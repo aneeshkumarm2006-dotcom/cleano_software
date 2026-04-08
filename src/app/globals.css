@@ -1,0 +1,555 @@
+@import "tailwindcss";
+
+/* Gontserrat Font Family */
+@font-face {
+  font-family: 'Gontserrat';
+  src: url('/fonts/gontserrat/Gontserrat-Thin.ttf') format('truetype');
+  font-weight: 100;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Gontserrat';
+  src: url('/fonts/gontserrat/Gontserrat-ThinItalic.ttf') format('truetype');
+  font-weight: 100;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: 'Gontserrat';
+  src: url('/fonts/gontserrat/Gontserrat-ExtraLight.ttf') format('truetype');
+  font-weight: 200;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Gontserrat';
+  src: url('/fonts/gontserrat/Gontserrat-ExtraLightItalic.ttf') format('truetype');
+  font-weight: 200;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: 'Gontserrat';
+  src: url('/fonts/gontserrat/Gontserrat-Light.ttf') format('truetype');
+  font-weight: 300;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Gontserrat';
+  src: url('/fonts/gontserrat/Gontserrat-LightItalic.ttf') format('truetype');
+  font-weight: 300;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: 'Gontserrat';
+  src: url('/fonts/gontserrat/Gontserrat-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Gontserrat';
+  src: url('/fonts/gontserrat/Gontserrat-Italic.ttf') format('truetype');
+  font-weight: 400;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: 'Gontserrat';
+  src: url('/fonts/gontserrat/Gontserrat-Medium.ttf') format('truetype');
+  font-weight: 500;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Gontserrat';
+  src: url('/fonts/gontserrat/Gontserrat-MediumItalic.ttf') format('truetype');
+  font-weight: 500;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: 'Gontserrat';
+  src: url('/fonts/gontserrat/Gontserrat-SemiBold.ttf') format('truetype');
+  font-weight: 600;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Gontserrat';
+  src: url('/fonts/gontserrat/Gontserrat-SemiBoldItalic.ttf') format('truetype');
+  font-weight: 600;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: 'Gontserrat';
+  src: url('/fonts/gontserrat/Gontserrat-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Gontserrat';
+  src: url('/fonts/gontserrat/Gontserrat-BoldItalic.ttf') format('truetype');
+  font-weight: 700;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: 'Gontserrat';
+  src: url('/fonts/gontserrat/Gontserrat-ExtraBold.ttf') format('truetype');
+  font-weight: 800;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Gontserrat';
+  src: url('/fonts/gontserrat/Gontserrat-ExtraBoldItalic.ttf') format('truetype');
+  font-weight: 800;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: 'Gontserrat';
+  src: url('/fonts/gontserrat/Gontserrat-Black.ttf') format('truetype');
+  font-weight: 900;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Gontserrat';
+  src: url('/fonts/gontserrat/Gontserrat-BlackItalic.ttf') format('truetype');
+  font-weight: 900;
+  font-style: italic;
+}
+
+/* TT Norms Font Family */
+@font-face {
+  font-family: 'TT Norms Pro';
+  src: url('/fonts/tt_norms/TTNormsPro-Thin.ttf') format('truetype');
+  font-weight: 100;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'TT Norms Pro';
+  src: url('/fonts/tt_norms/TTNormsPro-ThinItalic.ttf') format('truetype');
+  font-weight: 100;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: 'TT Norms Pro';
+  src: url('/fonts/tt_norms/TTNormsPro-ExtraLight.ttf') format('truetype');
+  font-weight: 200;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'TT Norms Pro';
+  src: url('/fonts/tt_norms/TTNormsPro-ExtraLightItalic.ttf') format('truetype');
+  font-weight: 200;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: 'TT Norms Pro';
+  src: url('/fonts/tt_norms/TTNormsPro-Light.ttf') format('truetype');
+  font-weight: 300;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'TT Norms Pro';
+  src: url('/fonts/tt_norms/TTNormsPro-LightItalic.ttf') format('truetype');
+  font-weight: 300;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: 'TT Norms Pro';
+  src: url('/fonts/tt_norms/TTNormsPro-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'TT Norms Pro';
+  src: url('/fonts/tt_norms/TTNormsPro-Italic.ttf') format('truetype');
+  font-weight: 400;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: 'TT Norms Pro';
+  src: url('/fonts/tt_norms/TTNormsPro-Medium.ttf') format('truetype');
+  font-weight: 500;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'TT Norms Pro';
+  src: url('/fonts/tt_norms/TTNormsPro-MediumItalic.ttf') format('truetype');
+  font-weight: 500;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: 'TT Norms Pro';
+  src: url('/fonts/tt_norms/TTNormsPro-DemiBold.ttf') format('truetype');
+  font-weight: 600;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'TT Norms Pro';
+  src: url('/fonts/tt_norms/TTNormsPro-DemiBoldItalic.ttf') format('truetype');
+  font-weight: 600;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: 'TT Norms Pro';
+  src: url('/fonts/tt_norms/TTNormsPro-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'TT Norms Pro';
+  src: url('/fonts/tt_norms/TTNormsPro-BoldItalic.ttf') format('truetype');
+  font-weight: 700;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: 'TT Norms Pro';
+  src: url('/fonts/tt_norms/TTNormsPro-ExtraBold.ttf') format('truetype');
+  font-weight: 800;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'TT Norms Pro';
+  src: url('/fonts/tt_norms/TTNormsPro-ExtraBoldItalic.ttf') format('truetype');
+  font-weight: 800;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: 'TT Norms Pro';
+  src: url('/fonts/tt_norms/TTNormsPro-Black.ttf') format('truetype');
+  font-weight: 900;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'TT Norms Pro';
+  src: url('/fonts/tt_norms/TTNormsPro-BlackItalic.ttf') format('truetype');
+  font-weight: 900;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: 'TT Norms Pro';
+  src: url('/fonts/tt_norms/TTNormsPro-ExtraBlack.ttf') format('truetype');
+  font-weight: 950;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'TT Norms Pro';
+  src: url('/fonts/tt_norms/TTNormsPro-ExtraBlackItalic.ttf') format('truetype');
+  font-weight: 950;
+  font-style: italic;
+}
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+  --font-tt-norms: 'TT Norms Pro', system-ui, -apple-system, sans-serif;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-manrope);
+  --font-mono: var(--font-geist-mono);
+  --font-tt-norms: var(--font-tt-norms);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-manrope), system-ui, -apple-system, sans-serif;
+}
+
+@theme {
+  --font-tt-fors: TT Fors, sans-serif;
+  --font-tt-fors-variable: TT Fors Variable, sans-serif;
+  --font-gontserrat: Gontserrat, sans-serif;
+  --font-hikasami: Hikasami, sans-serif;
+  --font-primeform: Primeform, sans-serif;
+  --font-paperlogy: Paperlogy, sans-serif;
+  --font-diagraph: Diagraph, sans-serif;
+  --font-manrope: Manrope, sans-serif;
+  --font-tt-norms-pro: TT Norms Pro, sans-serif;
+  --font-tt-norms-pro-mono: TT Norms Pro Mono, monospace;
+  --font-tt-norms-pro-expanded: TT Norms Pro Expanded, sans-serif;
+  --font-tt-norms-pro-condensed: TT Norms Pro Condensed, sans-serif;
+  --font-tt-norms-pro-compact: TT Norms Pro Compact, sans-serif;
+  /* Universal Color Palette */
+  --color-primary: #005F6A;
+  --color-secondary: #77C8CC;
+
+  /* Background Gradients */
+  --bg-gradient-start-white: #ffffff;
+  --bg-gradient-end-white: #f8fafc;
+}
+
+/* Start Generation Here */
+/* Start of Selection */
+@layer utilities {
+  /* Custom smaller sizes for specific use cases */
+  .text-xs {
+    font-size: 0.75rem; /* 12px */
+    line-height: 0.7rem; /* 16px */
+  }
+
+  .text-xxs {
+    font-size: 0.56rem; /* 8.96px, slightly larger than 8px */
+    line-height: 0.8rem; /* 12.8px, slightly larger than 12px */
+  }
+
+  .text-xxxs {
+    font-size: 0.42rem; /* 6.72px, slightly larger than 6px */
+    line-height: 0.7rem; /* 11.2px, slightly larger than 10px */
+  }
+
+  .text-sm {
+    font-size: 0.875rem;
+    line-height: 0.9rem;
+  }
+
+  .text-base {
+    font-size: 1rem;
+    line-height: 1.1rem;
+  }
+
+  .text-lg {
+    font-size: 1.15rem;
+    line-height: 0.95rem;
+  }
+
+  .text-xl {
+    font-size: 1.25rem;
+    line-height: 1.15rem;
+  }
+
+  /* Thin Scrollbar Utility */
+  .scrollbar-thin {
+    /* For Firefox */
+    scrollbar-width: thin;
+    scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
+  }
+
+  /* Safari-specific webkit scrollbar styling */
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+    -webkit-appearance: none;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+    border-radius: 2px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: rgba(156, 163, 175, 0.4);
+    border-radius: 2px;
+    border: none;
+    -webkit-appearance: none;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(156, 163, 175, 0.6);
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:active {
+    background-color: rgba(156, 163, 175, 0.8);
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  .scrollbar-none {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  /* Additional Safari-specific fixes */
+  @supports (-webkit-appearance: none) {
+    .scrollbar-thin {
+      -webkit-overflow-scrolling: touch;
+    }
+  }
+
+  /* Custom component classes */
+  .input-label {
+    @apply text-sm font-[350] tracking-tight text-[#005F6A] mb-1;
+  }
+
+  .h2-title {
+    @apply text-2xl md:text-3xl font-[350] tracking-tight text-[#005F6A];
+  }
+
+  .h2-subtitle {
+    @apply text-xl font-[350] tracking-tight text-[#005F6A];
+  }
+
+  .app-title {
+    @apply text-[1rem] leading-[1.1rem] font-[350] tracking-tight text-[#005F6A];
+  }
+
+  .app-title-small {
+    @apply text-xs font-[350] tracking-tight text-[#005F6A];
+  }
+
+  .app-subtitle {
+    @apply text-[0.56rem] leading-[0.8rem] font-[350] tracking-tight text-[#005F6A]/70;
+  }
+
+  .h2-subheader {
+    @apply text-sm font-[350] tracking-tight text-[#005F6A]/80;
+  }
+
+  .h2-subsubtitle {
+    @apply text-xs font-[350] tracking-tight text-[#005F6A]/80;
+  }
+
+  .section-title {
+    @apply text-[0.56rem] leading-[0.8rem] font-medium text-[#005F6A]/60 uppercase tracking-wide;
+  }
+}
+/* End of Selection */
+/* End Generation Here */
+
+/* Primeform Font Family */
+@font-face {
+  font-family: Primeform;
+  src: url("/fonts/primeform/PrimeformProDemo-Thin.otf") format("opentype");
+  font-weight: 100;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: Primeform;
+  src: url("/fonts/primeform/PrimeformProDemo-Light.otf") format("opentype");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: Primeform;
+  src: url("/fonts/primeform/PrimeformProDemo-Regular.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: Primeform;
+  src: url("/fonts/primeform/PrimeformProDemo-Italic.otf") format("opentype");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: Primeform;
+  src: url("/fonts/primeform/PrimeformProDemo-Medium.otf") format("opentype");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: Primeform;
+  src: url("/fonts/primeform/PrimeformProDemo-SemiBold.otf") format("opentype");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: Primeform;
+  src: url("/fonts/primeform/PrimeformProDemo-Bold.otf") format("opentype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: Primeform;
+  src: url("/fonts/primeform/PrimeformProDemo-BoldItalic.otf")
+    format("opentype");
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: Primeform;
+  src: url("/fonts/primeform/PrimeformProDemo-Heavy.otf") format("opentype");
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: Primeform;
+  src: url("/fonts/primeform/PrimeformProDemo-Black.otf") format("opentype");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Start Generation Here */
+/* Redefine font sizes to be smaller than usual */
+
+/* Start of Selection */
+/* Base font sizes */
+
+/* End Generation Here */
+/* End of Selection */
+
+/* === Audio Equalizer Animation === */
+.equalizer-bar {
+  width: 2px;
+  height: 100%;
+  margin-right: 2px;
+  background-color: #b94c2b;
+  display: inline-block;
+  transform-origin: bottom;
+  transition: transform 0.1s linear;
+}
+
+@theme {
+  --color-primary: #CDE2FF;
+  --color-secondary: #005F6A;
+}

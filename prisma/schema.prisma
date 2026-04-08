@@ -1,0 +1,210 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id                String             @id @default(cuid())
+  name              String
+  email             String             @unique
+  image             String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  phone             String?
+  role              Roles              @default(EMPLOYEE)
+  emailVerified     Boolean            @default(false)
+  accounts          Account[]
+  assignedProducts  EmployeeProduct[]
+  inventoryRequests InventoryRequest[]
+  jobs              Job[]              @relation("EmployeeJobs")
+  sessions          Session[]
+  cleaningJobs      Job[]              @relation("JobCleaners")
+  jobLogs           JobLog[]           @relation("UserJobLogs")
+}
+
+model Account {
+  id           String    @id @default(cuid())
+  userId       String
+  accessToken  String?
+  accountId    String
+  createdAt    DateTime  @default(now())
+  expiresAt    DateTime?
+  idToken      String?
+  password     String?
+  providerId   String
+  refreshToken String?
+  updatedAt    DateTime  @updatedAt
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  ipAddress String?
+  token     String   @unique
+  updatedAt DateTime @updatedAt
+  userAgent String?
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Product {
+  id               String            @id @default(cuid())
+  name             String
+  description      String?
+  unit             String
+  costPerUnit      Float
+  stockLevel       Float             @default(0)
+  minStock         Float             @default(0)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  employeeProducts EmployeeProduct[]
+  jobUsage         JobProductUsage[]
+}
+
+model Job {
+  id              String            @id @default(cuid())
+  employeeId      String
+  clientName      String
+  location        String?
+  description     String?
+  jobType         String?
+  jobDate         DateTime?
+  startTime       DateTime
+  endTime         DateTime?
+  clockInTime     DateTime?
+  clockOutTime    DateTime?
+  status          JobStatus         @default(CREATED)
+  price           Float?
+  employeePay     Float?
+  totalTip        Float?
+  parking         Float?
+  paymentReceived Boolean           @default(false)
+  invoiceSent     Boolean           @default(false)
+  notes           String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  employee        User              @relation("EmployeeJobs", fields: [employeeId], references: [id], onDelete: Cascade)
+  productUsage    JobProductUsage[]
+  cleaners        User[]            @relation("JobCleaners")
+  logs            JobLog[]
+
+  @@index([jobDate])
+  @@index([clientName])
+  @@index([status])
+}
+
+model JobProductUsage {
+  id                 String   @id @default(cuid())
+  jobId              String
+  productId          String
+  quantity           Float
+  inventoryBefore    Float?
+  inventoryAfter     Float?
+  notes              String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  job                Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  product            Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, productId])
+}
+
+model JobLog {
+  id          String       @id @default(cuid())
+  jobId       String
+  userId      String?
+  action      JobLogAction
+  field       String?
+  oldValue    String?
+  newValue    String?
+  description String
+  createdAt   DateTime     @default(now())
+  job         Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  user        User?        @relation("UserJobLogs", fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([jobId])
+  @@index([createdAt])
+  @@index([userId])
+}
+
+model InventoryRequest {
+  id         String        @id @default(cuid())
+  employeeId String
+  productId  String?
+  kitId      String?
+  quantity   Float
+  reason     String?
+  status     RequestStatus @default(PENDING)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+  employee   User          @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+}
+
+model EmployeeProduct {
+  id         String   @id @default(cuid())
+  employeeId String
+  productId  String
+  quantity   Float
+  assignedAt DateTime @default(now())
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  employee   User     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, productId])
+  @@index([employeeId])
+  @@index([productId])
+}
+
+enum Roles {
+  OWNER
+  ADMIN
+  EMPLOYEE
+}
+
+enum JobStatus {
+  CREATED
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  PAID
+  CANCELLED
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  FULFILLED
+}
+
+enum JobLogAction {
+  CREATED
+  UPDATED
+  CLOCKED_IN
+  CLOCKED_OUT
+  STATUS_CHANGED
+  PAYMENT_RECEIVED
+  INVOICE_SENT
+  PRODUCT_USED
+  NOTE_ADDED
+  CLEANER_ADDED
+  CLEANER_REMOVED
+}
