@@ -12,6 +12,12 @@ import {
   Briefcase,
   ClipboardList,
   CalendarDays,
+  Contact,
+  Wallet,
+  Receipt,
+  FileText,
+  MapPin,
+  Banknote,
   LucideIcon,
 } from "lucide-react";
 
@@ -23,6 +29,12 @@ const iconMap: Record<string, LucideIcon> = {
   jobs: Briefcase,
   "my-jobs": ClipboardList,
   calendar: CalendarDays,
+  clients: Contact,
+  payouts: Wallet,
+  finances: Receipt,
+  invoices: FileText,
+  sales: MapPin,
+  "my-pay": Banknote,
 };
 
 export default function NavLink({

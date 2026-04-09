@@ -20,7 +20,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`!font-tt-norms-pro`}>{children}</body>
+      <body className={`!font-tt-norms-pro`} suppressHydrationWarning>{children}</body>
     </html>
   );
 }

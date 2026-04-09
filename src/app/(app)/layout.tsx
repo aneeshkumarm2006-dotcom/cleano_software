@@ -54,16 +54,34 @@ export default async function DashboardLayout({
                 <NavLink href="/employees" icon="employees" iconOnly>
                   Employees
                 </NavLink>
+                <NavLink href="/clients" icon="clients" iconOnly>
+                  Clients
+                </NavLink>
                 <NavLink href="/inventory" icon="inventory" iconOnly>
                   Inventory
                 </NavLink>
                 <NavLink href="/jobs" icon="jobs" iconOnly>
                   Jobs
                 </NavLink>
+                <NavLink href="/payouts" icon="payouts" iconOnly>
+                  Payouts
+                </NavLink>
+                <NavLink href="/finances" icon="finances" iconOnly>
+                  Finances
+                </NavLink>
+                <NavLink href="/invoices" icon="invoices" iconOnly>
+                  Invoices
+                </NavLink>
+                <NavLink href="/sales" icon="sales" iconOnly>
+                  Sales
+                </NavLink>
               </>
             )}
             <NavLink href="/my-jobs" icon="my-jobs" iconOnly>
               My Jobs
+            </NavLink>
+            <NavLink href="/my-pay" icon="my-pay" iconOnly>
+              My Pay
             </NavLink>
             <NavLink href="/calendar" icon="calendar" iconOnly>
               Calendar

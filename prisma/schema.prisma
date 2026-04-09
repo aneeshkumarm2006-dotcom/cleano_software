@@ -77,10 +77,23 @@ model Product {
   jobUsage         JobProductUsage[]
 }
 
+model Client {
+  id        String   @id @default(cuid())
+  name      String
+  email     String?
+  phone     String?
+  address   String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  jobs      Job[]
+}
+
 model Job {
   id              String            @id @default(cuid())
   employeeId      String
   clientName      String
+  clientId        String?
   location        String?
   description     String?
   jobType         String?
@@ -100,12 +113,14 @@ model Job {
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
   employee        User              @relation("EmployeeJobs", fields: [employeeId], references: [id], onDelete: Cascade)
+  client          Client?           @relation(fields: [clientId], references: [id], onDelete: SetNull)
   productUsage    JobProductUsage[]
   cleaners        User[]            @relation("JobCleaners")
   logs            JobLog[]
 
   @@index([jobDate])
   @@index([clientName])
+  @@index([clientId])
   @@index([status])
 }
 
@@ -207,4 +222,35 @@ enum JobLogAction {
   NOTE_ADDED
   CLEANER_ADDED
   CLEANER_REMOVED
+}
+
+enum PaymentType {
+  CASH
+  CHEQUE
+  E_TRANSFER
+  CREDIT_CARD
+  OTHER
+}
+
+enum PayPeriodStatus {
+  DRAFT
+  APPROVED
+  PAID
+  CANCELLED
+}
+
+enum TransactionCategory {
+  REVENUE
+  SUPPLIES
+  LABOUR
+  OVERHEAD
+  OTHER
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+  OVERDUE
+  CANCELLED
 }
