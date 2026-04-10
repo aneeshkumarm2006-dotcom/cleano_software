@@ -47,14 +47,16 @@ export default async function SettingsPage() {
     : [[], [], [], [], []];
 
   return (
-    <SettingsClient
-      user={userWithRole}
-      isAdmin={isAdmin}
-      appSettings={appSettings as never}
-      products={products as never}
-      kitTemplates={kitTemplates as never}
-      inventoryRules={inventoryRules as never}
-      suppliers={suppliers as never}
-    />
+    <div className="h-full overflow-hidden overflow-y-auto p-8">
+      <SettingsClient
+        user={userWithRole}
+        isAdmin={isAdmin}
+        appSettings={appSettings as never}
+        products={products as never}
+        kitTemplates={kitTemplates as never}
+        inventoryRules={inventoryRules as never}
+        suppliers={suppliers as never}
+      />
+    </div>
   );
 }

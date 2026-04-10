@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { CreditCard } from "lucide-react";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import { updateAppSetting } from "../../actions/updateAppSetting";
@@ -62,14 +63,18 @@ export default function PaymentTypesTab({ settings }: PaymentTypesTabProps) {
   return (
     <SectionCard
       title="Payment Types"
-      description="Customize labels for the payment methods displayed throughout the app.">
+      description="Customize labels for the payment methods displayed throughout the app."
+      icon={CreditCard}>
       <div className="space-y-3">
         {keys.map((k) => (
           <div
             key={k}
-            className="grid grid-cols-[140px_1fr] items-center gap-3">
-            <span className="text-sm text-gray-500 font-mono">{k}</span>
+            className="grid grid-cols-[160px_1fr] items-center gap-3">
+            <span className="text-xs text-[#005F6A]/60 font-mono uppercase tracking-wide">
+              {k}
+            </span>
             <Input
+              variant="form"
               value={labels[k]}
               onChange={(e) =>
                 setLabels((prev) => ({ ...prev, [k]: e.target.value }))
@@ -84,9 +89,11 @@ export default function PaymentTypesTab({ settings }: PaymentTypesTabProps) {
       <div className="flex justify-end">
         <Button
           type="button"
-          variant="primary"
+          variant="action"
+          border={false}
           onClick={handleSave}
-          disabled={saving}>
+          disabled={saving}
+          className="rounded-xl px-6 py-2.5">
           {saving ? "Saving..." : "Save"}
         </Button>
       </div>

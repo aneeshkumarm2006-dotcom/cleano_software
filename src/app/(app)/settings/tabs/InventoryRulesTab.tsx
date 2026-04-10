@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Boxes } from "lucide-react";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import { createInventoryRule } from "../../actions/createInventoryRule";
@@ -84,21 +85,32 @@ export default function InventoryRulesTab({
   return (
     <SectionCard
       title="Inventory Rules"
-      description="Configure usage per job and refill thresholds per product. Used by inventory forecasting.">
+      description="Configure usage per job and refill thresholds per product. Used by inventory forecasting."
+      icon={Boxes}>
       {products.length === 0 ? (
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-[#005F6A]/60">
           No products yet. Add products in the Inventory page first.
         </p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-gray-500 border-b border-gray-200">
-                <th className="py-2 pr-3 font-[500]">Product</th>
-                <th className="py-2 pr-3 font-[500]">Usage / Job</th>
-                <th className="py-2 pr-3 font-[500]">Refill Threshold</th>
-                <th className="py-2 pr-3 font-[500]">Stock</th>
-                <th className="py-2 font-[500] text-right">Actions</th>
+              <tr className="text-left border-b border-[#005F6A]/10">
+                <th className="py-3 pr-3 text-xs font-[350] text-[#005F6A]/70 uppercase tracking-wide">
+                  Product
+                </th>
+                <th className="py-3 pr-3 text-xs font-[350] text-[#005F6A]/70 uppercase tracking-wide">
+                  Usage / Job
+                </th>
+                <th className="py-3 pr-3 text-xs font-[350] text-[#005F6A]/70 uppercase tracking-wide">
+                  Refill Threshold
+                </th>
+                <th className="py-3 pr-3 text-xs font-[350] text-[#005F6A]/70 uppercase tracking-wide">
+                  Stock
+                </th>
+                <th className="py-3 text-right text-xs font-[350] text-[#005F6A]/70 uppercase tracking-wide">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -107,15 +119,16 @@ export default function InventoryRulesTab({
                 return (
                   <tr
                     key={p.id}
-                    className="border-b border-gray-100 last:border-0">
-                    <td className="py-2 pr-3 text-gray-900">
+                    className="border-b border-[#005F6A]/5 last:border-0">
+                    <td className="py-3 pr-3 text-sm text-[#005F6A]">
                       {p.name}
-                      <span className="text-xs text-gray-500 ml-2">
+                      <span className="text-xs text-[#005F6A]/60 ml-2">
                         ({p.unit})
                       </span>
                     </td>
-                    <td className="py-2 pr-3">
+                    <td className="py-3 pr-3">
                       <Input
+                        variant="form"
                         type="number"
                         min="0"
                         step="0.01"
@@ -125,11 +138,12 @@ export default function InventoryRulesTab({
                             usagePerJob: parseFloat(e.target.value) || 0,
                           })
                         }
-                        className="max-w-[120px]"
+                        className="max-w-[140px]"
                       />
                     </td>
-                    <td className="py-2 pr-3">
+                    <td className="py-3 pr-3">
                       <Input
+                        variant="form"
                         type="number"
                         min="0"
                         step="0.01"
@@ -139,19 +153,21 @@ export default function InventoryRulesTab({
                             refillThreshold: parseFloat(e.target.value) || 0,
                           })
                         }
-                        className="max-w-[120px]"
+                        className="max-w-[140px]"
                       />
                     </td>
-                    <td className="py-2 pr-3 text-gray-600">
+                    <td className="py-3 pr-3 text-sm text-[#005F6A]/70">
                       {p.stockLevel}
                     </td>
-                    <td className="py-2 text-right space-x-2">
+                    <td className="py-3 text-right space-x-2">
                       <Button
                         type="button"
-                        variant="primary"
+                        variant="action"
+                        border={false}
                         size="sm"
                         disabled={savingId === p.id}
-                        onClick={() => handleSave(p.id)}>
+                        onClick={() => handleSave(p.id)}
+                        className="rounded-xl">
                         {savingId === p.id ? "Saving..." : "Save"}
                       </Button>
                       {row.hasRule && (
@@ -160,7 +176,8 @@ export default function InventoryRulesTab({
                           variant="ghost"
                           size="sm"
                           disabled={savingId === p.id}
-                          onClick={() => handleDelete(p.id)}>
+                          onClick={() => handleDelete(p.id)}
+                          className="rounded-xl">
                           Clear
                         </Button>
                       )}

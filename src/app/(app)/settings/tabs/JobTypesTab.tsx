@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Briefcase } from "lucide-react";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import IconButton from "@/components/ui/IconButton";
@@ -73,32 +73,41 @@ export default function JobTypesTab({ settings }: JobTypesTabProps) {
     <SectionCard
       title="Job Types"
       description="Manage selectable job types and their availability."
+      icon={Briefcase}
       actions={
-        <Button type="button" variant="default" size="sm" onClick={add}>
+        <Button
+          type="button"
+          variant="default"
+          border={false}
+          size="sm"
+          onClick={add}
+          className="rounded-xl">
           <Plus className="w-4 h-4 mr-1" /> Add Job Type
         </Button>
       }>
       <div className="space-y-2">
         {items.length === 0 && (
-          <p className="text-sm text-gray-500">No job types configured.</p>
+          <p className="text-sm text-[#005F6A]/60">No job types configured.</p>
         )}
         {items.map((item) => (
           <div
             key={item.id}
-            className="flex items-center gap-3 p-2 rounded-xl hover:bg-gray-50">
+            className="flex items-center gap-3 p-2 rounded-xl hover:bg-[#005F6A]/5 transition-colors">
             <Input
+              variant="form"
               value={item.name}
               onChange={(e) => update(item.id, { name: e.target.value })}
               placeholder="Job type name"
               className="flex-1"
             />
-            <label className="flex items-center gap-2 text-sm text-gray-700 select-none">
+            <label className="flex items-center gap-2 text-sm text-[#005F6A] select-none">
               <input
                 type="checkbox"
                 checked={item.isActive}
                 onChange={(e) =>
                   update(item.id, { isActive: e.target.checked })
                 }
+                className="accent-[#005F6A]"
               />
               Active
             </label>
@@ -118,9 +127,11 @@ export default function JobTypesTab({ settings }: JobTypesTabProps) {
       <div className="flex justify-end">
         <Button
           type="button"
-          variant="primary"
+          variant="action"
+          border={false}
           onClick={handleSave}
-          disabled={saving}>
+          disabled={saving}
+          className="rounded-xl px-6 py-2.5">
           {saving ? "Saving..." : "Save Job Types"}
         </Button>
       </div>

@@ -102,38 +102,40 @@ export default function SettingsClient({
   const [activeTab, setActiveTab] = useState<TabId>("profile");
 
   return (
-    <div className="max-w-6xl mx-auto p-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-[600] text-gray-900">Settings</h1>
-        <p className="text-sm text-gray-500 mt-1">
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-3xl !font-light tracking-tight text-[#005F6A]">
+          Settings
+        </h1>
+        <p className="text-sm text-[#005F6A]/70 mt-1">
           Manage your account and application configuration
         </p>
       </div>
 
       <div className="flex gap-6">
         {/* Sidebar tabs */}
-        <nav className="w-56 flex-shrink-0">
-          <ul className="space-y-1">
+        <nav className="w-60 flex-shrink-0">
+          <div className="bg-[#005F6A]/5 rounded-2xl p-1 space-y-1">
             {visibleTabs.map((tab) => {
               const Icon = tab.icon;
               const active = activeTab === tab.id;
               return (
-                <li key={tab.id}>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-[400] transition-all duration-150 ${
-                      active
-                        ? "bg-[#005F6A] text-white"
-                        : "text-[#005F6A] hover:bg-[#005F6A]/10"
-                    }`}>
-                    <Icon strokeWidth={1.6} className="w-4 h-4" />
-                    {tab.label}
-                  </button>
-                </li>
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-[350] transition-all duration-200 whitespace-nowrap ${
+                    active
+                      ? "bg-[#005F6A]/90 text-white"
+                      : "text-[#005F6A] hover:bg-[#005F6A]/10"
+                  }`}>
+                  <Icon strokeWidth={1.6} className="w-4 h-4" />
+                  {tab.label}
+                </button>
               );
             })}
-          </ul>
+          </div>
         </nav>
 
         {/* Content panel */}

@@ -1,7 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Trash2, Pencil, ChevronDown, ChevronRight } from "lucide-react";
+import {
+  Plus,
+  Trash2,
+  Pencil,
+  ChevronDown,
+  ChevronRight,
+  Truck,
+} from "lucide-react";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import IconButton from "@/components/ui/IconButton";
@@ -174,13 +181,20 @@ export default function SuppliersTab({
     <SectionCard
       title="Suppliers"
       description="Manage suppliers and per-product pricing for procurement comparisons."
+      icon={Truck}
       actions={
-        <Button type="button" variant="primary" size="sm" onClick={openCreate}>
+        <Button
+          type="button"
+          variant="action"
+          border={false}
+          size="sm"
+          onClick={openCreate}
+          className="rounded-xl">
           <Plus className="w-4 h-4 mr-1" /> New Supplier
         </Button>
       }>
       {suppliers.length === 0 ? (
-        <p className="text-sm text-gray-500">No suppliers yet.</p>
+        <p className="text-sm text-[#005F6A]/60">No suppliers yet.</p>
       ) : (
         <div className="space-y-2">
           {suppliers.map((s) => {
@@ -188,28 +202,28 @@ export default function SuppliersTab({
             return (
               <div
                 key={s.id}
-                className="border border-gray-200 rounded-xl overflow-hidden">
+                className="border border-[#005F6A]/10 rounded-xl overflow-hidden bg-white">
                 <div className="flex items-center justify-between p-3">
                   <button
                     type="button"
                     onClick={() => setExpanded(isOpen ? null : s.id)}
                     className="flex items-center gap-2 flex-1 text-left">
                     {isOpen ? (
-                      <ChevronDown className="w-4 h-4 text-gray-400" />
+                      <ChevronDown className="w-4 h-4 text-[#005F6A]/60" />
                     ) : (
-                      <ChevronRight className="w-4 h-4 text-gray-400" />
+                      <ChevronRight className="w-4 h-4 text-[#005F6A]/60" />
                     )}
                     <div>
-                      <div className="text-sm font-[550] text-gray-900">
+                      <div className="text-sm font-[400] text-[#005F6A]">
                         {s.name}
                         {!s.isActive && (
-                          <span className="ml-2 text-xs text-gray-400">
+                          <span className="ml-2 text-xs text-[#005F6A]/40">
                             (inactive)
                           </span>
                         )}
                       </div>
                       {(s.contact || s.email || s.phone) && (
-                        <div className="text-xs text-gray-500">
+                        <div className="text-xs text-[#005F6A]/60">
                           {[s.contact, s.email, s.phone]
                             .filter(Boolean)
                             .join(" · ")}
@@ -235,19 +249,25 @@ export default function SuppliersTab({
                 </div>
 
                 {isOpen && (
-                  <div className="border-t border-gray-200 p-3 bg-gray-50/50">
+                  <div className="border-t border-[#005F6A]/10 p-4 bg-[#005F6A]/3">
                     {products.length === 0 ? (
-                      <p className="text-xs text-gray-500">
+                      <p className="text-xs text-[#005F6A]/60">
                         No products to price.
                       </p>
                     ) : (
                       <table className="w-full text-sm">
                         <thead>
-                          <tr className="text-left text-gray-500">
-                            <th className="py-1 pr-2 font-[500]">Product</th>
-                            <th className="py-1 pr-2 font-[500]">Price ($)</th>
-                            <th className="py-1 pr-2 font-[500]">Unit</th>
-                            <th className="py-1 font-[500] text-right">
+                          <tr className="text-left">
+                            <th className="py-2 pr-2 text-xs font-[350] text-[#005F6A]/70 uppercase tracking-wide">
+                              Product
+                            </th>
+                            <th className="py-2 pr-2 text-xs font-[350] text-[#005F6A]/70 uppercase tracking-wide">
+                              Price ($)
+                            </th>
+                            <th className="py-2 pr-2 text-xs font-[350] text-[#005F6A]/70 uppercase tracking-wide">
+                              Unit
+                            </th>
+                            <th className="py-2 text-xs font-[350] text-[#005F6A]/70 uppercase tracking-wide text-right">
                               Actions
                             </th>
                           </tr>
@@ -264,12 +284,13 @@ export default function SuppliersTab({
                             return (
                               <tr
                                 key={p.id}
-                                className="border-t border-gray-200">
-                                <td className="py-1 pr-2 text-gray-900">
+                                className="border-t border-[#005F6A]/10">
+                                <td className="py-2 pr-2 text-sm text-[#005F6A]">
                                   {p.name}
                                 </td>
-                                <td className="py-1 pr-2">
+                                <td className="py-2 pr-2">
                                   <Input
+                                    variant="form"
                                     type="number"
                                     min="0"
                                     step="0.01"
@@ -280,28 +301,31 @@ export default function SuppliersTab({
                                           parseFloat(e.target.value) || 0,
                                       })
                                     }
-                                    className="max-w-[120px]"
+                                    className="max-w-[140px]"
                                   />
                                 </td>
-                                <td className="py-1 pr-2">
+                                <td className="py-2 pr-2">
                                   <Input
+                                    variant="form"
                                     value={d.unit}
                                     onChange={(e) =>
                                       setPriceDraft(s.id, p.id, {
                                         unit: e.target.value,
                                       })
                                     }
-                                    className="max-w-[100px]"
+                                    className="max-w-[120px]"
                                   />
                                 </td>
-                                <td className="py-1 text-right space-x-1">
+                                <td className="py-2 text-right space-x-1">
                                   <Button
                                     type="button"
-                                    variant="primary"
+                                    variant="action"
+                                    border={false}
                                     size="sm"
                                     onClick={() =>
                                       handleSavePrice(s.id, p.id)
-                                    }>
+                                    }
+                                    className="rounded-xl">
                                     Save
                                   </Button>
                                   {existing && (
@@ -311,7 +335,8 @@ export default function SuppliersTab({
                                       size="sm"
                                       onClick={() =>
                                         handleDeletePrice(s.id, p.id)
-                                      }>
+                                      }
+                                      className="rounded-xl">
                                       Clear
                                     </Button>
                                   )}
@@ -344,6 +369,7 @@ export default function SuppliersTab({
           <div className="grid grid-cols-2 gap-4">
             <Field label="Name">
               <Input
+                variant="form"
                 value={draft.name}
                 onChange={(e) =>
                   setDraft((prev) => ({ ...prev, name: e.target.value }))
@@ -353,6 +379,7 @@ export default function SuppliersTab({
             </Field>
             <Field label="Contact Person">
               <Input
+                variant="form"
                 value={draft.contact}
                 onChange={(e) =>
                   setDraft((prev) => ({ ...prev, contact: e.target.value }))
@@ -361,6 +388,7 @@ export default function SuppliersTab({
             </Field>
             <Field label="Email">
               <Input
+                variant="form"
                 type="email"
                 value={draft.email}
                 onChange={(e) =>
@@ -370,6 +398,7 @@ export default function SuppliersTab({
             </Field>
             <Field label="Phone">
               <Input
+                variant="form"
                 type="tel"
                 value={draft.phone}
                 onChange={(e) =>
@@ -380,6 +409,7 @@ export default function SuppliersTab({
           </div>
           <Field label="Address">
             <Input
+              variant="form"
               value={draft.address}
               onChange={(e) =>
                 setDraft((prev) => ({ ...prev, address: e.target.value }))
@@ -388,19 +418,21 @@ export default function SuppliersTab({
           </Field>
           <Field label="Notes">
             <Input
+              variant="form"
               value={draft.notes}
               onChange={(e) =>
                 setDraft((prev) => ({ ...prev, notes: e.target.value }))
               }
             />
           </Field>
-          <label className="flex items-center gap-2 text-sm text-gray-700 select-none">
+          <label className="flex items-center gap-2 text-sm text-[#005F6A] select-none">
             <input
               type="checkbox"
               checked={draft.isActive}
               onChange={(e) =>
                 setDraft((prev) => ({ ...prev, isActive: e.target.checked }))
               }
+              className="accent-[#005F6A]"
             />
             Active
           </label>
@@ -411,14 +443,18 @@ export default function SuppliersTab({
             <Button
               type="button"
               variant="ghost"
-              onClick={() => setModalOpen(false)}>
+              border={false}
+              onClick={() => setModalOpen(false)}
+              className="rounded-xl">
               Cancel
             </Button>
             <Button
               type="button"
-              variant="primary"
+              variant="action"
+              border={false}
               onClick={handleSaveSupplier}
-              disabled={saving}>
+              disabled={saving}
+              className="rounded-xl px-6">
               {saving ? "Saving..." : "Save Supplier"}
             </Button>
           </div>

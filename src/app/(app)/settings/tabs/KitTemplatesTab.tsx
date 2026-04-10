@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Trash2, Pencil, X } from "lucide-react";
+import { Plus, Trash2, Pencil, X, Package } from "lucide-react";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import IconButton from "@/components/ui/IconButton";
@@ -10,7 +10,13 @@ import { createKitTemplate } from "../../actions/createKitTemplate";
 import { updateKitTemplate } from "../../actions/updateKitTemplate";
 import { deleteKitTemplate } from "../../actions/deleteKitTemplate";
 import { ProductRecord, KitTemplateRecord } from "../types";
-import { SectionCard, Field, Feedback, Msg } from "./_shared";
+import {
+  SectionCard,
+  Field,
+  Feedback,
+  Msg,
+  themedSelectClass,
+} from "./_shared";
 
 interface KitTemplatesTabProps {
   products: ProductRecord[];
@@ -130,30 +136,39 @@ export default function KitTemplatesTab({
     <SectionCard
       title="Kit Templates"
       description="Define reusable starter kits combining multiple products."
+      icon={Package}
       actions={
-        <Button type="button" variant="primary" size="sm" onClick={openCreate}>
+        <Button
+          type="button"
+          variant="action"
+          border={false}
+          size="sm"
+          onClick={openCreate}
+          className="rounded-xl">
           <Plus className="w-4 h-4 mr-1" /> New Kit
         </Button>
       }>
       {kitTemplates.length === 0 ? (
-        <p className="text-sm text-gray-500">No kit templates yet.</p>
+        <p className="text-sm text-[#005F6A]/60">No kit templates yet.</p>
       ) : (
         <div className="space-y-2">
           {kitTemplates.map((kit) => (
             <div
               key={kit.id}
-              className="flex items-start justify-between gap-3 p-3 border border-gray-200 rounded-xl">
+              className="flex items-start justify-between gap-3 p-4 border border-[#005F6A]/10 rounded-xl bg-white hover:bg-[#005F6A]/3 transition-colors">
               <div className="flex-1">
                 <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-[550] text-gray-900">
+                  <h3 className="text-sm font-[400] text-[#005F6A]">
                     {kit.name}
                   </h3>
                   {!kit.isActive && (
-                    <span className="text-xs text-gray-400">(inactive)</span>
+                    <span className="text-xs text-[#005F6A]/40">
+                      (inactive)
+                    </span>
                   )}
                 </div>
                 {kit.description && (
-                  <p className="text-xs text-gray-500 mt-0.5">
+                  <p className="text-xs text-[#005F6A]/60 mt-0.5">
                     {kit.description}
                   </p>
                 )}
@@ -200,6 +215,7 @@ export default function KitTemplatesTab({
         <div className="space-y-4">
           <Field label="Name">
             <Input
+              variant="form"
               value={draft.name}
               onChange={(e) =>
                 setDraft((prev) => ({ ...prev, name: e.target.value }))
@@ -209,6 +225,7 @@ export default function KitTemplatesTab({
           </Field>
           <Field label="Description">
             <Input
+              variant="form"
               value={draft.description}
               onChange={(e) =>
                 setDraft((prev) => ({ ...prev, description: e.target.value }))
@@ -216,32 +233,35 @@ export default function KitTemplatesTab({
               placeholder="Optional"
             />
           </Field>
-          <label className="flex items-center gap-2 text-sm text-gray-700 select-none">
+          <label className="flex items-center gap-2 text-sm text-[#005F6A] select-none">
             <input
               type="checkbox"
               checked={draft.isActive}
               onChange={(e) =>
                 setDraft((prev) => ({ ...prev, isActive: e.target.checked }))
               }
+              className="accent-[#005F6A]"
             />
             Active
           </label>
 
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="text-sm font-[500] text-gray-700">
+              <label className="text-xs font-[350] text-[#005F6A]/70 uppercase tracking-wide">
                 Products
               </label>
               <Button
                 type="button"
                 variant="default"
+                border={false}
                 size="sm"
-                onClick={addItem}>
+                onClick={addItem}
+                className="rounded-xl">
                 <Plus className="w-4 h-4 mr-1" /> Add Product
               </Button>
             </div>
             {draft.items.length === 0 && (
-              <p className="text-xs text-gray-500">No products added.</p>
+              <p className="text-xs text-[#005F6A]/60">No products added.</p>
             )}
             <div className="space-y-2">
               {draft.items.map((item, idx) => (
@@ -253,7 +273,7 @@ export default function KitTemplatesTab({
                     onChange={(e) =>
                       updateItem(idx, { productId: e.target.value })
                     }
-                    className="px-3 py-2 border border-gray-200 rounded-2xl text-sm bg-white">
+                    className={themedSelectClass}>
                     <option value="">Select product...</option>
                     {products.map((p) => (
                       <option key={p.id} value={p.id}>
@@ -262,6 +282,7 @@ export default function KitTemplatesTab({
                     ))}
                   </select>
                   <Input
+                    variant="form"
                     type="number"
                     min="0"
                     step="0.01"
@@ -290,14 +311,18 @@ export default function KitTemplatesTab({
             <Button
               type="button"
               variant="ghost"
-              onClick={() => setModalOpen(false)}>
+              border={false}
+              onClick={() => setModalOpen(false)}
+              className="rounded-xl">
               Cancel
             </Button>
             <Button
               type="button"
-              variant="primary"
+              variant="action"
+              border={false}
               onClick={handleSave}
-              disabled={saving}>
+              disabled={saving}
+              className="rounded-xl px-6">
               {saving ? "Saving..." : "Save Kit"}
             </Button>
           </div>

@@ -50,7 +50,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
         "bg-transparent border-0 hover:bg-gray-50 focus:bg-white focus:focus:border-neutral-950/70",
       outline:
         "bg-white border-neutral-950/10 hover:border-neutral-950/20 focus:border-neutral-950/25",
-      form: "bg-[#005F6A]/3 hover:bg-[#005F6A]/5 focus:bg-[#005F6A]/6 !text-[#005F6A] placeholder:text-[#005F6A]/40",
+      form: "bg-[#005F6A]/5 hover:bg-[#005F6A]/8 focus:bg-[#005F6A]/8 border-transparent !text-[#005F6A] placeholder:text-[#005F6A]/40",
     }[variant];
 
     const errorClasses = error

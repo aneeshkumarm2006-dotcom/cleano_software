@@ -56,24 +56,29 @@ export default function MultipliersTab({ settings }: MultipliersTabProps) {
   return (
     <SectionCard
       title="Pay Rate Multipliers"
-      description="Map cleaner star ratings to pay multipliers applied at payout calculation.">
+      description="Map cleaner star ratings to pay multipliers applied at payout calculation."
+      icon={Star}>
       <div className="space-y-3">
         {stars.map((s) => (
           <div
             key={s}
-            className="grid grid-cols-[140px_1fr] items-center gap-3">
+            className="grid grid-cols-[160px_1fr] items-center gap-3">
             <div className="flex items-center gap-1">
               {Array.from({ length: parseInt(s) }).map((_, i) => (
                 <Star
                   key={i}
-                  className="w-4 h-4 fill-yellow-400 text-yellow-400"
+                  className="w-4 h-4 fill-[#77C8CC] text-[#77C8CC]"
                 />
               ))}
               {Array.from({ length: 5 - parseInt(s) }).map((_, i) => (
-                <Star key={`e${i}`} className="w-4 h-4 text-gray-300" />
+                <Star
+                  key={`e${i}`}
+                  className="w-4 h-4 text-[#005F6A]/20"
+                />
               ))}
             </div>
             <Input
+              variant="form"
               type="number"
               min="0"
               step="0.01"
@@ -84,7 +89,7 @@ export default function MultipliersTab({ settings }: MultipliersTabProps) {
                   [s]: parseFloat(e.target.value) || 0,
                 }))
               }
-              className="max-w-[160px]"
+              className="max-w-[180px]"
             />
           </div>
         ))}
@@ -95,9 +100,11 @@ export default function MultipliersTab({ settings }: MultipliersTabProps) {
       <div className="flex justify-end">
         <Button
           type="button"
-          variant="primary"
+          variant="action"
+          border={false}
           onClick={handleSave}
-          disabled={saving}>
+          disabled={saving}
+          className="rounded-xl px-6 py-2.5">
           {saving ? "Saving..." : "Save"}
         </Button>
       </div>

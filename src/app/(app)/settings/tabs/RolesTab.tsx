@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, X } from "lucide-react";
+import { Check, X, Shield } from "lucide-react";
 import { SectionCard } from "./_shared";
 
 interface PermissionRow {
@@ -65,30 +65,41 @@ export default function RolesTab() {
   return (
     <SectionCard
       title="Roles & Permissions"
-      description="Read-only overview of capabilities granted to each role.">
+      description="Read-only overview of capabilities granted to each role."
+      icon={Shield}>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left text-gray-500 border-b border-gray-200">
-              <th className="py-2 pr-3 font-[500]">Feature</th>
-              <th className="py-2 pr-3 font-[500] text-center">Owner</th>
-              <th className="py-2 pr-3 font-[500] text-center">Admin</th>
-              <th className="py-2 font-[500] text-center">Employee</th>
+            <tr className="text-left border-b border-[#005F6A]/10">
+              <th className="py-3 pr-3 text-xs font-[350] text-[#005F6A]/70 uppercase tracking-wide">
+                Feature
+              </th>
+              <th className="py-3 pr-3 text-xs font-[350] text-[#005F6A]/70 uppercase tracking-wide text-center">
+                Owner
+              </th>
+              <th className="py-3 pr-3 text-xs font-[350] text-[#005F6A]/70 uppercase tracking-wide text-center">
+                Admin
+              </th>
+              <th className="py-3 text-xs font-[350] text-[#005F6A]/70 uppercase tracking-wide text-center">
+                Employee
+              </th>
             </tr>
           </thead>
           <tbody>
             {PERMISSIONS.map((row) => (
               <tr
                 key={row.feature}
-                className="border-b border-gray-100 last:border-0">
-                <td className="py-2 pr-3 text-gray-900">{row.feature}</td>
-                <td className="py-2 pr-3 text-center">
+                className="border-b border-[#005F6A]/5 last:border-0">
+                <td className="py-3 pr-3 text-sm text-[#005F6A]">
+                  {row.feature}
+                </td>
+                <td className="py-3 pr-3 text-center">
                   <PermIcon allowed={row.owner} />
                 </td>
-                <td className="py-2 pr-3 text-center">
+                <td className="py-3 pr-3 text-center">
                   <PermIcon allowed={row.admin} />
                 </td>
-                <td className="py-2 text-center">
+                <td className="py-3 text-center">
                   <PermIcon allowed={row.employee} />
                 </td>
               </tr>
@@ -102,8 +113,8 @@ export default function RolesTab() {
 
 function PermIcon({ allowed }: { allowed: boolean }) {
   return allowed ? (
-    <Check className="w-4 h-4 text-green-600 inline-block" />
+    <Check className="w-4 h-4 text-[#005F6A] inline-block" />
   ) : (
-    <X className="w-4 h-4 text-gray-300 inline-block" />
+    <X className="w-4 h-4 text-[#005F6A]/20 inline-block" />
   );
 }

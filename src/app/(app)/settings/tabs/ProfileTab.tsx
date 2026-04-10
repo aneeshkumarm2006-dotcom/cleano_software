@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Card from "@/components/ui/Card";
+import { User as UserIcon, KeyRound } from "lucide-react";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import {
@@ -9,12 +9,11 @@ import {
   updateUserPassword,
 } from "../../actions/updateUserSettings";
 import { SettingsUser } from "../types";
+import { SectionCard, Field, Feedback, Msg } from "./_shared";
 
 interface ProfileTabProps {
   user: SettingsUser;
 }
-
-type Msg = { type: "success" | "error"; text: string } | null;
 
 export default function ProfileTab({ user }: ProfileTabProps) {
   const [name, setName] = useState(user.name);
@@ -95,140 +94,114 @@ export default function ProfileTab({ user }: ProfileTabProps) {
 
   return (
     <div className="space-y-6">
-      <Card variant="white" border>
-        <form onSubmit={handleProfileUpdate} className="p-4 space-y-5">
-          <h2 className="text-lg font-[550] text-gray-900">
-            Profile Information
-          </h2>
-
-          <div className="space-y-4">
-            <Field label="Full Name">
-              <Input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Enter your full name"
-                required
-              />
-            </Field>
-            <Field label="Email Address">
-              <Input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Enter your email"
-                required
-              />
-            </Field>
-            <Field label="Phone Number">
-              <Input
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="Enter your phone number"
-              />
-            </Field>
-            <Field label="Role">
-              <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-2xl text-sm text-gray-600">
-                {user.role}
-              </div>
-              <p className="text-xs text-gray-500 mt-1">
-                Contact an administrator to change your role.
-              </p>
-            </Field>
-          </div>
+      <SectionCard
+        title="Profile Information"
+        description="Update your name, email, and contact details."
+        icon={UserIcon}>
+        <form onSubmit={handleProfileUpdate} className="space-y-4">
+          <Field label="Full Name">
+            <Input
+              variant="form"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Enter your full name"
+              required
+            />
+          </Field>
+          <Field label="Email Address">
+            <Input
+              variant="form"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Enter your email"
+              required
+            />
+          </Field>
+          <Field label="Phone Number">
+            <Input
+              variant="form"
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="Enter your phone number"
+            />
+          </Field>
+          <Field
+            label="Role"
+            hint="Contact an administrator to change your role.">
+            <div className="px-4 py-2.5 bg-[#005F6A]/5 rounded-2xl text-sm text-[#005F6A]">
+              {user.role}
+            </div>
+          </Field>
 
           {profileMsg && <Feedback msg={profileMsg} />}
 
           <div className="flex justify-end">
             <Button
               type="submit"
-              variant="primary"
-              disabled={updatingProfile}>
+              variant="action"
+              border={false}
+              disabled={updatingProfile}
+              className="rounded-xl px-6 py-2.5">
               {updatingProfile ? "Updating..." : "Update Profile"}
             </Button>
           </div>
         </form>
-      </Card>
+      </SectionCard>
 
-      <Card variant="white" border>
-        <form onSubmit={handlePasswordUpdate} className="p-4 space-y-5">
-          <h2 className="text-lg font-[550] text-gray-900">Change Password</h2>
-
-          <div className="space-y-4">
-            <Field label="Current Password">
-              <Input
-                type="password"
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                placeholder="Enter current password"
-                required
-              />
-            </Field>
-            <Field label="New Password">
-              <Input
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Enter new password"
-                required
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Must be at least 8 characters.
-              </p>
-            </Field>
-            <Field label="Confirm New Password">
-              <Input
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Confirm new password"
-                required
-              />
-            </Field>
-          </div>
+      <SectionCard
+        title="Change Password"
+        description="Use a strong password you don't reuse elsewhere."
+        icon={KeyRound}>
+        <form onSubmit={handlePasswordUpdate} className="space-y-4">
+          <Field label="Current Password">
+            <Input
+              variant="form"
+              type="password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              placeholder="Enter current password"
+              required
+            />
+          </Field>
+          <Field
+            label="New Password"
+            hint="Must be at least 8 characters.">
+            <Input
+              variant="form"
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="Enter new password"
+              required
+            />
+          </Field>
+          <Field label="Confirm New Password">
+            <Input
+              variant="form"
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="Confirm new password"
+              required
+            />
+          </Field>
 
           {passwordMsg && <Feedback msg={passwordMsg} />}
 
           <div className="flex justify-end">
             <Button
               type="submit"
-              variant="primary"
-              disabled={updatingPassword}>
+              variant="action"
+              border={false}
+              disabled={updatingPassword}
+              className="rounded-xl px-6 py-2.5">
               {updatingPassword ? "Updating..." : "Update Password"}
             </Button>
           </div>
         </form>
-      </Card>
-    </div>
-  );
-}
-
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div>
-      <label className="block text-sm font-[500] text-gray-700 mb-1.5">
-        {label}
-      </label>
-      {children}
-    </div>
-  );
-}
-
-function Feedback({ msg }: { msg: NonNullable<Msg> }) {
-  return (
-    <div
-      className={`px-4 py-3 rounded-xl text-sm ${
-        msg.type === "success"
-          ? "bg-green-50 text-green-800 border border-green-200"
-          : "bg-red-50 text-red-800 border border-red-200"
-      }`}>
-      {msg.text}
+      </SectionCard>
     </div>
   );
 }

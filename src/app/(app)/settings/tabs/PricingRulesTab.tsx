@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, DollarSign, Sparkles } from "lucide-react";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import IconButton from "@/components/ui/IconButton";
@@ -98,18 +98,21 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
       <SectionCard
         title="Base Pricing Tiers"
         description="Set base prices by bedroom and bathroom count."
+        icon={DollarSign}
         actions={
           <Button
             type="button"
             variant="default"
+            border={false}
             size="sm"
-            onClick={addTier}>
+            onClick={addTier}
+            className="rounded-xl">
             <Plus className="w-4 h-4 mr-1" /> Add Tier
           </Button>
         }>
-        <div className="space-y-2">
+        <div className="space-y-3">
           {baseTiers.length === 0 && (
-            <p className="text-sm text-gray-500">No base tiers configured.</p>
+            <p className="text-sm text-[#005F6A]/60">No base tiers configured.</p>
           )}
           {baseTiers.map((tier, idx) => (
             <div
@@ -117,6 +120,7 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
               className="grid grid-cols-[1fr_1fr_1fr_auto] gap-3 items-end">
               <Field label="Beds">
                 <Input
+                  variant="form"
                   type="number"
                   min="0"
                   value={tier.beds}
@@ -127,6 +131,7 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
               </Field>
               <Field label="Baths">
                 <Input
+                  variant="form"
                   type="number"
                   min="0"
                   step="0.5"
@@ -140,6 +145,7 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
               </Field>
               <Field label="Price ($)">
                 <Input
+                  variant="form"
                   type="number"
                   min="0"
                   step="0.01"
@@ -166,18 +172,21 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
       <SectionCard
         title="Add-Ons"
         description="Optional services that can be added to a job."
+        icon={Sparkles}
         actions={
           <Button
             type="button"
             variant="default"
+            border={false}
             size="sm"
-            onClick={addAddOn}>
+            onClick={addAddOn}
+            className="rounded-xl">
             <Plus className="w-4 h-4 mr-1" /> Add Add-On
           </Button>
         }>
-        <div className="space-y-2">
+        <div className="space-y-3">
           {addOns.length === 0 && (
-            <p className="text-sm text-gray-500">No add-ons configured.</p>
+            <p className="text-sm text-[#005F6A]/60">No add-ons configured.</p>
           )}
           {addOns.map((addon) => (
             <div
@@ -185,6 +194,7 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
               className="grid grid-cols-[2fr_1fr_auto] gap-3 items-end">
               <Field label="Name">
                 <Input
+                  variant="form"
                   value={addon.name}
                   onChange={(e) =>
                     updateAddOn(addon.id, { name: e.target.value })
@@ -194,6 +204,7 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
               </Field>
               <Field label="Price ($)">
                 <Input
+                  variant="form"
                   type="number"
                   min="0"
                   step="0.01"
@@ -221,9 +232,11 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
       <div className="flex justify-end">
         <Button
           type="button"
-          variant="primary"
+          variant="action"
+          border={false}
           onClick={handleSave}
-          disabled={saving}>
+          disabled={saving}
+          className="rounded-xl px-6 py-2.5">
           {saving ? "Saving..." : "Save Pricing Rules"}
         </Button>
       </div>
