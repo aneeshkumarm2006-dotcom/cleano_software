@@ -1,253 +1,177 @@
 "use client";
 
 import { useState } from "react";
-import Card from "@/components/ui/Card";
-import Input from "@/components/ui/Input";
-import Button from "@/components/ui/Button";
-import { updateUserSettings, updateUserPassword } from "../actions/updateUserSettings";
-
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  phone?: string | null;
-  role: "OWNER" | "ADMIN" | "EMPLOYEE";
-}
+import {
+  User as UserIcon,
+  Percent,
+  DollarSign,
+  Briefcase,
+  CreditCard,
+  Boxes,
+  Package,
+  Star,
+  Shield,
+  Truck,
+} from "lucide-react";
+import ProfileTab from "./tabs/ProfileTab";
+import TaxSettingsTab from "./tabs/TaxSettingsTab";
+import PricingRulesTab from "./tabs/PricingRulesTab";
+import JobTypesTab from "./tabs/JobTypesTab";
+import PaymentTypesTab from "./tabs/PaymentTypesTab";
+import InventoryRulesTab from "./tabs/InventoryRulesTab";
+import KitTemplatesTab from "./tabs/KitTemplatesTab";
+import MultipliersTab from "./tabs/MultipliersTab";
+import RolesTab from "./tabs/RolesTab";
+import SuppliersTab from "./tabs/SuppliersTab";
+import {
+  SettingsUser,
+  AppSettingRecord,
+  ProductRecord,
+  KitTemplateRecord,
+  InventoryRuleRecord,
+  SupplierRecord,
+} from "./types";
 
 interface SettingsClientProps {
-  user: User;
+  user: SettingsUser;
+  isAdmin: boolean;
+  appSettings: AppSettingRecord[];
+  products: ProductRecord[];
+  kitTemplates: KitTemplateRecord[];
+  inventoryRules: InventoryRuleRecord[];
+  suppliers: SupplierRecord[];
 }
 
-export default function SettingsClient({ user }: SettingsClientProps) {
-  const [name, setName] = useState(user.name);
-  const [email, setEmail] = useState(user.email);
-  const [phone, setPhone] = useState(user.phone || "");
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  
-  const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
-  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
-  const [profileMessage, setProfileMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-  const [passwordMessage, setPasswordMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+type TabId =
+  | "profile"
+  | "tax"
+  | "pricing"
+  | "jobTypes"
+  | "paymentTypes"
+  | "inventoryRules"
+  | "kitTemplates"
+  | "multipliers"
+  | "roles"
+  | "suppliers";
 
-  const handleProfileUpdate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsUpdatingProfile(true);
-    setProfileMessage(null);
+interface TabDef {
+  id: TabId;
+  label: string;
+  icon: typeof UserIcon;
+  adminOnly?: boolean;
+}
 
-    try {
-      const result = await updateUserSettings({ name, email, phone: phone || null });
-      
-      if (result.success) {
-        setProfileMessage({ type: "success", text: "Profile updated successfully!" });
-      } else {
-        setProfileMessage({ type: "error", text: result.error || "Failed to update profile" });
-      }
-    } catch (error) {
-      setProfileMessage({ type: "error", text: "An unexpected error occurred" });
-    } finally {
-      setIsUpdatingProfile(false);
-    }
-  };
+const TABS: TabDef[] = [
+  { id: "profile", label: "Profile", icon: UserIcon },
+  { id: "tax", label: "Tax", icon: Percent, adminOnly: true },
+  { id: "pricing", label: "Pricing Rules", icon: DollarSign, adminOnly: true },
+  { id: "jobTypes", label: "Job Types", icon: Briefcase, adminOnly: true },
+  {
+    id: "paymentTypes",
+    label: "Payment Types",
+    icon: CreditCard,
+    adminOnly: true,
+  },
+  {
+    id: "inventoryRules",
+    label: "Inventory Rules",
+    icon: Boxes,
+    adminOnly: true,
+  },
+  {
+    id: "kitTemplates",
+    label: "Kit Templates",
+    icon: Package,
+    adminOnly: true,
+  },
+  { id: "multipliers", label: "Multipliers", icon: Star, adminOnly: true },
+  { id: "roles", label: "Roles", icon: Shield, adminOnly: true },
+  { id: "suppliers", label: "Suppliers", icon: Truck, adminOnly: true },
+];
 
-  const handlePasswordUpdate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsUpdatingPassword(true);
-    setPasswordMessage(null);
-
-    if (newPassword !== confirmPassword) {
-      setPasswordMessage({ type: "error", text: "New passwords do not match" });
-      setIsUpdatingPassword(false);
-      return;
-    }
-
-    if (newPassword.length < 8) {
-      setPasswordMessage({ type: "error", text: "Password must be at least 8 characters" });
-      setIsUpdatingPassword(false);
-      return;
-    }
-
-    try {
-      const result = await updateUserPassword({ currentPassword, newPassword });
-      
-      if (result.success) {
-        setPasswordMessage({ type: "success", text: "Password updated successfully!" });
-        setCurrentPassword("");
-        setNewPassword("");
-        setConfirmPassword("");
-      } else {
-        setPasswordMessage({ type: "error", text: result.error || "Failed to update password" });
-      }
-    } catch (error) {
-      setPasswordMessage({ type: "error", text: "An unexpected error occurred" });
-    } finally {
-      setIsUpdatingPassword(false);
-    }
-  };
+export default function SettingsClient({
+  user,
+  isAdmin,
+  appSettings,
+  products,
+  kitTemplates,
+  inventoryRules,
+  suppliers,
+}: SettingsClientProps) {
+  const visibleTabs = TABS.filter((t) => !t.adminOnly || isAdmin);
+  const [activeTab, setActiveTab] = useState<TabId>("profile");
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-[600] text-gray-900">Account Settings</h1>
+    <div className="max-w-6xl mx-auto p-6">
+      <div className="mb-6">
+        <h1 className="text-2xl font-[600] text-gray-900">Settings</h1>
         <p className="text-sm text-gray-500 mt-1">
-          Manage your account information and preferences
+          Manage your account and application configuration
         </p>
       </div>
 
-      {/* Profile Information */}
-      <Card>
-        <form onSubmit={handleProfileUpdate} className="space-y-6">
-          <div>
-            <h2 className="text-lg font-[550] text-gray-900 mb-4">Profile Information</h2>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-[500] text-gray-700 mb-1.5">
-                  Full Name
-                </label>
-                <Input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Enter your full name"
-                  required
-                />
-              </div>
+      <div className="flex gap-6">
+        {/* Sidebar tabs */}
+        <nav className="w-56 flex-shrink-0">
+          <ul className="space-y-1">
+            {visibleTabs.map((tab) => {
+              const Icon = tab.icon;
+              const active = activeTab === tab.id;
+              return (
+                <li key={tab.id}>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-[400] transition-all duration-150 ${
+                      active
+                        ? "bg-[#005F6A] text-white"
+                        : "text-[#005F6A] hover:bg-[#005F6A]/10"
+                    }`}>
+                    <Icon strokeWidth={1.6} className="w-4 h-4" />
+                    {tab.label}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
 
-              <div>
-                <label className="block text-sm font-[500] text-gray-700 mb-1.5">
-                  Email Address
-                </label>
-                <Input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Enter your email"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-[500] text-gray-700 mb-1.5">
-                  Phone Number
-                </label>
-                <Input
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="Enter your phone number"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-[500] text-gray-700 mb-1.5">
-                  Role
-                </label>
-                <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-600">
-                  {user.role}
-                </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  Contact an administrator to change your role
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {profileMessage && (
-            <div
-              className={`px-4 py-3 rounded-lg text-sm ${
-                profileMessage.type === "success"
-                  ? "bg-green-50 text-green-800 border border-green-200"
-                  : "bg-red-50 text-red-800 border border-red-200"
-              }`}>
-              {profileMessage.text}
-            </div>
+        {/* Content panel */}
+        <div className="flex-1 min-w-0">
+          {activeTab === "profile" && <ProfileTab user={user} />}
+          {activeTab === "tax" && isAdmin && (
+            <TaxSettingsTab settings={appSettings} />
           )}
-
-          <div className="flex justify-end">
-            <Button
-              type="submit"
-              variant="primary"
-              disabled={isUpdatingProfile}>
-              {isUpdatingProfile ? "Updating..." : "Update Profile"}
-            </Button>
-          </div>
-        </form>
-      </Card>
-
-      {/* Password Change */}
-      <Card>
-        <form onSubmit={handlePasswordUpdate} className="space-y-6">
-          <div>
-            <h2 className="text-lg font-[550] text-gray-900 mb-4">Change Password</h2>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-[500] text-gray-700 mb-1.5">
-                  Current Password
-                </label>
-                <Input
-                  type="password"
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  placeholder="Enter current password"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-[500] text-gray-700 mb-1.5">
-                  New Password
-                </label>
-                <Input
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="Enter new password"
-                  required
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Must be at least 8 characters
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-[500] text-gray-700 mb-1.5">
-                  Confirm New Password
-                </label>
-                <Input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Confirm new password"
-                  required
-                />
-              </div>
-            </div>
-          </div>
-
-          {passwordMessage && (
-            <div
-              className={`px-4 py-3 rounded-lg text-sm ${
-                passwordMessage.type === "success"
-                  ? "bg-green-50 text-green-800 border border-green-200"
-                  : "bg-red-50 text-red-800 border border-red-200"
-              }`}>
-              {passwordMessage.text}
-            </div>
+          {activeTab === "pricing" && isAdmin && (
+            <PricingRulesTab settings={appSettings} />
           )}
-
-          <div className="flex justify-end">
-            <Button
-              type="submit"
-              variant="primary"
-              disabled={isUpdatingPassword}>
-              {isUpdatingPassword ? "Updating..." : "Update Password"}
-            </Button>
-          </div>
-        </form>
-      </Card>
+          {activeTab === "jobTypes" && isAdmin && (
+            <JobTypesTab settings={appSettings} />
+          )}
+          {activeTab === "paymentTypes" && isAdmin && (
+            <PaymentTypesTab settings={appSettings} />
+          )}
+          {activeTab === "inventoryRules" && isAdmin && (
+            <InventoryRulesTab
+              products={products}
+              rules={inventoryRules}
+            />
+          )}
+          {activeTab === "kitTemplates" && isAdmin && (
+            <KitTemplatesTab
+              products={products}
+              kitTemplates={kitTemplates}
+            />
+          )}
+          {activeTab === "multipliers" && isAdmin && (
+            <MultipliersTab settings={appSettings} />
+          )}
+          {activeTab === "roles" && isAdmin && <RolesTab />}
+          {activeTab === "suppliers" && isAdmin && (
+            <SuppliersTab products={products} suppliers={suppliers} />
+          )}
+        </div>
+      </div>
     </div>
   );
 }
-

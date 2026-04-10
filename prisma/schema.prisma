@@ -75,6 +75,86 @@ model Product {
   updatedAt        DateTime          @updatedAt
   employeeProducts EmployeeProduct[]
   jobUsage         JobProductUsage[]
+  kitItems         KitTemplateItem[]
+  inventoryRule    InventoryRule?
+  supplierPrices   SupplierPrice[]
+}
+
+model AppSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  category  String
+  value     Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([category])
+}
+
+model KitTemplate {
+  id          String            @id @default(cuid())
+  name        String
+  description String?
+  isActive    Boolean           @default(true)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  items       KitTemplateItem[]
+}
+
+model KitTemplateItem {
+  id            String      @id @default(cuid())
+  kitTemplateId String
+  productId     String
+  quantity      Float
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  kitTemplate   KitTemplate @relation(fields: [kitTemplateId], references: [id], onDelete: Cascade)
+  product       Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([kitTemplateId, productId])
+  @@index([kitTemplateId])
+  @@index([productId])
+}
+
+model InventoryRule {
+  id              String   @id @default(cuid())
+  productId       String   @unique
+  usagePerJob     Float    @default(0)
+  refillThreshold Float    @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  product         Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model Supplier {
+  id        String          @id @default(cuid())
+  name      String
+  contact   String?
+  email     String?
+  phone     String?
+  address   String?
+  notes     String?
+  isActive  Boolean         @default(true)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  prices    SupplierPrice[]
+}
+
+model SupplierPrice {
+  id         String   @id @default(cuid())
+  supplierId String
+  productId  String
+  price      Float
+  unit       String?
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([supplierId, productId])
+  @@index([supplierId])
+  @@index([productId])
 }
 
 model Client {
@@ -125,17 +205,17 @@ model Job {
 }
 
 model JobProductUsage {
-  id                 String   @id @default(cuid())
-  jobId              String
-  productId          String
-  quantity           Float
-  inventoryBefore    Float?
-  inventoryAfter     Float?
-  notes              String?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-  job                Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  product            Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  id              String   @id @default(cuid())
+  jobId           String
+  productId       String
+  quantity        Float
+  inventoryBefore Float?
+  inventoryAfter  Float?
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  job             Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  product         Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@unique([jobId, productId])
 }
