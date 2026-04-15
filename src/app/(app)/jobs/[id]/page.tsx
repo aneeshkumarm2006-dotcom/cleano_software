@@ -30,6 +30,8 @@ export default async function JobPage({
     include: {
       employee: true,
       cleaners: true,
+      client: true,
+      addOns: true,
       productUsage: {
         include: {
           product: true,
@@ -62,6 +64,11 @@ export default async function JobPage({
       name: true,
       email: true,
     },
+  });
+
+  const clients = await db.client.findMany({
+    orderBy: { name: "asc" },
+    select: { id: true, name: true },
   });
 
   // Fetch paginated logs separately
@@ -104,6 +111,7 @@ export default async function JobPage({
   const jobData = {
     id: job.id,
     clientName: job.clientName,
+    clientId: job.clientId,
     location: job.location,
     description: job.description,
     jobType: job.jobType,
@@ -120,6 +128,16 @@ export default async function JobPage({
     paymentReceived: job.paymentReceived,
     invoiceSent: job.invoiceSent,
     notes: job.notes,
+    paymentType: job.paymentType,
+    discountAmount: job.discountAmount,
+    bedCount: job.bedCount,
+    bathCount: job.bathCount,
+    payRateMultiplier: job.payRateMultiplier,
+    addOns: job.addOns.map((a) => ({
+      id: a.id,
+      name: a.name,
+      price: a.price,
+    })),
     employee: {
       id: job.employee.id,
       name: job.employee.name,
@@ -162,6 +180,7 @@ export default async function JobPage({
       isAdmin={isAdmin}
       onDeleteJob={deleteJob}
       users={users}
+      clients={clients}
     />
   );
 }

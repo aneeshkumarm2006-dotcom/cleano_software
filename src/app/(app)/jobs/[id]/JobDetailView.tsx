@@ -63,6 +63,7 @@ const MENU_ITEMS: Array<{ id: TabView; label: string; icon: React.ReactNode }> =
 interface Job {
   id: string;
   clientName: string;
+  clientId?: string | null;
   location: string | null;
   description: string | null;
   jobType: string | null;
@@ -79,11 +80,22 @@ interface Job {
   paymentReceived: boolean;
   invoiceSent: boolean;
   notes: string | null;
+  paymentType?: string | null;
+  discountAmount?: number | null;
+  bedCount?: number | null;
+  bathCount?: number | null;
+  payRateMultiplier?: number | null;
+  addOns?: Array<{ id: string; name: string; price: number }>;
   employee: {
     id: string;
     name: string;
   };
   cleaners: Array<{ id: string; name: string }>;
+}
+
+interface ClientLite {
+  id: string;
+  name: string;
 }
 
 interface ProductUsage {
@@ -129,6 +141,7 @@ interface JobDetailViewProps {
   isAdmin: boolean;
   onDeleteJob?: () => Promise<void>;
   users: User[];
+  clients?: ClientLite[];
 }
 
 export default function JobDetailView({
@@ -142,6 +155,7 @@ export default function JobDetailView({
   isAdmin,
   onDeleteJob,
   users,
+  clients = [],
 }: JobDetailViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -527,16 +541,12 @@ export default function JobDetailView({
             <Button
               type="button"
               variant={invoiceSent ? "primary" : "default"}
-              onClick={handleToggleInvoiceSent}
+              href={`/invoices?job=${job.id}`}
               border={false}
-              disabled={!isAdmin || isTogglingInvoice}
+              disabled={!isAdmin}
               className="flex !justify-start gap-2 items-center px-2 py-3 rounded-xl transition-all duration-200">
-              {isTogglingInvoice ? (
-                <Loader className="w-4 h-4 animate-spin" />
-              ) : (
-                <FileText className="w-4 h-4" />
-              )}
-              {invoiceSent ? "Invoice Sent" : "Invoice Not Sent"}
+              <Receipt className="w-4 h-4" />
+              {invoiceSent ? "View Invoice" : "Generate Invoice"}
             </Button>
           </div>
         </Card>
@@ -558,6 +568,59 @@ export default function JobDetailView({
                 <span className="text-sm font-[350] text-green-600">
                   + ${job.price.toFixed(2)}
                 </span>
+              </div>
+            )}
+            {job.discountAmount && job.discountAmount > 0 && (
+              <div className="flex justify-between items-center p-3 rounded-xl bg-yellow-50">
+                <span className="text-sm text-[#005F6A]/70">Discount</span>
+                <span className="text-sm font-[400] text-yellow-700">
+                  − ${job.discountAmount.toFixed(2)}
+                </span>
+              </div>
+            )}
+            {job.paymentType && (
+              <div className="flex justify-between items-center p-3 rounded-xl bg-[#005F6A]/5">
+                <span className="text-sm text-[#005F6A]/70">Payment Type</span>
+                <span className="text-sm font-[400] text-[#005F6A]">
+                  {job.paymentType.replace("_", " ")}
+                </span>
+              </div>
+            )}
+            {(job.bedCount || job.bathCount) && (
+              <div className="flex justify-between items-center p-3 rounded-xl bg-[#005F6A]/5">
+                <span className="text-sm text-[#005F6A]/70">Rooms</span>
+                <span className="text-sm font-[400] text-[#005F6A]">
+                  {job.bedCount || 0} bed · {job.bathCount || 0} bath
+                </span>
+              </div>
+            )}
+            {job.payRateMultiplier !== null &&
+              job.payRateMultiplier !== undefined &&
+              job.payRateMultiplier !== 1 && (
+                <div className="flex justify-between items-center p-3 rounded-xl bg-[#005F6A]/5">
+                  <span className="text-sm text-[#005F6A]/70">
+                    Pay Multiplier
+                  </span>
+                  <span className="text-sm font-[400] text-[#005F6A]">
+                    ×{job.payRateMultiplier.toFixed(2)}
+                  </span>
+                </div>
+              )}
+            {job.addOns && job.addOns.length > 0 && (
+              <div className="p-3 rounded-xl bg-[#005F6A]/5">
+                <span className="text-sm text-[#005F6A]/70 block mb-2">
+                  Add-Ons
+                </span>
+                <div className="space-y-1">
+                  {job.addOns.map((a) => (
+                    <div key={a.id} className="flex justify-between text-xs">
+                      <span className="text-[#005F6A]">{a.name}</span>
+                      <span className="text-[#005F6A]">
+                        ${a.price.toFixed(2)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
             {job.employeePay !== null && (
@@ -882,9 +945,10 @@ export default function JobDetailView({
       <JobModal
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
-        job={job}
+        job={job as any}
         mode="edit"
         users={users}
+        clients={clients}
         onSubmit={handleSubmit}
         onDelete={handleModalDelete}
       />

@@ -35,6 +35,7 @@ interface User {
 interface Job {
   id: string;
   clientName: string;
+  clientId?: string | null;
   location: string | null;
   description: string | null;
   jobType: string | null;
@@ -46,7 +47,18 @@ interface Job {
   totalTip: number | null;
   parking: number | null;
   notes: string | null;
+  paymentType?: string | null;
+  discountAmount?: number | null;
+  bedCount?: number | null;
+  bathCount?: number | null;
+  payRateMultiplier?: number | null;
   cleaners: Array<{ id: string; name: string }>;
+  addOns?: Array<{ id: string; name: string; price: number }>;
+}
+
+interface ClientLite {
+  id: string;
+  name: string;
 }
 
 interface JobModalProps {
@@ -55,6 +67,7 @@ interface JobModalProps {
   job?: Job | null;
   mode: "create" | "edit";
   users: User[];
+  clients?: ClientLite[];
   onSubmit: (data: FormData) => Promise<{ success?: boolean; error?: string }>;
   onDelete?: (jobId: string) => Promise<{ success?: boolean; error?: string }>;
 }
@@ -73,6 +86,12 @@ const formSchema = z.object({
   totalTip: z.union([z.coerce.number().min(0), z.literal("")]).optional(),
   parking: z.union([z.coerce.number().min(0), z.literal("")]).optional(),
   notes: z.string().optional(),
+  bedCount: z.union([z.coerce.number().int().min(0), z.literal("")]).optional(),
+  bathCount: z.union([z.coerce.number().int().min(0), z.literal("")]).optional(),
+  discountAmount: z.union([z.coerce.number().min(0), z.literal("")]).optional(),
+  payRateMultiplier: z
+    .union([z.coerce.number().min(0), z.literal("")])
+    .optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -479,6 +498,7 @@ export default function JobModal({
   job,
   mode,
   users,
+  clients = [],
   onSubmit,
   onDelete,
 }: JobModalProps) {
@@ -490,6 +510,13 @@ export default function JobModal({
   const [isDeleting, setIsDeleting] = useState(false);
   const [selectedCleaners, setSelectedCleaners] = useState<string[]>([]);
   const [selectedJobType, setSelectedJobType] = useState<string>("");
+  const [selectedClientId, setSelectedClientId] = useState<string>("");
+  const [selectedPaymentType, setSelectedPaymentType] = useState<string>("");
+  const [addOns, setAddOns] = useState<Array<{ name: string; price: number }>>(
+    []
+  );
+  const [newAddOnName, setNewAddOnName] = useState("");
+  const [newAddOnPrice, setNewAddOnPrice] = useState("");
 
   const {
     register,
@@ -530,9 +557,18 @@ export default function JobModal({
           totalTip: job.totalTip || "",
           parking: job.parking || "",
           notes: job.notes || "",
+          bedCount: job.bedCount ?? "",
+          bathCount: job.bathCount ?? "",
+          discountAmount: job.discountAmount ?? "",
+          payRateMultiplier: job.payRateMultiplier ?? "",
         });
         setSelectedCleaners(job.cleaners?.map((c) => c.id) || []);
         setSelectedJobType(job.jobType || "");
+        setSelectedClientId(job.clientId || "");
+        setSelectedPaymentType(job.paymentType || "");
+        setAddOns(
+          (job.addOns || []).map((a) => ({ name: a.name, price: a.price }))
+        );
       } else {
         reset({
           clientName: "",
@@ -548,9 +584,16 @@ export default function JobModal({
           totalTip: "",
           parking: "",
           notes: "",
+          bedCount: "",
+          bathCount: "",
+          discountAmount: "",
+          payRateMultiplier: "",
         });
         setSelectedCleaners([]);
         setSelectedJobType("");
+        setSelectedClientId("");
+        setSelectedPaymentType("");
+        setAddOns([]);
       }
     }
   }, [isOpen, job, reset]);
@@ -623,6 +666,7 @@ export default function JobModal({
       const formData = new FormData();
       if (job?.id) formData.append("jobId", job.id);
       formData.append("clientName", values.clientName);
+      formData.append("clientId", selectedClientId);
       formData.append("location", values.location || "");
       formData.append("description", values.description || "");
       formData.append("jobType", selectedJobType);
@@ -635,6 +679,15 @@ export default function JobModal({
       formData.append("totalTip", String(values.totalTip || ""));
       formData.append("parking", String(values.parking || ""));
       formData.append("notes", values.notes || "");
+      formData.append("bedCount", String(values.bedCount || ""));
+      formData.append("bathCount", String(values.bathCount || ""));
+      formData.append("discountAmount", String(values.discountAmount || ""));
+      formData.append(
+        "payRateMultiplier",
+        String(values.payRateMultiplier || "")
+      );
+      formData.append("paymentType", selectedPaymentType);
+      formData.append("addOns", JSON.stringify(addOns));
 
       // Add cleaners
       selectedCleaners.forEach((id) => {
@@ -848,6 +901,57 @@ export default function JobModal({
               {/* Step 1: Basic Information */}
               {currentStep === 1 && (
                 <div className="space-y-5">
+                  {/* Existing Client Selector */}
+                  {clients.length > 0 && (
+                    <div>
+                      <label className="input-label tracking-tight">
+                        Link to Existing Client (optional)
+                      </label>
+                      <CustomDropdown
+                        trigger={
+                          <Button
+                            variant="default"
+                            size="md"
+                            border={false}
+                            type="button"
+                            disabled={disableForm}
+                            className="w-full h-[44px] px-4 py-3 flex items-center !justify-between bg-[#005F6A]/5">
+                            <span className="text-sm font-[350] text-[#005F6A] truncate">
+                              {selectedClientId
+                                ? clients.find(
+                                    (c) => c.id === selectedClientId
+                                  )?.name || "—"
+                                : "No linked client"}
+                            </span>
+                            <ChevronDown className="w-4 h-4 text-[#005F6A]/50" />
+                          </Button>
+                        }
+                        options={[
+                          {
+                            label: "— None —",
+                            onClick: () => setSelectedClientId(""),
+                          },
+                          ...clients.map((c) => ({
+                            label: c.name,
+                            onClick: () => {
+                              setSelectedClientId(c.id);
+                              // Auto-fill the name when linking
+                              const ev = new Event("input", { bubbles: true });
+                              const input = document.querySelector(
+                                'input[name="clientName"]'
+                              ) as HTMLInputElement | null;
+                              if (input) {
+                                input.value = c.name;
+                                input.dispatchEvent(ev);
+                              }
+                            },
+                          })),
+                        ]}
+                        maxHeight="16rem"
+                      />
+                    </div>
+                  )}
+
                   {/* Client Name */}
                   <div>
                     <label className="input-label tracking-tight">
@@ -1172,6 +1276,216 @@ export default function JobModal({
                           />
                         </div>
                       </div>
+
+                      <div>
+                        <label className="input-label tracking-tight">
+                          Discount Amount
+                        </label>
+                        <div className="relative">
+                          <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#005F6A]/50" />
+                          <Input
+                            variant="form"
+                            type="number"
+                            size="md"
+                            step="0.01"
+                            min="0"
+                            {...register("discountAmount")}
+                            disabled={disableForm}
+                            className="w-full pl-11 px-4 py-3"
+                            placeholder="0.00"
+                            border={false}
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="input-label tracking-tight">
+                          Pay Rate Multiplier
+                        </label>
+                        <Input
+                          variant="form"
+                          type="number"
+                          size="md"
+                          step="0.05"
+                          min="0"
+                          {...register("payRateMultiplier")}
+                          disabled={disableForm}
+                          className="w-full px-4 py-3"
+                          placeholder="1.00"
+                          border={false}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="input-label tracking-tight">
+                          Bed Count
+                        </label>
+                        <Input
+                          variant="form"
+                          type="number"
+                          size="md"
+                          min="0"
+                          {...register("bedCount")}
+                          disabled={disableForm}
+                          className="w-full px-4 py-3"
+                          placeholder="0"
+                          border={false}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="input-label tracking-tight">
+                          Bath Count
+                        </label>
+                        <Input
+                          variant="form"
+                          type="number"
+                          size="md"
+                          min="0"
+                          {...register("bathCount")}
+                          disabled={disableForm}
+                          className="w-full px-4 py-3"
+                          placeholder="0"
+                          border={false}
+                        />
+                      </div>
+
+                      <div className="col-span-2">
+                        <label className="input-label tracking-tight">
+                          Payment Type
+                        </label>
+                        <CustomDropdown
+                          trigger={
+                            <Button
+                              variant="default"
+                              size="md"
+                              border={false}
+                              type="button"
+                              disabled={disableForm}
+                              className="w-full h-[44px] px-4 py-3 flex items-center !justify-between bg-[#005F6A]/5">
+                              <span className="text-sm font-[350] text-[#005F6A]">
+                                {selectedPaymentType
+                                  ? selectedPaymentType.replace("_", " ")
+                                  : "Select payment type"}
+                              </span>
+                              <ChevronDown className="w-4 h-4 text-[#005F6A]/50" />
+                            </Button>
+                          }
+                          options={[
+                            {
+                              label: "— None —",
+                              onClick: () => setSelectedPaymentType(""),
+                            },
+                            {
+                              label: "Cash",
+                              onClick: () => setSelectedPaymentType("CASH"),
+                            },
+                            {
+                              label: "Cheque",
+                              onClick: () => setSelectedPaymentType("CHEQUE"),
+                            },
+                            {
+                              label: "E-Transfer",
+                              onClick: () =>
+                                setSelectedPaymentType("E_TRANSFER"),
+                            },
+                            {
+                              label: "Credit Card",
+                              onClick: () =>
+                                setSelectedPaymentType("CREDIT_CARD"),
+                            },
+                            {
+                              label: "Other",
+                              onClick: () => setSelectedPaymentType("OTHER"),
+                            },
+                          ]}
+                          maxHeight="14rem"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Add-Ons Section */}
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-[400] text-[#005F6A] uppercase tracking-tight flex items-center gap-2">
+                      <Briefcase className="w-4 h-4" />
+                      Add-Ons
+                    </h3>
+                    {addOns.length > 0 && (
+                      <div className="space-y-2">
+                        {addOns.map((a, i) => (
+                          <div
+                            key={i}
+                            className="flex items-center justify-between p-3 rounded-xl bg-[#005F6A]/5">
+                            <span className="text-sm text-[#005F6A]">
+                              {a.name}
+                            </span>
+                            <div className="flex items-center gap-3">
+                              <span className="text-sm font-[400] text-[#005F6A]">
+                                ${a.price.toFixed(2)}
+                              </span>
+                              <button
+                                type="button"
+                                className="text-xs text-red-600"
+                                onClick={() =>
+                                  setAddOns((prev) =>
+                                    prev.filter((_, idx) => idx !== i)
+                                  )
+                                }>
+                                remove
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div className="flex gap-2">
+                      <Input
+                        variant="form"
+                        size="md"
+                        value={newAddOnName}
+                        onChange={(e) => setNewAddOnName(e.target.value)}
+                        disabled={disableForm}
+                        placeholder="Add-on name"
+                        className="flex-1 px-4 py-3"
+                        border={false}
+                      />
+                      <Input
+                        variant="form"
+                        type="number"
+                        size="md"
+                        step="0.01"
+                        min="0"
+                        value={newAddOnPrice}
+                        onChange={(e) => setNewAddOnPrice(e.target.value)}
+                        disabled={disableForm}
+                        placeholder="Price"
+                        className="w-28 px-4 py-3"
+                        border={false}
+                      />
+                      <Button
+                        type="button"
+                        variant="default"
+                        size="md"
+                        border={false}
+                        disabled={
+                          disableForm || !newAddOnName.trim()
+                        }
+                        onClick={() => {
+                          const price = parseFloat(newAddOnPrice);
+                          setAddOns((prev) => [
+                            ...prev,
+                            {
+                              name: newAddOnName.trim(),
+                              price: Number.isFinite(price) ? price : 0,
+                            },
+                          ]);
+                          setNewAddOnName("");
+                          setNewAddOnPrice("");
+                        }}
+                        className="px-4 py-3">
+                        Add
+                      </Button>
                     </div>
                   </div>
 

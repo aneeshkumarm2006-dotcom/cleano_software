@@ -53,6 +53,12 @@ export default async function JobFormPage({
     },
   });
 
+  // Get all clients for the client selector
+  const clients = await db.client.findMany({
+    orderBy: { name: "asc" },
+    select: { id: true, name: true },
+  });
+
   async function saveJob(formData: FormData) {
     "use server";
 
@@ -69,9 +75,24 @@ export default async function JobFormPage({
     const endDate = formData.get("endDate") as string;
     const endTime = formData.get("endTime") as string;
 
+    const validPaymentTypes = [
+      "CASH",
+      "CHEQUE",
+      "E_TRANSFER",
+      "CREDIT_CARD",
+      "OTHER",
+    ];
+    const rawPaymentType = (formData.get("paymentType") as string) || "";
+    const paymentType = validPaymentTypes.includes(rawPaymentType)
+      ? rawPaymentType
+      : null;
+    const rawClientId = (formData.get("clientId") as string) || "";
+    const clientId = rawClientId || null;
+
     const jobData: any = {
       employeeId: session!.user.id,
       clientName: formData.get("clientName") as string,
+      clientId,
       description: (formData.get("description") as string) || null,
       jobType: (formData.get("jobType") as string) || null,
       location: (formData.get("location") as string) || null,
@@ -96,6 +117,19 @@ export default async function JobFormPage({
       paymentReceived: formData.get("paymentReceived") === "on",
       invoiceSent: formData.get("invoiceSent") === "on",
       notes: (formData.get("notes") as string) || null,
+      paymentType,
+      discountAmount: formData.get("discountAmount")
+        ? parseFloat(formData.get("discountAmount") as string)
+        : null,
+      bedCount: formData.get("bedCount")
+        ? parseInt(formData.get("bedCount") as string, 10)
+        : null,
+      bathCount: formData.get("bathCount")
+        ? parseInt(formData.get("bathCount") as string, 10)
+        : null,
+      payRateMultiplier: formData.get("payRateMultiplier")
+        ? parseFloat(formData.get("payRateMultiplier") as string)
+        : 1.0,
     };
 
     const editingJobId = formData.get("jobId") as string | null;
@@ -177,6 +211,26 @@ export default async function JobFormPage({
             </h2>
           </Card>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label
+                htmlFor="clientId"
+                className="block text-sm font-[400] text-neutral-950/80 mb-1">
+                Link Client (optional)
+              </label>
+              <select
+                id="clientId"
+                name="clientId"
+                defaultValue={existingJob?.clientId || ""}
+                className="w-full h-[42px] px-3 rounded-xl bg-[#005F6A]/5 text-sm text-[#005F6A] border-0 focus:outline-none focus:ring-1 focus:ring-[#005F6A]/20">
+                <option value="">— None —</option>
+                {clients.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <div>
               <label
                 htmlFor="clientName"
@@ -443,6 +497,94 @@ export default async function JobFormPage({
                   className="pl-7"
                 />
               </div>
+            </div>
+
+            <div>
+              <label
+                htmlFor="discountAmount"
+                className="block text-sm font-[400] text-neutral-950/80 mb-1">
+                Discount Amount
+              </label>
+              <div className="relative">
+                <span className="absolute left-3 top-2 text-gray-500">$</span>
+                <Input
+                  type="number"
+                  step="0.01"
+                  id="discountAmount"
+                  name="discountAmount"
+                  defaultValue={existingJob?.discountAmount || ""}
+                  placeholder="0.00"
+                  className="pl-7"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label
+                htmlFor="payRateMultiplier"
+                className="block text-sm font-[400] text-neutral-950/80 mb-1">
+                Pay Rate Multiplier
+              </label>
+              <Input
+                type="number"
+                step="0.05"
+                id="payRateMultiplier"
+                name="payRateMultiplier"
+                defaultValue={existingJob?.payRateMultiplier ?? 1.0}
+                placeholder="1.00"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="paymentType"
+                className="block text-sm font-[400] text-neutral-950/80 mb-1">
+                Payment Type
+              </label>
+              <select
+                id="paymentType"
+                name="paymentType"
+                defaultValue={existingJob?.paymentType || ""}
+                className="w-full h-[42px] px-3 rounded-xl bg-[#005F6A]/5 text-sm text-[#005F6A] border-0 focus:outline-none focus:ring-1 focus:ring-[#005F6A]/20">
+                <option value="">— Select —</option>
+                <option value="CASH">Cash</option>
+                <option value="CHEQUE">Cheque</option>
+                <option value="E_TRANSFER">E-Transfer</option>
+                <option value="CREDIT_CARD">Credit Card</option>
+                <option value="OTHER">Other</option>
+              </select>
+            </div>
+
+            <div>
+              <label
+                htmlFor="bedCount"
+                className="block text-sm font-[400] text-neutral-950/80 mb-1">
+                Bed Count
+              </label>
+              <Input
+                type="number"
+                min="0"
+                id="bedCount"
+                name="bedCount"
+                defaultValue={existingJob?.bedCount ?? ""}
+                placeholder="0"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="bathCount"
+                className="block text-sm font-[400] text-neutral-950/80 mb-1">
+                Bath Count
+              </label>
+              <Input
+                type="number"
+                min="0"
+                id="bathCount"
+                name="bathCount"
+                defaultValue={existingJob?.bathCount ?? ""}
+                placeholder="0"
+              />
             </div>
           </div>
         </Card>

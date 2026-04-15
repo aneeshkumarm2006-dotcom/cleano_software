@@ -29,6 +29,7 @@ import CustomDropdown from "@/components/ui/custom-dropdown";
 interface Job {
   id: string;
   clientName: string;
+  clientId: string | null;
   location: string | null;
   description: string | null;
   jobType: string | null;
@@ -43,7 +44,27 @@ interface Job {
   notes: string | null;
   paymentReceived: boolean;
   invoiceSent: boolean;
+  paymentType?: string | null;
+  discountAmount?: number | null;
+  bedCount?: number | null;
+  bathCount?: number | null;
+  payRateMultiplier?: number | null;
+  profit?: number;
+  profitPct?: number;
+  timeSpentMs?: number;
   cleaners: Array<{ id: string; name: string }>;
+  addOns?: Array<{ id: string; name: string; price: number }>;
+}
+
+interface ClientLite {
+  id: string;
+  name: string;
+}
+
+interface UserLite {
+  id: string;
+  name: string;
+  email: string;
 }
 
 interface JobStats {
@@ -74,6 +95,21 @@ interface JobsViewProps {
   // Modal handlers
   onCreateJob: () => void;
   onEditJob: (job: Job) => void;
+  // Extended filter controls
+  clients?: ClientLite[];
+  users?: UserLite[];
+  startDate?: string;
+  endDate?: string;
+  jobTypeFilter?: string;
+  clientFilter?: string;
+  employeeFilter?: string;
+  paymentTypeFilter?: string;
+  onStartDateChange?: (v: string) => void;
+  onEndDateChange?: (v: string) => void;
+  onJobTypeFilterChange?: (v: string) => void;
+  onClientFilterChange?: (v: string) => void;
+  onEmployeeFilterChange?: (v: string) => void;
+  onPaymentTypeFilterChange?: (v: string) => void;
 }
 
 export default function JobsView({
@@ -93,6 +129,20 @@ export default function JobsView({
   updateURLParams,
   onCreateJob,
   onEditJob,
+  clients = [],
+  users = [],
+  startDate = "",
+  endDate = "",
+  jobTypeFilter = "all",
+  clientFilter = "all",
+  employeeFilter = "all",
+  paymentTypeFilter = "all",
+  onStartDateChange,
+  onEndDateChange,
+  onJobTypeFilterChange,
+  onClientFilterChange,
+  onEmployeeFilterChange,
+  onPaymentTypeFilterChange,
 }: JobsViewProps) {
   const getStatusBadge = (status: string) => {
     const statusConfig: Record<string, { variant: any; label: string }> = {
@@ -439,6 +489,157 @@ export default function JobsView({
         </div>
       </div>
 
+      {/* Extended Filters Row */}
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <input
+          type="date"
+          value={startDate}
+          onChange={(e) => onStartDateChange?.(e.target.value)}
+          className="h-[38px] px-3 rounded-xl bg-[#005F6A]/5 text-sm text-[#005F6A] border-0 focus:outline-none focus:ring-1 focus:ring-[#005F6A]/20"
+          placeholder="Start date"
+        />
+        <span className="text-xs text-[#005F6A]/50">to</span>
+        <input
+          type="date"
+          value={endDate}
+          onChange={(e) => onEndDateChange?.(e.target.value)}
+          className="h-[38px] px-3 rounded-xl bg-[#005F6A]/5 text-sm text-[#005F6A] border-0 focus:outline-none focus:ring-1 focus:ring-[#005F6A]/20"
+          placeholder="End date"
+        />
+
+        <CustomDropdown
+          trigger={
+            <Button
+              variant="default"
+              size="sm"
+              border={false}
+              type="button"
+              className="h-[38px] px-3 flex items-center gap-2">
+              <span className="text-xs font-[350]">
+                Type:{" "}
+                {jobTypeFilter === "all" ? "All" : jobTypeFilter}
+              </span>
+              <ChevronDown className="w-3 h-3" />
+            </Button>
+          }
+          options={[
+            { label: "All Types", onClick: () => onJobTypeFilterChange?.("all") },
+            { label: "Residential (R)", onClick: () => onJobTypeFilterChange?.("R") },
+            { label: "Commercial (C)", onClick: () => onJobTypeFilterChange?.("C") },
+            { label: "Post-Construction (PC)", onClick: () => onJobTypeFilterChange?.("PC") },
+            { label: "Follow-up (F)", onClick: () => onJobTypeFilterChange?.("F") },
+          ]}
+          maxHeight="14rem"
+        />
+
+        {clients.length > 0 && (
+          <CustomDropdown
+            trigger={
+              <Button
+                variant="default"
+                size="sm"
+                border={false}
+                type="button"
+                className="h-[38px] px-3 flex items-center gap-2 max-w-[200px]">
+                <span className="text-xs font-[350] truncate">
+                  Client:{" "}
+                  {clientFilter === "all"
+                    ? "All"
+                    : clients.find((c) => c.id === clientFilter)?.name || "—"}
+                </span>
+                <ChevronDown className="w-3 h-3" />
+              </Button>
+            }
+            options={[
+              { label: "All Clients", onClick: () => onClientFilterChange?.("all") },
+              ...clients.map((c) => ({
+                label: c.name,
+                onClick: () => onClientFilterChange?.(c.id),
+              })),
+            ]}
+            maxHeight="18rem"
+          />
+        )}
+
+        {users.length > 0 && (
+          <CustomDropdown
+            trigger={
+              <Button
+                variant="default"
+                size="sm"
+                border={false}
+                type="button"
+                className="h-[38px] px-3 flex items-center gap-2 max-w-[200px]">
+                <span className="text-xs font-[350] truncate">
+                  Employee:{" "}
+                  {employeeFilter === "all"
+                    ? "All"
+                    : users.find((u) => u.id === employeeFilter)?.name || "—"}
+                </span>
+                <ChevronDown className="w-3 h-3" />
+              </Button>
+            }
+            options={[
+              { label: "All Employees", onClick: () => onEmployeeFilterChange?.("all") },
+              ...users.map((u) => ({
+                label: u.name,
+                onClick: () => onEmployeeFilterChange?.(u.id),
+              })),
+            ]}
+            maxHeight="18rem"
+          />
+        )}
+
+        <CustomDropdown
+          trigger={
+            <Button
+              variant="default"
+              size="sm"
+              border={false}
+              type="button"
+              className="h-[38px] px-3 flex items-center gap-2">
+              <span className="text-xs font-[350]">
+                Pay:{" "}
+                {paymentTypeFilter === "all" ? "All" : paymentTypeFilter}
+              </span>
+              <ChevronDown className="w-3 h-3" />
+            </Button>
+          }
+          options={[
+            { label: "All Payment Types", onClick: () => onPaymentTypeFilterChange?.("all") },
+            { label: "Cash", onClick: () => onPaymentTypeFilterChange?.("CASH") },
+            { label: "Cheque", onClick: () => onPaymentTypeFilterChange?.("CHEQUE") },
+            { label: "E-Transfer", onClick: () => onPaymentTypeFilterChange?.("E_TRANSFER") },
+            { label: "Credit Card", onClick: () => onPaymentTypeFilterChange?.("CREDIT_CARD") },
+            { label: "Other", onClick: () => onPaymentTypeFilterChange?.("OTHER") },
+          ]}
+          maxHeight="14rem"
+        />
+
+        {(startDate ||
+          endDate ||
+          jobTypeFilter !== "all" ||
+          clientFilter !== "all" ||
+          employeeFilter !== "all" ||
+          paymentTypeFilter !== "all") && (
+          <Button
+            variant="ghost"
+            size="sm"
+            border={false}
+            className="h-[38px] px-3 text-xs"
+            onClick={() => {
+              onStartDateChange?.("");
+              onEndDateChange?.("");
+              onJobTypeFilterChange?.("all");
+              onClientFilterChange?.("all");
+              onEmployeeFilterChange?.("all");
+              onPaymentTypeFilterChange?.("all");
+            }}>
+            Clear
+          </Button>
+        )}
+      </div>
+
       {/* Loading State */}
       {isLoading ? (
         <div className="bg-white rounded-2xl">
@@ -474,13 +675,14 @@ export default function JobsView({
                       { label: "Date", className: "w-[100px] text-left" },
                       { label: "Client", className: "w-[180px] text-left" },
                       { label: "Type", className: "w-[60px] text-center" },
-                      { label: "Cleaners", className: "w-[180px] text-left" },
-                      { label: "Start", className: "w-[120px] text-center" },
-                      { label: "End", className: "w-[120px] text-center" },
-                      { label: "OT", className: "w-[120px] text-center" },
-                      { label: "Price", className: "w-[120px] text-right" },
+                      { label: "Cleaners", className: "w-[160px] text-left" },
+                      { label: "Time", className: "w-[110px] text-center" },
+                      { label: "Price", className: "w-[110px] text-right" },
+                      { label: "Discount", className: "w-[100px] text-right" },
+                      { label: "Profit %", className: "w-[90px] text-right" },
+                      { label: "Pay Type", className: "w-[110px] text-center" },
                       { label: "Status", className: "w-[110px] text-center" },
-                      { label: "Payment", className: "w-[120px] text-center" },
+                      { label: "Paid", className: "w-[90px] text-center" },
                       { label: "Actions", className: "w-[160px] text-left" },
                     ].map((col) => (
                       <div
@@ -494,7 +696,13 @@ export default function JobsView({
                   {/* Rows */}
                   <div className="divide-y divide-[#005F6A]/4">
                     {paginatedJobs.map((job) => {
-                      const overtime = calculateOvertime(job);
+                      const formatTimeSpent = (ms: number) => {
+                        if (!ms || ms <= 0) return "-";
+                        const totalMin = Math.round(ms / 60000);
+                        const h = Math.floor(totalMin / 60);
+                        const m = totalMin % 60;
+                        return h > 0 ? `${h}h ${m}m` : `${m}m`;
+                      };
                       return (
                         <div
                           key={job.id}
@@ -530,7 +738,7 @@ export default function JobsView({
                           </div>
 
                           {/* Cleaners */}
-                          <div className="w-[180px] p-4">
+                          <div className="w-[160px] p-4">
                             <p
                               className="app-title-small truncate"
                               title={
@@ -543,33 +751,27 @@ export default function JobsView({
                             </p>
                           </div>
 
-                          {/* Start */}
-                          <div className="w-[120px] p-4 text-center">
+                          {/* Time Spent */}
+                          <div className="w-[110px] p-4 text-center">
                             <p className="app-title-small !text-[#005F6A]/70">
-                              {new Date(job.startTime).toLocaleTimeString([], {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
+                              {formatTimeSpent(job.timeSpentMs || 0)}
                             </p>
                           </div>
 
-                          {/* End */}
-                          <div className="w-[120px] p-4 text-center">
-                            <p className="app-title-small !text-[#005F6A]/70">
-                              {job.endTime
-                                ? new Date(job.endTime).toLocaleTimeString([], {
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                  })
+                          {/* Price */}
+                          <div className="w-[110px] p-4 text-right">
+                            <p className="app-title-small !text-[#005F6A]">
+                              {job.price !== null && job.price !== undefined
+                                ? `$${job.price.toFixed(2)}`
                                 : "-"}
                             </p>
                           </div>
 
-                          {/* Overtime */}
-                          <div className="w-[120px] p-4 text-center">
-                            {overtime ? (
-                              <span className="text-sm font-[400] text-orange-600">
-                                {overtime}h
+                          {/* Discount */}
+                          <div className="w-[100px] p-4 text-right">
+                            {job.discountAmount && job.discountAmount > 0 ? (
+                              <span className="text-sm font-[400] text-yellow-600">
+                                −${job.discountAmount.toFixed(2)}
                               </span>
                             ) : (
                               <span className="!app-subtitle !text-[#005F6A]/40">
@@ -578,11 +780,36 @@ export default function JobsView({
                             )}
                           </div>
 
-                          {/* Price */}
-                          <div className="w-[120px] p-4 text-right">
-                            <p className="app-title-small !text-[#005F6A]">
-                              {job.price ? `$${job.price.toFixed(2)}` : "-"}
-                            </p>
+                          {/* Profit % */}
+                          <div className="w-[90px] p-4 text-right">
+                            {typeof job.profitPct === "number" &&
+                            (job.price || 0) > 0 ? (
+                              <span
+                                className={`text-sm font-[400] ${
+                                  job.profitPct >= 0
+                                    ? "text-green-600"
+                                    : "text-red-600"
+                                }`}>
+                                {job.profitPct.toFixed(0)}%
+                              </span>
+                            ) : (
+                              <span className="!app-subtitle !text-[#005F6A]/40">
+                                -
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Payment Type */}
+                          <div className="w-[110px] p-4 text-center">
+                            {job.paymentType ? (
+                              <Badge variant="default" size="sm">
+                                {job.paymentType.replace("_", " ")}
+                              </Badge>
+                            ) : (
+                              <span className="!app-subtitle !text-[#005F6A]/40">
+                                -
+                              </span>
+                            )}
                           </div>
 
                           {/* Status */}
@@ -590,8 +817,8 @@ export default function JobsView({
                             {getStatusBadge(job.status)}
                           </div>
 
-                          {/* Payment */}
-                          <div className="w-[120px] p-4 flex justify-center gap-1">
+                          {/* Paid (Payment flags) */}
+                          <div className="w-[90px] p-4 flex justify-center gap-1">
                             <div title="Payment Received">
                               <CheckCircle2
                                 strokeWidth={1.2}

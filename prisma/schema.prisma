@@ -18,6 +18,7 @@ model User {
   phone             String?
   role              Roles              @default(EMPLOYEE)
   emailVerified     Boolean            @default(false)
+  payMultiplier     Float              @default(1.0)
   accounts          Account[]
   assignedProducts  EmployeeProduct[]
   inventoryRequests InventoryRequest[]
@@ -25,6 +26,8 @@ model User {
   sessions          Session[]
   cleaningJobs      Job[]              @relation("JobCleaners")
   jobLogs           JobLog[]           @relation("UserJobLogs")
+  payouts           Payout[]
+  approvedPeriods   PayPeriod[]        @relation("PayPeriodApprover")
 }
 
 model Account {
@@ -170,38 +173,68 @@ model Client {
 }
 
 model Job {
-  id              String            @id @default(cuid())
-  employeeId      String
-  clientName      String
-  clientId        String?
-  location        String?
-  description     String?
-  jobType         String?
-  jobDate         DateTime?
-  startTime       DateTime
-  endTime         DateTime?
-  clockInTime     DateTime?
-  clockOutTime    DateTime?
-  status          JobStatus         @default(CREATED)
-  price           Float?
-  employeePay     Float?
-  totalTip        Float?
-  parking         Float?
-  paymentReceived Boolean           @default(false)
-  invoiceSent     Boolean           @default(false)
-  notes           String?
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
-  employee        User              @relation("EmployeeJobs", fields: [employeeId], references: [id], onDelete: Cascade)
-  client          Client?           @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  productUsage    JobProductUsage[]
-  cleaners        User[]            @relation("JobCleaners")
-  logs            JobLog[]
+  id                 String            @id @default(cuid())
+  employeeId         String
+  clientName         String
+  clientId           String?
+  location           String?
+  description        String?
+  jobType            String?
+  jobDate            DateTime?
+  startTime          DateTime
+  endTime            DateTime?
+  clockInTime        DateTime?
+  clockOutTime       DateTime?
+  status             JobStatus         @default(CREATED)
+  price              Float?
+  employeePay        Float?
+  totalTip           Float?
+  parking            Float?
+  paymentReceived    Boolean           @default(false)
+  invoiceSent        Boolean           @default(false)
+  notes              String?
+  paymentType        PaymentType?
+  discountAmount     Float?
+  bedCount           Int?
+  bathCount          Int?
+  payRateMultiplier  Float?            @default(1.0)
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  employee           User              @relation("EmployeeJobs", fields: [employeeId], references: [id], onDelete: Cascade)
+  client             Client?           @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  productUsage       JobProductUsage[]
+  cleaners           User[]            @relation("JobCleaners")
+  logs               JobLog[]
+  addOns             JobAddOn[]
 
   @@index([jobDate])
   @@index([clientName])
   @@index([clientId])
   @@index([status])
+}
+
+model JobAddOn {
+  id          String   @id @default(cuid())
+  jobId       String
+  name        String
+  price       Float    @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  job         Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId])
+}
+
+model PricingRule {
+  id        String   @id @default(cuid())
+  bedCount  Int
+  bathCount Int
+  basePrice Float
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([bedCount, bathCount])
 }
 
 model JobProductUsage {
@@ -266,6 +299,46 @@ model EmployeeProduct {
   @@unique([employeeId, productId])
   @@index([employeeId])
   @@index([productId])
+}
+
+model PayPeriod {
+  id           String          @id @default(cuid())
+  startDate    DateTime
+  endDate      DateTime
+  status       PayPeriodStatus @default(DRAFT)
+  notes        String?
+  approvedById String?
+  approvedAt   DateTime?
+  paidAt       DateTime?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  approvedBy   User?           @relation("PayPeriodApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+  payouts      Payout[]
+
+  @@index([startDate])
+  @@index([status])
+}
+
+model Payout {
+  id                  String    @id @default(cuid())
+  payPeriodId         String
+  employeeId          String
+  baseAmount          Float     @default(0)
+  adjustments         Float     @default(0)
+  deductions          Float     @default(0)
+  reimbursements      Float     @default(0)
+  finalAmount         Float     @default(0)
+  jobCount            Int       @default(0)
+  totalHours          Float     @default(0)
+  notes               String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  payPeriod           PayPeriod @relation(fields: [payPeriodId], references: [id], onDelete: Cascade)
+  employee            User      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([payPeriodId, employeeId])
+  @@index([payPeriodId])
+  @@index([employeeId])
 }
 
 enum Roles {

@@ -1,23 +1,60 @@
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { db } from "@/db";
+import PayoutsPageClient from "./PayoutsPageClient";
 
 export default async function PayoutsPage() {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) redirect("/sign-in");
 
+  const role = (session.user as any).role;
+  if (role !== "OWNER" && role !== "ADMIN") {
+    redirect("/dashboard");
+  }
+
+  const periods = await db.payPeriod.findMany({
+    orderBy: { startDate: "desc" },
+    include: {
+      approvedBy: { select: { id: true, name: true } },
+      payouts: {
+        include: {
+          employee: { select: { id: true, name: true, email: true } },
+        },
+      },
+    },
+  });
+
+  const data = periods.map((p) => ({
+    id: p.id,
+    startDate: p.startDate.toISOString(),
+    endDate: p.endDate.toISOString(),
+    status: p.status,
+    notes: p.notes,
+    approvedAt: p.approvedAt ? p.approvedAt.toISOString() : null,
+    approvedBy: p.approvedBy ? { id: p.approvedBy.id, name: p.approvedBy.name } : null,
+    paidAt: p.paidAt ? p.paidAt.toISOString() : null,
+    totalFinal: p.payouts.reduce((sum, pay) => sum + pay.finalAmount, 0),
+    employeeCount: p.payouts.length,
+    payouts: p.payouts.map((pay) => ({
+      id: pay.id,
+      employeeId: pay.employeeId,
+      employeeName: pay.employee.name,
+      employeeEmail: pay.employee.email,
+      baseAmount: pay.baseAmount,
+      adjustments: pay.adjustments,
+      deductions: pay.deductions,
+      reimbursements: pay.reimbursements,
+      finalAmount: pay.finalAmount,
+      jobCount: pay.jobCount,
+      totalHours: pay.totalHours,
+      notes: pay.notes,
+    })),
+  }));
+
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen text-center px-4">
-      <div className="w-16 h-16 rounded-2xl bg-[#005F6A] flex items-center justify-center mb-6">
-        <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-      </div>
-      <h1 className="text-3xl font-bold text-gray-900 mb-3">Payouts</h1>
-      <p className="text-gray-500 text-lg mb-2">Coming Soon</p>
-      <p className="text-gray-400 text-sm max-w-sm">
-        Payout management is on its way. You&apos;ll be able to track and manage all employee payouts from here.
-      </p>
+    <div className="h-full overflow-hidden overflow-y-auto p-8">
+      <PayoutsPageClient initialPeriods={data} />
     </div>
   );
 }

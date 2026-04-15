@@ -21,48 +21,47 @@ export default async function JobsPage({
     redirect("/sign-in");
   }
 
-  // Check user role - admins/owners can see all jobs
   const isAdmin =
     (session.user as any).role === "ADMIN" ||
     (session.user as any).role === "OWNER";
 
-  // Parse search params
   const params = await searchParams;
   const search = (params.search as string) || "";
   const status = (params.status as string) || "all";
   const payment = (params.payment as string) || "all";
+  const subTab = (params.subTab as string) || "all";
   const page = Number(params.page) || 1;
   const rowsPerPage = Number(params.rowsPerPage) || 10;
 
-  // Build where clause for stats
   const baseWhere: any = {};
   if (!isAdmin) {
     baseWhere.employeeId = session.user.id;
   }
 
-  // Fetch all jobs for the user
   const allJobs = await db.job.findMany({
     where: baseWhere,
     include: {
       employee: true,
       cleaners: true,
+      client: true,
+      addOns: true,
+      productUsage: { include: { product: true } },
     },
     orderBy: {
       jobDate: "desc",
     },
   });
 
-  // Fetch all users for the cleaner selector
   const users = await db.user.findMany({
     orderBy: { name: "asc" },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-    },
+    select: { id: true, name: true, email: true },
   });
 
-  // Calculate statistics
+  const clients = await db.client.findMany({
+    orderBy: { name: "asc" },
+    select: { id: true, name: true },
+  });
+
   const totalRevenue = await db.job.aggregate({
     where: baseWhere,
     _sum: { price: true },
@@ -78,26 +77,55 @@ export default async function JobsPage({
 
   const totalJobsCount = allJobs.length;
 
-  // Transform jobs for the client
-  const jobsData = allJobs.map((job) => ({
-    id: job.id,
-    clientName: job.clientName,
-    location: job.location,
-    description: job.description,
-    jobType: job.jobType,
-    jobDate: job.jobDate?.toISOString() || null,
-    startTime: job.startTime.toISOString(),
-    endTime: job.endTime?.toISOString() || null,
-    status: job.status,
-    price: job.price,
-    employeePay: job.employeePay,
-    totalTip: job.totalTip,
-    parking: job.parking,
-    notes: job.notes,
-    paymentReceived: job.paymentReceived,
-    invoiceSent: job.invoiceSent,
-    cleaners: job.cleaners.map((c) => ({ id: c.id, name: c.name })),
-  }));
+  const jobsData = allJobs.map((job) => {
+    const productCost = job.productUsage.reduce(
+      (sum, u) => sum + u.quantity * u.product.costPerUnit,
+      0
+    );
+    const revenue = job.price || 0;
+    const costs = (job.employeePay || 0) + (job.parking || 0) + productCost;
+    const profit = revenue - costs;
+    const profitPct = revenue > 0 ? (profit / revenue) * 100 : 0;
+
+    const timeSpentMs =
+      job.endTime && job.startTime
+        ? new Date(job.endTime).getTime() - new Date(job.startTime).getTime()
+        : 0;
+
+    return {
+      id: job.id,
+      clientName: job.clientName,
+      clientId: job.clientId,
+      location: job.location,
+      description: job.description,
+      jobType: job.jobType,
+      jobDate: job.jobDate?.toISOString() || null,
+      startTime: job.startTime.toISOString(),
+      endTime: job.endTime?.toISOString() || null,
+      status: job.status,
+      price: job.price,
+      employeePay: job.employeePay,
+      totalTip: job.totalTip,
+      parking: job.parking,
+      notes: job.notes,
+      paymentReceived: job.paymentReceived,
+      invoiceSent: job.invoiceSent,
+      paymentType: job.paymentType,
+      discountAmount: job.discountAmount,
+      bedCount: job.bedCount,
+      bathCount: job.bathCount,
+      payRateMultiplier: job.payRateMultiplier,
+      profit,
+      profitPct,
+      timeSpentMs,
+      cleaners: job.cleaners.map((c) => ({ id: c.id, name: c.name })),
+      addOns: job.addOns.map((a) => ({
+        id: a.id,
+        name: a.name,
+        price: a.price,
+      })),
+    };
+  });
 
   const stats = {
     totalJobs: totalJobsCount,
@@ -114,9 +142,12 @@ export default async function JobsPage({
         initialSearch={search}
         initialStatus={status}
         initialPayment={payment}
+        initialSubTab={subTab}
         initialPage={page}
         initialRowsPerPage={rowsPerPage}
         users={users}
+        clients={clients}
+        isAdmin={isAdmin}
       />
     </div>
   );
