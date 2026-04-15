@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
+import type { Prisma } from "@prisma/client";
 
 export async function togglePaymentReceived(jobId: string) {
   const session = await auth.api.getSession({
@@ -31,7 +32,7 @@ export async function togglePaymentReceived(jobId: string) {
 
     const newStatus = !job.paymentReceived;
 
-    await db.$transaction([
+    const ops: Prisma.PrismaPromise<unknown>[] = [
       db.job.update({
         where: { id: jobId },
         data: {
@@ -51,10 +52,55 @@ export async function togglePaymentReceived(jobId: string) {
             : `Payment marked as not received by ${session.user.name}`,
         },
       }),
-    ]);
+    ];
+
+    if (newStatus && job.price && job.price > 0) {
+      const taxConfig = await db.appSetting.findUnique({
+        where: { key: "tax.config" },
+      });
+      let taxAmount = 0;
+      if (taxConfig?.value) {
+        const cfg = taxConfig.value as {
+          gstRate?: number;
+          qstRate?: number;
+        };
+        const gst = (job.price * (cfg.gstRate ?? 0)) / 100;
+        const qst = (job.price * (cfg.qstRate ?? 0)) / 100;
+        taxAmount = gst + qst;
+      }
+      const discount = job.discountAmount ?? 0;
+      const netAmount = job.price - discount;
+      ops.push(
+        db.transaction.create({
+          data: {
+            date: new Date(),
+            category: "REVENUE",
+            amount: netAmount,
+            description: `Revenue from job for ${job.clientName}`,
+            jobId: job.id,
+            source: job.paymentType ?? null,
+            taxAmount,
+            isAuto: true,
+          },
+        })
+      );
+    } else if (!newStatus) {
+      ops.push(
+        db.transaction.deleteMany({
+          where: {
+            jobId: job.id,
+            category: "REVENUE",
+            isAuto: true,
+          },
+        })
+      );
+    }
+
+    await db.$transaction(ops);
 
     revalidatePath(`/jobs/${jobId}`);
     revalidatePath("/jobs");
+    revalidatePath("/finances");
 
     return { success: true, newStatus };
   } catch (error) {

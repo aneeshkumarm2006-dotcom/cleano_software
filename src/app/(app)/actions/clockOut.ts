@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
+import type { Prisma } from "@prisma/client";
 
 interface ProductInventory {
   productId: string;
@@ -76,6 +77,7 @@ export async function clockOut(
     // Calculate product usage and update inventory
     const productUsageUpdates = [];
     const employeeProductUpdates = [];
+    let suppliesCost = 0;
 
     for (const inventory of productInventories) {
       const employeeProduct = employeeProducts.find(
@@ -89,6 +91,7 @@ export async function clockOut(
       const quantityUsed = inventoryBefore - inventoryAfter;
 
       if (quantityUsed > 0) {
+        suppliesCost += quantityUsed * employeeProduct.product.costPerUnit;
         // Check if product usage already exists
         const existingUsage = job.productUsage.find(
           (pu) => pu.productId === inventory.productId
@@ -144,8 +147,7 @@ export async function clockOut(
     }
 
     // Execute all updates in a transaction
-    await db.$transaction([
-      // Update job with clock out time
+    const ops: Prisma.PrismaPromise<unknown>[] = [
       db.job.update({
         where: { id: jobId },
         data: {
@@ -153,7 +155,6 @@ export async function clockOut(
           status: "COMPLETED",
         },
       }),
-      // Create clock out log
       db.jobLog.create({
         data: {
           jobId,
@@ -162,7 +163,6 @@ export async function clockOut(
           description: `${session.user.name} clocked out`,
         },
       }),
-      // Create status change log
       db.jobLog.create({
         data: {
           jobId,
@@ -176,11 +176,30 @@ export async function clockOut(
       }),
       ...productUsageUpdates,
       ...employeeProductUpdates,
-    ]);
+    ];
+
+    if (suppliesCost > 0) {
+      ops.push(
+        db.transaction.create({
+          data: {
+            date: now,
+            category: "SUPPLIES",
+            amount: suppliesCost,
+            description: `Supplies consumed for ${job.clientName}`,
+            jobId,
+            source: "AUTO_CLOCK_OUT",
+            isAuto: true,
+          },
+        })
+      );
+    }
+
+    await db.$transaction(ops);
 
     revalidatePath("/my-jobs");
     revalidatePath(`/jobs/${jobId}`);
     revalidatePath(`/employees/${session.user.id}`);
+    revalidatePath("/finances");
 
     return { success: true };
   } catch (error) {

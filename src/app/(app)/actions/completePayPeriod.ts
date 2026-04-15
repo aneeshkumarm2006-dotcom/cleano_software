@@ -19,23 +19,55 @@ export async function completePayPeriod(payPeriodId: string) {
   try {
     const period = await db.payPeriod.findUnique({
       where: { id: payPeriodId },
+      include: { payouts: true },
     });
     if (!period) return { error: "Pay period not found" };
     if (period.status !== "APPROVED") {
       return { error: "Only approved pay periods can be marked as paid" };
     }
 
-    await db.payPeriod.update({
-      where: { id: payPeriodId },
-      data: {
-        status: "PAID",
-        paidAt: new Date(),
-      },
+    const paidAt = new Date();
+    const totalLabour = period.payouts.reduce(
+      (sum, p) => sum + p.finalAmount,
+      0
+    );
+    const periodLabel = `${period.startDate.toISOString().slice(0, 10)} → ${period.endDate.toISOString().slice(0, 10)}`;
+
+    await db.$transaction(async (tx) => {
+      await tx.payPeriod.update({
+        where: { id: payPeriodId },
+        data: {
+          status: "PAID",
+          paidAt,
+        },
+      });
+
+      await tx.transaction.deleteMany({
+        where: {
+          category: "LABOUR",
+          isAuto: true,
+          source: `PAY_PERIOD:${payPeriodId}`,
+        },
+      });
+
+      if (totalLabour > 0) {
+        await tx.transaction.create({
+          data: {
+            date: paidAt,
+            category: "LABOUR",
+            amount: totalLabour,
+            description: `Payroll for pay period ${periodLabel}`,
+            source: `PAY_PERIOD:${payPeriodId}`,
+            isAuto: true,
+          },
+        });
+      }
     });
 
     revalidatePath("/payouts");
     revalidatePath(`/payouts/${payPeriodId}`);
     revalidatePath("/my-pay");
+    revalidatePath("/finances");
     return { success: true };
   } catch (error) {
     console.error("Error completing pay period:", error);
