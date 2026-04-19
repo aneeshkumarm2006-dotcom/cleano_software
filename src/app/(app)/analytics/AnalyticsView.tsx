@@ -18,45 +18,49 @@ import {
   ArrowUp,
   ArrowDown,
   BarChart3,
+  Target,
+  Bell,
+  Megaphone,
+  PieChart,
+  Activity,
 } from "lucide-react";
+import RevenueTrendChart from "./charts/RevenueTrendChart";
+import InventoryValueChart from "./charts/InventoryValueChart";
+import ProfitLossChart from "./charts/ProfitLossChart";
+import SupplierComparisonChart from "./charts/SupplierComparisonChart";
+import TargetVsActualChart from "./charts/TargetVsActualChart";
+import { CBarChart, CPieChart } from "@/components/ui/Chart";
+import { dismissAlert, markAlertRead } from "@/app/(app)/actions/createAlert";
+import { createTarget } from "@/app/(app)/actions/createTarget";
+import { updateTarget } from "@/app/(app)/actions/updateTarget";
 
 type TabView =
   | "overview"
-  | "revenue"
-  | "jobs"
+  | "kpis"
+  | "graphs"
+  | "budget"
+  | "targets"
   | "inventory"
   | "employees"
-  | "payments";
+  | "payments"
+  | "alerts"
+  | "marketing";
 
 const MENU_ITEMS: Array<{ id: TabView; label: string; icon: React.ReactNode }> =
   [
-    {
-      id: "overview",
-      label: "Overview",
-      icon: <BarChart3 className="w-4 h-4" />,
-    },
-    {
-      id: "revenue",
-      label: "Revenue",
-      icon: <DollarSign className="w-4 h-4" />,
-    },
-    { id: "jobs", label: "Jobs", icon: <Briefcase className="w-4 h-4" /> },
-    {
-      id: "inventory",
-      label: "Inventory",
-      icon: <Package className="w-4 h-4" />,
-    },
-    {
-      id: "employees",
-      label: "Employees",
-      icon: <Users className="w-4 h-4" />,
-    },
-    {
-      id: "payments",
-      label: "Payments",
-      icon: <DollarSign className="w-4 h-4" />,
-    },
+    { id: "overview", label: "Overview", icon: <BarChart3 className="w-4 h-4" /> },
+    { id: "kpis", label: "KPIs", icon: <Activity className="w-4 h-4" /> },
+    { id: "graphs", label: "Graphs", icon: <PieChart className="w-4 h-4" /> },
+    { id: "budget", label: "Budget vs Actuals", icon: <DollarSign className="w-4 h-4" /> },
+    { id: "targets", label: "Targets vs Actuals", icon: <Target className="w-4 h-4" /> },
+    { id: "inventory", label: "Inventory", icon: <Package className="w-4 h-4" /> },
+    { id: "employees", label: "Employees", icon: <Users className="w-4 h-4" /> },
+    { id: "payments", label: "Payments", icon: <DollarSign className="w-4 h-4" /> },
+    { id: "alerts", label: "Alerts", icon: <Bell className="w-4 h-4" /> },
+    { id: "marketing", label: "Marketing", icon: <Megaphone className="w-4 h-4" /> },
   ];
+
+// ── Types ──
 
 interface JobStats {
   total: number;
@@ -89,6 +93,7 @@ interface InventoryStats {
   lowStockCount: number;
   totalUsageCost: number;
   avgUsagePerJob: number;
+  inCirculationValue: number;
 }
 
 interface EmployeeStats {
@@ -139,7 +144,10 @@ interface MonthlyData {
   month: string;
   revenue: number;
   jobs: number;
+  expenses: number;
+  net: number;
   profit: number;
+  period: string;
 }
 
 interface PaymentJob {
@@ -152,6 +160,40 @@ interface PaymentJob {
   endTime: string | null;
   createdAt: string;
   totalWorkers: number;
+}
+
+interface BudgetVsActual {
+  id: string;
+  category: string;
+  period: string;
+  budgetAmount: number;
+  actualAmount: number;
+  variance: number;
+  percentUsed: number;
+}
+
+interface TargetWithActual {
+  id: string;
+  metric: string;
+  period: string;
+  periodStart: string;
+  targetValue: number;
+  actual: number;
+  variance: number;
+  progress: number;
+  notes: string | null;
+}
+
+interface AlertItem {
+  id: string;
+  type: string;
+  severity: string;
+  title: string;
+  message: string;
+  isRead: boolean;
+  relatedId: string | null;
+  relatedType: string | null;
+  createdAt: string;
 }
 
 interface AnalyticsViewProps {
@@ -173,10 +215,17 @@ interface AnalyticsViewProps {
     employeeName: string;
   }>;
   paymentJobs: PaymentJob[];
+  budgetVsActuals: BudgetVsActual[];
+  targetsWithActuals: TargetWithActual[];
+  alerts: AlertItem[];
+  supplierComparisonData: Array<Record<string, string | number>>;
+  supplierNames: string[];
+  inventoryValueData: Array<{ name: string; warehouse: number; inCirculation: number }>;
 }
 
-// Simple Bar Chart Component
-function BarChart({
+// ── Reusable Sub-components ──
+
+function SimpleBarChart({
   data,
   maxValue,
   label,
@@ -189,9 +238,11 @@ function BarChart({
 }) {
   return (
     <div className="space-y-3">
-      <p className="text-xs text-[#005F6A]/60 uppercase tracking-wide">
-        {label}
-      </p>
+      {label && (
+        <p className="text-xs text-[#005F6A]/60 uppercase tracking-wide">
+          {label}
+        </p>
+      )}
       {data.map((item, idx) => (
         <div key={idx} className="space-y-1">
           <div className="flex justify-between text-xs text-[#005F6A]/70">
@@ -212,7 +263,6 @@ function BarChart({
   );
 }
 
-// Progress Ring Component
 function ProgressRing({
   value,
   max,
@@ -266,7 +316,6 @@ function ProgressRing({
   );
 }
 
-// Metric Card Component
 function MetricCard({
   label,
   value,
@@ -328,6 +377,8 @@ function MetricCard({
   );
 }
 
+// ── Main Component ──
+
 export default function AnalyticsView({
   jobStats,
   revenueStats,
@@ -340,13 +391,18 @@ export default function AnalyticsView({
   monthlyData,
   recentJobs,
   paymentJobs,
+  budgetVsActuals,
+  targetsWithActuals,
+  alerts,
+  supplierComparisonData,
+  supplierNames,
+  inventoryValueData,
 }: AnalyticsViewProps) {
   const [activeView, setActiveView] = useState<TabView>("overview");
 
-  // Overview Tab
+  // ── Tab 1: Overview ──
   const OverviewTab = () => (
     <div className="space-y-6">
-      {/* Key Metrics */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard
           label="Total Revenue"
@@ -372,55 +428,19 @@ export default function AnalyticsView({
         />
       </div>
 
-      {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Monthly Revenue Chart */}
         <Card variant="default" className="p-6">
           <div className="flex items-center gap-2 mb-6">
             <div className="p-2 bg-[#005F6A]/10 rounded-lg">
               <TrendingUp className="w-4 h-4 text-[#005F6A]" />
             </div>
             <h3 className="text-sm font-[350] text-[#005F6A]/80">
-              Monthly Revenue Trend
+              Revenue Trend (12 months)
             </h3>
           </div>
-          {monthlyData.length > 0 ? (
-            <div className="space-y-4">
-              {monthlyData.slice(-6).map((item, idx) => (
-                <div key={idx} className="space-y-1">
-                  <div className="flex justify-between text-xs text-[#005F6A]/70">
-                    <span>{item.month}</span>
-                    <span className="font-[400]">
-                      ${item.revenue.toFixed(0)}
-                    </span>
-                  </div>
-                  <div className="h-3 bg-[#005F6A]/10 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-[#005F6A] rounded-full transition-all duration-500"
-                      style={{
-                        width: `${
-                          Math.max(...monthlyData.map((m) => m.revenue)) > 0
-                            ? (item.revenue /
-                                Math.max(
-                                  ...monthlyData.map((m) => m.revenue)
-                                )) *
-                              100
-                            : 0
-                        }%`,
-                      }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-[#005F6A]/60 text-center py-8">
-              No revenue data yet
-            </p>
-          )}
+          <RevenueTrendChart data={monthlyData} />
         </Card>
 
-        {/* Job Type Breakdown */}
         <Card variant="default" className="p-6">
           <div className="flex items-center gap-2 mb-6">
             <div className="p-2 bg-[#005F6A]/10 rounded-lg">
@@ -431,7 +451,7 @@ export default function AnalyticsView({
             </h3>
           </div>
           {jobTypeBreakdown.length > 0 ? (
-            <BarChart
+            <SimpleBarChart
               data={jobTypeBreakdown.map((j) => ({
                 label: j.type || "Unspecified",
                 value: j.count,
@@ -447,7 +467,6 @@ export default function AnalyticsView({
         </Card>
       </div>
 
-      {/* Quick Stats Row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <Card variant="cleano_light" className="p-4 text-center">
           <p className="text-2xl font-[400] text-[#005F6A]">
@@ -489,200 +508,95 @@ export default function AnalyticsView({
     </div>
   );
 
-  // Revenue Tab
-  const RevenueTab = () => (
-    <div className="space-y-6">
-      {/* Revenue Metrics */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard
-          label="Total Revenue"
-          value={`$${revenueStats.totalRevenue.toFixed(2)}`}
-        />
-        <MetricCard
-          label="This Month"
-          value={`$${revenueStats.monthlyRevenue.toFixed(2)}`}
-        />
-        <MetricCard
-          label="This Week"
-          value={`$${revenueStats.weeklyRevenue.toFixed(2)}`}
-        />
-        <MetricCard
-          label="Avg Job Price"
-          value={`$${revenueStats.avgJobPrice.toFixed(2)}`}
-        />
-      </div>
+  // ── Tab 2: KPIs ──
+  const KPIsTab = () => {
+    const kpis = [
+      {
+        label: "Revenue This Month",
+        value: `$${revenueStats.monthlyRevenue.toFixed(2)}`,
+        subValue: `$${revenueStats.weeklyRevenue.toFixed(2)} this week`,
+        icon: <DollarSign className="w-5 h-5" />,
+      },
+      {
+        label: "Profit Margin",
+        value: `${revenueStats.profitMargin.toFixed(1)}%`,
+        subValue: `$${revenueStats.netProfit.toFixed(2)} net profit`,
+        icon: <TrendingUp className="w-5 h-5" />,
+      },
+      {
+        label: "Job Completion Rate",
+        value: `${jobStats.completionRate.toFixed(1)}%`,
+        subValue: `${jobStats.completed} of ${jobStats.total} jobs`,
+        icon: <CheckCircle2 className="w-5 h-5" />,
+      },
+      {
+        label: "Avg Job Duration",
+        value: `${jobStats.avgDuration.toFixed(0)} min`,
+        subValue: `Across ${jobStats.completed} completed jobs`,
+        icon: <Clock className="w-5 h-5" />,
+      },
+      {
+        label: "Avg Revenue per Job",
+        value: `$${revenueStats.avgJobPrice.toFixed(2)}`,
+        subValue: `Total: $${revenueStats.totalRevenue.toFixed(2)}`,
+        icon: <DollarSign className="w-5 h-5" />,
+      },
+      {
+        label: "Employee Productivity",
+        value: `${employeeStats.avgJobsPerEmployee.toFixed(1)}`,
+        subValue: `Jobs per employee avg`,
+        icon: <Users className="w-5 h-5" />,
+      },
+      {
+        label: "Avg Product Cost / Job",
+        value: `$${inventoryStats.avgUsagePerJob.toFixed(2)}`,
+        subValue: `Total: $${inventoryStats.totalUsageCost.toFixed(2)}`,
+        icon: <Package className="w-5 h-5" />,
+      },
+      {
+        label: "Pending Collections",
+        value: `$${revenueStats.pendingAmount.toFixed(2)}`,
+        subValue: `${revenueStats.pendingPayments} unpaid jobs`,
+        icon: <AlertTriangle className="w-5 h-5" />,
+      },
+    ];
 
-      {/* Profit Analysis */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card variant="default" className="p-6">
-          <div className="flex items-center gap-2 mb-6">
-            <div className="p-2 bg-[#005F6A]/10 rounded-lg">
-              <DollarSign className="w-4 h-4 text-[#005F6A]" />
-            </div>
-            <h3 className="text-sm font-[350] text-[#005F6A]/80">
-              Profit & Loss Breakdown
-            </h3>
-          </div>
-          <div className="space-y-3">
-            <div className="flex justify-between items-center p-3 rounded-xl bg-green-50">
-              <span className="text-sm text-[#005F6A]/70">Total Revenue</span>
-              <span className="text-sm font-[400] text-green-600">
-                +${revenueStats.totalRevenue.toFixed(2)}
-              </span>
-            </div>
-            <div className="flex justify-between items-center p-3 rounded-xl bg-[#005F6A]/5">
-              <span className="text-sm text-[#005F6A]/70">Employee Pay</span>
-              <span className="text-sm font-[400] text-[#005F6A]">
-                -${revenueStats.totalEmployeePay.toFixed(2)}
-              </span>
-            </div>
-            <div className="flex justify-between items-center p-3 rounded-xl bg-[#005F6A]/5">
-              <span className="text-sm text-[#005F6A]/70">Product Costs</span>
-              <span className="text-sm font-[400] text-[#005F6A]">
-                -${revenueStats.totalProductCost.toFixed(2)}
-              </span>
-            </div>
-            <div className="flex justify-between items-center p-3 rounded-xl bg-[#005F6A]/5">
-              <span className="text-sm text-[#005F6A]/70">Parking</span>
-              <span className="text-sm font-[400] text-[#005F6A]">
-                -${revenueStats.totalParking.toFixed(2)}
-              </span>
-            </div>
-            {revenueStats.totalTips > 0 && (
-              <div className="flex justify-between items-center p-3 rounded-xl bg-green-50">
-                <span className="text-sm text-[#005F6A]/70">Tips</span>
-                <span className="text-sm font-[400] text-green-600">
-                  +${revenueStats.totalTips.toFixed(2)}
-                </span>
-              </div>
-            )}
-            <div className="flex justify-between items-center p-3 rounded-xl bg-[#005F6A]/10 mt-2">
-              <span className="text-sm font-[400] text-[#005F6A]">
-                Net Profit
-              </span>
-              <span className="text-base font-[400] text-[#005F6A]">
-                ${revenueStats.netProfit.toFixed(2)}
-              </span>
-            </div>
-          </div>
-        </Card>
-
-        {/* Payment Status */}
-        <Card variant="default" className="p-6">
-          <div className="flex items-center gap-2 mb-6">
-            <div className="p-2 bg-[#005F6A]/10 rounded-lg">
-              <CheckCircle2 className="w-4 h-4 text-[#005F6A]" />
-            </div>
-            <h3 className="text-sm font-[350] text-[#005F6A]/80">
-              Payment Status
-            </h3>
-          </div>
-          <div className="flex justify-center mb-6">
-            <div className="relative">
-              <ProgressRing
-                value={jobStats.completed - revenueStats.pendingPayments}
-                max={jobStats.completed}
-                label="Payments Collected"
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="text-center p-3 rounded-xl bg-green-50">
-              <p className="text-lg font-[400] text-green-600">
-                {jobStats.completed - revenueStats.pendingPayments}
-              </p>
-              <p className="text-xs text-green-600/70">Paid</p>
-            </div>
-            <div className="text-center p-3 rounded-xl bg-yellow-50">
-              <p className="text-lg font-[400] text-yellow-600">
-                {revenueStats.pendingPayments}
-              </p>
-              <p className="text-xs text-yellow-600/70">Pending</p>
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      {/* Monthly Trend */}
-      <Card variant="default" className="p-6">
-        <div className="flex items-center gap-2 mb-6">
-          <div className="p-2 bg-[#005F6A]/10 rounded-lg">
-            <TrendingUp className="w-4 h-4 text-[#005F6A]" />
-          </div>
-          <h3 className="text-sm font-[350] text-[#005F6A]/80">
-            Monthly Profit Trend
-          </h3>
-        </div>
-        {monthlyData.length > 0 ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-            {monthlyData.slice(-6).map((item, idx) => (
-              <div key={idx} className="text-center">
-                <div className="h-24 flex items-end justify-center mb-2">
-                  <div
-                    className={`w-full max-w-12 rounded-t-lg transition-all duration-500 ${
-                      item.profit >= 0 ? "bg-[#005F6A]" : "bg-red-400"
-                    }`}
-                    style={{
-                      height: `${
-                        Math.max(
-                          ...monthlyData.map((m) => Math.abs(m.profit))
-                        ) > 0
-                          ? (Math.abs(item.profit) /
-                              Math.max(
-                                ...monthlyData.map((m) => Math.abs(m.profit))
-                              )) *
-                            100
-                          : 0
-                      }%`,
-                    }}
-                  />
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {kpis.map((kpi, idx) => (
+            <Card key={idx} variant="default" className="p-6">
+              <div className="flex items-start gap-3">
+                <div className="p-2 bg-[#005F6A]/10 rounded-lg text-[#005F6A]">
+                  {kpi.icon}
                 </div>
-                <p className="text-xs text-[#005F6A]/60">{item.month}</p>
-                <p className="text-sm font-[400] text-[#005F6A]">
-                  ${item.profit.toFixed(0)}
-                </p>
+                <div className="flex-1">
+                  <p className="text-xs text-[#005F6A]/60 uppercase tracking-wide">
+                    {kpi.label}
+                  </p>
+                  <p className="text-xl font-[400] text-[#005F6A] mt-1">
+                    {kpi.value}
+                  </p>
+                  <p className="text-xs text-[#005F6A]/50 mt-0.5">
+                    {kpi.subValue}
+                  </p>
+                </div>
               </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-sm text-[#005F6A]/60 text-center py-8">
-            No data yet
-          </p>
-        )}
-      </Card>
-    </div>
-  );
+            </Card>
+          ))}
+        </div>
 
-  // Jobs Tab
-  const JobsTab = () => (
-    <div className="space-y-6">
-      {/* Job Metrics */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        <MetricCard label="Total Jobs" value={String(jobStats.total)} />
-        <MetricCard label="Completed" value={String(jobStats.completed)} />
-        <MetricCard label="In Progress" value={String(jobStats.inProgress)} />
-        <MetricCard label="Scheduled" value={String(jobStats.scheduled)} />
-        <MetricCard
-          label="Cancelled"
-          value={String(jobStats.cancelled)}
-          variant={jobStats.cancelled > 0 ? "warning" : "default"}
-        />
-      </div>
-
-      {/* Job Analysis */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Completion Rate */}
-        <Card variant="default" className="p-6">
-          <div className="flex items-center gap-2 mb-6">
-            <div className="p-2 bg-[#005F6A]/10 rounded-lg">
-              <CheckCircle2 className="w-4 h-4 text-[#005F6A]" />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card variant="default" className="p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="p-2 bg-[#005F6A]/10 rounded-lg">
+                <CheckCircle2 className="w-4 h-4 text-[#005F6A]" />
+              </div>
+              <h3 className="text-sm font-[350] text-[#005F6A]/80">
+                Job Completion
+              </h3>
             </div>
-            <h3 className="text-sm font-[350] text-[#005F6A]/80">
-              Job Completion Rate
-            </h3>
-          </div>
-          <div className="flex justify-center">
-            <div className="relative">
+            <div className="flex justify-center">
               <ProgressRing
                 value={jobStats.completed}
                 max={jobStats.total}
@@ -690,146 +604,448 @@ export default function AnalyticsView({
                 size={140}
               />
             </div>
+          </Card>
+
+          <Card variant="default" className="p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="p-2 bg-[#005F6A]/10 rounded-lg">
+                <DollarSign className="w-4 h-4 text-[#005F6A]" />
+              </div>
+              <h3 className="text-sm font-[350] text-[#005F6A]/80">
+                Payment Collection
+              </h3>
+            </div>
+            <div className="flex justify-center">
+              <ProgressRing
+                value={jobStats.completed - revenueStats.pendingPayments}
+                max={jobStats.completed}
+                label="Payments Collected"
+                size={140}
+              />
+            </div>
+          </Card>
+        </div>
+      </div>
+    );
+  };
+
+  // ── Tab 3: Graphs ──
+  const GraphsTab = () => (
+    <div className="space-y-6">
+      <Card variant="default" className="p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <div className="p-2 bg-[#005F6A]/10 rounded-lg">
+            <TrendingUp className="w-4 h-4 text-[#005F6A]" />
           </div>
-          <div className="grid grid-cols-3 gap-4 mt-6">
-            <div className="text-center p-2 rounded-xl bg-[#005F6A]/5">
-              <p className="text-lg font-[400] text-[#005F6A]">
-                {jobStats.completed}
-              </p>
-              <p className="text-xs text-[#005F6A]/60">Completed</p>
-            </div>
-            <div className="text-center p-2 rounded-xl bg-[#005F6A]/5">
-              <p className="text-lg font-[400] text-[#005F6A]">
-                {jobStats.inProgress}
-              </p>
-              <p className="text-xs text-[#005F6A]/60">In Progress</p>
-            </div>
-            <div className="text-center p-2 rounded-xl bg-[#005F6A]/5">
-              <p className="text-lg font-[400] text-[#005F6A]">
-                {jobStats.scheduled}
-              </p>
-              <p className="text-xs text-[#005F6A]/60">Scheduled</p>
-            </div>
+          <h3 className="text-sm font-[350] text-[#005F6A]/80">
+            Revenue Trend (12 months)
+          </h3>
+        </div>
+        <RevenueTrendChart data={monthlyData} />
+      </Card>
+
+      <Card variant="default" className="p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <div className="p-2 bg-[#005F6A]/10 rounded-lg">
+            <BarChart3 className="w-4 h-4 text-[#005F6A]" />
           </div>
+          <h3 className="text-sm font-[350] text-[#005F6A]/80">
+            Profit & Loss by Month
+          </h3>
+        </div>
+        <ProfitLossChart data={monthlyData} />
+      </Card>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card variant="default" className="p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="p-2 bg-[#005F6A]/10 rounded-lg">
+              <Package className="w-4 h-4 text-[#005F6A]" />
+            </div>
+            <h3 className="text-sm font-[350] text-[#005F6A]/80">
+              Inventory Value: Warehouse vs In-Circulation
+            </h3>
+          </div>
+          <InventoryValueChart data={inventoryValueData} />
         </Card>
 
-        {/* Job Types Revenue */}
         <Card variant="default" className="p-6">
-          <div className="flex items-center gap-2 mb-6">
+          <div className="flex items-center gap-2 mb-4">
             <div className="p-2 bg-[#005F6A]/10 rounded-lg">
               <DollarSign className="w-4 h-4 text-[#005F6A]" />
             </div>
             <h3 className="text-sm font-[350] text-[#005F6A]/80">
-              Revenue by Job Type
+              Supplier Price Comparison
             </h3>
           </div>
-          {jobTypeBreakdown.length > 0 ? (
-            <div className="space-y-3">
-              {jobTypeBreakdown.map((type, idx) => (
-                <div
-                  key={idx}
-                  className="flex items-center justify-between p-3 rounded-xl bg-[#005F6A]/5">
-                  <div>
-                    <p className="text-sm font-[400] text-[#005F6A]">
-                      {type.type || "Unspecified"}
-                    </p>
-                    <p className="text-xs text-[#005F6A]/60">
-                      {type.count} jobs
-                    </p>
-                  </div>
-                  <p className="text-sm font-[400] text-[#005F6A]">
-                    ${type.revenue.toFixed(2)}
-                  </p>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-[#005F6A]/60 text-center py-8">
-              No job data yet
-            </p>
-          )}
+          <SupplierComparisonChart
+            data={supplierComparisonData}
+            supplierNames={supplierNames}
+          />
         </Card>
       </div>
 
-      {/* Recent Jobs */}
-      <Card variant="default" className="p-6">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
+      {targetsWithActuals.length > 0 && (
+        <Card variant="default" className="p-6">
+          <div className="flex items-center gap-2 mb-4">
             <div className="p-2 bg-[#005F6A]/10 rounded-lg">
-              <Calendar className="w-4 h-4 text-[#005F6A]" />
+              <Target className="w-4 h-4 text-[#005F6A]" />
             </div>
             <h3 className="text-sm font-[350] text-[#005F6A]/80">
-              Recent Jobs
+              Targets vs Actuals
             </h3>
           </div>
-          <Link href="/jobs">
-            <Button variant="ghost" size="sm" className="text-xs">
-              View All
-            </Button>
-          </Link>
-        </div>
-        {recentJobs.length > 0 ? (
-          <div className="space-y-2">
-            {recentJobs.map((job) => (
-              <Link
-                key={job.id}
-                href={`/jobs/${job.id}`}
-                className="flex items-center justify-between p-3 rounded-xl bg-[#005F6A]/5 hover:bg-[#005F6A]/8 transition-colors">
-                <div className="flex-1">
-                  <p className="text-sm font-[400] text-[#005F6A]">
-                    {job.clientName}
-                  </p>
-                  <p className="text-xs text-[#005F6A]/60">
-                    {job.employeeName} • {job.date}
-                  </p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Badge
-                    variant={
-                      job.status === "COMPLETED"
-                        ? "success"
-                        : job.status === "IN_PROGRESS"
-                        ? "secondary"
-                        : "default"
-                    }
-                    size="sm"
-                    className="px-2 py-1">
-                    {job.status}
-                  </Badge>
-                  {job.price && (
-                    <span className="text-sm font-[400] text-[#005F6A]">
-                      ${job.price.toFixed(2)}
-                    </span>
-                  )}
-                </div>
-              </Link>
-            ))}
-          </div>
-        ) : (
-          <p className="text-sm text-[#005F6A]/60 text-center py-8">
-            No jobs yet
-          </p>
-        )}
-      </Card>
+          <TargetVsActualChart
+            data={targetsWithActuals.map((t) => ({
+              metric: t.metric.replace(/_/g, " "),
+              target: t.targetValue,
+              actual: t.actual,
+            }))}
+          />
+        </Card>
+      )}
     </div>
   );
 
-  // Inventory Tab
+  // ── Tab 4: Budget vs Actuals ──
+  const BudgetTab = () => (
+    <div className="space-y-6">
+      {budgetVsActuals.length > 0 ? (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <MetricCard
+              label="Total Budgeted"
+              value={`$${budgetVsActuals.reduce((s, b) => s + b.budgetAmount, 0).toFixed(2)}`}
+            />
+            <MetricCard
+              label="Total Actual"
+              value={`$${budgetVsActuals.reduce((s, b) => s + b.actualAmount, 0).toFixed(2)}`}
+            />
+            <MetricCard
+              label="Total Variance"
+              value={`$${budgetVsActuals.reduce((s, b) => s + b.variance, 0).toFixed(2)}`}
+              variant={
+                budgetVsActuals.reduce((s, b) => s + b.variance, 0) < 0
+                  ? "warning"
+                  : "success"
+              }
+            />
+          </div>
+
+          <Card variant="default" className="p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="p-2 bg-[#005F6A]/10 rounded-lg">
+                <BarChart3 className="w-4 h-4 text-[#005F6A]" />
+              </div>
+              <h3 className="text-sm font-[350] text-[#005F6A]/80">
+                Budget vs Actual Spending
+              </h3>
+            </div>
+            <CBarChart
+              data={budgetVsActuals.map((b) => ({
+                name: `${b.category} (${b.period})`,
+                Budget: b.budgetAmount,
+                Actual: b.actualAmount,
+              }))}
+              dataKeys={["Budget", "Actual"]}
+              xKey="name"
+              height={300}
+            />
+          </Card>
+
+          <Card variant="default" className="p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="p-2 bg-[#005F6A]/10 rounded-lg">
+                <DollarSign className="w-4 h-4 text-[#005F6A]" />
+              </div>
+              <h3 className="text-sm font-[350] text-[#005F6A]/80">
+                Budget Detail
+              </h3>
+            </div>
+            <div className="space-y-3">
+              {budgetVsActuals.map((b) => {
+                const overBudget = b.percentUsed > 100;
+                return (
+                  <div
+                    key={b.id}
+                    className={`p-4 rounded-xl ${
+                      overBudget ? "bg-red-50 border border-red-200" : "bg-[#005F6A]/5"
+                    }`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <div>
+                        <p className="text-sm font-[400] text-[#005F6A]">
+                          {b.category}
+                        </p>
+                        <p className="text-xs text-[#005F6A]/60">{b.period}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-[400] text-[#005F6A]">
+                          ${b.actualAmount.toFixed(2)} / ${b.budgetAmount.toFixed(2)}
+                        </p>
+                        <Badge
+                          variant={overBudget ? "error" : "success"}
+                          size="sm">
+                          {b.percentUsed.toFixed(0)}%
+                        </Badge>
+                      </div>
+                    </div>
+                    <div className="h-2 bg-[#005F6A]/10 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${
+                          overBudget ? "bg-red-500" : "bg-[#005F6A]"
+                        }`}
+                        style={{ width: `${Math.min(b.percentUsed, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        </>
+      ) : (
+        <Card variant="default" className="p-12 text-center">
+          <div className="w-16 h-16 bg-[#005F6A]/5 rounded-full flex items-center justify-center mx-auto mb-3">
+            <DollarSign className="w-8 h-8 text-[#005F6A]/40" />
+          </div>
+          <p className="text-sm font-[350] text-[#005F6A]/70">
+            No budgets configured yet
+          </p>
+          <p className="text-xs text-[#005F6A]/50 mt-1">
+            Set up budgets in the Finances module to see comparisons here
+          </p>
+        </Card>
+      )}
+    </div>
+  );
+
+  // ── Tab 5: Targets vs Actuals ──
+  const TargetsTab = () => {
+    const [showForm, setShowForm] = useState(false);
+
+    const metricLabels: Record<string, string> = {
+      REVENUE: "Revenue",
+      JOBS_COMPLETED: "Jobs Completed",
+      NEW_CLIENTS: "New Clients",
+      PROFIT_MARGIN: "Profit Margin (%)",
+      AVG_JOB_PRICE: "Avg Job Price",
+      EMPLOYEE_RETENTION: "Employee Count",
+    };
+
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-[350] text-[#005F6A]/80">
+            Business Targets
+          </h2>
+          <Button
+            variant="action"
+            size="sm"
+            border={false}
+            onClick={() => setShowForm(!showForm)}
+            className="rounded-xl px-4 py-2">
+            {showForm ? "Cancel" : "Add Target"}
+          </Button>
+        </div>
+
+        {showForm && (
+          <Card variant="cleano_light" className="p-6">
+            <form
+              action={async (formData) => {
+                await createTarget(formData);
+                setShowForm(false);
+              }}
+              className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-[350] text-[#005F6A]/70 uppercase tracking-wide mb-1 block">
+                    Metric
+                  </label>
+                  <select
+                    name="metric"
+                    required
+                    className="w-full px-4 py-2.5 rounded-xl border border-[#005F6A]/10 bg-white text-sm text-[#005F6A] focus:outline-none focus:ring-2 focus:ring-[#005F6A]/20">
+                    <option value="REVENUE">Revenue</option>
+                    <option value="JOBS_COMPLETED">Jobs Completed</option>
+                    <option value="NEW_CLIENTS">New Clients</option>
+                    <option value="PROFIT_MARGIN">Profit Margin (%)</option>
+                    <option value="AVG_JOB_PRICE">Avg Job Price</option>
+                    <option value="EMPLOYEE_RETENTION">Employee Count</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-[350] text-[#005F6A]/70 uppercase tracking-wide mb-1 block">
+                    Period
+                  </label>
+                  <select
+                    name="period"
+                    required
+                    className="w-full px-4 py-2.5 rounded-xl border border-[#005F6A]/10 bg-white text-sm text-[#005F6A] focus:outline-none focus:ring-2 focus:ring-[#005F6A]/20">
+                    <option value="WEEKLY">Weekly</option>
+                    <option value="MONTHLY">Monthly</option>
+                    <option value="QUARTERLY">Quarterly</option>
+                    <option value="YEARLY">Yearly</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-[350] text-[#005F6A]/70 uppercase tracking-wide mb-1 block">
+                    Period Start
+                  </label>
+                  <input
+                    type="date"
+                    name="periodStart"
+                    required
+                    className="w-full px-4 py-2.5 rounded-xl border border-[#005F6A]/10 bg-white text-sm text-[#005F6A] focus:outline-none focus:ring-2 focus:ring-[#005F6A]/20"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-[350] text-[#005F6A]/70 uppercase tracking-wide mb-1 block">
+                    Target Value
+                  </label>
+                  <input
+                    type="number"
+                    name="targetValue"
+                    step="0.01"
+                    required
+                    className="w-full px-4 py-2.5 rounded-xl border border-[#005F6A]/10 bg-white text-sm text-[#005F6A] focus:outline-none focus:ring-2 focus:ring-[#005F6A]/20"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-[350] text-[#005F6A]/70 uppercase tracking-wide mb-1 block">
+                  Notes
+                </label>
+                <input
+                  type="text"
+                  name="notes"
+                  className="w-full px-4 py-2.5 rounded-xl border border-[#005F6A]/10 bg-white text-sm text-[#005F6A] focus:outline-none focus:ring-2 focus:ring-[#005F6A]/20"
+                />
+              </div>
+              <Button
+                type="submit"
+                variant="action"
+                size="sm"
+                border={false}
+                className="rounded-xl px-6 py-2">
+                Create Target
+              </Button>
+            </form>
+          </Card>
+        )}
+
+        {targetsWithActuals.length > 0 ? (
+          <>
+            <Card variant="default" className="p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="p-2 bg-[#005F6A]/10 rounded-lg">
+                  <Target className="w-4 h-4 text-[#005F6A]" />
+                </div>
+                <h3 className="text-sm font-[350] text-[#005F6A]/80">
+                  Target Progress
+                </h3>
+              </div>
+              <TargetVsActualChart
+                data={targetsWithActuals.map((t) => ({
+                  metric: metricLabels[t.metric] || t.metric,
+                  target: t.targetValue,
+                  actual: t.actual,
+                }))}
+              />
+            </Card>
+
+            <div className="space-y-3">
+              {targetsWithActuals.map((target) => {
+                const progressColor =
+                  target.progress >= 100
+                    ? "bg-green-500"
+                    : target.progress >= 80
+                    ? "bg-yellow-500"
+                    : "bg-red-500";
+                const badgeVariant =
+                  target.progress >= 100
+                    ? "success"
+                    : target.progress >= 80
+                    ? "default"
+                    : "error";
+
+                return (
+                  <Card key={target.id} variant="default" className="p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <div>
+                        <p className="text-sm font-[400] text-[#005F6A]">
+                          {metricLabels[target.metric] || target.metric}
+                        </p>
+                        <p className="text-xs text-[#005F6A]/60">
+                          {target.period} from{" "}
+                          {new Date(target.periodStart).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <div className="text-right flex items-center gap-3">
+                        <div>
+                          <p className="text-sm font-[400] text-[#005F6A]">
+                            {target.actual.toFixed(
+                              target.metric === "PROFIT_MARGIN" ? 1 : 2
+                            )}{" "}
+                            / {target.targetValue.toFixed(target.metric === "PROFIT_MARGIN" ? 1 : 2)}
+                          </p>
+                          <p className="text-xs text-[#005F6A]/60">
+                            Variance: {target.variance >= 0 ? "+" : ""}
+                            {target.variance.toFixed(2)}
+                          </p>
+                        </div>
+                        <Badge variant={badgeVariant as any} size="sm">
+                          {target.progress.toFixed(0)}%
+                        </Badge>
+                      </div>
+                    </div>
+                    <div className="h-2 bg-[#005F6A]/10 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full ${progressColor} rounded-full transition-all duration-500`}
+                        style={{ width: `${Math.min(target.progress, 100)}%` }}
+                      />
+                    </div>
+                    {target.notes && (
+                      <p className="text-xs text-[#005F6A]/50 mt-2">
+                        {target.notes}
+                      </p>
+                    )}
+                  </Card>
+                );
+              })}
+            </div>
+          </>
+        ) : (
+          <Card variant="default" className="p-12 text-center">
+            <div className="w-16 h-16 bg-[#005F6A]/5 rounded-full flex items-center justify-center mx-auto mb-3">
+              <Target className="w-8 h-8 text-[#005F6A]/40" />
+            </div>
+            <p className="text-sm font-[350] text-[#005F6A]/70">
+              No targets set yet
+            </p>
+            <p className="text-xs text-[#005F6A]/50 mt-1">
+              Click &quot;Add Target&quot; to create your first business target
+            </p>
+          </Card>
+        )}
+      </div>
+    );
+  };
+
+  // ── Tab 6: Inventory ──
   const InventoryTab = () => (
     <div className="space-y-6">
-      {/* Inventory Metrics */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard
           label="Total Products"
           value={String(inventoryStats.totalProducts)}
         />
         <MetricCard
-          label="Inventory Value"
+          label="Warehouse Value"
           value={`$${inventoryStats.totalValue.toFixed(2)}`}
         />
         <MetricCard
-          label="Total Usage Cost"
-          value={`$${inventoryStats.totalUsageCost.toFixed(2)}`}
+          label="In Circulation"
+          value={`$${inventoryStats.inCirculationValue.toFixed(2)}`}
         />
         <MetricCard
           label="Low Stock Items"
@@ -838,19 +1054,15 @@ export default function AnalyticsView({
         />
       </div>
 
-      {/* Product Usage & Low Stock */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Top Used Products */}
         <Card variant="default" className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <div className="p-2 bg-[#005F6A]/10 rounded-lg">
-                <TrendingUp className="w-4 h-4 text-[#005F6A]" />
-              </div>
-              <h3 className="text-sm font-[350] text-[#005F6A]/80">
-                Most Used Products
-              </h3>
+          <div className="flex items-center gap-2 mb-4">
+            <div className="p-2 bg-[#005F6A]/10 rounded-lg">
+              <TrendingUp className="w-4 h-4 text-[#005F6A]" />
             </div>
+            <h3 className="text-sm font-[350] text-[#005F6A]/80">
+              Most Used Products
+            </h3>
           </div>
           {productUsage.length > 0 ? (
             <div className="space-y-2">
@@ -885,7 +1097,6 @@ export default function AnalyticsView({
           )}
         </Card>
 
-        {/* Low Stock Alert */}
         <Card
           variant={lowStockProducts.length > 0 ? "warning" : "default"}
           className="p-6">
@@ -945,38 +1156,23 @@ export default function AnalyticsView({
         </Card>
       </div>
 
-      {/* Usage by Product Chart */}
       <Card variant="default" className="p-6">
         <div className="flex items-center gap-2 mb-6">
           <div className="p-2 bg-[#005F6A]/10 rounded-lg">
             <Package className="w-4 h-4 text-[#005F6A]" />
           </div>
           <h3 className="text-sm font-[350] text-[#005F6A]/80">
-            Product Usage Distribution
+            Inventory Value Distribution
           </h3>
         </div>
-        {productUsage.length > 0 ? (
-          <BarChart
-            data={productUsage.slice(0, 8).map((p) => ({
-              label: p.name,
-              value: p.usageCount,
-            }))}
-            maxValue={Math.max(...productUsage.map((p) => p.usageCount))}
-            label="Times Used in Jobs"
-          />
-        ) : (
-          <p className="text-sm text-[#005F6A]/60 text-center py-8">
-            No usage data yet
-          </p>
-        )}
+        <InventoryValueChart data={inventoryValueData} />
       </Card>
     </div>
   );
 
-  // Employees Tab
+  // ── Tab 7: Employees ──
   const EmployeesTab = () => (
     <div className="space-y-6">
-      {/* Employee Metrics */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard
           label="Total Employees"
@@ -993,7 +1189,6 @@ export default function AnalyticsView({
         />
       </div>
 
-      {/* Employee Performance Table */}
       <Card variant="default" className="p-6">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
@@ -1013,7 +1208,6 @@ export default function AnalyticsView({
         {employeePerformance.length > 0 ? (
           <div className="overflow-x-auto">
             <div className="min-w-max">
-              {/* Header */}
               <div className="flex bg-[#005F6A]/5 rounded-t-xl">
                 {[
                   { label: "Employee", className: "w-[180px] text-left" },
@@ -1030,7 +1224,6 @@ export default function AnalyticsView({
                   </div>
                 ))}
               </div>
-              {/* Rows */}
               <div className="divide-y divide-[#005F6A]/4">
                 {employeePerformance.map((emp, idx) => (
                   <Link
@@ -1083,7 +1276,6 @@ export default function AnalyticsView({
         )}
       </Card>
 
-      {/* Performance Chart */}
       <Card variant="default" className="p-6">
         <div className="flex items-center gap-2 mb-6">
           <div className="p-2 bg-[#005F6A]/10 rounded-lg">
@@ -1094,13 +1286,15 @@ export default function AnalyticsView({
           </h3>
         </div>
         {employeePerformance.length > 0 ? (
-          <BarChart
+          <CBarChart
             data={employeePerformance.slice(0, 8).map((e) => ({
-              label: e.name,
-              value: e.totalJobs,
+              name: e.name,
+              Jobs: e.totalJobs,
+              Completed: e.completedJobs,
             }))}
-            maxValue={Math.max(...employeePerformance.map((e) => e.totalJobs))}
-            label=""
+            dataKeys={["Jobs", "Completed"]}
+            xKey="name"
+            height={300}
           />
         ) : (
           <p className="text-sm text-[#005F6A]/60 text-center py-8">
@@ -1111,37 +1305,32 @@ export default function AnalyticsView({
     </div>
   );
 
-  // Payments Tab
+  // ── Tab 8: Payments ──
   const PaymentsTab = () => {
-    // Default to current month
     const getDefaultStartDate = () => {
       const date = new Date();
-      date.setDate(1); // First day of current month
+      date.setDate(1);
       return date.toISOString().split("T")[0];
     };
 
     const getDefaultEndDate = () => {
-      const date = new Date();
-      return date.toISOString().split("T")[0];
+      return new Date().toISOString().split("T")[0];
     };
 
     const [startDate, setStartDate] = React.useState(getDefaultStartDate());
     const [endDate, setEndDate] = React.useState(getDefaultEndDate());
 
-    // Calculate payments for each employee within the date range
     const calculateEmployeePayments = () => {
       const startDateTime = startDate ? new Date(startDate).getTime() : 0;
       const endDateTime = endDate
         ? new Date(endDate).setHours(23, 59, 59, 999)
         : Date.now();
 
-      // Filter jobs by date range
       const filteredJobs = paymentJobs.filter((job) => {
         const jobDate = new Date(job.startTime).getTime();
         return jobDate >= startDateTime && jobDate <= endDateTime;
       });
 
-      // Group by employee and calculate totals
       const employeeMap = new Map<
         string,
         { id: string; name: string; totalOwed: number; jobsCount: number }
@@ -1154,7 +1343,6 @@ export default function AnalyticsView({
           totalOwed: 0,
           jobsCount: 0,
         };
-
         employeeMap.set(job.employeeId, {
           ...existing,
           totalOwed: existing.totalOwed + job.employeePay,
@@ -1173,11 +1361,9 @@ export default function AnalyticsView({
       0
     );
 
-    // Quick date range presets
     const setDateRange = (preset: string) => {
       const today = new Date();
       const todayStr = today.toISOString().split("T")[0];
-
       switch (preset) {
         case "today":
           setStartDate(todayStr);
@@ -1195,16 +1381,8 @@ export default function AnalyticsView({
           setEndDate(getDefaultEndDate());
           break;
         case "lastMonth": {
-          const lastMonth = new Date(
-            today.getFullYear(),
-            today.getMonth() - 1,
-            1
-          );
-          const lastMonthEnd = new Date(
-            today.getFullYear(),
-            today.getMonth(),
-            0
-          );
+          const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+          const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
           setStartDate(lastMonth.toISOString().split("T")[0]);
           setEndDate(lastMonthEnd.toISOString().split("T")[0]);
           break;
@@ -1218,59 +1396,34 @@ export default function AnalyticsView({
 
     return (
       <div className="space-y-6">
-        {/* Date Range Filters */}
         <Card variant="cleano_light" className="p-6">
           <div className="space-y-4">
-            {/* Quick Presets */}
             <div>
               <label className="text-xs font-[350] text-[#005F6A]/70 uppercase tracking-wide mb-2 block">
                 Quick Select
               </label>
               <div className="flex flex-wrap gap-2">
-                <Button
-                  variant="default"
-                  size="sm"
-                  border={false}
-                  onClick={() => setDateRange("today")}
-                  className="rounded-xl px-4 py-2">
-                  Today
-                </Button>
-                <Button
-                  variant="default"
-                  size="sm"
-                  border={false}
-                  onClick={() => setDateRange("week")}
-                  className="rounded-xl px-4 py-2">
-                  Last 7 Days
-                </Button>
-                <Button
-                  variant="default"
-                  size="sm"
-                  border={false}
-                  onClick={() => setDateRange("month")}
-                  className="rounded-xl px-4 py-2">
-                  This Month
-                </Button>
-                <Button
-                  variant="default"
-                  size="sm"
-                  border={false}
-                  onClick={() => setDateRange("lastMonth")}
-                  className="rounded-xl px-4 py-2">
-                  Last Month
-                </Button>
-                <Button
-                  variant="default"
-                  size="sm"
-                  border={false}
-                  onClick={() => setDateRange("all")}
-                  className="rounded-xl px-4 py-2">
-                  All Time
-                </Button>
+                {["today", "week", "month", "lastMonth", "all"].map((preset) => (
+                  <Button
+                    key={preset}
+                    variant="default"
+                    size="sm"
+                    border={false}
+                    onClick={() => setDateRange(preset)}
+                    className="rounded-xl px-4 py-2">
+                    {preset === "today"
+                      ? "Today"
+                      : preset === "week"
+                      ? "Last 7 Days"
+                      : preset === "month"
+                      ? "This Month"
+                      : preset === "lastMonth"
+                      ? "Last Month"
+                      : "All Time"}
+                  </Button>
+                ))}
               </div>
             </div>
-
-            {/* Custom Date Range */}
             <div className="flex flex-col lg:flex-row gap-4">
               <div className="flex-1">
                 <label className="text-xs font-[350] text-[#005F6A]/70 uppercase tracking-wide mb-2 block">
@@ -1298,7 +1451,6 @@ export default function AnalyticsView({
           </div>
         </Card>
 
-        {/* Summary Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <MetricCard
             label="Total Owed"
@@ -1317,7 +1469,6 @@ export default function AnalyticsView({
           />
         </div>
 
-        {/* Payments Table */}
         <Card variant="default" className="p-0">
           <div className="p-6 border-b border-[#005F6A]/10">
             <div className="flex items-center justify-between">
@@ -1333,11 +1484,7 @@ export default function AnalyticsView({
                 {(startDate || endDate) && (
                   <p className="text-xs text-[#005F6A]/60 mt-2">
                     {startDate && endDate
-                      ? `${new Date(
-                          startDate
-                        ).toLocaleDateString()} - ${new Date(
-                          endDate
-                        ).toLocaleDateString()}`
+                      ? `${new Date(startDate).toLocaleDateString()} - ${new Date(endDate).toLocaleDateString()}`
                       : startDate
                       ? `From ${new Date(startDate).toLocaleDateString()}`
                       : `Until ${new Date(endDate).toLocaleDateString()}`}
@@ -1350,13 +1497,7 @@ export default function AnalyticsView({
                   size="sm"
                   border={false}
                   onClick={() => {
-                    // Create CSV content
-                    const headers = [
-                      "Employee Name",
-                      "Jobs",
-                      "Amount Owed",
-                      "Avg Per Job",
-                    ];
+                    const csvHeaders = ["Employee Name", "Jobs", "Amount Owed", "Avg Per Job"];
                     const rows = employeePayments.map((emp) => [
                       emp.name,
                       emp.jobsCount.toString(),
@@ -1364,18 +1505,14 @@ export default function AnalyticsView({
                       (emp.totalOwed / emp.jobsCount).toFixed(2),
                     ]);
                     const csvContent = [
-                      headers.join(","),
+                      csvHeaders.join(","),
                       ...rows.map((row) => row.join(",")),
                     ].join("\n");
-
-                    // Download CSV
                     const blob = new Blob([csvContent], { type: "text/csv" });
                     const url = window.URL.createObjectURL(blob);
                     const a = document.createElement("a");
                     a.href = url;
-                    a.download = `employee-payments-${
-                      new Date().toISOString().split("T")[0]
-                    }.csv`;
+                    a.download = `employee-payments-${new Date().toISOString().split("T")[0]}.csv`;
                     a.click();
                     window.URL.revokeObjectURL(url);
                   }}
@@ -1388,10 +1525,8 @@ export default function AnalyticsView({
 
           {employeePayments.length > 0 ? (
             <>
-              {/* Desktop Table View */}
               <div className="hidden md:block overflow-x-auto">
                 <div className="min-w-max">
-                  {/* Header */}
                   <div className="flex bg-[#005F6A]/5">
                     {[
                       { label: "Employee Name", className: "w-[220px]" },
@@ -1407,45 +1542,31 @@ export default function AnalyticsView({
                       </div>
                     ))}
                   </div>
-
-                  {/* Rows */}
                   <div className="divide-y divide-[#005F6A]/4">
                     {employeePayments.map((emp) => (
                       <div
                         key={emp.id}
                         className="flex items-center hover:bg-[#005F6A]/1 transition-colors">
-                        {/* Employee Name */}
                         <div className="w-[220px] p-4">
                           <p className="text-sm font-[350] text-[#005F6A] truncate">
                             {emp.name}
                           </p>
                         </div>
-
-                        {/* Jobs Count */}
                         <div className="w-[100px] p-4">
-                          <p className="text-sm font-[350] text-[#005F6A]/100">
+                          <p className="text-sm font-[350] text-[#005F6A]">
                             {emp.jobsCount}
                           </p>
                         </div>
-
-                        {/* Amount Owed */}
                         <div className="w-[150px] p-4">
-                          <Badge
-                            variant="success"
-                            size="sm"
-                            className="px-3 py-1.5">
+                          <Badge variant="success" size="sm" className="px-3 py-1.5">
                             ${emp.totalOwed.toFixed(2)}
                           </Badge>
                         </div>
-
-                        {/* Avg per Job */}
                         <div className="w-[120px] p-4">
                           <p className="text-sm font-[350] text-[#005F6A]/60">
                             ${(emp.totalOwed / emp.jobsCount).toFixed(2)}
                           </p>
                         </div>
-
-                        {/* Actions */}
                         <div className="w-[180px] p-4">
                           <Link href={`/employees/${emp.id}`}>
                             <Button
@@ -1463,7 +1584,6 @@ export default function AnalyticsView({
                 </div>
               </div>
 
-              {/* Mobile Card View */}
               <div className="md:hidden space-y-3 p-4">
                 {employeePayments.map((emp) => (
                   <Card key={emp.id} variant="cleano_light" className="p-4">
@@ -1478,10 +1598,7 @@ export default function AnalyticsView({
                             {(emp.totalOwed / emp.jobsCount).toFixed(2)} avg
                           </p>
                         </div>
-                        <Badge
-                          variant="success"
-                          size="sm"
-                          className="px-3 py-1.5">
+                        <Badge variant="success" size="sm" className="px-3 py-1.5">
                           ${emp.totalOwed.toFixed(2)}
                         </Badge>
                       </div>
@@ -1517,6 +1634,168 @@ export default function AnalyticsView({
     );
   };
 
+  // ── Tab 9: Alerts ──
+  const AlertsTab = () => {
+    const unreadCount = alerts.filter((a) => !a.isRead).length;
+
+    const severityConfig: Record<
+      string,
+      { color: string; bg: string; border: string }
+    > = {
+      CRITICAL: {
+        color: "text-red-700",
+        bg: "bg-red-50",
+        border: "border-red-200",
+      },
+      WARNING: {
+        color: "text-yellow-700",
+        bg: "bg-yellow-50",
+        border: "border-yellow-200",
+      },
+      INFO: {
+        color: "text-blue-700",
+        bg: "bg-blue-50",
+        border: "border-blue-200",
+      },
+    };
+
+    const typeIcons: Record<string, React.ReactNode> = {
+      LOW_INVENTORY: <Package className="w-4 h-4" />,
+      CANCELLATION: <Briefcase className="w-4 h-4" />,
+      OVERDUE_PAYMENT: <DollarSign className="w-4 h-4" />,
+      GENERAL: <Bell className="w-4 h-4" />,
+    };
+
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <MetricCard label="Total Alerts" value={String(alerts.length)} />
+          <MetricCard
+            label="Unread"
+            value={String(unreadCount)}
+            variant={unreadCount > 0 ? "warning" : "default"}
+          />
+          <MetricCard
+            label="Critical"
+            value={String(
+              alerts.filter((a) => a.severity === "CRITICAL").length
+            )}
+            variant={
+              alerts.some((a) => a.severity === "CRITICAL")
+                ? "warning"
+                : "default"
+            }
+          />
+        </div>
+
+        {alerts.length > 0 ? (
+          <div className="space-y-3">
+            {alerts.map((alert) => {
+              const config = severityConfig[alert.severity] || severityConfig.INFO;
+              return (
+                <Card key={alert.id} variant="default" className="p-0">
+                  <div
+                    className={`p-4 ${config.bg} border-l-4 ${config.border} rounded-xl`}>
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-start gap-3">
+                        <div className={`mt-0.5 ${config.color}`}>
+                          {typeIcons[alert.type] || typeIcons.GENERAL}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className={`text-sm font-[400] ${config.color}`}>
+                              {alert.title}
+                            </p>
+                            {!alert.isRead && (
+                              <span className="w-2 h-2 bg-[#005F6A] rounded-full" />
+                            )}
+                          </div>
+                          <p className="text-xs text-[#005F6A]/60 mt-1">
+                            {alert.message}
+                          </p>
+                          <div className="flex items-center gap-3 mt-2">
+                            <Badge variant="default" size="sm">
+                              {alert.type.replace(/_/g, " ")}
+                            </Badge>
+                            <span className="text-xs text-[#005F6A]/40">
+                              {new Date(alert.createdAt).toLocaleDateString()}{" "}
+                              {new Date(alert.createdAt).toLocaleTimeString()}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {!alert.isRead && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            border={false}
+                            onClick={async () => {
+                              await markAlertRead(alert.id);
+                            }}
+                            className="text-xs rounded-xl px-3 py-1">
+                            Mark Read
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          border={false}
+                          onClick={async () => {
+                            await dismissAlert(alert.id);
+                          }}
+                          className="text-xs rounded-xl px-3 py-1">
+                          Dismiss
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        ) : (
+          <Card variant="default" className="p-12 text-center">
+            <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-3">
+              <CheckCircle2 className="w-8 h-8 text-green-500" />
+            </div>
+            <p className="text-sm font-[350] text-[#005F6A]/70">
+              No active alerts
+            </p>
+            <p className="text-xs text-[#005F6A]/50 mt-1">
+              Alerts for low inventory, cancellations, and overdue payments will
+              appear here
+            </p>
+          </Card>
+        )}
+      </div>
+    );
+  };
+
+  // ── Tab 10: Marketing ──
+  const MarketingTab = () => (
+    <div className="space-y-6">
+      <Card variant="default" className="p-12 text-center">
+        <div className="w-16 h-16 bg-[#005F6A]/5 rounded-full flex items-center justify-center mx-auto mb-3">
+          <Megaphone className="w-8 h-8 text-[#005F6A]/40" />
+        </div>
+        <p className="text-sm font-[350] text-[#005F6A]/70">
+          Marketing Analytics
+        </p>
+        <p className="text-xs text-[#005F6A]/50 mt-1">
+          Campaign performance and landing page analytics will appear here once
+          the Sales & Marketing module (Phase 8) is configured
+        </p>
+      </Card>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <MetricCard label="Active Campaigns" value="0" subValue="No campaigns yet" />
+        <MetricCard label="Page Visits" value="0" subValue="No landing pages yet" />
+        <MetricCard label="Conversion Rate" value="0%" subValue="No data yet" />
+      </div>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -1530,9 +1809,13 @@ export default function AnalyticsView({
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-2 bg-[#005F6A]/5 rounded-2xl p-1 w-fit overflow-x-auto">
+      <div className="flex items-center gap-2 bg-[#005F6A]/5 rounded-2xl p-1 w-fit overflow-x-auto max-w-full">
         {MENU_ITEMS.map((item) => {
           const isActive = activeView === item.id;
+          const alertCount =
+            item.id === "alerts"
+              ? alerts.filter((a) => !a.isRead).length
+              : 0;
           return (
             <Button
               key={item.id}
@@ -1540,9 +1823,14 @@ export default function AnalyticsView({
               onClick={() => setActiveView(item.id)}
               variant={isActive ? "action" : "ghost"}
               size="md"
-              className="rounded-xl px-4 md:px-6 py-3 whitespace-nowrap">
+              className="rounded-xl px-4 md:px-5 py-3 whitespace-nowrap relative">
               <span className="mr-2 hidden sm:inline">{item.icon}</span>
               {item.label}
+              {alertCount > 0 && (
+                <span className="ml-1.5 inline-flex items-center justify-center w-5 h-5 text-[10px] font-[500] bg-red-500 text-white rounded-full">
+                  {alertCount}
+                </span>
+              )}
             </Button>
           );
         })}
@@ -1551,11 +1839,15 @@ export default function AnalyticsView({
       {/* Content Area */}
       <div className="flex-1">
         {activeView === "overview" && <OverviewTab />}
-        {activeView === "revenue" && <RevenueTab />}
-        {activeView === "jobs" && <JobsTab />}
+        {activeView === "kpis" && <KPIsTab />}
+        {activeView === "graphs" && <GraphsTab />}
+        {activeView === "budget" && <BudgetTab />}
+        {activeView === "targets" && <TargetsTab />}
         {activeView === "inventory" && <InventoryTab />}
         {activeView === "employees" && <EmployeesTab />}
         {activeView === "payments" && <PaymentsTab />}
+        {activeView === "alerts" && <AlertsTab />}
+        {activeView === "marketing" && <MarketingTab />}
       </div>
     </div>
   );

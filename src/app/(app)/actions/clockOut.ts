@@ -196,10 +196,33 @@ export async function clockOut(
 
     await db.$transaction(ops);
 
+    // Check for low inventory alerts after stock deduction
+    for (const inventory of productInventories) {
+      const employeeProduct = employeeProducts.find(
+        (ep) => ep.productId === inventory.productId
+      );
+      if (!employeeProduct) continue;
+
+      const product = employeeProduct.product;
+      if (inventory.inventoryAfter <= product.minStock && product.minStock > 0) {
+        await db.alert.create({
+          data: {
+            type: "LOW_INVENTORY",
+            severity: inventory.inventoryAfter <= 0 ? "CRITICAL" : "WARNING",
+            title: `Low stock: ${product.name}`,
+            message: `${product.name} for ${session.user.name} is at ${inventory.inventoryAfter} ${product.unit} (min: ${product.minStock})`,
+            relatedId: product.id,
+            relatedType: "Product",
+          },
+        });
+      }
+    }
+
     revalidatePath("/my-jobs");
     revalidatePath(`/jobs/${jobId}`);
     revalidatePath(`/employees/${session.user.id}`);
     revalidatePath("/finances");
+    revalidatePath("/analytics");
 
     return { success: true };
   } catch (error) {

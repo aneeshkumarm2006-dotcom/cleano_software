@@ -102,22 +102,52 @@ export async function saveJob(formData: FormData) {
     };
 
     const editingJobId = formData.get("jobId") as string | null;
+    const statusRaw = (formData.get("status") as string) || null;
 
     if (editingJobId) {
+      // Fetch existing job to detect status change to CANCELLED
+      const existingJob = statusRaw === "CANCELLED"
+        ? await db.job.findUnique({ where: { id: editingJobId }, select: { status: true, clientName: true } })
+        : null;
+
+      const updateData: any = {
+        ...jobData,
+        cleaners:
+          cleanerIds.length > 0
+            ? { set: cleanerIds.map((id) => ({ id })) }
+            : { set: [] },
+        addOns: {
+          deleteMany: {},
+          create: addOns.map((a) => ({ name: a.name, price: a.price })),
+        },
+      };
+
+      if (statusRaw) {
+        updateData.status = statusRaw;
+      }
+
       await db.job.update({
         where: { id: editingJobId },
-        data: {
-          ...jobData,
-          cleaners:
-            cleanerIds.length > 0
-              ? { set: cleanerIds.map((id) => ({ id })) }
-              : { set: [] },
-          addOns: {
-            deleteMany: {},
-            create: addOns.map((a) => ({ name: a.name, price: a.price })),
-          },
-        },
+        data: updateData,
       });
+
+      // Create cancellation alert if job was just cancelled
+      if (
+        statusRaw === "CANCELLED" &&
+        existingJob &&
+        existingJob.status !== "CANCELLED"
+      ) {
+        await db.alert.create({
+          data: {
+            type: "CANCELLATION",
+            severity: "WARNING",
+            title: `Job cancelled: ${existingJob.clientName}`,
+            message: `Job for ${existingJob.clientName} was cancelled (previously ${existingJob.status})`,
+            relatedId: editingJobId,
+            relatedType: "Job",
+          },
+        });
+      }
 
       if (jobData.startTime) {
         await invalidateCalendarDay(
@@ -126,6 +156,7 @@ export async function saveJob(formData: FormData) {
       }
       revalidatePath("/jobs");
       revalidatePath(`/jobs/${editingJobId}`);
+      revalidatePath("/analytics");
       return { success: true };
     } else {
       if (cleanerIds.length > 0) {
@@ -147,6 +178,7 @@ export async function saveJob(formData: FormData) {
         );
       }
       revalidatePath("/jobs");
+      revalidatePath("/analytics");
       return { success: true, jobId: newJob.id };
     }
   } catch (error) {

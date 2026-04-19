@@ -464,3 +464,64 @@ enum InvoiceStatus {
   OVERDUE
   CANCELLED
 }
+
+model Alert {
+  id          String        @id @default(cuid())
+  type        AlertType
+  severity    AlertSeverity @default(WARNING)
+  title       String
+  message     String
+  isRead      Boolean       @default(false)
+  isDismissed Boolean       @default(false)
+  relatedId   String?
+  relatedType String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([type])
+  @@index([isRead])
+  @@index([createdAt])
+}
+
+model Target {
+  id          String       @id @default(cuid())
+  metric      TargetMetric
+  period      TargetPeriod
+  periodStart DateTime
+  targetValue Float
+  notes       String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@unique([metric, period, periodStart])
+  @@index([periodStart])
+}
+
+enum AlertType {
+  LOW_INVENTORY
+  CANCELLATION
+  OVERDUE_PAYMENT
+  GENERAL
+}
+
+enum AlertSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum TargetMetric {
+  REVENUE
+  JOBS_COMPLETED
+  NEW_CLIENTS
+  PROFIT_MARGIN
+  AVG_JOB_PRICE
+  EMPLOYEE_RETENTION
+}
+
+enum TargetPeriod {
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
