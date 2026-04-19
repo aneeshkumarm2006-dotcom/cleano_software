@@ -6,7 +6,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
+import Modal from "@/components/ui/Modal";
 import { EmployeeModal } from "../EmployeeModal";
+import { assignKit } from "../../actions/assignKit";
 import {
   ArrowLeft,
   Mail,
@@ -20,6 +22,8 @@ import {
   Package,
   History,
   User,
+  Plus,
+  TrendingDown,
 } from "lucide-react";
 
 type TabView = "overview" | "jobs" | "products";
@@ -76,6 +80,31 @@ interface AssignedProduct {
   costPerUnit: number;
 }
 
+interface KitTemplate {
+  id: string;
+  name: string;
+  description: string | null;
+  items: Array<{
+    productId: string;
+    productName: string;
+    quantity: number;
+    unit: string;
+    warehouseStock: number;
+  }>;
+}
+
+interface ForecastItem {
+  productId: string;
+  productName: string;
+  unit: string;
+  currentQuantity: number;
+  usagePerJob: number;
+  refillThreshold: number;
+  projectedUsage: number;
+  deficit: number;
+  needsRefill: boolean;
+}
+
 interface EmployeeDetailViewProps {
   employee: Employee;
   stats: {
@@ -89,6 +118,9 @@ interface EmployeeDetailViewProps {
   recentJobs: Job[];
   topProducts: ProductUsage[];
   assignedProducts: AssignedProduct[];
+  kitTemplates: KitTemplate[];
+  forecast: ForecastItem[];
+  upcomingJobCount: number;
 }
 
 export default function EmployeeDetailView({
@@ -98,12 +130,49 @@ export default function EmployeeDetailView({
   recentJobs,
   topProducts,
   assignedProducts,
+  kitTemplates,
+  forecast,
+  upcomingJobCount,
 }: EmployeeDetailViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
   const [activeView, setActiveView] = useState<TabView>("overview");
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [kitModalOpen, setKitModalOpen] = useState(false);
+  const [selectedKitId, setSelectedKitId] = useState("");
+  const [assigning, setAssigning] = useState(false);
+  const [kitMessage, setKitMessage] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
+
+  const selectedKit = kitTemplates.find((k) => k.id === selectedKitId) || null;
+
+  const handleAssignKit = async () => {
+    if (!selectedKitId) {
+      setKitMessage({ type: "error", text: "Select a kit template." });
+      return;
+    }
+    setAssigning(true);
+    setKitMessage(null);
+    const res = await assignKit({
+      employeeId: employee.id,
+      kitTemplateId: selectedKitId,
+    });
+    if (res.success) {
+      setKitMessage({ type: "success", text: "Kit assigned successfully." });
+      setSelectedKitId("");
+      setTimeout(() => {
+        setKitModalOpen(false);
+        setKitMessage(null);
+        router.refresh();
+      }, 900);
+    } else {
+      setKitMessage({ type: "error", text: res.error || "Failed to assign kit." });
+    }
+    setAssigning(false);
+  };
 
   // Sync activeView with URL params
   useEffect(() => {
@@ -407,6 +476,69 @@ export default function EmployeeDetailView({
   // Products Tab Content
   const ProductsTab = () => (
     <div className="space-y-6">
+      {/* Assign Starter Kit */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-[350] tracking-tight text-[#005F6A]">
+          Products & Inventory
+        </h2>
+        <Button
+          variant="primary"
+          size="md"
+          border={false}
+          onClick={() => setKitModalOpen(true)}
+          className="px-6 py-3">
+          <Plus className="w-4 h-4 mr-2" />
+          Assign Starter Kit
+        </Button>
+      </div>
+
+      {/* Inventory Forecast */}
+      {forecast.length > 0 && (
+        <Card variant="default" className="p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="p-2 bg-[#005F6A]/10 rounded-lg">
+              <TrendingDown className="w-4 h-4 text-[#005F6A]" />
+            </div>
+            <h3 className="text-sm font-[350] text-[#005F6A]/80">
+              Inventory Forecast ({upcomingJobCount} upcoming job{upcomingJobCount !== 1 ? "s" : ""})
+            </h3>
+          </div>
+          <div className="space-y-2">
+            {forecast.map((item) => (
+              <div
+                key={item.productId}
+                className={`flex items-center justify-between p-3 rounded-xl ${
+                  item.needsRefill ? "bg-red-50 border border-red-200" : "bg-[#005F6A]/5"
+                }`}>
+                <div className="flex-1">
+                  <p className={`text-sm font-[400] ${item.needsRefill ? "text-red-700" : "text-[#005F6A]"}`}>
+                    {item.productName}
+                  </p>
+                  <p className={`text-xs ${item.needsRefill ? "text-red-500" : "text-[#005F6A]/60"}`}>
+                    Has {item.currentQuantity} {item.unit} &middot; Needs {item.projectedUsage} {item.unit} for upcoming jobs
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {item.deficit > 0 ? (
+                    <Badge variant="error" size="sm">
+                      Deficit: {item.deficit} {item.unit}
+                    </Badge>
+                  ) : item.needsRefill ? (
+                    <Badge variant="warning" size="sm">
+                      Below threshold
+                    </Badge>
+                  ) : (
+                    <Badge variant="success" size="sm">
+                      OK
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
       {/* Most Used Products */}
       <h2 className="text-lg font-[350] tracking-tight text-[#005F6A]">
         Most Used Products
@@ -624,6 +756,97 @@ export default function EmployeeDetailView({
         employee={employee}
         mode="edit"
       />
+
+      {/* Kit Assignment Modal */}
+      <Modal
+        isOpen={kitModalOpen}
+        onClose={() => {
+          setKitModalOpen(false);
+          setSelectedKitId("");
+          setKitMessage(null);
+        }}
+        title="Assign Starter Kit">
+        <div className="space-y-4">
+          <p className="text-sm text-[#005F6A]/70">
+            Select a kit template to assign products to {employee.name}.
+            Warehouse stock will be deducted accordingly.
+          </p>
+
+          <select
+            className="w-full p-3 rounded-xl border border-[#005F6A]/20 bg-white text-sm text-[#005F6A] focus:outline-none focus:ring-2 focus:ring-[#005F6A]/30"
+            value={selectedKitId}
+            onChange={(e) => {
+              setSelectedKitId(e.target.value);
+              setKitMessage(null);
+            }}>
+            <option value="">Select a kit template...</option>
+            {kitTemplates.map((kit) => (
+              <option key={kit.id} value={kit.id}>
+                {kit.name} ({kit.items.length} items)
+              </option>
+            ))}
+          </select>
+
+          {selectedKit && (
+            <div className="bg-[#005F6A]/5 rounded-xl p-4 space-y-2">
+              <h4 className="text-sm font-[400] text-[#005F6A]">Kit Contents:</h4>
+              {selectedKit.items.map((item) => {
+                const hasStock = item.warehouseStock >= item.quantity;
+                return (
+                  <div
+                    key={item.productId}
+                    className={`flex items-center justify-between text-xs p-2 rounded-lg ${
+                      hasStock ? "bg-white" : "bg-red-50"
+                    }`}>
+                    <span className={hasStock ? "text-[#005F6A]" : "text-red-600"}>
+                      {item.productName}
+                    </span>
+                    <span className={hasStock ? "text-[#005F6A]/70" : "text-red-500"}>
+                      {item.quantity} {item.unit}
+                      {!hasStock && ` (only ${item.warehouseStock} in stock)`}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {kitMessage && (
+            <div
+              className={`p-3 rounded-xl text-sm ${
+                kitMessage.type === "success"
+                  ? "bg-green-50 text-green-700 border border-green-200"
+                  : "bg-red-50 text-red-700 border border-red-200"
+              }`}>
+              {kitMessage.text}
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="default"
+              size="md"
+              border={false}
+              onClick={() => {
+                setKitModalOpen(false);
+                setSelectedKitId("");
+                setKitMessage(null);
+              }}
+              className="px-6 py-3">
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              size="md"
+              border={false}
+              onClick={handleAssignKit}
+              disabled={assigning || !selectedKitId}
+              className="px-6 py-3">
+              {assigning ? "Assigning..." : "Assign Kit"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

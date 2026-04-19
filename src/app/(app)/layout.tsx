@@ -60,6 +60,9 @@ export default async function DashboardLayout({
                 <NavLink href="/inventory" icon="inventory" iconOnly>
                   Inventory
                 </NavLink>
+                <NavLink href="/inventory/rag-wash" icon="rag-wash" iconOnly>
+                  Rag Wash
+                </NavLink>
                 <NavLink href="/jobs" icon="jobs" iconOnly>
                   Jobs
                 </NavLink>

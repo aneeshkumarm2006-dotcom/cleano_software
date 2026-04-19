@@ -28,6 +28,7 @@ model User {
   jobLogs           JobLog[]           @relation("UserJobLogs")
   payouts           Payout[]
   approvedPeriods   PayPeriod[]        @relation("PayPeriodApprover")
+  ragWashes         RagWash[]
 }
 
 model Account {
@@ -76,11 +77,12 @@ model Product {
   minStock         Float             @default(0)
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
-  employeeProducts EmployeeProduct[]
-  jobUsage         JobProductUsage[]
-  kitItems         KitTemplateItem[]
-  inventoryRule    InventoryRule?
-  supplierPrices   SupplierPrice[]
+  employeeProducts  EmployeeProduct[]
+  inventoryRequests InventoryRequest[]
+  jobUsage          JobProductUsage[]
+  kitItems          KitTemplateItem[]
+  inventoryRule     InventoryRule?
+  supplierPrices    SupplierPrice[]
 }
 
 model AppSetting {
@@ -95,13 +97,14 @@ model AppSetting {
 }
 
 model KitTemplate {
-  id          String            @id @default(cuid())
-  name        String
-  description String?
-  isActive    Boolean           @default(true)
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
-  items       KitTemplateItem[]
+  id                String             @id @default(cuid())
+  name              String
+  description       String?
+  isActive          Boolean            @default(true)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  items             KitTemplateItem[]
+  inventoryRequests InventoryRequest[]
 }
 
 model KitTemplateItem {
@@ -273,16 +276,22 @@ model JobLog {
 }
 
 model InventoryRequest {
-  id         String        @id @default(cuid())
-  employeeId String
-  productId  String?
-  kitId      String?
-  quantity   Float
-  reason     String?
-  status     RequestStatus @default(PENDING)
-  createdAt  DateTime      @default(now())
-  updatedAt  DateTime      @updatedAt
-  employee   User          @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  id          String        @id @default(cuid())
+  employeeId  String
+  productId   String?
+  kitId       String?
+  quantity    Float
+  reason      String?
+  status      RequestStatus @default(PENDING)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  employee    User          @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  product     Product?      @relation(fields: [productId], references: [id], onDelete: SetNull)
+  kitTemplate KitTemplate?  @relation(fields: [kitId], references: [id], onDelete: SetNull)
+
+  @@index([employeeId])
+  @@index([productId])
+  @@index([kitId])
 }
 
 model EmployeeProduct {
@@ -360,6 +369,20 @@ model Transaction {
   @@index([date])
   @@index([category])
   @@index([jobId])
+}
+
+model RagWash {
+  id          String   @id @default(cuid())
+  employeeId  String
+  washDate    DateTime @default(now())
+  ragCount    Int      @default(0)
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  employee    User     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+  @@index([washDate])
 }
 
 model Budget {

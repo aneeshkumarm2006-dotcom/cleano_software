@@ -134,6 +134,68 @@ export default async function EmployeePage({
     costPerUnit: p.product.costPerUnit,
   }));
 
+  // Active kit templates for starter kit assignment
+  const kitTemplatesRaw = await db.kitTemplate.findMany({
+    where: { isActive: true },
+    orderBy: { name: "asc" },
+    include: {
+      items: {
+        include: { product: true },
+      },
+    },
+  });
+
+  const kitTemplates = kitTemplatesRaw.map((k) => ({
+    id: k.id,
+    name: k.name,
+    description: k.description,
+    items: k.items.map((it) => ({
+      productId: it.productId,
+      productName: it.product.name,
+      quantity: it.quantity,
+      unit: it.product.unit,
+      warehouseStock: it.product.stockLevel,
+    })),
+  }));
+
+  // Forecast for this employee — upcoming jobs × usagePerJob vs currentQuantity
+  const upcomingEmployeeJobs = await db.job.count({
+    where: {
+      OR: [
+        { employeeId: employee.id },
+        { cleaners: { some: { id: employee.id } } },
+      ],
+      status: { in: ["CREATED", "SCHEDULED", "IN_PROGRESS"] },
+      jobDate: { gte: new Date() },
+    },
+  });
+
+  const inventoryRulesForForecast = await db.inventoryRule.findMany({
+    include: { product: true },
+  });
+
+  const forecast = employee.assignedProducts
+    .map((ep) => {
+      const rule = inventoryRulesForForecast.find(
+        (r) => r.productId === ep.productId
+      );
+      const usagePerJob = rule?.usagePerJob || 0;
+      const projectedUsage = usagePerJob * upcomingEmployeeJobs;
+      const deficit = Math.max(0, projectedUsage - ep.quantity);
+      return {
+        productId: ep.productId,
+        productName: ep.product.name,
+        unit: ep.product.unit,
+        currentQuantity: ep.quantity,
+        usagePerJob,
+        refillThreshold: rule?.refillThreshold || 0,
+        projectedUsage,
+        deficit,
+        needsRefill: deficit > 0 || ep.quantity <= (rule?.refillThreshold || 0),
+      };
+    })
+    .filter((f) => f.usagePerJob > 0);
+
   return (
     <EmployeeDetailView
       employee={{
@@ -154,6 +216,9 @@ export default async function EmployeePage({
       recentJobs={recentJobs}
       topProducts={topProducts}
       assignedProducts={assignedProducts}
+      kitTemplates={kitTemplates}
+      forecast={forecast}
+      upcomingJobCount={upcomingEmployeeJobs}
     />
   );
 }

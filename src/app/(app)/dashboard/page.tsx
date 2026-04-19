@@ -128,6 +128,7 @@ export default async function DashboardPage() {
     unit: string;
   }> = [];
   let totalInventoryValue = 0;
+  let refillAlertCount = 0;
   if (isAdmin) {
     const products = await db.product.findMany();
     totalProducts = products.length;
@@ -138,12 +139,35 @@ export default async function DashboardPage() {
       (sum, p) => sum + p.stockLevel * p.costPerUnit,
       0
     );
+
+    // Forecast refill alerts
+    const [inventoryRules, employeesWithProducts] = await Promise.all([
+      db.inventoryRule.findMany(),
+      db.employeeProduct.findMany({
+        include: { product: true },
+      }),
+    ]);
+
+    for (const ep of employeesWithProducts) {
+      const rule = inventoryRules.find((r) => r.productId === ep.productId);
+      if (rule && (ep.quantity <= rule.refillThreshold)) {
+        refillAlertCount++;
+      }
+    }
   }
 
   // User's personal stats (for employees)
   let myJobsCount = 0;
   let myCompletedJobs = 0;
   let myUpcomingJobs: typeof upcomingJobs = [];
+  let myForecast: Array<{
+    productName: string;
+    currentQuantity: number;
+    unit: string;
+    projectedUsage: number;
+    deficit: number;
+    needsRefill: boolean;
+  }> = [];
   if (!isAdmin) {
     [myJobsCount, myCompletedJobs, myUpcomingJobs] = await Promise.all([
       db.job.count({
@@ -168,6 +192,43 @@ export default async function DashboardPage() {
         },
       }),
     ]);
+
+    // Employee inventory forecast
+    const [myProducts, myRules, myUpcomingCount] = await Promise.all([
+      db.employeeProduct.findMany({
+        where: { employeeId: user.id },
+        include: { product: true },
+      }),
+      db.inventoryRule.findMany(),
+      db.job.count({
+        where: {
+          OR: [
+            { employeeId: user.id },
+            { cleaners: { some: { id: user.id } } },
+          ],
+          status: { in: ["CREATED", "SCHEDULED", "IN_PROGRESS"] },
+          jobDate: { gte: new Date() },
+        },
+      }),
+    ]);
+
+    myForecast = myProducts
+      .map((ep) => {
+        const rule = myRules.find((r) => r.productId === ep.productId);
+        const usagePerJob = rule?.usagePerJob || 0;
+        const projectedUsage = usagePerJob * myUpcomingCount;
+        const deficit = Math.max(0, projectedUsage - ep.quantity);
+        return {
+          productName: ep.product.name,
+          currentQuantity: ep.quantity,
+          unit: ep.product.unit,
+          projectedUsage,
+          deficit,
+          needsRefill:
+            deficit > 0 || ep.quantity <= (rule?.refillThreshold || 0),
+        };
+      })
+      .filter((f) => f.needsRefill);
   }
 
   // Metric Card Component
@@ -297,6 +358,16 @@ export default async function DashboardPage() {
                 icon={AlertTriangle}
                 variant="warning"
                 href="/inventory?status=low"
+              />
+            )}
+            {refillAlertCount > 0 && (
+              <MetricCard
+                label="Refill Alerts"
+                value={String(refillAlertCount)}
+                subValue="Employee inventory below threshold"
+                icon={Package}
+                variant="warning"
+                href="/inventory"
               />
             )}
           </div>
@@ -579,6 +650,41 @@ export default async function DashboardPage() {
               </div>
             )}
           </Card>
+
+          {/* Inventory Refill Alerts */}
+          {myForecast.length > 0 && (
+            <Card variant="warning" className="p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="p-2 bg-yellow-100 rounded-lg">
+                  <AlertTriangle className="w-4 h-4 text-yellow-600" />
+                </div>
+                <h2 className="text-sm font-[350] text-yellow-700">
+                  Inventory Refill Needed
+                </h2>
+              </div>
+              <div className="space-y-2">
+                {myForecast.map((item, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-center justify-between p-3 rounded-xl bg-yellow-50 border border-yellow-200">
+                    <div>
+                      <p className="text-sm font-[400] text-yellow-800">
+                        {item.productName}
+                      </p>
+                      <p className="text-xs text-yellow-600 mt-0.5">
+                        Has {item.currentQuantity} {item.unit}
+                        {item.deficit > 0 &&
+                          ` \u2022 Needs ${item.deficit} more ${item.unit}`}
+                      </p>
+                    </div>
+                    <Badge variant="error" size="sm">
+                      {item.deficit > 0 ? "Deficit" : "Low"}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
 
           {/* Quick Actions for Employee */}
           <div>

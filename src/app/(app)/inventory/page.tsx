@@ -35,18 +35,47 @@ export default async function InventoryPage({
   const rowsPerPage = Number(params.rowsPerPage) || 10;
 
   // Fetch all products with their employee assignments
-  const allProducts = await db.product.findMany({
-    include: {
-      employeeProducts: {
+  const [allProducts, supplierPrices, activeSuppliers, employees] =
+    await Promise.all([
+      db.product.findMany({
         include: {
-          employee: true,
+          employeeProducts: {
+            include: {
+              employee: true,
+            },
+          },
         },
-      },
-    },
-    orderBy: {
-      name: "asc",
-    },
-  });
+        orderBy: {
+          name: "asc",
+        },
+      }),
+      db.supplierPrice.findMany({
+        include: {
+          supplier: true,
+          product: true,
+        },
+      }),
+      db.supplier.findMany({
+        where: { isActive: true },
+        orderBy: { name: "asc" },
+      }),
+      db.user.findMany({
+        where: { role: { in: ["EMPLOYEE", "ADMIN", "OWNER"] } },
+        include: {
+          assignedProducts: {
+            include: { product: true },
+          },
+          jobs: {
+            where: {
+              status: { in: ["CREATED", "SCHEDULED", "IN_PROGRESS"] },
+              jobDate: { gte: new Date() },
+            },
+            select: { id: true },
+          },
+        },
+        orderBy: { name: "asc" },
+      }),
+    ]);
 
   // Calculate stats for each product
   const productsWithStats = allProducts.map((product) => {
@@ -72,6 +101,88 @@ export default async function InventoryPage({
     };
   });
 
+  // Build supplier comparison data
+  const supplierProductMap = new Map<
+    string,
+    {
+      productId: string;
+      productName: string;
+      unit: string;
+      costPerUnit: number;
+      supplierPrices: Array<{
+        supplierId: string;
+        supplierName: string;
+        price: number;
+        unit: string | null;
+        notes: string | null;
+      }>;
+    }
+  >();
+
+  for (const sp of supplierPrices) {
+    if (!supplierProductMap.has(sp.productId)) {
+      supplierProductMap.set(sp.productId, {
+        productId: sp.productId,
+        productName: sp.product.name,
+        unit: sp.product.unit,
+        costPerUnit: sp.product.costPerUnit,
+        supplierPrices: [],
+      });
+    }
+    supplierProductMap.get(sp.productId)!.supplierPrices.push({
+      supplierId: sp.supplierId,
+      supplierName: sp.supplier.name,
+      price: sp.price,
+      unit: sp.unit,
+      notes: sp.notes,
+    });
+  }
+
+  const supplierData = {
+    products: Array.from(supplierProductMap.values()),
+    suppliers: activeSuppliers.map((s) => ({ id: s.id, name: s.name })),
+  };
+
+  // Build forecast data
+  const inventoryRules = await db.inventoryRule.findMany({
+    include: { product: true },
+  });
+
+  const forecastData = employees
+    .map((emp) => {
+      const upcomingJobCount = emp.jobs.length;
+      const items = emp.assignedProducts
+        .map((ep) => {
+          const rule = inventoryRules.find(
+            (r) => r.productId === ep.productId
+          );
+          const usagePerJob = rule?.usagePerJob || 0;
+          const projectedUsage = usagePerJob * upcomingJobCount;
+          const deficit = Math.max(0, projectedUsage - ep.quantity);
+          return {
+            productId: ep.productId,
+            productName: ep.product.name,
+            unit: ep.product.unit,
+            currentQuantity: ep.quantity,
+            usagePerJob,
+            refillThreshold: rule?.refillThreshold || 0,
+            projectedUsage,
+            deficit,
+            needsRefill:
+              deficit > 0 || ep.quantity <= (rule?.refillThreshold || 0),
+          };
+        })
+        .filter((f) => f.usagePerJob > 0);
+
+      return {
+        employeeId: emp.id,
+        employeeName: emp.name,
+        upcomingJobCount,
+        items,
+      };
+    })
+    .filter((e) => e.items.length > 0);
+
   return (
     <div className="h-full overflow-hidden overflow-y-auto p-8">
       <InventoryPageClient
@@ -80,6 +191,8 @@ export default async function InventoryPage({
         initialStatus={status}
         initialPage={page}
         initialRowsPerPage={rowsPerPage}
+        supplierData={supplierData}
+        forecastData={forecastData}
       />
     </div>
   );

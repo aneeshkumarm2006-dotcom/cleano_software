@@ -18,6 +18,7 @@ import {
   FileText,
   MapPin,
   Banknote,
+  Droplets,
   LucideIcon,
 } from "lucide-react";
 
@@ -35,6 +36,7 @@ const iconMap: Record<string, LucideIcon> = {
   invoices: FileText,
   sales: MapPin,
   "my-pay": Banknote,
+  "rag-wash": Droplets,
 };
 
 export default function NavLink({
