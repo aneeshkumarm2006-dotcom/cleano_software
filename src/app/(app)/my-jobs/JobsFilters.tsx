@@ -92,6 +92,10 @@ export function JobsFilters() {
   const jobTypeOptions = [
     { value: "all", label: "All Types" },
     { value: "R", label: "Residential" },
+    { value: "DEEP", label: "Deep Cleaning" },
+    { value: "MOVE_IN", label: "Move-in Cleaning" },
+    { value: "MOVE_OUT", label: "Move-out Cleaning" },
+    { value: "AIRBNB", label: "Airbnb Cleaning" },
     { value: "C", label: "Commercial" },
     { value: "PC", label: "Post-Construction" },
     { value: "F", label: "Follow-up" },

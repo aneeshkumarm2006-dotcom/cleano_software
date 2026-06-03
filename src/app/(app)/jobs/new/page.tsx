@@ -86,7 +86,15 @@ export default async function JobFormPage({
   // Get all clients for the client selector
   const clients = await db.client.findMany({
     orderBy: { name: "asc" },
-    select: { id: true, name: true, address: true, email: true, phone: true },
+    select: {
+      id: true,
+      name: true,
+      address: true,
+      email: true,
+      phone: true,
+      discountPercent: true,
+      defaultPaymentMethodId: true,
+    },
   });
 
   async function saveJob(formData: FormData) {
@@ -405,19 +413,6 @@ export default async function JobFormPage({
             <MoneyFieldWrap label="Total tip" id="totalTip" name="totalTip" defaultValue={existingJob?.totalTip} />
             <MoneyFieldWrap label="Parking" id="parking" name="parking" defaultValue={existingJob?.parking} />
             <MoneyFieldWrap label="Discount amount" id="discountAmount" name="discountAmount" defaultValue={existingJob?.discountAmount} />
-
-            <FieldWrap label="Pay rate multiplier" hint="1.5 for overtime, 2.0 for holidays">
-              <Input
-                type="number"
-                step="0.1"
-                min="0.5"
-                max="3"
-                id="payRateMultiplier"
-                name="payRateMultiplier"
-                defaultValue={existingJob?.payRateMultiplier ?? 1.0}
-                placeholder="1.0"
-              />
-            </FieldWrap>
 
             <FieldWrap label="Payment type">
               <PaymentTypeSelect defaultValue={existingJob?.paymentType || ""} />

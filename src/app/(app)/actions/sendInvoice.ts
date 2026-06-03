@@ -5,6 +5,7 @@ import { headers } from "next/headers";
 import { db } from "@/db";
 import { revalidatePath } from "next/cache";
 import { sendInvoiceEmail } from "@/lib/email";
+import { buildInvoicePdfBuffer, loadInvoiceData } from "@/lib/invoice-pdf";
 
 async function requireAdmin() {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -27,14 +28,18 @@ export async function sendInvoice(invoiceId: string) {
 
     if (!invoice) return { success: false, error: "Invoice not found" };
 
-    if (invoice.status !== "DRAFT") {
-      return { success: false, error: "Only draft invoices can be sent" };
+    if (invoice.status === "CANCELLED") {
+      return {
+        success: false,
+        error: "Cancelled invoices cannot be emailed",
+      };
     }
 
+    const wasDraft = invoice.status === "DRAFT";
     await db.invoice.update({
       where: { id: invoiceId },
       data: {
-        status: "SENT",
+        ...(wasDraft ? { status: "SENT" } : {}),
         sentAt: new Date(),
       },
     });
@@ -65,22 +70,53 @@ export async function sendInvoice(invoiceId: string) {
     revalidatePath("/invoices");
     revalidatePath(`/invoices/${invoiceId}`);
 
-    // Customer "Invoice resent" — gated by `cust.invoice.resend`.
+    // Email the customer with the invoice PDF attached.
     const fresh = await db.invoice.findUnique({
       where: { id: invoiceId },
       include: { client: { select: { name: true, email: true } } },
     });
-    if (fresh?.client?.email) {
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
-      sendInvoiceEmail({
-        to: fresh.client.email,
-        recipient: "CUSTOMER",
-        event: "resend",
-        invoiceNumber: fresh.invoiceNumber,
-        amount: fresh.totalAmount,
-        clientName: fresh.client.name,
-        link: `${appUrl}/portal/invoices/${fresh.id}`,
-      }).catch((e) => console.error("customer invoice-resend", e));
+    if (!fresh?.client?.email) {
+      return {
+        success: false,
+        error:
+          "Invoice status updated, but the client has no email on file — nothing was sent.",
+      };
+    }
+
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+    let pdfAttachment: { filename: string; content: Buffer } | undefined;
+    try {
+      const data = await loadInvoiceData(invoiceId);
+      if (data) {
+        const buffer = await buildInvoicePdfBuffer(data);
+        pdfAttachment = {
+          filename: `invoice-${fresh.invoiceNumber}.pdf`,
+          content: buffer,
+        };
+      }
+    } catch (e) {
+      console.error("Could not build invoice PDF for email", e);
+    }
+
+    const result = await sendInvoiceEmail({
+      to: fresh.client.email,
+      recipient: "CUSTOMER",
+      event: wasDraft ? "new" : "resend",
+      invoiceNumber: fresh.invoiceNumber,
+      amount: fresh.totalAmount,
+      clientName: fresh.client.name,
+      link: `${appUrl}/portal/invoices/${fresh.id}`,
+      pdfAttachment,
+    });
+
+    if (!result.ok) {
+      return {
+        success: false,
+        error:
+          ("error" in result && typeof result.error === "string"
+            ? result.error
+            : null) ?? "Email delivery failed",
+      };
     }
 
     return { success: true };

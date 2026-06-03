@@ -25,6 +25,7 @@ import Input from "@/components/ui/Input";
 import Textarea from "@/components/ui/Textarea";
 import CustomDropdown from "@/components/ui/custom-dropdown";
 import SmartSearch from "@/components/SmartSearch";
+import SaveCardOnFile from "./SaveCardOnFile";
 
 interface User {
   id: string;
@@ -59,8 +60,10 @@ interface Job {
 interface ClientLite {
   id: string;
   name: string;
+  email?: string | null;
   address?: string | null;
   discountPercent?: number | null;
+  defaultPaymentMethodId?: string | null;
 }
 
 interface JobModalProps {
@@ -91,9 +94,6 @@ const formSchema = z.object({
   bedCount: z.union([z.coerce.number().int().min(0), z.literal("")]).optional(),
   bathCount: z.union([z.coerce.number().int().min(0), z.literal("")]).optional(),
   discountAmount: z.union([z.coerce.number().min(0), z.literal("")]).optional(),
-  payRateMultiplier: z
-    .union([z.coerce.number().min(0), z.literal("")])
-    .optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -101,6 +101,10 @@ type FormValues = z.infer<typeof formSchema>;
 const jobTypes = [
   { value: "", label: "Select type" },
   { value: "R", label: "Residential" },
+  { value: "DEEP", label: "Deep Cleaning" },
+  { value: "MOVE_IN", label: "Move-in Cleaning" },
+  { value: "MOVE_OUT", label: "Move-out Cleaning" },
+  { value: "AIRBNB", label: "Airbnb Cleaning" },
   { value: "C", label: "Commercial" },
   { value: "PC", label: "Post-Construction" },
   { value: "F", label: "Follow-up" },
@@ -514,6 +518,11 @@ export default function JobModal({
   const [selectedJobType, setSelectedJobType] = useState<string>("");
   const [selectedClientId, setSelectedClientId] = useState<string>("");
   const [selectedPaymentType, setSelectedPaymentType] = useState<string>("");
+  // Flips to true after admin saves a card via the inline SaveCardOnFile
+  // panel. Keeps the success state visible until the modal closes /
+  // re-opens (the parent server data still shows defaultPaymentMethodId
+  // as null until the page revalidates).
+  const [cardSavedNow, setCardSavedNow] = useState(false);
   const [addOns, setAddOns] = useState<Array<{ name: string; price: number }>>(
     []
   );
@@ -568,12 +577,12 @@ export default function JobModal({
           bedCount: job.bedCount ?? "",
           bathCount: job.bathCount ?? "",
           discountAmount: job.discountAmount ?? "",
-          payRateMultiplier: job.payRateMultiplier ?? "",
         });
         setSelectedCleaners(job.cleaners?.map((c) => c.id) || []);
         setSelectedJobType(job.jobType || "");
         setSelectedClientId(job.clientId || "");
         setSelectedPaymentType(job.paymentType || "");
+        setCardSavedNow(false);
         setAddOns(
           (job.addOns || []).map((a) => ({ name: a.name, price: a.price }))
         );
@@ -603,12 +612,12 @@ export default function JobModal({
           bedCount: "",
           bathCount: "",
           discountAmount: "",
-          payRateMultiplier: "",
         });
         setSelectedCleaners([]);
         setSelectedJobType("");
         setSelectedClientId("");
         setSelectedPaymentType("");
+        setCardSavedNow(false);
         setAddOns([]);
         setDiscountMode("percent");
         setDiscountInput("");
@@ -732,10 +741,6 @@ export default function JobModal({
         resolvedDiscount = "0";
       }
       formData.append("discountAmount", resolvedDiscount);
-      formData.append(
-        "payRateMultiplier",
-        String(values.payRateMultiplier || "")
-      );
       formData.append("paymentType", selectedPaymentType);
       formData.append("addOns", JSON.stringify(addOns));
 
@@ -951,57 +956,28 @@ export default function JobModal({
               {/* Step 1: Basic Information */}
               {currentStep === 1 && (
                 <div className="space-y-5">
-                  {/* Existing Client Selector */}
+                  {/* Existing Client Picker (searchable) */}
                   {clients.length > 0 && (
-                    <div>
-                      <label className="input-label tracking-tight">
-                        Link to Existing Client (optional)
-                      </label>
-                      <CustomDropdown
-                        trigger={
-                          <Button
-                            variant="default"
-                            size="md"
-                            border={false}
-                            type="button"
-                            disabled={disableForm}
-                            className="w-full h-[44px] px-4 py-3 flex items-center !justify-between bg-[#005F6A]/5">
-                            <span className="text-sm font-[350] text-[#005F6A] truncate">
-                              {selectedClientId
-                                ? clients.find(
-                                    (c) => c.id === selectedClientId
-                                  )?.name || "—"
-                                : "No linked client"}
-                            </span>
-                            <ChevronDown className="w-4 h-4 text-[#005F6A]/50" />
-                          </Button>
-                        }
-                        options={[
-                          {
-                            label: "— None —",
-                            onClick: () => {
-                              setSelectedClientId("");
-                              setDiscountTouched(false);
-                            },
-                          },
-                          ...clients.map((c) => ({
-                            label: c.name,
-                            onClick: () => {
-                              setSelectedClientId(c.id);
-                              setDiscountTouched(false);
-                              setValue("clientName", c.name, {
-                                shouldValidate: true,
-                                shouldDirty: true,
-                              });
-                              setValue("location", c.address || "", {
-                                shouldDirty: true,
-                              });
-                            },
-                          })),
-                        ]}
-                        maxHeight="16rem"
-                      />
-                    </div>
+                    <ClientSearchPicker
+                      clients={clients}
+                      selectedClientId={selectedClientId}
+                      disabled={disableForm}
+                      onSelect={(c) => {
+                        setSelectedClientId(c.id);
+                        setDiscountTouched(false);
+                        setValue("clientName", c.name, {
+                          shouldValidate: true,
+                          shouldDirty: true,
+                        });
+                        setValue("location", c.address || "", {
+                          shouldDirty: true,
+                        });
+                      }}
+                      onClear={() => {
+                        setSelectedClientId("");
+                        setDiscountTouched(false);
+                      }}
+                    />
                   )}
 
                   {/* Client Name */}
@@ -1399,24 +1375,6 @@ export default function JobModal({
 
                       <div>
                         <label className="input-label tracking-tight">
-                          Pay Rate Multiplier
-                        </label>
-                        <Input
-                          variant="form"
-                          type="number"
-                          size="md"
-                          step="0.05"
-                          min="0"
-                          {...register("payRateMultiplier")}
-                          disabled={disableForm}
-                          className="w-full px-4 py-3"
-                          placeholder="1.00"
-                          border={false}
-                        />
-                      </div>
-
-                      <div>
-                        <label className="input-label tracking-tight">
                           Bed Count
                         </label>
                         <Input
@@ -1502,6 +1460,55 @@ export default function JobModal({
                         />
                       </div>
                     </div>
+
+                    {/* Card on file: shown when CREDIT_CARD selected and
+                        the chosen client has no saved payment method. */}
+                    {selectedPaymentType === "CREDIT_CARD" && (() => {
+                      const selectedClient = clients.find(
+                        (c) => c.id === selectedClientId
+                      );
+                      if (!selectedClientId || !selectedClient) {
+                        return (
+                          <div
+                            style={{
+                              marginTop: 12,
+                              padding: 12,
+                              background: "#fef3c7",
+                              border: "1px solid #fde68a",
+                              borderRadius: 10,
+                              fontSize: 12.5,
+                              color: "#854d0e",
+                              lineHeight: 1.5,
+                            }}>
+                            To save a card on file, pick an existing client from the search above. For a brand-new client, save the job first then add the card from their client profile.
+                          </div>
+                        );
+                      }
+                      if (selectedClient.defaultPaymentMethodId || cardSavedNow) {
+                        return (
+                          <div
+                            style={{
+                              marginTop: 12,
+                              padding: "8px 12px",
+                              background: "#dcfce7",
+                              color: "#166534",
+                              fontSize: 13,
+                              fontWeight: 600,
+                              borderRadius: 8,
+                            }}>
+                            ✓ Card on file. Charges will run off-session.
+                          </div>
+                        );
+                      }
+                      return (
+                        <SaveCardOnFile
+                          clientId={selectedClient.id}
+                          clientName={selectedClient.name}
+                          clientEmail={selectedClient.email ?? null}
+                          onSaved={() => setCardSavedNow(true)}
+                        />
+                      );
+                    })()}
                   </div>
 
                   {/* Add-Ons Section */}
@@ -1700,6 +1707,133 @@ export default function JobModal({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Client search picker ─────────────────────────────────────────────────
+function ClientSearchPicker({
+  clients,
+  selectedClientId,
+  disabled,
+  onSelect,
+  onClear,
+}: {
+  clients: ClientLite[];
+  selectedClientId: string;
+  disabled?: boolean;
+  onSelect: (c: ClientLite) => void;
+  onClear: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  // Close on outside click
+  useEffect(() => {
+    function onDocClick(e: MouseEvent) {
+      if (!wrapperRef.current) return;
+      if (!wrapperRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    if (open) document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [open]);
+
+  const selected = selectedClientId
+    ? clients.find((c) => c.id === selectedClientId) ?? null
+    : null;
+
+  const filtered = (() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return clients.slice(0, 20);
+    return clients
+      .filter((c) => {
+        const haystack = `${c.name} ${c.email ?? ""} ${c.address ?? ""}`.toLowerCase();
+        return haystack.includes(q);
+      })
+      .slice(0, 20);
+  })();
+
+  return (
+    <div ref={wrapperRef} className="relative">
+      <label className="input-label tracking-tight">
+        Link to Existing Client (optional)
+      </label>
+
+      {selected ? (
+        <div
+          className="w-full flex items-center justify-between gap-2 px-4 py-2.5 rounded-xl bg-[#005F6A]/5 border border-[#005F6A]/10"
+          style={{ minHeight: 44 }}>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-[450] text-[#005F6A] truncate">
+              {selected.name}
+            </div>
+            <div className="text-xs text-[#005F6A]/60 truncate">
+              {selected.email ?? "—"}
+              {selected.address ? ` · ${selected.address}` : ""}
+            </div>
+          </div>
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => {
+              onClear();
+              setQuery("");
+            }}
+            className="text-xs text-[#005F6A]/70 hover:text-[#005F6A] px-2 py-1">
+            Change
+          </button>
+        </div>
+      ) : (
+        <div className="relative">
+          <input
+            type="text"
+            value={query}
+            disabled={disabled}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setOpen(true);
+            }}
+            onFocus={() => setOpen(true)}
+            placeholder="Search clients by name, email, or address…"
+            className="w-full h-[44px] px-4 py-3 rounded-xl bg-[#005F6A]/5 text-sm text-[#005F6A] placeholder:text-[#005F6A]/50 outline-none focus:bg-[#005F6A]/10"
+          />
+          {open && (
+            <div
+              className="absolute left-0 right-0 mt-1 z-30 rounded-xl bg-white border border-[#005F6A]/10 shadow-lg"
+              style={{ maxHeight: 280, overflowY: "auto" }}>
+              {filtered.length === 0 ? (
+                <div className="px-4 py-3 text-sm text-[#005F6A]/60">
+                  No matches. Enter the name below to create a new client.
+                </div>
+              ) : (
+                filtered.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => {
+                      onSelect(c);
+                      setQuery("");
+                      setOpen(false);
+                    }}
+                    className="w-full text-left px-4 py-2.5 hover:bg-[#005F6A]/5 flex flex-col gap-0.5 border-b border-[#005F6A]/5 last:border-b-0">
+                    <span className="text-sm font-[450] text-[#005F6A]">
+                      {c.name}
+                    </span>
+                    <span className="text-xs text-[#005F6A]/60 truncate">
+                      {c.email ?? "—"}
+                      {c.address ? ` · ${c.address}` : ""}
+                      {c.defaultPaymentMethodId ? " · 💳 card on file" : ""}
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

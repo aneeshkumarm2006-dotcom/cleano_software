@@ -1359,6 +1359,8 @@ interface InvoiceEmailOpts {
   amount?: number;
   link?: string;
   clientName?: string;
+  /** Optional PDF attachment — usually the invoice PDF for `new`/`update`/`resend`. */
+  pdfAttachment?: { filename: string; content: Buffer };
 }
 
 const INVOICE_KEY_MAP: Record<"ADMIN" | "CUSTOMER", Partial<Record<InvoiceEvent, string>>> = {
@@ -1450,6 +1452,9 @@ export async function sendInvoiceEmail(opts: InvoiceEmailOpts) {
     subject: copy.subject(opts.invoiceNumber),
     html,
     notification: { recipient: opts.recipient, key },
+    ...(opts.pdfAttachment
+      ? { attachments: [opts.pdfAttachment] }
+      : {}),
   });
 }
 

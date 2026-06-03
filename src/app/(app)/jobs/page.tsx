@@ -59,7 +59,14 @@ export default async function JobsPage({
 
   const clients = await db.client.findMany({
     orderBy: { name: "asc" },
-    select: { id: true, name: true, address: true, discountPercent: true },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      address: true,
+      discountPercent: true,
+      defaultPaymentMethodId: true,
+    },
   });
 
   const totalRevenue = await db.job.aggregate({

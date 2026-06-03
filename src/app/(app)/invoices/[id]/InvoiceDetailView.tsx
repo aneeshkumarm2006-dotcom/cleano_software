@@ -184,7 +184,15 @@ export default function InvoiceDetailView({
             <Printer className="w-4 h-4 mr-2" />
             Print
           </Button>
-          {invoice.status === "DRAFT" && (
+          <a
+            href={`/api/invoices/${invoice.id}/pdf`}
+            target="_blank"
+            rel="noopener"
+            className="inline-flex items-center gap-2 rounded-2xl px-6 py-3 text-sm font-medium bg-[#005F6A]/5 text-[#005F6A] hover:bg-[#005F6A]/10">
+            <FileText className="w-4 h-4" />
+            Download PDF
+          </a>
+          {invoice.status !== "PAID" && invoice.status !== "CANCELLED" && (
             <Button
               variant="primary"
               size="md"
@@ -193,7 +201,7 @@ export default function InvoiceDetailView({
               onClick={handleSend}
               className="rounded-2xl px-6 py-3">
               {isSending ? <Loader className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
-              Mark as Sent
+              {invoice.status === "DRAFT" ? "Send Invoice" : "Resend Invoice"}
             </Button>
           )}
           {(invoice.status === "SENT" || invoice.status === "OVERDUE") && (

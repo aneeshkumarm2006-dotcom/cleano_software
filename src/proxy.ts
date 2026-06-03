@@ -18,6 +18,7 @@ const PUBLIC_EXACT = new Set<string>([
 const PUBLIC_PREFIXES = [
   '/book/', // includes /book and any nested segments
   '/rate/', // /rate/[token]
+  '/add-card/', // /add-card/[token] customer card setup link
   '/p/', // existing landing pages
   '/gift-card/', // gift card purchase + redemption flow
   '/api/auth/', // Better Auth endpoints

@@ -480,6 +480,10 @@ export default function JobsView({
               options={[
                 { value: "all", label: "All types" },
                 { value: "R", label: "Residential (R)" },
+                { value: "DEEP", label: "Deep Cleaning" },
+                { value: "MOVE_IN", label: "Move-in" },
+                { value: "MOVE_OUT", label: "Move-out" },
+                { value: "AIRBNB", label: "Airbnb" },
                 { value: "C", label: "Commercial (C)" },
                 { value: "PC", label: "Post-Construction (PC)" },
                 { value: "F", label: "Follow-up (F)" },

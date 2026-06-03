@@ -68,7 +68,14 @@ export default async function JobPage({
 
   const clients = await db.client.findMany({
     orderBy: { name: "asc" },
-    select: { id: true, name: true },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      address: true,
+      discountPercent: true,
+      defaultPaymentMethodId: true,
+    },
   });
 
   // Fetch paginated logs separately

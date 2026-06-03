@@ -11,6 +11,10 @@ interface JobTypeSelectorProps {
 const jobTypeOptions = [
   { value: "", label: "Select Type" },
   { value: "R - Residential", label: "R - Residential" },
+  { value: "DEEP - Deep Cleaning", label: "DEEP - Deep Cleaning" },
+  { value: "MOVE_IN - Move-in Cleaning", label: "MOVE_IN - Move-in Cleaning" },
+  { value: "MOVE_OUT - Move-out Cleaning", label: "MOVE_OUT - Move-out Cleaning" },
+  { value: "AIRBNB - Airbnb Cleaning", label: "AIRBNB - Airbnb Cleaning" },
   { value: "C - Commercial", label: "C - Commercial" },
   { value: "PC - Post Construction", label: "PC - Post Construction" },
   { value: "F - Follow-up", label: "F - Follow-up" },

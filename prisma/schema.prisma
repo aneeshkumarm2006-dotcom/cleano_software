@@ -1336,6 +1336,23 @@ enum GiftCardStatus {
   CANCELLED
 }
 
+/** One-time token a customer uses on the public /add-card/[token] page
+ *  to save their card on file without needing a portal login. The link
+ *  is emailed by admin via the job detail "Send Add card link" action. */
+model ClientCardSetupToken {
+  id           String    @id @default(cuid())
+  clientId     String
+  token        String    @unique
+  expiresAt    DateTime
+  usedAt       DateTime?
+  jobId        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([clientId])
+  @@index([expiresAt])
+}
+
 model GiftCard {
   id                    String         @id @default(cuid())
   code                  String         @unique

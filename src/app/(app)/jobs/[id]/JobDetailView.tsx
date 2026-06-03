@@ -8,6 +8,8 @@ import { saveJob } from "../../actions/saveJob";
 import { deleteJob as deleteJobAction } from "../../actions/deleteJob";
 import { togglePaymentReceived } from "../../actions/toggleJobPaymentStatus";
 import { chargeJob } from "../../actions/chargeJob";
+import { sendAddCardLink } from "../../actions/sendAddCardLink";
+import { resendReceipt } from "../../actions/resendReceipt";
 import { generateInvoiceFromJob } from "../../actions/generateInvoiceFromJob";
 import { markJobComplete } from "../../actions/markJobComplete";
 import { createRatingToken } from "../../actions/createRatingToken";
@@ -72,7 +74,14 @@ interface Job {
   rescheduleRequestedAt?: string | null;
 }
 
-interface ClientLite { id: string; name: string; }
+interface ClientLite {
+  id: string;
+  name: string;
+  email?: string | null;
+  address?: string | null;
+  discountPercent?: number | null;
+  defaultPaymentMethodId?: string | null;
+}
 
 interface ProductUsage {
   id: string;
@@ -740,6 +749,13 @@ export default function JobDetailView({
 
           {!paymentReceived && isAdmin && !job.isCashJob && (
             <ChargeButton jobId={job.id} amount={grossRevenue} />
+          )}
+
+          {isAdmin && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
+              <SendAddCardLinkButton jobId={job.id} />
+              {paymentReceived && <ResendReceiptButton jobId={job.id} />}
+            </div>
           )}
         </div>
       </div>
@@ -1795,5 +1811,89 @@ function ChargeButton({ jobId, amount, compact }: { jobId: string; amount: numbe
         </div>
       </Modal>
     </>
+  );
+}
+
+// ── Send "Add card" link button ──────────────────────────────────────────
+function SendAddCardLinkButton({ jobId }: { jobId: string }) {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  async function handleClick() {
+    if (busy) return;
+    setBusy(true);
+    setMsg(null);
+    const res = await sendAddCardLink({ jobId });
+    if (res.success) {
+      setMsg({ ok: true, text: "Add-card link emailed to the customer." });
+    } else {
+      setMsg({ ok: false, text: res.error ?? "Could not send link." });
+    }
+    setBusy(false);
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <Button
+        variant="default"
+        border={false}
+        onClick={handleClick}
+        disabled={busy}
+        className="px-4 py-2 text-sm bg-[#fce7f3] text-[#9d174d] hover:bg-[#fbcfe8]">
+        {busy ? "Sending…" : 'Send "Add card" link'}
+      </Button>
+      {msg && (
+        <span
+          style={{
+            fontSize: 11,
+            color: msg.ok ? "var(--primary)" : "#dc2626",
+            fontWeight: 600,
+          }}>
+          {msg.text}
+        </span>
+      )}
+    </div>
+  );
+}
+
+// ── Resend receipt button ────────────────────────────────────────────────
+function ResendReceiptButton({ jobId }: { jobId: string }) {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  async function handleClick() {
+    if (busy) return;
+    setBusy(true);
+    setMsg(null);
+    const res = await resendReceipt(jobId);
+    if (res.success) {
+      setMsg({ ok: true, text: "Receipt re-sent." });
+    } else {
+      setMsg({ ok: false, text: res.error ?? "Could not resend." });
+    }
+    setBusy(false);
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <Button
+        variant="default"
+        border={false}
+        onClick={handleClick}
+        disabled={busy}
+        className="px-4 py-2 text-sm bg-[#e0e7ff] text-[#3730a3] hover:bg-[#c7d2fe]">
+        {busy ? "Resending…" : "Resend Receipt"}
+      </Button>
+      {msg && (
+        <span
+          style={{
+            fontSize: 11,
+            color: msg.ok ? "var(--primary)" : "#dc2626",
+            fontWeight: 600,
+          }}>
+          {msg.text}
+        </span>
+      )}
+    </div>
   );
 }
