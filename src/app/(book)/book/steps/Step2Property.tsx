@@ -49,9 +49,18 @@ export default function Step2Property({ draft, onChange }: Props) {
           your <em>{isPC ? "project." : "home."}</em>
         </h1>
         <p className="cl-subtitle">
-          Pick your service type, then tell us about the property.
+          A few details so we can put together a price.
         </p>
       </header>
+
+      <Field label="Address" htmlFor="prop-addr">
+        <Input
+          id="prop-addr"
+          value={draft.address}
+          onChange={(e) => onChange({ address: e.target.value })}
+          placeholder="123 rue Sainte-Catherine, Montréal"
+        />
+      </Field>
 
       <div className="cl-stack-12">
         <span className="cl-label">Service type</span>
@@ -66,15 +75,6 @@ export default function Step2Property({ draft, onChange }: Props) {
           ))}
         </div>
       </div>
-
-      <Field label="Address" htmlFor="prop-addr">
-        <Input
-          id="prop-addr"
-          value={draft.address}
-          onChange={(e) => onChange({ address: e.target.value })}
-          placeholder="123 rue Sainte-Catherine, Montréal"
-        />
-      </Field>
 
       {isPC ? (
         /* Post-construction: hours × cleaners estimate */
