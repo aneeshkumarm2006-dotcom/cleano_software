@@ -12,6 +12,10 @@ export default async function GiftCardsAdminPage() {
 
   return (
     <div className="h-full overflow-hidden overflow-y-auto p-8">
+      <div style={{ display: "flex", gap: 0, marginBottom: 24, borderBottom: "1px solid rgba(0,95,106,0.1)" }}>
+        <a href="/gift-cards" style={{ padding: "8px 18px", fontSize: 13, fontWeight: 600, color: "#005F6A", textDecoration: "none", borderBottom: "2px solid #005F6A", marginBottom: -1, display: "inline-block" }}>Gift Cards</a>
+        <a href="/promo-codes" style={{ padding: "8px 18px", fontSize: 13, fontWeight: 400, color: "rgba(0,95,106,0.5)", textDecoration: "none", borderBottom: "2px solid transparent", marginBottom: -1, display: "inline-block" }}>Promo Codes</a>
+      </div>
       <GiftCardsAdminClient
         cards={cards.map((c) => ({
           id: c.id,

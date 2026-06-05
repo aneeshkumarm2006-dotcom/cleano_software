@@ -23,7 +23,9 @@ interface ClientLite {
   id: string;
   name: string;
   email: string | null;
+  secondaryEmail?: string | null;
   phone: string | null;
+  secondaryPhone?: string | null;
   address: string | null;
   notes: string | null;
   discountPercent?: number | null;
@@ -49,7 +51,9 @@ export default function ClientModal({
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [secondaryEmail, setSecondaryEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [secondaryPhone, setSecondaryPhone] = useState("");
   const [address, setAddress] = useState("");
   const [notes, setNotes] = useState("");
   const [discountPercent, setDiscountPercent] = useState("");
@@ -60,7 +64,9 @@ export default function ClientModal({
       setSuccess(false);
       setName(client?.name || "");
       setEmail(client?.email || "");
+      setSecondaryEmail(client?.secondaryEmail || "");
       setPhone(client?.phone || "");
+      setSecondaryPhone(client?.secondaryPhone || "");
       setAddress(client?.address || "");
       setNotes(client?.notes || "");
       setDiscountPercent(
@@ -85,7 +91,9 @@ export default function ClientModal({
     const fd = new FormData();
     fd.append("name", name);
     fd.append("email", email);
+    fd.append("secondaryEmail", secondaryEmail);
     fd.append("phone", phone);
+    fd.append("secondaryPhone", secondaryPhone);
     fd.append("address", address);
     fd.append("notes", notes);
     fd.append("discountPercent", discountPercent);
@@ -192,6 +200,24 @@ export default function ClientModal({
             </div>
 
             <div>
+              <label className="input-label tracking-tight">Secondary email</label>
+              <div className="relative">
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#005F6A]/30" />
+                <Input
+                  variant="form"
+                  type="email"
+                  size="md"
+                  value={secondaryEmail}
+                  onChange={(e) => setSecondaryEmail(e.target.value)}
+                  disabled={submitting}
+                  className="w-full pl-11 px-4 py-3"
+                  placeholder="cc@example.com (optional)"
+                  border={false}
+                />
+              </div>
+            </div>
+
+            <div>
               <label className="input-label tracking-tight">Phone</label>
               <div className="relative">
                 <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#005F6A]/50" />
@@ -203,6 +229,23 @@ export default function ClientModal({
                   disabled={submitting}
                   className="w-full pl-11 px-4 py-3"
                   placeholder="(555) 123-4567"
+                  border={false}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="input-label tracking-tight">Secondary phone</label>
+              <div className="relative">
+                <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#005F6A]/30" />
+                <Input
+                  variant="form"
+                  size="md"
+                  value={secondaryPhone}
+                  onChange={(e) => setSecondaryPhone(e.target.value)}
+                  disabled={submitting}
+                  className="w-full pl-11 px-4 py-3"
+                  placeholder="(555) 987-6543 (optional)"
                   border={false}
                 />
               </div>

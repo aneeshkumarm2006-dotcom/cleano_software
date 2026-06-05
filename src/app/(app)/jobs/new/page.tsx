@@ -21,9 +21,9 @@ import { ArrowLeft } from "lucide-react";
 export default async function JobFormPage({
   searchParams,
 }: {
-  searchParams: Promise<{ edit?: string }>;
+  searchParams: Promise<{ edit?: string; duplicate?: string }>;
 }) {
-  const { edit: jobId } = await searchParams;
+  const { edit: jobId, duplicate: duplicateId } = await searchParams;
   const isEditing = !!jobId;
 
   const session = await auth.api.getSession({
@@ -39,14 +39,21 @@ export default async function JobFormPage({
   if (isEditing) {
     existingJob = await db.job.findUnique({
       where: { id: jobId },
-      include: {
-        cleaners: true,
-      },
+      include: { cleaners: true },
     });
 
     if (!existingJob || existingJob.employeeId !== session.user.id) {
       redirect("/jobs");
     }
+  }
+
+  // Pre-fill from duplicate source (all fields except date/time, payment & clock data)
+  let duplicateSource = null;
+  if (duplicateId) {
+    duplicateSource = await db.job.findUnique({
+      where: { id: duplicateId },
+      include: { cleaners: true },
+    });
   }
 
   // Get all users to populate the cleaners dropdown
@@ -110,8 +117,6 @@ export default async function JobFormPage({
     // Parse all form fields according to schema
     const startDate = formData.get("startDate") as string;
     const startTime = formData.get("startTime") as string;
-    const endDate = formData.get("endDate") as string;
-    const endTime = formData.get("endTime") as string;
 
     const validPaymentTypes = [
       "CASH",
@@ -159,12 +164,12 @@ export default async function JobFormPage({
       description: (formData.get("description") as string) || null,
       jobType: (formData.get("jobType") as string) || null,
       location: (formData.get("location") as string) || null,
+      aptNumber: (formData.get("aptNumber") as string) || null,
       jobDate: startDate ? new Date(startDate) : null,
       startTime:
         startDate && startTime
           ? new Date(`${startDate}T${startTime}`)
           : new Date(),
-      endTime: endDate && endTime ? new Date(`${endDate}T${endTime}`) : null,
       price,
       employeePay: formData.get("employeePay")
         ? parseFloat(formData.get("employeePay") as string)
@@ -186,9 +191,13 @@ export default async function JobFormPage({
       bathCount: formData.get("bathCount")
         ? parseInt(formData.get("bathCount") as string, 10)
         : null,
+      halfBathCount: formData.get("halfBathCount")
+        ? parseInt(formData.get("halfBathCount") as string, 10)
+        : null,
       payRateMultiplier: formData.get("payRateMultiplier")
         ? parseFloat(formData.get("payRateMultiplier") as string)
         : 1.0,
+      isCashJob: formData.get("isCashJob") === "on",
     };
 
     const editingJobId = formData.get("jobId") as string | null;
@@ -241,8 +250,9 @@ export default async function JobFormPage({
     redirect("/jobs");
   }
 
-  // Get selected cleaner IDs for editing
-  const selectedCleanerIds = existingJob?.cleaners.map((c) => c.id) || [];
+  // Source for pre-filling: editing wins, then duplicate, then blank
+  const prefill = existingJob ?? duplicateSource;
+  const selectedCleanerIds = prefill?.cleaners?.map((c) => c.id) || [];
 
   return (
     <div className="max-w-[68rem] mx-auto text-black pb-24">
@@ -281,6 +291,8 @@ export default async function JobFormPage({
         >
           {isEditing ? (
             <>Edit <em style={{ fontStyle: "italic" }}>cleaning job.</em></>
+          ) : duplicateId ? (
+            <>Duplicate <em style={{ fontStyle: "italic" }}>cleaning job.</em></>
           ) : (
             <>New <em style={{ fontStyle: "italic" }}>cleaning job.</em></>
           )}
@@ -301,7 +313,7 @@ export default async function JobFormPage({
             <FieldWrap label="Link client" hint="Pulls in saved name + address">
               <ClientLinkSelector
                 clients={clients}
-                defaultValue={existingJob?.clientId || ""}
+                defaultValue={prefill?.clientId || ""}
               />
             </FieldWrap>
 
@@ -311,22 +323,32 @@ export default async function JobFormPage({
                 id="clientName"
                 name="clientName"
                 required
-                defaultValue={existingJob?.clientName || ""}
+                defaultValue={prefill?.clientName || ""}
                 placeholder="e.g. Alexis Juarez"
               />
             </FieldWrap>
 
             <FieldWrap label="Job type">
-              <JobTypeSelector initialValue={existingJob?.jobType} />
+              <JobTypeSelector initialValue={prefill?.jobType} />
             </FieldWrap>
 
-            <FieldWrap label="Location" hint="Address or general area">
+            <FieldWrap label="Location" hint="Street address">
               <Input
                 type="text"
                 id="location"
                 name="location"
-                defaultValue={existingJob?.location || ""}
+                defaultValue={prefill?.location || ""}
                 placeholder="123 rue Sainte-Catherine, Montréal"
+              />
+            </FieldWrap>
+
+            <FieldWrap label="Apartment / Unit #">
+              <Input
+                type="text"
+                id="aptNumber"
+                name="aptNumber"
+                defaultValue={(prefill as any)?.aptNumber || ""}
+                placeholder="e.g. Apt 4B, Unit 202"
               />
             </FieldWrap>
 
@@ -336,7 +358,7 @@ export default async function JobFormPage({
                   id="description"
                   name="description"
                   rows={2}
-                  defaultValue={existingJob?.description || ""}
+                  defaultValue={prefill?.description || ""}
                   placeholder="Brief description of the job…"
                 />
               </FieldWrap>
@@ -344,14 +366,14 @@ export default async function JobFormPage({
           </div>
         </SectionCard>
 
-        {/* Date & Time */}
+        {/* Date & Time — always blank when duplicating */}
         <SectionCard title="Date & time" subtitle="Scheduled window">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
             <FieldWrap label="Start date">
               <ControlledDatePicker
                 name="startDate"
                 defaultValue={
-                  existingJob?.startTime
+                  isEditing && existingJob?.startTime
                     ? new Date(existingJob.startTime).toISOString().split("T")[0]
                     : ""
                 }
@@ -363,7 +385,7 @@ export default async function JobFormPage({
               <ControlledTimePicker
                 name="startTime"
                 defaultValue={
-                  existingJob?.startTime
+                  isEditing && existingJob?.startTime
                     ? new Date(existingJob.startTime).toISOString().split("T")[1].slice(0, 5)
                     : ""
                 }
@@ -371,29 +393,6 @@ export default async function JobFormPage({
               />
             </FieldWrap>
 
-            <FieldWrap label="End date">
-              <ControlledDatePicker
-                name="endDate"
-                defaultValue={
-                  existingJob?.endTime
-                    ? new Date(existingJob.endTime).toISOString().split("T")[0]
-                    : ""
-                }
-                size="md"
-              />
-            </FieldWrap>
-
-            <FieldWrap label="End time">
-              <ControlledTimePicker
-                name="endTime"
-                defaultValue={
-                  existingJob?.endTime
-                    ? new Date(existingJob.endTime).toISOString().split("T")[1].slice(0, 5)
-                    : ""
-                }
-                size="md"
-              />
-            </FieldWrap>
           </div>
         </SectionCard>
 
@@ -408,36 +407,62 @@ export default async function JobFormPage({
         {/* Pricing & Payment */}
         <SectionCard title="Pricing & payment" subtitle="Charges, costs, and payment method">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-            <MoneyFieldWrap label="Price" id="price" name="price" defaultValue={existingJob?.price} />
-            <MoneyFieldWrap label="Employee pay" id="employeePay" name="employeePay" defaultValue={existingJob?.employeePay} />
-            <MoneyFieldWrap label="Total tip" id="totalTip" name="totalTip" defaultValue={existingJob?.totalTip} />
-            <MoneyFieldWrap label="Parking" id="parking" name="parking" defaultValue={existingJob?.parking} />
-            <MoneyFieldWrap label="Discount amount" id="discountAmount" name="discountAmount" defaultValue={existingJob?.discountAmount} />
+            <MoneyFieldWrap label="Price" id="price" name="price" defaultValue={prefill?.price} />
+            <MoneyFieldWrap label="Employee pay" id="employeePay" name="employeePay" defaultValue={prefill?.employeePay} />
+            <MoneyFieldWrap label="Total tip" id="totalTip" name="totalTip" defaultValue={prefill?.totalTip} />
+            <MoneyFieldWrap label="Parking" id="parking" name="parking" defaultValue={prefill?.parking} />
+            <MoneyFieldWrap label="Discount amount" id="discountAmount" name="discountAmount" defaultValue={prefill?.discountAmount} />
 
             <FieldWrap label="Payment type">
-              <PaymentTypeSelect defaultValue={existingJob?.paymentType || ""} />
+              <PaymentTypeSelect defaultValue={prefill?.paymentType || ""} />
             </FieldWrap>
 
-            <FieldWrap label="Bed count">
+            <div className="md:col-span-2">
+              <label className="flex items-center gap-3 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  name="isCashJob"
+                  defaultChecked={(prefill as any)?.isCashJob === true}
+                  className="w-4 h-4 rounded accent-[#005F6A]"
+                />
+                <span style={{ fontSize: 14, color: "var(--ink)" }}>
+                  Cash job <span style={{ color: "var(--primary-50)", fontWeight: 400 }}>— no Stripe charge, no tax, manual payment received</span>
+                </span>
+              </label>
+            </div>
+
+            <FieldWrap label="Bedrooms">
               <Input
                 type="number"
                 min="0"
                 max="10"
                 id="bedCount"
                 name="bedCount"
-                defaultValue={existingJob?.bedCount ?? ""}
+                defaultValue={prefill?.bedCount ?? ""}
                 placeholder="0"
               />
             </FieldWrap>
 
-            <FieldWrap label="Bath count">
+            <FieldWrap label="Full bathrooms">
               <Input
                 type="number"
                 min="0"
                 max="10"
                 id="bathCount"
                 name="bathCount"
-                defaultValue={existingJob?.bathCount ?? ""}
+                defaultValue={prefill?.bathCount ?? ""}
+                placeholder="0"
+              />
+            </FieldWrap>
+
+            <FieldWrap label="Half bathrooms">
+              <Input
+                type="number"
+                min="0"
+                max="10"
+                id="halfBathCount"
+                name="halfBathCount"
+                defaultValue={(prefill as any)?.halfBathCount ?? ""}
                 placeholder="0"
               />
             </FieldWrap>
@@ -453,7 +478,7 @@ export default async function JobFormPage({
               id="notes"
               name="notes"
               rows={4}
-              defaultValue={existingJob?.notes || ""}
+              defaultValue={prefill?.notes || ""}
               placeholder="Pets, parking, door codes, sensitive surfaces, special requirements…"
             />
           </FieldWrap>
@@ -483,7 +508,7 @@ export default async function JobFormPage({
               <DeleteButton />
             </form>
           )}
-          <Link href={isEditing ? `/jobs/${existingJob?.id}` : "/jobs"}>
+          <Link href={isEditing ? `/jobs/${existingJob?.id}` : duplicateId ? `/jobs/${duplicateId}` : "/jobs"}>
             <Button type="button" variant="outline">
               Cancel
             </Button>

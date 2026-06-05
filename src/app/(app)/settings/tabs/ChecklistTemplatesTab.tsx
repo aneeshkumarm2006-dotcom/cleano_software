@@ -22,7 +22,6 @@ import { deleteChecklistTemplate } from "../../actions/deleteChecklistTemplate";
 import {
   ChecklistTemplateRecord,
   AppSettingRecord,
-  getSetting,
 } from "../types";
 import {
   SectionCard,
@@ -35,7 +34,7 @@ import {
 
 interface ChecklistTemplatesTabProps {
   templates: ChecklistTemplateRecord[];
-  settings: AppSettingRecord[];
+  settings?: AppSettingRecord[];
 }
 
 interface DraftItem {
@@ -54,11 +53,17 @@ interface DraftTemplate {
   items: DraftItem[];
 }
 
-interface JobTypeEntry {
-  id: string;
-  name: string;
-  isActive: boolean;
-}
+// Fixed job type values — must match what JobTypeSelector writes to Job.jobType
+const JOB_TYPE_OPTIONS = [
+  { value: "R - Residential", label: "R - Residential" },
+  { value: "DEEP - Deep Cleaning", label: "DEEP - Deep Cleaning" },
+  { value: "MOVE_IN - Move-in Cleaning", label: "MOVE_IN - Move-in Cleaning" },
+  { value: "MOVE_OUT - Move-out Cleaning", label: "MOVE_OUT - Move-out Cleaning" },
+  { value: "AIRBNB - Airbnb Cleaning", label: "AIRBNB - Airbnb Cleaning" },
+  { value: "C - Commercial", label: "C - Commercial" },
+  { value: "PC - Post Construction", label: "PC - Post Construction" },
+  { value: "F - Follow-up", label: "F - Follow-up" },
+];
 
 const EMPTY_TEMPLATE: DraftTemplate = {
   id: null,
@@ -72,14 +77,7 @@ const EMPTY_TEMPLATE: DraftTemplate = {
 
 export default function ChecklistTemplatesTab({
   templates,
-  settings,
 }: ChecklistTemplatesTabProps) {
-  const jobTypes = getSetting<JobTypeEntry[]>(
-    settings,
-    "jobTypes.list",
-    []
-  ).filter((jt) => jt.isActive);
-
   const [modalOpen, setModalOpen] = useState(false);
   const [draft, setDraft] = useState<DraftTemplate>(EMPTY_TEMPLATE);
   const [saving, setSaving] = useState(false);
@@ -326,8 +324,8 @@ export default function ChecklistTemplatesTab({
                   setDraft((prev) => ({ ...prev, jobType: v }))
                 }
                 options={[
-                  { value: "", label: "— Any (Standard) —" },
-                  ...jobTypes.map((jt) => ({ value: jt.name, label: jt.name })),
+                  { value: "", label: "— Any (all jobs) —" },
+                  ...JOB_TYPE_OPTIONS,
                 ]}
                 size="sm"
               />

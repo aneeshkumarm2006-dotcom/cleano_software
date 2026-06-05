@@ -26,7 +26,9 @@ type Frequency =
   | "WEEKLY"
   | "BIWEEKLY"
   | "MONTHLY"
-  | "QUARTERLY";
+  | "QUARTERLY"
+  | "TWICE_WEEKLY"
+  | "HIGH_FREQUENCY";
 
 interface SubmitBookingInput {
   // Step 1
@@ -115,6 +117,13 @@ export async function submitBooking(input: SubmitBookingInput) {
     const isNewClient = !existingClient;
     const newReferralCode = isNewClient ? await generateUniqueReferralCode() : null;
 
+    // Map Airbnb-specific frequencies to schema enum values (TWICE_WEEKLY / HIGH_FREQUENCY aren't in ServiceFrequency enum)
+    type StoreFreq = "ONE_TIME" | "WEEKLY" | "BIWEEKLY" | "MONTHLY" | "QUARTERLY";
+    const storeFrequency: StoreFreq | null =
+      input.frequency === "TWICE_WEEKLY" || input.frequency === "HIGH_FREQUENCY"
+        ? "WEEKLY"
+        : (input.frequency as StoreFreq);
+
     const client = existingClient
       ? await db.client.update({
           where: { id: existingClient.id },
@@ -122,7 +131,7 @@ export async function submitBooking(input: SubmitBookingInput) {
             name: input.name.trim(),
             phone: input.phone.trim(),
             address: input.address.trim(),
-            serviceFrequency: input.frequency,
+            serviceFrequency: storeFrequency,
             ...(input.stripeCustomerId && { stripeCustomerId: input.stripeCustomerId }),
             ...(input.stripePaymentMethodId && { defaultPaymentMethodId: input.stripePaymentMethodId }),
           },
@@ -133,7 +142,7 @@ export async function submitBooking(input: SubmitBookingInput) {
             email,
             phone: input.phone.trim(),
             address: input.address.trim(),
-            serviceFrequency: input.frequency,
+            serviceFrequency: storeFrequency,
             referredByClientId,
             referralCode: newReferralCode,
             ...(input.stripeCustomerId && { stripeCustomerId: input.stripeCustomerId }),

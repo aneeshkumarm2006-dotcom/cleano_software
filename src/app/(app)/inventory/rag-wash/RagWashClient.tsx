@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Card from "@/components/ui/Card";
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
-import { ArrowLeft, Users, Droplets } from "lucide-react";
+import { Users, Droplets } from "lucide-react";
 
 interface EmployeeRagWashData {
   id: string;
@@ -30,19 +30,6 @@ export default function RagWashClient({ employees }: RagWashClientProps) {
 
   return (
     <div className="max-w-[80rem] mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-4 mb-2">
-        <Button
-          variant="default"
-          size="sm"
-          border={false}
-          onClick={() => router.push("/inventory")}
-          className="px-6 py-3">
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to Inventory
-        </Button>
-      </div>
-
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl !font-light tracking-tight text-[#005F6A]">

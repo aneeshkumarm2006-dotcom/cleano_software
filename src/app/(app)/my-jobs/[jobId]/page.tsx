@@ -11,6 +11,7 @@ import CancelShiftButton from "../CancelShiftButton";
 import WhyThisPriceLink from "../WhyThisPriceLink";
 import PhotoGallery from "./PhotoGallery";
 import JobChecklistPanel from "./JobChecklistPanel";
+import MapLinks from "./MapLinksClient";
 
 type PageProps = {
   params: Promise<{ jobId: string }>;
@@ -52,6 +53,7 @@ export default async function JobDetailPage({ params }: PageProps) {
       cleaners: true,
       addOns: true,
       productUsage: { include: { product: true } },
+      client: { select: { phone: true, email: true } },
     },
   });
 
@@ -113,10 +115,13 @@ export default async function JobDetailPage({ params }: PageProps) {
       {/* Hero */}
       <header className="cl-jd-hero">
         {job.location && (
-          <div className="loc">
-            <MapPin size={14} />
-            {job.location}
-          </div>
+          <>
+            <div className="loc">
+              <MapPin size={14} />
+              {job.location}
+            </div>
+            <MapLinks address={job.location} />
+          </>
         )}
         <h1>{job.clientName}</h1>
         {jobTypeLabel(job.jobType) && (
@@ -366,6 +371,48 @@ export default async function JobDetailPage({ params }: PageProps) {
           </div>
         </div>
       </div>
+
+      {/* Contact Client */}
+      {(job.client?.phone || job.client?.email) && (
+        <>
+          <h2 className="cl-jd-section-title">Contact <em>client.</em></h2>
+          <div className="cl-jd-card" style={{ marginBottom: 0 }}>
+            <div className="cl-jd-card-head">
+              <span className="icon-bubble">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.15 11.9 19.79 19.79 0 0 1 1.07 3.27 2 2 0 0 1 3.05 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 8.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21 16l.92.92z" />
+                </svg>
+              </span>
+              <h3>Client contact</h3>
+            </div>
+            <dl className="cl-jd-dl">
+              {job.client?.phone && (
+                <div className="cl-jd-dl-row featured">
+                  <dt>Phone</dt>
+                  <dd>
+                    <a href={`tel:${job.client.phone}`} style={{ color: "var(--primary)", textDecoration: "none", fontWeight: 600 }}>
+                      {job.client.phone}
+                    </a>
+                  </dd>
+                </div>
+              )}
+              {job.client?.email && (
+                <div className="cl-jd-dl-row">
+                  <dt>Email</dt>
+                  <dd>
+                    <a href={`mailto:${job.client.email}`} style={{ color: "var(--primary)", textDecoration: "none" }}>
+                      {job.client.email}
+                    </a>
+                  </dd>
+                </div>
+              )}
+            </dl>
+            <p style={{ fontSize: 11, color: "var(--primary-40)", margin: "8px 0 0", lineHeight: 1.5 }}>
+              Use these to let the client know if you&apos;re running late or have a quick question about the job.
+            </p>
+          </div>
+        </>
+      )}
 
       {/* Home details */}
       {(job.bedCount != null || job.bathCount != null || job.halfBathCount != null || addOnsArr.length > 0) && (

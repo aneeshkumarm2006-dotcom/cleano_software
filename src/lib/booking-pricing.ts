@@ -78,13 +78,17 @@ async function resolveBasePrice(
 // Returns the recurring discount percentage for the 2nd+ cleaning.
 // First cleaning is always full price.
 export function recurringDiscountPercent(
-  frequency: "ONE_TIME" | "WEEKLY" | "BIWEEKLY" | "MONTHLY" | "QUARTERLY"
+  frequency: "ONE_TIME" | "WEEKLY" | "BIWEEKLY" | "MONTHLY" | "QUARTERLY" | "TWICE_WEEKLY" | "HIGH_FREQUENCY"
 ): number {
   switch (frequency) {
     case "WEEKLY":
       return 12;
     case "BIWEEKLY":
       return 8;
+    case "TWICE_WEEKLY":
+      return 15;
+    case "HIGH_FREQUENCY":
+      return 20;
     default:
       return 0;
   }
@@ -93,12 +97,16 @@ export function recurringDiscountPercent(
 // Returns the date for the next occurrence given a base date and frequency.
 export function nextOccurrence(
   base: Date,
-  frequency: "WEEKLY" | "BIWEEKLY" | "MONTHLY" | "QUARTERLY"
+  frequency: "WEEKLY" | "BIWEEKLY" | "MONTHLY" | "QUARTERLY" | "TWICE_WEEKLY" | "HIGH_FREQUENCY"
 ): Date {
   const d = new Date(base);
   switch (frequency) {
     case "WEEKLY":
+    case "HIGH_FREQUENCY":
       d.setDate(d.getDate() + 7);
+      break;
+    case "TWICE_WEEKLY":
+      d.setDate(d.getDate() + 3);
       break;
     case "BIWEEKLY":
       d.setDate(d.getDate() + 14);
@@ -116,10 +124,12 @@ export function nextOccurrence(
 // How many additional jobs to auto-create for recurring bookings.
 // Per spec: 4 weeks of jobs for WEEKLY (4 more), 4 visits for BIWEEKLY (3 more).
 export function recurrenceCount(
-  frequency: "ONE_TIME" | "WEEKLY" | "BIWEEKLY" | "MONTHLY" | "QUARTERLY"
+  frequency: "ONE_TIME" | "WEEKLY" | "BIWEEKLY" | "MONTHLY" | "QUARTERLY" | "TWICE_WEEKLY" | "HIGH_FREQUENCY"
 ): number {
   switch (frequency) {
     case "WEEKLY":
+    case "TWICE_WEEKLY":
+    case "HIGH_FREQUENCY":
       return 3;
     case "BIWEEKLY":
       return 3;

@@ -7,7 +7,7 @@ export default async function MyPayPage() {
   const session = await requireCleaner();
   const userId = session.user.id;
 
-  const [payouts, withdrawals, starRating, ragWashes, ragCreditSetting] = await Promise.all([
+  const [payouts, withdrawals, starRating, ragWashes, ragCreditSetting, completedJobs, allPayPeriods, userRecord] = await Promise.all([
     db.payout.findMany({
       where: { employeeId: userId },
       include: { payPeriod: true },
@@ -23,6 +23,36 @@ export default async function MyPayPage() {
       orderBy: { washDate: "desc" },
     }),
     db.appSetting.findUnique({ where: { key: "payroll.ragCreditPerRag" } }),
+    // Fetch completed jobs for this cleaner to compute unprocessed earnings
+    db.job.findMany({
+      where: {
+        status: { in: ["COMPLETED", "IN_PROGRESS"] },
+        clockOutTime: { not: null },
+        employeePay: { gt: 0 },
+        OR: [
+          { employeeId: userId },
+          { cleaners: { some: { id: userId } } },
+        ],
+      },
+      select: {
+        id: true,
+        jobDate: true,
+        startTime: true,
+        employeeId: true,
+        employeePay: true,
+        totalTip: true,
+        payRateMultiplier: true,
+        cleaners: { select: { id: true } },
+      },
+    }),
+    db.payPeriod.findMany({
+      where: { payouts: { some: { employeeId: userId } } },
+      select: { startDate: true, endDate: true },
+    }),
+    db.user.findUnique({
+      where: { id: userId },
+      select: { payMultiplier: true },
+    }),
   ]);
 
   const currentPayout =
@@ -32,12 +62,34 @@ export default async function MyPayPage() {
 
   const paidPayouts = payouts.filter((p) => p.payPeriod.status === "PAID");
   const walletBalance = paidPayouts.reduce((sum, p) => sum + p.finalAmount, 0);
-  const pendingAmount = payouts
+  const pendingFromPayPeriods = payouts
     .filter(
       (p) =>
         p.payPeriod.status === "DRAFT" || p.payPeriod.status === "APPROVED"
     )
     .reduce((sum, p) => sum + p.finalAmount, 0);
+
+  // Earnings from completed jobs not yet covered by any pay period
+  const empMultiplier = userRecord?.payMultiplier ?? 1;
+  const unprocessedEarnings = completedJobs
+    .filter((job) => {
+      const jobDate = new Date(job.jobDate ?? job.startTime);
+      return !allPayPeriods.some((pp) => {
+        const rangeEnd = new Date(pp.endDate);
+        rangeEnd.setHours(23, 59, 59, 999);
+        return jobDate >= pp.startDate && jobDate <= rangeEnd;
+      });
+    })
+    .reduce((sum, job) => {
+      const participants = Array.from(
+        new Set([job.employeeId, ...job.cleaners.map((c) => c.id)].filter(Boolean))
+      );
+      if (participants.length === 0) return sum;
+      const basePay = ((job.employeePay ?? 0) + (job.totalTip ?? 0)) * (job.payRateMultiplier ?? 1);
+      return sum + (basePay / participants.length) * empMultiplier;
+    }, 0);
+
+  const pendingAmount = pendingFromPayPeriods + unprocessedEarnings;
 
   // Reserved = withdrawals not rejected
   const reservedTotal = withdrawals
@@ -130,6 +182,7 @@ export default async function MyPayPage() {
       }))}
       walletBalance={walletBalance}
       pendingAmount={pendingAmount}
+      unprocessedEarnings={unprocessedEarnings}
       paidThisYear={paidThisYear}
       totalHoursYear={totalHoursYear}
       availableBalance={availableBalance}

@@ -21,6 +21,7 @@ import {
   Star, Copy, Check, Inbox, RotateCcw, XCircle,
 } from "lucide-react";
 import { resolveJobRequest } from "../../actions/resolveJobRequest";
+import { fmtDateTime, fmtTime } from "@/lib/time";
 import { assignCleaners } from "../../actions/assignCleaners";
 import { ConfirmDeleteModal } from "@/components/common/ConfirmDeleteModal";
 import Modal from "@/components/ui/Modal";
@@ -462,8 +463,8 @@ export default function JobDetailView({
   const dayOfWeek = jobDateObj.toLocaleDateString('en-US', { weekday: 'long' });
   const dayNum    = jobDateObj.toLocaleDateString('en-US', { day: 'numeric' });
   const mon       = jobDateObj.toLocaleDateString('en-US', { month: 'short' });
-  const startTimeStr = new Date(job.startTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-  const endTimeStr   = job.endTime ? new Date(job.endTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : null;
+  const startTimeStr = fmtTime(job.startTime);
+  const endTimeStr   = job.endTime ? fmtTime(job.endTime) : null;
 
   // ── Tab content ────────────────────────────────────────────────────────────
 
@@ -1009,9 +1010,7 @@ export default function JobDetailView({
                       </span>
                       <p style={{ margin: '10px 0 0', fontSize: 13.5, color: 'var(--ink)' }}>
                         <strong>{job.clientName}</strong> asked to cancel this booking on{' '}
-                        {new Date(job.cancellationRequestedAt!).toLocaleString(undefined, {
-                          month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
-                        })}.
+                        {fmtDateTime(job.cancellationRequestedAt!)}.
                       </p>
                     </div>
                   </div>
@@ -1090,9 +1089,7 @@ export default function JobDetailView({
                       </span>
                       <p style={{ margin: '10px 0 0', fontSize: 13.5, color: 'var(--ink)' }}>
                         <strong>{job.clientName}</strong> asked to reschedule this booking on{' '}
-                        {new Date(job.rescheduleRequestedAt!).toLocaleString(undefined, {
-                          month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
-                        })}.
+                        {fmtDateTime(job.rescheduleRequestedAt!)}.
                       </p>
                       <p style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--primary-50)' }}>
                         Any preferred date or note left by the customer is recorded in the Logs tab.
@@ -1209,6 +1206,15 @@ export default function JobDetailView({
             >
               <Pencil size={14} className="mr-2" /> Edit
             </Button>
+            {isAdmin && (
+              <Button
+                variant="default" border={false}
+                onClick={() => router.push(`/jobs/new?duplicate=${job.id}`)}
+                className="rounded-xl px-4 py-2"
+              >
+                <Copy size={14} className="mr-2" /> Duplicate
+              </Button>
+            )}
             {isAdmin && (paymentReceived || depositRemaining > 0) && (
               <Button
                 variant="default" border={false}

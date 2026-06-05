@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import { LogIn } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { clockIn } from "../actions/clockIn";
 
 interface ClockInButtonProps {
   jobId: string;
@@ -14,14 +16,27 @@ export default function ClockInButton({
   disabled = false,
 }: ClockInButtonProps) {
   const router = useRouter();
+  const [loading, setLoading] = useState(false);
+
+  async function handleClockIn() {
+    setLoading(true);
+    try {
+      const result = await clockIn(jobId);
+      if (result.success) {
+        router.push(`/my-jobs/${jobId}/clock`);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <button
       className="cl-jd-clock"
-      onClick={() => router.push(`/my-jobs/${jobId}/clock`)}
-      disabled={disabled}>
+      onClick={handleClockIn}
+      disabled={disabled || loading}>
       <LogIn size={13} />
-      Clock in
+      {loading ? "Clocking in…" : "Clock in"}
     </button>
   );
 }

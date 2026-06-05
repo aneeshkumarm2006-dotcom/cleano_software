@@ -1,6 +1,6 @@
 "use client";
 
-import { BookingDraft, SERVICE_TYPES, FREQUENCIES, RoomType } from "../types";
+import { BookingDraft, SERVICE_TYPES, FREQUENCIES, AIRBNB_FREQUENCIES, PC_HOURLY_RATE, RoomType } from "../types";
 import { Field, Input } from "@/components/customer/Field";
 import { NumberStepper, ChoiceButton } from "@/components/customer/atoms";
 
@@ -30,6 +30,13 @@ interface Props {
 }
 
 export default function Step2Property({ draft, onChange }: Props) {
+  const isPC = draft.serviceType === "POST_CONSTRUCTION";
+  const isAirbnb = draft.serviceType === "AIRBNB";
+  const pcEstimate = draft.pcHours * draft.pcCleaners * PC_HOURLY_RATE;
+
+  const activeAirbnbFreq = AIRBNB_FREQUENCIES.find((f) => f.value === draft.frequency);
+  const airbnbDiscount = activeAirbnbFreq?.discount ?? 0;
+
   return (
     <div className="cl-stack-32">
       <header className="cl-stack-8">
@@ -39,10 +46,12 @@ export default function Step2Property({ draft, onChange }: Props) {
           style={{ fontSize: "clamp(34px, 4.4vw, 52px)" }}>
           Tell us about
           <br />
-          your <em>home.</em>
+          your <em>{isPC ? "project." : "home."}</em>
         </h1>
         <p className="cl-subtitle">
-          A few details so we can put together a price.
+          {isPC
+            ? "We price post-construction cleaning at $50/hr per cleaner."
+            : "A few details so we can put together a price."}
         </p>
       </header>
 
@@ -55,39 +64,82 @@ export default function Step2Property({ draft, onChange }: Props) {
         />
       </Field>
 
-      <div className="cl-grid-2">
-        <NumberStepper
-          label="Bedrooms"
-          value={draft.bedCount}
-          onChange={(v) => onChange({ bedCount: v })}
-          min={0}
-          max={8}
-        />
-        <NumberStepper
-          label="Full bathrooms"
-          value={draft.bathCount}
-          onChange={(v) => onChange({ bathCount: v })}
-          min={0}
-          max={6}
-        />
-        <NumberStepper
-          label="Half bathrooms"
-          value={draft.halfBathCount}
-          onChange={(v) => onChange({ halfBathCount: v })}
-          min={0}
-          max={4}
-        />
-        <Field label="Square footage">
-          <Input
-            value={draft.squareFootage || ""}
-            onChange={(e) =>
-              onChange({ squareFootage: parseInt(e.target.value) || 0 })
-            }
-            placeholder="e.g. 1200"
-            inputMode="numeric"
+      {isPC ? (
+        /* Post-construction: hours × cleaners estimate */
+        <div className="cl-stack-12">
+          <div className="cl-grid-2">
+            <NumberStepper
+              label="Estimated hours"
+              value={draft.pcHours}
+              onChange={(v) => onChange({ pcHours: v })}
+              min={1}
+              max={24}
+            />
+            <NumberStepper
+              label="Number of cleaners"
+              value={draft.pcCleaners}
+              onChange={(v) => onChange({ pcCleaners: v })}
+              min={1}
+              max={6}
+            />
+          </div>
+          <div
+            style={{
+              background: "var(--primary-10)",
+              borderRadius: 12,
+              padding: "14px 18px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}>
+            <div>
+              <div style={{ fontSize: 12, color: "var(--primary-60)", marginBottom: 2 }}>
+                Estimate ({draft.pcHours}h × {draft.pcCleaners} cleaner{draft.pcCleaners !== 1 ? "s" : ""} × ${PC_HOURLY_RATE}/hr)
+              </div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: "var(--primary)" }}>
+                ${pcEstimate.toFixed(0)} <span style={{ fontSize: 13, fontWeight: 400, color: "var(--primary-60)" }}>before tax</span>
+              </div>
+            </div>
+            <span style={{ fontSize: 11, color: "var(--primary-50)", maxWidth: 130, lineHeight: 1.4 }}>
+              Final price confirmed after on-site assessment.
+            </span>
+          </div>
+        </div>
+      ) : (
+        <div className="cl-grid-2">
+          <NumberStepper
+            label="Bedrooms"
+            value={draft.bedCount}
+            onChange={(v) => onChange({ bedCount: v })}
+            min={0}
+            max={8}
           />
-        </Field>
-      </div>
+          <NumberStepper
+            label="Full bathrooms"
+            value={draft.bathCount}
+            onChange={(v) => onChange({ bathCount: v })}
+            min={0}
+            max={6}
+          />
+          <NumberStepper
+            label="Half bathrooms"
+            value={draft.halfBathCount}
+            onChange={(v) => onChange({ halfBathCount: v })}
+            min={0}
+            max={4}
+          />
+          <Field label="Square footage">
+            <Input
+              value={draft.squareFootage || ""}
+              onChange={(e) =>
+                onChange({ squareFootage: parseInt(e.target.value) || 0 })
+              }
+              placeholder="e.g. 1200"
+              inputMode="numeric"
+            />
+          </Field>
+        </div>
+      )}
 
       <div className="cl-stack-12">
         <span className="cl-label">Service type</span>
@@ -97,36 +149,45 @@ export default function Step2Property({ draft, onChange }: Props) {
               key={s.value}
               active={draft.serviceType === s.value}
               title={s.label}
-              onClick={() => onChange({ serviceType: s.value })}
+              onClick={() => onChange({ serviceType: s.value, frequency: "ONE_TIME" })}
             />
           ))}
         </div>
       </div>
 
-      <div className="cl-stack-12">
-        <span className="cl-label">Frequency</span>
-        <p
-          style={{
-            fontSize: 12,
-            color: "var(--primary-60)",
-            margin: 0,
-            lineHeight: 1.5,
-          }}>
-          Recurring options auto-book future visits so you don't have to. You
-          can change or cancel any visit before it happens.
-        </p>
-        <div className="cl-grid-2">
-          {FREQUENCIES.map((f) => (
-            <ChoiceButton
-              key={f.value}
-              active={draft.frequency === f.value}
-              title={f.label}
-              hint={f.hint}
-              onClick={() => onChange({ frequency: f.value })}
-            />
-          ))}
+      {!isPC && (
+        <div className="cl-stack-12">
+          <span className="cl-label">Frequency</span>
+          {isAirbnb ? (
+            <p style={{ fontSize: 12, color: "var(--primary-60)", margin: 0, lineHeight: 1.5 }}>
+              Airbnb turnover discounts apply automatically when you book recurring cleans.
+            </p>
+          ) : (
+            <p style={{ fontSize: 12, color: "var(--primary-60)", margin: 0, lineHeight: 1.5 }}>
+              Recurring options auto-book future visits so you don&apos;t have to. You can change or cancel any visit before it happens.
+            </p>
+          )}
+          <div className="cl-grid-2">
+            {(isAirbnb ? AIRBNB_FREQUENCIES : FREQUENCIES).map((f) => (
+              <ChoiceButton
+                key={f.value}
+                active={draft.frequency === f.value}
+                title={f.label}
+                hint={f.hint}
+                onClick={() => onChange({ frequency: f.value })}
+              />
+            ))}
+          </div>
+          {isAirbnb && airbnbDiscount > 0 && (
+            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", borderRadius: 12, background: "rgba(5,150,105,0.08)", border: "1px solid rgba(5,150,105,0.2)" }}>
+              <span style={{ fontSize: 18, color: "#059669", fontWeight: 700 }}>−{airbnbDiscount}%</span>
+              <span style={{ fontSize: 13, color: "#065f46" }}>
+                Recurring Airbnb discount applied to every visit.
+              </span>
+            </div>
+          )}
         </div>
-      </div>
+      )}
 
       <div className="cl-stack-12">
         <span className="cl-label">Add-ons</span>

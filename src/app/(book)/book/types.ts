@@ -3,7 +3,9 @@ export type Frequency =
   | "WEEKLY"
   | "BIWEEKLY"
   | "MONTHLY"
-  | "QUARTERLY";
+  | "QUARTERLY"
+  | "TWICE_WEEKLY"
+  | "HIGH_FREQUENCY";
 
 export type RoomType =
   | "KITCHEN"
@@ -37,6 +39,9 @@ export interface BookingDraft {
   serviceType: string;
   frequency: Frequency;
   addOns: AddOnSelection[];
+  // Post-construction specific
+  pcHours: number;
+  pcCleaners: number;
   // Step 3
   date: string;
   isFlexible: boolean;
@@ -67,9 +72,9 @@ export const EMPTY_DRAFT: BookingDraft = {
   squareFootage: 0,
   serviceType: "STANDARD",
   frequency: "ONE_TIME",
-  // Populated from getBookingConfig() on mount — kept empty by default so
-  // the catalog stays admin-managed.
   addOns: [],
+  pcHours: 4,
+  pcCleaners: 2,
   date: "",
   isFlexible: true,
   timeSlot: "",
@@ -96,5 +101,16 @@ export const FREQUENCIES: { value: Frequency; label: string; hint?: string }[] =
     { value: "MONTHLY", label: "Monthly", hint: "Auto-books the next 3 monthly visits" },
     { value: "QUARTERLY", label: "Quarterly", hint: "Auto-books the next 2 quarterly visits" },
   ];
+
+export const AIRBNB_FREQUENCIES: { value: Frequency; label: string; hint?: string; discount: number }[] =
+  [
+    { value: "ONE_TIME", label: "One-time", hint: "Full price", discount: 0 },
+    { value: "BIWEEKLY", label: "Every 2 weeks", hint: "8% off every visit", discount: 8 },
+    { value: "WEEKLY", label: "Weekly", hint: "10% off every visit", discount: 10 },
+    { value: "TWICE_WEEKLY", label: "Twice a week (~8/mo)", hint: "15% off every visit", discount: 15 },
+    { value: "HIGH_FREQUENCY", label: "Daily / 20+ per month", hint: "20% off every visit", discount: 20 },
+  ];
+
+export const PC_HOURLY_RATE = 50; // $50/hr per cleaner for post-construction
 
 export const TIME_SLOTS: string[] = ["08:00", "10:00", "12:00", "14:00"];

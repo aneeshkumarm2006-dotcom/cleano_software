@@ -191,7 +191,9 @@ model Client {
   id                     String            @id @default(cuid())
   name                   String
   email                  String?
+  secondaryEmail         String?
   phone                  String?
+  secondaryPhone         String?
   address                String?
   notes                  String?
   discountPercent        Float             @default(0)
@@ -202,13 +204,7 @@ model Client {
   defaultPaymentMethodId String?
   referralCode           String?           @unique
   referralCredit         Float             @default(0)
-  // Account credit from redeemed gift cards. Auto-applies at chargeJob time
-  // (drains down to zero before the card-on-file is charged).
   giftCardBalance        Float             @default(0)
-  // No-show tracking: incremented on each admin-confirmed no-show. The
-  // automatic 1-star is captured here (count + timestamp) rather than as
-  // a Client-side rating row, because the existing review system only
-  // models cleaner ratings.
   noShowCount            Int               @default(0)
   lastNoShowAt           DateTime?
   referredByClientId     String?
@@ -219,12 +215,27 @@ model Client {
   invoices               Invoice[]
   complaints             Complaint[]
   waitlistEntries        Waitlist[]
+  addresses              ClientAddress[]
   referredBy             Client?           @relation("ClientReferrals", fields: [referredByClientId], references: [id], onDelete: SetNull)
   referrals              Client[]          @relation("ClientReferrals")
 
   @@index([clientType])
   @@index([isActive])
   @@index([referredByClientId])
+}
+
+model ClientAddress {
+  id        String   @id @default(cuid())
+  clientId  String
+  label     String   @default("Home")
+  address   String
+  aptNumber String?
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
 }
 
 enum ClientType {
@@ -247,6 +258,7 @@ model Job {
   clientName              String
   clientId                String?
   location                String?
+  aptNumber               String?
   description             String?
   jobType                 String?
   jobDate                 DateTime?

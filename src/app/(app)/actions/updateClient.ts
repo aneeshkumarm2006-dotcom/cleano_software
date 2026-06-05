@@ -36,7 +36,9 @@ export async function updateClient(formData: FormData) {
       data: {
         name,
         email: (formData.get("email") as string) || null,
+        secondaryEmail: (formData.get("secondaryEmail") as string) || null,
         phone: (formData.get("phone") as string) || null,
+        secondaryPhone: (formData.get("secondaryPhone") as string) || null,
         address: (formData.get("address") as string) || null,
         notes: (formData.get("notes") as string) || null,
         discountPercent,

@@ -25,6 +25,7 @@ export default async function ClientDetailPage({
         orderBy: { startTime: "desc" },
         include: { cleaners: { select: { id: true, name: true } } },
       },
+      addresses: { orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }] },
     },
   });
 
@@ -93,11 +94,20 @@ export default async function ClientDetailPage({
           id: client.id,
           name: client.name,
           email: client.email,
+          secondaryEmail: client.secondaryEmail,
           phone: client.phone,
+          secondaryPhone: client.secondaryPhone,
           address: client.address,
           notes: client.notes,
           discountPercent: client.discountPercent,
           createdAt: client.createdAt.toISOString(),
+          addresses: client.addresses.map((a) => ({
+            id: a.id,
+            label: a.label,
+            address: a.address,
+            aptNumber: a.aptNumber,
+            isDefault: a.isDefault,
+          })),
         }}
         jobs={jobs}
         totals={{ totalRevenue, totalPaid, unpaidAmount, jobCount: jobs.length }}

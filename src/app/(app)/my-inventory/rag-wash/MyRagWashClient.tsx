@@ -2,9 +2,8 @@
 
 import React, { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { createRagWash } from "../../actions/createRagWash";
 import { claimWashPayout } from "../../actions/claimWashPayout";
-import { Plus, Sparkles, Wallet, CheckCircle2, AlertTriangle, ArrowLeft } from "lucide-react";
+import { Sparkles, Wallet, CheckCircle2, AlertTriangle, ArrowLeft } from "lucide-react";
 
 type PayoutStatus = "PENDING" | "COMPLETED" | "FAILED";
 
@@ -90,46 +89,8 @@ export default function MyRagWashClient({
   lastWashDate,
 }: MyRagWashClientProps) {
   const router = useRouter();
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-  const [washDate, setWashDate] = useState(new Date().toISOString().split("T")[0]);
-  const [ragCount, setRagCount] = useState("1");
-  const [padCount, setPadCount] = useState("0");
-  const [notes, setNotes] = useState("");
   const [claiming, startClaim] = useTransition();
   const [claimResult, setClaimResult] = useState<{ type: "success" | "error"; text: string } | null>(null);
-
-  function resetForm() {
-    setWashDate(new Date().toISOString().split("T")[0]);
-    setRagCount("1");
-    setPadCount("0");
-    setNotes("");
-    setMessage(null);
-  }
-
-  async function handleAdd() {
-    setSaving(true);
-    setMessage(null);
-    const res = await createRagWash({
-      employeeId,
-      washDate,
-      ragCount: parseInt(ragCount) || 0,
-      padCount: parseInt(padCount) || 0,
-      notes: notes || undefined,
-    });
-    if (res.success) {
-      setMessage({ type: "success", text: "Wash entry logged." });
-      setTimeout(() => {
-        setShowAddModal(false);
-        resetForm();
-        router.refresh();
-      }, 600);
-    } else {
-      setMessage({ type: "error", text: ("error" in res && res.error) || "Save failed." });
-    }
-    setSaving(false);
-  }
 
   function handleClaim() {
     if (payable.amount <= 0) return;
@@ -184,13 +145,6 @@ export default function MyRagWashClient({
             Wash your own rags + pads and cash out as credits build up.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setShowAddModal(true)}
-          className="cl-action-btn">
-          <Plus className="w-3.5 h-3.5" />
-          Log a wash
-        </button>
       </div>
 
       {/* Hero: ledger + claim */}
@@ -390,90 +344,6 @@ export default function MyRagWashClient({
         </div>
       ) : null}
 
-      {/* Modal: log a wash */}
-      {showAddModal && (
-        <div className="co-overlay" onClick={() => !saving && setShowAddModal(false)}>
-          <div className="co-sheet" onClick={(e) => e.stopPropagation()}>
-            <div className="co-head">
-              <div className="co-head-left">
-                <span className="co-head-icon">
-                  <Sparkles size={18} />
-                </span>
-                <div>
-                  <h2 className="co-title">Log a wash</h2>
-                  <p className="co-subtitle">Record what you ran through the laundry today.</p>
-                </div>
-              </div>
-              <button className="co-close" onClick={() => !saving && setShowAddModal(false)}>
-                ✕
-              </button>
-            </div>
-            <div className="co-body">
-              <div className="co-input-row">
-                <label className="co-input-label">Wash date</label>
-                <input
-                  className="co-input"
-                  type="date"
-                  value={washDate}
-                  onChange={(e) => setWashDate(e.target.value)}
-                />
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                <div className="co-input-row">
-                  <label className="co-input-label">Rags washed</label>
-                  <input
-                    className="co-input"
-                    type="number"
-                    min={0}
-                    value={ragCount}
-                    onChange={(e) => setRagCount(e.target.value)}
-                  />
-                </div>
-                <div className="co-input-row">
-                  <label className="co-input-label">Pads washed</label>
-                  <input
-                    className="co-input"
-                    type="number"
-                    min={0}
-                    value={padCount}
-                    onChange={(e) => setPadCount(e.target.value)}
-                  />
-                </div>
-              </div>
-              <div className="co-input-row">
-                <label className="co-input-label">Notes (optional)</label>
-                <input
-                  className="co-input"
-                  type="text"
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="e.g. extra greasy load from move-out"
-                />
-              </div>
-              {message && (
-                <p
-                  style={{
-                    fontSize: 12.5,
-                    color: message.type === "success" ? "var(--primary)" : "#dc2626",
-                  }}>
-                  {message.text}
-                </p>
-              )}
-            </div>
-            <div className="co-footer">
-              <button
-                className="co-btn-ghost"
-                onClick={() => !saving && setShowAddModal(false)}
-                disabled={saving}>
-                Cancel
-              </button>
-              <button className="co-btn-confirm" onClick={handleAdd} disabled={saving}>
-                {saving ? "Saving…" : "Log wash"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

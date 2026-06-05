@@ -23,6 +23,25 @@ export default async function ClockPage({ params }: PageProps) {
   const isCleaner = (job as any).cleaners?.some((c: any) => c.id === session.user.id);
   if (!isEmployee && !isCleaner) redirect("/my-jobs");
 
+  // Fetch employee products for clock-out inventory modal
+  const rawProducts = await db.employeeProduct.findMany({
+    where: { employeeId: session.user.id },
+    include: { product: true },
+  });
+
+  const employeeProducts = rawProducts.map((ep) => ({
+    id: ep.id,
+    productId: ep.productId,
+    quantity: ep.quantity,
+    product: {
+      id: ep.product.id,
+      name: ep.product.name,
+      unit: ep.product.unit,
+      category: ep.product.category as any,
+      inventoryRule: null as null,
+    },
+  }));
+
   const j = job as any;
 
   return (
@@ -34,6 +53,7 @@ export default async function ClockPage({ params }: PageProps) {
       status={job.status}
       clockInTime={j.clockInTime?.toISOString() ?? null}
       clockOutTime={j.clockOutTime?.toISOString() ?? null}
+      employeeProducts={employeeProducts}
     />
   );
 }

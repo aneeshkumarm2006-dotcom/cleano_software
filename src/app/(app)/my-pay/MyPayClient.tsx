@@ -62,6 +62,7 @@ interface MyPayClientProps {
   withdrawals: Withdrawal[];
   walletBalance: number;
   pendingAmount: number;
+  unprocessedEarnings?: number;
   paidThisYear: number;
   totalHoursYear: number;
   availableBalance: number;
@@ -93,6 +94,7 @@ export default function MyPayClient({
   withdrawals,
   walletBalance,
   pendingAmount,
+  unprocessedEarnings = 0,
   paidThisYear,
   totalHoursYear,
   availableBalance,
@@ -174,6 +176,11 @@ export default function MyPayClient({
           <div className="cl-pay-tile">
             <div className="cl-pay-tile-head"><span>Pending</span></div>
             <div className="cl-pay-tile-val">${pendingAmount.toFixed(2)}</div>
+            {unprocessedEarnings > 0 && (
+              <div style={{ fontSize: 11, color: "rgba(0,95,106,0.55)", marginTop: 4 }}>
+                incl. ${unprocessedEarnings.toFixed(2)} from completed jobs
+              </div>
+            )}
           </div>
           <div className="cl-pay-tile">
             <div className="cl-pay-tile-head"><span>Earned {year}</span></div>

@@ -207,136 +207,65 @@ export default function Sidebar({
           {/* Navigation — strictly split by role: admin sees admin links only,
               cleaner sees cleaner links only. No overlap. */}
           <nav
-            className={`flex-1 py-2 space-y-1 overflow-y-auto overflow-x-hidden flex flex-col ${
+            className={`flex-1 py-2 overflow-y-auto overflow-x-hidden flex flex-col ${
               expanded ? "items-stretch px-3" : "items-center"
             }`}>
             {isAdmin ? (
               <>
-                <NavLink href="/dashboard" icon="dashboard" expanded={expanded}>
-                  Dashboard
-                </NavLink>
-                <NavLink href="/analytics" icon="analytics" expanded={expanded}>
-                  Analytics
-                </NavLink>
-                <NavLink href="/employees" icon="employees" expanded={expanded}>
-                  Employees
-                </NavLink>
-                <NavLink href="/clients" icon="clients" expanded={expanded}>
-                  Clients
-                </NavLink>
-                <NavLink
-                  href="/inventory"
-                  icon="inventory"
-                  expanded={expanded}
-                  exclude={["/inventory/rag-wash"]}>
-                  Inventory
-                </NavLink>
-                <NavLink
-                  href="/inventory/rag-wash"
-                  icon="rag-wash"
-                  expanded={expanded}>
-                  Rag Wash
-                </NavLink>
-                <NavLink
-                  href="/inventory/kits"
-                  icon="my-inventory"
-                  expanded={expanded}>
-                  Cleaner Kits
-                </NavLink>
-                <NavLink
-                  href="/wash-payouts"
-                  icon="rag-wash"
-                  expanded={expanded}>
-                  Wash Payouts
-                </NavLink>
-                <NavLink href="/jobs" icon="jobs" expanded={expanded}>
-                  Jobs
-                </NavLink>
-                <NavLink
-                  href="/web-bookings"
-                  icon="web-bookings"
-                  expanded={expanded}>
-                  Web Bookings
-                </NavLink>
-                <NavLink href="/calendar" icon="calendar" expanded={expanded}>
-                  Calendar
-                </NavLink>
-                <NavLink href="/payouts" icon="payouts" expanded={expanded}>
-                  Payouts
-                </NavLink>
-                <NavLink href="/finances" icon="finances" expanded={expanded}>
-                  Finances
-                </NavLink>
-                <NavLink href="/invoices" icon="invoices" expanded={expanded}>
-                  Invoices
-                </NavLink>
-                <NavLink href="/bulk-charge" icon="payouts" expanded={expanded}>
-                  Bulk Charge
-                </NavLink>
-                <NavLink href="/quotes" icon="leads" expanded={expanded}>
-                  Quotes
-                </NavLink>
-                <NavLink href="/gift-cards" icon="sales" expanded={expanded}>
-                  Gift Cards
-                </NavLink>
-                <NavLink href="/sales" icon="sales" expanded={expanded}>
-                  Sales
-                </NavLink>
-                <NavLink href="/promo-codes" icon="sales" expanded={expanded}>
-                  Promo Codes
-                </NavLink>
-                <NavLink href="/leads" icon="leads" expanded={expanded}>
-                  Leads
-                </NavLink>
-                <NavLink href="/waitlist" icon="waitlist" expanded={expanded}>
-                  Waitlist
-                </NavLink>
-                <NavLink
-                  href="/requests"
-                  icon="requests"
-                  expanded={expanded}
-                  badge={pendingRequests}>
-                  Requests
-                </NavLink>
-                <NavLink href="/training" icon="training" expanded={expanded}>
-                  Training
-                </NavLink>
-                <NavLink href="/documents" icon="documents" expanded={expanded}>
-                  Documents
-                </NavLink>
-                <NavLink href="/chat" icon="chat" expanded={expanded} badge={chatUnread}>
-                  Chat
-                </NavLink>
+                <SidebarGroup label="Overview" expanded={expanded}>
+                  <NavLink href="/dashboard" icon="dashboard" expanded={expanded}>Dashboard</NavLink>
+                  <NavLink href="/analytics" icon="analytics" expanded={expanded}>Analytics</NavLink>
+                  <NavLink href="/calendar" icon="calendar" expanded={expanded}>Calendar</NavLink>
+                </SidebarGroup>
+
+                <SidebarGroup label="Operations" expanded={expanded}>
+                  <NavLink href="/jobs" icon="jobs" expanded={expanded}>Jobs</NavLink>
+                  <NavLink href="/requests" icon="requests" expanded={expanded} badge={pendingRequests}>Requests</NavLink>
+                  <NavLink href="/waitlist" icon="waitlist" expanded={expanded}>Wait Lists</NavLink>
+                  <NavLink href="/documents" icon="documents" expanded={expanded}>Documents</NavLink>
+                  <NavLink href="/clients" icon="clients" expanded={expanded}>Clients</NavLink>
+                  <NavLink href="/web-bookings" icon="web-bookings" expanded={expanded}>Web Bookings</NavLink>
+                  <NavLink href="/leads" icon="leads" expanded={expanded}>Leads</NavLink>
+                  <NavLink href="/chat" icon="chat" expanded={expanded} badge={chatUnread}>Chat</NavLink>
+                </SidebarGroup>
+
+                <SidebarGroup label="Staff" expanded={expanded}>
+                  <NavLink href="/employees" icon="employees" expanded={expanded}>Employees</NavLink>
+                </SidebarGroup>
+
+                <SidebarGroup label="Inventory & Supplies" expanded={expanded}>
+                  <NavLink href="/inventory" icon="inventory" expanded={expanded} exclude={["/inventory/rag-wash"]}>Inventory</NavLink>
+                  <NavLink href="/inventory/rag-wash" icon="rag-wash" expanded={expanded}>Rag Wash & Payouts</NavLink>
+                </SidebarGroup>
+
+                <SidebarGroup label="Sales & Marketing" expanded={expanded}>
+                  <NavLink href="/sales" icon="sales" expanded={expanded}>Sales Leads</NavLink>
+                  <NavLink href="/quotes" icon="leads" expanded={expanded}>Quotes</NavLink>
+                  <NavLink href="/gift-cards" icon="sales" expanded={expanded}>Gift Cards & Promos</NavLink>
+                </SidebarGroup>
+
+                <SidebarGroup label="Finance" expanded={expanded}>
+                  <NavLink href="/payouts" icon="payouts" expanded={expanded}>Payouts</NavLink>
+                  <NavLink href="/finances" icon="finances" expanded={expanded}>Finances</NavLink>
+                  <NavLink href="/invoices" icon="invoices" expanded={expanded}>Invoices</NavLink>
+                  <NavLink href="/bulk-charge" icon="payouts" expanded={expanded}>Bulk Charge</NavLink>
+                </SidebarGroup>
+
+                <SidebarGroup label="Admin" expanded={expanded}>
+                  <NavLink href="/settings" icon="dashboard" expanded={expanded}>Settings</NavLink>
+                </SidebarGroup>
               </>
             ) : (
               <>
-                <NavLink href="/my-jobs" icon="my-jobs" expanded={expanded}>
-                  My Jobs
-                </NavLink>
-                <NavLink href="/available-jobs" icon="jobs" expanded={expanded}>
-                  Available Jobs
-                </NavLink>
-                <NavLink href="/my-pay" icon="my-pay" expanded={expanded}>
-                  My Pay
-                </NavLink>
-                <NavLink
-                  href="/my-inventory"
-                  icon="my-inventory"
-                  expanded={expanded}>
-                  My Inventory
-                </NavLink>
-                <NavLink href="/calendar" icon="calendar" expanded={expanded}>
-                  Calendar
-                </NavLink>
-                <NavLink href="/training" icon="training" expanded={expanded}>
-                  Training
-                </NavLink>
-                <NavLink href="/documents" icon="documents" expanded={expanded}>
-                  Documents
-                </NavLink>
-                <NavLink href="/chat" icon="chat" expanded={expanded} badge={chatUnread}>
-                  Chat
-                </NavLink>
+                <NavLink href="/my-jobs" icon="my-jobs" expanded={expanded}>My Jobs</NavLink>
+                <NavLink href="/available-jobs" icon="jobs" expanded={expanded}>Available Jobs</NavLink>
+                <NavLink href="/my-pay" icon="my-pay" expanded={expanded}>My Pay</NavLink>
+                <NavLink href="/my-inventory" icon="my-inventory" expanded={expanded}>My Inventory</NavLink>
+                <NavLink href="/availability" icon="calendar" expanded={expanded}>Availability</NavLink>
+                <NavLink href="/calendar" icon="calendar" expanded={expanded}>Calendar</NavLink>
+                <NavLink href="/training" icon="training" expanded={expanded}>Training</NavLink>
+                <NavLink href="/documents" icon="documents" expanded={expanded}>Documents</NavLink>
+                <NavLink href="/chat" icon="chat" expanded={expanded} badge={chatUnread}>Chat</NavLink>
               </>
             )}
           </nav>
@@ -360,7 +289,7 @@ export default function Sidebar({
         <main className="h-full bg-white print:!h-auto">{children}</main>
       </div>
 
-      {/* Chat notification toast */}
+      {/* Chat notification toast — shown when a new message arrives and user isn't on /chat */}
       {chatToast && (
         <div
           style={{
@@ -429,6 +358,47 @@ export default function Sidebar({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function SidebarGroup({
+  label,
+  expanded,
+  children,
+}: {
+  label: string;
+  expanded: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className={expanded ? "mb-1" : "mb-2"}>
+      {expanded && (
+        <p
+          style={{
+            fontSize: 10,
+            fontWeight: 700,
+            textTransform: "uppercase",
+            letterSpacing: "0.08em",
+            color: "rgba(0,95,106,0.40)",
+            padding: "10px 12px 4px",
+            margin: 0,
+          }}>
+          {label}
+        </p>
+      )}
+      {!expanded && (
+        <div
+          style={{
+            height: 1,
+            background: "rgba(0,95,106,0.08)",
+            margin: "6px 8px",
+          }}
+        />
+      )}
+      <div className={`space-y-0.5 ${expanded ? "" : "flex flex-col items-center"}`}>
+        {children}
+      </div>
     </div>
   );
 }

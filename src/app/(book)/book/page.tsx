@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Check, Sparkles } from "lucide-react";
-import { BookingDraft, EMPTY_DRAFT } from "./types";
+import { BookingDraft, EMPTY_DRAFT, AIRBNB_FREQUENCIES, PC_HOURLY_RATE } from "./types";
 import Step1PostalCode from "./steps/Step1PostalCode";
 import Step2Property from "./steps/Step2Property";
 import Step3Schedule from "./steps/Step3Schedule";
@@ -128,15 +128,16 @@ export default function BookPage() {
     };
   }, [draft, step]);
 
-  // Live quote refresh on Property/Review steps
+  // Live quote refresh on Property/Review steps (skip for post-construction — uses hourly rate)
   useEffect(() => {
     if (step < 1) return;
+    if (draft.serviceType === "POST_CONSTRUCTION") return;
     getQuote({ bedCount: draft.bedCount, bathCount: draft.bathCount })
       .then((r) => {
         if (r.success && r.basePrice) setBasePrice(r.basePrice);
       })
       .catch(() => {});
-  }, [step, draft.bedCount, draft.bathCount]);
+  }, [step, draft.bedCount, draft.bathCount, draft.serviceType]);
 
   function patch(p: Partial<BookingDraft>) {
     setDraft((d) => ({ ...d, ...p }));
@@ -221,7 +222,10 @@ export default function BookPage() {
       name: draft.name,
       phone: draft.phone,
       email: draft.email,
-      notes: draft.notes,
+      notes: [
+        draft.notes,
+        isPC ? `Post-construction: ${draft.pcHours}h × ${draft.pcCleaners} cleaner(s) × $${PC_HOURLY_RATE}/hr = ~$${(draft.pcHours * draft.pcCleaners * PC_HOURLY_RATE).toFixed(0)}` : "",
+      ].filter(Boolean).join("\n\n"),
       referralCode: draft.referralCode,
       depositPaymentIntentId,
       stripeCustomerId: draft.stripeCustomerId,
@@ -240,12 +244,24 @@ export default function BookPage() {
   }
 
   // Live price for sidebar
+  const isPC = draft.serviceType === "POST_CONSTRUCTION";
+  const isAirbnb = draft.serviceType === "AIRBNB";
+  const pcBase = draft.pcHours * draft.pcCleaners * PC_HOURLY_RATE;
+  const effectiveBase = isPC ? pcBase : basePrice;
+
+  const airbnbDiscountPct = isAirbnb
+    ? (AIRBNB_FREQUENCIES.find((f) => f.value === draft.frequency)?.discount ?? 0)
+    : 0;
+
   const addOnTotal = draft.addOns
     .filter((a) => a.selected)
     .reduce((s, a) => s + a.price, 0);
-  const subtotal = basePrice + addOnTotal + draft.travelFee;
+  const discountedBase = airbnbDiscountPct > 0
+    ? effectiveBase * (1 - airbnbDiscountPct / 100)
+    : effectiveBase;
+  const subtotal = discountedBase + addOnTotal + draft.travelFee;
   const tax = calculateTax(subtotal);
-  const showSummary = step >= 1 && basePrice > 0;
+  const showSummary = step >= 1 && (effectiveBase > 0);
 
   if (submitted) {
     return (
@@ -488,8 +504,14 @@ export default function BookPage() {
               </div>
               <div className="cl-summary-row">
                 <span>Base service</span>
-                <strong>${basePrice.toFixed(2)}</strong>
+                <strong>${effectiveBase.toFixed(2)}</strong>
               </div>
+              {airbnbDiscountPct > 0 && (
+                <div className="cl-summary-row" style={{ color: "#059669" }}>
+                  <span>Airbnb discount (−{airbnbDiscountPct}%)</span>
+                  <strong>−${(effectiveBase * airbnbDiscountPct / 100).toFixed(2)}</strong>
+                </div>
+              )}
               {addOnTotal > 0 ? (
                 <div className="cl-summary-row">
                   <span>

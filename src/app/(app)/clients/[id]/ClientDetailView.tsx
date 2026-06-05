@@ -6,18 +6,30 @@ import {
   AlertTriangle, Pencil, Mail, Phone, MapPin,
 } from "lucide-react";
 import ClientModal from "../ClientModal";
+import ClientAddressManager from "../ClientAddressManager";
 
 type TabKey = "history" | "payments" | "ratings";
+
+interface ClientAddressLite {
+  id: string;
+  label: string;
+  address: string;
+  aptNumber: string | null;
+  isDefault: boolean;
+}
 
 interface ClientData {
   id: string;
   name: string;
   email: string | null;
+  secondaryEmail?: string | null;
   phone: string | null;
+  secondaryPhone?: string | null;
   address: string | null;
   notes: string | null;
   discountPercent: number;
   createdAt: string;
+  addresses?: ClientAddressLite[];
 }
 
 interface JobLite {
@@ -169,14 +181,24 @@ export default function ClientDetailView({
             </div>
             <div className="row" style={{ flexWrap: "wrap", gap: 12 }}>
               {client.email && (
-                <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, color: "var(--primary-70)" }}>
+                <a href={`mailto:${client.email}`} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, color: "var(--primary-70)", textDecoration: "none" }}>
                   <Mail size={13} /> {client.email}
-                </span>
+                </a>
+              )}
+              {client.secondaryEmail && (
+                <a href={`mailto:${client.secondaryEmail}`} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, color: "var(--primary-50)", textDecoration: "none" }}>
+                  <Mail size={12} /> {client.secondaryEmail}
+                </a>
               )}
               {client.phone && (
-                <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, color: "var(--primary-70)" }}>
+                <a href={`tel:${client.phone}`} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, color: "var(--primary-70)", textDecoration: "none" }}>
                   <Phone size={13} /> {client.phone}
-                </span>
+                </a>
+              )}
+              {client.secondaryPhone && (
+                <a href={`tel:${client.secondaryPhone}`} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, color: "var(--primary-50)", textDecoration: "none" }}>
+                  <Phone size={12} /> {client.secondaryPhone}
+                </a>
               )}
               {client.address && (
                 <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, color: "var(--primary-70)" }}>
@@ -219,6 +241,14 @@ export default function ClientDetailView({
           </p>
         </div>
       )}
+
+      {/* Saved Addresses */}
+      <div className="dcard">
+        <div className="dcard-head">
+          <h3>Saved addresses</h3>
+        </div>
+        <ClientAddressManager clientId={client.id} addresses={client.addresses ?? []} />
+      </div>
 
       {/* Tabs */}
       <div className="dtabs">
