@@ -49,11 +49,23 @@ export default function Step2Property({ draft, onChange }: Props) {
           your <em>{isPC ? "project." : "home."}</em>
         </h1>
         <p className="cl-subtitle">
-          {isPC
-            ? "We price post-construction cleaning at $50/hr per cleaner."
-            : "A few details so we can put together a price."}
+          Pick your service type, then tell us about the property.
         </p>
       </header>
+
+      <div className="cl-stack-12">
+        <span className="cl-label">Service type</span>
+        <div className="cl-grid-2">
+          {SERVICE_TYPES.map((s) => (
+            <ChoiceButton
+              key={s.value}
+              active={draft.serviceType === s.value}
+              title={s.label}
+              onClick={() => onChange({ serviceType: s.value, frequency: "ONE_TIME" })}
+            />
+          ))}
+        </div>
+      </div>
 
       <Field label="Address" htmlFor="prop-addr">
         <Input
@@ -140,20 +152,6 @@ export default function Step2Property({ draft, onChange }: Props) {
           </Field>
         </div>
       )}
-
-      <div className="cl-stack-12">
-        <span className="cl-label">Service type</span>
-        <div className="cl-grid-2">
-          {SERVICE_TYPES.map((s) => (
-            <ChoiceButton
-              key={s.value}
-              active={draft.serviceType === s.value}
-              title={s.label}
-              onClick={() => onChange({ serviceType: s.value, frequency: "ONE_TIME" })}
-            />
-          ))}
-        </div>
-      </div>
 
       {!isPC && (
         <div className="cl-stack-12">
