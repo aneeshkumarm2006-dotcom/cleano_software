@@ -181,33 +181,49 @@ export default function SettingsClient({
   const [activeTab, setActiveTab] = useState<TabId>("profile");
 
   return (
-    <div className="cl-page-wrap">
-      <div className="cl-page-head">
-        <div>
-          <h1 className="cl-page-title">Settings</h1>
-          <p className="cl-page-sub">Manage your account and application configuration.</p>
-        </div>
-      </div>
+    <div className="admin-font stack-24">
+      <header className="stack-8">
+        <p className="eyebrow">Admin</p>
+        <h1 className="display">Settings</h1>
+        <p style={{ fontSize: 14, color: "var(--primary-60)" }}>Manage your account and application configuration.</p>
+      </header>
 
-      <div className="cl-settings-shell">
-        <aside className="cl-settings-side">
-          {visibleTabs.map((tab) => {
-            const Icon = tab.icon;
-            const active = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setActiveTab(tab.id)}
-                className={active ? "active" : ""}>
-                <Icon strokeWidth={1.9} className="w-4 h-4" />
-                {tab.label}
-              </button>
-            );
-          })}
+      <div style={{ display: "flex", gap: 24, alignItems: "flex-start" }}>
+        <aside style={{ width: 220, flexShrink: 0 }}>
+          <div style={{ background: "var(--primary-5)", borderRadius: 16, padding: 6, display: "flex", flexDirection: "column", gap: 2 }}>
+            {visibleTabs.map((tab) => {
+              const Icon = tab.icon;
+              const active = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveTab(tab.id)}
+                  style={{
+                    width: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    padding: "10px 14px",
+                    borderRadius: 10,
+                    fontSize: 13,
+                    fontWeight: active ? 600 : 400,
+                    background: active ? "var(--primary)" : "transparent",
+                    color: active ? "#fff" : "var(--primary-70)",
+                    border: "none",
+                    cursor: "pointer",
+                    textAlign: "left",
+                    transition: "background 0.15s",
+                  }}>
+                  <Icon strokeWidth={1.9} size={15} />
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
         </aside>
 
-        <section>
+        <section style={{ flex: 1, minWidth: 0 }}>
           {activeTab === "profile" && <ProfileTab user={user} />}
           {activeTab === "availability" && <AvailabilityTab />}
           {activeTab === "tax" && isAdmin && (
@@ -270,3 +286,4 @@ export default function SettingsClient({
     </div>
   );
 }
+

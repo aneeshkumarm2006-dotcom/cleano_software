@@ -112,6 +112,7 @@ export async function saveJob(formData: FormData) {
       description: (formData.get("description") as string) || null,
       jobType: (formData.get("jobType") as string) || null,
       location: (formData.get("location") as string) || null,
+      aptNumber: (formData.get("aptNumber") as string) || null,
       jobDate: startDate ? new Date(startDate) : null,
       startTime:
         startDate && startTime

@@ -38,6 +38,7 @@ interface Job {
   clientName: string;
   clientId?: string | null;
   location: string | null;
+  aptNumber?: string | null;
   description: string | null;
   jobType: string | null;
   jobDate: string | null;
@@ -80,6 +81,7 @@ interface JobModalProps {
 const formSchema = z.object({
   clientName: z.string().min(1, "Client name is required"),
   location: z.string().optional(),
+  aptNumber: z.string().optional(),
   description: z.string().optional(),
   jobType: z.string().optional(),
   startDate: z.string().optional(),
@@ -555,6 +557,7 @@ export default function JobModal({
         reset({
           clientName: job.clientName || "",
           location: job.location || "",
+          aptNumber: job.aptNumber || "",
           description: job.description || "",
           jobType: job.jobType || "",
           startDate: job.startTime
@@ -598,6 +601,7 @@ export default function JobModal({
         reset({
           clientName: "",
           location: "",
+          aptNumber: "",
           description: "",
           jobType: "",
           startDate: "",
@@ -708,6 +712,7 @@ export default function JobModal({
       formData.append("clientName", values.clientName);
       formData.append("clientId", selectedClientId);
       formData.append("location", values.location || "");
+      formData.append("aptNumber", values.aptNumber || "");
       formData.append("description", values.description || "");
       formData.append("jobType", selectedJobType);
       formData.append("startDate", values.startDate || "");
@@ -1024,6 +1029,23 @@ export default function JobModal({
                         border={false}
                       />
                     </div>
+                  </div>
+
+                  {/* Apartment / Unit # */}
+                  <div>
+                    <label className="input-label tracking-tight">
+                      Apartment / Unit #
+                    </label>
+                    <Input
+                      variant="form"
+                      type="text"
+                      size="md"
+                      {...register("aptNumber")}
+                      disabled={disableForm}
+                      className="w-full px-4 py-3 tracking-tight placeholder:tracking-tight"
+                      placeholder="e.g. Apt 4B"
+                      border={false}
+                    />
                   </div>
 
                   {/* Job Type */}

@@ -63,118 +63,82 @@ export default function QuotesInboxClient({ quotes }: Props) {
     });
   }
 
+  const counts = useMemo(() => {
+    const c: Record<string, number> = { ALL: quotes.length };
+    STATUS_OPTIONS.forEach(s => { c[s] = quotes.filter(q => q.status === s).length; });
+    return c;
+  }, [quotes]);
+
   return (
-    <div className="cl-page-wrap">
-      <div className="cl-page-head">
-        <div>
-          <h1 className="cl-page-title">Quote requests</h1>
-          <p className="cl-page-sub">
-            Submissions from the public quote landing page. Triage and convert.
-          </p>
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          {(["ALL", ...STATUS_OPTIONS] as const).map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => setFilter(s)}
-              style={{
-                padding: "6px 12px",
-                fontSize: 12,
-                fontWeight: 600,
-                background: filter === s ? "var(--primary)" : "#fff",
-                color: filter === s ? "#fff" : "var(--ink)",
-                border: "1px solid var(--primary-15)",
-                borderRadius: 999,
-                cursor: "pointer",
-              }}>
-              {s}
-            </button>
-          ))}
-        </div>
+    <div className="admin-font stack-24">
+      <header className="stack-8">
+        <p className="eyebrow">Operations</p>
+        <h1 className="display">
+          Quote Requests{" "}
+          <span style={{ color: "var(--primary-40)", fontWeight: 300 }}>· {quotes.length}</span>
+        </h1>
+        <p style={{ fontSize: 14, color: "var(--primary-60)" }}>Submissions from the public quote page. Triage and convert.</p>
+      </header>
+
+      <div className="atabs">
+        {(["ALL", ...STATUS_OPTIONS] as const).map(s => (
+          <button key={s} type="button" className={`atab${filter === s ? " active" : ""}`} onClick={() => setFilter(s)}>
+            {s} {counts[s] !== undefined && <span style={{ opacity: 0.6, fontSize: 11 }}>({counts[s]})</span>}
+          </button>
+        ))}
       </div>
 
-      <div
-        style={{
-          marginTop: 16,
-          background: "#fff",
-          border: "1px solid var(--primary-10)",
-          borderRadius: 14,
-          overflow: "hidden",
-        }}>
-        {filtered.length === 0 ? (
-          <div
-            style={{
-              padding: 32,
-              textAlign: "center",
-              color: "var(--primary-50)",
-              fontSize: 14,
-            }}>
-            No quote requests yet.
-          </div>
-        ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={{ background: "var(--primary-5)", textAlign: "left" }}>
-                <th style={th}>Name</th>
-                <th style={th}>Email</th>
-                <th style={th}>Service</th>
-                <th style={th}>Received</th>
-                <th style={th}>Status</th>
-                <th style={th}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((q) => (
-                <tr
-                  key={q.id}
-                  style={{ borderTop: "1px solid var(--primary-10)" }}>
-                  <td style={td}>{q.name}</td>
-                  <td style={{ ...td, fontSize: 12, color: "var(--primary-70)" }}>
-                    {q.email}
-                  </td>
-                  <td style={{ ...td, fontSize: 12, color: "var(--primary-60)" }}>
-                    {q.serviceType ?? "—"}
-                  </td>
-                  <td style={{ ...td, fontSize: 12, color: "var(--primary-60)" }}>
-                    {fmtDate(q.createdAt)}
-                  </td>
-                  <td style={td}>
-                    <span
-                      style={{
-                        padding: "3px 8px",
-                        borderRadius: 6,
-                        fontSize: 11,
-                        fontWeight: 700,
-                        background: STATUS_TINT[q.status].bg,
-                        color: STATUS_TINT[q.status].fg,
-                      }}>
-                      {q.status}
-                    </span>
-                  </td>
-                  <td style={{ ...td, textAlign: "right" }}>
-                    <button
-                      type="button"
-                      onClick={() => setOpen(q)}
-                      style={{
-                        padding: "6px 12px",
-                        fontSize: 12,
-                        fontWeight: 600,
-                        background: "var(--primary)",
-                        color: "#fff",
-                        border: "none",
-                        borderRadius: 6,
-                        cursor: "pointer",
-                      }}>
-                      Open
-                    </button>
-                  </td>
+      {filtered.length === 0 ? (
+        <div className="atable-wrap" style={{ padding: "80px 40px", textAlign: "center", color: "var(--primary-60)" }}>
+          No quote requests yet.
+        </div>
+      ) : (
+        <div className="atable-wrap">
+          <div className="atable-scroll">
+            <table className="atable">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Contact</th>
+                  <th>Service</th>
+                  <th>Received</th>
+                  <th>Status</th>
+                  <th className="col-actions" />
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+              </thead>
+              <tbody>
+                {filtered.map(q => (
+                  <tr key={q.id} onClick={() => setOpen(q)}>
+                    <td style={{ minWidth: 160 }}>
+                      <div className="col-client">{q.name}</div>
+                      {q.address && <div className="col-client-sub">{q.address}</div>}
+                    </td>
+                    <td style={{ minWidth: 180 }}>
+                      <div className="col-client-sub">{q.email}</div>
+                      {q.phone && <div className="col-client-sub">{q.phone}</div>}
+                    </td>
+                    <td>
+                      <span style={{ fontSize: 12, color: "var(--primary-70)" }}>{q.serviceType ?? "—"}</span>
+                      {(q.bedCount != null || q.bathCount != null) && (
+                        <div className="col-client-sub">{[q.bedCount != null ? `${q.bedCount}bd` : null, q.bathCount != null ? `${q.bathCount}ba` : null].filter(Boolean).join(" · ")}</div>
+                      )}
+                    </td>
+                    <td><span style={{ fontSize: 12, color: "var(--primary-70)" }}>{fmtDate(q.createdAt)}</span></td>
+                    <td>
+                      <span style={{ display: "inline-block", background: STATUS_TINT[q.status].bg, color: STATUS_TINT[q.status].fg, fontSize: 11, fontWeight: 600, borderRadius: 20, padding: "2px 10px" }}>
+                        {q.status}
+                      </span>
+                    </td>
+                    <td className="col-actions" onClick={e => e.stopPropagation()}>
+                      <button type="button" className="btn btn-secondary btn-sm" onClick={() => setOpen(q)}>Open</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {open && (
         <QuoteDrawer
@@ -186,6 +150,7 @@ export default function QuotesInboxClient({ quotes }: Props) {
     </div>
   );
 }
+
 
 function QuoteDrawer({
   quote,
@@ -201,26 +166,16 @@ function QuoteDrawer({
     <div
       onClick={onClose}
       style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.4)",
-        zIndex: 50,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 16,
+        position: "fixed", inset: 0,
+        background: "rgba(0,60,70,0.55)", backdropFilter: "blur(2px)",
+        zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16,
       }}>
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          background: "#fff",
-          borderRadius: 14,
-          maxWidth: 560,
-          width: "100%",
-          padding: 24,
-          boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
-          maxHeight: "85vh",
-          overflowY: "auto",
+          background: "#fff", borderRadius: 20, maxWidth: 560, width: "100%",
+          padding: 28, boxShadow: "0 20px 60px rgba(0,60,70,0.25)",
+          maxHeight: "85vh", overflowY: "auto",
         }}>
         <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>{quote.name}</h2>
         <p style={{ marginTop: 4, fontSize: 13, color: "var(--primary-70)" }}>

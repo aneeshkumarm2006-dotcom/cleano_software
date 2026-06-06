@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import { Inbox, Check, X, ExternalLink } from "lucide-react";
-import Card from "@/components/ui/Card";
 import { resolveJobRequest } from "../actions/resolveJobRequest";
 
 interface JobRow {
@@ -16,12 +15,7 @@ interface JobRow {
   price: number | null;
   cancellationRequestedAt: string | null;
   rescheduleRequestedAt: string | null;
-  client: {
-    id: string;
-    name: string;
-    email: string | null;
-    phone: string | null;
-  } | null;
+  client: { id: string; name: string; email: string | null; phone: string | null } | null;
   cleaners: { id: string; name: string }[];
 }
 
@@ -31,39 +25,26 @@ export default function RequestsPageClient({ jobs }: { jobs: JobRow[] }) {
   const [filter, setFilter] = useState<Filter>("all");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState<{ jobId: string; kind: "cancellation" | "reschedule"; decision: "approve" | "deny"; msg: string } | null>(null);
+  const [note, setNote] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   const filtered = useMemo(() => {
-    if (filter === "cancellation")
-      return jobs.filter((j) => j.cancellationRequestedAt);
-    if (filter === "reschedule")
-      return jobs.filter((j) => j.rescheduleRequestedAt);
+    if (filter === "cancellation") return jobs.filter(j => j.cancellationRequestedAt);
+    if (filter === "reschedule") return jobs.filter(j => j.rescheduleRequestedAt);
     return jobs;
   }, [jobs, filter]);
 
   const counts = {
     all: jobs.length,
-    cancellation: jobs.filter((j) => j.cancellationRequestedAt).length,
-    reschedule: jobs.filter((j) => j.rescheduleRequestedAt).length,
+    cancellation: jobs.filter(j => j.cancellationRequestedAt).length,
+    reschedule: jobs.filter(j => j.rescheduleRequestedAt).length,
   };
 
-  const [pending, setPending] = useState<{
-    jobId: string;
-    kind: "cancellation" | "reschedule";
-    decision: "approve" | "deny";
-    msg: string;
-  } | null>(null);
-  const [note, setNote] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-
-  function handle(
-    jobId: string,
-    kind: "cancellation" | "reschedule",
-    decision: "approve" | "deny"
-  ) {
-    const msg =
-      kind === "cancellation" && decision === "approve"
-        ? "Approve this cancellation? The job will be marked as CANCELLED."
-        : `Mark this ${kind} request as ${decision === "approve" ? "approved" : "denied"}?`;
+  function handle(jobId: string, kind: "cancellation" | "reschedule", decision: "approve" | "deny") {
+    const msg = kind === "cancellation" && decision === "approve"
+      ? "Approve this cancellation? The job will be marked as CANCELLED."
+      : `Mark this ${kind} request as ${decision === "approve" ? "approved" : "denied"}?`;
     setNote("");
     setPending({ jobId, kind, decision, msg });
   }
@@ -73,325 +54,168 @@ export default function RequestsPageClient({ jobs }: { jobs: JobRow[] }) {
     const { jobId, kind, decision } = pending;
     setSubmitting(true);
     setError(null);
-    const res = await resolveJobRequest({
-      jobId,
-      kind,
-      decision,
-      note: note.trim() || undefined,
-    });
+    const res = await resolveJobRequest({ jobId, kind, decision, note: note.trim() || undefined });
     setSubmitting(false);
-    if (!res.success) {
-      setError(res.error || "Failed to resolve");
-      return;
-    }
+    if (!res.success) { setError(res.error || "Failed to resolve"); return; }
     setPending(null);
     setBusyId(jobId);
     setBusyId(null);
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl !font-light tracking-tight text-[#005F6A] flex items-center gap-3">
-          <Inbox className="w-7 h-7" /> Pending Requests
+    <div className="admin-font stack-24">
+      <header className="stack-8">
+        <p className="eyebrow">Operations</p>
+        <h1 className="display" style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <Inbox size={28} style={{ color: "var(--primary)" }} />
+          Pending Requests
+          {jobs.length > 0 && (
+            <span style={{ background: "#005F6A", color: "#fff", fontSize: 13, fontWeight: 700, borderRadius: 20, padding: "2px 12px", marginLeft: 4 }}>
+              {jobs.length}
+            </span>
+          )}
         </h1>
-        <p className="text-sm text-[#005F6A]/70 mt-1">
-          Customer-initiated cancellation and reschedule requests that need a
-          decision from you.
+        <p style={{ fontSize: 14, color: "var(--primary-60)" }}>
+          Customer-initiated cancellation and reschedule requests that need a decision from you.
         </p>
-      </div>
+      </header>
 
-      {error ? (
-        <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+      {error && (
+        <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 12, padding: "12px 16px", fontSize: 13, color: "#b91c1c" }}>
           {error}
         </div>
-      ) : null}
+      )}
 
-      <Card variant="default" className="p-5">
-        <div className="flex flex-wrap gap-1 mb-5">
-          {([
-            ["all", `All (${counts.all})`],
-            ["cancellation", `Cancellation (${counts.cancellation})`],
-            ["reschedule", `Reschedule (${counts.reschedule})`],
-          ] as [Filter, string][]).map(([k, label]) => {
-            const active = filter === k;
+      <div className="atabs">
+        {([["all", `All (${counts.all})`], ["cancellation", `Cancellation (${counts.cancellation})`], ["reschedule", `Reschedule (${counts.reschedule})`]] as [Filter, string][]).map(([k, label]) => (
+          <button key={k} type="button" className={`atab${filter === k ? " active" : ""}`} onClick={() => setFilter(k)}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {filtered.length === 0 ? (
+        <div className="atable-wrap" style={{ padding: "80px 40px", textAlign: "center", color: "var(--primary-60)" }}>
+          No pending requests. 🎉
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {filtered.map(j => {
+            const kinds: ("cancellation" | "reschedule")[] = [];
+            if (j.cancellationRequestedAt) kinds.push("cancellation");
+            if (j.rescheduleRequestedAt) kinds.push("reschedule");
+            const requestedAt = j.cancellationRequestedAt ?? j.rescheduleRequestedAt;
+            const startStr = new Date(j.startTime).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+
             return (
-              <button
-                key={k}
-                type="button"
-                onClick={() => setFilter(k)}
-                className={`px-3 py-1.5 rounded-full text-xs transition-colors ${
-                  active
-                    ? "bg-[#005F6A] text-white"
-                    : "bg-[#005F6A]/5 text-[#005F6A] hover:bg-[#005F6A]/10"
-                }`}>
-                {label}
-              </button>
+              <article key={j.id} className="jcard">
+                <div className="jcard-top">
+                  <div>
+                    <div className="jcard-meta" style={{ marginBottom: 4 }}>Job #{j.jobNumber}</div>
+                    <div className="jcard-client">{startStr}{j.isFlexible && <span style={{ fontSize: 12, color: "var(--primary-60)", fontWeight: 400, marginLeft: 6 }}>(flexible)</span>}</div>
+                    {j.location && <div className="jcard-meta">{j.location}</div>}
+                    {j.client && (
+                      <div className="jcard-meta" style={{ marginTop: 4 }}>
+                        {j.client.name}{j.client.email ? ` · ${j.client.email}` : ""}{j.client.phone ? ` · ${j.client.phone}` : ""}
+                      </div>
+                    )}
+                    {j.cleaners.length > 0 && <div className="jcard-meta">with {j.cleaners.map(c => c.name).join(", ")}</div>}
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end" }}>
+                    {kinds.map(k => (
+                      <span key={k} style={{
+                        display: "inline-block",
+                        background: k === "cancellation" ? "#fee2e2" : "#fffbeb",
+                        color: k === "cancellation" ? "#b91c1c" : "#d97706",
+                        fontSize: 10, fontWeight: 700, borderRadius: 20, padding: "3px 10px",
+                        letterSpacing: "0.06em", textTransform: "uppercase",
+                      }}>
+                        {k}
+                      </span>
+                    ))}
+                    {j.price !== null && <div className="jcard-price">${j.price.toFixed(2)}</div>}
+                  </div>
+                </div>
+
+                <div className="jcard-row" style={{ paddingTop: 12, borderTop: "1px solid var(--primary-10)", marginTop: 10, flexWrap: "wrap", gap: 8 }}>
+                  <a href={`/jobs/${j.id}`} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, color: "var(--primary-60)", textDecoration: "none" }}>
+                    <ExternalLink size={13} /> Open job
+                  </a>
+                  <div style={{ flex: 1 }} />
+                  {kinds.map(k => (
+                    <div key={k} style={{ display: "flex", gap: 6 }}>
+                      <button
+                        type="button"
+                        disabled={busyId === j.id}
+                        onClick={() => handle(j.id, k, "approve")}
+                        className="btn btn-sm"
+                        style={{
+                          background: k === "cancellation" ? "#dc2626" : "#059669",
+                          color: "#fff", border: 0,
+                          display: "inline-flex", alignItems: "center", gap: 4,
+                        }}>
+                        <Check size={13} /> Approve {k}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busyId === j.id}
+                        onClick={() => handle(j.id, k, "deny")}
+                        className="btn btn-ghost btn-sm"
+                        style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                        <X size={13} /> Deny
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                {requestedAt && (
+                  <div style={{ fontSize: 10, color: "var(--primary-40)", marginTop: 6 }}>
+                    Requested {new Date(requestedAt).toLocaleString()}
+                  </div>
+                )}
+              </article>
             );
           })}
         </div>
-
-        {filtered.length === 0 ? (
-          <div className="text-center text-sm text-[#005F6A]/60 py-12">
-            No pending requests. 🎉
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {filtered.map((j) => {
-              const kinds: ("cancellation" | "reschedule")[] = [];
-              if (j.cancellationRequestedAt) kinds.push("cancellation");
-              if (j.rescheduleRequestedAt) kinds.push("reschedule");
-              const requestedAt =
-                j.cancellationRequestedAt ?? j.rescheduleRequestedAt;
-              const startStr = new Date(j.startTime).toLocaleString(undefined, {
-                weekday: "short",
-                month: "short",
-                day: "numeric",
-                hour: "numeric",
-                minute: "2-digit",
-              });
-
-              return (
-                <article
-                  key={j.id}
-                  className="rounded-xl border border-[#005F6A]/10 bg-white p-5 space-y-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="text-[10px] uppercase tracking-wide text-[#005F6A]/60 font-medium">
-                        Job #{j.jobNumber}
-                      </div>
-                      <div className="text-lg font-medium text-[#005F6A] mt-0.5">
-                        {startStr}
-                        {j.isFlexible ? (
-                          <span className="ml-2 text-xs text-[#005F6A]/60 font-normal">
-                            (flexible)
-                          </span>
-                        ) : null}
-                      </div>
-                      {j.location ? (
-                        <div className="text-xs text-[#005F6A]/60 mt-1">
-                          {j.location}
-                        </div>
-                      ) : null}
-                    </div>
-                    <div className="flex gap-1.5">
-                      {kinds.map((k) => (
-                        <span
-                          key={k}
-                          className={`px-2 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wide ${
-                            k === "cancellation"
-                              ? "bg-red-50 text-red-700"
-                              : "bg-amber-50 text-amber-700"
-                          }`}>
-                          {k}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap gap-3 text-xs text-[#005F6A]/70">
-                    {j.client ? (
-                      <span>
-                        {j.client.name}
-                        {j.client.email ? ` · ${j.client.email}` : ""}
-                        {j.client.phone ? ` · ${j.client.phone}` : ""}
-                      </span>
-                    ) : null}
-                    {j.cleaners.length ? (
-                      <span>
-                        with {j.cleaners.map((c) => c.name).join(", ")}
-                      </span>
-                    ) : null}
-                  </div>
-
-                  <div className="flex flex-wrap gap-2 pt-2 border-t border-[#005F6A]/10">
-                    <a
-                      href={`/jobs/${j.id}`}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs text-[#005F6A]/70 hover:bg-[#005F6A]/5">
-                      <ExternalLink className="w-3.5 h-3.5" /> Open job
-                    </a>
-                    <div className="flex-1" />
-                    {kinds.map((k) => (
-                      <div key={k} className="inline-flex gap-1.5">
-                        <button
-                          type="button"
-                          disabled={busyId === j.id}
-                          onClick={() => handle(j.id, k, "approve")}
-                          className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs text-white disabled:opacity-50 ${
-                            k === "cancellation"
-                              ? "bg-red-600 hover:bg-red-700"
-                              : "bg-emerald-600 hover:bg-emerald-700"
-                          }`}>
-                          <Check className="w-3.5 h-3.5" />
-                          Approve {k}
-                        </button>
-                        <button
-                          type="button"
-                          disabled={busyId === j.id}
-                          onClick={() => handle(j.id, k, "deny")}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs text-[#005F6A] bg-[#005F6A]/5 hover:bg-[#005F6A]/10 disabled:opacity-50">
-                          <X className="w-3.5 h-3.5" /> Deny
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-
-                  {requestedAt ? (
-                    <div className="text-[10px] text-[#005F6A]/40">
-                      Requested {new Date(requestedAt).toLocaleString()}
-                    </div>
-                  ) : null}
-                </article>
-              );
-            })}
-          </div>
-        )}
-      </Card>
+      )}
 
       {pending && (
         <div
           onClick={() => !submitting && setPending(null)}
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0, 60, 70, 0.55)",
-            backdropFilter: "blur(2px)",
-            zIndex: 100,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 16,
-          }}>
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              background: "#fff",
-              borderRadius: 16,
-              maxWidth: 480,
-              width: "100%",
-              padding: 28,
-              boxShadow: "0 20px 60px rgba(0, 60, 70, 0.25)",
-            }}>
+          style={{ position: "fixed", inset: 0, background: "rgba(0,60,70,0.55)", backdropFilter: "blur(2px)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: "#fff", borderRadius: 20, maxWidth: 480, width: "100%", padding: 28, boxShadow: "0 20px 60px rgba(0,60,70,0.25)" }}>
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
               <div>
-                <h2
-                  style={{
-                    fontFamily: "var(--font-serif, serif)",
-                    fontSize: 24,
-                    color: "var(--primary-deep, #003C46)",
-                    margin: "0 0 6px",
-                    fontWeight: 400,
-                  }}>
-                  {pending.decision === "approve"
-                    ? `Approve ${pending.kind}?`
-                    : `Deny ${pending.kind}?`}
+                <h2 style={{ fontSize: 22, color: "var(--primary)", margin: "0 0 6px", fontWeight: 400 }}>
+                  {pending.decision === "approve" ? `Approve ${pending.kind}?` : `Deny ${pending.kind}?`}
                 </h2>
-                <p style={{ fontSize: 13.5, color: "var(--primary-60, #5b7a80)", margin: 0, lineHeight: 1.5 }}>
-                  {pending.msg}
-                </p>
+                <p style={{ fontSize: 13.5, color: "var(--primary-60)", margin: 0, lineHeight: 1.5 }}>{pending.msg}</p>
               </div>
-              <button
-                type="button"
-                onClick={() => !submitting && setPending(null)}
-                style={{
-                  background: "transparent",
-                  border: 0,
-                  cursor: "pointer",
-                  color: "var(--primary-50, #6b8085)",
-                  padding: 4,
-                  fontFamily: "inherit",
-                }}
-                aria-label="Close">
-                <X className="w-4 h-4" />
+              <button type="button" onClick={() => !submitting && setPending(null)} style={{ background: "none", border: 0, cursor: "pointer", color: "var(--primary-50)", padding: 4 }}>
+                <X size={16} />
               </button>
             </div>
-
             <div style={{ marginTop: 22 }}>
-              <label
-                style={{
-                  display: "block",
-                  fontSize: 11,
-                  fontWeight: 700,
-                  letterSpacing: "0.1em",
-                  textTransform: "uppercase",
-                  color: "var(--primary-60, #5b7a80)",
-                  marginBottom: 8,
-                }}>
-                {pending.decision === "deny"
-                  ? "Reason (optional, shown to the customer)"
-                  : "Note (optional, shown to the customer)"}
+              <label style={{ display: "block", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--primary-60)", marginBottom: 8 }}>
+                {pending.decision === "deny" ? "Reason (optional, shown to customer)" : "Note (optional, shown to customer)"}
               </label>
               <textarea
                 value={note}
-                onChange={(e) => setNote(e.target.value)}
-                placeholder={
-                  pending.decision === "deny"
-                    ? "e.g. We're outside our cancellation window — please contact us if you'd like to discuss."
-                    : "Any extra context to share with the customer."
-                }
+                onChange={e => setNote(e.target.value)}
                 rows={4}
                 disabled={submitting}
-                style={{
-                  width: "100%",
-                  borderRadius: 12,
-                  border: "1px solid var(--primary-10, rgba(0,95,106,0.15))",
-                  padding: "10px 12px",
-                  fontSize: 14,
-                  fontFamily: "inherit",
-                  color: "var(--ink, #003C46)",
-                  resize: "vertical",
-                  outline: "none",
-                }}
+                placeholder={pending.decision === "deny" ? "e.g. We're outside our cancellation window…" : "Any extra context to share."}
+                style={{ width: "100%", borderRadius: 12, border: "1px solid rgba(0,95,106,0.15)", padding: "10px 12px", fontSize: 14, fontFamily: "inherit", color: "var(--ink)", resize: "vertical", outline: "none", boxSizing: "border-box" }}
               />
             </div>
-
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "flex-end",
-                gap: 10,
-                marginTop: 22,
-              }}>
-              <button
-                type="button"
-                onClick={() => !submitting && setPending(null)}
-                disabled={submitting}
-                style={{
-                  background: "transparent",
-                  border: 0,
-                  padding: "10px 14px",
-                  fontSize: 14,
-                  fontWeight: 600,
-                  color: "var(--primary-60, #5b7a80)",
-                  cursor: submitting ? "not-allowed" : "pointer",
-                  fontFamily: "inherit",
-                }}>
-                Cancel
-              </button>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 22 }}>
+              <button type="button" onClick={() => !submitting && setPending(null)} disabled={submitting} className="btn btn-ghost">Cancel</button>
               <button
                 type="button"
                 onClick={confirmHandle}
                 disabled={submitting}
-                style={{
-                  padding: "10px 22px",
-                  borderRadius: 999,
-                  border: 0,
-                  background:
-                    pending.decision === "approve"
-                      ? "var(--primary-deep, #003C46)"
-                      : "#b91c1c",
-                  color: "#fff",
-                  fontSize: 14,
-                  fontWeight: 600,
-                  fontFamily: "inherit",
-                  cursor: submitting ? "not-allowed" : "pointer",
-                  opacity: submitting ? 0.6 : 1,
-                }}>
-                {submitting
-                  ? "Working…"
-                  : pending.decision === "approve"
-                  ? "Approve"
-                  : "Deny"}
+                className="btn"
+                style={{ background: pending.decision === "approve" ? "var(--primary)" : "#b91c1c", color: "#fff", border: 0, opacity: submitting ? 0.6 : 1 }}>
+                {submitting ? "Working…" : pending.decision === "approve" ? "Approve" : "Deny"}
               </button>
             </div>
           </div>

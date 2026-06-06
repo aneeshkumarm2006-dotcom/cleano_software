@@ -79,30 +79,19 @@ export default function WebBookingsPageClient({ jobs }: { jobs: WebJob[] }) {
   };
 
   return (
-    <div className="admin-font">
-      {/* Header — matches /jobs */}
-      <header
-        style={{
-          display: "flex",
-          alignItems: "flex-end",
-          justifyContent: "space-between",
-          marginBottom: 32,
-          gap: 16,
-          flexWrap: "wrap",
-        }}>
-        <div>
-          <p className="admin-eyebrow">Operations</p>
-          <h1 className="admin-page-title">
-            Web bookings{" "}
-            <span style={{ color: "var(--primary-40)", fontWeight: 300 }}>
-              · {counts.all}
-            </span>
-          </h1>
-        </div>
+    <div className="admin-font stack-24">
+      <header className="stack-8">
+        <p className="eyebrow">Operations</p>
+        <h1 className="display">
+          Web Bookings{" "}
+          <span style={{ color: "var(--primary-40)", fontWeight: 300 }}>
+            · {counts.all}
+          </span>
+        </h1>
       </header>
 
-      {/* Stats — match Jobs page; clickable to filter */}
-      <div className="astat-grid" style={{ marginBottom: 28 }}>
+      {/* Stats — clickable to filter */}
+      <div className="astat-grid">
         <FilterStat
           icon={<Globe size={15} />}
           label="Total"
@@ -135,28 +124,17 @@ export default function WebBookingsPageClient({ jobs }: { jobs: WebJob[] }) {
         />
       </div>
 
-      {/* List */}
-      <div
-        style={{
-          background: "#fff",
-          border: "1px solid var(--primary-10)",
-          borderRadius: 16,
-          padding: 18,
-        }}>
-        {filtered.length === 0 ? (
-          <div style={{ textAlign: "center", color: "var(--primary-50)", fontSize: 13, padding: "48px 0" }}>
-            {filter === "unassigned"
-              ? "🎉 Every web booking has a cleaner assigned."
-              : "No web bookings match this filter."}
-          </div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {filtered.map((j) => (
-              <BookingRow key={j.id} job={j} />
-            ))}
-          </div>
-        )}
-      </div>
+      {filtered.length === 0 ? (
+        <div className="atable-wrap" style={{ padding: "60px 40px", textAlign: "center", color: "var(--primary-50)", fontSize: 13 }}>
+          {filter === "unassigned" ? "Every web booking has a cleaner assigned." : "No web bookings match this filter."}
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {filtered.map((j) => (
+            <BookingRow key={j.id} job={j} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -228,7 +206,7 @@ function BookingRow({ job }: { job: WebJob }) {
   });
 
   return (
-    <article className="rounded-xl border border-[#005F6A]/10 bg-white p-5 space-y-3">
+    <article className="jcard">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <div className="flex items-center gap-2 text-[10px] uppercase tracking-wide text-[#005F6A]/60 font-medium">

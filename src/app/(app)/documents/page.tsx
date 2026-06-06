@@ -48,9 +48,5 @@ export default async function DocumentsPage() {
     },
   }));
 
-  return (
-    <div className="cl-page-wrap">
-      <DocumentsClient signatures={signatureData} />
-    </div>
-  );
+  return <DocumentsClient signatures={signatureData} />;
 }

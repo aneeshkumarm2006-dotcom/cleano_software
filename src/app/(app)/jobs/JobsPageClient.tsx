@@ -29,6 +29,7 @@ export interface Job {
   clientName: string;
   clientId: string | null;
   location: string | null;
+  aptNumber?: string | null;
   description: string | null;
   jobType: string | null;
   jobDate: string | null;

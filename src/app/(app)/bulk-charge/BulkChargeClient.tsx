@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { CreditCard, CheckCircle, XCircle, Zap } from "lucide-react";
 import { bulkChargeJobs } from "../actions/bulkChargeJobs";
 
 interface BulkJob {
@@ -59,6 +60,10 @@ export default function BulkChargeClient({ jobs }: Props) {
         .reduce((sum, j) => sum + j.amount, 0),
     [jobs, selected]
   );
+  const totalValue = useMemo(
+    () => eligible.reduce((s, j) => s + j.amount, 0),
+    [eligible]
+  );
 
   function toggle(id: string) {
     setSelected((prev) => {
@@ -94,178 +99,143 @@ export default function BulkChargeClient({ jobs }: Props) {
   }
 
   return (
-    <div className="cl-page-wrap">
-      <div className="cl-page-head">
-        <div>
-          <h1 className="cl-page-title">Bulk charge</h1>
-          <p className="cl-page-sub">
-            All completed jobs that are unpaid and have a card on file. Select
-            the rows you want to bill and run them in one batch.
-          </p>
+    <div className="admin-font stack-24">
+      <header className="stack-8">
+        <p className="eyebrow">Finance</p>
+        <h1 className="display">Bulk Charge</h1>
+        <p style={{ fontSize: 14, color: "var(--primary-60)" }}>
+          Completed jobs that are unpaid and have a card on file. Select rows and run them in one batch.
+        </p>
+      </header>
+
+      <div className="astat-grid">
+        <div className="astat">
+          <div className="astat-head">
+            <span>Eligible jobs</span>
+            <span className="astat-icon"><CreditCard size={15} /></span>
+          </div>
+          <div className="astat-value">{eligible.length}</div>
+          <div className="astat-delta">{jobs.length - eligible.length} no card on file</div>
+        </div>
+        <div className="astat">
+          <div className="astat-head">
+            <span>Chargeable total</span>
+            <span className="astat-icon"><Zap size={15} /></span>
+          </div>
+          <div className="astat-value">{fmtAmount(totalValue)}</div>
+          <div className="astat-delta">across {eligible.length} jobs</div>
         </div>
       </div>
 
       {jobs.length === 0 ? (
-        <div
-          style={{
-            marginTop: 16,
-            padding: 32,
-            textAlign: "center",
-            border: "1px solid var(--primary-10)",
-            borderRadius: 14,
-            background: "#fff",
-            fontSize: 14,
-            color: "var(--primary-60)",
-          }}>
+        <div className="atable-wrap" style={{ padding: "80px 40px", textAlign: "center", color: "var(--primary-60)" }}>
           Nothing to charge. All completed jobs are either paid or marked as cash.
         </div>
       ) : (
         <>
-          <div
-            style={{
-              marginTop: 16,
-              display: "flex",
-              gap: 16,
-              alignItems: "center",
-              flexWrap: "wrap",
-            }}>
-            <div
-              style={{
-                fontSize: 13,
-                color: "var(--primary-70)",
-                fontWeight: 600,
-              }}>
-              {selected.size} selected · {fmtAmount(selectedTotal)} total
+          <div className="atoolbar">
+            <div style={{ fontSize: 13, color: "var(--primary-70)", fontWeight: 600 }}>
+              {selected.size > 0
+                ? `${selected.size} selected · ${fmtAmount(selectedTotal)} total`
+                : `${eligible.length} eligible jobs`}
             </div>
-            <button
-              type="button"
-              disabled={selected.size === 0 || pending}
-              onClick={runBatch}
-              style={{
-                padding: "10px 18px",
-                fontSize: 14,
-                fontWeight: 700,
-                background:
-                  selected.size === 0 || pending
-                    ? "var(--primary-20)"
-                    : "var(--primary)",
-                color: "#fff",
-                border: "none",
-                borderRadius: 8,
-                cursor:
-                  selected.size === 0 || pending ? "default" : "pointer",
-              }}>
-              {pending ? "Charging…" : `Charge ${selected.size} job${selected.size === 1 ? "" : "s"}`}
-            </button>
+            <div style={{ marginLeft: "auto" }}>
+              <button
+                type="button"
+                disabled={selected.size === 0 || pending}
+                onClick={runBatch}
+                className="btn btn-primary"
+                style={{ opacity: selected.size === 0 || pending ? 0.5 : 1 }}>
+                <Zap size={15} />
+                {pending ? "Charging…" : `Charge ${selected.size} job${selected.size === 1 ? "" : "s"}`}
+              </button>
+            </div>
           </div>
 
-          <div
-            style={{
-              marginTop: 16,
-              background: "#fff",
-              border: "1px solid var(--primary-10)",
-              borderRadius: 14,
-              overflow: "hidden",
-            }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr
-                  style={{
-                    background: "var(--primary-5)",
-                    textAlign: "left",
-                  }}>
-                  <th style={th}>
-                    <input
-                      type="checkbox"
-                      checked={allSelected}
-                      onChange={toggleAll}
-                      aria-label="Select all eligible"
-                    />
-                  </th>
-                  <th style={th}>Job</th>
-                  <th style={th}>Client</th>
-                  <th style={th}>Service</th>
-                  <th style={th}>Completed</th>
-                  <th style={{ ...th, textAlign: "right" }}>Amount</th>
-                  <th style={th}></th>
-                </tr>
-              </thead>
-              <tbody>
-                {jobs.map((j) => {
-                  const disabled = !j.hasCardOnFile;
-                  return (
-                    <tr
-                      key={j.id}
-                      style={{
-                        borderTop: "1px solid var(--primary-10)",
-                        opacity: disabled ? 0.55 : 1,
-                      }}>
-                      <td style={td}>
-                        <input
-                          type="checkbox"
-                          disabled={disabled}
-                          checked={selected.has(j.id)}
-                          onChange={() => toggle(j.id)}
-                        />
-                      </td>
-                      <td style={td}>#{j.jobNumber}</td>
-                      <td style={td}>{j.clientName}</td>
-                      <td style={{ ...td, fontSize: 12, color: "var(--primary-60)" }}>
-                        {j.jobType ?? "—"}
-                      </td>
-                      <td style={{ ...td, fontSize: 12, color: "var(--primary-60)" }}>
-                        {fmtDate(j.completedAt)}
-                      </td>
-                      <td
-                        style={{
-                          ...td,
-                          textAlign: "right",
-                          fontVariantNumeric: "tabular-nums",
-                          fontWeight: 700,
-                        }}>
-                        {fmtAmount(j.amount)}
-                      </td>
-                      <td style={{ ...td, fontSize: 11, color: "var(--primary-50)" }}>
-                        {disabled ? "No card on file" : ""}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="atable-wrap">
+            <div className="atable-scroll">
+              <table className="atable">
+                <thead>
+                  <tr>
+                    <th style={{ width: 40, textAlign: "center" }}>
+                      <input
+                        type="checkbox"
+                        checked={allSelected}
+                        onChange={toggleAll}
+                        aria-label="Select all eligible"
+                      />
+                    </th>
+                    <th>Job</th>
+                    <th>Client</th>
+                    <th>Service</th>
+                    <th>Completed</th>
+                    <th className="num">Amount</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {jobs.map((j) => {
+                    const disabled = !j.hasCardOnFile;
+                    return (
+                      <tr key={j.id} style={{ opacity: disabled ? 0.5 : 1 }}>
+                        <td style={{ textAlign: "center" }}>
+                          <input
+                            type="checkbox"
+                            disabled={disabled}
+                            checked={selected.has(j.id)}
+                            onChange={() => toggle(j.id)}
+                          />
+                        </td>
+                        <td>
+                          <span className="col-client">#{j.jobNumber}</span>
+                        </td>
+                        <td>
+                          <span className="col-client">{j.clientName}</span>
+                        </td>
+                        <td>
+                          <span style={{ fontSize: 12, color: "var(--primary-60)" }}>{j.jobType ?? "—"}</span>
+                        </td>
+                        <td>
+                          <span style={{ fontSize: 12, color: "var(--primary-60)" }}>{fmtDate(j.completedAt)}</span>
+                        </td>
+                        <td className="num" style={{ fontWeight: 700 }}>
+                          {fmtAmount(j.amount)}
+                        </td>
+                        <td>
+                          {disabled && (
+                            <span style={{ fontSize: 11, color: "var(--primary-40)" }}>No card on file</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </>
       )}
 
       {batch && (
-        <div
-          style={{
-            marginTop: 24,
-            padding: 20,
-            background: "#fff",
-            border: "1px solid var(--primary-10)",
-            borderRadius: 14,
-          }}>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>
-            Batch complete
-          </h3>
-          <p style={{ marginTop: 6, fontSize: 13, color: "var(--primary-70)" }}>
-            Charged {fmtAmount(batch.totalCharged)} across {batch.succeeded} of{" "}
-            {batch.attempted} jobs.{" "}
+        <div className="atable-wrap" style={{ padding: 24 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Batch complete</h3>
+            {batch.failed === 0
+              ? <CheckCircle size={18} style={{ color: "#15803d" }} />
+              : <XCircle size={18} style={{ color: "#dc2626" }} />}
+          </div>
+          <p style={{ marginTop: 0, fontSize: 13, color: "var(--primary-70)" }}>
+            Charged {fmtAmount(batch.totalCharged)} across {batch.succeeded} of {batch.attempted} jobs.{" "}
             {batch.failed > 0 && (
-              <span style={{ color: "#dc2626", fontWeight: 600 }}>
-                {batch.failed} failed.
-              </span>
+              <span style={{ color: "#dc2626", fontWeight: 600 }}>{batch.failed} failed.</span>
             )}
           </p>
-          <ul style={{ marginTop: 12, fontSize: 13, paddingLeft: 18 }}>
+          <ul style={{ marginTop: 12, fontSize: 13, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 4 }}>
             {batch.results.map((r) => (
-              <li key={r.jobId} style={{ marginBottom: 4 }}>
+              <li key={r.jobId}>
                 #{r.jobNumber} — {r.clientName}:{" "}
                 {r.success ? (
-                  <span style={{ color: "var(--primary)" }}>
-                    Charged {fmtAmount(r.amount ?? 0)}
-                  </span>
+                  <span style={{ color: "var(--primary)", fontWeight: 600 }}>Charged {fmtAmount(r.amount ?? 0)}</span>
                 ) : (
                   <span style={{ color: "#dc2626" }}>{r.error}</span>
                 )}
@@ -277,18 +247,3 @@ export default function BulkChargeClient({ jobs }: Props) {
     </div>
   );
 }
-
-const th: React.CSSProperties = {
-  padding: "10px 14px",
-  fontSize: 11,
-  fontWeight: 700,
-  textTransform: "uppercase",
-  letterSpacing: "0.08em",
-  color: "var(--primary-60)",
-};
-
-const td: React.CSSProperties = {
-  padding: "12px 14px",
-  fontSize: 13,
-  color: "var(--ink)",
-};

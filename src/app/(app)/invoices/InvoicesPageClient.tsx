@@ -2,30 +2,12 @@
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import {
-  Search,
-  Plus,
-  FileText,
-  DollarSign,
-  AlertTriangle,
-  ChevronsLeft,
-  ChevronLeft,
-  ChevronRight,
-  ChevronsRight,
-  ChevronDown,
-  Send,
-  CheckCircle2,
-  Clock,
-  XCircle,
-  Loader,
-  Eye,
+  Search, Plus, FileText, DollarSign, AlertTriangle,
+  ChevronLeft, ChevronRight, Send, CheckCircle2, Clock, XCircle,
+  Eye, Loader, SlidersHorizontal,
 } from "lucide-react";
-import Button from "@/components/ui/Button";
-import Card from "@/components/ui/Card";
-import Input from "@/components/ui/Input";
-import Badge from "@/components/ui/Badge";
-import CustomDropdown from "@/components/ui/custom-dropdown";
+import PremiumSelect from "@/components/ui/PremiumSelect";
 import CreateInvoiceModal from "./CreateInvoiceModal";
 import { sendInvoice } from "../actions/sendInvoice";
 import { updateInvoice } from "../actions/updateInvoice";
@@ -77,28 +59,41 @@ interface ClientOption {
 interface InvoicesPageClientProps {
   invoices: Invoice[];
   clients: ClientOption[];
-  taxConfig: {
-    gstRate: number;
-    qstRate: number;
-    gstNumber: string;
-    qstNumber: string;
-  };
+  taxConfig: { gstRate: number; qstRate: number; gstNumber: string; qstNumber: string };
 }
 
-const STATUS_OPTIONS = [
-  { label: "All Statuses", value: "" },
-  { label: "Draft", value: "DRAFT" },
-  { label: "Sent", value: "SENT" },
-  { label: "Paid", value: "PAID" },
-  { label: "Overdue", value: "OVERDUE" },
-  { label: "Cancelled", value: "CANCELLED" },
-];
+const STATUS_CONFIG: Record<string, { label: string; bg: string; color: string }> = {
+  DRAFT:     { label: "Draft",     bg: "#f1f5f9", color: "#475569" },
+  SENT:      { label: "Sent",      bg: "#eff6ff", color: "#1d4ed8" },
+  PAID:      { label: "Paid",      bg: "#dcfce7", color: "#15803d" },
+  OVERDUE:   { label: "Overdue",   bg: "#fffbeb", color: "#d97706" },
+  CANCELLED: { label: "Cancelled", bg: "#fee2e2", color: "#b91c1c" },
+};
 
-export default function InvoicesPageClient({
-  invoices,
-  clients,
-  taxConfig,
-}: InvoicesPageClientProps) {
+function StatusPill({ status }: { status: string }) {
+  const c = STATUS_CONFIG[status] ?? { label: status, bg: "#f1f5f9", color: "#475569" };
+  return (
+    <span style={{ display: "inline-block", background: c.bg, color: c.color, fontSize: 11, fontWeight: 600, borderRadius: 20, padding: "2px 10px" }}>
+      {c.label}
+    </span>
+  );
+}
+
+function StatusIcon({ status }: { status: string }) {
+  switch (status) {
+    case "SENT":      return <Send size={12} style={{ color: "#1d4ed8" }} />;
+    case "PAID":      return <CheckCircle2 size={12} style={{ color: "#15803d" }} />;
+    case "OVERDUE":   return <Clock size={12} style={{ color: "#d97706" }} />;
+    case "CANCELLED": return <XCircle size={12} style={{ color: "#b91c1c" }} />;
+    default:          return <FileText size={12} style={{ color: "#94a3b8" }} />;
+  }
+}
+
+const AVATAR_COLORS = ["#005F6A", "#0284c7", "#7c3aed", "#dc2626", "#d97706", "#059669"];
+function avatarColor(name: string) { return AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length]; }
+function initials(name: string) { return name.split(" ").slice(0, 2).map(p => p[0] ?? "").join("").toUpperCase(); }
+
+export default function InvoicesPageClient({ invoices, clients, taxConfig }: InvoicesPageClientProps) {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -109,433 +104,292 @@ export default function InvoicesPageClient({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [sendingId, setSendingId] = useState<string | null>(null);
   const [markingPaidId, setMarkingPaidId] = useState<string | null>(null);
+  const [showFilters, setShowFilters] = useState(false);
 
-  const stats = useMemo(() => {
-    const totalInvoices = invoices.length;
-    const totalRevenue = invoices
-      .filter((i) => i.status === "PAID")
-      .reduce((sum, i) => sum + i.totalAmount, 0);
-    const pendingAmount = invoices
-      .filter((i) => i.status === "SENT" || i.status === "OVERDUE")
-      .reduce((sum, i) => sum + i.totalAmount, 0);
-    const overdueCount = invoices.filter((i) => i.status === "OVERDUE").length;
-    return { totalInvoices, totalRevenue, pendingAmount, overdueCount };
-  }, [invoices]);
+  const stats = useMemo(() => ({
+    total: invoices.length,
+    collected: invoices.filter(i => i.status === "PAID").reduce((s, i) => s + i.totalAmount, 0),
+    pending: invoices.filter(i => i.status === "SENT" || i.status === "OVERDUE").reduce((s, i) => s + i.totalAmount, 0),
+    overdue: invoices.filter(i => i.status === "OVERDUE").length,
+  }), [invoices]);
 
-  const filtered = useMemo(() => {
-    return invoices.filter((inv) => {
-      if (statusFilter && inv.status !== statusFilter) return false;
-      if (clientFilter && inv.clientId !== clientFilter) return false;
-      if (searchTerm) {
-        const q = searchTerm.toLowerCase();
-        return (
-          inv.invoiceNumber.toLowerCase().includes(q) ||
-          inv.clientName.toLowerCase().includes(q) ||
-          (inv.notes?.toLowerCase().includes(q) ?? false)
-        );
-      }
-      return true;
-    });
-  }, [invoices, searchTerm, statusFilter, clientFilter]);
+  const filtered = useMemo(() => invoices.filter(inv => {
+    if (statusFilter && inv.status !== statusFilter) return false;
+    if (clientFilter && inv.clientId !== clientFilter) return false;
+    if (searchTerm) {
+      const q = searchTerm.toLowerCase();
+      return inv.invoiceNumber.toLowerCase().includes(q) || inv.clientName.toLowerCase().includes(q);
+    }
+    return true;
+  }), [invoices, searchTerm, statusFilter, clientFilter]);
 
   const total = filtered.length;
   const totalPages = Math.max(1, Math.ceil(total / rowsPerPage));
   const startIdx = (page - 1) * rowsPerPage;
   const paginated = filtered.slice(startIdx, startIdx + rowsPerPage);
-
   const goToPage = (p: number) => setPage(Math.min(Math.max(1, p), totalPages));
 
-  const handleSend = async (invoiceId: string) => {
-    setSendingId(invoiceId);
-    const result = await sendInvoice(invoiceId);
+  const activeFilterCount = [statusFilter !== "", clientFilter !== ""].filter(Boolean).length;
+
+  const handleSend = async (id: string) => {
+    setSendingId(id);
+    const r = await sendInvoice(id);
     setSendingId(null);
-    if (!result.success) {
-      setErrorMsg(result.error || "Failed to send invoice");
-    } else {
-      router.refresh();
-    }
+    if (!r.success) setErrorMsg(r.error || "Failed to send"); else router.refresh();
   };
 
-  const handleMarkPaid = async (invoiceId: string) => {
-    setMarkingPaidId(invoiceId);
-    const result = await updateInvoice({ id: invoiceId, status: "PAID" });
+  const handleMarkPaid = async (id: string) => {
+    setMarkingPaidId(id);
+    const r = await updateInvoice({ id, status: "PAID" });
     setMarkingPaidId(null);
-    if (!result.success) {
-      setErrorMsg(result.error || "Failed to mark as paid");
-    } else {
-      router.refresh();
-    }
+    if (!r.success) setErrorMsg(r.error || "Failed to mark paid"); else router.refresh();
   };
-
-  const getStatusBadge = (status: string) => {
-    const config: Record<string, { variant: "default" | "warning" | "success" | "error" | "cleano" | "secondary"; label: string }> = {
-      DRAFT: { variant: "default", label: "Draft" },
-      SENT: { variant: "secondary", label: "Sent" },
-      PAID: { variant: "success", label: "Paid" },
-      OVERDUE: { variant: "warning", label: "Overdue" },
-      CANCELLED: { variant: "error", label: "Cancelled" },
-    };
-    const c = config[status] || { variant: "default" as const, label: status };
-    return <Badge variant={c.variant} size="sm">{c.label}</Badge>;
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "DRAFT": return <FileText className="w-3.5 h-3.5 text-gray-400" />;
-      case "SENT": return <Send className="w-3.5 h-3.5 text-blue-500" />;
-      case "PAID": return <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />;
-      case "OVERDUE": return <Clock className="w-3.5 h-3.5 text-yellow-500" />;
-      case "CANCELLED": return <XCircle className="w-3.5 h-3.5 text-red-500" />;
-      default: return <FileText className="w-3.5 h-3.5" />;
-    }
-  };
-
-  const MetricCard = ({
-    label,
-    value,
-    variant = "default",
-  }: {
-    label: string;
-    value: string;
-    variant?: "default" | "warning";
-  }) => (
-    <Card
-      variant={variant === "warning" ? "warning" : "cleano_light"}
-      className="p-6 h-[7rem]">
-      <div className="h-full flex flex-col justify-between">
-        <span className={`app-title-small ${variant === "warning" ? "text-yellow-700" : "!text-[#005F6A]/70"}`}>
-          {label}
-        </span>
-        <p className={`h2-title ${variant === "warning" ? "text-yellow-700" : "text-[#005F6A]"}`}>
-          {value}
-        </p>
-      </div>
-    </Card>
-  );
 
   return (
-    <div>
-      {/* Header */}
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-3xl !font-light tracking-tight text-[#005F6A]">
-            Invoices
+    <div className="admin-font stack-24">
+      <header className="row-between" style={{ alignItems: "flex-end", flexWrap: "wrap", gap: 16 }}>
+        <div className="stack-8">
+          <p className="eyebrow">Finance</p>
+          <h1 className="display">
+            Invoices{" "}
+            <span style={{ color: "var(--primary-40)", fontWeight: 300 }}>· {stats.total}</span>
           </h1>
-          <p className="text-sm text-[#005F6A]/70 !font-light mt-1">
-            Create, send, and track invoices for your clients
-          </p>
         </div>
-        <Button
-          variant="primary"
-          size="md"
-          border={false}
-          onClick={() => setIsModalOpen(true)}
-          className="rounded-2xl px-6 py-3">
-          <Plus className="w-4 h-4 mr-2" />
-          New Invoice
-        </Button>
+        <button type="button" className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
+          <Plus size={16} /> New Invoice
+        </button>
+      </header>
+
+      <div className="astat-grid">
+        <div className="astat">
+          <div className="astat-head"><span>Total invoices</span><span className="astat-icon"><FileText size={15} /></span></div>
+          <div className="astat-value">{stats.total}</div>
+        </div>
+        <div className="astat">
+          <div className="astat-head"><span>Collected</span><span className="astat-icon"><DollarSign size={15} /></span></div>
+          <div className="astat-value">${stats.collected.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
+          <div className="astat-delta">paid invoices</div>
+        </div>
+        <div className="astat">
+          <div className="astat-head"><span>Pending</span><span className="astat-icon"><Clock size={15} /></span></div>
+          <div className="astat-value">${stats.pending.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
+          <div className="astat-delta">sent / overdue</div>
+        </div>
+        <div className="astat" style={stats.overdue > 0 ? { borderLeft: "3px solid #d97706" } : {}}>
+          <div className="astat-head" style={stats.overdue > 0 ? { color: "#92400e" } : {}}>
+            <span>Overdue</span>
+            <span className="astat-icon" style={stats.overdue > 0 ? { background: "#fffbeb", color: "#d97706" } : {}}>
+              <AlertTriangle size={15} />
+            </span>
+          </div>
+          <div className="astat-value" style={stats.overdue > 0 ? { color: "#92400e" } : {}}>{stats.overdue}</div>
+          <div className="astat-delta">{stats.overdue > 0 ? "needs attention" : "all clear"}</div>
+        </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <MetricCard label="Total Invoices" value={String(stats.totalInvoices)} />
-        <MetricCard label="Collected" value={`$${stats.totalRevenue.toFixed(2)}`} />
-        <MetricCard label="Pending" value={`$${stats.pendingAmount.toFixed(2)}`} />
-        {stats.overdueCount > 0 ? (
-          <MetricCard label="Overdue" value={String(stats.overdueCount)} variant="warning" />
-        ) : (
-          <MetricCard label="Overdue" value="0" />
-        )}
-      </div>
-
-      {/* Error */}
       {errorMsg && (
-        <div className="mb-4 rounded-2xl bg-red-50 border border-red-200 p-3 flex items-start gap-3">
-          <AlertTriangle className="w-4 h-4 text-red-600 mt-0.5" />
-          <div className="flex-1 text-sm text-red-700">{errorMsg}</div>
-          <button className="text-xs text-red-600 underline" onClick={() => setErrorMsg(null)}>
-            dismiss
-          </button>
+        <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 12, padding: "12px 16px", fontSize: 13, color: "#b91c1c", display: "flex", gap: 10, alignItems: "center" }}>
+          <AlertTriangle size={14} />
+          <span style={{ flex: 1 }}>{errorMsg}</span>
+          <button type="button" onClick={() => setErrorMsg(null)} style={{ fontSize: 12, color: "#b91c1c", cursor: "pointer", textDecoration: "underline", background: "none", border: 0 }}>dismiss</button>
         </div>
       )}
 
-      {/* Search & Filters */}
-      <div className="flex flex-col lg:flex-row gap-2 mb-6">
-        <div className="flex-1 relative">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#005F6A]/60 z-10 w-4 h-4" />
-          <Input
-            placeholder="Search by invoice number, client name..."
+      <div className="atoolbar">
+        <div className="atoolbar-search">
+          <span className="atoolbar-search-icon"><Search size={14} /></span>
+          <input
+            className="input"
             value={searchTerm}
-            size="md"
-            onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
-            className="pl-10 h-[42px] py-3 placeholder:!text-[#005F6A]/40 placeholder:!font-[350]"
-            variant="form"
-            border={false}
+            onChange={e => { setSearchTerm(e.target.value); setPage(1); }}
+            placeholder="Search by invoice # or client…"
           />
         </div>
-        <CustomDropdown
-          trigger={
-            <Button variant="default" size="md" border={false} className="min-w-36 h-[42px] px-4 py-3 flex items-center justify-between w-fit">
-              <span className="text-sm font-[350]">
-                {STATUS_OPTIONS.find((s) => s.value === statusFilter)?.label || "All Statuses"}
-              </span>
-              <ChevronDown className="w-4 h-4 ml-2 flex-shrink-0" />
-            </Button>
-          }
-          options={STATUS_OPTIONS.map((s) => ({
-            label: s.label,
-            onClick: () => { setStatusFilter(s.value); setPage(1); },
-          }))}
-          maxHeight="12rem"
+        <button type="button" className={`afilter-toggle${showFilters ? " open" : ""}`} onClick={() => setShowFilters(v => !v)}>
+          <SlidersHorizontal size={14} />
+          Filters
+          {activeFilterCount > 0 && <span className="afilter-badge">{activeFilterCount}</span>}
+        </button>
+        <PremiumSelect
+          value={String(rowsPerPage)}
+          onChange={v => { setRowsPerPage(Number(v)); setPage(1); }}
+          options={[5, 10, 25, 50].map(n => ({ value: String(n), label: `${n} / page` }))}
+          size="sm"
+          style={{ width: 110 }}
         />
-        <CustomDropdown
-          trigger={
-            <Button variant="default" size="md" border={false} className="min-w-36 h-[42px] px-4 py-3 flex items-center justify-between w-fit">
-              <span className="text-sm font-[350] truncate max-w-[150px]">
-                {clientFilter ? clients.find((c) => c.id === clientFilter)?.name || "Client" : "All Clients"}
-              </span>
-              <ChevronDown className="w-4 h-4 ml-2 flex-shrink-0" />
-            </Button>
-          }
-          options={[
-            { label: "All Clients", onClick: () => { setClientFilter(""); setPage(1); } },
-            ...clients.map((c) => ({
-              label: c.name,
-              onClick: () => { setClientFilter(c.id); setPage(1); },
-            })),
-          ]}
-          maxHeight="16rem"
-        />
-        <CustomDropdown
-          trigger={
-            <Button variant="default" size="md" border={false} className="min-w-20 h-[42px] px-4 py-3 flex items-center justify-between w-fit">
-              <span className="text-sm font-[350]">{rowsPerPage} / page</span>
-              <ChevronDown className="w-4 h-4 ml-2 flex-shrink-0" />
-            </Button>
-          }
-          options={[5, 10, 25, 50].map((n) => ({
-            label: String(n),
-            onClick: () => { setRowsPerPage(n); setPage(1); },
-          }))}
-          maxHeight="12rem"
-        />
+        <span style={{ fontSize: 13, color: "var(--primary-60)" }}>{total} invoice{total !== 1 ? "s" : ""}</span>
       </div>
 
-      {/* Table */}
-      {total === 0 ? (
-        <div className="bg-white rounded-2xl">
-          <div className="text-center py-12">
-            <div className="w-16 h-16 bg-[#005F6A]/5 rounded-full flex items-center justify-center mx-auto mb-3">
-              <FileText className="w-8 h-8 text-[#005F6A]/40" />
-            </div>
-            <p className="text-sm font-[350] text-[#005F6A]/70">No invoices found</p>
-            <p className="text-xs font-[350] text-[#005F6A]/60 mt-1">
-              Create your first invoice to get started
-            </p>
+      {showFilters && (
+        <div className="afilter-panel">
+          <div className="field">
+            <label className="label">Status</label>
+            <PremiumSelect
+              value={statusFilter}
+              onChange={v => { setStatusFilter(v); setPage(1); }}
+              options={[
+                { value: "", label: "All statuses" },
+                { value: "DRAFT", label: "Draft" },
+                { value: "SENT", label: "Sent" },
+                { value: "PAID", label: "Paid" },
+                { value: "OVERDUE", label: "Overdue" },
+                { value: "CANCELLED", label: "Cancelled" },
+              ]}
+              size="sm"
+            />
+          </div>
+          <div className="field">
+            <label className="label">Client</label>
+            <PremiumSelect
+              value={clientFilter}
+              onChange={v => { setClientFilter(v); setPage(1); }}
+              options={[{ value: "", label: "All clients" }, ...clients.map(c => ({ value: c.id, label: c.name }))]}
+              size="sm"
+            />
+          </div>
+          <div className="afilter-panel-actions">
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setStatusFilter(""); setClientFilter(""); setPage(1); }}>Clear all</button>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShowFilters(false)}>Done</button>
           </div>
         </div>
+      )}
+
+      {total === 0 ? (
+        <div className="atable-wrap" style={{ padding: "80px 40px", textAlign: "center", color: "var(--primary-60)" }}>
+          No invoices match these filters.
+        </div>
       ) : (
-        <div className="bg-white rounded-2xl">
-          {/* Desktop Table */}
-          <div className="hidden lg:block overflow-x-auto rounded-t-2xl">
-            <div className="min-w-max">
-              <div className="flex bg-[#005F6A]/5 rounded-t-2xl">
-                {[
-                  { label: "Invoice #", className: "w-[160px] text-left" },
-                  { label: "Client", className: "w-[200px] text-left" },
-                  { label: "Date", className: "w-[120px] text-left" },
-                  { label: "Due Date", className: "w-[120px] text-left" },
-                  { label: "Amount", className: "w-[120px] text-right" },
-                  { label: "Status", className: "w-[110px] text-center" },
-                  { label: "Actions", className: "w-[220px] text-left" },
-                ].map((col) => (
-                  <div
-                    key={col.label}
-                    className={`p-4 text-xs font-[350] !text-[#005F6A]/40 uppercase !tracking-wider ${col.className}`}>
-                    {col.label}
-                  </div>
-                ))}
-              </div>
-
-              <div className="divide-y divide-[#005F6A]/4">
-                {paginated.map((inv) => (
-                  <div key={inv.id} className="flex items-center hover:bg-[#005F6A]/1 transition-colors">
-                    <div className="w-[160px] p-4">
-                      <Link
-                        href={`/invoices/${inv.id}`}
-                        className="app-title-small text-[#005F6A] hover:underline flex items-center gap-1.5">
-                        {getStatusIcon(inv.status)}
-                        {inv.invoiceNumber}
-                      </Link>
-                    </div>
-
-                    <div className="w-[200px] p-4">
-                      <p className="app-title-small text-[#005F6A] truncate">{inv.clientName}</p>
-                      {inv.jobId && (
-                        <p className="text-[10px] text-[#005F6A]/50 truncate">
-                          Job: {inv.jobType || "—"}{inv.jobDate ? ` · ${new Date(inv.jobDate).toLocaleDateString("en-US")}` : ""}
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="w-[120px] p-4">
-                      <span className="app-title-small !text-[#005F6A]/60 text-xs">
-                        {new Date(inv.createdAt).toLocaleDateString("en-US")}
-                      </span>
-                    </div>
-
-                    <div className="w-[120px] p-4">
-                      <span className="app-title-small !text-[#005F6A]/60 text-xs">
-                        {inv.dueDate ? new Date(inv.dueDate).toLocaleDateString("en-US") : "—"}
-                      </span>
-                    </div>
-
-                    <div className="w-[120px] p-4 text-right">
-                      <span className="app-title-small !text-[#005F6A]">
-                        ${inv.totalAmount.toFixed(2)}
-                      </span>
-                    </div>
-
-                    <div className="w-[110px] p-4 text-center">
-                      {getStatusBadge(inv.status)}
-                    </div>
-
-                    <div className="w-[220px] p-4 flex items-center gap-2">
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        border={false}
-                        href={`/invoices/${inv.id}`}
-                        className="rounded-2xl px-3 py-2">
-                        <Eye className="w-3 h-3 mr-1" />
-                        View
-                      </Button>
-                      {inv.status === "DRAFT" && (
-                        <Button
-                          variant="default"
-                          size="sm"
-                          border={false}
-                          disabled={sendingId === inv.id}
-                          onClick={() => handleSend(inv.id)}
-                          className="rounded-2xl px-3 py-2">
-                          {sendingId === inv.id ? (
-                            <Loader className="w-3 h-3 animate-spin mr-1" />
-                          ) : (
-                            <Send className="w-3 h-3 mr-1" />
+        <div className="atable-wrap">
+          <div id="inv-desktop">
+            <div className="atable-scroll">
+              <table className="atable">
+                <thead>
+                  <tr>
+                    <th>Invoice</th>
+                    <th>Client</th>
+                    <th>Date</th>
+                    <th>Due</th>
+                    <th className="num">Amount</th>
+                    <th>Status</th>
+                    <th className="col-actions" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginated.map(inv => (
+                    <tr key={inv.id} onClick={() => { window.location.href = `/invoices/${inv.id}`; }}>
+                      <td style={{ minWidth: 140 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <StatusIcon status={inv.status} />
+                          <span className="col-client">{inv.invoiceNumber}</span>
+                        </div>
+                        {inv.jobType && <div className="col-client-sub">{inv.jobType}</div>}
+                      </td>
+                      <td style={{ minWidth: 180 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <span className="avatar" style={{ background: avatarColor(inv.clientName), fontSize: 11, width: 28, height: 28, flexShrink: 0 }}>
+                            {initials(inv.clientName)}
+                          </span>
+                          <div className="col-client">{inv.clientName}</div>
+                        </div>
+                      </td>
+                      <td><span style={{ fontSize: 12, color: "var(--primary-70)" }}>{new Date(inv.createdAt).toLocaleDateString("en-US")}</span></td>
+                      <td>
+                        <span style={{ fontSize: 12, color: inv.status === "OVERDUE" ? "#d97706" : "var(--primary-70)" }}>
+                          {inv.dueDate ? new Date(inv.dueDate).toLocaleDateString("en-US") : "—"}
+                        </span>
+                      </td>
+                      <td className="num" style={{ fontWeight: 600, color: "var(--ink)" }}>${inv.totalAmount.toFixed(2)}</td>
+                      <td><StatusPill status={inv.status} /></td>
+                      <td className="col-actions" onClick={e => e.stopPropagation()}>
+                        <div className="row" style={{ gap: 6 }}>
+                          <a href={`/invoices/${inv.id}`} className="btn btn-secondary btn-sm" style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                            <Eye size={12} /> View
+                          </a>
+                          {inv.status === "DRAFT" && (
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-sm"
+                              disabled={sendingId === inv.id}
+                              onClick={() => handleSend(inv.id)}
+                              style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                              {sendingId === inv.id ? <Loader size={12} className="animate-spin" /> : <Send size={12} />}
+                              Send
+                            </button>
                           )}
-                          Send
-                        </Button>
-                      )}
-                      {(inv.status === "SENT" || inv.status === "OVERDUE") && (
-                        <Button
-                          variant="default"
-                          size="sm"
-                          border={false}
-                          disabled={markingPaidId === inv.id}
-                          onClick={() => handleMarkPaid(inv.id)}
-                          className="rounded-2xl px-3 py-2">
-                          {markingPaidId === inv.id ? (
-                            <Loader className="w-3 h-3 animate-spin mr-1" />
-                          ) : (
-                            <DollarSign className="w-3 h-3 mr-1" />
+                          {(inv.status === "SENT" || inv.status === "OVERDUE") && (
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-sm"
+                              disabled={markingPaidId === inv.id}
+                              onClick={() => handleMarkPaid(inv.id)}
+                              style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                              {markingPaidId === inv.id ? <Loader size={12} className="animate-spin" /> : <DollarSign size={12} />}
+                              Paid
+                            </button>
                           )}
-                          Mark Paid
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
 
-          {/* Mobile Cards */}
-          <div className="lg:hidden space-y-3 p-4">
-            {paginated.map((inv) => (
-              <Card key={inv.id} variant="cleano_light" className="p-4">
-                <div className="space-y-3">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <Link
-                        href={`/invoices/${inv.id}`}
-                        className="text-sm font-[400] text-[#005F6A] hover:underline">
-                        {inv.invoiceNumber}
-                      </Link>
-                      <p className="text-xs text-[#005F6A]/60 mt-0.5">{inv.clientName}</p>
+          <div id="inv-mobile" style={{ display: "none", flexDirection: "column", gap: 10, padding: 16 }}>
+            {paginated.map(inv => (
+              <article key={inv.id} className="jcard" style={{ cursor: "pointer" }} onClick={() => { window.location.href = `/invoices/${inv.id}`; }}>
+                <div className="jcard-top">
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                      <StatusIcon status={inv.status} />
+                      <div className="jcard-client">{inv.invoiceNumber}</div>
                     </div>
-                    <div className="text-right">
-                      <span className="text-sm font-[400] text-[#005F6A]">
-                        ${inv.totalAmount.toFixed(2)}
-                      </span>
-                      <div className="mt-1">{getStatusBadge(inv.status)}</div>
-                    </div>
+                    <div className="jcard-meta">{inv.clientName}</div>
+                    {inv.dueDate && <div className="jcard-meta">Due {new Date(inv.dueDate).toLocaleDateString("en-US")}</div>}
                   </div>
-                  <div className="flex items-center justify-between text-xs text-[#005F6A]/60">
-                    <span>{new Date(inv.createdAt).toLocaleDateString("en-US")}</span>
-                    {inv.dueDate && <span>Due: {new Date(inv.dueDate).toLocaleDateString("en-US")}</span>}
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      border={false}
-                      href={`/invoices/${inv.id}`}
-                      className="rounded-2xl px-4 py-2 flex-1">
-                      View
-                    </Button>
-                    {inv.status === "DRAFT" && (
-                      <Button
-                        variant="default"
-                        size="sm"
-                        border={false}
-                        disabled={sendingId === inv.id}
-                        onClick={() => handleSend(inv.id)}
-                        className="rounded-2xl px-4 py-2 flex-1">
-                        {sendingId === inv.id ? "Sending..." : "Send"}
-                      </Button>
-                    )}
-                    {(inv.status === "SENT" || inv.status === "OVERDUE") && (
-                      <Button
-                        variant="default"
-                        size="sm"
-                        border={false}
-                        disabled={markingPaidId === inv.id}
-                        onClick={() => handleMarkPaid(inv.id)}
-                        className="rounded-2xl px-4 py-2 flex-1">
-                        {markingPaidId === inv.id ? "Processing..." : "Mark Paid"}
-                      </Button>
-                    )}
+                  <div style={{ textAlign: "right" }}>
+                    <div className="jcard-price">${inv.totalAmount.toFixed(2)}</div>
+                    <div style={{ marginTop: 4 }}><StatusPill status={inv.status} /></div>
                   </div>
                 </div>
-              </Card>
+                <div className="jcard-row" style={{ paddingTop: 10, borderTop: "1px solid var(--primary-10)", marginTop: 10, gap: 8 }} onClick={e => e.stopPropagation()}>
+                  <a href={`/invoices/${inv.id}`} className="btn btn-secondary btn-sm" style={{ flex: 1, justifyContent: "center" }}>View</a>
+                  {inv.status === "DRAFT" && (
+                    <button type="button" className="btn btn-ghost btn-sm" disabled={sendingId === inv.id} onClick={() => handleSend(inv.id)} style={{ flex: 1 }}>
+                      {sendingId === inv.id ? "Sending…" : "Send"}
+                    </button>
+                  )}
+                  {(inv.status === "SENT" || inv.status === "OVERDUE") && (
+                    <button type="button" className="btn btn-ghost btn-sm" disabled={markingPaidId === inv.id} onClick={() => handleMarkPaid(inv.id)} style={{ flex: 1 }}>
+                      {markingPaidId === inv.id ? "Processing…" : "Mark Paid"}
+                    </button>
+                  )}
+                </div>
+              </article>
             ))}
           </div>
 
-          {/* Pagination */}
-          <div className="flex items-center justify-between p-2 px-3 bg-[#005F6A]/4 rounded-b-2xl">
-            <div className="text-xs text-[#005F6A]/70 font-[350]">
-              Showing {startIdx + 1} to {Math.min(startIdx + rowsPerPage, total)} of {total} invoices
-            </div>
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" size="sm" onClick={() => goToPage(1)} disabled={page === 1} className="px-2">
-                <ChevronsLeft className="w-4 h-4" />
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => goToPage(page - 1)} disabled={page === 1} className="px-2">
-                <ChevronLeft className="w-4 h-4" />
-              </Button>
-              <span className="text-xs text-[#005F6A]/70 px-2">
-                Page {page} / {totalPages}
-              </span>
-              <Button variant="ghost" size="sm" onClick={() => goToPage(page + 1)} disabled={page >= totalPages} className="px-2">
-                <ChevronRight className="w-4 h-4" />
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => goToPage(totalPages)} disabled={page >= totalPages} className="px-2">
-                <ChevronsRight className="w-4 h-4" />
-              </Button>
+          <div className="apager">
+            <span>Showing {startIdx + 1}–{Math.min(startIdx + rowsPerPage, total)} of {total}</span>
+            <div className="apager-controls">
+              <button type="button" className="apager-btn" disabled={page === 1} onClick={() => goToPage(1)}>«</button>
+              <button type="button" className="apager-btn" disabled={page === 1} onClick={() => goToPage(page - 1)}><ChevronLeft size={14} /></button>
+              <span className="apager-btn active">{page}</span>
+              <span style={{ fontSize: 12, color: "var(--primary-50)", alignSelf: "center" }}>/ {totalPages}</span>
+              <button type="button" className="apager-btn" disabled={page >= totalPages} onClick={() => goToPage(page + 1)}><ChevronRight size={14} /></button>
+              <button type="button" className="apager-btn" disabled={page >= totalPages} onClick={() => goToPage(totalPages)}>»</button>
             </div>
           </div>
         </div>
       )}
+
+      <style>{`
+        @media (max-width: 900px) {
+          #inv-desktop { display: none !important; }
+          #inv-mobile  { display: flex !important; }
+        }
+      `}</style>
 
       <CreateInvoiceModal
         isOpen={isModalOpen}

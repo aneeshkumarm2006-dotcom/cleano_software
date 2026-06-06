@@ -104,6 +104,7 @@ export default async function JobsPage({
       clientName: job.clientName,
       clientId: job.clientId,
       location: job.location,
+      aptNumber: job.aptNumber,
       description: job.description,
       jobType: job.jobType,
       jobDate: job.jobDate?.toISOString() || null,

@@ -1,11 +1,7 @@
 "use client";
 
 import React from "react";
-import { useRouter } from "next/navigation";
-import Card from "@/components/ui/Card";
-import Badge from "@/components/ui/Badge";
-import Button from "@/components/ui/Button";
-import { Users, Droplets } from "lucide-react";
+import { Droplets, Users, ChevronRight } from "lucide-react";
 
 interface EmployeeRagWashData {
   id: string;
@@ -18,186 +14,136 @@ interface EmployeeRagWashData {
   lastWashRagCount: number;
 }
 
-interface RagWashClientProps {
-  employees: EmployeeRagWashData[];
-}
+const AVATAR_COLORS = ["#005F6A", "#0284c7", "#7c3aed", "#dc2626", "#d97706", "#059669", "#0891b2", "#be185d"];
+function avatarColor(name: string) { return AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length]; }
+function initials(name: string) { return name.split(" ").slice(0, 2).map(p => p[0] ?? "").join("").toUpperCase(); }
 
-export default function RagWashClient({ employees }: RagWashClientProps) {
-  const router = useRouter();
-
-  const employeesWithWashes = employees.filter((e) => e.totalWashes > 0);
-  const employeesWithoutWashes = employees.filter((e) => e.totalWashes === 0);
+export default function RagWashClient({ employees }: { employees: EmployeeRagWashData[] }) {
+  const totalWashes = employees.reduce((s, e) => s + e.totalWashes, 0);
+  const totalRags = employees.reduce((s, e) => s + e.totalRags, 0);
+  const activeWashers = employees.filter(e => e.totalWashes > 0).length;
 
   return (
-    <div className="max-w-[80rem] mx-auto space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl !font-light tracking-tight text-[#005F6A]">
-            Rag Wash Tracking
-          </h1>
-          <p className="text-sm text-[#005F6A]/70 !font-light mt-1">
-            Track and manage rag washing for all cleaners
-          </p>
+    <div className="admin-font stack-24">
+      <header className="stack-8">
+        <p className="eyebrow">Inventory & Supplies</p>
+        <h1 className="display">Rag Wash</h1>
+      </header>
+
+      <div className="astat-grid">
+        <div className="astat">
+          <div className="astat-head"><span>Total washes</span><span className="astat-icon"><Droplets size={15} /></span></div>
+          <div className="astat-value">{totalWashes}</div>
+          <div className="astat-delta">all time</div>
         </div>
-        <Badge variant="cleano" size="sm">
-          {employees.length} cleaners
-        </Badge>
+        <div className="astat">
+          <div className="astat-head"><span>Total rags washed</span><span className="astat-icon"><Droplets size={15} /></span></div>
+          <div className="astat-value">{totalRags}</div>
+        </div>
+        <div className="astat">
+          <div className="astat-head"><span>Active washers</span><span className="astat-icon"><Users size={15} /></span></div>
+          <div className="astat-value">{activeWashers}</div>
+          <div className="astat-delta">of {employees.length} cleaners</div>
+        </div>
       </div>
 
-      {/* Summary Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card variant="cleano_light" className="p-6 h-[7rem]">
-          <div className="h-full flex flex-col justify-between">
-            <span className="app-title-small !text-[#005F6A]/70">
-              Total Washes
-            </span>
-            <p className="h2-title text-[#005F6A]">
-              {employees.reduce((sum, e) => sum + e.totalWashes, 0)}
-            </p>
-          </div>
-        </Card>
-        <Card variant="cleano_light" className="p-6 h-[7rem]">
-          <div className="h-full flex flex-col justify-between">
-            <span className="app-title-small !text-[#005F6A]/70">
-              Total Rags Washed
-            </span>
-            <p className="h2-title text-[#005F6A]">
-              {employees.reduce((sum, e) => sum + e.totalRags, 0)}
-            </p>
-          </div>
-        </Card>
-        <Card variant="cleano_light" className="p-6 h-[7rem]">
-          <div className="h-full flex flex-col justify-between">
-            <span className="app-title-small !text-[#005F6A]/70">
-              Active Washers
-            </span>
-            <p className="h2-title text-[#005F6A]">
-              {employeesWithWashes.length}
-            </p>
-          </div>
-        </Card>
-      </div>
-
-      {/* Employee List */}
-      <div className="space-y-4">
-        <h2 className="text-lg font-[350] tracking-tight text-[#005F6A]">
-          Cleaners
-        </h2>
-
-        {/* Desktop Table */}
-        <div className="hidden md:block bg-white rounded-2xl overflow-hidden">
-          <div className="overflow-x-auto">
-            <div className="min-w-max">
-              <div className="flex bg-[#005F6A]/5 rounded-t-2xl">
-                {[
-                  { label: "Employee", className: "w-[250px]" },
-                  { label: "Total Washes", className: "w-[150px]" },
-                  { label: "Total Rags", className: "w-[150px]" },
-                  { label: "Last Wash", className: "w-[200px]" },
-                  { label: "Actions", className: "w-[150px]" },
-                ].map((col) => (
-                  <div
-                    key={col.label}
-                    className={`${col.className} p-4 text-left text-xs font-[350] !text-[#005F6A]/40 uppercase tracking-wide`}>
-                    {col.label}
-                  </div>
-                ))}
-              </div>
-              <div className="divide-y divide-[#005F6A]/4">
-                {employees.map((emp) => (
-                  <div
-                    key={emp.id}
-                    className="flex items-center hover:bg-[#005F6A]/1 transition-colors cursor-pointer"
-                    onClick={() =>
-                      router.push(`/inventory/rag-wash/${emp.id}`)
-                    }>
-                    <div className="w-[250px] p-4">
-                      <p className="text-sm font-[350] text-[#005F6A]">
-                        {emp.name}
-                      </p>
-                      <p className="text-xs text-[#005F6A]/50 mt-0.5">
-                        {emp.email}
-                      </p>
-                    </div>
-                    <div className="w-[150px] p-4">
-                      <span className="text-sm font-[350] text-[#005F6A]">
-                        {emp.totalWashes}
-                      </span>
-                    </div>
-                    <div className="w-[150px] p-4">
-                      <span className="text-sm font-[350] text-[#005F6A]">
-                        {emp.totalRags}
-                      </span>
-                    </div>
-                    <div className="w-[200px] p-4">
-                      {emp.lastWashDate ? (
-                        <div>
-                          <p className="text-sm font-[350] text-[#005F6A]">
-                            {new Date(emp.lastWashDate).toLocaleDateString("en-US")}
-                          </p>
-                          <p className="text-xs text-[#005F6A]/50">
-                            {emp.lastWashRagCount} rags
-                          </p>
+      {employees.length === 0 ? (
+        <div className="atable-wrap" style={{ padding: "80px 40px", textAlign: "center", color: "var(--primary-60)" }}>
+          No cleaner data yet.
+        </div>
+      ) : (
+        <div className="atable-wrap">
+          <div id="rw-desktop">
+            <div className="atable-scroll">
+              <table className="atable">
+                <thead>
+                  <tr>
+                    <th>Cleaner</th>
+                    <th className="num">Washes</th>
+                    <th className="num">Rags</th>
+                    <th>Last wash</th>
+                    <th className="col-actions" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {employees.map(e => (
+                    <tr key={e.id} onClick={() => { window.location.href = `/inventory/rag-wash/${e.id}`; }}>
+                      <td style={{ minWidth: 200 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <span className="avatar" style={{ background: avatarColor(e.name), fontSize: 12, width: 36, height: 36 }}>
+                            {initials(e.name)}
+                          </span>
+                          <div>
+                            <div className="col-client">{e.name}</div>
+                            <div className="col-client-sub">{e.email}</div>
+                          </div>
                         </div>
-                      ) : (
-                        <span className="text-sm text-[#005F6A]/30">
-                          No washes
-                        </span>
-                      )}
-                    </div>
-                    <div className="w-[150px] p-4">
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        border={false}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          router.push(`/inventory/rag-wash/${emp.id}`);
-                        }}
-                        className="rounded-2xl px-4 py-2.5">
-                        View
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                      </td>
+                      <td className="num">
+                        <span style={{ fontWeight: 600, color: "var(--ink)" }}>{e.totalWashes}</span>
+                      </td>
+                      <td className="num">
+                        <span style={{ fontWeight: 600, color: "var(--ink)" }}>{e.totalRags}</span>
+                      </td>
+                      <td>
+                        {e.lastWashDate ? (
+                          <div>
+                            <span style={{ fontSize: 12, color: "var(--primary-70)" }}>
+                              {new Date(e.lastWashDate).toLocaleDateString("en-US")}
+                            </span>
+                            <div className="col-client-sub">{e.lastWashRagCount} rags</div>
+                          </div>
+                        ) : (
+                          <span style={{ color: "var(--primary-40)", fontSize: 12 }}>No washes</span>
+                        )}
+                      </td>
+                      <td className="col-actions" onClick={ev => ev.stopPropagation()}>
+                        <a href={`/inventory/rag-wash/${e.id}`} className="btn btn-secondary btn-sm" style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                          View <ChevronRight size={12} />
+                        </a>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
-        </div>
 
-        {/* Mobile Card View */}
-        <div className="md:hidden space-y-3">
-          {employees.map((emp) => (
-            <Card
-              key={emp.id}
-              variant="cleano_light"
-              className="p-4 cursor-pointer"
-              onClick={() => router.push(`/inventory/rag-wash/${emp.id}`)}>
-              <div className="space-y-2">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-sm font-[400] text-[#005F6A]">
-                      {emp.name}
-                    </p>
-                    <p className="text-xs text-[#005F6A]/60">{emp.email}</p>
-                  </div>
-                  <Badge variant="cleano" size="sm">
-                    {emp.totalWashes} washes
-                  </Badge>
-                </div>
-                <div className="flex items-center justify-between text-xs text-[#005F6A]/60">
-                  <span>{emp.totalRags} rags total</span>
-                  {emp.lastWashDate && (
-                    <span>
-                      Last: {new Date(emp.lastWashDate).toLocaleDateString("en-US")}
+          <div id="rw-mobile" style={{ display: "none", flexDirection: "column", gap: 10, padding: 16 }}>
+            {employees.map(e => (
+              <article key={e.id} className="jcard" style={{ cursor: "pointer" }} onClick={() => { window.location.href = `/inventory/rag-wash/${e.id}`; }}>
+                <div className="jcard-top">
+                  <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                    <span className="avatar" style={{ background: avatarColor(e.name), fontSize: 12, width: 36, height: 36 }}>
+                      {initials(e.name)}
                     </span>
-                  )}
+                    <div>
+                      <div className="jcard-client">{e.name}</div>
+                      <div className="jcard-meta">{e.email}</div>
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div className="jcard-price">{e.totalWashes} washes</div>
+                    <div className="jcard-meta">{e.totalRags} rags</div>
+                  </div>
                 </div>
-              </div>
-            </Card>
-          ))}
+                {e.lastWashDate && (
+                  <div className="jcard-meta" style={{ marginTop: 8 }}>
+                    Last wash: {new Date(e.lastWashDate).toLocaleDateString("en-US")} · {e.lastWashRagCount} rags
+                  </div>
+                )}
+              </article>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
+
+      <style>{`
+        @media (max-width: 768px) {
+          #rw-desktop { display: none !important; }
+          #rw-mobile  { display: flex !important; }
+        }
+      `}</style>
     </div>
   );
 }

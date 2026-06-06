@@ -3,23 +3,17 @@
 import React from "react";
 import {
   Search,
-  ChevronDown,
-  Users,
-  Loader,
   Plus,
-  ChevronsLeft,
+  Users,
+  DollarSign,
+  Briefcase,
+  AlertTriangle,
   ChevronLeft,
   ChevronRight,
-  ChevronsRight,
-  Briefcase,
-  DollarSign,
-  AlertTriangle,
+  Pencil,
+  SlidersHorizontal,
 } from "lucide-react";
-import Button from "@/components/ui/Button";
-import Card from "@/components/ui/Card";
-import Input from "@/components/ui/Input";
-import Badge from "@/components/ui/Badge";
-import CustomDropdown from "@/components/ui/custom-dropdown";
+import PremiumSelect from "@/components/ui/PremiumSelect";
 
 interface Employee {
   id: string;
@@ -44,23 +38,69 @@ interface EmployeesViewProps {
   employees: Employee[];
   stats: EmployeeStats;
   isLoading: boolean;
-  // Search and filters
   searchTerm: string;
   roleFilter: string;
   jobStatusFilter: string;
   rowsPerPage: number;
   page: number;
-  // Handlers
   onSearchTermChange: (term: string) => void;
   onRoleFilterChange: (filter: string) => void;
   onJobStatusFilterChange: (filter: string) => void;
   onRowsPerPageChange: (rowsPerPage: number) => void;
   onPageChange: (page: number) => void;
-  // URL update function
   updateURLParams: (updates: Record<string, string | number>) => void;
-  // Modal handlers
   onCreateEmployee: () => void;
   onEditEmployee: (employee: Employee) => void;
+}
+
+const AVATAR_COLORS = ["#005F6A", "#0284c7", "#7c3aed", "#dc2626", "#d97706", "#059669", "#0891b2", "#be185d"];
+
+function avatarColor(name: string) {
+  return AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length];
+}
+
+function initials(name: string) {
+  return name.split(" ").slice(0, 2).map(p => p[0] ?? "").join("").toUpperCase();
+}
+
+function RolePill({ role }: { role: string }) {
+  const cfg: Record<string, { bg: string; color: string; label: string }> = {
+    OWNER:    { bg: "#e0f2f1", color: "#005F6A", label: "Owner" },
+    ADMIN:    { bg: "#e0e7ff", color: "#4338ca", label: "Admin" },
+    EMPLOYEE: { bg: "#f1f5f9", color: "#475569", label: "Employee" },
+  };
+  const c = cfg[role] ?? cfg.EMPLOYEE;
+  return (
+    <span style={{
+      display: "inline-block",
+      background: c.bg,
+      color: c.color,
+      fontSize: 11,
+      fontWeight: 600,
+      borderRadius: 20,
+      padding: "2px 10px",
+      letterSpacing: "0.02em",
+    }}>
+      {c.label}
+    </span>
+  );
+}
+
+function AStatCard({ icon: Icon, label, value, hint, warn }: {
+  icon: React.ElementType; label: string; value: string; hint?: string; warn?: boolean;
+}) {
+  return (
+    <div className="astat" style={warn ? { borderLeft: "3px solid #d97706" } : {}}>
+      <div className="astat-head" style={warn ? { color: "#92400e" } : {}}>
+        <span>{label}</span>
+        <span className="astat-icon" style={warn ? { background: "#fffbeb", color: "#d97706" } : {}}>
+          <Icon size={15} />
+        </span>
+      </div>
+      <div className="astat-value" style={warn ? { color: "#92400e" } : {}}>{value}</div>
+      {hint && <div className="astat-delta">{hint}</div>}
+    </div>
+  );
 }
 
 export default function EmployeesView({
@@ -81,597 +121,256 @@ export default function EmployeesView({
   onCreateEmployee,
   onEditEmployee,
 }: EmployeesViewProps) {
-  const getRoleBadge = (role: string) => {
-    const roleConfig: Record<string, { variant: any; label: string }> = {
-      OWNER: { variant: "cleano", label: "Owner" },
-      ADMIN: { variant: "secondary", label: "Admin" },
-      EMPLOYEE: { variant: "default", label: "Employee" },
-    };
-    const config = roleConfig[role] || { variant: "default", label: role };
-    return (
-      <Badge variant={config.variant} className="px-2 py-1" size="sm">
-        {config.label}
-      </Badge>
-    );
-  };
+  const [showFilters, setShowFilters] = React.useState(false);
 
-  // Enhanced filtering logic
-  const filteredEmployees = employees.filter((employee) => {
-    // Search filter
-    const searchLower = searchTerm.toLowerCase();
-    const matchesSearch =
-      !searchTerm ||
-      employee.name.toLowerCase().includes(searchLower) ||
-      employee.email.toLowerCase().includes(searchLower) ||
-      (employee.phone && employee.phone.includes(searchTerm));
-
-    // Role filter
-    const matchesRole = roleFilter === "all" || employee.role === roleFilter;
-
-    // Job status filter
-    const matchesJobStatus = (() => {
-      if (jobStatusFilter === "all") return true;
-      if (jobStatusFilter === "active") return employee.activeJobsCount > 0;
-      if (jobStatusFilter === "completed")
-        return employee.completedJobsCount > 0;
-      if (jobStatusFilter === "unpaid") return employee.unpaidJobs > 0;
-      return true;
-    })();
-
-    return matchesSearch && matchesRole && matchesJobStatus;
+  const filteredEmployees = employees.filter((e) => {
+    const q = searchTerm.toLowerCase();
+    if (searchTerm && !e.name.toLowerCase().includes(q) && !e.email.toLowerCase().includes(q) && !(e.phone?.includes(searchTerm))) return false;
+    if (roleFilter !== "all" && e.role !== roleFilter) return false;
+    if (jobStatusFilter === "active" && e.activeJobsCount === 0) return false;
+    if (jobStatusFilter === "completed" && e.completedJobsCount === 0) return false;
+    if (jobStatusFilter === "unpaid" && e.unpaidJobs === 0) return false;
+    return true;
   });
 
-  // Pagination logic
-  const totalEmployees = filteredEmployees.length;
-  const totalPages = Math.ceil(totalEmployees / rowsPerPage);
-  const startIndex = (page - 1) * rowsPerPage;
-  const endIndex = startIndex + rowsPerPage;
-  const paginatedEmployees = filteredEmployees.slice(startIndex, endIndex);
+  const total = filteredEmployees.length;
+  const totalPages = Math.max(1, Math.ceil(total / rowsPerPage));
+  const startIdx = (page - 1) * rowsPerPage;
+  const paginated = filteredEmployees.slice(startIdx, startIdx + rowsPerPage);
 
-  // Helper functions for pagination
-  const goToPage = (newPage: number) => {
-    onPageChange(newPage);
-    updateURLParams({ page: newPage });
+  const goToPage = (p: number) => {
+    const np = Math.min(Math.max(1, p), totalPages);
+    onPageChange(np);
+    updateURLParams({ page: np });
   };
 
-  const changeRowsPerPage = (newRowsPerPage: number) => {
-    onRowsPerPageChange(newRowsPerPage);
+  const activeFilterCount = [roleFilter !== "all", jobStatusFilter !== "all"].filter(Boolean).length;
+
+  const clearFilters = () => {
+    onRoleFilterChange("all");
+    onJobStatusFilterChange("all");
     onPageChange(1);
-    updateURLParams({ rowsPerPage: newRowsPerPage, page: 1 });
+    updateURLParams({ role: "all", jobStatus: "all", page: 1 });
   };
-
-  // Metric Card Component
-  const MetricCard = ({
-    label,
-    value,
-    variant = "default",
-  }: {
-    label: string;
-    value: string;
-    variant?: "default" | "warning";
-  }) => (
-    <Card
-      variant={variant === "warning" ? "warning" : "cleano_light"}
-      className="p-6 h-[7rem]">
-      <div className="h-full flex flex-col justify-between">
-        <span
-          className={`app-title-small ${
-            variant === "warning" ? "text-yellow-700" : "!text-[#005F6A]/70"
-          }`}>
-          {label}
-        </span>
-        <p
-          className={`h2-title ${
-            variant === "warning" ? "text-yellow-700" : "text-[#005F6A]"
-          }`}>
-          {value}
-        </p>
-      </div>
-    </Card>
-  );
 
   return (
-    <div className="max-w-[80rem] mx-auto w-full">
-      {/* Header */}
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-3xl !font-light tracking-tight text-[#005F6A]">
-            Employees
+    <div className="admin-font stack-24">
+      <header className="row-between" style={{ alignItems: "flex-end", flexWrap: "wrap", gap: 16 }}>
+        <div className="stack-8">
+          <p className="eyebrow">Staff</p>
+          <h1 className="display">
+            Employees{" "}
+            <span style={{ color: "var(--primary-40)", fontWeight: 300 }}>· {stats.totalEmployees}</span>
           </h1>
-          <p className="text-sm text-[#005F6A]/70 !font-light mt-1">
-            Manage your team members and their assignments
-          </p>
         </div>
-        <Button
-          variant="primary"
-          size="md"
-          border={false}
-          onClick={onCreateEmployee}
-          className="rounded-2xl px-6 py-3">
-          <Plus className="w-4 h-4 mr-2" />
-          Add Employee
-        </Button>
+        <button type="button" className="btn btn-primary" onClick={onCreateEmployee}>
+          <Plus size={16} /> Add Employee
+        </button>
+      </header>
+
+      <div className="astat-grid">
+        <AStatCard icon={Users}      label="Total employees"  value={String(stats.totalEmployees)} hint="all time" />
+        <AStatCard icon={Users}      label="Admins"           value={String(stats.admins)} hint="admin or owner" />
+        <AStatCard icon={Briefcase}  label="Active now"       value={String(stats.activeEmployees)} hint="with active jobs" />
+        <AStatCard icon={DollarSign} label="Total revenue"    value={`$${stats.totalRevenue.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`} />
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <MetricCard
-          label="Total Employees"
-          value={String(stats.totalEmployees)}
+      <div className="atoolbar">
+        <div className="atoolbar-search">
+          <span className="atoolbar-search-icon"><Search size={14} /></span>
+          <input
+            className="input"
+            value={searchTerm}
+            onChange={e => { onSearchTermChange(e.target.value); onPageChange(1); updateURLParams({ search: e.target.value, page: 1 }); }}
+            placeholder="Search by name, email, or phone…"
+          />
+        </div>
+        <button
+          type="button"
+          className={`afilter-toggle${showFilters ? " open" : ""}`}
+          onClick={() => setShowFilters(v => !v)}>
+          <SlidersHorizontal size={14} />
+          Filters
+          {activeFilterCount > 0 && <span className="afilter-badge">{activeFilterCount}</span>}
+        </button>
+        <PremiumSelect
+          value={String(rowsPerPage)}
+          onChange={v => { onRowsPerPageChange(Number(v)); onPageChange(1); updateURLParams({ rowsPerPage: Number(v), page: 1 }); }}
+          options={[5, 10, 25, 50].map(n => ({ value: String(n), label: `${n} / page` }))}
+          size="sm"
+          style={{ width: 110 }}
         />
-        <MetricCard label="Admins" value={String(stats.admins)} />
-        <MetricCard label="Active Now" value={String(stats.activeEmployees)} />
-        <MetricCard
-          label="Total Revenue"
-          value={`$${stats.totalRevenue.toFixed(2)}`}
-        />
+        <span style={{ fontSize: 13, color: "var(--primary-60)" }}>
+          {total} employee{total !== 1 ? "s" : ""}
+        </span>
       </div>
 
-      {/* Search and Filters */}
-      <div className="flex flex-col lg:flex-row gap-2 mb-6">
-        {/* Search */}
-        <div className="flex-1">
-          <div className="relative">
-            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-[#005F6A]/60 z-[10] w-4 h-4" />
-            <Input
-              placeholder="Search by name, email, or phone..."
-              value={searchTerm}
-              size="md"
-              onChange={(e) => {
-                onSearchTermChange(e.target.value);
-                onPageChange(1);
-                updateURLParams({ search: e.target.value, page: 1 });
-              }}
-              className="pl-10 h-[42px] py-3 placeholder:!text-[#005F6A]/40 placeholder:!font-[350]"
-              variant="form"
-              border={false}
+      {showFilters && (
+        <div className="afilter-panel">
+          <div className="field">
+            <label className="label">Role</label>
+            <PremiumSelect
+              value={roleFilter}
+              onChange={v => { onRoleFilterChange(v); onPageChange(1); updateURLParams({ role: v, page: 1 }); }}
+              options={[
+                { value: "all", label: "All roles" },
+                { value: "OWNER", label: "Owner" },
+                { value: "ADMIN", label: "Admin" },
+                { value: "EMPLOYEE", label: "Employee" },
+              ]}
+              size="sm"
             />
           </div>
-        </div>
-
-        {/* Filters Row */}
-        <div className="flex items-center gap-2">
-          {/* Role Filter */}
-          <CustomDropdown
-            trigger={
-              <Button
-                variant="default"
-                size="md"
-                border={false}
-                type="button"
-                className="min-w-32 h-[42px] px-4 py-3 flex items-center justify-between w-fit">
-                <span className="text-left w-full text-sm font-[350]">
-                  {[
-                    { value: "all", label: "All Roles" },
-                    { value: "OWNER", label: "Owner" },
-                    { value: "ADMIN", label: "Admin" },
-                    { value: "EMPLOYEE", label: "Employee" },
-                  ].find((opt) => opt.value === roleFilter)?.label ||
-                    "All Roles"}
-                </span>
-                <ChevronDown className="w-4 h-4 ml-2 flex-shrink-0" />
-              </Button>
-            }
-            options={[
-              {
-                label: "All Roles",
-                onClick: () => {
-                  onRoleFilterChange("all");
-                  onPageChange(1);
-                  updateURLParams({ role: "all", page: 1 });
-                },
-              },
-              {
-                label: "Owner",
-                onClick: () => {
-                  onRoleFilterChange("OWNER");
-                  onPageChange(1);
-                  updateURLParams({ role: "OWNER", page: 1 });
-                },
-              },
-              {
-                label: "Admin",
-                onClick: () => {
-                  onRoleFilterChange("ADMIN");
-                  onPageChange(1);
-                  updateURLParams({ role: "ADMIN", page: 1 });
-                },
-              },
-              {
-                label: "Employee",
-                onClick: () => {
-                  onRoleFilterChange("EMPLOYEE");
-                  onPageChange(1);
-                  updateURLParams({ role: "EMPLOYEE", page: 1 });
-                },
-              },
-            ]}
-            maxHeight="12rem"
-          />
-
-          {/* Job Status Filter */}
-          <CustomDropdown
-            trigger={
-              <Button
-                variant="default"
-                size="md"
-                border={false}
-                type="button"
-                className="min-w-32 h-[42px] px-4 py-3 flex items-center justify-between w-fit">
-                <span className="text-left w-full text-sm font-[350]">
-                  {[
-                    { value: "all", label: "All Status" },
-                    { value: "active", label: "Active Jobs" },
-                    { value: "completed", label: "Has Completed" },
-                    { value: "unpaid", label: "Has Unpaid" },
-                  ].find((opt) => opt.value === jobStatusFilter)?.label ||
-                    "All Status"}
-                </span>
-                <ChevronDown className="w-4 h-4 ml-2 flex-shrink-0" />
-              </Button>
-            }
-            options={[
-              {
-                label: "All Status",
-                onClick: () => {
-                  onJobStatusFilterChange("all");
-                  onPageChange(1);
-                  updateURLParams({ jobStatus: "all", page: 1 });
-                },
-              },
-              {
-                label: "Active Jobs",
-                onClick: () => {
-                  onJobStatusFilterChange("active");
-                  onPageChange(1);
-                  updateURLParams({ jobStatus: "active", page: 1 });
-                },
-              },
-              {
-                label: "Has Completed",
-                onClick: () => {
-                  onJobStatusFilterChange("completed");
-                  onPageChange(1);
-                  updateURLParams({ jobStatus: "completed", page: 1 });
-                },
-              },
-              {
-                label: "Has Unpaid",
-                onClick: () => {
-                  onJobStatusFilterChange("unpaid");
-                  onPageChange(1);
-                  updateURLParams({ jobStatus: "unpaid", page: 1 });
-                },
-              },
-            ]}
-            maxHeight="12rem"
-          />
-
-          {/* Rows Per Page */}
-          <CustomDropdown
-            trigger={
-              <Button
-                variant="default"
-                size="md"
-                border={false}
-                className="min-w-20 h-[42px] px-4 py-3 flex items-center justify-between w-fit">
-                <span className="text-sm font-[350]">{rowsPerPage} / page</span>
-                <ChevronDown className="w-4 h-4 ml-2 flex-shrink-0" />
-              </Button>
-            }
-            options={[
-              { label: "5", onClick: () => changeRowsPerPage(5) },
-              { label: "10", onClick: () => changeRowsPerPage(10) },
-              { label: "25", onClick: () => changeRowsPerPage(25) },
-              { label: "50", onClick: () => changeRowsPerPage(50) },
-            ]}
-            className="min-w-20"
-            maxHeight="12rem"
-          />
-        </div>
-      </div>
-
-      {/* Loading State */}
-      {isLoading ? (
-        <div className="bg-white rounded-2xl">
-          <div className="text-center py-12">
-            <Loader className="w-4 h-4 animate-spin text-[#005F6A] mx-auto mb-2" />
-            <span className="text-sm text-[#005F6A]/70">
-              Loading employees...
-            </span>
+          <div className="field">
+            <label className="label">Job status</label>
+            <PremiumSelect
+              value={jobStatusFilter}
+              onChange={v => { onJobStatusFilterChange(v); onPageChange(1); updateURLParams({ jobStatus: v, page: 1 }); }}
+              options={[
+                { value: "all", label: "All" },
+                { value: "active", label: "Active jobs" },
+                { value: "completed", label: "Has completed" },
+                { value: "unpaid", label: "Has unpaid" },
+              ]}
+              size="sm"
+            />
+          </div>
+          <div className="afilter-panel-actions">
+            <button type="button" className="btn btn-ghost btn-sm" onClick={clearFilters}>Clear all</button>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShowFilters(false)}>Done</button>
           </div>
         </div>
+      )}
+
+      {isLoading ? (
+        <div className="atable-wrap" style={{ padding: "80px 40px", textAlign: "center", color: "var(--primary-60)" }}>
+          Loading employees…
+        </div>
+      ) : total === 0 ? (
+        <div className="atable-wrap" style={{ padding: "80px 40px", textAlign: "center", color: "var(--primary-60)" }}>
+          No employees match these filters.
+        </div>
       ) : (
-        <div className="mt-2">
-          {totalEmployees === 0 ? (
-            <div className="bg-white rounded-2xl">
-              <div className="text-center py-12">
-                <div className="w-16 h-16 bg-[#005F6A]/5 rounded-full flex items-center justify-center mx-auto mb-3">
-                  <Users className="w-8 h-8 text-[#005F6A]/40" />
-                </div>
-                <p className="text-sm font-[350] text-[#005F6A]/70">
-                  No employees found
-                </p>
-                <p className="text-xs font-[350] text-[#005F6A]/60 mt-1">
-                  Add employees to get started
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="bg-white rounded-2xl">
-              {/* Desktop Table View */}
-              <div className="hidden lg:block overflow-x-auto rounded-t-2xl">
-                <div className="min-w-max">
-                  {/* Header */}
-                  <div className="flex bg-[#005F6A]/5 rounded-t-2xl">
-                    {[
-                      { label: "Name", className: "w-[200px] text-left" },
-                      { label: "Email", className: "w-[220px] text-left" },
-                      { label: "Phone", className: "w-[140px] text-left" },
-                      { label: "Role", className: "w-[100px] text-left" },
-                      {
-                        label: "Completed",
-                        className: "w-[100px] text-center",
-                      },
-                      { label: "Active", className: "w-[100px] text-center" },
-                      { label: "Revenue", className: "w-[120px] text-right" },
-                      { label: "Actions", className: "w-[160px] text-left pl-12" },
-                    ].map((col) => (
-                      <div
-                        key={col.label}
-                        className={`p-4 text-xs font-[350] !text-[#005F6A]/40 uppercase !tracking-wider ${col.className}`}>
-                        {col.label}
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Rows */}
-                  <div className="divide-y divide-[#005F6A]/4">
-                    {paginatedEmployees.map((employee) => (
-                      <div
-                        key={employee.id}
-                        className="flex items-center hover:bg-[#005F6A]/1 transition-colors">
-                        {/* Name */}
-                        <div className="w-[200px] p-4">
-                          <p className="app-title-small truncate">
-                            {employee.name}
-                          </p>
-                        </div>
-
-                        {/* Email */}
-                        <div className="w-[220px] p-4">
-                          <p className="app-title-small !text-[#005F6A]/50 truncate">
-                            {employee.email}
-                          </p>
-                        </div>
-
-                        {/* Phone */}
-                        <div className="w-[140px] p-4">
-                          <p className="app-title-small !text-[#005F6A]/50 truncate">
-                            {employee.phone || "-"}
-                          </p>
-                        </div>
-
-                        {/* Role */}
-                        <div className="w-[100px] p-4">
-                          {getRoleBadge(employee.role)}
-                        </div>
-
-                        {/* Completed Jobs */}
-                        <div className="w-[100px] p-4 text-center">
-                          <p className="app-title-small !text-[#005F6A]/70">
-                            {employee.completedJobsCount}
-                          </p>
-                        </div>
-
-                        {/* Active Jobs */}
-                        <div className="w-[100px] p-4 text-center">
-                          {employee.activeJobsCount > 0 ? (
-                            <Badge
-                              variant="success"
-                              size="sm"
-                              className="px-2 py-1">
-                              {employee.activeJobsCount}
-                            </Badge>
-                          ) : (
-                            <span className="app-title-small !text-[#005F6A]/40">
-                              -
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Revenue */}
-                        <div className="w-[120px] p-4 text-right">
-                          <p className="app-title-small text-[#005F6A]">
-                            ${employee.totalRevenue.toFixed(2)}
-                          </p>
-                        </div>
-
-                        {/* Actions */}
-                        <div className="w-[160px] p-4 pl-12">
-                          <div className="flex items-center gap-2">
-                            <Button
-                              variant="default"
-                              size="sm"
-                              border={false}
-                              onClick={() => onEditEmployee(employee)}
-                              className="rounded-2xl px-4 py-2.5">
-                              Edit
-                            </Button>
-                            <Button
-                              variant="primary"
-                              size="sm"
-                              border={false}
-                              href={`/employees/${employee.id}`}
-                              className="rounded-2xl px-4 py-2.5">
-                              View
-                            </Button>
+        <div className="atable-wrap">
+          <div id="emp-desktop">
+            <div className="atable-scroll">
+              <table className="atable">
+                <thead>
+                  <tr>
+                    <th>Employee</th>
+                    <th>Contact</th>
+                    <th>Role</th>
+                    <th className="num">Completed</th>
+                    <th className="num">Active</th>
+                    <th className="num">Revenue</th>
+                    <th className="col-actions" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginated.map(e => (
+                    <tr key={e.id} onClick={() => { window.location.href = `/employees/${e.id}`; }}>
+                      <td style={{ minWidth: 200 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <span className="avatar" style={{ background: avatarColor(e.name), fontSize: 12, width: 36, height: 36 }}>
+                            {initials(e.name)}
+                          </span>
+                          <div>
+                            <div className="col-client">{e.name}</div>
+                            {e.email && <div className="col-client-sub">{e.email}</div>}
                           </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Mobile Card View */}
-              <div className="lg:hidden space-y-3 p-4">
-                {paginatedEmployees.map((employee) => (
-                  <Card
-                    key={employee.id}
-                    variant="cleano_light"
-                    className="p-4">
-                    <div className="space-y-3">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <p className="text-sm font-[400] text-[#005F6A]">
-                            {employee.name}
-                          </p>
-                          <p className="text-xs text-[#005F6A]/60 mt-0.5">
-                            {employee.email}
-                          </p>
+                      </td>
+                      <td style={{ minWidth: 160 }}>
+                        {e.phone ? (
+                          <div className="col-client-sub">{e.phone}</div>
+                        ) : (
+                          <span style={{ color: "var(--primary-40)" }}>—</span>
+                        )}
+                      </td>
+                      <td><RolePill role={e.role} /></td>
+                      <td className="num">
+                        <span style={{ fontWeight: 600, color: "var(--ink)" }}>{e.completedJobsCount}</span>
+                      </td>
+                      <td className="num">
+                        {e.activeJobsCount > 0 ? (
+                          <span style={{ fontWeight: 600, color: "#059669" }}>{e.activeJobsCount}</span>
+                        ) : <span style={{ color: "var(--primary-40)" }}>—</span>}
+                      </td>
+                      <td className="num" style={{ fontWeight: 600, color: "var(--ink)" }}>
+                        ${e.totalRevenue.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                      </td>
+                      <td className="col-actions" onClick={ev => ev.stopPropagation()}>
+                        <div className="row">
+                          <button type="button" className="icon-btn" title="Edit" onClick={() => onEditEmployee(e)}>
+                            <Pencil size={14} />
+                          </button>
+                          <a href={`/employees/${e.id}`} className="btn btn-secondary btn-sm">View</a>
                         </div>
-                        {getRoleBadge(employee.role)}
-                      </div>
-
-                      <div className="grid grid-cols-3 gap-2 text-center">
-                        <div className="bg-[#005F6A]/5 rounded-xl p-2">
-                          <p className="text-xs text-[#005F6A]/60">Completed</p>
-                          <p className="text-sm font-[400] text-[#005F6A]">
-                            {employee.completedJobsCount}
-                          </p>
-                        </div>
-                        <div className="bg-[#005F6A]/5 rounded-xl p-2">
-                          <p className="text-xs text-[#005F6A]/60">Active</p>
-                          <p className="text-sm font-[400] text-[#005F6A]">
-                            {employee.activeJobsCount}
-                          </p>
-                        </div>
-                        <div className="bg-[#005F6A]/5 rounded-xl p-2">
-                          <p className="text-xs text-[#005F6A]/60">Revenue</p>
-                          <p className="text-sm font-[400] text-[#005F6A]">
-                            ${employee.totalRevenue.toFixed(0)}
-                          </p>
-                        </div>
-                      </div>
-
-                      {employee.unpaidJobs > 0 && (
-                        <div className="flex items-center gap-2 text-amber-600 bg-amber-50 rounded-xl p-2">
-                          <AlertTriangle className="w-4 h-4" />
-                          <span className="text-xs font-[400]">
-                            {employee.unpaidJobs} unpaid job
-                            {employee.unpaidJobs > 1 ? "s" : ""}
-                          </span>
-                        </div>
-                      )}
-
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Button
-                          variant="default"
-                          size="sm"
-                          border={false}
-                          onClick={() => onEditEmployee(employee)}
-                          className="rounded-2xl px-4 py-2 flex-1">
-                          Edit
-                        </Button>
-                        <Button
-                          variant="primary"
-                          size="sm"
-                          border={false}
-                          href={`/employees/${employee.id}`}
-                          className="rounded-2xl px-4 py-2 flex-1">
-                          View
-                        </Button>
-                      </div>
-                    </div>
-                  </Card>
-                ))}
-              </div>
-
-              {/* Pagination */}
-              {totalEmployees > 0 && (
-                <div className="flex items-center justify-between p-2 px-3 bg-[#005F6A]/4 rounded-b-2xl">
-                  <div className="text-xs text-[#005F6A]/70 font-[350]">
-                    Showing {startIndex + 1} to{" "}
-                    {Math.min(endIndex, totalEmployees)} of {totalEmployees}{" "}
-                    employees
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => goToPage(1)}
-                      disabled={page === 1}
-                      className="px-2">
-                      <ChevronsLeft className="w-4 h-4" />
-                    </Button>
-
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => goToPage(page - 1)}
-                      disabled={page === 1}
-                      className="px-2">
-                      <ChevronLeft className="w-4 h-4" />
-                    </Button>
-
-                    <div className="flex items-center gap-1">
-                      {Array.from(
-                        { length: Math.min(5, totalPages) },
-                        (_, i) => {
-                          let pageNum;
-                          if (totalPages <= 5) {
-                            pageNum = i + 1;
-                          } else if (page <= 3) {
-                            pageNum = i + 1;
-                          } else if (page >= totalPages - 2) {
-                            pageNum = totalPages - 4 + i;
-                          } else {
-                            pageNum = page - 2 + i;
-                          }
-
-                          return (
-                            <Button
-                              key={pageNum}
-                              variant={page === pageNum ? "cleano" : "default"}
-                              border={false}
-                              size="md"
-                              onClick={() => goToPage(pageNum)}
-                              className="px-3 min-w-8 rounded-xl">
-                              <span className="text-sm font-[350] text-[#005F6A]">
-                                {pageNum}
-                              </span>
-                            </Button>
-                          );
-                        }
-                      )}
-                    </div>
-
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => goToPage(page + 1)}
-                      disabled={page === totalPages || totalPages === 0}
-                      className="px-2">
-                      <ChevronRight className="w-4 h-4" />
-                    </Button>
-
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => goToPage(totalPages)}
-                      disabled={page === totalPages || totalPages === 0}
-                      className="px-2">
-                      <ChevronsRight className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-              )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          )}
+          </div>
+
+          <div id="emp-mobile" style={{ display: "none", flexDirection: "column", gap: 10, padding: 16 }}>
+            {paginated.map(e => (
+              <article key={e.id} className="jcard" style={{ cursor: "pointer" }} onClick={() => { window.location.href = `/employees/${e.id}`; }}>
+                <div className="jcard-top">
+                  <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                    <span className="avatar" style={{ background: avatarColor(e.name), fontSize: 12, width: 36, height: 36 }}>
+                      {initials(e.name)}
+                    </span>
+                    <div>
+                      <div className="jcard-client">{e.name}</div>
+                      <div className="jcard-meta">{e.email}</div>
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div className="jcard-price">${e.totalRevenue.toFixed(0)}</div>
+                    <RolePill role={e.role} />
+                  </div>
+                </div>
+                <div className="jcard-row" style={{ paddingTop: 10, borderTop: "1px solid var(--primary-10)", marginTop: 10 }}>
+                  <div style={{ fontSize: 12, color: "var(--primary-70)" }}>
+                    {e.completedJobsCount} done · {e.activeJobsCount} active
+                  </div>
+                  {e.unpaidJobs > 0 && (
+                    <div style={{ fontSize: 12, color: "#d97706", fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}>
+                      <AlertTriangle size={12} />
+                      {e.unpaidJobs} unpaid
+                    </div>
+                  )}
+                </div>
+              </article>
+            ))}
+          </div>
+
+          <div className="apager">
+            <span>Showing {startIdx + 1}–{Math.min(startIdx + rowsPerPage, total)} of {total}</span>
+            <div className="apager-controls">
+              <button type="button" className="apager-btn" disabled={page === 1} onClick={() => goToPage(1)}>«</button>
+              <button type="button" className="apager-btn" disabled={page === 1} onClick={() => goToPage(page - 1)}>
+                <ChevronLeft size={14} />
+              </button>
+              <span className="apager-btn active">{page}</span>
+              <span style={{ fontSize: 12, color: "var(--primary-50)", alignSelf: "center" }}>/ {totalPages}</span>
+              <button type="button" className="apager-btn" disabled={page >= totalPages} onClick={() => goToPage(page + 1)}>
+                <ChevronRight size={14} />
+              </button>
+              <button type="button" className="apager-btn" disabled={page >= totalPages} onClick={() => goToPage(totalPages)}>»</button>
+            </div>
+          </div>
         </div>
       )}
+
+      <style>{`
+        @media (max-width: 900px) {
+          #emp-desktop { display: none !important; }
+          #emp-mobile  { display: flex !important; }
+        }
+      `}</style>
     </div>
   );
 }

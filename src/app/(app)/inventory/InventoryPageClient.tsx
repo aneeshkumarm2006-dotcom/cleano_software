@@ -6,7 +6,6 @@ import InventoryView from "./InventoryView";
 import { ProductModal } from "./ProductModal";
 import SupplierComparison from "./SupplierComparison";
 import ForecastView from "./ForecastView";
-import Button from "@/components/ui/Button";
 import { Package, DollarSign, TrendingDown } from "lucide-react";
 
 type ProductCategory = "LIQUID_SPRAY" | "MOP_LIQUID" | "DISPOSABLE" | "OTHER";
@@ -75,9 +74,9 @@ interface InventoryPageClientProps {
 }
 
 const TABS: Array<{ id: TabId; label: string; icon: React.ReactNode }> = [
-  { id: "products", label: "Products", icon: <Package className="w-4 h-4" /> },
-  { id: "suppliers", label: "Supplier Comparison", icon: <DollarSign className="w-4 h-4" /> },
-  { id: "forecast", label: "Forecast", icon: <TrendingDown className="w-4 h-4" /> },
+  { id: "products", label: "Products", icon: <Package size={15} /> },
+  { id: "suppliers", label: "Supplier Comparison", icon: <DollarSign size={15} /> },
+  { id: "forecast", label: "Forecast", icon: <TrendingDown size={15} /> },
 ];
 
 export default function InventoryPageClient({
@@ -90,7 +89,6 @@ export default function InventoryPageClient({
   forecastData,
 }: InventoryPageClientProps) {
   const router = useRouter();
-  const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>("products");
 
   // Modal state
@@ -148,31 +146,32 @@ export default function InventoryPageClient({
   };
 
   return (
-    <div className="admin-font">
-      {/* Segmented tabs — matches the Jobs page pattern */}
-      <div style={{ marginBottom: 18 }}>
-        <div className="atabs">
-          {TABS.map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              className={`atab ${activeTab === tab.id ? "active" : ""}`}
-              onClick={() => setActiveTab(tab.id)}>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                {tab.icon}
-                {tab.label}
-              </span>
-            </button>
-          ))}
-        </div>
+    <div className="admin-font stack-24">
+      <header className="stack-8">
+        <p className="eyebrow">Operations</p>
+        <h1 className="display">Inventory</h1>
+      </header>
+
+      <div className="atabs">
+        {TABS.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            className={`atab${activeTab === tab.id ? " active" : ""}`}
+            onClick={() => setActiveTab(tab.id)}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              {tab.icon}
+              {tab.label}
+            </span>
+          </button>
+        ))}
       </div>
 
-      {/* Tab Content */}
       {activeTab === "products" && (
         <>
           <InventoryView
             products={initialProducts}
-            isLoading={isLoading}
+            isLoading={false}
             searchTerm={searchTerm}
             statusFilter={statusFilter}
             rowsPerPage={rowsPerPage}

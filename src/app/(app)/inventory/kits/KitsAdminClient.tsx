@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { Search, Package, Users } from "lucide-react";
 import {
   assignToCleanerKit,
   removeFromCleanerKit,
@@ -35,6 +36,10 @@ interface Props {
   cleaners: Cleaner[];
   products: Product[];
 }
+
+const AVATAR_COLORS = ["#005F6A", "#0284c7", "#7c3aed", "#dc2626", "#d97706", "#059669"];
+function avatarColor(name: string) { return AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length]; }
+function initials(name: string) { return name.split(" ").slice(0, 2).map(p => p[0] ?? "").join("").toUpperCase(); }
 
 export default function KitsAdminClient({ cleaners, products }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(
@@ -97,79 +102,70 @@ export default function KitsAdminClient({ cleaners, products }: Props) {
   }
 
   return (
-    <div className="cl-page-wrap">
-      <div className="cl-page-head">
-        <div>
-          <h1 className="cl-page-title">Cleaner kits</h1>
-          <p className="cl-page-sub">
-            Assign items to each cleaner's personal kit. Master stock stays
-            unchanged when you assign; it only drops when a cleaner reports
-            damage or loss.
-          </p>
+    <div className="admin-font stack-24">
+      <header className="stack-8">
+        <p className="eyebrow">Inventory</p>
+        <h1 className="display">Cleaner Kits</h1>
+        <p style={{ fontSize: 14, color: "var(--primary-60)" }}>
+          Assign items to each cleaner's personal kit. Master stock only drops when a cleaner reports damage or loss.
+        </p>
+      </header>
+
+      <div className="astat-grid">
+        <div className="astat">
+          <div className="astat-head"><span>Cleaners</span><span className="astat-icon"><Users size={15} /></span></div>
+          <div className="astat-value">{cleaners.length}</div>
+          <div className="astat-delta">with kit management</div>
+        </div>
+        <div className="astat">
+          <div className="astat-head"><span>Products</span><span className="astat-icon"><Package size={15} /></span></div>
+          <div className="astat-value">{products.length}</div>
+          <div className="astat-delta">assignable items</div>
         </div>
       </div>
 
-      <div
-        style={{
-          marginTop: 16,
-          display: "grid",
-          gridTemplateColumns: "260px 1fr",
-          gap: 20,
-        }}>
+      <div style={{ display: "grid", gridTemplateColumns: "260px 1fr", gap: 20, alignItems: "start" }}>
         {/* Cleaner list */}
-        <div
-          style={{
-            background: "#fff",
-            border: "1px solid var(--primary-10)",
-            borderRadius: 14,
-            overflow: "hidden",
-          }}>
+        <div className="atable-wrap" style={{ padding: 0, overflow: "hidden" }}>
           <div style={{ padding: 12, borderBottom: "1px solid var(--primary-10)" }}>
-            <input
-              type="text"
-              placeholder="Search cleaners…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              style={{
-                width: "100%",
-                padding: "8px 12px",
-                fontSize: 13,
-                border: "1px solid var(--primary-15)",
-                borderRadius: 8,
-              }}
-            />
+            <div style={{ position: "relative" }}>
+              <Search size={13} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--primary-40)", pointerEvents: "none" }} />
+              <input
+                type="text"
+                placeholder="Search cleaners…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="input"
+                style={{ paddingLeft: 32, width: "100%", fontSize: 13 }}
+              />
+            </div>
           </div>
           <div style={{ maxHeight: 540, overflowY: "auto" }}>
-            {filtered.map((c) => (
+            {filtered.length === 0 ? (
+              <div style={{ padding: "24px 16px", textAlign: "center", fontSize: 13, color: "var(--primary-50)" }}>No cleaners found.</div>
+            ) : filtered.map((c) => (
               <button
                 key={c.id}
                 type="button"
                 onClick={() => setSelectedId(c.id)}
                 style={{
                   width: "100%",
-                  display: "block",
-                  padding: "12px 14px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: "10px 14px",
                   textAlign: "left",
-                  background:
-                    c.id === selectedId ? "var(--primary-5)" : "transparent",
+                  background: c.id === selectedId ? "var(--primary-5)" : "transparent",
                   borderTop: "1px solid var(--primary-10)",
                   cursor: "pointer",
+                  borderLeft: c.id === selectedId ? "3px solid var(--primary)" : "3px solid transparent",
                 }}>
-                <div
-                  style={{
-                    fontSize: 14,
-                    fontWeight: 600,
-                    color: "var(--ink)",
-                  }}>
-                  {c.name}
-                </div>
-                <div
-                  style={{
-                    marginTop: 2,
-                    fontSize: 11,
-                    color: "var(--primary-60)",
-                  }}>
-                  {c.kit.length} kit item{c.kit.length === 1 ? "" : "s"}
+                <span className="avatar" style={{ background: avatarColor(c.name), fontSize: 11, width: 32, height: 32, flexShrink: 0 }}>
+                  {initials(c.name)}
+                </span>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</div>
+                  <div style={{ fontSize: 11, color: "var(--primary-60)", marginTop: 1 }}>{c.kit.length} kit item{c.kit.length === 1 ? "" : "s"}</div>
                 </div>
               </button>
             ))}
@@ -177,61 +173,33 @@ export default function KitsAdminClient({ cleaners, products }: Props) {
         </div>
 
         {/* Selected cleaner's kit */}
-        <div
-          style={{
-            background: "#fff",
-            border: "1px solid var(--primary-10)",
-            borderRadius: 14,
-            padding: 20,
-          }}>
+        <div className="atable-wrap" style={{ padding: 20 }}>
           {!selected ? (
-            <p style={{ fontSize: 14, color: "var(--primary-50)" }}>
+            <p style={{ fontSize: 14, color: "var(--primary-50)", padding: "40px 0", textAlign: "center" }}>
               Pick a cleaner from the left to manage their kit.
             </p>
           ) : (
             <>
-              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>
-                {selected.name}
-              </h2>
-              <p style={{ marginTop: 2, fontSize: 12, color: "var(--primary-60)" }}>
-                {selected.email}
-              </p>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+                <span className="avatar" style={{ background: avatarColor(selected.name), fontSize: 14, width: 40, height: 40, flexShrink: 0 }}>
+                  {initials(selected.name)}
+                </span>
+                <div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: "var(--ink)" }}>{selected.name}</div>
+                  <div style={{ fontSize: 12, color: "var(--primary-60)", marginTop: 2 }}>{selected.email}</div>
+                </div>
+              </div>
 
-              <div
-                style={{
-                  marginTop: 16,
-                  padding: 16,
-                  background: "var(--primary-5)",
-                  borderRadius: 10,
-                }}>
-                <div
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 700,
-                    textTransform: "uppercase",
-                    letterSpacing: "0.08em",
-                    color: "var(--primary-60)",
-                    marginBottom: 10,
-                  }}>
+              <div style={{ background: "var(--primary-5)", borderRadius: 10, padding: 16, marginBottom: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--primary-60)", marginBottom: 10 }}>
                   Add to kit
                 </div>
-                <div
-                  style={{
-                    display: "flex",
-                    gap: 8,
-                    flexWrap: "wrap",
-                    alignItems: "center",
-                  }}>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                   <select
                     value={addProductId}
                     onChange={(e) => setAddProductId(e.target.value)}
-                    style={{
-                      flex: "1 1 200px",
-                      padding: "8px 12px",
-                      fontSize: 13,
-                      border: "1px solid var(--primary-15)",
-                      borderRadius: 8,
-                    }}>
+                    className="input"
+                    style={{ flex: "1 1 200px", fontSize: 13 }}>
                     <option value="">Select product…</option>
                     {products.map((p) => (
                       <option key={p.id} value={p.id}>
@@ -244,127 +212,71 @@ export default function KitsAdminClient({ cleaners, products }: Props) {
                     min={1}
                     value={addQty}
                     onChange={(e) => setAddQty(Math.max(1, Number(e.target.value)))}
-                    style={{
-                      width: 100,
-                      padding: "8px 12px",
-                      fontSize: 13,
-                      border: "1px solid var(--primary-15)",
-                      borderRadius: 8,
-                    }}
+                    className="input"
+                    style={{ width: 90, fontSize: 13 }}
                   />
                   <button
                     type="button"
                     onClick={add}
                     disabled={!addProductId || busy}
-                    style={{
-                      padding: "8px 16px",
-                      fontSize: 13,
-                      fontWeight: 600,
-                      background:
-                        !addProductId || busy ? "var(--primary-20)" : "var(--primary)",
-                      color: "#fff",
-                      border: "none",
-                      borderRadius: 8,
-                      cursor: !addProductId || busy ? "default" : "pointer",
-                    }}>
+                    className="btn btn-primary"
+                    style={{ opacity: !addProductId || busy ? 0.5 : 1 }}>
                     {busy ? "…" : "Add"}
                   </button>
                 </div>
-                {error && (
-                  <p
-                    style={{
-                      marginTop: 8,
-                      fontSize: 12,
-                      color: "#dc2626",
-                    }}>
-                    {error}
-                  </p>
-                )}
+                {error && <p style={{ marginTop: 8, fontSize: 12, color: "#dc2626" }}>{error}</p>}
               </div>
 
               {selected.kit.length === 0 ? (
-                <p style={{ marginTop: 20, fontSize: 13, color: "var(--primary-50)" }}>
+                <p style={{ fontSize: 13, color: "var(--primary-50)", textAlign: "center", padding: "32px 0" }}>
                   No items in this cleaner's kit yet.
                 </p>
               ) : (
-                <table style={{ width: "100%", marginTop: 16, borderCollapse: "collapse" }}>
-                  <thead>
-                    <tr
-                      style={{
-                        textAlign: "left",
-                        borderBottom: "1px solid var(--primary-10)",
-                      }}>
-                      <th style={th}>Product</th>
-                      <th style={th}>In kit</th>
-                      <th style={th}>Master stock</th>
-                      <th style={th}></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {selected.kit.map((item) => (
-                      <tr
-                        key={item.employeeProductId}
-                        style={{ borderBottom: "1px solid var(--primary-10)" }}>
-                        <td style={td}>{item.productName}</td>
-                        <td
-                          style={{
-                            ...td,
-                            fontVariantNumeric: "tabular-nums",
-                            fontWeight: 600,
-                          }}>
-                          {item.quantity} {item.unit}
-                        </td>
-                        <td
-                          style={{
-                            ...td,
-                            fontSize: 12,
-                            color: "var(--primary-60)",
-                            fontVariantNumeric: "tabular-nums",
-                          }}>
-                          {item.masterStock} {item.unit}
-                        </td>
-                        <td style={{ ...td, textAlign: "right" }}>
-                          <button
-                            type="button"
-                            onClick={() => remove(item)}
-                            disabled={busy}
-                            style={{
-                              padding: "6px 12px",
-                              fontSize: 12,
-                              fontWeight: 600,
-                              background: "#fff",
-                              color: "var(--primary-70)",
-                              border: "1px solid var(--primary-15)",
-                              borderRadius: 6,
-                              cursor: busy ? "default" : "pointer",
-                            }}>
-                            Remove
-                          </button>
-                        </td>
+                <div className="atable-scroll">
+                  <table className="atable">
+                    <thead>
+                      <tr>
+                        <th>Product</th>
+                        <th>In kit</th>
+                        <th>Master stock</th>
+                        <th className="col-actions" />
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {selected.kit.map((item) => (
+                        <tr key={item.employeeProductId}>
+                          <td><span className="col-client">{item.productName}</span></td>
+                          <td style={{ fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>
+                            {item.quantity} {item.unit}
+                          </td>
+                          <td style={{ fontSize: 12, color: "var(--primary-60)", fontVariantNumeric: "tabular-nums" }}>
+                            {item.masterStock} {item.unit}
+                          </td>
+                          <td className="col-actions">
+                            <button
+                              type="button"
+                              onClick={() => remove(item)}
+                              disabled={busy}
+                              className="btn btn-ghost btn-sm">
+                              Remove
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </>
           )}
         </div>
       </div>
+
+      <style>{`
+        @media (max-width: 700px) {
+          .kits-grid { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
     </div>
   );
 }
-
-const th: React.CSSProperties = {
-  padding: "8px 10px",
-  fontSize: 11,
-  fontWeight: 700,
-  textTransform: "uppercase",
-  letterSpacing: "0.08em",
-  color: "var(--primary-60)",
-};
-
-const td: React.CSSProperties = {
-  padding: "10px",
-  fontSize: 13,
-  color: "var(--ink)",
-};
