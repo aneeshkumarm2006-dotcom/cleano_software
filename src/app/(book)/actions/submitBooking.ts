@@ -20,6 +20,7 @@ import {
   sendCustomerBookingsPrepaid,
 } from "@/lib/email";
 import { isValidEmail, isValidPhone } from "@/lib/validation";
+import { AFTER_PHOTO_CONSENT_VERSION } from "@/lib/policy";
 
 type Frequency =
   | "ONE_TIME"
@@ -52,6 +53,7 @@ interface SubmitBookingInput {
   email: string;
   notes: string;
   referralCode: string;
+  afterPhotoConsent?: boolean;
   promoCode?: string;
   promoDiscount?: number;
   // Optional
@@ -219,6 +221,16 @@ export async function submitBooking(input: SubmitBookingInput) {
 
     // 6. Create the primary Job
 
+    // After-photo consent — saved to every job from this booking (incl. the
+    // recurring children). Only stamp the timestamp/version when consent is
+    // actually given so the absence of a timestamp reads as "no consent".
+    const consentGiven = input.afterPhotoConsent === true;
+    const afterPhotoConsentData = {
+      afterPhotoConsent: consentGiven,
+      afterPhotoConsentAt: consentGiven ? new Date() : null,
+      afterPhotoConsentVersion: consentGiven ? AFTER_PHOTO_CONSENT_VERSION : null,
+    };
+
     const primaryJob = await db.job.create({
       data: {
         clientName: client.name,
@@ -243,6 +255,7 @@ export async function submitBooking(input: SubmitBookingInput) {
         appliedPromoCode: input.promoCode?.trim() || null,
         promoDiscountAmount: input.promoDiscount && input.promoDiscount > 0 ? input.promoDiscount : null,
         bookingSource: "web",
+        ...afterPhotoConsentData,
         notes: input.notes?.trim() || null,
         ...(input.depositPaymentIntentId && {
           depositPaymentIntentId: input.depositPaymentIntentId,
@@ -284,6 +297,30 @@ export async function submitBooking(input: SubmitBookingInput) {
         where: { code: input.promoCode.trim().toUpperCase(), isActive: true },
         data: { usesCount: { increment: 1 } },
       }).catch(() => {});
+    }
+
+    // 6c. Win-back: if this client previously cancelled their recurring
+    // service, mark that cancellation reactivated (and REDEEMED if they used
+    // the save-offer code). Drives the retention KPI + offer funnel.
+    const openCancellation = await db.recurringCancellation.findFirst({
+      where: { clientId: client.id, reactivatedAt: null },
+      orderBy: { cancelledAt: "desc" },
+    });
+    if (openCancellation) {
+      const usedOffer =
+        !!input.promoCode?.trim() &&
+        !!openCancellation.offerCode &&
+        input.promoCode.trim().toUpperCase() ===
+          openCancellation.offerCode.toUpperCase();
+      await db.recurringCancellation
+        .update({
+          where: { id: openCancellation.id },
+          data: {
+            reactivatedAt: new Date(),
+            ...(usedOffer ? { offerStatus: "REDEEMED" } : {}),
+          },
+        })
+        .catch((e) => console.error("reactivation update", e));
     }
 
     // 7. Recurring jobs — copy the primary across future dates
@@ -333,6 +370,7 @@ export async function submitBooking(input: SubmitBookingInput) {
             discountAmount: childPricing.discountAmount > 0 ? childPricing.discountAmount : null,
             parentJob: { connect: { id: primaryJob.id } },
             bookingSource: "web",
+            ...afterPhotoConsentData,
             addOns: {
               create: input.addOns.map((a) => ({
                 name: a.name,

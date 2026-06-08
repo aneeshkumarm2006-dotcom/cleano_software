@@ -58,6 +58,8 @@ export interface BookingDraft {
   // Step 5 — Stripe
   stripeCustomerId?: string;
   stripeCardReady?: boolean;
+  // Step 5 — after-photo consent (opt-in, not pre-selected)
+  afterPhotoConsent: boolean;
 }
 
 export const EMPTY_DRAFT: BookingDraft = {
@@ -83,6 +85,7 @@ export const EMPTY_DRAFT: BookingDraft = {
   email: "",
   notes: "",
   referralCode: "",
+  afterPhotoConsent: false,
 };
 
 export const SERVICE_TYPES: { value: string; label: string }[] = [

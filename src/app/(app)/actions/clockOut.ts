@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import type { Prisma } from "@prisma/client";
 import { projectWashables, CREDIT_PER_RAG, CREDIT_PER_PAD } from "@/lib/wash";
 import { sendAdminClockedOut } from "@/lib/email";
+import { ensureRatingRequest } from "@/lib/rating";
 
 const ML_PER_SPRAY = 1.25;
 
@@ -296,6 +297,11 @@ export async function clockOut(jobId: string, usage: PostJobUsage) {
       cleanerName: session.user.name ?? "Cleaner",
       durationMinutes,
     }).catch((e) => console.error("admin clocked-out email", e));
+
+    // The cleaner just finished the job — ask the customer to rate it.
+    await ensureRatingRequest(jobId).catch((e) =>
+      console.error("ensureRatingRequest", e)
+    );
 
     revalidatePath("/my-jobs");
     revalidatePath(`/my-jobs/${jobId}`);

@@ -27,9 +27,13 @@ import {
   Plus,
   TrendingDown,
   Star,
+  ShieldAlert,
 } from "lucide-react";
+import StrikesPanel from "./StrikesPanel";
+import type { StrikeLevel } from "@/lib/strikes-constants";
+import type { StrikeReason } from "@prisma/client";
 
-type TabView = "overview" | "jobs" | "products" | "availability";
+type TabView = "overview" | "jobs" | "products" | "availability" | "accountability";
 
 const MENU_ITEMS: Array<{ id: TabView; label: string; icon: React.ReactNode }> =
   [
@@ -52,6 +56,11 @@ const MENU_ITEMS: Array<{ id: TabView; label: string; icon: React.ReactNode }> =
       id: "availability",
       label: "Availability",
       icon: <Calendar className="w-4 h-4" />,
+    },
+    {
+      id: "accountability",
+      label: "Strikes",
+      icon: <ShieldAlert className="w-4 h-4" />,
     },
   ];
 
@@ -156,6 +165,22 @@ interface EmployeeDetailViewProps {
   upcomingJobCount: number;
   availability: AvailabilitySlot[];
   availabilityConflicts: AvailabilityConflict[];
+  strikes: StrikeDTO[];
+  strikeSummary: { activeCount: number; level: StrikeLevel };
+  strikeWindowDays: number;
+}
+
+interface StrikeDTO {
+  id: string;
+  reasonCode: StrikeReason;
+  reason: string;
+  status: "ACTIVE" | "EXPIRED" | "EXCUSED" | "REMOVED";
+  isAuto: boolean;
+  adminNote: string | null;
+  jobNumber: number | null;
+  createdAt: string;
+  expiresAt: string;
+  excusedAt: string | null;
 }
 
 export default function EmployeeDetailView({
@@ -171,6 +196,9 @@ export default function EmployeeDetailView({
   upcomingJobCount,
   availability,
   availabilityConflicts,
+  strikes,
+  strikeSummary,
+  strikeWindowDays,
 }: EmployeeDetailViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -1008,6 +1036,14 @@ export default function EmployeeDetailView({
           {activeView === "jobs" && <JobsTab />}
           {activeView === "products" && <ProductsTab />}
           {activeView === "availability" && <AvailabilityTabContent />}
+          {activeView === "accountability" && (
+            <StrikesPanel
+              cleanerId={employee.id}
+              strikes={strikes}
+              strikeSummary={strikeSummary}
+              strikeWindowDays={strikeWindowDays}
+            />
+          )}
         </div>
       </div>
 

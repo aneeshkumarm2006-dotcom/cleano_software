@@ -6,160 +6,218 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { sendCustomerPoorRatingFollowUp } from "@/lib/email";
 import { POOR_RATING_FOLLOWUP_STARS } from "@/lib/policy";
+import { maybeApplyLowRatingStrike } from "@/lib/strikes";
 
 export interface PendingRatingJob {
+  token: string;
   jobId: string;
   jobNumber: number;
   cleanerName: string;
-  cleanerId: string;
   completedAt: string;
 }
 
-export async function getPendingClientRating(): Promise<PendingRatingJob | null> {
+/**
+ * Resolve the Client record for the logged-in portal session.
+ */
+async function getSessionClientId(): Promise<string | null> {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) return null;
-
   const email = session.user.email?.toLowerCase();
   if (!email) return null;
-
-  // Find the client record for this email
   const client = await db.client.findFirst({
     where: { email },
     select: { id: true },
   });
-  if (!client) return null;
+  return client?.id ?? null;
+}
 
-  // Find most recent completed job for this client in the last 60 days
-  const since = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000);
-  const jobs = await db.job.findMany({
+/**
+ * The next completed job awaiting a customer rating. Backed by
+ * {@link JobRatingToken}, which is the same token the "rate us" email links
+ * to — so rating by email suppresses this pop-up and vice-versa. The pop-up
+ * keeps re-appearing until the customer rates or clicks "Rather not answer".
+ */
+export async function getPendingClientRating(): Promise<PendingRatingJob | null> {
+  const clientId = await getSessionClientId();
+  if (!clientId) return null;
+
+  const now = new Date();
+  const tokenRow = await db.jobRatingToken.findFirst({
     where: {
-      clientId: client.id,
-      status: "COMPLETED",
-      jobDate: { gte: since },
+      customerId: clientId,
+      usedAt: null,
+      ratherNotAnswer: false,
+      OR: [{ expiresAt: null }, { expiresAt: { gte: now } }],
+      job: { status: { in: ["COMPLETED", "PAID"] } },
     },
-    orderBy: { jobDate: "desc" },
-    take: 10,
-    select: {
-      id: true,
-      jobNumber: true,
-      jobDate: true,
-      startTime: true,
-      employeeId: true,
-      employee: { select: { id: true, name: true } },
-      ratings: { select: { notes: true } },
+    orderBy: { createdAt: "desc" },
+    include: {
+      job: {
+        select: {
+          id: true,
+          jobNumber: true,
+          jobDate: true,
+          startTime: true,
+          employee: { select: { name: true } },
+          cleaners: { select: { name: true } },
+        },
+      },
     },
   });
 
-  // Find the first job that hasn't had a customer rating or skip
-  const unrated = jobs.find(
-    (j) => j.employee && !j.ratings.some((r) => r.notes?.startsWith("customer:"))
-  );
+  if (!tokenRow) return null;
 
-  if (!unrated || !unrated.employee) return null;
+  const cleanerName =
+    tokenRow.job.employee?.name ??
+    tokenRow.job.cleaners[0]?.name ??
+    "your cleaner";
+
+  // Record that we showed the pop-up (first time only).
+  if (!tokenRow.popupShownAt) {
+    await db.jobRatingToken
+      .update({
+        where: { id: tokenRow.id },
+        data: { popupShownAt: now },
+      })
+      .catch(() => {});
+  }
 
   return {
-    jobId: unrated.id,
-    jobNumber: unrated.jobNumber,
-    cleanerName: unrated.employee.name,
-    cleanerId: unrated.employee.id,
-    completedAt: (unrated.jobDate ?? unrated.startTime).toISOString(),
+    token: tokenRow.token,
+    jobId: tokenRow.job.id,
+    jobNumber: tokenRow.job.jobNumber,
+    cleanerName,
+    completedAt: (tokenRow.job.jobDate ?? tokenRow.job.startTime).toISOString(),
   };
 }
 
+/**
+ * Submit (or decline) a customer rating from the portal pop-up.
+ *
+ * Ratings are stored on the 1–5 star scale — identical to the email rating
+ * link — so a cleaner's average means the same thing regardless of which
+ * channel the customer used. "Rather not answer" only flips the token's
+ * `ratherNotAnswer` flag; it never writes a rating row, so declining can't
+ * drag down the cleaner's average.
+ */
 export async function submitCustomerRating(
-  jobId: string,
-  cleanerId: string,
+  token: string,
   stars: number,
   skipped: boolean
 ): Promise<{ success: true } | { success: false; error: string }> {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) return { success: false, error: "Not authenticated" };
+  const clientId = await getSessionClientId();
+  if (!clientId) return { success: false, error: "Not authenticated" };
 
-  const email = session.user.email?.toLowerCase();
-  if (!email) return { success: false, error: "No email" };
-
-  // Verify this job belongs to this client
-  const client = await db.client.findFirst({ where: { email }, select: { id: true } });
-  if (!client) return { success: false, error: "Client not found" };
-
-  const job = await db.job.findUnique({
-    where: { id: jobId },
-    select: { clientId: true, lateArrivalRatingCap: true },
-  });
-  if (!job || job.clientId !== client.id) {
-    return { success: false, error: "Not authorized" };
-  }
-  const effectiveStars = job.lateArrivalRatingCap
-    ? Math.min(stars, Math.floor(job.lateArrivalRatingCap))
-    : stars;
-
-  if (skipped) {
-    await db.employeeRating.create({
-      data: {
-        employeeId: cleanerId,
-        jobId,
-        rating: 0,
-        notes: "customer:skipped",
-        ratedBy: session.user.id,
-      },
-    });
-  } else {
-    if (stars < 1 || stars > 5) return { success: false, error: "Invalid rating" };
-
-    // Map 1-5 star input to 4.0-5.0 display range. Late-arrival cap is
-    // applied on the raw star count before the mapping.
-    const mappedRating =
-      Math.round((4 + ((effectiveStars - 1) / 4)) * 10) / 10;
-
-    await db.employeeRating.create({
-      data: {
-        employeeId: cleanerId,
-        jobId,
-        rating: mappedRating,
-        notes:
-          effectiveStars !== stars
-            ? `customer:${stars} (capped to ${effectiveStars} by late arrival)`
-            : `customer:${stars}`,
-        ratedBy: session.user.id,
-      },
-    });
-
-    // 1-star follow-up: email + admin alert
-    if (stars <= POOR_RATING_FOLLOWUP_STARS) {
-      const fullJob = await db.job.findUnique({
-        where: { id: jobId },
+  const tokenRow = await db.jobRatingToken.findUnique({
+    where: { token },
+    include: {
+      job: {
         select: {
           id: true,
           jobNumber: true,
           clientName: true,
+          clientId: true,
+          lateArrivalRatingCap: true,
+          employeeId: true,
           client: { select: { email: true, name: true } },
+          cleaners: { select: { id: true } },
         },
-      });
-      const clientEmail = fullJob?.client?.email ?? email;
-      const clientName =
-        fullJob?.client?.name ?? fullJob?.clientName ?? "the customer";
-      if (clientEmail && fullJob) {
-        sendCustomerPoorRatingFollowUp({
-          to: clientEmail,
-          clientName,
-          jobNumber: fullJob.jobNumber,
-        }).catch((e) => console.error("poor-rating follow-up email", e));
-      }
-      if (fullJob) {
-        await db.alert
-          .create({
-            data: {
-              type: "CLIENT_COMPLAINT",
-              severity: "CRITICAL",
-              title: `1-star rating — ${clientName}`,
-              message: `Booking #${fullJob.jobNumber} received a 1-star rating. Customer was promised a follow-up; reach out with compensation.`,
-              relatedId: fullJob.id,
-              relatedType: "Job",
-            },
-          })
-          .catch((e) => console.error("poor-rating admin alert", e));
-      }
+      },
+    },
+  });
+
+  if (!tokenRow) return { success: false, error: "Rating link not found" };
+  if (tokenRow.customerId && tokenRow.customerId !== clientId) {
+    return { success: false, error: "Not authorized" };
+  }
+  if (tokenRow.job.clientId && tokenRow.job.clientId !== clientId) {
+    return { success: false, error: "Not authorized" };
+  }
+  if (tokenRow.usedAt || tokenRow.ratherNotAnswer) {
+    // Already handled — treat as success so the pop-up just closes.
+    return { success: true };
+  }
+
+  if (skipped) {
+    await db.jobRatingToken.update({
+      where: { id: tokenRow.id },
+      data: { ratherNotAnswer: true },
+    });
+    revalidatePath("/portal");
+    return { success: true };
+  }
+
+  if (!Number.isInteger(stars) || stars < 1 || stars > 5) {
+    return { success: false, error: "Rating must be 1–5 stars" };
+  }
+
+  // Apply the late-arrival cap (clamp down only), matching the email flow.
+  const effectiveStars = tokenRow.job.lateArrivalRatingCap
+    ? Math.min(stars, Math.floor(tokenRow.job.lateArrivalRatingCap))
+    : stars;
+
+  const cleanerIds = tokenRow.cleanerId
+    ? [tokenRow.cleanerId]
+    : tokenRow.job.employeeId
+    ? [tokenRow.job.employeeId]
+    : tokenRow.job.cleaners.map((c) => c.id);
+
+  if (cleanerIds.length === 0) {
+    return { success: false, error: "No cleaners were assigned to this job" };
+  }
+
+  await db.$transaction([
+    ...cleanerIds.map((employeeId) =>
+      db.employeeRating.create({
+        data: {
+          jobId: tokenRow.job.id,
+          employeeId,
+          rating: effectiveStars,
+          notes:
+            effectiveStars !== stars
+              ? `Late-arrival cap applied (${stars} → ${effectiveStars})`
+              : null,
+          ratedBy: "client-portal",
+        },
+      })
+    ),
+    db.jobRatingToken.update({
+      where: { id: tokenRow.id },
+      data: { usedAt: new Date(), ratingStars: stars },
+    }),
+  ]);
+
+  // Accountability: two consecutive sub-3-star customer ratings → strike.
+  for (const cleanerId of cleanerIds) {
+    await maybeApplyLowRatingStrike(cleanerId, tokenRow.job.id).catch((e) =>
+      console.error("low-rating strike", e)
+    );
+  }
+
+  // 1-star follow-up: reassure the customer + raise a CRITICAL admin alert.
+  if (stars <= POOR_RATING_FOLLOWUP_STARS) {
+    const clientEmail = tokenRow.job.client?.email ?? null;
+    const clientName =
+      tokenRow.job.client?.name ?? tokenRow.job.clientName ?? "the customer";
+    if (clientEmail) {
+      sendCustomerPoorRatingFollowUp({
+        to: clientEmail,
+        clientName,
+        jobNumber: tokenRow.job.jobNumber,
+      }).catch((e) => console.error("poor-rating follow-up email", e));
     }
+    await db.alert
+      .create({
+        data: {
+          type: "CLIENT_COMPLAINT",
+          severity: "CRITICAL",
+          title: `1-star rating — ${clientName}`,
+          message: `Booking #${tokenRow.job.jobNumber} received a 1-star rating. Customer was promised a follow-up; reach out with compensation.`,
+          relatedId: tokenRow.job.id,
+          relatedType: "Job",
+        },
+      })
+      .catch((e) => console.error("poor-rating admin alert", e));
   }
 
   revalidatePath("/portal");

@@ -115,6 +115,19 @@ export async function uploadJobPhoto(formData: FormData) {
       return { success: false, error: "Not authorized for this job" };
     }
 
+    // After-photo consent gate. Cleaners may only upload photos when the
+    // customer consented at booking, or an admin overrode it for this job.
+    // Admins/owners bypass — they are the override authority.
+    const afterPhotosAllowed =
+      job.afterPhotoConsent || job.afterPhotoOverrideAt !== null;
+    if (!isAdmin && !afterPhotosAllowed) {
+      return {
+        success: false,
+        error:
+          "The customer hasn't consented to after-photos for this job. Ask an admin to enable photos before uploading.",
+      };
+    }
+
     const existingCount = await db.jobPhoto.count({ where: { jobId } });
     if (existingCount >= MAX_PHOTOS_PER_JOB) {
       return {

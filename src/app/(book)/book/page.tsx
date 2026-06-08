@@ -15,6 +15,7 @@ import { submitBooking } from "../actions/submitBooking";
 import { getBookingConfig } from "../actions/getBookingConfig";
 import { calculateTax } from "@/lib/tax";
 import { isValidEmail, isValidPhone } from "@/lib/validation";
+import { AFTER_PHOTO_CONSENT_TEXT } from "@/lib/policy";
 import CustomerLogo from "@/components/customer/Logo";
 import { Button, Banner } from "@/components/customer/Field";
 import { authClient } from "@/lib/auth-client";
@@ -227,6 +228,7 @@ export default function BookPage() {
         isPC ? `Post-construction: ${draft.pcHours}h × ${draft.pcCleaners} cleaner(s) × $${PC_HOURLY_RATE}/hr = ~$${(draft.pcHours * draft.pcCleaners * PC_HOURLY_RATE).toFixed(0)}` : "",
       ].filter(Boolean).join("\n\n"),
       referralCode: draft.referralCode,
+      afterPhotoConsent: draft.afterPhotoConsent,
       depositPaymentIntentId,
       stripeCustomerId: draft.stripeCustomerId,
       stripePaymentMethodId,
@@ -593,6 +595,26 @@ export default function BookPage() {
                 <label
                   className="cl-check-row"
                   style={{ alignItems: "flex-start", marginTop: 24 }}>
+                  <input
+                    type="checkbox"
+                    className="cl-check"
+                    checked={draft.afterPhotoConsent}
+                    onChange={(e) => patch({ afterPhotoConsent: e.target.checked })}
+                    style={{ marginTop: 3 }}
+                  />
+                  <span
+                    style={{
+                      fontSize: 14,
+                      lineHeight: 1.55,
+                      color: "var(--ink-soft)",
+                    }}>
+                    {AFTER_PHOTO_CONSENT_TEXT}{" "}
+                    <span style={{ color: "var(--primary-60)" }}>(optional)</span>
+                  </span>
+                </label>
+                <label
+                  className="cl-check-row"
+                  style={{ alignItems: "flex-start", marginTop: 16 }}>
                   <input
                     type="checkbox"
                     className="cl-check"

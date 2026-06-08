@@ -215,6 +215,7 @@ export default function Sidebar({
                 <SidebarGroup label="Overview" expanded={expanded}>
                   <NavLink href="/dashboard" icon="dashboard" expanded={expanded}>Dashboard</NavLink>
                   <NavLink href="/analytics" icon="analytics" expanded={expanded}>Analytics</NavLink>
+                  <NavLink href="/kpi" icon="analytics" expanded={expanded}>KPIs</NavLink>
                   <NavLink href="/calendar" icon="calendar" expanded={expanded}>Calendar</NavLink>
                 </SidebarGroup>
 
@@ -231,6 +232,7 @@ export default function Sidebar({
 
                 <SidebarGroup label="Staff" expanded={expanded}>
                   <NavLink href="/employees" icon="employees" expanded={expanded}>Employees</NavLink>
+                  <NavLink href="/job-applications" icon="employees" expanded={expanded}>Job Applications</NavLink>
                 </SidebarGroup>
 
                 <SidebarGroup label="Inventory & Supplies" expanded={expanded}>

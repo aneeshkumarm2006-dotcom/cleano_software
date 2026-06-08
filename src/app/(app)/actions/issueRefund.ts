@@ -6,6 +6,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { queueAndSendRefund } from "@/lib/email";
+import { applyStrike } from "@/lib/strikes";
 
 interface IssueRefundInput {
   jobId: string;
@@ -28,7 +29,10 @@ export async function issueRefund(input: IssueRefundInput) {
 
     const job = await db.job.findUnique({
       where: { id: input.jobId },
-      include: { client: { select: { email: true, name: true } } },
+      include: {
+        client: { select: { email: true, name: true } },
+        cleaners: { select: { id: true } },
+      },
     });
     if (!job) return { success: false, error: "Job not found" };
 
@@ -129,6 +133,24 @@ export async function issueRefund(input: IssueRefundInput) {
     ]);
 
     queueAndSendRefund(input.jobId, input.amount, input.reason).catch(() => {});
+
+    // Accountability strike: a complaint that results in a half or full
+    // refund strikes the assigned cleaner(s). Half = >= 50% of the charge.
+    const refundedTotal = alreadyRefunded + input.amount;
+    if (totalCharged > 0 && refundedTotal >= totalCharged * 0.5) {
+      const pct = Math.round((refundedTotal / totalCharged) * 100);
+      const cleanerIds = new Set<string>(job.cleaners.map((c) => c.id));
+      if (job.employeeId) cleanerIds.add(job.employeeId);
+      for (const cleanerId of cleanerIds) {
+        await applyStrike({
+          cleanerId,
+          reasonCode: "REFUND_COMPLAINT",
+          detail: `${pct}% refund on job #${job.jobNumber}`,
+          jobId: input.jobId,
+          dedupePerJob: true,
+        }).catch((e) => console.error("refund-complaint strike", e));
+      }
+    }
 
     revalidatePath(`/jobs/${input.jobId}`);
     revalidatePath("/jobs");

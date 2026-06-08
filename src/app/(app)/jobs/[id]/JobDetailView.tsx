@@ -13,6 +13,7 @@ import { resendReceipt } from "../../actions/resendReceipt";
 import { generateInvoiceFromJob } from "../../actions/generateInvoiceFromJob";
 import { markJobComplete } from "../../actions/markJobComplete";
 import { createRatingToken } from "../../actions/createRatingToken";
+import { setAfterPhotoOverride } from "../../actions/setAfterPhotoOverride";
 import {
   ArrowLeft, MapPin, Clock, DollarSign, Users,
   CheckCircle2, Package, Pencil, History, Activity,
@@ -73,6 +74,17 @@ interface Job {
   cleaners: Array<{ id: string; name: string }>;
   cancellationRequestedAt?: string | null;
   rescheduleRequestedAt?: string | null;
+  afterPhotoConsent?: boolean;
+  afterPhotoConsentAt?: string | null;
+  afterPhotoConsentVersion?: string | null;
+  afterPhotoOverrideAt?: string | null;
+  ratingTokens?: Array<{
+    id: string;
+    usedAt: string | Date | null;
+    ratingStars: number | null;
+    ratherNotAnswer: boolean;
+    emailSentAt: string | Date | null;
+  }>;
 }
 
 interface ClientLite {
@@ -294,6 +306,10 @@ export default function JobDetailView({
   const [isSendingReview, setIsSendingReview] = useState(false);
   const [reviewCopied, setReviewCopied] = useState(false);
   const [currentStatus, setCurrentStatus] = useState(job.status);
+  const [afterPhotoOverrideAt, setAfterPhotoOverrideAt] = useState<string | null>(
+    job.afterPhotoOverrideAt ?? null
+  );
+  const [isTogglingPhotoOverride, setIsTogglingPhotoOverride] = useState(false);
   // Cancel-with-prompt and Refund modals.
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
@@ -425,6 +441,17 @@ export default function JobDetailView({
       setReviewLink(link);
     }
     setIsSendingReview(false);
+  };
+
+  const handleTogglePhotoOverride = async () => {
+    if (isTogglingPhotoOverride) return;
+    setIsTogglingPhotoOverride(true);
+    const next = afterPhotoOverrideAt === null;
+    const result = await setAfterPhotoOverride(job.id, next);
+    if (result.success) {
+      setAfterPhotoOverrideAt(next ? new Date().toISOString() : null);
+    }
+    setIsTogglingPhotoOverride(false);
   };
 
   const handleCopyReviewLink = () => {
@@ -1267,6 +1294,77 @@ export default function JobDetailView({
             {isAdmin && !job.isCashJob && <ChargeButton jobId={job.id} amount={grossRevenue} compact />}
           </div>
         )}
+
+        {/* Customer rating status */}
+        {(() => {
+          const rt = job.ratingTokens?.[0];
+          if (!rt) return null;
+          let label: string;
+          let bg = '#f1f5f9', border = '#cbd5e1', color = '#334155', dot = '#64748b';
+          if (rt.usedAt && rt.ratingStars != null) {
+            label = `Customer rated ${rt.ratingStars} ★`;
+            bg = '#ecfdf5'; border = '#6ee7b7'; color = '#065f46'; dot = '#10b981';
+          } else if (rt.ratherNotAnswer) {
+            label = 'Customer declined to rate ("Rather not answer")';
+          } else if (rt.emailSentAt) {
+            label = 'Rating requested — awaiting customer response';
+            bg = '#fffbeb'; border = '#fcd34d'; color = '#92400e'; dot = '#f59e0b';
+          } else {
+            label = 'Rating link created — not yet sent';
+          }
+          return (
+            <div className="banner" style={{ background: bg, borderColor: border, color }}>
+              <Star size={16} style={{ flex: '0 0 auto', color: dot }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <strong>{label}</strong>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* After-photo consent status */}
+        {(() => {
+          const consented = !!job.afterPhotoConsent;
+          const overridden = afterPhotoOverrideAt !== null;
+          const allowed = consented || overridden;
+          const detail = consented
+            ? `Customer consented at booking${
+                job.afterPhotoConsentVersion ? ` (${job.afterPhotoConsentVersion})` : ""
+              }.`
+            : overridden
+            ? "No customer consent — enabled by admin override."
+            : "Customer did not consent. Cleaners are blocked from uploading after-photos.";
+          return (
+            <div
+              className="banner"
+              style={{
+                background: allowed ? '#ecfdf5' : '#fef2f2',
+                borderColor: allowed ? '#6ee7b7' : '#fca5a5',
+                color: allowed ? '#065f46' : '#991b1b',
+              }}>
+              <Camera size={16} style={{ flex: '0 0 auto', color: allowed ? '#10b981' : '#ef4444' }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <strong>After-photos {allowed ? 'allowed' : 'not permitted'}.</strong>{' '}
+                {detail}
+              </div>
+              {isAdmin && !consented && (
+                <button
+                  type="button"
+                  onClick={handleTogglePhotoOverride}
+                  disabled={isTogglingPhotoOverride}
+                  style={{
+                    fontSize: 12, padding: '4px 10px', borderRadius: 8, border: 'none',
+                    cursor: 'pointer', flexShrink: 0,
+                    background: overridden ? '#991b1b' : '#10b981', color: '#fff',
+                  }}>
+                  {isTogglingPhotoOverride
+                    ? 'Saving…'
+                    : overridden ? 'Remove override' : 'Override · allow photos'}
+                </button>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Review link banner */}
         {reviewLink && (

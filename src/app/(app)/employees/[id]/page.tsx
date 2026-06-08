@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/db";
 import EmployeeDetailView from "./EmployeeDetailView";
 import { getEmployeeAvgRating } from "../../actions/setEmployeeRating";
+import { getStrikeSummary, STRIKE_WINDOW_DAYS } from "@/lib/strikes";
 
 export default async function EmployeePage({
   params,
@@ -264,6 +265,31 @@ export default async function EmployeePage({
 
   const starRating = await getEmployeeAvgRating(id);
 
+  // Accountability strikes (rolling 30-day window).
+  const strikeRows = await db.cleanerStrike.findMany({
+    where: { cleanerId: id },
+    orderBy: { createdAt: "desc" },
+    take: 60,
+    include: { job: { select: { jobNumber: true } } },
+  });
+  const strikeSummary = await getStrikeSummary(id);
+  const strikes = strikeRows.map((s) => ({
+    id: s.id,
+    reasonCode: s.reasonCode,
+    reason: s.reason,
+    // Effective status: an ACTIVE strike past its window reads as EXPIRED.
+    status:
+      s.status === "ACTIVE" && s.expiresAt <= now
+        ? ("EXPIRED" as const)
+        : s.status,
+    isAuto: s.isAuto,
+    adminNote: s.adminNote,
+    jobNumber: s.job?.jobNumber ?? null,
+    createdAt: s.createdAt.toISOString(),
+    expiresAt: s.expiresAt.toISOString(),
+    excusedAt: s.excusedAt?.toISOString() ?? null,
+  }));
+
   return (
     <EmployeeDetailView
       employee={{
@@ -290,6 +316,9 @@ export default async function EmployeePage({
       kitTemplates={kitTemplates}
       forecast={forecast}
       upcomingJobCount={upcomingEmployeeJobs}
+      strikes={strikes}
+      strikeSummary={strikeSummary}
+      strikeWindowDays={STRIKE_WINDOW_DAYS}
     />
   );
 }

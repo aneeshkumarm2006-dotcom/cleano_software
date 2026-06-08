@@ -11,9 +11,14 @@ import PhotoUpload from "./PhotoUpload";
 interface PhotoGalleryProps {
   jobId: string;
   canUpload: boolean;
+  afterPhotosAllowed?: boolean;
 }
 
-export default function PhotoGallery({ jobId, canUpload }: PhotoGalleryProps) {
+export default function PhotoGallery({
+  jobId,
+  canUpload,
+  afterPhotosAllowed = true,
+}: PhotoGalleryProps) {
   const [photos, setPhotos] = useState<JobPhotoDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -89,7 +94,7 @@ export default function PhotoGallery({ jobId, canUpload }: PhotoGalleryProps) {
 
   return (
     <div className="space-y-6">
-      {canUpload && (
+      {canUpload && afterPhotosAllowed && (
         <PhotoUpload
           jobId={jobId}
           currentPhotoCount={photos.length}

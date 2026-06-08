@@ -7,6 +7,7 @@ import {
   sendCustomerPoorRatingFollowUp,
 } from "@/lib/email";
 import { POOR_RATING_FOLLOWUP_STARS } from "@/lib/policy";
+import { maybeApplyLowRatingStrike } from "@/lib/strikes";
 
 interface SubmitRatingInput {
   token: string;
@@ -79,7 +80,7 @@ export async function submitRating(input: SubmitRatingInput) {
       ),
       db.jobRatingToken.update({
         where: { id: tokenRow.id },
-        data: { usedAt: new Date() },
+        data: { usedAt: new Date(), ratingStars: input.stars },
       }),
     ]);
 
@@ -153,6 +154,10 @@ export async function submitRating(input: SubmitRatingInput) {
           notes: input.comment?.trim() || null,
         }).catch((e) => console.error("provider new-review email", e));
       }
+      // Accountability: two consecutive sub-3-star customer ratings → strike.
+      await maybeApplyLowRatingStrike(employeeId, tokenRow.jobId).catch((e) =>
+        console.error("low-rating strike", e)
+      );
     }
 
     return { success: true };

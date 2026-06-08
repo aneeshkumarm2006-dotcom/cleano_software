@@ -19,13 +19,13 @@ export default function RatingPopup({ pending }: Props) {
   async function handleSubmit() {
     if (stars === 0) return;
     setSubmitting(true);
-    await submitCustomerRating(pending.jobId, pending.cleanerId, stars, false);
+    await submitCustomerRating(pending.token, stars, false);
     setDismissed(true);
   }
 
   async function handleSkip() {
     setSubmitting(true);
-    await submitCustomerRating(pending.jobId, pending.cleanerId, 0, true);
+    await submitCustomerRating(pending.token, 0, true);
     setDismissed(true);
   }
 

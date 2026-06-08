@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { createAssignmentInvites } from "@/lib/invites";
 import { sendProviderLastMinuteOpening } from "@/lib/email";
 import { LAST_MINUTE_CLAIM_BONUS_USD } from "@/lib/policy";
+import { applyStrike } from "@/lib/strikes";
 
 const LATE_CANCEL_HOURS = 24;
 const LATE_CANCEL_FEE = 20;
@@ -104,6 +105,17 @@ export async function cancelShift(jobId: string): Promise<{ success: true; penal
         }
       }
     });
+
+    // Accountability strike for a late cancel (admin can excuse it).
+    if (isLateCancel) {
+      await applyStrike({
+        cleanerId: employeeId,
+        reasonCode: "LATE_CANCEL",
+        detail: `cancelled job #${job.jobNumber} ${Math.round(hoursUntilShift)}h before start`,
+        jobId,
+        dedupePerJob: true,
+      }).catch((e) => console.error("late-cancel strike", e));
+    }
 
     // Last-minute repost: if the cancellation happened within the
     // last-minute window AND the job no longer has any cleaners assigned,

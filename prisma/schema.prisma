@@ -50,6 +50,7 @@ model User {
   employeeComplaints           Complaint[]            @relation("EmployeeComplaints")
   resolvedComplaints           Complaint[]            @relation("ResolvedComplaints")
   receivedAlerts               Alert[]                @relation("RecipientAlerts")
+  strikes                      CleanerStrike[]        @relation("CleanerStrikes")
 }
 
 model Account {
@@ -216,12 +217,40 @@ model Client {
   complaints             Complaint[]
   waitlistEntries        Waitlist[]
   addresses              ClientAddress[]
+  recurringCancellations RecurringCancellation[]
   referredBy             Client?           @relation("ClientReferrals", fields: [referredByClientId], references: [id], onDelete: SetNull)
   referrals              Client[]          @relation("ClientReferrals")
 
   @@index([clientType])
   @@index([isActive])
   @@index([referredByClientId])
+}
+
+/// Recurring-service cancellation + save-offer tracking. Created only when a
+/// customer cancels their ENTIRE recurring service (not a single cleaning).
+model RecurringCancellation {
+  id            String    @id @default(cuid())
+  clientId      String
+  frequency     String?
+  reason        String?
+  cancelledAt   DateTime  @default(now())
+  emailSentAt   DateTime?
+  offerType     String?   // PERCENT | FIXED
+  offerValue    Float?
+  offerCode     String?
+  // PENDING | SENT | OPENED | CLICKED | REPLIED | REDEEMED | EXPIRED | NONE
+  offerStatus   String    @default("PENDING")
+  openedAt      DateTime?
+  clickedAt     DateTime?
+  repliedAt     DateTime?
+  reactivatedAt DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  client        Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@index([offerStatus])
+  @@index([cancelledAt])
 }
 
 model ClientAddress {
@@ -332,6 +361,13 @@ model Job {
   holdReleasedAt          DateTime?
   holdCaptureFailedAt     DateTime?
   holdCaptureFailReason   String?
+  // After-photo consent captured at booking time. `afterPhotoOverrideAt`
+  // lets admin authorise after-photos for a job even without consent.
+  afterPhotoConsent        Boolean          @default(false)
+  afterPhotoConsentAt      DateTime?
+  afterPhotoConsentVersion String?
+  afterPhotoOverrideAt     DateTime?
+  afterPhotoOverrideBy     String?
   createdAt               DateTime          @default(now())
   updatedAt               DateTime          @updatedAt
   employee                User?             @relation("EmployeeJobs", fields: [employeeId], references: [id], onDelete: SetNull)
@@ -351,6 +387,7 @@ model Job {
   complaints              Complaint[]
   emailLogs               EmailLog[]
   ratingTokens            JobRatingToken[]
+  strikes                 CleanerStrike[]
   convertedFromLeads      Lead[]
   convertedFromWaitlist   Waitlist[]
 
@@ -840,7 +877,56 @@ enum AlertType {
   CLIENT_COMPLAINT
   RATING_DECREASE
   OVERDUE_COMMERCIAL
+  CLEANER_STRIKE
   GENERAL
+}
+
+/// Three-strike accountability. Strikes roll off 30 days after they're
+/// applied (rolling window) — `expiresAt` is that reset date. Excused /
+/// removed strikes stop counting immediately. Active = ACTIVE + expiresAt > now.
+enum StrikeReason {
+  LATE_45
+  NO_SHOW
+  LOW_RATINGS_CONSECUTIVE
+  REFUND_COMPLAINT
+  LATE_CANCEL
+  JOB_ABANDONMENT
+  FALSIFIED_CLOCK
+  CHECKLIST_FAILURE
+  UNAPPROVED_PERSON
+  MISCONDUCT
+  MANUAL
+}
+
+enum StrikeStatus {
+  ACTIVE
+  EXPIRED
+  EXCUSED
+  REMOVED
+}
+
+model CleanerStrike {
+  id          String       @id @default(cuid())
+  cleanerId   String
+  reasonCode  StrikeReason
+  reason      String
+  jobId       String?
+  status      StrikeStatus @default(ACTIVE)
+  isAuto      Boolean      @default(true)
+  appliedById String?
+  adminNote   String?
+  excusedById String?
+  excusedAt   DateTime?
+  expiresAt   DateTime
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  cleaner     User         @relation("CleanerStrikes", fields: [cleanerId], references: [id], onDelete: Cascade)
+  job         Job?         @relation(fields: [jobId], references: [id], onDelete: SetNull)
+
+  @@index([cleanerId])
+  @@index([status])
+  @@index([jobId])
+  @@index([expiresAt])
 }
 
 enum AlertSeverity {
@@ -1333,6 +1419,36 @@ enum QuoteRequestStatus {
   ARCHIVED
 }
 
+enum JobApplicationStatus {
+  NEW
+  CONTACTED
+  INTERVIEWING
+  HIRED
+  REJECTED
+  ARCHIVED
+}
+
+/// Cleaner job-application intake from the public careers page.
+model JobApplication {
+  id           String               @id @default(cuid())
+  name         String
+  email        String
+  phone        String?
+  cityArea     String?
+  availability String?
+  experience   String?
+  hasTransport Boolean?
+  resumeUrl    String?
+  status       JobApplicationStatus @default(NEW)
+  notes        String?
+  source       String?
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
+}
+
 enum JobInviteDecision {
   PENDING
   ACCEPTED
@@ -1535,14 +1651,19 @@ model EmailLog {
 }
 
 model JobRatingToken {
-  id          String    @id @default(cuid())
-  jobId       String
-  token       String    @unique
-  cleanerId   String?
-  usedAt      DateTime?
-  expiresAt   DateTime?
-  createdAt   DateTime  @default(now())
-  job         Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  id              String    @id @default(cuid())
+  jobId           String
+  token           String    @unique
+  cleanerId       String?
+  customerId      String?
+  usedAt          DateTime?
+  ratingStars     Int?
+  ratherNotAnswer Boolean   @default(false)
+  emailSentAt     DateTime?
+  popupShownAt    DateTime?
+  expiresAt       DateTime?
+  createdAt       DateTime  @default(now())
+  job             Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
   @@index([jobId])
   @@index([token])

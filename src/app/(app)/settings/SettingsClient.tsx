@@ -18,6 +18,7 @@ import {
   GraduationCap,
   FileSignature,
   Bell,
+  HeartHandshake,
 } from "lucide-react";
 import ProfileTab from "./tabs/ProfileTab";
 import TaxSettingsTab from "./tabs/TaxSettingsTab";
@@ -41,6 +42,7 @@ import DocumentsTab, {
   UserOption,
 } from "./tabs/DocumentsTab";
 import NotificationsTab, { NotificationSettingRow } from "./tabs/NotificationsTab";
+import RetentionTab from "./tabs/RetentionTab";
 import {
   SettingsUser,
   AppSettingRecord,
@@ -87,6 +89,7 @@ type TabId =
   | "suppliers"
   | "inventoryLocations"
   | "serviceAreas"
+  | "retention"
   | "notifications";
 
 interface TabDef {
@@ -151,6 +154,12 @@ const TABS: TabDef[] = [
     id: "serviceAreas",
     label: "Service Areas",
     icon: MapPin,
+    adminOnly: true,
+  },
+  {
+    id: "retention",
+    label: "Retention",
+    icon: HeartHandshake,
     adminOnly: true,
   },
   {
@@ -277,6 +286,9 @@ export default function SettingsClient({
           )}
           {activeTab === "serviceAreas" && isAdmin && (
             <ServiceAreasTab serviceAreas={serviceAreas} />
+          )}
+          {activeTab === "retention" && isAdmin && (
+            <RetentionTab settings={appSettings} />
           )}
           {activeTab === "notifications" && isAdmin && (
             <NotificationsTab settings={notificationSettings} />

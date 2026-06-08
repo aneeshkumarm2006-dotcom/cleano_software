@@ -59,3 +59,11 @@ export const POOR_RATING_FOLLOWUP_STARS = 1;
 
 /** Default low-stock threshold applied to a product if none is set. */
 export const DEFAULT_INVENTORY_LOW_STOCK = 10;
+
+/** Current version of the after-photo consent wording. Bump when the text
+ *  below changes so we can tell which wording a customer agreed to. */
+export const AFTER_PHOTO_CONSENT_VERSION = "v1";
+
+/** Exact wording shown on the booking page for after-photo consent. */
+export const AFTER_PHOTO_CONSENT_TEXT =
+  "I consent to Cleano cleaners taking after photos of the cleaned areas for quality control after my service is complete.";

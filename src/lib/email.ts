@@ -2524,3 +2524,100 @@ export async function sendProviderLastMinuteOpening(opts: {
     notification: { recipient: "PROVIDER", key: "prov.unassigned.last_minute" },
   });
 }
+
+/**
+ * Recurring-cancellation "save offer" check-in email. Includes an open-tracking
+ * pixel and a click-tracked offer button (both route through /api/track/recurring).
+ * `offerLabel` is null when no offer is configured (check-in only).
+ */
+export async function sendRecurringSaveOffer(opts: {
+  to: string;
+  clientName: string;
+  cancellationId: string;
+  intro: string;
+  offerLabel: string | null;
+  offerCode: string | null;
+}) {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const firstName = opts.clientName.split(" ")[0] || opts.clientName;
+  const clickUrl = `${appUrl}/api/track/recurring/${opts.cancellationId}/click`;
+  const pixel = `<img src="${appUrl}/api/track/recurring/${opts.cancellationId}/open" width="1" height="1" alt="" style="display:none" />`;
+
+  const offerBlock = opts.offerLabel
+    ? p(`As a thank-you for giving us another try, here's <strong>${opts.offerLabel}</strong>${
+        opts.offerCode ? ` — your code is <strong>${opts.offerCode}</strong>` : ""
+      }.`) + btn("Rebook with my offer", clickUrl)
+    : p(`We'd still love to have you back whenever you're ready.`) +
+      btn("Book a cleaning", clickUrl);
+
+  const html = layout(
+    h1("Is everything okay?") +
+      p(`Hi ${firstName},`) +
+      p(opts.intro) +
+      p(`If something went wrong, just reply to this email — a real person reads every response and we'd genuinely like to make it right.`) +
+      offerBlock +
+      pixel
+  );
+
+  return deliver({
+    to: opts.to,
+    subject: "We'd love to have you back — is everything okay?",
+    html,
+  });
+}
+
+/** Confirmation to a job applicant after they submit the careers form. */
+export async function sendApplicantConfirmation(opts: {
+  to: string;
+  applicantName: string;
+}) {
+  const html = layout(
+    h1("Thanks for applying to Cleano") +
+      p(`Hi ${opts.applicantName.split(" ")[0]}, we've received your application to join the Cleano cleaning team.`) +
+      p(`Our hiring team reviews every application. If you look like a good fit, we'll reach out by email or phone with the next steps.`) +
+      p(`Thanks for your interest in working with us!`)
+  );
+  return deliver({
+    to: opts.to,
+    subject: "We received your Cleano application",
+    html,
+  });
+}
+
+/** Admin alert that a new job application landed. */
+export async function sendAdminNewApplication(opts: {
+  applicationId: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  cityArea: string | null;
+  hasTransport: boolean | null;
+  resumeUrl: string | null;
+}) {
+  const admins = await fetchAdmins();
+  if (admins.length === 0) return;
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const html = layout(
+    h1(`New job application — ${opts.name}`) +
+      section([
+        ["Name", opts.name],
+        ["Email", opts.email],
+        ["Phone", opts.phone ?? "—"],
+        ["City / area", opts.cityArea ?? "—"],
+        ["Has transport", opts.hasTransport == null ? "—" : opts.hasTransport ? "Yes" : "No"],
+        ["Resume", opts.resumeUrl ? "Attached" : "Not provided"],
+      ]) +
+      btn("Open applications", `${appUrl}/job-applications`)
+  );
+  for (const admin of admins) {
+    try {
+      await deliver({
+        to: admin.email,
+        subject: `New job application — ${opts.name}`,
+        html,
+      });
+    } catch (e) {
+      console.error("admin application email failed for", admin.email, e);
+    }
+  }
+}

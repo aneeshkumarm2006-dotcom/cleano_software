@@ -25,6 +25,8 @@ const ALERT_ROUTING_DEFAULTS: ReadonlyArray<{
   { alertType: AlertType.RATING_DECREASE, recipientRole: Roles.EMPLOYEE },
   { alertType: AlertType.RATING_DECREASE, recipientRole: Roles.FIELD_LEAD },
   { alertType: AlertType.RATING_DECREASE, recipientRole: Roles.OPS_MANAGER },
+  { alertType: AlertType.CLEANER_STRIKE, recipientRole: Roles.OPS_MANAGER },
+  { alertType: AlertType.CLEANER_STRIKE, recipientRole: Roles.ADMIN },
   { alertType: AlertType.GENERAL, recipientRole: Roles.OPS_MANAGER },
 ];
 

@@ -37,6 +37,10 @@ export default async function JobPage({
           product: true,
         },
       },
+      ratingTokens: {
+        orderBy: { createdAt: "desc" },
+        take: 1,
+      },
       _count: {
         select: { logs: true },
       },
@@ -163,6 +167,17 @@ export default async function JobPage({
     cleaners: job.cleaners.map((c) => ({ id: c.id, name: c.name })),
     cancellationRequestedAt: job.cancellationRequestedAt?.toISOString() ?? null,
     rescheduleRequestedAt: job.rescheduleRequestedAt?.toISOString() ?? null,
+    afterPhotoConsent: job.afterPhotoConsent,
+    afterPhotoConsentAt: job.afterPhotoConsentAt?.toISOString() ?? null,
+    afterPhotoConsentVersion: job.afterPhotoConsentVersion,
+    afterPhotoOverrideAt: job.afterPhotoOverrideAt?.toISOString() ?? null,
+    ratingTokens: job.ratingTokens.map((t) => ({
+      id: t.id,
+      usedAt: t.usedAt?.toISOString() ?? null,
+      ratingStars: t.ratingStars,
+      ratherNotAnswer: t.ratherNotAnswer,
+      emailSentAt: t.emailSentAt?.toISOString() ?? null,
+    })),
   };
 
   const productUsageData = job.productUsage.map((usage) => ({

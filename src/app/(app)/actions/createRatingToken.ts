@@ -24,10 +24,17 @@ export async function createRatingToken(input: CreateInput) {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + (input.expiresInDays ?? 30));
 
+    // Capture the customer so the portal rating pop-up can find this token.
+    const job = await db.job.findUnique({
+      where: { id: input.jobId },
+      select: { clientId: true },
+    });
+
     const row = await db.jobRatingToken.create({
       data: {
         jobId: input.jobId,
         cleanerId: input.cleanerId ?? null,
+        customerId: job?.clientId ?? null,
         token,
         expiresAt,
       },

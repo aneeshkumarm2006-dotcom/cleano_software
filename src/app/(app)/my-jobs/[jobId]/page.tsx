@@ -497,8 +497,53 @@ export default async function JobDetailPage({ params }: PageProps) {
             <Camera size={22} />
             Photos
           </h2>
+          {(() => {
+            const afterPhotosAllowed =
+              job.afterPhotoConsent || job.afterPhotoOverrideAt !== null;
+            const overridden = !job.afterPhotoConsent && job.afterPhotoOverrideAt !== null;
+            return (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: 10,
+                  padding: "12px 14px",
+                  borderRadius: 12,
+                  marginBottom: 14,
+                  fontSize: 13.5,
+                  lineHeight: 1.5,
+                  border: `1px solid ${afterPhotosAllowed ? "#6ee7b7" : "#fca5a5"}`,
+                  background: afterPhotosAllowed ? "#ecfdf5" : "#fef2f2",
+                  color: afterPhotosAllowed ? "#065f46" : "#991b1b",
+                }}>
+                <Camera size={16} style={{ flex: "0 0 auto", marginTop: 1 }} />
+                <span>
+                  {afterPhotosAllowed ? (
+                    <>
+                      <strong>After-photos allowed.</strong>{" "}
+                      {overridden
+                        ? "Enabled by an admin override for this job."
+                        : "The customer consented to after-photos for quality control."}
+                    </>
+                  ) : (
+                    <>
+                      <strong>After-photos not permitted.</strong> The customer did not
+                      consent for this job. Please don&apos;t take after-photos unless an
+                      admin enables it.
+                    </>
+                  )}
+                </span>
+              </div>
+            );
+          })()}
           <div className="cl-jd-photos-wrap">
-            <PhotoGallery jobId={job.id} canUpload={job.status !== "PAID"} />
+            <PhotoGallery
+              jobId={job.id}
+              canUpload={job.status !== "PAID"}
+              afterPhotosAllowed={
+                job.afterPhotoConsent || job.afterPhotoOverrideAt !== null
+              }
+            />
           </div>
         </>
       )}

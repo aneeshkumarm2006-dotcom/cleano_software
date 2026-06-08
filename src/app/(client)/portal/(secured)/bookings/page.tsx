@@ -3,6 +3,15 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
 import BookingsClient from "./BookingsClient";
+import CancelRecurringCard from "../../CancelRecurringCard";
+import { RECURRING_FREQUENCIES } from "@/lib/retention-constants";
+
+const FREQUENCY_LABELS: Record<string, string> = {
+  WEEKLY: "Weekly",
+  BIWEEKLY: "Every 2 weeks",
+  MONTHLY: "Monthly",
+  QUARTERLY: "Quarterly",
+};
 
 export default async function BookingsPage() {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -72,5 +81,20 @@ export default async function BookingsPage() {
     };
   });
 
-  return <BookingsClient bookings={serialized} />;
+  const isRecurringClient =
+    !!client.serviceFrequency &&
+    (RECURRING_FREQUENCIES as readonly string[]).includes(client.serviceFrequency);
+
+  return (
+    <>
+      <BookingsClient bookings={serialized} />
+      {isRecurringClient && (
+        <CancelRecurringCard
+          frequencyLabel={
+            FREQUENCY_LABELS[client.serviceFrequency as string] ?? "recurring"
+          }
+        />
+      )}
+    </>
+  );
 }

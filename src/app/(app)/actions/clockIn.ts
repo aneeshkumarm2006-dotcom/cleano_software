@@ -10,6 +10,10 @@ import {
   sendProviderLateArrival,
 } from "@/lib/email";
 import { computeLateArrivalRatingCap } from "@/lib/policy";
+import { applyStrike } from "@/lib/strikes";
+
+/** Minutes late that earns an accountability strike (subject to admin excuse). */
+const STRIKE_LATE_MIN = 45;
 
 export async function clockIn(jobId: string) {
   const session = await auth.api.getSession({
@@ -132,6 +136,18 @@ export async function clockIn(jobId: string) {
           description: `Late arrival: clocked in ${minutesLate} min after scheduled start. Rating cap for this job set to ${ratingCap} stars.`,
         },
       });
+    }
+
+    // Accountability strike: 45+ minutes late without approved notice.
+    // Admin can excuse it later if there was an approved notice.
+    if (minutesLate >= STRIKE_LATE_MIN) {
+      await applyStrike({
+        cleanerId: session.user.id,
+        reasonCode: "LATE_45",
+        detail: `${minutesLate} min late to job #${job.jobNumber}`,
+        jobId,
+        dedupePerJob: true,
+      }).catch((e) => console.error("late-arrival strike", e));
     }
 
     revalidatePath("/my-jobs");

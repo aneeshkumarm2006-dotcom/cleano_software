@@ -2,8 +2,9 @@ import Link from "next/link";
 import { db } from "@/db";
 import {
   MapPin, CheckCircle2, AlertTriangle, Package, DollarSign,
-  Calendar, Briefcase,
+  Calendar, Briefcase, ShieldAlert,
 } from "lucide-react";
+import { getStrikeSummary, STRIKE_THRESHOLD } from "@/lib/strikes";
 
 interface Props {
   userId: string;
@@ -136,6 +137,9 @@ export default async function CleanerDashboard({ userId, userName }: Props) {
   const { g, firstName } = greeting(userName);
   const dateStr = now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
 
+  // Accountability strikes (rolling 30-day window).
+  const strikeSummary = await getStrikeSummary(userId);
+
   return (
     <div className="cl-dash-shell">
       {/* Greeting */}
@@ -143,6 +147,30 @@ export default async function CleanerDashboard({ userId, userName }: Props) {
         <h1>{g}, <em>{firstName}.</em></h1>
         <p>{dateStr} &middot; {todayJobs.length === 0 ? "No jobs today — nice and easy." : `${todayJobs.length} ${todayJobs.length === 1 ? "job" : "jobs"} today.`}</p>
       </div>
+
+      {/* Accountability strikes — only shown when the cleaner has any. */}
+      {strikeSummary.activeCount > 0 && (
+        <div
+          style={{
+            display: "flex", alignItems: "flex-start", gap: 10,
+            padding: "12px 14px", borderRadius: 12, marginBottom: 16,
+            fontSize: 13.5, lineHeight: 1.5,
+            border: `1px solid ${strikeSummary.level === "REVIEW" ? "#fca5a5" : "#fcd34d"}`,
+            background: strikeSummary.level === "REVIEW" ? "#fef2f2" : "#fffbeb",
+            color: strikeSummary.level === "REVIEW" ? "#991b1b" : "#92400e",
+          }}>
+          <ShieldAlert size={16} style={{ flex: "0 0 auto", marginTop: 1 }} />
+          <span>
+            <strong>
+              {strikeSummary.activeCount} of {STRIKE_THRESHOLD} active strike
+              {strikeSummary.activeCount === 1 ? "" : "s"}.
+            </strong>{" "}
+            {strikeSummary.level === "REVIEW"
+              ? "You've reached the limit — an admin will review your account."
+              : `${STRIKE_THRESHOLD - strikeSummary.activeCount} more before admin review. Strikes roll off 30 days after they're applied.`}
+          </span>
+        </div>
+      )}
 
       {/* Next job hero */}
       {nextJob ? (
