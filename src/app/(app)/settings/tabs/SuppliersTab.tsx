@@ -25,6 +25,7 @@ import {
 } from "../../actions/updateSupplierPrice";
 import { ProductRecord, SupplierRecord } from "../types";
 import { SectionCard, Field, Feedback, Msg } from "./_shared";
+import ImportCsvButton from "@/components/csv/ImportCsvButton";
 
 interface SuppliersTabProps {
   products: ProductRecord[];
@@ -188,15 +189,18 @@ export default function SuppliersTab({
       description="Manage suppliers and per-product pricing for procurement comparisons."
       icon={Truck}
       actions={
-        <Button
-          type="button"
-          variant="action"
-          border={false}
-          size="sm"
-          onClick={openCreate}
-          className="rounded-xl">
-          <Plus className="w-4 h-4 mr-1" /> New Supplier
-        </Button>
+        <div className="flex items-center gap-2">
+          <ImportCsvButton entity="suppliers" label="Import" triggerClassName="btn btn-secondary btn-sm" />
+          <Button
+            type="button"
+            variant="action"
+            border={false}
+            size="sm"
+            onClick={openCreate}
+            className="rounded-xl">
+            <Plus className="w-4 h-4 mr-1" /> New Supplier
+          </Button>
+        </div>
       }>
       {suppliers.length === 0 ? (
         <p className="text-sm text-[#005F6A]/60">No suppliers yet.</p>

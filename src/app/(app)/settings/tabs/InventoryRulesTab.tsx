@@ -8,6 +8,7 @@ import { createInventoryRule } from "../../actions/createInventoryRule";
 import { deleteInventoryRule } from "../../actions/updateInventoryRule";
 import { ProductRecord, InventoryRuleRecord } from "../types";
 import { SectionCard, Feedback, Msg } from "./_shared";
+import ImportCsvButton from "@/components/csv/ImportCsvButton";
 
 interface InventoryRulesTabProps {
   products: ProductRecord[];
@@ -86,7 +87,10 @@ export default function InventoryRulesTab({
     <SectionCard
       title="Inventory Rules"
       description="Configure usage per job and refill thresholds per product. Used by inventory forecasting."
-      icon={Boxes}>
+      icon={Boxes}
+      actions={
+        <ImportCsvButton entity="inventory-rules" label="Import" triggerClassName="btn btn-secondary btn-sm" />
+      }>
       {products.length === 0 ? (
         <p className="text-sm text-[#005F6A]/60">
           No products yet. Add products in the Inventory page first.

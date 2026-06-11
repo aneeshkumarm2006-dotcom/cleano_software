@@ -12,6 +12,8 @@ import {
   Loader,
   Check,
   Percent,
+  Building2,
+  Hash,
 } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
@@ -26,7 +28,12 @@ interface ClientLite {
   secondaryEmail?: string | null;
   phone: string | null;
   secondaryPhone?: string | null;
+  company?: string | null;
   address: string | null;
+  aptNumber?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zip?: string | null;
   notes: string | null;
   discountPercent?: number | null;
 }
@@ -54,7 +61,12 @@ export default function ClientModal({
   const [secondaryEmail, setSecondaryEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [secondaryPhone, setSecondaryPhone] = useState("");
+  const [company, setCompany] = useState("");
   const [address, setAddress] = useState("");
+  const [aptNumber, setAptNumber] = useState("");
+  const [city, setCity] = useState("");
+  const [stateRegion, setStateRegion] = useState("");
+  const [zip, setZip] = useState("");
   const [notes, setNotes] = useState("");
   const [discountPercent, setDiscountPercent] = useState("");
 
@@ -67,7 +79,12 @@ export default function ClientModal({
       setSecondaryEmail(client?.secondaryEmail || "");
       setPhone(client?.phone || "");
       setSecondaryPhone(client?.secondaryPhone || "");
+      setCompany(client?.company || "");
       setAddress(client?.address || "");
+      setAptNumber(client?.aptNumber || "");
+      setCity(client?.city || "");
+      setStateRegion(client?.state || "");
+      setZip(client?.zip || "");
       setNotes(client?.notes || "");
       setDiscountPercent(
         client?.discountPercent != null && client.discountPercent > 0
@@ -94,7 +111,12 @@ export default function ClientModal({
     fd.append("secondaryEmail", secondaryEmail);
     fd.append("phone", phone);
     fd.append("secondaryPhone", secondaryPhone);
+    fd.append("company", company);
     fd.append("address", address);
+    fd.append("aptNumber", aptNumber);
+    fd.append("city", city);
+    fd.append("state", stateRegion);
+    fd.append("zip", zip);
     fd.append("notes", notes);
     fd.append("discountPercent", discountPercent);
 
@@ -252,6 +274,23 @@ export default function ClientModal({
             </div>
 
             <div>
+              <label className="input-label tracking-tight">Company</label>
+              <div className="relative">
+                <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#005F6A]/50" />
+                <Input
+                  variant="form"
+                  size="md"
+                  value={company}
+                  onChange={(e) => setCompany(e.target.value)}
+                  disabled={submitting}
+                  className="w-full pl-11 px-4 py-3"
+                  placeholder="Company name (optional)"
+                  border={false}
+                />
+              </div>
+            </div>
+
+            <div>
               <label className="input-label tracking-tight">Address</label>
               <div className="relative">
                 <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#005F6A]/50" />
@@ -262,7 +301,65 @@ export default function ClientModal({
                   onChange={(e) => setAddress(e.target.value)}
                   disabled={submitting}
                   className="w-full pl-11 px-4 py-3"
-                  placeholder="Street, City"
+                  placeholder="Street address"
+                  border={false}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="input-label tracking-tight">Apt / Unit</label>
+                <div className="relative">
+                  <Hash className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#005F6A]/50" />
+                  <Input
+                    variant="form"
+                    size="md"
+                    value={aptNumber}
+                    onChange={(e) => setAptNumber(e.target.value)}
+                    disabled={submitting}
+                    className="w-full pl-11 px-4 py-3"
+                    placeholder="Apt no."
+                    border={false}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="input-label tracking-tight">City</label>
+                <Input
+                  variant="form"
+                  size="md"
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                  disabled={submitting}
+                  className="w-full px-4 py-3"
+                  placeholder="City"
+                  border={false}
+                />
+              </div>
+              <div>
+                <label className="input-label tracking-tight">State / Province</label>
+                <Input
+                  variant="form"
+                  size="md"
+                  value={stateRegion}
+                  onChange={(e) => setStateRegion(e.target.value)}
+                  disabled={submitting}
+                  className="w-full px-4 py-3"
+                  placeholder="State / Province"
+                  border={false}
+                />
+              </div>
+              <div>
+                <label className="input-label tracking-tight">Zip / Postal Code</label>
+                <Input
+                  variant="form"
+                  size="md"
+                  value={zip}
+                  onChange={(e) => setZip(e.target.value)}
+                  disabled={submitting}
+                  className="w-full px-4 py-3"
+                  placeholder="Zip / Postal"
                   border={false}
                 />
               </div>

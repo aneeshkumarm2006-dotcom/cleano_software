@@ -195,7 +195,12 @@ model Client {
   secondaryEmail         String?
   phone                  String?
   secondaryPhone         String?
+  company                String?
   address                String?
+  aptNumber              String?
+  city                   String?
+  state                  String?
+  zip                    String?
   notes                  String?
   discountPercent        Float             @default(0)
   clientType             ClientType        @default(RESIDENTIAL)

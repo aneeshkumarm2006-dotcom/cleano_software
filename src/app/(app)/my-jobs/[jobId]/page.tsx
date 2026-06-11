@@ -396,19 +396,9 @@ export default async function JobDetailPage({ params }: PageProps) {
                   </dd>
                 </div>
               )}
-              {job.client?.email && (
-                <div className="cl-jd-dl-row">
-                  <dt>Email</dt>
-                  <dd>
-                    <a href={`mailto:${job.client.email}`} style={{ color: "var(--primary)", textDecoration: "none" }}>
-                      {job.client.email}
-                    </a>
-                  </dd>
-                </div>
-              )}
             </dl>
             <p style={{ fontSize: 11, color: "var(--primary-40)", margin: "8px 0 0", lineHeight: 1.5 }}>
-              Use these to let the client know if you&apos;re running late or have a quick question about the job.
+              Use this to let the client know if you&apos;re running late or have a quick question about the job.
             </p>
           </div>
         </>

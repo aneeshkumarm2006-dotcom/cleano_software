@@ -6,6 +6,7 @@ import JobsView from "./JobsView";
 import JobModal from "./JobModal";
 import JobsSubTabs, { JobSubTab } from "./JobsSubTabs";
 import ExportButton from "./ExportButton";
+import ImportCsvButton from "@/components/csv/ImportCsvButton";
 import { saveJob } from "../actions/saveJob";
 import { deleteJob } from "../actions/deleteJob";
 
@@ -273,7 +274,8 @@ export default function JobsPageClient({
           />
         </div>
         {isAdmin && (
-          <div className="pt-1">
+          <div className="pt-1 flex gap-2">
+            <ImportCsvButton entity="jobs" />
             <ExportButton filters={activeFilters} />
           </div>
         )}

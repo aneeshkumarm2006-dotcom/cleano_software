@@ -25,7 +25,12 @@ interface ClientData {
   secondaryEmail?: string | null;
   phone: string | null;
   secondaryPhone?: string | null;
+  company?: string | null;
   address: string | null;
+  aptNumber?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zip?: string | null;
   notes: string | null;
   discountPercent: number;
   createdAt: string;
@@ -133,6 +138,17 @@ function dateStr(iso: string) {
   return new Date(iso).toLocaleDateString("en-CA", { month: "short", day: "numeric", year: "numeric" });
 }
 
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="stack-4">
+      <span style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--primary-50)" }}>
+        {label}
+      </span>
+      <span style={{ fontSize: 14, color: "var(--primary-80)" }}>{value}</span>
+    </div>
+  );
+}
+
 export default function ClientDetailView({
   client,
   jobs,
@@ -229,6 +245,23 @@ export default function ClientDetailView({
           hint={totals.unpaidAmount > 0 ? "outstanding" : "all clear"}
         />
       </div>
+
+      {/* Contact & address details */}
+      {(client.company || client.address || client.aptNumber || client.city || client.state || client.zip) && (
+        <div className="dcard">
+          <div className="dcard-head">
+            <h3>Contact &amp; address</h3>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 16 }}>
+            {client.company && <DetailRow label="Company" value={client.company} />}
+            {client.address && <DetailRow label="Address" value={client.address} />}
+            {client.aptNumber && <DetailRow label="Apt / Unit" value={client.aptNumber} />}
+            {client.city && <DetailRow label="City" value={client.city} />}
+            {client.state && <DetailRow label="State / Province" value={client.state} />}
+            {client.zip && <DetailRow label="Zip / Postal" value={client.zip} />}
+          </div>
+        </div>
+      )}
 
       {/* Notes */}
       {client.notes && (

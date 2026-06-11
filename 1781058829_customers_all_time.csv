@@ -1,0 +1,704 @@
+Id, Status, First Name, Last Name, Full Name, Company Name, Email Address, Additional Email Addresse(s), Phone Number, Additional Phone Number(s), Note, Address, Apt. No., City, State, Zip/Postal Code
+143,Inactive,jamal,francis,jamal francis,,jamalfrancis1@hotmail.com,,5148145994,,,"1800 René-Lévesque Boulevard West, Montreal, QC, Canada",1007,Montréal,Québec,H3H 2H2
+259,Inactive,Nick,Mantello,Nick Mantello,,nick.mantello@gmail.com,,5142922163,5147093906,,"12660 Avenue Gaston-Ramon, Montreal, QC, Canada",,Montréal,Québec,H1E 2C3
+310,Inactive,Deeva,Bowry,Deeva Bowry,,bowrydeeva@gmail.com,,2508060235,,,"4530 Rue Clark, Montreal, QC, Canada",502,Montréal,Québec,H2T 2T4
+354,Inactive,Mary,Butera,Mary Butera,,buteramary63@gmail.com,,4382265071,,,"12095 50e Avenue, Montreal, QC, Canada",,Montréal,Québec,H1E 7B8
+382,Inactive,Jacqueline,Bugdale,Jacqueline Bugdale,,felicity51@hotmail.com,jacqueline.bugdale@battatco.com,5149726725,,,"224 Rue Prieur Ouest, Montréal, QC, Canada",,Montréal,Québec,H3L 1R6
+540,Inactive,Shawna,Wagman,Shawna Wagman,,shawnawagman@gmail.com,,6133014940,,,"437 Avenue Lansdowne, Westmount, Québec H3Y 2V4, Canada",,Westmount,Québec,H3Y 2V4
+584,Inactive,Marian,Eichie,Marian Eichie,,marian.aghahowa@gmail.com,,,,,,,,,
+10,Active,Ipek,Davran,Ipek Davran,,ipekdavran@outlook.com,,5145317111,,,1450 Boul René-Lévesque O,2203,,,H3G0E1
+11,Active,Lucie,Rheaume,Lucie Rheaume,,lucie@girlcrushgang.com,,5144671134,,,"60 Rue de Brésoles, Montréal, QC, Canada",306,Montréal,Québec,H2Y
+21,Active,Dan,Mast,Dan Mast,,proviewsportstours@gmail.com,,5146418559,,,265 Brunswick Boulevard,,,,H9R0H7
+22,Active,Sehli,Nxumalo,Sehli Nxumalo,,sehlinxumalo@gmail.com,sehlinxumalo@outlook.com,5144316541,,,"5242 Avenue Montclair, Montreal, QC, Canada",,Montréal,Québec,H4V 1H8
+23,Active,Katherine,Chadwick,Katherine Chadwick,,katherinechadwick2002@gmail.com,,6136127730,,,"4838 Saint Laurent Boulevard, Montreal, QC, Canada",,Montréal,Québec,H2T 1R5
+24,Active,Amanda,Di Liberto,Amanda Di Liberto,,a.diliberto@hotmail.com,,5147269977,,,"1414 Rue Chomedey, Montreal, QC, Canada",757,Montréal,Québec,H3H 0A2
+25,Active,Taryn,Kolodny,Taryn Kolodny,,tkolodny@hotmail.com,,5142623216,5142363030,,"5614 Avenue Cork, Côte Saint-Luc, QC, Canada",,Côte Saint-Luc,Québec,H4W 1Z7
+26,Active,Joshua,Monroe,Joshua Monroe,,joshmonroeblanchette@gmail.com,,4388734522,,,"630 Rue William, Montreal, QC, Canada",305,Montréal,Québec,H3C 4C9
+27,Active,Diana,Henriques,Diana Henriques,,d.henriques337@gmail.com,d.henriques@hotmail.ca,4389227143,,,"2020 Boulevard René-Lévesque Ouest, Montreal, QC, Canada",1807,Montréal,Québec,H3H 0B4
+36,Active,Aya,Elzohbi,Aya Elzohbi,,ayaelzohbi99@gmail.com,,5148038501,,,"1200 Boulevard De Maisonneuve Ouest, Montreal, QC, Canada",8G,Montreal,Quebec,H3G 1M2
+37,Active,Brahm,Mauer,Brahm Mauer,,info@teamcleano.com,,4384924536,,,"400 McGill Street, Montreal, QC, Canada",,Montréal,Québec,H2Y 2G1
+39,Active,Ariane,Gagnon,Ariane Gagnon,,arianegagnon841@gmail.com,,4388205351,,,"5587 Av. Stephen Leacock, Côte Saint-Luc, QC, Canada",,Côte Saint-Luc,Québec,H4W 3H8
+40,Active,Jennifer,,Jennifer ,,jenbeesmith@gmail.com,,5148138530,,,"5175 Rue Mackenzie, Montreal, QC, Canada",611,Montréal,Québec,H3W 0B3
+41,Active,Nick,Ishak,Nick Ishak,,nicolas.ishak@gmail.com,,5146033478,,,"502 Olympic Drive, Beaconsfield, QC, Canada",,Beaconsfield,Quebec,H9W 1A4
+42,Active,Beatrice,Forcier,Beatrice Forcier,,forcierbeatrice@gmail.com,lpungartnik@gmail.com,5142653107,5146548776,,"790 Avenue Marin, Montréal, QC, Canada",,Montréal,Québec,H4C 2H2
+45,Active,Paolo,Perri,Paolo Perri,,paolo.pperri@gmail.com,,5149521094,,,"257 85e Avenue, Laval, QC, Canada",102,Laval,Québec,H7W 2Z1
+46,Active,Sabine,Dorzin,Sabine Dorzin,,s.m.dorzins@gmail.com,,5149633771,,,"3350 Blvd. de la Concorde E, Laval, QC, Canada",,Laval,Québec,H7E 2C2
+47,Active,Nicole,Alberts,Nicole Alberts,,albertsnm@gmail.com,,5149151079,,,"400 Rue de lInspecteur unit 827, Montreal, QC, Canada",,Montréal,Québec,H3C 4A8
+48,Active,Jennifer,Barbusci,Jennifer Barbusci,,jen_barbusci@hotmail.com,,5142200890,,,"34 Rue Lafford, Kirkland, QC, Canada",,Kirkland,Québec,H9J 3X9
+49,Active,John,Dangubic,John Dangubic,,johndang131@gmail.com,susanmatthews@hotmail.ca,5146250088,5146226289,,"5820 Avenue McLynn, Montréal, QC, Canada",,Montreal,Quebec,H3X 2R2
+50,Active,Èle,Thibault,Èle Thibault,,thibault.rachele@gmail.com,,5146880819,,,"2745 Place de Darlington, Montréal, QC, Canada",10,Montréal,Québec,H3S 1L4
+51,Active,Shen,Tang,Shen Tang,,shen.tang@century21.ca,,5146595828,,,1288 saint antoine ouest ,1205,,,H3C0X6
+52,Active,Dalia,Aternali,Dalia Aternali,,dalia_aternali@live.com,,4383643546,,,"9375 Avenue Joseph Melancon, Montreal QC H2M 2H6",,,,H2M2H6
+53,Active,Beatrice,Baudinet,Beatrice Baudinet,,baudinet@royallepage.ca,,8193299466,,,"4160 Sherbrooke Street West, Westmount, QC, Canada",,Westmount,Québec,H3Z 1C2
+54,Active,Elleni,Tsatoumas,Elleni Tsatoumas,,elleni.tsatoumas@gmail.com,,5149091443,,,"301 Rue Bourgeoys, Montreal, QC, Canada",3,Montréal,Québec,H3K 2R2
+55,Active,Jonathan,Csakany,Jonathan Csakany,,jonathan_csakany@hotmail.com,,5148863574,,,108 av du Champ D’Avions,,,,H9R5X3
+56,Active,Willa,Whitaker,Willa Whitaker,,wrwhitakerjackson@gmail.com,,8025954752,,,"2512 Rue Coursol, Montreal, QC, Canada",,Montréal,Québec,H3J 1E1
+57,Active,Jen,Barbusci,Jen Barbusci,,laurence_casia@hotmail.com,,5142200890,,,"160 Meaney Street, Kirkland, QC, Canada",,Kirkland,Quebec,H9J 3M9
+58,Active,Aaron,Stafford,Aaron Stafford,,astafford084@gmail.com,,8192080603,,,1500 Jarry Est,205,,,H2E1A9
+59,Active,Christina,Mantzioros,Christina Mantzioros,,cmantz23@gmail.com,,5146541571,,,"67 Rue Barton, Dollard-des-Ormeaux, QC, Canada",,Dollard-des-Ormeaux,Québec,H9G 2M4
+60,Active,Susy,Gioia,Susy Gioia,,skgioia68@gmail.com,,5148038713,,,"5522 Avenue McLynn, Montreal, QC, Canada",,Montreal,Quebec,H3X 2R1
+61,Active,Jacques,Beaulieu,Jacques Beaulieu,,concierge@le7cinq.com,,5145155348,,,"401 Boulevard du Curé-Labelle, Laval, QC, Canada",,Laval,Québec,H7V 0E6
+62,Active,Nil,Patel,Nil Patel,,nileema-patel@hotmail.com,,5148247542,5146906230,,"2729 Rue des Dahlias, Vaudreuil-Dorion, QC, Canada",,Vaudreuil-Dorion,Québec,J7V 0A5
+63,Active,Royal,A,Royal A,,subsandmarks@gmail.com,,5147817695,,,"102 Rue Charlevoix, Kirkland, QC, Canada",,Kirkland,Québec,H9J 3M7
+64,Active,Anne-Marie,Breton,Anne-Marie Breton,,am_breton@hotmail.com,,5146023925,,,"4454 Saint Andre Street, Montreal, QC, Canada",,Montréal,Québec,H2J 2Z4
+65,Active,Carolyne,Gratton,Carolyne Gratton,,carolyne.gratton@gmail.com,,5147966694,,,7057 St Andre St,,,,H2S2L3
+66,Active,Imaad,Bukhari,Imaad Bukhari,,imaad.bukhari@gmail.com,,5142242095,9059224182,,"1225 Boulevard Robert-Bourassa, Montreal, QC, Canada",804,Montréal,Québec,H3B 3A7
+67,Active,Jatin,Saini,Jatin Saini,,jatinsaini580@icloud.com,,5149919420,,,"5410 Ch de la Côte-Saint-Luc, 003",3,,,H3X2C5
+68,Active,Adam,Benjamin,Adam Benjamin,,adam@rokerconstruction.com,,5149695001,,,5650 Rue Hadley,,,,H4E 3M9
+69,Active,Adis,Bacous,Adis Bacous,,adis.goreg@yahoo.com,,5143470517,,,"3811 Blvd Saint-Elzéar O, Laval, QC, Canada",,Laval,Québec,H7P 4K1
+70,Active,Arteesha,Hemraz,Arteesha Hemraz,,hemrazkarishma@gmail.com,,6479393609,5147016749,,"4390 Grand Boulevard, Montreal, QC, Canada",210,Montréal,Québec,H4B 2X8
+71,Active,Kayla,Caluori,Kayla Caluori,,caluorikayla@hotmail.com,,5146418559,,,"141 Rue Denault, Kirkland, QC, Canada",,Kirkland,Québec,H9J 3X2
+72,Active,Sean,Connolly,Sean Connolly,,sean.thomas.connolly.123@gmail.com,hannahconnolly63@gmail.com,5199940290,,,"350 Rue Prince Arthur Ouest, Montreal, QC, Canada",2609,Montréal,Québec,H2X 3R2
+73,Active,Urmi,Bhakta,Urmi Bhakta,,bhakta@ualberta.ca,,5146216763,,,"11111 Boulevard Cavendish, Montreal, QC, Canada",309,Montréal,Québec,H4R 2M8
+74,Active,Aya,Hayek,Aya Hayek,,aya.n.hayek@gmail.com,,5819223299,,We will pay you 20$/hr and a 50$ bonus for this job :),"777 Boulevard le Corbusier, Laval, QC, Canada",1407,Laval,Québec,H7N 0G6
+75,Active,Ike,Harris-Eze,Ike Harris-Eze,,ihez88@hotmail.com,,9028775559,,,435 Rue Willibrord Verdun,,,,H4G2T7
+76,Active,Matthew,Landry,Matthew Landry,,matthewglandry@gmail.com,,6049103877,,,"617 Rue dHibernia, Montreal, QC, Canada",,Montréal,Québec,H3K 2T3
+77,Active,Dayna,Halperin,Dayna Halperin,,daynahalperinn@gmail.com,,5142998005,,,"144 Rue Angora, Dollard-Des Ormeaux, QC, Canada",,Dollard-des-Ormeaux,Québec,H9B 2G8
+78,Active,Cezar,Musharrafiyyah,Cezar Musharrafiyyah,,cmusharrafieh@outlook.com,cmusharrafieh@gmail.com,4388829760,,,"441 Avenue du Président-Kennedy, Montreal, QC, Canada",704,Montréal,Québec,H3A 0A4
+79,Active,Anna,Dejewska,Anna Dejewska,,anna.dejewska12@gmail.com,raymond.jf89@gmail.com,5149694303,5145533303,,"234 Rue Andras, Dollard-Des Ormeaux, QC, Canada",,Dollard-des-Ormeaux,Québec,H9B 1R6
+80,Active,Christopher,Pendenza,Christopher Pendenza,,chris.pendenza@gmail.com,,5158255894,,,"26 Avenue Brock Sud, Montreal West, Montréal, QC, Canada",,Montréal-Ouest,Québec,H4X 2E5
+81,Active,Lisa,Fireman,Lisa Fireman,,lisafireman2004@gmail.com,,4164649116,,,"3521a Rue University, Montreal, QC, Canada",A (Basement entrance) ,Montréal,Québec,H3A2A9
+84,Active,Analyssa,Paraskevopoulos,Analyssa Paraskevopoulos,,aparaskevopoulos@dialecticanet.com,,4388897675,,,"1020 Rue de Bleury, Montreal, QC, Canada",1214,Montréal,Québec,H2Z 2B8
+85,Active,Pascale,Cantave,Pascale Cantave,,pascale.cantave@yahoo.com,,5142962793,,,"12367 Bd Saint-Jean-Baptiste, Montréal, QC H1C 1S4, Canada",,Montréal,Québec,H1C 1S4
+90,Active,Akai,Gannon,Akai Gannon,,gannonakai47@gmail.com,,4388303244,,,"1819 Avenue Dollard, Montreal, QC, Canada",410,Montréal,Québec,H8N 0J4
+91,Active,Patrizia,Stabile,Patrizia Stabile,,daniel@brahmmauer.com,,5149686765,,,"2012 Rue de lÉquateur, Saint-Laurent, QC, Canada",,Montréal,Québec,H4R 3G8
+92,Active,Laura,Canter,Laura Canter,,laura.canter@hotmail.com,,5149293135,,,"222 Avenue Melville, Westmount, QC, Canada",21,Westmount,Québec,H3Z 2J5
+93,Active,Sachin,Adithyaa Arangarasan,Sachin Adithyaa Arangarasan,,sachinadithyaaarangarasan@gmail.com,,4387286937,,,"3555 Chemin de la Côte-des-Neiges, Montreal, QC, Canada",1707,Montréal,Québec,H3H 1V2
+94,Active,Erich,Fox,Erich Fox,,erichfox@gmail.com,,4164509353,,,"5480 Henri Julien Avenue, Montreal, QC, Canada",323,Montréal,Québec,H2T 2E8
+95,Active,Bhavna,P,Bhavna P,,purswanibh@gmail.com,,5146689147,,,"50 Rue des Soeurs-Grises, Montreal, QC, Canada",401,Montréal,Québec,H3C 5P1
+96,Active,Stefano,Lalli,Stefano Lalli,,lallistefano@gmail.com,,5149277000,,,"128 Avenue Strathearn Nord, Montreal West, QC, Canada",,Montréal-Ouest,Québec,H4X 1X9
+97,Active,Kuridat,Tajudeen,Kuridat Tajudeen,,kudirat.tajudeen@gmail.com,,5142497924,,,"350 Boulevard De Maisonneuve Ouest, Montreal, QC, Canada",,Montreal,Quebec,H3A 1L4
+98,Active,Brittany,Perkins,Brittany Perkins,,brittany_perkins@hotmail.com,,5144661186,5147135801,,"12480 Boulevard Gouin Ouest, Pierrefonds, QC, Canada",,Montréal,Québec,H8Z 1W3
+99,Active,John,Hodges,John Hodges,,danielmastrangelo2@gmail.com,,5146418559,,,"1254 Saint-Catherine Street West, Montreal, QC, Canada",,Montréal,Québec,H3G 1P1
+100,Active,Romain,Noel,Romain Noel,,rom1.noel9@gmail.com,,4384485603,,,"3421 Rue Hochelaga, Montreal, QC, Canada",3,Montréal,Québec,H1W 1H4
+101,Active,Avi,Benardete,Avi Benardete,,alperavi@gmail.com,,4389267831,,,"1110 Boulevard René-Lévesque Est, Montréal, QC, Canada",404,Montréal,Québec,H2L 0E1
+102,Active,Mylène,Pellerin,Mylène Pellerin,,mamamype@gmail.com,,5145866802,,,"439 Rue de la Noue, Verdun, QC, Canada",,Montréal,Québec,H3E 1R9
+103,Active,Gabrielle,Rashkovan,Gabrielle Rashkovan,,grashkovan@gmail.com,,5148267571,5148248198,,"17 Rue Malta, Dollard-Des Ormeaux, QC, Canada",,Dollard-des-Ormeaux,Québec,H9B 2E6
+104,Active,Sierra,Conti,Sierra Conti,,sierraconti@hotmail.com,,5148987737,,,"1188 Rue Saint-Antoine Ouest #709, Montreal, QC, Canada",709,Montréal,Québec,H3C 1B4
+105,Active,flora,pisaturo,flora pisaturo,,fpisaturo22@gmail.com,frank@dgba.ca,5149414249,,,"11 Rue Finch, Dollard-des-Ormeaux, QC, Canada",,Dollard-des-Ormeaux,Québec,H9A 3G8
+106,Active,Sophie,Hill,Sophie Hill,,hill.sophie@gmail.com,,6046520620,,,"3546 Rue Durocher, Montreal, QC, Canada",1J,Montréal,Québec,H2X 2E5
+107,Active,Dina,Osman,Dina Osman,,dinaalad.osman@gmail.com,,5147467315,,Added Oven Cleaning to the final price,"1380 Boulevard René-Lévesque Ouest, Montreal, QC, Canada",2404,Montréal,Québec,H3G 0E4
+108,Active,Jatin,Saini,Jatin Saini,,jatinsaini580@gmail.com,,5149919420,5145723650,,"6-5410 Ch De La Côte-Saint-Luc Door code - #1647, on second floor, take left from the stairs",6,,,H3X2C5
+109,Active,Marcel,Haynes,Marcel Haynes,,marcelhaynes95@gmail.com,,5147468500,,,"1350 Rue du Fort, Montreal, QC, Canada",1602,Montréal,Québec,H3H 1N6
+110,Active,Joseph,Mauvais,Joseph Mauvais,,mauvais7k@gmail.com,patriciasaintcilien@gmail.com,9546255780,4385191546,,"3462 Place Joseph-N. Drapeau, Montréal, QC H1X 3J1, Canada",102,Montréal,Québec,H1X 3J1
+111,Active,Wassim,Nsouli,Wassim Nsouli,,nsouliw@hotmail.com,,5144671767,,,"59 Chemin de la Pointe Sud, Montreal, QC, Canada",,Montréal,Québec,H3E 1Z9
+112,Active,Aaron,Cabral,Aaron Cabral,,aaron_cabral2001@outlook.com,,5146418559,,,"50 Boulevard Crémazie Ouest, Montreal, QC, Canada",,Montréal,Québec,H2P 2T3
+113,Active,Alex,Brown,Alex Brown,,alex@davcon.ca,,5146418559,,,"111 Rue Chabanel Ouest, Montreal, QC, Canada",,Montréal,Québec,H2N
+114,Active,Agathe,Nazha,Agathe Nazha,,agathenazha@hotmail.com,,5146592370,,,"1310 Boulevard René-Lévesque Ouest, Montreal, QC, Canada",702,Montréal,Québec,H3G 0B8
+115,Active,Justin,Szekely,Justin Szekely,,justinszekely97@gmail.com,abbiejames98@ymail.com,5147015323,5794235382,,"710 Rue Lusignan, Montreal, QC, Canada",6,Montréal,Québec,H3C 1Y9
+116,Active,Danny,D'Alessandro,Danny D'Alessandro,,r.d.generalcontractor@gmail.com,,5142962356,,,"4545 Avenue Girouard, Montreal, QC, Canada",203,Montréal,Québec,H4A 0A1
+117,Active,Devin,Goldstein,Devin Goldstein,,stateofmotion.dancestudios@gmail.com,,5146418559,,,"8369 Chemin Montview, Mount Royal, QC, Canada",,Mont-Royal,Québec,H4P 2L8
+118,Active,Giacomo,Galluccio,Giacomo Galluccio,,giacomogallucio@gmail.com,julia0899@hotmail.com,5148127320,4388285666,,"214 Rue Édouard, Laval, QC, Canada",,Laval,Québec,H7P 2M6
+119,Active,Heather,Borelli,Heather Borelli,,heather.borrelli@mail.mcgill.ca,,5145677401,,,"4625 Avenue Félix Leclerc, Saint-Laurent, QC, Canada",R04,Montréal,Québec,H4R 3J3
+120,Active,Gladys,Garcia,Gladys Garcia,,chiriyeye507@gmail.com,,4044688994,,,"1400 René-Lévesque Boulevard West, Montreal, QC, Canada",2508,Montréal,Québec,H3G 1T6
+121,Active,Valerie,Magnan,Valerie Magnan,,valemagnan@gmail.com,,5148253107,,,"85 Rue de Castelnau O, Montreal, QC, Canada",117,Montréal,Québec,H2R 0B7
+129,Active,Leandra,Pinto,Leandra Pinto,,lpinto848@gmail.com,cordiertimothee@gmail.com,5145949613,5148382756,,"345 Rue De la Gauchetière Ouest, Montreal, QC, Canada",903,Montréal,Québec,H2Z 0A2
+133,Active,Ilona,Szuszics,Ilona Szuszics,,elenaszuszics@yahoo.com,,5142228319,,,"171 Chemin de la Haute-Rivière, Châteauguay, QC, Canada",,Châteauguay,Québec,J6K 5A9
+134,Active,Aretha,Chan,Aretha Chan,,arethaeats@gmail.com,,4388215548,,,"3620 Rue Lorne Crescent, Montreal, QC, Canada",612,Montréal,Québec,H2X 2B1
+135,Active,Chelsea,Perkins,Chelsea Perkins,,chelseaperkins@hotmail.com,,5149955226,,,4600 Rue Rene-Emard,414,,,H9A3A7
+136,Active,Jessica,Reyes,Jessica Reyes,,xjessicareyes@gmail.com,,5145660564,,,5320 Av MacDonald Côte-Saint-Luc QC H3X 2W2 Canada,PH (penthouse),,,H3X2W2
+137,Active,Maryam,Ashkani,Maryam Ashkani,,jas00benj@gmail.com,,5149096332,,,"4669 Rue Gaston-Chapleau, Laval, QC, Canada",,Laval,Québec,H7W 0A3
+138,Active,Chloé,De Chevigny,Chloé De Chevigny,,chloedechevigny@videotron.ca,,5142943758,,,"60 rue de Brésoles à Montréal, H2Y 1V5",,,,H2Y1V5
+139,Active,Sabrina,Bouchard,Sabrina Bouchard,,bouchard.sabrina31@gmail.com,,5149728520,,,"901 Rue de la Commune Est, Montreal, QC, Canada",710,Montréal,Québec,H2L 0B9
+140,Active,John,Torres,John Torres,,info@basikmtl.com,,5146081744,,,"2111 Saint Regis Boulevard, Dollard-Des Ormeaux, QC, Canada",unit B.,Dollard-des-Ormeaux,Québec,H9B 3L7
+141,Active,Benjamin,Elbourne-Weinstock,Benjamin Elbourne-Weinstock,,benelweins@gmail.com,,5146293763,,,"1770 Rue Joseph Manseau, Montreal, QC, Canada",617,Montréal,Québec,H3H 0A8
+142,Active,Judy,Pierre,Judy Pierre,,judy.pe@icloud.com,,5146328104,,,"155 Avenue Chamberry, Les Cèdres, QC, Canada",,Les Cèdres,Québec,J7T 1A2
+144,Active,Laura,Brassington,Laura Brassington,,laubrass123@gmail.com,,4383415998,,,"235 Peel Street, Montreal, QC, Canada",1802,Montréal,Québec,H3C 0P8
+145,Active,JP,Lachapelle,JP Lachapelle,,jp@jpayments.ca,,5149794318,,,"115 Rue des Violettes, Blainville, QC, Canada",,Blainville,Québec,J7C 5H4
+146,Active,Salina,Brotto,Salina Brotto,,sbrotto@hotmail.com,,5148910528,,,"50 15e Rue, Laval, QC, Canada",,Laval,Québec,H7N 1L1
+147,Active,Vasili,Tsatoumas,Vasili Tsatoumas,,vasilitsat@gmail.com,,5146194272,,,"37 Boulevard Brunswick, Dollard-Des Ormeaux, QC, Canada",219,Dollard-des-Ormeaux,Québec,H9B 1P5
+148,Active,Jer,Aouizerats,Jer Aouizerats,,1282918932@gmail.com,,5146418559,,,"943 Rue Richelieu, Beloeil, QC, Canada",,Beloeil,Quebec,J3H 3H2
+149,Active,Kulbir,Singh,Kulbir Singh,,k.s.madhok@gmail.com,,5146322804,,,"12 Rue Jordi-Bonet, Notre-Dame-de-lÎle-Perrot, QC, Canada",,,,h3p2e3
+150,Active,Arianne,Vallières,Arianne Vallières,,cocottee.contact@gmail.com,,5146494430,,,"15 Rue du Canal, Saint-Louis-de-Gonzague, QC, Canada",,,Québec,J0S 1T0
+151,Active,Marisa,Ipolla,Marisa Ipolla,,lady_godiva9@hotmail.com,,5142600345,,,"7560-A Rue Mainville, Montreal, QC, Canada",,Montréal,Québec,H1S 1Z6
+152,Active,Hanlong,Jia,Hanlong Jia,,jiahanlong@gmail.com,,5145726766,,,"1200 Rue Saint-Jacques, Montreal, QC, Canada",1009,Montréal,Québec,H3C
+153,Active,Fahmida,Rashid,Fahmida Rashid,,fahima.rashid@hotmail.com,,5145499116,,,"7170 Rue de Lunan, Brossard, QC, Canada",4,Brossard,Québec,J4Y 0P9
+154,Active,Dmitry,Baranoshnik,Dmitry Baranoshnik,,noshnik@aol.com,,5145839354,,,"1440 Rue Gaston-Véronneau, Longueuil, QC, Canada",106,Longueuil,Québec,J4N 0H1
+155,Active,quan,zheng,quan zheng,,vsouknight@gmail.com,,4389217066,,,"11362 Avenue Garon, Montrã©Al, QC, Canada",7,Montrã©Al,Québec,H1H 3T8
+156,Active,Carlos,Gomez,Carlos Gomez,,carlosgoac@yahoo.com,,4384583938,,,"1225 Boulevard Robert-Bourassa, Montreal, QC, Canada",2204,Montréal,Québec,H3B 3A7
+157,Active,William,Johnson,William Johnson,,wjohnson@royallepage.ca,,5146418559,,,"204 Avenue du Havre des Îles, Laval, QC, Canada",2505,Laval,Québec,H7W
+158,Active,Jacqueline,Mazor,Jacqueline Mazor,,jacq.gelb@gmail.com,,5145570867,,,5885 Av. Marc Chagall,ph02,,,H4W0C1
+159,Active,Dinah,Elmaleh,Dinah Elmaleh,,dinahelmaleh@gmail.com,,5142403702,5148252653,,6803 Abraham de Sola,306,,,H3X4B3
+160,Active,Jeremy,Rutman,Jeremy Rutman,,jrutman7@gmail.com,cristinamarani13@gmail.com,5148982559,7724757727,,100 Murray,302,,,H3C1A2
+161,Active,Divya,Auroomoogum,Divya Auroomoogum,,divya.auroo@gmail.com,,4388659600,,,"1458 Rue des Bassins, Montreal, QC, Canada",804,Montréal,Québec,H3C 0N3
+162,Active,Laura,Sanabria Galvis,Laura Sanabria Galvis,,laurab.sanag@gmail.com,,2633841039,,,"1400 Ottawa Street, Montreal, QC, Canada",420A,Montréal,Québec,H3C 0Y9
+163,Active,Sophie,Crawford,Sophie Crawford,,sophiecrawford1998@gmail.com,,5144970264,,,"617 Rue Saint Rémi, Montreal, QC, Canada",303A,Montréal,Québec,H4C 3G7
+164,Active,Nicole,Carbotte,Nicole Carbotte,,niccarbotte@gmail.com,nicole.carbotte@ecn.forces.gc.ca,5147129962,,,7269 Rue Saint-Denis,,,,h2r2e3
+165,Active,Riya,Dorkadi,Riya Dorkadi,,riyamdorkadi1398@gmail.com,,5148137492,6479362919,,"2150 Boulevard de Maisonneuve Est, Montreal, QC, Canada",1603,Montréal,Québec,H2K 2E1
+166,Active,Sokhna Fatim,Niang,Sokhna Fatim Niang,,sfnotb@gmail.com,,4388661686,5142126631,,"3385 Boulevard le Carrefour, Laval, QC, Canada",1203,Laval,Québec,H7T 0R1
+167,Active,Amanda,Di Liberto,Amanda Di Liberto,,amandadiliberto5@gmail.com,,5147269977,5147554644,,"1414 Rue Chomedey, Montreal, QC, Canada",757 phase 3,Montréal,Québec,H3H 0A2
+168,Active,Lina,Gharibah,Lina Gharibah,,linagharibah@hotmail.com,,5142249311,,,"1006 Rue Guy-Burelle, Laval, QC, Canada",,Laval,Québec,H7W 0G7
+169,Active,Natalie,Aziz,Natalie Aziz,,23819382198@gmail.com,,5146494430,,,"589 Boulevard Graham, Mount Royal, QC, Canada",,Mont-Royal,Québec,H3P 2E3
+170,Active,Marissa,Santillan,Marissa Santillan,,msantillan2000@gmail.com,,4388327274,,,"6049 Rue Mazarin, Montreal, QC, Canada",,Montréal,Québec,H4E 2X1
+171,Active,Hema,Bephia,Hema Bephia,,hema.bephia@hotmail.com,,5148272832,,,"1020 Rue Jules-Huot, Laval, QC, Canada",,Laval,Québec,H7W 0G3
+172,Active,Karen,Kurtz,Karen Kurtz,,karen.kurtz@remax-quebec.com,,5147798161,,,"4025 Avenue de Vendôme, Montreal, QC, Canada",,Montréal,Québec,H4A 3N2
+173,Active,Aisha,Karsli,Aisha Karsli,,hkarsli.mtl@gmail.com,,5149994670,,,412 rue St Roch,6,,,H3N1K3
+174,Active,Nadia,Stabile,Nadia Stabile,,nadia@agencetaro.com,,5148923621,,,"6650 Boulevard Couture, Saint-Leonard, QC, Canada",204,Montréal,Québec,H1P 3N4
+175,Active,Adriana,Menghi,Adriana Menghi,,adrianamenghi@gmail.com,,4384091239,,,"7342 Avenue Christophe Colomb, Montreal, QC, Canada",,Montréal,Québec,H2R 2S6
+176,Active,Samba,Balde,Samba Balde,,sambabalde03@yahoo.ca,,4389339428,,,"281 Rue Charles-Dickens, Châteauguay, QC, Canada",,Châteauguay,Québec,J6J 2A3
+177,Active,Fahmida,Rashid,Fahmida Rashid,,fahmida.rashid@hotmail.com,,5145499116,,,"100 Ontario Street East, Montreal, QC, Canada",1022,Montréal,Québec,H2X 1H2
+178,Active,Qoods,Landoulsi,Qoods Landoulsi,,qoodsland@hotmail.fr,,4389249907,,,"1968 Rue Olivier Berthelet, Montreal, QC, Canada",,Montréal,Québec,H4N 3G8
+179,Active,Jean-Sebastien,Leblond,Jean-Sebastien Leblond,,jsleblond@gmail.com,,4388757710,,,"740 Boul. Laval, Laval, QC, Canada",89,Laval,Québec,H7S 2K2
+180,Active,Sai,Komatlapalli,Sai Komatlapalli,,komatlapallisaikrishna@gmail.com,,5145689103,,,1001-1975 boulevard de Maisonneuve ouest,1001,,,H3H1K4
+181,Active,jordan,Assali,jordan Assali,,jordan@teamcleano.com,,5146494430,,,"589 Graham Boulevard, Mount Royal, QC, Canada",,Mont-Royal,Québec,H3P 2E3
+182,Active,Anna,Nini,Anna Nini,,anna.nini@akelius.ca,,0000000000,,,"4555 Avenue Bonavista, Montreal, QC, Canada",0504,Montréal,Québec,H3W 2C7
+183,Active,Gunin,Ruthwick,Gunin Ruthwick,,dhsashj@gmail.com,,4388666528,,,"1414 Rue Chomedey, Montreal, QC, Canada",309,Montréal,Québec,H3H 0A2
+184,Active,Gianna,Grilli,Gianna Grilli,,djaslsdjakl@gmail.com,,5148820426,,,"1717 Rue des Gerardies, Saint-Lazare, QC, Canada",,Saint-Lazare,Quebec,J7T 0R3
+185,Active,Lucie,Rhéaume,Lucie Rhéaume,,contact@lucierheaume.com,chloedechevigny@videotron.ca,5144671134,,,"60 Rue de Brésoles, Montreal, QC, Canada",306,Montréal,Québec,H2Y
+186,Active,Clarita,Hachem,Clarita Hachem,,hachemclarita@hotmail.co.uk,,4388285050,,,"60 Rue Péladeau, Boisbriand, QC, Canada",,Boisbriand,Québec,J7G 1M2
+187,Active,Claudine,Hachem,Claudine Hachem,,claudinehachem@outlook.com,,5146610114,,,"3297 Rue de Beauvoir, Boisbriand, QC, Canada",,Boisbriand,Québec,J7H 1H6
+188,Active,Filip,Stanczak,Filip Stanczak,,filipon2002s@gmail.com,,6477697677,,,"7777 Boulevard de lAcadie, Montreal, Quebec, Kanada",5,Montréal,Québec,H3N 2V9
+189,Active,Luis,Sollano,Luis Sollano,,gersollano@gmail.com,,5793663328,,,"1123 Rue Rachel Est, Montreal, QC, Canada",,Montréal,Québec,H2J 2J6
+190,Active,Elliot,Quimbrot,Elliot Quimbrot,,equimbrot@gmail.com,,5144732869,,,6950 Avenue Fielding,315,,,H4V1P7
+192,Active,Stephanie,Principe,Stephanie Principe,,stephanie_principe@hotmail.com,,5144657833,,,"2925 Croissant Giffard, Laval, QC, Canada",,Laval,Québec,H7E 4Y9
+194,Active,Sebastian,Comas,Sebastian Comas,,sebacms@gmail.com,,5142965443,,,"2300 Tupper Street, Montreal, QC, Canada",205,Montréal,Québec,H3H 0B9
+195,Active,Josua,Saenz,Josua Saenz,,josua.saenz@hotmail.com,,5149986122,,,"4700 2e Avenue, 606",606,,,H1Y 0B2
+196,Active,Osama,Husein,Osama Husein,,osama.huss@hotmail.com,,2633842741,,,"6631 Saint Andre Street, Montreal, QC, Canada",101,Montréal,Québec,H2S 2K7
+197,Active,Felix,Choquette,Felix Choquette,,felix.choquette@gmail.com,,5149772717,,,"71 Rue Duke, Montreal, QC, Canada",606,Montréal,Québec,H3C 0L5
+198,Active,Leo,Brunswic,Leo Brunswic,,panier@brunswic.fr,,4384393110,,,2720 Av Barclay appt 8 appt 8,,,,H3S 1J6
+199,Active,Eda,Ozonal,Eda Ozonal,,eda.unalozonal@gmail.com,,4382237131,,,"1414 Rue Chomedey, Montreal, QC, Canada",309,Montréal,Québec,H3H 0A2
+200,Active,E-J,Sherrington,E-J Sherrington,,ejsherr@gmail.com,,5142268506,,,"2355 Avenue Walkley, Montrã©Al, QC, Canada",5,Montrã©Al,Québec,H4B 2J9
+201,Active,Michelle,Furtado,Michelle Furtado,,michelle.furtado@hotmail.fr,,4385226602,,,"5456 7e Avenue, Montréal, QC, Canada",,Montréal,Québec,H1Y 2N5
+202,Active,jackie,campbell,jackie campbell,,cmandley@outlook.com,,4384083588,,,"8200 Avenue Christophe Colomb, Montreal, QC, Canada",27,Montréal,Québec,H2P 1X2
+203,Active,Karina,Panasci,Karina Panasci,,kpanasci@hotmail.com,,5142657603,,,"32 Avenue Fenwick, Montreal West, QC, Canada",,Montréal-Ouest,Québec,H4X 1P5
+204,Active,Kathleen,Renaud,Kathleen Renaud,,kati.renaud@gmail.com,,4384043478,,,"219 Rue Olivier-Chauveau, Laval, QC, Canada",,Laval,Québec,H7K 3J7
+205,Active,Tom,Boquet,Tom Boquet,,tom.boquet@gmail.com,,5146254575,,,"54 Rue Sunny Acres, Baie-DUrfe, QC, Canada",,Baie-d'Urfé,Québec,H9X 3B9
+206,Active,victor,raposo,victor raposo,,victorraposo00@gmail.com,,5144766742,,,"2097 Rue Viau, Montreal, QC, Canada",306,Montréal,Québec,H1V 3H4
+207,Active,Alexis,Juarez,Alexis Juarez,,info@constructiongenex.com,,4388820172,,,"515 Rue Aline-Prudhomme, Terrebonne, QC, Canada",,Terrebonne,Québec,J6Y 2B7
+208,Active,Nar,Bullock,Nar Bullock,,amyaussi@gmail.com,,5142665771,,,"6080 Place des Cageux, Sainte-Catherine, QC J5A 2S6, Canada",805,Sainte-Catherine,Québec,J5A 2S6
+209,Active,Gabrielle,Breton,Gabrielle Breton,,gabriellebreton3@gmail.com,,5142950137,,,"2925 Graham Boulevard, Mount Royal, QC, Canada",,Mont-Royal,Québec,H3R 1J8
+210,Active,Aba,Atlas,Aba Atlas,,abarthelbusiness@gmail.com,i.projectatlas@gmail.com,6138077571,6475680250,,"1055 Rue Cartier, Montréal, QC, Canada",,Montréal,Québec,H2K 4C2
+211,Active,Rosanna,Verrillo,Rosanna Verrillo,,rverrillo20@gmail.com,,5142392117,5148125539,,"8601 Rue Albanel, Montreal, QC, Canada",,Montréal,Québec,H1P 2L3
+212,Active,John,Koziris,John Koziris,,j.kozir3@gmail.com,,4389335022,,,"5985 Rue Souart, Montreal, QC, Canada",,Montréal,Québec,H3S 2E9
+213,Active,beril,evgin,beril evgin,,berilevgin@hotmail.com,,4388726283,,,"1075 Rue Sherbrooke Est, Montreal, QC, Canada",306,Montréal,Québec,H2L 4V1
+214,Active,Crystel,Gagne Duplan,Crystel Gagne Duplan,,crystel.business@outlook.com,,4387642329,,,"7090 Rue Beaubien Est, Anjou, QC, Canada",503,Montréal,Québec,H1M 1B4
+215,Active,Ella,Martindale,Ella Martindale,,ellalaureen@gmail.com,ella.martindale@concordia.ca,2506410440,,,1035 Bernard Avenue,1,,,H2V 1T9
+216,Active,Silas,Carneiro do couto,Silas Carneiro do couto,,silascou14@gmail.com,volurd@gmail.com,4388714836,,,"7880 Avenue Papineau, Montreal, QC, Canada",4,Montréal,Québec,H2E 2H3
+217,Active,Maria,Kalivas,Maria Kalivas,,mary.kalivas@gmail.com,,5147741382,,,"1085 Rue Emerson, Laval, QC, Canada",,Laval,Québec,H7W 1H6
+218,Active,Anna,Creo,Anna Creo,,itali_anna455@hotmail.com,annacreo455@hotmail.com,5147585315,5145506986,,"6315 Rue de Normandie, Montréal-Nord, QC, Canada",,Montréal,Québec,H1G 2L2
+219,Active,Agrasoy,Realty,Agrasoy Realty,,chloe.agrasoyrealty@gmail.com,,5146418559,,,"1375 Rue des Bassins, Montréal, QC, Canada",304,Montréal,Québec,H3C 1W3
+221,Active,Anja-Sara,Lahady,Anja-Sara Lahady,,anjasaralah@gmail.com,,4388268237,,,"2320 Rue Tupper, Montréal, QC, Canada",1214,Montréal,Québec,H3H 0B8
+222,Active,Kirk,Tsipnis,Kirk Tsipnis,,kirktsipnis@gmail.com,,5149835475,,,"514 Boul des Cépages, Laval, QC, Canada",,Laval,Québec,H7A 0H4
+223,Active,jeremie,dorzin,jeremie dorzin,,j.dorzin@hotmail.com,,5148306389,,,"546 Av. Guybourg, Montreal, QC, Canada",,Montréal,Québec,H1N 2X6
+224,Active,Jessica,Ricciardi,Jessica Ricciardi,,jessicaevebeauty@gmail.com,,5149625536,,,"928 Rue de Clichy, Vaudreuil-Dorion, QC J7V 0B2, Canada",,Vaudreuil-Dorion,Québec,J7V 0B2
+225,Active,Fabien,Joyeux,Fabien Joyeux,,joyeux.fabien@gmail.com,,5144584902,5149179759,,"8108 Chem. Magnolia, Côte Saint-Luc, QC, Canada",,Côte Saint-Luc,Québec,H4X 1B8
+226,Active,Alfredo,Cosentino,Alfredo Cosentino,,cosentinoalfredo@gmail.com,,5142452669,,,"2525 Avenue des Érables, Montreal, QC, Canada",11,Montréal,Québec,H2K 3V4
+228,Active,Michael,Gu,Michael Gu,,mgu2010@gmail.com,,5148207368,,,"888 Rue Wellington, Montreal, QC, Canada",313,Montréal,Québec,H3C 2M8
+229,Active,Dominika,Kopcik,Dominika Kopcik,,dominika@xcitetech.com,,4389936480,,,"670 Victoria Ave, Saint-Lambert, QC, Canada",,Saint-Lambert,Québec,J4P 2J6
+230,Active,Mahshid,Nabavi,Mahshid Nabavi,,nabavimahshid@icloud.com,,5145744474,,,211-2660 Rue Ontario Est,211,,,H2K 1W9
+231,Active,Nathaniel,Blumer,Nathaniel Blumer,,objects-phrase7z@icloud.com,,9172778773,,,"2321 Rue des Éclusiers, Montreal, QC, Canada",,Montréal,Québec,H3J 2Y6
+232,Active,Daniel,Calla,Daniel Calla,,dcalla84@gmail.com,,5145911242,,,"131 Prom Sheraton, Montreal West, QC, Canada",,Montreal West,Quebec,H4X 1N6
+233,Active,Denise,Pehlivanian,Denise Pehlivanian,,dxionn111@gmail.com,,5148051824,,,"11768 Rue Michel Sarrazin, Montreal, QC, Canada",,Montréal,Québec,H4J 2G5
+234,Active,bianca,napolitano,bianca napolitano,,biancanapolitano97@gmail.com,,5149228248,,,"7992 Rue Louky, Bersianik, QC, Canada",,Bersianik,Québec,H7A 0K6
+235,Active,Nishanthy,Chitravelu,Nishanthy Chitravelu,,nishanthy.chitravelu@gmail.com,,5148303643,,,"2226 Rue Harriet-Quimby, Saint-Laurent, Montreal, QC, Canada",,Montréal,Québec,H4R 3E2
+237,Active,daniel,silber,daniel silber,,silber.daniel@gmail.com,,5145785057,,,"88 Charlotte Street, Montreal, QC, Canada",210,Montréal,Québec,H2X 2W3
+238,Active,Nicholas,Salter,Nicholas Salter,,nsalter33@gmail.com,,5149283706,,,5651 Cote Saint Antoine ,,,,H4A 1R6
+239,Active,Maria,Ciarallo,Maria Ciarallo,,ciarallo.mb@gmail.com,,5147738815,,,"337 Arlington Crescent, Beaconsfield, QC, Canada",,Beaconsfield,Québec,H9W 2K4
+240,Active,steven,chung,steven chung,,steven.john.chung@gmail.com,,5148140860,,,"631 Rue de Saint-Malo Est, LÎle-Bizard, QC, Canada",,Montréal,Québec,H9C 2P1
+241,Active,Josie,Cipolla,Josie Cipolla,,josie.cipolla@hotmail.com,,4504190818,,,"Saint-Patrick Street, Montreal, QC, Canada",502,Montréal,Québec,h3k 0b3
+243,Active,Sasha,Parusova,Sasha Parusova,,parusova.alexandra@gmail.com,,6479047745,,,"215 Murray Street, Montreal, QC, Canada",603,Montréal,Québec,H3C 0B5
+244,Active,Sai,Testing,Sai Testing,,kskon1998@gmail.com,,5145689103,,,1975 boulevard de maisonneuve ouest,1001,,,H3H1K4
+245,Active,Anojan,Kanagalingam,Anojan Kanagalingam,,ano.thiviya@gmail.com,,5157748920,,,"1575 Boulevard du Souvenir, Laval, QC, Canada",103,Laval,Québec,H7N 4Z7
+246,Active,Sai,k,Sai k,,saikrishnak456@gmail.com,,5145689103,,,"1975 Boulevard De Maisonneuve Ouest #1001, Montreal, QC, Canada",,Montreal,Quebec,H3H
+247,Active,Chrissy,Kap,Chrissy Kap,,chrissy_1481@hotmail.com,,5149936227,,,"3365 Boulevard le Carrefour, Laval, QC, Canada",,Laval,Québec,H7T 0R4
+248,Active,Kraemer,Olthof,Kraemer Olthof,,kolth090@gmail.com,,8195987698,,,"1850 Avenue William-David, Montreal, QC, Canada",,Montréal,Québec,H1V 2S1
+249,Active,Samud,Zaman,Samud Zaman,,samud_zaman@yahoo.ca,,5145707886,,,"4560 Rue Edward Higgins, Montreal, QC, Canada",A01,Montréal,Québec,H8Y 3N6
+250,Active,josie,grassia,josie grassia,,grassia.josie@gmail.com,,5146516586,,,"4370 Rue Sir George Simpson, Lachine, QC, Canada",,Montréal,Québec,H8T 1E6
+251,Active,Derek,Berger,Derek Berger,,derek.machining@gmail.com,,4389883207,,,"101 Rue Viking, Dollard-des-Ormeaux, QC, Canada",,Dollard-des-Ormeaux,Québec,H9G 2M5
+252,Active,Ashraf,Moawada,Ashraf Moawada,,amoawad96@gmail.com,,5149808070,,,"145 Rue Bourget, Montreal, QC, Canada",102,Montréal,Québec,H4C 2M1
+254,Active,Sam,Alem,Sam Alem,,siem04@icloud.com,,,,,,,,,
+256,Active,Alexandre,Gauvin,Alexandre Gauvin,,gaualex@gmail.com,koffad@gmail.com,4389983001,4388808142,,"100 Avenue Easton, Montreal West, QC, Canada",,Montréal-Ouest,Québec,H4X 1L2
+257,Active,Franky,Benalia,Franky Benalia,,receipts@oakshop.ca,,4038302958,,,"111 Rue Chabanel Ouest, Montreal, QC, Canada",623,Montréal,Québec,H2N
+258,Active,William,Sarker,William Sarker,,williamsarker@gmail.com,,5148857786,,,"2095 Avenue Bennett, Montreal, QC, Canada",303,Montréal,Québec,H1V 2T2
+260,Active,Stefan,Vanev,Stefan Vanev,,vanevstefan@gmail.com,,5147427833,,,"680 Rue de Courcelle, Montreal, QC, Canada",710,Montréal,Québec,H4C 0B8
+261,Active,Claudia,Vitorino,Claudia Vitorino,,makeupbyclaudiav@gmail.com,,5147432205,,,"2151 Rue Léger, Lasalle, QC, Canada",1201,Montréal,Québec,H8N 0J3
+262,Active,elitsa,asenova,elitsa asenova,,elitsa.asenova@gmail.com,,5146491632,,,"218 Rue Roland Jeanneau, Montreal, QC, Canada",,Montréal,Québec,H3E 1R5
+263,Active,Kristina,Candido,Kristina Candido,,kristinacandido@hotmail.com,,5146557788,,,"68 Chem. Radcliffe, Montreal West, QC, Canada",,Montréal-Ouest,Québec,H4X 1B9
+264,Active,Ken,Haligua,Ken Haligua,,ken@nuagesight.com,,5148256343,,,"4333 Avenue Mariette, Montreal, QC, Canada",,Montréal,Québec,H4B 2G1
+265,Active,Lucia,Urbano,Lucia Urbano,,lucy@urbanointernational.com,,5142132835,,,"5840 Rue Jarry Est, Saint-Léonard, QC, Canada",403,Montréal,Québec,H1P 0A6
+266,Active,Lisa,Freeman,Lisa Freeman,,lfreeman@ualberta.ca,,4383857791,,,"4100 Av. Benny, Montreal, QC, Canada",B103,Montréal,Québec,H4B 2R8
+267,Active,Paul,Pedrossian,Paul Pedrossian,,pbedross@hotmail.com,,5142980704,,,"3730 Rue Simone-De Beauvoir, Laval, QC, Canada",,Laval,Québec,H7P 0C5
+268,Active,Amanda,leigh,Amanda leigh,,amanda-leigh-22@hotmail.com,,5142485029,,,"1072 Rue Saint-Timothée, Montreal, QC, Canada",,Montréal,Québec,H2L 2N3
+269,Active,Tanja,Geurtsen,Tanja Geurtsen,,tgeurtsen@gmail.com,,5142385640,,,"18 Rue Magil, Dollard-des-Ormeaux, QC, Canada",,Dollard-des-Ormeaux,Québec,H9G 1N3
+270,Active,Jessica,Mamarbachi,Jessica Mamarbachi,,cleanikhd@gmail.com,,5148238403,,,"335 Boulevard du Curé-Labelle, Fabreville, QC, Canada",,Laval,Québec,H7P 2P2
+271,Active,Meagan,Hodge,Meagan Hodge,,meaganhopehodge@hotmail.com,,5147736036,5148384679,,"433 21e Avenue, Lachine, Montreal, QC, Canada",8,Montréal,Québec,H8S 0A4
+272,Active,Lisa,Ventimiglia,Lisa Ventimiglia,,liventidesign@gmail.com,,5144490101,,,"37 Rue de Tarascon, Blainville, QC, Canada",,Blainville,Québec,J7B 6B7
+273,Active,Jonathan,Sylvestre-Fishman,Jonathan Sylvestre-Fishman,,j.fishman.91@gmail.com,,4389927505,,,"29 Avenue du Mont-Royal Est #2, Montreal, QC, Canada",,Montréal,Québec,H2T
+275,Active,Catherine,Dezoete,Catherine Dezoete,,catherine.dezoete@gmail.com,,5145719579,,,"456 Rue Hickson, Montreal, QC, Canada",,Montréal,Québec,H4G 2K1
+276,Active,Tiffany,Lai,Tiffany Lai,,contact@tiffanylai.ca,,5146548974,,,"8042 Rue Rousselot, Montreal, QC, Canada",,Montréal,Québec,H2E 1Z4
+277,Active,Shaun,Daigneault,Shaun Daigneault,,shaun25@hotmail.ca,,4388683738,,,"5661 Avenue De Chateaubriand, Montreal, QC, Canada",404,Montréal,Québec,H2S 0B6
+278,Active,Catia,Correia,Catia Correia,,admin@leartof.com,,5145018522,,,"5478 Boulevard Saint-Laurent, Montreal, QC, Canada",,Montréal,Québec,H2T 1S1
+279,Active,Louis-Philippe,Berti,Louis-Philippe Berti,,louispberti@gmail.com,sofiaxberti@gmail.com,5146612893,,,18131 Rue Hardouin,,,,H9K1J7
+280,Active,Meissa,Thiam,Meissa Thiam,,meissathiam@hotmail.com,,4388787230,,,"1500 Boulevard René-Lévesque Ouest, Montreal, QC, Canada",2812,Montréal,Québec,H3G 0H6
+281,Active,Laura,Germain,Laura Germain,,laura.p.germain@gmail.com,,5159943033,5145549211,,"92 Rue Park Ridge, Kirkland, QC, Canada",,Kirkland,Québec,H9J 1P9
+282,Active,Carmine,De Somma,Carmine De Somma,,carmine.desomma@gmail.com,,5148676664,,,"16 Discepola Street, Kirkland, QC, Canada",,Kirkland,Quebec,H9J 3Z9
+283,Active,Joshua,Monroe-Blanchette,Joshua Monroe-Blanchette,,joshmonroeblanchette@mmontreal.com,,4388734522,,,"630 Rue William, Montreal, QC, Canada",305,Montréal,Québec,H3C 4C9
+284,Active,sarah,sajjad,sarah sajjad,,sarahsajjad8@hotmail.com,,5149750215,,,"23 Rue Vinci, Dollard-Des Ormeaux, QC, Canada",,Dollard-des-Ormeaux,Québec,H9B 2N2
+285,Active,Jeffrey,Climan,Jeffrey Climan,,jeffreycliman@gmail.com,,5149526863,,,"22 Cressy Road, Hampstead, QC, Canada",,Hampstead,Québec,H3X 1R4
+286,Active,Matthew,Zambito,Matthew Zambito,,mzambito@hotmail.com,,5144024394,,,"3405 Boul. le Carrefour, Laval, QC, Canada",2102,Laval,Québec,H7T 0M9
+287,Active,Jordan,Assali,Jordan Assali,,botllycorp@gmail.com,,,,,,,,,
+288,Active,Demolition,Kapco,Demolition Kapco,,kaperonism@gmail.com,,4385222234,,,"175 Côte de Terrebonne, Terrebonne, QC, Canada",,Terrebonne,Québec,J6Y 0A6
+289,Active,Azadeh,Moghaddam,Azadeh Moghaddam,,moghaddam.azadeh@gmail.com,,4388839033,,,3480 Simpson avenue,904,,,H3G2N7
+290,Active,alex,mador,alex mador,,alexmador@outlook.com,,5147141329,,,"2424 Grand Boulevard, Montreal, QC, Canada",6,Montréal,Québec,H4B 1M2
+291,Active,Mili,Jain,Mili Jain,,raveenandmili@gmail.com,,,,,,,,,
+292,Active,Sabrina,Orlando,Sabrina Orlando,,sorlando_84@hotmail.com,,5142220785,,,"485 Rue Ricard, Laval, QC, Canada",,Laval,Québec,H7J 1A6
+293,Active,Emily,Ma,Emily Ma,,sinly.ma@gmail.com,,5149633833,,,"6710 Avenue Tisserand, Brossard, QC, Canada",,Brossard,Québec,J4W 3B9
+294,Active,Kristina,Campbell,Kristina Campbell,,krissicampbell@me.com,,5149718977,,,"415 Avenue Notre-Dame, Saint-Lambert, QC, Canada",,Saint-Lambert,Québec,J4P 2K2
+295,Active,julie,MARIGNALE,julie MARIGNALE,,julie.marignale@gmail.com,,4383383046,,,"2423 Rue Frontenac, Montreal, QC, Canada",,Montréal,Québec,H2K 2Z8
+296,Active,Cat Around,Films,Cat Around Films,,justin@cataroundfilms.com,,5144020461,,,"5524 Saint-Patrick Street, Montreal, QC, Canada",Door C (locks after 6pm),Montréal,Québec,H4E 1A8
+297,Active,Linda,G,Linda G,,chocolate4linda@hotmail.com,,5149155268,,,"4001 Rue Elsa-Triolet, Laval, QC, Canada",606,Laval,Québec,H7P 4K1
+298,Active,Michaela,Sheaf,Michaela Sheaf,,m_sheaf@yahoo.com,,8283685040,,,"5773 Avenue McAlear, Montreal, QC, Canada",,Montréal,Québec,H4W 2H2
+299,Active,Sabrina,9454-3022 Quebec inc,Sabrina 9454-3022 Quebec inc,,info@maison-reves.ca,,5145497555,,,"1288 Avenue des Canadiens-de-Montréal, Montreal, QC, Canada",4308,Montréal,Québec,H3B
+300,Active,Renaud,Blanchet,Renaud Blanchet,,info@gymlequartier.com,,5149795954,,,"6551 Rue Durocher, Outremont, QC, Canada",,Montréal,Québec,H2V 3Z4
+301,Active,Scott,Fillmore,Scott Fillmore,,scottafillmore@gmail.com,,9058096453,,,"5905 Boulevard du Quartier #1012, Brossard, QC, Canada",,Brossard,Québec,J4Z 0R7
+302,Active,Mark,Boisse,Mark Boisse,,markboisse@aol.com,,5142943342,,,"150 Westminster Avenue North, Montreal West, QC, Canada",1,Montréal-Ouest,Québec,H4X 1Z4
+303,Active,Raphael,Kemp,Raphael Kemp,,kemp.raphael@gmail.com,,5142918086,,,"150 Chemin de la Pointe Sud, Montreal, QC, Canada",PH103,Montréal,Québec,H3E 0A7
+304,Active,Priyanka,Pillai,Priyanka Pillai,,priyapillai40@gmail.com,,5142348410,,,"60 Rue de lÉclipse, Brossard, QC, Canada",1603,Brossard,Québec,J4Z 0T8
+307,Active,Laura,Lindborg,Laura Lindborg,,laurajlmars@gmail.com,,5145741902,,,"6860 Fielding Avenue, Montreal, QC, Canada",427,Montréal,Québec,H4V 1P2
+309,Active,Ilana,Suissa,Ilana Suissa,,ilanasuissa@gmail.com,dazoulay@gmail.com,5145890892,5146294586,,"3747 Rue John-Lyman, Montreal, QC, Canada",,Montréal,Québec,H4R 0C4
+311,Active,Stephanie,Tardif-Bennett,Stephanie Tardif-Bennett,,stephanietardifb@gmail.com,,5146542475,,,"1023 Rue Sainte-Marguerite, Montreal, QC, Canada",,Montréal,Québec,H4C 2X9
+312,Active,Noemie,Moar,Noemie Moar,,noemie.moar123@hotmail.com,,4389939869,,,"201 :Rue Antoine-Forestier, Laval, QC, Canada",,Laval,Québec,H7M 6A5
+314,Active,Nila,Isaac,Nila Isaac,,nilaisaac4@gmail.com,,4388771300,,,"5215 Chemin de la Côte-Sainte-Catherine, Montreal, QC, Canada",07,Montréal,Québec,H3W 1M9
+315,Active,Jeremy,Azeff,Jeremy Azeff,,azeffjeremy@hotmail.com,jazeff96@gmail.com,5144345183,,,370 Rue Saint-André,312,,,h2l0c4
+316,Active,Eric,Russo,Eric Russo,,ericrusso01@hotmail.com,,5148091033,,,"500 Avenue Mousseau-Vermette, Dorval, QC, Canada",324,Dorval,Québec,H9S 0A5
+317,Active,Marion,Murungi,Marion Murungi,,marionluts@yahoo.com,,4388726284,,,"4067 Grey Avenue, Montreal, QC, Canada",4067,Montréal,Québec,H4A 3N9
+318,Active,9507-0306 Quebec in,Salomon,9507-0306 Quebec in Salomon,,salomon@atdclubhouse.com,,5148234662,,,"460 Avenue Van Dyck, Brossard, QC, Canada",,Brossard,Québec,J4W 2E3
+319,Active,Araz,Nerdjivanian,Araz Nerdjivanian,,araz.nerdjivanian@gmail.com,,5144979556,,,"745 Rue Crevier, Montreal, QC, Canada",,Montréal,Québec,H4L 2V9
+320,Active,Grace,Alshawi,Grace Alshawi,,gracechaoui@hotmail.com,,5146239307,,,"1255 Boulevard Alexis-Nihon, Saint-Laurent, QC, Canada",103,Montréal,Québec,H4R 0N9
+321,Active,Hoda,Helou,Hoda Helou,,hoda.2helou@gmail.com,,5148154411,5145715585,,"3660 Promenade Sir-William-Osler, Montreal, QC, Canada",1502,Montreal,Quebec,H3G 0B1
+323,Active,Sandra,Simas,Sandra Simas,,sandra.simas@live.ca,simas.interiors@mail.com ,5152988216,7786684233,,"22d Rue de lArmistice, Repentigny, QC, Canada",D,Repentigny,Québec,J5Z 2C7
+324,Active,Dhruv,Arora,Dhruv Arora,,butterchickencroissant@gmail.com,,5147751622,,,"4975 Rue Jean-Talon O #207, Montréal, QC, Canada",2216,Montréal,Québec,H4P 1W7
+325,Active,Fiora,Miceli,Fiora Miceli,,micelifiora1@gmail.com,,5142501745,,,"5249 Rue du Bon-Conseil, Saint-Léonard, Montreal, Québec H1R 1V9, Canada",,Montréal,Québec,H1R 1V9
+326,Active,Charlton,Silvy,Charlton Silvy,,charlton.silvy@gmail.com,,4385060116,,,"1123 Saint Joseph Boulevard East #1a, Montréal, QC, Canada",,Montréal,Québec,H2J 1L3
+327,Active,maggie,Proud,maggie Proud,,magpro16@icloud.com,,5142790138,,,"1540 Avenue Lajoie, Outremont, QC, Canada",,Montréal,Québec,H2V 1R3
+328,Active,Uchenna,Udechukwu,Uchenna Udechukwu,,captainuchenna1@gmail.com,,5146534356,,,"1225 Rue Notre-Dame Ouest, Montréal, QC H3C 6S3, Canada",702,Montréal,Québec,H3C 6S3
+329,Active,Wendy,ED,Wendy ED,,wendydonissaint@gmail.com,,5148255025,,,"3930 Rue de Mentana, Montreal, QC, Canada",,Montréal,Québec,H2L 3R8
+330,Active,Danny,Capaldo,Danny Capaldo,,d.capaldo@gmail.com,,4388202935,,,"7121 Avenue Goncourt, Anjou, QC, Canada",,Montréal,Québec,H1K 3Y2
+331,Active,Tara,Small,Tara Small,,tara.small.ts@gmail.com,,5146194717,,,"1310 Avenue Provost, Brossard, QC, Canada",,Brossard,Québec,J4W 2R2
+332,Active,Chloe,Tramley,Chloe Tramley,,tramleyc@hotmail.com,,5142134509,5149700421,,"409 Rue Bruce, Kirkland, QC, Canada",,Kirkland,Québec,H9H 3X2
+333,Active,Celia,Cristinziani,Celia Cristinziani,,c.ailec85@gmail.com,,5149933059,,,"4425 Boulevard Saint-Jean, Dollard-Des Ormeaux, QC, Canada",407,Dollard-des-Ormeaux,Québec,H9H 2A4
+335,Active,Houda,Jawhar,Houda Jawhar,,houda_jawhar@hotmail.com,,4384907400,,,"4020 Sources Boulevard, Dollard-Des Ormeaux, QC, Canada",404,Dollard-des-Ormeaux,Québec,H9B 3L5
+336,Active,Jade,Driscoll,Jade Driscoll,,jadedriscoll07@gmail.com,,4385432990,,,"206 Courcelle Street, Montreal, QC, Canada",,Montréal,Québec,H4C 3B7
+338,Active,Anthony,Dewar,Anthony Dewar,,anthony@rokerconstruction.com,,5142647249,,,"5845 Avenue Marc Chagall, Côte Saint-Luc, QC, Canada",,Côte Saint-Luc,Québec,H4W 3K4
+339,Active,Friedi,Feige,Friedi Feige,,friedi@mgg.ski,lafirmeconcierge@gmail.com,5819955503,4387995308,,"653 Avenue Belmont, Westmount, QC, Canada",,Westmount,Québec,H3Y 2W3
+340,Active,Andrew,Hunkeler,Andrew Hunkeler,,andrewhunkeler@gmail.com,,5149415936,,,"1010 William Street, Montreal, QC, Canada",223,Montréal,Québec,H3C 0K8
+341,Active,Tylea,Cole,Tylea Cole,,tyleacole@hotmail.com,,4387287833,,,"2017 Westmore Avenue, Montreal, QC, Canada",6,Montreal,Quebec,H4B 1Z5
+342,Active,Sasha,Novozhilova,Sasha Novozhilova,,aleksandra.novozhilova@outlook.com,,5146323228,,,"2734 Rue Augustin-Cantin, Montreal, QC, Canada",,Montréal,Québec,H3K 1E1
+343,Active,Chloe,Burko,Chloe Burko,,chloeburko@gmail.com,,5148263436,,,"172 Rue Schubert, Dollard-Des Ormeaux, QC, Canada",,Dollard-des-Ormeaux,Québec,H9B 2E4
+344,Active,Noémie,Hallé-Ducasse,Noémie Hallé-Ducasse,,noemie.halleducasse@gmail.com,,4383082589,,,"829 Rue Gameroff, Montreal, QC, Canada",,Montréal,Québec,H8T 3R4
+345,Active,Karen,Kessous,Karen Kessous,,karenkessous@hotmail.com,,5148336451,,,"278 Rue Fenwood, Dollard-Des Ormeaux, QC, Canada",,Dollard-des-Ormeaux,Québec,H9G 2Z5
+346,Active,Steve,Eid,Steve Eid,,eidsteve1@gmail.com,,5147097392,,,"3476 Rue Anatole-Carignan, Montreal, QC, Canada",,Montréal,Québec,H8T 3M9
+347,Active,Midlyne,Titus,Midlyne Titus,,midlyne@hotmail.com,,5142989388,,,"984 Rue Notre-Dame #108, Repentigny, QC, Canada",,Repentigny,Québec,J5Y 1C9
+348,Active,Ezio,Wassim,Ezio Wassim,,eziodilameche@outlook.com,,5142442206,,,"3895 Boulevard de Chenonceau, Laval, QC, Canada",503,Laval,Québec,H7T 0L3
+349,Active,jhone,maier,jhone maier,,zolawa545w@gmail.com,,,,,,,,,
+350,Active,Alexander,Wurtz,Alexander Wurtz,,alexander_wurtz@hotmail.com,alwz@simcorp.com,4384597476,,,888 Rue Wellington,1004,,,H3C 2M8
+351,Active,Rosalie,Nardelli,Rosalie Nardelli,,rosalie.nardelli@hotmail.com,,5142674227,,,"5510 Rue Radisson, Montréal, QC, Canada",,Montréal,Québec,H1M 1X6
+352,Active,Magdalena,Pikula,Magdalena Pikula,,klomagda@gmail.com,,5144651143,,,"4077 Acres Street, Pierrefonds, QC, Canada",,Montréal,Québec,H9H 2T3
+353,Active,Sharon,Roopnah,Sharon Roopnah,,sharon.roopnah5@gmail.com,,5147555174,,,"49 Pl. Touraine, Dollard-Des Ormeaux, QC, Canada",,Dollard-des-Ormeaux,Québec,H9B 3C3
+355,Active,Jessica,Laforge,Jessica Laforge,,jessica.laforge@umontreal.ca,,4385266251,,,"2137 Avenue Oxford, Montréal, QC, Canada",201,Montréal,Québec,H4A 2X7
+356,Active,Mary,Fabrizio,Mary Fabrizio,,steve.butera@hotmail.ca,,,,,"12095 50e Avenue, Montreal, QC, Canada",,Montréal,Québec,H1E 7B8
+357,Active,Krista,Rossum,Krista Rossum,,kristarossum@gmail.com,krista.rossum@mail.mcgill.ca,2047824480,,,"290 Rue Sainte-Marguerite, Montreal, QC, Canada",,Montréal,Québec,H4C 2W6
+359,Active,Talya,Ezerzer,Talya Ezerzer,,talezerzer@gmail.com,,5147098443,,,"1288 Avenue des Canadiens-de-Montréal, Montreal, QC, Canada",2414,Montréal,Québec,H3B
+360,Active,Manal,Bihya,Manal Bihya,,manalbihya@gmail.com,,4378927774,,,2000 Rue Remembrance,623,,,H8S 0C9
+361,Active,Jayne,Lisak,Jayne Lisak,,dislexic@outlook.com,,5147819944,,,"3555 Chemin de la Côte-des-Neiges, Montreal, QC, Canada",1903,Montréal,Québec,H3H 1V2
+362,Active,Caroline,Vreeland,Caroline Vreeland,,carolinezvreeland@gmail.com,,5146494430,,,"2131 Rue Wellington, Montreal, QC, Canada",,Montréal,Québec,H3K 1X1
+363,Active,Alessandra,Caputo,Alessandra Caputo,,alesscaput@gmail.com,,5147163593,,,"1135 Rue de Montmartre, Laval, QC, Canada",,Laval,Québec,H7E 3P2
+364,Active,draguisha,dominique,draguisha dominique,,draguisha@hotmail.com,,5142444887,,,"14414 Rue Madison, Pierrefonds, QC, Canada",,Montréal,Québec,H9H 1K8
+365,Active,Timothée,Perrin,Timothée Perrin,,tipyjunior@gmail.com,,4388739869,,,"4393 Rue de Bordeaux, Montréal, QC, Canada",,Montréal,Québec,H2H 1Z6
+366,Active,Farène,Goulamhoussen,Farène Goulamhoussen,,goulamhoussenfarene@gmail.com,,5142450458,,,"424 4e Avenue, Deux-Montagnes, QC, Canada",,Deux-Montagnes,Québec,J7R 3B6
+367,Active,Yahia,Shouhoud,Yahia Shouhoud,,yahia161203@gmail.com,,5879662677,,,"1300 René-Lévesque Boulevard West, Montreal, QC, Canada",,Montréal,Québec,H3B
+368,Active,Kundan,Sheikh,Kundan Sheikh,,kundanrulz@gmail.com,kundan.sheikh@mcgill.ca,5149263143,,,2166 Blvd de Maisonneuve,203,,,H3H 1L5
+369,Active,Isabelle,Lesperance,Isabelle Lesperance,,jojohabs123@hotmail.com,,5145066707,,,"4602 Rue Michel Bibaud, Montreal, QC, Canada",,Montréal,Québec,H3W 2E2
+370,Active,Antonietta,Mastrangelo,Antonietta Mastrangelo,,flora_kong@live.com,,5145943377,,,"9330 Croissant Roussel, Brossard, QC, Canada",,Brossard,Québec,J4X 2R3
+371,Active,Wendy,Donissaint,Wendy Donissaint,,wenrido@hotmail.com,,5148255025,,,"9089 Rue de lAiglon, Montreal, QC, Canada",,Montréal,Québec,H1R 3K5
+372,Active,Antonietta,Mastrangelo,Antonietta Mastrangelo,,antoniettamast@live.ca,,5145943377,,,"9330 Croissant Roussel, Brossard, QC, Canada",,Brossard,Québec,J4X 2R3
+373,Active,Liam,Casey,Liam Casey,,caseyl@selwyn.ca,lpcasey18@gmail.com,4383512601,,,"400 Av. Lansdowne, Westmount, QC, Canada",406,Westmount,Québec,H3Y 2V3
+374,Active,Kayden,Allen,Kayden Allen,,kaaydenallen@gmail.com,,7782681843,,,"3605 Ridgewood Avenue, Montreal, QC, Canada",405,Montréal,Québec,H3V 1B4
+375,Active,Sabrin,Salmin,Sabrin Salmin,,sabrin.salmin@gmail.com,,4384598049,,,"38 Rue Sénécal, Longueuil, QC, Canada",,Longueuil,Québec,J4G 1M7
+376,Active,Westmount,Estates Management Inc.,Westmount Estates Management Inc.,,jaycy@nujour.com,joanart@nujour.com,4505584152,,,"201 Av. Metcalfe, Westmount, QC, Canada",727,Westmount,Québec,H3Z 2H7
+377,Active,Tamara,Close,Tamara Close,,tamaraclose@closegc.com,,5145026863,,,"3857 Rue de Mentana, Montreal, QC, Canada",,Montréal,Québec,H2L 3R7
+378,Active,Benjamin,Morris,Benjamin Morris,,benjamin.morris@bmlocation.ca,,4389210881,,,"469 2e Avenue, Lachine, Montreal, QC, Canada",,Montréal,Québec,H8S 2T1
+379,Active,Zachary,Argyris,Zachary Argyris,,zac.ale.arg@gmail.com,,2633812400,,,"3600 Avenue du Parc, Montreal, QC, Canada",#0324,Montréal,Québec,H2X 3R2
+380,Active,Billy,Kourembanas,Billy Kourembanas,,eventsbyvasilios@gmail.com,,5147438799,5149751822,,"887 Place Des Capucines, Laval, QC H7X 3G7",,,,H7X3G7
+381,Active,Maxim,Verchinski,Maxim Verchinski,,mverchinski@gmail.com,deborapassos@gmail.com,6048098981,7788713003,,"129 Florida Drive, Beaconsfield, QC, Canada",,Beaconsfield,Quebec,H9W 1M2
+383,Active,Daniela,Pizzuto,Daniela Pizzuto,,fdpizzuto@gmail.com,,5144520109,,,"6612 Avenue Macdonald, Hampstead, QC, Canada",,Hampstead,Québec,H3X 2X4
+384,Active,Ted,Spare,Ted Spare,,ted.spare@gmail.com,,5149662591,,,"1115 St Joseph Blvd E, Montreal, QC, Canada",4,Montréal,Québec,H2J 1L3
+387,Active,Imraan,Sookia,Imraan Sookia,,imraansookia92@gmail.com,,4383377581,,,9185 Lennon Street,710,,,H3P2E3
+390,Active,Lyndon,Ferguson,Lyndon Ferguson,,fergusonlyndon@gmail.com,,5146039686,,,"17806 Sainte Marie Road, Montreal, QC, Canada",,Montréal,Québec,H9J 2L5
+391,Active,Shahnila,Chaudary,Shahnila Chaudary,,shahnilachaudary@gmail.com,,5149096452,,,"4949 Rue Périard, Pierrefonds, QC, Canada",,Montréal,Québec,H9J 3T4
+392,Active,Danny,Roy,Danny Roy,,dannyroy12345@hotmail.com,,4503706626,,,"3300 Av. Troie, Montreal, QC, Canada",804,Montréal,Québec,H3V 1A9
+394,Active,Lachezar,Arabadzhiev,Lachezar Arabadzhiev,Skild Labs Inc.,lacho@skildlabs.com,lachezar.arabadzhiev@gmail.com,4384663460,,,"1550 Des Bassins Street, Montreal, Quebec H3C 0W5, Canada",132,Montréal,Québec,H3C 0W5
+396,Active,Justine,Laurie,Justine Laurie,,justine.laurie1@gmail.com,,5145165418,,,"150 Avenue King, Pointe-Claire, QC, Canada",,Pointe-Claire,Québec,H9R 4H4
+397,Active,Joseph,Lapenna,Joseph Lapenna,,jlapenna@constructionsri.com,,5146904298,,,"1800 Boulevard Angrignon, Lasalle, QC, Canada",201,Montréal,Québec,H8N0B8
+398,Active,Younes,Rakkaby,Younes Rakkaby,,younesrakkaby@gmail.com,yoounesrakkaby@gmail.com,5145691773,,,"5330 Avenue Louis Colin, Montreal, QC, Canada",,Montréal,Québec,H3T 1T3
+399,Active,Julianna,Varriale,Julianna Varriale,,xox-juli-xox@hotmail.fr,,5149673647,,,"6361 Rue Drolet, Montreal, QC, Canada",,Montréal,Québec,H2S 2S6
+400,Active,Elio,Perrazzino,Elio Perrazzino,,eperrazzino@bell.net,,5146050177,,,"315 Vinet Ave, Dorval, QC, Canada",,Dorval,Quebec,H9S 2M7
+401,Active,95173472,QUEBEC INC.,95173472 QUEBEC INC.,,trancantine@gmail.com,,5143794690,,,"4690 Rue Notre-Dame Ouest, Montreal, QC, Canada",,Montréal,Québec,H4C 1S6
+402,Active,Tracy,Hawchar,Tracy Hawchar,,tracyhawchar@gmail.com,,5149445009,,,"1625 Boulevard De Maisonneuve Ouest, Montreal, QC, Canada",P212,Montreal,Quebec,H3H 2N4
+403,Active,Alex,Brousseau,Alex Brousseau,,alexbrousseau01@gmail.com,,5142359224,,,"6631 Rue de Lanaudière, Montréal, QC, Canada",4,Montréal,Québec,H2G 3B1
+404,Active,Niggers,ur company suck,Niggers ur company suck,,fucku@gmail.com,,,,,,,,,
+405,Active,Brianna,Ste-Marie,Brianna Ste-Marie,,b.stemarie96@gmail.com,,5146637645,,,"435 Saint-Louis Avenue, Pointe-Claire, QC, Canada",,Pointe-Claire,Québec,H9R 2A6
+406,Active,Katherine,Argiriou,Katherine Argiriou,,katherineargiriou@hotmail.com,,5149790179,,,"3600 Boulevard Gouin Ouest, Montreal, QC, Canada",,Montréal,Québec,H3M 1B7
+407,Active,Luba,Gayda,Luba Gayda,,lubagayda@gmail.com,,5147086366,,,"220 Chemin du Golf, Montreal, QC, Canada",414,Montréal,Québec,H3E 2A7
+408,Active,Patakfalvi,Notaire inc.,Patakfalvi Notaire inc.,,admin@mynotaire.ca,,5147058262,,,"3095 A. Jean-Noël-Lavoie, Laval, Québec H7P 4W5, Canada",205,Laval,Québec,H7P 4W5
+409,Active,Nitin,Verma,Nitin Verma,,drnitinvermamd@gmail.com,,3025889099,,,"245 Boulevard Robert-Bourassa, Montreal, QC, Canada",2513,Montréal,Québec,H3C 1A4
+411,Active,Celia,Mekid,Celia Mekid,,celia.mekid@hotmail.com,,4388875346,,,"1485 Rue Jacques-Hertel, Montreal, QC, Canada",2,Montréal,Québec,H4E 1P5
+412,Active,Cynthia,Santamaria,Cynthia Santamaria,,cynthia.santamaria@gmail.com,nicolejonesyoga@gmail.com,5149626636,5148808068,,"199 Rue du Fort-Rémy, Lasalle, QC, Canada",,Montréal,Québec,H8R 4C5
+413,Active,Lesley,Manchanda,Lesley Manchanda,,lesley.nicole35@icloud.com,manchanda.rp@gmail.com,9028179494,7828823996,,"151 Rue Louis Cyr, Repentigny, QC, Canada",,Repentigny,Québec,J5Y 0A2
+414,Active,Abhirupa,Sen,Abhirupa Sen,,abhirupac.sen@gmail.com,,5142352217,,,"580 Place de la Fontaine, Verdun, QC, Canada",1B,Montréal,Québec,H3E 1G6
+415,Active,Groupe,DV,Groupe DV,,noemail@gmail.com,,0000000000,,,"479 Av. Mousseau-Vermette, Dorval, QC, Canada",1111,Dorval,Québec,H9S 0A6
+419,Active,Karen,Dreiblatt,Karen Dreiblatt,,naturalglow78@gmail.com,,5145710918,,,"1179 Rue du Phare, Laval, QC, Canada",,Laval,Québec,H7R 6H5
+420,Active,Nimah,Ali,Nimah Ali,,nimah.ali@gmail.com,,5149422614,,,"12358 Rue Pavillon, Pierrefonds-Roxboro, QC, Canada",,Montréal,Québec,H8Z 1N1
+421,Active,Nicole,Wilson,Nicole Wilson,,nicole.evelyn.wilson@gmail.com,,5149696377,,,"3095 Rue William, Saint-Hubert, QC, Canada",B,Longueuil,Québec,J4T 2W7
+422,Active,Gary,Mathieu,Gary Mathieu,,garymathieu10@gmail.com,,5147184249,,,"1085 Graham Boulevard #7, Mount Royal, QC, Canada",7,Mont-Royal,Québec,H3P 2G1
+423,Active,Lauren,Goodman,Lauren Goodman,,lrn.goodman@gmail.com,info@projetshop.com,5145571586,,,"5413 Boul. Saint-Laurent, Montreal, QC, Canada",306,Montréal,Québec,H2T 1S5
+425,Active,Korhan,Teko,Korhan Teko,,teko.korhan@hotmail.com,,6476066701,4164745792,,"1065 Rue des Francs-Bourgeois, Boisbriand, QC, Canada",103,Boisbriand,Québec,J7H 0G9
+426,Active,Joy,Benisty,Joy Benisty,,joy.benisty@gmail.com,,6478386840,,,"5885 Boulevard Cavendish, Montreal, QC, Canada",603,Montréal,Québec,H4W 3H3
+427,Active,Mario,Zakhour,Mario Zakhour,,daniellemarioz@gmail.com,,5144491617,5144326386,,395 Av Lagacé ,,,,H9S2M2
+428,Active,Catherine,Sauve,Catherine Sauve,,catherine_sauve@hotmail.ca,,5148804410,,,"752 Rue Walnut, Montreal, QC H4C 3E5, Canada",101,Montréal,Québec,H4C 3E5
+429,Active,Sarah,Abou-Hassan,Sarah Abou-Hassan,,sarah_abouhassan@hotmail.com,,,,,,,,,
+430,Active,Zareh,Makdesian,Zareh Makdesian,,zee9000@hotmail.com,,5142224889,,,"366 Rue Mayor, Montreal, QC, Canada",603,Montréal,Québec,H3A 1N8
+431,Active,Rami,Chaaban,Rami Chaaban,,chaaban.rami@gmail.com,,4387633129,,,"6165 Rue Sherbrooke Ouest, Montreal, QC, Canada",106,Montréal,Québec,H4B 1M1
+432,Active,Rim,Adib,Rim Adib,,621anto@gmail.com,,5149699290,,"8 extra cleaning hours the first day, 3 extra hours the second day x 35$/h","621 Chemin Cote Saint Antoine, Westmount, QC, Canada",,Westmount,Québec,H3Y 2K5
+433,Active,Andrew,Anzovino,Andrew Anzovino,,andyanzovino@gmail.com,,5147979135,,,"566 Av Forest, Pincourt, QC, Canada",7,Pincourt,Québec,J7W 0K2
+434,Active,Emily,Kocsis,Emily Kocsis,,emily.kocsis18@gmail.com,e2kocsis@uwaterloo.ca,9053248617,,,6329 Rue Drolet,,,,H2S2S6
+435,Active,Maria,Galanakis,Maria Galanakis,,maria.galanakis@hotmail.com,,5149949508,,,"369 Rue Roger-Pilon, Dollard-Des Ormeaux, QC, Canada",,Dollard-des-Ormeaux,Québec,H9G 2S1
+436,Active,Michel,Arghiriu,Michel Arghiriu,,marghiriu@gmail.com,,5149168581,,,"100 Avenue Laval #2353, Laval, QC, Canada",302,Laval,Québec,H7N 3V4
+437,Active,RESSOURCE LE MI-TEMPS,Inc.,RESSOURCE LE MI-TEMPS Inc.,,cassandra@lemitemps.ca,,4507360563,,,"4650 Boulevard des Laurentides, Laval, QC, Canada",205,Laval,Quebec,H7K 2J4
+438,Active,Angèle,Eguienta,Angèle Eguienta,,serviteur.pastels_5q@icloud.com,,4387886938,,,"8197 Avenue de Gaspé, Montréal, QC, Canada",,Montréal,Québec,H2P 2J9
+439,Active,Mona,Golabi,Mona Golabi,,mona.golabi@gmail.com,,5148412293,,,"2316 Duvernay Street, Montreal, QC, Canada",,Montréal,Québec,H3J 2X1
+440,Active,Leo,Mihalo,Leo Mihalo,,mihalochristaleo@yahoo.ca,,5149693497,,,"1188 Av. Union, Montréal, QC, Canada",3003,Montréal,Québec,H3B 0E5
+441,Active,Leonidas,Mihalochrista,Leonidas Mihalochrista,,megalodonelitehockey@yahoo.com,,,,,,,,,
+442,Active,Sean,Arani,Sean Arani,,s.s.arani@gmail.com,,4388811111,,,"215 Chemin Edgehill, Westmount, QC, Canada",,Westmount,Québec,H3Y 1G2
+443,Active,Mathieu,Thériault,Mathieu Thériault,,mathieu.theriault31@gmail.com,lemieux.aurelie@gmail.com,5145853430,5819981955,,"6628 Rue Drolet, Montréal, QC, Canada",8,Montréal,Québec,H2S 2S8
+444,Active,Julie,Arbour,Julie Arbour,,julielarbour@gmail.com,,5145715854,,,"178 Rue Terry Fox, Verdun, Montreal, QC, Canada",,Montréal,Québec,H3E 1L5
+445,Active,Elisabeth,Pelletier,Elisabeth Pelletier,,ely_pelletier@hotmail.com,,4188065906,,,"701 Rue Irène, Montréal, QC, Canada",409,Montréal,Québec,H4C 2P2
+446,Active,Danse,123,Danse 123,,info@danse123.ca,,5143667927,,,"7927 Newman Boulevard, Lasalle, QC, Canada",,Montréal,Québec,H8N 2N9
+447,Active,Lola,Toledano,Lola Toledano,,toledanolola@gmail.com,,5148895652,,,"4884 Avenue de Melrose, Montreal, QC, Canada",,Montréal,Québec,H3X 3P5
+448,Active,9526-9783,Quebec Inc.,9526-9783 Quebec Inc.,,email@mail.com,,5146021114,,,"6414 Rue Saint-Denis, Montreal, QC, Canada",,Montréal,Québec,H2S 2R7
+449,Active,7ednx_,_,7ednx_ _,,caracena.ornela@gmail.com,,4189933207,,,"200 Rue Saint-Jacques, Montreal, QC, Canada",301,Montréal,Québec,H2Y 1L9
+450,Active,Ryan,El Khoury,Ryan El Khoury,,ryankhoury04@gmail.com,,,,,,,,,
+451,Active,Amir,Moulai,Amir Moulai,,amoulai1909@gmail.com,,4039707375,,,"3687 Rue Clark, Montreal, QC, Canada",201,Montréal,Québec,H2X 2S1
+452,Active,Chelsea,Burke,Chelsea Burke,,chelsea@theventagency.ca,chelseaburkebrisson@protonmail.com,5148090894,5144420385,,"2354 Rue Knox, Montréal, QC, Canada",,Montréal,Québec,H3K 1P9
+453,Active,Dmytro,Aref'yev,Dmytro Aref'yev,,dmytroaref@gmail.com,,5146194803,,,"3405 Boulevard le Carrefour, Laval, QC, Canada",1007,Laval,Québec,H7T 0M9
+456,Active,Filomena,Sciarra,Filomena Sciarra,,ic_dolphinz11@hotmail.com,,5143378501,,,"3424 Rue Dudemaine, Montreal, QC, Canada",,Montréal,Québec,H4J 1M3
+457,Active,Karine,Khandji,Karine Khandji,,karine.khandji@gmail.com,,5147751954,,,"4885 Boulevard Henri Bourassa Ouest, Saint-Laurent, QC, Canada",404,Montréal,Québec,H4L 0A5
+458,Active,Nioushah,Noushi,Nioushah Noushi,,nioushanoushi@gmail.com,nicholas.rudolph.beck@gmail.com,4164502855,5148248818,,"6854 Av. Christophe Colomb, Montreal, QC, Canada",,Montréal,Québec,H2S 2H2
+459,Active,1769 Distillery,Inc.,1769 Distillery Inc.,,maureen@1769distillery.com,,5149438359,,,"111 Newman Boulevard, Lasalle, QC, Canada",,Montréal,Québec,H8R 3E6
+460,Active,Leqi,Yu,Leqi Yu,,luckzta007@gmail.com,,5146029802,,,"1919 Rue Gustave-Désourdy, Longueuil, QC J4T 1Y7, Canada",,Longueuil,Québec,J4T 1Y7
+461,Active,Naomi,Dayan,Naomi Dayan,,naomi_911@hotmail.com,,5148898557,,,"5119 Saint Ambroise Street #3, Montreal, QC, Canada",3,Montréal,Québec,H4C 2E9
+462,Active,Audrey,Bedard,Audrey Bedard,,audreebedard@hotmail.com,,4383896976,,,"5798 Avenue De Lorimier, Montréal, QC, Canada",,Montréal,Québec,H2G 2N6
+463,Active,melissa,Lauzon,melissa Lauzon,,jeffrey.enbom@me.com,melissalauzon@me.com,5148823560,5149837964,,495 Rue Etienne-Lavoie,,,,H7X 0B4
+464,Active,Nick,Messina,Nick Messina,,nicholas.messina@theagencyre.com,,5148266991,5146030395,,"404 Wolseley North Avenue, Montreal West, QC, Canada",,Montréal-Ouest,Québec,H4X 1W3
+465,Active,Josee,Mirabella,Josee Mirabella,,joseemirabella@gmail.com,,5147104346,,,"11181 Rue Claude-Mathias-Fanef, Montreal, QC, Canada",,Montréal,Québec,H1C 0A9
+466,Active,Nancia Marthe,Prochette,Nancia Marthe Prochette,,nancia.mp@gmail.com,nancia.marthe@gmail.com,5145152260,,,288 Rue Léon-Bloy O,2,Terrebonne,Québec,J6X 3J1
+467,Active,David,Fine,David Fine,,david@davcon.ca,,5149983431,,,"642 Rue de Courcelle, Montreal, QC, Canada",311,Montréal,Québec,H4C 3C7
+468,Active,BRIAN,ETCOVITCH,BRIAN ETCOVITCH,,brianetco@gmail.com,,5145667197,,,156 Rue St-Ferdinand,,,,H4C 2S5
+469,Active,Komal,Sheikh,Komal Sheikh,,komal.sheikh90@gmail.com,,5146598870,,,"1797 Rue King, Saint-Hubert, QC, Canada",,Longueuil,Québec,J4T 1Z1
+470,Active,Brianna,McEnroe,Brianna McEnroe,,briannamcenroe14@gmail.com,,,,,,,,,
+471,Active,Sandra,Costa,Sandra Costa,,costasandra@live.ca,,4388691288,,,"3940 Boulevard Saint-Elzéar Ouest, Laval, QC, Canada",1702,Laval,Québec,H7P 0N4
+472,Active,Luca,Zambito,Luca Zambito,,lucazambito2002@hotmail.com,,5147965822,,,"9140 Av. Choppin, Anjou, QC, Canada",,Montréal,Québec,H1J 1Z8
+473,Active,Sidney Sandra,Dian,Sidney Sandra Dian,,sidneydian@hotmail.com,,5148155002,,,"10259 Boulevard des Galeries dAnjou, Anjou, QC, Canada",,Montréal,Québec,H1J 2Z3
+474,Active,Marina,Paradisis,Marina Paradisis,,marinaparadisis@gmail.com,katravasgerry@gmail.com,5148303656,5146380915,,"1213 Avenue 43, Laval, QC, Canada",,Laval,Québec,H7R 5A2
+475,Active,Klara,Neuwirth,Klara Neuwirth,,klarav.neuwirth@gmail.com,,5147154693,,,"1000 Ottawa Street, Montreal, QC, Canada",708,Montréal,Québec,H3C 1S3
+477,Active,Catherine,Macaluso,Catherine Macaluso,,catmac8888@gmail.com,,5148876088,,,,,,,
+478,Active,Styphanie,Mledger,Styphanie Mledger,,mledger954@gmail.com,,,,,,,,,
+479,Active,Jaimie,Litwin,Jaimie Litwin,,mail@mail.com,,5146514340,,,"5320b Avenue Royalmount, Montréal, QC H4P 2P5, Canada",,Montréal,Québec,H4P 2P5
+480,Active,Andrew,Olders,Andrew Olders,,andrew.olders@gmail.com,,5149947435,,,"650 Rue Notre-Dame Ouest, Montreal, QC, Canada",205,Montréal,Québec,H3C 1J2
+481,Active,Isabella,Beato,Isabella Beato,,info@salongoldn.com,,5148351198,,,"1670 Boulevard des Laurentides, Laval, QC, Canada",,Laval,Quebec,H7M 2P4
+482,Active,Natasha,Ziavras,Natasha Ziavras,,natashaziavras@gmail.com,,5145132705,,,"1051 Chemin Waterloo, Mount Royal, QC, Canada",,Mont-Royal,Québec,H3R 2L3
+486,Active,Matei,Banica,Matei Banica,,mattbanica7@gmail.com,dorsa.sohaei77@gmail.com,9059260527,,,"1001 Rue Lucien-LAllier, Montreal, QC, Canada",3312,Montréal,Québec,H3G 0G7
+487,Active,Jason,Dacosta,Jason Dacosta,,jasondacosta06@gmail.com,,5144657418,,,"360 René-Lévesque Boulevard West, Montreal, QC, Canada",3401,Montréal,Québec,H2Z 1L9
+488,Active,Mario,Regina,Mario Regina,,marioregina76@gmail.com,,5145933333,,,"5512 14e Avenue, Montreal, QC, Canada",,Montréal,Québec,H1X 2W2
+489,Active,Valerie,Salem,Valerie Salem,,valeriesalem@yahoo.com,,5149636017,,,"5794 Ilan Ramon, Côte Saint-Luc, QC, Canada",,Côte Saint-Luc,Québec,H4W 3L4
+490,Active,Iris,Alapin,Iris Alapin,,irispsy514@gmail.com,jplaroche.2017@gmail.com,5146794318,5145815233,,"3523 Avenue Benny, Montreal, QC, Canada",,Montréal,Québec,H4B 2S1
+491,Active,Nicole,Akl,Nicole Akl,,nicoleakl@hotmail.com,,5149722747,,,"2620 Avenue Ernest - Hemingway, Saint-Laurent, QC, Canada",,Montréal,Québec,H4R 3E7
+492,Active,Phylicia,Graham,Phylicia Graham,,phyliciachanel14@gmail.com,,5149775749,,,"4890 Rue de Paisley, Montréal, QC, Canada",2,Montréal,Québec,H1S 1T3
+494,Active,Chris,De Biler,Chris De Biler,,cdebiler@gmail.com,,0000000000,,,"167 Rue Sauvé, LÎle-Bizard, QC, Canada",,Montréal,Québec,H9C 2Z8
+495,Active,Diana,Kim,Diana Kim,,diana.kim.vfx@gmail.com,,5142382626,,,"345 Rue Émile, Laval, QC, Canada",,Laval,Québec,H7N 4M4
+496,Active,Leyad,Montreal,Leyad Montreal,,faith@leyad.ca,,4388275664,,,"1440 Boulevard Henri-Bourassa East, Montreal, QC, Canada",303,Montréal,Québec,H2C 1H3
+497,Active,Celine,Richard,Celine Richard,,jiffy@teamcleano.com,,5149171792,,,"3245 Avenue Henri-de Salières, Montreal, QC, Canada",,Montréal,Québec,H1N 2Y1
+498,Active,Prestige,Plus,Prestige Plus,,renospr23@gmail.com,,5149243920,,,"536 Place Sherwood, Laval, QC, Canada",,Laval,Québec,H7W 3S5
+499,Active,Charles,Fraser,Charles Fraser,,cfraser@findhrpartners.com,,9028177695,,,"216 Rue de lÉglise, Rosemère, QC, Canada",,Rosemère,Québec,J7A 2X2
+500,Active,Bertille,Ceus,Bertille Ceus,,bceus@yahoo.com,,5149167954,,,"201 Rue Jacques-le Ber, Montreal, QC, Canada",827,Montréal,Québec,H3E 0E4
+501,Active,Claude,Gervais,Claude Gervais,,claudegervais-ahelo@hotmail.com,,5147816495,,,"6644 Avenue Henri-Julien, Montreal, QC, Canada",,Montréal,Québec,H2S 2V2
+502,Active,Jessica,Pullan,Jessica Pullan,,pullanjessica@gmail.com,jarredpaperman@gmail.com,6043150099,5149848227,,"20 Rue Holly, Hampstead, QC, Canada",,Hampstead,Quebec,H3X 3K7
+503,Active,Juliano,Zavaglia,Juliano Zavaglia,,juliano.zavaglia@royallepage.ca,,5149444092,,,"50 Rue Gordon, Verdun, QC, Canada",,Montréal,Québec,H4G 2R3
+504,Active,Jase,Zampini,Jase Zampini,,jase.zampini@gmail.com,jase_z@hotmail.com,5147584694,,,2041 rue du Clairon,,,,H3P2E3
+505,Active,Anja-Sara,Lahady,Anja-Sara Lahady,,anja@lawspark.co,anjasaralah@gmail.com,4388268237,,,"2320 Rue Tupper, Montréal, QC, Canada",1214,Montréal,Québec,H3H 0B8
+506,Active,Brian,Park,Brian Park,,bap911@hotmail.com,brianpark44@gmail.com,5148352911,,,"155 ch de la Rive Boisee, Pierrefonds ",1104,,,H8Z 0B1
+507,Active,Alessandra,Salituri,Alessandra Salituri,,alessandra.salituri@gmail.com,,5145678553,,,"760 Chemin Marie le Ber, Verdun, QC, Canada",216,Montréal,Québec,H3E 1W6
+508,Active,Sandy,Fischel,Sandy Fischel,,sandyfischel@gmail.com,,5142498760,,,"1 Avenue Wood, Westmount, QC, Canada",804,Westmount,Québec,H3Z 3C5
+509,Active,annie,harrouch,annie harrouch,,annie.harrouch@gmail.com,,5144661081,,,"5094 Avenue Victoria, Montreal, QC, Canada",20,Montréal,Québec,H3W 2N3
+510,Active,Luca,Cella,Luca Cella,,lucacella99@outlook.com,,5149755822,,,"246 33e Avenue, Sainte-Marthe-sur-le-Lac, QC, Canada",Unit G,Sainte-Marthe-sur-le-Lac,Québec,J0N 1P0
+511,Active,Andrew,Henderson,Andrew Henderson,,aaghenderson@hotmail.com,,5142326887,,,"11265 Avenue Lamoureux, Montreal, QC, Canada",,Montréal,Québec,H1G 5M1
+512,Active,Helen,Vasserman,Helen Vasserman,,helen.vasserman@hotmail.com,,5142459536,5144090614,,"17 Avenue Crestwood, Montreal West, Montréal, QC, Canada",,Montréal-Ouest,Québec,H4X 1N3
+514,Active,Alexander,Fournier,Alexander Fournier,,alexander.fournier@gmail.com,,4383936610,,,"111 Chemin de la Pointe Nord, Montreal, QC, Canada",714,Montréal,Québec,H3E 0B3
+515,Active,Sehrish,Hussain,Sehrish Hussain,,sehrish_786@hotmail.com,,5145837969,,,"61 Ch Pointe-Aux-Renards, Pincourt, QC, Canada",,Pincourt,Québec,J7W 0C3
+516,Active,jo,fal,jo fal,,leomcknight07@gmail.com,,,,,,,,,
+517,Active,Julien,Raby,Julien Raby,,julienraby@gmail.com,,5145747765,,,"7930 Rue des Écores, Montreal, QC, Canada",1,Montréal,Québec,H2E 2W9
+518,Active,chloe,ranaldi,chloe ranaldi,,chloeranaldi3@gmail.com,,5149700421,,,"21 Boulevard Caza, Notre-Dame-de-lÎle-Perrot, QC, Canada",,Notre-Dame-de-l'Île-Perrot,Québec,J7V 8P6
+519,Active,alessandra,leroux capparelli,alessandra leroux capparelli,,massotherapiealc@hotmail.com,,5147744369,,,"4489 Boulevard Dagenais Ouest, Laval, QC, Canada",80,Laval,Québec,H7R 1L7
+520,Active,Desiree,Lafrance,Desiree Lafrance,,laft0808@gmail.com,,4183658555,,,"1150 Rue Saint-Denis, Montreal, QC, Canada",317,Montréal,Québec,H2X 0B3
+521,Active,Raphaël,Courtay,Raphaël Courtay,,raphael_courtay@icloud.com,,4389261587,,,"8215 Rue St-Hubert, Montreal, QC, Canada",,Montréal,Québec,H2P 1Z1
+523,Active,Raphaël,Courtay,Raphaël Courtay,Atrium Courtay inc ,raphaelcourtay@atriumcourtay.com,nehaadhikari@atriumcourtay.com,4389261587,4385233306,,"8215 Rue Saint-Hubert, A",A,,,H2P 1Z1
+524,Active,Shari,Libman,Shari Libman,,sharilibman@me.com,,5145942030,,,"3591 Avenue Girouard, Montreal, QC, Canada",,Montréal,Québec,H4A 3C5
+525,Active,joe,lumia,joe lumia,,lumia.joe@gmail.com,,5148300236,,,"420 Rue Quesnel, Laval, QC, Canada",,Laval,Québec,H7N 1P6
+526,Active,Geoff,Ingram,Geoff Ingram,,geoffpingram@gmail.com,,2505805629,,,"1010 Rue William, Montreal, QC, Canada",704,Montréal,Québec,H3C 0K8
+527,Active,Ryan,Church,Ryan Church,REMAX Royal Jordan ,ryanrchurch@gmail.com,,5142124037,,,"1460 Rue Wolfe, Montreal, QC, Canada",7,Montréal,Québec,H2L 3J4
+528,Active,Agrasoy,Realty,Agrasoy Realty,Agrasoy,gwen.agrasoy@gmail.com,,5148912472,,,"26a Avenue Dupras, Lasalle, QC, Canada",,Montréal,Québec,H8R 3S3
+529,Active,Antoine,Godin-Landry,Antoine Godin-Landry,,agodinlandry@gmail.com,goda3902@hotmail.fr,4188094285,,,"1103 Rue du Bosquet, Beloeil, QC, Canada",,Beloeil,Québec,J3G 3S1
+530,Active,Dennis,Diamond,Dennis Diamond,,den.diam@me.com,d3n.diam@icloud.com,5147730838,,,"1337 Rue Bélanger, Montreal, QC, Canada",A,Montréal,Québec,H2G 1A2
+531,Active,Joseph,Myschkowski,Joseph Myschkowski,,jmyschkowski@gmail.com,,5147464255,,,"5787 Av. Eldridge, Côte Saint-Luc, QC, Canada",A basement ,Côte Saint-Luc,Québec,H4W 2E3
+532,Active,stacey,macneil,stacey macneil,,stacey.macpurdy@gmail.com,,5146494430,,,"14401 Rue Swallow, Montreal, QC, Canada",,Montréal,Québec,H9H 1S6
+533,Active,Veronica,Kost,Veronica Kost,,kost.veronica@gmail.com,,5149237345,,,"25 4e Avenue, LaSalle, Montreal, QC, Canada",,Montréal,Québec,H8P 2H9
+534,Active,Leslie,Katz,Leslie Katz,,info@lkprojects.ca,,5145710751,,,"4307 Avenue Montrose, Westmount, QC, Canada",,Westmount,Québec,H3Y 2A6
+535,Active,Chloe,Ginsberg,Chloe Ginsberg,,chloe.ginsberg1@gmail.com,,5149935293,,,"5105 Saint Ambroise Street, Montreal, QC, Canada",,Montréal,Québec,H4C 2E9
+536,Active,Steve,Havitov,Steve Havitov,,steve@timegroupe.com,,5149717473,,,"5189 Croissant Langevin, Laval, QC, Canada",,Laval,Québec,H7W 2E4
+537,Active,Maroua,Benzaid,Maroua Benzaid,,maroua.benzaid@gmail.com,,4388231074,,,"10150 Avenue Charton, Montreal, QC, Canada",,Montréal,Québec,H2B 2C8
+538,Active,susanna,kuhn,susanna kuhn,,paulolioss@gmail.com,,5147549576,5145883725,,"4527 Hutchison Street, Montreal, QC, Canada",,Montreal,Quebec,H2V 4A1
+539,Active,Bessy Vasiliki,Staikos,Bessy Vasiliki Staikos,,vassica@yahoo.ca,,5148156207,,,"12011 Avenue Longtin, Montreal, QC, Canada",A,Montréal,Québec,H4K 2M6
+541,Active,Judith,Azuelos,Judith Azuelos,,judithazuelos@yahoo.ca,,5146384004,,,"6809 Kildare Road, Côte Saint-Luc, QC, Canada",,Côte Saint-Luc,Québec,H4W 0B4
+542,Active,Tara,Abi Nader,Tara Abi Nader,,tara.abi@gmail.com,,5147777789,,,"405 Rue de la Concorde, Montreal, QC, Canada",1901,Montréal,Québec,H3A 0H1
+543,Active,Kathleen,McGuigan,Kathleen McGuigan,,kathleen@oberfeldsnowcap.com,,5142675027,,,"5415 Monkland Avenue, Montreal, QC, Canada",,Montréal,Québec,H4A 1C5
+544,Active,Diana,Martin,Diana Martin,,diana.martin@gmail.com,,5144433083,,,"2633 Rue Montgomery, Montréal, QC, Canada",,Montréal,Québec,H2K 2S3
+545,Active,denis,latulippe,denis latulippe,,lesimmeubles2d@gmail.com,,5146993283,,,"4984 Boulevard Notre-Dame, Laval, QC, Canada",,Laval,Québec,H7W 1V5
+546,Active,Jeff,dichter,Jeff dichter,,jeffdichter1@gmail.com,,5149848835,,,"4239 Jean-Talon Ouest, Montreal, QC, Canada",1004,Montréal,Québec,H4P 0A5
+549,Active,Bianca,Vena,Bianca Vena,,venabianca@gmail.com,,5148676077,,,"3424 Rue Dudemaine, Montréal, QC, Canada",,Montréal,Québec,H4J 1M3
+550,Active,Sye,Satz,Sye Satz,,sye.satz@gmail.com,,6783385899,,,"1200 Rue Drummond, Montreal, QC, Canada",505,Montréal,Québec,H3G 0H5
+551,Active,Roxanne,Lefebvre,Roxanne Lefebvre,,roxanne.lefebvre2124@hotmail.com,,5146295287,,,"124 Rue Léonard, Châteauguay, QC, Canada",,Châteauguay,Québec,J6K 1N8
+552,Active,Jonathan,Shrier,Jonathan Shrier,,jonshrier@gmail.com,,4388805917,,,"5511 Hudson Avenue, Côte Saint-Luc, QC, Canada",,Côte Saint-Luc,Québec,H4W 2K2
+554,Active,Fahdah,Alalyan,Fahdah Alalyan,,fahdah.adv@gmail.com,,5142484443,,,"1800 René-Lévesque Boulevard West, Montreal, QC, Canada",1010,Montréal,Québec,H3H 2H2
+555,Active,Victoria,Ordonez,Victoria Ordonez,,mariavictoriaordonez@hotmail.com,,4383705921,,,"4395 Boulevard Décarie, Montreal, QC, Canada",,Montréal,Québec,H4A 1H6
+556,Active,Francis,Charbonneau,Francis Charbonneau,,charbonneau.francis79@gmail.com,claudinasuarez@gmail.com,5146257385,,,"3383 Rue J.-A.-Descarries, Montreal, QC, Canada",,Montréal,Québec,H8T 3N1
+557,Active,Branka,Trogrlic,Branka Trogrlic,,brankaftrmt@gmail.com,,2262000288,,,"5072 3e Avenue, Montreal, QC, Canada",,Montréal,Québec,H1Y 2W3
+559,Active,Tanya,Mastrangelo,Tanya Mastrangelo,,tmastrangelo@hotmail.com,,5148258551,,,"2515 Rue des Équinoxes, Saint-Laurent, QC, Canada",202,Montréal,Québec,H4R 0K9
+560,Active,Stamatia,K,Stamatia K,,k.stamatia@gmail.com,,5147739591,,,"432 Avenue de Chambly, Laval, QC, Canada",,Laval,Québec,H7W 4K1
+561,Active,Loic,Cheron,Loic Cheron,,loicheronenterprises@gmail.com,loiccheron@gmail.com,5142168681,7864835420,,"1188 Avenue Union, Montreal, QC, Canada",3003,Montréal,Québec,H3B 0E5
+562,Active,Romain,Floreani,Romain Floreani,,rfloreani0@gmail.com,natasha.viens@yahoo.ca,4389247199,,,"715 Rue William, Montreal, QC, Canada",202,Montréal,Québec,H3C 0R2
+563,Active,Gina,Ciucci,Gina Ciucci,,lciucci@videotron.ca,,5145944234,,,"505 Terrasse Blais, Montreal, QC, Canada",,Montréal,Québec,H8P 3N8
+564,Active,Nathan,Dominique,Nathan Dominique,,anikababoun@gmail.com,,9546102684,5148027639,,"235 Rue Young, Montreal, QC, Canada",1903,Montréal,Québec,H3C 0Z6
+565,Active,Mariame,Bahadda,Mariame Bahadda,,mariamebahadda@gmail.com,,5146546820,,,"1269 Rue des Voiliers, Laval, QC, Canada",,Laval,Québec,H7R 6J9
+566,Active,Les,Fournier,Les Fournier,,lfourni@hotmail.com,,4169397051,,,"1288 Av. des Canadiens-de-Montréal, Montreal, QC, Canada",4114,Montréal,Québec,H3B 3B3
+567,Active,Sheida,Zabihi,Sheida Zabihi,,shadez88@yahoo.ca,,5144675075,,,"2525 Boul. Cavendish, Montreal, QC, Canada",1019,Montréal,Québec,H4B
+568,Active,Keita,Christophe,Keita Christophe,,nkchristophe@gmail.com,vsal7141995@gmail.com,5147711007,2404866448,,"6978 Drolet St, Montreal, QC, Canada",,Montréal,Québec,H2S 2T3
+569,Active,Naomi,Wilson,Naomi Wilson,,nvanessaw@gmail.com,,5142680322,,,"6665 Rue Briand, Montreal, QC, Canada",,Montréal,Québec,H4E 3L4
+570,Active,Pietro,Jordano,Pietro Jordano,,transportyul514@gmail.com,,5146542999,,,"19400 Rue du Sulky, Pierrefonds, QC, Canada",305,Montréal,Québec,H9K 0B8
+571,Active,Vicky,Pats,Vicky Pats,,vickyp764@gmail.com,,,,,,,,,
+572,Active,Stephanie,Chouliareas,Stephanie Chouliareas,,stephanie.chouliareas@gmail.com,,5148273101,,,"6760 Rue des Sittelles, Laval, QC, Canada",,Laval,Québec,H7L 4Y2
+573,Active,Priya,Mohan Mehta,Priya Mohan Mehta,,priyamohan016@gmail.com,,5142244816,,,"43 Croissant des Trèfles, LÃ�Le-Perrot, QC, Canada",,L'Ã�Le-Perrot,Quebec,J7V 2G2
+574,Active,Mila,Bouchereau,Mila Bouchereau,,dr.milabouchereau@gmail.com,,5146906452,,,"123 Rue Villeneuve Est, Montréal, QC, Canada",,Montréal,Québec,H2T 1L3
+575,Active,Laza,Aina,Laza Aina,,lazaaina.agrasoyrealty@gmail.com,,4385267368,,,"7227 Newman Boulevard #714, Montreal, QC, Canada",714,Montréal,Québec,H8N 0H7
+576,Active,Winter,Monte,Winter Monte,,winter.monte@hotmail.com,,5148246772,,,"171 Rue de Langloiserie, Blainville, QC, Canada",305,Blainville,Québec,J7A 0A9
+577,Active,Aren,Bedros,Aren Bedros,,info@anbconstruction@gmail.com,,5145839991,,,"1070 A Boulevard des Laurentides, Laval, QC, Canada",,Laval,Quebec,H7G 2W1
+578,Active,Nadia,Molluso,Nadia Molluso,,nadia.molluso@royallepage.ca,,5144768783,,,"440 19e Avenue, Montreal, QC, Canada",109,Montréal,Québec,H8S 3S2
+579,Active,Benedetta,Covanti,Benedetta Covanti,,benedettacovanti@gmail.com,,,,,,,,,
+580,Active,Pegah,Eslami,Pegah Eslami,,p.eslami.sbu@gmail.com,,5813979767,,,"3405 Av. Benny, Montreal, QC, Canada",310,Montréal,Québec,H4B 0A4
+581,Active,Monty,Steckler,Monty Steckler,,ionit.cohen@gmail.com,,4383788069,,,"6625 Chemin Mackle, Côte Saint-Luc, QC, Canada",1107,Côte Saint-Luc,Québec,H4W 2Z8
+582,Active,Fabiola,Abelard,Fabiola Abelard,,fabiolaabelard@gmail.com,,5142625232,,,"11755 Av. Lamoureux, Montreal, QC, Canada",,Montréal,Québec,H1G 5M7
+583,Active,Amanda,Petrella,Amanda Petrella,,amandapetrella96@gmail.com,,5146626178,,,"8515 Rue Chantenay, Montreal, QC, Canada",,Montréal,Québec,H1P 2J3
+585,Active,Sandra,Papazian,Sandra Papazian,,sandra.papazian.sandra@gmail.com,,5144305840,,,"7930 Avenue Stuart, Montreal, QC, Canada",4,Montréal,Québec,H3N 2R8
+587,Active,Dina,Marinos,Dina Marinos,,dina_marinos@hotmail.com,dkoulogeorgiou@hotmail.com,5148021250,5144588781,,"6685 Rue Galarneau, Laval, QC, Canada",,Laval,Québec,H7L 4G9
+588,Active,nicole,mainwaring,nicole mainwaring,,nmainwaring1@gmail.com,,5146046223,,,"5925 Rue Saint-Exupéry, Laval, QC, Canada",,Laval,Québec,H7H 1H5
+589,Active,Rony,Ibrahim,Rony Ibrahim,,rony.t.ibrahim@gmail.com,rony.ibrahim@etsmtl.ca,5142178760,,,"3550 Boulevard le Carrefour, Laval, QC, Canada",403,Laval,Québec,H7T 2K5
+593,Active,Eymen,Dji,Eymen Dji,,eymen.djidjekh@gmail.com,alicee.18@hotmail.com,4389895993,,,"5335 Rue Chabot, Montreal, QC, Canada",,Montréal,Québec,H2H 1Y9
+594,Active,Kevin,Huitton,Kevin Huitton,,1998kevinjones1998@gmail.com,,5147096870,,,"1245 Rue de Bleury, Montreal, QC, Canada",3822,Montréal,Québec,H3B 0C2
+595,Active,Maria,Jaouad,Maria Jaouad,,maria.jaouad@gmail.com,,5152613977,,,"2260 Rue Notre-Dame Ouest, Montreal, QC, Canada",202,Montréal,Québec,H3J 2V4
+596,Active,Stephanie,Heinsohn,Stephanie Heinsohn,,stephanie.heinsohn@yahoo.com,,5147265839,4388332427,,"9615 Avenue Papineau, Montreal, QC, Canada",110,Montréal,Québec,H2B 1Z6
+597,Active,David,Hinchey,David Hinchey,,david.hinchey@gdi.com,,5145661477,,,"137 Avenue dArrowhead Crescent, Pointe-Claire, QC, Canada",,Pointe-Claire,Québec,H9R 3V4
+598,Active,Elvio Galasso,Consulting and Catering,Elvio Galasso Consulting and Catering,,elviog@me.com,,5142421329,,,"115 Boulevard Normandie, Terrebonne, QC, Canada",,Terrebonne,Québec,J0N 1H0
+600,Active,Morteza,Soroush,Morteza Soroush,,morteza.bme.5@gmail.com,,5145749801,,,"1870 Rue Frontenac, Longueuil, QC, Canada",,Longueuil,Québec,J4J 2E7
+602,Active,Amine,Riahi,Amine Riahi,,amine.riahi@hotmail.com,,5149966084,,,"2530 Place Michel-Brault, 608",608,,,H1Y0B6
+603,Active,Julie-Anne,Ho,Julie-Anne Ho,,julie.anne.ho@hotmail.fr,,5145861366,,,"760 Chemin Marie le Ber, Verdun, QC, Canada",810,Montréal,Québec,H3E 1W6
+604,Active,Steven,ghazarian,Steven ghazarian,,aliedei@yahoo.com,,5147052994,,,1990 Rue Everett,3,,,H2E1P3
+605,Active,Luigi,DellaRipa,Luigi DellaRipa,,luigidellaripa@yahoo.com,,4389353140,,,"1745 Rue Sauvé E, Montreal, QC, Canada",1,Montréal,Québec,H2C 2B2
+606,Active,william,Pauzé,william Pauzé,,pauzew@gmail.com,,5146522783,,,"6317 9e Avenue, Montreal, QC, Canada",,Montréal,Québec,H1Y 2K6
+607,Active,Pini,Kras,Pini Kras,,pinikras16@gmail.com,,5146547616,,,"5200 Rue de la Savane, Montreal, QC, Canada",712,Montréal,Québec,H4P 0E2
+608,Active,Komal,Sheikh,Komal Sheikh,,komalfitt@gmail.com,,5146598870,,,"1797 Rue King, Saint-Hubert, QC, Canada",,Longueuil,Québec,J4T 1Z1
+609,Active,Anna,Gordi,Anna Gordi,,annagordi19@icloud.com,,5149950519,,,"297 Rue Briand, Châteauguay, QC, Canada",,Châteauguay,Québec,J6K 4N9
+610,Active,Vincent,Leclerc,Vincent Leclerc,,vleclerc@groupeindustrielpremium.com,,5147759075,,,"290 Montée Gagnon, Bois-des-Filion, QC, Canada",,Bois-des-Filion,Québec,J6Z 2X2
+611,Active,lina,dawli,lina dawli,,linaskymtl@gmail.com,,5142225454,,,"9240 Rue Cérès, Montreal, QC, Canada",101,Montréal,Québec,H8Y 3N5
+612,Active,Gennaro,Dranias,Gennaro Dranias,,petros.westmount@gmail.com,picflic123@gmail.com,5142409647,5148069593,,"5254 Rue West Broadway, Montreal, QC, Canada",,Montréal,Québec,H4V 2A2
+614,Active,vince,miscio,vince miscio,,vincem@live.ca,,5147725542,,,"12135 Avenue Gaston Maillet, Montreal, QC, Canada",,Montréal,Québec,H1E 5T5
+615,Active,Alessia,De Petris,Alessia De Petris,,alessia.depetris01@gmail.com,,5144763376,,,"1987 Boul Alexis-Nihon, Saint-Laurent, QC, Canada",,Montréal,Québec,H4R 3C4
+616,Active,Roksana,Akter,Roksana Akter,,roksanamed14@gmail.com,,5143475320,,,"9430 Boulevard Lacordaire, Saint-Leonard, QC, Canada",1212,Montréal,Québec,H1R 0C7
+617,Active,Wendy Kim,Ly,Wendy Kim Ly,,w.kim.ly@gmail.com,,5146222121,,,"4190 Boulevard Gaétan-Boucher, Saint-Hubert, QC, Canada",,Longueuil,Québec,J3Y 5W6
+618,Active,Allison,Flynn,Allison Flynn,,tangled.notes@gmail.com,,5149723934,,,59 Columbia Avenue,,,,H3Z 2C4
+619,Active,Nicolas,Barazin,Nicolas Barazin,,barazinraphael75@gmail.com,,5145915028,,,"10901 Avenue Louis-Fréchette, Montreal, QC, Canada",4,Montréal,Québec,H1G 4X8
+620,Active,Ronelo,Sugcay,Ronelo Sugcay,,ronelosng@yahoo.com,ronelo.cs@icloud.com,5144307471,,,"5360 Avenue Macdonald, Côte Saint-Luc, QC, Canada",203,Côte Saint-Luc,Québec,H3X 2W3
+621,Active,gino,miceli,gino miceli,,gino.miceli26@hotmail.com,,4389880198,,,"3500 Boulevard Saint-Elzéar Ouest, Laval, QC, Canada",507,Laval,Québec,H7P 0M3
+622,Active,Patricia,Fironi,Patricia Fironi,,pfironi@gmail.com,,5149274721,5142995652,,"4368 Rue Hillsdale, Pierrefonds, QC, Canada",,Montréal,Québec,H9H 2H1
+623,Active,Tuan,To,Tuan To,,tominhtuan18@gmail.com,,5145613769,,,"5560 Avenue Saint Donat, Montreal, QC, Canada",,Montréal,Québec,H1K 3P4
+624,Active,Ioannis,Rigas,Ioannis Rigas,,johnrigas@hotmail.com,,5148130639,,,"6850 Henri Bourassa Boulevard West, Saint-Laurent, QC, Canada",405,Montréal,Québec,H4R 3J3
+625,Active,olivia,lapia,olivia lapia,,livlapia1997@outlook.com,,5144342229,,,"302 Rue des Buissons, Pincourt, QC, Canada",,Pincourt,Quebec,J7W 0K4
+626,Active,alessandro,falbo,alessandro falbo,,falbocon@gmail.com,,5149511756,,,"12243 Rue Marie-Anne-Tison, Montreal, QC, Canada",,Montréal,Québec,H1C 0C8
+627,Active,Didier,pluviose,Didier pluviose,,didierpluviose_6@hotmail.com,,5149989526,,,"8345 Boulevard du St Laurent, Brossard, QC, Canada",802,Brossard,Québec,J4X 0C1
+629,Active,Kasha,Vitoratos,Kasha Vitoratos,,kashavitoratos@gmail.com,,2365975695,,,"350 Boulevard De Maisonneuve Ouest, Montreal, QC, Canada",1003,Montreal,Quebec,H3A 0B4
+630,Active,Keon,Johnson,Keon Johnson,,keonremaxplatine@gmail.com,,5142969683,,,"3900 Place Miron, Brossard, QC, Canada",,Brossard,Québec,J4Y 1V4
+631,Active,melissa,bentoura,melissa bentoura,,melissa.bentoura@gmail.com,,4384709145,,,"3701 Chemin de Chambly, Longueuil, QC, Canada",304,Longueuil,Québec,J4L 1N9
+633,Active,Groupe,Villamendez,Groupe Villamendez,,gvillamendez@hotmail.com,,4383452064,,,"528 Impasse du Rocher, Saint-Jérôme, QC, Canada",,Saint-Jérôme,Québec,J7Y 4M4
+634,Active,Alessandro,Latino,Alessandro Latino,,alatino17@gmail.com,,5143583951,,,"2325A Rue Saint-Zotique Est, Montreal, QC, Canada",,Montréal,Québec,H2G 1K1
+635,Active,Sandra,Badolato,Sandra Badolato,,sandra.badolato@gmail.com,danny7296@gmail.com,5149727263,5143867296,,"1595 Rue Marchand, Laval, QC, Canada",,Laval,Québec,H7G 4W5
+636,Active,Catherine,Richer,Catherine Richer,,catherine.richer@live.ca,raphaeltangobaron@gmail.com,4389336480,,,"365 Rue Moffat, Verdun, Montréal, QC, Canada",,Montréal,Québec,H4H 1Y6
+637,Active,Melody,Cottone,Melody Cottone,,melody.c@live.ca,davidefoti@hotmail.com,4387771591,5147974131,,"190 :Rue Antoine-Forestier, Laval, QC, Canada",,Laval,Québec,H7M 6A6
+638,Active,Irene,Reeves,Irene Reeves,,reenix@gmail.com,,5145708847,,,"4354 Avenue Rosedale, Montreal, QC, Canada",,Montréal,Québec,H4B 2G7
+639,Active,Geena,Naccarato,Geena Naccarato,,geena.naccarato@gmail.com,,6132198109,,,"235 Rue Young, Montreal, QC, Canada",1701,Montréal,Québec,H3C 0Z6
+640,Active,Audrey,Langevin,Audrey Langevin,,audrey.langevin06@hotmail.fr,,4388807635,,,"439 Avenue Thérèse-Lavoie-Roux, Montreal, QC, Canada",412,Montréal,Québec,H2V 0B1
+641,Active,Colin,Strachan,Colin Strachan,,colin@colinstrachan.com,col@strachanmusic.com,5146999002,,,"4490 Rue Saint-Urbain, Montreal, QC, Canada",205,Montréal,Québec,H2W 1T2
+642,Active,Vault,Europa group,Vault Europa group,,luis@europagroup.ca,,5149132048,,,"701 Rue Saint-Pierre, Montreal, QC, Canada",,Montréal,Québec,H2Y 2N3
+643,Active,Davis,Nickel,Davis Nickel,,davisnickel@gmail.com,,6476572241,,,"3429 Rue Sainte-Famille, Montreal, QC, Canada",5,Montréal,Québec,H2X 2K6
+644,Active,Samuel,Villa,Samuel Villa,,samuelvilla@lysion.ca,,,,,,,,,
+645,Active,Liyana,Tannir,Liyana Tannir,,liyanatannir@gmail.com,,2638662102,,,"190 Rue Murray, Montreal, QC, Canada",301,Montréal,Québec,H3C 2C7
+646,Active,Tania,DeRubeis,Tania DeRubeis,,tania.derub@gmail.com,,5149844207,514984427,,"12 Av. Brunet, Pointe-Claire, QC H9S 4T2, Canada",,Pointe-Claire,Québec,H9S 4T2
+647,Active,Simone,w,Simone w,,simonepiper@icloud.com,,4379808070,,,"3608 Aylmer Street, Montreal, QC, Canada",B,Montréal,Québec,H2X 2C2
+648,Active,Katie,Stevenson,Katie Stevenson,,katiestevenson58@gmail.com,kt.stevenson@icloud.com,5875722307,,,"3511 Rue University, Montreal, QC, Canada",A,Montréal,Québec,H3A 2A9
+649,Active,Sheila,Hem,Sheila Hem,,reichenbach296@gmail.com,winxwhite@gmail.com,8196392142,,,"336 2e Avenue, Montréal, QC, Canada",,Montréal,Québec,H4G 2W5
+650,Active,Agence,NR,Agence NR,,ke@agencenr.com,,5142580432,,,"5524 Saint-Patrick Street, Montreal, QC, Canada",425,Montréal,Québec,H4E 1A8
+651,Active,Sosi,Donabet,Sosi Donabet,,sdonabet@hotmail.com,,5142327674,,,"7320 Boulevard Notre-Dame, Laval, QC, Canada",3,Laval,Québec,H7X 4G7
+652,Active,Bao,Thu Cao,Bao Thu Cao,,baothu_c@hotmail.com,,5147573690,,,"17920 Rue Foster, Pierrefonds, QC, Canada",,Montréal,Québec,H9K 1M3
+653,Active,Bejamin,Grevy,Bejamin Grevy,,gbenjamin1996@outlook.com,,5144586550,,,"1485 Rue des Bassins, Montreal, QC, Canada",223,Montréal,Québec,H3C 1B7
+655,Active,Mike,Shatilla,Mike Shatilla,,mikeshatilla@me.com,,5142449311,,,"8191 Chemin Montview, Mount Royal, QC, Canada",,Mont-Royal,Québec,H4P 1K4
+656,Active,Rian,Goldman,Rian Goldman,,rian@fleuristemonarque.com,,5149091647,,,"2471 Rue du Centre, Montreal, QC, Canada",,Montréal,Québec,H3K 1J9
+657,Active,CELINE,FLOTE,CELINE FLOTE,,celineanneflote@gmail.com,,7788922035,,,"738 Rue Bourget, Montreal, QC, Canada",314,Montréal,Québec,H4C 2M7
+658,Active,Nicolas,Rochon,Nicolas Rochon,Agence Nicolas Rochon inc,nick@agencenr.com,,4186706425,,,"4425 Saint-Patrick Street, Montréal, QC, Canada",425,Montréal,Québec,H3K 1A4
+659,Active,Chris,Homsi,Chris Homsi,,nooemail@gmail.com,,5146605187,,,"5925 Boulevard des Laurentides, Laval, QC, Canada",1 & 2,Laval,Quebec,H7H 1N4
+660,Active,Hotel,Varennes,Hotel Varennes,,varennes2626@gmail.com,,5145320618,,,"2200 Chem. des Sucreries, Varennes, QC, Canada",,Varennes,Québec,J3X 0H4
+661,Active,Marylin,Koayes,Marylin Koayes,,marylinkoayes@gmail.com,,5149707108,,,"3035 Avenue des Gouverneurs, Laval, QC, Canada",311,Laval,Québec,H7E 0E2
+662,Active,Rafaela,Righetti,Rafaela Righetti,,rafarighetti@gmail.com,rafaela.righetti@noavrtis.com,2632889714,1263288971,,"1288 Av. des Canadiens-de-Montréal, Montreal, Quebec, Canadá",2811,Montréal,Québec,H3B 3B3
+663,Active,leane,hboivin,leane hboivin,,leanehb@hotmail.com,,4388731637,,,"6020 Rue Waverly, Montreal, QC, Canada",,Montréal,Québec,H2T 2Y3
+664,Active,Rosemarie,Barone,Rosemarie Barone,,em@mail.com,,5142290554,,,"197 Rosedale Avenue, Beaconsfield, QC, Canada",,Beaconsfield,Québec,H9W 2H9
+665,Active,Veronica,Gallo,Veronica Gallo,,gallo_veronica@hotmail.com,,5149102645,,,12355 94e Ave,,,,H1C1H6
+666,Active,David,Ambrose,David Ambrose,,dave.ambrose@gmail.com,kmaquivar@outlook.com,6475507233,8046154422,,"2080 Rue Clark, Montreal, QC, Canada",2,Montréal,Québec,H2X 2R7
+667,Active,Sammi,Moudarres,Sammi Moudarres,,jourdain82@live.com,,5149753474,,,"296 Rue Jourdain, Dollard-des-Ormeaux, QC, Canada",,Dollard-des-Ormeaux,Québec,H9G 1N6
+668,Active,Rania,Tohme,Rania Tohme,,raniatohme23@gmail.com,,5142977503,,,"4417 Rue Martin-Plouffe, Laval, QC, Canada",,Laval,Québec,H7W 5L9
+669,Active,david,ambrose,david ambrose,,dave.ambrose06@gmail.com,kmaquivar@outlook.com,6475507233,8046154422,,"2080 Rue Clark, Montreal, QC, Canada",2,Montréal,Québec,H2X 2R7
+670,Active,Megha,Shetty,Megha Shetty,,mshetty2@uwo.ca,,5195896113,,,"1380 Boulevard René-Lévesque Ouest, Montréal, QC, Canada",2211,Montréal,Québec,H3G 0E4
+671,Active,Zareh,Aslanian,Zareh Aslanian,,gurarslan@powercorp.com,,5149270096,,,"1880 Rue Georges Baril, Laval, QC, Canada",,Laval,Québec,H7M 4B2
+672,Active,camilo,enrique,camilo enrique,,cenrique.laram@gmail.com,a.pattersonlapierre@gmail.com,5146084268,4169088996,,"159 Avenue de la Pointe Claire, Pointe-Claire, QC, Canada",,Pointe-Claire,Québec,H9S 4M7
+673,Active,Scott,Sternthal,Scott Sternthal,,scottsternthal@gmail.com,,5149168353,,,"42 Burton Avenue, Westmount, QC, Canada",,Westmount,Québec,H3Z 1J7
+674,Active,clara,kalulumia,clara kalulumia,,clara.kalulumia@gmail.com,,5145547053,,,"11310 Notre-Dame Street East, Montréal-Est, QC, Canada",309,Montréal-Est,Québec,H1B 2W4
+675,Active,jordan,assali,jordan assali,,contact@fixaropro.com,,5146494430,,,"605 Berwick Street, White Haven, PA, USA",,White Haven,Pennsylvania,18661
+676,Active,sarojbala,gupta,sarojbala gupta,,vikgupta68@gmail.com,,5147719854,,,"8450 Avenue Sorbonne, Brossard, QC, Canada",,Brossard,Québec,J4X 1N3
+677,Active,Lee,Dulgar,Lee Dulgar,,ldulgar@leeroc.com,,4504747888,,,"328 Rue Eleanor, Montréal, QC, Canada",,Montréal,Québec,H3C 0V2
+678,Active,bol,bol,bol bol,,va@teamcleano.com,,5146494430,,,589 Graham Boulevard,,,,H3P 2E3
+679,Active,jordan,assali,jordan assali,,teamcleanaura@gmail.com,,5146494430,,,589 Graham Boulevard,,,,H3P 2E3
+680,Active,Daniel,Mastrangelo,Daniel Mastrangelo,,hjhkslkz@gmail.com,,1237281882,,,"265 Brunswick Boulevard, Pointe-Claire, QC, Canada",,Pointe-Claire,Québec,H9R 0H7
+681,Active,Ty,Toole,Ty Toole,,tylertoole9@gmail.com,,9053799222,,,"2060 Rue Peel, Montreal, QC, Canada",1908,Montréal,Québec,H3A 0J1
+682,Active,Melissa,Benoualid,Melissa Benoualid,,melissabenoualid3@gmail.com,,5142991774,,,"5175 Rue Mackenzie, Montreal, QC, Canada",216,Montréal,Québec,H3W 0B3
+683,Active,jordan,assali,jordan assali,,cleanliftagency@gmail.com,,5146494430,,,"585 Graham Boulevard, Vale, OR, USA",,Vale,Oregon,97918
+684,Active,Varsha,Ramgolam,Varsha Ramgolam,,varsharamgolam@hotmail.com,,5148344236,,,"6153 Rue Arthur-Chevrier, Montréal-Nord, QC, Canada",,Montréal,Québec,H1G 1R8
+685,Active,George,Kanellakis,George Kanellakis,,georgekanellakis99@gmail.com,,5148877745,,,"11845 Avenue de Poutrincourt, Montreal, QC, Canada",,Montréal,Québec,H3M 2A3
+686,Active,tannaz,bakhshi,tannaz bakhshi,,tannaz.bakhshi@hotmail.com,,5142981083,,,"824 Rue Renoir, Saint-Constant, QC, Canada",,Saint-Constant,Québec,J5A 0T4
+687,Active,Marie,Boulanger,Marie Boulanger,,marieboulanger03@gmail.com,,5146027575,,,"4357 Rue de Verdun, Montreal, QC, Canada",3,Montréal,Québec,H4G 1L6
+688,Active,BX,Studio,BX Studio,,bxstudio.mtl@gmail.com,,5148243107,,,"3075 Promenade du Quartier-Saint-Martin, Laval, QC, Canada",,Laval,Quebec,H7T 0N7
+689,Active,vanessa,bertone,vanessa bertone,,vanessa.bertone@hotmail.com,jrocca11@hotmail.com,5149613107,5142643434,,"5105 Chemin de la Côte Saint Luc, Montreal, QC, Canada",222,Montréal,Québec,H3W 2H5
+690,Active,Cheryl,Feiden,Cheryl Feiden,,cherylfeiden@gmail.com,,5148024435,,,"13290 Rue Sauriol, Pierrefonds-Roxboro, QC, Canada",,Montréal,Québec,H8Z 1B6
+691,Active,Emily,condon,Emily condon,,emilycondon26@gmail.com,,,,,,,,,
+692,Active,Cara,Carosielli,Cara Carosielli,,cara.carosielli@gmail.com,,5149668645,,,"6656 Rue Molson, Montreal, QC, Canada",,Montréal,Québec,H1Y 3C5
+693,Active,Chelsea,Aquinno,Chelsea Aquinno,,chelsaquino@hotmail.com,,5145150886,,,"399 Rue de la Rotonde, Verdun, QC, Canada",1510,Montréal,Québec,H3E 0G1
+694,Active,domenico,reale,domenico reale,,domenicor@live.ca,,5147079761,,,"12311 Avenue Eudore Dubeau, Montreal, QC, Canada",,Montréal,Québec,H1E 5V2
+695,Active,Chloe,McCartney,Chloe McCartney,,chloecmccartney@gmail.com,,5819932335,,,"228 Rue Delinelle, Montréal, QC, Canada",,Montréal,Québec,H4C 3A8
+696,Active,Angelina,Contarini,Angelina Contarini,,contarini.angelina@gmail.com,,5144630284,,,"9230 Boulevard Gouin Est, Montreal, QC, Canada",,Montréal,Québec,H1E 1C8
+699,Active,Grant,McCrea,Grant McCrea,,agmccrea55@gmail.com,,4384669757,,,"1101 Rue Rachel Est, Montreal, QC, Canada",1214,Montréal,Québec,H2J 2J7
+700,Active,Ping,Cheng,Ping Cheng,,chenping1205@gmail.com,,5149946117,,,"2585 Avenue Valois, Montreal, QC, Canada",,Montréal,Québec,H1W 3M7
+701,Active,Angelina,Contarini,Angelina Contarini,,contarini.angina@gmail.com,,5144630284,,,"9230 Boulevard Gouin Est, Montreal, QC, Canada",,Montréal,Québec,H1E 1C8
+702,Active,Cassandra,Hoton,Cassandra Hoton,,jiffy@jiffycustomer.com,,5142096077,,,"267 83e Av, Laval, QC, Canada",,Laval,Québec,H7W 2V3
+703,Active,Vaishali,Mutreja,Vaishali Mutreja,,vaishalimutreja@gmail.com,,,,,,,,,
+704,Active,Stephanie,Craciunas,Stephanie Craciunas,,stephaniecraciunas@gmail.com,,5145670396,,,"2456 Rue Dalbis, Laval, QC, Canada",,Laval,Québec,H7T 2Y9
+705,Active,Carly,Bambrick,Carly Bambrick,,cmbambrick@gmail.com,,4384689594,,,"950 Rue Saint-Antoine Ouest, Montreal, QC, Canada",1305,Montréal,Québec,H3C 1A8
+706,Active,Jimmy,Vafiadis,Jimmy Vafiadis,,jimvafiadis@hotmail.ca,,5141112222,,,"976 Rue Laurin, Laval, QC, Canada",,Laval,Québec,H7X 2L1
+707,Active,Irene,Stath,Irene Stath,,irenestathakis@me.com,,5148305400,,,"1161 Rue Emerson, Laval, QC, Canada",,Laval,Québec,H7W 1H6
+708,Active,Rabia,Chaudry,Rabia Chaudry,,rabiarehmat01@gmail.com,,5142241715,,,"191 7e Avenue, LÎle-Perrot, QC, Canada",,L'Île-Perrot,Québec,J7V 3G2
+709,Active,andrea,letko,andrea letko,,andrea.letko@gmail.com,,5148878691,,,"156 Easton Avenue, Montreal West, QC, Canada",,Montreal West,Quebec,H4X 1L2
+710,Active,Elisabeth,Mohan,Elisabeth Mohan,,elisabetta.mohan@gmail.com,,5147179481,,,"101 Rue Peel, Montreal, QC, Canada",225,Montréal,Québec,H3C 0Y1
+711,Active,AMINE,MENARD,AMINE MENARD,,amine.menard@pmml.ca,,5145701021,,,3200 Boulevard Chomedey ,#203,,,H7P 0M6
+712,Active,Lynn,Labonte,Lynn Labonte,,lynnlabonte@hotmail.com,,1514328469,,,"1665 Boulevard du Souvenir, Laval, QC, Canada",205,Laval,Québec,H7N 5V5
+713,Active,Farah,Badr,Farah Badr,,me.musallam@gmail.com,farah.bbadr@gmail.com,4389246646,6478632225,,"1518 Sherbrooke Street West, Montreal, QC, Canada",1215,Montréal,Québec,H3G 0S1
+714,Active,Liana,Demirdjian,Liana Demirdjian,,liana.dem@hotmail.com,,5147581980,,,"424 Rue Toussaint, Laval, QC, Canada",,Laval,Québec,H7X 3N3
+715,Active,Jen,Alves,Jen Alves,,jen.alves@gmail.com,,5142406359,,,"1484 Rue Tardivel, Laval, QC, Canada",,Laval,Québec,H7K 2Y1
+716,Active,Lanni,Frankel,Lanni Frankel,,lannif@outlook.com,,5145755243,,,"137 Rue Larivée, Vaudreuil-Dorion, QC, Canada",,Vaudreuil-Dorion,Québec,J7V 8P5
+717,Active,Lenia,Karabetian,Lenia Karabetian,,leniakarabetian@gmail.com,,5149792297,,,"2346 Boulevard Keller, Montreal, QC, Canada",,Montréal,Québec,H4K 2P8
+718,Active,Jessica,Shergill,Jessica Shergill,,jessicashergill@gmail.com,,5147430977,,,"301b Rue Émery, Montreal, QC H2X 1J1, Canada",,Montréal,Québec,H2X 1J1
+719,Active,Karla,Fiorillo,Karla Fiorillo,,fiorillokarla@gmail.com,ciannarodgers@gmail.com,4313356549,,,"235 Rue Sherbrooke Ouest, Montreal, QC, Canada",1708,Montréal,Québec,H2X 1X8
+721,Active,Marie-Ange,Muhoza,Marie-Ange Muhoza,,marieange.muhoza1@gmail.com,,4388756995,,,"1 Boulevard De Maisonneuve Ouest, Montreal, QC, Canada",2220,Montreal,Quebec,H2X 0E3
+722,Active,Sabrina,Hed,Sabrina Hed,,sabrinahed@hotmail.com,,5147585584,,,"4597 8eme Rue, Laval, QC, Canada",,Laval,Québec,H7W 2A3
+723,Active,Regina,Husa,Regina Husa,,reginahusa@gmail.com,,5148981753,,,"62 Aberdeen Avenue, Westmount, QC, Canada",,Westmount,Québec,H3Y 3A7
+724,Active,emilia,solitiero,emilia solitiero,,emiliasolitiero@hotmail.com,,5148158961,,,"4695 Rue Bénêche, Pierrefonds, QC, Canada",,Montréal,Québec,H9J 3R1
+725,Active,Naomie,Samiama,Naomie Samiama,,nsng@hotmail.fr,,4385223794,,,1288 st antoine ouest,5006,,,H3B 5E8
+727,Active,Kyle,Campbell,Kyle Campbell,,campbellkyle5555@gmail.com,,5142605953,,,"1000 Rue Gordon, Verdun, QC, Canada",405,Montréal,Québec,H4G 1C9
+728,Active,Yousef,Ghanem,Yousef Ghanem,,ghanem@ithmarinvest.com,,9627772561,,,"1051 Rue de la Montagne, Montreal, QC, Canada","502, tower Rocabella 3",Montréal,Québec,H3G 0B7
+729,Active,Veronika,Ness,Veronika Ness,,veronika.m.ness@gmail.com,jasper.fyson@gmail.com,5149130539,5147130539,,"7070 Boulevard Newman, Lasalle, QC, Canada",1401,Montréal,Québec,H8N 0K1
+730,Active,C,K,C K,,lespetitslapins@hotmail.com,,5149936227,,,"3365 Boulevard le Carrefour, Laval, QC, Canada",609,Laval,Québec,H7T 0R4
+731,Active,Mayssa,Bougamra,Mayssa Bougamra,,mayssa.bougamra@ymail.com,,4388732702,,,"245 Chemin Bates, Montreal, QC, Canada",207,Montréal,Québec,H3S 0A3
+732,Active,Margarita,Miseros,Margarita Miseros,,margaritamiseros@hotmail.com,,5148824303,,,"5021 Av. de Kensington, Montreal, QC, Canada",,Montréal,Québec,H3X 3S6
+733,Active,Rivkha,Larco,Rivkha Larco,,grlarco@gmail.com,,5147759596,,,"1393 Boulevard Alexis-Nihon, Montreal, QC, Canada",106,Montréal,Québec,H4R 0H3
+734,Active,Mohammed Ali,Saadi,Mohammed Ali Saadi,,ma.saadi028@gmail.com,,5149940605,,,"224 8e Avenue, Laval, QC H7N 4G9, Canada",,Laval,Québec,H7N 4G9
+735,Active,Cristina,Lymberopoulos,Cristina Lymberopoulos,,crislym17@gmail.com,,4388821882,,,"12016 5e Avenue, Montreal, QC, Canada",,Montréal,Québec,H1E 1R2
+737,Active,Dominique,Villeneuve,Dominique Villeneuve,,ohbilly902@gmail.com,,5875992943,,,"50 Rue Suzor, Saint-Hubert, QC, Canada",,Longueuil,Québec,J3Y 3Y1
+738,Active,Lara,Charestan,Lara Charestan,,laracharestan@icloud.com,,4383370034,,,"594 Rue Papineau, Boisbriand, QC, Canada",,Boisbriand,Québec,J7G 2T7
+739,Active,Samer,Sawan,Samer Sawan,,samersawan123@gmail.com,,5145858385,,,1800 Boul Rene-Levesque Ouest,1205,,,H3H2H2
+740,Active,andres,Monzon,andres Monzon,,andres.monzon@gmail.com,,8193453651,,,"2144 Boulevard Décarie, Montreal, QC, Canada",5,Montréal,Québec,H4A 3J3
+741,Active,Christopher,Olimpo,Christopher Olimpo,,dubey.manu95@gmail.com,,5146256958,,,"59 Prom. des Îles, Laval, QC, Canada",8,Laval,Québec,H7W 5J6
+742,Active,Marine,Calado,Marine Calado,,caladomarine@gmail.com,,4384481989,,,4370 Rue De Brébeuf,28,,,H2J 3K9
+743,Active,Monica,Patel,Monica Patel,,monicapatel14@outlook.com,,5142689661,,,"36 Rue Charade, Dollard-Des Ormeaux, QC, Canada",,Dollard-des-Ormeaux,Québec,H9G 2P6
+744,Active,Audrey,Bangura Bernier,Audrey Bangura Bernier,,abangurabernier@hotmail.com,,5145016994,,,"217 Rue Cousineau, Laval, QC, Canada",,Laval,Québec,H7G 3J7
+745,Active,Elena,Senechal-Becker,Elena Senechal-Becker,,elenasenbec@gmail.com,elenasb@rogers.com,6137959128,6134068014,,"3555 Chemin de la Côte-des-Neiges, Montreal, QC, Canada",1502,Montréal,Québec,H3H 1V2
+746,Active,Mathieu,Leblanc,Mathieu Leblanc,,thefuriousdragon@gmail.com,mathieu.leblanc@ecn.forces.gc.ca,3679967177,,,"18 Rue Léry, Saint-Hubert, Longueuil, QC, Canada",,Longueuil,Québec,J3Y 3Y3
+747,Active,Nelly,Jamal,Nelly Jamal,,jamal.nelly@yahoo.com,,5144431995,,,"2735 Rue des Francs-Bourgeois, Boisbriand, QC, Canada",,Boisbriand,Québec,J7H 0E9
+748,Active,Gerlando,Baronello,Gerlando Baronello,,gerlando@groupebaronello.com,,5148858346,,,"2460 Rue des Abeilles, Laval, QC, Canada",,Laval,Québec,H7K 2W2
+749,Active,Amanda,Busner,Amanda Busner,,amandabusner@me.com,,5148159538,,,4781 Rue Des Hydrangees,,,,H3P2E3
+750,Active,Josie,Zbella,Josie Zbella,,dizambi04@gmail.com,,5144315701,,,"12335 Rue Marcelle-Gauvreau, Montreal, QC, Canada",,Montréal,Québec,H1C 2B6
+751,Active,Detour,Studios,Detour Studios,,info@detourstudios.ca,,5148383006,,,"4035 Rue Saint-Ambroise, Montreal, QC, Canada",415,Montréal,Québec,H4C 2E1
+752,Active,Meredith,Lackey,Meredith Lackey,,meredithlackey@hotmail.com,,5147145759,,,"550 Fortune Street, Montreal, QC, Canada",,Montréal,Québec,H3K 2R6
+753,Active,Matthew,Levine,Matthew Levine,,levinematthew4@gmail.com,,5149247154,,,"1310 Boulevard René-Lévesque Ouest, Montreal, QC, Canada",3003,Montréal,Québec,H3B
+754,Active,Chrissanthi,Nastopoulos,Chrissanthi Nastopoulos,,xrissanthi@gmail.com,,5149476714,,,"5715 Rue Baillargeon, Brossard, QC, Canada",,Brossard,Québec,J4Z 1T1
+755,Active,Shah,Alam,Shah Alam,,shah544243@gmail.com,,5147462260,,,"8036 Avenue Querbes, Montreal, QC, Canada",,Montréal,Québec,H3N 2C1
+756,Active,Gloria,Ndayishimiye,Gloria Ndayishimiye,,ndayishimiyegloria1@gmail.com,,4382204042,,,"7440 Place de Vernantes, Montréal, QC, Canada",a,Montréal,Québec,H1J 1E9
+757,Active,Chris,Hasford,Chris Hasford,,chris@gestionrr.com,,5148833781,,,"5010 Avenue Macdonald, Côte Saint-Luc, QC, Canada",27,Côte Saint-Luc,Québec,H3X 2V4
+758,Active,yanni,mouhhous,yanni mouhhous,,proline601@outlook.com,yann505800@gmail.com,4384677756,,,"205 Terrasse Allaire, Laval, QC, Canada",1102,Laval,Québec,H7G 0A8
+759,Active,Tiffany,Goldberg,Tiffany Goldberg,,tiffanygoldberg482@hotmail.com,,5146995549,,,"5500 Avenue Rosedale, Côte Saint-Luc, QC, Canada",2,Côte Saint-Luc,Québec,H4V 2J1
+760,Active,Rosanna,Angelillo,Rosanna Angelillo,,rosannaangelillo@yahoo.ca,,5142995398,,,10182 Rue Pierre-Louis-Panet,,,,H1C 0B4
+762,Active,Ashley,Randolph,Ashley Randolph,,ashley.randolph@hotmail.com,,5148827841,,,"4555 Avenue Bonavista, Montreal, QC, Canada",1011,Montréal,Québec,H3W 2C7
+763,Active,Marisa,Pietrangelo,Marisa Pietrangelo,,mlocations2000@gmail.com,,5141111111,,,"12395 Avenue Hurteau, Montrã©Al, QC, Canada",,Montrã©Al,Québec,H1G 3W9
+764,Active,sébastien,ouellette,sébastien ouellette,,sebastien1002@hotmail.com,,4505223308,,,"425 Rue Sainte-Hélène, Montréal, QC, Canada",606,Montréal,Québec,H2Y 2K9
+765,Active,Melissa,Dair,Melissa Dair,,michhomeo.melissa@gmail.com,melissa@michmontreal.com,5146926116,,,"580 Boulevard Saint-Jean, Pointe-Claire, QC, Canada",#419,Pointe-Claire,Québec,H9R 0H6
+766,Active,Chuang,Deng,Chuang Deng,,rockymenc@gmail.com,,5149224306,,,"700 Rue Saint-Paul Ouest, 蒙特利尔魁北克省加拿大",337,Montréal,Québec,H3C 0X2
+767,Active,Emma,Murrin,Emma Murrin,,emurrin99@gmail.com,,5147945296,,,"1552 Rue des Bassins, Montréal, QC, Canada",410,Montréal,Québec,H3C 0Z3
+768,Active,Tiffany,Goldberg,Tiffany Goldberg,,toffanygoldberg482@hotmail.com,,,,,,,,,
+769,Active,Maite,Procureur,Maite Procureur,,procureurmaite@gmail.com,,4383969818,,,"769 Rue de Versailles, 769",769,,,H3C 1Z5
+770,Active,Samson,mahbod,Samson mahbod,,samsonmahbod@gmail.com,,5142928605,,,"2467 Chemin du Bord-du-Lac, Montreal, QC, Canada",,Montréal,Québec,H9C 1P4
+771,Active,Ben,Thomas,Ben Thomas,,thomasben091@gmail.com,sisyphus089@gmail.com,5874348137,,,"2188 R. Cartier, Montreal, QC, Canada",,Montréal,Québec,H2K 4E8
+772,Active,Marc-Antoine,Vivier,Marc-Antoine Vivier,,marc.antoine.vivier@gmail.com,marc-antoine.vivier@forces.gc.ca,5149807796,,,"14 Rue Senneville, Saint-Hubert, QC, Canada",,Longueuil,Québec,J3Y 3Z4
+773,Active,Rawan,Mahmoud,Rawan Mahmoud,,rawanmahmoud28@outlook.com,,4385201778,,,"11875 Avenue Drapeau, Montréal-Nord, QC, Canada",,Montréal,Québec,H1H 3K7
+774,Active,Omar,Abdelhafez,Omar Abdelhafez,,ohafez08@gmail.com,,2633841363,,,"1300 Boul. René-Lévesque Ouest, Montreal, QC, Canada",1906,Montréal,Québec,H3B
+775,Active,Rita,De Angelis,Rita De Angelis,,ms.deangelis@outlook.com,steph.rita@bell.net,5142226422,,,"12055 Av. Henrietta, Montreal, QC, Canada",,Montréal,Québec,H1H 3J1
+776,Active,Maria,Miana,Maria Miana,,marieta087@gmail.com,marieta087@hormail.com,5148344981,,,"3216 Rue Claude-Jodoin, Montreal, QC, Canada",,Montréal,Québec,H1Y 3M2
+777,Active,resmont,sarah,resmont sarah,,sarah.rasemont@gmail.com,,4387220381,,,"693 Rue William, Montreal, QC, Canada",,Montréal,Québec,H3C 1N8
+778,Active,Amanda,Leone,Amanda Leone,,amandaleone23@gmail.com,,4389908234,,,"385 Rue Saint-Martin, Montreal, QC, Canada",606,Montréal,Québec,H3J 0C6
+779,Active,Pelgressy,.,Pelgressy .,,pelgressy@linenchest.com,,5148875456,,,"4424 Avenue Henri-Julien, Montreal, QC, Canada",,Montréal,Québec,H2W 2K8
+780,Active,Giuseppe,Dilallo,Giuseppe Dilallo,,giuseppe@dilalloburger.ca,,5148869245,,,"329 Rue Montreuil, Laval, QC, Canada",,Laval,Québec,H7X 3K1
+781,Active,Ken,Yuen,Ken Yuen,,ken.yuen@kidney.ca,,4388137987,,,"5160 Boulevard Décarie, Montreal, QC, Canada",880,Montréal,Québec,H3X 2H9
+782,Active,S,Beallor,S Beallor,,sbeallor@me.com,,5149423620,,,"24 Rue Holly, Hampstead, QC, Canada",,Hampstead,Quebec,H3X 3W5
+783,Active,Kathy,Ramzy,Kathy Ramzy,,soshi17@hotmail.com,,5149796804,,,"585 Rue Marguerite, Laval, QC, Canada",,Laval,Québec,H7X 3C6
+784,Active,marie eve,albert,marie eve albert,,marieeve.production@gmail.com,,5147573016,,,"4950 Boulevard de lAssomption, Montreal, QC, Canada",1007,Montréal,Québec,H1T 0A3
+785,Active,Gabrielle,Lapicerella,Gabrielle Lapicerella,,gabrielle.lapicerella@gmail.com,,5142653251,,,"94 Avenue Charles, Pointe-Claire, QC, Canada",,Pointe-Claire,Québec,H9R 4L1
+786,Active,Shelby,Wailes,Shelby Wailes,,shw2729@yahoo.com,,7607167074,,,"2128 Rue Frontenac, Montreal, QC, Canada",4,Montréal,Québec,H2K 2Z3
+787,Active,Denis,Latulippe,Denis Latulippe,,entreprises.dlat@gmail.com,,5146993283,,,"303 Bd du Curé-Boivin, Boisbriand, QC, Canada",6,Boisbriand,Québec,J7G 2A5
+788,Active,Abdel Ghani,Chahal,Abdel Ghani Chahal,,business@primelogistixcanada.com,,5148240801,,,"815 Plymouth Avenue, Mount Royal, QC, Canada",501,Mount Royal,Quebec,H4P 0C6
+789,Active,Dennis,Diamond,Dennis Diamond,,dennis.diamond@bell.ca,d.g.diamond@icloud.com,5147730837,5152140837,,"1341 Rue Bélanger, Montreal, QC, Canada",,Montréal,Québec,H2G 1A2
+790,Active,Sarah,Henriques,Sarah Henriques,,sarahhenriques01@hotmail.com,,5145915610,,,"2424 Place Mérineau, Laval, QC, Canada",,Laval,Québec,H7L 4T9
+791,Active,Khalil,Bouzguenda,Khalil Bouzguenda,,khlilbouzguenda@gmail.com,,5146383179,,,"235 Rue Peel, Montreal, QC, Canada",403,Montréal,Québec,H3C 0P8
+793,Active,marc,anhoury,marc anhoury,,immaybemarc@gmail.com,,5142476272,,,"960 Sainte Croix Avenue, Saint-Laurent, QC, Canada",108,Montréal,Québec,H4L 3Y8
+794,Active,Talia Jennings,Jennings,Talia Jennings Jennings,,taliajennings@gmail.com,bungry731@gmail.com,4387787313,4388889924,,"6377 Rue Saint-André, Montreal, QC, Canada",3,Montréal,Québec,H2S 2K6
+795,Active,Iman,Sta-ali,Iman Sta-ali,,imane.s@hotmail.ca,,5149614626,,,"3600 Av. du Parc, Montréal, QC, Canada",322,Montréal,Québec,H2X 3R2
+796,Active,Pierre-André,Meunier,Pierre-André Meunier,,pameunier@gmail.com,dentonha@gmail.com,5149931488,,,"250 Rue du Fort-Rémy, Montreal, QC, Canada",,Montréal,Québec,H8R 4C6
+797,Active,Anouch,Nercessian,Anouch Nercessian,,anouch.ner@gmail.com,,5149096787,,,"711 Rue de la Commune Ouest, Montreal, QC, Canada",510,Montréal,Québec,H3C 0P1
+798,Active,Christina,Gregoriou,Christina Gregoriou,,christina@markedwards.com,,5142459960,,,"1046 Rue des Pervenches, Laval, QC, Canada",,Laval,Québec,H7Y 2C7
+799,Active,Carole,Hurteau,Carole Hurteau,,shaw.carole@videotron.ca,veronikaness13@hotmail.com,5147130539,5149130539,,"1900 Boulevard Angrignon, Lasalle, QC, Canada",801,Montréal,Québec,H8N 0B9
+800,Active,Maggie,Atmih,Maggie Atmih,,maggieapmih21@gmail.com,,5146296244,,,"7270 Avenue de Beaufort, Anjou, QC, Canada",307,Montréal,Québec,H1M 3W4
+801,Active,Mariam,Yacoubi,Mariam Yacoubi,,m_ycb@hotmail.com,,5149169254,,,"11739 Rue Joseph-Casavant, Montreal, QC, Canada",,Montréal,Québec,H3M 2B9
+802,Active,Jeami,Isidore,Jeami Isidore,,jisidore11@gmail.com,,5148277216,,,"2272 Victoria Street, Lachine, Montreal, QC, Canada",7,Montréal,Québec,H8S 1Z3
+803,Active,Amberlee,De Lalagade,Amberlee De Lalagade,,amberlee.pro@gmail.com,,4385214565,,,"2255 Boulevard René-Lévesque Ouest, Montreal, QC, Canada",1911,Montréal,Québec,H3H 0C2
+804,Active,Olivia,Shiveck,Olivia Shiveck,,oshiveck@hotmail.com,,5145155811,,,"315 Rue Richmond, Montreal, QC, Canada",524,Montréal,Québec,H3J 0B7
+805,Active,sukriti,roy,sukriti roy,,roysukriti0115@gmail.com,,4389212263,,,"4875 Avenue Bourret, Montreal, QC, Canada",208,Montréal,Québec,H3W 1L2
+806,Active,Charlotte,Del,Charlotte Del,,charlottepenpal@gmail.com,,4385435493,,,"4900 Avenue Wilson, Montréal, QC, Canada",404,Montréal,Québec,H3X 3P2

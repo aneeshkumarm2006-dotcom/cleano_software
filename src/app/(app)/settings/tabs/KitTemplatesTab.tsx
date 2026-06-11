@@ -18,6 +18,7 @@ import {
   Feedback,
   Msg,
 } from "./_shared";
+import ImportCsvButton from "@/components/csv/ImportCsvButton";
 
 interface KitTemplatesTabProps {
   products: ProductRecord[];
@@ -143,15 +144,18 @@ export default function KitTemplatesTab({
       description="Define reusable starter kits combining multiple products."
       icon={Package}
       actions={
-        <Button
-          type="button"
-          variant="action"
-          border={false}
-          size="sm"
-          onClick={openCreate}
-          className="rounded-xl">
-          <Plus className="w-4 h-4 mr-1" /> New Kit
-        </Button>
+        <div className="flex items-center gap-2">
+          <ImportCsvButton entity="kit-templates" label="Import" triggerClassName="btn btn-secondary btn-sm" />
+          <Button
+            type="button"
+            variant="action"
+            border={false}
+            size="sm"
+            onClick={openCreate}
+            className="rounded-xl">
+            <Plus className="w-4 h-4 mr-1" /> New Kit
+          </Button>
+        </div>
       }>
       {kitTemplates.length === 0 ? (
         <p className="text-sm text-[#005F6A]/60">No kit templates yet.</p>

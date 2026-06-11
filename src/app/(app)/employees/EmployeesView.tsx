@@ -14,6 +14,7 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import PremiumSelect from "@/components/ui/PremiumSelect";
+import ImportCsvButton from "@/components/csv/ImportCsvButton";
 
 interface Employee {
   id: string;
@@ -163,9 +164,12 @@ export default function EmployeesView({
             <span style={{ color: "var(--primary-40)", fontWeight: 300 }}>· {stats.totalEmployees}</span>
           </h1>
         </div>
-        <button type="button" className="btn btn-primary" onClick={onCreateEmployee}>
-          <Plus size={16} /> Add Employee
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <ImportCsvButton entity="employees" />
+          <button type="button" className="btn btn-primary" onClick={onCreateEmployee}>
+            <Plus size={16} /> Add Employee
+          </button>
+        </div>
       </header>
 
       <div className="astat-grid">
