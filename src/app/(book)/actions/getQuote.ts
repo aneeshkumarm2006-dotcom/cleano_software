@@ -1,11 +1,21 @@
 "use server";
 
 import { db } from "@/db";
+import { getServicePricingConfig } from "@/lib/booking-pricing";
+import {
+  isSqftService,
+  isHourlyService,
+  moveInOutBasePrice,
+  postConstructionBasePrice,
+} from "@/lib/service-pricing";
 
 interface GetQuoteInput {
+  serviceType?: string;
   bedCount: number;
   bathCount: number;
   halfBathCount?: number;
+  squareFootage?: number;
+  pcHours?: number;
 }
 
 async function getPerUnitRates() {
@@ -24,8 +34,25 @@ async function getPerUnitRates() {
   return null;
 }
 
-export async function getQuote({ bedCount, bathCount, halfBathCount = 0 }: GetQuoteInput) {
+export async function getQuote({
+  serviceType,
+  bedCount,
+  bathCount,
+  halfBathCount = 0,
+  squareFootage = 0,
+  pcHours = 0,
+}: GetQuoteInput) {
   try {
+    // Per-service-type pricing overrides the bed/bath model.
+    if (isSqftService(serviceType)) {
+      const cfg = await getServicePricingConfig();
+      return { success: true, basePrice: moveInOutBasePrice(squareFootage, cfg) };
+    }
+    if (isHourlyService(serviceType)) {
+      const cfg = await getServicePricingConfig();
+      return { success: true, basePrice: postConstructionBasePrice(pcHours, cfg) };
+    }
+
     // Prefer flat per-unit rates (new model set in Settings > Pricing Rules)
     const rates = await getPerUnitRates();
     if (rates) {

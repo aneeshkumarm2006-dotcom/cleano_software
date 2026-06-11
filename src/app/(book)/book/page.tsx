@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Check, Sparkles } from "lucide-react";
-import { BookingDraft, EMPTY_DRAFT, AIRBNB_FREQUENCIES, PC_HOURLY_RATE } from "./types";
+import { BookingDraft, EMPTY_DRAFT, AIRBNB_FREQUENCIES } from "./types";
 import Step1PostalCode from "./steps/Step1PostalCode";
 import Step2Property from "./steps/Step2Property";
 import Step3Schedule from "./steps/Step3Schedule";
@@ -129,16 +129,31 @@ export default function BookPage() {
     };
   }, [draft, step]);
 
-  // Live quote refresh on Property/Review steps (skip for post-construction — uses hourly rate)
+  // Live quote refresh on Property/Review steps. Server-authoritative for every
+  // service type (bed/bath, sqft for move-in/out, hourly/package for PC).
   useEffect(() => {
     if (step < 1) return;
-    if (draft.serviceType === "POST_CONSTRUCTION") return;
-    getQuote({ bedCount: draft.bedCount, bathCount: draft.bathCount })
+    getQuote({
+      serviceType: draft.serviceType,
+      bedCount: draft.bedCount,
+      bathCount: draft.bathCount,
+      halfBathCount: draft.halfBathCount,
+      squareFootage: draft.squareFootage,
+      pcHours: draft.pcHours,
+    })
       .then((r) => {
-        if (r.success && r.basePrice) setBasePrice(r.basePrice);
+        if (r.success && typeof r.basePrice === "number") setBasePrice(r.basePrice);
       })
       .catch(() => {});
-  }, [step, draft.bedCount, draft.bathCount, draft.serviceType]);
+  }, [
+    step,
+    draft.serviceType,
+    draft.bedCount,
+    draft.bathCount,
+    draft.halfBathCount,
+    draft.squareFootage,
+    draft.pcHours,
+  ]);
 
   function patch(p: Partial<BookingDraft>) {
     setDraft((d) => ({ ...d, ...p }));
@@ -149,7 +164,12 @@ export default function BookPage() {
       case 0:
         return draft.postalCovered === true;
       case 1:
-        return !!(draft.address.trim() && draft.serviceType && draft.frequency);
+        if (!(draft.address.trim() && draft.serviceType && draft.frequency))
+          return false;
+        // Move-in/out is priced per square foot — require it before continuing.
+        if (draft.serviceType === "MOVE_IN_OUT" && !(draft.squareFootage > 0))
+          return false;
+        return true;
       case 2:
         return !!(draft.date && (draft.isFlexible || draft.timeSlot));
       case 3:
@@ -213,6 +233,7 @@ export default function BookPage() {
       halfBathCount: draft.halfBathCount,
       squareFootage: draft.squareFootage,
       serviceType: draft.serviceType,
+      pcHours: draft.pcHours,
       frequency: draft.frequency,
       addOns: draft.addOns
         .filter((a) => a.selected)
@@ -225,7 +246,11 @@ export default function BookPage() {
       email: draft.email,
       notes: [
         draft.notes,
-        isPC ? `Post-construction: ${draft.pcHours}h × ${draft.pcCleaners} cleaner(s) × $${PC_HOURLY_RATE}/hr = ~$${(draft.pcHours * draft.pcCleaners * PC_HOURLY_RATE).toFixed(0)}` : "",
+        isPC
+          ? `Post-construction: ${draft.pcHours} hour(s)${
+              draft.pcCleaners ? `, ${draft.pcCleaners} cleaner(s)` : ""
+            }`
+          : "",
       ].filter(Boolean).join("\n\n"),
       referralCode: draft.referralCode,
       afterPhotoConsent: draft.afterPhotoConsent,
@@ -245,11 +270,10 @@ export default function BookPage() {
     // screen so further submits are impossible anyway.
   }
 
-  // Live price for sidebar
+  // Live price for sidebar. basePrice is server-computed for every service type.
   const isPC = draft.serviceType === "POST_CONSTRUCTION";
   const isAirbnb = draft.serviceType === "AIRBNB";
-  const pcBase = draft.pcHours * draft.pcCleaners * PC_HOURLY_RATE;
-  const effectiveBase = isPC ? pcBase : basePrice;
+  const effectiveBase = basePrice;
 
   const airbnbDiscountPct = isAirbnb
     ? (AIRBNB_FREQUENCIES.find((f) => f.value === draft.frequency)?.discount ?? 0)
@@ -582,7 +606,9 @@ export default function BookPage() {
                 onContinue={() => setStep(1)}
               />
             )}
-            {step === 1 && <Step2Property draft={draft} onChange={patch} />}
+            {step === 1 && (
+              <Step2Property draft={draft} onChange={patch} basePrice={basePrice} />
+            )}
             {step === 2 && <Step3Schedule draft={draft} onChange={patch} />}
             {step === 3 && <Step4Contact draft={draft} onChange={patch} />}
             {step === 4 && (

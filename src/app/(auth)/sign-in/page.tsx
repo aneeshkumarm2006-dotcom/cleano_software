@@ -336,15 +336,8 @@ export default function SignInPage() {
               </Button>
             </div>
 
-            {/* Sign Up Link */}
-            <p className="pt-4 text-center text-sm text-[#005F6A]/80">
-              Don&apos;t have an account?{" "}
-              <Link
-                href="/sign-up"
-                className="font-medium text-[#005F6A] hover:text-[#005F6A]/80 transition-colors underline underline-offset-2">
-                Sign up
-              </Link>
-            </p>
+            {/* Staff sign-up removed — staff accounts are provisioned by an
+                admin via Employees → Create. No public self-registration. */}
           </form>
         </div>
       </div>

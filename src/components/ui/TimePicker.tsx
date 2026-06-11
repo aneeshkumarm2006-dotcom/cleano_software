@@ -26,6 +26,46 @@ function formatDisplay(str?: string): string {
   return `${hour}:${String(m).padStart(2, "0")} ${period}`;
 }
 
+/**
+ * Parse a free-form typed time into canonical "HH:MM" (24-hour), or null if it
+ * can't be understood. Accepts: "9", "930", "9:30", "0930", "9pm", "9:30 pm",
+ * "230pm", "14:30", "1430". This is what restores manual keyboard entry.
+ */
+export function parseTimeInput(raw: string): string | null {
+  if (!raw) return null;
+  let s = raw.trim().toLowerCase();
+  if (!s) return null;
+  let ampm: "am" | "pm" | null = null;
+  if (/[ap]\.?m?\.?$/.test(s)) {
+    if (s.includes("p")) ampm = "pm";
+    else if (s.includes("a")) ampm = "am";
+    s = s.replace(/[ap]\.?m?\.?$/, "");
+  }
+  s = s.replace(/[^\d:]/g, "");
+  if (!s) return null;
+  let h: number;
+  let m: number;
+  if (s.includes(":")) {
+    const [hp, mp] = s.split(":");
+    h = parseInt(hp, 10);
+    m = mp ? parseInt(mp.slice(0, 2), 10) : 0;
+  } else if (s.length <= 2) {
+    h = parseInt(s, 10);
+    m = 0;
+  } else if (s.length === 3) {
+    h = parseInt(s.slice(0, 1), 10);
+    m = parseInt(s.slice(1), 10);
+  } else {
+    h = parseInt(s.slice(0, 2), 10);
+    m = parseInt(s.slice(2, 4), 10);
+  }
+  if (isNaN(h) || isNaN(m)) return null;
+  if (ampm === "pm" && h < 12) h += 12;
+  if (ampm === "am" && h === 12) h = 0;
+  if (h < 0 || h > 23 || m < 0 || m > 59) return null;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
 const H = { sm: 34, md: 44, lg: 52 } as const;
 const FS = { sm: 13, md: 14, lg: 15 } as const;
 const BR = { sm: 9, md: 10, lg: 12 } as const;
@@ -45,7 +85,12 @@ export default function TimePicker({
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0 });
   const [mounted, setMounted] = useState(false);
-  const triggerRef = useRef<HTMLButtonElement>(null);
+  // Typed-text buffer for manual keyboard entry. While `editing`, the input
+  // shows the raw text the user is typing; otherwise it shows the formatted value.
+  const [text, setText] = useState("");
+  const [editing, setEditing] = useState(false);
+  const triggerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const dropRef = useRef<HTMLDivElement>(null);
   const hourColRef = useRef<HTMLDivElement>(null);
   const minColRef = useRef<HTMLDivElement>(null);
@@ -109,6 +154,13 @@ export default function TimePicker({
   function pick(h: number, m: number) {
     onChange?.(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
     setOpen(false);
+  }
+
+  // Commit whatever the user typed. Valid → fire onChange; invalid → silently
+  // revert to the current value (display falls back to formatDisplay(value)).
+  function commitTyped() {
+    const parsed = parseTimeInput(text);
+    if (parsed && parsed !== value) onChange?.(parsed);
   }
 
   const border = error
@@ -177,12 +229,10 @@ export default function TimePicker({
     <>
       {name && <input type="hidden" name={name} value={value ?? ""} />}
 
-      <button
+      <div
         ref={triggerRef}
-        type="button"
-        disabled={disabled}
-        onClick={() => setOpen(v => !v)}
         className={className}
+        onClick={() => { if (!disabled) inputRef.current?.focus(); }}
         style={{
           display: "inline-flex",
           alignItems: "center",
@@ -192,22 +242,55 @@ export default function TimePicker({
           borderRadius: BR[size],
           border,
           background: disabled ? "rgba(0,95,106,0.04)" : "#fff",
-          fontSize: FS[size],
-          color: value ? "#111" : "rgba(0,95,106,0.38)",
           fontFamily: "inherit",
-          cursor: disabled ? "not-allowed" : "pointer",
+          cursor: disabled ? "not-allowed" : "text",
           transition: "border .15s, box-shadow .15s",
           boxShadow,
           gap: 8,
-          outline: "none",
           opacity: disabled ? 0.55 : 1,
           ...style,
         }}>
         <Clock size={14} style={{ flexShrink: 0, color: "rgba(0,95,106,0.45)" }} />
-        <span style={{ flex: 1, textAlign: "left" }}>
-          {value ? formatDisplay(value) : placeholder}
-        </span>
-      </button>
+        <input
+          ref={inputRef}
+          type="text"
+          inputMode="numeric"
+          disabled={disabled}
+          placeholder={placeholder}
+          value={editing ? text : value ? formatDisplay(value) : ""}
+          onFocus={() => {
+            setEditing(true);
+            setText(value ? formatDisplay(value) : "");
+            setOpen(true);
+          }}
+          onChange={(e) => setText(e.target.value)}
+          onBlur={() => { commitTyped(); setEditing(false); }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              commitTyped();
+              setEditing(false);
+              setOpen(false);
+              inputRef.current?.blur();
+            } else if (e.key === "Escape") {
+              setEditing(false);
+              setOpen(false);
+              inputRef.current?.blur();
+            }
+          }}
+          style={{
+            flex: 1,
+            minWidth: 0,
+            border: 0,
+            outline: "none",
+            background: "transparent",
+            fontSize: FS[size],
+            color: value ? "#111" : "rgba(0,95,106,0.45)",
+            fontFamily: "inherit",
+            padding: 0,
+          }}
+        />
+      </div>
 
       {mounted &&
         open &&

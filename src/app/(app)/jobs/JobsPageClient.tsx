@@ -48,6 +48,7 @@ export interface Job {
   discountAmount: number | null;
   bedCount: number | null;
   bathCount: number | null;
+  halfBathCount: number | null;
   payRateMultiplier: number | null;
   profit: number;
   profitPct: number;
@@ -74,6 +75,7 @@ interface JobsPageClientProps {
   initialRowsPerPage: number;
   users: User[];
   clients: ClientLite[];
+  addOnCatalog?: Array<{ id: string; name: string; price: number }>;
   isAdmin: boolean;
 }
 
@@ -88,6 +90,7 @@ export default function JobsPageClient({
   initialRowsPerPage,
   users,
   clients,
+  addOnCatalog = [],
   isAdmin,
 }: JobsPageClientProps) {
   const router = useRouter();
@@ -320,6 +323,7 @@ export default function JobsPageClient({
         mode={modalMode}
         users={users}
         clients={clients}
+        addOnCatalog={addOnCatalog}
         onSubmit={handleSubmit}
         onDelete={handleDelete}
       />

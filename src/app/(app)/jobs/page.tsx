@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
 import JobsPageClient from "./JobsPageClient";
+import { getBookingConfig } from "../../(book)/actions/getBookingConfig";
 
 type SearchParams = Promise<{
   [key: string]: string | string[] | undefined;
@@ -72,6 +73,10 @@ export default async function JobsPage({
     },
   });
 
+  // Add-ons configured in Settings → Pricing Rules, offered as quick-add chips
+  // in the job form so staff don't have to retype them.
+  const { addOns: addOnCatalog } = await getBookingConfig();
+
   const totalRevenue = await db.job.aggregate({
     where: baseWhere,
     _sum: { price: true },
@@ -125,6 +130,7 @@ export default async function JobsPage({
       discountAmount: job.discountAmount,
       bedCount: job.bedCount,
       bathCount: job.bathCount,
+      halfBathCount: job.halfBathCount,
       payRateMultiplier: job.payRateMultiplier,
       profit,
       profitPct,
@@ -158,6 +164,7 @@ export default async function JobsPage({
         initialRowsPerPage={rowsPerPage}
         users={users}
         clients={clients}
+        addOnCatalog={addOnCatalog}
         isAdmin={isAdmin}
       />
     </div>

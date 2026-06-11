@@ -1,13 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Trash2, DollarSign, Sparkles, BedDouble, Bath } from "lucide-react";
+import { Plus, Trash2, Sparkles, BedDouble, Truck, HardHat } from "lucide-react";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import IconButton from "@/components/ui/IconButton";
 import { updateAppSetting } from "../../actions/updateAppSetting";
 import { AppSettingRecord, getSetting } from "../types";
 import { SectionCard, Field, Feedback, Msg } from "./_shared";
+import {
+  SERVICE_PRICING_KEY,
+  ServicePricingConfig,
+  normalizeServicePricing,
+} from "@/lib/service-pricing";
 
 interface PricingRulesTabProps {
   settings: AppSettingRecord[];
@@ -78,8 +83,18 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
     baseServicePrice: initialRates.baseServicePrice ?? 100,
   });
   const [addOns, setAddOns] = useState<AddOn[]>(initialAddOns);
+  const [svc, setSvc] = useState<ServicePricingConfig>(() =>
+    normalizeServicePricing(getSetting<unknown>(settings, SERVICE_PRICING_KEY, {}))
+  );
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<Msg>(null);
+
+  function updateMi(patch: Partial<ServicePricingConfig["moveInOut"]>) {
+    setSvc((s) => ({ ...s, moveInOut: { ...s.moveInOut, ...patch } }));
+  }
+  function updatePc(patch: Partial<ServicePricingConfig["postConstruction"]>) {
+    setSvc((s) => ({ ...s, postConstruction: { ...s.postConstruction, ...patch } }));
+  }
 
   function updateAddOn(id: string, patch: Partial<AddOn>) {
     setAddOns((prev) => prev.map((a) => (a.id === id ? { ...a, ...patch } : a)));
@@ -97,15 +112,19 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
     setSaving(true);
     setMsg(null);
 
-    const [r1, r2] = await Promise.all([
+    const [r1, r2, r3] = await Promise.all([
       updateAppSetting({ key: PER_UNIT_KEY, category: "pricing", value: rates }),
       updateAppSetting({ key: ADDONS_KEY, category: "pricing", value: addOns }),
+      updateAppSetting({ key: SERVICE_PRICING_KEY, category: "pricing", value: svc }),
     ]);
 
-    if (r1.success && r2.success) {
+    if (r1.success && r2.success && r3.success) {
       setMsg({ type: "success", text: "Pricing rules saved." });
     } else {
-      setMsg({ type: "error", text: r1.error ?? r2.error ?? "Failed to save." });
+      setMsg({
+        type: "error",
+        text: r1.error ?? r2.error ?? r3.error ?? "Failed to save.",
+      });
     }
     setSaving(false);
   }
@@ -249,6 +268,132 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
             </div>
           ))}
         </div>
+      </SectionCard>
+
+      {/* Move-in / Move-out — priced per square foot */}
+      <SectionCard
+        title="Move-in / Move-out pricing"
+        description="Charged per square foot, with a cheaper rate for larger homes."
+        icon={Truck}>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <Field label="Large-home threshold (sq ft)">
+            <Input
+              variant="form"
+              type="number"
+              min="0"
+              step="50"
+              value={svc.moveInOut.thresholdSqft}
+              onChange={(e) =>
+                updateMi({ thresholdSqft: parseFloat(e.target.value) || 0 })
+              }
+            />
+          </Field>
+          <Field label="Rate at/above threshold ($/sq ft)">
+            <Input
+              variant="form"
+              type="number"
+              min="0"
+              step="0.01"
+              value={svc.moveInOut.rateAtOrAbove}
+              onChange={(e) =>
+                updateMi({ rateAtOrAbove: parseFloat(e.target.value) || 0 })
+              }
+            />
+          </Field>
+          <Field label="Rate below threshold ($/sq ft)">
+            <Input
+              variant="form"
+              type="number"
+              min="0"
+              step="0.01"
+              value={svc.moveInOut.rateBelow}
+              onChange={(e) =>
+                updateMi({ rateBelow: parseFloat(e.target.value) || 0 })
+              }
+            />
+          </Field>
+        </div>
+        <p className="text-sm text-[#005F6A]/60 mt-3">
+          Example: 1,200 sq ft ={" "}
+          <strong>
+            $
+            {(
+              1200 *
+              (1200 >= svc.moveInOut.thresholdSqft
+                ? svc.moveInOut.rateAtOrAbove
+                : svc.moveInOut.rateBelow)
+            ).toFixed(2)}
+          </strong>{" "}
+          · 800 sq ft ={" "}
+          <strong>
+            $
+            {(
+              800 *
+              (800 >= svc.moveInOut.thresholdSqft
+                ? svc.moveInOut.rateAtOrAbove
+                : svc.moveInOut.rateBelow)
+            ).toFixed(2)}
+          </strong>
+        </p>
+      </SectionCard>
+
+      {/* Post-construction — hourly with a package */}
+      <SectionCard
+        title="Post-construction pricing"
+        description="A flat package covers the first hours, then an hourly rate for extra hours."
+        icon={HardHat}>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <Field label="Package price ($)">
+            <Input
+              variant="form"
+              type="number"
+              min="0"
+              step="1"
+              value={svc.postConstruction.packagePrice}
+              onChange={(e) =>
+                updatePc({ packagePrice: parseFloat(e.target.value) || 0 })
+              }
+            />
+          </Field>
+          <Field label="Package hours">
+            <Input
+              variant="form"
+              type="number"
+              min="1"
+              step="1"
+              value={svc.postConstruction.packageHours}
+              onChange={(e) =>
+                updatePc({ packageHours: parseFloat(e.target.value) || 0 })
+              }
+            />
+          </Field>
+          <Field label="Extra hour rate ($/hr)">
+            <Input
+              variant="form"
+              type="number"
+              min="0"
+              step="1"
+              value={svc.postConstruction.hourlyRate}
+              onChange={(e) =>
+                updatePc({ hourlyRate: parseFloat(e.target.value) || 0 })
+              }
+            />
+          </Field>
+        </div>
+        <p className="text-sm text-[#005F6A]/60 mt-3">
+          {svc.postConstruction.packageHours}h ={" "}
+          <strong>${svc.postConstruction.packagePrice.toFixed(2)}</strong> ·{" "}
+          {svc.postConstruction.packageHours + 2}h ={" "}
+          <strong>
+            $
+            {(
+              svc.postConstruction.packagePrice +
+              2 * svc.postConstruction.hourlyRate
+            ).toFixed(2)}
+          </strong>{" "}
+          · under {svc.postConstruction.packageHours}h billed at $
+          {svc.postConstruction.hourlyRate.toFixed(2)}/hr
+        </p>
       </SectionCard>
 
       {msg && <Feedback msg={msg} />}

@@ -26,6 +26,13 @@ import Textarea from "@/components/ui/Textarea";
 import CustomDropdown from "@/components/ui/custom-dropdown";
 import SmartSearch from "@/components/SmartSearch";
 import SaveCardOnFile from "./SaveCardOnFile";
+import { parseTimeInput } from "@/components/ui/TimePicker";
+
+interface AddOnCatalogItem {
+  id: string;
+  name: string;
+  price: number;
+}
 
 interface User {
   id: string;
@@ -53,6 +60,7 @@ interface Job {
   discountAmount?: number | null;
   bedCount?: number | null;
   bathCount?: number | null;
+  halfBathCount?: number | null;
   payRateMultiplier?: number | null;
   cleaners: Array<{ id: string; name: string }>;
   addOns?: Array<{ id: string; name: string; price: number }>;
@@ -76,6 +84,8 @@ interface JobModalProps {
   clients?: ClientLite[];
   onSubmit: (data: FormData) => Promise<{ success?: boolean; error?: string }>;
   onDelete?: (jobId: string) => Promise<{ success?: boolean; error?: string }>;
+  /** Add-ons configured in Settings → Pricing Rules; offered as quick-add chips. */
+  addOnCatalog?: AddOnCatalogItem[];
 }
 
 const formSchema = z.object({
@@ -86,8 +96,6 @@ const formSchema = z.object({
   jobType: z.string().optional(),
   startDate: z.string().optional(),
   startTime: z.string().optional(),
-  endDate: z.string().optional(),
-  endTime: z.string().optional(),
   price: z.union([z.coerce.number().min(0), z.literal("")]).optional(),
   employeePay: z.union([z.coerce.number().min(0), z.literal("")]).optional(),
   totalTip: z.union([z.coerce.number().min(0), z.literal("")]).optional(),
@@ -95,6 +103,7 @@ const formSchema = z.object({
   notes: z.string().optional(),
   bedCount: z.union([z.coerce.number().int().min(0), z.literal("")]).optional(),
   bathCount: z.union([z.coerce.number().int().min(0), z.literal("")]).optional(),
+  halfBathCount: z.union([z.coerce.number().int().min(0), z.literal("")]).optional(),
   discountAmount: z.union([z.coerce.number().min(0), z.literal("")]).optional(),
 });
 
@@ -409,6 +418,15 @@ function CustomTimePicker({
 
   const timeOptions = generateTimeOptions();
 
+  // Manual keyboard entry: buffer typed text and parse it on blur/Enter.
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [text, setText] = useState("");
+  const [editing, setEditing] = useState(false);
+  function commitTyped() {
+    const parsed = parseTimeInput(text);
+    if (parsed && parsed !== value) onChange(parsed);
+  }
+
   const formatTimeDisplay = (time: string) => {
     if (!time) return "";
     const [hours, minutes] = time.split(":");
@@ -431,31 +449,54 @@ function CustomTimePicker({
   return (
     <div className="space-y-2 relative" ref={pickerRef}>
       <label className="input-label tracking-tight">{label}</label>
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={() => !disabled && setIsOpen((prev) => !prev)}
+      <div
+        onClick={() => { if (!disabled) inputRef.current?.focus(); }}
         className={`w-full px-4 py-3 rounded-2xl border border-[#005F6A]/15 bg-[#005F6A]/5 flex items-center justify-between text-left transition-all tracking-tight ${
           disabled
             ? "opacity-60 cursor-not-allowed"
-            : "hover:border-[#005F6A]/40"
+            : "hover:border-[#005F6A]/40 cursor-text"
         }`}>
-        <div className="flex items-center gap-3 overflow-hidden">
-          <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center border border-[#005F6A]/15">
+        <div className="flex items-center gap-3 overflow-hidden flex-1">
+          <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center border border-[#005F6A]/15 flex-shrink-0">
             <Calendar className="w-4 h-4 text-[#005F6A]" />
           </div>
-          <div className="flex flex-col leading-tight">
+          <div className="flex flex-col leading-tight flex-1 min-w-0">
             <span className="text-xs text-[#005F6A]/70">Selected time</span>
-            <span
-              className={`text-sm font-[450] ${
+            <input
+              ref={inputRef}
+              type="text"
+              inputMode="numeric"
+              disabled={disabled}
+              placeholder={placeholder}
+              value={editing ? text : value ? formatTimeDisplay(value) : ""}
+              onFocus={() => {
+                setEditing(true);
+                setText(value ? formatTimeDisplay(value) : "");
+                setIsOpen(true);
+              }}
+              onChange={(e) => setText(e.target.value)}
+              onBlur={() => { commitTyped(); setEditing(false); }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  commitTyped();
+                  setEditing(false);
+                  setIsOpen(false);
+                  inputRef.current?.blur();
+                } else if (e.key === "Escape") {
+                  setEditing(false);
+                  setIsOpen(false);
+                  inputRef.current?.blur();
+                }
+              }}
+              className={`text-sm font-[450] bg-transparent border-0 outline-none p-0 w-full ${
                 value ? "text-[#005F6A]" : "text-[#005F6A]/50"
-              }`}>
-              {value ? formatTimeDisplay(value) : placeholder}
-            </span>
+              }`}
+            />
           </div>
         </div>
         <ChevronDown className="w-4 h-4 text-[#005F6A]/60 flex-shrink-0" />
-      </button>
+      </div>
 
       {isOpen && (
         <div
@@ -509,6 +550,7 @@ export default function JobModal({
   clients = [],
   onSubmit,
   onDelete,
+  addOnCatalog = [],
 }: JobModalProps) {
   const [currentStep, setCurrentStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
@@ -566,12 +608,6 @@ export default function JobModal({
           startTime: job.startTime
             ? new Date(job.startTime).toISOString().split("T")[1].slice(0, 5)
             : "",
-          endDate: job.endTime
-            ? new Date(job.endTime).toISOString().split("T")[0]
-            : "",
-          endTime: job.endTime
-            ? new Date(job.endTime).toISOString().split("T")[1].slice(0, 5)
-            : "",
           price: job.price || "",
           employeePay: job.employeePay || "",
           totalTip: job.totalTip || "",
@@ -579,6 +615,7 @@ export default function JobModal({
           notes: job.notes || "",
           bedCount: job.bedCount ?? "",
           bathCount: job.bathCount ?? "",
+          halfBathCount: job.halfBathCount ?? "",
           discountAmount: job.discountAmount ?? "",
         });
         setSelectedCleaners(job.cleaners?.map((c) => c.id) || []);
@@ -606,8 +643,6 @@ export default function JobModal({
           jobType: "",
           startDate: "",
           startTime: "",
-          endDate: "",
-          endTime: "",
           price: "",
           employeePay: "",
           totalTip: "",
@@ -615,6 +650,7 @@ export default function JobModal({
           notes: "",
           bedCount: "",
           bathCount: "",
+          halfBathCount: "",
           discountAmount: "",
         });
         setSelectedCleaners([]);
@@ -717,8 +753,6 @@ export default function JobModal({
       formData.append("jobType", selectedJobType);
       formData.append("startDate", values.startDate || "");
       formData.append("startTime", values.startTime || "");
-      formData.append("endDate", values.endDate || "");
-      formData.append("endTime", values.endTime || "");
       formData.append("price", String(values.price || ""));
       formData.append("employeePay", String(values.employeePay || ""));
       formData.append("totalTip", String(values.totalTip || ""));
@@ -726,6 +760,7 @@ export default function JobModal({
       formData.append("notes", values.notes || "");
       formData.append("bedCount", String(values.bedCount || ""));
       formData.append("bathCount", String(values.bathCount || ""));
+      formData.append("halfBathCount", String(values.halfBathCount || ""));
 
       // Resolve discount: convert percent to amount if needed.
       // If admin has touched the field, send an explicit value (including "0")
@@ -1135,34 +1170,6 @@ export default function JobModal({
                           />
                         )}
                       />
-
-                      <Controller
-                        name="endDate"
-                        control={control}
-                        render={({ field }) => (
-                          <CustomDatePicker
-                            label="End Date"
-                            value={field.value}
-                            onChange={field.onChange}
-                            disabled={disableForm}
-                            placeholder="Select end date"
-                          />
-                        )}
-                      />
-
-                      <Controller
-                        name="endTime"
-                        control={control}
-                        render={({ field }) => (
-                          <CustomTimePicker
-                            label="End Time"
-                            value={field.value}
-                            onChange={field.onChange}
-                            disabled={disableForm}
-                            placeholder="Select end time"
-                          />
-                        )}
-                      />
                     </div>
                   </div>
 
@@ -1429,6 +1436,23 @@ export default function JobModal({
                         />
                       </div>
 
+                      <div>
+                        <label className="input-label tracking-tight">
+                          Half Bath Count
+                        </label>
+                        <Input
+                          variant="form"
+                          type="number"
+                          size="md"
+                          min="0"
+                          {...register("halfBathCount")}
+                          disabled={disableForm}
+                          className="w-full px-4 py-3"
+                          placeholder="0"
+                          border={false}
+                        />
+                      </div>
+
                       <div className="col-span-2">
                         <label className="input-label tracking-tight">
                           Payment Type
@@ -1539,6 +1563,41 @@ export default function JobModal({
                       <Briefcase className="w-4 h-4" />
                       Add-Ons
                     </h3>
+                    {addOnCatalog.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-xs text-[#005F6A]/60">
+                          Quick add from your configured add-ons:
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {addOnCatalog.map((cat) => {
+                            const already = addOns.some(
+                              (a) =>
+                                a.name.toLowerCase() === cat.name.toLowerCase()
+                            );
+                            return (
+                              <button
+                                key={cat.id}
+                                type="button"
+                                disabled={disableForm || already}
+                                onClick={() =>
+                                  setAddOns((prev) => [
+                                    ...prev,
+                                    { name: cat.name, price: cat.price },
+                                  ])
+                                }
+                                className={`px-3 py-1.5 rounded-full text-xs font-[450] border transition-colors ${
+                                  already
+                                    ? "bg-[#005F6A]/10 text-[#005F6A]/40 border-transparent cursor-not-allowed"
+                                    : "bg-white text-[#005F6A] border-[#005F6A]/20 hover:border-[#005F6A]/50"
+                                }`}>
+                                {already ? "✓ " : "+ "}
+                                {cat.name} · ${cat.price.toFixed(2)}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                     {addOns.length > 0 && (
                       <div className="space-y-2">
                         {addOns.map((a, i) => (

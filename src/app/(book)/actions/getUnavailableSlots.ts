@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/db";
+import { getBlockedSlots } from "@/lib/blocked-dates";
 
 const MAX_JOBS_PER_SLOT = 2; // grey out a slot once this many jobs are booked
 
@@ -27,7 +28,11 @@ export async function getUnavailableSlots(date: string): Promise<string[]> {
     counts[slot] = (counts[slot] ?? 0) + 1;
   }
 
-  return Object.entries(counts)
+  const fullSlots = Object.entries(counts)
     .filter(([, count]) => count >= MAX_JOBS_PER_SLOT)
     .map(([slot]) => slot);
+
+  // Merge in admin-blocked time slots for this date.
+  const blocked = await getBlockedSlots(date);
+  return Array.from(new Set([...fullSlots, ...blocked]));
 }

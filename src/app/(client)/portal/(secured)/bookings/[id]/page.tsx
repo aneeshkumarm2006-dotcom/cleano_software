@@ -323,7 +323,10 @@ export default async function BookingDetailPage({
           </section>
 
           {isUpcoming && !hasRequest ? (
-            <RequestActions jobId={job.id} />
+            <RequestActions
+              jobId={job.id}
+              startTime={job.startTime.toISOString()}
+            />
           ) : null}
 
           <section className="cl-tile cl-tile-pad-sm">

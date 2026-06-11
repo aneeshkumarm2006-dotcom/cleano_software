@@ -153,6 +153,7 @@ export default async function JobPage({
     discountAmount: job.discountAmount,
     bedCount: job.bedCount,
     bathCount: job.bathCount,
+    halfBathCount: job.halfBathCount,
     payRateMultiplier: job.payRateMultiplier,
     depositPaid: job.depositPaid,
     depositPaymentIntentId: job.depositPaymentIntentId,

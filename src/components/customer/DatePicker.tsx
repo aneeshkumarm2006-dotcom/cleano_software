@@ -10,6 +10,10 @@ interface DatePickerProps {
   min?: string; // YYYY-MM-DD
   max?: string;
   placeholder?: string;
+  /** Fully-closed days ("YYYY-MM-DD") that can't be selected. */
+  disabledDates?: string[];
+  /** Reason per closed day ("YYYY-MM-DD" → reason), shown when one is tapped. */
+  blockedReasons?: Record<string, string>;
 }
 
 const DAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
@@ -54,7 +58,11 @@ export default function DatePicker({
   min,
   max,
   placeholder = "Select a date",
+  disabledDates,
+  blockedReasons,
 }: DatePickerProps) {
+  const blockedSet = new Set(disabledDates ?? []);
+  const [blockedMsg, setBlockedMsg] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [popupPos, setPopupPos] = useState<{ top: number; left: number } | null>(
@@ -150,10 +158,16 @@ export default function DatePicker({
     cells.push({ date: d, muted: true });
   }
 
-  function isDisabled(d: Date): boolean {
+  function outOfRange(d: Date): boolean {
     if (minDate && d < minDate) return true;
     if (maxDate && d > maxDate) return true;
     return false;
+  }
+  function isBlocked(d: Date): boolean {
+    return blockedSet.has(toISO(d));
+  }
+  function isDisabled(d: Date): boolean {
+    return outOfRange(d) || isBlocked(d);
   }
 
   function gotoPrev() {
@@ -225,14 +239,15 @@ export default function DatePicker({
           {cells.map((cell, i) => {
             const d = cell.date!;
             const isSel = selected && isSameDay(d, selected);
-            const disabled = isDisabled(d);
+            const oor = outOfRange(d);
+            const blocked = isBlocked(d);
             const today = isSameDay(d, new Date());
             const cls = [
               "cl-dp-day",
               cell.muted ? "muted" : "",
               isSel ? "selected" : "",
               today && !isSel ? "today" : "",
-              disabled ? "disabled" : "",
+              oor ? "disabled" : "",
             ]
               .filter(Boolean)
               .join(" ");
@@ -241,8 +256,29 @@ export default function DatePicker({
                 key={i}
                 type="button"
                 className={cls}
-                disabled={disabled}
+                // Out-of-range days are hard-disabled. Blocked days stay
+                // clickable so tapping one can explain why it's closed.
+                disabled={oor}
+                style={
+                  blocked && !isSel
+                    ? {
+                        textDecoration: "line-through",
+                        color: "var(--primary-40)",
+                        cursor: "pointer",
+                      }
+                    : undefined
+                }
                 onClick={() => {
+                  if (blocked) {
+                    const r = blockedReasons?.[toISO(d)];
+                    setBlockedMsg(
+                      r && r.trim()
+                        ? `Closed — ${r.trim()}`
+                        : "This day is closed for booking."
+                    );
+                    return;
+                  }
+                  setBlockedMsg(null);
                   onChange(toISO(d));
                   if (cell.muted) {
                     setViewMonth(new Date(d.getFullYear(), d.getMonth(), 1));
@@ -254,6 +290,21 @@ export default function DatePicker({
             );
           })}
         </div>
+
+        {blockedMsg && (
+          <div
+            style={{
+              margin: "10px 12px 0",
+              padding: "9px 12px",
+              borderRadius: 10,
+              background: "rgba(0,95,106,0.08)",
+              color: "var(--primary)",
+              fontSize: 12.5,
+              lineHeight: 1.4,
+            }}>
+            {blockedMsg}
+          </div>
+        )}
 
         <div className="cl-dp-foot">
           <button type="button" className="cl-dp-link" onClick={clear}>
@@ -272,7 +323,10 @@ export default function DatePicker({
         ref={triggerRef}
         type="button"
         className="cl-dp-trigger"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          setBlockedMsg(null);
+          setOpen((v) => !v);
+        }}
         aria-haspopup="dialog"
         aria-expanded={open}>
         <span

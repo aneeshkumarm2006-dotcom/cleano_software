@@ -15,6 +15,7 @@ import {
   MapPin,
   ListChecks,
   Calendar as CalendarIcon,
+  CalendarOff,
   GraduationCap,
   FileSignature,
   Bell,
@@ -34,6 +35,7 @@ import InventoryLocationsTab from "./tabs/InventoryLocationsTab";
 import ServiceAreasTab from "./tabs/ServiceAreasTab";
 import ChecklistTemplatesTab from "./tabs/ChecklistTemplatesTab";
 import AvailabilityTab from "./tabs/AvailabilityTab";
+import ClosuresTab from "./tabs/ClosuresTab";
 import TrainingTab, {
   TrainingModuleRecord,
 } from "./tabs/TrainingTab";
@@ -75,6 +77,7 @@ interface SettingsClientProps {
 type TabId =
   | "profile"
   | "availability"
+  | "closures"
   | "tax"
   | "pricing"
   | "jobTypes"
@@ -102,6 +105,7 @@ interface TabDef {
 const TABS: TabDef[] = [
   { id: "profile", label: "Profile", icon: UserIcon },
   { id: "availability", label: "Availability", icon: CalendarIcon },
+  { id: "closures", label: "Closed Dates", icon: CalendarOff, adminOnly: true },
   { id: "tax", label: "Tax", icon: Percent, adminOnly: true },
   { id: "pricing", label: "Pricing Rules", icon: DollarSign, adminOnly: true },
   { id: "jobTypes", label: "Job Types", icon: Briefcase, adminOnly: true },
@@ -235,6 +239,9 @@ export default function SettingsClient({
         <section style={{ flex: 1, minWidth: 0 }}>
           {activeTab === "profile" && <ProfileTab user={user} />}
           {activeTab === "availability" && <AvailabilityTab />}
+          {activeTab === "closures" && isAdmin && (
+            <ClosuresTab settings={appSettings} />
+          )}
           {activeTab === "tax" && isAdmin && (
             <TaxSettingsTab settings={appSettings} />
           )}

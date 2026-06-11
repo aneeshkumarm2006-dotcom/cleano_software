@@ -64,6 +64,7 @@ interface Job {
   discountAmount?: number | null;
   bedCount?: number | null;
   bathCount?: number | null;
+  halfBathCount?: number | null;
   payRateMultiplier?: number | null;
   depositPaid?: boolean;
   depositPaymentIntentId?: string | null;

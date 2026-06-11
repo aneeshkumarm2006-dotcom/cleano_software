@@ -1,13 +1,33 @@
 import { db } from "@/db";
 import { calculateTax, TaxBreakdown } from "./tax";
+import {
+  SERVICE_PRICING_KEY,
+  ServicePricingConfig,
+  normalizeServicePricing,
+  moveInOutBasePrice,
+  postConstructionBasePrice,
+  isSqftService,
+  isHourlyService,
+} from "./service-pricing";
 
 export interface PricingInput {
+  serviceType?: string;
   bedCount: number;
   bathCount: number;
   halfBathCount?: number;
+  squareFootage?: number;
+  pcHours?: number;
   addOns: { name: string; price: number }[];
   travelFee?: number;
   discountAmount?: number;
+}
+
+/** Reads the admin-configured per-service-type rates, falling back to defaults. */
+export async function getServicePricingConfig(): Promise<ServicePricingConfig> {
+  const setting = await db.appSetting.findUnique({
+    where: { key: SERVICE_PRICING_KEY },
+  });
+  return normalizeServicePricing(setting?.value);
 }
 
 export interface PricingResult extends TaxBreakdown {
@@ -20,11 +40,7 @@ export interface PricingResult extends TaxBreakdown {
 export async function computeBookingPrice(
   input: PricingInput
 ): Promise<PricingResult> {
-  const basePrice = await resolveBasePrice(
-    input.bedCount,
-    input.bathCount,
-    input.halfBathCount ?? 0
-  );
+  const basePrice = await resolveBasePrice(input);
   const addOnTotal = input.addOns.reduce((s, a) => s + a.price, 0);
   const travelFee = input.travelFee ?? 0;
   const discountAmount = input.discountAmount ?? 0;
@@ -35,11 +51,20 @@ export async function computeBookingPrice(
   return { basePrice, addOnTotal, travelFee, discountAmount, ...tax };
 }
 
-async function resolveBasePrice(
-  bedCount: number,
-  bathCount: number,
-  halfBathCount: number
-): Promise<number> {
+async function resolveBasePrice(input: PricingInput): Promise<number> {
+  const { bedCount, bathCount } = input;
+  const halfBathCount = input.halfBathCount ?? 0;
+
+  // Per-service-type pricing overrides the bed/bath model.
+  if (isSqftService(input.serviceType)) {
+    const cfg = await getServicePricingConfig();
+    return moveInOutBasePrice(input.squareFootage ?? 0, cfg);
+  }
+  if (isHourlyService(input.serviceType)) {
+    const cfg = await getServicePricingConfig();
+    return postConstructionBasePrice(input.pcHours ?? 0, cfg);
+  }
+
   // Prefer flat per-unit rates set in Settings > Pricing Rules
   const setting = await db.appSetting.findUnique({ where: { key: "pricing.perUnit" } });
   if (setting?.value && typeof setting.value === "object") {

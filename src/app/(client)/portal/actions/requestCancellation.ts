@@ -4,9 +4,19 @@ import { db } from "@/db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { sendAdminBookingCancellationRequest } from "@/lib/email";
+import { stripe } from "@/lib/stripe";
+import {
+  sendAdminBookingCancellationRequest,
+  sendCustomerFeesCharged,
+} from "@/lib/email";
+import {
+  CANCELLATION_FEE_USD,
+  CANCELLATION_FEE_WINDOW_HOURS,
+} from "@/lib/policy";
 
 // Per spec: cancellation requests are flagged for admin review — never auto-cancel.
+// If the request lands inside the late-cancellation window, the configured fee
+// is charged off-session to the saved card at request time.
 export async function requestCancellation(jobId: string) {
   try {
     const session = await auth.api.getSession({ headers: await headers() });
@@ -17,10 +27,10 @@ export async function requestCancellation(jobId: string) {
 
     const job = await db.job.findUnique({
       where: { id: jobId },
-      include: { client: { select: { email: true } } },
+      include: { client: true },
     });
     if (!job) return { success: false, error: "Booking not found" };
-    if (job.client?.email !== email) {
+    if (job.client?.email?.toLowerCase() !== email) {
       return { success: false, error: "Not authorized" };
     }
     if (
@@ -34,19 +44,107 @@ export async function requestCancellation(jobId: string) {
       };
     }
 
+    const now = new Date();
+    const client = job.client;
+
+    // Late-cancellation fee: charge once, only inside the window, only when a
+    // card is on file and we haven't already charged for this job.
+    const msUntilStart = job.startTime.getTime() - now.getTime();
+    const withinFeeWindow =
+      msUntilStart < CANCELLATION_FEE_WINDOW_HOURS * 60 * 60 * 1000;
+
+    let chargeOutcome:
+      | "charged"
+      | "no_card_on_file"
+      | "stripe_failed"
+      | "not_applicable"
+      | "already_charged" = "not_applicable";
+    let chargeError: string | undefined;
+    let feePaymentIntentId: string | undefined;
+    const feeUsd = CANCELLATION_FEE_USD;
+    const amountCents = Math.round(feeUsd * 100);
+
+    if (withinFeeWindow && job.cancellationFeeChargedAt) {
+      chargeOutcome = "already_charged";
+    } else if (withinFeeWindow) {
+      if (client?.stripeCustomerId && client.defaultPaymentMethodId) {
+        try {
+          const pi = await stripe.paymentIntents.create({
+            amount: amountCents,
+            currency: "cad",
+            customer: client.stripeCustomerId,
+            payment_method: client.defaultPaymentMethodId,
+            off_session: true,
+            confirm: true,
+            description: `Cleano late-cancellation fee — job #${job.jobNumber}`,
+            metadata: {
+              jobId,
+              jobNumber: String(job.jobNumber),
+              feeType: "cancellation",
+            },
+          });
+          feePaymentIntentId = pi.id;
+          chargeOutcome = "charged";
+        } catch (err) {
+          chargeOutcome = "stripe_failed";
+          chargeError =
+            (err as { raw?: { message?: string }; message?: string })?.raw
+              ?.message ??
+            (err as { message?: string })?.message ??
+            "Stripe charge failed";
+        }
+      } else {
+        chargeOutcome = "no_card_on_file";
+      }
+    }
+
+    const feeNote =
+      chargeOutcome === "charged"
+        ? ` Late-cancellation fee of $${feeUsd.toFixed(2)} charged via Stripe (PI: ${feePaymentIntentId}).`
+        : chargeOutcome === "no_card_on_file"
+          ? ` Within ${CANCELLATION_FEE_WINDOW_HOURS}h window but no card on file — collect $${feeUsd.toFixed(2)} fee manually.`
+          : chargeOutcome === "stripe_failed"
+            ? ` Within ${CANCELLATION_FEE_WINDOW_HOURS}h window — fee charge FAILED: ${chargeError}. Collect $${feeUsd.toFixed(2)} manually.`
+            : chargeOutcome === "already_charged"
+              ? ` Late-cancellation fee already charged for this booking.`
+              : "";
+
     await db.$transaction([
       db.job.update({
         where: { id: jobId },
-        data: { cancellationRequestedAt: new Date() },
+        data: {
+          cancellationRequestedAt: now,
+          ...(chargeOutcome === "charged"
+            ? {
+                cancellationFeeChargedAt: now,
+                cancellationFeePaymentIntentId: feePaymentIntentId,
+              }
+            : {}),
+        },
       }),
       db.jobLog.create({
         data: {
           jobId,
           userId: session.user.id,
           action: "NOTE_ADDED",
-          description: "Cancellation requested by client",
+          description: `Cancellation requested by client.${feeNote}`,
         },
       }),
+      ...(chargeOutcome === "charged"
+        ? [
+            db.transaction.create({
+              data: {
+                date: now,
+                category: "REVENUE" as const,
+                amount: feeUsd,
+                description: `Late-cancellation fee — job #${job.jobNumber}`,
+                jobId,
+                source: "CREDIT_CARD" as const,
+                isAuto: true,
+              },
+            }),
+          ]
+        : []),
     ]);
 
     // Notify all admins (gated by Settings → Notifications).
@@ -59,9 +157,24 @@ export async function requestCancellation(jobId: string) {
       serviceType: job.jobType,
     }).catch((e) => console.error("admin cancellation-request email", e));
 
+    if (chargeOutcome === "charged" && client?.email) {
+      sendCustomerFeesCharged({
+        to: client.email,
+        clientName: client.name,
+        jobId,
+        jobNumber: job.jobNumber,
+        feeType: "cancellation",
+        amount: feeUsd,
+      }).catch((e) => console.error("cancellation-fee email", e));
+    }
+
     revalidatePath("/portal");
     revalidatePath("/portal/bookings");
-    return { success: true };
+    return {
+      success: true,
+      feeCharged: chargeOutcome === "charged",
+      feeUsd: chargeOutcome === "charged" ? feeUsd : undefined,
+    };
   } catch (error) {
     console.error("Error requesting cancellation:", error);
     return { success: false, error: "Failed to submit request" };

@@ -2,6 +2,7 @@
 
 import { db } from "@/db";
 import { checkServiceAreaInternal } from "@/lib/service-area";
+import { getBlockedDates, getBlockedSlots } from "@/lib/blocked-dates";
 import {
   computeBookingPrice,
   nextOccurrence,
@@ -41,6 +42,7 @@ interface SubmitBookingInput {
   halfBathCount: number;
   squareFootage: number;
   serviceType: string;
+  pcHours?: number; // post-construction hours (drives hourly/package pricing)
   frequency: Frequency;
   addOns: { name: string; price: number }[];
   // Step 3
@@ -87,6 +89,38 @@ export async function submitBooking(input: SubmitBookingInput) {
     }
     if (!input.date) {
       return { success: false, error: "Date is required" };
+    }
+    // Move-in/out is priced per square foot — require it.
+    if (
+      input.serviceType === "MOVE_IN_OUT" &&
+      (!input.squareFootage || input.squareFootage <= 0)
+    ) {
+      return {
+        success: false,
+        error: "Square footage is required for move-in / move-out bookings.",
+      };
+    }
+
+    // 1b. Reject fully-closed days (admin-configured). Server-authoritative —
+    // the date picker greys these out but a crafted request could bypass it.
+    const blockedDates = await getBlockedDates();
+    if (blockedDates.includes(input.date)) {
+      return {
+        success: false,
+        error: "Sorry, we're closed on that date. Please choose another day.",
+      };
+    }
+    // Reject a specific time slot the admin has closed (skipped for flexible
+    // bookings, which don't pin a slot).
+    if (!input.isFlexible && input.timeSlot) {
+      const blockedSlots = await getBlockedSlots(input.date);
+      if (blockedSlots.includes(input.timeSlot)) {
+        return {
+          success: false,
+          error:
+            "Sorry, that time is no longer available. Please choose another slot.",
+        };
+      }
     }
 
     // 2. Re-check service area (server-authoritative — client can be tampered)
@@ -183,8 +217,12 @@ export async function submitBooking(input: SubmitBookingInput) {
 
     // 5b. Server-authoritative pricing
     const pricing = await computeBookingPrice({
+      serviceType: input.serviceType,
       bedCount: input.bedCount,
       bathCount: input.bathCount,
+      halfBathCount: input.halfBathCount,
+      squareFootage: input.squareFootage,
+      pcHours: input.pcHours,
       addOns: input.addOns,
       travelFee: areaCheck.travelFee ?? 0,
       discountAmount,
@@ -334,9 +372,12 @@ export async function submitBooking(input: SubmitBookingInput) {
         : 0;
       const childPricing = recurringDiscount > 0
         ? await computeBookingPrice({
+            serviceType: input.serviceType,
             bedCount: input.bedCount,
             bathCount: input.bathCount,
             halfBathCount: input.halfBathCount ?? 0,
+            squareFootage: input.squareFootage,
+            pcHours: input.pcHours,
             addOns: input.addOns,
             travelFee: pricing.travelFee,
             discountAmount: discountAmount + recurringDiscount,

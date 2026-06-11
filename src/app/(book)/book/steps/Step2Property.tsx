@@ -1,6 +1,6 @@
 "use client";
 
-import { BookingDraft, SERVICE_TYPES, FREQUENCIES, AIRBNB_FREQUENCIES, PC_HOURLY_RATE, RoomType } from "../types";
+import { BookingDraft, SERVICE_TYPES, FREQUENCIES, AIRBNB_FREQUENCIES, RoomType } from "../types";
 import { Field, Input } from "@/components/customer/Field";
 import { NumberStepper, ChoiceButton } from "@/components/customer/atoms";
 
@@ -27,12 +27,14 @@ const ROOM_ORDER: RoomType[] = [
 interface Props {
   draft: BookingDraft;
   onChange: (patch: Partial<BookingDraft>) => void;
+  /** Server-computed base price (before add-ons/tax) for the current inputs. */
+  basePrice?: number;
 }
 
-export default function Step2Property({ draft, onChange }: Props) {
+export default function Step2Property({ draft, onChange, basePrice = 0 }: Props) {
   const isPC = draft.serviceType === "POST_CONSTRUCTION";
   const isAirbnb = draft.serviceType === "AIRBNB";
-  const pcEstimate = draft.pcHours * draft.pcCleaners * PC_HOURLY_RATE;
+  const isMoveInOut = draft.serviceType === "MOVE_IN_OUT";
 
   const activeAirbnbFreq = AIRBNB_FREQUENCIES.find((f) => f.value === draft.frequency);
   const airbnbDiscount = activeAirbnbFreq?.discount ?? 0;
@@ -106,10 +108,10 @@ export default function Step2Property({ draft, onChange }: Props) {
             }}>
             <div>
               <div style={{ fontSize: 12, color: "var(--primary-60)", marginBottom: 2 }}>
-                Estimate ({draft.pcHours}h × {draft.pcCleaners} cleaner{draft.pcCleaners !== 1 ? "s" : ""} × ${PC_HOURLY_RATE}/hr)
+                Estimate ({draft.pcHours} hour{draft.pcHours !== 1 ? "s" : ""})
               </div>
               <div style={{ fontSize: 22, fontWeight: 700, color: "var(--primary)" }}>
-                ${pcEstimate.toFixed(0)} <span style={{ fontSize: 13, fontWeight: 400, color: "var(--primary-60)" }}>before tax</span>
+                ${basePrice.toFixed(0)} <span style={{ fontSize: 13, fontWeight: 400, color: "var(--primary-60)" }}>before tax</span>
               </div>
             </div>
             <span style={{ fontSize: 11, color: "var(--primary-50)", maxWidth: 130, lineHeight: 1.4 }}>
@@ -118,6 +120,7 @@ export default function Step2Property({ draft, onChange }: Props) {
           </div>
         </div>
       ) : (
+        <>
         <div className="cl-grid-2">
           <NumberStepper
             label="Bedrooms"
@@ -140,7 +143,7 @@ export default function Step2Property({ draft, onChange }: Props) {
             min={0}
             max={4}
           />
-          <Field label="Square footage">
+          <Field label={isMoveInOut ? "Square footage (required)" : "Square footage"}>
             <Input
               value={draft.squareFootage || ""}
               onChange={(e) =>
@@ -151,6 +154,20 @@ export default function Step2Property({ draft, onChange }: Props) {
             />
           </Field>
         </div>
+        {isMoveInOut && (
+          <p
+            style={{
+              fontSize: 12.5,
+              color: "var(--primary-60)",
+              margin: "8px 0 0",
+              lineHeight: 1.5,
+            }}>
+            {draft.squareFootage > 0
+              ? `Move-in/out is priced by square footage — estimated $${basePrice.toFixed(2)} before tax.`
+              : "Move-in/out is priced by square footage. Enter it above to see your price."}
+          </p>
+        )}
+        </>
       )}
 
       {!isPC && (

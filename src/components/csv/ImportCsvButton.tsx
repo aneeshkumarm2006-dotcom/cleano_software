@@ -32,7 +32,7 @@ interface ImportCsvButtonProps {
 interface PreviewRow {
   index: number; // 1-based
   errors: string[];
-  cells: Record<string, string>;
+  display: string; // first column's value, resolved through header aliases
 }
 
 function downloadCsv(fileName: string, csv: string) {
@@ -92,12 +92,18 @@ export default function ImportCsvButton({ entity, label, triggerClassName }: Imp
         }
         setUnknownCols(findUnknownColumns(config, headers));
         setRecords(recs);
+        const firstKey = config.columns[0].key;
         setPreview(
-          recs.map((rec, i) => ({
-            index: i + 1,
-            errors: validateRecord(config, rec).errors,
-            cells: rec,
-          }))
+          recs.map((rec, i) => {
+            const { values, errors } = validateRecord(config, rec);
+            return {
+              index: i + 1,
+              errors,
+              // Use the alias-resolved value so the column shows even when the
+              // upload's header differs from our key (e.g. "Full Name" → name).
+              display: values[firstKey] != null ? String(values[firstKey]) : "",
+            };
+          })
         );
       } catch {
         setParseError("Could not read this file. Make sure it is a valid .csv file.");
@@ -236,7 +242,7 @@ export default function ImportCsvButton({ entity, label, triggerClassName }: Imp
                         <tr key={r.index} className="border-t border-gray-50">
                           <td className="px-2 py-1.5 text-gray-400">{r.index}</td>
                           <td className="px-2 py-1.5 text-gray-800">
-                            {r.cells[config.columns[0].key] ?? "—"}
+                            {r.display || "—"}
                           </td>
                           <td className="px-2 py-1.5">
                             {ok ? (

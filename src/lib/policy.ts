@@ -14,6 +14,14 @@ export const ACCEPT_DECLINE_TIMEOUT_MIN = 10;
 /** No-show penalty charged to the customer when the cleaner reports a no-show. */
 export const NO_SHOW_FEE_USD = 25;
 
+/** Fee charged to the customer when they cancel inside the late-cancellation
+ *  window below. */
+export const CANCELLATION_FEE_USD = 20;
+
+/** Hours before the booking start time inside which a cancellation incurs the
+ *  late-cancellation fee. */
+export const CANCELLATION_FEE_WINDOW_HOURS = 48;
+
 /** Auto-rating posted on the cleaner's job when the customer is a no-show. */
 export const NO_SHOW_AUTO_STAR = 1;
 

@@ -13,7 +13,15 @@ function tomorrowISO() {
   return d.toISOString().slice(0, 10);
 }
 
-export default function RequestActions({ jobId }: { jobId: string }) {
+export default function RequestActions({
+  jobId,
+  startTime,
+}: {
+  jobId: string;
+  startTime: string;
+}) {
+  const within48h =
+    new Date(startTime).getTime() - Date.now() < 48 * 60 * 60 * 1000;
   const [busy, setBusy] = useState<"cancel" | "reschedule" | null>(null);
   const [msg, setMsg] = useState<{
     kind: "success" | "error";
@@ -39,17 +47,19 @@ export default function RequestActions({ jobId }: { jobId: string }) {
       res.success
         ? {
             kind: "success",
-            text: "Cancellation requested — awaiting confirmation.",
+            text: res.feeCharged
+              ? `Cancellation requested — a $${res.feeUsd?.toFixed(0)} late-cancellation fee was charged to your card. Awaiting confirmation.`
+              : "Cancellation requested — awaiting confirmation.",
           }
         : { kind: "error", text: res.error || "Failed" }
     );
   }
 
   async function submitReschedule() {
-    if (!preferredDate && !rescheduleNotes.trim()) {
+    if (!preferredDate) {
       setMsg({
         kind: "error",
-        text: "Please pick a date or add a note for our team.",
+        text: "Please choose a new date for your booking.",
       });
       return;
     }
@@ -118,7 +128,7 @@ export default function RequestActions({ jobId }: { jobId: string }) {
         title="Request a reschedule"
         description="Tell us when you'd like to move this booking to. Our team will reach out to confirm.">
         <div className="cl-stack-16">
-          <Field label="Preferred new date (optional)">
+          <Field label="Preferred new date">
             <DatePicker
               value={preferredDate}
               onChange={setPreferredDate}
@@ -145,7 +155,7 @@ export default function RequestActions({ jobId }: { jobId: string }) {
             <Button
               onClick={submitReschedule}
               loading={busy === "reschedule"}
-              disabled={busy !== null}>
+              disabled={busy !== null || !preferredDate}>
               Submit request
             </Button>
           </div>
@@ -158,6 +168,11 @@ export default function RequestActions({ jobId }: { jobId: string }) {
         title="Cancel this booking?"
         description="Our team reviews every cancellation and will reach out to confirm. Your booking won't be cancelled automatically.">
         <div className="cl-stack-16">
+          <Banner kind={within48h ? "error" : "amber"}>
+            {within48h
+              ? "Heads up: this booking is within 48 hours, so a $20 cancellation fee will apply."
+              : "Cancellations within 48 hours of your appointment are charged a $20 fee."}
+          </Banner>
           <Field label="Reason (optional)" htmlFor="cn-reason">
             <Textarea
               id="cn-reason"

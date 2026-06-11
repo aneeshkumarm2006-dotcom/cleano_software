@@ -130,6 +130,7 @@ export async function saveJob(formData: FormData) {
       discountAmount,
       bedCount: parseOptionalInt(formData.get("bedCount")),
       bathCount: parseOptionalInt(formData.get("bathCount")),
+      halfBathCount: parseOptionalInt(formData.get("halfBathCount")),
       payRateMultiplier:
         parseOptionalFloat(formData.get("payRateMultiplier")) ?? 1.0,
     };

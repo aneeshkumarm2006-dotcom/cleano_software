@@ -6,6 +6,7 @@ import { Field } from "@/components/customer/Field";
 import { ChoiceButton } from "@/components/customer/atoms";
 import DatePicker from "@/components/customer/DatePicker";
 import { getUnavailableSlots } from "../../actions/getUnavailableSlots";
+import { getDateClosures } from "../../actions/getDateClosures";
 
 interface Props {
   draft: BookingDraft;
@@ -25,7 +26,30 @@ function maxISO() {
 
 export default function Step3Schedule({ draft, onChange }: Props) {
   const [unavailableSlots, setUnavailableSlots] = useState<string[]>([]);
+  const [blockedDates, setBlockedDates] = useState<string[]>([]);
+  const [blockedReasons, setBlockedReasons] = useState<Record<string, string>>({});
   const [, startTransition] = useTransition();
+
+  // Load admin-configured fully-closed days (with reasons) once, and clear the
+  // selection if the currently-picked date is one of them.
+  useEffect(() => {
+    let cancelled = false;
+    getDateClosures().then((list) => {
+      if (cancelled) return;
+      setBlockedDates(list.map((c) => c.date));
+      const reasons: Record<string, string> = {};
+      for (const c of list) if (c.reason) reasons[c.date] = c.reason;
+      setBlockedReasons(reasons);
+      if (draft.date && list.some((c) => c.date === draft.date)) {
+        onChange({ date: "", timeSlot: "" });
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+    // Intentionally run once on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (!draft.date) { setUnavailableSlots([]); return; }
@@ -59,6 +83,8 @@ export default function Step3Schedule({ draft, onChange }: Props) {
           onChange={(iso) => onChange({ date: iso })}
           min={todayISO()}
           max={maxISO()}
+          disabledDates={blockedDates}
+          blockedReasons={blockedReasons}
           placeholder="Choose your preferred date"
         />
       </Field>
