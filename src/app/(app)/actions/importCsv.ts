@@ -25,6 +25,9 @@ export interface ImportResponse {
 }
 
 const MAX_ROWS = 2000;
+// How many rows to process in parallel. Keeps the pooled DB connection busy
+// without overwhelming it, turning ~1,400 sequential round-trips into ~waves.
+const CONCURRENCY = 8;
 
 type Values = Record<string, unknown>;
 type HandlerOutcome = { status: RowResult["status"]; reason?: string; label?: string };
@@ -402,22 +405,37 @@ export async function importCsv(entity: EntityKey, records: Record<string, strin
     return { ok: false, error: `Too many rows — max ${MAX_ROWS} per import`, ...empty };
   }
 
-  const results: RowResult[] = [];
-  for (let i = 0; i < records.length; i++) {
-    const rowNum = i + 1;
-    const { values, errors } = validateRecord(config, records[i]);
-    if (errors.length) {
-      results.push({ row: rowNum, status: "failed", reason: errors.join("; ") });
-      continue;
-    }
-    try {
-      const outcome = await handler(values);
-      results.push({ row: rowNum, ...outcome });
-    } catch (e) {
-      console.error(`importCsv ${entity} row ${rowNum}`, e);
-      results.push({ row: rowNum, status: "failed", reason: "Server error while importing this row" });
+  // Process rows with bounded concurrency so a large file finishes in seconds
+  // (sequential per-row round-trips to a remote DB is what risks a timeout).
+  // Results are written by index to preserve row order in the report.
+  const results: RowResult[] = new Array(records.length);
+  let cursor = 0;
+
+  async function worker() {
+    for (let i = cursor++; i < records.length; i = cursor++) {
+      const rowNum = i + 1;
+      const { values, errors } = validateRecord(config, records[i]);
+      if (errors.length) {
+        results[i] = { row: rowNum, status: "failed", reason: errors.join("; ") };
+        continue;
+      }
+      try {
+        const outcome = await handler(values);
+        results[i] = { row: rowNum, ...outcome };
+      } catch (e) {
+        // Unique-constraint conflict (e.g. a duplicate slipped past the dedupe
+        // check) is a skip, not a failure.
+        if ((e as { code?: string })?.code === "P2002") {
+          results[i] = { row: rowNum, status: "skipped", reason: "Duplicate — already exists" };
+        } else {
+          console.error(`importCsv ${entity} row ${rowNum}`, e);
+          results[i] = { row: rowNum, status: "failed", reason: "Server error while importing this row" };
+        }
+      }
     }
   }
+
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, records.length) }, worker));
 
   for (const path of REVALIDATE[entity]) revalidatePath(path);
 

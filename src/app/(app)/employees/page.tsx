@@ -8,6 +8,9 @@ type SearchParams = Promise<{
   [key: string]: string | string[] | undefined;
 }>;
 
+// Allow bulk CSV import (processed by the importCsv server action) enough time.
+export const maxDuration = 60;
+
 export default async function EmployeesPage({
   searchParams,
 }: {

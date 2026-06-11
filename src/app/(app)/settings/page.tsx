@@ -5,6 +5,9 @@ import { db } from "@/db";
 import SettingsClient from "./SettingsClient";
 import { seedNotificationCatalog } from "@/lib/notifications";
 
+// Allow bulk CSV import (processed by the importCsv server action) enough time.
+export const maxDuration = 60;
+
 export default async function SettingsPage() {
   const session = await auth.api.getSession({
     headers: await headers(),
