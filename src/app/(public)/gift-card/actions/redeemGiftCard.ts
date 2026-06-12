@@ -53,21 +53,24 @@ export async function redeemGiftCard(input: { code: string }) {
     };
   }
 
+  // Atomically claim the card — only the call that flips ACTIVE→REDEEMED gets
+  // count 1 and credits the balance, so concurrent redeems can't double-credit.
+  const claim = await db.giftCard.updateMany({
+    where: { id: card.id, status: "ACTIVE" },
+    data: {
+      status: "REDEEMED",
+      redeemedAt: new Date(),
+      redeemedByClientId: client.id,
+    },
+  });
+  if (claim.count === 0) {
+    return { success: false, error: "This gift card has already been redeemed" };
+  }
   const newBalance = client.giftCardBalance + card.amount;
-  await db.$transaction([
-    db.giftCard.update({
-      where: { id: card.id },
-      data: {
-        status: "REDEEMED",
-        redeemedAt: new Date(),
-        redeemedByClientId: client.id,
-      },
-    }),
-    db.client.update({
-      where: { id: client.id },
-      data: { giftCardBalance: { increment: card.amount } },
-    }),
-  ]);
+  await db.client.update({
+    where: { id: client.id },
+    data: { giftCardBalance: { increment: card.amount } },
+  });
 
   if (client.email) {
     sendGiftCardRedeemedConfirmation({

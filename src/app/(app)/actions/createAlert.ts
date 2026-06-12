@@ -6,6 +6,7 @@ import {
   DEFAULT_NOTIFICATION_PREFS,
   type NotificationPrefs,
 } from "./notificationPrefsConstants";
+import { getActor, requireOwnerAdmin } from "@/lib/action-guards";
 
 interface CreateAlertInput {
   type: AlertType;
@@ -19,6 +20,9 @@ interface CreateAlertInput {
 
 export async function createAlert(input: CreateAlertInput) {
   try {
+    const guard = await requireOwnerAdmin();
+    if (!guard.ok) return { success: false, error: guard.error };
+
     const alert = await db.alert.create({
       data: {
         type: input.type,
@@ -37,8 +41,27 @@ export async function createAlert(input: CreateAlertInput) {
   }
 }
 
+// Dismiss/read are scoped: an admin can act on any alert; anyone else only on
+// alerts addressed to them (recipientUserId). Blocks anonymous/customer access.
+async function canMutateAlert(alertId: string) {
+  const actor = await getActor();
+  if (!actor.userId) return { ok: false as const, error: "Not authenticated" };
+  const alert = await db.alert.findUnique({
+    where: { id: alertId },
+    select: { recipientUserId: true },
+  });
+  if (!alert) return { ok: false as const, error: "Alert not found" };
+  const isAdmin = actor.role === "OWNER" || actor.role === "ADMIN";
+  if (!isAdmin && alert.recipientUserId !== actor.userId) {
+    return { ok: false as const, error: "Not authorized" };
+  }
+  return { ok: true as const };
+}
+
 export async function dismissAlert(alertId: string) {
   try {
+    const auth = await canMutateAlert(alertId);
+    if (!auth.ok) return { success: false, error: auth.error };
     await db.alert.update({
       where: { id: alertId },
       data: { isDismissed: true },
@@ -52,6 +75,8 @@ export async function dismissAlert(alertId: string) {
 
 export async function markAlertRead(alertId: string) {
   try {
+    const auth = await canMutateAlert(alertId);
+    if (!auth.ok) return { success: false, error: auth.error };
     await db.alert.update({
       where: { id: alertId },
       data: { isRead: true },
@@ -114,6 +139,9 @@ export async function notifyByRule(
   payload: NotifyByRulePayload,
 ): Promise<NotifyByRuleResult> {
   try {
+    const guard = await requireOwnerAdmin();
+    if (!guard.ok) return { success: false, error: guard.error };
+
     const recipientIds = new Set<string>();
 
     if (!payload.skipRoleRouting) {

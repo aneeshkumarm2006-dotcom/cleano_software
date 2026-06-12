@@ -1,7 +1,6 @@
 "use client";
 
 import { Suspense, useEffect, useState, FormEvent } from "react";
-import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 import SplitShell from "@/components/customer/SplitShell";
@@ -13,7 +12,9 @@ import {
   Banner,
 } from "@/components/customer/Field";
 
-function PortalLoginInner() {
+const CALLBACK = "/api/post-signin?from=cleaner";
+
+function CleanerLoginInner() {
   const session = authClient.useSession();
   const searchParams = useSearchParams();
 
@@ -23,11 +24,11 @@ function PortalLoginInner() {
       ? localStorage.getItem(rememberedKey) ?? ""
       : "";
 
-  // If we just bounced a staff account out, show a banner explaining why.
+  // Explain a wrong-role bounce from /api/post-signin.
   const errorParam = searchParams.get("error");
   const initialError =
-    errorParam === "staff_account"
-      ? "That account is a staff account. Use the staff sign-in page instead."
+    errorParam === "not_cleaner" || errorParam === "use_cleaner_login"
+      ? "That account isn't a cleaner account. If you're an admin, use the staff sign-in."
       : null;
 
   const [email, setEmail] = useState(initialEmail);
@@ -39,7 +40,7 @@ function PortalLoginInner() {
 
   useEffect(() => {
     if (session.data?.session) {
-      window.location.href = "/api/post-signin?from=portal";
+      window.location.href = CALLBACK;
     }
   }, [session.data?.session]);
 
@@ -61,7 +62,7 @@ function PortalLoginInner() {
       const res = await authClient.signIn.email({
         email: email.trim().toLowerCase(),
         password,
-        callbackURL: "/api/post-signin?from=portal",
+        callbackURL: CALLBACK,
       });
       if (res.error) {
         const code = res.error.status;
@@ -74,7 +75,7 @@ function PortalLoginInner() {
       }
       if (remember) localStorage.setItem(rememberedKey, email);
       else localStorage.removeItem(rememberedKey);
-      window.location.href = "/api/post-signin?from=portal";
+      window.location.href = CALLBACK;
     } catch {
       setError("Unexpected error. Please try again.");
       setLoading(false);
@@ -83,12 +84,11 @@ function PortalLoginInner() {
 
   return (
     <SplitShell
-      image="/customer-login.png"
-      quoteHtml={"Your home<br/>shouldn't <em>feel like<br/>work.</em>"}
-      quoteSub="Trusted Montréal cleaners. Transparent pricing. Manage everything from one place."
-      topRightLabel="Book a cleaning →"
-      topRightHref="/book"
-      badge="Customer portal">
+      image="/employee-login.png"
+      imagePosition="center top"
+      quoteHtml={"Great work<br/>starts with a<br/><em>great team.</em>"}
+      quoteSub="Your jobs, your schedule, and your pay — all in one place."
+      badge="Cleaner portal">
       <header style={{ marginBottom: 36 }}>
         <p className="cl-eyebrow" style={{ marginBottom: 12 }}>
           Welcome back
@@ -96,10 +96,10 @@ function PortalLoginInner() {
         <h1 className="cl-display">
           Sign in to
           <br />
-          your <em>account.</em>
+          your <em>team account.</em>
         </h1>
         <p className="cl-subtitle">
-          Manage bookings, reschedule, and track your past cleanings.
+          View your jobs, track your pay, and manage your schedule.
         </p>
       </header>
 
@@ -145,7 +145,7 @@ function PortalLoginInner() {
             className="cl-link-muted"
             onClick={(e) => {
               e.preventDefault();
-              setNotice("Forgot password flow — coming soon.");
+              setNotice("Forgot password? Please contact your manager.");
             }}
             style={{ fontSize: 13 }}>
             Forgot password?
@@ -158,41 +158,15 @@ function PortalLoginInner() {
         <Button type="submit" size="lg" block loading={loading}>
           {loading ? "Signing in…" : "Sign in →"}
         </Button>
-
-        <div className="cl-divider-or" style={{ marginTop: 8 }}>
-          or
-        </div>
-
-        <div
-          className="cl-stack-12"
-          style={{
-            textAlign: "center",
-            fontSize: 14,
-            color: "var(--primary-70)",
-            lineHeight: 1.6,
-          }}>
-          <div>
-            First time?{" "}
-            <Link href="/book" className="cl-link">
-              Book your first cleaning →
-            </Link>
-          </div>
-          <div style={{ fontSize: 13 }}>
-            Booked recently but no password yet?{" "}
-            <Link href="/portal/setup" className="cl-link">
-              Set up your account →
-            </Link>
-          </div>
-        </div>
       </form>
     </SplitShell>
   );
 }
 
-export default function PortalLoginPage() {
+export default function CleanerLoginPage() {
   return (
     <Suspense fallback={null}>
-      <PortalLoginInner />
+      <CleanerLoginInner />
     </Suspense>
   );
 }

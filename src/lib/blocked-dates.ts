@@ -117,6 +117,44 @@ export async function getBlockedDayClosures(): Promise<
   return [...map.entries()].map(([date, reason]) => ({ date, reason }));
 }
 
+export interface ClosureRange {
+  start: string; // "HH:MM"
+  end: string; // "HH:MM"
+  reason: string | null;
+}
+
+/**
+ * Time-range closures for a specific date (non-whole-day). Used by the booking
+ * time picker to grey out / reject arbitrary times that fall inside a blocked
+ * window. Whole-day closures are handled separately (they disable the date).
+ */
+export async function getDayClosureRanges(
+  date: string
+): Promise<ClosureRange[]> {
+  if (!date) return [];
+  const closures = await getClosures();
+  return closures
+    .filter((c) => c.date === date && !c.allDay && c.start && c.end)
+    .map((c) => ({ start: c.start!, end: c.end!, reason: c.reason }));
+}
+
+/**
+ * True when an arbitrary "HH:MM" time falls inside any range closure on `date`.
+ * Range-aware (unlike getBlockedSlots, which only tests the legacy fixed slots),
+ * so it correctly validates a customer-chosen time like "10:24".
+ */
+export async function isTimeBlocked(
+  date: string,
+  time: string
+): Promise<{ blocked: boolean; reason: string | null }> {
+  for (const r of await getDayClosureRanges(date)) {
+    if (slotInRange(time, r.start, r.end)) {
+      return { blocked: true, reason: r.reason };
+    }
+  }
+  return { blocked: false, reason: null };
+}
+
 /**
  * Fixed booking slots ("HH:MM") blocked for a specific date — any TIME_SLOTS
  * that fall inside a range closure on that date. Whole-day closures are handled

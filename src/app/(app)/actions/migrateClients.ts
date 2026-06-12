@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/db";
+import { requireOwnerAdmin } from "@/lib/action-guards";
 
 /**
  * One-time migration: deduplicates existing clientName strings into Client
@@ -11,6 +12,9 @@ export async function migrateClients(): Promise<{
   created: number;
   updated: number;
 }> {
+  const guard = await requireOwnerAdmin();
+  if (!guard.ok) throw new Error(guard.error);
+
   // Gather all distinct clientName values from Job rows that have no clientId
   const unmigrated = await db.job.findMany({
     where: { clientId: null },

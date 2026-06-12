@@ -35,8 +35,11 @@ export async function POST(req: NextRequest) {
       customerId,
       paymentIntentId: paymentIntent.id,
     });
-  } catch (err: any) {
+  } catch (err) {
     console.error("charge-deposit error:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to start deposit payment" },
+      { status: 500 }
+    );
   }
 }

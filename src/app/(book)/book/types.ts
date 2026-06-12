@@ -46,6 +46,9 @@ export interface BookingDraft {
   date: string;
   isFlexible: boolean;
   timeSlot: string;
+  // False when the chosen timeSlot falls in an admin-blocked window / outside
+  // business hours / at capacity. Undefined until validated. Gates "Next".
+  timeSlotValid?: boolean;
   // Step 4
   name: string;
   phone: string;
@@ -116,4 +119,18 @@ export const AIRBNB_FREQUENCIES: { value: Frequency; label: string; hint?: strin
 
 export const PC_HOURLY_RATE = 50; // $50/hr per cleaner for post-construction
 
+// Legacy fixed slots — kept for backward-compat helpers. The booking time
+// picker now lets customers choose any time within the business-hours window
+// below (down to the minute), so this list is no longer the source of truth.
 export const TIME_SLOTS: string[] = ["08:00", "10:00", "12:00", "14:00"];
+
+// Bookable business-hours window (inclusive). Customers may pick any time
+// between these, to the minute, unless an admin has blocked it.
+export const BOOKING_DAY_START = "09:00"; // 9 AM
+export const BOOKING_DAY_END = "19:00"; // 7 PM
+
+// Hourly quick-pick chips spanning the window (9 AM … 7 PM).
+export const TIME_SLOT_SUGGESTIONS: string[] = Array.from(
+  { length: 11 },
+  (_, i) => `${String(9 + i).padStart(2, "0")}:00`
+);

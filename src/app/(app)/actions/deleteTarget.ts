@@ -15,10 +15,10 @@ export async function deleteTarget(formData: FormData) {
   }
 
   const userWithRole = session.user as typeof session.user & {
-    role: "OWNER" | "ADMIN" | "EMPLOYEE";
+    role?: string;
   };
 
-  if (userWithRole.role === "EMPLOYEE") {
+  if (userWithRole.role !== "OWNER" && userWithRole.role !== "ADMIN") {
     return { error: "Only admins can manage targets" };
   }
 

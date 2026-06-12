@@ -15,6 +15,9 @@ export const BRAND_IMAGES = {
 
 interface SplitShellProps {
   image?: string;
+  // CSS background-position for the brand image (default "center"). Use e.g.
+  // "center top" to keep a portrait subject's head from being cropped.
+  imagePosition?: string;
   // HTML string (may include <br/> and <em>...</em>) for the brand quote
   quoteHtml?: string;
   quoteSub?: string;
@@ -26,6 +29,7 @@ interface SplitShellProps {
 
 export default function SplitShell({
   image,
+  imagePosition,
   quoteHtml,
   quoteSub,
   topRightLabel,
@@ -45,6 +49,7 @@ export default function SplitShell({
           style={
             {
               "--brand-image": image ? `url(${image})` : "none",
+              "--brand-pos": imagePosition ?? "center",
             } as React.CSSProperties
           }>
           <div className="cl-split-brand-top">

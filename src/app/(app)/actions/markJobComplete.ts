@@ -5,10 +5,25 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { ensureRatingRequest } from "@/lib/rating";
+import { isAdminRole } from "@/lib/role-routing";
 
 export async function markJobComplete(jobId: string) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) return { error: "Not authenticated" };
+
+  // Only an admin or a cleaner assigned to this job may complete it.
+  const role = (session.user as { role?: string }).role;
+  const userId = session.user.id;
+  const job = await db.job.findUnique({
+    where: { id: jobId },
+    select: { employeeId: true, cleaners: { select: { id: true } } },
+  });
+  if (!job) return { error: "Job not found" };
+  const isAssigned =
+    job.employeeId === userId || job.cleaners.some((c) => c.id === userId);
+  if (!isAdminRole(role) && !isAssigned) {
+    return { error: "Not authorized" };
+  }
 
   await db.job.update({
     where: { id: jobId },

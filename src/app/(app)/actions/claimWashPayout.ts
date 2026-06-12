@@ -33,15 +33,24 @@ export async function claimWashPayout(): Promise<
       };
     }
 
-    // Atomically: drain ledger + create payout row.
+    // Atomically: drain ledger + create payout row. The conditional decrement
+    // (credits must still cover what we're consuming) means two concurrent
+    // claims can't both drain the same credits / double-pay.
     const payout = await db.$transaction(async (tx) => {
-      await tx.user.update({
-        where: { id: session.user.id },
+      const claim = await tx.user.updateMany({
+        where: {
+          id: session.user.id,
+          ragCredits: { gte: payable.ragCreditsConsumed },
+          padCredits: { gte: payable.padCreditsConsumed },
+        },
         data: {
           ragCredits: { decrement: payable.ragCreditsConsumed },
           padCredits: { decrement: payable.padCreditsConsumed },
         },
       });
+      if (claim.count === 0) {
+        throw new Error("Credits already claimed");
+      }
       return tx.washPayout.create({
         data: {
           employeeId: session.user.id,

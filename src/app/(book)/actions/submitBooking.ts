@@ -2,7 +2,9 @@
 
 import { db } from "@/db";
 import { checkServiceAreaInternal } from "@/lib/service-area";
-import { getBlockedDates, getBlockedSlots } from "@/lib/blocked-dates";
+import { getBlockedDates, isTimeBlocked } from "@/lib/blocked-dates";
+import { getBookingConfig } from "./getBookingConfig";
+import { BOOKING_DAY_START, BOOKING_DAY_END } from "../book/types";
 import {
   computeBookingPrice,
   nextOccurrence,
@@ -44,7 +46,9 @@ interface SubmitBookingInput {
   serviceType: string;
   pcHours?: number; // post-construction hours (drives hourly/package pricing)
   frequency: Frequency;
-  addOns: { name: string; price: number }[];
+  // Client sends id (preferred) and/or name; the price is resolved server-side
+  // from the catalog and any client-supplied price is ignored.
+  addOns: { id?: string; name: string; price?: number }[];
   // Step 3
   date: string; // YYYY-MM-DD
   isFlexible: boolean;
@@ -110,11 +114,21 @@ export async function submitBooking(input: SubmitBookingInput) {
         error: "Sorry, we're closed on that date. Please choose another day.",
       };
     }
-    // Reject a specific time slot the admin has closed (skipped for flexible
-    // bookings, which don't pin a slot).
+    // Reject a customer-chosen time that's outside business hours or inside an
+    // admin-blocked window (skipped for flexible bookings, which don't pin a
+    // time). Range-aware so an arbitrary time like "10:24" is validated too.
     if (!input.isFlexible && input.timeSlot) {
-      const blockedSlots = await getBlockedSlots(input.date);
-      if (blockedSlots.includes(input.timeSlot)) {
+      if (
+        input.timeSlot < BOOKING_DAY_START ||
+        input.timeSlot > BOOKING_DAY_END
+      ) {
+        return {
+          success: false,
+          error: "Please choose a time between 9 AM and 7 PM.",
+        };
+      }
+      const { blocked } = await isTimeBlocked(input.date, input.timeSlot);
+      if (blocked) {
         return {
           success: false,
           error:
@@ -215,6 +229,23 @@ export async function submitBooking(input: SubmitBookingInput) {
       discountAmount = creditSpent;
     }
 
+    // 5a-bis. Resolve add-on prices server-side from the configured catalog.
+    // Never trust prices from the client — they're tamperable (a negative price
+    // could drag the whole booking to $0). Add-ons not in the catalog are dropped.
+    const { addOns: addOnCatalog } = await getBookingConfig();
+    const addOnById = new Map(addOnCatalog.map((a) => [a.id, a]));
+    const addOnByName = new Map(
+      addOnCatalog.map((a) => [a.name.trim().toLowerCase(), a])
+    );
+    const resolvedAddOns = (input.addOns ?? [])
+      .map((a) => {
+        const hit =
+          (a.id && addOnById.get(a.id)) ||
+          addOnByName.get((a.name ?? "").trim().toLowerCase());
+        return hit ? { name: hit.name, price: hit.price } : null;
+      })
+      .filter((a): a is { name: string; price: number } => a !== null);
+
     // 5b. Server-authoritative pricing
     const pricing = await computeBookingPrice({
       serviceType: input.serviceType,
@@ -223,7 +254,7 @@ export async function submitBooking(input: SubmitBookingInput) {
       halfBathCount: input.halfBathCount,
       squareFootage: input.squareFootage,
       pcHours: input.pcHours,
-      addOns: input.addOns,
+      addOns: resolvedAddOns,
       travelFee: areaCheck.travelFee ?? 0,
       discountAmount,
     });
@@ -301,7 +332,7 @@ export async function submitBooking(input: SubmitBookingInput) {
           depositPaidAt: new Date(),
         }),
         addOns: {
-          create: input.addOns.map((a) => ({
+          create: resolvedAddOns.map((a) => ({
             name: a.name,
             price: a.price,
           })),
@@ -378,7 +409,7 @@ export async function submitBooking(input: SubmitBookingInput) {
             halfBathCount: input.halfBathCount ?? 0,
             squareFootage: input.squareFootage,
             pcHours: input.pcHours,
-            addOns: input.addOns,
+            addOns: resolvedAddOns,
             travelFee: pricing.travelFee,
             discountAmount: discountAmount + recurringDiscount,
           })
@@ -413,7 +444,7 @@ export async function submitBooking(input: SubmitBookingInput) {
             bookingSource: "web",
             ...afterPhotoConsentData,
             addOns: {
-              create: input.addOns.map((a) => ({
+              create: resolvedAddOns.map((a) => ({
                 name: a.name,
                 price: a.price,
               })),

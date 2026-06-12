@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { syncDefaultLocationStock } from "@/lib/inventory";
 import { revalidatePath } from "next/cache";
 import type { ProductCategory } from "@prisma/client";
+import { requireOwnerAdmin } from "@/lib/action-guards";
 
 const ALLOWED_CATEGORIES: readonly ProductCategory[] = [
   "LIQUID_SPRAY",
@@ -21,6 +22,9 @@ export default async function createProduct(
   prevState: State,
   formData: FormData
 ): Promise<State> {
+  const guard = await requireOwnerAdmin();
+  if (!guard.ok) return { message: "", error: guard.error };
+
   const name = formData.get("name") as string;
   const description = formData.get("description") as string;
   const unit = formData.get("unit") as string;

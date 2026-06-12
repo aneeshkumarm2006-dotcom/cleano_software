@@ -171,7 +171,10 @@ export default function BookPage() {
           return false;
         return true;
       case 2:
-        return !!(draft.date && (draft.isFlexible || draft.timeSlot));
+        return !!(
+          draft.date &&
+          (draft.isFlexible || (draft.timeSlot && draft.timeSlotValid !== false))
+        );
       case 3:
         return !!(
           draft.name.trim() &&
@@ -237,7 +240,7 @@ export default function BookPage() {
       frequency: draft.frequency,
       addOns: draft.addOns
         .filter((a) => a.selected)
-        .map((a) => ({ name: a.name, price: a.price })),
+        .map((a) => ({ id: a.id, name: a.name })),
       date: draft.date,
       isFlexible: draft.isFlexible,
       timeSlot: draft.timeSlot,

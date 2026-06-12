@@ -370,8 +370,15 @@
   content: '';
   position: absolute; inset: 0;
   background:
-    linear-gradient(180deg, rgba(0, 57, 64, 0.45) 0%, rgba(0, 57, 64, 0.78) 60%, rgba(0, 57, 64, 0.92) 100%),
-    var(--brand-image, none) center / cover no-repeat,
+    /* Neutral scrim — darken only the top (logo/label) and bottom (quote) for
+       legibility; leave the middle clear so the photo keeps its true colors. */
+    linear-gradient(180deg,
+      rgba(8, 20, 22, 0.5) 0%,
+      rgba(8, 20, 22, 0.12) 20%,
+      rgba(8, 20, 22, 0) 44%,
+      rgba(8, 20, 22, 0.42) 78%,
+      rgba(8, 20, 22, 0.86) 100%),
+    var(--brand-image, none) var(--brand-pos, center) / cover no-repeat,
     linear-gradient(135deg, #005F6A 0%, #007580 100%);
   z-index: 0;
 }

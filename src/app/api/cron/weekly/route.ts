@@ -12,6 +12,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { isAuthorizedCron } from "@/lib/cron-auth";
 import { db } from "@/db";
 import {
   sendProviderWeeklyPerformance,
@@ -214,10 +215,7 @@ async function runRagWashDashboard(weekStart: Date, weekEnd: Date, label: string
 
 export async function GET(req: NextRequest) {
   const secret = req.headers.get("authorization");
-  if (
-    !process.env.CRON_SECRET ||
-    secret !== `Bearer ${process.env.CRON_SECRET}`
-  ) {
+  if (!isAuthorizedCron(secret)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

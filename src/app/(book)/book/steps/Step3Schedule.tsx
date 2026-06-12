@@ -1,12 +1,32 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
-import { BookingDraft, TIME_SLOTS } from "../types";
+import { useEffect, useMemo, useState, useTransition } from "react";
+import {
+  BookingDraft,
+  BOOKING_DAY_START,
+  BOOKING_DAY_END,
+  TIME_SLOT_SUGGESTIONS,
+} from "../types";
 import { Field } from "@/components/customer/Field";
 import { ChoiceButton } from "@/components/customer/atoms";
 import DatePicker from "@/components/customer/DatePicker";
-import { getUnavailableSlots } from "../../actions/getUnavailableSlots";
+import {
+  getDayAvailability,
+  type DayAvailability,
+} from "../../actions/getDayAvailability";
 import { getDateClosures } from "../../actions/getDateClosures";
+
+/** "14:30" → "2:30 PM", "09:00" → "9 AM" */
+function formatTimeLabel(t: string): string {
+  const [hStr, mStr] = t.split(":");
+  const hour = parseInt(hStr, 10);
+  const min = parseInt(mStr, 10);
+  const period = hour >= 12 ? "PM" : "AM";
+  const h12 = hour % 12 === 0 ? 12 : hour % 12;
+  return min === 0
+    ? `${h12} ${period}`
+    : `${h12}:${mStr.padStart(2, "0")} ${period}`;
+}
 
 interface Props {
   draft: BookingDraft;
@@ -25,7 +45,10 @@ function maxISO() {
 }
 
 export default function Step3Schedule({ draft, onChange }: Props) {
-  const [unavailableSlots, setUnavailableSlots] = useState<string[]>([]);
+  const [availability, setAvailability] = useState<DayAvailability>({
+    ranges: [],
+    fullTimes: [],
+  });
   const [blockedDates, setBlockedDates] = useState<string[]>([]);
   const [blockedReasons, setBlockedReasons] = useState<Record<string, string>>({});
   const [, startTransition] = useTransition();
@@ -52,14 +75,52 @@ export default function Step3Schedule({ draft, onChange }: Props) {
   }, []);
 
   useEffect(() => {
-    if (!draft.date) { setUnavailableSlots([]); return; }
+    if (!draft.date) {
+      setAvailability({ ranges: [], fullTimes: [] });
+      return;
+    }
     startTransition(async () => {
-      const slots = await getUnavailableSlots(draft.date);
-      setUnavailableSlots(slots);
+      const data = await getDayAvailability(draft.date);
+      setAvailability(data);
     });
   }, [draft.date]);
 
-  const UNAVAILABLE_SLOTS = unavailableSlots;
+  // Why a chosen "HH:MM" can't be booked, or null when it's fine. Range
+  // boundaries are [start, end); HH:MM strings compare correctly as text.
+  function timeUnavailableReason(t: string): string | null {
+    if (!t) return null;
+    if (t < BOOKING_DAY_START || t > BOOKING_DAY_END) {
+      return `Please choose a time between ${formatTimeLabel(
+        BOOKING_DAY_START
+      )} and ${formatTimeLabel(BOOKING_DAY_END)}.`;
+    }
+    for (const r of availability.ranges) {
+      if (t >= r.start && t < r.end) {
+        return r.reason
+          ? `Unavailable (${r.reason}). Please choose another time.`
+          : "That time isn't available. Please choose another.";
+      }
+    }
+    if (availability.fullTimes.includes(t)) {
+      return "That time is fully booked. Please choose another.";
+    }
+    return null;
+  }
+
+  const selectedTimeError = useMemo(
+    () => timeUnavailableReason(draft.timeSlot),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [draft.timeSlot, availability]
+  );
+
+  // Keep the draft's validity flag in sync so the wizard can gate "Next".
+  const computedValid = draft.timeSlot ? selectedTimeError === null : undefined;
+  useEffect(() => {
+    if (draft.timeSlotValid !== computedValid) {
+      onChange({ timeSlotValid: computedValid });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [computedValid]);
 
   return (
     <div className="cl-stack-32">
@@ -101,7 +162,7 @@ export default function Step3Schedule({ draft, onChange }: Props) {
           large
           active={!draft.isFlexible}
           title="Pick a time"
-          sub="Choose from available slots."
+          sub="Choose any time between 9 AM and 7 PM."
           onClick={() => onChange({ isFlexible: false })}
         />
       </div>
@@ -121,20 +182,15 @@ export default function Step3Schedule({ draft, onChange }: Props) {
 
       {!draft.isFlexible ? (
         <div className="cl-stack-12">
-          <span className="cl-label">Available time slots</span>
+          <span className="cl-label">Choose a time</span>
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(4, 1fr)",
+              gridTemplateColumns: "repeat(auto-fill, minmax(84px, 1fr))",
               gap: 10,
             }}>
-            {TIME_SLOTS.map((slot) => {
-              const [h] = slot.split(":");
-              const hour = parseInt(h);
-              const label = `${hour > 12 ? hour - 12 : hour} ${
-                hour >= 12 ? "PM" : "AM"
-              }`;
-              const disabled = UNAVAILABLE_SLOTS.includes(slot);
+            {TIME_SLOT_SUGGESTIONS.map((slot) => {
+              const disabled = timeUnavailableReason(slot) !== null;
               const active = draft.timeSlot === slot;
               return (
                 <button
@@ -149,18 +205,53 @@ export default function Step3Schedule({ draft, onChange }: Props) {
                     opacity: disabled ? 0.4 : 1,
                     cursor: disabled ? "not-allowed" : "pointer",
                     textAlign: "center",
-                    padding: "18px 8px",
+                    padding: "16px 8px",
                     fontSize: 15,
                     fontWeight: 500,
                   }}>
-                  {label}
+                  {formatTimeLabel(slot)}
                 </button>
               );
             })}
           </div>
-          <div style={{ fontSize: 12, color: "var(--primary-50)" }}>
-            Greyed slots mean no capacity.
-          </div>
+
+          <Field label="Or enter an exact time">
+            <input
+              type="time"
+              className="cl-input"
+              value={draft.timeSlot}
+              min={BOOKING_DAY_START}
+              max={BOOKING_DAY_END}
+              step={300}
+              onChange={(e) => onChange({ timeSlot: e.target.value })}
+            />
+          </Field>
+
+          {selectedTimeError ? (
+            <div style={{ fontSize: 12, color: "var(--danger, #c0392b)" }}>
+              {selectedTimeError}
+            </div>
+          ) : (
+            <div style={{ fontSize: 12, color: "var(--primary-50)" }}>
+              Any time between {formatTimeLabel(BOOKING_DAY_START)} and{" "}
+              {formatTimeLabel(BOOKING_DAY_END)} — greyed times are unavailable.
+            </div>
+          )}
+
+          {availability.ranges.length > 0 ? (
+            <div style={{ fontSize: 12, color: "var(--primary-50)" }}>
+              Blocked this day:{" "}
+              {availability.ranges
+                .map(
+                  (r) =>
+                    `${formatTimeLabel(r.start)}–${formatTimeLabel(r.end)}${
+                      r.reason ? ` (${r.reason})` : ""
+                    }`
+                )
+                .join(", ")}
+              .
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>

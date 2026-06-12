@@ -1,9 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { stripe, getOrCreateStripeCustomer } from "@/lib/stripe";
 import { db } from "@/db";
+import { auth } from "@/lib/auth";
+import { isAdminRole } from "@/lib/role-routing";
 
 export async function POST(req: NextRequest) {
   try {
+    // Admin-only. This binds a SetupIntent to a specific client (by clientId),
+    // so it must require staff — otherwise anyone could attach a card to any
+    // client's Stripe customer (IDOR). The public booking flow uses
+    // /api/stripe/charge-deposit instead, which never takes a clientId.
+    const session = await auth.api.getSession({ headers: req.headers });
+    const role = (session?.user as { role?: string } | undefined)?.role;
+    if (!isAdminRole(role)) {
+      return NextResponse.json({ error: "Not authorized" }, { status: 401 });
+    }
+
     const { email, name, clientId } = await req.json();
 
     if (!email || !name) {
@@ -36,8 +48,11 @@ export async function POST(req: NextRequest) {
       clientSecret: setupIntent.client_secret,
       customerId,
     });
-  } catch (err: any) {
+  } catch (err) {
     console.error("setup-intent error:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to create setup intent" },
+      { status: 500 }
+    );
   }
 }

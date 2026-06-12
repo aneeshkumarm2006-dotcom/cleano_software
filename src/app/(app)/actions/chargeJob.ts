@@ -45,8 +45,38 @@ export async function chargeJob(jobId: string) {
   const remainingDue = Math.max(0, totalAmount - giftCardApplied);
   const amountCents = Math.round(remainingDue * 100);
 
+  // Atomically claim this job so two concurrent charges (a double-click or two
+  // admins) can't both reach Stripe. Only the call that flips paymentReceived
+  // false→true proceeds; the rest abort. Rolled back if the charge fails.
+  const claim = await db.job.updateMany({
+    where: { id: jobId, paymentReceived: false },
+    data: { paymentReceived: true, paidAt: new Date() },
+  });
+  if (claim.count === 0) {
+    return { success: false, error: "Already paid" };
+  }
+
+  const releaseClaim = async (failureReason?: string) => {
+    await db.job
+      .updateMany({
+        where: { id: jobId },
+        data: {
+          paymentReceived: false,
+          paidAt: null,
+          ...(failureReason
+            ? {
+                paymentFailedAt: new Date(),
+                paymentFailureReason: failureReason,
+              }
+            : {}),
+        },
+      })
+      .catch(() => {});
+  };
+
   // If gift card credit covers the booking entirely, skip Stripe.
   if (amountCents === 0) {
+    try {
     await db.$transaction([
       db.job.update({
         where: { id: jobId },
@@ -76,6 +106,11 @@ export async function chargeJob(jobId: string) {
         },
       }),
     ]);
+    } catch (e) {
+      console.error("gift-card charge tx", e);
+      await releaseClaim();
+      return { success: false, error: "Failed to apply gift card credit" };
+    }
 
     queueAndSendReceipt(jobId).catch(() => {});
 
@@ -92,6 +127,7 @@ export async function chargeJob(jobId: string) {
 
   // Stripe path is required for the remaining amount.
   if (!client.stripeCustomerId || !client.defaultPaymentMethodId) {
+    await releaseClaim();
     return { success: false, error: "No saved card on file for this client" };
   }
 
@@ -188,13 +224,8 @@ export async function chargeJob(jobId: string) {
   } catch (err: any) {
     const failureReason = err?.raw?.message ?? err?.message ?? "Charge failed";
 
-    await db.job.update({
-      where: { id: jobId },
-      data: {
-        paymentFailedAt: new Date(),
-        paymentFailureReason: failureReason,
-      },
-    }).catch(() => {});
+    // Roll back the claim so the job isn't stuck "paid" and can be retried.
+    await releaseClaim(failureReason);
 
     // Notify admin + customer of the declined card (gated by toggles).
     sendAdminCardDeclined({

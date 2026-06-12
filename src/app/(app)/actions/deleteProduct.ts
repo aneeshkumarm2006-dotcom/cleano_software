@@ -2,12 +2,16 @@
 
 import { db } from "@/db";
 import { revalidatePath } from "next/cache";
+import { requireOwnerAdmin } from "@/lib/action-guards";
 
 export async function deleteProduct(productId: string): Promise<{
   success: boolean;
   error?: string;
 }> {
   try {
+    const guard = await requireOwnerAdmin();
+    if (!guard.ok) return { success: false, error: guard.error };
+
     // Check if product has any employee assignments or job usage
     const product = await db.product.findUnique({
       where: { id: productId },
