@@ -6,6 +6,7 @@ import { getSessionCookie } from 'better-auth/cookies'
 const PUBLIC_EXACT = new Set<string>([
   '/sign-in',
   '/sign-up',
+  '/cleanos/login', // cleaner sign-in
   '/portal/login',
   '/portal/setup',
   '/book',
