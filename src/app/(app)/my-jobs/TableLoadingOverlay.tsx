@@ -1,6 +1,7 @@
 "use client";
 
 import { useJobsLoading } from "./JobsLoadingContext";
+import CleanoLoader from "@/components/ui/CleanoLoader";
 
 export function TableLoadingOverlay() {
   const { loading } = useJobsLoading();
@@ -9,7 +10,7 @@ export function TableLoadingOverlay() {
 
   return (
     <div className="absolute inset-0 bg-white/60 backdrop-blur-[2px] z-10 flex items-center justify-center">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+      <CleanoLoader size={56} label="" />
     </div>
   );
 }

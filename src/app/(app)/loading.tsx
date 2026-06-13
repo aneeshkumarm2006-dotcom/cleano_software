@@ -1,13 +1,14 @@
-import React from "react";
-import { Loader } from "lucide-react";
+import CleanoLoader from "@/components/ui/CleanoLoader";
 
-export default function loading() {
+export default function Loading() {
+  // Center within the app content area (viewport minus the main's vertical
+  // padding), so the loader sits in the true middle rather than the top third.
   return (
-    <div className="flex items-center justify-center h-[calc(100vh-10rem)]">
-      <div className="flex flex-col items-center gap-2">
-        <Loader className="w-4 h-4 animate-spin" />
-        <p className="text-sm text-gray-500">Loading...</p>
-      </div>
+    <div
+      className="flex items-center justify-center"
+      style={{ minHeight: "calc(100vh - 120px)" }}
+    >
+      <CleanoLoader size={72} />
     </div>
   );
 }

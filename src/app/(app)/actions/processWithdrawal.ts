@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import type { WithdrawalStatus } from "@prisma/client";
+import { sendProviderPayoutCompleted } from "@/lib/email";
 
 type Action = "APPROVE" | "REJECT" | "COMPLETE";
 
@@ -26,6 +27,7 @@ export async function processWithdrawal(
   try {
     const withdrawal = await db.withdrawal.findUnique({
       where: { id: withdrawalId },
+      include: { employee: true },
     });
 
     if (!withdrawal) {
@@ -76,6 +78,16 @@ export async function processWithdrawal(
         notes: notes?.trim() ? notes.trim() : withdrawal.notes,
       },
     });
+
+    // Let the cleaner know once the money is actually on its way.
+    if (nextStatus === "COMPLETED" && withdrawal.employee?.email) {
+      await sendProviderPayoutCompleted({
+        to: withdrawal.employee.email,
+        providerName: withdrawal.employee.name ?? "there",
+        amount: withdrawal.amount,
+        paymentMethod: withdrawal.paymentMethod,
+      }).catch((e) => console.error("payout-completed email", e));
+    }
 
     revalidatePath("/my-pay");
     revalidatePath("/withdrawals");

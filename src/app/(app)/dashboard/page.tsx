@@ -2,742 +2,320 @@ import { getCachedSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
 import Link from "next/link";
-import Card from "@/components/ui/Card";
-import Badge from "@/components/ui/Badge";
-import Button from "@/components/ui/Button";
 import {
+  CreditCard,
   Briefcase,
-  DollarSign,
   Users,
   Package,
-  AlertTriangle,
-  TrendingUp,
-  Calendar,
+  CalendarDays,
   Clock,
-  CheckCircle2,
-  ArrowRight,
+  AlertTriangle,
+  MapPin,
+  Plus,
+  ChevronRight,
+  type LucideIcon,
 } from "lucide-react";
-
-import { requireAdmin } from "@/lib/page-guards";
 import { isAdminRole } from "@/lib/role-routing";
 import CleanerDashboard from "./CleanerDashboard";
 
-export default async function DashboardPage() {
-  const preCheck = await getCachedSession();
-  if (!preCheck) redirect("/sign-in");
+export const dynamic = "force-dynamic";
 
-  const role = (preCheck.user as any).role;
-  if (!isAdminRole(role)) {
-    return (
-      <CleanerDashboard
-        userId={preCheck.user.id}
-        userName={preCheck.user.name ?? ""}
-      />
-    );
-  }
+// ── helpers ───────────────────────────────────────────────
+function initials(name: string): string {
+  return (name || "?").split(/\s+/).map((w) => w[0] || "").join("").slice(0, 2).toUpperCase();
+}
+function avatarBg(name: string): string {
+  const palette = ["#2c6e75","#1a5c63","#3d7f87","#0e4a52","#4f9097","#246a72","#538c94","#1c6068"];
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0x7fffffff;
+  return palette[h % palette.length];
+}
+function money(n: number): string {
+  return `$${Math.round(n).toLocaleString("en-US")}`;
+}
+function fmtDate(d: Date): string {
+  return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+}
+function fmtTime(d: Date): string {
+  return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
 
-  // Admin path — unchanged below
-  const session = await requireAdmin();
-
-  const { user } = session;
-  const userWithRole = user as typeof user & {
-    role: "OWNER" | "ADMIN" | "EMPLOYEE";
-  };
-  const isAdmin = true;
-
-  // Fetch dashboard data
-  const now = new Date();
-  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-  const startOfToday = new Date(now.setHours(0, 0, 0, 0));
-
-  // Jobs metrics
-  const [
-    totalJobs,
-    completedJobs,
-    inProgressJobs,
-    pendingPaymentJobs,
-    todaysJobs,
-    upcomingJobs,
-    recentJobs,
-  ] = await Promise.all([
-    db.job.count(),
-    db.job.count({ where: { status: "COMPLETED" } }),
-    db.job.count({ where: { status: "IN_PROGRESS" } }),
-    db.job.count({
-      where: { status: "COMPLETED", paymentReceived: false },
-    }),
-    db.job.count({
-      where: {
-        jobDate: {
-          gte: startOfToday,
-          lt: new Date(startOfToday.getTime() + 24 * 60 * 60 * 1000),
-        },
-      },
-    }),
-    db.job.findMany({
-      where: {
-        jobDate: { gte: new Date() },
-        status: { in: ["CREATED", "SCHEDULED"] },
-      },
-      orderBy: { jobDate: "asc" },
-      take: 5,
-      include: {
-        cleaners: { select: { id: true, name: true } },
-      },
-    }),
-    db.job.findMany({
-      where: { status: "COMPLETED" },
-      orderBy: { updatedAt: "desc" },
-      take: 5,
-      include: {
-        cleaners: { select: { id: true, name: true } },
-      },
-    }),
-  ]);
-
-  // Revenue calculation
-  const revenueData = await db.job.aggregate({
-    where: { status: { in: ["COMPLETED", "PAID"] } },
-    _sum: { price: true },
-  });
-  const totalRevenue = revenueData._sum.price || 0;
-
-  // Monthly revenue
-  const monthlyRevenueData = await db.job.aggregate({
-    where: {
-      status: { in: ["COMPLETED", "PAID"] },
-      createdAt: { gte: thirtyDaysAgo },
-    },
-    _sum: { price: true },
-  });
-  const monthlyRevenue = monthlyRevenueData._sum.price || 0;
-
-  // Employee metrics (admin only)
-  let employeeCount = 0;
-  let activeEmployees = 0;
-  if (isAdmin) {
-    [employeeCount, activeEmployees] = await Promise.all([
-      db.user.count(),
-      db.user.count({
-        where: {
-          cleaningJobs: {
-            some: { status: "IN_PROGRESS" },
-          },
-        },
-      }),
-    ]);
-  }
-
-  // Inventory metrics (admin only)
-  let totalProducts = 0;
-  let lowStockProducts: Array<{
-    id: string;
-    name: string;
-    stockLevel: number;
-    minStock: number;
-    unit: string;
-  }> = [];
-  let totalInventoryValue = 0;
-  let refillAlertCount = 0;
-  if (isAdmin) {
-    const products = await db.product.findMany();
-    totalProducts = products.length;
-    lowStockProducts = products
-      .filter((p) => p.stockLevel <= p.minStock)
-      .slice(0, 5);
-    totalInventoryValue = products.reduce(
-      (sum, p) => sum + p.stockLevel * p.costPerUnit,
-      0
-    );
-
-    // Forecast refill alerts
-    const [inventoryRules, employeesWithProducts] = await Promise.all([
-      db.inventoryRule.findMany(),
-      db.employeeProduct.findMany({
-        include: { product: true },
-      }),
-    ]);
-
-    for (const ep of employeesWithProducts) {
-      const rule = inventoryRules.find((r) => r.productId === ep.productId);
-      if (rule && (ep.quantity <= rule.refillThreshold)) {
-        refillAlertCount++;
-      }
-    }
-  }
-
-  // User's personal stats (for employees)
-  let myJobsCount = 0;
-  let myCompletedJobs = 0;
-  let myUpcomingJobs: typeof upcomingJobs = [];
-  let myForecast: Array<{
-    productName: string;
-    currentQuantity: number;
-    unit: string;
-    projectedUsage: number;
-    deficit: number;
-    needsRefill: boolean;
-  }> = [];
-  if (!isAdmin) {
-    [myJobsCount, myCompletedJobs, myUpcomingJobs] = await Promise.all([
-      db.job.count({
-        where: { cleaners: { some: { id: user.id } } },
-      }),
-      db.job.count({
-        where: {
-          cleaners: { some: { id: user.id } },
-          status: "COMPLETED",
-        },
-      }),
-      db.job.findMany({
-        where: {
-          cleaners: { some: { id: user.id } },
-          jobDate: { gte: new Date() },
-          status: { in: ["CREATED", "SCHEDULED"] },
-        },
-        orderBy: { jobDate: "asc" },
-        take: 5,
-        include: {
-          cleaners: { select: { id: true, name: true } },
-        },
-      }),
-    ]);
-
-    // Employee inventory forecast
-    const [myProducts, myRules, myUpcomingCount] = await Promise.all([
-      db.employeeProduct.findMany({
-        where: { employeeId: user.id },
-        include: { product: true },
-      }),
-      db.inventoryRule.findMany(),
-      db.job.count({
-        where: {
-          OR: [
-            { employeeId: user.id },
-            { cleaners: { some: { id: user.id } } },
-          ],
-          status: { in: ["CREATED", "SCHEDULED", "IN_PROGRESS"] },
-          jobDate: { gte: new Date() },
-        },
-      }),
-    ]);
-
-    myForecast = myProducts
-      .map((ep) => {
-        const rule = myRules.find((r) => r.productId === ep.productId);
-        const usagePerJob = rule?.usagePerJob || 0;
-        const projectedUsage = usagePerJob * myUpcomingCount;
-        const deficit = Math.max(0, projectedUsage - ep.quantity);
-        return {
-          productName: ep.product.name,
-          currentQuantity: ep.quantity,
-          unit: ep.product.unit,
-          projectedUsage,
-          deficit,
-          needsRefill:
-            deficit > 0 || ep.quantity <= (rule?.refillThreshold || 0),
-        };
-      })
-      .filter((f) => f.needsRefill);
-  }
-
-  // Metric Card Component
-  const MetricCard = ({
-    label,
-    value,
-    subValue,
-    icon: Icon,
-    variant = "default",
-    href,
-  }: {
-    label: string;
-    value: string;
-    subValue?: string;
-    icon: React.ElementType;
-    variant?: "default" | "warning";
-    href?: string;
-  }) => {
-    const content = (
-      <Card
-        variant={variant === "warning" ? "warning" : "cleano_light"}
-        className={`p-6 h-[7rem] ${
-          href ? "hover:bg-[#005F6A]/8 transition-colors cursor-pointer" : ""
-        }`}>
-        <div className="h-full flex flex-col justify-between">
-          <span
-            className={`app-title-small ${
-              variant === "warning" ? "text-yellow-700" : "!text-[#005F6A]/70"
-            }`}>
-            {label}
-          </span>
-          <div>
-            <p
-              className={`h2-title ${
-                variant === "warning" ? "text-yellow-700" : "text-[#005F6A]"
-              }`}>
-              {value}
-            </p>
-            {subValue && (
-              <p className="text-xs text-[#005F6A]/60 mt-0.5">{subValue}</p>
-            )}
-          </div>
-        </div>
-      </Card>
-    );
-
-    if (href) {
-      return <Link href={href}>{content}</Link>;
-    }
-    return content;
-  };
-
+const STATUS_PILL: Record<string, { label: string; bg: string; color: string; dot: string }> = {
+  CREATED: { label: "Created", bg: "#f3f4f6", color: "#374151", dot: "#9ca3af" },
+  SCHEDULED: { label: "Scheduled", bg: "#dbeafe", color: "#1e40af", dot: "#3b82f6" },
+  IN_PROGRESS: { label: "In Progress", bg: "#fef3c7", color: "#92400e", dot: "#f59e0b" },
+  COMPLETED: { label: "Completed", bg: "#d1fae5", color: "#065f46", dot: "#10b981" },
+  PAID: { label: "Paid", bg: "#d1fae5", color: "#065f46", dot: "#059669" },
+  CANCELLED: { label: "Cancelled", bg: "#fee2e2", color: "#991b1b", dot: "#ef4444" },
+};
+function StatusPill({ status }: { status: string }) {
+  const c = STATUS_PILL[status] || { label: status, bg: "#f3f4f6", color: "#374151", dot: "#9ca3af" };
   return (
-    <div className="space-y-8 p-8">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl !font-light tracking-tight text-[#005F6A]">
-          Welcome back, {user.name}!
-        </h1>
-        <p className="text-sm text-[#005F6A]/70 mt-1">
-          Here&apos;s what&apos;s happening with your business today
-        </p>
+    <span className="pill" style={{ background: c.bg, color: c.color }}>
+      <span className="pill-dot" style={{ background: c.dot }} />
+      {c.label}
+    </span>
+  );
+}
+
+function Stat({
+  icon: Icon, label, value, delta, deltaUp, hint,
+}: {
+  icon: LucideIcon; label: string; value: string | number;
+  delta?: string; deltaUp?: boolean; hint?: string;
+}) {
+  return (
+    <div className="astat">
+      <div className="astat-head">
+        <span>{label}</span>
+        <div className="astat-icon"><Icon size={15} /></div>
       </div>
-
-      {/* Admin/Owner Metrics */}
-      {isAdmin ? (
-        <>
-          {/* Primary Metrics */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <MetricCard
-              label="Total Revenue"
-              value={`$${totalRevenue.toFixed(2)}`}
-              subValue={`$${monthlyRevenue.toFixed(2)} this month`}
-              icon={DollarSign}
-              href="/jobs"
-            />
-            <MetricCard
-              label="Total Jobs"
-              value={String(totalJobs)}
-              subValue={`${completedJobs} completed`}
-              icon={Briefcase}
-              href="/jobs"
-            />
-            <MetricCard
-              label="Employees"
-              value={String(employeeCount)}
-              subValue={`${activeEmployees} active now`}
-              icon={Users}
-              href="/employees"
-            />
-            <MetricCard
-              label="Products"
-              value={String(totalProducts)}
-              subValue={`$${totalInventoryValue.toFixed(0)} value`}
-              icon={Package}
-              href="/inventory"
-            />
-          </div>
-
-          {/* Secondary Metrics */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <MetricCard
-              label="Today's Jobs"
-              value={String(todaysJobs)}
-              icon={Calendar}
-              href="/jobs"
-            />
-            <MetricCard
-              label="In Progress"
-              value={String(inProgressJobs)}
-              icon={Clock}
-              href="/jobs?status=IN_PROGRESS"
-            />
-            {pendingPaymentJobs > 0 && (
-              <MetricCard
-                label="Pending Payment"
-                value={String(pendingPaymentJobs)}
-                icon={AlertTriangle}
-                variant="warning"
-                href="/jobs?payment=pending"
-              />
-            )}
-            {lowStockProducts.length > 0 && (
-              <MetricCard
-                label="Low Stock Items"
-                value={String(lowStockProducts.length)}
-                icon={AlertTriangle}
-                variant="warning"
-                href="/inventory?status=low"
-              />
-            )}
-            {refillAlertCount > 0 && (
-              <MetricCard
-                label="Refill Alerts"
-                value={String(refillAlertCount)}
-                subValue="Employee inventory below threshold"
-                icon={Package}
-                variant="warning"
-                href="/inventory"
-              />
-            )}
-          </div>
-
-          {/* Two Column Layout */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Upcoming Jobs */}
-            <Card variant="default" className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 bg-[#005F6A]/10 rounded-lg">
-                    <Calendar className="w-4 h-4 text-[#005F6A]" />
-                  </div>
-                  <h2 className="text-sm font-[350] text-[#005F6A]/80">
-                    Upcoming Jobs
-                  </h2>
-                </div>
-                <Link href="/jobs">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-xs text-[#005F6A]/60">
-                    View All
-                    <ArrowRight className="w-3 h-3 ml-1" />
-                  </Button>
-                </Link>
-              </div>
-
-              {upcomingJobs.length === 0 ? (
-                <div className="text-center py-8">
-                  <div className="w-12 h-12 bg-[#005F6A]/5 rounded-2xl flex items-center justify-center mx-auto mb-3">
-                    <Calendar className="w-6 h-6 text-[#005F6A]/40" />
-                  </div>
-                  <p className="text-sm text-[#005F6A]/60">No upcoming jobs</p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {upcomingJobs.map((job) => (
-                    <Link
-                      key={job.id}
-                      href={`/jobs/${job.id}`}
-                      className="flex items-center justify-between p-3 rounded-xl bg-[#005F6A]/5 hover:bg-[#005F6A]/8 transition-colors">
-                      <div className="flex-1">
-                        <p className="text-sm font-[400] text-[#005F6A]">
-                          {job.clientName}
-                        </p>
-                        <p className="text-xs text-[#005F6A]/60">
-                          {job.jobDate
-                            ? new Date(job.jobDate).toLocaleDateString("en-US")
-                            : "No date"}{" "}
-                          •{" "}
-                          {job.cleaners.length > 0
-                            ? job.cleaners.map((c) => c.name).join(", ")
-                            : "Unassigned"}
-                        </p>
-                      </div>
-                      {job.price && (
-                        <span className="text-sm font-[400] text-[#005F6A]">
-                          ${job.price.toFixed(2)}
-                        </span>
-                      )}
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </Card>
-
-            {/* Recent Completed Jobs */}
-            <Card variant="default" className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 bg-[#005F6A]/10 rounded-lg">
-                    <CheckCircle2 className="w-4 h-4 text-[#005F6A]" />
-                  </div>
-                  <h2 className="text-sm font-[350] text-[#005F6A]/80">
-                    Recent Completed
-                  </h2>
-                </div>
-                <Link href="/jobs?status=COMPLETED">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-xs text-[#005F6A]/60">
-                    View All
-                    <ArrowRight className="w-3 h-3 ml-1" />
-                  </Button>
-                </Link>
-              </div>
-
-              {recentJobs.length === 0 ? (
-                <div className="text-center py-8">
-                  <div className="w-12 h-12 bg-[#005F6A]/5 rounded-2xl flex items-center justify-center mx-auto mb-3">
-                    <CheckCircle2 className="w-6 h-6 text-[#005F6A]/40" />
-                  </div>
-                  <p className="text-sm text-[#005F6A]/60">
-                    No completed jobs yet
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {recentJobs.map((job) => (
-                    <Link
-                      key={job.id}
-                      href={`/jobs/${job.id}`}
-                      className="flex items-center justify-between p-3 rounded-xl bg-[#005F6A]/5 hover:bg-[#005F6A]/8 transition-colors">
-                      <div className="flex-1">
-                        <p className="text-sm font-[400] text-[#005F6A]">
-                          {job.clientName}
-                        </p>
-                        <p className="text-xs text-[#005F6A]/60">
-                          {new Date(job.updatedAt).toLocaleDateString("en-US")}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Badge
-                          variant={job.paymentReceived ? "success" : "warning"}
-                          size="sm"
-                          className="px-2 py-1">
-                          {job.paymentReceived ? "Paid" : "Unpaid"}
-                        </Badge>
-                        {job.price && (
-                          <span className="text-sm font-[400] text-[#005F6A]">
-                            ${job.price.toFixed(2)}
-                          </span>
-                        )}
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </Card>
-          </div>
-
-          {/* Low Stock Alert */}
-          {lowStockProducts.length > 0 && (
-            <Card variant="warning" className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 bg-yellow-100 rounded-lg">
-                    <AlertTriangle className="w-4 h-4 text-yellow-600" />
-                  </div>
-                  <h2 className="text-sm font-[350] text-yellow-700">
-                    Low Stock Alert
-                  </h2>
-                </div>
-                <Link href="/inventory?status=low">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-xs text-yellow-700">
-                    View All
-                    <ArrowRight className="w-3 h-3 ml-1" />
-                  </Button>
-                </Link>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {lowStockProducts.map((product) => (
-                  <Link
-                    key={product.id}
-                    href={`/inventory/${product.id}`}
-                    className="p-3 rounded-xl bg-yellow-50 border border-yellow-200 hover:bg-yellow-100 transition-colors">
-                    <p className="text-sm font-[400] text-yellow-800">
-                      {product.name}
-                    </p>
-                    <p className="text-xs text-yellow-600 mt-1">
-                      {product.stockLevel} / {product.minStock} {product.unit}
-                    </p>
-                  </Link>
-                ))}
-              </div>
-            </Card>
+      <div className="astat-value">{value}</div>
+      {(delta || hint) && (
+        <div className="astat-delta">
+          {delta && (
+            <strong style={deltaUp ? { color: "var(--emerald-600)" } : undefined}>{delta}</strong>
           )}
-
-          {/* Quick Actions */}
-          <div>
-            <h2 className="text-lg font-[350] tracking-tight text-[#005F6A] mb-4">
-              Quick Actions
-            </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-              <QuickAction title="New Job" href="/jobs/new" icon={Briefcase} />
-              <QuickAction title="Employees" href="/employees" icon={Users} />
-              <QuickAction title="Inventory" href="/inventory" icon={Package} />
-              <QuickAction
-                title="Analytics"
-                href="/analytics"
-                icon={TrendingUp}
-              />
-              <QuickAction title="All Jobs" href="/jobs" icon={Calendar} />
-              <QuickAction
-                title="Settings"
-                href="/settings"
-                icon={CheckCircle2}
-              />
-            </div>
-          </div>
-        </>
-      ) : (
-        <>
-          {/* Employee View */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <MetricCard
-              label="My Total Jobs"
-              value={String(myJobsCount)}
-              icon={Briefcase}
-              href="/my-jobs"
-            />
-            <MetricCard
-              label="Completed"
-              value={String(myCompletedJobs)}
-              icon={CheckCircle2}
-              href="/my-jobs"
-            />
-            <MetricCard
-              label="Upcoming"
-              value={String(myUpcomingJobs.length)}
-              icon={Calendar}
-              href="/my-jobs"
-            />
-          </div>
-
-          {/* My Upcoming Jobs */}
-          <Card variant="default" className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <div className="p-2 bg-[#005F6A]/10 rounded-lg">
-                  <Calendar className="w-4 h-4 text-[#005F6A]" />
-                </div>
-                <h2 className="text-sm font-[350] text-[#005F6A]/80">
-                  My Upcoming Jobs
-                </h2>
-              </div>
-              <Link href="/my-jobs">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-xs text-[#005F6A]/60">
-                  View All
-                  <ArrowRight className="w-3 h-3 ml-1" />
-                </Button>
-              </Link>
-            </div>
-
-            {myUpcomingJobs.length === 0 ? (
-              <div className="text-center py-8">
-                <div className="w-12 h-12 bg-[#005F6A]/5 rounded-2xl flex items-center justify-center mx-auto mb-3">
-                  <Calendar className="w-6 h-6 text-[#005F6A]/40" />
-                </div>
-                <p className="text-sm text-[#005F6A]/60">No upcoming jobs</p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {myUpcomingJobs.map((job) => (
-                  <Link
-                    key={job.id}
-                    href={`/my-jobs/${job.id}`}
-                    className="flex items-center justify-between p-3 rounded-xl bg-[#005F6A]/5 hover:bg-[#005F6A]/8 transition-colors">
-                    <div className="flex-1">
-                      <p className="text-sm font-[400] text-[#005F6A]">
-                        {job.clientName}
-                      </p>
-                      <p className="text-xs text-[#005F6A]/60">
-                        {job.jobDate
-                          ? new Date(job.jobDate).toLocaleDateString("en-US")
-                          : "No date"}{" "}
-                        at{" "}
-                        {new Date(job.startTime).toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </p>
-                    </div>
-                    {job.jobType && (
-                      <Badge variant="cleano" size="sm">
-                        {job.jobType}
-                      </Badge>
-                    )}
-                  </Link>
-                ))}
-              </div>
-            )}
-          </Card>
-
-          {/* Inventory Refill Alerts */}
-          {myForecast.length > 0 && (
-            <Card variant="warning" className="p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <div className="p-2 bg-yellow-100 rounded-lg">
-                  <AlertTriangle className="w-4 h-4 text-yellow-600" />
-                </div>
-                <h2 className="text-sm font-[350] text-yellow-700">
-                  Inventory Refill Needed
-                </h2>
-              </div>
-              <div className="space-y-2">
-                {myForecast.map((item, idx) => (
-                  <div
-                    key={idx}
-                    className="flex items-center justify-between p-3 rounded-xl bg-yellow-50 border border-yellow-200">
-                    <div>
-                      <p className="text-sm font-[400] text-yellow-800">
-                        {item.productName}
-                      </p>
-                      <p className="text-xs text-yellow-600 mt-0.5">
-                        Has {item.currentQuantity} {item.unit}
-                        {item.deficit > 0 &&
-                          ` \u2022 Needs ${item.deficit} more ${item.unit}`}
-                      </p>
-                    </div>
-                    <Badge variant="error" size="sm">
-                      {item.deficit > 0 ? "Deficit" : "Low"}
-                    </Badge>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          )}
-
-          {/* Quick Actions for Employee */}
-          <div>
-            <h2 className="text-lg font-[350] tracking-tight text-[#005F6A] mb-4">
-              Quick Actions
-            </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              <QuickAction title="My Jobs" href="/my-jobs" icon={Briefcase} />
-              <QuickAction
-                title="Request Inventory"
-                href="/my-requests"
-                icon={Package}
-              />
-              <QuickAction
-                title="Settings"
-                href="/settings"
-                icon={CheckCircle2}
-              />
-            </div>
-          </div>
-        </>
+          {delta && hint ? " · " : ""}
+          {hint}
+        </div>
       )}
     </div>
   );
 }
 
-function QuickAction({
-  title,
-  href,
-  icon: Icon,
+function AlertTile({
+  icon: Icon, label, value, hint, href,
 }: {
-  title: string;
-  href: string;
-  icon: React.ElementType;
+  icon: LucideIcon; label: string; value: string | number; hint?: string; href: string;
 }) {
   return (
-    <Link
-      href={href}
-      className="flex flex-col items-center justify-center p-4 bg-white rounded-2xl border border-[#005F6A]/10 hover:border-[#005F6A]/20 hover:bg-[#005F6A]/5 transition-colors gap-2">
-      <div className="p-2 bg-[#005F6A]/10 rounded-xl">
-        <Icon className="w-5 h-5 text-[#005F6A]" />
+    <Link href={href} className="astat dash-alert">
+      <div className="astat-head" style={{ color: "var(--amber-800)" }}>
+        <span>{label}</span>
+        <span className="astat-icon" style={{ background: "var(--amber-100)", color: "var(--amber-700)" }}>
+          <Icon size={16} />
+        </span>
       </div>
-      <span className="text-sm font-[350] text-[#005F6A]">{title}</span>
+      <div className="astat-value" style={{ color: "var(--amber-800)" }}>{value}</div>
+      {hint && <div className="astat-delta" style={{ color: "var(--amber-700)" }}>{hint}</div>}
     </Link>
+  );
+}
+
+type JobRow = {
+  id: string;
+  clientName: string;
+  jobDate: Date | null;
+  startTime: Date;
+  price: number | null;
+  discountAmount: number | null;
+  status: string;
+};
+
+function ListCard({
+  title, viewAllHref, empty, rows,
+}: {
+  title: string; viewAllHref: string; empty: string; rows: JobRow[];
+}) {
+  return (
+    <div className="dcard" style={{ gap: 4, padding: 0 }}>
+      <div className="dash-listcard-head">
+        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: "var(--ink)" }}>{title}</h3>
+        <Link href={viewAllHref} className="link" style={{ fontSize: 13, fontWeight: 500 }}>
+          View all →
+        </Link>
+      </div>
+      {rows.length === 0 ? (
+        <div className="dash-list-empty">{empty}</div>
+      ) : (
+        <div className="dash-list">
+          {rows.map((j) => {
+            const when = j.jobDate ?? j.startTime;
+            return (
+              <Link key={j.id} href={`/jobs/${j.id}`} className="dash-listrow">
+                <div className="avatar" style={{ background: avatarBg(j.clientName), width: 36, height: 36 }}>
+                  {initials(j.clientName)}
+                </div>
+                <div className="dash-listrow-meta">
+                  <div className="dash-listrow-name">{j.clientName || "Unknown client"}</div>
+                  <div className="dash-listrow-sub">{fmtDate(when)} · {fmtTime(when)}</div>
+                </div>
+                <div className="dash-listrow-right">
+                  <div className="dash-listrow-price">{money((j.price || 0) - (j.discountAmount || 0))}</div>
+                  <StatusPill status={j.status} />
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default async function DashboardPage() {
+  const session = await getCachedSession();
+  if (!session) redirect("/sign-in");
+  const role = (session.user as { role?: string }).role;
+
+  if (!isAdminRole(role)) {
+    return <CleanerDashboard userId={session.user.id} userName={session.user.name ?? ""} />;
+  }
+
+  const now = new Date();
+  const startOfToday = new Date(new Date().setHours(0, 0, 0, 0));
+  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+  const [
+    totalJobs, completedJobs, inProgressJobs, pendingPaymentJobs, todaysJobs, upcomingJobs, recentJobs,
+  ] = await Promise.all([
+    db.job.count(),
+    db.job.count({ where: { status: "COMPLETED" } }),
+    db.job.count({ where: { status: "IN_PROGRESS" } }),
+    db.job.count({ where: { status: "COMPLETED", paymentReceived: false } }),
+    db.job.count({
+      where: { jobDate: { gte: startOfToday, lt: new Date(startOfToday.getTime() + 86400000) } },
+    }),
+    db.job.findMany({
+      where: { jobDate: { gte: new Date() }, status: { in: ["CREATED", "SCHEDULED"] } },
+      orderBy: { jobDate: "asc" },
+      take: 5,
+      select: { id: true, clientName: true, jobDate: true, startTime: true, price: true, discountAmount: true, status: true },
+    }),
+    db.job.findMany({
+      where: { status: "COMPLETED" },
+      orderBy: { updatedAt: "desc" },
+      take: 5,
+      select: { id: true, clientName: true, jobDate: true, startTime: true, price: true, discountAmount: true, status: true },
+    }),
+  ]);
+
+  const [revenueData, monthlyRevenueData, employeeCount, activeEmployees, products] = await Promise.all([
+    db.job.aggregate({ where: { status: { in: ["COMPLETED", "PAID"] } }, _sum: { price: true } }),
+    db.job.aggregate({
+      where: { status: { in: ["COMPLETED", "PAID"] }, createdAt: { gte: thirtyDaysAgo } },
+      _sum: { price: true },
+    }),
+    db.user.count(),
+    db.user.count({ where: { cleaningJobs: { some: { status: "IN_PROGRESS" } } } }),
+    db.product.findMany(),
+  ]);
+
+  const totalRevenue = revenueData._sum.price || 0;
+  const monthlyRevenue = monthlyRevenueData._sum.price || 0;
+  const totalProducts = products.length;
+  const lowStockProducts = products.filter((p) => p.stockLevel <= p.minStock).sort((a, b) => a.stockLevel - b.stockLevel).slice(0, 8);
+  const totalInventoryValue = products.reduce((s, p) => s + p.stockLevel * p.costPerUnit, 0);
+
+  // Refill alerts (employee inventory below threshold)
+  const [inventoryRules, employeesWithProducts] = await Promise.all([
+    db.inventoryRule.findMany(),
+    db.employeeProduct.findMany({ select: { productId: true, quantity: true } }),
+  ]);
+  let refillAlertCount = 0;
+  for (const ep of employeesWithProducts) {
+    const rule = inventoryRules.find((r) => r.productId === ep.productId);
+    if (rule && ep.quantity <= rule.refillThreshold) refillAlertCount++;
+  }
+
+  const hours = now.getHours();
+  const greeting = hours < 12 ? "Good morning" : hours < 18 ? "Good afternoon" : "Good evening";
+  const dateLabel = now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+  const firstName = (session.user.name ?? "there").split(/\s+/)[0];
+
+  return (
+    <div className="p-8" style={{ maxWidth: 1280, margin: "0 auto" }}>
+      <header style={{ marginBottom: 32 }}>
+        <p className="eyebrow">{dateLabel}</p>
+        <h1 className="display" style={{ fontSize: "clamp(34px, 4.4vw, 50px)", marginTop: 6 }}>
+          {greeting}, <em>{firstName}.</em>
+        </h1>
+        <p className="subtitle" style={{ marginTop: 12, fontSize: 16 }}>
+          Here&apos;s what&apos;s happening with your business today.
+        </p>
+      </header>
+
+      {/* Primary metrics */}
+      <div className="astat-grid" style={{ marginBottom: 18 }}>
+        <Stat icon={CreditCard} label="Total revenue" value={money(totalRevenue)} delta={money(monthlyRevenue)} deltaUp hint="this month" />
+        <Stat icon={Briefcase} label="Total jobs" value={totalJobs} delta={String(completedJobs)} hint="completed" />
+        <Stat icon={Users} label="Employees" value={employeeCount} delta={String(activeEmployees)} deltaUp hint="active now" />
+        <Stat icon={Package} label="Products" value={totalProducts} delta={money(totalInventoryValue)} hint="inventory value" />
+      </div>
+
+      {/* Secondary + conditional alerts */}
+      <div className="dash-secondary" style={{ marginBottom: 32 }}>
+        <Stat icon={CalendarDays} label="Today's jobs" value={todaysJobs} hint="scheduled today" />
+        <Stat icon={Clock} label="In progress" value={inProgressJobs} hint="cleaners on site" />
+        {pendingPaymentJobs > 0 && (
+          <AlertTile icon={AlertTriangle} label="Pending payment" value={pendingPaymentJobs} hint="jobs awaiting payment" href="/jobs?payment=pending" />
+        )}
+        {lowStockProducts.length > 0 && (
+          <AlertTile icon={Package} label="Low stock" value={lowStockProducts.length} hint={lowStockProducts.length === 1 ? "1 product" : `${lowStockProducts.length} products`} href="/inventory?status=low" />
+        )}
+        {refillAlertCount > 0 && (
+          <AlertTile icon={MapPin} label="Refill alerts" value={refillAlertCount} hint="cleaners low on supplies" href="/inventory" />
+        )}
+      </div>
+
+      {/* Two-column lists */}
+      <div className="tab-panel" style={{ marginBottom: lowStockProducts.length ? 18 : 32 }}>
+        <ListCard title="Upcoming jobs" viewAllHref="/jobs?subTab=upcoming" empty="No upcoming jobs scheduled." rows={upcomingJobs} />
+        <ListCard title="Recently completed" viewAllHref="/jobs?subTab=completed" empty="No completed jobs yet." rows={recentJobs} />
+      </div>
+
+      {/* Low stock alert */}
+      {lowStockProducts.length > 0 && (
+        <div className="dash-lowstock" style={{ marginBottom: 32 }}>
+          <div className="dash-lowstock-head">
+            <div className="row" style={{ gap: 10 }}>
+              <span className="dash-lowstock-icon"><AlertTriangle size={16} /></span>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: "var(--amber-800)" }}>Low stock alert</h3>
+                <p style={{ margin: "2px 0 0", fontSize: 13, color: "var(--amber-700)" }}>
+                  {lowStockProducts.length} {lowStockProducts.length === 1 ? "product is" : "products are"} at or below the refill threshold.
+                </p>
+              </div>
+            </div>
+            <Link href="/inventory" className="link" style={{ color: "var(--amber-800)", fontWeight: 600, fontSize: 13 }}>
+              Manage inventory →
+            </Link>
+          </div>
+          <div className="dash-lowstock-grid">
+            {lowStockProducts.map((p) => (
+              <div key={p.id} className="dash-lowstock-item">
+                <div className="dash-lowstock-name">{p.name}</div>
+                <div className="dash-lowstock-qty">
+                  <strong>{p.stockLevel}</strong> / {p.minStock} {p.unit}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Quick actions */}
+      <div>
+        <p className="eyebrow" style={{ marginBottom: 14 }}>Quick actions</p>
+        <div className="dash-qa-grid">
+          {[
+            { Icon: Plus, label: "New job", sub: "Schedule a cleaning", href: "/jobs/new" },
+            { Icon: Users, label: "Employees", sub: `${employeeCount} on the team`, href: "/employees" },
+            { Icon: Package, label: "Inventory", sub: `${totalProducts} products`, href: "/inventory" },
+            { Icon: Briefcase, label: "All jobs", sub: `${totalJobs} total`, href: "/jobs" },
+          ].map((q) => (
+            <Link key={q.label} href={q.href} className="dash-qa">
+              <span className="dash-qa-icon"><q.Icon size={20} /></span>
+              <span className="dash-qa-text">
+                <span className="dash-qa-label">{q.label}</span>
+                <span className="dash-qa-sub">{q.sub}</span>
+              </span>
+              <span className="dash-qa-arrow"><ChevronRight size={16} /></span>
+            </Link>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }

@@ -3,7 +3,6 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
 import AnalyticsView from "./AnalyticsView";
-import LabourCostCard from "./LabourCostCard";
 
 export default async function AnalyticsPage() {
   const session = await auth.api.getSession({
@@ -777,7 +776,6 @@ export default async function AnalyticsPage() {
 
   return (
     <div className="h-full overflow-hidden overflow-y-auto p-8">
-      <LabourCostCard />
       <AnalyticsView
         jobStats={jobStats}
         revenueStats={revenueStats}

@@ -19,6 +19,7 @@
 
 import { isNotificationEnabled } from "./notifications";
 import type { Recipient } from "./notifications/catalog";
+import { logActivity } from "./activity-log";
 
 export interface SmsGate {
   recipient: Recipient;
@@ -56,21 +57,40 @@ function normalizeE164(input: string): string | null {
 }
 
 export async function sendSms(input: SendSmsInput): Promise<SendResult> {
+  // Record every SMS attempt to the activity log (success/failure/skipped).
+  const record = async (r: SendResult): Promise<SendResult> => {
+    await logActivity({
+      category: "SMS",
+      action: input.notification?.key ?? "send_sms",
+      status: r.sent
+        ? "SUCCESS"
+        : r.reason === "disabled-by-catalog"
+        ? "SKIPPED"
+        : "FAILED",
+      targetType: "phone",
+      targetId: input.to,
+      message: input.body.slice(0, 160),
+      error: r.sent ? null : r.reason ?? null,
+      providerId: r.twilioSid ?? null,
+    });
+    return r;
+  };
+
   if (input.notification) {
     const allowed = await isNotificationEnabled(
       input.notification.recipient,
       input.notification.key,
       "SMS"
     );
-    if (!allowed) return { sent: false, reason: "disabled-by-catalog" };
+    if (!allowed) return record({ sent: false, reason: "disabled-by-catalog" });
   }
 
   if (!twilioConfigured()) {
-    return { sent: false, reason: "twilio-not-configured" };
+    return record({ sent: false, reason: "twilio-not-configured" });
   }
 
   const to = normalizeE164(input.to);
-  if (!to) return { sent: false, reason: "invalid-phone" };
+  if (!to) return record({ sent: false, reason: "invalid-phone" });
 
   const sid = process.env.TWILIO_ACCOUNT_SID!;
   const token = process.env.TWILIO_AUTH_TOKEN!;
@@ -99,12 +119,12 @@ export async function sendSms(input: SendSmsInput): Promise<SendResult> {
     const data = (await res.json()) as { sid?: string; message?: string };
     if (!res.ok) {
       console.error("Twilio send failed:", res.status, data);
-      return { sent: false, reason: data.message ?? `http-${res.status}` };
+      return record({ sent: false, reason: data.message ?? `http-${res.status}` });
     }
-    return { sent: true, twilioSid: data.sid };
+    return record({ sent: true, twilioSid: data.sid });
   } catch (err) {
     console.error("Twilio send error:", err);
-    return { sent: false, reason: "network-error" };
+    return record({ sent: false, reason: "network-error" });
   }
 }
 

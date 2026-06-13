@@ -5,6 +5,10 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import type { PaymentType } from "@prisma/client";
+import {
+  sendProviderPayoutRequested,
+  sendAdminPayoutRequest,
+} from "@/lib/email";
 
 interface RequestWithdrawalInput {
   amount: number;
@@ -84,6 +88,24 @@ export async function requestWithdrawal(
         relatedType: "Withdrawal",
       },
     });
+
+    // Notify the cleaner (confirmation) and admins. Fire-and-forget — a mail
+    // hiccup must not fail the withdrawal itself.
+    const email = (session.user as { email?: string }).email;
+    const providerName = session.user.name ?? "there";
+    if (email) {
+      await sendProviderPayoutRequested({
+        to: email,
+        providerName,
+        amount,
+        paymentMethod: input.paymentMethod,
+      }).catch((e) => console.error("payout-requested email", e));
+    }
+    await sendAdminPayoutRequest({
+      providerName: session.user.name ?? "A cleaner",
+      amount,
+      paymentMethod: input.paymentMethod,
+    }).catch((e) => console.error("admin payout-request email", e));
 
     revalidatePath("/my-pay");
 

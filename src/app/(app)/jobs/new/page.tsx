@@ -7,7 +7,7 @@ import CleanerSelector from "./CleanerSelector";
 import JobTypeSelector from "./JobTypeSelector";
 import SubmitButton from "./SubmitButton";
 import DeleteButton from "./DeleteButton";
-import ClientLinkSelector from "./ClientLinkSelector";
+import ClientNameField from "./ClientNameField";
 import { ControlledDatePicker, ControlledTimePicker } from "./DateTimePicker";
 import PaymentTypeSelect from "./PaymentTypeSelect";
 import Card from "@/components/ui/Card";
@@ -97,6 +97,7 @@ export default async function JobFormPage({
       id: true,
       name: true,
       address: true,
+      aptNumber: true,
       email: true,
       phone: true,
       discountPercent: true,
@@ -310,23 +311,18 @@ export default async function JobFormPage({
         {/* Basic Information */}
         <SectionCard title="Basic information" subtitle="Who, what, where">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-            <FieldWrap label="Link client" hint="Pulls in saved name + address">
-              <ClientLinkSelector
-                clients={clients}
-                defaultValue={prefill?.clientId || ""}
-              />
-            </FieldWrap>
-
-            <FieldWrap label="Client name" required>
-              <Input
-                type="text"
-                id="clientName"
-                name="clientName"
-                required
-                defaultValue={prefill?.clientName || ""}
-                placeholder="e.g. Alexis Juarez"
-              />
-            </FieldWrap>
+            <div className="md:col-span-2">
+              <FieldWrap
+                label="Client name"
+                hint="Search existing customers, or type a new name"
+                required>
+                <ClientNameField
+                  clients={clients}
+                  defaultName={prefill?.clientName || ""}
+                  defaultClientId={prefill?.clientId || ""}
+                />
+              </FieldWrap>
+            </div>
 
             <FieldWrap label="Job type">
               <JobTypeSelector initialValue={prefill?.jobType} />

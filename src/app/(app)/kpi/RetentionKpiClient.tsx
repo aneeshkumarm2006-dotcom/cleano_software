@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { TrendingUp, TrendingDown, RefreshCw, PauseCircle } from "lucide-react";
+import RingChart from "@/components/ui/RingChart";
 import {
   getRetentionKpi,
   type RetentionKpi,
@@ -14,6 +14,15 @@ type Bucket = "retained" | "cancelled" | "paused" | "reactivated";
 
 function fmtDate(d: Date) {
   return d.toISOString().slice(0, 10);
+}
+function avatarBg(name: string): string {
+  const palette = ["#2c6e75","#1a5c63","#3d7f87","#0e4a52","#4f9097","#246a72","#538c94","#1c6068"];
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0x7fffffff;
+  return palette[h % palette.length];
+}
+function initials(name: string): string {
+  return (name || "?").split(/\s+/).map((w) => w[0] || "").join("").slice(0, 2).toUpperCase();
 }
 
 function presetRange(p: Exclude<Preset, "custom">): { from: string; to: string } {
@@ -41,9 +50,7 @@ export default function RetentionKpiClient() {
     setLoading(false);
   }, [range]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useEffect(() => { load(); }, [load]);
 
   function choosePreset(p: Preset) {
     setPreset(p);
@@ -57,160 +64,151 @@ export default function RetentionKpiClient() {
   }
 
   const rows: RetentionClientRow[] = data ? data[bucket] : [];
+  const retentionRate = data?.retentionRate ?? 0;
+  const churnRate = data?.churnRate ?? 0;
+  const v = (n: string | number) => (loading ? "…" : n);
+
+  const PERIODS: { id: Preset; label: string }[] = [
+    { id: "month", label: "This month" },
+    { id: "quarter", label: "This quarter" },
+    { id: "year", label: "This year" },
+    { id: "custom", label: "Custom" },
+  ];
+  const BUCKETS: { id: Bucket; label: string }[] = [
+    { id: "retained", label: "Retained" },
+    { id: "cancelled", label: "Cancelled" },
+    { id: "paused", label: "Paused" },
+    { id: "reactivated", label: "Reactivated" },
+  ];
 
   return (
-    <div>
-      <h1 style={{ fontSize: 24, fontWeight: 700, color: "#0a1f24", marginBottom: 4 }}>
-        Recurring Client Retention
-      </h1>
-      <p style={{ color: "#64748b", fontSize: 14, marginBottom: 20 }}>
-        How many recurring customers stay with us over time.
-      </p>
+    <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+      <header style={{ marginBottom: 24 }}>
+        <p className="eyebrow">Insights · Retention</p>
+        <h1 className="display" style={{ fontSize: "clamp(32px, 4.2vw, 46px)", marginTop: 6 }}>
+          Recurring client <em>retention.</em>
+        </h1>
+        <p className="subtitle" style={{ marginTop: 10, fontSize: 15.5 }}>
+          How many recurring customers stay, churn, pause, or come back.
+        </p>
+      </header>
 
       {/* Period selector */}
-      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 22 }}>
-        {(["month", "quarter", "year", "custom"] as Preset[]).map((p) => (
-          <button key={p} onClick={() => choosePreset(p)}
-            style={{
-              padding: "6px 14px", borderRadius: 20, fontSize: 13, fontWeight: 600,
-              border: "1px solid", borderColor: preset === p ? "#005F6A" : "#e2e8f0",
-              background: preset === p ? "#005F6A" : "#fff", color: preset === p ? "#fff" : "#475569",
-              cursor: "pointer",
-            }}>
-            {p === "month" ? "This month" : p === "quarter" ? "This quarter" : p === "year" ? "This year" : "Custom"}
-          </button>
-        ))}
+      <div className="k-period">
+        <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+          {PERIODS.map((p) => (
+            <button key={p.id} className={`an-chip ${preset === p.id ? "active" : ""}`} onClick={() => choosePreset(p.id)}>
+              {p.label}
+            </button>
+          ))}
+        </div>
         {preset === "custom" && (
-          <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
-            <input type="date" value={range.from} onChange={(e) => setRange((r) => ({ ...r, from: e.target.value }))} style={DATE} />
-            <span style={{ color: "#94a3b8" }}>→</span>
-            <input type="date" value={range.to} onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))} style={DATE} />
-          </span>
+          <div className="row" style={{ gap: 10 }}>
+            <label className="k-date">From<input type="date" className="input" value={range.from} onChange={(e) => setRange((r) => ({ ...r, from: e.target.value }))} /></label>
+            <label className="k-date">To<input type="date" className="input" value={range.to} onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))} /></label>
+          </div>
         )}
       </div>
 
-      {/* KPI cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16, marginBottom: 26 }}>
-        <KpiCard
-          icon={<TrendingUp size={18} />}
-          tint="#15803d"
-          label="Retention rate"
-          value={loading ? "…" : data?.retentionRate == null ? "—" : `${data.retentionRate}%`}
-          sub={data ? `${data.retainedCount} of ${data.startingCount} retained` : ""}
-        />
-        <KpiCard
-          icon={<TrendingDown size={18} />}
-          tint="#b91c1c"
-          label="Churn rate"
-          value={loading ? "…" : data?.churnRate == null ? "—" : `${data.churnRate}%`}
-          sub={data ? `${data.cancelledCount} cancelled` : ""}
-        />
-        <KpiCard
-          icon={<RefreshCw size={18} />}
-          tint="#1e40af"
-          label="Reactivations"
-          value={loading ? "…" : String(data?.reactivatedCount ?? 0)}
-          sub="won back this period"
-        />
-        <KpiCard
-          icon={<PauseCircle size={18} />}
-          tint="#b45309"
-          label="Paused / inactive"
-          value={loading ? "…" : String(data?.pausedCount ?? 0)}
-          sub="recurring, deactivated"
-        />
+      {/* KPI cards + ring */}
+      <div className="k-top">
+        <div className="k-cards">
+          <div className="an-tile">
+            <div className="an-tile-label">Retention rate</div>
+            <div className="an-tile-value" style={{ color: "var(--emerald-600)" }}>{v(data?.retentionRate == null ? "—" : `${data.retentionRate}%`)}</div>
+            <div className="an-tile-hint">{data ? `${data.retainedCount} of ${data.startingCount} retained` : ""}</div>
+          </div>
+          <div className="an-tile">
+            <div className="an-tile-label">Churn rate</div>
+            <div className="an-tile-value" style={{ color: churnRate > 25 ? "var(--error)" : "var(--amber-700)" }}>{v(data?.churnRate == null ? "—" : `${data.churnRate}%`)}</div>
+            <div className="an-tile-hint">{data ? `${data.cancelledCount} cancelled` : ""}</div>
+          </div>
+          <div className="an-tile">
+            <div className="an-tile-label">Reactivations</div>
+            <div className="an-tile-value" style={{ color: "var(--primary)" }}>{v(data?.reactivatedCount ?? 0)}</div>
+            <div className="an-tile-hint">won back this period</div>
+          </div>
+          <div className="an-tile">
+            <div className="an-tile-label">Paused / inactive</div>
+            <div className="an-tile-value" style={{ color: "var(--amber-700)" }}>{v(data?.pausedCount ?? 0)}</div>
+            <div className="an-tile-hint">recurring, deactivated</div>
+          </div>
+        </div>
+        <div className="dcard k-ring">
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+            <RingChart used={data?.retainedCount ?? 0} total={data?.startingCount || 1} size={140} strokeWidth={12} usedColor="#059669" remainingColor="var(--cream-deep)" />
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>Retention</div>
+              <div style={{ fontSize: 12, color: "var(--primary-60)" }}>{data?.retainedCount ?? 0}/{data?.startingCount ?? 0} clients</div>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Drill-down */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
-        {(["retained", "cancelled", "paused", "reactivated"] as Bucket[]).map((b) => {
-          const count = data ? data[b].length : 0;
-          return (
-            <button key={b} onClick={() => setBucket(b)}
-              style={{
-                padding: "6px 14px", borderRadius: 8, fontSize: 13, fontWeight: 600,
-                border: "1px solid", borderColor: bucket === b ? "#005F6A" : "#e2e8f0",
-                background: bucket === b ? "#f0f9fa" : "#fff", color: bucket === b ? "#005F6A" : "#475569",
-                cursor: "pointer", textTransform: "capitalize",
-              }}>
-              {b} ({count})
-            </button>
-          );
-        })}
+      {/* Bucket filter */}
+      <div className="row" style={{ gap: 8, flexWrap: "wrap", margin: "24px 0 16px" }}>
+        {BUCKETS.map((b) => (
+          <button key={b.id} className={`k-bucket ${bucket === b.id ? "active" : ""}`} onClick={() => setBucket(b.id)}>
+            {b.label}<span className="k-bucket-count">{data ? data[b.id].length : 0}</span>
+          </button>
+        ))}
       </div>
 
-      <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 14, overflow: "hidden" }}>
-        {rows.length === 0 ? (
-          <p style={{ padding: 28, textAlign: "center", color: "#94a3b8", fontSize: 14 }}>
-            No clients in this bucket for the selected period.
-          </p>
-        ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+      {/* Client table */}
+      <div className="atable-wrap">
+        <div className="atable-scroll">
+          <table className="atable">
             <thead>
-              <tr style={{ background: "#f8fafc", textAlign: "left", color: "#64748b", fontSize: 12 }}>
-                <th style={TH}>Client</th>
-                <th style={TH}>Frequency</th>
-                {bucket === "cancelled" && <th style={TH}>Cancelled</th>}
-                {bucket === "cancelled" && <th style={TH}>Offer</th>}
-                {bucket === "reactivated" && <th style={TH}>Reactivated</th>}
-                {bucket === "cancelled" && <th style={TH}>Reply</th>}
+              <tr>
+                <th>Client</th>
+                <th>Frequency</th>
+                {bucket === "cancelled" && <><th>Cancelled</th><th>Win-back offer</th><th>Reply</th><th></th></>}
+                {bucket === "reactivated" && <th>Reactivated</th>}
+                {bucket === "paused" && <th>Status</th>}
+                {bucket === "retained" && <th>Recurring since</th>}
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
-                <tr key={`${r.clientId}-${r.cancellationId ?? "x"}`} style={{ borderTop: "1px solid #f1f5f9" }}>
-                  <td style={TD}>
-                    <div style={{ fontWeight: 600, color: "#0a1f24" }}>{r.name}</div>
-                    <div style={{ fontSize: 12, color: "#94a3b8" }}>{r.email ?? "—"}</div>
+              {rows.length === 0 ? (
+                <tr><td colSpan={6} style={{ textAlign: "center", padding: 48, color: "var(--primary-50)" }}>
+                  {loading ? "Loading…" : "No clients in this bucket for the selected period."}
+                </td></tr>
+              ) : rows.map((r) => (
+                <tr key={`${r.clientId}-${r.cancellationId ?? "x"}`} style={{ cursor: "default" }}>
+                  <td>
+                    <div className="row" style={{ gap: 10 }}>
+                      <div className="avatar" style={{ background: avatarBg(r.name) }}>{initials(r.name)}</div>
+                      <div><div className="col-client">{r.name}</div><div className="col-client-sub">{r.email ?? "—"}</div></div>
+                    </div>
                   </td>
-                  <td style={TD}>{r.frequency ?? "—"}</td>
+                  <td><span className="pill" style={{ background: "var(--primary-5)", color: "var(--primary)" }}>{r.frequency ?? "—"}</span></td>
+
                   {bucket === "cancelled" && (
-                    <td style={TD}>{r.cancelledAt ? new Date(r.cancelledAt).toLocaleDateString() : "—"}</td>
+                    <>
+                      <td style={{ fontSize: 13, color: "var(--ink-soft)" }}>{r.cancelledAt ? new Date(r.cancelledAt).toLocaleDateString() : "—"}</td>
+                      <td style={{ fontSize: 13, color: "var(--primary-70)" }}>
+                        {r.offerStatus ?? "—"}
+                        {r.reactivatedAt && <span style={{ fontSize: 11, color: "var(--emerald-600)", marginLeft: 6 }}>· reactivated</span>}
+                      </td>
+                      <td>
+                        {r.repliedAt
+                          ? <span style={{ fontSize: 12.5, color: "var(--emerald-600)" }}>Replied</span>
+                          : <span className="pill" style={{ background: "var(--amber-100)", color: "var(--amber-800)" }}>Awaiting reply</span>}
+                      </td>
+                      <td style={{ textAlign: "right" }}>
+                        {!r.repliedAt && <button className="btn btn-secondary btn-sm" onClick={() => markReplied(r.cancellationId)}>Mark replied</button>}
+                      </td>
+                    </>
                   )}
-                  {bucket === "cancelled" && (
-                    <td style={TD}>
-                      <span style={{ fontSize: 12, color: "#475569" }}>{r.offerStatus ?? "—"}</span>
-                      {r.reactivatedAt && <span style={{ fontSize: 11, color: "#15803d", marginLeft: 6 }}>· reactivated</span>}
-                    </td>
-                  )}
-                  {bucket === "reactivated" && (
-                    <td style={TD}>{r.reactivatedAt ? new Date(r.reactivatedAt).toLocaleDateString() : "—"}</td>
-                  )}
-                  {bucket === "cancelled" && (
-                    <td style={TD}>
-                      {r.repliedAt ? (
-                        <span style={{ fontSize: 12, color: "#15803d" }}>Replied</span>
-                      ) : (
-                        <button onClick={() => markReplied(r.cancellationId)}
-                          style={{ fontSize: 12, color: "#005F6A", background: "none", border: "1px solid #cbd5e1", borderRadius: 6, padding: "3px 8px", cursor: "pointer" }}>
-                          Mark replied
-                        </button>
-                      )}
-                    </td>
-                  )}
+                  {bucket === "reactivated" && <td style={{ fontSize: 13, color: "var(--emerald-600)", fontWeight: 600 }}>{r.reactivatedAt ? new Date(r.reactivatedAt).toLocaleDateString() : "—"}</td>}
+                  {bucket === "paused" && <td style={{ fontSize: 13, color: "var(--primary-70)" }}>Deactivated</td>}
+                  {bucket === "retained" && <td style={{ fontSize: 13, color: "var(--ink-soft)" }}>{r.startDate ? new Date(r.startDate).toLocaleDateString() : "—"}</td>}
                 </tr>
               ))}
             </tbody>
           </table>
-        )}
+        </div>
       </div>
-    </div>
-  );
-}
-
-const DATE: React.CSSProperties = { border: "1px solid #e2e8f0", borderRadius: 8, padding: "6px 9px", fontSize: 13 };
-const TH: React.CSSProperties = { padding: "10px 14px", fontWeight: 600 };
-const TD: React.CSSProperties = { padding: "10px 14px", color: "#0a1f24", verticalAlign: "top" };
-
-function KpiCard({ icon, tint, label, value, sub }: { icon: React.ReactNode; tint: string; label: string; value: string; sub: string }) {
-  return (
-    <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 14, padding: 18 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, color: tint, marginBottom: 10 }}>
-        {icon}
-        <span style={{ fontSize: 12, fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em" }}>{label}</span>
-      </div>
-      <div style={{ fontSize: 32, fontWeight: 800, color: tint, lineHeight: 1 }}>{value}</div>
-      <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 6 }}>{sub}</div>
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { sendGiftCardRedeemedConfirmation } from "@/lib/email";
+import { logActivity } from "@/lib/activity-log";
 
 /**
  * Redeem a gift card code onto the signed-in client's account. The
@@ -70,6 +71,18 @@ export async function redeemGiftCard(input: { code: string }) {
   await db.client.update({
     where: { id: client.id },
     data: { giftCardBalance: { increment: card.amount } },
+  });
+
+  await logActivity({
+    category: "PAYMENT",
+    action: "redeem_gift_card",
+    status: "SUCCESS",
+    actorId: session.user.id,
+    actorLabel: client.email ?? client.name,
+    targetType: "client",
+    targetId: client.id,
+    amount: card.amount,
+    message: `Redeemed gift card ${code} — new balance $${newBalance.toFixed(2)}.`,
   });
 
   if (client.email) {

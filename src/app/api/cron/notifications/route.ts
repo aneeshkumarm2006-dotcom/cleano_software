@@ -11,6 +11,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { isAuthorizedCron } from "@/lib/cron-auth";
+import { logActivity } from "@/lib/activity-log";
 import { db } from "@/db";
 import {
   sendAdminUnassignedDeadline,
@@ -55,7 +56,10 @@ async function ensureNotSent(
       notificationKey,
       jobId: jobId ?? undefined,
       recipient,
-      status: { in: ["SENT", "PENDING"] },
+      // Include FAILED: a window-keyed notification is attempted once per
+      // window. Without this, a failing send (e.g. a bad EMAIL_FROM) retries
+      // every cron run forever and floods the logs.
+      status: { in: ["SENT", "PENDING", "FAILED"] },
     },
     select: { id: true },
   });
@@ -549,6 +553,12 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  await logActivity({
+    category: "CRON",
+    action: "notifications",
+    status: "SUCCESS",
+    message: `Notifications cron ran (${expiredInvites.length} expired invites, ${giftCardsDelivered} gift cards delivered)`,
+  });
   return NextResponse.json({
     ok: true,
     at: now.toISOString(),

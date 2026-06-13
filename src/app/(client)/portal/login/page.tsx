@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 import SplitShell from "@/components/customer/SplitShell";
+import CleanoLoader from "@/components/ui/CleanoLoader";
 import {
   Field,
   Input,
@@ -36,9 +37,11 @@ function PortalLoginInner() {
   const [error, setError] = useState<string | null>(initialError);
   const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [redirecting, setRedirecting] = useState(false);
 
   useEffect(() => {
     if (session.data?.session) {
+      setRedirecting(true);
       window.location.href = "/api/post-signin?from=portal";
     }
   }, [session.data?.session]);
@@ -74,6 +77,7 @@ function PortalLoginInner() {
       }
       if (remember) localStorage.setItem(rememberedKey, email);
       else localStorage.removeItem(rememberedKey);
+      setRedirecting(true);
       window.location.href = "/api/post-signin?from=portal";
     } catch {
       setError("Unexpected error. Please try again.");
@@ -82,6 +86,14 @@ function PortalLoginInner() {
   }
 
   return (
+    <>
+      {(loading || redirecting) && (
+        <CleanoLoader
+          fullscreen
+          size={72}
+          messages={["Signing you in…", "Loading your account…"]}
+        />
+      )}
     <SplitShell
       image="/customer-login.png"
       quoteHtml={"Your home<br/>shouldn't <em>feel like<br/>work.</em>"}
@@ -186,6 +198,7 @@ function PortalLoginInner() {
         </div>
       </form>
     </SplitShell>
+    </>
   );
 }
 

@@ -10,6 +10,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { isAuthorizedCron } from "@/lib/cron-auth";
+import { logActivity } from "@/lib/activity-log";
 import { db } from "@/db";
 import { sendCustomerMonthlyStatement } from "@/lib/email";
 import {
@@ -46,7 +47,7 @@ async function ensureNotSent(notificationKey: string, recipient: string) {
     where: {
       notificationKey,
       recipient,
-      status: { in: ["SENT", "PENDING"] },
+      status: { in: ["SENT", "PENDING", "FAILED"] },
     },
     select: { id: true },
   });
@@ -175,6 +176,13 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  await logActivity({
+    category: "CRON",
+    action: "monthly",
+    status: errors.length > 0 ? "FAILED" : "SUCCESS",
+    message: `Monthly statements (${period.monthLabel}): sent ${sent}, skipped ${skipped}, failed ${errors.length}`,
+    error: errors.length > 0 ? errors.slice(0, 3).join("; ") : null,
+  });
   return NextResponse.json({
     ok: true,
     monthLabel: period.monthLabel,

@@ -13,6 +13,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { isAuthorizedCron } from "@/lib/cron-auth";
+import { logActivity } from "@/lib/activity-log";
 import { db } from "@/db";
 import {
   sendProviderWeeklyPerformance,
@@ -38,7 +39,7 @@ async function ensureNotSent(notificationKey: string, recipient: string) {
     where: {
       notificationKey,
       recipient,
-      status: { in: ["SENT", "PENDING"] },
+      status: { in: ["SENT", "PENDING", "FAILED"] },
     },
     select: { id: true },
   });
@@ -227,5 +228,11 @@ export async function GET(req: NextRequest) {
     runRagWashDashboard(start, end, label),
   ]);
 
+  await logActivity({
+    category: "CRON",
+    action: "weekly",
+    status: "SUCCESS",
+    message: `Weekly cron ran for ${label}`,
+  });
   return NextResponse.json({ ok: true, weekLabel: label, perf, dashboard });
 }

@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { stripe } from "@/lib/stripe";
+import { logActivity } from "@/lib/activity-log";
 import {
   queueAndSendReceipt,
   sendCustomerBookingCharged,
@@ -114,6 +115,17 @@ export async function chargeJob(jobId: string) {
 
     queueAndSendReceipt(jobId).catch(() => {});
 
+    await logActivity({
+      category: "PAYMENT",
+      action: "charge_job",
+      status: "SUCCESS",
+      actorId: session.user.id,
+      targetType: "job",
+      targetId: jobId,
+      amount: totalAmount,
+      message: `Job #${job.jobNumber} fully covered by gift-card credit ($${giftCardApplied.toFixed(2)}).`,
+    });
+
     revalidatePath(`/jobs/${jobId}`);
     revalidatePath("/jobs");
     revalidatePath("/finances");
@@ -211,6 +223,18 @@ export async function chargeJob(jobId: string) {
       }).catch((e) => console.error("customer booking-charged email", e));
     }
 
+    await logActivity({
+      category: "PAYMENT",
+      action: "charge_job",
+      status: "SUCCESS",
+      actorId: session.user.id,
+      targetType: "job",
+      targetId: jobId,
+      amount: totalAmount,
+      providerId: paymentIntent.id,
+      message: `Job #${job.jobNumber} charged $${stripeAmount.toFixed(2)} via Stripe${giftCardApplied > 0 ? ` + $${giftCardApplied.toFixed(2)} gift-card credit` : ""}.`,
+    });
+
     revalidatePath(`/jobs/${jobId}`);
     revalidatePath("/jobs");
     revalidatePath("/finances");
@@ -226,6 +250,18 @@ export async function chargeJob(jobId: string) {
 
     // Roll back the claim so the job isn't stuck "paid" and can be retried.
     await releaseClaim(failureReason);
+
+    await logActivity({
+      category: "PAYMENT",
+      action: "charge_job",
+      status: "FAILED",
+      actorId: session.user.id,
+      targetType: "job",
+      targetId: jobId,
+      amount: amountCents / 100,
+      error: failureReason,
+      message: `Job #${job.jobNumber} charge declined.`,
+    });
 
     // Notify admin + customer of the declined card (gated by toggles).
     sendAdminCardDeclined({

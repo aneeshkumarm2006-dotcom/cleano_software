@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
+import { logActivity } from "@/lib/activity-log";
 import {
   homeForRole,
   isClientRole,
@@ -27,10 +28,36 @@ export async function GET(req: Request) {
   }
 
   const role = (session.user as { role?: string }).role;
+  const email = (session.user as { email?: string }).email ?? null;
+  const doorLabel = from === "portal" ? "portal" : from === "cleaner" ? "cleaner" : "staff";
 
-  // Sign the wrong-role account out so it doesn't sit in a half-state, then
-  // bounce to the right login.
-  async function bounce(path: string) {
+  // Credentials were valid (failed logins never reach this route), but the
+  // account may still be the wrong audience for this door. Log the *outcome*
+  // — access granted vs. denied — not just the authentication, so the audit
+  // trail shows who was turned away.
+  async function granted(path: string) {
+    await logActivity({
+      category: "AUTH",
+      action: "login",
+      status: "SUCCESS",
+      actorId: session!.user.id,
+      actorLabel: email,
+      message: `Signed in via ${doorLabel} door (role: ${role ?? "?"})`,
+    });
+    return NextResponse.redirect(`${baseUrl}${path}`);
+  }
+
+  // Sign the wrong-role account out so it doesn't sit in a half-state, record
+  // the denial, then bounce to the right login.
+  async function bounce(path: string, reason: string) {
+    await logActivity({
+      category: "AUTH",
+      action: "login_denied",
+      status: "FAILED",
+      actorId: session!.user.id,
+      actorLabel: email,
+      message: `Access denied at ${doorLabel} door — ${reason} (role: ${role ?? "?"})`,
+    });
     try {
       await auth.api.signOut({ headers: await headers() });
     } catch {
@@ -42,29 +69,29 @@ export async function GET(req: Request) {
   // Customer portal door — clients only.
   if (from === "portal") {
     if (!isClientRole(role)) {
-      return bounce(`/portal/login?error=staff_account`);
+      return bounce(`/portal/login?error=staff_account`, "not a customer account");
     }
-    return NextResponse.redirect(`${baseUrl}${homeForRole(role)}`);
+    return granted(homeForRole(role));
   }
 
   // Cleaner door — employees only.
   if (from === "cleaner") {
     if (!isCleanerRole(role)) {
-      return bounce(`/cleanos/login?error=not_cleaner`);
+      return bounce(`/cleanos/login?error=not_cleaner`, "not a cleaner account");
     }
-    return NextResponse.redirect(`${baseUrl}${homeForRole(role)}`);
+    return granted(homeForRole(role));
   }
 
   // Staff door (default, /sign-in) — admin/staff roles only. Other roles are
   // sent to their own login.
   if (!isAdminRole(role)) {
     if (isCleanerRole(role)) {
-      return bounce(`/cleanos/login?error=use_cleaner_login`);
+      return bounce(`/cleanos/login?error=use_cleaner_login`, "cleaner should use the cleaner login");
     }
     if (isClientRole(role)) {
-      return bounce(`/portal/login?error=staff_account`);
+      return bounce(`/portal/login?error=staff_account`, "customer should use the portal login");
     }
-    return bounce(`/sign-in?error=no_access`);
+    return bounce(`/sign-in?error=no_access`, "role has no staff access");
   }
-  return NextResponse.redirect(`${baseUrl}${homeForRole(role)}`);
+  return granted(homeForRole(role));
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAuthorizedCron } from "@/lib/cron-auth";
+import { logActivity } from "@/lib/activity-log";
 import { db } from "@/db";
 import { sendReminder24h } from "@/lib/email";
 
@@ -38,7 +39,7 @@ export async function GET(req: NextRequest) {
 
     // Skip if already sent for this job
     const existing = await db.emailLog.findFirst({
-      where: { jobId: job.id, kind: "REMINDER_24H", status: { in: ["SENT", "PENDING"] } },
+      where: { jobId: job.id, kind: "REMINDER_24H", status: { in: ["SENT", "PENDING", "FAILED"] } },
     });
     if (existing) { skipped++; continue; }
 
@@ -66,5 +67,11 @@ export async function GET(req: NextRequest) {
     sent++;
   }
 
+  await logActivity({
+    category: "CRON",
+    action: "reminders",
+    status: "SUCCESS",
+    message: `Reminders cron: sent ${sent}, skipped ${skipped}`,
+  });
   return NextResponse.json({ ok: true, sent, skipped });
 }

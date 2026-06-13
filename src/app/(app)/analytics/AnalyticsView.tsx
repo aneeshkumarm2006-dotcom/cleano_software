@@ -30,6 +30,7 @@ import {
   Star,
   MessageSquare,
 } from "lucide-react";
+import LabourCostCard from "./LabourCostCard";
 import RevenueTrendChart from "./charts/RevenueTrendChart";
 import InventoryValueChart from "./charts/InventoryValueChart";
 import ProfitLossChart from "./charts/ProfitLossChart";
@@ -422,6 +423,59 @@ function MetricCard({
   );
 }
 
+// ── Design-system helpers (match the analytics mockup) ──
+function AnStat({ icon: Icon, label, value, delta, deltaUp, hint }: {
+  icon?: React.ElementType; label: string; value: React.ReactNode;
+  delta?: string; deltaUp?: boolean; hint?: string;
+}) {
+  return (
+    <div className="astat">
+      <div className="astat-head">
+        <span>{label}</span>
+        {Icon && <span className="astat-icon"><Icon size={15} /></span>}
+      </div>
+      <div className="astat-value">{value}</div>
+      {(delta || hint) && (
+        <div className="astat-delta">
+          {delta && <strong style={deltaUp ? { color: "var(--emerald-600)" } : undefined}>{delta}</strong>}
+          {delta && hint ? " · " : ""}
+          {hint}
+        </div>
+      )}
+    </div>
+  );
+}
+function AnTile({ label, value, hint, accent }: {
+  label: string; value: React.ReactNode; hint?: string; accent?: string;
+}) {
+  return (
+    <div className="an-tile">
+      <div className="an-tile-label">{label}</div>
+      <div className="an-tile-value" style={accent ? { color: accent } : undefined}>{value}</div>
+      {hint && <div className="an-tile-hint">{hint}</div>}
+    </div>
+  );
+}
+function AnPanel({ title, sub, action, children, style }: {
+  title?: string; sub?: string; action?: React.ReactNode;
+  children: React.ReactNode; style?: React.CSSProperties;
+}) {
+  return (
+    <div className="dcard" style={{ gap: 18, ...style }}>
+      {(title || action) && (
+        <div className="dcard-head" style={{ alignItems: "flex-start" }}>
+          <div>
+            {title && <h3>{title}</h3>}
+            {sub && <p style={{ margin: "4px 0 0", fontSize: 12.5, color: "var(--primary-60)" }}>{sub}</p>}
+          </div>
+          {action}
+        </div>
+      )}
+      {children}
+    </div>
+  );
+}
+
 // ── Main Component ──
 
 export default function AnalyticsView({
@@ -450,108 +504,36 @@ export default function AnalyticsView({
 
   // ── Tab 1: Overview ──
   const OverviewTab = () => (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard
-          label="Total Revenue"
-          value={`$${revenueStats.totalRevenue.toFixed(2)}`}
-          subValue={`$${revenueStats.monthlyRevenue.toFixed(2)} this month`}
-        />
-        <MetricCard
-          label="Net Profit"
-          value={`$${revenueStats.netProfit.toFixed(2)}`}
-          subValue={`${revenueStats.profitMargin.toFixed(1)}% margin`}
-          variant={revenueStats.profitMargin > 30 ? "success" : "default"}
-        />
-        <MetricCard
-          label="Total Jobs"
-          value={String(jobStats.total)}
-          subValue={`${jobStats.completionRate.toFixed(0)}% completion rate`}
-        />
-        <MetricCard
-          label="Pending Payments"
-          value={String(revenueStats.pendingPayments)}
-          subValue={`$${revenueStats.pendingAmount.toFixed(2)} outstanding`}
-          variant={revenueStats.pendingPayments > 0 ? "warning" : "default"}
-        />
+    <div className="stack-18">
+      <div className="astat-grid">
+        <AnStat icon={DollarSign} label="Total revenue" value={`$${revenueStats.totalRevenue.toFixed(0)}`} delta={`$${revenueStats.monthlyRevenue.toFixed(0)}`} deltaUp hint="this month" />
+        <AnStat icon={TrendingUp} label="Net profit" value={`$${revenueStats.netProfit.toFixed(0)}`} delta={`${revenueStats.profitMargin.toFixed(0)}%`} hint="margin" />
+        <AnStat icon={Briefcase} label="Total jobs" value={jobStats.total} delta={`${jobStats.completed}`} hint="completed" />
+        <AnStat icon={AlertTriangle} label="Pending payments" value={`$${revenueStats.pendingAmount.toFixed(0)}`} hint={`${revenueStats.pendingPayments} jobs outstanding`} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card variant="default" className="p-6">
-          <div className="flex items-center gap-2 mb-6">
-            <div className="p-2 bg-[#005F6A]/10 rounded-lg">
-              <TrendingUp className="w-4 h-4 text-[#005F6A]" />
-            </div>
-            <h3 className="text-sm font-[350] text-[#005F6A]/80">
-              Revenue Trend (12 months)
-            </h3>
-          </div>
+      <div className="an-grid-2">
+        <AnPanel title="Revenue trend" sub="Monthly service revenue (12 mo)">
           <RevenueTrendChart data={monthlyData} />
-        </Card>
-
-        <Card variant="default" className="p-6">
-          <div className="flex items-center gap-2 mb-6">
-            <div className="p-2 bg-[#005F6A]/10 rounded-lg">
-              <Briefcase className="w-4 h-4 text-[#005F6A]" />
-            </div>
-            <h3 className="text-sm font-[350] text-[#005F6A]/80">
-              Jobs by Type
-            </h3>
-          </div>
+        </AnPanel>
+        <AnPanel title="Jobs by type" sub="All-time mix">
           {jobTypeBreakdown.length > 0 ? (
             <SimpleBarChart
-              data={jobTypeBreakdown.map((j) => ({
-                label: j.type || "Unspecified",
-                value: j.count,
-              }))}
+              data={jobTypeBreakdown.map((j) => ({ label: j.type || "Unspecified", value: j.count }))}
               maxValue={Math.max(...jobTypeBreakdown.map((j) => j.count))}
               label=""
             />
           ) : (
-            <p className="text-sm text-[#005F6A]/60 text-center py-8">
-              No job data yet
-            </p>
+            <div className="an-empty">No job data yet</div>
           )}
-        </Card>
+        </AnPanel>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <Card variant="cleano_light" className="p-4 text-center">
-          <p className="text-2xl font-[400] text-[#005F6A]">
-            {employeeStats.totalEmployees}
-          </p>
-          <p className="text-xs text-[#005F6A]/60 mt-1">Total Employees</p>
-        </Card>
-        <Card variant="cleano_light" className="p-4 text-center">
-          <p className="text-2xl font-[400] text-[#005F6A]">
-            {inventoryStats.totalProducts}
-          </p>
-          <p className="text-xs text-[#005F6A]/60 mt-1">Products</p>
-        </Card>
-        <Card variant="cleano_light" className="p-4 text-center">
-          <p className="text-2xl font-[400] text-[#005F6A]">
-            ${revenueStats.avgJobPrice.toFixed(0)}
-          </p>
-          <p className="text-xs text-[#005F6A]/60 mt-1">Avg Job Price</p>
-        </Card>
-        <Card
-          variant={lowStockProducts.length > 0 ? "warning" : "cleano_light"}
-          className="p-4 text-center">
-          <p
-            className={`text-2xl font-[400] ${
-              lowStockProducts.length > 0 ? "text-yellow-700" : "text-[#005F6A]"
-            }`}>
-            {lowStockProducts.length}
-          </p>
-          <p
-            className={`text-xs mt-1 ${
-              lowStockProducts.length > 0
-                ? "text-yellow-600"
-                : "text-[#005F6A]/60"
-            }`}>
-            Low Stock Items
-          </p>
-        </Card>
+      <div className="astat-grid">
+        <AnTile label="Employees" value={employeeStats.totalEmployees} hint={`${employeeStats.activeNow} active now`} />
+        <AnTile label="Products" value={inventoryStats.totalProducts} hint={`$${inventoryStats.totalValue.toFixed(0)} value`} />
+        <AnTile label="Avg job price" value={`$${revenueStats.avgJobPrice.toFixed(0)}`} hint="completed only" />
+        <AnTile label="Low stock" value={lowStockProducts.length} hint={lowStockProducts.length ? "needs refill" : "all stocked"} accent={lowStockProducts.length ? "var(--amber-700)" : undefined} />
       </div>
     </div>
   );
@@ -610,68 +592,28 @@ export default function AnalyticsView({
     ];
 
     return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="stack-18">
+        <div className="an-kpi-grid">
           {kpis.map((kpi, idx) => (
-            <Card key={idx} variant="default" className="p-6">
-              <div className="flex items-start gap-3">
-                <div className="p-2 bg-[#005F6A]/10 rounded-lg text-[#005F6A]">
-                  {kpi.icon}
-                </div>
-                <div className="flex-1">
-                  <p className="text-xs text-[#005F6A]/60 uppercase tracking-wide">
-                    {kpi.label}
-                  </p>
-                  <p className="text-xl font-[400] text-[#005F6A] mt-1">
-                    {kpi.value}
-                  </p>
-                  <p className="text-xs text-[#005F6A]/50 mt-0.5">
-                    {kpi.subValue}
-                  </p>
-                </div>
-              </div>
-            </Card>
+            <div key={idx} className="astat">
+              <div className="astat-head"><span>{kpi.label}</span></div>
+              <div className="astat-value">{kpi.value}</div>
+              <div className="astat-delta">{kpi.subValue}</div>
+            </div>
           ))}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card variant="default" className="p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="p-2 bg-[#005F6A]/10 rounded-lg">
-                <CheckCircle2 className="w-4 h-4 text-[#005F6A]" />
-              </div>
-              <h3 className="text-sm font-[350] text-[#005F6A]/80">
-                Job Completion
-              </h3>
+        <div className="an-grid-2">
+          <AnPanel title="Completion rate">
+            <div style={{ display: "flex", justifyContent: "center", padding: "12px 0" }}>
+              <ProgressRing value={jobStats.completed} max={jobStats.total} label="Jobs completed" size={140} />
             </div>
-            <div className="flex justify-center">
-              <ProgressRing
-                value={jobStats.completed}
-                max={jobStats.total}
-                label="Completion Rate"
-                size={140}
-              />
+          </AnPanel>
+          <AnPanel title="Payments collected">
+            <div style={{ display: "flex", justifyContent: "center", padding: "12px 0" }}>
+              <ProgressRing value={jobStats.completed - revenueStats.pendingPayments} max={jobStats.completed} label="Collected" size={140} />
             </div>
-          </Card>
-
-          <Card variant="default" className="p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="p-2 bg-[#005F6A]/10 rounded-lg">
-                <DollarSign className="w-4 h-4 text-[#005F6A]" />
-              </div>
-              <h3 className="text-sm font-[350] text-[#005F6A]/80">
-                Payment Collection
-              </h3>
-            </div>
-            <div className="flex justify-center">
-              <ProgressRing
-                value={jobStats.completed - revenueStats.pendingPayments}
-                max={jobStats.completed}
-                label="Payments Collected"
-                size={140}
-              />
-            </div>
-          </Card>
+          </AnPanel>
         </div>
       </div>
     );
@@ -679,70 +621,23 @@ export default function AnalyticsView({
 
   // ── Tab 3: Graphs ──
   const GraphsTab = () => (
-    <div className="space-y-6">
-      <Card variant="default" className="p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <div className="p-2 bg-[#005F6A]/10 rounded-lg">
-            <TrendingUp className="w-4 h-4 text-[#005F6A]" />
-          </div>
-          <h3 className="text-sm font-[350] text-[#005F6A]/80">
-            Revenue Trend (12 months)
-          </h3>
-        </div>
+    <div className="stack-18">
+      <AnPanel title="Revenue trend" sub="Monthly service revenue (12 mo)">
         <RevenueTrendChart data={monthlyData} />
-      </Card>
-
-      <Card variant="default" className="p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <div className="p-2 bg-[#005F6A]/10 rounded-lg">
-            <BarChart3 className="w-4 h-4 text-[#005F6A]" />
-          </div>
-          <h3 className="text-sm font-[350] text-[#005F6A]/80">
-            Profit & Loss by Month
-          </h3>
-        </div>
+      </AnPanel>
+      <AnPanel title="Profit & loss by month" sub="Revenue · cost · profit">
         <ProfitLossChart data={monthlyData} />
-      </Card>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card variant="default" className="p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="p-2 bg-[#005F6A]/10 rounded-lg">
-              <Package className="w-4 h-4 text-[#005F6A]" />
-            </div>
-            <h3 className="text-sm font-[350] text-[#005F6A]/80">
-              Inventory Value: Warehouse vs In-Circulation
-            </h3>
-          </div>
+      </AnPanel>
+      <div className="an-grid-2">
+        <AnPanel title="Inventory value" sub="Warehouse vs in-circulation">
           <InventoryValueChart data={inventoryValueData} />
-        </Card>
-
-        <Card variant="default" className="p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="p-2 bg-[#005F6A]/10 rounded-lg">
-              <DollarSign className="w-4 h-4 text-[#005F6A]" />
-            </div>
-            <h3 className="text-sm font-[350] text-[#005F6A]/80">
-              Supplier Price Comparison
-            </h3>
-          </div>
-          <SupplierComparisonChart
-            data={supplierComparisonData}
-            supplierNames={supplierNames}
-          />
-        </Card>
+        </AnPanel>
+        <AnPanel title="Supplier price comparison" sub="Unit cost across suppliers">
+          <SupplierComparisonChart data={supplierComparisonData} supplierNames={supplierNames} />
+        </AnPanel>
       </div>
-
       {targetsWithActuals.length > 0 && (
-        <Card variant="default" className="p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="p-2 bg-[#005F6A]/10 rounded-lg">
-              <Target className="w-4 h-4 text-[#005F6A]" />
-            </div>
-            <h3 className="text-sm font-[350] text-[#005F6A]/80">
-              Targets vs Actuals
-            </h3>
-          </div>
+        <AnPanel title="Targets vs actuals">
           <TargetVsActualChart
             data={targetsWithActuals.map((t) => ({
               metric: t.metric.replace(/_/g, " "),
@@ -750,122 +645,91 @@ export default function AnalyticsView({
               actual: t.actual,
             }))}
           />
-        </Card>
+        </AnPanel>
       )}
     </div>
   );
 
   // ── Tab 4: Budget vs Actuals ──
-  const BudgetTab = () => (
-    <div className="space-y-6">
-      {budgetVsActuals.length > 0 ? (
-        <>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <MetricCard
-              label="Total Budgeted"
-              value={`$${budgetVsActuals.reduce((s, b) => s + b.budgetAmount, 0).toFixed(2)}`}
-            />
-            <MetricCard
-              label="Total Actual"
-              value={`$${budgetVsActuals.reduce((s, b) => s + b.actualAmount, 0).toFixed(2)}`}
-            />
-            <MetricCard
-              label="Total Variance"
-              value={`$${budgetVsActuals.reduce((s, b) => s + b.variance, 0).toFixed(2)}`}
-              variant={
-                budgetVsActuals.reduce((s, b) => s + b.variance, 0) < 0
-                  ? "warning"
-                  : "success"
-              }
-            />
-          </div>
-
-          <Card variant="default" className="p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="p-2 bg-[#005F6A]/10 rounded-lg">
-                <BarChart3 className="w-4 h-4 text-[#005F6A]" />
-              </div>
-              <h3 className="text-sm font-[350] text-[#005F6A]/80">
-                Budget vs Actual Spending
-              </h3>
+  const BudgetTab = () => {
+    const totalBudget = budgetVsActuals.reduce((s, b) => s + b.budgetAmount, 0);
+    const totalActual = budgetVsActuals.reduce((s, b) => s + b.actualAmount, 0);
+    const totalVariance = budgetVsActuals.reduce((s, b) => s + b.variance, 0);
+    return (
+      <div className="stack-18">
+        {budgetVsActuals.length > 0 ? (
+          <>
+            <div className="astat-grid">
+              <AnTile label="Total budgeted" value={`$${totalBudget.toFixed(2)}`} />
+              <AnTile label="Total actual" value={`$${totalActual.toFixed(2)}`} />
+              <AnTile
+                label="Total variance"
+                value={`${totalVariance < 0 ? "-" : "+"}$${Math.abs(totalVariance).toFixed(2)}`}
+                accent={totalVariance < 0 ? "var(--error)" : "var(--emerald-600)"}
+                hint={totalVariance < 0 ? "Over budget" : "Under budget"}
+              />
             </div>
-            <CBarChart
-              data={budgetVsActuals.map((b) => ({
-                name: `${b.category} (${b.period})`,
-                Budget: b.budgetAmount,
-                Actual: b.actualAmount,
-              }))}
-              dataKeys={["Budget", "Actual"]}
-              xKey="name"
-              height={300}
-            />
-          </Card>
 
-          <Card variant="default" className="p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="p-2 bg-[#005F6A]/10 rounded-lg">
-                <DollarSign className="w-4 h-4 text-[#005F6A]" />
-              </div>
-              <h3 className="text-sm font-[350] text-[#005F6A]/80">
-                Budget Detail
-              </h3>
-            </div>
-            <div className="space-y-3">
-              {budgetVsActuals.map((b) => {
-                const overBudget = b.percentUsed > 100;
-                return (
-                  <div
-                    key={b.id}
-                    className={`p-4 rounded-xl ${
-                      overBudget ? "bg-red-50 border border-red-200" : "bg-[#005F6A]/5"
-                    }`}>
-                    <div className="flex items-center justify-between mb-2">
-                      <div>
-                        <p className="text-sm font-[400] text-[#005F6A]">
-                          {b.category}
-                        </p>
-                        <p className="text-xs text-[#005F6A]/60">{b.period}</p>
+            <AnPanel title="Budget vs actual" sub="Spending by category">
+              <CBarChart
+                data={budgetVsActuals.map((b) => ({
+                  name: `${b.category} (${b.period})`,
+                  Budget: b.budgetAmount,
+                  Actual: b.actualAmount,
+                }))}
+                dataKeys={["Budget", "Actual"]}
+                xKey="name"
+                height={300}
+              />
+            </AnPanel>
+
+            <AnPanel title="By category">
+              <div className="stack-16">
+                {budgetVsActuals.map((b) => {
+                  const overBudget = b.percentUsed > 100;
+                  return (
+                    <div key={b.id} className="an-budrow">
+                      <div className="an-budrow-head">
+                        <div>
+                          <div className="an-budrow-name">{b.category}</div>
+                          <div className="an-budrow-sub">{b.period}</div>
+                        </div>
+                        <div style={{ textAlign: "right", display: "flex", alignItems: "center", gap: 10 }}>
+                          <span className="an-budrow-name">
+                            ${b.actualAmount.toFixed(2)} / ${b.budgetAmount.toFixed(2)}
+                          </span>
+                          <span className={`pill ${overBudget ? "pill-rose" : "pill-emerald"}`}>
+                            {b.percentUsed.toFixed(0)}%
+                          </span>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <p className="text-sm font-[400] text-[#005F6A]">
-                          ${b.actualAmount.toFixed(2)} / ${b.budgetAmount.toFixed(2)}
-                        </p>
-                        <Badge
-                          variant={overBudget ? "error" : "success"}
-                          size="sm">
-                          {b.percentUsed.toFixed(0)}%
-                        </Badge>
+                      <div className="an-progress">
+                        <div
+                          className="an-progress-fill"
+                          style={{
+                            width: `${Math.min(b.percentUsed, 100)}%`,
+                            background: overBudget ? "var(--error)" : "var(--primary)",
+                          }}
+                        />
                       </div>
                     </div>
-                    <div className="h-2 bg-[#005F6A]/10 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all duration-500 ${
-                          overBudget ? "bg-red-500" : "bg-[#005F6A]"
-                        }`}
-                        style={{ width: `${Math.min(b.percentUsed, 100)}%` }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </Card>
-        </>
-      ) : (
-        <Card variant="default" className="p-12 text-center">
-          <div className="w-16 h-16 bg-[#005F6A]/5 rounded-full flex items-center justify-center mx-auto mb-3">
-            <DollarSign className="w-8 h-8 text-[#005F6A]/40" />
+                  );
+                })}
+              </div>
+            </AnPanel>
+          </>
+        ) : (
+          <div className="an-empty">
+            <div className="an-empty-icon"><DollarSign size={26} /></div>
+            <h3 className="title-sm">No budgets configured yet</h3>
+            <p className="subtitle" style={{ fontSize: 13.5, margin: 0 }}>
+              Set up budgets in the Finances module to see comparisons here.
+            </p>
           </div>
-          <p className="text-sm font-[350] text-[#005F6A]/70">
-            No budgets configured yet
-          </p>
-          <p className="text-xs text-[#005F6A]/50 mt-1">
-            Set up budgets in the Finances module to see comparisons here
-          </p>
-        </Card>
-      )}
-    </div>
-  );
+        )}
+      </div>
+    );
+  };
 
   // ── Tab 5: Targets vs Actuals ──
   const TargetsTab = () => {
@@ -886,23 +750,22 @@ export default function AnalyticsView({
     };
 
     return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-[350] text-[#005F6A]/80">
-            Business Targets
-          </h2>
-          <Button
-            variant="action"
-            size="sm"
-            border={false}
-            onClick={() => setShowForm(!showForm)}
-            className="rounded-xl px-4 py-2">
-            {showForm ? "Cancel" : "Add Target"}
-          </Button>
+      <div className="stack-18">
+        <div className="dcard-head" style={{ alignItems: "flex-start" }}>
+          <div>
+            <p className="eyebrow">Goals</p>
+            <h3 style={{ margin: "2px 0 0" }}>Business targets</h3>
+          </div>
+          <button
+            type="button"
+            className={`btn btn-sm ${showForm ? "btn-secondary" : "btn-primary"}`}
+            onClick={() => setShowForm(!showForm)}>
+            {showForm ? "Cancel" : "Add target"}
+          </button>
         </div>
 
         {showForm && (
-          <Card variant="cleano_light" className="p-6">
+          <AnPanel>
             <form
               action={async (formData) => {
                 await createTarget(formData);
@@ -989,20 +852,12 @@ export default function AnalyticsView({
                 Create Target
               </Button>
             </form>
-          </Card>
+          </AnPanel>
         )}
 
         {targetsWithActuals.length > 0 ? (
           <>
-            <Card variant="default" className="p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <div className="p-2 bg-[#005F6A]/10 rounded-lg">
-                  <Target className="w-4 h-4 text-[#005F6A]" />
-                </div>
-                <h3 className="text-sm font-[350] text-[#005F6A]/80">
-                  Target Progress
-                </h3>
-              </div>
+            <AnPanel title="Target progress" sub="Actual vs target by metric">
               <TargetVsActualChart
                 data={targetsWithActuals.map((t) => ({
                   metric: metricLabels[t.metric] || t.metric,
@@ -1010,91 +865,82 @@ export default function AnalyticsView({
                   actual: t.actual,
                 }))}
               />
-            </Card>
+            </AnPanel>
 
-            <div className="space-y-3">
+            <div className="an-grid-2">
               {targetsWithActuals.map((target) => {
-                const progressColor =
-                  target.progress >= 100
-                    ? "bg-green-500"
-                    : target.progress >= 80
-                    ? "bg-yellow-500"
-                    : "bg-red-500";
-                const badgeVariant =
-                  target.progress >= 100
-                    ? "success"
-                    : target.progress >= 80
-                    ? "default"
-                    : "error";
+                const hit = target.progress >= 100;
+                const fillColor = hit
+                  ? "var(--emerald-600)"
+                  : target.progress >= 80
+                  ? "var(--amber-600)"
+                  : "var(--primary)";
 
                 const isEditing = editingId === target.id;
                 const isConfirmingDelete = deletingId === target.id;
                 const valuePrecision = target.metric === "PROFIT_MARGIN" ? 1 : 2;
 
                 return (
-                  <Card key={target.id} variant="default" className="p-4">
-                    <div className="flex items-center justify-between mb-2">
+                  <div key={target.id} className="dcard" style={{ gap: 12 }}>
+                    <div className="row-between" style={{ alignItems: "flex-start" }}>
                       <div>
-                        <p className="text-sm font-[400] text-[#005F6A]">
+                        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: "var(--ink)" }}>
                           {metricLabels[target.metric] || target.metric}
-                        </p>
-                        <p className="text-xs text-[#005F6A]/60">
-                          {target.period} from{" "}
-                          {new Date(target.periodStart).toLocaleDateString("en-US")}
-                        </p>
-                      </div>
-                      <div className="text-right flex items-center gap-3">
-                        <div>
-                          <p className="text-sm font-[400] text-[#005F6A]">
-                            {target.actual.toFixed(valuePrecision)}{" "}
-                            / {target.targetValue.toFixed(valuePrecision)}
-                          </p>
-                          <p className="text-xs text-[#005F6A]/60">
-                            Variance: {target.variance >= 0 ? "+" : ""}
-                            {target.variance.toFixed(2)}
-                          </p>
+                        </h3>
+                        <div style={{ fontSize: 12, color: "var(--primary-60)", marginTop: 2 }}>
+                          {target.period} from {new Date(target.periodStart).toLocaleDateString("en-US")}
                         </div>
-                        <Badge variant={badgeVariant as any} size="sm">
-                          {target.progress.toFixed(0)}%
-                        </Badge>
-                        {!isEditing && !isConfirmingDelete && (
-                          <div className="flex items-center gap-1">
-                            <button
-                              type="button"
-                              aria-label="Edit target"
-                              title="Edit target"
-                              onClick={() => {
-                                setDeletingId(null);
-                                setEditingId(target.id);
-                              }}
-                              className="p-1.5 rounded-lg text-[#005F6A]/60 hover:text-[#005F6A] hover:bg-[#005F6A]/10 transition-colors">
-                              <Pencil className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              aria-label="Delete target"
-                              title="Delete target"
-                              onClick={() => {
-                                setEditingId(null);
-                                setDeletingId(target.id);
-                              }}
-                              className="p-1.5 rounded-lg text-red-500/70 hover:text-red-600 hover:bg-red-500/10 transition-colors">
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        )}
+                      </div>
+                      {!isEditing && !isConfirmingDelete && (
+                        <div className="row" style={{ gap: 4 }}>
+                          <button
+                            type="button"
+                            className="icon-btn"
+                            style={{ width: 28, height: 28 }}
+                            aria-label="Edit target"
+                            title="Edit target"
+                            onClick={() => {
+                              setDeletingId(null);
+                              setEditingId(target.id);
+                            }}>
+                            <Pencil size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            className="icon-btn"
+                            style={{ width: 28, height: 28, color: "var(--error)" }}
+                            aria-label="Delete target"
+                            title="Delete target"
+                            onClick={() => {
+                              setEditingId(null);
+                              setDeletingId(target.id);
+                            }}>
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    <div className="row-between" style={{ alignItems: "flex-end" }}>
+                      <div style={{ fontFamily: "var(--font-serif)", fontSize: 28, color: "var(--ink)", lineHeight: 1 }}>
+                        {target.actual.toFixed(valuePrecision)}
+                      </div>
+                      <div style={{ fontSize: 13, color: "var(--primary-60)" }}>
+                        of {target.targetValue.toFixed(valuePrecision)}
                       </div>
                     </div>
-                    <div className="h-2 bg-[#005F6A]/10 rounded-full overflow-hidden">
+                    <div className="an-progress">
                       <div
-                        className={`h-full ${progressColor} rounded-full transition-all duration-500`}
-                        style={{ width: `${Math.min(target.progress, 100)}%` }}
+                        className="an-progress-fill"
+                        style={{ width: `${Math.min(target.progress, 100)}%`, background: fillColor }}
                       />
                     </div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: hit ? "var(--emerald-600)" : "var(--primary-60)" }}>
+                      {hit
+                        ? "✓ Target met"
+                        : `${target.progress.toFixed(0)}% of target · variance ${target.variance >= 0 ? "+" : ""}${target.variance.toFixed(2)}`}
+                    </div>
                     {target.notes && !isEditing && (
-                      <p className="text-xs text-[#005F6A]/50 mt-2">
-                        {target.notes}
-                      </p>
+                      <div style={{ fontSize: 12, color: "var(--primary-50)" }}>{target.notes}</div>
                     )}
 
                     {isEditing && (
@@ -1185,23 +1031,19 @@ export default function AnalyticsView({
                         </form>
                       </div>
                     )}
-                  </Card>
+                  </div>
                 );
               })}
             </div>
           </>
         ) : (
-          <Card variant="default" className="p-12 text-center">
-            <div className="w-16 h-16 bg-[#005F6A]/5 rounded-full flex items-center justify-center mx-auto mb-3">
-              <Target className="w-8 h-8 text-[#005F6A]/40" />
-            </div>
-            <p className="text-sm font-[350] text-[#005F6A]/70">
-              No targets set yet
+          <div className="an-empty">
+            <div className="an-empty-icon"><Target size={26} /></div>
+            <h3 className="title-sm">No targets set yet</h3>
+            <p className="subtitle" style={{ fontSize: 13.5, margin: 0 }}>
+              Click &quot;Add target&quot; to create your first business target.
             </p>
-            <p className="text-xs text-[#005F6A]/50 mt-1">
-              Click &quot;Add Target&quot; to create your first business target
-            </p>
-          </Card>
+          </div>
         )}
       </div>
     );
@@ -1209,288 +1051,162 @@ export default function AnalyticsView({
 
   // ── Tab 6: Inventory ──
   const InventoryTab = () => (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard
-          label="Total Products"
-          value={String(inventoryStats.totalProducts)}
-        />
-        <MetricCard
-          label="Warehouse Value"
-          value={`$${inventoryStats.totalValue.toFixed(2)}`}
-        />
-        <MetricCard
-          label="In Circulation"
-          value={`$${inventoryStats.inCirculationValue.toFixed(2)}`}
-        />
-        <MetricCard
-          label="Low Stock Items"
+    <div className="stack-18">
+      <div className="astat-grid">
+        <AnTile label="Total products" value={String(inventoryStats.totalProducts)} />
+        <AnTile label="Warehouse value" value={`$${inventoryStats.totalValue.toFixed(2)}`} />
+        <AnTile label="In circulation" value={`$${inventoryStats.inCirculationValue.toFixed(2)}`} />
+        <AnTile
+          label="Low stock items"
           value={String(inventoryStats.lowStockCount)}
-          variant={inventoryStats.lowStockCount > 0 ? "warning" : "default"}
+          accent={inventoryStats.lowStockCount > 0 ? "var(--amber-600)" : undefined}
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card variant="default" className="p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="p-2 bg-[#005F6A]/10 rounded-lg">
-              <TrendingUp className="w-4 h-4 text-[#005F6A]" />
-            </div>
-            <h3 className="text-sm font-[350] text-[#005F6A]/80">
-              Most Used Products
-            </h3>
-          </div>
+      <div className="an-grid-2">
+        <AnPanel title="Most used products" sub="By consumption value">
           {productUsage.length > 0 ? (
-            <div className="space-y-2">
+            <div className="an-list">
               {productUsage.slice(0, 5).map((product, idx) => (
-                <Link
-                  key={product.id}
-                  href={`/inventory/${product.id}`}
-                  className="flex items-center justify-between p-3 rounded-xl bg-[#005F6A]/5 hover:bg-[#005F6A]/8 transition-colors">
-                  <div className="flex items-center gap-3">
-                    <Badge variant="cleano" size="sm">
-                      #{idx + 1}
-                    </Badge>
+                <Link key={product.id} href={`/inventory/${product.id}`} className="an-listrow">
+                  <div className="an-listrow-main">
+                    <span className="an-rank">#{idx + 1}</span>
                     <div>
-                      <p className="text-sm font-[400] text-[#005F6A]">
-                        {product.name}
-                      </p>
-                      <p className="text-xs text-[#005F6A]/60">
-                        {product.totalUsed.toFixed(1)} {product.unit} used
-                      </p>
+                      <div className="an-listrow-name">{product.name}</div>
+                      <div className="an-listrow-sub">{product.totalUsed.toFixed(1)} {product.unit} used</div>
                     </div>
                   </div>
-                  <p className="text-sm font-[400] text-[#005F6A]">
-                    ${product.totalCost.toFixed(2)}
-                  </p>
+                  <div className="an-listrow-val">${product.totalCost.toFixed(2)}</div>
                 </Link>
               ))}
             </div>
           ) : (
-            <p className="text-sm text-[#005F6A]/60 text-center py-8">
-              No usage data yet
-            </p>
+            <div className="an-listempty">No usage data yet</div>
           )}
-        </Card>
+        </AnPanel>
 
-        <Card
-          variant={lowStockProducts.length > 0 ? "warning" : "default"}
-          className="p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <div
-              className={`p-2 rounded-lg ${
-                lowStockProducts.length > 0
-                  ? "bg-yellow-100"
-                  : "bg-[#005F6A]/10"
-              }`}>
-              <AlertTriangle
-                className={`w-4 h-4 ${
-                  lowStockProducts.length > 0
-                    ? "text-yellow-600"
-                    : "text-[#005F6A]"
-                }`}
-              />
-            </div>
-            <h3
-              className={`text-sm font-[350] ${
-                lowStockProducts.length > 0
-                  ? "text-yellow-700"
-                  : "text-[#005F6A]/80"
-              }`}>
-              Low Stock Alert
-            </h3>
-          </div>
+        <AnPanel
+          title="Low stock alert"
+          sub="Below minimum threshold"
+          action={
+            lowStockProducts.length > 0 ? (
+              <span className="pill pill-rose">{lowStockProducts.length} low</span>
+            ) : undefined
+          }>
           {lowStockProducts.length > 0 ? (
-            <div className="space-y-2">
-              {lowStockProducts.map((product) => (
-                <Link
-                  key={product.id}
-                  href={`/inventory/${product.id}`}
-                  className="flex items-center justify-between p-3 rounded-xl bg-yellow-50 border border-yellow-200 hover:bg-yellow-100 transition-colors">
-                  <div>
-                    <p className="text-sm font-[400] text-yellow-800">
-                      {product.name}
-                    </p>
-                    <p className="text-xs text-yellow-600">
-                      {product.stockLevel} / {product.minStock} {product.unit}
-                    </p>
-                  </div>
-                  <Badge variant="error" size="sm">
-                    Low
-                  </Badge>
-                </Link>
-              ))}
+            <div className="an-scroll">
+              <div className="an-list">
+                {lowStockProducts.map((product) => (
+                  <Link key={product.id} href={`/inventory/${product.id}`} className="an-listrow warn">
+                    <div>
+                      <div className="an-listrow-name">{product.name}</div>
+                      <div className="an-listrow-sub">{product.unit}</div>
+                    </div>
+                    <span className="pill pill-amber">{product.stockLevel} / {product.minStock} {product.unit}</span>
+                  </Link>
+                ))}
+              </div>
             </div>
           ) : (
-            <div className="text-center py-8">
-              <div className="w-12 h-12 bg-green-100 rounded-2xl flex items-center justify-center mx-auto mb-3">
-                <CheckCircle2 className="w-6 h-6 text-green-600" />
-              </div>
-              <p className="text-sm text-[#005F6A]/60">All stock levels OK</p>
+            <div className="an-listempty" style={{ flexDirection: "column", gap: 10, padding: "28px 0" }}>
+              <span className="an-empty-icon" style={{ width: 44, height: 44, margin: 0, background: "rgba(5,150,105,0.10)", color: "var(--emerald-600)" }}>
+                <CheckCircle2 size={22} />
+              </span>
+              All stock levels OK
             </div>
           )}
-        </Card>
+        </AnPanel>
       </div>
 
-      <Card variant="default" className="p-6">
-        <div className="flex items-center gap-2 mb-6">
-          <div className="p-2 bg-[#005F6A]/10 rounded-lg">
-            <Package className="w-4 h-4 text-[#005F6A]" />
-          </div>
-          <h3 className="text-sm font-[350] text-[#005F6A]/80">
-            Inventory Value Distribution
-          </h3>
-        </div>
+      <AnPanel title="Inventory value distribution" sub="Warehouse vs in-circulation">
         <InventoryValueChart data={inventoryValueData} />
-      </Card>
+      </AnPanel>
     </div>
   );
 
   // ── Tab 7: Employees ──
   const EmployeesTab = () => (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard
-          label="Total Employees"
-          value={String(employeeStats.totalEmployees)}
-        />
-        <MetricCard label="Admins" value={String(employeeStats.admins)} />
-        <MetricCard
-          label="Active Now"
-          value={String(employeeStats.activeNow)}
-        />
-        <MetricCard
-          label="Avg Jobs/Employee"
-          value={employeeStats.avgJobsPerEmployee.toFixed(1)}
-        />
+    <div className="stack-18">
+      <div className="astat-grid">
+        <AnTile label="Total employees" value={String(employeeStats.totalEmployees)} />
+        <AnTile label="Admins" value={String(employeeStats.admins)} />
+        <AnTile label="Active now" value={String(employeeStats.activeNow)} />
+        <AnTile label="Avg jobs / employee" value={employeeStats.avgJobsPerEmployee.toFixed(1)} />
       </div>
 
-      <Card variant="default" className="p-6">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <div className="p-2 bg-[#005F6A]/10 rounded-lg">
-              <Users className="w-4 h-4 text-[#005F6A]" />
-            </div>
-            <h3 className="text-sm font-[350] text-[#005F6A]/80">
-              Employee Performance
-            </h3>
-          </div>
-          <Link href="/employees">
-            <Button variant="ghost" size="sm" className="text-xs">
-              View All
-            </Button>
-          </Link>
-        </div>
+      <AnPanel
+        title="Employee performance"
+        sub="Jobs, completion and revenue"
+        action={<Link href="/employees" className="btn btn-secondary btn-sm">View all</Link>}>
         {employeePerformance.length > 0 ? (
-          <div className="overflow-x-auto">
-            <div className="min-w-max">
-              <div className="flex bg-[#005F6A]/5 rounded-t-xl">
-                {[
-                  { label: "Employee", className: "w-[180px] text-left" },
-                  { label: "Jobs", className: "w-[80px] text-center" },
-                  { label: "Completed", className: "w-[100px] text-center" },
-                  { label: "Rate", className: "w-[80px] text-center" },
-                  { label: "Revenue", className: "w-[120px] text-right" },
-                  { label: "Avg/Job", className: "w-[100px] text-right" },
-                ].map((col) => (
-                  <div
-                    key={col.label}
-                    className={`p-3 text-xs font-[350] !text-[#005F6A]/40 uppercase !tracking-wider ${col.className}`}>
-                    {col.label}
-                  </div>
-                ))}
-              </div>
-              <div className="divide-y divide-[#005F6A]/4">
-                {employeePerformance.map((emp, idx) => (
-                  <Link
-                    key={emp.id}
-                    href={`/employees/${emp.id}`}
-                    className="flex items-center hover:bg-[#005F6A]/1 transition-colors">
-                    <div className="w-[180px] p-3 flex items-center gap-2">
-                      {idx === 0 && (
-                        <Badge variant="cleano" size="sm">
-                          Top
-                        </Badge>
-                      )}
-                      <p className="app-title-small truncate">{emp.name}</p>
-                    </div>
-                    <div className="w-[80px] p-3 text-center">
-                      <p className="app-title-small">{emp.totalJobs}</p>
-                    </div>
-                    <div className="w-[100px] p-3 text-center">
-                      <p className="app-title-small">{emp.completedJobs}</p>
-                    </div>
-                    <div className="w-[80px] p-3 text-center">
-                      <Badge
-                        variant={
-                          emp.completionRate >= 80 ? "success" : "default"
-                        }
-                        size="sm"
-                        className="px-2 py-1">
-                        {emp.completionRate.toFixed(0)}%
-                      </Badge>
-                    </div>
-                    <div className="w-[120px] p-3 text-right">
-                      <p className="app-title-small">
-                        ${emp.totalRevenue.toFixed(2)}
-                      </p>
-                    </div>
-                    <div className="w-[100px] p-3 text-right">
-                      <p className="app-title-small !text-[#005F6A]/50">
-                        ${emp.avgJobPrice.toFixed(2)}
-                      </p>
-                    </div>
-                  </Link>
-                ))}
-              </div>
+          <div className="atable-wrap" style={{ boxShadow: "none", border: "1px solid var(--primary-10)" }}>
+            <div style={{ overflowX: "auto" }}>
+              <table className="atable">
+                <thead>
+                  <tr>
+                    <th>Employee</th>
+                    <th className="num">Jobs</th>
+                    <th className="num">Completed</th>
+                    <th className="num">Rate</th>
+                    <th className="num">Revenue</th>
+                    <th className="num">Avg / job</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {employeePerformance.map((emp, idx) => (
+                    <tr
+                      key={emp.id}
+                      onClick={() => { window.location.href = `/employees/${emp.id}`; }}>
+                      <td>
+                        <div className="row" style={{ gap: 8 }}>
+                          <span className="avatar" style={{ background: "var(--primary)", width: 28, height: 28, fontSize: 11 }}>
+                            {emp.name.split(/\s+/).map((w) => w[0] || "").join("").slice(0, 2).toUpperCase()}
+                          </span>
+                          <div>
+                            <div className="col-client">{emp.name}</div>
+                            {idx === 0 && <div className="col-client-sub">Top performer</div>}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="num">{emp.totalJobs}</td>
+                      <td className="num">{emp.completedJobs}</td>
+                      <td className="num">
+                        <span className={`profit-pct ${emp.completionRate >= 80 ? "good" : ""}`}>
+                          {emp.completionRate.toFixed(0)}%
+                        </span>
+                      </td>
+                      <td className="num">${emp.totalRevenue.toFixed(2)}</td>
+                      <td className="num">${emp.avgJobPrice.toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         ) : (
-          <p className="text-sm text-[#005F6A]/60 text-center py-8">
-            No employee data yet
-          </p>
+          <div className="an-listempty">No employee data yet</div>
         )}
-      </Card>
+      </AnPanel>
 
-      {/* 5.1 Job Count per Employee */}
-      <Card variant="default" className="p-6">
-        <div className="flex items-center gap-2 mb-6">
-          <div className="p-2 bg-[#005F6A]/10 rounded-lg">
-            <Briefcase className="w-4 h-4 text-[#005F6A]" />
-          </div>
-          <h3 className="text-sm font-[350] text-[#005F6A]/80">
-            Job Count per Employee
-          </h3>
-        </div>
-        {employeePerformance.length > 0 ? (
-          <CBarChart
-            data={employeePerformance.slice(0, 10).map((e) => ({
-              name: e.name,
-              Jobs: e.totalJobs,
-              Completed: e.completedJobs,
-            }))}
-            dataKeys={["Jobs", "Completed"]}
-            xKey="name"
-            height={300}
-          />
-        ) : (
-          <p className="text-sm text-[#005F6A]/60 text-center py-8">
-            No data yet
-          </p>
-        )}
-      </Card>
+      <div className="an-grid-2">
+        <AnPanel title="Jobs per employee" sub="Top 10 · jobs vs completed">
+          {employeePerformance.length > 0 ? (
+            <CBarChart
+              data={employeePerformance.slice(0, 10).map((e) => ({
+                name: e.name,
+                Jobs: e.totalJobs,
+                Completed: e.completedJobs,
+              }))}
+              dataKeys={["Jobs", "Completed"]}
+              xKey="name"
+              height={240}
+            />
+          ) : (
+            <div className="an-listempty">No data yet</div>
+          )}
+        </AnPanel>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* 5.1 Average Time per Job */}
-        <Card variant="default" className="p-6">
-          <div className="flex items-center gap-2 mb-6">
-            <div className="p-2 bg-[#005F6A]/10 rounded-lg">
-              <Clock className="w-4 h-4 text-[#005F6A]" />
-            </div>
-            <h3 className="text-sm font-[350] text-[#005F6A]/80">
-              Average Time per Job (minutes)
-            </h3>
-          </div>
+        <AnPanel title="Average time per job" sub="Minutes · top 10">
           {employeePerformance.some((e) => e.avgTimePerJob > 0) ? (
             <CBarChart
               data={employeePerformance
@@ -1502,25 +1218,14 @@ export default function AnalyticsView({
                 }))}
               dataKeys={["Minutes"]}
               xKey="name"
-              height={300}
+              height={240}
             />
           ) : (
-            <p className="text-sm text-[#005F6A]/60 text-center py-8">
-              No completed jobs with duration yet
-            </p>
+            <div className="an-listempty">No completed jobs with duration yet</div>
           )}
-        </Card>
+        </AnPanel>
 
-        {/* 5.1 Current Star Rating by Employee */}
-        <Card variant="default" className="p-6">
-          <div className="flex items-center gap-2 mb-6">
-            <div className="p-2 bg-[#005F6A]/10 rounded-lg">
-              <Star className="w-4 h-4 text-[#005F6A]" />
-            </div>
-            <h3 className="text-sm font-[350] text-[#005F6A]/80">
-              Current Star Rating by Employee
-            </h3>
-          </div>
+        <AnPanel title="Current star rating" sub="By employee · top 10">
           {employeePerformance.some((e) => e.ratingsCount > 0) ? (
             <CBarChart
               data={employeePerformance
@@ -1532,26 +1237,34 @@ export default function AnalyticsView({
                 }))}
               dataKeys={["Rating"]}
               xKey="name"
-              height={300}
+              height={240}
             />
           ) : (
-            <p className="text-sm text-[#005F6A]/60 text-center py-8">
-              No ratings yet
-            </p>
+            <div className="an-listempty">No ratings yet</div>
           )}
-        </Card>
+        </AnPanel>
+
+        <AnPanel title="Total complaints logged" sub="Ratings below 3 · top 10">
+          {employeePerformance.some((e) => e.complaints > 0) ? (
+            <CBarChart
+              data={employeePerformance
+                .filter((e) => e.complaints > 0)
+                .slice(0, 10)
+                .map((e) => ({
+                  name: e.name,
+                  Complaints: e.complaints,
+                }))}
+              dataKeys={["Complaints"]}
+              xKey="name"
+              height={240}
+            />
+          ) : (
+            <div className="an-listempty">No complaints logged</div>
+          )}
+        </AnPanel>
       </div>
 
-      {/* 5.1 Historical Rating Trend */}
-      <Card variant="default" className="p-6">
-        <div className="flex items-center gap-2 mb-6">
-          <div className="p-2 bg-[#005F6A]/10 rounded-lg">
-            <TrendingUp className="w-4 h-4 text-[#005F6A]" />
-          </div>
-          <h3 className="text-sm font-[350] text-[#005F6A]/80">
-            Historical Rating Trend (12 months)
-          </h3>
-        </div>
+      <AnPanel title="Historical rating trend" sub="12 months by employee">
         {ratingTrendEmployeeNames.length > 0 ? (
           <CLineChart
             data={ratingTrendData}
@@ -1560,41 +1273,9 @@ export default function AnalyticsView({
             height={320}
           />
         ) : (
-          <p className="text-sm text-[#005F6A]/60 text-center py-8">
-            Not enough rating history yet
-          </p>
+          <div className="an-listempty">Not enough rating history yet</div>
         )}
-      </Card>
-
-      {/* 5.1 Total Complaints Logged */}
-      <Card variant="default" className="p-6">
-        <div className="flex items-center gap-2 mb-6">
-          <div className="p-2 bg-[#005F6A]/10 rounded-lg">
-            <MessageSquare className="w-4 h-4 text-[#005F6A]" />
-          </div>
-          <h3 className="text-sm font-[350] text-[#005F6A]/80">
-            Total Complaints Logged (ratings &lt; 3)
-          </h3>
-        </div>
-        {employeePerformance.some((e) => e.complaints > 0) ? (
-          <CBarChart
-            data={employeePerformance
-              .filter((e) => e.complaints > 0)
-              .slice(0, 10)
-              .map((e) => ({
-                name: e.name,
-                Complaints: e.complaints,
-              }))}
-            dataKeys={["Complaints"]}
-            xKey="name"
-            height={300}
-          />
-        ) : (
-          <p className="text-sm text-[#005F6A]/60 text-center py-8">
-            No complaints logged
-          </p>
-        )}
-      </Card>
+      </AnPanel>
     </div>
   );
 
@@ -1687,131 +1368,85 @@ export default function AnalyticsView({
       }
     };
 
-    return (
-      <div className="space-y-6">
-        <Card variant="cleano_light" className="p-6">
-          <div className="space-y-4">
-            <div>
-              <label className="text-xs font-[350] text-[#005F6A]/70 uppercase tracking-wide mb-2 block">
-                Quick Select
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {["today", "week", "month", "lastMonth", "all"].map((preset) => (
-                  <Button
-                    key={preset}
-                    variant="default"
-                    size="sm"
-                    border={false}
-                    onClick={() => setDateRange(preset)}
-                    className="rounded-xl px-4 py-2">
-                    {preset === "today"
-                      ? "Today"
-                      : preset === "week"
-                      ? "Last 7 Days"
-                      : preset === "month"
-                      ? "This Month"
-                      : preset === "lastMonth"
-                      ? "Last Month"
-                      : "All Time"}
-                  </Button>
-                ))}
-              </div>
-            </div>
-            <div className="flex flex-col lg:flex-row gap-4">
-              <div className="flex-1">
-                <label className="text-xs font-[350] text-[#005F6A]/70 uppercase tracking-wide mb-2 block">
-                  Start Date
-                </label>
-                <DatePicker
-                  value={startDate}
-                  onChange={setStartDate}
-                  size="sm"
-                />
-              </div>
-              <div className="flex-1">
-                <label className="text-xs font-[350] text-[#005F6A]/70 uppercase tracking-wide mb-2 block">
-                  End Date
-                </label>
-                <DatePicker
-                  value={endDate}
-                  onChange={setEndDate}
-                  size="sm"
-                />
-              </div>
-            </div>
-          </div>
-        </Card>
+    const presetLabels: Record<string, string> = {
+      today: "Today",
+      week: "Last 7 days",
+      month: "This month",
+      lastMonth: "Last month",
+      all: "All time",
+    };
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <MetricCard
-            label="Total Owed"
-            value={`$${totalOwed.toFixed(2)}`}
-            variant="success"
-          />
-          <MetricCard
-            label="Employees"
-            value={String(employeePayments.length)}
-          />
-          <MetricCard
-            label="Jobs Completed"
-            value={String(
-              employeePayments.reduce((sum, emp) => sum + emp.jobsCount, 0)
-            )}
+    return (
+      <div className="stack-18">
+        <AnPanel title="Date range" sub="Filter employee payouts">
+          <div className="an-chip-row">
+            {["today", "week", "month", "lastMonth", "all"].map((preset) => (
+              <button
+                key={preset}
+                type="button"
+                className="an-chip"
+                onClick={() => setDateRange(preset)}>
+                {presetLabels[preset]}
+              </button>
+            ))}
+          </div>
+          <div className="an-daterange">
+            <label>Start date<DatePicker size="sm" value={startDate} onChange={setStartDate} placeholder="Any" /></label>
+            <label>End date<DatePicker size="sm" value={endDate} onChange={setEndDate} placeholder="Any" /></label>
+          </div>
+        </AnPanel>
+
+        <div className="astat-grid">
+          <AnTile label="Total owed" value={`$${totalOwed.toFixed(2)}`} accent="var(--emerald-600)" />
+          <AnTile label="Employees" value={String(employeePayments.length)} />
+          <AnTile
+            label="Jobs completed"
+            value={String(employeePayments.reduce((sum, emp) => sum + emp.jobsCount, 0))}
           />
         </div>
 
-        <Card variant="default" className="p-0">
-          <div className="p-6 border-b border-[#005F6A]/10">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="flex items-center gap-2">
-                  <div className="p-2 bg-[#005F6A]/10 rounded-lg">
-                    <DollarSign className="w-4 h-4 text-[#005F6A]" />
-                  </div>
-                  <h3 className="text-sm font-[350] text-[#005F6A]/80">
-                    Employee Payment Summary
-                  </h3>
-                </div>
-                {(startDate || endDate) && (
-                  <p className="text-xs text-[#005F6A]/60 mt-2">
-                    {startDate && endDate
-                      ? `${new Date(startDate).toLocaleDateString("en-US")} - ${new Date(endDate).toLocaleDateString("en-US")}`
-                      : startDate
-                      ? `From ${new Date(startDate).toLocaleDateString("en-US")}`
-                      : `Until ${new Date(endDate).toLocaleDateString("en-US")}`}
-                  </p>
-                )}
-              </div>
-              {employeePayments.length > 0 && (
-                <Button
-                  variant="default"
-                  size="sm"
-                  border={false}
-                  onClick={() => {
-                    const csvHeaders = ["Employee Name", "Jobs", "Amount Owed", "Avg Per Job"];
-                    const rows = employeePayments.map((emp) => [
-                      emp.name,
-                      emp.jobsCount.toString(),
-                      emp.totalOwed.toFixed(2),
-                      (emp.totalOwed / emp.jobsCount).toFixed(2),
-                    ]);
-                    const csvContent = [
-                      csvHeaders.join(","),
-                      ...rows.map((row) => row.join(",")),
-                    ].join("\n");
-                    const blob = new Blob([csvContent], { type: "text/csv" });
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement("a");
-                    a.href = url;
-                    a.download = `employee-payments-${new Date().toISOString().split("T")[0]}.csv`;
-                    a.click();
-                    window.URL.revokeObjectURL(url);
-                  }}
-                  className="rounded-xl px-4 py-2">
-                  Export CSV
-                </Button>
-              )}
+        <AnPanel
+          style={{ gap: 0, padding: 0, overflow: "hidden" }}>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, padding: "20px 22px", borderBottom: "1px solid var(--primary-10)" }}>
+            <div>
+              <h3 style={{ margin: 0 }}>Employee payment summary</h3>
+              <p style={{ margin: "4px 0 0", fontSize: 12.5, color: "var(--primary-60)" }}>
+                {startDate && endDate
+                  ? `${new Date(startDate).toLocaleDateString("en-US")} – ${new Date(endDate).toLocaleDateString("en-US")}`
+                  : startDate
+                  ? `From ${new Date(startDate).toLocaleDateString("en-US")}`
+                  : endDate
+                  ? `Until ${new Date(endDate).toLocaleDateString("en-US")}`
+                  : "All completed jobs"}
+              </p>
             </div>
+            {employeePayments.length > 0 && (
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => {
+                  const csvHeaders = ["Employee Name", "Jobs", "Amount Owed", "Avg Per Job"];
+                  const rows = employeePayments.map((emp) => [
+                    emp.name,
+                    emp.jobsCount.toString(),
+                    emp.totalOwed.toFixed(2),
+                    (emp.totalOwed / emp.jobsCount).toFixed(2),
+                  ]);
+                  const csvContent = [
+                    csvHeaders.join(","),
+                    ...rows.map((row) => row.join(",")),
+                  ].join("\n");
+                  const blob = new Blob([csvContent], { type: "text/csv" });
+                  const url = window.URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `employee-payments-${new Date().toISOString().split("T")[0]}.csv`;
+                  a.click();
+                  window.URL.revokeObjectURL(url);
+                }}>
+                Export CSV
+              </button>
+            )}
           </div>
 
           {employeePayments.length > 0 ? (
@@ -1908,19 +1543,15 @@ export default function AnalyticsView({
               </div>
             </>
           ) : (
-            <div className="text-center py-12">
-              <div className="w-16 h-16 bg-[#005F6A]/5 rounded-full flex items-center justify-center mx-auto mb-3">
-                <DollarSign className="w-8 h-8 text-[#005F6A]/40" />
-              </div>
-              <p className="text-sm font-[350] text-[#005F6A]/70">
-                No payments found
-              </p>
-              <p className="text-xs font-[350] text-[#005F6A]/60 mt-1">
-                Employee payments for completed jobs will appear here
+            <div style={{ padding: "48px 22px", textAlign: "center" }}>
+              <span className="an-empty-icon"><DollarSign size={26} /></span>
+              <h3 className="title-sm" style={{ marginBottom: 6 }}>No payments found</h3>
+              <p className="subtitle" style={{ fontSize: 13.5, margin: 0 }}>
+                Employee payments for completed jobs will appear here.
               </p>
             </div>
           )}
-        </Card>
+        </AnPanel>
       </div>
     );
   };
@@ -1929,135 +1560,85 @@ export default function AnalyticsView({
   const AlertsTab = () => {
     const unreadCount = alerts.filter((a) => !a.isRead).length;
 
-    const severityConfig: Record<
-      string,
-      { color: string; bg: string; border: string }
-    > = {
-      CRITICAL: {
-        color: "text-red-700",
-        bg: "bg-red-50",
-        border: "border-red-200",
-      },
-      WARNING: {
-        color: "text-yellow-700",
-        bg: "bg-yellow-50",
-        border: "border-yellow-200",
-      },
-      INFO: {
-        color: "text-blue-700",
-        bg: "bg-blue-50",
-        border: "border-blue-200",
-      },
-    };
-
     const typeIcons: Record<string, React.ReactNode> = {
-      LOW_INVENTORY: <Package className="w-4 h-4" />,
-      CANCELLATION: <Briefcase className="w-4 h-4" />,
-      OVERDUE_PAYMENT: <DollarSign className="w-4 h-4" />,
-      GENERAL: <Bell className="w-4 h-4" />,
+      LOW_INVENTORY: <Package size={16} />,
+      CANCELLATION: <Briefcase size={16} />,
+      OVERDUE_PAYMENT: <DollarSign size={16} />,
+      GENERAL: <Bell size={16} />,
     };
 
     return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <MetricCard label="Total Alerts" value={String(alerts.length)} />
-          <MetricCard
+      <div className="stack-18">
+        <div className="astat-grid">
+          <AnTile label="Total alerts" value={String(alerts.length)} />
+          <AnTile
             label="Unread"
             value={String(unreadCount)}
-            variant={unreadCount > 0 ? "warning" : "default"}
+            accent={unreadCount > 0 ? "var(--amber-600)" : undefined}
           />
-          <MetricCard
+          <AnTile
             label="Critical"
-            value={String(
-              alerts.filter((a) => a.severity === "CRITICAL").length
-            )}
-            variant={
-              alerts.some((a) => a.severity === "CRITICAL")
-                ? "warning"
-                : "default"
-            }
+            value={String(alerts.filter((a) => a.severity === "CRITICAL").length)}
+            accent={alerts.some((a) => a.severity === "CRITICAL") ? "var(--error)" : undefined}
           />
         </div>
 
         {alerts.length > 0 ? (
-          <div className="space-y-3">
+          <div className="an-list">
             {alerts.map((alert) => {
-              const config = severityConfig[alert.severity] || severityConfig.INFO;
+              const tone =
+                alert.severity === "CRITICAL" ? "crit" : alert.severity === "WARNING" ? "warn" : "info";
               return (
-                <Card key={alert.id} variant="default" className="p-0">
-                  <div
-                    className={`p-4 ${config.bg} border-l-4 ${config.border} rounded-xl`}>
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-start gap-3">
-                        <div className={`mt-0.5 ${config.color}`}>
-                          {typeIcons[alert.type] || typeIcons.GENERAL}
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <p className={`text-sm font-[400] ${config.color}`}>
-                              {alert.title}
-                            </p>
-                            {!alert.isRead && (
-                              <span className="w-2 h-2 bg-[#005F6A] rounded-full" />
-                            )}
-                          </div>
-                          <p className="text-xs text-[#005F6A]/60 mt-1">
-                            {alert.message}
-                          </p>
-                          <div className="flex items-center gap-3 mt-2">
-                            <Badge variant="default" size="sm">
-                              {alert.type.replace(/_/g, " ")}
-                            </Badge>
-                            <span className="text-xs text-[#005F6A]/40">
-                              {new Date(alert.createdAt).toLocaleDateString("en-US")}{" "}
-                              {new Date(alert.createdAt).toLocaleTimeString()}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {!alert.isRead && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            border={false}
-                            onClick={async () => {
-                              await markAlertRead(alert.id);
-                            }}
-                            className="text-xs rounded-xl px-3 py-1">
-                            Mark Read
-                          </Button>
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          border={false}
-                          onClick={async () => {
-                            await dismissAlert(alert.id);
-                          }}
-                          className="text-xs rounded-xl px-3 py-1">
-                          Dismiss
-                        </Button>
-                      </div>
+                <div key={alert.id} className={`an-alert an-alert-${tone}`}>
+                  <span className="an-alert-icon">{typeIcons[alert.type] || typeIcons.GENERAL}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="an-alert-titlerow">
+                      <span className="an-alert-title">{alert.title}</span>
+                      {!alert.isRead && <span className="an-alert-new">NEW</span>}
+                    </div>
+                    <p className="an-alert-msg">{alert.message}</p>
+                    <div className="an-alert-meta">
+                      <span className="pill">{alert.type.replace(/_/g, " ")}</span>
+                      <span>
+                        {new Date(alert.createdAt).toLocaleDateString("en-US")}{" "}
+                        {new Date(alert.createdAt).toLocaleTimeString()}
+                      </span>
                     </div>
                   </div>
-                </Card>
+                  <div className="an-alert-actions">
+                    {!alert.isRead && (
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        onClick={async () => {
+                          await markAlertRead(alert.id);
+                        }}>
+                        Mark read
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      onClick={async () => {
+                        await dismissAlert(alert.id);
+                      }}>
+                      Dismiss
+                    </button>
+                  </div>
+                </div>
               );
             })}
           </div>
         ) : (
-          <Card variant="default" className="p-12 text-center">
-            <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-3">
-              <CheckCircle2 className="w-8 h-8 text-green-500" />
-            </div>
-            <p className="text-sm font-[350] text-[#005F6A]/70">
-              No active alerts
+          <div className="an-empty">
+            <span className="an-empty-icon" style={{ background: "rgba(5,150,105,0.10)", color: "var(--emerald-600)" }}>
+              <CheckCircle2 size={26} />
+            </span>
+            <h3 className="title-sm">No active alerts</h3>
+            <p className="subtitle" style={{ fontSize: 13.5, margin: 0 }}>
+              Alerts for low inventory, cancellations and overdue payments will appear here.
             </p>
-            <p className="text-xs text-[#005F6A]/50 mt-1">
-              Alerts for low inventory, cancellations, and overdue payments will
-              appear here
-            </p>
-          </Card>
+          </div>
         )}
       </div>
     );
@@ -2072,207 +1653,125 @@ export default function AnalyticsView({
         : "0";
 
     return (
-      <div className="space-y-6">
-        {/* Summary Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-          <MetricCard
-            label="Active Campaigns"
-            value={String(md?.activeCampaigns ?? 0)}
-            subValue={`${md?.campaigns.length ?? 0} total`}
-          />
-          <MetricCard
-            label="Page Visits"
-            value={String(md?.totalPageVisits ?? 0)}
-            subValue={`${md?.publishedPages ?? 0} published pages`}
-          />
-          <MetricCard
-            label="Budget Spent"
-            value={`$${(md?.totalSpent ?? 0).toFixed(0)}`}
-            subValue={`${budgetUsedPct}% of $${(md?.totalBudget ?? 0).toFixed(0)}`}
-          />
-          <MetricCard
-            label="Landing Pages"
-            value={String(md?.landingPages.length ?? 0)}
-            subValue={`${md?.publishedPages ?? 0} live`}
-          />
+      <div className="stack-18">
+        <div className="astat-grid">
+          <AnTile label="Active campaigns" value={String(md?.activeCampaigns ?? 0)} hint={`${md?.campaigns.length ?? 0} total`} />
+          <AnTile label="Page visits" value={String(md?.totalPageVisits ?? 0)} hint={`${md?.publishedPages ?? 0} published pages`} />
+          <AnTile label="Budget spent" value={`$${(md?.totalSpent ?? 0).toFixed(0)}`} hint={`${budgetUsedPct}% of $${(md?.totalBudget ?? 0).toFixed(0)}`} />
+          <AnTile label="Landing pages" value={String(md?.landingPages.length ?? 0)} hint={`${md?.publishedPages ?? 0} live`} />
         </div>
 
-        {/* Campaigns Table */}
-        <Card variant="default" className="p-5">
-          <h3 className="text-sm font-[400] text-[#005F6A] mb-3">
-            Campaign Performance
-          </h3>
+        <AnPanel title="Campaign performance" sub="Spend and reach by campaign">
           {md && md.campaigns.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+            <div style={{ overflowX: "auto" }}>
+              <table className="atable">
                 <thead>
-                  <tr className="border-b border-gray-100">
-                    <th className="text-left py-2 text-xs font-[400] text-[#005F6A]/60">
-                      Campaign
-                    </th>
-                    <th className="text-left py-2 text-xs font-[400] text-[#005F6A]/60">
-                      Status
-                    </th>
-                    <th className="text-left py-2 text-xs font-[400] text-[#005F6A]/60">
-                      Channel
-                    </th>
-                    <th className="text-right py-2 text-xs font-[400] text-[#005F6A]/60">
-                      Budget
-                    </th>
-                    <th className="text-right py-2 text-xs font-[400] text-[#005F6A]/60">
-                      Spent
-                    </th>
-                    <th className="text-right py-2 text-xs font-[400] text-[#005F6A]/60">
-                      Pages
-                    </th>
+                  <tr>
+                    <th>Campaign</th>
+                    <th>Status</th>
+                    <th>Channel</th>
+                    <th style={{ textAlign: "right" }}>Budget</th>
+                    <th style={{ textAlign: "right" }}>Spent</th>
+                    <th style={{ textAlign: "right" }}>Pages</th>
                   </tr>
                 </thead>
                 <tbody>
                   {md.campaigns.map((c) => (
-                    <tr
-                      key={c.id}
-                      className="border-b border-gray-50 last:border-0">
-                      <td className="py-2 font-[350] text-[#005F6A]">
-                        {c.name}
+                    <tr key={c.id}>
+                      <td style={{ fontWeight: 500, color: "var(--primary)" }}>{c.name}</td>
+                      <td>
+                        <span className={`pill ${c.status === "ACTIVE" ? "pill-emerald" : ""}`}>{c.status}</span>
                       </td>
-                      <td className="py-2">
-                        <Badge
-                          variant={
-                            c.status === "ACTIVE" ? "default" : "secondary"
-                          }
-                          size="sm">
-                          {c.status}
-                        </Badge>
-                      </td>
-                      <td className="py-2 text-[#005F6A]/60">
-                        {c.channel || "-"}
-                      </td>
-                      <td className="py-2 text-right text-[#005F6A]/70">
-                        ${c.budget.toFixed(0)}
-                      </td>
-                      <td className="py-2 text-right text-[#005F6A]/70">
-                        ${c.spent.toFixed(0)}
-                      </td>
-                      <td className="py-2 text-right text-[#005F6A]/70">
-                        {c.landingPageCount}
-                      </td>
+                      <td style={{ color: "var(--primary-60)" }}>{c.channel || "—"}</td>
+                      <td style={{ textAlign: "right" }}>${c.budget.toFixed(0)}</td>
+                      <td style={{ textAlign: "right" }}>${c.spent.toFixed(0)}</td>
+                      <td style={{ textAlign: "right" }}>{c.landingPageCount}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           ) : (
-            <p className="text-sm text-[#005F6A]/50 text-center py-4">
-              No campaigns yet. Create one from the Sales page.
-            </p>
+            <div className="an-listempty">No campaigns yet. Create one from the Sales page.</div>
           )}
-        </Card>
+        </AnPanel>
 
-        {/* Landing Pages Table */}
-        <Card variant="default" className="p-5">
-          <h3 className="text-sm font-[400] text-[#005F6A] mb-3">
-            Landing Page Visits
-          </h3>
+        <AnPanel title="Landing page visits" sub="Traffic by page">
           {md && md.landingPages.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+            <div style={{ overflowX: "auto" }}>
+              <table className="atable">
                 <thead>
-                  <tr className="border-b border-gray-100">
-                    <th className="text-left py-2 text-xs font-[400] text-[#005F6A]/60">
-                      Page
-                    </th>
-                    <th className="text-left py-2 text-xs font-[400] text-[#005F6A]/60">
-                      Status
-                    </th>
-                    <th className="text-left py-2 text-xs font-[400] text-[#005F6A]/60">
-                      Campaign
-                    </th>
-                    <th className="text-right py-2 text-xs font-[400] text-[#005F6A]/60">
-                      Total Visits
-                    </th>
+                  <tr>
+                    <th>Page</th>
+                    <th>Status</th>
+                    <th>Campaign</th>
+                    <th style={{ textAlign: "right" }}>Total visits</th>
                   </tr>
                 </thead>
                 <tbody>
                   {md.landingPages
                     .sort((a, b) => b.totalVisits - a.totalVisits)
                     .map((lp) => (
-                      <tr
-                        key={lp.id}
-                        className="border-b border-gray-50 last:border-0">
-                        <td className="py-2">
-                          <p className="font-[350] text-[#005F6A]">
-                            {lp.title}
-                          </p>
-                          <p className="text-xs text-[#005F6A]/40">
-                            /p/{lp.slug}
-                          </p>
+                      <tr key={lp.id}>
+                        <td>
+                          <div style={{ fontWeight: 500, color: "var(--primary)" }}>{lp.title}</div>
+                          <div style={{ fontSize: 11.5, color: "var(--primary-40)" }}>/p/{lp.slug}</div>
                         </td>
-                        <td className="py-2">
-                          <Badge
-                            variant={
-                              lp.isPublished ? "default" : "secondary"
-                            }
-                            size="sm">
+                        <td>
+                          <span className={`pill ${lp.isPublished ? "pill-emerald" : ""}`}>
                             {lp.isPublished ? "Published" : "Draft"}
-                          </Badge>
+                          </span>
                         </td>
-                        <td className="py-2 text-[#005F6A]/60">
-                          {lp.campaignName || "-"}
-                        </td>
-                        <td className="py-2 text-right font-[400] text-[#005F6A]">
-                          {lp.totalVisits}
-                        </td>
+                        <td style={{ color: "var(--primary-60)" }}>{lp.campaignName || "—"}</td>
+                        <td style={{ textAlign: "right", fontWeight: 500, color: "var(--primary)" }}>{lp.totalVisits}</td>
                       </tr>
                     ))}
                 </tbody>
               </table>
             </div>
           ) : (
-            <p className="text-sm text-[#005F6A]/50 text-center py-4">
-              No landing pages yet. Create one from the Sales page.
-            </p>
+            <div className="an-listempty">No landing pages yet. Create one from the Sales page.</div>
           )}
-        </Card>
+        </AnPanel>
       </div>
     );
   };
 
   return (
-    <div className="space-y-6">
+    <div className="admin-font stack-24" style={{ maxWidth: 1200, margin: "0 auto" }}>
       {/* Header */}
-      <div>
-        <h1 className="text-3xl !font-light tracking-tight text-[#005F6A]">
-          Analytics & Reports
+      <header>
+        <p className="eyebrow">Insights · Owner</p>
+        <h1 className="display" style={{ fontSize: "clamp(32px, 4.2vw, 46px)", marginTop: 6 }}>
+          Analytics &amp; <em>reports.</em>
         </h1>
-        <p className="text-sm text-[#005F6A]/70 mt-1">
-          Comprehensive insights into your business performance
+        <p className="subtitle" style={{ marginTop: 10, fontSize: 15.5 }}>
+          Comprehensive insights into revenue, labour, inventory and growth.
         </p>
-      </div>
+      </header>
+
+      {/* Always-on Labour Cost % widget */}
+      <LabourCostCard />
 
       {/* Tabs */}
-      <div className="flex items-center gap-2 bg-[#005F6A]/5 rounded-2xl p-1 w-fit overflow-x-auto max-w-full">
+      <div className="atabs" style={{ overflowX: "auto", maxWidth: "100%" }}>
         {MENU_ITEMS.map((item) => {
           const isActive = activeView === item.id;
           const alertCount =
-            item.id === "alerts"
-              ? alerts.filter((a) => !a.isRead).length
-              : 0;
+            item.id === "alerts" ? alerts.filter((a) => !a.isRead).length : 0;
           return (
-            <Button
+            <button
               key={item.id}
-              border={false}
+              className={`atab ${isActive ? "active" : ""}`}
               onClick={() => setActiveView(item.id)}
-              variant={isActive ? "action" : "ghost"}
-              size="md"
-              className="rounded-xl px-4 md:px-5 py-3 whitespace-nowrap relative">
-              <span className="mr-2 hidden sm:inline">{item.icon}</span>
+              style={{ whiteSpace: "nowrap" }}>
               {item.label}
               {alertCount > 0 && (
-                <span className="ml-1.5 inline-flex items-center justify-center w-5 h-5 text-[10px] font-[500] bg-red-500 text-white rounded-full">
+                <span className="atab-count" style={{ background: "#ef4444", color: "#fff" }}>
                   {alertCount}
                 </span>
               )}
-            </Button>
+            </button>
           );
         })}
       </div>

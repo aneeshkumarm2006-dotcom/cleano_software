@@ -710,9 +710,9 @@ export const NOTIFICATION_CATALOG: CatalogEntry[] = [
 
   // ─── PROPOSED ADDITIONS ───────────────────────────────────────────
   // Instant payouts
-  { recipient: "ADMIN", category: "Instant payouts (proposed)", key: "admin.payout.request_received", label: "Instant payout request received", trigger: "Provider requests an instant payout.", channels: { EMAIL: true, APP_PUSH: true, SMS: false }, isProposed: true },
-  { recipient: "PROVIDER", category: "Instant payouts (proposed)", key: "prov.payout.request_received", label: "Instant payout request received", trigger: "Provider's instant payout request was received.", channels: { EMAIL: true, APP_PUSH: true }, isProposed: true },
-  { recipient: "PROVIDER", category: "Instant payouts (proposed)", key: "prov.payout.completed", label: "Instant payout completed", trigger: "Provider instant payout has been completed.", channels: { EMAIL: true, APP_PUSH: true }, isProposed: true },
+  { recipient: "ADMIN", category: "Instant payouts", key: "admin.payout.request_received", label: "Instant payout request received", trigger: "Provider requests an instant payout.", channels: { EMAIL: true, APP_PUSH: true, SMS: false } },
+  { recipient: "PROVIDER", category: "Instant payouts", key: "prov.payout.request_received", label: "Instant payout request received", trigger: "Provider's instant payout request was received.", channels: { EMAIL: true, APP_PUSH: true } },
+  { recipient: "PROVIDER", category: "Instant payouts", key: "prov.payout.completed", label: "Instant payout completed", trigger: "Provider instant payout has been completed.", channels: { EMAIL: true, APP_PUSH: true } },
   // Chat (proposed)
   { recipient: "ADMIN", category: "Chat (proposed)", key: "admin.chat.customer_provider_msg", label: "New customer/provider chat message", trigger: "New customer or provider chat message needs attention.", channels: { EMAIL: true, APP_PUSH: true }, isProposed: true },
   { recipient: "CUSTOMER", category: "Chat (proposed)", key: "cust.chat.new_message", label: "New chat message", trigger: "Customer has a new chat message from admin or provider.", channels: { EMAIL: true, APP_PUSH: true, SMS: false }, isProposed: true },

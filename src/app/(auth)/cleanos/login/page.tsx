@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState, FormEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 import SplitShell from "@/components/customer/SplitShell";
+import CleanoLoader from "@/components/ui/CleanoLoader";
 import {
   Field,
   Input,
@@ -37,9 +38,11 @@ function CleanerLoginInner() {
   const [error, setError] = useState<string | null>(initialError);
   const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [redirecting, setRedirecting] = useState(false);
 
   useEffect(() => {
     if (session.data?.session) {
+      setRedirecting(true);
       window.location.href = CALLBACK;
     }
   }, [session.data?.session]);
@@ -75,6 +78,7 @@ function CleanerLoginInner() {
       }
       if (remember) localStorage.setItem(rememberedKey, email);
       else localStorage.removeItem(rememberedKey);
+      setRedirecting(true);
       window.location.href = CALLBACK;
     } catch {
       setError("Unexpected error. Please try again.");
@@ -83,6 +87,14 @@ function CleanerLoginInner() {
   }
 
   return (
+    <>
+      {(loading || redirecting) && (
+        <CleanoLoader
+          fullscreen
+          size={72}
+          messages={["Signing you in…", "Loading your jobs…"]}
+        />
+      )}
     <SplitShell
       image="/employee-login.png"
       imagePosition="center top"
@@ -160,6 +172,7 @@ function CleanerLoginInner() {
         </Button>
       </form>
     </SplitShell>
+    </>
   );
 }
 

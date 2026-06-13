@@ -1695,3 +1695,62 @@ model PromoCode {
   @@index([code])
 }
 
+// Unified activity / audit log — one row per notable system event (email, SMS,
+// payment, refund, etc.) with a common shape so the admin Logs page can show
+// successes and failures across the whole system in one timeline.
+model ActivityLog {
+  id         String           @id @default(cuid())
+  createdAt  DateTime         @default(now())
+  category   ActivityCategory
+  action     String
+  status     ActivityStatus   @default(SUCCESS)
+  actorId    String? // user who triggered it (null = system/anonymous)
+  actorLabel String? // denormalized name/email for display
+  targetType String? // e.g. "job", "client", "giftCard"
+  targetId   String?
+  message    String?
+  error      String?
+  amount     Float?
+  providerId String? // Stripe PI / Twilio SID / Resend id
+  metadata   Json?
+
+  @@index([category])
+  @@index([status])
+  @@index([createdAt])
+  @@index([actorId])
+  @@index([targetType, targetId])
+}
+
+enum ActivityCategory {
+  EMAIL
+  SMS
+  PAYMENT
+  REFUND
+  DEPOSIT
+  WEBHOOK
+  AUTH
+  BOOKING
+  ADMIN
+  CRON
+  SYSTEM
+}
+
+enum ActivityStatus {
+  SUCCESS
+  FAILED
+  PENDING
+  SKIPPED
+}
+
+// Idempotency ledger for Stripe webhooks. The Stripe event id is the primary
+// key, so a duplicate delivery collides and is skipped. A row is inserted
+// before processing and deleted if processing fails (so Stripe's retry can
+// reprocess it).
+model WebhookEvent {
+  id        String   @id // Stripe event id (evt_...)
+  type      String
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+

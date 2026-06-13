@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { db } from "@/db";
+import { logActivity } from "@/lib/activity-log";
 import {
   queueAndSendReceipt,
   queueAndSendRefund,
@@ -223,6 +224,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Webhook error: ${err.message}` }, { status: 400 });
   }
 
+  // Idempotency: claim the event id before processing. A duplicate delivery
+  // collides on the primary key and is skipped (Stripe retries the same id).
+  try {
+    await db.webhookEvent.create({
+      data: { id: event.id, type: event.type },
+    });
+  } catch {
+    return NextResponse.json({ received: true, duplicate: true });
+  }
+
   try {
     switch (event.type) {
       case "payment_intent.succeeded":
@@ -243,8 +254,24 @@ export async function POST(req: NextRequest) {
     }
   } catch (err: any) {
     console.error(`Error handling ${event.type}:`, err);
+    // Release the claim so Stripe's retry can reprocess this event.
+    await db.webhookEvent.delete({ where: { id: event.id } }).catch(() => {});
+    await logActivity({
+      category: "WEBHOOK",
+      action: event.type,
+      status: "FAILED",
+      providerId: event.id,
+      error: String(err?.message ?? err),
+    });
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
+
+  await logActivity({
+    category: "WEBHOOK",
+    action: event.type,
+    status: "SUCCESS",
+    providerId: event.id,
+  });
 
   return NextResponse.json({ received: true });
 }

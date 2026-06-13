@@ -7,6 +7,7 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { queueAndSendRefund } from "@/lib/email";
 import { applyStrike } from "@/lib/strikes";
+import { logActivity } from "@/lib/activity-log";
 
 interface IssueRefundInput {
   jobId: string;
@@ -80,6 +81,17 @@ export async function issueRefund(input: IssueRefundInput) {
         stripeRefundId = refund.id;
       } catch (stripeErr: any) {
         const msg = stripeErr?.raw?.message ?? stripeErr?.message ?? "Stripe refund failed";
+        await logActivity({
+          category: "REFUND",
+          action: "issue_refund",
+          status: "FAILED",
+          actorId: session.user.id,
+          targetType: "job",
+          targetId: input.jobId,
+          amount: input.amount,
+          error: msg,
+          message: `Refund failed on job #${job.jobNumber}.`,
+        });
         return { success: false, error: `Stripe error: ${msg}` };
       }
     }
@@ -151,6 +163,18 @@ export async function issueRefund(input: IssueRefundInput) {
         }).catch((e) => console.error("refund-complaint strike", e));
       }
     }
+
+    await logActivity({
+      category: "REFUND",
+      action: "issue_refund",
+      status: "SUCCESS",
+      actorId: session.user.id,
+      targetType: "job",
+      targetId: input.jobId,
+      amount: input.amount,
+      providerId: stripeRefundId,
+      message: `Refunded $${input.amount.toFixed(2)} on job #${job.jobNumber}${isDepositRefund ? " (deposit)" : ""}.`,
+    });
 
     revalidatePath(`/jobs/${input.jobId}`);
     revalidatePath("/jobs");

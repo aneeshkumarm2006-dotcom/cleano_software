@@ -1674,6 +1674,76 @@ export async function sendProviderNewTip(opts: {
   });
 }
 
+function payoutMethod(method?: string | null) {
+  return method ? ` via ${method.toLowerCase().replace(/_/g, " ")}` : "";
+}
+
+/** Provider email confirming we received their payout (withdrawal) request. Gated by `prov.payout.request_received`. */
+export async function sendProviderPayoutRequested(opts: {
+  to: string;
+  providerName: string;
+  amount: number;
+  paymentMethod?: string | null;
+}) {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const html = layout(
+    h1("We got your payout request") +
+      p(`Hi ${opts.providerName.split(" ")[0]}, we've received your request to withdraw <strong>${fmt(opts.amount)}</strong>${payoutMethod(opts.paymentMethod)}. We'll email you again as soon as it's on its way.`) +
+      btn("View my pay", `${appUrl}/my-pay`)
+  );
+  return deliver({
+    to: opts.to,
+    subject: `Payout request received — ${fmt(opts.amount)}`,
+    html,
+    notification: { recipient: "PROVIDER", key: "prov.payout.request_received" },
+  });
+}
+
+/** Provider email when their payout (withdrawal) has been completed. Gated by `prov.payout.completed`. */
+export async function sendProviderPayoutCompleted(opts: {
+  to: string;
+  providerName: string;
+  amount: number;
+  paymentMethod?: string | null;
+}) {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const html = layout(
+    h1("Your payout is on its way 🎉") +
+      p(`Hi ${opts.providerName.split(" ")[0]}, your withdrawal of <strong>${fmt(opts.amount)}</strong>${payoutMethod(opts.paymentMethod)} has been completed.`) +
+      btn("View my pay", `${appUrl}/my-pay`)
+  );
+  return deliver({
+    to: opts.to,
+    subject: `Payout completed — ${fmt(opts.amount)}`,
+    html,
+    notification: { recipient: "PROVIDER", key: "prov.payout.completed" },
+  });
+}
+
+/** Admin email when a provider requests an instant payout. Gated by `admin.payout.request_received`. */
+export async function sendAdminPayoutRequest(opts: {
+  providerName: string;
+  amount: number;
+  paymentMethod?: string | null;
+}) {
+  const admins = await fetchAdmins();
+  if (admins.length === 0) return;
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const html = layout(
+    h1("Payout request received") +
+      p(`<strong>${opts.providerName}</strong> requested a payout of <strong>${fmt(opts.amount)}</strong>${payoutMethod(opts.paymentMethod)}.`) +
+      btn("Review withdrawals", `${appUrl}/withdrawals`)
+  );
+  for (const admin of admins) {
+    await deliver({
+      to: admin.email,
+      subject: `Payout request — ${opts.providerName} (${fmt(opts.amount)})`,
+      html,
+      notification: { recipient: "ADMIN", key: "admin.payout.request_received" },
+    }).catch((e) => console.error("admin payout-request", admin.email, e));
+  }
+}
+
 // ──────────────────────────────────────────────────────────────────────
 // CRON-DRIVEN NOTIFICATIONS (Yellow batch)
 // All helpers in this section are designed to be called from

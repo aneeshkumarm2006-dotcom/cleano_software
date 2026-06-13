@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { isAdminRole } from "@/lib/role-routing";
+import { JOB_TYPE_VALUES } from "@/lib/job-types";
 import type { Prisma } from "@prisma/client";
 
 export interface LabourFilters {
@@ -99,11 +100,20 @@ export async function getLabourCostMetric(
       orderBy: { name: "asc" },
     }),
     db.job.findMany({
-      where: { status: { in: ["COMPLETED", "PAID"] }, jobType: { not: null } },
+      where: { jobType: { not: null } },
       select: { jobType: true },
       distinct: ["jobType"],
     }),
   ]);
+
+  // Always offer the canonical service types so the filter is usable even with
+  // no jobs yet, plus any custom/legacy types actually present in the data.
+  const serviceTypes = Array.from(
+    new Set([
+      ...JOB_TYPE_VALUES,
+      ...serviceTypeRows.map((r) => r.jobType).filter((t): t is string => !!t),
+    ])
+  );
 
   const totals = jobs.reduce(
     (acc, j) => {
@@ -142,9 +152,7 @@ export async function getLabourCostMetric(
     totals,
     options: {
       cleaners,
-      serviceTypes: serviceTypeRows
-        .map((r) => r.jobType)
-        .filter((t): t is string => !!t),
+      serviceTypes,
     },
   };
 }

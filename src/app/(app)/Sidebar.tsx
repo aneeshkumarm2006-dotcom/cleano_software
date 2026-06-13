@@ -3,9 +3,37 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, X, MessageCircle } from "lucide-react";
-import NavLink from "./NavLink";
-import UserActions from "./UserActions";
+import {
+  Menu,
+  X,
+  MessageCircle,
+  LayoutDashboard,
+  BarChart3,
+  TrendingUp,
+  CalendarDays,
+  Briefcase,
+  Inbox,
+  Clock,
+  FileSignature,
+  Contact,
+  Globe,
+  Flame,
+  Users,
+  UserPlus,
+  Package,
+  Droplets,
+  MapPin,
+  FileText,
+  Gift,
+  Wallet,
+  Receipt,
+  Banknote,
+  ScrollText,
+  Settings,
+  LogOut,
+  Sparkles,
+  type LucideIcon,
+} from "lucide-react";
 import { getUnreadChatCount } from "./chat/actions";
 import { getPendingRequestCount } from "./actions/getPendingRequestCount";
 
@@ -24,13 +52,100 @@ interface SidebarProps {
   children: React.ReactNode;
 }
 
+type Badge = "chat" | "requests";
+interface NavItem {
+  href: string;
+  label: string;
+  Icon: LucideIcon;
+  badge?: Badge;
+  exclude?: string[];
+}
+
+const NAV: { label: string; items: NavItem[] }[] = [
+  {
+    label: "Overview",
+    items: [
+      { href: "/dashboard", label: "Dashboard", Icon: LayoutDashboard },
+      { href: "/analytics", label: "Analytics", Icon: BarChart3 },
+      { href: "/kpi", label: "KPIs", Icon: TrendingUp },
+      { href: "/calendar", label: "Calendar", Icon: CalendarDays },
+    ],
+  },
+  {
+    label: "Operations",
+    items: [
+      { href: "/jobs", label: "Jobs", Icon: Briefcase },
+      { href: "/requests", label: "Requests", Icon: Inbox, badge: "requests" },
+      { href: "/waitlist", label: "Wait Lists", Icon: Clock },
+      { href: "/documents", label: "Documents", Icon: FileSignature },
+      { href: "/clients", label: "Clients", Icon: Contact },
+      { href: "/web-bookings", label: "Web Bookings", Icon: Globe },
+      { href: "/leads", label: "Leads", Icon: Flame },
+      { href: "/chat", label: "Chat", Icon: MessageCircle, badge: "chat" },
+    ],
+  },
+  {
+    label: "Staff",
+    items: [
+      { href: "/employees", label: "Employees", Icon: Users },
+      { href: "/job-applications", label: "Job Applications", Icon: UserPlus },
+    ],
+  },
+  {
+    label: "Inventory & Supplies",
+    items: [
+      { href: "/inventory", label: "Inventory", Icon: Package, exclude: ["/inventory/rag-wash"] },
+      { href: "/inventory/rag-wash", label: "Rag Wash & Payouts", Icon: Droplets },
+    ],
+  },
+  {
+    label: "Sales & Marketing",
+    items: [
+      { href: "/sales", label: "Sales Leads", Icon: MapPin },
+      { href: "/quotes", label: "Quotes", Icon: FileText },
+      { href: "/gift-cards", label: "Gift Cards & Promos", Icon: Gift },
+    ],
+  },
+  {
+    label: "Finance",
+    items: [
+      { href: "/payouts", label: "Payouts", Icon: Wallet },
+      { href: "/finances", label: "Finances", Icon: Receipt },
+      { href: "/invoices", label: "Invoices", Icon: FileText },
+      { href: "/bulk-charge", label: "Bulk Charge", Icon: Banknote },
+    ],
+  },
+  {
+    label: "Admin",
+    items: [
+      { href: "/logs", label: "Logs", Icon: ScrollText },
+      { href: "/settings", label: "Settings", Icon: Settings },
+    ],
+  },
+];
+
+function initialsOf(name: string): string {
+  return (
+    name
+      .trim()
+      .split(/\s+/)
+      .map((w) => w[0])
+      .slice(0, 2)
+      .join("")
+      .toUpperCase() || "?"
+  );
+}
+function roleLabel(role: string): string {
+  return role
+    ? role.charAt(0) + role.slice(1).toLowerCase().replace("_", " ")
+    : "Staff";
+}
+
 export default function Sidebar({
   user,
-  isAdmin,
   signOutAction,
   children,
 }: SidebarProps) {
-  const [hovered, setHovered] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = usePathname();
   const [chatUnread, setChatUnread] = useState(0);
@@ -40,70 +155,47 @@ export default function Sidebar({
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pathnameRef = useRef(pathname);
 
-  // Close mobile drawer on navigation
-  useEffect(() => {
-    setMobileOpen(false);
-  }, [pathname]);
+  useEffect(() => { setMobileOpen(false); }, [pathname]);
 
-  // Close mobile drawer on Escape
   useEffect(() => {
     if (!mobileOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setMobileOpen(false);
-    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setMobileOpen(false); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [mobileOpen]);
 
-  // Lock body scroll while mobile drawer is open
   useEffect(() => {
     if (!mobileOpen) return;
     const original = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = original;
-    };
+    return () => { document.body.style.overflow = original; };
   }, [mobileOpen]);
 
-  // Keep pathname ref current; dismiss toast when user opens chat
   useEffect(() => {
     pathnameRef.current = pathname;
-    if (pathname.startsWith("/chat")) {
-      setChatToast(null);
-    }
+    if (pathname.startsWith("/chat")) setChatToast(null);
   }, [pathname]);
 
-  // Poll for unread chat count and show toast on new messages
+  // Poll unread chat + toast on new messages
   useEffect(() => {
     let cancelled = false;
-
     async function poll() {
       if (cancelled) return;
       try {
         const { count, latest } = await getUnreadChatCount();
         if (cancelled) return;
-
         setChatUnread(count);
-
         const latestAt = latest?.at ?? "";
         const isInitialized = prevLatestAtRef.current !== null;
-        const hasNew =
-          isInitialized &&
-          latestAt !== "" &&
-          latestAt !== prevLatestAtRef.current;
-
+        const hasNew = isInitialized && latestAt !== "" && latestAt !== prevLatestAtRef.current;
         if (hasNew && !pathnameRef.current.startsWith("/chat")) {
           setChatToast({ senderName: latest!.senderName, body: latest!.body });
           if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
           toastTimerRef.current = setTimeout(() => setChatToast(null), 5000);
         }
-
         prevLatestAtRef.current = latestAt;
-      } catch {
-        // ignore transient errors
-      }
+      } catch { /* ignore */ }
     }
-
     poll();
     const id = setInterval(poll, 5000);
     return () => {
@@ -113,9 +205,7 @@ export default function Sidebar({
     };
   }, []);
 
-  // Poll pending portal requests (cancellation + reschedule) every 5s for
-  // the Requests sidebar badge. resolveJobRequest clears the *RequestedAt
-  // field on approve/deny, so the badge naturally drops when an admin acts.
+  // Poll pending portal requests for the badge
   useEffect(() => {
     let cancelled = false;
     async function poll() {
@@ -123,23 +213,22 @@ export default function Sidebar({
       try {
         const { count } = await getPendingRequestCount();
         if (!cancelled) setPendingRequests(count);
-      } catch {
-        // ignore transient errors
-      }
+      } catch { /* ignore */ }
     }
     poll();
     const id = setInterval(poll, 5000);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
+    return () => { cancelled = true; clearInterval(id); };
   }, []);
 
-  // Whether labels are visible. Drives NavLink/UserActions content.
-  const expanded = hovered || mobileOpen;
+  function isActive(item: NavItem): boolean {
+    if (item.exclude?.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
+      return false;
+    }
+    return pathname === item.href || pathname.startsWith(item.href + "/");
+  }
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen" style={{ background: "var(--cream)" }}>
       {/* Mobile hamburger */}
       <button
         type="button"
@@ -159,139 +248,83 @@ export default function Sidebar({
         }`}
       />
 
-      {/* Sidebar */}
+      {/* Sidebar rail */}
       <aside
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
-        className={`fixed left-0 top-0 bottom-0 p-3 z-50 transition-all duration-300 ease-in-out w-64 print:hidden ${
+        className={`asidebar-rail fixed left-0 top-0 bottom-0 w-[240px] z-50 transition-transform duration-300 ease-in-out print:hidden ${
           mobileOpen ? "translate-x-0" : "-translate-x-full"
-        } md:translate-x-0 ${hovered ? "md:w-64" : "md:w-[5.5rem]"}`}>
-        <div className={`w-full h-full shadow-lg rounded-2xl flex flex-col overflow-hidden ${
-          isAdmin
-            ? "bg-white/70 backdrop-blur-md"
-            : "bg-gradient-to-b from-white to-[#f5f2ec] border border-[rgba(0,95,106,0.08)]"
-        }`}>
-          {/* Logo + mobile close */}
-          <div
-            className={`h-16 flex items-center ${
-              expanded ? "justify-between px-4" : "justify-center"
-            }`}>
-            <Link
-              href="/dashboard"
-              className={`flex items-center ${
-                expanded ? "gap-3 min-w-0" : "justify-center w-12 h-12"
-              }`}>
-              <div className="w-10 h-10 rounded-xl bg-[#005F6A] flex items-center justify-center shrink-0">
-                <span className="text-white text-lg">C</span>
-              </div>
-              <span
-                className={`text-[#005F6A] font-medium whitespace-nowrap transition-all duration-300 ${
-                  expanded
-                    ? "opacity-100 translate-x-0"
-                    : "opacity-0 -translate-x-2 pointer-events-none w-0"
-                }`}>
-                Cleano
-              </span>
-            </Link>
-            {mobileOpen && (
-              <button
-                type="button"
-                onClick={() => setMobileOpen(false)}
-                aria-label="Close menu"
-                className="md:hidden p-2 rounded-lg text-[#005F6A]/70 hover:bg-[#005F6A]/10 hover:text-[#005F6A] transition-colors">
-                <X className="w-5 h-5" />
-              </button>
-            )}
+        } md:translate-x-0`}>
+        {/* Logo */}
+        <div className="asidebar-logo">
+          <Link href="/dashboard" className="flex items-center gap-2 min-w-0">
+            <span className="logo-mark-dark">
+              <Sparkles size={16} strokeWidth={2} />
+            </span>
+            <span className="logo-word">cleano</span>
+            <span className="logo-badge">Admin</span>
+          </Link>
+          {mobileOpen && (
+            <button
+              type="button"
+              onClick={() => setMobileOpen(false)}
+              aria-label="Close menu"
+              className="ml-auto p-1.5 rounded-lg text-white/60 hover:text-white hover:bg-white/10">
+              <X className="w-5 h-5" />
+            </button>
+          )}
+        </div>
+
+        {/* Nav */}
+        <nav className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-[18px] pr-0.5">
+          {NAV.map((section) => (
+            <div className="asidebar-section" key={section.label}>
+              <div className="asidebar-section-label">{section.label}</div>
+              {section.items.map((item) => {
+                const active = isActive(item);
+                const badgeCount =
+                  item.badge === "chat" ? chatUnread : item.badge === "requests" ? pendingRequests : 0;
+                const Icon = item.Icon;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`anav-item ${active ? "active" : ""}`}>
+                    <Icon size={16} strokeWidth={1.7} />
+                    <span className="anav-label">{item.label}</span>
+                    {badgeCount > 0 && (
+                      <span className="anav-count alert">{badgeCount > 99 ? "99+" : badgeCount}</span>
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
+        </nav>
+
+        {/* User footer */}
+        <div className="asidebar-user">
+          <span className="asidebar-avatar">{initialsOf(user.name)}</span>
+          <div className="asidebar-user-meta">
+            <strong>{user.name}</strong>
+            <span>{roleLabel(user.role)}</span>
           </div>
-
-          {/* Navigation — strictly split by role: admin sees admin links only,
-              cleaner sees cleaner links only. No overlap. */}
-          <nav
-            className={`flex-1 py-2 overflow-y-auto overflow-x-hidden flex flex-col ${
-              expanded ? "items-stretch px-3" : "items-center"
-            }`}>
-            {isAdmin ? (
-              <>
-                <SidebarGroup label="Overview" expanded={expanded}>
-                  <NavLink href="/dashboard" icon="dashboard" expanded={expanded}>Dashboard</NavLink>
-                  <NavLink href="/analytics" icon="analytics" expanded={expanded}>Analytics</NavLink>
-                  <NavLink href="/kpi" icon="analytics" expanded={expanded}>KPIs</NavLink>
-                  <NavLink href="/calendar" icon="calendar" expanded={expanded}>Calendar</NavLink>
-                </SidebarGroup>
-
-                <SidebarGroup label="Operations" expanded={expanded}>
-                  <NavLink href="/jobs" icon="jobs" expanded={expanded}>Jobs</NavLink>
-                  <NavLink href="/requests" icon="requests" expanded={expanded} badge={pendingRequests}>Requests</NavLink>
-                  <NavLink href="/waitlist" icon="waitlist" expanded={expanded}>Wait Lists</NavLink>
-                  <NavLink href="/documents" icon="documents" expanded={expanded}>Documents</NavLink>
-                  <NavLink href="/clients" icon="clients" expanded={expanded}>Clients</NavLink>
-                  <NavLink href="/web-bookings" icon="web-bookings" expanded={expanded}>Web Bookings</NavLink>
-                  <NavLink href="/leads" icon="leads" expanded={expanded}>Leads</NavLink>
-                  <NavLink href="/chat" icon="chat" expanded={expanded} badge={chatUnread}>Chat</NavLink>
-                </SidebarGroup>
-
-                <SidebarGroup label="Staff" expanded={expanded}>
-                  <NavLink href="/employees" icon="employees" expanded={expanded}>Employees</NavLink>
-                  <NavLink href="/job-applications" icon="employees" expanded={expanded}>Job Applications</NavLink>
-                </SidebarGroup>
-
-                <SidebarGroup label="Inventory & Supplies" expanded={expanded}>
-                  <NavLink href="/inventory" icon="inventory" expanded={expanded} exclude={["/inventory/rag-wash"]}>Inventory</NavLink>
-                  <NavLink href="/inventory/rag-wash" icon="rag-wash" expanded={expanded}>Rag Wash & Payouts</NavLink>
-                </SidebarGroup>
-
-                <SidebarGroup label="Sales & Marketing" expanded={expanded}>
-                  <NavLink href="/sales" icon="sales" expanded={expanded}>Sales Leads</NavLink>
-                  <NavLink href="/quotes" icon="leads" expanded={expanded}>Quotes</NavLink>
-                  <NavLink href="/gift-cards" icon="sales" expanded={expanded}>Gift Cards & Promos</NavLink>
-                </SidebarGroup>
-
-                <SidebarGroup label="Finance" expanded={expanded}>
-                  <NavLink href="/payouts" icon="payouts" expanded={expanded}>Payouts</NavLink>
-                  <NavLink href="/finances" icon="finances" expanded={expanded}>Finances</NavLink>
-                  <NavLink href="/invoices" icon="invoices" expanded={expanded}>Invoices</NavLink>
-                  <NavLink href="/bulk-charge" icon="payouts" expanded={expanded}>Bulk Charge</NavLink>
-                </SidebarGroup>
-
-                <SidebarGroup label="Admin" expanded={expanded}>
-                  <NavLink href="/settings" icon="dashboard" expanded={expanded}>Settings</NavLink>
-                </SidebarGroup>
-              </>
-            ) : (
-              <>
-                <NavLink href="/my-jobs" icon="my-jobs" expanded={expanded}>My Jobs</NavLink>
-                <NavLink href="/available-jobs" icon="jobs" expanded={expanded}>Available Jobs</NavLink>
-                <NavLink href="/my-pay" icon="my-pay" expanded={expanded}>My Pay</NavLink>
-                <NavLink href="/my-inventory" icon="my-inventory" expanded={expanded}>My Inventory</NavLink>
-                <NavLink href="/availability" icon="calendar" expanded={expanded}>Availability</NavLink>
-                <NavLink href="/calendar" icon="calendar" expanded={expanded}>Calendar</NavLink>
-                <NavLink href="/training" icon="training" expanded={expanded}>Training</NavLink>
-                <NavLink href="/documents" icon="documents" expanded={expanded}>Documents</NavLink>
-                <NavLink href="/chat" icon="chat" expanded={expanded} badge={chatUnread}>Chat</NavLink>
-              </>
-            )}
-          </nav>
-
-          {/* User Section */}
-          <div
-            className={`pb-4 ${
-              expanded ? "px-3" : "flex justify-center"
-            }`}>
-            <UserActions
-              user={user}
-              signOutAction={signOutAction}
-              expanded={expanded}
-            />
-          </div>
+          <button
+            type="button"
+            className="asidebar-signout"
+            aria-label="Sign out"
+            onClick={() => signOutAction()}>
+            <LogOut size={15} />
+          </button>
         </div>
       </aside>
 
-      {/* Main Content */}
-      <div className="ml-0 md:ml-[5.5rem] h-screen overflow-hidden overflow-y-auto print:!ml-0 print:!h-auto print:!overflow-visible">
-        <main className="h-full bg-white print:!h-auto">{children}</main>
+      {/* Main content */}
+      <div
+        className="md:ml-[240px] h-screen overflow-hidden overflow-y-auto print:!ml-0 print:!h-auto print:!overflow-visible"
+        style={{ background: "var(--cream)" }}>
+        <main className="h-full print:!h-auto">{children}</main>
       </div>
 
-      {/* Chat notification toast — shown when a new message arrives and user isn't on /chat */}
+      {/* Chat notification toast */}
       {chatToast && (
         <div
           style={{
@@ -339,10 +372,7 @@ export default function Sidebar({
               </p>
               <a
                 href="/chat"
-                style={{
-                  fontSize: 12, fontWeight: 600, color: "#fff",
-                  textDecoration: "none", opacity: 0.9,
-                }}
+                style={{ fontSize: 12, fontWeight: 600, color: "#fff", textDecoration: "none", opacity: 0.9 }}
                 onClick={() => setChatToast(null)}>
                 Open Chat →
               </a>
@@ -360,47 +390,6 @@ export default function Sidebar({
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-function SidebarGroup({
-  label,
-  expanded,
-  children,
-}: {
-  label: string;
-  expanded: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className={expanded ? "mb-1" : "mb-2"}>
-      {expanded && (
-        <p
-          style={{
-            fontSize: 10,
-            fontWeight: 700,
-            textTransform: "uppercase",
-            letterSpacing: "0.08em",
-            color: "rgba(0,95,106,0.40)",
-            padding: "10px 12px 4px",
-            margin: 0,
-          }}>
-          {label}
-        </p>
-      )}
-      {!expanded && (
-        <div
-          style={{
-            height: 1,
-            background: "rgba(0,95,106,0.08)",
-            margin: "6px 8px",
-          }}
-        />
-      )}
-      <div className={`space-y-0.5 ${expanded ? "" : "flex flex-col items-center"}`}>
-        {children}
-      </div>
     </div>
   );
 }

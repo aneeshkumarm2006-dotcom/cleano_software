@@ -24,6 +24,7 @@ import {
   Clock,
   Inbox,
   Globe,
+  ScrollText,
   LucideIcon,
 } from "lucide-react";
 
@@ -50,6 +51,7 @@ const iconMap: Record<string, LucideIcon> = {
   waitlist: Clock,
   requests: Inbox,
   "web-bookings": Globe,
+  logs: ScrollText,
 };
 
 export default function NavLink({
