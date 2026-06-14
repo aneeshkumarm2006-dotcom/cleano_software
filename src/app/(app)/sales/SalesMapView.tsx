@@ -10,36 +10,7 @@ import {
 } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-
-// Fix default marker icon issue with Next.js bundling
-const defaultIcon = L.icon({
-  iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-  iconRetinaUrl:
-    "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
-  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41],
-});
-
-const TYPE_COLORS: Record<string, string> = {
-  DOOR_KNOCK: "#005F6A",
-  FLYER_DROP: "#0EA5E9",
-  REFERRAL: "#10B981",
-  ONLINE_AD: "#8B5CF6",
-  SOCIAL_MEDIA: "#F59E0B",
-  OTHER: "#6B7280",
-};
-
-const TYPE_LABELS: Record<string, string> = {
-  DOOR_KNOCK: "Door Knock",
-  FLYER_DROP: "Flyer Drop",
-  REFERRAL: "Referral",
-  ONLINE_AD: "Online Ad",
-  SOCIAL_MEDIA: "Social Media",
-  OTHER: "Other",
-};
+import { salesTypeColor, salesTypeLabel } from "./salesTypes";
 
 function createColoredIcon(color: string) {
   return L.divIcon({
@@ -107,56 +78,41 @@ export default function SalesMapView({
       <MapContainer
         center={defaultCenter}
         zoom={11}
-        style={{ height: "400px", width: "100%" }}
-        className="rounded-xl z-0">
+        scrollWheelZoom={false}
+        style={{ height: "420px", width: "100%" }}
+        className="sl-map z-0">
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution="&copy; OpenStreetMap &copy; CARTO"
+          url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+          subdomains="abcd"
         />
         <FitBounds salesAreas={salesAreas} />
-        {salesAreas.map((area) => (
-          <Marker
-            key={area.id}
-            position={[area.latitude, area.longitude]}
-            icon={createColoredIcon(
-              TYPE_COLORS[area.type] || TYPE_COLORS.OTHER
-            )}
-            eventHandlers={{
-              click: () => onPinClick?.(area),
-            }}>
-            <Popup>
-              <div className="text-sm">
-                <p className="font-[500] text-[#005F6A]">{area.name}</p>
-                <p className="text-xs text-gray-500">
-                  {TYPE_LABELS[area.type] || area.type}
-                </p>
-                {area.address && (
-                  <p className="text-xs text-gray-400 mt-1">{area.address}</p>
-                )}
-                <p className="text-xs text-gray-400 mt-1">
-                  {new Date(area.date).toLocaleDateString("en-US")}
-                </p>
-              </div>
-            </Popup>
-          </Marker>
-        ))}
+        {salesAreas.map((area) => {
+          const color = salesTypeColor(area.type);
+          return (
+            <Marker
+              key={area.id}
+              position={[area.latitude, area.longitude]}
+              icon={createColoredIcon(color)}
+              eventHandlers={{ click: () => onPinClick?.(area) }}>
+              <Popup>
+                <div className="text-sm">
+                  <p className="font-[500] text-[#005F6A]">{area.name}</p>
+                  <p className="text-xs font-[600] uppercase tracking-wide" style={{ color }}>
+                    {salesTypeLabel(area.type)}
+                  </p>
+                  {area.address && (
+                    <p className="text-xs text-gray-400 mt-1">{area.address}</p>
+                  )}
+                  {area.notes && (
+                    <p className="text-xs text-gray-500 mt-1">{area.notes}</p>
+                  )}
+                </div>
+              </Popup>
+            </Marker>
+          );
+        })}
       </MapContainer>
-
-      {/* Legend */}
-      <div className="absolute bottom-4 left-4 z-[400] bg-white/90 backdrop-blur-sm rounded-lg shadow-sm p-3">
-        <p className="text-xs font-[400] text-gray-600 mb-1.5">Pin Types</p>
-        <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-          {Object.entries(TYPE_LABELS).map(([key, label]) => (
-            <div key={key} className="flex items-center gap-1.5">
-              <div
-                className="w-3 h-3 rounded-full border-2 border-white shadow-sm"
-                style={{ background: TYPE_COLORS[key] }}
-              />
-              <span className="text-[10px] text-gray-500">{label}</span>
-            </div>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }

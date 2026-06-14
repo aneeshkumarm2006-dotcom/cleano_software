@@ -1,6 +1,18 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import {
+  Mail,
+  Phone,
+  MapPin,
+  Sparkles,
+  Home,
+  CalendarClock,
+  Clock,
+  ArrowRight,
+  X,
+} from "lucide-react";
 import { updateQuoteStatus } from "../actions/updateQuoteStatus";
 
 type Status = "NEW" | "CONTACTED" | "CONVERTED" | "ARCHIVED";
@@ -26,283 +38,335 @@ interface Props {
   quotes: Quote[];
 }
 
-const STATUS_OPTIONS: Status[] = ["NEW", "CONTACTED", "CONVERTED", "ARCHIVED"];
+const ORDER: Status[] = ["NEW", "CONTACTED", "CONVERTED", "ARCHIVED"];
 
-const STATUS_TINT: Record<Status, { bg: string; fg: string }> = {
-  NEW: { bg: "#fef3c7", fg: "#854d0e" },
-  CONTACTED: { bg: "#dbeafe", fg: "#1e40af" },
-  CONVERTED: { bg: "#dcfce7", fg: "#166534" },
-  ARCHIVED: { bg: "#f1f5f9", fg: "#475569" },
+const STATUS: Record<Status, { label: string; dot: string; bg: string; fg: string }> = {
+  NEW: { label: "New", dot: "#2f6fae", bg: "var(--blue-100)", fg: "var(--blue-800)" },
+  CONTACTED: { label: "Contacted", dot: "#d97706", bg: "var(--amber-50)", fg: "var(--amber-800)" },
+  CONVERTED: { label: "Converted", dot: "#059669", bg: "var(--emerald-100)", fg: "var(--emerald-800)" },
+  ARCHIVED: { label: "Archived", dot: "#64748b", bg: "var(--slate-100)", fg: "var(--slate-700)" },
 };
 
-function fmtDate(iso: string) {
-  return new Date(iso).toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+function StatusPill({ status }: { status: Status }) {
+  const m = STATUS[status];
+  return (
+    <span className="pill" style={{ background: m.bg, color: m.fg }}>
+      <span className="pill-dot" style={{ background: m.dot }} />
+      {m.label}
+    </span>
+  );
+}
+
+function dateShort(iso: string) {
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+function timeShort(iso: string) {
+  return new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
 
 export default function QuotesInboxClient({ quotes }: Props) {
-  const [filter, setFilter] = useState<Status | "ALL">("ALL");
-  const [open, setOpen] = useState<Quote | null>(null);
-  const [, startTransition] = useTransition();
-
-  const filtered = useMemo(() => {
-    if (filter === "ALL") return quotes;
-    return quotes.filter((q) => q.status === filter);
-  }, [quotes, filter]);
-
-  function setStatus(quoteId: string, status: Status, notes?: string) {
-    startTransition(async () => {
-      const result = await updateQuoteStatus({ quoteId, status, notes });
-      if (!result.success) alert(result.error ?? "Failed to update");
-      else setOpen(null);
-    });
-  }
+  const [tab, setTab] = useState<Status | "all">("all");
+  const [openId, setOpenId] = useState<string | null>(null);
 
   const counts = useMemo(() => {
-    const c: Record<string, number> = { ALL: quotes.length };
-    STATUS_OPTIONS.forEach(s => { c[s] = quotes.filter(q => q.status === s).length; });
+    const c: Record<string, number> = { all: quotes.length };
+    ORDER.forEach((s) => {
+      c[s] = quotes.filter((q) => q.status === s).length;
+    });
     return c;
   }, [quotes]);
 
+  const tabs: { id: Status | "all"; label: string }[] = [
+    { id: "all", label: "All" },
+    ...ORDER.map((s) => ({ id: s, label: STATUS[s].label })),
+  ];
+
+  const visible = useMemo(
+    () => (tab === "all" ? quotes : quotes.filter((q) => q.status === tab)),
+    [quotes, tab]
+  );
+  const open = quotes.find((q) => q.id === openId) ?? null;
+
   return (
-    <div className="admin-font stack-24">
-      <header className="stack-8">
+    <div className="admin-font stack-24" style={{ maxWidth: 1200, margin: "0 auto" }}>
+      <header>
         <p className="eyebrow">Operations</p>
-        <h1 className="display">
-          Quote Requests{" "}
-          <span style={{ color: "var(--primary-40)", fontWeight: 300 }}>· {quotes.length}</span>
+        <h1 className="display" style={{ fontSize: "clamp(32px, 4.2vw, 46px)", marginTop: 6 }}>
+          Quote requests{" "}
+          <span style={{ color: "var(--primary-40)", fontWeight: 300, fontFamily: "var(--font-serif)" }}>
+            · {quotes.length}
+          </span>
         </h1>
-        <p style={{ fontSize: 14, color: "var(--primary-60)" }}>Submissions from the public quote page. Triage and convert.</p>
+        <p className="subtitle" style={{ marginTop: 10, fontSize: 15.5 }}>
+          Inbound estimate requests from the website. Review, quote, and convert to jobs.
+        </p>
       </header>
 
       <div className="atabs">
-        {(["ALL", ...STATUS_OPTIONS] as const).map(s => (
-          <button key={s} type="button" className={`atab${filter === s ? " active" : ""}`} onClick={() => setFilter(s)}>
-            {s} {counts[s] !== undefined && <span style={{ opacity: 0.6, fontSize: 11 }}>({counts[s]})</span>}
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            className={`atab ${tab === t.id ? "active" : ""}`}
+            onClick={() => setTab(t.id)}>
+            {t.label}
+            {counts[t.id] > 0 && <span className="atab-count">{counts[t.id]}</span>}
           </button>
         ))}
       </div>
 
-      {filtered.length === 0 ? (
-        <div className="atable-wrap" style={{ padding: "80px 40px", textAlign: "center", color: "var(--primary-60)" }}>
-          No quote requests yet.
-        </div>
-      ) : (
-        <div className="atable-wrap">
-          <div className="atable-scroll">
-            <table className="atable">
-              <thead>
+      <div className="atable-wrap">
+        <div className="atable-scroll">
+          <table className="atable">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Contact</th>
+                <th>Service</th>
+                <th>Received</th>
+                <th>Status</th>
+                <th className="col-actions" />
+              </tr>
+            </thead>
+            <tbody>
+              {visible.length === 0 ? (
                 <tr>
-                  <th>Name</th>
-                  <th>Contact</th>
-                  <th>Service</th>
-                  <th>Received</th>
-                  <th>Status</th>
-                  <th className="col-actions" />
+                  <td colSpan={6} style={{ textAlign: "center", padding: 56, color: "var(--primary-50)" }}>
+                    No {tab === "all" ? "" : STATUS[tab].label.toLowerCase() + " "}quote requests.
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {filtered.map(q => (
-                  <tr key={q.id} onClick={() => setOpen(q)}>
-                    <td style={{ minWidth: 160 }}>
-                      <div className="col-client">{q.name}</div>
-                      {q.address && <div className="col-client-sub">{q.address}</div>}
+              ) : (
+                visible.map((q) => (
+                  <tr key={q.id} onClick={() => setOpenId(q.id)}>
+                    <td className="col-client">
+                      {q.name}
+                      {q.address && <div className="col-client-sub">{q.address.split(",")[0]}</div>}
                     </td>
-                    <td style={{ minWidth: 180 }}>
-                      <div className="col-client-sub">{q.email}</div>
-                      {q.phone && <div className="col-client-sub">{q.phone}</div>}
-                    </td>
-                    <td>
-                      <span style={{ fontSize: 12, color: "var(--primary-70)" }}>{q.serviceType ?? "—"}</span>
-                      {(q.bedCount != null || q.bathCount != null) && (
-                        <div className="col-client-sub">{[q.bedCount != null ? `${q.bedCount}bd` : null, q.bathCount != null ? `${q.bathCount}ba` : null].filter(Boolean).join(" · ")}</div>
+                    <td style={{ whiteSpace: "normal" }}>
+                      <div style={{ fontSize: 13 }}>{q.email}</div>
+                      {q.phone && (
+                        <div style={{ fontSize: 12, color: "var(--primary-60)", marginTop: 2 }}>{q.phone}</div>
                       )}
                     </td>
-                    <td><span style={{ fontSize: 12, color: "var(--primary-70)" }}>{fmtDate(q.createdAt)}</span></td>
-                    <td>
-                      <span style={{ display: "inline-block", background: STATUS_TINT[q.status].bg, color: STATUS_TINT[q.status].fg, fontSize: 11, fontWeight: 600, borderRadius: 20, padding: "2px 10px" }}>
-                        {q.status}
-                      </span>
+                    <td style={{ whiteSpace: "normal", maxWidth: 200 }}>
+                      <div style={{ fontWeight: 500 }}>{q.serviceType ?? "—"}</div>
+                      {(q.bedCount != null || q.bathCount != null || q.squareFootage != null) && (
+                        <div style={{ fontSize: 12, color: "var(--primary-60)", marginTop: 2 }}>
+                          {[
+                            q.bedCount != null ? `${q.bedCount}bd` : null,
+                            q.bathCount != null ? `${q.bathCount}ba` : null,
+                            q.squareFootage != null ? `${q.squareFootage} ft²` : null,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </div>
+                      )}
                     </td>
-                    <td className="col-actions" onClick={e => e.stopPropagation()}>
-                      <button type="button" className="btn btn-secondary btn-sm" onClick={() => setOpen(q)}>Open</button>
+                    <td className="col-date">
+                      <div className="date-line">{dateShort(q.createdAt)}</div>
+                      <div className="time-line">{timeShort(q.createdAt)}</div>
+                    </td>
+                    <td>
+                      <StatusPill status={q.status} />
+                    </td>
+                    <td className="col-actions" onClick={(e) => e.stopPropagation()}>
+                      <button type="button" className="btn btn-secondary btn-sm" onClick={() => setOpenId(q.id)}>
+                        Open
+                      </button>
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+        <div className="apager">
+          <span>
+            {visible.length} {visible.length === 1 ? "request" : "requests"}
+          </span>
+          <span />
+        </div>
+      </div>
+
+      {open && <QuoteDrawer key={open.id} quote={open} onClose={() => setOpenId(null)} />}
+    </div>
+  );
+}
+
+function QuoteDrawer({ quote, onClose }: { quote: Quote; onClose: () => void }) {
+  const router = useRouter();
+  const [noteDraft, setNoteDraft] = useState(quote.notes ?? "");
+  const [pending, startTransition] = useTransition();
+
+  function persist(status: Status, notes: string, close: boolean) {
+    startTransition(async () => {
+      const res = await updateQuoteStatus({ quoteId: quote.id, status, notes });
+      if (!res.success) {
+        alert(res.error ?? "Failed to update");
+        return;
+      }
+      if (close) onClose();
+    });
+  }
+
+  return (
+    <div className="qd-overlay" onClick={() => !pending && onClose()}>
+      <div className="qd-panel" onClick={(e) => e.stopPropagation()}>
+        <div className="qd-head">
+          <div>
+            <h3>{quote.name}</h3>
+            <div className="qd-sub">
+              Received {dateShort(quote.createdAt)} · {timeShort(quote.createdAt)}
+            </div>
+          </div>
+          <button
+            type="button"
+            className="icon-btn"
+            style={{ width: 30, height: 30 }}
+            onClick={() => !pending && onClose()}
+            aria-label="Close">
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="qd-body">
+          <div className="q-drawer">
+            <StatusPill status={quote.status} />
+
+            <div className="q-rows">
+              <div className="q-row">
+                <span className="q-k">
+                  <Mail size={15} /> Email
+                </span>
+                <a className="q-v link" href={`mailto:${quote.email}`}>
+                  {quote.email}
+                </a>
+              </div>
+              {quote.phone && (
+                <div className="q-row">
+                  <span className="q-k">
+                    <Phone size={15} /> Phone
+                  </span>
+                  <a className="q-v link" href={`tel:${quote.phone}`}>
+                    {quote.phone}
+                  </a>
+                </div>
+              )}
+              {quote.address && (
+                <div className="q-row">
+                  <span className="q-k">
+                    <MapPin size={15} /> Address
+                  </span>
+                  <span className="q-v">{quote.address}</span>
+                </div>
+              )}
+              {quote.serviceType && (
+                <div className="q-row">
+                  <span className="q-k">
+                    <Sparkles size={15} /> Service
+                  </span>
+                  <span className="q-v">{quote.serviceType}</span>
+                </div>
+              )}
+              {(quote.bedCount != null || quote.bathCount != null || quote.squareFootage != null) && (
+                <div className="q-row">
+                  <span className="q-k">
+                    <Home size={15} /> Property
+                  </span>
+                  <span className="q-v">
+                    {[
+                      quote.bedCount != null ? `${quote.bedCount} bed` : null,
+                      quote.bathCount != null ? `${quote.bathCount} bath` : null,
+                      quote.squareFootage != null ? `${quote.squareFootage} ft²` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </span>
+                </div>
+              )}
+              {quote.preferredDate && (
+                <div className="q-row">
+                  <span className="q-k">
+                    <CalendarClock size={15} /> Preferred
+                  </span>
+                  <span className="q-v">
+                    {new Date(quote.preferredDate).toLocaleDateString("en-US", {
+                      weekday: "short",
+                      month: "short",
+                      day: "numeric",
+                    })}
+                  </span>
+                </div>
+              )}
+              <div className="q-row">
+                <span className="q-k">
+                  <Clock size={15} /> Received
+                </span>
+                <span className="q-v">
+                  {dateShort(quote.createdAt)} · {timeShort(quote.createdAt)}
+                </span>
+              </div>
+            </div>
+
+            {quote.message && (
+              <div className="q-message">
+                <div className="q-message-label">Customer message</div>
+                <p>{quote.message}</p>
+              </div>
+            )}
+
+            <div className="q-section-label">Status</div>
+            <div className="q-status-grid">
+              {ORDER.map((s) => {
+                const m = STATUS[s];
+                const on = quote.status === s;
+                return (
+                  <button
+                    key={s}
+                    type="button"
+                    className={`q-status-btn ${on ? "on" : ""}`}
+                    disabled={pending}
+                    onClick={() => persist(s, noteDraft, false)}
+                    style={on ? { background: m.bg, color: m.fg, borderColor: m.dot } : undefined}>
+                    <span style={{ width: 7, height: 7, borderRadius: 99, background: m.dot }} />
+                    {m.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="q-section-label">Internal notes</div>
+            <textarea
+              className="textarea"
+              rows={4}
+              placeholder="Quote amount, follow-up details…"
+              value={noteDraft}
+              onChange={(e) => setNoteDraft(e.target.value)}
+            />
+
+            <button
+              type="button"
+              className="btn btn-secondary btn-block"
+              style={{ marginTop: 12 }}
+              onClick={() => router.push("/jobs/new")}>
+              <ArrowRight size={15} /> Convert to job
+            </button>
           </div>
         </div>
-      )}
 
-      {open && (
-        <QuoteDrawer
-          quote={open}
-          onClose={() => setOpen(null)}
-          onStatus={(s, n) => setStatus(open.id, s, n)}
-        />
-      )}
-    </div>
-  );
-}
-
-
-function QuoteDrawer({
-  quote,
-  onClose,
-  onStatus,
-}: {
-  quote: Quote;
-  onClose: () => void;
-  onStatus: (status: Status, notes?: string) => void;
-}) {
-  const [notes, setNotes] = useState(quote.notes ?? "");
-  return (
-    <div
-      onClick={onClose}
-      style={{
-        position: "fixed", inset: 0,
-        background: "rgba(0,60,70,0.55)", backdropFilter: "blur(2px)",
-        zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16,
-      }}>
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          background: "#fff", borderRadius: 20, maxWidth: 560, width: "100%",
-          padding: 28, boxShadow: "0 20px 60px rgba(0,60,70,0.25)",
-          maxHeight: "85vh", overflowY: "auto",
-        }}>
-        <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>{quote.name}</h2>
-        <p style={{ marginTop: 4, fontSize: 13, color: "var(--primary-70)" }}>
-          {quote.email}
-          {quote.phone ? ` · ${quote.phone}` : ""}
-        </p>
-
-        <div style={{ marginTop: 20, display: "grid", gap: 10 }}>
-          <Field label="Service" value={quote.serviceType ?? "—"} />
-          <Field label="Address" value={quote.address ?? "—"} />
-          <Field
-            label="Property"
-            value={[
-              quote.bedCount != null ? `${quote.bedCount} bed` : null,
-              quote.bathCount != null ? `${quote.bathCount} bath` : null,
-              quote.squareFootage ? `${quote.squareFootage} sq ft` : null,
-            ]
-              .filter(Boolean)
-              .join(" · ") || "—"}
-          />
-          <Field
-            label="Preferred date"
-            value={
-              quote.preferredDate
-                ? new Date(quote.preferredDate).toLocaleDateString("en-US", {
-                    weekday: "short",
-                    month: "short",
-                    day: "numeric",
-                    year: "numeric",
-                  })
-                : "—"
-            }
-          />
-          <Field label="Message" value={quote.message ?? "—"} />
-        </div>
-
-        <label
-          style={{
-            display: "block",
-            marginTop: 16,
-            fontSize: 12,
-            fontWeight: 600,
-            color: "var(--primary-70)",
-          }}>
-          Internal notes
-        </label>
-        <textarea
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          rows={3}
-          style={{
-            marginTop: 4,
-            width: "100%",
-            padding: "8px 12px",
-            fontSize: 14,
-            border: "1px solid var(--primary-15)",
-            borderRadius: 8,
-            resize: "vertical",
-            fontFamily: "inherit",
-          }}
-        />
-
-        <div
-          style={{
-            marginTop: 20,
-            display: "flex",
-            gap: 8,
-            flexWrap: "wrap",
-            justifyContent: "flex-end",
-          }}>
-          {STATUS_OPTIONS.map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => onStatus(s, notes)}
-              disabled={s === quote.status}
-              style={{
-                padding: "8px 14px",
-                fontSize: 13,
-                fontWeight: 600,
-                background:
-                  s === quote.status ? "var(--primary-10)" : "var(--primary)",
-                color: s === quote.status ? "var(--primary-50)" : "#fff",
-                border: "none",
-                borderRadius: 8,
-                cursor: s === quote.status ? "default" : "pointer",
-              }}>
-              {s}
-            </button>
-          ))}
+        <div className="qd-foot">
+          <button type="button" className="btn btn-ghost btn-sm" disabled={pending} onClick={onClose}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            disabled={pending}
+            onClick={() => persist(quote.status, noteDraft, true)}>
+            {pending ? "Saving…" : "Save notes"}
+          </button>
         </div>
       </div>
     </div>
   );
 }
-
-function Field({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <div
-        style={{
-          fontSize: 11,
-          fontWeight: 600,
-          textTransform: "uppercase",
-          letterSpacing: "0.08em",
-          color: "var(--primary-50)",
-        }}>
-        {label}
-      </div>
-      <div style={{ marginTop: 2, fontSize: 14, color: "var(--ink)", whiteSpace: "pre-wrap" }}>
-        {value}
-      </div>
-    </div>
-  );
-}
-
-const th: React.CSSProperties = {
-  padding: "10px 14px",
-  fontSize: 11,
-  fontWeight: 700,
-  textTransform: "uppercase",
-  letterSpacing: "0.08em",
-  color: "var(--primary-60)",
-};
-
-const td: React.CSSProperties = {
-  padding: "12px 14px",
-  fontSize: 13,
-  color: "var(--ink)",
-};

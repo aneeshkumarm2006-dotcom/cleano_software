@@ -3,15 +3,14 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import SignatureCanvas from "react-signature-canvas";
-import Card from "@/components/ui/Card";
-import Badge from "@/components/ui/Badge";
-import Button from "@/components/ui/Button";
 import {
   ArrowLeft,
   CheckCircle2,
   AlertCircle,
-  ExternalLink,
-  Eraser,
+  Check,
+  PenLine,
+  FileText,
+  Download,
 } from "lucide-react";
 import { signDocument } from "../../actions/signDocument";
 
@@ -43,13 +42,33 @@ interface DocumentSigningViewProps {
   signer: SignerData;
 }
 
+const STATUS: Record<
+  DocStatus,
+  { label: string; dot: string; bg: string; fg: string }
+> = {
+  PENDING: { label: "Pending", dot: "#d97706", bg: "var(--amber-50)", fg: "var(--amber-800)" },
+  SIGNED: { label: "Signed", dot: "#059669", bg: "var(--emerald-100)", fg: "var(--emerald-800)" },
+  EXPIRED: { label: "Expired", dot: "#64748b", bg: "var(--slate-100)", fg: "var(--slate-700)" },
+  REVOKED: { label: "Revoked", dot: "#dc2626", bg: "var(--error-bg)", fg: "var(--error-text)" },
+};
+
 function formatDate(value: string | null) {
-  if (!value) return null;
+  if (!value) return "—";
   return new Date(value).toLocaleDateString("en-US", {
-    year: "numeric",
     month: "short",
     day: "numeric",
+    year: "numeric",
   });
+}
+
+function DocStatusPill({ status }: { status: DocStatus }) {
+  const m = STATUS[status];
+  return (
+    <span className="pill" style={{ background: m.bg, color: m.fg }}>
+      <span className="pill-dot" style={{ background: m.dot }} />
+      {m.label}
+    </span>
+  );
 }
 
 export default function DocumentSigningView({
@@ -60,42 +79,22 @@ export default function DocumentSigningView({
   const router = useRouter();
   const sigRef = useRef<SignatureCanvas>(null);
   const [agreed, setAgreed] = useState(false);
-  const [hasDrawn, setHasDrawn] = useState(false);
+  const [hasInk, setHasInk] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<{
-    type: "success" | "error";
-    text: string;
-  } | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const isSigned = signature.status === "SIGNED";
-  const isReadOnly =
-    signature.status === "SIGNED" ||
-    signature.status === "EXPIRED" ||
-    signature.status === "REVOKED";
-
-  const today = new Date().toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+  const signable = signature.status === "PENDING";
 
   function clearSignature() {
     sigRef.current?.clear();
-    setHasDrawn(false);
+    setHasInk(false);
   }
 
   async function handleSubmit() {
-    if (!sigRef.current || sigRef.current.isEmpty()) {
-      setMessage({ type: "error", text: "Please draw your signature." });
-      return;
-    }
-    if (!agreed) {
-      setMessage({ type: "error", text: "You must agree before signing." });
-      return;
-    }
+    if (!agreed || !hasInk || !sigRef.current || sigRef.current.isEmpty()) return;
 
     setSaving(true);
-    setMessage(null);
+    setError(null);
 
     const dataUrl = sigRef.current.toDataURL("image/png");
     const res = await signDocument({
@@ -104,206 +103,184 @@ export default function DocumentSigningView({
     });
 
     if (res.success) {
-      setMessage({ type: "success", text: "Document signed successfully." });
+      router.push("/documents");
       router.refresh();
     } else {
-      setMessage({
-        type: "error",
-        text: res.error || "Failed to sign document.",
-      });
+      setError(res.error || "Failed to sign document.");
+      setSaving(false);
     }
-    setSaving(false);
   }
 
   return (
-    <div className="max-w-[60rem] mx-auto space-y-6">
-      <Button
-        variant="default"
-        size="sm"
-        border={false}
-        onClick={() => router.push("/documents")}
-        className="mb-2 px-6 py-3">
-        <ArrowLeft className="w-4 h-4 mr-2" />
-        Back to Documents
-      </Button>
+    <div className="admin-font">
+      <button className="jdetail-back" onClick={() => router.push("/documents")}>
+        <ArrowLeft size={14} /> Back to Documents
+      </button>
 
-      <div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <h1 className="text-3xl !font-light tracking-tight text-[#005F6A]">
-            {document.title}
-          </h1>
-          <Badge variant="default" size="md">
-            v{document.version}
-          </Badge>
-          {isSigned && (
-            <Badge variant="success" size="md">
-              <CheckCircle2 className="w-3 h-3 mr-1" />
-              Signed
-            </Badge>
-          )}
-          {signature.status === "REVOKED" && (
-            <Badge variant="error" size="md">
-              <AlertCircle className="w-3 h-3 mr-1" />
-              Revoked
-            </Badge>
-          )}
-        </div>
-        {document.description && (
-          <p className="text-sm text-[#005F6A]/70 !font-light mt-2 max-w-3xl">
-            {document.description}
-          </p>
-        )}
-        {document.dueDate && !isSigned && (
-          <p className="text-xs text-[#005F6A]/60 mt-1">
-            Due {formatDate(document.dueDate)}
-          </p>
-        )}
-      </div>
-
-      <Card variant="default" className="p-6">
-        <h2 className="text-sm font-[400] text-[#005F6A] mb-4 uppercase tracking-wide">
-          Document
-        </h2>
-        {document.fileUrl ? (
-          <div className="space-y-4">
-            <iframe
-              src={document.fileUrl}
-              className="w-full h-[60vh] rounded-xl border border-[#005F6A]/10 bg-white"
-              title={document.title}
-            />
-            <a
-              href={document.fileUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-xs text-[#005F6A] hover:underline">
-              Open in new tab
-              <ExternalLink className="w-3 h-3" />
-            </a>
+      <div className="doc-detail">
+        {/* Document content */}
+        <div className="doc-paper-wrap">
+          <div className="doc-paper-head">
+            <div>
+              <p className="eyebrow">HR &amp; Compliance</p>
+              <h1 className="title" style={{ fontSize: 28, marginTop: 4 }}>
+                {document.title}
+              </h1>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span className="doc-ver">v{document.version}</span>
+              <DocStatusPill status={signature.status} />
+            </div>
           </div>
-        ) : document.content ? (
-          <div className="prose prose-sm max-w-none text-[#005F6A] whitespace-pre-wrap leading-relaxed bg-white p-4 rounded-xl border border-[#005F6A]/10">
-            {document.content}
-          </div>
-        ) : (
-          <p className="text-sm text-[#005F6A]/60">
-            This document has no content.
-          </p>
-        )}
-      </Card>
-
-      {isSigned ? (
-        <Card variant="default" className="p-6">
-          <h2 className="text-sm font-[400] text-[#005F6A] mb-4 uppercase tracking-wide">
-            Your Signature
-          </h2>
-          <div className="space-y-3">
-            {signature.signatureUrl && (
-              <div className="border border-[#005F6A]/10 rounded-xl bg-white p-4 inline-block">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={signature.signatureUrl}
-                  alt="Signature"
-                  className="max-h-32"
-                />
+          <div className="doc-paper">
+            {document.fileUrl ? (
+              <div className="doc-pdf-placeholder">
+                <FileText size={40} />
+                <div style={{ fontWeight: 600 }}>
+                  {document.title} · v{document.version}
+                </div>
+                <div style={{ fontSize: 13, color: "var(--primary-50)" }}>
+                  PDF preview ({document.title.replace(/\s/g, "_")}.pdf)
+                </div>
+                <a
+                  href={document.fileUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn btn-secondary btn-sm"
+                  style={{ marginTop: 12, textDecoration: "none" }}>
+                  <Download size={14} /> Download PDF
+                </a>
+              </div>
+            ) : document.content ? (
+              <div className="doc-text" style={{ whiteSpace: "pre-wrap" }}>
+                {document.content}
+              </div>
+            ) : (
+              <div className="doc-text">
+                <p>
+                  This acknowledgement confirms that the undersigned has received, read, and
+                  understood the contents of <strong>{document.title}</strong> (v{document.version}
+                  ).
+                </p>
+                <p>
+                  {document.description ? `${document.description} ` : ""}By signing below, you agree
+                  to comply with all policies and procedures described herein, and understand that
+                  violation may result in disciplinary action up to and including termination.
+                </p>
+                <p>
+                  This document supersedes all prior versions. Questions may be directed to the HR
+                  department at any time.
+                </p>
+                <ul>
+                  <li>I have read the document in its entirety.</li>
+                  <li>I understand my obligations under these terms.</li>
+                  <li>I am signing voluntarily and electronically.</li>
+                </ul>
               </div>
             )}
-            <p className="text-xs text-[#005F6A]/70">
-              Signed by {signer.name} on {formatDate(signature.signedAt)}
+          </div>
+        </div>
+
+        {/* Sign or signed view */}
+        {signable ? (
+          <div className="dcard doc-sign">
+            <div className="dcard-head">
+              <h3>Your signature</h3>
+            </div>
+            <p style={{ fontSize: 13.5, color: "var(--primary-60)", margin: 0 }}>
+              Draw your signature in the box below.
+            </p>
+            <div className="doc-canvas-wrap">
+              <SignatureCanvas
+                ref={sigRef}
+                penColor="#0e1a1c"
+                canvasProps={{ className: "doc-canvas" }}
+                onEnd={() => setHasInk(true)}
+              />
+              {!hasInk ? <span className="doc-canvas-hint">Sign here</span> : null}
+              <span className="doc-canvas-x">✕</span>
+            </div>
+            <div className="doc-canvas-actions">
+              <button
+                className="link-muted"
+                style={{ background: "none", border: 0, cursor: "pointer", fontSize: 13 }}
+                onClick={clearSignature}>
+                Clear
+              </button>
+            </div>
+            <label className="doc-agree">
+              <span
+                className={`doc-check ${agreed ? "on" : ""}`}
+                onClick={() => setAgreed((a) => !a)}>
+                {agreed ? <Check size={13} /> : null}
+              </span>
+              <span onClick={() => setAgreed((a) => !a)}>
+                I have read and agree to the terms set out in <strong>{document.title}</strong>, and
+                I am signing this document electronically.
+              </span>
+            </label>
+            {error ? (
+              <div className="banner banner-amber" style={{ margin: 0 }}>
+                <AlertCircle size={16} /> {error}
+              </div>
+            ) : null}
+            <button
+              className="btn btn-primary btn-block"
+              disabled={!agreed || !hasInk || saving}
+              onClick={handleSubmit}>
+              <PenLine size={16} /> {saving ? "Signing…" : "Sign document"}
+            </button>
+            <p
+              style={{
+                fontSize: 11.5,
+                color: "var(--primary-40)",
+                textAlign: "center",
+                margin: 0,
+              }}>
+              Your signature and a timestamp will be recorded.
             </p>
           </div>
-        </Card>
-      ) : isReadOnly ? (
-        <Card variant="alert" className="p-6">
-          <p className="text-sm">
-            This document can no longer be signed.
-          </p>
-        </Card>
-      ) : (
-        <Card variant="default" className="p-6">
-          <h2 className="text-sm font-[400] text-[#005F6A] mb-4 uppercase tracking-wide">
-            Sign
-          </h2>
-          <div className="grid grid-cols-2 gap-4 mb-4">
-            <div>
-              <label className="text-xs uppercase tracking-wide text-[#005F6A]/70 block mb-1">
-                Name
-              </label>
-              <div className="px-4 py-2.5 rounded-xl bg-[#005F6A]/5 text-sm text-[#005F6A]">
-                {signer.name}
+        ) : (
+          <div className="dcard doc-sign">
+            <div className="dcard-head">
+              <h3>Signature on file</h3>
+            </div>
+            {signature.status === "SIGNED" ? (
+              <>
+                <div className="doc-signed-box">
+                  {signature.signatureUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={signature.signatureUrl}
+                      alt="signature"
+                      style={{ maxWidth: "100%", maxHeight: 90 }}
+                    />
+                  ) : (
+                    <span
+                      style={{
+                        fontFamily: "var(--font-serif)",
+                        fontStyle: "italic",
+                        fontSize: 30,
+                        color: "var(--ink)",
+                      }}>
+                      {signer.name}
+                    </span>
+                  )}
+                </div>
+                <div className="banner banner-success" style={{ margin: 0 }}>
+                  <CheckCircle2 size={16} /> Signed on {formatDate(signature.signedAt)} · v
+                  {document.version}
+                </div>
+              </>
+            ) : (
+              <div className="banner banner-amber" style={{ margin: 0 }}>
+                <AlertCircle size={16} /> This document is {signature.status.toLowerCase()} and can
+                no longer be signed.
               </div>
-            </div>
-            <div>
-              <label className="text-xs uppercase tracking-wide text-[#005F6A]/70 block mb-1">
-                Date
-              </label>
-              <div className="px-4 py-2.5 rounded-xl bg-[#005F6A]/5 text-sm text-[#005F6A]">
-                {today}
-              </div>
-            </div>
+            )}
           </div>
-
-          <label className="text-xs uppercase tracking-wide text-[#005F6A]/70 block mb-2">
-            Signature
-          </label>
-          <div className="border border-[#005F6A]/15 rounded-xl bg-white relative">
-            <SignatureCanvas
-              ref={sigRef}
-              canvasProps={{
-                className: "w-full h-48 rounded-xl",
-              }}
-              onEnd={() => setHasDrawn(true)}
-              penColor="#005F6A"
-            />
-            <button
-              type="button"
-              onClick={clearSignature}
-              disabled={!hasDrawn}
-              className="absolute top-2 right-2 inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg bg-[#005F6A]/5 text-[#005F6A] hover:bg-[#005F6A]/10 disabled:opacity-30">
-              <Eraser className="w-3 h-3" />
-              Clear
-            </button>
-          </div>
-          <p className="text-xs text-[#005F6A]/60 mt-2">
-            Sign with your finger, mouse, or stylus above.
-          </p>
-
-          <label className="flex items-start gap-2 mt-4 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={agreed}
-              onChange={(e) => setAgreed(e.target.checked)}
-              className="mt-0.5 accent-[#005F6A]"
-            />
-            <span className="text-sm text-[#005F6A]">
-              I have read and agree to the contents of this document. I
-              understand my electronic signature is legally binding.
-            </span>
-          </label>
-
-          {message && (
-            <div
-              className={`p-3 rounded-xl text-sm mt-4 ${
-                message.type === "success"
-                  ? "bg-green-50 text-green-700 border border-green-200"
-                  : "bg-red-50 text-red-700 border border-red-200"
-              }`}>
-              {message.text}
-            </div>
-          )}
-
-          <div className="flex justify-end mt-4">
-            <Button
-              variant="action"
-              size="md"
-              border={false}
-              onClick={handleSubmit}
-              disabled={saving || !agreed || !hasDrawn}
-              className="px-6 py-3">
-              {saving ? "Signing..." : "Sign Document"}
-            </Button>
-          </div>
-        </Card>
-      )}
+        )}
+      </div>
     </div>
   );
 }

@@ -2,6 +2,18 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import {
+  Mail,
+  Phone,
+  MapPin,
+  Clock,
+  Briefcase,
+  Car,
+  Sparkles,
+  FileText,
+  Check,
+} from "lucide-react";
+import { initials } from "@/lib/avatar";
 import { updateApplicationStatus } from "../actions/updateApplicationStatus";
 
 type Status =
@@ -22,12 +34,13 @@ interface Application {
   experience: string | null;
   hasTransport: boolean | null;
   resumeUrl: string | null;
+  source: string | null;
   status: Status;
   notes: string | null;
   createdAt: string;
 }
 
-const STATUS_OPTIONS: Status[] = [
+const ORDER: Status[] = [
   "NEW",
   "CONTACTED",
   "INTERVIEWING",
@@ -36,14 +49,42 @@ const STATUS_OPTIONS: Status[] = [
   "ARCHIVED",
 ];
 
-const STATUS_TINT: Record<Status, { bg: string; fg: string }> = {
-  NEW: { bg: "#fef3c7", fg: "#854d0e" },
-  CONTACTED: { bg: "#dbeafe", fg: "#1e40af" },
-  INTERVIEWING: { bg: "#ede9fe", fg: "#6d28d9" },
-  HIRED: { bg: "#dcfce7", fg: "#15803d" },
-  REJECTED: { bg: "#fee2e2", fg: "#b91c1c" },
-  ARCHIVED: { bg: "#f1f5f9", fg: "#64748b" },
+const STATUS: Record<Status, { label: string; dot: string; bg: string; fg: string }> = {
+  NEW: { label: "New", dot: "#2f6fae", bg: "var(--blue-100)", fg: "var(--blue-800)" },
+  CONTACTED: { label: "Contacted", dot: "#7c3aed", bg: "#ede9fe", fg: "#5b21b6" },
+  INTERVIEWING: { label: "Interviewing", dot: "#d97706", bg: "var(--amber-50)", fg: "var(--amber-800)" },
+  HIRED: { label: "Hired", dot: "#059669", bg: "var(--emerald-100)", fg: "var(--emerald-800)" },
+  REJECTED: { label: "Rejected", dot: "#dc2626", bg: "var(--error-bg)", fg: "var(--error-text)" },
+  ARCHIVED: { label: "Archived", dot: "#64748b", bg: "var(--slate-100)", fg: "var(--slate-700)" },
 };
+
+function StatusPill({ status, sm }: { status: Status; sm?: boolean }) {
+  const m = STATUS[status];
+  return (
+    <span
+      className="pill"
+      style={{ background: m.bg, color: m.fg, ...(sm ? { fontSize: 10.5 } : {}) }}>
+      <span className="pill-dot" style={{ background: m.dot }} />
+      {m.label}
+    </span>
+  );
+}
+
+function Avatar({ name, size }: { name: string; size: number }) {
+  return (
+    <span
+      className="avatar"
+      style={{
+        width: size,
+        height: size,
+        fontSize: size * 0.32,
+        border: 0,
+        background: "var(--primary)",
+      }}>
+      {initials(name)}
+    </span>
+  );
+}
 
 export default function ApplicationsInboxClient({
   applications,
@@ -52,180 +93,243 @@ export default function ApplicationsInboxClient({
 }) {
   const router = useRouter();
   const [filter, setFilter] = useState<"ALL" | Status>("ALL");
-  const [selectedId, setSelectedId] = useState<string | null>(
-    applications[0]?.id ?? null
+  const [selId, setSelId] = useState<string | null>(
+    applications.find((a) => a.status === "NEW")?.id ?? applications[0]?.id ?? null
   );
+  const [notesDraft, setNotesDraft] = useState<Record<string, string>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
-  const [noteDraft, setNoteDraft] = useState<string>("");
+  const [savedFlash, setSavedFlash] = useState(false);
 
   const counts = useMemo(() => {
-    const c: Record<string, number> = { ALL: applications.length };
-    STATUS_OPTIONS.forEach((s) => {
-      c[s] = applications.filter((a) => a.status === s).length;
+    const m: Record<string, number> = { ALL: applications.length };
+    ORDER.forEach((s) => {
+      m[s] = applications.filter((a) => a.status === s).length;
     });
-    return c;
+    return m;
   }, [applications]);
 
-  const visible = useMemo(
-    () => (filter === "ALL" ? applications : applications.filter((a) => a.status === filter)),
-    [applications, filter]
-  );
+  const visible = filter === "ALL" ? applications : applications.filter((a) => a.status === filter);
+  const sel = applications.find((a) => a.id === selId) ?? null;
 
-  const selected = applications.find((a) => a.id === selectedId) ?? null;
+  const FILTERS: { id: "ALL" | Status; label: string }[] = [
+    { id: "ALL", label: "All" },
+    ...ORDER.map((s) => ({ id: s, label: STATUS[s].label })),
+  ];
 
-  async function setStatus(id: string, status: Status, notes?: string) {
-    setSavingId(id);
-    const res = await updateApplicationStatus({ applicationId: id, status, notes });
+  async function setStatus(status: Status) {
+    if (!sel || sel.status === status) return;
+    setSavingId(sel.id);
+    const res = await updateApplicationStatus({ applicationId: sel.id, status });
     setSavingId(null);
     if (res.success) router.refresh();
   }
 
-  return (
-    <div>
-      <h1 style={{ fontSize: 24, fontWeight: 700, color: "#0a1f24", marginBottom: 4 }}>
-        Job Applications
-      </h1>
-      <p style={{ color: "#64748b", fontSize: 14, marginBottom: 20 }}>
-        Applications from the public careers page.
-      </p>
+  async function saveNotes() {
+    if (!sel) return;
+    setSavingId(sel.id);
+    const res = await updateApplicationStatus({
+      applicationId: sel.id,
+      status: sel.status,
+      notes: notesDraft[sel.id] ?? sel.notes ?? "",
+    });
+    setSavingId(null);
+    if (res.success) {
+      setSavedFlash(true);
+      setTimeout(() => setSavedFlash(false), 1600);
+      router.refresh();
+    }
+  }
 
-      {/* Filters */}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>
-        {(["ALL", ...STATUS_OPTIONS] as const).map((s) => (
+  const draftVal = sel ? notesDraft[sel.id] ?? sel.notes ?? "" : "";
+  const dirty = sel ? draftVal !== (sel.notes ?? "") : false;
+
+  return (
+    <div className="admin-font">
+      <header style={{ marginBottom: 20 }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
+          <h1 className="title" style={{ fontSize: 30 }}>
+            Job applications
+          </h1>
+          <span className="apps-headcount">{applications.length}</span>
+        </div>
+        <p className="subtitle" style={{ marginTop: 8, fontSize: 15 }}>
+          Move applicants through the hiring pipeline — from new lead to hired.
+        </p>
+      </header>
+
+      {/* Filter pills */}
+      <div className="apps-filters">
+        {FILTERS.map((f) => (
           <button
-            key={s}
-            onClick={() => setFilter(s)}
-            style={{
-              padding: "6px 14px",
-              borderRadius: 20,
-              fontSize: 13,
-              fontWeight: 600,
-              border: "1px solid",
-              borderColor: filter === s ? "#005F6A" : "#e2e8f0",
-              background: filter === s ? "#005F6A" : "#fff",
-              color: filter === s ? "#fff" : "#475569",
-              cursor: "pointer",
-            }}>
-            {s} ({counts[s] ?? 0})
+            key={f.id}
+            className={`apps-filter ${filter === f.id ? "active" : ""}`}
+            onClick={() => setFilter(f.id)}>
+            {f.id !== "ALL" ? (
+              <span className="apps-filter-dot" style={{ background: STATUS[f.id as Status].dot }} />
+            ) : null}
+            {f.label}
+            <span className="apps-filter-count">{counts[f.id] ?? 0}</span>
           </button>
         ))}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1.2fr", gap: 20 }}>
+      {/* Split */}
+      <div className="apps-split">
         {/* List */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div className="apps-list">
           {visible.length === 0 ? (
-            <p style={{ color: "#94a3b8", fontSize: 14, padding: 24, textAlign: "center" }}>
-              No applications.
-            </p>
+            <div className="apps-empty">
+              <Briefcase size={28} />
+              <p>
+                No {filter === "ALL" ? "" : STATUS[filter].label.toLowerCase() + " "}applications.
+              </p>
+            </div>
           ) : (
             visible.map((a) => (
               <button
                 key={a.id}
-                onClick={() => { setSelectedId(a.id); setNoteDraft(a.notes ?? ""); }}
-                style={{
-                  textAlign: "left",
-                  background: a.id === selectedId ? "#f0f9fa" : "#fff",
-                  border: "1px solid",
-                  borderColor: a.id === selectedId ? "#005F6A" : "#e2e8f0",
-                  borderRadius: 12,
-                  padding: 14,
-                  cursor: "pointer",
-                }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontWeight: 600, color: "#0a1f24" }}>{a.name}</span>
-                  <span style={{ background: STATUS_TINT[a.status].bg, color: STATUS_TINT[a.status].fg, fontSize: 11, fontWeight: 600, borderRadius: 20, padding: "2px 10px" }}>
-                    {a.status}
-                  </span>
+                className={`apps-card ${a.id === selId ? "active" : ""}`}
+                onClick={() => setSelId(a.id)}>
+                <Avatar name={a.name} size={42} />
+                <div className="apps-card-body">
+                  <div className="apps-card-name">{a.name}</div>
+                  <div className="apps-card-sub">
+                    {[a.cityArea, a.source].filter(Boolean).join(" · ") || "—"}
+                  </div>
                 </div>
-                <div style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>
-                  {a.cityArea ?? "—"} · {new Date(a.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                </div>
+                <StatusPill status={a.status} sm />
               </button>
             ))
           )}
         </div>
 
         {/* Detail */}
-        <div>
-          {selected ? (
-            <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 14, padding: 20 }}>
-              <h2 style={{ fontSize: 18, fontWeight: 700, color: "#0a1f24", marginBottom: 12 }}>
-                {selected.name}
-              </h2>
-              <Row label="Email" value={selected.email} />
-              <Row label="Phone" value={selected.phone ?? "—"} />
-              <Row label="City / area" value={selected.cityArea ?? "—"} />
-              <Row label="Availability" value={selected.availability ?? "—"} />
-              <Row label="Transportation" value={selected.hasTransport == null ? "—" : selected.hasTransport ? "Yes" : "No"} />
-              {selected.experience && (
-                <div style={{ marginTop: 10 }}>
-                  <div style={{ fontSize: 12, color: "#64748b", marginBottom: 2 }}>Experience</div>
-                  <div style={{ fontSize: 14, color: "#0a1f24", whiteSpace: "pre-line" }}>{selected.experience}</div>
-                </div>
-              )}
-              {selected.resumeUrl && (
-                <a href={selected.resumeUrl} target="_blank" rel="noopener noreferrer"
-                  style={{ display: "inline-block", marginTop: 12, fontSize: 14, color: "#005F6A", fontWeight: 600 }}>
-                  View resume →
-                </a>
-              )}
-
-              {/* Status actions */}
-              <div style={{ marginTop: 18, borderTop: "1px solid #f1f5f9", paddingTop: 16 }}>
-                <div style={{ fontSize: 12, color: "#64748b", marginBottom: 8 }}>Set status</div>
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                  {STATUS_OPTIONS.map((s) => (
-                    <button
-                      key={s}
-                      disabled={s === selected.status || savingId === selected.id}
-                      onClick={() => setStatus(selected.id, s)}
-                      style={{
-                        padding: "6px 12px",
-                        borderRadius: 8,
-                        fontSize: 12,
-                        fontWeight: 600,
-                        border: "none",
-                        cursor: s === selected.status ? "default" : "pointer",
-                        background: s === selected.status ? "#e2e8f0" : "#005F6A",
-                        color: s === selected.status ? "#94a3b8" : "#fff",
-                      }}>
-                      {s}
-                    </button>
-                  ))}
-                </div>
-
-                <div style={{ marginTop: 14 }}>
-                  <div style={{ fontSize: 12, color: "#64748b", marginBottom: 6 }}>Admin notes</div>
-                  <textarea
-                    value={noteDraft}
-                    onChange={(e) => setNoteDraft(e.target.value)}
-                    rows={3}
-                    style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 10px", fontSize: 14, resize: "vertical" }}
-                  />
-                  <button
-                    onClick={() => setStatus(selected.id, selected.status, noteDraft)}
-                    disabled={savingId === selected.id}
-                    style={{ marginTop: 8, padding: "7px 14px", borderRadius: 8, fontSize: 13, fontWeight: 600, border: "none", background: "#005F6A", color: "#fff", cursor: "pointer" }}>
-                    {savingId === selected.id ? "Saving…" : "Save notes"}
-                  </button>
+        {!sel ? (
+          <div className="apps-detail apps-detail-empty">
+            <Briefcase size={32} />
+            <p>Select an applicant to view details.</p>
+          </div>
+        ) : (
+          <div className="apps-detail">
+            <div className="apps-detail-head">
+              <Avatar name={sel.name} size={56} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <h2 className="apps-detail-name">{sel.name}</h2>
+                <div className="apps-detail-contact">
+                  <a className="apps-contact-link" href={`mailto:${sel.email}`}>
+                    <Mail size={14} /> {sel.email}
+                  </a>
+                  {sel.phone ? (
+                    <a className="apps-contact-link" href={`tel:${sel.phone}`}>
+                      <Phone size={14} /> {sel.phone}
+                    </a>
+                  ) : null}
                 </div>
               </div>
+              <StatusPill status={sel.status} />
             </div>
-          ) : (
-            <p style={{ color: "#94a3b8", fontSize: 14 }}>Select an application.</p>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
 
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", fontSize: 14 }}>
-      <span style={{ color: "#64748b" }}>{label}</span>
-      <span style={{ color: "#0a1f24", fontWeight: 500, textAlign: "right" }}>{value}</span>
+            <div className="apps-rows">
+              <div className="apps-row">
+                <span className="apps-row-k">
+                  <MapPin size={15} /> Area
+                </span>
+                <span className="apps-row-v">{sel.cityArea ?? "—"}</span>
+              </div>
+              <div className="apps-row">
+                <span className="apps-row-k">
+                  <Clock size={15} /> Availability
+                </span>
+                <span className="apps-row-v">{sel.availability ?? "—"}</span>
+              </div>
+              <div className="apps-row">
+                <span className="apps-row-k">
+                  <Briefcase size={15} /> Experience
+                </span>
+                <span className="apps-row-v">{sel.experience ?? "—"}</span>
+              </div>
+              <div className="apps-row">
+                <span className="apps-row-k">
+                  <Car size={15} /> Transport
+                </span>
+                <span className="apps-row-v">
+                  {sel.hasTransport == null
+                    ? "—"
+                    : sel.hasTransport
+                    ? "Has own vehicle"
+                    : "No vehicle"}
+                </span>
+              </div>
+              <div className="apps-row">
+                <span className="apps-row-k">
+                  <Sparkles size={15} /> Source
+                </span>
+                <span className="apps-row-v">{sel.source ?? "—"}</span>
+              </div>
+            </div>
+
+            {sel.resumeUrl ? (
+              <a
+                href={sel.resumeUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn btn-secondary btn-sm apps-resume"
+                style={{ textDecoration: "none", width: "fit-content" }}>
+                <FileText size={14} /> View résumé (PDF)
+              </a>
+            ) : (
+              <button className="btn btn-secondary btn-sm apps-resume" disabled>
+                <FileText size={14} /> No résumé on file
+              </button>
+            )}
+
+            {/* Status workflow */}
+            <div className="apps-section-label">Move to stage</div>
+            <div className="apps-status-grid">
+              {ORDER.map((s) => {
+                const m = STATUS[s];
+                const on = sel.status === s;
+                return (
+                  <button
+                    key={s}
+                    className={`apps-status-btn ${on ? "on" : ""}`}
+                    disabled={savingId === sel.id}
+                    onClick={() => setStatus(s)}
+                    style={on ? { background: m.bg, color: m.fg, borderColor: m.dot } : undefined}>
+                    <span className="apps-filter-dot" style={{ background: m.dot }} />
+                    {m.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Notes */}
+            <div className="apps-section-label">Admin notes</div>
+            <textarea
+              className="textarea"
+              rows={4}
+              placeholder="Add a private note about this applicant…"
+              value={draftVal}
+              onChange={(e) => setNotesDraft((d) => ({ ...d, [sel.id]: e.target.value }))}
+            />
+            <div className="apps-notes-foot">
+              {savedFlash ? (
+                <span className="apps-saved">
+                  <Check size={14} /> Saved
+                </span>
+              ) : (
+                <span />
+              )}
+              <button
+                className="btn btn-primary btn-sm"
+                disabled={!dirty || savingId === sel.id}
+                onClick={saveNotes}>
+                {savingId === sel.id ? "Saving…" : "Save notes"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -48,5 +48,9 @@ export default async function DocumentsPage() {
     },
   }));
 
-  return <DocumentsClient signatures={signatureData} />;
+  return (
+    <div className="h-full overflow-hidden overflow-y-auto p-8">
+      <DocumentsClient signatures={signatureData} />
+    </div>
+  );
 }

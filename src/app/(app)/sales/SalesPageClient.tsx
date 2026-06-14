@@ -12,9 +12,12 @@ import {
   Megaphone,
   Eye,
   DollarSign,
-  TrendingUp,
-  Pencil,
 } from "lucide-react";
+import {
+  SALES_TYPE_LABELS,
+  salesTypeColor,
+  salesTypeLabel,
+} from "./salesTypes";
 
 // Dynamic import for map (SSR disabled — Leaflet requires browser APIs)
 const SalesMapView = dynamic(() => import("./SalesMapView"), {
@@ -33,15 +36,6 @@ const TABS: Array<{ id: TabView; label: string; icon: React.ReactNode }> = [
   { id: "landing-pages", label: "Landing Pages", icon: <Globe size={15} /> },
   { id: "campaigns", label: "Campaigns", icon: <Megaphone size={15} /> },
 ];
-
-const TYPE_LABELS: Record<string, string> = {
-  DOOR_KNOCK: "Door Knock",
-  FLYER_DROP: "Flyer Drop",
-  REFERRAL: "Referral",
-  ONLINE_AD: "Online Ad",
-  SOCIAL_MEDIA: "Social Media",
-  OTHER: "Other",
-};
 
 interface SalesArea {
   id: string;
@@ -117,31 +111,32 @@ export default function SalesPageClient({
     <div className="admin-font stack-24">
       <header className="stack-8">
         <p className="eyebrow">Marketing</p>
-        <h1 className="display">Sales & Marketing</h1>
-        <p style={{ fontSize: 14, color: "var(--primary-60)" }}>
-          Manage sales areas, landing pages, and marketing campaigns.
+        <h1 className="display">Sales &amp; <em>marketing.</em></h1>
+        <p className="subtitle">
+          Service zones, landing pages, and campaign performance in one place.
         </p>
       </header>
 
       <div className="astat-grid">
         <div className="astat">
-          <div className="astat-head"><span>Sales Areas</span><span className="astat-icon"><MapPin size={15} /></span></div>
+          <div className="astat-head"><span>Service areas</span><span className="astat-icon"><MapPin size={15} /></span></div>
           <div className="astat-value">{stats.totalAreas}</div>
+          <div className="astat-delta">zones mapped</div>
         </div>
         <div className="astat">
-          <div className="astat-head"><span>Page Visits</span><span className="astat-icon"><Eye size={15} /></span></div>
-          <div className="astat-value">{stats.totalVisits}</div>
+          <div className="astat-head"><span>Page visits</span><span className="astat-icon"><Eye size={15} /></span></div>
+          <div className="astat-value">{stats.totalVisits.toLocaleString()}</div>
           <div className="astat-delta">{stats.publishedPages} published pages</div>
         </div>
         <div className="astat">
-          <div className="astat-head"><span>Active Campaigns</span><span className="astat-icon"><Megaphone size={15} /></span></div>
+          <div className="astat-head"><span>Active campaigns</span><span className="astat-icon"><Megaphone size={15} /></span></div>
           <div className="astat-value">{stats.activeCampaigns}</div>
           <div className="astat-delta">of {stats.totalCampaigns} total</div>
         </div>
         <div className="astat">
           <div className="astat-head"><span>Budget spent</span><span className="astat-icon"><DollarSign size={15} /></span></div>
-          <div className="astat-value">${stats.totalSpent.toFixed(0)}</div>
-          <div className="astat-delta">of ${stats.totalBudget.toFixed(0)} budget</div>
+          <div className="astat-value">${stats.totalSpent.toLocaleString()}</div>
+          <div className="astat-delta">of ${stats.totalBudget.toLocaleString()} budget</div>
         </div>
       </div>
 
@@ -161,21 +156,25 @@ export default function SalesPageClient({
       </div>
 
       {activeTab === "map" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-            <div>
-              <div className="col-client">Sales Areas Map</div>
-              <div className="col-client-sub">Color-coded pins showing sales activity across areas</div>
+        <div>
+          <div className="sl-map-bar">
+            <div className="sl-legend">
+              {Object.entries(SALES_TYPE_LABELS).map(([key, label]) => (
+                <span key={key} className="sl-legend-item">
+                  <span className="sl-legend-dot" style={{ background: salesTypeColor(key) }} />
+                  {label}
+                </span>
+              ))}
             </div>
             <button
               type="button"
               className="btn btn-primary btn-sm"
               onClick={() => { setEditingArea(null); setShowAreaModal(true); }}>
-              <Plus size={14} /> Add Pin
+              <Plus size={14} /> New area
             </button>
           </div>
 
-          <div className="atable-wrap" style={{ padding: 0, overflow: "hidden" }}>
+          <div className="sl-map-wrap">
             <SalesMapView
               salesAreas={salesAreas}
               onPinClick={(area) => { setEditingArea(area); setShowAreaModal(true); }}
@@ -183,34 +182,37 @@ export default function SalesPageClient({
           </div>
 
           {salesAreas.length > 0 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--primary-50)" }}>
-                All Areas ({salesAreas.length})
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 10 }}>
-                {salesAreas.map((area) => (
+            <div className="sl-area-grid">
+              {salesAreas.map((area) => {
+                const color = salesTypeColor(area.type);
+                return (
                   <button
                     key={area.id}
                     type="button"
-                    className="jcard"
-                    style={{ textAlign: "left", cursor: "pointer", width: "100%" }}
+                    className="jcard sl-area-card"
                     onClick={() => { setEditingArea(area); setShowAreaModal(true); }}>
-                    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                          <span className="col-client" style={{ fontSize: 14 }}>{area.name}</span>
-                          <span style={{ display: "inline-block", background: "var(--primary-5)", color: "var(--primary-70)", fontSize: 10, fontWeight: 600, borderRadius: 20, padding: "2px 8px" }}>
-                            {TYPE_LABELS[area.type] || area.type}
-                          </span>
-                        </div>
-                        {area.address && <div className="col-client-sub" style={{ marginTop: 4 }}>{area.address}</div>}
-                        <div className="col-client-sub" style={{ marginTop: 2 }}>{new Date(area.date).toLocaleDateString("en-US")}</div>
-                      </div>
-                      <Pencil size={13} style={{ color: "var(--primary-30)", flexShrink: 0, marginTop: 2 }} />
+                    <div className="sl-area-top">
+                      <span className="jcard-client">{area.name}</span>
+                      <span
+                        className="pill"
+                        style={{ background: "transparent", color, boxShadow: `inset 0 0 0 1px ${color}55` }}>
+                        <span className="pill-dot" style={{ background: color }} />
+                        {salesTypeLabel(area.type)}
+                      </span>
                     </div>
+                    {area.address && (
+                      <div className="sl-area-addr"><MapPin size={13} /> {area.address}</div>
+                    )}
+                    {area.notes ? (
+                      <div className="sl-area-notes">{area.notes}</div>
+                    ) : (
+                      <div className="sl-area-notes" style={{ color: "var(--primary-50)" }}>
+                        {new Date(area.date).toLocaleDateString("en-US")}
+                      </div>
+                    )}
                   </button>
-                ))}
-              </div>
+                );
+              })}
             </div>
           )}
         </div>

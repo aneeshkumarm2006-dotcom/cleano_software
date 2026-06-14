@@ -1,24 +1,14 @@
 "use client";
 
 import React, { useState } from "react";
-import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
-import Badge from "@/components/ui/Badge";
 import Modal from "@/components/ui/Modal";
 import Input from "@/components/ui/Input";
 import Textarea from "@/components/ui/Textarea";
 import PremiumSelect from "@/components/ui/PremiumSelect";
 import { ConfirmDeleteModal } from "@/components/common/ConfirmDeleteModal";
 import { createLandingPage, updateLandingPage, deleteLandingPage } from "@/app/(app)/actions/createLandingPage";
-import {
-  Globe,
-  Plus,
-  Eye,
-  EyeOff,
-  ExternalLink,
-  Pencil,
-  Trash2,
-} from "lucide-react";
+import { Globe, Plus, Trash2 } from "lucide-react";
 
 interface LandingPage {
   id: string;
@@ -89,107 +79,81 @@ export default function LandingPageManager({
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-sm font-[400] text-[#005F6A]">Landing Pages</h3>
-          <p className="text-xs text-[#005F6A]/50 mt-0.5">
-            Create and manage public landing pages for marketing campaigns
-          </p>
-        </div>
-        <Button
-          variant="action"
-          size="sm"
+    <div>
+      <div className="sl-tab-bar">
+        <span className="sl-tab-hint">{landingPages.length} landing pages</span>
+        <button
+          type="button"
+          className="btn btn-primary btn-sm"
           onClick={() => {
             setEditingPage(null);
             setCampaignId("");
             setShowModal(true);
           }}>
-          <Plus className="w-4 h-4 mr-1" />
-          New Page
-        </Button>
+          <Plus size={14} /> New page
+        </button>
       </div>
 
       {landingPages.length === 0 ? (
-        <Card variant="default" className="p-8 text-center">
-          <Globe className="w-8 h-8 text-[#005F6A]/30 mx-auto mb-2" />
-          <p className="text-sm text-[#005F6A]/60">No landing pages yet</p>
-          <p className="text-xs text-[#005F6A]/40 mt-1">
-            Create your first landing page to start capturing leads
+        <div className="dcard sl-empty">
+          <Globe size={28} className="sl-empty-icon" />
+          <p style={{ fontSize: 14, color: "var(--primary-70)", fontWeight: 500 }}>No landing pages yet</p>
+          <p style={{ fontSize: 12.5, color: "var(--primary-50)", marginTop: 4 }}>
+            Create your first landing page to start capturing leads.
           </p>
-        </Card>
+        </div>
       ) : (
-        <div className="space-y-3">
+        <div className="sl-card-list">
           {landingPages.map((page) => (
-            <Card key={page.id} variant="default" className="p-4">
-              <div className="flex items-start justify-between">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h4 className="text-sm font-[400] text-[#005F6A] truncate">
-                      {page.title}
-                    </h4>
-                    <Badge
-                      variant={page.isPublished ? "default" : "secondary"}
-                      size="sm">
-                      {page.isPublished ? (
-                        <span className="flex items-center gap-1">
-                          <Eye className="w-3 h-3" /> Published
-                        </span>
-                      ) : (
-                        <span className="flex items-center gap-1">
-                          <EyeOff className="w-3 h-3" /> Draft
-                        </span>
-                      )}
-                    </Badge>
-                  </div>
-                  <p className="text-xs text-[#005F6A]/50 mt-1">
-                    /{page.slug}
-                    {page.campaignName && (
-                      <span className="ml-2 text-[#005F6A]/40">
-                        Campaign: {page.campaignName}
-                      </span>
-                    )}
-                  </p>
-                  <div className="flex items-center gap-4 mt-2">
-                    <span className="text-xs text-[#005F6A]/60">
-                      {page.totalVisits} total visits
-                    </span>
-                    <span className="text-xs text-[#005F6A]/60">
-                      {page.recentVisits} last 30d
-                    </span>
-                  </div>
+            <div key={page.id} className="dcard sl-lp">
+              <div className="sl-lp-main">
+                <div className="sl-lp-toprow">
+                  <h3 className="sl-lp-title">{page.title}</h3>
+                  <span
+                    className="pill"
+                    style={
+                      page.isPublished
+                        ? { background: "var(--emerald-100)", color: "var(--emerald-800)" }
+                        : { background: "var(--slate-100)", color: "var(--slate-700)" }
+                    }>
+                    <span className="pill-dot" style={{ background: page.isPublished ? "#059669" : "#94a3b8" }} />
+                    {page.isPublished ? "Published" : "Draft"}
+                  </span>
                 </div>
-                <div className="flex items-center gap-1">
-                  {page.isPublished && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() =>
-                        window.open(`/p/${page.slug}`, "_blank")
-                      }>
-                      <ExternalLink className="w-4 h-4" />
-                    </Button>
-                  )}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setEditingPage(page);
-                      setCampaignId(page.campaignId || "");
-                      setShowModal(true);
-                    }}>
-                    <Pencil className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleDelete(page.id)}
-                    className="text-red-400 hover:text-red-600">
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
+                <div className="sl-lp-meta">
+                  <span className="sl-lp-slug">/{page.slug}</span>
+                  <span className="sl-lp-visits"><strong>{page.recentVisits.toLocaleString()}</strong> visits · 30d</span>
+                  {page.campaignName ? <span>Campaign: {page.campaignName}</span> : null}
                 </div>
               </div>
-            </Card>
+              <div className="sl-lp-actions">
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  disabled={!page.isPublished}
+                  onClick={() => window.open(`/p/${page.slug}`, "_blank")}>
+                  Open ↗
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => {
+                    setEditingPage(page);
+                    setCampaignId(page.campaignId || "");
+                    setShowModal(true);
+                  }}>
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  className="icon-btn"
+                  style={{ width: 36, height: 36 }}
+                  onClick={() => handleDelete(page.id)}
+                  aria-label="Delete">
+                  <Trash2 size={15} />
+                </button>
+              </div>
+            </div>
           ))}
         </div>
       )}

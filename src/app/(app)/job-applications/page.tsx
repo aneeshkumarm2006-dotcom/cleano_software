@@ -23,6 +23,7 @@ export default async function JobApplicationsPage() {
           experience: a.experience,
           hasTransport: a.hasTransport,
           resumeUrl: a.resumeUrl,
+          source: a.source,
           status: a.status,
           notes: a.notes,
           createdAt: a.createdAt.toISOString(),

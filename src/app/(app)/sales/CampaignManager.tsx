@@ -1,9 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
-import Badge from "@/components/ui/Badge";
 import Modal from "@/components/ui/Modal";
 import Input from "@/components/ui/Input";
 import Textarea from "@/components/ui/Textarea";
@@ -14,14 +12,12 @@ import {
   updateMarketingCampaign,
   deleteMarketingCampaign,
 } from "@/app/(app)/actions/updateMarketingCampaign";
-import {
-  Megaphone,
-  Plus,
-  Pencil,
-  Trash2,
-  DollarSign,
-  Calendar,
-} from "lucide-react";
+import { Megaphone, Plus, Trash2 } from "lucide-react";
+import { campaignStatusStyle } from "./salesTypes";
+
+const money = (n: number) => "$" + Math.round(n).toLocaleString("en-US");
+const shortDate = (d: string) =>
+  new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
 const CAMPAIGN_STATUSES = [
   { value: "DRAFT", label: "Draft" },
@@ -57,19 +53,6 @@ interface Campaign {
 
 interface CampaignManagerProps {
   campaigns: Campaign[];
-}
-
-function statusBadgeVariant(status: string) {
-  switch (status) {
-    case "ACTIVE":
-      return "default" as const;
-    case "PAUSED":
-      return "secondary" as const;
-    case "COMPLETED":
-      return "default" as const;
-    default:
-      return "secondary" as const;
-  }
 }
 
 export default function CampaignManager({ campaigns }: CampaignManagerProps) {
@@ -121,19 +104,12 @@ export default function CampaignManager({ campaigns }: CampaignManagerProps) {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-sm font-[400] text-[#005F6A]">
-            Marketing Campaigns
-          </h3>
-          <p className="text-xs text-[#005F6A]/50 mt-0.5">
-            Track campaign budgets, channels, and performance
-          </p>
-        </div>
-        <Button
-          variant="action"
-          size="sm"
+    <div>
+      <div className="sl-tab-bar">
+        <span className="sl-tab-hint">{campaigns.length} campaigns</span>
+        <button
+          type="button"
+          className="btn btn-primary btn-sm"
           onClick={() => {
             setEditingCampaign(null);
             setFormStatus("DRAFT");
@@ -142,145 +118,108 @@ export default function CampaignManager({ campaigns }: CampaignManagerProps) {
             setFormEndDate("");
             setShowModal(true);
           }}>
-          <Plus className="w-4 h-4 mr-1" />
-          New Campaign
-        </Button>
+          <Plus size={14} /> New campaign
+        </button>
       </div>
 
       {deleteError && (
-        <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-2.5">
+        <div className="banner banner-amber" style={{ marginBottom: 14 }}>
           {deleteError}
         </div>
       )}
 
       {campaigns.length === 0 ? (
-        <Card variant="default" className="p-8 text-center">
-          <Megaphone className="w-8 h-8 text-[#005F6A]/30 mx-auto mb-2" />
-          <p className="text-sm text-[#005F6A]/60">No campaigns yet</p>
-          <p className="text-xs text-[#005F6A]/40 mt-1">
-            Create your first marketing campaign to start tracking performance
+        <div className="dcard sl-empty">
+          <Megaphone size={28} className="sl-empty-icon" />
+          <p style={{ fontSize: 14, color: "var(--primary-70)", fontWeight: 500 }}>No campaigns yet</p>
+          <p style={{ fontSize: 12.5, color: "var(--primary-50)", marginTop: 4 }}>
+            Create your first marketing campaign to start tracking performance.
           </p>
-        </Card>
+        </div>
       ) : (
-        <div className="space-y-3">
+        <div className="sl-card-list">
           {campaigns.map((campaign) => {
-            const budgetUsed =
+            const pct =
               campaign.budget > 0
-                ? (campaign.spent / campaign.budget) * 100
+                ? Math.min(100, Math.round((campaign.spent / campaign.budget) * 100))
                 : 0;
+            const st = campaignStatusStyle(campaign.status);
+            if (confirmDeleteId === campaign.id) {
+              return (
+                <div key={campaign.id} className="dcard" style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
+                  <div>
+                    <div className="sl-lp-title">Delete &ldquo;{campaign.name}&rdquo;?</div>
+                    <div style={{ fontSize: 12.5, color: "var(--primary-50)", marginTop: 4 }}>This cannot be undone.</div>
+                  </div>
+                  <div className="sl-camp-actions">
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => setConfirmDeleteId(null)} disabled={deleting}>Cancel</button>
+                    <button type="button" className="btn btn-danger-ghost btn-sm" onClick={handleDelete} disabled={deleting}>{deleting ? "Deleting…" : "Delete"}</button>
+                  </div>
+                </div>
+              );
+            }
             return (
-              <Card key={campaign.id} variant="default" className="p-4">
-                {confirmDeleteId === campaign.id ? (
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <p className="text-sm font-[400] text-[#005F6A]">Delete &ldquo;{campaign.name}&rdquo;?</p>
-                      <p className="text-xs text-[#005F6A]/50 mt-0.5">This cannot be undone.</p>
+              <div key={campaign.id} className="dcard sl-camp">
+                <div className="sl-camp-head">
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="sl-camp-toprow">
+                      <h3 className="sl-lp-title">{campaign.name}</h3>
+                      <span className="pill" style={{ background: st.bg, color: st.fg }}>
+                        <span className="pill-dot" style={{ background: st.dot }} />
+                        {st.label}
+                      </span>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setConfirmDeleteId(null)}
-                        disabled={deleting}>
-                        Cancel
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={handleDelete}
-                        disabled={deleting}
-                        className="bg-red-50 text-red-600 hover:bg-red-100 border border-red-200">
-                        {deleting ? "Deleting…" : "Delete"}
-                      </Button>
+                    <div className="sl-camp-meta">
+                      {[
+                        campaign.channel,
+                        campaign.startDate
+                          ? `${shortDate(campaign.startDate)}${campaign.endDate ? `–${shortDate(campaign.endDate)}` : ""}`
+                          : null,
+                        `${campaign.landingPageCount} landing page${campaign.landingPageCount !== 1 ? "s" : ""}`,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
                     </div>
                   </div>
-                ) : (
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h4 className="text-sm font-[400] text-[#005F6A] truncate">
-                          {campaign.name}
-                        </h4>
-                        <Badge
-                          variant={statusBadgeVariant(campaign.status)}
-                          size="sm">
-                          {campaign.status}
-                        </Badge>
-                      </div>
-                      {campaign.description && (
-                        <p className="text-xs text-[#005F6A]/50 mt-1 line-clamp-1">
-                          {campaign.description}
-                        </p>
-                      )}
-                      <div className="flex items-center gap-4 mt-2 flex-wrap">
-                        {campaign.channel && (
-                          <span className="text-xs text-[#005F6A]/60 flex items-center gap-1">
-                            <Megaphone className="w-3 h-3" />
-                            {campaign.channel}
-                          </span>
-                        )}
-                        <span className="text-xs text-[#005F6A]/60 flex items-center gap-1">
-                          <DollarSign className="w-3 h-3" />$
-                          {campaign.spent.toFixed(0)} / $
-                          {campaign.budget.toFixed(0)}
-                        </span>
-                        {campaign.startDate && (
-                          <span className="text-xs text-[#005F6A]/60 flex items-center gap-1">
-                            <Calendar className="w-3 h-3" />
-                            {new Date(campaign.startDate).toLocaleDateString("en-US")}
-                            {campaign.endDate &&
-                              ` - ${new Date(campaign.endDate).toLocaleDateString("en-US")}`}
-                          </span>
-                        )}
-                        <span className="text-xs text-[#005F6A]/40">
-                          {campaign.landingPageCount} landing page
-                          {campaign.landingPageCount !== 1 ? "s" : ""}
-                        </span>
-                      </div>
-                      {campaign.budget > 0 && (
-                        <div className="mt-2">
-                          <div className="w-full bg-gray-100 rounded-full h-1.5">
-                            <div
-                              className={`h-1.5 rounded-full transition-all ${
-                                budgetUsed > 100
-                                  ? "bg-red-400"
-                                  : budgetUsed > 80
-                                    ? "bg-yellow-400"
-                                    : "bg-[#005F6A]"
-                              }`}
-                              style={{
-                                width: `${Math.min(budgetUsed, 100)}%`,
-                              }}
-                            />
-                          </div>
-                        </div>
-                      )}
+                  <div className="sl-camp-actions">
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => {
+                        setEditingCampaign(campaign);
+                        setFormStatus(campaign.status || "DRAFT");
+                        setFormChannel(campaign.channel || "");
+                        setFormStartDate(campaign.startDate ? new Date(campaign.startDate).toISOString().split("T")[0] : "");
+                        setFormEndDate(campaign.endDate ? new Date(campaign.endDate).toISOString().split("T")[0] : "");
+                        setShowModal(true);
+                      }}>
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      style={{ width: 36, height: 36 }}
+                      onClick={() => setConfirmDeleteId(campaign.id)}
+                      aria-label="Delete">
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                </div>
+                {campaign.budget > 0 && (
+                  <div className="sl-budget">
+                    <div className="sl-budget-row">
+                      <span>{money(campaign.spent)} spent</span>
+                      <span style={{ color: "var(--primary-50)" }}>of {money(campaign.budget)}</span>
                     </div>
-                    <div className="flex items-center gap-1 ml-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setEditingCampaign(campaign);
-                          setFormStatus(campaign.status || "DRAFT");
-                          setFormChannel(campaign.channel || "");
-                          setFormStartDate(campaign.startDate ? new Date(campaign.startDate).toISOString().split("T")[0] : "");
-                          setFormEndDate(campaign.endDate ? new Date(campaign.endDate).toISOString().split("T")[0] : "");
-                          setShowModal(true);
-                        }}>
-                        <Pencil className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setConfirmDeleteId(campaign.id)}
-                        className="text-red-400 hover:text-red-600">
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                    <div className="sl-budget-track">
+                      <div
+                        className="sl-budget-fill"
+                        style={{ width: pct + "%", background: pct >= 100 ? "var(--amber-600)" : "var(--primary)" }}
+                      />
                     </div>
                   </div>
                 )}
-              </Card>
+              </div>
             );
           })}
         </div>

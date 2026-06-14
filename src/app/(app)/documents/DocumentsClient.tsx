@@ -2,7 +2,14 @@
 
 import { useMemo } from "react";
 import Link from "next/link";
-import { CheckCircle2, Clock, AlertCircle, ChevronRight, FileText } from "lucide-react";
+import {
+  CheckCircle2,
+  Clock,
+  AlertCircle,
+  ChevronRight,
+  FileText,
+  Check,
+} from "lucide-react";
 
 type DocStatus = "PENDING" | "SIGNED" | "EXPIRED" | "REVOKED";
 
@@ -25,134 +32,162 @@ interface DocumentsClientProps {
   signatures: SignatureRow[];
 }
 
+const STATUS: Record<
+  DocStatus,
+  { label: string; dot: string; bg: string; fg: string }
+> = {
+  PENDING: { label: "Pending", dot: "#d97706", bg: "var(--amber-50)", fg: "var(--amber-800)" },
+  SIGNED: { label: "Signed", dot: "#059669", bg: "var(--emerald-100)", fg: "var(--emerald-800)" },
+  EXPIRED: { label: "Expired", dot: "#64748b", bg: "var(--slate-100)", fg: "var(--slate-700)" },
+  REVOKED: { label: "Revoked", dot: "#dc2626", bg: "var(--error-bg)", fg: "var(--error-text)" },
+};
+
 function formatDate(value: string | null) {
   if (!value) return null;
   return new Date(value).toLocaleDateString("en-US", {
-    year: "numeric",
     month: "short",
     day: "numeric",
+    year: "numeric",
   });
 }
 
-function isOverdue(dueDate: string | null) {
-  if (!dueDate) return false;
-  return new Date(dueDate).getTime() < Date.now();
+function daysUntil(value: string) {
+  return Math.ceil((new Date(value).getTime() - Date.now()) / 86400000);
 }
 
-const STATUS_TINT: Record<string, { bg: string; fg: string }> = {
-  PENDING:  { bg: "#fffbeb", fg: "#d97706" },
-  SIGNED:   { bg: "#dcfce7", fg: "#166534" },
-  OVERDUE:  { bg: "#fee2e2", fg: "#b91c1c" },
-  EXPIRED:  { bg: "#f1f5f9", fg: "#475569" },
-  REVOKED:  { bg: "#fee2e2", fg: "#b91c1c" },
-};
+function DocStatusPill({ status }: { status: DocStatus }) {
+  const m = STATUS[status];
+  return (
+    <span className="pill" style={{ background: m.bg, color: m.fg }}>
+      <span className="pill-dot" style={{ background: m.dot }} />
+      {m.label}
+    </span>
+  );
+}
 
 export default function DocumentsClient({ signatures }: DocumentsClientProps) {
   const pending = useMemo(() => signatures.filter((s) => s.status === "PENDING"), [signatures]);
   const signed = useMemo(() => signatures.filter((s) => s.status === "SIGNED"), [signatures]);
-  const other = useMemo(() => signatures.filter((s) => s.status !== "PENDING" && s.status !== "SIGNED"), [signatures]);
+  const other = useMemo(
+    () => signatures.filter((s) => s.status === "EXPIRED" || s.status === "REVOKED"),
+    [signatures]
+  );
+
+  const sections: { title: string; rows: SignatureRow[]; accent?: boolean }[] = [
+    { title: "Pending signature", rows: pending, accent: true },
+    { title: "Signed", rows: signed },
+    { title: "Other", rows: other },
+  ];
 
   return (
-    <div className="admin-font stack-24">
-      <header className="stack-8">
-        <p className="eyebrow">HR & Compliance</p>
-        <h1 className="display">Documents</h1>
-        <p style={{ fontSize: 14, color: "var(--primary-60)" }}>Review and sign documents assigned to you.</p>
+    <div className="admin-font">
+      <header style={{ marginBottom: 26 }}>
+        <p className="eyebrow">HR &amp; Compliance</p>
+        <h1 className="display" style={{ fontSize: "clamp(32px, 4.2vw, 46px)", marginTop: 6 }}>
+          Documents.
+        </h1>
+        <p className="subtitle" style={{ marginTop: 10, fontSize: 15.5 }}>
+          Review, sign, and keep your compliance paperwork up to date.
+        </p>
       </header>
 
-      <div className="astat-grid">
-        <div className="astat">
-          <div className="astat-head"><span>Pending</span><span className="astat-icon"><Clock size={15} /></span></div>
-          <div className="astat-value" style={pending.length > 0 ? { color: "#d97706" } : {}}>{pending.length}</div>
-          {pending.length > 0 && <div className="astat-delta" style={{ color: "#d97706" }}>needs attention</div>}
-        </div>
-        <div className="astat">
-          <div className="astat-head"><span>Signed</span><span className="astat-icon"><CheckCircle2 size={15} /></span></div>
-          <div className="astat-value">{signed.length}</div>
-        </div>
-        <div className="astat">
-          <div className="astat-head"><span>Total</span><span className="astat-icon"><FileText size={15} /></span></div>
-          <div className="astat-value">{signatures.length}</div>
-        </div>
+      <div
+        className="astat-grid"
+        style={{ gridTemplateColumns: "repeat(3, minmax(0,1fr))", marginBottom: 32 }}>
+        <Stat
+          icon={<AlertCircle size={16} />}
+          label="Pending"
+          value={pending.length}
+          hint={pending.length ? "awaiting your signature" : "all caught up"}
+        />
+        <Stat icon={<CheckCircle2 size={16} />} label="Signed" value={signed.length} hint="on file" />
+        <Stat icon={<FileText size={16} />} label="Total" value={signatures.length} hint="documents" />
       </div>
 
-      <section>
-        <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--primary-50)", marginBottom: 10 }}>
-          Pending signature
-        </div>
-        {pending.length === 0 ? (
-          <div className="atable-wrap" style={{ padding: "40px 24px", textAlign: "center", color: "var(--primary-60)" }}>
-            You have no pending documents.
+      {sections.map((sec) => (
+        <section key={sec.title} style={{ marginBottom: 30 }}>
+          <div className="doc-sec-head">
+            <h2 className="doc-sec-title">{sec.title}</h2>
+            <span className="doc-sec-count">{sec.rows.length}</span>
           </div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {pending.map((row) => <DocumentRow key={row.id} row={row} />)}
-          </div>
-        )}
-      </section>
-
-      <section>
-        <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--primary-50)", marginBottom: 10 }}>
-          Signed
-        </div>
-        {signed.length === 0 ? (
-          <div className="atable-wrap" style={{ padding: "40px 24px", textAlign: "center", color: "var(--primary-60)" }}>
-            No signed documents yet.
-          </div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {signed.map((row) => <DocumentRow key={row.id} row={row} />)}
-          </div>
-        )}
-      </section>
-
-      {other.length > 0 && (
-        <section>
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--primary-50)", marginBottom: 10 }}>
-            Other
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {other.map((row) => <DocumentRow key={row.id} row={row} />)}
-          </div>
+          {sec.rows.length === 0 ? (
+            <div className="doc-empty">
+              {sec.title === "Pending signature"
+                ? "Nothing waiting on you — nice."
+                : `No ${sec.title.toLowerCase()} documents.`}
+            </div>
+          ) : (
+            <div className="doc-list">
+              {sec.rows.map((row) => (
+                <DocumentCard key={row.id} row={row} accent={!!sec.accent} />
+              ))}
+            </div>
+          )}
         </section>
-      )}
+      ))}
     </div>
   );
 }
 
-function DocumentRow({ row }: { row: SignatureRow }) {
-  const overdue = row.status === "PENDING" && isOverdue(row.document.dueDate);
-  const due = formatDate(row.document.dueDate);
-  const signedDate = formatDate(row.signedAt);
+function Stat({
+  icon,
+  label,
+  value,
+  hint,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: number;
+  hint?: string;
+}) {
+  return (
+    <div className="astat">
+      <div className="astat-head">
+        <span>{label}</span>
+        <span className="astat-icon">{icon}</span>
+      </div>
+      <div className="astat-value">{value}</div>
+      {hint ? <div className="astat-delta">{hint}</div> : null}
+    </div>
+  );
+}
 
-  let pillKey: string = row.status;
-  if (overdue) pillKey = "OVERDUE";
-  const tint = STATUS_TINT[pillKey] ?? STATUS_TINT.EXPIRED;
-
-  const pillLabel = overdue ? "Overdue" : row.status.charAt(0) + row.status.slice(1).toLowerCase();
-  const PillIcon = overdue ? AlertCircle : row.status === "SIGNED" ? CheckCircle2 : Clock;
+function DocumentCard({ row, accent }: { row: SignatureRow; accent: boolean }) {
+  const { document: d } = row;
+  const days = d.dueDate ? daysUntil(d.dueDate) : null;
+  const overdue = row.status === "PENDING" && days !== null && days < 0;
+  const dueSoon = row.status === "PENDING" && days !== null && days >= 0 && days <= 3;
 
   return (
-    <Link href={`/documents/${row.document.id}`} className="jcard" style={{ textDecoration: "none", display: "flex", alignItems: "center", gap: 14 }}>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
-          <span className="col-client" style={{ fontSize: 15 }}>{row.document.title}</span>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "var(--primary-5)", color: "var(--primary-60)", fontSize: 10, fontWeight: 600, borderRadius: 20, padding: "2px 8px" }}>
-            v{row.document.version}
-          </span>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, background: tint.bg, color: tint.fg, fontSize: 10, fontWeight: 700, borderRadius: 20, padding: "2px 10px" }}>
-            <PillIcon size={10} /> {pillLabel}
-          </span>
+    <Link
+      href={`/documents/${d.id}`}
+      className={`jcard doc-card ${accent ? "accent" : ""}`}>
+      <span className="doc-card-icon">
+        <FileText size={18} />
+      </span>
+      <div className="doc-card-body">
+        <div className="doc-card-toprow">
+          <span className="jcard-client">{d.title}</span>
+          <span className="doc-ver">v{d.version}</span>
         </div>
-        {row.document.description && (
-          <div className="col-client-sub" style={{ marginBottom: 4 }}>{row.document.description}</div>
-        )}
-        <div style={{ fontSize: 11.5, color: "var(--primary-50)", display: "flex", gap: 12 }}>
-          {due && row.status === "PENDING" && <span>Due {due}</span>}
-          {signedDate && <span>Signed {signedDate}</span>}
+        {d.description && <div className="doc-card-sub">{d.description}</div>}
+        <div className="doc-card-meta">
+          <DocStatusPill status={row.status} />
+          {row.status === "PENDING" && d.dueDate ? (
+            <span className={`doc-due ${overdue ? "overdue" : dueSoon ? "soon" : ""}`}>
+              <Clock size={13} /> Due {formatDate(d.dueDate)}
+              {overdue ? " · overdue" : dueSoon ? " · soon" : ""}
+            </span>
+          ) : row.signedAt ? (
+            <span className="doc-due">
+              <Check size={13} /> Signed {formatDate(row.signedAt)}
+            </span>
+          ) : null}
         </div>
       </div>
-      <ChevronRight size={16} style={{ color: "var(--primary-40)", flexShrink: 0 }} />
+      <span className="doc-card-chev">
+        <ChevronRight size={18} />
+      </span>
     </Link>
   );
 }

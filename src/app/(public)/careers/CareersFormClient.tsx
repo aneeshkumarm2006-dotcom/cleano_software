@@ -1,26 +1,20 @@
 "use client";
 
 import { useState, useRef } from "react";
+import { Check, AlertCircle, Paperclip } from "lucide-react";
 import { submitJobApplication } from "./actions/submitJobApplication";
 import { uploadResume } from "./actions/uploadResume";
 
-const FIELD: React.CSSProperties = {
-  width: "100%",
-  borderRadius: 10,
-  border: "1px solid #d6e2e0",
-  padding: "11px 13px",
-  fontSize: 15,
-  color: "#0a1f24",
-  background: "#fff",
-  outline: "none",
-};
-const LABEL: React.CSSProperties = {
-  display: "block",
-  fontSize: 13,
-  fontWeight: 600,
-  color: "#0a1f24",
-  marginBottom: 6,
-};
+function LogoMark({ size = 20 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M12 3c-1 2-6 7-6 11a6 6 0 0 0 12 0c0-4-5-9-6-11z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
 
 export default function CareersFormClient() {
   const [form, setForm] = useState({
@@ -45,11 +39,15 @@ export default function CareersFormClient() {
     setForm((f) => ({ ...f, [k]: v }));
   }
 
+  const emailOk = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
     setError(null);
+    setResumeUrl(null);
+    setResumeName(null);
     const fd = new FormData();
     fd.append("file", file);
     const res = await uploadResume(fd);
@@ -58,17 +56,16 @@ export default function CareersFormClient() {
       setResumeUrl(res.url);
       setResumeName(file.name);
     } else {
-      setError(res.error ?? "Resume upload failed");
+      setError(res.error ?? "Résumé upload failed.");
       if (fileRef.current) fileRef.current.value = "";
     }
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.name.trim() || !form.email.includes("@") || !form.phone.trim()) {
-      setError("Name, email, and phone are required.");
-      return;
-    }
+    if (!form.name.trim()) return setError("Please enter your full name.");
+    if (!emailOk(form.email)) return setError("Please enter a valid email address.");
+    if (!form.phone.trim()) return setError("Please enter a phone number.");
     setSubmitting(true);
     setError(null);
     const res = await submitJobApplication({
@@ -85,118 +82,263 @@ export default function CareersFormClient() {
     });
     setSubmitting(false);
     if (res.success) setDone(true);
-    else setError(res.error ?? "Something went wrong");
+    else setError(res.error ?? "Something went wrong. Please try again.");
   }
 
-  if (done) {
-    return (
-      <div
-        style={{
-          background: "#fff",
-          border: "1px solid #d6e2e0",
-          borderRadius: 16,
-          padding: 32,
-          textAlign: "center",
-        }}>
-        <h2 style={{ fontSize: 22, color: "#0a1f24", fontWeight: 700, marginBottom: 8 }}>
-          Application received
-        </h2>
-        <p style={{ color: "#3a5a62", fontSize: 15 }}>
-          Thanks for applying! We&apos;ve sent a confirmation to your email. Our
-          hiring team will reach out if you&apos;re a good fit.
-        </p>
-      </div>
-    );
+  function resetForm() {
+    setForm({
+      name: "",
+      email: "",
+      phone: "",
+      cityArea: "",
+      availability: "",
+      experience: "",
+      hasTransport: "",
+      notes: "",
+    });
+    setResumeUrl(null);
+    setResumeName(null);
+    setError(null);
+    setDone(false);
+    if (fileRef.current) fileRef.current.value = "";
   }
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      style={{
-        background: "#fff",
-        border: "1px solid #d6e2e0",
-        borderRadius: 16,
-        padding: 28,
-        display: "flex",
-        flexDirection: "column",
-        gap: 18,
-      }}>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-        <div>
-          <label style={LABEL}>Full name *</label>
-          <input style={FIELD} value={form.name} onChange={(e) => set("name", e.target.value)} required />
-        </div>
-        <div>
-          <label style={LABEL}>Phone *</label>
-          <input style={FIELD} value={form.phone} onChange={(e) => set("phone", e.target.value)} required />
-        </div>
-      </div>
+    <div className="cr-stage">
+      <div className="cr-col">
+        <header className="cr-header">
+          <div className="cr-brand">
+            <span className="cr-logo">
+              <LogoMark size={20} />
+            </span>
+            <span className="cr-eyebrow">Cleano Careers</span>
+          </div>
+          <h1 className="display cr-title">
+            {done ? (
+              <>
+                Application <em>received.</em>
+              </>
+            ) : (
+              <>
+                Apply to work <em>with us.</em>
+              </>
+            )}
+          </h1>
+          <p className="subtitle cr-sub">
+            {done
+              ? "Thanks for applying — our team will review your details and reach out soon."
+              : "Join a team that takes pride in spotless work and treats its cleaners right. Tell us a little about yourself."}
+          </p>
+        </header>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-        <div>
-          <label style={LABEL}>Email *</label>
-          <input style={FIELD} type="email" value={form.email} onChange={(e) => set("email", e.target.value)} required />
-        </div>
-        <div>
-          <label style={LABEL}>City / area</label>
-          <input style={FIELD} value={form.cityArea} onChange={(e) => set("cityArea", e.target.value)} placeholder="e.g. Montréal, West Island" />
-        </div>
-      </div>
+        {done ? (
+          <div className="cr-card cr-success">
+            <span className="cr-success-mark">
+              <Check size={30} />
+            </span>
+            <h2 className="cr-success-title">
+              You&apos;re all set, {form.name.split(" ")[0] || "there"}.
+            </h2>
+            <p className="cr-success-body">
+              We&apos;ve received your application
+              {resumeName ? (
+                <>
+                  {" "}
+                  and your résumé (<strong>{resumeName}</strong>)
+                </>
+              ) : null}
+              . Expect to hear from us at <strong>{form.email}</strong> within a
+              few business days.
+            </p>
+            <div className="cr-success-meta">
+              <div>
+                <span>Name</span>
+                {form.name}
+              </div>
+              <div>
+                <span>Email</span>
+                {form.email}
+              </div>
+              <div>
+                <span>Phone</span>
+                {form.phone}
+              </div>
+              {form.cityArea ? (
+                <div>
+                  <span>Area</span>
+                  {form.cityArea}
+                </div>
+              ) : null}
+            </div>
+            <button className="btn btn-secondary btn-block" onClick={resetForm}>
+              Submit another application
+            </button>
+          </div>
+        ) : (
+          <form className="cr-card" onSubmit={handleSubmit} noValidate>
+            <div className="cr-grid">
+              <div className="field">
+                <label className="label">
+                  Full name <span className="cr-req">*</span>
+                </label>
+                <input
+                  className="input"
+                  value={form.name}
+                  onChange={(e) => set("name", e.target.value)}
+                  placeholder="Jordan Lévesque"
+                />
+              </div>
+              <div className="field">
+                <label className="label">
+                  Phone <span className="cr-req">*</span>
+                </label>
+                <input
+                  className="input"
+                  type="tel"
+                  value={form.phone}
+                  onChange={(e) => set("phone", e.target.value)}
+                  placeholder="(514) 555-0123"
+                />
+              </div>
+            </div>
 
-      <div>
-        <label style={LABEL}>Availability</label>
-        <input style={FIELD} value={form.availability} onChange={(e) => set("availability", e.target.value)} placeholder="e.g. Weekday mornings, full-time" />
-      </div>
+            <div className="cr-grid">
+              <div className="field">
+                <label className="label">
+                  Email <span className="cr-req">*</span>
+                </label>
+                <input
+                  className="input"
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => set("email", e.target.value)}
+                  placeholder="you@email.com"
+                />
+              </div>
+              <div className="field">
+                <label className="label">City / area</label>
+                <input
+                  className="input"
+                  value={form.cityArea}
+                  onChange={(e) => set("cityArea", e.target.value)}
+                  placeholder="Plateau, Verdun…"
+                />
+              </div>
+            </div>
 
-      <div>
-        <label style={LABEL}>Cleaning experience</label>
-        <textarea style={{ ...FIELD, resize: "vertical" }} rows={3} value={form.experience} onChange={(e) => set("experience", e.target.value)} placeholder="Tell us about any relevant experience" />
-      </div>
+            <div className="field">
+              <label className="label">Availability</label>
+              <input
+                className="input"
+                value={form.availability}
+                onChange={(e) => set("availability", e.target.value)}
+                placeholder="e.g. Weekday mornings, full-time"
+              />
+            </div>
 
-      <div>
-        <label style={LABEL}>Do you have reliable transportation?</label>
-        <div style={{ display: "flex", gap: 18, marginTop: 4 }}>
-          {(["yes", "no"] as const).map((v) => (
-            <label key={v} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 15, color: "#0a1f24", cursor: "pointer" }}>
-              <input type="radio" name="transport" checked={form.hasTransport === v} onChange={() => set("hasTransport", v)} />
-              {v === "yes" ? "Yes" : "No"}
-            </label>
-          ))}
-        </div>
-      </div>
+            <div className="field">
+              <label className="label">Cleaning experience</label>
+              <textarea
+                className="textarea"
+                rows={3}
+                value={form.experience}
+                onChange={(e) => set("experience", e.target.value)}
+                placeholder="Tell us about any relevant experience — residential, commercial, hospitality…"
+              />
+            </div>
 
-      <div>
-        <label style={LABEL}>Resume (optional)</label>
-        <input ref={fileRef} type="file" accept=".pdf,.doc,.docx,image/*" onChange={handleFile} disabled={uploading} style={{ fontSize: 14 }} />
-        {uploading && <p style={{ fontSize: 13, color: "#3a5a62", marginTop: 6 }}>Uploading…</p>}
-        {resumeName && !uploading && (
-          <p style={{ fontSize: 13, color: "#15803d", marginTop: 6 }}>Attached: {resumeName}</p>
+            <div className="field">
+              <label className="label">Reliable transportation?</label>
+              <div className="cr-radios">
+                {(["yes", "no"] as const).map((opt) => (
+                  <button
+                    type="button"
+                    key={opt}
+                    className={`cr-radio ${form.hasTransport === opt ? "on" : ""}`}
+                    onClick={() => set("hasTransport", opt)}>
+                    <span className="cr-radio-dot">
+                      {form.hasTransport === opt ? <span /> : null}
+                    </span>
+                    {opt === "yes" ? "Yes" : "No"}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="field">
+              <label className="label">Résumé</label>
+              <input
+                ref={fileRef}
+                type="file"
+                accept=".pdf,.doc,.docx,image/*"
+                hidden
+                onChange={handleFile}
+              />
+              <button
+                type="button"
+                className={`cr-upload ${resumeName ? "done" : ""}`}
+                disabled={uploading}
+                onClick={() => fileRef.current?.click()}>
+                {uploading ? (
+                  <>
+                    <span className="cr-spinner" /> Uploading…
+                  </>
+                ) : resumeName ? (
+                  <>
+                    <span className="cr-upload-ic done">
+                      <Check size={16} />
+                    </span>
+                    <span>
+                      Attached: <strong>{resumeName}</strong>
+                    </span>
+                    <span className="cr-upload-replace">Replace</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="cr-upload-ic">
+                      <Paperclip size={16} />
+                    </span>
+                    <span>
+                      Upload your résumé{" "}
+                      <span className="cr-upload-hint">(PDF or Word)</span>
+                    </span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            <div className="field">
+              <label className="label">Anything else?</label>
+              <textarea
+                className="textarea"
+                rows={2}
+                value={form.notes}
+                onChange={(e) => set("notes", e.target.value)}
+                placeholder="Optional — anything you'd like us to know."
+              />
+            </div>
+
+            {error ? (
+              <div className="banner banner-error cr-error">
+                <AlertCircle size={16} /> {error}
+              </div>
+            ) : null}
+
+            <button
+              className="btn btn-primary btn-lg btn-block"
+              type="submit"
+              disabled={submitting || uploading}>
+              {submitting ? "Submitting…" : "Submit application"}
+            </button>
+            <p className="cr-fineprint">
+              By applying you agree to be contacted about employment
+              opportunities at Cleano.
+            </p>
+          </form>
         )}
+
+        <footer className="cr-footer">© 2026 Cleano · Montréal, QC</footer>
       </div>
-
-      <div>
-        <label style={LABEL}>Anything else?</label>
-        <textarea style={{ ...FIELD, resize: "vertical" }} rows={2} value={form.notes} onChange={(e) => set("notes", e.target.value)} />
-      </div>
-
-      {error && <p style={{ color: "#b91c1c", fontSize: 14 }}>{error}</p>}
-
-      <button
-        type="submit"
-        disabled={submitting || uploading}
-        style={{
-          background: "#005F6A",
-          color: "#fff",
-          border: "none",
-          borderRadius: 10,
-          padding: "13px 0",
-          fontSize: 16,
-          fontWeight: 600,
-          cursor: submitting || uploading ? "not-allowed" : "pointer",
-          opacity: submitting || uploading ? 0.6 : 1,
-        }}>
-        {submitting ? "Submitting…" : "Submit application"}
-      </button>
-    </form>
+    </div>
   );
 }
