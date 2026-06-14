@@ -1,5 +1,4 @@
 import React from "react";
-import { hexToRgba } from "./utils";
 import {
   MIN_BLOCK_HEIGHT,
   OfficeHours,
@@ -70,26 +69,13 @@ export const ScheduleBlocks: React.FC<ScheduleBlocksProps> = ({
               ((segEnd.getMinutes() - segStart.getMinutes()) * zoomLevel) / 60
           );
 
-          const blockColor = block.color || "#EF4444";
-
           return (
             <div
               key={`${block.id}-${day.toISOString()}`}
-              className="absolute left-0 right-0 z-10 border-l-2 pointer-events-none"
-              style={{
-                backgroundColor: hexToRgba(blockColor, 0.05),
-                borderColor: hexToRgba(blockColor, 0.3),
-                top: `${top}px`,
-                height: `${height}px`,
-              }}
+              className="cal-block"
+              style={{ top: `${top}px`, height: `${height}px`, zIndex: 10 }}
               title={`${block.title} (${block.startTime} - ${block.endTime})`}>
-              <div className="absolute inset-0 flex items-center justify-center">
-                <span
-                  className="text-xs font-medium px-1 py-0.5 rounded bg-white/70"
-                  style={{ color: blockColor }}>
-                  {block.title}
-                </span>
-              </div>
+              <span>{block.title}</span>
             </div>
           );
         })

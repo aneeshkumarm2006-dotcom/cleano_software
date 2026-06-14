@@ -22,12 +22,17 @@ export default async function CalendarPage() {
       },
       select: {
         id: true,
+        jobNumber: true,
         clientName: true,
         jobDate: true,
         startTime: true,
         endTime: true,
         status: true,
         jobType: true,
+        location: true,
+        employeePay: true,
+        notes: true,
+        cleaners: { select: { id: true, name: true } },
       },
       orderBy: { jobDate: "asc" },
     });
@@ -36,12 +41,17 @@ export default async function CalendarPage() {
       .filter((j) => j.jobDate != null)
       .map((j) => ({
         id: j.id,
+        jobNumber: j.jobNumber,
         clientName: j.clientName,
         date: j.jobDate!.toISOString(),
         startTime: j.startTime?.toISOString() ?? null,
         endTime: j.endTime?.toISOString() ?? null,
         status: j.status,
         jobType: j.jobType,
+        location: j.location ?? null,
+        employeePay: j.employeePay ?? null,
+        notes: j.notes ?? null,
+        cleaners: j.cleaners.map((c) => c.name),
       }));
 
     return <CleanerCalendarClient jobs={calJobs} />;

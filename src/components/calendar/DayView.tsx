@@ -27,8 +27,9 @@ import { ScheduleBlocksConfig } from "@/types/calendar";
 import EventCard from "./EventCard";
 import ScheduleBlocks from "./ScheduleBlocks";
 import AvailabilityOverlay from "./AvailabilityOverlay";
-import { getCurrentTimeMeta, useTimezoneLabel } from "./time-utils";
+import { getCurrentTimeMeta } from "./time-utils";
 import useDragSelection from "./useDragSelection";
+import { useCalendarOverlays } from "./CalendarOverlaysContext";
 
 /** Selection preview overlay during drag */
 const SelectionPreview: React.FC<{
@@ -112,6 +113,7 @@ export const DayView: React.FC = () => {
   } = useCalendar();
 
   const { config: calendarConfig } = useCalendarConfig();
+  const { availability: showAvailability, blocks: showBlocks } = useCalendarOverlays();
 
   // ---------------------------------------------------------------------------
   // Derived Config
@@ -143,9 +145,6 @@ export const DayView: React.FC = () => {
   // ---------------------------------------------------------------------------
   // Computed Values
   // ---------------------------------------------------------------------------
-
-  /** Timezone label (e.g., "GMT+2") */
-  const timezoneLabel = useTimezoneLabel();
 
   /** Office hours configuration */
   const officeHours = useMemo((): OfficeHours | null => {
@@ -428,114 +427,77 @@ export const DayView: React.FC = () => {
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
+  const baseHour = visibleHours[0] ?? 0;
+  const officeTop = (8 - baseHour) * zoomLevel;
+  const officeHeight = 10 * zoomLevel; // 8 → 18
+  const isToday = isSameDay(currentDate, currentTime);
+  const singleLane = roomNames.length === 1 && roomNames[0] === "All Events";
+
   return (
-    <div className="flex flex-col h-full">
-      {/* Header Row - Fixed */}
-      <div className="flex-shrink-0 flex pb-0 px-4 overflow-x-auto">
-        {/* Timezone Label */}
-        <div className="w-10 flex-shrink-0 flex flex-col items-center justify-end py-3">
-          <span className="app-subtitle !text-[#005F6A]/50">
-            {timezoneLabel}
-          </span>
+    <div className="cal-grid admin-font">
+      <div className="cal-grid-inner">
+        {/* Sticky header row (room lanes) */}
+        <div className="cal-grid-header">
+          <div className="cal-gutter-head" />
+          {roomNames.map((roomName) => {
+            const columnEvents =
+              roomName === "Unassigned Events" || roomName === "All Events"
+                ? dayEvents.filter((ev) => isEventUnassigned(ev, existingRoomNames))
+                : dayEvents.filter((ev) => ev.label === roomName);
+            const dow = singleLane
+              ? currentDate.toLocaleDateString("en-US", { weekday: "long" })
+              : roomName;
+            return (
+              <div key={roomName} className={`cal-dayhead ${isToday ? "today" : ""}`}>
+                <span className="cal-dayhead-dow">{dow}</span>
+                <span className={`cal-dayhead-num ${isToday ? "today" : ""}`}>
+                  {currentDate.getDate()}
+                </span>
+                {columnEvents.length ? (
+                  <span className="cal-dayhead-count">{columnEvents.length}</span>
+                ) : null}
+              </div>
+            );
+          })}
         </div>
 
-        {/* Room Headers */}
-        <div className="flex-1 flex bg-transparent min-w-fit">
-          {roomNames.map((roomName) => (
-            <div
-              key={roomName}
-              className={`flex items-baseline gap-1 p-2 rounded-xl min-w-[200px] flex-1 ${
-                roomName === "Unassigned Events" ? "bg-[#005F6A]/5" : ""
-              }`}>
-              <span
-                className={`app-title ${
-                  roomName === "Unassigned Events"
-                    ? "text-[#005F6A]/70 italic"
-                    : "text-[#005F6A]"
-                }`}>
-                {roomName}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
+        <div className="cal-grid-scroll">
+          {/* Hour gutter */}
+          <div className="cal-gutter">
+            {visibleHours.map((hour) => (
+              <div key={hour} className="cal-hour" style={{ height: `${zoomLevel}px` }}>
+                <span>{formatHour(hour, use24HourClock)}</span>
+              </div>
+            ))}
+          </div>
 
-      {/* Time Grid - Scrollable */}
-      <div className="flex flex-1 overflow-y-auto overflow-x-auto p-4">
-        {/* Time Labels Column */}
-        <div className="w-10 flex-shrink-0 flex flex-col select-none">
-          {visibleHours.map((hour) => (
-            <div
-              key={hour}
-              className="relative flex-shrink-0"
-              style={{ height: `${zoomLevel}px` }}>
-              <span className="absolute right-0 pr-2 z-[1000] section-title !lowercase !text-[#005F6A]/30 text-right -translate-y-1/2">
-                {formatHour(hour, use24HourClock)}
-              </span>
-            </div>
-          ))}
-        </div>
-
-        {/* Room Columns Container */}
-        <div className="flex-1 relative" ref={dayGridRef}>
-          <div className="flex relative" data-day-grid="true">
-            {/* Horizontal Grid Lines */}
-            <div className="absolute inset-0 pointer-events-none">
+          {/* Room columns */}
+          <div
+            className="cal-cols"
+            data-day-grid="true"
+            ref={dayGridRef}
+            style={{ height: `${gridHeight}px` }}>
+            <div className="cal-hourlines">
               {visibleHours.map((hour) => (
-                <React.Fragment key={hour}>
-                  {/* Hour line */}
-                  <div
-                    className="absolute left-0 right-0 border-t-1 border-[#005F6A]/5"
-                    style={{
-                      top: `${
-                        (hour - (officeHours?.start || 0)) * zoomLevel
-                      }px`,
-                    }}
-                  />
-                  {/* 15-minute interval lines */}
-                  {[15, 30, 45].map((minutes) => (
-                    <div
-                      key={`${hour}-${minutes}`}
-                      className="absolute left-0 right-0 border-t-1 border-[#005F6A]/[0.025]"
-                      style={{
-                        top: `${
-                          (hour - (officeHours?.start || 0)) * zoomLevel +
-                          (minutes * zoomLevel) / 60
-                        }px`,
-                      }}
-                    />
-                  ))}
-                </React.Fragment>
+                <div key={hour} className="cal-hline" style={{ height: `${zoomLevel}px` }} />
               ))}
-
-              {/* Current Time Indicator */}
-              {showCurrentTimeIndicator && (
-                <CurrentTimeIndicator top={currentTimeTop} />
+              {showCurrentTimeIndicator && <CurrentTimeIndicator top={currentTimeTop} />}
+              {isDraggingSelection && dragSelectionStart && dragSelectionEnd && (
+                <SelectionPreview
+                  start={dragSelectionStart}
+                  end={dragSelectionEnd}
+                  roomColumns={roomNames}
+                  zoomLevel={zoomLevel}
+                  officeHours={officeHours}
+                  currentRoomIndex={currentDragRoomIndex}
+                />
               )}
-
-              {/* Drag Selection Preview */}
-              {isDraggingSelection &&
-                dragSelectionStart &&
-                dragSelectionEnd && (
-                  <SelectionPreview
-                    start={dragSelectionStart}
-                    end={dragSelectionEnd}
-                    roomColumns={roomNames}
-                    zoomLevel={zoomLevel}
-                    officeHours={officeHours}
-                    currentRoomIndex={currentDragRoomIndex}
-                  />
-                )}
             </div>
 
-            {/* Room Columns */}
             {roomNames.map((roomName, roomIndex) => {
-              // Collect events for this room
               const columnEvents =
                 roomName === "Unassigned Events" || roomName === "All Events"
-                  ? dayEvents.filter((ev) =>
-                      isEventUnassigned(ev, existingRoomNames)
-                    )
+                  ? dayEvents.filter((ev) => isEventUnassigned(ev, existingRoomNames))
                   : dayEvents.filter((ev) => ev.label === roomName);
 
               const layoutMap = computeEventLayout(columnEvents, null);
@@ -548,31 +510,34 @@ export const DayView: React.FC = () => {
                   }}
                   data-room-column={roomIndex}
                   data-room-name={roomName}
-                  className={`relative min-w-[200px] flex-1 ${
-                    roomIndex > 0 ? "border-l border-[#005F6A]/10" : ""
-                  } ${
-                    roomName === "Unassigned Events"
-                      ? "bg-[#005F6A]/[0.02]"
-                      : ""
-                  }`}
+                  className="cal-col"
                   style={{ minHeight: `${gridHeight}px` }}
                   onDrop={(e) => handlePresetDrop(e, roomName)}
                   onDragOver={(e) => e.preventDefault()}>
-                  {/* Schedule Blocks */}
-                  <ScheduleBlocks
-                    day={currentDate}
-                    scheduleBlocks={scheduleBlocks}
-                    officeHours={officeHours}
-                    zoomLevel={zoomLevel}
-                    roomName={roomName}
-                  />
+                  {/* Office-hours shading */}
+                  {officeHeight > 0 && (
+                    <div className="cal-office" style={{ top: `${officeTop}px`, height: `${officeHeight}px` }} />
+                  )}
 
-                  {/* Availability Overlay (current user's self-view) */}
-                  <AvailabilityOverlay
-                    day={currentDate}
-                    officeHours={officeHours}
-                    zoomLevel={zoomLevel}
-                  />
+                  {/* Schedule Blocks */}
+                  {showBlocks && (
+                    <ScheduleBlocks
+                      day={currentDate}
+                      scheduleBlocks={scheduleBlocks}
+                      officeHours={officeHours}
+                      zoomLevel={zoomLevel}
+                      roomName={roomName}
+                    />
+                  )}
+
+                  {/* Availability Overlay */}
+                  {showAvailability && (
+                    <AvailabilityOverlay
+                      day={currentDate}
+                      officeHours={officeHours}
+                      zoomLevel={zoomLevel}
+                    />
+                  )}
 
                   {/* Events */}
                   {columnEvents.map((event) => {
@@ -581,7 +546,7 @@ export const DayView: React.FC = () => {
                     return renderEventCard(event, currentDate, layout);
                   })}
 
-                  {/* 15-Minute Tile Drag Handlers with Hover Effect */}
+                  {/* 15-Minute Tile Drag Handlers */}
                   {visibleHours.flatMap((hour, hourIndex) =>
                     [0, 15, 30, 45].map((minutes) => (
                       <div
@@ -589,21 +554,14 @@ export const DayView: React.FC = () => {
                         className={`absolute left-0 right-0 z-20 transition-colors duration-200 ${
                           isDraggingSelection
                             ? "cursor-crosshair"
-                            : "cursor-pointer hover:bg-[#005F6A]/[0.06]"
+                            : "cursor-pointer hover:bg-[#005F6A]/[0.05]"
                         }`}
                         style={{
-                          top: `${
-                            hourIndex * zoomLevel + (minutes * zoomLevel) / 60
-                          }px`,
+                          top: `${hourIndex * zoomLevel + (minutes * zoomLevel) / 60}px`,
                           height: `${zoomLevel / 4}px`,
                         }}
                         onMouseDown={(e) =>
-                          handleDragSelectionStart(
-                            e,
-                            roomIndex,
-                            hourIndex,
-                            minutes
-                          )
+                          handleDragSelectionStart(e, roomIndex, hourIndex, minutes)
                         }
                       />
                     ))

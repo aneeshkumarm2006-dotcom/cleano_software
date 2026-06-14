@@ -1,327 +1,208 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import Link from "next/link";
+// Cleaner calendar — premium read-only schedule (Month / Week / Day / Agenda).
+// Ported from the Cleano "Cleaner Calendar" design handoff. Read-only: no
+// create / drag / reschedule / resize / overlays — clicking a job opens a
+// details drawer with a "contact dispatch to make changes" notice.
 
-export type CalJob = {
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  X,
+  MapPin,
+  CalendarClock,
+  Sparkles,
+  CreditCard,
+  Briefcase,
+  Eye,
+} from "lucide-react";
+import { avatarColor, initials } from "@/lib/avatar";
+
+interface CalJob {
   id: string;
+  jobNumber: number;
   clientName: string;
   date: string;
   startTime: string | null;
   endTime: string | null;
   status: string;
   jobType: string | null;
+  location: string | null;
+  employeePay: number | null;
+  notes: string | null;
+  cleaners: string[];
+}
+
+type StatusMeta = { label: string; color: string; tint: string };
+const STATUS: Record<string, StatusMeta> = {
+  CREATED: { label: "Created", color: "#64748b", tint: "rgba(100,116,139,0.10)" },
+  SCHEDULED: { label: "Scheduled", color: "#005F6A", tint: "rgba(0,95,106,0.09)" },
+  IN_PROGRESS: { label: "In progress", color: "#d97706", tint: "rgba(217,119,6,0.11)" },
+  COMPLETED: { label: "Completed", color: "#059669", tint: "rgba(5,150,105,0.11)" },
+  PAID: { label: "Paid", color: "#15803d", tint: "rgba(21,128,61,0.11)" },
+  CANCELLED: { label: "Cancelled", color: "#dc2626", tint: "rgba(220,38,38,0.08)" },
 };
+const meta = (s: string): StatusMeta => STATUS[s] ?? STATUS.SCHEDULED;
+const unconfirmed = (j: CalJob) => j.status === "CREATED";
 
-function eventCls(status: string) {
-  if (["COMPLETED", "PAID"].includes(status)) return "";
-  if (["SCHEDULED", "IN_PROGRESS"].includes(status)) return "scheduled";
-  return "created";
+const START_HOUR = 6;
+const END_HOUR = 22;
+const OFFICE_START = 8 * 60;
+const OFFICE_END = 18 * 60;
+const PX_PER_HOUR = 64;
+
+// ── date helpers ──
+const jobStart = (j: CalJob) => new Date(j.startTime ?? j.date);
+const jobDurMin = (j: CalJob) => {
+  if (j.startTime && j.endTime) {
+    const d = (new Date(j.endTime).getTime() - new Date(j.startTime).getTime()) / 60000;
+    if (d > 0) return Math.max(30, d);
+  }
+  return 120;
+};
+const minOfDay = (d: Date) => d.getHours() * 60 + d.getMinutes();
+const sameDay = (a: Date, b: Date) =>
+  a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+function startOfWeek(d: Date) {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  x.setDate(x.getDate() - x.getDay());
+  return x;
 }
-
-function fmtTime(iso: string | null) {
-  if (!iso) return "";
-  return new Date(iso).toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
+function addDays(d: Date, n: number) {
+  const x = new Date(d);
+  x.setDate(x.getDate() + n);
+  return x;
 }
-
-const HOURS = Array.from({ length: 24 }, (_, h) => h);
+const fmtTime = (d: Date) =>
+  d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }).replace(":00", "");
 function fmtHour(h: number) {
-  if (h === 0) return "12am";
-  if (h < 12) return `${h}am`;
-  if (h === 12) return "12pm";
-  return `${h - 12}pm`;
+  const ap = h < 12 ? "AM" : "PM";
+  const hr = h % 12 === 0 ? 12 : h % 12;
+  return `${hr} ${ap}`;
+}
+const money = (n: number) => "$" + Math.round(n).toLocaleString("en-US");
+const typeLabel = (t: string | null) =>
+  t ? t.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase()) : "Clean";
+
+type ViewKind = "month" | "week" | "day" | "agenda";
+
+// ── overlap layout for time grid ──
+function layout(dayJobs: CalJob[]) {
+  const sorted = [...dayJobs].sort((a, b) => +jobStart(a) - +jobStart(b));
+  const out: { job: CalJob; col: number; cols: number }[] = [];
+  const active: { end: number; col: number }[] = [];
+  let clusterCols = 1;
+  let cluster: { job: CalJob; col: number; cols: number }[] = [];
+  const flush = () => {
+    cluster.forEach((o) => (o.cols = clusterCols));
+    cluster = [];
+    clusterCols = 1;
+  };
+  sorted.forEach((job) => {
+    const s = +jobStart(job);
+    const e = s + jobDurMin(job) * 60000;
+    for (let i = active.length - 1; i >= 0; i--) if (active[i].end <= s) active.splice(i, 1);
+    if (active.length === 0) flush();
+    let col = 0;
+    const used = new Set(active.map((a) => a.col));
+    while (used.has(col)) col++;
+    active.push({ end: e, col });
+    clusterCols = Math.max(clusterCols, active.length);
+    const rec = { job, col, cols: 1 };
+    out.push(rec);
+    cluster.push(rec);
+  });
+  flush();
+  return out;
 }
 
-const IconGrid = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="3" width="18" height="18" rx="2" />
-    <line x1="3" y1="9" x2="21" y2="9" />
-    <line x1="9" y1="21" x2="9" y2="9" />
-  </svg>
-);
-
-const IconList = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="8" y1="6" x2="21" y2="6" />
-    <line x1="8" y1="12" x2="21" y2="12" />
-    <line x1="8" y1="18" x2="21" y2="18" />
-    <line x1="3" y1="6" x2="3.01" y2="6" />
-    <line x1="3" y1="12" x2="3.01" y2="12" />
-    <line x1="3" y1="18" x2="3.01" y2="18" />
-  </svg>
-);
-
-const IconChevLeft = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="15 18 9 12 15 6" />
-  </svg>
-);
-
-const IconChevRight = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="9 18 15 12 9 6" />
-  </svg>
-);
-
-/* ── Month view ── */
-
-function MonthEvent({ job }: { job: CalJob }) {
+function StatusPill({ s }: { s: string }) {
+  const m = meta(s);
   return (
-    <Link href={`/my-jobs/${job.id}`} className={`cl-cal-event ${eventCls(job.status)}`}>
-      <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-        {job.clientName}
-      </div>
-      {job.startTime && <div className="cl-cal-event-time">{fmtTime(job.startTime)}</div>}
-    </Link>
+    <span className="pill" style={{ background: m.tint, color: m.color }}>
+      <span className="pill-dot" style={{ background: m.color }} />
+      {m.label}
+    </span>
   );
 }
 
-function MonthGrid({ cursor, jobs, today }: { cursor: Date; jobs: CalJob[]; today: Date }) {
-  const firstDay = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
-  const start = new Date(firstDay);
-  start.setDate(start.getDate() - start.getDay());
-
-  const weeks: Date[][] = [];
-  for (let w = 0; w < 6; w++) {
-    const row: Date[] = [];
-    for (let d = 0; d < 7; d++) {
-      const cell = new Date(start);
-      cell.setDate(start.getDate() + w * 7 + d);
-      row.push(cell);
-    }
-    weeks.push(row);
-  }
-
-  function eventsOn(day: Date) {
-    return jobs.filter((j) => new Date(j.date).toDateString() === day.toDateString());
-  }
-
+// ── Month ──
+function MonthView({ anchor, jobs, onDay, onJob }: { anchor: Date; jobs: CalJob[]; onDay: (d: Date) => void; onJob: (j: CalJob) => void }) {
+  const first = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+  const gridStart = startOfWeek(first);
+  const cells = Array.from({ length: 42 }, (_, i) => addDays(gridStart, i));
+  const today = new Date();
   return (
-    <div className="cl-cal-grid">
-      <div className="cl-cal-week-row header">
-        {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
-          <div key={d}>{d}</div>
-        ))}
-      </div>
-      {weeks.map((wk, wi) => (
-        <div className="cl-cal-week-row" key={wi}>
-          {wk.map((day, di) => {
-            const inMonth = day.getMonth() === cursor.getMonth();
-            const isToday = day.toDateString() === today.toDateString();
-            const evs = eventsOn(day);
-            return (
-              <div
-                key={di}
-                className={`cl-cal-cell${inMonth ? "" : " dim"}${isToday ? " today" : ""}`}
-              >
-                <span className="day-num">{day.getDate()}</span>
-                {evs.slice(0, 2).map((j) => (
-                  <MonthEvent key={j.id} job={j} />
-                ))}
-                {evs.length > 2 && (
-                  <div style={{ fontSize: 11, color: "var(--primary-50)" }}>
-                    +{evs.length - 2} more
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/* ── Week / Day positioned events ── */
-
-function PositionedEvent({ job, expanded = false }: { job: CalJob; expanded?: boolean }) {
-  const d = new Date(job.startTime || job.date);
-  const mins = d.getHours() * 60 + d.getMinutes();
-  const dur =
-    job.endTime && job.startTime
-      ? (new Date(job.endTime).getTime() - new Date(job.startTime).getTime()) / 60000
-      : 90;
-  const top = (mins / 60) * 48;
-  const height = Math.max(28, (dur / 60) * 48);
-
-  return (
-    <Link
-      href={`/my-jobs/${job.id}`}
-      className={`cl-cal-time-event ${eventCls(job.status)}`}
-      style={{ top: `${top}px`, height: `${height}px` }}
-    >
-      <div className="ev-title">{job.clientName}</div>
-      {job.startTime && <div className="ev-time">{fmtTime(job.startTime)}</div>}
-      {expanded && job.jobType && (
-        <div style={{ fontSize: 11, opacity: 0.7, marginTop: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-          {job.jobType}
-        </div>
-      )}
-    </Link>
-  );
-}
-
-/* ── Week view ── */
-
-function WeekGrid({ weekDays, jobs, today }: { weekDays: Date[]; jobs: CalJob[]; today: Date }) {
-  return (
-    <div className="cl-cal-time-shell">
-      <div className="cl-cal-time-head" style={{ gridTemplateColumns: "64px repeat(7, 1fr)" }}>
-        <div className="gmt">GMT</div>
-        {weekDays.map((d, i) => {
-          const isToday = d.toDateString() === today.toDateString();
+    <div className="cal-month">
+      <div className="cal-month-dow">{["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => <div key={d}>{d}</div>)}</div>
+      <div className="cal-month-grid">
+        {cells.map((d, i) => {
+          const inMonth = d.getMonth() === anchor.getMonth();
+          const isToday = sameDay(d, today);
+          const list = jobs.filter((j) => sameDay(jobStart(j), d)).sort((a, b) => +jobStart(a) - +jobStart(b));
           return (
-            <div key={i} className={`day${isToday ? " today" : ""}`}>
-              <span className="day-num">{d.getDate()}</span>
-              <span className="day-name">
-                {d.toLocaleDateString("en-US", { weekday: "short" })}
-              </span>
+            <div key={i} className={`cal-mcell ${inMonth ? "" : "out"} ${isToday ? "today" : ""}`} onClick={() => onDay(d)}>
+              <div className="cal-mcell-head">
+                {list.length ? <span className="cal-mcount">{list.length} {list.length === 1 ? "job" : "jobs"}</span> : <span />}
+                <span className={`cal-mdate ${isToday ? "today" : ""}`}>{d.getDate()}</span>
+              </div>
+              <div className="cal-mcell-jobs">
+                {list.slice(0, 2).map((j) => {
+                  const m = meta(j.status);
+                  return (
+                    <button key={j.id} className={`cal-chip ${unconfirmed(j) ? "faded" : ""}`} style={{ background: m.tint, color: m.color }} onClick={(e) => { e.stopPropagation(); onJob(j); }}>
+                      <span className="cal-chip-dot" style={{ background: m.color }} />
+                      <span className="cal-chip-t">{fmtTime(jobStart(j))}</span>
+                      <span className="cal-chip-n">{j.clientName.split(" ")[0]}</span>
+                    </button>
+                  );
+                })}
+                {list.length > 2 ? <button className="cal-more" onClick={(e) => { e.stopPropagation(); onDay(d); }}>+{list.length - 2} more</button> : null}
+              </div>
             </div>
           );
         })}
       </div>
-      <div className="cl-cal-time-body" style={{ gridTemplateColumns: "64px repeat(7, 1fr)" }}>
-        <div className="cl-cal-time-col gutter">
-          {HOURS.map((h) => (
-            <div key={h} className="cl-cal-time-row">{fmtHour(h)}</div>
-          ))}
-        </div>
-        {weekDays.map((day, di) => (
-          <div key={di} className="cl-cal-time-col">
-            {HOURS.map((h) => (
-              <div key={h} className="cl-cal-time-cell" />
-            ))}
-            {jobs
-              .filter((j) => new Date(j.date).toDateString() === day.toDateString())
-              .map((j) => (
-                <PositionedEvent key={j.id} job={j} />
-              ))}
-          </div>
-        ))}
-      </div>
     </div>
   );
 }
 
-/* ── Day view ── */
-
-function DayGrid({ day, jobs }: { day: Date; jobs: CalJob[] }) {
-  const dayJobs = jobs.filter((j) => new Date(j.date).toDateString() === day.toDateString());
+// ── Agenda ──
+function AgendaView({ anchor, jobs, onJob }: { anchor: Date; jobs: CalJob[]; onJob: (j: CalJob) => void }) {
+  const s = startOfWeek(anchor);
+  const days = Array.from({ length: 7 }, (_, i) => addDays(s, i));
   return (
-    <div className="cl-cal-time-shell">
-      <div className="cl-cal-time-head" style={{ gridTemplateColumns: "64px 1fr" }}>
-        <div className="gmt">GMT</div>
-        <div className="day" style={{ padding: "14px 18px" }}>
-          <span style={{
-            fontSize: 13, fontWeight: 600, color: "var(--primary)",
-            textTransform: "uppercase", letterSpacing: "0.08em",
-          }}>
-            {dayJobs.length === 0 ? "No events" : `${dayJobs.length} event${dayJobs.length === 1 ? "" : "s"}`}
-          </span>
-        </div>
-      </div>
-      <div className="cl-cal-time-body" style={{ gridTemplateColumns: "64px 1fr" }}>
-        <div className="cl-cal-time-col gutter">
-          {HOURS.map((h) => (
-            <div key={h} className="cl-cal-time-row">{fmtHour(h)}</div>
-          ))}
-        </div>
-        <div className="cl-cal-time-col">
-          {HOURS.map((h) => (
-            <div key={h} className="cl-cal-time-cell" />
-          ))}
-          {dayJobs.map((j) => (
-            <PositionedEvent key={j.id} job={j} expanded />
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ── Agenda view ── */
-
-function AgendaView({
-  cursor,
-  view,
-  jobs,
-  today,
-}: {
-  cursor: Date;
-  view: "month" | "week" | "day";
-  jobs: CalJob[];
-  today: Date;
-}) {
-  const days = useMemo(() => {
-    if (view === "day") return [new Date(cursor)];
-    if (view === "week") {
-      const s = new Date(cursor);
-      s.setDate(s.getDate() - s.getDay());
-      return Array.from({ length: 7 }, (_, i) => {
-        const d = new Date(s);
-        d.setDate(s.getDate() + i);
-        return d;
-      });
-    }
-    const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
-    const last = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0);
-    const out: Date[] = [];
-    for (let d = new Date(first); d <= last; d.setDate(d.getDate() + 1)) {
-      out.push(new Date(d));
-    }
-    return out;
-  }, [cursor, view]);
-
-  return (
-    <div className="cl-agenda">
-      {days.map((day) => {
-        const evs = jobs.filter((j) => new Date(j.date).toDateString() === day.toDateString());
-        const isToday = day.toDateString() === today.toDateString();
+    <div className="cal-agenda">
+      {days.map((d, i) => {
+        const list = jobs.filter((j) => sameDay(jobStart(j), d)).sort((a, b) => +jobStart(a) - +jobStart(b));
+        const isToday = sameDay(d, new Date());
         return (
-          <div className="cl-agenda-day" key={day.toISOString()}>
-            <div className="cl-agenda-day-head">
-              <h3 className={`cl-agenda-day-title${isToday ? " today" : ""}`}>
-                {day.toLocaleDateString("en-US", {
-                  weekday: "long",
-                  month: "long",
-                  day: "numeric",
-                  year: "numeric",
-                })}
-              </h3>
-              <span className="cl-agenda-day-count">
-                {evs.length} {evs.length === 1 ? "event" : "events"}
-              </span>
+          <div key={i} className={`cal-ag-day ${isToday ? "today" : ""}`}>
+            <div className="cal-ag-date">
+              <span className="cal-ag-dow">{d.toLocaleDateString("en-US", { weekday: "short" })}</span>
+              <span className="cal-ag-num">{d.getDate()}</span>
             </div>
-            {evs.length === 0 ? (
-              <div className="cl-agenda-empty">No events</div>
-            ) : (
-              evs.map((j) => (
-                <Link
-                  key={j.id}
-                  href={`/my-jobs/${j.id}`}
-                  className={`cl-agenda-event ${eventCls(j.status)}`}
-                >
-                  <div className="cl-agenda-event-head">
-                    <span className="cl-agenda-event-title">{j.clientName}</span>
-                    <span className="cl-pill" style={{ background: "rgba(0,0,0,0.04)", color: "var(--ink-soft)" }}>
-                      {j.status.toLowerCase().replace("_", " ")}
-                    </span>
-                  </div>
-                  {j.startTime && (
-                    <div className="cl-agenda-event-time">
-                      {fmtTime(j.startTime)}{j.endTime ? ` – ${fmtTime(j.endTime)}` : ""}
-                    </div>
-                  )}
-                  {j.jobType && (
-                    <div className="cl-agenda-event-sub">{j.jobType} cleaning</div>
-                  )}
-                </Link>
-              ))
-            )}
+            <div className="cal-ag-list">
+              {list.length === 0 ? (
+                <div className="cal-ag-empty">No jobs</div>
+              ) : (
+                list.map((j) => {
+                  const m = meta(j.status);
+                  return (
+                    <button key={j.id} className="cal-ag-row" style={{ borderLeftColor: m.color }} onClick={() => onJob(j)}>
+                      <span className="cal-ag-time">{fmtTime(jobStart(j))}</span>
+                      <span className="cal-ag-main">
+                        <strong>{j.clientName}</strong>
+                        <span>{typeLabel(j.jobType)}{j.employeePay != null ? ` · ${money(j.employeePay)}` : ""}</span>
+                      </span>
+                      <StatusPill s={j.status} />
+                    </button>
+                  );
+                })
+              )}
+            </div>
           </div>
         );
       })}
@@ -329,111 +210,227 @@ function AgendaView({
   );
 }
 
-/* ── Main export ── */
+// ── Time grid (week/day, read-only) ──
+function TimeGrid({ view, anchor, jobs, onJob }: { view: "week" | "day"; anchor: Date; jobs: CalJob[]; onJob: (j: CalJob) => void }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [nowMin, setNowMin] = useState(minOfDay(new Date()));
+  const days = view === "day" ? [new Date(anchor)] : Array.from({ length: 7 }, (_, i) => addDays(startOfWeek(anchor), i));
 
-export default function CleanerCalendarClient({ jobs }: { jobs: CalJob[] }) {
-  const today = useMemo(() => {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    return d;
+  const totalMin = (END_HOUR - START_HOUR) * 60;
+  const gridH = (totalMin / 60) * PX_PER_HOUR;
+  const minToY = (min: number) => ((min - START_HOUR * 60) / 60) * PX_PER_HOUR;
+  const hours: number[] = [];
+  for (let h = START_HOUR; h <= END_HOUR; h++) hours.push(h);
+
+  useEffect(() => {
+    const t = setInterval(() => setNowMin(minOfDay(new Date())), 60000);
+    return () => clearInterval(t);
+  }, []);
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = minToY(7 * 60);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const [view, setView] = useState<"month" | "week" | "day">("month");
-  const [mode, setMode] = useState<"grid" | "agenda">("grid");
-  const [cursor, setCursor] = useState(() => new Date());
-
-  function step(delta: number) {
-    setCursor((prev) => {
-      const d = new Date(prev);
-      if (view === "month") d.setMonth(d.getMonth() + delta);
-      else if (view === "week") d.setDate(d.getDate() + delta * 7);
-      else d.setDate(d.getDate() + delta);
-      return d;
-    });
-  }
-
-  function jump() {
-    setCursor(new Date());
-  }
-
-  const title =
-    view === "day"
-      ? cursor.toLocaleDateString("en-US", {
-          weekday: "long",
-          month: "long",
-          day: "numeric",
-          year: "numeric",
-        })
-      : cursor.toLocaleDateString("en-US", { month: "long", year: "numeric" });
-
-  const weekDays = useMemo(() => {
-    const s = new Date(cursor);
-    s.setDate(s.getDate() - s.getDay());
-    return Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(s);
-      d.setDate(s.getDate() + i);
-      return d;
-    });
-  }, [cursor]);
-
   return (
-    <div className="cl-cal-shell">
-      {/* Toolbar */}
-      <div className="cl-cal-bar">
-        <h2 className="cl-cal-title">{title}</h2>
-
-        <div className="cl-cal-views">
-          {(["month", "week", "day"] as const).map((v) => (
-            <button
-              key={v}
-              className={view === v ? "active" : ""}
-              onClick={() => setView(v)}
-            >
-              {v.charAt(0).toUpperCase() + v.slice(1)}
-            </button>
-          ))}
+    <div className="cal-grid" ref={scrollRef}>
+      <div className="cal-grid-inner" style={{ height: gridH + 56 }}>
+        <div className="cal-grid-header">
+          <div className="cal-gutter-head" />
+          {days.map((d, i) => {
+            const isToday = sameDay(d, new Date());
+            const count = jobs.filter((j) => sameDay(jobStart(j), d)).length;
+            return (
+              <div key={i} className={`cal-dayhead ${isToday ? "today" : ""}`}>
+                <span className="cal-dayhead-dow">{d.toLocaleDateString("en-US", { weekday: view === "day" ? "long" : "short" })}</span>
+                <span className={`cal-dayhead-num ${isToday ? "today" : ""}`}>{d.getDate()}</span>
+                {count ? <span className="cal-dayhead-count">{count}</span> : null}
+              </div>
+            );
+          })}
         </div>
 
-        <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
-          <div className="cl-cal-mode-toggle">
-            <button
-              className={mode === "grid" ? "active" : ""}
-              onClick={() => setMode("grid")}
-              title="Grid view"
-            >
-              <IconGrid />
-            </button>
-            <button
-              className={mode === "agenda" ? "active" : ""}
-              onClick={() => setMode("agenda")}
-              title="Agenda view"
-            >
-              <IconList />
-            </button>
+        <div className="cal-grid-scroll">
+          <div className="cal-gutter">
+            {hours.map((h) => <div key={h} className="cal-hour" style={{ height: PX_PER_HOUR }}><span>{fmtHour(h)}</span></div>)}
+          </div>
+          <div className="cal-cols" style={{ height: gridH }}>
+            <div className="cal-hourlines">
+              {hours.map((h) => <div key={h} className="cal-hline" style={{ height: PX_PER_HOUR }} />)}
+            </div>
+            {days.map((d, i) => {
+              const dayJobs = layout(jobs.filter((j) => sameDay(jobStart(j), d)));
+              const isToday = sameDay(d, new Date());
+              return (
+                <div key={i} className="cal-col">
+                  <div className="cal-office" style={{ top: minToY(OFFICE_START), height: ((OFFICE_END - OFFICE_START) / 60) * PX_PER_HOUR }} />
+                  {isToday && nowMin >= START_HOUR * 60 && nowMin <= END_HOUR * 60 ? (
+                    <div className="cal-now" style={{ top: minToY(nowMin) }}><span className="cal-now-dot" /></div>
+                  ) : null}
+                  {dayJobs.map(({ job, col, cols }) => {
+                    const m = meta(job.status);
+                    const sMin = Math.max(START_HOUR * 60, minOfDay(jobStart(job)));
+                    const dur = jobDurMin(job);
+                    const h = Math.max(22, (dur / 60) * PX_PER_HOUR - 3);
+                    const compact = dur <= 60;
+                    return (
+                      <div
+                        key={job.id}
+                        className={`cal-ev ${unconfirmed(job) ? "faded" : ""} ${job.status === "CANCELLED" ? "cancelled" : ""}`}
+                        style={{
+                          top: minToY(sMin),
+                          height: h,
+                          left: `calc(${(col / cols) * 100}% + 3px)`,
+                          width: `calc(${100 / cols}% - 6px)`,
+                          background: m.tint,
+                          borderColor: m.color,
+                          ["--evc" as string]: m.color,
+                        }}
+                        onClick={() => onJob(job)}>
+                        <span className="cal-ev-bar" style={{ background: m.color }} />
+                        <div className="cal-ev-in">
+                          <div className="cal-ev-top"><span className="cal-ev-client">{job.clientName}</span></div>
+                          {!compact ? <div className="cal-ev-meta">{fmtTime(jobStart(job))} · {typeLabel(job.jobType)}</div> : null}
+                          {!compact && (dur / 60) * PX_PER_HOUR > 70 ? (
+                            <div className="cal-ev-foot">
+                              <span className="cal-ev-loc">{job.location ?? ""}</span>
+                              {job.employeePay != null ? <span className="cal-ev-pay">{money(job.employeePay)}</span> : null}
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Read-only job drawer (matches the design's JobModal, read-only path) ──
+function JobModal({ job, onClose }: { job: CalJob; onClose: () => void }) {
+  const start = jobStart(job);
+  const dur = jobDurMin(job);
+  return (
+    <div
+      style={{ position: "fixed", inset: 0, zIndex: 80, background: "rgba(8,20,22,0.4)", display: "flex", justifyContent: "flex-end" }}
+      onClick={onClose}>
+      <div
+        className="admin-font"
+        style={{ width: 440, maxWidth: "100%", height: "100%", background: "#fff", boxShadow: "var(--shadow-pop)", padding: "24px 26px", overflowY: "auto" }}
+        onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 18, gap: 12 }}>
+          <div>
+            <h2 className="title-sm">{job.clientName}</h2>
+            <div className="cjm-sub">#{job.jobNumber} · {typeLabel(job.jobType)} clean</div>
+          </div>
+          <button className="icon-btn" onClick={onClose} aria-label="Close"><X size={18} /></button>
+        </div>
+
+        <div className="cjm">
+          <div className="cjm-statusrow">
+            <StatusPill s={job.status} />
           </div>
 
-          <div className="cl-cal-nav">
-            <button onClick={() => step(-1)} aria-label="Previous">
-              <IconChevLeft />
-            </button>
-            <button className="cl-cal-today" onClick={jump}>Today</button>
-            <button onClick={() => step(1)} aria-label="Next">
-              <IconChevRight />
-            </button>
+          <div className="cjm-rows">
+            <div className="cjm-row">
+              <span className="cjm-k"><CalendarClock size={15} /> When</span>
+              <span className="cjm-v">
+                {start.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })} · {fmtTime(start)}{" "}
+                <span style={{ color: "var(--primary-50)" }}>({Math.round((dur / 60) * 10) / 10}h)</span>
+              </span>
+            </div>
+            {job.location ? (
+              <div className="cjm-row"><span className="cjm-k"><MapPin size={15} /> Location</span><span className="cjm-v">{job.location}</span></div>
+            ) : null}
+            <div className="cjm-row"><span className="cjm-k"><Sparkles size={15} /> Service</span><span className="cjm-v">{typeLabel(job.jobType)}</span></div>
+            {job.employeePay != null ? (
+              <div className="cjm-row"><span className="cjm-k"><CreditCard size={15} /> Cleaner pay</span><span className="cjm-v">{money(job.employeePay)}</span></div>
+            ) : null}
+            {job.cleaners.length ? (
+              <div className="cjm-row">
+                <span className="cjm-k"><Briefcase size={15} /> Team</span>
+                <span className="cjm-v cjm-team">
+                  {job.cleaners.map((name) => (
+                    <span key={name} className="cjm-av" style={{ background: avatarColor(name) }} title={name}>{initials(name)}</span>
+                  ))}
+                  {job.cleaners.map((n) => n.split(" ")[0]).join(", ")}
+                </span>
+              </div>
+            ) : null}
+          </div>
+
+          {job.notes ? (
+            <div className="cjm-note">
+              <div className="cjm-note-label">Job note</div>
+              <p>{job.notes}</p>
+            </div>
+          ) : null}
+
+          <div className="cjm-ro"><Eye size={15} /> Read-only view — contact dispatch to make changes.</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function CleanerCalendarClient({ jobs }: { jobs: CalJob[] }) {
+  const [view, setView] = useState<ViewKind>("week");
+  const [anchor, setAnchor] = useState(new Date());
+  const [modalJob, setModalJob] = useState<CalJob | null>(null);
+
+  const VIEWS: ViewKind[] = ["month", "week", "day", "agenda"];
+
+  function go(dir: number) {
+    const d = new Date(anchor);
+    if (view === "month") d.setMonth(d.getMonth() + dir);
+    else if (view === "day") d.setDate(d.getDate() + dir);
+    else d.setDate(d.getDate() + dir * 7);
+    setAnchor(d);
+  }
+
+  const rangeLabel = useMemo(() => {
+    if (view === "month") return anchor.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+    if (view === "day") return anchor.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+    const s = startOfWeek(anchor);
+    const e = addDays(s, 6);
+    const sM = s.toLocaleDateString("en-US", { month: "short" });
+    const eM = e.toLocaleDateString("en-US", { month: "short" });
+    return `${sM} ${s.getDate()} – ${sM === eM ? "" : eM + " "}${e.getDate()}, ${e.getFullYear()}`;
+  }, [view, anchor]);
+
+  return (
+    <div className="admin-font cal-page">
+      <div className="cal-toolbar">
+        <div className="cal-tb-left">
+          <div className="cal-nav">
+            <button className="cal-navbtn" onClick={() => go(-1)} aria-label="Previous"><ChevronLeft size={18} /></button>
+            <button className="cal-today" onClick={() => setAnchor(new Date())}>Today</button>
+            <button className="cal-navbtn" onClick={() => go(1)} aria-label="Next"><ChevronRight size={18} /></button>
+          </div>
+          <h1 className="cal-range">{rangeLabel}</h1>
+        </div>
+        <div className="cal-tb-right">
+          <div className="cal-viewseg">
+            {VIEWS.map((v) => (
+              <button key={v} className={`cal-vbtn ${view === v ? "active" : ""}`} onClick={() => setView(v)}>
+                {v[0].toUpperCase() + v.slice(1)}
+              </button>
+            ))}
           </div>
         </div>
       </div>
 
-      {/* Content */}
-      {mode === "agenda" ? (
-        <AgendaView cursor={cursor} view={view} jobs={jobs} today={today} />
-      ) : view === "month" ? (
-        <MonthGrid cursor={cursor} jobs={jobs} today={today} />
-      ) : view === "week" ? (
-        <WeekGrid weekDays={weekDays} jobs={jobs} today={today} />
-      ) : (
-        <DayGrid day={cursor} jobs={jobs} />
-      )}
+      <div className="cal-body">
+        {view === "month" ? <MonthView anchor={anchor} jobs={jobs} onDay={(d) => { setAnchor(d); setView("day"); }} onJob={setModalJob} /> : null}
+        {view === "agenda" ? <AgendaView anchor={anchor} jobs={jobs} onJob={setModalJob} /> : null}
+        {view === "week" || view === "day" ? <TimeGrid view={view} anchor={anchor} jobs={jobs} onJob={setModalJob} /> : null}
+      </div>
+
+      {modalJob ? <JobModal job={modalJob} onClose={() => setModalJob(null)} /> : null}
     </div>
   );
 }

@@ -24,13 +24,13 @@ import {
 } from "./calendar-helpers";
 import { CurrentTimeIndicator } from "./calendar-components";
 import { ScheduleBlocksConfig } from "@/types/calendar";
-import Button from "@/components/ui/Button";
 import { HiMapPin } from "react-icons/hi2";
 import EventCard from "./EventCard";
 import ScheduleBlocks from "./ScheduleBlocks";
 import AvailabilityOverlay from "./AvailabilityOverlay";
-import { getCurrentTimeMeta, useTimezoneLabel } from "./time-utils";
+import { getCurrentTimeMeta } from "./time-utils";
 import useDragSelection from "./useDragSelection";
+import { useCalendarOverlays } from "./CalendarOverlaysContext";
 
 /** Selection preview overlay during drag */
 const SelectionPreview: React.FC<{
@@ -155,6 +155,7 @@ export const WeekView: React.FC = () => {
   } = useCalendar();
 
   const { config: calendarConfig } = useCalendarConfig();
+  const { availability: showAvailability, blocks: showBlocks } = useCalendarOverlays();
 
   // ---------------------------------------------------------------------------
   // Derived Config
@@ -185,9 +186,6 @@ export const WeekView: React.FC = () => {
   // ---------------------------------------------------------------------------
   // Computed Values
   // ---------------------------------------------------------------------------
-
-  /** Timezone label (e.g., "GMT+2") */
-  const timezoneLabel = useTimezoneLabel();
 
   /** Office hours configuration */
   const officeHours = useMemo((): OfficeHours | null => {
@@ -434,117 +432,67 @@ export const WeekView: React.FC = () => {
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
-  return (
-    <div className="flex flex-col h-full">
-      {/* Header Row - Fixed */}
-      <div className="flex-shrink-0 flex pb-0 px-4 overflow-x-auto">
-        {/* Timezone Label */}
-        <div className="w-10 flex-shrink-0 flex flex-col items-center justify-end py-3">
-          <span className="app-subtitle !text-[#005F6A]/50">
-            {timezoneLabel}
-          </span>
-        </div>
+  const baseHour = visibleHours[0] ?? 0;
+  const officeTop = (8 - baseHour) * zoomLevel;
+  const officeHeight = 10 * zoomLevel; // 8 → 18
 
-        {/* Day Headers */}
-        <div className="flex-1 flex bg-transparent min-w-fit">
+  return (
+    <div className="cal-grid admin-font">
+      <div className="cal-grid-inner">
+        {/* Sticky day-header row */}
+        <div className="cal-grid-header">
+          <div className="cal-gutter-head" />
           {weekDays.map((day) => {
             const isToday = isSameDay(day, currentTime);
-            const isWeekend = day.getDay() === 0 || day.getDay() === 6;
+            const count = events.filter((e) => eventOverlapsDay(e, day)).length;
             return (
-              <div
-                key={day.toISOString()}
-                className={`flex items-baseline gap-1 p-2 rounded-xl min-w-[120px] flex-1 ${
-                  isToday
-                    ? "bg-[#005F6A]/10"
-                    : isWeekend
-                    ? "bg-[#005F6A]/[0]"
-                    : ""
-                }`}>
-                <span
-                  className={`app-title ${
-                    isToday ? "text-[#005F6A]" : "text-[#005F6A]/70"
-                  }`}>
+              <div key={day.toISOString()} className={`cal-dayhead ${isToday ? "today" : ""}`}>
+                <span className="cal-dayhead-dow">
+                  {day.toLocaleDateString("en-US", { weekday: "short" })}
+                </span>
+                <span className={`cal-dayhead-num ${isToday ? "today" : ""}`}>
                   {day.getDate()}
                 </span>
-                <span className="app-subtitle !text-[#005F6A]/60">
-                  {day.toLocaleString("default", { weekday: "short" })}
-                </span>
+                {count ? <span className="cal-dayhead-count">{count}</span> : null}
               </div>
             );
           })}
         </div>
-      </div>
 
-      {/* Time Grid - Scrollable */}
-      <div className="flex flex-1 overflow-y-auto overflow-x-auto p-4">
-        {/* Time Labels Column */}
-        <div className="w-10 flex-shrink-0 flex flex-col select-none">
-          {visibleHours.map((hour) => (
-            <div
-              key={hour}
-              className="relative flex-shrink-0"
-              style={{ height: `${zoomLevel}px` }}>
-              <span className="absolute right-0 pr-2 z-[1000] section-title !lowercase !text-[#005F6A]/30 text-right -translate-y-1/2">
-                {formatHour(hour, use24HourClock)}
-              </span>
-            </div>
-          ))}
-        </div>
+        <div className="cal-grid-scroll">
+          {/* Hour gutter */}
+          <div className="cal-gutter">
+            {visibleHours.map((hour) => (
+              <div key={hour} className="cal-hour" style={{ height: `${zoomLevel}px` }}>
+                <span>{formatHour(hour, use24HourClock)}</span>
+              </div>
+            ))}
+          </div>
 
-        {/* Days Grid Container */}
-        <div className="flex-1 relative" ref={weekGridRef}>
-          <div className="flex relative" data-week-grid="true">
-            {/* Horizontal Grid Lines */}
-            <div className="absolute inset-0 pointer-events-none">
+          {/* Day columns */}
+          <div
+            className="cal-cols"
+            data-week-grid="true"
+            ref={weekGridRef}
+            style={{ height: `${gridHeight}px` }}>
+            {/* Hour lines + now-line + selection preview */}
+            <div className="cal-hourlines">
               {visibleHours.map((hour) => (
-                <React.Fragment key={hour}>
-                  {/* Hour line */}
-                  <div
-                    className="absolute left-0 right-0 border-t-1 border-[#005F6A]/5"
-                    style={{
-                      top: `${
-                        (hour - (officeHours?.start || 0)) * zoomLevel
-                      }px`,
-                    }}
-                  />
-                  {/* 15-minute interval lines */}
-                  {[15, 30, 45].map((minutes) => (
-                    <div
-                      key={`${hour}-${minutes}`}
-                      className="absolute left-0 right-0 border-t-1 border-[#005F6A]/[0.025]"
-                      style={{
-                        top: `${
-                          (hour - (officeHours?.start || 0)) * zoomLevel +
-                          (minutes * zoomLevel) / 60
-                        }px`,
-                      }}
-                    />
-                  ))}
-                </React.Fragment>
+                <div key={hour} className="cal-hline" style={{ height: `${zoomLevel}px` }} />
               ))}
-
-              {/* Current Time Indicator */}
-              {showCurrentTimeIndicator && (
-                <CurrentTimeIndicator top={currentTimeTop} />
+              {showCurrentTimeIndicator && <CurrentTimeIndicator top={currentTimeTop} />}
+              {isDraggingSelection && dragSelectionStart && dragSelectionEnd && (
+                <SelectionPreview
+                  start={dragSelectionStart}
+                  end={dragSelectionEnd}
+                  weekDays={weekDays}
+                  zoomLevel={zoomLevel}
+                  officeHours={officeHours}
+                />
               )}
-
-              {/* Drag Selection Preview */}
-              {isDraggingSelection &&
-                dragSelectionStart &&
-                dragSelectionEnd && (
-                  <SelectionPreview
-                    start={dragSelectionStart}
-                    end={dragSelectionEnd}
-                    weekDays={weekDays}
-                    zoomLevel={zoomLevel}
-                    officeHours={officeHours}
-                  />
-                )}
             </div>
 
-            {/* Day Columns */}
             {weekDays.map((day, index) => {
-              // Collect events for this day (including preview)
               const dayEvents = [
                 ...events,
                 ...(previewEvent && eventOverlapsDay(previewEvent, day)
@@ -554,8 +502,6 @@ export const WeekView: React.FC = () => {
 
               const layoutMap = computeEventLayout(dayEvents, null);
 
-              const isWeekend = day.getDay() === 0 || day.getDay() === 6;
-
               return (
                 <div
                   key={day.toISOString()}
@@ -563,26 +509,33 @@ export const WeekView: React.FC = () => {
                     dayColumnRefs.current[index] = el;
                   }}
                   data-day-column={index}
-                  className={`relative min-w-[120px] flex-1 ${
-                    index > 0 ? "border-l border-[#005F6A]/10" : ""
-                  } ${isWeekend ? "bg-[#005F6A]/[0.02]" : ""}`}
+                  className="cal-col"
                   style={{ minHeight: `${gridHeight}px` }}
                   onDrop={(e) => handlePresetDrop(e, day)}
                   onDragOver={(e) => e.preventDefault()}>
-                  {/* Schedule Blocks */}
-                  <ScheduleBlocks
-                    day={day}
-                    scheduleBlocks={scheduleBlocks}
-                    officeHours={officeHours}
-                    zoomLevel={zoomLevel}
-                  />
+                  {/* Office-hours shading (8am–6pm) */}
+                  {officeHeight > 0 && (
+                    <div className="cal-office" style={{ top: `${officeTop}px`, height: `${officeHeight}px` }} />
+                  )}
 
-                  {/* Availability Overlay (current user's self-view) */}
-                  <AvailabilityOverlay
-                    day={day}
-                    officeHours={officeHours}
-                    zoomLevel={zoomLevel}
-                  />
+                  {/* Schedule Blocks */}
+                  {showBlocks && (
+                    <ScheduleBlocks
+                      day={day}
+                      scheduleBlocks={scheduleBlocks}
+                      officeHours={officeHours}
+                      zoomLevel={zoomLevel}
+                    />
+                  )}
+
+                  {/* Availability Overlay */}
+                  {showAvailability && (
+                    <AvailabilityOverlay
+                      day={day}
+                      officeHours={officeHours}
+                      zoomLevel={zoomLevel}
+                    />
+                  )}
 
                   {/* Events */}
                   {dayEvents.map((event) => {
@@ -591,7 +544,7 @@ export const WeekView: React.FC = () => {
                     return renderEventCard(event, day, layout);
                   })}
 
-                  {/* 15-Minute Tile Drag Handlers with Hover Effect */}
+                  {/* 15-Minute Tile Drag Handlers */}
                   {visibleHours.flatMap((hour, hourIndex) =>
                     [0, 15, 30, 45].map((minutes) => (
                       <div
@@ -599,12 +552,10 @@ export const WeekView: React.FC = () => {
                         className={`absolute left-0 right-0 z-20 transition-colors duration-200 ${
                           isDraggingSelection
                             ? "cursor-crosshair"
-                            : "cursor-pointer hover:bg-[#005F6A]/[0.06]"
+                            : "cursor-pointer hover:bg-[#005F6A]/[0.05]"
                         }`}
                         style={{
-                          top: `${
-                            hourIndex * zoomLevel + (minutes * zoomLevel) / 60
-                          }px`,
+                          top: `${hourIndex * zoomLevel + (minutes * zoomLevel) / 60}px`,
                           height: `${zoomLevel / 4}px`,
                         }}
                         onMouseDown={(e) =>

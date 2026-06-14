@@ -1,12 +1,15 @@
 import React from "react";
-import Button from "@/components/ui/Button";
-import {
-  EventStyleInfo,
-  getBlockStripeStyle,
-  getEventBackgroundColor,
-  getEventBoxShadow,
-} from "./event-styles";
+import { AlertCircle } from "lucide-react";
+import { EventStyleInfo } from "./event-styles";
 import { CalendarEvent } from "./types";
+import {
+  statusMeta,
+  isUnconfirmed,
+  isCancelled,
+  hasMissingEquipment,
+  payLabel,
+  shortLocation,
+} from "./status-meta";
 
 export interface EventCardProps {
   event: CalendarEvent;
@@ -26,126 +29,89 @@ export interface EventCardProps {
   className?: string;
 }
 
+const JOB_TYPE_LABEL: Record<string, string> = {
+  R: "Residential",
+  C: "Commercial",
+  PC: "Post construction",
+  F: "Follow-up",
+};
+
+function timeStr(d: Date) {
+  return d
+    .toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+    .replace(":00", "");
+}
+
 /**
- * Shared event card used in both Week and Day views.
+ * Shared time-grid event card (Week & Day views) — premium `.cal-ev` design.
+ * Status-colored: left accent bar, client, "time · type", and a foot with
+ * locality + cleaner pay on taller cards.
  */
 export const EventCard: React.FC<EventCardProps> = ({
   event,
   layout,
-  styleInfo,
   isBeingMoved,
-  canResize,
-  minEventHeight,
   onMouseDown,
   onClick,
-  renderLocation,
-  className,
 }) => {
+  const m = statusMeta(event);
+  const jt = event.metadata?.jobType as string | undefined;
+  const typeName = (jt && JOB_TYPE_LABEL[jt]) || jt || "Clean";
+  const loc = shortLocation(event);
+  const pay = payLabel(event);
+
+  const showMeta = layout.height >= 34;
+  const showFoot = layout.height >= 72 && (loc || pay);
+
+  const classes = [
+    "cal-ev",
+    isUnconfirmed(event) ? "faded" : "",
+    isCancelled(event) ? "cancelled" : "",
+    isBeingMoved ? "dragging" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
-    <Button
+    <div
       data-event-card
-      variant="primary"
-      border={false}
-      className={`
-        absolute flex flex-col justify-start items-start px-2 z-30 overflow-hidden transition-none
-        ${layout.height > minEventHeight ? "py-1" : "py-0"}
-        ${isBeingMoved ? "opacity-70" : ""}
-        cursor-pointer
-        ${className ?? ""}
-      `}
-      style={{
-        backgroundColor: getEventBackgroundColor(styleInfo),
-        top: `${layout.top + 0.5}px`,
-        height: `${layout.height}px`,
-        left: layout.left,
-        width: layout.width,
-        boxShadow: getEventBoxShadow(styleInfo),
-      }}
+      className={classes}
+      style={
+        {
+          top: `${layout.top + 0.5}px`,
+          height: `${layout.height}px`,
+          left: layout.left,
+          width: layout.width,
+          background: m.tint,
+          borderColor: m.color,
+          ["--evc" as string]: m.color,
+        } as React.CSSProperties
+      }
       onMouseDown={(e) => onMouseDown(e, event)}
       onClick={(e) => onClick(e, event)}>
-      {/* Diagonal stripes overlay for blocks */}
-      {styleInfo.isBlock && (
-        <div
-          className="absolute inset-0 pointer-events-none"
-          style={getBlockStripeStyle(styleInfo.color)}
-        />
-      )}
-
-      <div
-        className="app-title-small truncate"
-        style={{ color: styleInfo.color }}>
-        {event.title}
-        {event.metadata?.jobId && event.metadata?.status && (
-          <span
-            className="ml-1 text-[10px] px-1 py-0.5 rounded"
-            style={{
-              backgroundColor: styleInfo.color + "30",
-            }}>
-            {event.metadata.status.replace("_", " ")}
-          </span>
-        )}
+      <span className="cal-ev-bar" style={{ background: m.color }} />
+      <div className="cal-ev-in">
+        <div className="cal-ev-top">
+          <span className="cal-ev-client">{event.title}</span>
+          {hasMissingEquipment(event) ? (
+            <span className="cal-ev-warn" title="Missing equipment">
+              <AlertCircle size={12} />
+            </span>
+          ) : null}
+        </div>
+        {showMeta ? (
+          <div className="cal-ev-meta">
+            {timeStr(event.start)} · {typeName}
+          </div>
+        ) : null}
+        {showFoot ? (
+          <div className="cal-ev-foot">
+            {loc ? <span className="cal-ev-loc">{loc}</span> : <span />}
+            {pay ? <span className="cal-ev-pay">{pay}</span> : null}
+          </div>
+        ) : null}
       </div>
-
-      {layout.height > 30 && event.metadata?.jobId && event.metadata?.jobType && (
-        <div
-          className="app-subtitle truncate text-[10px]"
-          style={{ color: styleInfo.color, opacity: 0.85 }}>
-          {event.metadata.jobType === "R"
-            ? "Residential"
-            : event.metadata.jobType === "C"
-            ? "Commercial"
-            : event.metadata.jobType === "PC"
-            ? "Post-Construction"
-            : event.metadata.jobType === "F"
-            ? "Follow-up"
-            : event.metadata.jobType}
-        </div>
-      )}
-
-      {layout.height > 30 && !event.metadata?.jobType && event.label && (
-        <div
-          className="app-subtitle truncate"
-          style={{ color: styleInfo.color }}>
-          {event.label}
-        </div>
-      )}
-
-      {layout.height > 50 &&
-        event.metadata?.location &&
-        renderLocation?.(event, styleInfo.color)}
-
-      {layout.height > 65 &&
-        event.metadata?.jobId &&
-        event.metadata?.employeePay != null && (
-          <div
-            className="app-subtitle truncate text-[10px] font-[450]"
-            style={{ color: styleInfo.color, opacity: 0.8 }}>
-            ${Number(event.metadata.employeePay).toFixed(2)}
-          </div>
-        )}
-
-      {layout.height > 80 &&
-        event.metadata?.jobId &&
-        event.metadata?.missingEquipment?.length > 0 && (
-          <div
-            className="app-subtitle truncate text-[10px] flex items-center gap-0.5"
-            style={{ color: "#F59E0B" }}>
-            <svg
-              className="w-3 h-3"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}>
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z"
-              />
-            </svg>
-            Missing equipment
-          </div>
-        )}
-    </Button>
+    </div>
   );
 };
 

@@ -153,17 +153,14 @@ export const AvailabilityOverlay: React.FC<AvailabilityOverlayProps> = ({
         return (
           <div
             key={`${day.toISOString()}-band-${idx}`}
-            className="absolute left-0 right-0 z-[5] pointer-events-none"
+            className="cal-unavail"
             style={{
               top: `${top}px`,
               height: `${height}px`,
-              backgroundImage: isHard
-                ? "repeating-linear-gradient(135deg, rgba(120,120,120,0.10) 0px, rgba(120,120,120,0.10) 6px, rgba(120,120,120,0.04) 6px, rgba(120,120,120,0.04) 12px)"
-                : "linear-gradient(rgba(120,120,120,0.06), rgba(120,120,120,0.06))",
+              zIndex: 5,
+              opacity: isHard ? 1 : 0.6,
             }}
-            title={
-              isHard ? "Unavailable" : "Outside availability hours"
-            }
+            title={isHard ? "Unavailable" : "Outside availability hours"}
           />
         );
       })}

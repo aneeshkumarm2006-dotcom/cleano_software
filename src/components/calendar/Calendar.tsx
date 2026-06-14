@@ -1,24 +1,26 @@
 "use client";
 
 import React, { useEffect, useMemo, useState, useRef } from "react";
-import Button from "@/components/ui/Button";
 import { useCalendar } from "@/components/calendar/CalendarContext";
 import { useCalendarConfig } from "@/contexts/CalendarConfigContext";
 import { MonthView } from "@/components/calendar/MonthView";
 import { WeekView } from "@/components/calendar/WeekView";
 import { DayView } from "@/components/calendar/DayView";
 import { ListView } from "@/components/calendar/ListView";
-import ZoomControls from "@/components/calendar/ZoomControls";
 import { format, addDays, startOfWeek } from "@/components/calendar/utils";
 import { CalendarRef, CalendarEvent } from "@/components/calendar/types";
-import Card from "@/components/ui/Card";
 import {
-  CalendarDays,
   ChevronLeft,
   ChevronRight,
   Inbox,
   Plus,
+  Check,
 } from "lucide-react";
+import {
+  CalendarOverlaysProvider,
+  CalendarOverlays,
+} from "@/components/calendar/CalendarOverlaysContext";
+import { STATUS_LEGEND } from "@/components/calendar/status-meta";
 import { OfficeHours } from "@/components/calendar/calendar-helpers";
 import JobModal from "../../app/(app)/jobs/JobModal";
 import { saveJob } from "../../app/(app)/actions/saveJob";
@@ -48,6 +50,7 @@ const Calendar = React.forwardRef<CalendarRef, CalendarProps>(({ hideNewJobButto
     movingEvent,
     setMovingEvent,
     zoomLevel,
+    setZoomLevel,
     finalizeEventMove,
     resizingEvent,
     setResizingEvent,
@@ -116,6 +119,10 @@ const Calendar = React.forwardRef<CalendarRef, CalendarProps>(({ hideNewJobButto
   }, [finalizeEventMove, finalizeEventResize]);
 
   const [listMode, setListMode] = useState(false);
+  const [overlays, setOverlays] = useState<CalendarOverlays>({
+    availability: true,
+    blocks: true,
+  });
   const { config: calendarConfig } = useCalendarConfig();
 
   const officeHours = useMemo((): OfficeHours | null => {
@@ -159,10 +166,33 @@ const Calendar = React.forwardRef<CalendarRef, CalendarProps>(({ hideNewJobButto
   };
 
   const getHeaderTitle = () => {
-    if (view === "month" || view === "week")
-      return format(currentDate, "MMMM yyyy");
-    if (view === "day") return format(currentDate, "EEEE, d MMMM yyyy");
+    if (view === "month") return format(currentDate, "MMMM yyyy");
+    if (view === "week") {
+      const ws = startOfWeek(currentDate);
+      const we = addDays(ws, 6);
+      const sM = ws.toLocaleDateString("en-US", { month: "short" });
+      const eM = we.toLocaleDateString("en-US", { month: "short" });
+      const tail = sM === eM ? `${we.getDate()}` : `${eM} ${we.getDate()}`;
+      return `${sM} ${ws.getDate()} – ${tail}, ${we.getFullYear()}`;
+    }
     return format(currentDate, "EEEE, d MMMM yyyy");
+  };
+
+  // Zoom levels mirror ZoomControls — shown as 1×–5× in the premium toolbar.
+  const ZOOM_LEVELS = [56, 64, 75, 86, 94];
+  const zoomIndex = Math.max(0, ZOOM_LEVELS.indexOf(zoomLevel));
+  const setZoomIndex = (i: number) =>
+    setZoomLevel(ZOOM_LEVELS[Math.min(ZOOM_LEVELS.length - 1, Math.max(0, i))]);
+
+  // Unified view segment: List is a granularity-preserving mode over view.
+  const activeSegment = listMode ? "list" : view;
+  const selectSegment = (seg: "month" | "week" | "day" | "list") => {
+    if (seg === "list") {
+      setListMode(true);
+    } else {
+      setListMode(false);
+      setView(seg);
+    }
   };
 
   useEffect(() => {
@@ -417,108 +447,123 @@ const Calendar = React.forwardRef<CalendarRef, CalendarProps>(({ hideNewJobButto
   ]);
 
   return (
-    <div className="flex flex-col h-full select-none gap-4">
-      {/* Fixed Header */}
-      <div className="flex-shrink-0 bg-white sticky top-0 z-10 p-4">
-        <div className="w-full grid grid-cols-3 items-center">
-          <div className="w-full flex items-center justify-start">
-            <h2 className="h2-subtitle">{getHeaderTitle()}</h2>
+    <CalendarOverlaysProvider value={overlays}>
+    <div className="flex flex-col h-full select-none gap-2">
+      {/* Fixed Header — premium toolbar */}
+      <div className="flex-shrink-0 bg-white sticky top-0 z-10 px-4 pt-4 pb-3 admin-font">
+        <div className="cal-toolbar">
+          <div className="cal-tb-left">
+            <div className="cal-nav">
+              <button
+                className="cal-navbtn"
+                onClick={handlePrev}
+                aria-label="Previous">
+                <ChevronLeft size={18} />
+              </button>
+              <button className="cal-today" onClick={handleToday}>
+                Today
+              </button>
+              <button
+                className="cal-navbtn"
+                onClick={handleNext}
+                aria-label="Next">
+                <ChevronRight size={18} />
+              </button>
+            </div>
+            <h1 className="cal-range">{getHeaderTitle()}</h1>
           </div>
 
-          <div className="w-full flex items-center justify-center">
-            <div className="w-fit flex gap-1 rounded-2xl overflow-hidden bg-neutral-50">
-              {(["month", "week", "day"] as const).map((v) => (
-                <Button
+          <div className="cal-tb-right">
+            {(activeSegment === "week" || activeSegment === "day") && (
+              <div className="cal-zoom">
+                <button
+                  className="cal-navbtn sm"
+                  disabled={zoomIndex === 0}
+                  onClick={() => setZoomIndex(zoomIndex - 1)}
+                  aria-label="Zoom out">
+                  −
+                </button>
+                <span className="cal-zoom-label">{zoomIndex + 1}×</span>
+                <button
+                  className="cal-navbtn sm"
+                  disabled={zoomIndex === ZOOM_LEVELS.length - 1}
+                  onClick={() => setZoomIndex(zoomIndex + 1)}
+                  aria-label="Zoom in">
+                  +
+                </button>
+              </div>
+            )}
+
+            <div className="cal-viewseg">
+              {(["month", "week", "day", "list"] as const).map((v) => (
+                <button
                   key={v}
-                  border={false}
-                  variant={view === v ? "action" : "ghost"}
-                  size="md"
-                  className="text-[#005F6A] !px-6 !py-4"
-                  onClick={() => setView(v)}>
+                  className={`cal-vbtn ${activeSegment === v ? "active" : ""}`}
+                  onClick={() => selectSegment(v)}>
                   {v.charAt(0).toUpperCase() + v.slice(1)}
-                </Button>
+                </button>
               ))}
             </div>
-          </div>
 
-          <div className="w-full flex items-center justify-end gap-2">
-            <div className="w-fit flex gap-1 rounded-2xl overflow-hidden bg-neutral-50">
-              <Button
-                variant={listMode ? "ghost" : "action"}
-                size="md"
-                className="text-[#005F6A] !px-6 py-3"
-                onClick={() => setListMode(false)}
-                aria-label="Calendar view">
-                <CalendarDays className="w-4 h-4" />
-              </Button>
-              <Button
-                variant={listMode ? "action" : "ghost"}
-                size="md"
-                className="text-[#005F6A] !px-6 py-3"
-                onClick={() => setListMode(true)}
-                aria-label="List view">
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  viewBox="0 0 24 24">
-                  <rect x="4" y="5" width="16" height="2" rx="1" />
-                  <rect x="4" y="11" width="16" height="2" rx="1" />
-                  <rect x="4" y="17" width="16" height="2" rx="1" />
-                </svg>
-              </Button>
-            </div>
-
-            <Card className="!p-0 !w-fit flex items-center gap-1">
-              <Button
-                variant="ghost"
-                size="md"
-                className="px-3 py-3"
-                onClick={handlePrev}>
-                <ChevronLeft
-                  className="w-4 h-4 text-[#005F6A]"
-                  strokeWidth={1.5}
-                />
-              </Button>
-
-              <Button
-                variant="primary"
-                size="md"
-                border={false}
-                onClick={handleToday}
-                className="w-fit px-6 py-3">
-                Today
-              </Button>
-
-              <Button
-                variant="ghost"
-                size="md"
-                className="px-3 py-3"
-                onClick={handleNext}>
-                <ChevronRight
-                  className="w-4 h-4 text-[#005F6A]"
-                  strokeWidth={1.5}
-                />
-              </Button>
-            </Card>
             {!hideNewJobButton && (
-              <Button
-                variant="primary"
-                size="md"
-                className="px-6 py-3"
-                onClick={() => {
-                  setShowJobModal(true);
-                }}>
-                New Job
-              </Button>
+              <button
+                className="btn btn-primary btn-sm cal-new"
+                onClick={() => setShowJobModal(true)}>
+                <Plus className="w-4 h-4" /> New job
+              </button>
             )}
           </div>
         </div>
+
+        {/* Overlays + status legend (week/day, admin) */}
+        {!hideNewJobButton &&
+          (activeSegment === "week" || activeSegment === "day") && (
+            <div className="cal-overlays">
+              <span className="cal-ov-label">Overlays</span>
+              <button
+                className={`cal-ovchip ${overlays.availability ? "on" : ""}`}
+                onClick={() =>
+                  setOverlays((o) => ({ ...o, availability: !o.availability }))
+                }>
+                <span
+                  className="cal-ovchip-box"
+                  style={
+                    overlays.availability
+                      ? { background: "#dc2626", borderColor: "#dc2626" }
+                      : undefined
+                  }>
+                  {overlays.availability ? <Check size={11} /> : null}
+                </span>
+                Availability
+              </button>
+              <button
+                className={`cal-ovchip ${overlays.blocks ? "on" : ""}`}
+                onClick={() => setOverlays((o) => ({ ...o, blocks: !o.blocks }))}>
+                <span
+                  className="cal-ovchip-box"
+                  style={
+                    overlays.blocks
+                      ? { background: "#64748b", borderColor: "#64748b" }
+                      : undefined
+                  }>
+                  {overlays.blocks ? <Check size={11} /> : null}
+                </span>
+                Schedule blocks
+              </button>
+              <div className="cal-legend">
+                {STATUS_LEGEND.map((s) => (
+                  <span key={s.key} className="cal-leg">
+                    <span className="cal-leg-dot" style={{ background: s.color }} />
+                    {s.label}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
       </div>
 
       {/* Scrollable Calendar Body */}
-      <div className="flex-1 min-h-0 overflow-hidden">
+      <div className="cal-body flex-1 min-h-0 overflow-hidden mx-4 mb-4">
         {renderCurrentView()}
       </div>
 
@@ -576,6 +621,7 @@ const Calendar = React.forwardRef<CalendarRef, CalendarProps>(({ hideNewJobButto
         }}
       />
     </div>
+    </CalendarOverlaysProvider>
   );
 });
 
