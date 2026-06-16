@@ -49,7 +49,18 @@ interface AddOn {
   name: string;
   price: number;
   roomType?: RoomType;
+  /** Service types this add-on shows for. Empty/undefined = all services. */
+  services?: string[];
 }
+
+// Service types must match the booking flow's SERVICE_TYPES values.
+const SERVICE_OPTIONS: { value: string; label: string }[] = [
+  { value: "STANDARD", label: "Standard" },
+  { value: "DEEP", label: "Deep" },
+  { value: "MOVE_IN_OUT", label: "Move-in/out" },
+  { value: "POST_CONSTRUCTION", label: "Post-construction" },
+  { value: "AIRBNB", label: "Airbnb" },
+];
 
 const PER_UNIT_KEY = "pricing.perUnit";
 const ADDONS_KEY = "pricing.addOns";
@@ -223,48 +234,80 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
             <p className="text-sm text-[#005F6A]/60">No add-ons configured.</p>
           )}
           {addOns.map((addon) => (
-            <div key={addon.id} className="grid grid-cols-1 sm:grid-cols-[2fr_1fr_1.4fr_auto] gap-3 items-end">
-              <Field label="Name">
-                <Input
-                  variant="form"
-                  value={addon.name}
-                  onChange={(e) => updateAddOn(addon.id, { name: e.target.value })}
-                  placeholder="e.g. Inside Fridge"
+            <div key={addon.id} className="rounded-xl border border-[#005F6A]/10 p-3 space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-[2fr_1fr_1.4fr_auto] gap-3 items-end">
+                <Field label="Name">
+                  <Input
+                    variant="form"
+                    value={addon.name}
+                    onChange={(e) => updateAddOn(addon.id, { name: e.target.value })}
+                    placeholder="e.g. Inside Fridge"
+                  />
+                </Field>
+                <Field label="Price ($)">
+                  <Input
+                    variant="form"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={addon.price}
+                    onChange={(e) =>
+                      updateAddOn(addon.id, { price: parseFloat(e.target.value) || 0 })
+                    }
+                  />
+                </Field>
+                <Field label="Room">
+                  <select
+                    value={addon.roomType ?? "WHOLE_HOME"}
+                    onChange={(e) =>
+                      updateAddOn(addon.id, { roomType: e.target.value as RoomType })
+                    }
+                    className="w-full px-3 py-2 rounded-xl border border-[#005F6A]/15 bg-white text-[#003C46] text-sm focus:outline-none focus:border-[#005F6A] focus:ring-2 focus:ring-[#005F6A]/10">
+                    {ROOM_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <IconButton
+                  icon={Trash2}
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => removeAddOn(addon.id)}
+                  className="text-red-500"
                 />
-              </Field>
-              <Field label="Price ($)">
-                <Input
-                  variant="form"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={addon.price}
-                  onChange={(e) =>
-                    updateAddOn(addon.id, { price: parseFloat(e.target.value) || 0 })
-                  }
-                />
-              </Field>
-              <Field label="Room">
-                <select
-                  value={addon.roomType ?? "WHOLE_HOME"}
-                  onChange={(e) =>
-                    updateAddOn(addon.id, { roomType: e.target.value as RoomType })
-                  }
-                  className="w-full px-3 py-2 rounded-xl border border-[#005F6A]/15 bg-white text-[#003C46] text-sm focus:outline-none focus:border-[#005F6A] focus:ring-2 focus:ring-[#005F6A]/10">
-                  {ROOM_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <IconButton
-                icon={Trash2}
-                variant="ghost"
-                size="sm"
-                onClick={() => removeAddOn(addon.id)}
-                className="text-red-500"
-              />
+              </div>
+              <div>
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-[#005F6A]/60">
+                  Shows for service
+                </span>
+                <div className="flex flex-wrap gap-2 mt-1.5 items-center">
+                  {SERVICE_OPTIONS.map((s) => {
+                    const on = (addon.services ?? []).includes(s.value);
+                    return (
+                      <button
+                        key={s.value}
+                        type="button"
+                        onClick={() => {
+                          const cur = addon.services ?? [];
+                          const next = on ? cur.filter((v) => v !== s.value) : [...cur, s.value];
+                          updateAddOn(addon.id, { services: next });
+                        }}
+                        className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                          on
+                            ? "bg-[#005F6A] text-white border-[#005F6A]"
+                            : "bg-white text-[#005F6A]/70 border-[#005F6A]/15 hover:border-[#005F6A]/40"
+                        }`}>
+                        {s.label}
+                      </button>
+                    );
+                  })}
+                  {(!addon.services || addon.services.length === 0) && (
+                    <span className="text-xs text-[#005F6A]/50 italic">All services (none selected)</span>
+                  )}
+                </div>
+              </div>
             </div>
           ))}
         </div>

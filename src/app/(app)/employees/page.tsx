@@ -64,6 +64,7 @@ export default async function EmployeesPage({
       email: emp.email,
       phone: emp.phone,
       role: emp.role as "OWNER" | "ADMIN" | "EMPLOYEE",
+      isActive: emp.isActive,
       completedJobsCount: completedJobs.length,
       activeJobsCount: activeJobs.length,
       totalRevenue,

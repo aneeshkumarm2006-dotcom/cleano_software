@@ -22,6 +22,7 @@ interface Employee {
   email: string;
   phone: string | null;
   role: "OWNER" | "ADMIN" | "EMPLOYEE";
+  isActive?: boolean;
   completedJobsCount: number;
   activeJobsCount: number;
   totalRevenue: number;

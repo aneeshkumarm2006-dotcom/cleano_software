@@ -84,8 +84,13 @@ export function coverFor(key: string): GiftCardCover {
   );
 }
 
-/** Approved purchase tiers, in USD. */
-export const GIFT_CARD_TIERS = [100, 150, 200, 250, 300, 350, 400] as const;
+/**
+ * Legacy fallback list of purchase tiers. The live values are admin-editable
+ * via the `payments.giftCardTiers` setting (read with `getSetting`); this const
+ * is kept only as the documented default and mirrors the registry default —
+ * minimum purchase is $150.
+ */
+export const GIFT_CARD_TIERS = [150, 200, 250, 300, 350, 400] as const;
 
 /** Minimum job price — displayed on the purchase page so buyers know what
  *  the recipient can use the gift card for. Change here when prices shift. */

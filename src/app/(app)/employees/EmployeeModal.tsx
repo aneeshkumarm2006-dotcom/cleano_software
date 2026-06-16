@@ -28,6 +28,7 @@ interface Employee {
   email: string;
   phone: string | null;
   role: "OWNER" | "ADMIN" | "EMPLOYEE";
+  isActive?: boolean;
 }
 
 interface EmployeeModalProps {
@@ -83,6 +84,7 @@ export function EmployeeModal({
   const [selectedRole, setSelectedRole] = useState<
     "OWNER" | "ADMIN" | "EMPLOYEE"
   >(employee?.role || "EMPLOYEE");
+  const [isActive, setIsActive] = useState(employee?.isActive ?? true);
 
   const createForm = useForm<CreateFormValues>({
     resolver: zodResolver(createFormSchema),
@@ -127,6 +129,7 @@ export function EmployeeModal({
           role: employee.role,
         });
         setSelectedRole(employee.role);
+        setIsActive(employee.isActive ?? true);
       } else {
         createForm.reset({
           name: "",
@@ -164,6 +167,10 @@ export function EmployeeModal({
 
       if (mode === "create" && "password" in values) {
         formData.append("password", values.password);
+      }
+
+      if (mode === "edit") {
+        formData.append("isActive", isActive ? "on" : "");
       }
 
       let result;
@@ -502,6 +509,25 @@ export function EmployeeModal({
                   </p>
                 </div>
               </div>
+
+              {/* Active toggle (edit mode only) */}
+              {mode === "edit" && (
+                <div className="w-full">
+                  <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={isActive}
+                      onChange={(e) => setIsActive(e.target.checked)}
+                    />
+                    Active account
+                  </label>
+                  <p className="text-xs text-gray-400 mt-1">
+                    When off, this cleaner is signed out of the app and sees the
+                    deactivated notice (edit its wording in Settings &rarr;
+                    Provider).
+                  </p>
+                </div>
+              )}
 
               {/* Global Error */}
               {globalError && (

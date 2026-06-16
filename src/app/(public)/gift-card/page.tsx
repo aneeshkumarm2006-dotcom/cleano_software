@@ -1,5 +1,6 @@
 import GiftCardPurchaseClient from "./GiftCardPurchaseClient";
-import { GIFT_CARD_COVERS, GIFT_CARD_TIERS, MIN_JOB_PRICE_USD } from "@/lib/gift-cards/covers";
+import { GIFT_CARD_COVERS, MIN_JOB_PRICE_USD } from "@/lib/gift-cards/covers";
+import { getSetting } from "@/lib/settings";
 
 export const metadata = {
   title: "Buy a Gift Card · Cleano",
@@ -7,7 +8,8 @@ export const metadata = {
     "Send a Cleano cleaning service gift card to someone you appreciate.",
 };
 
-export default function GiftCardPurchasePage() {
+export default async function GiftCardPurchasePage() {
+  const tiers = await getSetting("payments.giftCardTiers");
   return (
     <div
       style={{
@@ -52,7 +54,7 @@ export default function GiftCardPurchasePage() {
         </header>
 
         <GiftCardPurchaseClient
-          tiers={[...GIFT_CARD_TIERS]}
+          tiers={tiers}
           covers={GIFT_CARD_COVERS}
           minJobPrice={MIN_JOB_PRICE_USD}
         />

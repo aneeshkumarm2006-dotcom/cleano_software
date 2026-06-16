@@ -15,11 +15,17 @@ import {
   MapPin,
   ListChecks,
   Calendar as CalendarIcon,
+  CalendarClock,
   CalendarOff,
   GraduationCap,
   FileSignature,
   Bell,
   HeartHandshake,
+  Wallet,
+  Users,
+  Globe,
+  Globe2,
+  HardHat,
 } from "lucide-react";
 import ProfileTab from "./tabs/ProfileTab";
 import TaxSettingsTab from "./tabs/TaxSettingsTab";
@@ -45,6 +51,12 @@ import DocumentsTab, {
 } from "./tabs/DocumentsTab";
 import NotificationsTab, { NotificationSettingRow } from "./tabs/NotificationsTab";
 import RetentionTab from "./tabs/RetentionTab";
+import SchedulingTab from "./tabs/SchedulingTab";
+import PaymentsTab from "./tabs/PaymentsTab";
+import CustomerTab from "./tabs/CustomerTab";
+import GeneralTab from "./tabs/GeneralTab";
+import ProviderTab from "./tabs/ProviderTab";
+import WebsiteTab from "./tabs/WebsiteTab";
 import {
   SettingsUser,
   AppSettingRecord,
@@ -92,6 +104,12 @@ type TabId =
   | "suppliers"
   | "inventoryLocations"
   | "serviceAreas"
+  | "general"
+  | "customer"
+  | "provider"
+  | "payments"
+  | "scheduling"
+  | "website"
   | "retention"
   | "notifications";
 
@@ -160,6 +178,17 @@ const TABS: TabDef[] = [
     icon: MapPin,
     adminOnly: true,
   },
+  { id: "general", label: "General", icon: Globe, adminOnly: true },
+  { id: "customer", label: "Customer", icon: Users, adminOnly: true },
+  { id: "provider", label: "Provider", icon: HardHat, adminOnly: true },
+  { id: "payments", label: "Payments & Fees", icon: Wallet, adminOnly: true },
+  {
+    id: "scheduling",
+    label: "Scheduling",
+    icon: CalendarClock,
+    adminOnly: true,
+  },
+  { id: "website", label: "Website & FAQ", icon: Globe2, adminOnly: true },
   {
     id: "retention",
     label: "Retention",
@@ -293,6 +322,24 @@ export default function SettingsClient({
           )}
           {activeTab === "serviceAreas" && isAdmin && (
             <ServiceAreasTab serviceAreas={serviceAreas} />
+          )}
+          {activeTab === "general" && isAdmin && (
+            <GeneralTab settings={appSettings} />
+          )}
+          {activeTab === "customer" && isAdmin && (
+            <CustomerTab settings={appSettings} />
+          )}
+          {activeTab === "provider" && isAdmin && (
+            <ProviderTab settings={appSettings} />
+          )}
+          {activeTab === "payments" && isAdmin && (
+            <PaymentsTab settings={appSettings} />
+          )}
+          {activeTab === "scheduling" && isAdmin && (
+            <SchedulingTab settings={appSettings} />
+          )}
+          {activeTab === "website" && isAdmin && (
+            <WebsiteTab settings={appSettings} />
           )}
           {activeTab === "retention" && isAdmin && (
             <RetentionTab settings={appSettings} />

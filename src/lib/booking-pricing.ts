@@ -148,16 +148,20 @@ export function nextOccurrence(
 
 // How many additional jobs to auto-create for recurring bookings.
 // Per spec: 4 weeks of jobs for WEEKLY (4 more), 4 visits for BIWEEKLY (3 more).
+// `weeklyHorizon` is the admin-configurable count for weekly-cadence
+// frequencies (setting `scheduling.recurringWeeklyHorizon`); it defaults to 3
+// so callers that don't pass it keep the original behavior.
 export function recurrenceCount(
-  frequency: "ONE_TIME" | "WEEKLY" | "BIWEEKLY" | "MONTHLY" | "QUARTERLY" | "TWICE_WEEKLY" | "HIGH_FREQUENCY"
+  frequency: "ONE_TIME" | "WEEKLY" | "BIWEEKLY" | "MONTHLY" | "QUARTERLY" | "TWICE_WEEKLY" | "HIGH_FREQUENCY",
+  weeklyHorizon = 3
 ): number {
   switch (frequency) {
     case "WEEKLY":
     case "TWICE_WEEKLY":
     case "HIGH_FREQUENCY":
-      return 3;
+      return weeklyHorizon;
     case "BIWEEKLY":
-      return 3;
+      return weeklyHorizon;
     case "MONTHLY":
       return 2;
     case "QUARTERLY":

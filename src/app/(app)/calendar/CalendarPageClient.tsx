@@ -3,6 +3,11 @@
 import React, { useEffect, useMemo, useRef } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Calendar from "@/components/calendar/Calendar";
+import type {
+  ClientLite,
+  User as JobModalUser,
+  AddOnCatalogItem,
+} from "@/app/(app)/jobs/JobModal";
 import { CalendarRef, CalendarEvent } from "@/components/calendar/types";
 import { CalendarProvider } from "@/components/calendar/CalendarContext";
 import { useCalendarData } from "@/hooks/useCalendarData";
@@ -51,7 +56,17 @@ function CalendarUrlSync() {
   return null;
 }
 
-export default function CalendarPageClient({ isEmployee = false }: { isEmployee?: boolean }) {
+export default function CalendarPageClient({
+  isEmployee = false,
+  clients = [],
+  users = [],
+  addOnCatalog = [],
+}: {
+  isEmployee?: boolean;
+  clients?: ClientLite[];
+  users?: JobModalUser[];
+  addOnCatalog?: AddOnCatalogItem[];
+}) {
   const calendarRef = useRef<CalendarRef>(null);
   const searchParams = useSearchParams();
 
@@ -118,7 +133,13 @@ export default function CalendarPageClient({ isEmployee = false }: { isEmployee?
       initialView={initialView}>
       <CalendarUrlSync />
       <div className="h-full overflow-hidden">
-        <Calendar ref={calendarRef} hideNewJobButton={isEmployee} />
+        <Calendar
+          ref={calendarRef}
+          hideNewJobButton={isEmployee}
+          clients={clients}
+          users={users}
+          addOnCatalog={addOnCatalog}
+        />
       </div>
       <CalendarJobActions />
     </CalendarProvider>

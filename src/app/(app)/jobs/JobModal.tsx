@@ -28,13 +28,13 @@ import SmartSearch from "@/components/SmartSearch";
 import SaveCardOnFile from "./SaveCardOnFile";
 import { parseTimeInput } from "@/components/ui/TimePicker";
 
-interface AddOnCatalogItem {
+export interface AddOnCatalogItem {
   id: string;
   name: string;
   price: number;
 }
 
-interface User {
+export interface User {
   id: string;
   name: string;
   email: string;
@@ -66,7 +66,7 @@ interface Job {
   addOns?: Array<{ id: string; name: string; price: number }>;
 }
 
-interface ClientLite {
+export interface ClientLite {
   id: string;
   name: string;
   email?: string | null;

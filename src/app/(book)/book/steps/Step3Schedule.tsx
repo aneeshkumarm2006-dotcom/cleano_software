@@ -31,11 +31,13 @@ function formatTimeLabel(t: string): string {
 interface Props {
   draft: BookingDraft;
   onChange: (patch: Partial<BookingDraft>) => void;
+  /** Minimum days ahead a customer can book (admin setting; default 1). */
+  minLeadDays?: number;
 }
 
-function todayISO() {
+function earliestISO(leadDays: number) {
   const d = new Date();
-  d.setDate(d.getDate() + 1);
+  d.setDate(d.getDate() + Math.max(1, leadDays));
   return d.toISOString().slice(0, 10);
 }
 function maxISO() {
@@ -44,7 +46,7 @@ function maxISO() {
   return d.toISOString().slice(0, 10);
 }
 
-export default function Step3Schedule({ draft, onChange }: Props) {
+export default function Step3Schedule({ draft, onChange, minLeadDays = 1 }: Props) {
   const [availability, setAvailability] = useState<DayAvailability>({
     ranges: [],
     fullTimes: [],
@@ -142,7 +144,7 @@ export default function Step3Schedule({ draft, onChange }: Props) {
         <DatePicker
           value={draft.date}
           onChange={(iso) => onChange({ date: iso })}
-          min={todayISO()}
+          min={earliestISO(minLeadDays)}
           max={maxISO()}
           disabledDates={blockedDates}
           blockedReasons={blockedReasons}

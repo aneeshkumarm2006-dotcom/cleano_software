@@ -31,10 +31,27 @@ interface Props {
   basePrice?: number;
 }
 
+/** An add-on shows when it has no service restriction, or includes this service. */
+function addOnForService(a: { services?: string[] }, serviceType: string): boolean {
+  return !a.services || a.services.length === 0 || a.services.includes(serviceType);
+}
+
 export default function Step2Property({ draft, onChange, basePrice = 0 }: Props) {
   const isPC = draft.serviceType === "POST_CONSTRUCTION";
   const isAirbnb = draft.serviceType === "AIRBNB";
   const isMoveInOut = draft.serviceType === "MOVE_IN_OUT";
+
+  // Switching service hides add-ons that don't apply — deselect them so a hidden
+  // add-on can't stay in the total.
+  function selectService(value: string) {
+    onChange({
+      serviceType: value,
+      frequency: "ONE_TIME",
+      addOns: draft.addOns.map((a) =>
+        a.selected && !addOnForService(a, value) ? { ...a, selected: false } : a
+      ),
+    });
+  }
 
   const activeAirbnbFreq = AIRBNB_FREQUENCIES.find((f) => f.value === draft.frequency);
   const airbnbDiscount = activeAirbnbFreq?.discount ?? 0;
@@ -72,7 +89,7 @@ export default function Step2Property({ draft, onChange, basePrice = 0 }: Props)
               key={s.value}
               active={draft.serviceType === s.value}
               title={s.label}
-              onClick={() => onChange({ serviceType: s.value, frequency: "ONE_TIME" })}
+              onClick={() => selectService(s.value)}
             />
           ))}
         </div>
@@ -206,20 +223,19 @@ export default function Step2Property({ draft, onChange, basePrice = 0 }: Props)
 
       <div className="cl-stack-12">
         <span className="cl-label">Add-ons</span>
-        {draft.addOns.length === 0 ? (
-          <p
-            style={{
-              fontSize: 13,
-              color: "var(--primary-60)",
-              margin: 0,
-            }}>
-            No add-ons available right now.
-          </p>
-        ) : (
-          ROOM_ORDER.map((room) => {
+        {(() => {
+          const visible = draft.addOns.filter((a) => addOnForService(a, draft.serviceType));
+          if (visible.length === 0) {
+            return (
+              <p style={{ fontSize: 13, color: "var(--primary-60)", margin: 0 }}>
+                No add-ons available for this service.
+              </p>
+            );
+          }
+          return ROOM_ORDER.map((room) => {
             const items = draft.addOns
               .map((a, idx) => ({ a, idx }))
-              .filter(({ a }) => (a.roomType ?? "WHOLE_HOME") === room);
+              .filter(({ a }) => (a.roomType ?? "WHOLE_HOME") === room && addOnForService(a, draft.serviceType));
             if (items.length === 0) return null;
             return (
               <div key={room} className="cl-stack-8" style={{ marginTop: 4 }}>
@@ -255,8 +271,8 @@ export default function Step2Property({ draft, onChange, basePrice = 0 }: Props)
                 ))}
               </div>
             );
-          })
-        )}
+          });
+        })()}
       </div>
     </div>
   );

@@ -6,7 +6,7 @@ import {
   sendProviderNewReview,
   sendCustomerPoorRatingFollowUp,
 } from "@/lib/email";
-import { POOR_RATING_FOLLOWUP_STARS } from "@/lib/policy";
+import { POOR_RATING_FOLLOWUP_STARS, applyLateArrivalPenalty } from "@/lib/policy";
 import { maybeApplyLowRatingStrike } from "@/lib/strikes";
 
 interface SubmitRatingInput {
@@ -36,11 +36,12 @@ export async function submitRating(input: SubmitRatingInput) {
         },
       },
     });
-    // Apply the late-arrival rating cap if one was set on the job at
-    // clock-in. We clamp the incoming stars down (never up).
-    const effectiveStars = tokenRow?.job?.lateArrivalRatingCap
-      ? Math.min(input.stars, Math.floor(tokenRow.job.lateArrivalRatingCap))
-      : input.stars;
+    // Apply the late-arrival rating penalty if one was set on the job at
+    // clock-in — a flat deduction (never below the floor), not a cap.
+    const effectiveStars = applyLateArrivalPenalty(
+      input.stars,
+      tokenRow?.job?.lateArrivalRatingPenalty
+    );
 
     if (!tokenRow) return { success: false, error: "Invalid rating link" };
     if (tokenRow.usedAt) {
@@ -72,7 +73,7 @@ export async function submitRating(input: SubmitRatingInput) {
             rating: effectiveStars,
             notes:
               effectiveStars !== input.stars
-                ? `${input.comment?.trim() ?? ""}${input.comment?.trim() ? " | " : ""}Late-arrival cap applied (${input.stars} → ${effectiveStars})`.trim()
+                ? `${input.comment?.trim() ?? ""}${input.comment?.trim() ? " | " : ""}Late-arrival penalty applied (${input.stars} → ${effectiveStars})`.trim()
                 : input.comment?.trim() || null,
             ratedBy: "client-link",
           },

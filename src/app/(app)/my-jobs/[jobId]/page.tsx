@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
+import { getSetting } from "@/lib/settings";
 import { Calendar, Users, Package, Zap, Camera, ListChecks, MapPin, DollarSign } from "lucide-react";
 import Link from "next/link";
 import BackButton from "../BackButton";
@@ -62,6 +63,8 @@ export default async function JobDetailPage({ params }: PageProps) {
   const isEmployee = job.employeeId === session.user.id;
   const isCleaner = job.cleaners.some((c) => c.id === session.user.id);
   if (!isEmployee && !isCleaner) redirect("/my-jobs");
+
+  const showCustomerPhone = await getSetting("provider.showCustomerPhone");
 
   const employeeProductsRaw = await db.employeeProduct.findMany({
     where: { employeeId: session.user.id },
@@ -373,7 +376,7 @@ export default async function JobDetailPage({ params }: PageProps) {
       </div>
 
       {/* Contact Client */}
-      {(job.client?.phone || job.client?.email) && (
+      {showCustomerPhone && (job.client?.phone || job.client?.email) && (
         <>
           <h2 className="cl-jd-section-title">Contact <em>client.</em></h2>
           <div className="cl-jd-card" style={{ marginBottom: 0 }}>

@@ -32,7 +32,8 @@ export default function Step4Contact({ draft, onChange }: Props) {
           reach <em>you?</em>
         </h1>
         <p className="cl-subtitle">
-          We'll send a confirmation and a reminder before your appointment.
+          We&rsquo;ll send a confirmation and a reminder before your
+          appointment.
         </p>
       </header>
 
@@ -111,6 +112,28 @@ export default function Step4Contact({ draft, onChange }: Props) {
           />
         </Field>
       </div>
+
+      <label
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          gap: 10,
+          marginTop: 16,
+          fontSize: 13,
+          lineHeight: 1.5,
+          cursor: "pointer",
+        }}>
+        <input
+          type="checkbox"
+          checked={draft.smsConsent}
+          onChange={(e) => onChange({ smsConsent: e.target.checked })}
+          style={{ marginTop: 2 }}
+        />
+        <span>
+          Send me booking updates and reminders by SMS. Message and data rates
+          may apply; you can opt out anytime.
+        </span>
+      </label>
     </div>
   );
 }

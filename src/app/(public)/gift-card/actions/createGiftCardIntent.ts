@@ -3,10 +3,8 @@
 import { db } from "@/db";
 import { stripe } from "@/lib/stripe";
 import { generateGiftCardCode } from "@/lib/gift-cards/code";
-import {
-  GIFT_CARD_COVERS,
-  GIFT_CARD_TIERS,
-} from "@/lib/gift-cards/covers";
+import { GIFT_CARD_COVERS } from "@/lib/gift-cards/covers";
+import { getSetting } from "@/lib/settings";
 
 export interface CreateGiftCardInput {
   amount: number;
@@ -28,7 +26,8 @@ export interface CreateGiftCardInput {
  */
 export async function createGiftCardIntent(input: CreateGiftCardInput) {
   const amount = Math.round(Number(input.amount));
-  if (!GIFT_CARD_TIERS.includes(amount as (typeof GIFT_CARD_TIERS)[number])) {
+  const tiers = await getSetting("payments.giftCardTiers");
+  if (!tiers.includes(amount)) {
     return { success: false, error: "Pick a valid tier amount" };
   }
 

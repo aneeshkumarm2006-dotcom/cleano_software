@@ -6,7 +6,7 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { stripe } from "@/lib/stripe";
 import { sendCustomerNoShowFee } from "@/lib/email";
-import { NO_SHOW_FEE_USD } from "@/lib/policy";
+import { getSetting } from "@/lib/settings";
 
 /**
  * Admin action: customer was a no-show for the booking. Charges the
@@ -35,7 +35,7 @@ export async function markNoShow(jobId: string) {
   const client = job.client;
   if (!client) return { success: false, error: "No client on this job" };
 
-  const feeUsd = NO_SHOW_FEE_USD;
+  const feeUsd = await getSetting("scheduling.noShowFeeUsd");
   const amountCents = Math.round(feeUsd * 100);
 
   let chargeOutcome: "charged" | "no_card_on_file" | "stripe_failed" = "charged";

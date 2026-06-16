@@ -28,34 +28,33 @@ export const NO_SHOW_AUTO_STAR = 1;
 /** Minutes past start time before the cleaner late-penalty starts applying. */
 export const LATE_PENALTY_GRACE_MIN = 10;
 
-/** Star cap once the grace window is exceeded (4 stars max for that job). */
-export const LATE_PENALTY_INITIAL_CAP = 4;
+/** Stars deducted from the job's customer rating for a late arrival (flat). */
+export const LATE_ARRIVAL_RATING_PENALTY = 0.5;
 
-/** Additional half-star penalty for each window of this many minutes. */
-export const LATE_PENALTY_STEP_MIN = 5;
-export const LATE_PENALTY_STEP_STARS = 0.5;
+/** Lowest a rating can be reduced to by the late-arrival penalty. */
+export const LATE_ARRIVAL_RATING_FLOOR = 0.5;
 
 /**
- * Compute the cleaner's maximum possible rating for this job based on how
- * many minutes late they were. Returns null when no cap applies (under the
- * grace window). Floors at 0.5 so the cap stays representable.
+ * Stars to deduct from this job's rating for a late arrival. Returns a flat
+ * penalty once the grace window is exceeded, otherwise null (no penalty).
  *
- *   <= 10 min late → no cap
- *   10 min        → 4.0
- *   15 min        → 3.5
- *   20 min        → 3.0
- *   ...
+ *   <= 10 min late → no penalty
+ *   >  10 min late → −0.5 stars
  */
-export function computeLateArrivalRatingCap(
+export function computeLateArrivalPenalty(
   minutesLate: number
 ): number | null {
   if (minutesLate < LATE_PENALTY_GRACE_MIN) return null;
-  const stepsBeyond = Math.floor(
-    (minutesLate - LATE_PENALTY_GRACE_MIN) / LATE_PENALTY_STEP_MIN
-  );
-  const cap =
-    LATE_PENALTY_INITIAL_CAP - stepsBeyond * LATE_PENALTY_STEP_STARS;
-  return Math.max(0.5, cap);
+  return LATE_ARRIVAL_RATING_PENALTY;
+}
+
+/** Apply the late-arrival penalty to a customer's given stars. */
+export function applyLateArrivalPenalty(
+  stars: number,
+  penalty: number | null | undefined
+): number {
+  if (!penalty) return stars;
+  return Math.max(LATE_ARRIVAL_RATING_FLOOR, stars - penalty);
 }
 
 /** Bonus paid to whichever cleaner claims a last-minute reassigned job. */

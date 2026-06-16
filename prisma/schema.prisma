@@ -18,6 +18,9 @@ model User {
   phone                        String?
   role                         Roles                  @default(EMPLOYEE)
   emailVerified                Boolean                @default(false)
+  // Admin can deactivate a provider/cleaner; deactivated users see the
+  // configurable provider.deactivatedMessage instead of the app.
+  isActive                     Boolean                @default(true)
   payMultiplier                Float                  @default(1.0)
   multiplierLastRecalculatedAt DateTime?
   lastSeenAt                   DateTime?
@@ -189,7 +192,7 @@ model SupplierPrice {
 }
 
 model Client {
-  id                     String            @id @default(cuid())
+  id                     String                  @id @default(cuid())
   name                   String
   email                  String?
   secondaryEmail         String?
@@ -202,29 +205,30 @@ model Client {
   state                  String?
   zip                    String?
   notes                  String?
-  discountPercent        Float             @default(0)
-  clientType             ClientType        @default(RESIDENTIAL)
+  discountPercent        Float                   @default(0)
+  clientType             ClientType              @default(RESIDENTIAL)
   serviceFrequency       ServiceFrequency?
-  isActive               Boolean           @default(true)
-  stripeCustomerId       String?           @unique
+  isActive               Boolean                 @default(true)
+  stripeCustomerId       String?                 @unique
   defaultPaymentMethodId String?
-  referralCode           String?           @unique
-  referralCredit         Float             @default(0)
-  giftCardBalance        Float             @default(0)
-  noShowCount            Int               @default(0)
+  referralCode           String?                 @unique
+  referralCredit         Float                   @default(0)
+  giftCardBalance        Float                   @default(0)
+  noShowCount            Int                     @default(0)
   lastNoShowAt           DateTime?
   referredByClientId     String?
-  userId                 String?           @unique
-  createdAt              DateTime          @default(now())
-  updatedAt              DateTime          @updatedAt
+  userId                 String?                 @unique
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
   jobs                   Job[]
   invoices               Invoice[]
   complaints             Complaint[]
   waitlistEntries        Waitlist[]
   addresses              ClientAddress[]
   recurringCancellations RecurringCancellation[]
-  referredBy             Client?           @relation("ClientReferrals", fields: [referredByClientId], references: [id], onDelete: SetNull)
-  referrals              Client[]          @relation("ClientReferrals")
+  referredBy             Client?                 @relation("ClientReferrals", fields: [referredByClientId], references: [id], onDelete: SetNull)
+  referrals              Client[]                @relation("ClientReferrals")
+  contact                Contact?
 
   @@index([clientType])
   @@index([isActive])
@@ -240,7 +244,7 @@ model RecurringCancellation {
   reason        String?
   cancelledAt   DateTime  @default(now())
   emailSentAt   DateTime?
-  offerType     String?   // PERCENT | FIXED
+  offerType     String? // PERCENT | FIXED
   offerValue    Float?
   offerCode     String?
   // PENDING | SENT | OPENED | CLICKED | REPLIED | REDEEMED | EXPIRED | NONE
@@ -286,120 +290,124 @@ enum ServiceFrequency {
 }
 
 model Job {
-  id                      String            @id @default(cuid())
-  jobNumber               Int               @unique @default(autoincrement())
-  employeeId              String?
-  clientName              String
-  clientId                String?
-  location                String?
-  aptNumber               String?
-  description             String?
-  jobType                 String?
-  jobDate                 DateTime?
-  startTime               DateTime
-  endTime                 DateTime?
-  clockInTime             DateTime?
-  clockOutTime            DateTime?
-  status                  JobStatus         @default(CREATED)
-  price                   Float?
-  employeePay             Float?
-  totalTip                Float?
-  parking                 Float?
-  paymentReceived         Boolean           @default(false)
-  invoiceSent             Boolean           @default(false)
-  notes                   String?
-  paymentType             PaymentType?
-  discountAmount          Float?
-  bedCount                Int?
-  bathCount               Int?
-  payRateMultiplier       Float?            @default(1.0)
-  isFlexible              Boolean           @default(false)
-  requiredCleaners        Int               @default(1)
-  subtotalAmount          Float             @default(0)
-  gstAmount               Float             @default(0)
-  qstAmount               Float             @default(0)
-  tipAmount               Float             @default(0)
-  totalAmount             Float             @default(0)
-  stripeSetupIntentId     String?
-  stripePaymentIntentId   String?
-  depositPaymentIntentId  String?
-  depositPaid             Boolean           @default(false)
-  depositPaidAt           DateTime?
-  paymentFailedAt         DateTime?
-  paymentFailureReason    String?
-  paidAt                  DateTime?
-  refundedAmount          Float             @default(0)
-  isCashJob               Boolean           @default(false)
-  appliedPromoCode        String?
-  promoDiscountAmount     Float?
-  cancellationRequestedAt DateTime?
+  id                             String                @id @default(cuid())
+  jobNumber                      Int                   @unique @default(autoincrement())
+  employeeId                     String?
+  clientName                     String
+  clientId                       String?
+  location                       String?
+  aptNumber                      String?
+  description                    String?
+  jobType                        String?
+  jobDate                        DateTime?
+  startTime                      DateTime
+  endTime                        DateTime?
+  clockInTime                    DateTime?
+  clockOutTime                   DateTime?
+  status                         JobStatus             @default(CREATED)
+  price                          Float?
+  employeePay                    Float?
+  totalTip                       Float?
+  parking                        Float?
+  paymentReceived                Boolean               @default(false)
+  invoiceSent                    Boolean               @default(false)
+  notes                          String?
+  paymentType                    PaymentType?
+  discountAmount                 Float?
+  bedCount                       Int?
+  bathCount                      Int?
+  payRateMultiplier              Float?                @default(1.0)
+  isFlexible                     Boolean               @default(false)
+  requiredCleaners               Int                   @default(1)
+  subtotalAmount                 Float                 @default(0)
+  gstAmount                      Float                 @default(0)
+  qstAmount                      Float                 @default(0)
+  tipAmount                      Float                 @default(0)
+  totalAmount                    Float                 @default(0)
+  stripeSetupIntentId            String?
+  stripePaymentIntentId          String?
+  depositPaymentIntentId         String?
+  depositPaid                    Boolean               @default(false)
+  depositPaidAt                  DateTime?
+  paymentFailedAt                DateTime?
+  paymentFailureReason           String?
+  paidAt                         DateTime?
+  refundedAmount                 Float                 @default(0)
+  isCashJob                      Boolean               @default(false)
+  appliedPromoCode               String?
+  promoDiscountAmount            Float?
+  cancellationRequestedAt        DateTime?
   // Late-cancellation fee charged to the saved card when the customer
   // cancels within the 48h window (see CANCELLATION_FEE_USD in policy.ts).
   // `cancellationFeeChargedAt` makes the charge idempotent.
   cancellationFeeChargedAt       DateTime?
   cancellationFeePaymentIntentId String?
-  rescheduleRequestedAt   DateTime?
-  parentJobId             String?
-  bookingSource           String?
-  squareFootage           Int?
-  halfBathCount           Int?
+  rescheduleRequestedAt          DateTime?
+  parentJobId                    String?
+  bookingSource                  String?
+  squareFootage                  Int?
+  halfBathCount                  Int?
   // Rag-wash projection — computed from job specs at completion.
   // `washCreditsAwarded` flips to true once credits are written to
   // the assigned cleaner ledger(s), making the award idempotent.
-  washProjectedRags       Int?
-  washProjectedPads       Int?
-  washCappedRags          Int?
-  washCappedPads          Int?
-  washActualRags          Int?
-  washActualPads          Int?
-  washCreditsAwarded      Boolean           @default(false)
+  washProjectedRags              Int?
+  washProjectedPads              Int?
+  washCappedRags                 Int?
+  washCappedPads                 Int?
+  washActualRags                 Int?
+  washActualPads                 Int?
+  washCreditsAwarded             Boolean               @default(false)
   // No-show + late-arrival event timestamps (admin action + clock-in watcher).
-  noShowAt                DateTime?
-  lateArrivalAt           DateTime?
-  // Rating cap applied to the cleaner for this job because they were late.
-  // 4 stars at +10 min; -0.5 stars per additional 5 min (see src/lib/policy.ts).
-  lateArrivalRatingCap    Float?
+  noShowAt                       DateTime?
+  lateArrivalAt                  DateTime?
+  // Stars deducted from this job's customer rating because the cleaner arrived
+  // late (flat −0.5 past the 10-min grace; see src/lib/policy.ts). Column name
+  // kept as the legacy "lateArrivalRatingCap" to avoid a migration.
+  lateArrivalRatingPenalty       Float?                @map("lateArrivalRatingCap")
   // Manager override for the Rag Wash review flag.
-  washReviewOverrideAt    DateTime?
-  washReviewOverrideBy    String?
+  washReviewOverrideAt           DateTime?
+  washReviewOverrideBy           String?
   // Card hold lifecycle. `holdPaymentIntentId` is set when admin (or the
   // booking flow) places a manual-capture PI for the full job price.
-  holdPaymentIntentId     String?
-  holdPlacedAt            DateTime?
-  holdAmount              Float?
-  holdCapturedAt          DateTime?
-  holdReleasedAt          DateTime?
-  holdCaptureFailedAt     DateTime?
-  holdCaptureFailReason   String?
+  holdPaymentIntentId            String?
+  holdPlacedAt                   DateTime?
+  holdAmount                     Float?
+  holdCapturedAt                 DateTime?
+  holdReleasedAt                 DateTime?
+  holdCaptureFailedAt            DateTime?
+  holdCaptureFailReason          String?
   // After-photo consent captured at booking time. `afterPhotoOverrideAt`
   // lets admin authorise after-photos for a job even without consent.
-  afterPhotoConsent        Boolean          @default(false)
-  afterPhotoConsentAt      DateTime?
-  afterPhotoConsentVersion String?
-  afterPhotoOverrideAt     DateTime?
-  afterPhotoOverrideBy     String?
-  createdAt               DateTime          @default(now())
-  updatedAt               DateTime          @updatedAt
-  employee                User?             @relation("EmployeeJobs", fields: [employeeId], references: [id], onDelete: SetNull)
-  client                  Client?           @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  parentJob               Job?              @relation("JobRecurrence", fields: [parentJobId], references: [id], onDelete: SetNull)
-  childJobs               Job[]             @relation("JobRecurrence")
-  productUsage            JobProductUsage[]
-  cleaners                User[]            @relation("JobCleaners")
-  assignmentInvites       JobAssignmentInvite[]
-  logs                    JobLog[]
-  addOns                  JobAddOn[]
-  transactions            Transaction[]
-  invoices                Invoice[]
-  photos                  JobPhoto[]
-  checklists              JobChecklist[]
-  ratings                 EmployeeRating[]
-  complaints              Complaint[]
-  emailLogs               EmailLog[]
-  ratingTokens            JobRatingToken[]
-  strikes                 CleanerStrike[]
-  convertedFromLeads      Lead[]
-  convertedFromWaitlist   Waitlist[]
+  afterPhotoConsent              Boolean               @default(false)
+  afterPhotoConsentAt            DateTime?
+  afterPhotoConsentVersion       String?
+  afterPhotoOverrideAt           DateTime?
+  // SMS notification consent captured at booking time (default checked, admin
+  // setting customer.smsOptInDefault). Existing rows default to true.
+  smsConsent                     Boolean               @default(true)
+  afterPhotoOverrideBy           String?
+  createdAt                      DateTime              @default(now())
+  updatedAt                      DateTime              @updatedAt
+  employee                       User?                 @relation("EmployeeJobs", fields: [employeeId], references: [id], onDelete: SetNull)
+  client                         Client?               @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  parentJob                      Job?                  @relation("JobRecurrence", fields: [parentJobId], references: [id], onDelete: SetNull)
+  childJobs                      Job[]                 @relation("JobRecurrence")
+  productUsage                   JobProductUsage[]
+  cleaners                       User[]                @relation("JobCleaners")
+  assignmentInvites              JobAssignmentInvite[]
+  logs                           JobLog[]
+  addOns                         JobAddOn[]
+  transactions                   Transaction[]
+  invoices                       Invoice[]
+  photos                         JobPhoto[]
+  checklists                     JobChecklist[]
+  ratings                        EmployeeRating[]
+  complaints                     Complaint[]
+  emailLogs                      EmailLog[]
+  ratingTokens                   JobRatingToken[]
+  strikes                        CleanerStrike[]
+  convertedFromLeads             Lead[]
+  convertedFromWaitlist          Waitlist[]
 
   @@index([jobDate])
   @@index([clientName])
@@ -580,17 +588,17 @@ model RagWash {
 
 // Per-spec rag-wash credit-to-cash redemption. Records every payout drain.
 model WashPayout {
-  id              String             @id @default(cuid())
-  employeeId      String
-  ragCreditsUsed  Int                @default(0)
-  padCreditsUsed  Int                @default(0)
-  amount          Float
-  status          WashPayoutStatus   @default(PENDING)
+  id               String           @id @default(cuid())
+  employeeId       String
+  ragCreditsUsed   Int              @default(0)
+  padCreditsUsed   Int              @default(0)
+  amount           Float
+  status           WashPayoutStatus @default(PENDING)
   stripeTransferId String?
-  notes           String?
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
-  employee        User               @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  notes            String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  employee         User             @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
   @@index([employeeId])
   @@index([status])
@@ -648,18 +656,18 @@ enum NotificationChannel {
 // per-channel enabled flag. Seeded from the Notification Catalog spec; admin
 // can toggle any row from Settings → Notifications.
 model NotificationSetting {
-  id           String                @id @default(cuid())
-  recipient    NotificationRecipient
-  category     String
-  key          String
-  label        String
-  trigger      String
-  channel      NotificationChannel
-  enabled      Boolean               @default(false)
-  isProposed   Boolean               @default(false)
-  sortOrder    Int                   @default(0)
-  createdAt    DateTime              @default(now())
-  updatedAt    DateTime              @updatedAt
+  id         String                @id @default(cuid())
+  recipient  NotificationRecipient
+  category   String
+  key        String
+  label      String
+  trigger    String
+  channel    NotificationChannel
+  enabled    Boolean               @default(false)
+  isProposed Boolean               @default(false)
+  sortOrder  Int                   @default(0)
+  createdAt  DateTime              @default(now())
+  updatedAt  DateTime              @updatedAt
 
   @@unique([recipient, key, channel])
   @@index([recipient])
@@ -1474,18 +1482,20 @@ enum GiftCardStatus {
   CANCELLED
 }
 
-/** One-time token a customer uses on the public /add-card/[token] page
- *  to save their card on file without needing a portal login. The link
- *  is emailed by admin via the job detail "Send Add card link" action. */
+/**
+ * One-time token a customer uses on the public /add-card/[token] page
+ * to save their card on file without needing a portal login. The link
+ * is emailed by admin via the job detail "Send Add card link" action.
+ */
 model ClientCardSetupToken {
-  id           String    @id @default(cuid())
-  clientId     String
-  token        String    @unique
-  expiresAt    DateTime
-  usedAt       DateTime?
-  jobId        String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id        String    @id @default(cuid())
+  clientId  String
+  token     String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  jobId     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   @@index([clientId])
   @@index([expiresAt])
@@ -1571,46 +1581,171 @@ model QuoteRequest {
 }
 
 model ServiceArea {
-  id         String   @id @default(cuid())
-  prefix     String   @unique
-  zoneName   String
-  isActive   Boolean  @default(true)
-  travelFee  Float    @default(0)
-  notes      String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id        String   @id @default(cuid())
+  prefix    String   @unique
+  zoneName  String
+  isActive  Boolean  @default(true)
+  travelFee Float    @default(0)
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([isActive])
 }
 
 model Lead {
-  id              String     @id @default(cuid())
-  email           String
-  name            String?
-  phone           String?
-  postalCode      String?
-  dropOffStep     Int?
-  serviceType     String?
-  bedCount        Int?
-  bathCount       Int?
-  halfBathCount   Int?
-  squareFootage   Int?
-  preferredDate   DateTime?
-  isFlexible      Boolean    @default(false)
-  preferredSlot   String?
-  payload         Json?
-  status          LeadStatus @default(NEW)
-  source          String?
-  convertedJobId  String?
-  convertedAt     DateTime?
-  lastActivityAt  DateTime   @default(now())
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
-  convertedJob    Job?       @relation(fields: [convertedJobId], references: [id], onDelete: SetNull)
+  id             String     @id @default(cuid())
+  email          String
+  name           String?
+  phone          String?
+  postalCode     String?
+  dropOffStep    Int?
+  serviceType    String?
+  bedCount       Int?
+  bathCount      Int?
+  halfBathCount  Int?
+  squareFootage  Int?
+  preferredDate  DateTime?
+  isFlexible     Boolean    @default(false)
+  preferredSlot  String?
+  payload        Json?
+  status         LeadStatus @default(NEW)
+  source         String?
+  convertedJobId String?
+  convertedAt    DateTime?
+  lastActivityAt DateTime   @default(now())
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  convertedJob   Job?       @relation(fields: [convertedJobId], references: [id], onDelete: SetNull)
+  contact        Contact?
 
   @@index([email])
   @@index([status])
   @@index([lastActivityAt])
+}
+
+/// Unified CRM record. One Contact spans a person's whole lifecycle — lead,
+/// client, applicant, cleaner — and back-links to the operational Client/Lead
+/// rows it was created from (additive: existing tables are untouched).
+/// Queryable CRM columns are first-class; the flexible property-card fields
+/// (bedrooms, sqft, frequency, …) live in `props` until a full property-
+/// definition engine is built.
+model Contact {
+  id                 String            @id @default(cuid())
+  name               String
+  email              String?
+  phone              String?
+  address            String?
+  lifecycle          LifecycleStage    @default(NEW_LEAD)
+  source             String?
+  sourceDetail       String?
+  latestSource       String?
+  campaign           String?
+  ownerId            String? // soft reference to User (CRM owner / rep)
+  leadScore          Int?
+  nextStep           String?
+  nextStepDue        DateTime?
+  tags               String[]          @default([])
+  props              Json? // flexible property bag — drives the property cards
+  ratingAvg          Float?
+  ratingCount        Int               @default(0)
+  lifetimeValue      Float             @default(0)
+  bookingsCount      Int               @default(0)
+  duplicateDismissed Boolean           @default(false)
+  archivedAt         DateTime?
+  clientId           String?           @unique
+  leadId             String?           @unique
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  lastActivityAt     DateTime          @default(now())
+  client             Client?           @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  lead               Lead?             @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  activities         ContactActivity[]
+
+  @@index([lifecycle])
+  @@index([ownerId])
+  @@index([lastActivityAt])
+  @@index([email])
+  @@index([phone])
+}
+
+/// Mixed-type timeline entry on a Contact (note, call, email, lifecycle change…).
+model ContactActivity {
+  id        String              @id @default(cuid())
+  contactId String
+  type      ContactActivityType @default(NOTE)
+  title     String
+  body      String?
+  actor     String?
+  createdAt DateTime            @default(now())
+  contact   Contact             @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@index([contactId])
+  @@index([createdAt])
+}
+
+enum LifecycleStage {
+  NEW_LEAD
+  QUALIFIED
+  BOOKED
+  ACTIVE
+  RETURNING
+  PAST
+  LOST
+  APPLICANT
+  CLEANER
+  DNC
+}
+
+enum ContactActivityType {
+  NOTE
+  EMAIL
+  SMS
+  CALL
+  BOOKING
+  RATING
+  CANCEL
+  LIFECYCLE
+  CREATE
+}
+
+/// HubSpot-style property registry. Defines the editable fields ("properties")
+/// available on each CRM object. System properties are locked from deletion and
+/// internal-name/type changes after creation.
+model PropertyDefinition {
+  id           String    @id @default(cuid())
+  objectType   String // contact | company | booking
+  groupName    String
+  label        String
+  internalName String
+  fieldType    String // text|textarea|number|email|phone|date|dropdown|multi|checkbox|user
+  options      String[]  @default([])
+  isSystem     Boolean   @default(false)
+  isRequired   Boolean   @default(false)
+  isUnique     Boolean   @default(false)
+  visibility   String    @default("everyone") // everyone | admin
+  sortOrder    Int       @default(0)
+  archivedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([objectType, internalName])
+  @@index([objectType])
+}
+
+/// Marketing ad-spend entries (manual or CSV import) used to compute true CPA
+/// by channel. Funnel metrics are derived live from Contact source/lifecycle.
+model AdSpendImport {
+  id           String   @id @default(cuid())
+  channel      String // normalized channel id: google | instagram | facebook | …
+  date         DateTime
+  amount       Float
+  source       String? // "Manual" | "CSV · file.csv"
+  importedById String?
+  createdAt    DateTime @default(now())
+
+  @@index([channel])
+  @@index([date])
 }
 
 model Waitlist {
@@ -1652,7 +1787,7 @@ model EmailLog {
   notificationKey String?
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
-  job         Job?        @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  job             Job?        @relation(fields: [jobId], references: [id], onDelete: SetNull)
 
   @@index([kind])
   @@index([status])
@@ -1680,17 +1815,17 @@ model JobRatingToken {
 }
 
 model PromoCode {
-  id           String    @id @default(cuid())
-  code         String    @unique
-  description  String?
-  discountType String    @default("FIXED") // FIXED | PERCENT
+  id            String    @id @default(cuid())
+  code          String    @unique
+  description   String?
+  discountType  String    @default("FIXED") // FIXED | PERCENT
   discountValue Float
-  maxUses      Int?
-  usesCount    Int       @default(0)
-  expiresAt    DateTime?
-  isActive     Boolean   @default(true)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  maxUses       Int?
+  usesCount     Int       @default(0)
+  expiresAt     DateTime?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   @@index([code])
 }
@@ -1753,4 +1888,3 @@ model WebhookEvent {
 
   @@index([createdAt])
 }
-

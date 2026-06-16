@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { db } from "@/db";
 import CalendarPageClient from "./CalendarPageClient";
 import CleanerCalendarClient from "./CleanerCalendarClient";
+import { getBookingConfig } from "../../(book)/actions/getBookingConfig";
 
 export default async function CalendarPage() {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -57,5 +58,34 @@ export default async function CalendarPage() {
     return <CleanerCalendarClient jobs={calJobs} />;
   }
 
-  return <CalendarPageClient isEmployee={isEmployee} />;
+  // Admin/staff calendar — load the same lookups the Jobs page uses so the
+  // New-job modal can search existing customers, assign cleaners, and offer
+  // the add-on catalog.
+  const [users, clients, bookingConfig] = await Promise.all([
+    db.user.findMany({
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, email: true },
+    }),
+    db.client.findMany({
+      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        address: true,
+        discountPercent: true,
+        defaultPaymentMethodId: true,
+      },
+    }),
+    getBookingConfig(),
+  ]);
+
+  return (
+    <CalendarPageClient
+      isEmployee={isEmployee}
+      users={users}
+      clients={clients}
+      addOnCatalog={bookingConfig.addOns}
+    />
+  );
 }

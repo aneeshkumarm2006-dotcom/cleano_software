@@ -4,6 +4,11 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { db } from "@/db";
 import { revalidatePath } from "next/cache";
+import {
+  isRegisteredSetting,
+  writeSetting,
+  invalidateSetting,
+} from "@/lib/settings";
 
 interface UpdateAppSettingParams {
   key: string;
@@ -31,6 +36,23 @@ export async function updateAppSetting(params: UpdateAppSettingParams) {
       return { success: false, error: "Key and category are required" };
     }
 
+    // Registry-governed settings: validate + audit through the spine.
+    if (isRegisteredSetting(key)) {
+      const user = guard.session.user as {
+        id?: string;
+        name?: string;
+        email?: string;
+      };
+      const res = await writeSetting(key, value, {
+        id: user.id ?? null,
+        label: user.name ?? user.email ?? null,
+      });
+      if (!res.success) return { success: false, error: res.error };
+      revalidatePath("/settings");
+      return { success: true };
+    }
+
+    // Legacy / unregistered settings: existing passthrough behavior.
     await db.appSetting.upsert({
       where: { key },
       create: {
@@ -44,6 +66,7 @@ export async function updateAppSetting(params: UpdateAppSettingParams) {
       },
     });
 
+    invalidateSetting(key); // no-op if not cached; keeps spine reads fresh
     revalidatePath("/settings");
     return { success: true };
   } catch (error) {

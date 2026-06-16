@@ -52,6 +52,7 @@ export default function BookPage() {
   const [submitted, setSubmitted] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [confirmedTotal, setConfirmedTotal] = useState<number | null>(null);
+  const [minLeadDays, setMinLeadDays] = useState(1);
 
   // Hard guard against double-submit. The button is disabled while
   // `submitting` is true, but state updates are async so a fast double-click
@@ -72,8 +73,10 @@ export default function BookPage() {
   // Load admin-managed add-on catalog on first mount.
   useEffect(() => {
     let cancelled = false;
-    getBookingConfig().then(({ addOns }) => {
+    getBookingConfig().then(({ addOns, minLeadDays, smsOptInDefault }) => {
       if (cancelled) return;
+      setMinLeadDays(minLeadDays);
+      setDraft((d) => ({ ...d, smsConsent: smsOptInDefault }));
       setDraft((d) =>
         d.addOns.length > 0
           ? d
@@ -84,6 +87,7 @@ export default function BookPage() {
                 name: a.name,
                 price: a.price,
                 roomType: a.roomType,
+                services: a.services,
                 selected: false,
               })),
             }
@@ -257,6 +261,7 @@ export default function BookPage() {
       ].filter(Boolean).join("\n\n"),
       referralCode: draft.referralCode,
       afterPhotoConsent: draft.afterPhotoConsent,
+      smsConsent: draft.smsConsent,
       depositPaymentIntentId,
       stripeCustomerId: draft.stripeCustomerId,
       stripePaymentMethodId,
@@ -612,7 +617,13 @@ export default function BookPage() {
             {step === 1 && (
               <Step2Property draft={draft} onChange={patch} basePrice={basePrice} />
             )}
-            {step === 2 && <Step3Schedule draft={draft} onChange={patch} />}
+            {step === 2 && (
+              <Step3Schedule
+                draft={draft}
+                onChange={patch}
+                minLeadDays={minLeadDays}
+              />
+            )}
             {step === 3 && <Step4Contact draft={draft} onChange={patch} />}
             {step === 4 && (
               <>

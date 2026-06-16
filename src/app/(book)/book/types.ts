@@ -21,6 +21,8 @@ export interface AddOnSelection {
   name: string;
   price: number;
   roomType?: RoomType;
+  /** Service types this add-on shows for. Empty = all services. */
+  services?: string[];
   selected: boolean;
 }
 
@@ -63,6 +65,8 @@ export interface BookingDraft {
   stripeCardReady?: boolean;
   // Step 5 — after-photo consent (opt-in, not pre-selected)
   afterPhotoConsent: boolean;
+  // Step 4 — SMS notification consent (default from customer.smsOptInDefault)
+  smsConsent: boolean;
 }
 
 export const EMPTY_DRAFT: BookingDraft = {
@@ -89,6 +93,7 @@ export const EMPTY_DRAFT: BookingDraft = {
   notes: "",
   referralCode: "",
   afterPhotoConsent: false,
+  smsConsent: true,
 };
 
 export const SERVICE_TYPES: { value: string; label: string }[] = [

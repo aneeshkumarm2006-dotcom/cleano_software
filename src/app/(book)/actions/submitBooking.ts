@@ -14,9 +14,8 @@ import {
 import {
   ensureClientReferralCode,
   generateUniqueReferralCode,
-  NEW_CLIENT_DISCOUNT,
-  REFERRER_CREDIT,
 } from "@/lib/referral";
+import { getSetting } from "@/lib/settings";
 import {
   sendBookingConfirmation,
   sendAdminNewBookingNotification,
@@ -60,6 +59,7 @@ interface SubmitBookingInput {
   notes: string;
   referralCode: string;
   afterPhotoConsent?: boolean;
+  smsConsent?: boolean;
   promoCode?: string;
   promoDiscount?: number;
   // Optional
@@ -222,7 +222,7 @@ export async function submitBooking(input: SubmitBookingInput) {
     let creditSpent = 0;
 
     if (isNewClient && referrerEligibleForCredit) {
-      discountAmount = NEW_CLIENT_DISCOUNT;
+      discountAmount = await getSetting("customer.newClientReferralDiscountUsd");
     } else if (!isNewClient && client.referralCredit > 0) {
       // Spend up to 50% of subtotal in credit (sanity cap), to be tuned later.
       creditSpent = Math.min(client.referralCredit, 50);
@@ -298,6 +298,8 @@ export async function submitBooking(input: SubmitBookingInput) {
       afterPhotoConsent: consentGiven,
       afterPhotoConsentAt: consentGiven ? new Date() : null,
       afterPhotoConsentVersion: consentGiven ? AFTER_PHOTO_CONSENT_VERSION : null,
+      // SMS consent defaults to true unless the customer explicitly unchecks it.
+      smsConsent: input.smsConsent !== false,
     };
 
     const primaryJob = await db.job.create({
@@ -352,10 +354,11 @@ export async function submitBooking(input: SubmitBookingInput) {
 
     // Credit the referrer for sending a new paying client our way
     if (referrerEligibleForCredit && referredByClientId) {
+      const referrerCredit = await getSetting("customer.referrerCreditUsd");
       await db.client.update({
         where: { id: referredByClientId },
         data: {
-          referralCredit: { increment: REFERRER_CREDIT },
+          referralCredit: { increment: referrerCredit },
         },
       });
     }
@@ -393,7 +396,8 @@ export async function submitBooking(input: SubmitBookingInput) {
     }
 
     // 7. Recurring jobs — copy the primary across future dates
-    const recurrences = recurrenceCount(input.frequency);
+    const weeklyHorizon = await getSetting("scheduling.recurringWeeklyHorizon");
+    const recurrences = recurrenceCount(input.frequency, weeklyHorizon);
     const childJobIds: string[] = [];
     if (recurrences > 0 && input.frequency !== "ONE_TIME") {
       // Compute discounted price for 2nd+ cleanings (first cleaning is full price)

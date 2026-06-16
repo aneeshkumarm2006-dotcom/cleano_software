@@ -11,6 +11,7 @@ interface Employee {
   email: string;
   phone: string | null;
   role: "OWNER" | "ADMIN" | "EMPLOYEE";
+  isActive?: boolean;
 }
 
 interface EmployeeModalContextType {

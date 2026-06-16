@@ -166,8 +166,17 @@ function AStatCard({ icon: Icon, label, value, hint }: { icon: any; label: strin
 }
 
 function formatDate(dateStr: string | null, fallback: string): string {
-  const d = dateStr ? new Date(dateStr) : new Date(fallback);
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  // `jobDate` is stored as a calendar date at midnight UTC, so format it in UTC
+  // to avoid showing the previous day in negative-offset timezones. The
+  // `startTime` fallback is a real instant, so it's rendered in local time.
+  if (dateStr) {
+    return new Date(dateStr).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      timeZone: 'UTC',
+    });
+  }
+  return new Date(fallback).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
 function formatTime(iso: string): string {

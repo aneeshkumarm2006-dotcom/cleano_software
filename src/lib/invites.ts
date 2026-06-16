@@ -2,13 +2,14 @@
  * Accept / decline workflow helpers.
  *
  * When a cleaner is added to a job, we create a JobAssignmentInvite with
- * an expiry of `ACCEPT_DECLINE_TIMEOUT_MIN` minutes from now. The cleaner
- * accepts or declines from /my-jobs; if they don't respond in time the
- * cron sweep marks it EXPIRED and removes them from the job.
+ * an expiry of the configured accept/decline timeout (admin setting
+ * `scheduling.acceptDeclineTimeoutMin`) from now. The cleaner accepts or
+ * declines from /my-jobs; if they don't respond in time the cron sweep marks
+ * it EXPIRED and removes them from the job.
  */
 
 import { db } from "@/db";
-import { ACCEPT_DECLINE_TIMEOUT_MIN } from "./policy";
+import { getSetting } from "@/lib/settings";
 
 interface CreateInviteOpts {
   jobId: string;
@@ -20,9 +21,8 @@ interface CreateInviteOpts {
 export async function createAssignmentInvites(opts: CreateInviteOpts) {
   if (opts.cleanerIds.length === 0) return [];
   const now = new Date();
-  const expiresAt = new Date(
-    now.getTime() + ACCEPT_DECLINE_TIMEOUT_MIN * 60_000
-  );
+  const timeoutMin = await getSetting("scheduling.acceptDeclineTimeoutMin");
+  const expiresAt = new Date(now.getTime() + timeoutMin * 60_000);
   const isLastMinute = opts.isLastMinute ?? false;
   const bonusUsd = opts.bonusUsd ?? 0;
 

@@ -22,7 +22,11 @@ import {
 } from "@/components/calendar/CalendarOverlaysContext";
 import { STATUS_LEGEND } from "@/components/calendar/status-meta";
 import { OfficeHours } from "@/components/calendar/calendar-helpers";
-import JobModal from "../../app/(app)/jobs/JobModal";
+import JobModal, {
+  type ClientLite,
+  type User as JobModalUser,
+  type AddOnCatalogItem,
+} from "../../app/(app)/jobs/JobModal";
 import { saveJob } from "../../app/(app)/actions/saveJob";
 
 interface CalendarProps {
@@ -33,9 +37,14 @@ interface CalendarProps {
   persist?: boolean;
   onEventsChange?: (events: CalendarEvent[]) => void;
   hideNewJobButton?: boolean;
+  // Passed through to the New-job modal so it can look up existing customers,
+  // assign cleaners, and offer the add-on catalog — matching the Jobs page.
+  clients?: ClientLite[];
+  users?: JobModalUser[];
+  addOnCatalog?: AddOnCatalogItem[];
 }
 
-const Calendar = React.forwardRef<CalendarRef, CalendarProps>(({ hideNewJobButton = false, ...props }, ref) => {
+const Calendar = React.forwardRef<CalendarRef, CalendarProps>(({ hideNewJobButton = false, clients = [], users = [], addOnCatalog = [], ...props }, ref) => {
   const {
     view,
     setView,
@@ -597,7 +606,9 @@ const Calendar = React.forwardRef<CalendarRef, CalendarProps>(({ hideNewJobButto
             : null
         }
         mode="create"
-        users={[]}
+        users={users}
+        clients={clients}
+        addOnCatalog={addOnCatalog}
         onSubmit={async (formData) => {
           // Prefill times if provided by drag selection
           if (jobModalData?.date) {

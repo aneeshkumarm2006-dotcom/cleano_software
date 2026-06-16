@@ -5,7 +5,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { sendCustomerPoorRatingFollowUp } from "@/lib/email";
-import { POOR_RATING_FOLLOWUP_STARS } from "@/lib/policy";
+import { POOR_RATING_FOLLOWUP_STARS, applyLateArrivalPenalty } from "@/lib/policy";
 import { maybeApplyLowRatingStrike } from "@/lib/strikes";
 
 export interface PendingRatingJob {
@@ -117,7 +117,7 @@ export async function submitCustomerRating(
           jobNumber: true,
           clientName: true,
           clientId: true,
-          lateArrivalRatingCap: true,
+          lateArrivalRatingPenalty: true,
           employeeId: true,
           client: { select: { email: true, name: true } },
           cleaners: { select: { id: true } },
@@ -151,10 +151,11 @@ export async function submitCustomerRating(
     return { success: false, error: "Rating must be 1–5 stars" };
   }
 
-  // Apply the late-arrival cap (clamp down only), matching the email flow.
-  const effectiveStars = tokenRow.job.lateArrivalRatingCap
-    ? Math.min(stars, Math.floor(tokenRow.job.lateArrivalRatingCap))
-    : stars;
+  // Apply the late-arrival penalty (flat deduction, never below the floor).
+  const effectiveStars = applyLateArrivalPenalty(
+    stars,
+    tokenRow.job.lateArrivalRatingPenalty
+  );
 
   const cleanerIds = tokenRow.cleanerId
     ? [tokenRow.cleanerId]

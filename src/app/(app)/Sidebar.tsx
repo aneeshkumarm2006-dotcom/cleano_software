@@ -32,6 +32,11 @@ import {
   Settings,
   LogOut,
   Sparkles,
+  IdCard,
+  LineChart,
+  Database,
+  GraduationCap,
+  Megaphone,
   type LucideIcon,
 } from "lucide-react";
 import { getUnreadChatCount } from "./chat/actions";
@@ -74,6 +79,7 @@ const NAV: { label: string; items: NavItem[] }[] = [
   {
     label: "Operations",
     items: [
+      { href: "/contacts", label: "Contacts", Icon: IdCard },
       { href: "/jobs", label: "Jobs", Icon: Briefcase },
       { href: "/requests", label: "Requests", Icon: Inbox, badge: "requests" },
       { href: "/waitlist", label: "Wait Lists", Icon: Clock },
@@ -89,6 +95,8 @@ const NAV: { label: string; items: NavItem[] }[] = [
     items: [
       { href: "/employees", label: "Employees", Icon: Users },
       { href: "/job-applications", label: "Job Applications", Icon: UserPlus },
+      { href: "/training-docs", label: "Training & Docs", Icon: GraduationCap },
+      { href: "/announcements", label: "Announcements", Icon: Megaphone },
     ],
   },
   {
@@ -102,6 +110,7 @@ const NAV: { label: string; items: NavItem[] }[] = [
     label: "Sales & Marketing",
     items: [
       { href: "/sales", label: "Sales Leads", Icon: MapPin },
+      { href: "/reports", label: "Lead Source & CPA", Icon: LineChart },
       { href: "/quotes", label: "Quotes", Icon: FileText },
       { href: "/gift-cards", label: "Gift Cards & Promos", Icon: Gift },
     ],
@@ -118,6 +127,7 @@ const NAV: { label: string; items: NavItem[] }[] = [
   {
     label: "Admin",
     items: [
+      { href: "/properties", label: "Property Engine", Icon: Database },
       { href: "/logs", label: "Logs", Icon: ScrollText },
       { href: "/settings", label: "Settings", Icon: Settings },
     ],

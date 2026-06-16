@@ -2208,21 +2208,21 @@ export async function sendAdminWeeklyRagWashDashboard(opts: {
   }
 }
 
-/** Admin email when a cleaner arrives late and the rating cap kicks in. */
+/** Admin email when a cleaner arrives late and the rating penalty kicks in. */
 export async function sendAdminLateArrival(opts: {
   jobId: string;
   jobNumber: number;
   clientName: string;
   cleanerName: string;
   minutesLate: number;
-  ratingCap: number;
+  penalty: number;
 }) {
   const admins = await fetchAdmins();
   if (admins.length === 0) return;
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
   const html = layout(
     h1(`Late arrival — ${opts.cleanerName}`) +
-      p(`<strong>${opts.cleanerName}</strong> clocked in <strong>${opts.minutesLate} min late</strong> for booking #${opts.jobNumber} (${opts.clientName}). The maximum rating for this job is now capped at <strong>${opts.ratingCap} stars</strong>.`) +
+      p(`<strong>${opts.cleanerName}</strong> clocked in <strong>${opts.minutesLate} min late</strong> for booking #${opts.jobNumber} (${opts.clientName}). This job's customer rating will be reduced by <strong>${opts.penalty} stars</strong>.`) +
       btn("Open job", `${appUrl}/jobs/${opts.jobId}`)
   );
   for (const admin of admins) {
@@ -2239,19 +2239,19 @@ export async function sendAdminLateArrival(opts: {
   }
 }
 
-/** Cleaner email when their own late arrival caps their job rating. */
+/** Cleaner email when their own late arrival reduces their job rating. */
 export async function sendProviderLateArrival(opts: {
   to: string;
   providerName: string;
   jobId: string;
   jobNumber: number;
   minutesLate: number;
-  ratingCap: number;
+  penalty: number;
 }) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
   const html = layout(
     h1(`Late arrival on booking #${opts.jobNumber}`) +
-      p(`Hi ${opts.providerName.split(" ")[0]}, you clocked in <strong>${opts.minutesLate} min late</strong>. As per our service standards, the maximum rating for this job is capped at <strong>${opts.ratingCap} stars</strong>.`) +
+      p(`Hi ${opts.providerName.split(" ")[0]}, you clocked in <strong>${opts.minutesLate} min late</strong>. As per our service standards, your rating for this job will be reduced by <strong>${opts.penalty} stars</strong>.`) +
       p(`To avoid this in future, please clock in within 10 minutes of the booking start time.`) +
       btn("Open job", `${appUrl}/my-jobs/${opts.jobId}`)
   );

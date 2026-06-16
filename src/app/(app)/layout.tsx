@@ -1,7 +1,10 @@
 import { getCachedSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
+import { db } from "@/db";
+import { getSetting } from "@/lib/settings";
 import { isAdminRole, isClientRole } from "@/lib/role-routing";
 import signOut from "./actions/signOut";
+import AccountDeactivated from "./AccountDeactivated";
 import Sidebar from "./Sidebar";
 import CleanerSidebar from "./CleanerSidebar";
 import InstallPrompt from "@/components/InstallPrompt";
@@ -29,6 +32,17 @@ export default async function DashboardLayout({
   const isAdmin = isAdminRole(userWithRole.role);
 
   if (!isAdmin) {
+    // Deactivated cleaners see a configurable notice instead of the app.
+    const dbUser = await db.user.findUnique({
+      where: { id: userWithRole.id },
+      select: { isActive: true },
+    });
+    if (dbUser && dbUser.isActive === false) {
+      const message = await getSetting("provider.deactivatedMessage");
+      return (
+        <AccountDeactivated message={message} signOutAction={signOut} />
+      );
+    }
     return (
       <InstallProvider>
         <div className="cl-app-shell">

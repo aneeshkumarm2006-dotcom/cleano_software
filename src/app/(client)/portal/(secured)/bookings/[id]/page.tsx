@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect, notFound } from "next/navigation";
 import { db } from "@/db";
+import { getSettings } from "@/lib/settings";
 import Link from "next/link";
 import { ArrowLeft, Download, MapPin, Users, CreditCard } from "lucide-react";
 import { StatusBadge, DateBadge } from "@/components/customer/atoms";
@@ -62,6 +63,15 @@ export default async function BookingDetailPage({
   if (!job || job.clientId !== client.id) notFound();
 
   const isUpcoming = new Date(job.startTime) >= new Date();
+  const {
+    "policy.cancellationFeeUsd": cancellationFeeUsd,
+    "policy.cancellationFeeWindowHours": cancellationWindowHours,
+    "customer.cancellationReasons": cancellationReasons,
+  } = await getSettings([
+    "policy.cancellationFeeUsd",
+    "policy.cancellationFeeWindowHours",
+    "customer.cancellationReasons",
+  ]);
   const isCompletedOrPaid = job.status === "COMPLETED" || job.status === "PAID";
   const hasCancelRequest = !!job.cancellationRequestedAt;
   const hasRescheduleRequest = !!job.rescheduleRequestedAt;
@@ -326,6 +336,9 @@ export default async function BookingDetailPage({
             <RequestActions
               jobId={job.id}
               startTime={job.startTime.toISOString()}
+              cancellationFeeUsd={cancellationFeeUsd}
+              cancellationWindowHours={cancellationWindowHours}
+              cancellationReasons={cancellationReasons}
             />
           ) : null}
 

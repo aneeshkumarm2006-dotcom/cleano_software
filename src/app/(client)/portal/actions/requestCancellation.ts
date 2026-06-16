@@ -9,15 +9,12 @@ import {
   sendAdminBookingCancellationRequest,
   sendCustomerFeesCharged,
 } from "@/lib/email";
-import {
-  CANCELLATION_FEE_USD,
-  CANCELLATION_FEE_WINDOW_HOURS,
-} from "@/lib/policy";
+import { getSetting } from "@/lib/settings";
 
 // Per spec: cancellation requests are flagged for admin review — never auto-cancel.
 // If the request lands inside the late-cancellation window, the configured fee
 // is charged off-session to the saved card at request time.
-export async function requestCancellation(jobId: string) {
+export async function requestCancellation(jobId: string, reason?: string) {
   try {
     const session = await auth.api.getSession({ headers: await headers() });
     if (!session) return { success: false, error: "Not authenticated" };
@@ -49,9 +46,12 @@ export async function requestCancellation(jobId: string) {
 
     // Late-cancellation fee: charge once, only inside the window, only when a
     // card is on file and we haven't already charged for this job.
+    const cancellationWindowHours = await getSetting(
+      "policy.cancellationFeeWindowHours"
+    );
     const msUntilStart = job.startTime.getTime() - now.getTime();
     const withinFeeWindow =
-      msUntilStart < CANCELLATION_FEE_WINDOW_HOURS * 60 * 60 * 1000;
+      msUntilStart < cancellationWindowHours * 60 * 60 * 1000;
 
     let chargeOutcome:
       | "charged"
@@ -61,7 +61,7 @@ export async function requestCancellation(jobId: string) {
       | "already_charged" = "not_applicable";
     let chargeError: string | undefined;
     let feePaymentIntentId: string | undefined;
-    const feeUsd = CANCELLATION_FEE_USD;
+    const feeUsd = await getSetting("policy.cancellationFeeUsd");
     const amountCents = Math.round(feeUsd * 100);
 
     if (withinFeeWindow && job.cancellationFeeChargedAt) {
@@ -102,9 +102,9 @@ export async function requestCancellation(jobId: string) {
       chargeOutcome === "charged"
         ? ` Late-cancellation fee of $${feeUsd.toFixed(2)} charged via Stripe (PI: ${feePaymentIntentId}).`
         : chargeOutcome === "no_card_on_file"
-          ? ` Within ${CANCELLATION_FEE_WINDOW_HOURS}h window but no card on file — collect $${feeUsd.toFixed(2)} fee manually.`
+          ? ` Within ${cancellationWindowHours}h window but no card on file — collect $${feeUsd.toFixed(2)} fee manually.`
           : chargeOutcome === "stripe_failed"
-            ? ` Within ${CANCELLATION_FEE_WINDOW_HOURS}h window — fee charge FAILED: ${chargeError}. Collect $${feeUsd.toFixed(2)} manually.`
+            ? ` Within ${cancellationWindowHours}h window — fee charge FAILED: ${chargeError}. Collect $${feeUsd.toFixed(2)} manually.`
             : chargeOutcome === "already_charged"
               ? ` Late-cancellation fee already charged for this booking.`
               : "";
@@ -127,7 +127,9 @@ export async function requestCancellation(jobId: string) {
           jobId,
           userId: session.user.id,
           action: "NOTE_ADDED",
-          description: `Cancellation requested by client.${feeNote}`,
+          description: `Cancellation requested by client.${
+            reason?.trim() ? ` Reason: ${reason.trim()}.` : ""
+          }${feeNote}`,
         },
       }),
       ...(chargeOutcome === "charged"

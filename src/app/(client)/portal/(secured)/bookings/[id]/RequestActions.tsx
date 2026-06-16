@@ -16,12 +16,20 @@ function tomorrowISO() {
 export default function RequestActions({
   jobId,
   startTime,
+  cancellationFeeUsd,
+  cancellationWindowHours,
+  cancellationReasons,
 }: {
   jobId: string;
   startTime: string;
+  cancellationFeeUsd: number;
+  cancellationWindowHours: number;
+  cancellationReasons: string[];
 }) {
-  const within48h =
-    new Date(startTime).getTime() - Date.now() < 48 * 60 * 60 * 1000;
+  const withinFeeWindow =
+    new Date(startTime).getTime() - Date.now() <
+    cancellationWindowHours * 60 * 60 * 1000;
+  const feeLabel = `$${cancellationFeeUsd.toFixed(0)}`;
   const [busy, setBusy] = useState<"cancel" | "reschedule" | null>(null);
   const [msg, setMsg] = useState<{
     kind: "success" | "error";
@@ -38,8 +46,9 @@ export default function RequestActions({
   const [rescheduleNotes, setRescheduleNotes] = useState("");
 
   async function submitCancel() {
+    if (!cancelReason) return;
     setBusy("cancel");
-    const res = await requestCancellation(jobId);
+    const res = await requestCancellation(jobId, cancelReason);
     setBusy(null);
     setCancelOpen(false);
     setCancelReason("");
@@ -117,8 +126,8 @@ export default function RequestActions({
             margin: "12px 0 0",
             lineHeight: 1.5,
           }}>
-          Requests are reviewed by our team — your booking won't be changed
-          automatically.
+          Requests are reviewed by our team — your booking won&rsquo;t be
+          changed automatically.
         </p>
       </section>
 
@@ -168,19 +177,26 @@ export default function RequestActions({
         title="Cancel this booking?"
         description="Our team reviews every cancellation and will reach out to confirm. Your booking won't be cancelled automatically.">
         <div className="cl-stack-16">
-          <Banner kind={within48h ? "error" : "amber"}>
-            {within48h
-              ? "Heads up: this booking is within 48 hours, so a $20 cancellation fee will apply."
-              : "Cancellations within 48 hours of your appointment are charged a $20 fee."}
+          <Banner kind={withinFeeWindow ? "error" : "amber"}>
+            {withinFeeWindow
+              ? `Heads up: this booking is within ${cancellationWindowHours} hours, so a ${feeLabel} cancellation fee will apply.`
+              : `Cancellations within ${cancellationWindowHours} hours of your appointment are charged a ${feeLabel} fee.`}
           </Banner>
-          <Field label="Reason (optional)" htmlFor="cn-reason">
-            <Textarea
+          <Field label="Reason for cancelling" htmlFor="cn-reason">
+            <select
               id="cn-reason"
-              rows={3}
+              className="cl-input"
               value={cancelReason}
-              onChange={(e) => setCancelReason(e.target.value)}
-              placeholder="Help us improve — why are you cancelling?"
-            />
+              onChange={(e) => setCancelReason(e.target.value)}>
+              <option value="" disabled>
+                Select a reason…
+              </option>
+              {cancellationReasons.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
           </Field>
           <div className="cl-modal-actions">
             <Button
@@ -193,7 +209,7 @@ export default function RequestActions({
               variant="amber"
               onClick={submitCancel}
               loading={busy === "cancel"}
-              disabled={busy !== null}>
+              disabled={busy !== null || !cancelReason}>
               Request cancellation
             </Button>
           </div>

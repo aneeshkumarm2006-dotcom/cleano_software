@@ -25,6 +25,8 @@ export async function updateEmployee(
   const email = formData.get("email") as string;
   const phone = formData.get("phone") as string;
   const role = formData.get("role") as string;
+  // Checkbox: present ("on") = active, absent ("") = deactivated.
+  const isActive = formData.get("isActive") === "on";
 
   // Validate required fields
   if (!name || !email || !role) {
@@ -69,6 +71,7 @@ export async function updateEmployee(
         email,
         phone: phone || null,
         role: role as "OWNER" | "ADMIN" | "EMPLOYEE",
+        isActive,
       },
     });
 
