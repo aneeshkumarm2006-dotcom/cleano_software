@@ -141,7 +141,7 @@ export default function CalendarPageClient({
           addOnCatalog={addOnCatalog}
         />
       </div>
-      <CalendarJobActions />
+      <CalendarJobActions isEmployee={isEmployee} />
     </CalendarProvider>
   );
 }

@@ -42,7 +42,11 @@ const STATUS_CONFIG: Record<
   CANCELLED: { label: "Cancelled", variant: "error" },
 };
 
-export default function CalendarJobActions() {
+export default function CalendarJobActions({
+  isEmployee = true,
+}: {
+  isEmployee?: boolean;
+}) {
   const {
     selectedEvent,
     showEventModal,
@@ -51,6 +55,9 @@ export default function CalendarJobActions() {
     refreshEvents,
   } = useCalendar();
   const router = useRouter();
+
+  // Admins land on the admin job view; cleaners on their own job page.
+  const jobBasePath = isEmployee ? "/my-jobs" : "/jobs";
 
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [showNoteInput, setShowNoteInput] = useState(false);
@@ -119,15 +126,15 @@ export default function CalendarJobActions() {
 
   const handleViewDetails = useCallback(() => {
     if (!event?.metadata?.jobId) return;
-    router.push(`/my-jobs/${event.metadata.jobId}`);
+    router.push(`${jobBasePath}/${event.metadata.jobId}`);
     handleClose();
-  }, [event, router, handleClose]);
+  }, [event, router, handleClose, jobBasePath]);
 
   const handleUploadPhotos = useCallback(() => {
     if (!event?.metadata?.jobId) return;
-    router.push(`/my-jobs/${event.metadata.jobId}#photos`);
+    router.push(`${jobBasePath}/${event.metadata.jobId}#photos`);
     handleClose();
-  }, [event, router, handleClose]);
+  }, [event, router, handleClose, jobBasePath]);
 
   const handleGetHelp = useCallback(() => {
     router.push("/chat");
@@ -281,7 +288,8 @@ export default function CalendarJobActions() {
           </div>
         )}
 
-        {/* Quick Actions - Contextual based on status */}
+        {/* Quick Actions - Contextual based on status (cleaner-facing) */}
+        {isEmployee && (
         <div className="border-t border-gray-100 pt-4">
           <p className="text-xs font-[450] text-gray-500 mb-2 uppercase tracking-wider">
             Quick Actions
@@ -404,16 +412,17 @@ export default function CalendarJobActions() {
             )}
           </div>
         </div>
+        )}
 
         {/* View Full Details Link */}
         <div className="border-t border-gray-100 pt-3">
           <Button
-            variant="ghost"
+            variant="primary"
             size="sm"
             onClick={handleViewDetails}
-            className="w-full justify-center !text-[#008C9C]">
+            className="w-full justify-center">
             <ExternalLink className="w-4 h-4 mr-1.5" />
-            View Full Job Details
+            {isEmployee ? "View Full Job Details" : "Open job details"}
           </Button>
         </div>
       </div>
