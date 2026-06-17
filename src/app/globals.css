@@ -5238,6 +5238,13 @@ a.an-listrow:hover { background: var(--primary-10); }
 .cal-ev.cancelled { opacity: 0.5; }
 .cal-ev.cancelled .cal-ev-client { text-decoration: line-through; }
 .cal-ev.dragging { box-shadow: 0 12px 30px rgba(0,60,70,0.22); z-index: 8; opacity: 0.95; }
+/* Event cards must sit ABOVE the z-20 drag-create tiles, otherwise the
+   transparent tiles intercept the click and open the New Job modal instead of
+   the event (Day & Week views). Higher-specificity selector wins over both
+   `.cal-ev` blocks regardless of source order. */
+.cal-col .cal-ev { z-index: 21; }
+.cal-col .cal-ev:hover { z-index: 26; }
+.cal-col .cal-ev.dragging { z-index: 30; }
 .cal-ev-bar { position: absolute; left: 0; top: 0; bottom: 0; width: 3px; }
 .cal-ev-in { padding: 5px 8px 5px 11px; height: 100%; box-sizing: border-box; overflow: hidden; }
 .cal-ev-top { display: flex; align-items: center; gap: 5px; }
