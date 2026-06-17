@@ -13,7 +13,7 @@ interface AdminChatClientProps {
 }
 
 // Deterministic color per employee name
-const AVATAR_COLORS = ["#005F6A","#0284c7","#7c3aed","#d97706","#dc2626","#059669","#be185d","#0891b2"];
+const AVATAR_COLORS = ["#008C9C","#0284c7","#7c3aed","#d97706","#dc2626","#059669","#be185d","#0891b2"];
 function avatarColor(name: string) {
   let h = 0;
   for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xffffffff;
@@ -316,7 +316,7 @@ export default function AdminChatClient({ initialList }: AdminChatClientProps) {
               <div className="chat-thread-empty" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flex: 1 }}>
                 <div style={{
                   width: 56, height: 56, borderRadius: "50%",
-                  background: "rgba(0,95,106,0.06)",
+                  background: "rgba(0,140,156,0.06)",
                   display: "flex", alignItems: "center", justifyContent: "center",
                   marginBottom: 14,
                 }}>

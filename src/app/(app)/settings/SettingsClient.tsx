@@ -26,6 +26,7 @@ import {
   Globe,
   Globe2,
   HardHat,
+  Tags,
 } from "lucide-react";
 import ProfileTab from "./tabs/ProfileTab";
 import TaxSettingsTab from "./tabs/TaxSettingsTab";
@@ -52,6 +53,7 @@ import DocumentsTab, {
 import NotificationsTab, { NotificationSettingRow } from "./tabs/NotificationsTab";
 import RetentionTab from "./tabs/RetentionTab";
 import SchedulingTab from "./tabs/SchedulingTab";
+import CalendarLabelsTab from "./tabs/CalendarLabelsTab";
 import PaymentsTab from "./tabs/PaymentsTab";
 import CustomerTab from "./tabs/CustomerTab";
 import GeneralTab from "./tabs/GeneralTab";
@@ -109,6 +111,7 @@ type TabId =
   | "provider"
   | "payments"
   | "scheduling"
+  | "calendarLabels"
   | "website"
   | "retention"
   | "notifications";
@@ -119,6 +122,49 @@ interface TabDef {
   icon: typeof UserIcon;
   adminOnly?: boolean;
 }
+
+// One-line description shown in the panel header above each tab's content.
+const TAB_SUBTITLES: Record<TabId, string> = {
+  profile: "Your dashboard, performance, income and personal alerts.",
+  availability: "When you can be scheduled.",
+  closures: "Block days or time ranges for the whole team.",
+  tax: "GST / QST rates and registration numbers.",
+  pricing: "Per-unit pricing, add-ons and specialty packages.",
+  jobTypes: "Define the kinds of jobs you offer.",
+  paymentTypes: "Customer-facing labels for each payment method.",
+  inventoryRules: "Per-job usage and refill thresholds.",
+  kitTemplates: "Bundled product sets for each visit type.",
+  checklistTemplates: "Reusable checklists applied to matching jobs.",
+  training: "Modules, videos and quizzes for your team.",
+  documents: "Documents your team must read and sign.",
+  multipliers: "Pay multiplier at each rating band.",
+  roles: "What each role can access.",
+  suppliers: "Vendors and their product pricing.",
+  inventoryLocations: "Where inventory is stored and stocked.",
+  serviceAreas: "Postal prefixes you serve and travel fees.",
+  general: "Currency and core configuration.",
+  customer: "Referrals, reviews and customer-facing rules.",
+  provider: "What providers can see and do.",
+  payments: "Cancellation fees and gift cards.",
+  scheduling: "Lead times, timeouts and recurring horizon.",
+  calendarLabels: "Tag each job type on the calendar.",
+  website: "Custom domain, FAQ and embed codes.",
+  retention: "Save offers in the check-in email.",
+  notifications: "Per-channel notification preferences.",
+};
+
+// Sidebar groupings (label → ordered tab ids).
+const TAB_GROUPS: { label: string; ids: TabId[] }[] = [
+  { label: "You", ids: ["profile", "availability"] },
+  { label: "Operations", ids: ["closures", "jobTypes", "checklistTemplates", "serviceAreas"] },
+  { label: "Money", ids: ["tax", "pricing", "paymentTypes", "multipliers", "payments"] },
+  { label: "Inventory", ids: ["inventoryRules", "kitTemplates", "suppliers", "inventoryLocations"] },
+  { label: "Team", ids: ["training", "documents", "roles"] },
+  {
+    label: "Configuration",
+    ids: ["general", "customer", "provider", "scheduling", "calendarLabels", "website", "retention", "notifications"],
+  },
+];
 
 const TABS: TabDef[] = [
   { id: "profile", label: "Profile", icon: UserIcon },
@@ -188,6 +234,12 @@ const TABS: TabDef[] = [
     icon: CalendarClock,
     adminOnly: true,
   },
+  {
+    id: "calendarLabels",
+    label: "Calendar Labels",
+    icon: Tags,
+    adminOnly: true,
+  },
   { id: "website", label: "Website & FAQ", icon: Globe2, adminOnly: true },
   {
     id: "retention",
@@ -219,53 +271,71 @@ export default function SettingsClient({
   serviceAreas,
   notificationSettings,
 }: SettingsClientProps) {
-  const visibleTabs = TABS.filter((t) => !t.adminOnly || isAdmin);
   const [activeTab, setActiveTab] = useState<TabId>("profile");
+
+  // Canonical 1–26 numbering follows the TABS order; groups only render their
+  // admin-visible tabs (non-admins see "You" only).
+  const tabNumber = (id: TabId) =>
+    String(TABS.findIndex((t) => t.id === id) + 1).padStart(2, "0");
+  const visibleGroups = TAB_GROUPS.map((g) => ({
+    label: g.label,
+    ids: g.ids.filter((id) => {
+      const tab = TABS.find((t) => t.id === id);
+      return tab && (!tab.adminOnly || isAdmin);
+    }),
+  })).filter((g) => g.ids.length > 0);
+
+  const activeDef = TABS.find((t) => t.id === activeTab);
+  const isReadOnly = activeTab === "roles";
 
   return (
     <div className="admin-font stack-24">
       <header className="stack-8">
         <p className="eyebrow">Admin</p>
         <h1 className="display">Settings</h1>
-        <p style={{ fontSize: 14, color: "var(--primary-60)" }}>Manage your account and application configuration.</p>
+        <p style={{ fontSize: 15, color: "var(--primary-70)" }}>Manage your account and application configuration.</p>
       </header>
 
-      <div style={{ display: "flex", gap: 24, alignItems: "flex-start" }}>
-        <aside style={{ width: 220, flexShrink: 0 }}>
-          <div style={{ background: "var(--primary-5)", borderRadius: 16, padding: 6, display: "flex", flexDirection: "column", gap: 2 }}>
-            {visibleTabs.map((tab) => {
-              const Icon = tab.icon;
-              const active = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setActiveTab(tab.id)}
-                  style={{
-                    width: "100%",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    padding: "10px 14px",
-                    borderRadius: 10,
-                    fontSize: 13,
-                    fontWeight: active ? 600 : 400,
-                    background: active ? "var(--primary)" : "transparent",
-                    color: active ? "#fff" : "var(--primary-70)",
-                    border: "none",
-                    cursor: "pointer",
-                    textAlign: "left",
-                    transition: "background 0.15s",
-                  }}>
-                  <Icon strokeWidth={1.9} size={15} />
-                  {tab.label}
-                </button>
-              );
-            })}
-          </div>
-        </aside>
+      <div className="set-layout">
+        <nav className="set-menu">
+          {visibleGroups.map((group) => (
+            <div key={group.label}>
+              <div className="set-menu-label">{group.label}</div>
+              {group.ids.map((id) => {
+                const tab = TABS.find((t) => t.id === id)!;
+                const Icon = tab.icon;
+                const active = activeTab === id;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    className={`smenu-item${active ? " active" : ""}`}
+                    onClick={() => setActiveTab(id)}>
+                    <Icon strokeWidth={1.9} size={16} />
+                    <span>{tab.label}</span>
+                    <span className="smenu-num">{tabNumber(id)}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </nav>
 
         <section style={{ flex: 1, minWidth: 0 }}>
+          {activeDef && (
+            <div className="set-panel-head">
+              <div>
+                <h2>{activeDef.label}</h2>
+                <p>{TAB_SUBTITLES[activeTab]}</p>
+              </div>
+              {activeDef.adminOnly && (
+                <span className="set-ro-tag">
+                  <Shield strokeWidth={2} size={13} />
+                  {isReadOnly ? "Read-only" : "Admin only"}
+                </span>
+              )}
+            </div>
+          )}
           {activeTab === "profile" && <ProfileTab user={user} />}
           {activeTab === "availability" && <AvailabilityTab />}
           {activeTab === "closures" && isAdmin && (
@@ -337,6 +407,9 @@ export default function SettingsClient({
           )}
           {activeTab === "scheduling" && isAdmin && (
             <SchedulingTab settings={appSettings} />
+          )}
+          {activeTab === "calendarLabels" && isAdmin && (
+            <CalendarLabelsTab settings={appSettings} />
           )}
           {activeTab === "website" && isAdmin && (
             <WebsiteTab settings={appSettings} />

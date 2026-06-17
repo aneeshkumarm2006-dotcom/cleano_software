@@ -19,6 +19,15 @@ import {
 } from "@/lib/email";
 import { isNotificationEnabled } from "@/lib/notifications";
 import { createAssignmentInvites } from "@/lib/invites";
+import { getSetting } from "@/lib/settings";
+import {
+  recurringDiscountPercent,
+  recurrenceCount,
+  nextOccurrence,
+} from "@/lib/booking-pricing";
+
+const RECURRING_FREQUENCIES = ["WEEKLY", "BIWEEKLY"] as const;
+type RecurringFrequency = (typeof RECURRING_FREQUENCIES)[number];
 
 const VALID_PAYMENT_TYPES = [
   "CASH",
@@ -51,6 +60,12 @@ export async function saveJob(formData: FormData) {
 
   try {
     const cleanerIds = formData.getAll("cleaners") as string[];
+    const frequencyRaw = (formData.get("frequency") as string) || "ONE_TIME";
+    const recurringFrequency = RECURRING_FREQUENCIES.includes(
+      frequencyRaw as RecurringFrequency
+    )
+      ? (frequencyRaw as RecurringFrequency)
+      : null;
     const addOnsRaw = formData.get("addOns") as string | null;
     let addOns: Array<{ name: string; price: number }> = [];
     if (addOnsRaw) {
@@ -448,6 +463,63 @@ export async function saveJob(formData: FormData) {
           jobId: newJob.id,
           cleanerIds,
         });
+      }
+
+      // ── Recurring series ─────────────────────────────────────────────
+      // Weekly/biweekly bookings auto-create the next few occurrences. The
+      // first cleaning (this job) stays full price; subsequent cleanings get
+      // the recurring discount (WEEKLY 12% / BIWEEKLY 8%) recorded on
+      // discountAmount. Same assigned team carries across occurrences.
+      if (recurringFrequency && jobData.startTime) {
+        const weeklyHorizon = await getSetting(
+          "scheduling.recurringWeeklyHorizon"
+        );
+        const occurrences = recurrenceCount(recurringFrequency, weeklyHorizon);
+        const basePrice = jobData.price ?? 0;
+        const discountPct = recurringDiscountPercent(recurringFrequency);
+        const recurringDiscount =
+          basePrice > 0 && discountPct > 0
+            ? Math.round(((basePrice * discountPct) / 100) * 100) / 100
+            : 0;
+        const childDiscount =
+          recurringDiscount > 0
+            ? +((jobData.discountAmount ?? 0) + recurringDiscount).toFixed(2)
+            : jobData.discountAmount;
+
+        // Preserve the job's duration across occurrences.
+        const durationMs =
+          jobData.endTime instanceof Date
+            ? jobData.endTime.getTime() - jobData.startTime.getTime()
+            : null;
+
+        let cursor: Date = jobData.startTime;
+        for (let i = 0; i < occurrences; i++) {
+          cursor = nextOccurrence(cursor, recurringFrequency);
+          const childData: any = {
+            ...jobData,
+            jobDate: cursor,
+            startTime: cursor,
+            endTime: durationMs != null ? new Date(cursor.getTime() + durationMs) : null,
+            discountAmount: childDiscount,
+            bookingSource: "admin-recurring",
+            parentJob: { connect: { id: newJob.id } },
+          };
+          if (cleanerIds.length > 0) {
+            childData.cleaners = { connect: cleanerIds.map((id) => ({ id })) };
+          }
+          if (addOns.length > 0) {
+            childData.addOns = {
+              create: addOns.map((a) => ({ name: a.name, price: a.price })),
+            };
+          }
+
+          const child = await db.job.create({ data: childData });
+
+          if (cleanerIds.length > 0) {
+            await createAssignmentInvites({ jobId: child.id, cleanerIds });
+          }
+          await invalidateCalendarDay(cursor.toISOString().slice(0, 10));
+        }
       }
 
       // If created with no cleaners, this lands in the unassigned folder.

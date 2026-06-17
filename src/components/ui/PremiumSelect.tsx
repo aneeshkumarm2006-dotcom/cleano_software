@@ -103,9 +103,9 @@ export default function PremiumSelect({
   const border = error
     ? "1.5px solid #f87171"
     : open
-    ? "1.5px solid #005F6A"
-    : "1px solid rgba(0,95,106,0.16)";
-  const boxShadow = open ? "0 0 0 3px rgba(0,95,106,0.11)" : "none";
+    ? "1.5px solid #008C9C"
+    : "1px solid rgba(0,140,156,0.16)";
+  const boxShadow = open ? "0 0 0 3px rgba(0,140,156,0.11)" : "none";
 
   return (
     <>
@@ -125,9 +125,9 @@ export default function PremiumSelect({
           padding: `0 ${size === "sm" ? 10 : 14}px`,
           borderRadius: BR[size],
           border,
-          background: disabled ? "rgba(0,95,106,0.04)" : "#fff",
+          background: disabled ? "rgba(0,140,156,0.04)" : "#fff",
           fontSize: FS[size],
-          color: selected ? "#111" : "rgba(0,95,106,0.38)",
+          color: selected ? "#111" : "rgba(0,140,156,0.38)",
           fontFamily: "inherit",
           cursor: disabled ? "not-allowed" : "pointer",
           transition: "border .15s, box-shadow .15s",
@@ -151,7 +151,7 @@ export default function PremiumSelect({
           size={14}
           style={{
             flexShrink: 0,
-            color: "rgba(0,95,106,0.45)",
+            color: "rgba(0,140,156,0.45)",
             transform: open ? "rotate(180deg)" : "none",
             transition: "transform .2s",
           }}
@@ -171,9 +171,9 @@ export default function PremiumSelect({
               zIndex: 9999,
               background: "#fff",
               borderRadius: 14,
-              border: "1px solid rgba(0,95,106,0.1)",
+              border: "1px solid rgba(0,140,156,0.1)",
               boxShadow:
-                "0 8px 32px rgba(0,95,106,0.13), 0 2px 8px rgba(0,0,0,0.05)",
+                "0 8px 32px rgba(0,140,156,0.13), 0 2px 8px rgba(0,0,0,0.05)",
               overflow: "hidden",
               animation: "ps-drop .16s cubic-bezier(.2,.8,.3,1) both",
             }}>
@@ -181,7 +181,7 @@ export default function PremiumSelect({
               <div
                 style={{
                   padding: "8px 8px 4px",
-                  borderBottom: "1px solid rgba(0,95,106,0.07)",
+                  borderBottom: "1px solid rgba(0,140,156,0.07)",
                 }}>
                 <input
                   ref={searchRef}
@@ -192,13 +192,13 @@ export default function PremiumSelect({
                     width: "100%",
                     height: 34,
                     borderRadius: 8,
-                    border: "1px solid rgba(0,95,106,0.14)",
+                    border: "1px solid rgba(0,140,156,0.14)",
                     padding: "0 12px",
                     fontSize: 13,
                     color: "#111",
                     fontFamily: "inherit",
                     outline: "none",
-                    background: "rgba(0,95,106,0.03)",
+                    background: "rgba(0,140,156,0.03)",
                   }}
                 />
               </div>
@@ -210,7 +210,7 @@ export default function PremiumSelect({
                   style={{
                     padding: "14px 12px",
                     fontSize: 13,
-                    color: "rgba(0,95,106,0.4)",
+                    color: "rgba(0,140,156,0.4)",
                     textAlign: "center",
                   }}>
                   No options
@@ -230,7 +230,7 @@ export default function PremiumSelect({
                         borderRadius: 9,
                         border: 0,
                         background: active
-                          ? "rgba(0,95,106,0.08)"
+                          ? "rgba(0,140,156,0.08)"
                           : "transparent",
                         display: "flex",
                         alignItems: "center",
@@ -240,9 +240,9 @@ export default function PremiumSelect({
                         fontSize: 13,
                         fontWeight: active ? 600 : 400,
                         color: opt.disabled
-                          ? "rgba(0,95,106,0.28)"
+                          ? "rgba(0,140,156,0.28)"
                           : active
-                          ? "#005F6A"
+                          ? "#008C9C"
                           : "#111",
                         fontFamily: "inherit",
                         textAlign: "left",
@@ -252,17 +252,17 @@ export default function PremiumSelect({
                         if (!opt.disabled && !active)
                           (
                             e.currentTarget as HTMLButtonElement
-                          ).style.background = "rgba(0,95,106,0.04)";
+                          ).style.background = "rgba(0,140,156,0.04)";
                       }}
                       onMouseLeave={e => {
                         (e.currentTarget as HTMLButtonElement).style.background =
-                          active ? "rgba(0,95,106,0.08)" : "transparent";
+                          active ? "rgba(0,140,156,0.08)" : "transparent";
                       }}>
                       <span>{opt.label}</span>
                       {active && (
                         <Check
                           size={13}
-                          style={{ color: "#005F6A", flexShrink: 0 }}
+                          style={{ color: "#008C9C", flexShrink: 0 }}
                         />
                       )}
                     </button>

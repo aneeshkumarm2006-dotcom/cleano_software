@@ -9,7 +9,7 @@ export type StageMeta = { label: string; bg: string; fg: string; dot: string };
 export const LIFECYCLE_META: Record<LifecycleStage, StageMeta> = {
   NEW_LEAD:  { label: "New Lead",       bg: "rgba(2,132,199,0.10)",   fg: "#075985", dot: "#0284c7" },
   QUALIFIED: { label: "Qualified",      bg: "rgba(79,70,229,0.10)",   fg: "#3730a3", dot: "#4f46e5" },
-  BOOKED:    { label: "Booked",         bg: "rgba(0,95,106,0.10)",    fg: "#003940", dot: "#005F6A" },
+  BOOKED:    { label: "Booked",         bg: "rgba(0,140,156,0.10)",    fg: "#003940", dot: "#008C9C" },
   ACTIVE:    { label: "Active",         bg: "rgba(5,150,105,0.12)",   fg: "#065f46", dot: "#059669" },
   RETURNING: { label: "Returning",      bg: "rgba(13,148,136,0.12)",  fg: "#115e59", dot: "#0d9488" },
   PAST:      { label: "Past",           bg: "rgba(100,116,139,0.12)", fg: "#334155", dot: "#64748b" },
@@ -35,7 +35,7 @@ export const EVENT_META: Record<ContactActivityType, EventMeta> = {
   EMAIL:     { color: "#0284c7", bg: "rgba(2,132,199,0.10)" },
   SMS:       { color: "#059669", bg: "rgba(5,150,105,0.12)" },
   CALL:      { color: "#0d9488", bg: "rgba(13,148,136,0.12)" },
-  BOOKING:   { color: "#005F6A", bg: "rgba(0,95,106,0.10)" },
+  BOOKING:   { color: "#008C9C", bg: "rgba(0,140,156,0.10)" },
   RATING:    { color: "#d97706", bg: "rgba(217,119,6,0.12)" },
   CANCEL:    { color: "#dc2626", bg: "rgba(220,38,38,0.10)" },
   LIFECYCLE: { color: "#7c3aed", bg: "rgba(124,58,237,0.10)" },

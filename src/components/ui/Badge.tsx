@@ -38,7 +38,7 @@ export default function Badge({
     tdo: "bg-purple-100 text-purple-700",
     secondary: "bg-gray-100 text-gray-700 hover:bg-gray-200",
     cleano:
-      "bg-[#005F6A]/10 text-[#005F6A] hover:bg-[#005F6A]/20 border-[#005F6A]/2 backdrop-blur-[3px]",
+      "bg-[#008C9C]/10 text-[#008C9C] hover:bg-[#008C9C]/20 border-[#008C9C]/2 backdrop-blur-[3px]",
     destructive: "bg-red-100 text-red-700",
     dentitek:
       "bg-[#173f38]/85 text-white hover:bg-[#173f38]/95 border-[#173f38]/20",

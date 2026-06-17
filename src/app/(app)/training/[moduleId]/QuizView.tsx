@@ -90,8 +90,8 @@ export default function QuizView({
       <div className="space-y-5">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <h2 className="text-lg font-[400] text-[#005F6A]">Quiz</h2>
-            <p className="text-xs text-[#005F6A]/60 mt-1">
+            <h2 className="text-lg font-[400] text-[#008C9C]">Quiz</h2>
+            <p className="text-xs text-[#008C9C]/60 mt-1">
               Pass with {Math.round(PASS_THRESHOLD * 100)}% or higher to complete this module.
             </p>
           </div>
@@ -157,7 +157,7 @@ export default function QuizView({
             <ol className="space-y-4">
               {quizzes.map((q, qIdx) => (
                 <li key={q.id} className="space-y-2">
-                  <p className="text-sm font-[400] text-[#005F6A]">
+                  <p className="text-sm font-[400] text-[#008C9C]">
                     {qIdx + 1}. {q.question}
                   </p>
                   <div className="space-y-1.5">
@@ -168,8 +168,8 @@ export default function QuizView({
                           key={oIdx}
                           className={`flex items-center gap-3 px-4 py-2.5 rounded-xl border cursor-pointer transition-colors ${
                             selected
-                              ? "bg-[#005F6A]/10 border-[#005F6A]/30"
-                              : "bg-white border-[#005F6A]/10 hover:bg-[#005F6A]/3"
+                              ? "bg-[#008C9C]/10 border-[#008C9C]/30"
+                              : "bg-white border-[#008C9C]/10 hover:bg-[#008C9C]/3"
                           }`}>
                           <input
                             type="radio"
@@ -178,10 +178,10 @@ export default function QuizView({
                             onChange={() =>
                               setAnswers((prev) => ({ ...prev, [q.id]: oIdx }))
                             }
-                            className="accent-[#005F6A]"
+                            className="accent-[#008C9C]"
                             disabled={!videoOk && status !== "COMPLETED"}
                           />
-                          <span className="text-sm text-[#005F6A]">
+                          <span className="text-sm text-[#008C9C]">
                             {opt.text}
                           </span>
                         </label>

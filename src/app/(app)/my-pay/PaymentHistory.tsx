@@ -151,13 +151,13 @@ export default function PaymentHistory({
     return (
       <div className="bg-white rounded-2xl">
         <div className="text-center py-12">
-          <div className="w-16 h-16 bg-[#005F6A]/5 rounded-full flex items-center justify-center mx-auto mb-3">
-            <Banknote className="w-8 h-8 text-[#005F6A]/40" />
+          <div className="w-16 h-16 bg-[#008C9C]/5 rounded-full flex items-center justify-center mx-auto mb-3">
+            <Banknote className="w-8 h-8 text-[#008C9C]/40" />
           </div>
-          <p className="text-sm font-[350] text-[#005F6A]/70">
+          <p className="text-sm font-[350] text-[#008C9C]/70">
             No payment activity yet
           </p>
-          <p className="text-xs font-[350] text-[#005F6A]/60 mt-1">
+          <p className="text-xs font-[350] text-[#008C9C]/60 mt-1">
             Payouts and withdrawals will appear here
           </p>
         </div>
@@ -178,7 +178,7 @@ export default function PaymentHistory({
         return (
           <div
             key={`${e.kind}-${e.id}`}
-            className="bg-white rounded-2xl border border-[#005F6A]/10 p-5 flex items-center justify-between gap-4">
+            className="bg-white rounded-2xl border border-[#008C9C]/10 p-5 flex items-center justify-between gap-4">
             <div className="flex items-center gap-4 min-w-0 flex-1">
               <div
                 className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
@@ -192,7 +192,7 @@ export default function PaymentHistory({
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="app-title-small text-[#005F6A] font-[400]">
+                  <span className="app-title-small text-[#008C9C] font-[400]">
                     {e.description}
                   </span>
                   <span
@@ -200,7 +200,7 @@ export default function PaymentHistory({
                     {e.status}
                   </span>
                 </div>
-                <div className="flex items-center gap-3 mt-1 text-xs text-[#005F6A]/60">
+                <div className="flex items-center gap-3 mt-1 text-xs text-[#008C9C]/60">
                   <span className="flex items-center gap-1">
                     <Calendar className="w-3 h-3" />
                     {formatDate(e.date)}
@@ -212,7 +212,7 @@ export default function PaymentHistory({
               <p className={`text-lg font-[500] ${colorClass}`}>
                 {sign}${e.amount.toFixed(2)}
               </p>
-              <p className="text-[10px] text-[#005F6A]/50">
+              <p className="text-[10px] text-[#008C9C]/50">
                 Balance ${e.runningBalance.toFixed(2)}
               </p>
             </div>

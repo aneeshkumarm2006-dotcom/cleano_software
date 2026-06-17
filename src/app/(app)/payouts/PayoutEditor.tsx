@@ -65,14 +65,14 @@ export default function PayoutEditor({ payout, locked }: Props) {
       <div className="bg-white rounded-xl p-4 flex items-center justify-between gap-4">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-[400] text-[#005F6A] truncate">
+            <span className="text-sm font-[400] text-[#008C9C] truncate">
               {payout.employeeName}
             </span>
-            <span className="text-xs text-[#005F6A]/50">
+            <span className="text-xs text-[#008C9C]/50">
               {payout.jobCount} jobs · {payout.totalHours.toFixed(1)}h
             </span>
           </div>
-          <div className="flex items-center gap-3 mt-1 text-xs text-[#005F6A]/60 flex-wrap">
+          <div className="flex items-center gap-3 mt-1 text-xs text-[#008C9C]/60 flex-wrap">
             <span>Base: ${payout.baseAmount.toFixed(2)}</span>
             {payout.adjustments !== 0 && (
               <span className="text-blue-600">
@@ -91,13 +91,13 @@ export default function PayoutEditor({ payout, locked }: Props) {
             )}
           </div>
           {payout.notes && (
-            <p className="text-xs text-[#005F6A]/50 mt-1 italic">
+            <p className="text-xs text-[#008C9C]/50 mt-1 italic">
               {payout.notes}
             </p>
           )}
         </div>
         <div className="flex items-center gap-3 flex-shrink-0">
-          <span className="text-lg font-[500] text-[#005F6A]">
+          <span className="text-lg font-[500] text-[#008C9C]">
             ${payout.finalAmount.toFixed(2)}
           </span>
           {!locked && (
@@ -118,10 +118,10 @@ export default function PayoutEditor({ payout, locked }: Props) {
   return (
     <div className="bg-white rounded-xl p-4">
       <div className="flex items-center justify-between mb-3">
-        <span className="text-sm font-[400] text-[#005F6A]">
+        <span className="text-sm font-[400] text-[#008C9C]">
           {payout.employeeName}
         </span>
-        <span className="text-xs text-[#005F6A]/50">
+        <span className="text-xs text-[#008C9C]/50">
           {payout.jobCount} jobs · {payout.totalHours.toFixed(1)}h
         </span>
       </div>
@@ -133,7 +133,7 @@ export default function PayoutEditor({ payout, locked }: Props) {
           { label: "Reimbursements", val: reim, set: setReim },
         ].map((f) => (
           <div key={f.label}>
-            <label className="text-[10px] uppercase tracking-wider text-[#005F6A]/50 font-[400]">
+            <label className="text-[10px] uppercase tracking-wider text-[#008C9C]/50 font-[400]">
               {f.label}
             </label>
             <input
@@ -142,13 +142,13 @@ export default function PayoutEditor({ payout, locked }: Props) {
               value={f.val}
               onChange={(e) => f.set(e.target.value)}
               disabled={saving}
-              className="w-full px-3 py-2 rounded-xl bg-[#005F6A]/5 text-sm text-[#005F6A] focus:outline-none"
+              className="w-full px-3 py-2 rounded-xl bg-[#008C9C]/5 text-sm text-[#008C9C] focus:outline-none"
             />
           </div>
         ))}
       </div>
       <div className="mt-3">
-        <label className="text-[10px] uppercase tracking-wider text-[#005F6A]/50 font-[400]">
+        <label className="text-[10px] uppercase tracking-wider text-[#008C9C]/50 font-[400]">
           Notes
         </label>
         <input
@@ -157,13 +157,13 @@ export default function PayoutEditor({ payout, locked }: Props) {
           onChange={(e) => setNotes(e.target.value)}
           disabled={saving}
           placeholder="Optional notes"
-          className="w-full px-3 py-2 rounded-xl bg-[#005F6A]/5 text-sm text-[#005F6A] focus:outline-none placeholder:text-[#005F6A]/40"
+          className="w-full px-3 py-2 rounded-xl bg-[#008C9C]/5 text-sm text-[#008C9C] focus:outline-none placeholder:text-[#008C9C]/40"
         />
       </div>
-      <div className="flex items-center justify-between mt-4 pt-3 border-t border-[#005F6A]/10">
-        <span className="text-sm text-[#005F6A]/70">
+      <div className="flex items-center justify-between mt-4 pt-3 border-t border-[#008C9C]/10">
+        <span className="text-sm text-[#008C9C]/70">
           Final:{" "}
-          <span className="text-[#005F6A] font-[500]">
+          <span className="text-[#008C9C] font-[500]">
             ${computedFinal.toFixed(2)}
           </span>
         </span>

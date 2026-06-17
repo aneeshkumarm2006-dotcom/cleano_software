@@ -121,6 +121,14 @@ const jobTypes = [
   { value: "F", label: "Follow-up" },
 ];
 
+// Recurring-booking frequencies. Weekly/biweekly auto-create the next few
+// occurrences at a discount (first cleaning full price); see saveJob.
+const frequencies = [
+  { value: "ONE_TIME", label: "One-time", hint: "" },
+  { value: "WEEKLY", label: "Weekly", hint: "12% off from the 2nd cleaning" },
+  { value: "BIWEEKLY", label: "Biweekly", hint: "8% off from the 2nd cleaning" },
+];
+
 const STEPS = [
   { id: 1, title: "Basic Info", icon: Briefcase },
   { id: 2, title: "Schedule & Team", icon: Calendar },
@@ -238,20 +246,20 @@ function CustomDatePicker({
         type="button"
         disabled={disabled}
         onClick={() => !disabled && setIsOpen((prev) => !prev)}
-        className={`w-full px-4 py-3 rounded-2xl border border-[#005F6A]/15 bg-[#005F6A]/5 flex items-center justify-between text-left transition-all tracking-tight ${
+        className={`w-full px-4 py-3 rounded-2xl border border-[#008C9C]/15 bg-[#008C9C]/5 flex items-center justify-between text-left transition-all tracking-tight ${
           disabled
             ? "opacity-60 cursor-not-allowed"
-            : "hover:border-[#005F6A]/40"
+            : "hover:border-[#008C9C]/40"
         }`}>
         <div className="flex items-center gap-3 overflow-hidden">
-          <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center border border-[#005F6A]/15">
-            <Calendar className="w-4 h-4 text-[#005F6A]" />
+          <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center border border-[#008C9C]/15">
+            <Calendar className="w-4 h-4 text-[#008C9C]" />
           </div>
           <div className="flex flex-col leading-tight">
-            <span className="text-xs text-[#005F6A]/70">Selected date</span>
+            <span className="text-xs text-[#008C9C]/70">Selected date</span>
             <span
               className={`text-sm font-[450] ${
-                value ? "text-[#005F6A]" : "text-[#005F6A]/50"
+                value ? "text-[#008C9C]" : "text-[#008C9C]/50"
               }`}>
               {value
                 ? new Date(`${value}T00:00:00`).toLocaleDateString("en-US", {
@@ -264,17 +272,17 @@ function CustomDatePicker({
             </span>
           </div>
         </div>
-        <ChevronDown className="w-4 h-4 text-[#005F6A]/60 flex-shrink-0" />
+        <ChevronDown className="w-4 h-4 text-[#008C9C]/60 flex-shrink-0" />
       </button>
 
       {isOpen && (
         <div
-          className="fixed z-[9999] w-full max-w-sm rounded-2xl bg-white shadow-xl border border-[#005F6A]/10 p-4"
+          className="fixed z-[9999] w-full max-w-sm rounded-2xl bg-white shadow-xl border border-[#008C9C]/10 p-4"
           style={{ top: dropdownPosition.top, left: dropdownPosition.left }}>
           <div className="flex items-center justify-between mb-3">
             <button
               type="button"
-              className="p-2 rounded-lg hover:bg-[#005F6A]/10 text-[#005F6A]"
+              className="p-2 rounded-lg hover:bg-[#008C9C]/10 text-[#008C9C]"
               onClick={() =>
                 setViewDate(
                   new Date(viewDate.getFullYear(), viewDate.getMonth() - 1, 1)
@@ -282,12 +290,12 @@ function CustomDatePicker({
               }>
               <ChevronLeft className="w-4 h-4" />
             </button>
-            <p className="text-sm font-[600] text-[#005F6A] tracking-tight">
+            <p className="text-sm font-[600] text-[#008C9C] tracking-tight">
               {monthLabel}
             </p>
             <button
               type="button"
-              className="p-2 rounded-lg hover:bg-[#005F6A]/10 text-[#005F6A]"
+              className="p-2 rounded-lg hover:bg-[#008C9C]/10 text-[#008C9C]"
               onClick={() =>
                 setViewDate(
                   new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 1)
@@ -297,7 +305,7 @@ function CustomDatePicker({
             </button>
           </div>
 
-          <div className="grid grid-cols-7 text-[11px] text-[#005F6A]/60 mb-2 tracking-tight">
+          <div className="grid grid-cols-7 text-[11px] text-[#008C9C]/60 mb-2 tracking-tight">
             {["S", "M", "T", "W", "T", "F", "S"].map((day) => (
               <div key={day} className="text-center py-1">
                 {day}
@@ -327,10 +335,10 @@ function CustomDatePicker({
                   onClick={() => handleSelectDay(day)}
                   className={`h-10 rounded-xl text-sm font-[450] transition-all tracking-tight ${
                     isSelected
-                      ? "bg-[#005F6A] text-white shadow-sm"
-                      : "hover:bg-[#005F6A]/10 text-[#005F6A]"
+                      ? "bg-[#008C9C] text-white shadow-sm"
+                      : "hover:bg-[#008C9C]/10 text-[#008C9C]"
                   } ${
-                    isToday && !isSelected ? "border border-[#005F6A]/30" : ""
+                    isToday && !isSelected ? "border border-[#008C9C]/30" : ""
                   }`}>
                   {day}
                 </button>
@@ -341,13 +349,13 @@ function CustomDatePicker({
           <div className="flex items-center justify-between mt-3 gap-2">
             <button
               type="button"
-              className="flex-1 px-3 py-2 rounded-xl bg-[#005F6A]/10 text-[#005F6A] text-sm font-[500] tracking-tight hover:bg-[#005F6A]/15"
+              className="flex-1 px-3 py-2 rounded-xl bg-[#008C9C]/10 text-[#008C9C] text-sm font-[500] tracking-tight hover:bg-[#008C9C]/15"
               onClick={handleToday}>
               Today
             </button>
             <button
               type="button"
-              className="flex-1 px-3 py-2 rounded-xl bg-white border border-[#005F6A]/20 text-[#005F6A]/80 text-sm font-[500] tracking-tight hover:border-[#005F6A]/40"
+              className="flex-1 px-3 py-2 rounded-xl bg-white border border-[#008C9C]/20 text-[#008C9C]/80 text-sm font-[500] tracking-tight hover:border-[#008C9C]/40"
               onClick={handleClear}>
               Clear
             </button>
@@ -451,17 +459,17 @@ function CustomTimePicker({
       <label className="input-label tracking-tight">{label}</label>
       <div
         onClick={() => { if (!disabled) inputRef.current?.focus(); }}
-        className={`w-full px-4 py-3 rounded-2xl border border-[#005F6A]/15 bg-[#005F6A]/5 flex items-center justify-between text-left transition-all tracking-tight ${
+        className={`w-full px-4 py-3 rounded-2xl border border-[#008C9C]/15 bg-[#008C9C]/5 flex items-center justify-between text-left transition-all tracking-tight ${
           disabled
             ? "opacity-60 cursor-not-allowed"
-            : "hover:border-[#005F6A]/40 cursor-text"
+            : "hover:border-[#008C9C]/40 cursor-text"
         }`}>
         <div className="flex items-center gap-3 overflow-hidden flex-1">
-          <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center border border-[#005F6A]/15 flex-shrink-0">
-            <Calendar className="w-4 h-4 text-[#005F6A]" />
+          <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center border border-[#008C9C]/15 flex-shrink-0">
+            <Calendar className="w-4 h-4 text-[#008C9C]" />
           </div>
           <div className="flex flex-col leading-tight flex-1 min-w-0">
-            <span className="text-xs text-[#005F6A]/70">Selected time</span>
+            <span className="text-xs text-[#008C9C]/70">Selected time</span>
             <input
               ref={inputRef}
               type="text"
@@ -490,23 +498,23 @@ function CustomTimePicker({
                 }
               }}
               className={`text-sm font-[450] bg-transparent border-0 outline-none p-0 w-full ${
-                value ? "text-[#005F6A]" : "text-[#005F6A]/50"
+                value ? "text-[#008C9C]" : "text-[#008C9C]/50"
               }`}
             />
           </div>
         </div>
-        <ChevronDown className="w-4 h-4 text-[#005F6A]/60 flex-shrink-0" />
+        <ChevronDown className="w-4 h-4 text-[#008C9C]/60 flex-shrink-0" />
       </div>
 
       {isOpen && (
         <div
-          className="fixed z-[9999] w-full max-w-sm rounded-2xl bg-white shadow-xl border border-[#005F6A]/10 max-h-64 overflow-y-auto"
+          className="fixed z-[9999] w-full max-w-sm rounded-2xl bg-white shadow-xl border border-[#008C9C]/10 max-h-64 overflow-y-auto"
           style={{ top: dropdownPosition.top, left: dropdownPosition.left }}>
           <div className="p-2">
             <div className="flex gap-2 mb-2">
               <button
                 type="button"
-                className="flex-1 px-3 py-2 rounded-xl bg-[#005F6A] text-white text-sm font-[500] tracking-tight hover:bg-[#005F6A]/90"
+                className="flex-1 px-3 py-2 rounded-xl bg-[#008C9C] text-white text-sm font-[500] tracking-tight hover:bg-[#008C9C]/90"
                 onClick={() =>
                   handleTimeSelect(new Date().toTimeString().slice(0, 5))
                 }>
@@ -514,7 +522,7 @@ function CustomTimePicker({
               </button>
               <button
                 type="button"
-                className="flex-1 px-3 py-2 rounded-xl bg-white border border-[#005F6A]/20 text-[#005F6A]/80 text-sm font-[500] tracking-tight hover:border-[#005F6A]/40"
+                className="flex-1 px-3 py-2 rounded-xl bg-white border border-[#008C9C]/20 text-[#008C9C]/80 text-sm font-[500] tracking-tight hover:border-[#008C9C]/40"
                 onClick={handleClear}>
                 Clear
               </button>
@@ -527,8 +535,8 @@ function CustomTimePicker({
                   onClick={() => handleTimeSelect(time)}
                   className={`px-3 py-2 rounded-lg text-sm font-[450] tracking-tight transition-all ${
                     value === time
-                      ? "bg-[#005F6A] text-white"
-                      : "bg-[#005F6A]/5 text-[#005F6A] hover:bg-[#005F6A]/10"
+                      ? "bg-[#008C9C] text-white"
+                      : "bg-[#008C9C]/5 text-[#008C9C] hover:bg-[#008C9C]/10"
                   }`}>
                   {formatTimeDisplay(time)}
                 </button>
@@ -560,6 +568,7 @@ export default function JobModal({
   const [isDeleting, setIsDeleting] = useState(false);
   const [selectedCleaners, setSelectedCleaners] = useState<string[]>([]);
   const [selectedJobType, setSelectedJobType] = useState<string>("");
+  const [selectedFrequency, setSelectedFrequency] = useState<string>("ONE_TIME");
   const [selectedClientId, setSelectedClientId] = useState<string>("");
   const [selectedPaymentType, setSelectedPaymentType] = useState<string>("");
   // Flips to true after admin saves a card via the inline SaveCardOnFile
@@ -620,6 +629,9 @@ export default function JobModal({
         });
         setSelectedCleaners(job.cleaners?.map((c) => c.id) || []);
         setSelectedJobType(job.jobType || "");
+        // Recurrence is generated only at creation time; editing never
+        // re-spawns a series, so always start the picker at one-time.
+        setSelectedFrequency("ONE_TIME");
         setSelectedClientId(job.clientId || "");
         setSelectedPaymentType(job.paymentType || "");
         setCardSavedNow(false);
@@ -655,6 +667,7 @@ export default function JobModal({
         });
         setSelectedCleaners([]);
         setSelectedJobType("");
+        setSelectedFrequency("ONE_TIME");
         setSelectedClientId("");
         setSelectedPaymentType("");
         setCardSavedNow(false);
@@ -751,6 +764,7 @@ export default function JobModal({
       formData.append("aptNumber", values.aptNumber || "");
       formData.append("description", values.description || "");
       formData.append("jobType", selectedJobType);
+      formData.append("frequency", selectedFrequency);
       formData.append("startDate", values.startDate || "");
       formData.append("startTime", values.startTime || "");
       formData.append("price", String(values.price || ""));
@@ -849,6 +863,7 @@ export default function JobModal({
       setShowDeleteConfirm(false);
       setSelectedCleaners([]);
       setSelectedJobType("");
+      setSelectedFrequency("ONE_TIME");
       setCurrentStep(1);
       onClose();
     }
@@ -876,10 +891,10 @@ export default function JobModal({
             {/* Header */}
             <div className="w-full flex items-start justify-between gap-1 mb-6">
               <div>
-                <h1 className="text-2xl font-[350] tracking-tight text-[#005F6A]">
+                <h1 className="text-2xl font-[350] tracking-tight text-[#008C9C]">
                   {mode === "create" ? "Create New Job" : "Edit Job"}
                 </h1>
-                <p className="text-sm text-[#005F6A]/60 mt-1">
+                <p className="text-sm text-[#008C9C]/60 mt-1">
                   Step {currentStep} of 3 — {STEPS[currentStep - 1].title}
                 </p>
               </div>
@@ -908,10 +923,10 @@ export default function JobModal({
                       disabled={disableForm}
                       className={`flex items-center gap-2 px-3 py-2 rounded-xl transition-all ${
                         isActive
-                          ? "bg-[#005F6A] text-white"
+                          ? "bg-[#008C9C] text-white"
                           : isCompleted
-                          ? "bg-[#005F6A]/10 text-[#005F6A] hover:bg-[#005F6A]/20"
-                          : "bg-[#005F6A]/5 text-[#005F6A]/40"
+                          ? "bg-[#008C9C]/10 text-[#008C9C] hover:bg-[#008C9C]/20"
+                          : "bg-[#008C9C]/5 text-[#008C9C]/40"
                       }`}>
                       {isCompleted ? (
                         <Check className="w-4 h-4" />
@@ -925,7 +940,7 @@ export default function JobModal({
                     {index < STEPS.length - 1 && (
                       <div
                         className={`flex-1 h-[2px] mx-2 rounded-full ${
-                          isCompleted ? "bg-[#005F6A]/30" : "bg-[#005F6A]/10"
+                          isCompleted ? "bg-[#008C9C]/30" : "bg-[#008C9C]/10"
                         }`}
                       />
                     )}
@@ -1026,7 +1041,7 @@ export default function JobModal({
                       Client Name <span className="text-red-500">*</span>
                     </label>
                     <div className="relative">
-                      <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#005F6A]/50" />
+                      <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/50" />
                       <Input
                         variant="form"
                         type="text"
@@ -1052,7 +1067,7 @@ export default function JobModal({
                       Location
                     </label>
                     <div className="relative">
-                      <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#005F6A]/50" />
+                      <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/50" />
                       <Input
                         variant="form"
                         type="text"
@@ -1096,12 +1111,12 @@ export default function JobModal({
                           border={false}
                           type="button"
                           disabled={disableForm}
-                          className="w-full h-[44px] px-4 py-3 flex items-center !justify-between bg-[#005F6A]/5">
-                          <span className="text-sm font-[350] text-[#005F6A]">
+                          className="w-full h-[44px] px-4 py-3 flex items-center !justify-between bg-[#008C9C]/5">
+                          <span className="text-sm font-[350] text-[#008C9C]">
                             {jobTypes.find((t) => t.value === selectedJobType)
                               ?.label || "Select type"}
                           </span>
-                          <ChevronDown className="w-4 h-4 text-[#005F6A]/50" />
+                          <ChevronDown className="w-4 h-4 text-[#008C9C]/50" />
                         </Button>
                       }
                       options={jobTypes.map((type) => ({
@@ -1137,7 +1152,7 @@ export default function JobModal({
                 <div className="space-y-6">
                   {/* Date & Time Section */}
                   <div className="space-y-4">
-                    <h3 className="text-sm font-[400] text-[#005F6A] uppercase tracking-tight flex items-center gap-2">
+                    <h3 className="text-sm font-[400] text-[#008C9C] uppercase tracking-tight flex items-center gap-2">
                       <Calendar className="w-4 h-4" />
                       Schedule
                     </h3>
@@ -1171,6 +1186,49 @@ export default function JobModal({
                         )}
                       />
                     </div>
+
+                    {/* Frequency — recurring bookings (creation only) */}
+                    {mode === "create" && (
+                      <div>
+                        <label className="input-label tracking-tight">
+                          Frequency
+                        </label>
+                        <CustomDropdown
+                          trigger={
+                            <Button
+                              variant="default"
+                              size="md"
+                              border={false}
+                              type="button"
+                              disabled={disableForm}
+                              className="w-full h-[44px] px-4 py-3 flex items-center !justify-between bg-[#008C9C]/5">
+                              <span className="text-sm font-[350] text-[#008C9C]">
+                                {frequencies.find(
+                                  (f) => f.value === selectedFrequency
+                                )?.label || "One-time"}
+                              </span>
+                              <ChevronDown className="w-4 h-4 text-[#008C9C]/50" />
+                            </Button>
+                          }
+                          options={frequencies.map((f) => ({
+                            label: f.label,
+                            onClick: () => setSelectedFrequency(f.value),
+                          }))}
+                          maxHeight="12rem"
+                        />
+                        {(() => {
+                          const hint = frequencies.find(
+                            (f) => f.value === selectedFrequency
+                          )?.hint;
+                          return hint ? (
+                            <p className="mt-2 text-xs text-[#008C9C]/60 tracking-tight">
+                              Recurring: the first cleaning is full price, then
+                              future cleanings are auto-created — {hint}.
+                            </p>
+                          ) : null;
+                        })()}
+                      </div>
+                    )}
                   </div>
 
                   {/* Team Section */}
@@ -1181,9 +1239,9 @@ export default function JobModal({
                     </h3>
 
                     {users.length === 0 ? (
-                      <div className="bg-[#005F6A]/5 rounded-2xl p-6 text-center">
-                        <Users className="w-8 h-8 text-[#005F6A]/30 mx-auto mb-2" />
-                        <p className="text-sm text-[#005F6A]/60">
+                      <div className="bg-[#008C9C]/5 rounded-2xl p-6 text-center">
+                        <Users className="w-8 h-8 text-[#008C9C]/30 mx-auto mb-2" />
+                        <p className="text-sm text-[#008C9C]/60">
                           No team members available
                         </p>
                       </div>
@@ -1209,26 +1267,26 @@ export default function JobModal({
                         renderItem={(item, isSelected) => (
                           <>
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-[400] text-[#005F6A]">
+                              <p className="text-sm font-[400] text-[#008C9C]">
                                 {item.name}
                               </p>
-                              <p className="text-xs text-[#005F6A]/60">
+                              <p className="text-xs text-[#008C9C]/60">
                                 {(item as { email?: string }).email}
                               </p>
                             </div>
                             {isSelected && (
-                              <Check className="w-4 h-4 text-[#005F6A]" />
+                              <Check className="w-4 h-4 text-[#008C9C]" />
                             )}
                           </>
                         )}
                         renderSelectedItem={(item) => (
                           <div className="flex items-center gap-2">
-                            <div className="w-6 h-6 rounded-full bg-[#005F6A]/20 flex items-center justify-center">
-                              <span className="text-xs font-[500] text-[#005F6A]">
+                            <div className="w-6 h-6 rounded-full bg-[#008C9C]/20 flex items-center justify-center">
+                              <span className="text-xs font-[500] text-[#008C9C]">
                                 {item.name.charAt(0).toUpperCase()}
                               </span>
                             </div>
-                            <span className="text-sm font-[350] text-[#005F6A]">
+                            <span className="text-sm font-[350] text-[#008C9C]">
                               {item.name}
                             </span>
                           </div>
@@ -1244,7 +1302,7 @@ export default function JobModal({
                 <div className="space-y-6">
                   {/* Pricing Section */}
                   <div className="space-y-4">
-                    <h3 className="text-sm font-[400] text-[#005F6A] uppercase tracking-tight flex items-center gap-2">
+                    <h3 className="text-sm font-[400] text-[#008C9C] uppercase tracking-tight flex items-center gap-2">
                       <DollarSign className="w-4 h-4" />
                       Pricing & Payment
                     </h3>
@@ -1255,7 +1313,7 @@ export default function JobModal({
                           Price
                         </label>
                         <div className="relative">
-                          <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#005F6A]/50" />
+                          <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/50" />
                           <Input
                             variant="form"
                             type="number"
@@ -1276,7 +1334,7 @@ export default function JobModal({
                           Employee Pay
                         </label>
                         <div className="relative">
-                          <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#005F6A]/50" />
+                          <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/50" />
                           <Input
                             variant="form"
                             type="number"
@@ -1297,7 +1355,7 @@ export default function JobModal({
                           Total Tip
                         </label>
                         <div className="relative">
-                          <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#005F6A]/50" />
+                          <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/50" />
                           <Input
                             variant="form"
                             type="number"
@@ -1318,7 +1376,7 @@ export default function JobModal({
                           Parking
                         </label>
                         <div className="relative">
-                          <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#005F6A]/50" />
+                          <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/50" />
                           <Input
                             variant="form"
                             type="number"
@@ -1339,7 +1397,7 @@ export default function JobModal({
                           <label className="input-label tracking-tight">
                             Discount
                           </label>
-                          <div className="flex bg-[#005F6A]/5 rounded-lg p-0.5">
+                          <div className="flex bg-[#008C9C]/5 rounded-lg p-0.5">
                             <button
                               type="button"
                               onClick={() => {
@@ -1349,8 +1407,8 @@ export default function JobModal({
                               disabled={disableForm}
                               className={`px-2 py-0.5 text-[11px] rounded-md transition-colors ${
                                 discountMode === "percent"
-                                  ? "bg-[#005F6A] text-white"
-                                  : "text-[#005F6A]/60"
+                                  ? "bg-[#008C9C] text-white"
+                                  : "text-[#008C9C]/60"
                               }`}>
                               %
                             </button>
@@ -1363,15 +1421,15 @@ export default function JobModal({
                               disabled={disableForm}
                               className={`px-2 py-0.5 text-[11px] rounded-md transition-colors ${
                                 discountMode === "amount"
-                                  ? "bg-[#005F6A] text-white"
-                                  : "text-[#005F6A]/60"
+                                  ? "bg-[#008C9C] text-white"
+                                  : "text-[#008C9C]/60"
                               }`}>
                               $
                             </button>
                           </div>
                         </div>
                         <div className="relative">
-                          <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#005F6A]/50" />
+                          <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/50" />
                           <Input
                             variant="form"
                             type="number"
@@ -1395,7 +1453,7 @@ export default function JobModal({
                               (c) => c.id === selectedClientId
                             );
                             return linked && (linked.discountPercent ?? 0) > 0 ? (
-                              <p className="text-[11px] text-[#005F6A]/60 mt-1">
+                              <p className="text-[11px] text-[#008C9C]/60 mt-1">
                                 From client default ({linked.discountPercent}%)
                               </p>
                             ) : null;
@@ -1465,13 +1523,13 @@ export default function JobModal({
                               border={false}
                               type="button"
                               disabled={disableForm}
-                              className="w-full h-[44px] px-4 py-3 flex items-center !justify-between bg-[#005F6A]/5">
-                              <span className="text-sm font-[350] text-[#005F6A]">
+                              className="w-full h-[44px] px-4 py-3 flex items-center !justify-between bg-[#008C9C]/5">
+                              <span className="text-sm font-[350] text-[#008C9C]">
                                 {selectedPaymentType
                                   ? selectedPaymentType.replace("_", " ")
                                   : "Select payment type"}
                               </span>
-                              <ChevronDown className="w-4 h-4 text-[#005F6A]/50" />
+                              <ChevronDown className="w-4 h-4 text-[#008C9C]/50" />
                             </Button>
                           }
                           options={[
@@ -1559,13 +1617,13 @@ export default function JobModal({
 
                   {/* Add-Ons Section */}
                   <div className="space-y-3">
-                    <h3 className="text-sm font-[400] text-[#005F6A] uppercase tracking-tight flex items-center gap-2">
+                    <h3 className="text-sm font-[400] text-[#008C9C] uppercase tracking-tight flex items-center gap-2">
                       <Briefcase className="w-4 h-4" />
                       Add-Ons
                     </h3>
                     {addOnCatalog.length > 0 && (
                       <div className="space-y-2">
-                        <p className="text-xs text-[#005F6A]/60">
+                        <p className="text-xs text-[#008C9C]/60">
                           Quick add from your configured add-ons:
                         </p>
                         <div className="flex flex-wrap gap-2">
@@ -1587,8 +1645,8 @@ export default function JobModal({
                                 }
                                 className={`px-3 py-1.5 rounded-full text-xs font-[450] border transition-colors ${
                                   already
-                                    ? "bg-[#005F6A]/10 text-[#005F6A]/40 border-transparent cursor-not-allowed"
-                                    : "bg-white text-[#005F6A] border-[#005F6A]/20 hover:border-[#005F6A]/50"
+                                    ? "bg-[#008C9C]/10 text-[#008C9C]/40 border-transparent cursor-not-allowed"
+                                    : "bg-white text-[#008C9C] border-[#008C9C]/20 hover:border-[#008C9C]/50"
                                 }`}>
                                 {already ? "✓ " : "+ "}
                                 {cat.name} · ${cat.price.toFixed(2)}
@@ -1603,12 +1661,12 @@ export default function JobModal({
                         {addOns.map((a, i) => (
                           <div
                             key={i}
-                            className="flex items-center justify-between p-3 rounded-xl bg-[#005F6A]/5">
-                            <span className="text-sm text-[#005F6A]">
+                            className="flex items-center justify-between p-3 rounded-xl bg-[#008C9C]/5">
+                            <span className="text-sm text-[#008C9C]">
                               {a.name}
                             </span>
                             <div className="flex items-center gap-3">
-                              <span className="text-sm font-[400] text-[#005F6A]">
+                              <span className="text-sm font-[400] text-[#008C9C]">
                                 ${a.price.toFixed(2)}
                               </span>
                               <button
@@ -1678,7 +1736,7 @@ export default function JobModal({
 
                   {/* Notes Section */}
                   <div className="space-y-4">
-                    <h3 className="text-sm font-[400] text-[#005F6A] uppercase tracking-tight flex items-center gap-2">
+                    <h3 className="text-sm font-[400] text-[#008C9C] uppercase tracking-tight flex items-center gap-2">
                       <FileText className="w-4 h-4" />
                       Additional Notes
                     </h3>
@@ -1687,7 +1745,7 @@ export default function JobModal({
                       size="md"
                       {...register("notes")}
                       disabled={disableForm}
-                      className="w-full px-4 py-3 min-h-[120px] bg-[#005F6A]/5 border-0 focus:ring-1 focus:ring-[#005F6A]/20 rounded-2xl tracking-tight placeholder:tracking-tight"
+                      className="w-full px-4 py-3 min-h-[120px] bg-[#008C9C]/5 border-0 focus:ring-1 focus:ring-[#008C9C]/20 rounded-2xl tracking-tight placeholder:tracking-tight"
                       placeholder="Any additional notes or special requirements..."
                       rows={4}
                     />
@@ -1703,7 +1761,7 @@ export default function JobModal({
               )}
 
               {/* Action Buttons */}
-              <div className="w-full flex flex-col md:flex-row justify-between pt-6 items-center border-[#005F6A]/10 gap-4">
+              <div className="w-full flex flex-col md:flex-row justify-between pt-6 items-center border-[#008C9C]/10 gap-4">
                 {/* Left side - Delete button (only in edit mode on last step) */}
                 {mode === "edit" &&
                 currentStep === 3 &&
@@ -1845,13 +1903,13 @@ function ClientSearchPicker({
 
       {selected ? (
         <div
-          className="w-full flex items-center justify-between gap-2 px-4 py-2.5 rounded-xl bg-[#005F6A]/5 border border-[#005F6A]/10"
+          className="w-full flex items-center justify-between gap-2 px-4 py-2.5 rounded-xl bg-[#008C9C]/5 border border-[#008C9C]/10"
           style={{ minHeight: 44 }}>
           <div className="flex-1 min-w-0">
-            <div className="text-sm font-[450] text-[#005F6A] truncate">
+            <div className="text-sm font-[450] text-[#008C9C] truncate">
               {selected.name}
             </div>
-            <div className="text-xs text-[#005F6A]/60 truncate">
+            <div className="text-xs text-[#008C9C]/60 truncate">
               {selected.email ?? "—"}
               {selected.address ? ` · ${selected.address}` : ""}
             </div>
@@ -1863,7 +1921,7 @@ function ClientSearchPicker({
               onClear();
               setQuery("");
             }}
-            className="text-xs text-[#005F6A]/70 hover:text-[#005F6A] px-2 py-1">
+            className="text-xs text-[#008C9C]/70 hover:text-[#008C9C] px-2 py-1">
             Change
           </button>
         </div>
@@ -1879,14 +1937,14 @@ function ClientSearchPicker({
             }}
             onFocus={() => setOpen(true)}
             placeholder="Search clients by name, email, or address…"
-            className="w-full h-[44px] px-4 py-3 rounded-xl bg-[#005F6A]/5 text-sm text-[#005F6A] placeholder:text-[#005F6A]/50 outline-none focus:bg-[#005F6A]/10"
+            className="w-full h-[44px] px-4 py-3 rounded-xl bg-[#008C9C]/5 text-sm text-[#008C9C] placeholder:text-[#008C9C]/50 outline-none focus:bg-[#008C9C]/10"
           />
           {open && (
             <div
-              className="absolute left-0 right-0 mt-1 z-30 rounded-xl bg-white border border-[#005F6A]/10 shadow-lg"
+              className="absolute left-0 right-0 mt-1 z-30 rounded-xl bg-white border border-[#008C9C]/10 shadow-lg"
               style={{ maxHeight: 280, overflowY: "auto" }}>
               {filtered.length === 0 ? (
-                <div className="px-4 py-3 text-sm text-[#005F6A]/60">
+                <div className="px-4 py-3 text-sm text-[#008C9C]/60">
                   No matches. Enter the name below to create a new client.
                 </div>
               ) : (
@@ -1899,11 +1957,11 @@ function ClientSearchPicker({
                       setQuery("");
                       setOpen(false);
                     }}
-                    className="w-full text-left px-4 py-2.5 hover:bg-[#005F6A]/5 flex flex-col gap-0.5 border-b border-[#005F6A]/5 last:border-b-0">
-                    <span className="text-sm font-[450] text-[#005F6A]">
+                    className="w-full text-left px-4 py-2.5 hover:bg-[#008C9C]/5 flex flex-col gap-0.5 border-b border-[#008C9C]/5 last:border-b-0">
+                    <span className="text-sm font-[450] text-[#008C9C]">
                       {c.name}
                     </span>
-                    <span className="text-xs text-[#005F6A]/60 truncate">
+                    <span className="text-xs text-[#008C9C]/60 truncate">
                       {c.email ?? "—"}
                       {c.address ? ` · ${c.address}` : ""}
                       {c.defaultPaymentMethodId ? " · 💳 card on file" : ""}

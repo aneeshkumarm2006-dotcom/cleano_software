@@ -131,7 +131,7 @@ function emptyQuiz(): DraftQuiz {
 }
 
 const themedInputClass =
-  "w-full px-4 py-2.5 rounded-xl border border-transparent bg-[#005F6A]/5 text-sm text-[#005F6A] placeholder:text-[#005F6A]/40 focus:outline-none focus:ring-2 focus:ring-[#005F6A]/20";
+  "w-full px-4 py-2.5 rounded-xl border border-transparent bg-[#008C9C]/5 text-sm text-[#008C9C] placeholder:text-[#008C9C]/40 focus:outline-none focus:ring-2 focus:ring-[#008C9C]/20";
 
 function statusInfo(status: ModuleStatus) {
   switch (status) {
@@ -462,10 +462,10 @@ export default function TrainingClient({
     <div className={isAdmin ? "max-w-[80rem] mx-auto space-y-6" : undefined}>
       <div className={isAdmin ? "flex items-start justify-between gap-4 flex-wrap" : "cl-page-head"}>
         <div>
-          <h1 className={isAdmin ? "text-3xl !font-light tracking-tight text-[#005F6A]" : "cl-page-title"}>
+          <h1 className={isAdmin ? "text-3xl !font-light tracking-tight text-[#008C9C]" : "cl-page-title"}>
             Training
           </h1>
-          <p className={isAdmin ? "text-sm text-[#005F6A]/70 !font-light mt-1" : "cl-page-sub"}>
+          <p className={isAdmin ? "text-sm text-[#008C9C]/70 !font-light mt-1" : "cl-page-sub"}>
             {isAdmin
               ? "Create and manage training modules for your team"
               : "Complete required modules to stay certified"}
@@ -504,7 +504,7 @@ export default function TrainingClient({
         <div
           className={`px-4 py-3 rounded-xl text-sm font-[350] ${
             msg.type === "success"
-              ? "bg-[#005F6A]/10 text-[#005F6A] border border-[#005F6A]/15"
+              ? "bg-[#008C9C]/10 text-[#008C9C] border border-[#008C9C]/15"
               : "bg-red-50 text-red-700 border border-red-200"
           }`}>
           {msg.text}
@@ -632,7 +632,7 @@ export default function TrainingClient({
               </div>
 
               <div className="flex gap-4 flex-wrap">
-                <label className="flex items-center gap-2 text-sm text-[#005F6A] select-none">
+                <label className="flex items-center gap-2 text-sm text-[#008C9C] select-none">
                   <input
                     type="checkbox"
                     checked={draft.isRequired}
@@ -642,11 +642,11 @@ export default function TrainingClient({
                         isRequired: e.target.checked,
                       }))
                     }
-                    className="accent-[#005F6A]"
+                    className="accent-[#008C9C]"
                   />
                   Required
                 </label>
-                <label className="flex items-center gap-2 text-sm text-[#005F6A] select-none">
+                <label className="flex items-center gap-2 text-sm text-[#008C9C] select-none">
                   <input
                     type="checkbox"
                     checked={draft.isActive}
@@ -656,7 +656,7 @@ export default function TrainingClient({
                         isActive: e.target.checked,
                       }))
                     }
-                    className="accent-[#005F6A]"
+                    className="accent-[#008C9C]"
                   />
                   Active
                 </label>
@@ -664,7 +664,7 @@ export default function TrainingClient({
 
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-[350] text-[#005F6A]/70 uppercase tracking-wide">
+                  <label className="text-xs font-[350] text-[#008C9C]/70 uppercase tracking-wide">
                     Quiz Questions
                   </label>
                   <Button
@@ -678,7 +678,7 @@ export default function TrainingClient({
                   </Button>
                 </div>
                 {draft.quizzes.length === 0 && (
-                  <p className="text-xs text-[#005F6A]/60">
+                  <p className="text-xs text-[#008C9C]/60">
                     No quiz questions added.
                   </p>
                 )}
@@ -686,7 +686,7 @@ export default function TrainingClient({
                   {draft.quizzes.map((q, qIdx) => (
                     <div
                       key={qIdx}
-                      className="p-3 rounded-xl bg-[#005F6A]/5 space-y-3">
+                      className="p-3 rounded-xl bg-[#008C9C]/5 space-y-3">
                       <div className="flex items-start gap-2">
                         <div className="flex-1 space-y-2">
                           <Input
@@ -716,7 +716,7 @@ export default function TrainingClient({
                               className={`p-1.5 rounded-lg border ${
                                 opt.isCorrect
                                   ? "bg-green-100 border-green-300 text-green-700"
-                                  : "bg-white border-[#005F6A]/20 text-[#005F6A]/40"
+                                  : "bg-white border-[#008C9C]/20 text-[#008C9C]/40"
                               }`}
                               aria-label="Mark correct">
                               <Check className="w-3 h-3" />
@@ -760,7 +760,7 @@ export default function TrainingClient({
                 <div
                   className={`px-4 py-3 rounded-xl text-sm font-[350] ${
                     msg.type === "success"
-                      ? "bg-[#005F6A]/10 text-[#005F6A] border border-[#005F6A]/15"
+                      ? "bg-[#008C9C]/10 text-[#008C9C] border border-[#008C9C]/15"
                       : "bg-red-50 text-red-700 border border-red-200"
                   }`}>
                   {msg.text}
@@ -796,7 +796,7 @@ export default function TrainingClient({
             {statsModule && (
               <div className="space-y-3">
                 {statsModule.progress.length === 0 ? (
-                  <p className="text-sm text-[#005F6A]/60">
+                  <p className="text-sm text-[#008C9C]/60">
                     No employees have started this module yet.
                   </p>
                 ) : (
@@ -821,16 +821,16 @@ export default function TrainingClient({
                       <tbody className="divide-y divide-gray-50">
                         {statsModule.progress.map((p) => (
                           <tr key={p.id} className="hover:bg-gray-50/50">
-                            <td className="px-4 py-2 text-[#005F6A]">
+                            <td className="px-4 py-2 text-[#008C9C]">
                               {p.employee.name}
                             </td>
-                            <td className="px-4 py-2 text-[#005F6A]/80">
+                            <td className="px-4 py-2 text-[#008C9C]/80">
                               {p.status.replace("_", " ").toLowerCase()}
                             </td>
-                            <td className="px-4 py-2 text-[#005F6A]/80">
+                            <td className="px-4 py-2 text-[#008C9C]/80">
                               {Math.round(p.videoProgress * 100)}%
                             </td>
-                            <td className="px-4 py-2 text-[#005F6A]/80">
+                            <td className="px-4 py-2 text-[#008C9C]/80">
                               {p.quizScore != null
                                 ? `${Math.round(p.quizScore * 100)}%`
                                 : "—"}
@@ -870,11 +870,11 @@ function FormField({
 }) {
   return (
     <div>
-      <label className="text-xs font-[350] text-[#005F6A]/70 uppercase tracking-wide mb-2 block">
+      <label className="text-xs font-[350] text-[#008C9C]/70 uppercase tracking-wide mb-2 block">
         {label}
       </label>
       {children}
-      {hint && <p className="text-xs text-[#005F6A]/60 mt-1">{hint}</p>}
+      {hint && <p className="text-xs text-[#008C9C]/60 mt-1">{hint}</p>}
     </div>
   );
 }
@@ -973,12 +973,12 @@ function AdminModuleSection({
 }) {
   return (
     <div className="space-y-3">
-      <h2 className="text-lg font-[350] tracking-tight text-[#005F6A]">
+      <h2 className="text-lg font-[350] tracking-tight text-[#008C9C]">
         {title}
       </h2>
       {modules.length === 0 ? (
         <Card variant="ghost" className="p-8">
-          <p className="text-sm text-[#005F6A]/60 text-center">{emptyText}</p>
+          <p className="text-sm text-[#008C9C]/60 text-center">{emptyText}</p>
         </Card>
       ) : (
         <div className="space-y-2">
@@ -1031,13 +1031,13 @@ function AdminModuleRow({
   const total = totalEmployees;
 
   return (
-    <div className="flex items-start gap-3 p-4 border border-[#005F6A]/10 rounded-2xl bg-white hover:bg-[#005F6A]/3 transition-colors">
+    <div className="flex items-start gap-3 p-4 border border-[#008C9C]/10 rounded-2xl bg-white hover:bg-[#008C9C]/3 transition-colors">
       <div className="flex flex-col gap-1 pt-1">
         <button
           type="button"
           onClick={() => onMove(idx, -1)}
           disabled={idx <= 0}
-          className="p-1 rounded text-[#005F6A]/60 hover:bg-[#005F6A]/10 disabled:opacity-20 disabled:cursor-not-allowed"
+          className="p-1 rounded text-[#008C9C]/60 hover:bg-[#008C9C]/10 disabled:opacity-20 disabled:cursor-not-allowed"
           aria-label="Move up">
           <ArrowUp className="w-3 h-3" />
         </button>
@@ -1045,7 +1045,7 @@ function AdminModuleRow({
           type="button"
           onClick={() => onMove(idx, 1)}
           disabled={idx >= lastIdx}
-          className="p-1 rounded text-[#005F6A]/60 hover:bg-[#005F6A]/10 disabled:opacity-20 disabled:cursor-not-allowed"
+          className="p-1 rounded text-[#008C9C]/60 hover:bg-[#008C9C]/10 disabled:opacity-20 disabled:cursor-not-allowed"
           aria-label="Move down">
           <ArrowDown className="w-3 h-3" />
         </button>
@@ -1063,7 +1063,7 @@ function AdminModuleRow({
         }}
         className="flex-1 min-w-0 text-left cursor-pointer">
         <div className="flex items-center gap-2 flex-wrap">
-          <h3 className="text-sm font-[400] text-[#005F6A]">{m.title}</h3>
+          <h3 className="text-sm font-[400] text-[#008C9C]">{m.title}</h3>
           {!m.isActive && (
             <Badge variant="default" size="sm">
               Inactive
@@ -1081,11 +1081,11 @@ function AdminModuleRow({
           )}
         </div>
         {m.description && (
-          <p className="text-xs text-[#005F6A]/60 mt-1 line-clamp-2">
+          <p className="text-xs text-[#008C9C]/60 mt-1 line-clamp-2">
             {m.description}
           </p>
         )}
-        <div className="flex items-center gap-4 mt-2 text-xs text-[#005F6A]/60">
+        <div className="flex items-center gap-4 mt-2 text-xs text-[#008C9C]/60">
           {duration && (
             <span className="flex items-center gap-1">
               <Clock className="w-3 h-3" />
@@ -1099,7 +1099,7 @@ function AdminModuleRow({
               e.stopPropagation();
               onStats(m.id);
             }}
-            className="text-[#005F6A] hover:underline inline-flex items-center gap-1">
+            className="text-[#008C9C] hover:underline inline-flex items-center gap-1">
             <BarChart3 className="w-3 h-3" />
             {completed}/{total} completed — view stats
           </button>

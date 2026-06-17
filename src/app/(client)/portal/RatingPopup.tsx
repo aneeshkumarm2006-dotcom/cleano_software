@@ -139,7 +139,7 @@ export default function RatingPopup({ pending }: Props) {
             style={{
               width: "100%",
               padding: "13px 0",
-              background: stars > 0 ? "#005F6A" : "#e0e0e0",
+              background: stars > 0 ? "#008C9C" : "#e0e0e0",
               color: stars > 0 ? "#fff" : "#aaa",
               border: "none",
               borderRadius: 12,

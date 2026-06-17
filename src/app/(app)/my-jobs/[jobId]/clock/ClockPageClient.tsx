@@ -106,7 +106,7 @@ function AnalogClock({ time }: { time: Date }) {
               y1={t.y1}
               x2={t.x2}
               y2={t.y2}
-              stroke={t.isHour ? "rgba(0, 95, 106, 0.5)" : "rgba(0, 95, 106, 0.2)"}
+              stroke={t.isHour ? "rgba(0,140,156, 0.5)" : "rgba(0,140,156, 0.2)"}
               strokeWidth={t.isHour ? 1.4 : 0.8}
               strokeLinecap="round"
             />
@@ -478,7 +478,7 @@ export default function ClockPageClient({
                 const pct = Math.round((doneItems / totalItems) * 100);
                 const pendingRequired = checklistItems.filter(it => it.isRequired && it.status !== "COMPLETED");
                 return (
-                  <div className="pju-section" style={{ borderBottom: "1px solid rgba(0,95,106,0.08)", paddingBottom: 16 }}>
+                  <div className="pju-section" style={{ borderBottom: "1px solid rgba(0,140,156,0.08)", paddingBottom: 16 }}>
                     <div className="pju-section-head">
                       <span className="pju-section-icon">✓</span>
                       <div>
@@ -490,7 +490,7 @@ export default function ClockPageClient({
                       </span>
                     </div>
                     {/* Progress bar */}
-                    <div style={{ height: 4, background: "rgba(0,95,106,0.08)", borderRadius: 2, margin: "0 0 14px", overflow: "hidden" }}>
+                    <div style={{ height: 4, background: "rgba(0,140,156,0.08)", borderRadius: 2, margin: "0 0 14px", overflow: "hidden" }}>
                       <div style={{ height: "100%", background: pct === 100 ? "#059669" : "var(--primary)", borderRadius: 2, width: `${pct}%`, transition: "width 0.3s" }} />
                     </div>
                     {/* Items */}
@@ -506,15 +506,15 @@ export default function ClockPageClient({
                             disabled={pending}
                             style={{
                               display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 12px",
-                              borderRadius: 10, border: done ? "1px solid rgba(5,150,105,0.2)" : "1px solid rgba(0,95,106,0.12)",
-                              background: done ? "rgba(5,150,105,0.06)" : "rgba(0,95,106,0.03)",
+                              borderRadius: 10, border: done ? "1px solid rgba(5,150,105,0.2)" : "1px solid rgba(0,140,156,0.12)",
+                              background: done ? "rgba(5,150,105,0.06)" : "rgba(0,140,156,0.03)",
                               cursor: pending ? "wait" : "pointer", textAlign: "left", width: "100%",
                               transition: "all 0.15s",
                             }}
                           >
                             <span style={{
                               width: 20, height: 20, borderRadius: 5, flexShrink: 0, marginTop: 1,
-                              border: done ? "none" : "1.5px solid rgba(0,95,106,0.3)",
+                              border: done ? "none" : "1.5px solid rgba(0,140,156,0.3)",
                               background: done ? "#059669" : "transparent",
                               display: "flex", alignItems: "center", justifyContent: "center",
                             }}>
@@ -525,7 +525,7 @@ export default function ClockPageClient({
                               )}
                             </span>
                             <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontSize: 13, fontWeight: 500, color: done ? "rgba(0,95,106,0.5)" : "var(--ink)", textDecoration: done ? "line-through" : "none", lineHeight: 1.3 }}>
+                              <div style={{ fontSize: 13, fontWeight: 500, color: done ? "rgba(0,140,156,0.5)" : "var(--ink)", textDecoration: done ? "line-through" : "none", lineHeight: 1.3 }}>
                                 {item.title}
                                 {item.isRequired && !done && (
                                   <span style={{ color: "#dc2626", marginLeft: 3, fontSize: 10, verticalAlign: "super" }}>*</span>

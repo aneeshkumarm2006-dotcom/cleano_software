@@ -17,8 +17,8 @@ export default function MapLinks({ address }: { address: string }) {
   const base: React.CSSProperties = {
     display: "inline-flex", alignItems: "center", gap: 5,
     padding: "6px 12px", borderRadius: 8, fontSize: 12, fontWeight: 500,
-    textDecoration: "none", border: "1px solid rgba(0,95,106,0.2)",
-    color: "#005F6A", background: "rgba(0,95,106,0.05)", whiteSpace: "nowrap",
+    textDecoration: "none", border: "1px solid rgba(0,140,156,0.2)",
+    color: "#008C9C", background: "rgba(0,140,156,0.05)", whiteSpace: "nowrap",
   };
 
   return (
@@ -52,9 +52,9 @@ export default function MapLinks({ address }: { address: string }) {
         onClick={handleCopy}
         style={{
           ...base, cursor: "pointer",
-          background: copied ? "rgba(5,150,105,0.1)" : "rgba(0,95,106,0.05)",
-          borderColor: copied ? "rgba(5,150,105,0.3)" : "rgba(0,95,106,0.2)",
-          color: copied ? "#059669" : "#005F6A",
+          background: copied ? "rgba(5,150,105,0.1)" : "rgba(0,140,156,0.05)",
+          borderColor: copied ? "rgba(5,150,105,0.3)" : "rgba(0,140,156,0.2)",
+          color: copied ? "#059669" : "#008C9C",
         }}
       >
         {copied ? <Check size={11} /> : <Copy size={11} />}

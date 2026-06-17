@@ -204,8 +204,8 @@ export default function EmployeeChatClient({ initial, userName }: EmployeeChatCl
           height: "100%",
           background: "#fff",
           borderRadius: 18,
-          boxShadow: "0 2px 24px rgba(0,95,106,0.08), 0 1px 4px rgba(0,0,0,0.04)",
-          border: "1px solid rgba(0,95,106,0.08)",
+          boxShadow: "0 2px 24px rgba(0,140,156,0.08), 0 1px 4px rgba(0,0,0,0.04)",
+          border: "1px solid rgba(0,140,156,0.08)",
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
@@ -260,7 +260,7 @@ export default function EmployeeChatClient({ initial, userName }: EmployeeChatCl
               <div style={{ margin: "auto", textAlign: "center", color: "var(--primary-50)" }}>
                 <div style={{
                   width: 56, height: 56, borderRadius: "50%",
-                  background: "rgba(0,95,106,0.06)",
+                  background: "rgba(0,140,156,0.06)",
                   display: "flex", alignItems: "center", justifyContent: "center",
                   margin: "0 auto 14px",
                 }}>

@@ -1,6 +1,6 @@
 import { db } from "@/db";
 
-const BRAND = "#005F6A";
+const BRAND = "#008C9C";
 
 export interface ReceiptData {
   jobId: string;
@@ -64,7 +64,7 @@ export async function buildReceiptPdfBuffer(
   );
   // React.createElement avoids needing JSX in this .ts file.
   const React = await import("react");
-  const tint = (a: number) => `rgba(0, 95, 106, ${a})`;
+  const tint = (a: number) => `rgba(0,140,156, ${a})`;
 
   const styles = StyleSheet.create({
     page: {

@@ -336,6 +336,10 @@ model Job {
   isCashJob                      Boolean               @default(false)
   appliedPromoCode               String?
   promoDiscountAmount            Float?
+  // Calendar priority badge override. null = follow the auto rule
+  // (calendar.jobTypeLabels setting, keyed by jobType); "ROUTINE" | "IMPORTANT"
+  // | "NONE" = an operations manager's explicit switch on the job detail page.
+  priorityLabel                  String?
   cancellationRequestedAt        DateTime?
   // Late-cancellation fee charged to the saved card when the customer
   // cancels within the 48h window (see CANCELLATION_FEE_USD in policy.ts).

@@ -37,7 +37,7 @@ interface CalJob {
 type StatusMeta = { label: string; color: string; tint: string };
 const STATUS: Record<string, StatusMeta> = {
   CREATED: { label: "Created", color: "#64748b", tint: "rgba(100,116,139,0.10)" },
-  SCHEDULED: { label: "Scheduled", color: "#005F6A", tint: "rgba(0,95,106,0.09)" },
+  SCHEDULED: { label: "Scheduled", color: "#008C9C", tint: "rgba(0,140,156,0.09)" },
   IN_PROGRESS: { label: "In progress", color: "#d97706", tint: "rgba(217,119,6,0.11)" },
   COMPLETED: { label: "Completed", color: "#059669", tint: "rgba(5,150,105,0.11)" },
   PAID: { label: "Paid", color: "#15803d", tint: "rgba(21,128,61,0.11)" },

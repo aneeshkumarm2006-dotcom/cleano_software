@@ -25,7 +25,7 @@ export const GIFT_CARD_COVERS: GiftCardCover[] = [
     name: "Classic",
     description: "A clean, year-round design.",
     imagePath: "/gift-cards/default.jpg",
-    gradient: "linear-gradient(135deg, #005F6A 0%, #0a8a98 100%)",
+    gradient: "linear-gradient(135deg, #008C9C 0%, #0a8a98 100%)",
   },
   {
     key: "birthday",

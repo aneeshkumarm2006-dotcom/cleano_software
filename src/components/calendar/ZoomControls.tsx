@@ -51,7 +51,7 @@ export default function ZoomControls() {
         variant="ghost"
         onClick={zoomOut}
         disabled={currentIndex === 0}
-        className="text-[#005F6A]/40 hover:text-[#005F6A]"
+        className="text-[#008C9C]/40 hover:text-[#008C9C]"
         strokeWidth={1.3}
         title="Zoom out"
       />
@@ -66,19 +66,19 @@ export default function ZoomControls() {
         variant="ghost"
         onClick={zoomIn}
         disabled={currentIndex === zoomLevels.length - 1}
-        className="text-[#005F6A]/40 hover:text-[#005F6A]"
+        className="text-[#008C9C]/40 hover:text-[#008C9C]"
         strokeWidth={1.3}
         title="Zoom in"
       />
 
-      <div className="w-px h-4 bg-[#005F6A]/10 mx-1" />
+      <div className="w-px h-4 bg-[#008C9C]/10 mx-1" />
 
       <IconButton
         icon={RotateCcw}
         size="md"
         variant="ghost"
         onClick={resetZoom}
-        className="text-[#005F6A]/40 hover:text-[#005F6A]"
+        className="text-[#008C9C]/40 hover:text-[#008C9C]"
         strokeWidth={1.3}
         title="Reset zoom"
       />

@@ -177,7 +177,7 @@ export default function MyPayClient({
             <div className="cl-pay-tile-head"><span>Pending</span></div>
             <div className="cl-pay-tile-val">${pendingAmount.toFixed(2)}</div>
             {unprocessedEarnings > 0 && (
-              <div style={{ fontSize: 11, color: "rgba(0,95,106,0.55)", marginTop: 4 }}>
+              <div style={{ fontSize: 11, color: "rgba(0,140,156,0.55)", marginTop: 4 }}>
                 incl. ${unprocessedEarnings.toFixed(2)} from completed jobs
               </div>
             )}
@@ -237,7 +237,7 @@ export default function MyPayClient({
                     <div className="cl-block-stat-val pos">${currentPayout.finalAmount.toFixed(2)}</div>
                   </div>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 12, color: "var(--primary-60)", paddingTop: 4, borderTop: "1px solid rgba(0,95,106,0.07)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 12, color: "var(--primary-60)", paddingTop: 4, borderTop: "1px solid rgba(0,140,156,0.07)" }}>
                   <span>{currentPayout.jobCount} jobs</span>
                   <span>·</span>
                   <span>{currentPayout.totalHours.toFixed(1)} hours</span>
@@ -288,7 +288,7 @@ export default function MyPayClient({
                 </div>
 
                 {ragData.recentWashes.length > 0 ? (
-                  <div style={{ borderTop: "1px solid rgba(0,95,106,0.07)", paddingTop: 12 }}>
+                  <div style={{ borderTop: "1px solid rgba(0,140,156,0.07)", paddingTop: 12 }}>
                     <p style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--primary-50)", marginBottom: 8 }}>
                       Recent Washes
                     </p>
@@ -308,7 +308,7 @@ export default function MyPayClient({
                     ))}
                   </div>
                 ) : (
-                  <div style={{ borderTop: "1px solid rgba(0,95,106,0.07)", paddingTop: 12, textAlign: "center" }}>
+                  <div style={{ borderTop: "1px solid rgba(0,140,156,0.07)", paddingTop: 12, textAlign: "center" }}>
                     <p style={{ fontSize: 13, color: "var(--primary-50)" }}>
                       No washes logged yet.{" "}
                       <a href="/my-inventory/rag-wash" style={{ textDecoration: "underline", color: "var(--primary)" }}>
@@ -318,7 +318,7 @@ export default function MyPayClient({
                   </div>
                 )}
 
-                <div style={{ borderTop: "1px solid rgba(0,95,106,0.07)", paddingTop: 10, fontSize: 11, color: "var(--primary-50)" }}>
+                <div style={{ borderTop: "1px solid rgba(0,140,156,0.07)", paddingTop: 10, fontSize: 11, color: "var(--primary-50)" }}>
                   Rate: ${ragData.creditRate.toFixed(2)} per rag · Credits are added as adjustments by admin at period close
                 </div>
               </div>

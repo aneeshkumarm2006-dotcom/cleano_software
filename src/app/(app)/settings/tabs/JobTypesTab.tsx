@@ -87,12 +87,12 @@ export default function JobTypesTab({ settings }: JobTypesTabProps) {
       }>
       <div className="space-y-2">
         {items.length === 0 && (
-          <p className="text-sm text-[#005F6A]/60">No job types configured.</p>
+          <p className="text-sm text-[#008C9C]/60">No job types configured.</p>
         )}
         {items.map((item) => (
           <div
             key={item.id}
-            className="flex items-center gap-3 p-2 rounded-xl hover:bg-[#005F6A]/5 transition-colors">
+            className="flex items-center gap-3 p-2 rounded-xl hover:bg-[#008C9C]/5 transition-colors">
             <Input
               variant="form"
               value={item.name}
@@ -100,14 +100,14 @@ export default function JobTypesTab({ settings }: JobTypesTabProps) {
               placeholder="Job type name"
               className="flex-1"
             />
-            <label className="flex items-center gap-2 text-sm text-[#005F6A] select-none">
+            <label className="flex items-center gap-2 text-sm text-[#008C9C] select-none">
               <input
                 type="checkbox"
                 checked={item.isActive}
                 onChange={(e) =>
                   update(item.id, { isActive: e.target.checked })
                 }
-                className="accent-[#005F6A]"
+                className="accent-[#008C9C]"
               />
               Active
             </label>

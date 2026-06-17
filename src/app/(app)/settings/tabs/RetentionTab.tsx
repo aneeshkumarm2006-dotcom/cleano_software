@@ -69,7 +69,7 @@ export default function RetentionTab({ settings }: Props) {
               value={offerType}
               onChange={(e) => setOfferType(e.target.value as SaveOfferConfig["offerType"])}
               disabled={!enabled}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#005F6A] disabled:opacity-50">
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#008C9C] disabled:opacity-50">
               <option value="PERCENT">% off next cleaning</option>
               <option value="FIXED">$ off next cleaning</option>
             </select>
@@ -92,7 +92,7 @@ export default function RetentionTab({ settings }: Props) {
             value={emailIntro}
             onChange={(e) => setEmailIntro(e.target.value)}
             rows={3}
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#005F6A]"
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#008C9C]"
           />
         </Field>
 

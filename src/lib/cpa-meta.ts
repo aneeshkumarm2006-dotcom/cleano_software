@@ -5,7 +5,7 @@
 export type Channel = { id: string; name: string; paid: boolean; color: string };
 
 export const CHANNELS: Channel[] = [
-  { id: "google", name: "Google Ads", paid: true, color: "#005F6A" },
+  { id: "google", name: "Google Ads", paid: true, color: "#008C9C" },
   { id: "instagram", name: "Instagram", paid: true, color: "#7c3aed" },
   { id: "facebook", name: "Facebook", paid: true, color: "#0284c7" },
   { id: "referral", name: "Referral", paid: false, color: "#059669" },

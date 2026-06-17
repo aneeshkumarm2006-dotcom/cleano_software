@@ -78,8 +78,8 @@ export default function SaveCardOnFile({
       style={{
         marginTop: 12,
         padding: 14,
-        background: "#005F6A0d",
-        border: "1px dashed rgba(0,95,106,0.3)",
+        background: "#008C9C0d",
+        border: "1px dashed rgba(0,140,156,0.3)",
         borderRadius: 10,
       }}>
       <div
@@ -88,7 +88,7 @@ export default function SaveCardOnFile({
           fontWeight: 700,
           letterSpacing: "0.08em",
           textTransform: "uppercase",
-          color: "#005F6A",
+          color: "#008C9C",
           marginBottom: 6,
         }}>
         Save card on file
@@ -97,7 +97,7 @@ export default function SaveCardOnFile({
         style={{
           margin: "0 0 12px",
           fontSize: 12,
-          color: "rgba(0,95,106,0.7)",
+          color: "rgba(0,140,156,0.7)",
           lineHeight: 1.5,
         }}>
         Enter the customer's card now and we'll charge it after the job
@@ -105,7 +105,7 @@ export default function SaveCardOnFile({
       </p>
 
       {loading && (
-        <p style={{ fontSize: 13, color: "rgba(0,95,106,0.6)" }}>
+        <p style={{ fontSize: 13, color: "rgba(0,140,156,0.6)" }}>
           Loading secure card form…
         </p>
       )}
@@ -206,7 +206,7 @@ function Inner({
           fontSize: 13,
           fontWeight: 700,
           color: "#fff",
-          background: busy ? "#7daab0" : "#005F6A",
+          background: busy ? "#7daab0" : "#008C9C",
           border: "none",
           borderRadius: 8,
           cursor: busy ? "default" : "pointer",

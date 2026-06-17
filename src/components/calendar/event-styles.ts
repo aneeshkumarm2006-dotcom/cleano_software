@@ -6,7 +6,7 @@ import { hexToRgba } from "./utils";
 // ============================================================================
 
 /** Default event color when no type is specified */
-export const DEFAULT_EVENT_COLOR = "#005F6A";
+export const DEFAULT_EVENT_COLOR = "#008C9C";
 
 /** Background opacity for confirmed events */
 export const EVENT_BG_OPACITY = 0.2;
@@ -51,7 +51,7 @@ export function getEventStyleInfo(
     // Apply color based on job status
     switch (jobStatus) {
       case "CREATED":
-        jobColor = "#005F6A"; // Slate - newly created
+        jobColor = "#008C9C"; // Slate - newly created
         break;
       case "SCHEDULED":
         jobColor = "#3B82F6"; // Blue - scheduled

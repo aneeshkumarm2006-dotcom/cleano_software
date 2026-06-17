@@ -1,15 +1,14 @@
 import React from "react";
-import { AlertCircle } from "lucide-react";
 import { EventStyleInfo } from "./event-styles";
 import { CalendarEvent } from "./types";
 import {
   statusMeta,
   isUnconfirmed,
   isCancelled,
-  hasMissingEquipment,
   payLabel,
   shortLocation,
 } from "./status-meta";
+import CornerBadge from "./CornerBadge";
 
 export interface EventCardProps {
   event: CalendarEvent;
@@ -92,12 +91,8 @@ export const EventCard: React.FC<EventCardProps> = ({
       <span className="cal-ev-bar" style={{ background: m.color }} />
       <div className="cal-ev-in">
         <div className="cal-ev-top">
+          <CornerBadge event={event} />
           <span className="cal-ev-client">{event.title}</span>
-          {hasMissingEquipment(event) ? (
-            <span className="cal-ev-warn" title="Missing equipment">
-              <AlertCircle size={12} />
-            </span>
-          ) : null}
         </div>
         {showMeta ? (
           <div className="cal-ev-meta">

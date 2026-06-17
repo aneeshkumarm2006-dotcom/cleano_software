@@ -154,11 +154,11 @@ export default function ClientNameField({
         ))}
 
       <style>{`
-        .client-typeahead { position: absolute; z-index: 50; top: calc(100% + 4px); left: 0; right: 0; background: #fff; border: 1px solid rgba(0,95,106,0.15); border-radius: 14px; box-shadow: 0 18px 48px rgba(0,95,106,0.18); padding: 6px; max-height: 280px; overflow-y: auto; }
+        .client-typeahead { position: absolute; z-index: 50; top: calc(100% + 4px); left: 0; right: 0; background: #fff; border: 1px solid rgba(0,140,156,0.15); border-radius: 14px; box-shadow: 0 18px 48px rgba(0,140,156,0.18); padding: 6px; max-height: 280px; overflow-y: auto; }
         .client-typeahead-row { width: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 10px; border: 0; background: none; border-radius: 9px; cursor: pointer; text-align: left; }
-        .client-typeahead-row:hover { background: rgba(0,95,106,0.06); }
+        .client-typeahead-row:hover { background: rgba(0,140,156,0.06); }
         .client-typeahead-name { font-size: 13.5px; color: #0e1a1c; font-weight: 500; }
-        .client-typeahead-sub { font-size: 11.5px; color: rgba(0,95,106,0.6); }
+        .client-typeahead-sub { font-size: 11.5px; color: rgba(0,140,156,0.6); }
         .client-typeahead-linked { margin-top: 6px; font-size: 12px; color: #166534; }
       `}</style>
     </div>

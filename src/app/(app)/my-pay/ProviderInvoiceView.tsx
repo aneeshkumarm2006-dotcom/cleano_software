@@ -72,9 +72,9 @@ export default function ProviderInvoiceView() {
           marginBottom: 20,
           paddingBottom: 10,
           borderBottomWidth: 1,
-          borderBottomColor: "#005F6A",
+          borderBottomColor: "#008C9C",
         },
-        title: { fontSize: 18, color: "#005F6A" },
+        title: { fontSize: 18, color: "#008C9C" },
         meta: { fontSize: 9, color: "#666" },
         section: { marginBottom: 14 },
         sectionTitle: {
@@ -108,7 +108,7 @@ export default function ProviderInvoiceView() {
           flexDirection: "row",
           paddingVertical: 8,
           borderTopWidth: 1,
-          borderTopColor: "#005F6A",
+          borderTopColor: "#008C9C",
           marginTop: 8,
           fontSize: 12,
         },
@@ -126,7 +126,7 @@ export default function ProviderInvoiceView() {
                 </Text>
               </View>
               <View>
-                <Text style={{ fontSize: 14, color: "#005F6A" }}>Cleano</Text>
+                <Text style={{ fontSize: 14, color: "#008C9C" }}>Cleano</Text>
                 <Text style={styles.meta}>Service Provider Statement</Text>
               </View>
             </View>
@@ -199,12 +199,12 @@ export default function ProviderInvoiceView() {
       <div className="flex items-start justify-between gap-4 mb-4">
         <div>
           <div className="flex items-center gap-2">
-            <FileText className="w-5 h-5 text-[#005F6A]" />
-            <h2 className="text-lg font-[400] text-[#005F6A]">
+            <FileText className="w-5 h-5 text-[#008C9C]" />
+            <h2 className="text-lg font-[400] text-[#008C9C]">
               Provider Invoice
             </h2>
           </div>
-          <p className="text-sm text-[#005F6A]/70 mt-1">
+          <p className="text-sm text-[#008C9C]/70 mt-1">
             Generate an invoice from your payouts to send to accounting.
           </p>
         </div>
@@ -228,21 +228,21 @@ export default function ProviderInvoiceView() {
 
       {invoice && (
         <div>
-          <div className="rounded-2xl bg-white border border-[#005F6A]/10 p-5">
+          <div className="rounded-2xl bg-white border border-[#008C9C]/10 p-5">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <p className="text-xs uppercase tracking-wider text-[#005F6A]/50">
+                <p className="text-xs uppercase tracking-wider text-[#008C9C]/50">
                   Invoice
                 </p>
-                <p className="text-base font-[500] text-[#005F6A]">
+                <p className="text-base font-[500] text-[#008C9C]">
                   {invoice.invoiceNumber}
                 </p>
               </div>
               <div className="text-right">
-                <p className="text-xs uppercase tracking-wider text-[#005F6A]/50">
+                <p className="text-xs uppercase tracking-wider text-[#008C9C]/50">
                   Period
                 </p>
-                <p className="text-sm text-[#005F6A]">
+                <p className="text-sm text-[#008C9C]">
                   {formatDate(invoice.periodFrom)} –{" "}
                   {formatDate(invoice.periodTo)}
                 </p>
@@ -250,51 +250,51 @@ export default function ProviderInvoiceView() {
             </div>
 
             {invoice.lines.length === 0 ? (
-              <p className="text-sm text-[#005F6A]/60 py-6 text-center">
+              <p className="text-sm text-[#008C9C]/60 py-6 text-center">
                 No payouts found for this period.
               </p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="min-w-full text-sm">
                   <thead>
-                    <tr className="text-[10px] uppercase tracking-wider text-[#005F6A]/50">
+                    <tr className="text-[10px] uppercase tracking-wider text-[#008C9C]/50">
                       <th className="text-left py-2 pr-3">Pay Period</th>
                       <th className="text-right py-2 px-3">Jobs</th>
                       <th className="text-right py-2 px-3">Hours</th>
                       <th className="text-right py-2 pl-3">Amount</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#005F6A]/10">
+                  <tbody className="divide-y divide-[#008C9C]/10">
                     {invoice.lines.map((l) => (
                       <tr key={l.payoutId}>
-                        <td className="py-2 pr-3 text-[#005F6A]">
+                        <td className="py-2 pr-3 text-[#008C9C]">
                           {formatDate(l.periodStart)} –{" "}
                           {formatDate(l.periodEnd)}
                         </td>
-                        <td className="py-2 px-3 text-right text-[#005F6A]/80">
+                        <td className="py-2 px-3 text-right text-[#008C9C]/80">
                           {l.jobCount}
                         </td>
-                        <td className="py-2 px-3 text-right text-[#005F6A]/80">
+                        <td className="py-2 px-3 text-right text-[#008C9C]/80">
                           {l.totalHours.toFixed(1)}
                         </td>
-                        <td className="py-2 pl-3 text-right text-[#005F6A] font-[500]">
+                        <td className="py-2 pl-3 text-right text-[#008C9C] font-[500]">
                           ${l.finalAmount.toFixed(2)}
                         </td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot>
-                    <tr className="border-t-2 border-[#005F6A]/30">
-                      <td className="py-3 pr-3 text-[#005F6A] font-[500]">
+                    <tr className="border-t-2 border-[#008C9C]/30">
+                      <td className="py-3 pr-3 text-[#008C9C] font-[500]">
                         Total
                       </td>
-                      <td className="py-3 px-3 text-right text-[#005F6A]/80">
+                      <td className="py-3 px-3 text-right text-[#008C9C]/80">
                         {invoice.totalJobs}
                       </td>
-                      <td className="py-3 px-3 text-right text-[#005F6A]/80">
+                      <td className="py-3 px-3 text-right text-[#008C9C]/80">
                         {invoice.totalHours.toFixed(1)}
                       </td>
-                      <td className="py-3 pl-3 text-right text-[#005F6A] text-base font-[500]">
+                      <td className="py-3 pl-3 text-right text-[#008C9C] text-base font-[500]">
                         ${invoice.subtotal.toFixed(2)}
                       </td>
                     </tr>

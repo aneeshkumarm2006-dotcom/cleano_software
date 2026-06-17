@@ -208,7 +208,7 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
             />
           </Field>
         </div>
-        <p className="text-sm text-[#005F6A]/60 mt-3">
+        <p className="text-sm text-[#008C9C]/60 mt-3">
           Example: 2 bed + 1 full bath = <strong>${examplePrice.toFixed(2)}</strong>
         </p>
       </SectionCard>
@@ -231,10 +231,10 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
         }>
         <div className="space-y-3">
           {addOns.length === 0 && (
-            <p className="text-sm text-[#005F6A]/60">No add-ons configured.</p>
+            <p className="text-sm text-[#008C9C]/60">No add-ons configured.</p>
           )}
           {addOns.map((addon) => (
-            <div key={addon.id} className="rounded-xl border border-[#005F6A]/10 p-3 space-y-3">
+            <div key={addon.id} className="rounded-xl border border-[#008C9C]/10 p-3 space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-[2fr_1fr_1.4fr_auto] gap-3 items-end">
                 <Field label="Name">
                   <Input
@@ -262,7 +262,7 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
                     onChange={(e) =>
                       updateAddOn(addon.id, { roomType: e.target.value as RoomType })
                     }
-                    className="w-full px-3 py-2 rounded-xl border border-[#005F6A]/15 bg-white text-[#003C46] text-sm focus:outline-none focus:border-[#005F6A] focus:ring-2 focus:ring-[#005F6A]/10">
+                    className="w-full px-3 py-2 rounded-xl border border-[#008C9C]/15 bg-white text-[#003C46] text-sm focus:outline-none focus:border-[#008C9C] focus:ring-2 focus:ring-[#008C9C]/10">
                     {ROOM_OPTIONS.map((opt) => (
                       <option key={opt.value} value={opt.value}>
                         {opt.label}
@@ -279,7 +279,7 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
                 />
               </div>
               <div>
-                <span className="text-[11px] font-semibold uppercase tracking-wide text-[#005F6A]/60">
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-[#008C9C]/60">
                   Shows for service
                 </span>
                 <div className="flex flex-wrap gap-2 mt-1.5 items-center">
@@ -296,15 +296,15 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
                         }}
                         className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
                           on
-                            ? "bg-[#005F6A] text-white border-[#005F6A]"
-                            : "bg-white text-[#005F6A]/70 border-[#005F6A]/15 hover:border-[#005F6A]/40"
+                            ? "bg-[#008C9C] text-white border-[#008C9C]"
+                            : "bg-white text-[#008C9C]/70 border-[#008C9C]/15 hover:border-[#008C9C]/40"
                         }`}>
                         {s.label}
                       </button>
                     );
                   })}
                   {(!addon.services || addon.services.length === 0) && (
-                    <span className="text-xs text-[#005F6A]/50 italic">All services (none selected)</span>
+                    <span className="text-xs text-[#008C9C]/50 italic">All services (none selected)</span>
                   )}
                 </div>
               </div>
@@ -356,7 +356,7 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
             />
           </Field>
         </div>
-        <p className="text-sm text-[#005F6A]/60 mt-3">
+        <p className="text-sm text-[#008C9C]/60 mt-3">
           Example: 1,200 sq ft ={" "}
           <strong>
             $
@@ -423,7 +423,7 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
             />
           </Field>
         </div>
-        <p className="text-sm text-[#005F6A]/60 mt-3">
+        <p className="text-sm text-[#008C9C]/60 mt-3">
           {svc.postConstruction.packageHours}h ={" "}
           <strong>${svc.postConstruction.packagePrice.toFixed(2)}</strong> ·{" "}
           {svc.postConstruction.packageHours + 2}h ={" "}

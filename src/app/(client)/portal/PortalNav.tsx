@@ -22,8 +22,8 @@ export default function PortalNav() {
             href={l.href}
             className={`px-3 py-1.5 rounded-full text-xs transition-colors ${
               active
-                ? "bg-[#005F6A] text-white"
-                : "text-[#005F6A]/70 hover:bg-[#005F6A]/5"
+                ? "bg-[#008C9C] text-white"
+                : "text-[#008C9C]/70 hover:bg-[#008C9C]/5"
             }`}>
             {l.label}
           </Link>

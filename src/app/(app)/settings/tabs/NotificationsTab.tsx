@@ -133,14 +133,14 @@ export default function NotificationsTab({ settings }: NotificationsTabProps) {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="rounded-2xl border border-[#005F6A]/10 bg-white p-5 shadow-sm">
+      <div className="rounded-2xl border border-[#008C9C]/10 bg-white p-5 shadow-sm">
         <div className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-xl bg-[#005F6A]/8 flex items-center justify-center flex-shrink-0">
-            <Bell className="w-5 h-5 text-[#005F6A]" />
+          <div className="w-10 h-10 rounded-xl bg-[#008C9C]/8 flex items-center justify-center flex-shrink-0">
+            <Bell className="w-5 h-5 text-[#008C9C]" />
           </div>
           <div className="flex-1 min-w-0">
             <h2 className="text-base font-semibold text-[#003C46]">Notifications</h2>
-            <p className="text-sm text-[#005F6A]/70 mt-1">
+            <p className="text-sm text-[#008C9C]/70 mt-1">
               Decide who gets notified, on which channel, for every event in the system.
               Changes save automatically.
             </p>
@@ -149,18 +149,18 @@ export default function NotificationsTab({ settings }: NotificationsTabProps) {
             type="button"
             onClick={handleReseed}
             disabled={reseeding}
-            className="inline-flex items-center gap-2 text-xs font-semibold text-[#005F6A] bg-[#005F6A]/8 hover:bg-[#005F6A]/14 px-3 py-2 rounded-lg disabled:opacity-50">
+            className="inline-flex items-center gap-2 text-xs font-semibold text-[#008C9C] bg-[#008C9C]/8 hover:bg-[#008C9C]/14 px-3 py-2 rounded-lg disabled:opacity-50">
             <RefreshCw className={`w-3.5 h-3.5 ${reseeding ? "animate-spin" : ""}`} />
             {reseeding ? "Refreshing…" : "Refresh catalog"}
           </button>
         </div>
         {reseedMsg && (
-          <p className="text-xs text-[#005F6A]/70 mt-3">{reseedMsg}</p>
+          <p className="text-xs text-[#008C9C]/70 mt-3">{reseedMsg}</p>
         )}
       </div>
 
       {/* Recipient tabs */}
-      <div className="flex gap-2 border-b border-[#005F6A]/10">
+      <div className="flex gap-2 border-b border-[#008C9C]/10">
         {recipients.map((r) => {
           const count = grouped.get(r) ? Array.from(grouped.get(r)!.values()).reduce((s, m) => s + m.size, 0) : 0;
           const active = activeRecipient === r;
@@ -171,13 +171,13 @@ export default function NotificationsTab({ settings }: NotificationsTabProps) {
               onClick={() => setActiveRecipient(r)}
               className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors ${
                 active
-                  ? "border-[#005F6A] text-[#005F6A]"
-                  : "border-transparent text-[#005F6A]/55 hover:text-[#005F6A]"
+                  ? "border-[#008C9C] text-[#008C9C]"
+                  : "border-transparent text-[#008C9C]/55 hover:text-[#008C9C]"
               }`}>
               {RECIPIENT_LABELS[r]}
               <span
                 className={`ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-                  active ? "bg-[#005F6A] text-white" : "bg-[#005F6A]/8 text-[#005F6A]/70"
+                  active ? "bg-[#008C9C] text-white" : "bg-[#008C9C]/8 text-[#008C9C]/70"
                 }`}>
                 {count}
               </span>
@@ -188,7 +188,7 @@ export default function NotificationsTab({ settings }: NotificationsTabProps) {
 
       {/* Categories */}
       {!categoriesForActive || categoriesForActive.size === 0 ? (
-        <div className="text-sm text-[#005F6A]/60 p-6 text-center">
+        <div className="text-sm text-[#008C9C]/60 p-6 text-center">
           No notifications seeded yet. Click <strong>Refresh catalog</strong> above to seed defaults.
         </div>
       ) : (
@@ -208,8 +208,8 @@ export default function NotificationsTab({ settings }: NotificationsTabProps) {
             return (
               <div
                 key={category}
-                className="rounded-2xl border border-[#005F6A]/10 bg-white overflow-hidden shadow-sm">
-                <div className="px-5 py-3 bg-[#005F6A]/4 border-b border-[#005F6A]/10 flex items-center justify-between gap-3">
+                className="rounded-2xl border border-[#008C9C]/10 bg-white overflow-hidden shadow-sm">
+                <div className="px-5 py-3 bg-[#008C9C]/4 border-b border-[#008C9C]/10 flex items-center justify-between gap-3">
                   <h3 className="text-sm font-semibold text-[#003C46]">{category}</h3>
                   <div className="flex items-center gap-1.5">
                     {channelsPresent.map((channel) => {
@@ -223,7 +223,7 @@ export default function NotificationsTab({ settings }: NotificationsTabProps) {
                           onClick={() =>
                             handleBulkCategory(activeRecipient, category, channel, !allOn)
                           }
-                          className="text-[10px] font-semibold text-[#005F6A]/70 hover:text-[#005F6A] px-2 py-1 rounded-md hover:bg-[#005F6A]/8">
+                          className="text-[10px] font-semibold text-[#008C9C]/70 hover:text-[#008C9C] px-2 py-1 rounded-md hover:bg-[#008C9C]/8">
                           {allOn ? "Disable all" : "Enable all"} {CHANNEL_LABEL[channel]}
                         </button>
                       );
@@ -231,7 +231,7 @@ export default function NotificationsTab({ settings }: NotificationsTabProps) {
                   </div>
                 </div>
 
-                <ul className="divide-y divide-[#005F6A]/8">
+                <ul className="divide-y divide-[#008C9C]/8">
                   {notifsArr.map((n) => (
                     <li key={n.key} className="px-5 py-3.5 flex items-start gap-4">
                       <div className="flex-1 min-w-0">
@@ -243,7 +243,7 @@ export default function NotificationsTab({ settings }: NotificationsTabProps) {
                             </span>
                           )}
                         </div>
-                        <p className="text-xs text-[#005F6A]/60 mt-0.5">{n.trigger}</p>
+                        <p className="text-xs text-[#008C9C]/60 mt-0.5">{n.trigger}</p>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0 mt-0.5">
                         {(["EMAIL", "SMS", "APP_PUSH"] as Channel[]).map((channel) => {
@@ -252,7 +252,7 @@ export default function NotificationsTab({ settings }: NotificationsTabProps) {
                             return (
                               <div
                                 key={channel}
-                                className="w-[88px] text-center text-[10px] text-[#005F6A]/30 py-1.5"
+                                className="w-[88px] text-center text-[10px] text-[#008C9C]/30 py-1.5"
                                 title="Channel not applicable">
                                 —
                               </div>
@@ -267,7 +267,7 @@ export default function NotificationsTab({ settings }: NotificationsTabProps) {
                               className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border transition-colors min-w-[88px] justify-center ${
                                 row.enabled
                                   ? "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100"
-                                  : "bg-white border-[#005F6A]/15 text-[#005F6A]/45 hover:border-[#005F6A]/30"
+                                  : "bg-white border-[#008C9C]/15 text-[#008C9C]/45 hover:border-[#008C9C]/30"
                               }`}
                               title={`${CHANNEL_LABEL[channel]} — ${row.enabled ? "On" : "Off"}`}>
                               <Icon className="w-3.5 h-3.5" />

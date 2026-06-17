@@ -171,13 +171,13 @@ export default function DatePicker({
   const border = error
     ? "1.5px solid #f87171"
     : open
-    ? "1.5px solid #005F6A"
-    : "1px solid rgba(0,95,106,0.16)";
-  const boxShadow = open ? "0 0 0 3px rgba(0,95,106,0.11)" : "none";
+    ? "1.5px solid #008C9C"
+    : "1px solid rgba(0,140,156,0.16)";
+  const boxShadow = open ? "0 0 0 3px rgba(0,140,156,0.11)" : "none";
 
   const NAV_BTN: React.CSSProperties = {
     width: 30, height: 30, borderRadius: 8, border: 0,
-    background: "rgba(0,95,106,0.06)", color: "#005F6A",
+    background: "rgba(0,140,156,0.06)", color: "#008C9C",
     cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
     flexShrink: 0,
   };
@@ -200,9 +200,9 @@ export default function DatePicker({
           padding: `0 ${size === "sm" ? 10 : 14}px`,
           borderRadius: BR[size],
           border,
-          background: disabled ? "rgba(0,95,106,0.04)" : "#fff",
+          background: disabled ? "rgba(0,140,156,0.04)" : "#fff",
           fontSize: FS[size],
-          color: value ? "#111" : "rgba(0,95,106,0.38)",
+          color: value ? "#111" : "rgba(0,140,156,0.38)",
           fontFamily: "inherit",
           cursor: disabled ? "not-allowed" : "pointer",
           transition: "border .15s, box-shadow .15s",
@@ -212,7 +212,7 @@ export default function DatePicker({
           opacity: disabled ? 0.55 : 1,
           ...style,
         }}>
-        <Calendar size={14} style={{ flexShrink: 0, color: "rgba(0,95,106,0.45)" }} />
+        <Calendar size={14} style={{ flexShrink: 0, color: "rgba(0,140,156,0.45)" }} />
         <span style={{ flex: 1, textAlign: "left" }}>
           {value ? formatDisplay(value) : placeholder}
         </span>
@@ -231,8 +231,8 @@ export default function DatePicker({
               zIndex: 9999,
               background: "#fff",
               borderRadius: 18,
-              border: "1px solid rgba(0,95,106,0.1)",
-              boxShadow: "0 12px 40px rgba(0,95,106,0.14), 0 2px 8px rgba(0,0,0,0.05)",
+              border: "1px solid rgba(0,140,156,0.1)",
+              boxShadow: "0 12px 40px rgba(0,140,156,0.14), 0 2px 8px rgba(0,0,0,0.05)",
               padding: "18px 16px 14px",
               animation: "ps-drop .16s cubic-bezier(.2,.8,.3,1) both",
             }}>
@@ -275,7 +275,7 @@ export default function DatePicker({
                     textAlign: "center",
                     fontSize: 10,
                     fontWeight: 700,
-                    color: "rgba(0,95,106,0.35)",
+                    color: "rgba(0,140,156,0.35)",
                     textTransform: "uppercase",
                     letterSpacing: "0.07em",
                     padding: "3px 0",
@@ -302,11 +302,11 @@ export default function DatePicker({
                       width: "100%",
                       aspectRatio: "1",
                       borderRadius: 8,
-                      border: isT && !isS ? "1.5px solid rgba(0,95,106,0.28)" : 0,
+                      border: isT && !isS ? "1.5px solid rgba(0,140,156,0.28)" : 0,
                       fontSize: 13,
                       fontWeight: isS ? 700 : isT ? 600 : 400,
-                      background: isS ? "#005F6A" : "transparent",
-                      color: isS ? "#fff" : isD ? "rgba(0,95,106,0.22)" : isT ? "#005F6A" : "#1a1a1a",
+                      background: isS ? "#008C9C" : "transparent",
+                      color: isS ? "#fff" : isD ? "rgba(0,140,156,0.22)" : isT ? "#008C9C" : "#1a1a1a",
                       cursor: isD ? "not-allowed" : "pointer",
                       fontFamily: "inherit",
                       transition: "background .1s, color .1s",
@@ -317,7 +317,7 @@ export default function DatePicker({
                     onMouseEnter={e => {
                       if (!isD && !isS)
                         (e.currentTarget as HTMLButtonElement).style.background =
-                          "rgba(0,95,106,0.08)";
+                          "rgba(0,140,156,0.08)";
                     }}
                     onMouseLeave={e => {
                       if (!isS)
@@ -333,7 +333,7 @@ export default function DatePicker({
             {/* Footer */}
             <div
               style={{
-                borderTop: "1px solid rgba(0,95,106,0.08)",
+                borderTop: "1px solid rgba(0,140,156,0.08)",
                 marginTop: 12,
                 paddingTop: 10,
                 display: "flex",
@@ -348,7 +348,7 @@ export default function DatePicker({
                 style={{
                   fontSize: 12,
                   fontWeight: 600,
-                  color: "#005F6A",
+                  color: "#008C9C",
                   background: "none",
                   border: 0,
                   cursor: "pointer",
@@ -363,7 +363,7 @@ export default function DatePicker({
                   onClick={() => { onChange?.(""); setOpen(false); }}
                   style={{
                     fontSize: 12,
-                    color: "rgba(0,95,106,0.45)",
+                    color: "rgba(0,140,156,0.45)",
                     background: "none",
                     border: 0,
                     cursor: "pointer",

@@ -59,8 +59,8 @@ export default function MultipliersTab({ settings }: MultipliersTabProps) {
             key={step}
             className="grid grid-cols-[160px_1fr] items-center gap-3">
             <div className="flex items-center gap-2">
-              <Star className="w-4 h-4 fill-[#77C8CC] text-[#77C8CC]" />
-              <span className="text-sm font-medium text-[#005F6A] tabular-nums">
+              <Star className="w-4 h-4 fill-[#3E7596] text-[#3E7596]" />
+              <span className="text-sm font-medium text-[#008C9C] tabular-nums">
                 {step}
               </span>
             </div>

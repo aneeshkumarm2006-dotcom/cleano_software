@@ -3,7 +3,7 @@
  * a running totals block. Uses @react-pdf/renderer (already a dep).
  */
 
-const BRAND = "#005F6A";
+const BRAND = "#008C9C";
 
 export interface StatementBookingRow {
   jobNumber: number;
@@ -31,7 +31,7 @@ export async function buildStatementPdfBuffer(
     "@react-pdf/renderer"
   );
   const React = await import("react");
-  const tint = (a: number) => `rgba(0, 95, 106, ${a})`;
+  const tint = (a: number) => `rgba(0,140,156, ${a})`;
 
   const styles = StyleSheet.create({
     page: {

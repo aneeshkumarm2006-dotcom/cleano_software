@@ -12,6 +12,12 @@
  * read labels/defaults from it. All persistence lives in `@/lib/settings`.
  */
 
+import {
+  DEFAULT_JOB_TYPE_LABELS,
+  normaliseLabelMap,
+  type PriorityLabel,
+} from "@/lib/calendar-labels";
+
 export type SettingCategory =
   | "account"
   | "general"
@@ -144,6 +150,15 @@ function stringList(maxLen = 80) {
     if (items.some((s) => s.length > maxLen))
       return { ok: false, error: `Each option must be ${maxLen} characters or fewer` };
     return { ok: true, value: items };
+  };
+}
+
+/** Service-type -> calendar priority label ("ROUTINE"|"IMPORTANT"|"NONE") map. */
+function jobTypeLabelMap() {
+  return (v: unknown): ValidationResult<Record<string, PriorityLabel>> => {
+    if (!v || typeof v !== "object" || Array.isArray(v))
+      return { ok: false, error: "Provide a mapping" };
+    return { ok: true, value: normaliseLabelMap(v) };
   };
 }
 
@@ -356,6 +371,16 @@ export const SETTINGS = {
       },
     ],
     validate: faqList(),
+  }),
+  // Calendar priority badges: which service type gets "R" (Routine, blue) or
+  // "I" (Important, yellow) in the top-left of a booking. Admin-editable in
+  // Settings → Calendar Labels; per-job overrides live on Job.priorityLabel.
+  "calendar.jobTypeLabels": def({
+    key: "calendar.jobTypeLabels",
+    category: "scheduling",
+    label: "Calendar priority labels by service type",
+    default: DEFAULT_JOB_TYPE_LABELS,
+    validate: jobTypeLabelMap(),
   }),
   // Customer-facing website domain (display/links only until DNS is connected).
   "website.customDomain": def({

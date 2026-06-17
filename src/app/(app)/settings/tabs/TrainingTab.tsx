@@ -356,7 +356,7 @@ export default function TrainingTab({ modules }: TrainingTabProps) {
         </Button>
       }>
       {modules.length === 0 ? (
-        <p className="text-sm text-[#005F6A]/60">No training modules yet.</p>
+        <p className="text-sm text-[#008C9C]/60">No training modules yet.</p>
       ) : (
         <div className="space-y-2">
           {modules.map((m, idx) => {
@@ -367,13 +367,13 @@ export default function TrainingTab({ modules }: TrainingTabProps) {
             return (
               <div
                 key={m.id}
-                className="flex items-start justify-between gap-3 p-4 border border-[#005F6A]/10 rounded-xl bg-white hover:bg-[#005F6A]/3 transition-colors">
+                className="flex items-start justify-between gap-3 p-4 border border-[#008C9C]/10 rounded-xl bg-white hover:bg-[#008C9C]/3 transition-colors">
                 <div className="flex flex-col gap-1 pt-1">
                   <button
                     type="button"
                     onClick={() => moveModule(idx, -1)}
                     disabled={idx === 0}
-                    className="p-1 rounded text-[#005F6A]/60 hover:bg-[#005F6A]/10 disabled:opacity-20 disabled:cursor-not-allowed"
+                    className="p-1 rounded text-[#008C9C]/60 hover:bg-[#008C9C]/10 disabled:opacity-20 disabled:cursor-not-allowed"
                     aria-label="Move up">
                     <ArrowUp className="w-3 h-3" />
                   </button>
@@ -381,7 +381,7 @@ export default function TrainingTab({ modules }: TrainingTabProps) {
                     type="button"
                     onClick={() => moveModule(idx, 1)}
                     disabled={idx === modules.length - 1}
-                    className="p-1 rounded text-[#005F6A]/60 hover:bg-[#005F6A]/10 disabled:opacity-20 disabled:cursor-not-allowed"
+                    className="p-1 rounded text-[#008C9C]/60 hover:bg-[#008C9C]/10 disabled:opacity-20 disabled:cursor-not-allowed"
                     aria-label="Move down">
                     <ArrowDown className="w-3 h-3" />
                   </button>
@@ -389,31 +389,31 @@ export default function TrainingTab({ modules }: TrainingTabProps) {
 
                 <div className="flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="text-sm font-[400] text-[#005F6A]">
+                    <h3 className="text-sm font-[400] text-[#008C9C]">
                       {m.title}
                     </h3>
                     {!m.isActive && (
-                      <span className="text-xs text-[#005F6A]/40">
+                      <span className="text-xs text-[#008C9C]/40">
                         (inactive)
                       </span>
                     )}
                     {m.isRequired && (
-                      <span className="text-xs bg-[#005F6A]/10 text-[#005F6A] px-2 py-0.5 rounded-full">
+                      <span className="text-xs bg-[#008C9C]/10 text-[#008C9C] px-2 py-0.5 rounded-full">
                         Required
                       </span>
                     )}
                     {m.quizzes.length > 0 && (
-                      <span className="text-xs bg-[#77C8CC]/20 text-[#005F6A] px-2 py-0.5 rounded-full">
+                      <span className="text-xs bg-[#3E7596]/20 text-[#008C9C] px-2 py-0.5 rounded-full">
                         Quiz: {m.quizzes.length} q
                       </span>
                     )}
                   </div>
                   {m.description && (
-                    <p className="text-xs text-[#005F6A]/60 mt-1">
+                    <p className="text-xs text-[#008C9C]/60 mt-1">
                       {m.description}
                     </p>
                   )}
-                  <div className="flex items-center gap-3 text-xs text-[#005F6A]/50 mt-1">
+                  <div className="flex items-center gap-3 text-xs text-[#008C9C]/50 mt-1">
                     {m.videoUrl && <span>Video set</span>}
                     {m.duration != null && (
                       <span>{Math.round(m.duration / 60)} min</span>
@@ -421,7 +421,7 @@ export default function TrainingTab({ modules }: TrainingTabProps) {
                     <button
                       type="button"
                       onClick={() => setStatsModuleId(m.id)}
-                      className="text-[#005F6A] hover:underline">
+                      className="text-[#008C9C] hover:underline">
                       {completed}/{total} completed — view stats
                     </button>
                   </div>
@@ -527,7 +527,7 @@ export default function TrainingTab({ modules }: TrainingTabProps) {
           </div>
 
           <div className="flex gap-4 flex-wrap">
-            <label className="flex items-center gap-2 text-sm text-[#005F6A] select-none">
+            <label className="flex items-center gap-2 text-sm text-[#008C9C] select-none">
               <input
                 type="checkbox"
                 checked={draft.isRequired}
@@ -537,18 +537,18 @@ export default function TrainingTab({ modules }: TrainingTabProps) {
                     isRequired: e.target.checked,
                   }))
                 }
-                className="accent-[#005F6A]"
+                className="accent-[#008C9C]"
               />
               Required
             </label>
-            <label className="flex items-center gap-2 text-sm text-[#005F6A] select-none">
+            <label className="flex items-center gap-2 text-sm text-[#008C9C] select-none">
               <input
                 type="checkbox"
                 checked={draft.isActive}
                 onChange={(e) =>
                   setDraft((prev) => ({ ...prev, isActive: e.target.checked }))
                 }
-                className="accent-[#005F6A]"
+                className="accent-[#008C9C]"
               />
               Active
             </label>
@@ -556,7 +556,7 @@ export default function TrainingTab({ modules }: TrainingTabProps) {
 
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="text-xs font-[350] text-[#005F6A]/70 uppercase tracking-wide">
+              <label className="text-xs font-[350] text-[#008C9C]/70 uppercase tracking-wide">
                 Quiz Questions
               </label>
               <Button
@@ -570,7 +570,7 @@ export default function TrainingTab({ modules }: TrainingTabProps) {
               </Button>
             </div>
             {draft.quizzes.length === 0 && (
-              <p className="text-xs text-[#005F6A]/60">
+              <p className="text-xs text-[#008C9C]/60">
                 No quiz questions added.
               </p>
             )}
@@ -578,7 +578,7 @@ export default function TrainingTab({ modules }: TrainingTabProps) {
               {draft.quizzes.map((q, qIdx) => (
                 <div
                   key={qIdx}
-                  className="p-3 rounded-xl bg-[#005F6A]/5 space-y-3">
+                  className="p-3 rounded-xl bg-[#008C9C]/5 space-y-3">
                   <div className="flex items-start gap-2">
                     <div className="flex-1 space-y-2">
                       <Input
@@ -608,7 +608,7 @@ export default function TrainingTab({ modules }: TrainingTabProps) {
                           className={`p-1.5 rounded-lg border ${
                             opt.isCorrect
                               ? "bg-green-100 border-green-300 text-green-700"
-                              : "bg-white border-[#005F6A]/20 text-[#005F6A]/40"
+                              : "bg-white border-[#008C9C]/20 text-[#008C9C]/40"
                           }`}
                           aria-label="Mark correct">
                           <Check className="w-3 h-3" />
@@ -677,7 +677,7 @@ export default function TrainingTab({ modules }: TrainingTabProps) {
         {statsModule && (
           <div className="space-y-3">
             {statsModule.progress.length === 0 ? (
-              <p className="text-sm text-[#005F6A]/60">
+              <p className="text-sm text-[#008C9C]/60">
                 No employees have started this module yet.
               </p>
             ) : (
@@ -702,16 +702,16 @@ export default function TrainingTab({ modules }: TrainingTabProps) {
                   <tbody className="divide-y divide-gray-50">
                     {statsModule.progress.map((p) => (
                       <tr key={p.id} className="hover:bg-gray-50/50">
-                        <td className="px-4 py-2 text-[#005F6A]">
+                        <td className="px-4 py-2 text-[#008C9C]">
                           {p.employee.name}
                         </td>
-                        <td className="px-4 py-2 text-[#005F6A]/80">
+                        <td className="px-4 py-2 text-[#008C9C]/80">
                           {p.status.replace("_", " ").toLowerCase()}
                         </td>
-                        <td className="px-4 py-2 text-[#005F6A]/80">
+                        <td className="px-4 py-2 text-[#008C9C]/80">
                           {Math.round(p.videoProgress * 100)}%
                         </td>
-                        <td className="px-4 py-2 text-[#005F6A]/80">
+                        <td className="px-4 py-2 text-[#008C9C]/80">
                           {p.quizScore != null
                             ? `${Math.round(p.quizScore * 100)}%`
                             : "—"}

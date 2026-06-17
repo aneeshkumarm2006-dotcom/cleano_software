@@ -186,7 +186,7 @@ export default function ProductDetailView({
               ? "text-red-600"
               : variant === "warning"
               ? "text-yellow-700"
-              : "!text-[#005F6A]/70"
+              : "!text-[#008C9C]/70"
           }`}>
           {label}
         </span>
@@ -196,7 +196,7 @@ export default function ProductDetailView({
               ? "text-red-600"
               : variant === "warning"
               ? "text-yellow-700"
-              : "text-[#005F6A]"
+              : "text-[#008C9C]"
           }`}>
           {value}
         </p>
@@ -211,40 +211,40 @@ export default function ProductDetailView({
       <div className="w-1/2 grid grid-cols-1 gap-12">
         <Card variant="ghost" className="!p-0">
           <div className="flex items-center gap-2 mb-4">
-            <div className="p-2 bg-[#005F6A]/10 rounded-lg">
-              <Archive className="w-4 h-4 text-[#005F6A]" />
+            <div className="p-2 bg-[#008C9C]/10 rounded-lg">
+              <Archive className="w-4 h-4 text-[#008C9C]" />
             </div>
-            <h3 className="text-sm font-[350] text-[#005F6A]/80">
+            <h3 className="text-sm font-[350] text-[#008C9C]/80">
               Stock Details
             </h3>
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <div className="flex justify-between items-center p-3 rounded-xl bg-[#005F6A]/2">
-              <span className="input-label !text-[#005F6A]/70">
+            <div className="flex justify-between items-center p-3 rounded-xl bg-[#008C9C]/2">
+              <span className="input-label !text-[#008C9C]/70">
                 Warehouse Stock
               </span>
-              <span className="app-title-small text-[#005F6A]">
+              <span className="app-title-small text-[#008C9C]">
                 {product.stockLevel} {product.unit}
               </span>
             </div>
-            <div className="flex justify-between items-center p-3 rounded-xl bg-[#005F6A]/2">
-              <span className="input-label !text-[#005F6A]/70">
+            <div className="flex justify-between items-center p-3 rounded-xl bg-[#008C9C]/2">
+              <span className="input-label !text-[#008C9C]/70">
                 Min. Threshold
               </span>
-              <span className="app-title-small text-[#005F6A]">
+              <span className="app-title-small text-[#008C9C]">
                 {product.minStock} {product.unit}
               </span>
             </div>
-            <div className="flex justify-between items-center p-3 rounded-xl bg-[#005F6A]/2">
-              <span className="input-label !text-[#005F6A]/70">
+            <div className="flex justify-between items-center p-3 rounded-xl bg-[#008C9C]/2">
+              <span className="input-label !text-[#008C9C]/70">
                 Assigned to Employees
               </span>
-              <span className="app-title-small text-[#005F6A]">
+              <span className="app-title-small text-[#008C9C]">
                 {totalAssigned} {product.unit}
               </span>
             </div>
-            <div className="flex justify-between items-center p-3 rounded-xl bg-[#005F6A]/5">
-              <span className="input-label !text-[#005F6A]/70">Status</span>
+            <div className="flex justify-between items-center p-3 rounded-xl bg-[#008C9C]/5">
+              <span className="input-label !text-[#008C9C]/70">Status</span>
               {isLowStock ? (
                 <Badge variant="error" size="sm" className="px-2 py-1">
                   Low Stock
@@ -261,25 +261,25 @@ export default function ProductDetailView({
         {/* Pricing Card */}
         <Card variant="ghost" className="!p-0">
           <div className="flex items-center gap-2 mb-4">
-            <div className="p-2 bg-[#005F6A]/10 rounded-lg">
-              <DollarSign className="w-4 h-4 text-[#005F6A]" />
+            <div className="p-2 bg-[#008C9C]/10 rounded-lg">
+              <DollarSign className="w-4 h-4 text-[#008C9C]" />
             </div>
-            <h3 className="input-label !text-[#005F6A]/70">Pricing</h3>
+            <h3 className="input-label !text-[#008C9C]/70">Pricing</h3>
           </div>
           <div className="space-y-3">
-            <div className="flex justify-between items-center p-3 rounded-xl bg-[#005F6A]/2">
-              <span className="input-label !text-[#005F6A]/70">
+            <div className="flex justify-between items-center p-3 rounded-xl bg-[#008C9C]/2">
+              <span className="input-label !text-[#008C9C]/70">
                 Cost per Unit
               </span>
-              <span className="app-title-small text-[#005F6A]">
+              <span className="app-title-small text-[#008C9C]">
                 ${product.costPerUnit.toFixed(2)} / {product.unit}
               </span>
             </div>
-            <div className="flex justify-between items-center p-3 rounded-xl bg-[#005F6A]/2">
-              <span className="input-label !text-[#005F6A]/70">
+            <div className="flex justify-between items-center p-3 rounded-xl bg-[#008C9C]/2">
+              <span className="input-label !text-[#008C9C]/70">
                 Total Inventory Value
               </span>
-              <span className="app-title-small text-[#005F6A]">
+              <span className="app-title-small text-[#008C9C]">
                 ${totalValue.toFixed(2)}
               </span>
             </div>
@@ -305,9 +305,9 @@ export default function ProductDetailView({
       {/* Description */}
       {product.description && (
         <>
-          <h2 className="input-label !text-[#005F6A]/70">Description</h2>
+          <h2 className="input-label !text-[#008C9C]/70">Description</h2>
           <Card variant="cleano_light" className="p-6">
-            <p className="text-sm text-[#005F6A]/80 whitespace-pre-wrap leading-relaxed">
+            <p className="text-sm text-[#008C9C]/80 whitespace-pre-wrap leading-relaxed">
               {product.description}
             </p>
           </Card>
@@ -323,10 +323,10 @@ export default function ProductDetailView({
         <Card variant="default" className="p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <div className="p-2 bg-[#005F6A]/10 rounded-lg">
-                <TrendingUp className="w-4 h-4 text-[#005F6A]" />
+              <div className="p-2 bg-[#008C9C]/10 rounded-lg">
+                <TrendingUp className="w-4 h-4 text-[#008C9C]" />
               </div>
-              <h3 className="text-sm font-[350] text-[#005F6A]/80">
+              <h3 className="text-sm font-[350] text-[#008C9C]/80">
                 Usage in Jobs
               </h3>
             </div>
@@ -339,12 +339,12 @@ export default function ProductDetailView({
             {jobUsage.map((usage) => (
               <div
                 key={usage.id}
-                className="flex items-center justify-between p-3 rounded-xl bg-[#005F6A]/5">
+                className="flex items-center justify-between p-3 rounded-xl bg-[#008C9C]/5">
                 <div className="flex-1">
-                  <p className="text-sm font-[400] text-[#005F6A]">
+                  <p className="text-sm font-[400] text-[#008C9C]">
                     {usage.job.clientName}
                   </p>
-                  <p className="text-xs text-[#005F6A]/60">
+                  <p className="text-xs text-[#008C9C]/60">
                     {usage.job.employee.name} •{" "}
                     {new Date(usage.createdAt).toLocaleDateString("en-US")}
                   </p>
@@ -369,10 +369,10 @@ export default function ProductDetailView({
       ) : (
         <Card variant="ghost" className="p-8">
           <div className="text-center">
-            <div className="w-12 h-12 bg-[#005F6A]/5 rounded-2xl flex items-center justify-center mx-auto mb-3">
-              <History className="w-6 h-6 text-[#005F6A]/40" />
+            <div className="w-12 h-12 bg-[#008C9C]/5 rounded-2xl flex items-center justify-center mx-auto mb-3">
+              <History className="w-6 h-6 text-[#008C9C]/40" />
             </div>
-            <p className="text-sm text-[#005F6A]/60">
+            <p className="text-sm text-[#008C9C]/60">
               No usage recorded for this product
             </p>
           </div>
@@ -387,13 +387,13 @@ export default function ProductDetailView({
       {employeeAssignments.length === 0 ? (
         <Card variant="ghost" className="p-8">
           <div className="text-center">
-            <div className="w-12 h-12 bg-[#005F6A]/5 rounded-2xl flex items-center justify-center mx-auto mb-3">
-              <Users className="w-6 h-6 text-[#005F6A]/40" />
+            <div className="w-12 h-12 bg-[#008C9C]/5 rounded-2xl flex items-center justify-center mx-auto mb-3">
+              <Users className="w-6 h-6 text-[#008C9C]/40" />
             </div>
-            <p className="text-sm font-[350] text-[#005F6A]/70">
+            <p className="text-sm font-[350] text-[#008C9C]/70">
               No assignments found
             </p>
-            <p className="text-xs font-[350] text-[#005F6A]/60 mt-1">
+            <p className="text-xs font-[350] text-[#008C9C]/60 mt-1">
               This product is not currently assigned to any employees
             </p>
           </div>
@@ -404,7 +404,7 @@ export default function ProductDetailView({
           <div className="flex flex-col lg:flex-row gap-2">
             <div className="flex-1">
               <div className="relative">
-                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-[#005F6A]/60 z-10 w-4 h-4" />
+                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-[#008C9C]/60 z-10 w-4 h-4" />
                 <Input
                   placeholder="Search by employee name, email, or notes..."
                   value={searchTerm}
@@ -413,7 +413,7 @@ export default function ProductDetailView({
                     setSearchTerm(e.target.value);
                     setPage(1);
                   }}
-                  className="pl-10 h-[42px] py-3 placeholder:!text-[#005F6A]/40 placeholder:!font-[350]"
+                  className="pl-10 h-[42px] py-3 placeholder:!text-[#008C9C]/40 placeholder:!font-[350]"
                   variant="form"
                   border={false}
                 />
@@ -451,7 +451,7 @@ export default function ProductDetailView({
             <div className="hidden lg:block overflow-x-auto rounded-t-2xl">
               <div className="min-w-max">
                 {/* Header */}
-                <div className="flex bg-[#005F6A]/5 rounded-t-2xl">
+                <div className="flex bg-[#008C9C]/5 rounded-t-2xl">
                   {[
                     { label: "Employee", className: "w-[200px] text-left" },
                     { label: "Email", className: "w-[250px] text-left" },
@@ -466,30 +466,30 @@ export default function ProductDetailView({
                   ].map((col) => (
                     <div
                       key={col.label}
-                      className={`p-4 text-xs font-[350] !text-[#005F6A]/40 uppercase !tracking-wider ${col.className}`}>
+                      className={`p-4 text-xs font-[350] !text-[#008C9C]/40 uppercase !tracking-wider ${col.className}`}>
                       {col.label}
                     </div>
                   ))}
                 </div>
 
                 {/* Rows */}
-                <div className="divide-y divide-[#005F6A]/4">
+                <div className="divide-y divide-[#008C9C]/4">
                   {paginatedAssignments.length === 0 ? (
-                    <div className="p-8 text-center text-sm font-[350] text-[#005F6A]/70">
+                    <div className="p-8 text-center text-sm font-[350] text-[#008C9C]/70">
                       No assignments found matching your search
                     </div>
                   ) : (
                     paginatedAssignments.map((assignment) => (
                       <div
                         key={assignment.id}
-                        className="flex items-center hover:bg-[#005F6A]/1 transition-colors">
+                        className="flex items-center hover:bg-[#008C9C]/1 transition-colors">
                         <div className="w-[200px] p-4">
                           <p className="app-title-small truncate">
                             {assignment.employee.name}
                           </p>
                         </div>
                         <div className="w-[250px] p-4">
-                          <p className="app-title-small !text-[#005F6A]/50 truncate">
+                          <p className="app-title-small !text-[#008C9C]/50 truncate">
                             {assignment.employee.email}
                           </p>
                         </div>
@@ -499,7 +499,7 @@ export default function ProductDetailView({
                           </Badge>
                         </div>
                         <div className="w-[120px] p-4">
-                          <p className="app-title-small text-[#005F6A]">
+                          <p className="app-title-small text-[#008C9C]">
                             $
                             {(
                               assignment.quantity * product.costPerUnit
@@ -507,14 +507,14 @@ export default function ProductDetailView({
                           </p>
                         </div>
                         <div className="w-[140px] p-4">
-                          <p className="app-title-small !text-[#005F6A]/50">
+                          <p className="app-title-small !text-[#008C9C]/50">
                             {new Date(
                               assignment.assignedAt
                             ).toLocaleDateString("en-US")}
                           </p>
                         </div>
                         <div className="w-[200px] p-4">
-                          <p className="app-title-small !text-[#005F6A]/40 truncate">
+                          <p className="app-title-small !text-[#008C9C]/40 truncate">
                             {assignment.notes || "-"}
                           </p>
                         </div>
@@ -535,7 +535,7 @@ export default function ProductDetailView({
 
                 {/* Footer Totals */}
                 {paginatedAssignments.length > 0 && (
-                  <div className="flex bg-[#005F6A]/5 border-t border-[#005F6A]/10">
+                  <div className="flex bg-[#008C9C]/5 border-t border-[#008C9C]/10">
                     <div className="w-[200px] p-4">
                       <p className="app-title-small">Total Assigned</p>
                     </div>
@@ -566,10 +566,10 @@ export default function ProductDetailView({
                   <div className="space-y-3">
                     <div className="flex items-start justify-between">
                       <div>
-                        <p className="text-sm font-[400] text-[#005F6A]">
+                        <p className="text-sm font-[400] text-[#008C9C]">
                           {assignment.employee.name}
                         </p>
-                        <p className="text-xs text-[#005F6A]/60 mt-0.5">
+                        <p className="text-xs text-[#008C9C]/60 mt-0.5">
                           {assignment.employee.email}
                         </p>
                       </div>
@@ -577,17 +577,17 @@ export default function ProductDetailView({
                         {assignment.quantity} {product.unit}
                       </Badge>
                     </div>
-                    <div className="flex items-center justify-between text-xs text-[#005F6A]/60">
+                    <div className="flex items-center justify-between text-xs text-[#008C9C]/60">
                       <span>
                         {new Date(assignment.assignedAt).toLocaleDateString("en-US")}
                       </span>
-                      <span className="text-sm font-[400] text-[#005F6A]">
+                      <span className="text-sm font-[400] text-[#008C9C]">
                         $
                         {(assignment.quantity * product.costPerUnit).toFixed(2)}
                       </span>
                     </div>
                     {assignment.notes && (
-                      <p className="text-xs text-[#005F6A]/50">
+                      <p className="text-xs text-[#008C9C]/50">
                         {assignment.notes}
                       </p>
                     )}
@@ -606,8 +606,8 @@ export default function ProductDetailView({
 
             {/* Pagination */}
             {totalAssignments > 0 && (
-              <div className="flex items-center justify-between p-2 px-3 bg-[#005F6A]/4 rounded-b-2xl">
-                <div className="text-xs text-[#005F6A]/70 font-[350]">
+              <div className="flex items-center justify-between p-2 px-3 bg-[#008C9C]/4 rounded-b-2xl">
+                <div className="text-xs text-[#008C9C]/70 font-[350]">
                   Showing {startIndex + 1} to{" "}
                   {Math.min(endIndex, totalAssignments)} of {totalAssignments}{" "}
                   assignments
@@ -653,7 +653,7 @@ export default function ProductDetailView({
                           size="md"
                           onClick={() => goToPage(pageNum)}
                           className="px-3 min-w-8 rounded-xl">
-                          <span className="text-sm font-[350] text-[#005F6A]">
+                          <span className="text-sm font-[350] text-[#008C9C]">
                             {pageNum}
                           </span>
                         </Button>
@@ -706,7 +706,7 @@ export default function ProductDetailView({
         <div className="w-full flex flex-col md:flex-row items-start justify-between gap-4 my-10">
           <div className="flex-1">
             <div className="flex items-center gap-3 flex-wrap">
-              <h1 className="text-3xl !font-light tracking-tight text-[#005F6A]">
+              <h1 className="text-3xl !font-light tracking-tight text-[#008C9C]">
                 {product.name}
               </h1>
               {isLowStock && (
@@ -717,14 +717,14 @@ export default function ProductDetailView({
               )}
             </div>
             {product.description && (
-              <p className="text-sm text-[#005F6A]/60 mt-2">
+              <p className="text-sm text-[#008C9C]/60 mt-2">
                 {product.description}
               </p>
             )}
           </div>
           <div className="text-right">
-            <p className="text-sm text-[#005F6A]/60 !mb-2">Cost per unit</p>
-            <p className="text-xl font-[350] text-[#005F6A]">
+            <p className="text-sm text-[#008C9C]/60 !mb-2">Cost per unit</p>
+            <p className="text-xl font-[350] text-[#008C9C]">
               ${product.costPerUnit.toFixed(2)} / {product.unit}
             </p>
           </div>
@@ -749,7 +749,7 @@ export default function ProductDetailView({
         </div>
 
         {/* Tabs */}
-        <div className="flex items-center gap-2 bg-[#005F6A]/5 rounded-2xl p-1 w-fit overflow-x-auto">
+        <div className="flex items-center gap-2 bg-[#008C9C]/5 rounded-2xl p-1 w-fit overflow-x-auto">
           {MENU_ITEMS.map((item) => {
             const isActive = activeView === item.id;
             return (

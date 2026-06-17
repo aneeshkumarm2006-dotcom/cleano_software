@@ -50,7 +50,7 @@ export default function AccountDeactivated({
           <button
             type="submit"
             style={{
-              background: "#005F6A",
+              background: "#008C9C",
               color: "#fff",
               border: "none",
               borderRadius: 10,

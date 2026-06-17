@@ -124,7 +124,7 @@ export default function ResolveClient({
           <h1 className="text-3xl font-[400] text-gray-900">
             Equipment Resolution
           </h1>
-          <p className="text-sm text-[#005F6A]/70 mt-1">
+          <p className="text-sm text-[#008C9C]/70 mt-1">
             No job selected. Open this page from a job that has missing
             equipment.
           </p>
@@ -159,7 +159,7 @@ export default function ResolveClient({
               <AlertTriangle className="w-6 h-6 text-amber-600" />
               Missing Equipment
             </h1>
-            <p className="text-sm text-[#005F6A]/70 mt-1">
+            <p className="text-sm text-[#008C9C]/70 mt-1">
               For job: <strong>{job.clientName}</strong>
               {job.jobDate &&
                 ` · ${new Date(job.jobDate).toLocaleDateString("en-US", {
@@ -200,7 +200,7 @@ export default function ResolveClient({
         <div
           className={`px-4 py-3 rounded-xl text-sm ${
             feedback.type === "success"
-              ? "bg-[#005F6A]/10 text-[#005F6A] border border-[#005F6A]/15"
+              ? "bg-[#008C9C]/10 text-[#008C9C] border border-[#008C9C]/15"
               : "bg-red-50 text-red-700 border border-red-200"
           }`}>
           {feedback.text}
@@ -270,7 +270,7 @@ export default function ResolveClient({
                 </div>
 
                 <div className="mt-4 pt-4 border-t border-gray-100">
-                  <p className="text-xs uppercase tracking-wide text-[#005F6A]/60 mb-2">
+                  <p className="text-xs uppercase tracking-wide text-[#008C9C]/60 mb-2">
                     Available at Locations
                   </p>
                   {!stock || stock.locations.length === 0 ? (

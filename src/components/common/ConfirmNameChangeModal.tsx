@@ -47,10 +47,10 @@ export function ConfirmNameChangeModal({
           <div className="w-full max-w-[80rem] mx-auto px-6 md:px-8 py-6 md:py-8">
             <div className="w-full flex items-start justify-between gap-1 mb-8">
               <div>
-                <h1 className="text-3xl font-[350] tracking-tight text-[#005F6A] max-w-[40rem]">
+                <h1 className="text-3xl font-[350] tracking-tight text-[#008C9C] max-w-[40rem]">
                   Confirm Name Change
                 </h1>
-                <p className="text-sm text-[#005F6A]/80">
+                <p className="text-sm text-[#008C9C]/80">
                   Review the changes before confirming
                 </p>
               </div>
@@ -65,22 +65,22 @@ export function ConfirmNameChangeModal({
             </div>
 
             <div className="space-y-6">
-              <p className="text-sm text-[#005F6A]/80">
+              <p className="text-sm text-[#008C9C]/80">
                 Are you sure you want to change the practice name?
               </p>
 
-              <div className="bg-[#005F6A]/5 rounded-2xl p-4 space-y-3">
+              <div className="bg-[#008C9C]/5 rounded-2xl p-4 space-y-3">
                 <div>
-                  <p className="text-xs text-[#005F6A]/70 mb-1">Current name</p>
-                  <p className="text-sm font-[400] text-[#005F6A]">{oldName}</p>
+                  <p className="text-xs text-[#008C9C]/70 mb-1">Current name</p>
+                  <p className="text-sm font-[400] text-[#008C9C]">{oldName}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-[#005F6A]/70 mb-1">New name</p>
-                  <p className="text-sm font-[400] text-[#005F6A]">{newName}</p>
+                  <p className="text-xs text-[#008C9C]/70 mb-1">New name</p>
+                  <p className="text-sm font-[400] text-[#008C9C]">{newName}</p>
                 </div>
               </div>
 
-              <p className="text-xs text-[#005F6A]/60">
+              <p className="text-xs text-[#008C9C]/60">
                 This name will be visible to all members of the practice.
               </p>
 

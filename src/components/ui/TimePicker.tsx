@@ -166,9 +166,9 @@ export default function TimePicker({
   const border = error
     ? "1.5px solid #f87171"
     : open
-    ? "1.5px solid #005F6A"
-    : "1px solid rgba(0,95,106,0.16)";
-  const boxShadow = open ? "0 0 0 3px rgba(0,95,106,0.11)" : "none";
+    ? "1.5px solid #008C9C"
+    : "1px solid rgba(0,140,156,0.16)";
+  const boxShadow = open ? "0 0 0 3px rgba(0,140,156,0.11)" : "none";
 
   const COL_LABEL: React.CSSProperties = {
     padding: "10px 10px 6px",
@@ -176,8 +176,8 @@ export default function TimePicker({
     fontWeight: 700,
     textTransform: "uppercase",
     letterSpacing: "0.09em",
-    color: "rgba(0,95,106,0.38)",
-    borderBottom: "1px solid rgba(0,95,106,0.07)",
+    color: "rgba(0,140,156,0.38)",
+    borderBottom: "1px solid rgba(0,140,156,0.07)",
     position: "sticky",
     top: 0,
     background: "#fff",
@@ -202,7 +202,7 @@ export default function TimePicker({
           padding: "8px 10px",
           borderRadius: 8,
           border: 0,
-          background: active ? "#005F6A" : "transparent",
+          background: active ? "#008C9C" : "transparent",
           color: active ? "#fff" : "#111",
           fontSize: 13,
           fontWeight: active ? 700 : 400,
@@ -214,7 +214,7 @@ export default function TimePicker({
         onMouseEnter={e => {
           if (!active)
             (e.currentTarget as HTMLButtonElement).style.background =
-              "rgba(0,95,106,0.06)";
+              "rgba(0,140,156,0.06)";
         }}
         onMouseLeave={e => {
           if (!active)
@@ -241,7 +241,7 @@ export default function TimePicker({
           padding: `0 ${size === "sm" ? 10 : 14}px`,
           borderRadius: BR[size],
           border,
-          background: disabled ? "rgba(0,95,106,0.04)" : "#fff",
+          background: disabled ? "rgba(0,140,156,0.04)" : "#fff",
           fontFamily: "inherit",
           cursor: disabled ? "not-allowed" : "text",
           transition: "border .15s, box-shadow .15s",
@@ -250,7 +250,7 @@ export default function TimePicker({
           opacity: disabled ? 0.55 : 1,
           ...style,
         }}>
-        <Clock size={14} style={{ flexShrink: 0, color: "rgba(0,95,106,0.45)" }} />
+        <Clock size={14} style={{ flexShrink: 0, color: "rgba(0,140,156,0.45)" }} />
         <input
           ref={inputRef}
           type="text"
@@ -285,7 +285,7 @@ export default function TimePicker({
             outline: "none",
             background: "transparent",
             fontSize: FS[size],
-            color: value ? "#111" : "rgba(0,95,106,0.45)",
+            color: value ? "#111" : "rgba(0,140,156,0.45)",
             fontFamily: "inherit",
             padding: 0,
           }}
@@ -305,14 +305,14 @@ export default function TimePicker({
               zIndex: 9999,
               background: "#fff",
               borderRadius: 16,
-              border: "1px solid rgba(0,95,106,0.1)",
-              boxShadow: "0 8px 32px rgba(0,95,106,0.13), 0 2px 8px rgba(0,0,0,0.05)",
+              border: "1px solid rgba(0,140,156,0.1)",
+              boxShadow: "0 8px 32px rgba(0,140,156,0.13), 0 2px 8px rgba(0,0,0,0.05)",
               overflow: "hidden",
               animation: "ps-drop .16s cubic-bezier(.2,.8,.3,1) both",
             }}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr" }}>
               {/* Hours */}
-              <div style={{ borderRight: "1px solid rgba(0,95,106,0.08)", display: "flex", flexDirection: "column" }}>
+              <div style={{ borderRight: "1px solid rgba(0,140,156,0.08)", display: "flex", flexDirection: "column" }}>
                 <div style={COL_LABEL}>Hour</div>
                 <div
                   ref={hourColRef}

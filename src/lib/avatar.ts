@@ -4,7 +4,7 @@
 // the same color everywhere.
 
 const AV_PALETTE = [
-  "#005F6A",
+  "#008C9C",
   "#0d7a86",
   "#1f7a5e",
   "#9a6a2f",

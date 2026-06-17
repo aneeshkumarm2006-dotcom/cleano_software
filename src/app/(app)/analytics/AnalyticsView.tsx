@@ -275,7 +275,7 @@ function SimpleBarChart({
   data,
   maxValue,
   label,
-  color = "bg-[#005F6A]",
+  color = "bg-[#008C9C]",
 }: {
   data: { label: string; value: number }[];
   maxValue: number;
@@ -285,17 +285,17 @@ function SimpleBarChart({
   return (
     <div className="space-y-3">
       {label && (
-        <p className="text-xs text-[#005F6A]/60 uppercase tracking-wide">
+        <p className="text-xs text-[#008C9C]/60 uppercase tracking-wide">
           {label}
         </p>
       )}
       {data.map((item, idx) => (
         <div key={idx} className="space-y-1">
-          <div className="flex justify-between text-xs text-[#005F6A]/70">
+          <div className="flex justify-between text-xs text-[#008C9C]/70">
             <span>{item.label}</span>
             <span className="font-[400]">{item.value}</span>
           </div>
-          <div className="h-2 bg-[#005F6A]/10 rounded-full overflow-hidden">
+          <div className="h-2 bg-[#008C9C]/10 rounded-full overflow-hidden">
             <div
               className={`h-full ${color} rounded-full transition-all duration-500`}
               style={{
@@ -334,7 +334,7 @@ function ProgressRing({
           cy={size / 2}
           r={radius}
           fill="none"
-          stroke="rgba(0, 95, 106, 0.1)"
+          stroke="rgba(0,140,156, 0.1)"
           strokeWidth={strokeWidth}
         />
         <circle
@@ -342,7 +342,7 @@ function ProgressRing({
           cy={size / 2}
           r={radius}
           fill="none"
-          stroke="#005F6A"
+          stroke="#008C9C"
           strokeWidth={strokeWidth}
           strokeDasharray={circumference}
           strokeDashoffset={offset}
@@ -353,11 +353,11 @@ function ProgressRing({
       <div
         className="absolute flex flex-col items-center justify-center"
         style={{ width: size, height: size }}>
-        <span className="text-2xl font-[400] text-[#005F6A]">
+        <span className="text-2xl font-[400] text-[#008C9C]">
           {percentage.toFixed(0)}%
         </span>
       </div>
-      <p className="text-xs text-[#005F6A]/60 mt-2">{label}</p>
+      <p className="text-xs text-[#008C9C]/60 mt-2">{label}</p>
     </div>
   );
 }
@@ -389,7 +389,7 @@ function MetricCard({
         <div className="flex items-center justify-between">
           <span
             className={`app-title-small ${
-              variant === "warning" ? "text-yellow-700" : "!text-[#005F6A]/70"
+              variant === "warning" ? "text-yellow-700" : "!text-[#008C9C]/70"
             }`}>
             {label}
           </span>
@@ -410,12 +410,12 @@ function MetricCard({
         <div>
           <p
             className={`h2-title ${
-              variant === "warning" ? "text-yellow-700" : "text-[#005F6A]"
+              variant === "warning" ? "text-yellow-700" : "text-[#008C9C]"
             }`}>
             {value}
           </p>
           {subValue && (
-            <p className="text-xs text-[#005F6A]/60 mt-0.5">{subValue}</p>
+            <p className="text-xs text-[#008C9C]/60 mt-0.5">{subValue}</p>
           )}
         </div>
       </div>
@@ -774,7 +774,7 @@ export default function AnalyticsView({
               className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs font-[350] text-[#005F6A]/70 uppercase tracking-wide mb-1 block">
+                  <label className="text-xs font-[350] text-[#008C9C]/70 uppercase tracking-wide mb-1 block">
                     Metric
                   </label>
                   <PremiumSelect
@@ -793,7 +793,7 @@ export default function AnalyticsView({
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-[350] text-[#005F6A]/70 uppercase tracking-wide mb-1 block">
+                  <label className="text-xs font-[350] text-[#008C9C]/70 uppercase tracking-wide mb-1 block">
                     Period
                   </label>
                   <PremiumSelect
@@ -810,7 +810,7 @@ export default function AnalyticsView({
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-[350] text-[#005F6A]/70 uppercase tracking-wide mb-1 block">
+                  <label className="text-xs font-[350] text-[#008C9C]/70 uppercase tracking-wide mb-1 block">
                     Period Start
                   </label>
                   <DatePicker
@@ -821,7 +821,7 @@ export default function AnalyticsView({
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-[350] text-[#005F6A]/70 uppercase tracking-wide mb-1 block">
+                  <label className="text-xs font-[350] text-[#008C9C]/70 uppercase tracking-wide mb-1 block">
                     Target Value
                   </label>
                   <input
@@ -829,18 +829,18 @@ export default function AnalyticsView({
                     name="targetValue"
                     step="0.01"
                     required
-                    className="w-full px-4 py-2.5 rounded-xl border border-[#005F6A]/10 bg-white text-sm text-[#005F6A] focus:outline-none focus:ring-2 focus:ring-[#005F6A]/20"
+                    className="w-full px-4 py-2.5 rounded-xl border border-[#008C9C]/10 bg-white text-sm text-[#008C9C] focus:outline-none focus:ring-2 focus:ring-[#008C9C]/20"
                   />
                 </div>
               </div>
               <div>
-                <label className="text-xs font-[350] text-[#005F6A]/70 uppercase tracking-wide mb-1 block">
+                <label className="text-xs font-[350] text-[#008C9C]/70 uppercase tracking-wide mb-1 block">
                   Notes
                 </label>
                 <input
                   type="text"
                   name="notes"
-                  className="w-full px-4 py-2.5 rounded-xl border border-[#005F6A]/10 bg-white text-sm text-[#005F6A] focus:outline-none focus:ring-2 focus:ring-[#005F6A]/20"
+                  className="w-full px-4 py-2.5 rounded-xl border border-[#008C9C]/10 bg-white text-sm text-[#008C9C] focus:outline-none focus:ring-2 focus:ring-[#008C9C]/20"
                 />
               </div>
               <Button
@@ -949,11 +949,11 @@ export default function AnalyticsView({
                           await updateTarget(formData);
                           setEditingId(null);
                         }}
-                        className="mt-4 pt-4 border-t border-[#005F6A]/10 space-y-3">
+                        className="mt-4 pt-4 border-t border-[#008C9C]/10 space-y-3">
                         <input type="hidden" name="targetId" value={target.id} />
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div>
-                            <label className="text-xs font-[350] text-[#005F6A]/70 uppercase tracking-wide mb-1 block">
+                            <label className="text-xs font-[350] text-[#008C9C]/70 uppercase tracking-wide mb-1 block">
                               Target Value
                             </label>
                             <input
@@ -962,18 +962,18 @@ export default function AnalyticsView({
                               step="0.01"
                               required
                               defaultValue={target.targetValue}
-                              className="w-full px-4 py-2.5 rounded-xl border border-[#005F6A]/10 bg-white text-sm text-[#005F6A] focus:outline-none focus:ring-2 focus:ring-[#005F6A]/20"
+                              className="w-full px-4 py-2.5 rounded-xl border border-[#008C9C]/10 bg-white text-sm text-[#008C9C] focus:outline-none focus:ring-2 focus:ring-[#008C9C]/20"
                             />
                           </div>
                           <div>
-                            <label className="text-xs font-[350] text-[#005F6A]/70 uppercase tracking-wide mb-1 block">
+                            <label className="text-xs font-[350] text-[#008C9C]/70 uppercase tracking-wide mb-1 block">
                               Notes
                             </label>
                             <input
                               type="text"
                               name="notes"
                               defaultValue={target.notes ?? ""}
-                              className="w-full px-4 py-2.5 rounded-xl border border-[#005F6A]/10 bg-white text-sm text-[#005F6A] focus:outline-none focus:ring-2 focus:ring-[#005F6A]/20"
+                              className="w-full px-4 py-2.5 rounded-xl border border-[#008C9C]/10 bg-white text-sm text-[#008C9C] focus:outline-none focus:ring-2 focus:ring-[#008C9C]/20"
                             />
                           </div>
                         </div>
@@ -1000,8 +1000,8 @@ export default function AnalyticsView({
                     )}
 
                     {isConfirmingDelete && (
-                      <div className="mt-4 pt-4 border-t border-[#005F6A]/10 flex items-center justify-between gap-3 flex-wrap">
-                        <p className="text-xs text-[#005F6A]/70">
+                      <div className="mt-4 pt-4 border-t border-[#008C9C]/10 flex items-center justify-between gap-3 flex-wrap">
+                        <p className="text-xs text-[#008C9C]/70">
                           Delete this target? This cannot be undone.
                         </p>
                         <form
@@ -1453,7 +1453,7 @@ export default function AnalyticsView({
             <>
               <div className="hidden md:block overflow-x-auto">
                 <div className="min-w-max">
-                  <div className="flex bg-[#005F6A]/5">
+                  <div className="flex bg-[#008C9C]/5">
                     {[
                       { label: "Employee Name", className: "w-[220px]" },
                       { label: "Jobs", className: "w-[100px]" },
@@ -1463,23 +1463,23 @@ export default function AnalyticsView({
                     ].map((col) => (
                       <div
                         key={col.label}
-                        className={`${col.className} p-4 text-left text-xs font-[350] !text-[#005F6A]/40 uppercase tracking-wide`}>
+                        className={`${col.className} p-4 text-left text-xs font-[350] !text-[#008C9C]/40 uppercase tracking-wide`}>
                         {col.label}
                       </div>
                     ))}
                   </div>
-                  <div className="divide-y divide-[#005F6A]/4">
+                  <div className="divide-y divide-[#008C9C]/4">
                     {employeePayments.map((emp) => (
                       <div
                         key={emp.id}
-                        className="flex items-center hover:bg-[#005F6A]/1 transition-colors">
+                        className="flex items-center hover:bg-[#008C9C]/1 transition-colors">
                         <div className="w-[220px] p-4">
-                          <p className="text-sm font-[350] text-[#005F6A] truncate">
+                          <p className="text-sm font-[350] text-[#008C9C] truncate">
                             {emp.name}
                           </p>
                         </div>
                         <div className="w-[100px] p-4">
-                          <p className="text-sm font-[350] text-[#005F6A]">
+                          <p className="text-sm font-[350] text-[#008C9C]">
                             {emp.jobsCount}
                           </p>
                         </div>
@@ -1489,7 +1489,7 @@ export default function AnalyticsView({
                           </Badge>
                         </div>
                         <div className="w-[120px] p-4">
-                          <p className="text-sm font-[350] text-[#005F6A]/60">
+                          <p className="text-sm font-[350] text-[#008C9C]/60">
                             ${(emp.totalOwed / emp.jobsCount).toFixed(2)}
                           </p>
                         </div>
@@ -1516,10 +1516,10 @@ export default function AnalyticsView({
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
                         <div className="flex-1">
-                          <p className="text-sm font-[400] text-[#005F6A]">
+                          <p className="text-sm font-[400] text-[#008C9C]">
                             {emp.name}
                           </p>
-                          <p className="text-xs text-[#005F6A]/70 mt-1">
+                          <p className="text-xs text-[#008C9C]/70 mt-1">
                             {emp.jobsCount} jobs • $
                             {(emp.totalOwed / emp.jobsCount).toFixed(2)} avg
                           </p>

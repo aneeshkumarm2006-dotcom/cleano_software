@@ -42,7 +42,7 @@ export const Toast: React.FC<ToastProps> = ({
       case "error":
         return <XCircle className="w-5 h-5 text-red-600" />;
       case "loading":
-        return <Loader className="w-5 h-5 text-[#005F6A] animate-spin" />;
+        return <Loader className="w-5 h-5 text-[#008C9C] animate-spin" />;
     }
   };
 

@@ -24,7 +24,7 @@ export default async function BookingsPage() {
 
   if (!client) {
     return (
-      <div className="rounded-2xl bg-white border border-[#005F6A]/10 p-8 text-center text-sm text-[#005F6A]/70">
+      <div className="rounded-2xl bg-white border border-[#008C9C]/10 p-8 text-center text-sm text-[#008C9C]/70">
         We can't find any bookings linked to your email.
       </div>
     );

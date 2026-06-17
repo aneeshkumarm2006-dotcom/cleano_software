@@ -114,7 +114,7 @@ export default function CustomDropdown({
   const dropdownContent = isOpen && (
     <div
       ref={dropdownRef}
-      className="fixed min-w-40 bg-white border border-[#005F6A]/10 rounded-2xl !overflow-hidden shadow-lg z-[9999]"
+      className="fixed min-w-40 bg-white border border-[#008C9C]/10 rounded-2xl !overflow-hidden shadow-lg z-[9999]"
       style={{
         top: `${dropdownPosition.top}px`,
         left: `${dropdownPosition.left}px`,
@@ -135,7 +135,7 @@ export default function CustomDropdown({
           <button
             key={index}
             onClick={() => handleOptionClick(option)}
-            className="w-full px-4 py-3 text-sm text-[#005F6A] hover:bg-[#005F6A]/5 flex items-center gap-2 transition-colors">
+            className="w-full px-4 py-3 text-sm text-[#008C9C] hover:bg-[#008C9C]/5 flex items-center gap-2 transition-colors">
             {option.icon}
             {option.label}
           </button>

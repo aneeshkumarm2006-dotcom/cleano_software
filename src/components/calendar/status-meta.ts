@@ -12,7 +12,7 @@ export interface StatusMeta {
 
 export const STATUS_META: Record<string, StatusMeta> = {
   CREATED: { key: "created", label: "Created", color: "#64748b", tint: "rgba(100,116,139,0.10)" },
-  SCHEDULED: { key: "scheduled", label: "Scheduled", color: "#005F6A", tint: "rgba(0,95,106,0.09)" },
+  SCHEDULED: { key: "scheduled", label: "Scheduled", color: "#008C9C", tint: "rgba(0,140,156,0.09)" },
   IN_PROGRESS: { key: "inprogress", label: "In progress", color: "#d97706", tint: "rgba(217,119,6,0.11)" },
   COMPLETED: { key: "completed", label: "Completed", color: "#059669", tint: "rgba(5,150,105,0.11)" },
   PAID: { key: "paid", label: "Paid", color: "#15803d", tint: "rgba(21,128,61,0.11)" },
@@ -47,6 +47,39 @@ export function isCancelled(event: CalendarEvent): boolean {
 export function hasMissingEquipment(event: CalendarEvent): boolean {
   const me = event.metadata?.missingEquipment;
   return Array.isArray(me) && me.length > 0;
+}
+
+/** Customer asked to move the booking — pending an admin decision. */
+export function hasRescheduleRequest(event: CalendarEvent): boolean {
+  return !!event.metadata?.rescheduleRequestedAt;
+}
+
+/** Either thing the ops manager must act on: missing kit or a reschedule ask. */
+export function hasError(event: CalendarEvent): boolean {
+  return hasMissingEquipment(event) || hasRescheduleRequest(event);
+}
+
+/** Why the error badge is showing (for the tooltip). */
+export function errorReason(event: CalendarEvent): string {
+  const parts: string[] = [];
+  if (hasMissingEquipment(event)) parts.push("Cleaner is missing equipment");
+  if (hasRescheduleRequest(event))
+    parts.push("Customer requested a time/date change");
+  return parts.join(" · ");
+}
+
+export type CornerBadgeKind = "error" | "routine" | "important";
+
+/**
+ * The single top-left corner badge for a booking. An error (missing equipment
+ * or reschedule request) always wins; otherwise the resolved priority label.
+ */
+export function cornerBadge(event: CalendarEvent): CornerBadgeKind | null {
+  if (hasError(event)) return "error";
+  const pl = event.metadata?.priorityLabel as string | undefined;
+  if (pl === "ROUTINE") return "routine";
+  if (pl === "IMPORTANT") return "important";
+  return null;
 }
 
 /** Cleaner pay for the card foot (employeePay from metadata). */

@@ -17,7 +17,7 @@ export default function AppointmentRecommendations({
 }: AppointmentRecommendationsProps) {
   if (isLoading) {
     return (
-      <div className="text-sm text-[#005F6A]/60">Loading recommendations...</div>
+      <div className="text-sm text-[#008C9C]/60">Loading recommendations...</div>
     );
   }
 
@@ -30,7 +30,7 @@ export default function AppointmentRecommendations({
       {recommendations.map((rec, idx) => (
         <div
           key={idx}
-          className="p-2 rounded-lg bg-[#005F6A]/5 hover:bg-[#005F6A]/10 cursor-pointer"
+          className="p-2 rounded-lg bg-[#008C9C]/5 hover:bg-[#008C9C]/10 cursor-pointer"
           onClick={() => onSelect(rec)}>
           {rec.time}
         </div>

@@ -150,10 +150,10 @@ export default function CreateInvoiceModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
       <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-xl mx-4">
-        <div className="flex items-center justify-between p-6 border-b border-[#005F6A]/10">
-          <h2 className="text-xl font-[350] text-[#005F6A]">New Invoice</h2>
-          <button onClick={onClose} className="p-2 hover:bg-[#005F6A]/5 rounded-xl">
-            <X className="w-5 h-5 text-[#005F6A]/60" />
+        <div className="flex items-center justify-between p-6 border-b border-[#008C9C]/10">
+          <h2 className="text-xl font-[350] text-[#008C9C]">New Invoice</h2>
+          <button onClick={onClose} className="p-2 hover:bg-[#008C9C]/5 rounded-xl">
+            <X className="w-5 h-5 text-[#008C9C]/60" />
           </button>
         </div>
 
@@ -166,7 +166,7 @@ export default function CreateInvoiceModal({
 
           {/* Client */}
           <div>
-            <label className="input-label !text-[#005F6A]/70 block mb-1.5">Client</label>
+            <label className="input-label !text-[#008C9C]/70 block mb-1.5">Client</label>
             <PremiumSelect
               value={clientId}
               onChange={(v) => {
@@ -185,7 +185,7 @@ export default function CreateInvoiceModal({
 
           {/* Due Date */}
           <div>
-            <label className="input-label !text-[#005F6A]/70 block mb-1.5">Due Date</label>
+            <label className="input-label !text-[#008C9C]/70 block mb-1.5">Due Date</label>
             <DatePicker
               value={dueDate}
               onChange={setDueDate}
@@ -196,10 +196,10 @@ export default function CreateInvoiceModal({
           {/* Line Items */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="input-label !text-[#005F6A]/70">Line Items</label>
+              <label className="input-label !text-[#008C9C]/70">Line Items</label>
               <button
                 onClick={addLineItem}
-                className="text-xs text-[#005F6A] hover:text-[#005F6A]/80 flex items-center gap-1">
+                className="text-xs text-[#008C9C] hover:text-[#008C9C]/80 flex items-center gap-1">
                 <Plus className="w-3.5 h-3.5" /> Add Item
               </button>
             </div>
@@ -242,7 +242,7 @@ export default function CreateInvoiceModal({
                       step="0.01"
                     />
                   </div>
-                  <div className="w-24 text-right text-sm text-[#005F6A]/70 pt-2">
+                  <div className="w-24 text-right text-sm text-[#008C9C]/70 pt-2">
                     ${(li.quantity * li.unitPrice).toFixed(2)}
                   </div>
                   {lineItems.length > 1 && (
@@ -260,10 +260,10 @@ export default function CreateInvoiceModal({
           {/* Discount */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="input-label !text-[#005F6A]/70">
+              <label className="input-label !text-[#008C9C]/70">
                 Discount
               </label>
-              <div className="flex bg-[#005F6A]/5 rounded-xl p-0.5">
+              <div className="flex bg-[#008C9C]/5 rounded-xl p-0.5">
                 <button
                   type="button"
                   onClick={() => {
@@ -272,8 +272,8 @@ export default function CreateInvoiceModal({
                   }}
                   className={`px-3 py-1 text-xs rounded-lg transition-colors ${
                     discountMode === "percent"
-                      ? "bg-[#005F6A] text-white"
-                      : "text-[#005F6A]/60"
+                      ? "bg-[#008C9C] text-white"
+                      : "text-[#008C9C]/60"
                   }`}>
                   %
                 </button>
@@ -285,8 +285,8 @@ export default function CreateInvoiceModal({
                   }}
                   className={`px-3 py-1 text-xs rounded-lg transition-colors ${
                     discountMode === "amount"
-                      ? "bg-[#005F6A] text-white"
-                      : "text-[#005F6A]/60"
+                      ? "bg-[#008C9C] text-white"
+                      : "text-[#008C9C]/60"
                   }`}>
                   $
                 </button>
@@ -309,7 +309,7 @@ export default function CreateInvoiceModal({
             {selectedClient &&
               (selectedClient.discountPercent ?? 0) > 0 &&
               !discountTouched && (
-                <p className="text-[11px] text-[#005F6A]/60 mt-1">
+                <p className="text-[11px] text-[#008C9C]/60 mt-1">
                   Auto-applied from client default ({selectedClient.discountPercent}%)
                 </p>
               )}
@@ -317,19 +317,19 @@ export default function CreateInvoiceModal({
 
           {/* Notes */}
           <div>
-            <label className="input-label !text-[#005F6A]/70 block mb-1.5">Notes</label>
+            <label className="input-label !text-[#008C9C]/70 block mb-1.5">Notes</label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Optional notes..."
               rows={2}
-              className="w-full px-3 py-2 text-sm bg-[#005F6A]/5 text-[#005F6A] rounded-2xl border-0 outline-none resize-none placeholder:text-[#005F6A]/40"
+              className="w-full px-3 py-2 text-sm bg-[#008C9C]/5 text-[#008C9C] rounded-2xl border-0 outline-none resize-none placeholder:text-[#008C9C]/40"
             />
           </div>
 
           {/* Totals */}
-          <div className="bg-[#005F6A]/5 rounded-2xl p-4 space-y-2">
-            <div className="flex justify-between text-sm text-[#005F6A]/70">
+          <div className="bg-[#008C9C]/5 rounded-2xl p-4 space-y-2">
+            <div className="flex justify-between text-sm text-[#008C9C]/70">
               <span>Subtotal</span>
               <span>${subtotal.toFixed(2)}</span>
             </div>
@@ -339,22 +339,22 @@ export default function CreateInvoiceModal({
                 <span>-${discount.toFixed(2)}</span>
               </div>
             )}
-            <div className="flex justify-between text-sm text-[#005F6A]/70">
+            <div className="flex justify-between text-sm text-[#008C9C]/70">
               <span>GST ({taxConfig.gstRate}%)</span>
               <span>${gstAmount.toFixed(2)}</span>
             </div>
-            <div className="flex justify-between text-sm text-[#005F6A]/70">
+            <div className="flex justify-between text-sm text-[#008C9C]/70">
               <span>QST ({taxConfig.qstRate}%)</span>
               <span>${qstAmount.toFixed(2)}</span>
             </div>
-            <div className="border-t border-[#005F6A]/10 pt-2 flex justify-between text-base font-[400] text-[#005F6A]">
+            <div className="border-t border-[#008C9C]/10 pt-2 flex justify-between text-base font-[400] text-[#008C9C]">
               <span>Total</span>
               <span>${totalAmount.toFixed(2)}</span>
             </div>
           </div>
         </div>
 
-        <div className="flex gap-3 p-6 border-t border-[#005F6A]/10">
+        <div className="flex gap-3 p-6 border-t border-[#008C9C]/10">
           <Button
             variant="default"
             size="md"

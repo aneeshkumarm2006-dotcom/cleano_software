@@ -39,7 +39,7 @@ export default function UserActions({
       <div className="flex flex-col items-stretch gap-1 w-full">
         <Link
           href="/settings"
-          className="flex items-center gap-3 h-12 px-3 rounded-xl text-sm font-[350] text-[#005F6A] hover:bg-[#005F6A]/10 transition-colors">
+          className="flex items-center gap-3 h-12 px-3 rounded-xl text-sm font-[350] text-[#008C9C] hover:bg-[#008C9C]/10 transition-colors">
           <Settings className="w-5 h-5 shrink-0" />
           <span className="truncate">Settings</span>
         </Link>
@@ -47,7 +47,7 @@ export default function UserActions({
           type="button"
           onClick={handleSignOut}
           disabled={isSigningOut}
-          className="flex items-center gap-3 h-12 px-3 rounded-xl text-sm font-[350] text-[#005F6A] hover:bg-[#005F6A]/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+          className="flex items-center gap-3 h-12 px-3 rounded-xl text-sm font-[350] text-[#008C9C] hover:bg-[#008C9C]/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
           <LogOut className="w-5 h-5 shrink-0" />
           <span className="truncate">
             {isSigningOut ? "Signing out..." : "Logout"}
@@ -61,14 +61,14 @@ export default function UserActions({
     <div className="flex flex-col items-center gap-2">
       <Link
         href="/settings"
-        className="p-2.5 rounded-xl text-[#005F6A]/70 hover:text-[#005F6A] hover:bg-[#005F6A]/10 transition-colors"
+        className="p-2.5 rounded-xl text-[#008C9C]/70 hover:text-[#008C9C] hover:bg-[#008C9C]/10 transition-colors"
         title="Settings">
         <Settings className="w-5 h-5" />
       </Link>
       <button
         onClick={handleSignOut}
         disabled={isSigningOut}
-        className="p-2.5 rounded-xl text-[#005F6A]/70 hover:text-[#005F6A] hover:bg-[#005F6A]/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        className="p-2.5 rounded-xl text-[#008C9C]/70 hover:text-[#008C9C] hover:bg-[#008C9C]/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         title="Sign Out">
         <LogOut className="w-5 h-5" />
       </button>

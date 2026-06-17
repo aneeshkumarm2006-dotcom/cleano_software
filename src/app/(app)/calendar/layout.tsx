@@ -111,7 +111,7 @@ function CalendarLayoutContent({ children }: { children: React.ReactNode }) {
   return (
     <div className="h-full flex overflow-hidden">
       {/* Left Sidebar Navigation */}
-      <div className="w-[14rem] flex-shrink-0 bg-[#005F6A]/2 rounded-2xl !my-2 hidden">
+      <div className="w-[14rem] flex-shrink-0 bg-[#008C9C]/2 rounded-2xl !my-2 hidden">
         <div className="p-2 py-3 h-full overflow-y-auto flex flex-col gap-4">
           {/* Menu */}
           <div className="!p-0 flex-1">
@@ -128,8 +128,8 @@ function CalendarLayoutContent({ children }: { children: React.ReactNode }) {
                     size="sm"
                     onClick={() => router.push(item.path)}
                     className="w-full flex items-center justify-start rounded-xl gap-3 !p-2.5">
-                    <Icon className="w-4 h-4 text-[#005F6A]" />
-                    <span className="text-[#005F6A]">{item.label}</span>
+                    <Icon className="w-4 h-4 text-[#008C9C]" />
+                    <span className="text-[#008C9C]">{item.label}</span>
                   </Button>
                 );
               })}
@@ -152,7 +152,7 @@ function CalendarLayoutContent({ children }: { children: React.ReactNode }) {
                     className="!p-1.5"
                     onClick={() => changeMonth("prev")}>
                     <ChevronLeft
-                      className="w-4 h-4 text-[#005F6A]"
+                      className="w-4 h-4 text-[#008C9C]"
                       strokeWidth={1.5}
                     />
                   </Button>
@@ -163,7 +163,7 @@ function CalendarLayoutContent({ children }: { children: React.ReactNode }) {
                     className="!p-1.5"
                     onClick={() => changeMonth("next")}>
                     <ChevronRight
-                      className="w-4 h-4 text-[#005F6A]"
+                      className="w-4 h-4 text-[#008C9C]"
                       strokeWidth={1.5}
                     />
                   </Button>
@@ -193,10 +193,10 @@ function CalendarLayoutContent({ children }: { children: React.ReactNode }) {
                       key={`${monthOffset}-${day}-${index}`}
                       className={`h-4 flex items-center justify-center app-subtitle ${
                         isToday
-                          ? "bg-[#D7F0F1] !text-[#005F6A] rounded-xl"
+                          ? "bg-[#D7F0F1] !text-[#008C9C] rounded-xl"
                           : isCurrentMonth
-                          ? "!text-[#005F6A]"
-                          : "!text-[#005F6A]/30"
+                          ? "!text-[#008C9C]"
+                          : "!text-[#008C9C]/30"
                       }`}>
                       {day}
                     </div>

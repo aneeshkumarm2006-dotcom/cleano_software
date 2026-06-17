@@ -3,6 +3,7 @@
 import { db } from "@/db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
+import { computeBadgeMaps } from "./_calendarBadges";
 
 export async function getJobsForCalendar(startDate?: Date, endDate?: Date) {
   const session = await auth.api.getSession({
@@ -92,50 +93,10 @@ export async function getJobsForCalendar(startDate?: Date, endDate?: Date) {
     ],
   });
 
-  // For employees, check equipment availability
-  let missingEquipmentMap: Record<string, { productName: string; needed: number; have: number }[]> = {};
-  if (!isAdmin && jobs.length > 0) {
-    const [employeeProducts, inventoryRules] = await Promise.all([
-      db.employeeProduct.findMany({
-        where: { employeeId: session.user.id },
-        include: { product: true },
-      }),
-      db.inventoryRule.findMany({
-        include: { product: true },
-      }),
-    ]);
-
-    const employeeInventory: Record<string, { quantity: number; name: string }> = {};
-    for (const ep of employeeProducts) {
-      employeeInventory[ep.productId] = {
-        quantity: ep.quantity,
-        name: ep.product.name,
-      };
-    }
-
-    for (const job of jobs) {
-      if (job.status === "COMPLETED" || job.status === "PAID" || job.status === "CANCELLED") {
-        continue;
-      }
-
-      const missing: { productName: string; needed: number; have: number }[] = [];
-      for (const rule of inventoryRules) {
-        if (rule.usagePerJob > 0) {
-          const have = employeeInventory[rule.productId]?.quantity ?? 0;
-          if (have < rule.usagePerJob) {
-            missing.push({
-              productName: rule.product.name,
-              needed: rule.usagePerJob,
-              have,
-            });
-          }
-        }
-      }
-      if (missing.length > 0) {
-        missingEquipmentMap[job.id] = missing;
-      }
-    }
-  }
+  // Resolve priority labels (R/I) + missing-equipment warnings. Admins see the
+  // warning for every assigned cleaner; cleaners see it for their own kit.
+  const { priority: priorityMap, missing: missingEquipmentMap } =
+    await computeBadgeMaps(jobs, { isAdmin, viewerId: session.user.id });
 
   // Transform jobs to calendar event format
   return jobs.map((job) => {
@@ -174,6 +135,10 @@ export async function getJobsForCalendar(startDate?: Date, endDate?: Date) {
         employeeName: job.employee?.name ?? "Unassigned",
         cleaners: job.cleaners,
         missingEquipment: missingEquipmentMap[job.id] || [],
+        priorityLabel: priorityMap[job.id] ?? "NONE",
+        rescheduleRequestedAt: job.rescheduleRequestedAt
+          ? job.rescheduleRequestedAt.toISOString()
+          : null,
       },
     };
   });

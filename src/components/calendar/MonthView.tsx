@@ -12,6 +12,7 @@ import {
   eventOverlapsDay,
 } from "@/components/calendar/utils";
 import { statusMeta, isUnconfirmed } from "./status-meta";
+import CornerBadge from "./CornerBadge";
 
 const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -87,6 +88,7 @@ export const MonthView = () => {
                         e.stopPropagation();
                         openEventDetailsModal(event);
                       }}>
+                      <CornerBadge event={event} />
                       <span className="cal-chip-dot" style={{ background: m.color }} />
                       <span className="cal-chip-t">
                         {format(event.start, "h:mm a").replace(":00", "")}

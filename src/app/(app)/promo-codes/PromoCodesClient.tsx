@@ -213,7 +213,7 @@ export default function PromoCodesClient({ codes }: { codes: PromoCode[] }) {
                           disabled={busyId === c.id}
                           onClick={() => handleToggle(c.id)}>
                           {c.isActive
-                            ? <ToggleRight size={16} style={{ color: "#005F6A" }} />
+                            ? <ToggleRight size={16} style={{ color: "#008C9C" }} />
                             : <ToggleLeft size={16} />}
                         </button>
                         <button

@@ -158,26 +158,26 @@ export default function KitTemplatesTab({
         </div>
       }>
       {kitTemplates.length === 0 ? (
-        <p className="text-sm text-[#005F6A]/60">No kit templates yet.</p>
+        <p className="text-sm text-[#008C9C]/60">No kit templates yet.</p>
       ) : (
         <div className="space-y-2">
           {kitTemplates.map((kit) => (
             <div
               key={kit.id}
-              className="flex items-start justify-between gap-3 p-4 border border-[#005F6A]/10 rounded-xl bg-white hover:bg-[#005F6A]/3 transition-colors">
+              className="flex items-start justify-between gap-3 p-4 border border-[#008C9C]/10 rounded-xl bg-white hover:bg-[#008C9C]/3 transition-colors">
               <div className="flex-1">
                 <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-[400] text-[#005F6A]">
+                  <h3 className="text-sm font-[400] text-[#008C9C]">
                     {kit.name}
                   </h3>
                   {!kit.isActive && (
-                    <span className="text-xs text-[#005F6A]/40">
+                    <span className="text-xs text-[#008C9C]/40">
                       (inactive)
                     </span>
                   )}
                 </div>
                 {kit.description && (
-                  <p className="text-xs text-[#005F6A]/60 mt-0.5">
+                  <p className="text-xs text-[#008C9C]/60 mt-0.5">
                     {kit.description}
                   </p>
                 )}
@@ -185,7 +185,7 @@ export default function KitTemplatesTab({
                   {kit.items.map((it) => (
                     <span
                       key={it.id}
-                      className="text-xs bg-[#005F6A]/10 text-[#005F6A] px-2 py-0.5 rounded-full">
+                      className="text-xs bg-[#008C9C]/10 text-[#008C9C] px-2 py-0.5 rounded-full">
                       {it.product.name} × {it.quantity}
                     </span>
                   ))}
@@ -242,21 +242,21 @@ export default function KitTemplatesTab({
               placeholder="Optional"
             />
           </Field>
-          <label className="flex items-center gap-2 text-sm text-[#005F6A] select-none">
+          <label className="flex items-center gap-2 text-sm text-[#008C9C] select-none">
             <input
               type="checkbox"
               checked={draft.isActive}
               onChange={(e) =>
                 setDraft((prev) => ({ ...prev, isActive: e.target.checked }))
               }
-              className="accent-[#005F6A]"
+              className="accent-[#008C9C]"
             />
             Active
           </label>
 
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="text-xs font-[350] text-[#005F6A]/70 uppercase tracking-wide">
+              <label className="text-xs font-[350] text-[#008C9C]/70 uppercase tracking-wide">
                 Products
               </label>
               <Button
@@ -270,7 +270,7 @@ export default function KitTemplatesTab({
               </Button>
             </div>
             {draft.items.length === 0 && (
-              <p className="text-xs text-[#005F6A]/60">No products added.</p>
+              <p className="text-xs text-[#008C9C]/60">No products added.</p>
             )}
             <div className="space-y-2">
               {draft.items.map((item, idx) => (

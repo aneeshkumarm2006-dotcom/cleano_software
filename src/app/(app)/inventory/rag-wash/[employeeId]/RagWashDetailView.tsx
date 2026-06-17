@@ -131,7 +131,7 @@ export default function RagWashDetailView({
   const WashForm = ({ onSubmit, submitLabel }: { onSubmit: () => void; submitLabel: string }) => (
     <div className="space-y-4">
       <div>
-        <label className="input-label !text-[#005F6A]/70 mb-1 block">
+        <label className="input-label !text-[#008C9C]/70 mb-1 block">
           Wash Date
         </label>
         <DatePicker
@@ -141,7 +141,7 @@ export default function RagWashDetailView({
         />
       </div>
       <div>
-        <label className="input-label !text-[#005F6A]/70 mb-1 block">
+        <label className="input-label !text-[#008C9C]/70 mb-1 block">
           Rag Count
         </label>
         <Input
@@ -156,7 +156,7 @@ export default function RagWashDetailView({
         />
       </div>
       <div>
-        <label className="input-label !text-[#005F6A]/70 mb-1 block">
+        <label className="input-label !text-[#008C9C]/70 mb-1 block">
           Notes (optional)
         </label>
         <Input
@@ -222,10 +222,10 @@ export default function RagWashDetailView({
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl !font-light tracking-tight text-[#005F6A]">
+          <h1 className="text-3xl !font-light tracking-tight text-[#008C9C]">
             {employee.name}
           </h1>
-          <p className="text-sm text-[#005F6A]/70 !font-light mt-1">
+          <p className="text-sm text-[#008C9C]/70 !font-light mt-1">
             Rag wash history
           </p>
         </div>
@@ -247,44 +247,44 @@ export default function RagWashDetailView({
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card variant="cleano_light" className="p-6 h-[7rem]">
           <div className="h-full flex flex-col justify-between">
-            <span className="app-title-small !text-[#005F6A]/70">
+            <span className="app-title-small !text-[#008C9C]/70">
               Total Washes
             </span>
-            <p className="h2-title text-[#005F6A]">{totalWashes}</p>
+            <p className="h2-title text-[#008C9C]">{totalWashes}</p>
           </div>
         </Card>
         <Card variant="cleano_light" className="p-6 h-[7rem]">
           <div className="h-full flex flex-col justify-between">
-            <span className="app-title-small !text-[#005F6A]/70">
+            <span className="app-title-small !text-[#008C9C]/70">
               Total Rags
             </span>
-            <p className="h2-title text-[#005F6A]">{totalRags}</p>
+            <p className="h2-title text-[#008C9C]">{totalRags}</p>
           </div>
         </Card>
         <Card variant="cleano_light" className="p-6 h-[7rem]">
           <div className="h-full flex flex-col justify-between">
-            <span className="app-title-small !text-[#005F6A]/70">
+            <span className="app-title-small !text-[#008C9C]/70">
               Avg Rags/Wash
             </span>
-            <p className="h2-title text-[#005F6A]">{avgRagsPerWash}</p>
+            <p className="h2-title text-[#008C9C]">{avgRagsPerWash}</p>
           </div>
         </Card>
       </div>
 
       {/* Wash History */}
       <div className="space-y-4">
-        <h2 className="text-lg font-[350] tracking-tight text-[#005F6A]">
+        <h2 className="text-lg font-[350] tracking-tight text-[#008C9C]">
           Wash History
         </h2>
 
         {washes.length === 0 ? (
           <Card variant="ghost" className="p-8">
             <div className="text-center">
-              <div className="w-12 h-12 bg-[#005F6A]/5 rounded-2xl flex items-center justify-center mx-auto mb-3">
-                <Droplets className="w-6 h-6 text-[#005F6A]/40" />
+              <div className="w-12 h-12 bg-[#008C9C]/5 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                <Droplets className="w-6 h-6 text-[#008C9C]/40" />
               </div>
-              <p className="text-sm text-[#005F6A]/60">No wash entries yet</p>
-              <p className="text-xs text-[#005F6A]/40 mt-1">
+              <p className="text-sm text-[#008C9C]/60">No wash entries yet</p>
+              <p className="text-xs text-[#008C9C]/40 mt-1">
                 Click &ldquo;Add Wash Entry&rdquo; to record a rag wash
               </p>
             </div>
@@ -294,13 +294,13 @@ export default function RagWashDetailView({
             {washes.map((wash) => (
               <div
                 key={wash.id}
-                className="flex items-center justify-between p-4 rounded-xl bg-[#005F6A]/5 hover:bg-[#005F6A]/8 transition-colors">
+                className="flex items-center justify-between p-4 rounded-xl bg-[#008C9C]/5 hover:bg-[#008C9C]/8 transition-colors">
                 <div className="flex items-center gap-4">
-                  <div className="p-2 bg-[#005F6A]/10 rounded-lg">
-                    <Calendar className="w-4 h-4 text-[#005F6A]" />
+                  <div className="p-2 bg-[#008C9C]/10 rounded-lg">
+                    <Calendar className="w-4 h-4 text-[#008C9C]" />
                   </div>
                   <div>
-                    <p className="text-sm font-[400] text-[#005F6A]">
+                    <p className="text-sm font-[400] text-[#008C9C]">
                       {new Date(wash.washDate).toLocaleDateString("en-US", {
                         weekday: "long",
                         year: "numeric",
@@ -309,7 +309,7 @@ export default function RagWashDetailView({
                       })}
                     </p>
                     {wash.notes && (
-                      <p className="text-xs text-[#005F6A]/50 mt-0.5">
+                      <p className="text-xs text-[#008C9C]/50 mt-0.5">
                         {wash.notes}
                       </p>
                     )}

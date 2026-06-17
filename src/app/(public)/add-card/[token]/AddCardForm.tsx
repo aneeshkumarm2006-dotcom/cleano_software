@@ -52,7 +52,7 @@ export default function AddCardForm({ token }: { token: string }) {
         style={{
           padding: 28,
           background: "#fff",
-          border: "1px solid rgba(0,95,106,0.12)",
+          border: "1px solid rgba(0,140,156,0.12)",
           borderRadius: 16,
           textAlign: "center",
           color: "#3a5a62",
@@ -132,11 +132,11 @@ function Inner({
         style={{
           padding: 28,
           background: "#fff",
-          border: "1px solid rgba(0,95,106,0.12)",
+          border: "1px solid rgba(0,140,156,0.12)",
           borderRadius: 16,
           textAlign: "center",
         }}>
-        <h2 style={{ margin: 0, fontSize: 20, color: "#005F6A" }}>
+        <h2 style={{ margin: 0, fontSize: 20, color: "#008C9C" }}>
           Card saved
         </h2>
         <p style={{ marginTop: 10, fontSize: 14, color: "#3a5a62", lineHeight: 1.6 }}>
@@ -151,7 +151,7 @@ function Inner({
       style={{
         padding: 28,
         background: "#fff",
-        border: "1px solid rgba(0,95,106,0.12)",
+        border: "1px solid rgba(0,140,156,0.12)",
         borderRadius: 16,
       }}>
       <PaymentElement options={{ layout: "tabs" }} />
@@ -171,7 +171,7 @@ function Inner({
           fontSize: 15,
           fontWeight: 700,
           color: "#fff",
-          background: busy ? "#7daab0" : "#005F6A",
+          background: busy ? "#7daab0" : "#008C9C",
           border: "none",
           borderRadius: 10,
           cursor: busy ? "default" : "pointer",

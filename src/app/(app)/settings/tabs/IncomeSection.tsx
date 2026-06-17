@@ -77,9 +77,9 @@ export default function IncomeSection({ employeeId }: IncomeSectionProps) {
           marginBottom: 20,
           paddingBottom: 10,
           borderBottomWidth: 1,
-          borderBottomColor: "#005F6A",
+          borderBottomColor: "#008C9C",
         },
-        title: { fontSize: 18, color: "#005F6A" },
+        title: { fontSize: 18, color: "#008C9C" },
         meta: { fontSize: 9, color: "#666" },
         section: { marginBottom: 14 },
         sectionTitle: {
@@ -97,7 +97,7 @@ export default function IncomeSection({ employeeId }: IncomeSectionProps) {
           borderRadius: 6,
         },
         kpiLabel: { fontSize: 8, color: "#666", marginBottom: 3 },
-        kpiValue: { fontSize: 14, color: "#005F6A" },
+        kpiValue: { fontSize: 14, color: "#008C9C" },
         tableHeader: {
           flexDirection: "row",
           paddingVertical: 6,
@@ -121,7 +121,7 @@ export default function IncomeSection({ employeeId }: IncomeSectionProps) {
           flexDirection: "row",
           paddingVertical: 8,
           borderTopWidth: 1,
-          borderTopColor: "#005F6A",
+          borderTopColor: "#008C9C",
           marginTop: 8,
           fontSize: 12,
         },
@@ -147,7 +147,7 @@ export default function IncomeSection({ employeeId }: IncomeSectionProps) {
                 </Text>
               </View>
               <View>
-                <Text style={{ fontSize: 14, color: "#005F6A" }}>Cleano</Text>
+                <Text style={{ fontSize: 14, color: "#008C9C" }}>Cleano</Text>
                 <Text style={styles.meta}>Annual Income Statement</Text>
               </View>
             </View>
@@ -246,7 +246,7 @@ export default function IncomeSection({ employeeId }: IncomeSectionProps) {
   if (loading) {
     return (
       <SectionCard title="My Income" icon={DollarSign}>
-        <p className="text-sm text-[#005F6A]/60">Loading income...</p>
+        <p className="text-sm text-[#008C9C]/60">Loading income...</p>
       </SectionCard>
     );
   }
@@ -320,10 +320,10 @@ function Stat({
         ? "text-amber-700"
         : tone === "blue"
           ? "text-blue-600"
-          : "text-[#005F6A]";
+          : "text-[#008C9C]";
   return (
-    <div className="rounded-2xl bg-[#005F6A]/5 p-4">
-      <p className="text-[10px] uppercase tracking-wider text-[#005F6A]/50 mb-1">
+    <div className="rounded-2xl bg-[#008C9C]/5 p-4">
+      <p className="text-[10px] uppercase tracking-wider text-[#008C9C]/50 mb-1">
         {label}
       </p>
       <p

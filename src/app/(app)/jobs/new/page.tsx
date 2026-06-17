@@ -419,7 +419,7 @@ export default async function JobFormPage({
                   type="checkbox"
                   name="isCashJob"
                   defaultChecked={(prefill as any)?.isCashJob === true}
-                  className="w-4 h-4 rounded accent-[#005F6A]"
+                  className="w-4 h-4 rounded accent-[#008C9C]"
                 />
                 <span style={{ fontSize: 14, color: "var(--ink)" }}>
                   Cash job <span style={{ color: "var(--primary-50)", fontWeight: 400 }}>— no Stripe charge, no tax, manual payment received</span>
@@ -489,7 +489,7 @@ export default async function JobFormPage({
             right: 0,
             background: "rgba(250, 247, 242, 0.92)",
             backdropFilter: "blur(8px)",
-            borderTop: "1px solid rgba(0,95,106,0.10)",
+            borderTop: "1px solid rgba(0,140,156,0.10)",
             padding: "14px 32px",
             display: "flex",
             justifyContent: "flex-end",
@@ -530,10 +530,10 @@ function SectionCard({
     <section
       style={{
         background: "#fff",
-        border: "1px solid rgba(0,95,106,0.08)",
+        border: "1px solid rgba(0,140,156,0.08)",
         borderRadius: 16,
         padding: "24px 28px",
-        boxShadow: "0 1px 6px rgba(0,95,106,0.05)",
+        boxShadow: "0 1px 6px rgba(0,140,156,0.05)",
       }}
     >
       <div style={{ marginBottom: 20 }}>

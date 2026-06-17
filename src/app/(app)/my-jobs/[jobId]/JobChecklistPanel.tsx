@@ -143,7 +143,7 @@ export default function JobChecklistPanel({
             type="button"
             onClick={handleGenerate}
             disabled={generating}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl text-sm bg-[#005F6A] text-white hover:bg-[#005F6A]/90 transition-colors disabled:opacity-50">
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl text-sm bg-[#008C9C] text-white hover:bg-[#008C9C]/90 transition-colors disabled:opacity-50">
             {generating ? (
               <Loader className="w-4 h-4 animate-spin" />
             ) : (
@@ -194,7 +194,7 @@ export default function JobChecklistPanel({
             </div>
             <div className="h-2 w-full rounded-full bg-neutral-950/10 overflow-hidden">
               <div
-                className="h-full bg-[#005F6A] transition-all duration-300"
+                className="h-full bg-[#008C9C] transition-all duration-300"
                 style={{ width: `${pct}%` }}
               />
             </div>
@@ -212,7 +212,7 @@ export default function JobChecklistPanel({
                   key={item.id}
                   className={`p-3 rounded-xl border transition-colors ${
                     isCompleted
-                      ? "bg-[#005F6A]/5 border-[#005F6A]/15"
+                      ? "bg-[#008C9C]/5 border-[#008C9C]/15"
                       : isSkipped
                       ? "bg-neutral-100 border-neutral-200 opacity-60"
                       : "bg-white border-neutral-200"
@@ -229,8 +229,8 @@ export default function JobChecklistPanel({
                       disabled={!canEdit || isPending}
                       className={`mt-0.5 flex-shrink-0 w-6 h-6 rounded-md flex items-center justify-center border transition-colors disabled:opacity-50 ${
                         isCompleted
-                          ? "bg-[#005F6A] border-[#005F6A] text-white"
-                          : "border-neutral-300 text-transparent hover:border-[#005F6A]/50"
+                          ? "bg-[#008C9C] border-[#008C9C] text-white"
+                          : "border-neutral-300 text-transparent hover:border-[#008C9C]/50"
                       }`}
                       aria-label={
                         isCompleted ? "Mark as pending" : "Mark as completed"
@@ -314,7 +314,7 @@ export default function JobChecklistPanel({
                             onChange={(e) => setNoteDraft(e.target.value)}
                             rows={2}
                             placeholder="Add a note..."
-                            className="w-full px-3 py-2 rounded-lg border border-neutral-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#005F6A]/20"
+                            className="w-full px-3 py-2 rounded-lg border border-neutral-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#008C9C]/20"
                           />
                           <div className="flex justify-end gap-2">
                             <button
@@ -327,7 +327,7 @@ export default function JobChecklistPanel({
                               type="button"
                               onClick={() => saveNotes(item.id)}
                               disabled={isPending}
-                              className="px-3 py-1 rounded-lg text-xs bg-[#005F6A] text-white hover:bg-[#005F6A]/90 disabled:opacity-50">
+                              className="px-3 py-1 rounded-lg text-xs bg-[#008C9C] text-white hover:bg-[#008C9C]/90 disabled:opacity-50">
                               Save Note
                             </button>
                           </div>

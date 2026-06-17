@@ -144,15 +144,15 @@ export default function ServiceAreasTab({
         {msg && <Feedback msg={msg} />}
 
         {sorted.length === 0 ? (
-          <div className="text-sm text-[#005F6A]/60 py-8 text-center">
+          <div className="text-sm text-[#008C9C]/60 py-8 text-center">
             No service areas yet. Add postal prefixes you cover (e.g. H1, H2,
             H3 for Montreal) to enable public bookings.
           </div>
         ) : (
-          <div className="rounded-2xl bg-[#005F6A]/5 overflow-hidden">
+          <div className="rounded-2xl bg-[#008C9C]/5 overflow-hidden">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left text-[10px] uppercase tracking-wide text-[#005F6A]/60">
+                <tr className="text-left text-[10px] uppercase tracking-wide text-[#008C9C]/60">
                   <th className="px-4 py-3">Prefix</th>
                   <th className="px-4 py-3">Zone</th>
                   <th className="px-4 py-3">Travel Fee</th>
@@ -160,9 +160,9 @@ export default function ServiceAreasTab({
                   <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#005F6A]/10">
+              <tbody className="divide-y divide-[#008C9C]/10">
                 {sorted.map((area) => (
-                  <tr key={area.id} className="text-[#005F6A]">
+                  <tr key={area.id} className="text-[#008C9C]">
                     <td className="px-4 py-3 font-mono font-medium">
                       {area.prefix}
                     </td>
@@ -274,7 +274,7 @@ export default function ServiceAreasTab({
             />
           </Field>
 
-          <label className="flex items-center gap-2 text-sm text-[#005F6A]">
+          <label className="flex items-center gap-2 text-sm text-[#008C9C]">
             <input
               type="checkbox"
               checked={draft.isActive}

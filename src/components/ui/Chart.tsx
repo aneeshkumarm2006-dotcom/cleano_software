@@ -19,7 +19,7 @@ import {
 } from "recharts";
 
 export const CLEANO_COLORS = [
-  "#005F6A",
+  "#008C9C",
   "#00899A",
   "#00B4CC",
   "#4DD9EC",

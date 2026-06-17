@@ -235,7 +235,7 @@ export default function CheckoutClient({ locations }: CheckoutClientProps) {
         <div
           className={`px-4 py-3 rounded-xl text-sm ${
             feedback.type === "success"
-              ? "bg-[#005F6A]/10 text-[#005F6A] border border-[#005F6A]/15"
+              ? "bg-[#008C9C]/10 text-[#008C9C] border border-[#008C9C]/15"
               : "bg-red-50 text-red-700 border border-red-200"
           }`}>
           {feedback.text}

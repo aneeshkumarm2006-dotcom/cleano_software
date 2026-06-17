@@ -54,7 +54,7 @@ export default function JobsSubTabs({
   counts = {},
 }: JobsSubTabsProps) {
   return (
-    <div className="flex items-center gap-2 bg-[#005F6A]/5 rounded-2xl p-1 mb-4 w-fit overflow-x-auto">
+    <div className="flex items-center gap-2 bg-[#008C9C]/5 rounded-2xl p-1 mb-4 w-fit overflow-x-auto">
       {TABS.map((t) => {
         const isActive = active === t.id;
         const count = counts[t.id];

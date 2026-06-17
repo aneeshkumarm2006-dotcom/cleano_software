@@ -179,21 +179,21 @@ export default function BudgetDashboardTab({ transactions, budgets }: Props) {
   }
 
   const inputCls =
-    "w-full px-4 py-2.5 rounded-xl border border-transparent bg-[#005F6A]/5 text-sm text-[#005F6A] placeholder:text-[#005F6A]/40 focus:outline-none focus:ring-2 focus:ring-[#005F6A]/20";
+    "w-full px-4 py-2.5 rounded-xl border border-transparent bg-[#008C9C]/5 text-sm text-[#008C9C] placeholder:text-[#008C9C]/40 focus:outline-none focus:ring-2 focus:ring-[#008C9C]/20";
   const selectCls = inputCls;
 
   return (
     <Card variant="default" className="p-6">
       <div className="flex items-start justify-between gap-4 mb-5">
         <div className="flex items-start gap-2">
-          <div className="p-2 bg-[#005F6A]/10 rounded-lg">
-            <Target className="w-4 h-4 text-[#005F6A]" />
+          <div className="p-2 bg-[#008C9C]/10 rounded-lg">
+            <Target className="w-4 h-4 text-[#008C9C]" />
           </div>
           <div>
-            <h2 className="text-sm font-[350] text-[#005F6A]/80">
+            <h2 className="text-sm font-[350] text-[#008C9C]/80">
               Budget Dashboard
             </h2>
-            <p className="text-xs text-[#005F6A]/60 mt-1">
+            <p className="text-xs text-[#008C9C]/60 mt-1">
               Monthly budget vs actual by category.
             </p>
           </div>
@@ -218,20 +218,20 @@ export default function BudgetDashboardTab({ transactions, budgets }: Props) {
       </div>
 
       {showForm && (
-        <div className="mb-5 rounded-2xl border border-[#005F6A]/10 bg-white p-5">
+        <div className="mb-5 rounded-2xl border border-[#008C9C]/10 bg-white p-5">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-[400] text-[#005F6A]">
+            <h3 className="text-sm font-[400] text-[#008C9C]">
               {form.id ? "Edit Budget" : "New Budget"}
             </h3>
             <button
               onClick={() => setShowForm(false)}
-              className="text-[#005F6A]/60 hover:text-[#005F6A]">
+              className="text-[#008C9C]/60 hover:text-[#008C9C]">
               <X className="w-4 h-4" />
             </button>
           </div>
           <form onSubmit={handleSave} className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-xs text-[#005F6A]/70 uppercase tracking-wide mb-1 block">
+              <label className="text-xs text-[#008C9C]/70 uppercase tracking-wide mb-1 block">
                 Category
               </label>
               <PremiumSelect
@@ -244,7 +244,7 @@ export default function BudgetDashboardTab({ transactions, budgets }: Props) {
               />
             </div>
             <div>
-              <label className="text-xs text-[#005F6A]/70 uppercase tracking-wide mb-1 block">
+              <label className="text-xs text-[#008C9C]/70 uppercase tracking-wide mb-1 block">
                 Period (YYYY-MM)
               </label>
               <input
@@ -257,7 +257,7 @@ export default function BudgetDashboardTab({ transactions, budgets }: Props) {
               />
             </div>
             <div>
-              <label className="text-xs text-[#005F6A]/70 uppercase tracking-wide mb-1 block">
+              <label className="text-xs text-[#008C9C]/70 uppercase tracking-wide mb-1 block">
                 Amount
               </label>
               <input
@@ -271,7 +271,7 @@ export default function BudgetDashboardTab({ transactions, budgets }: Props) {
               />
             </div>
             <div>
-              <label className="text-xs text-[#005F6A]/70 uppercase tracking-wide mb-1 block">
+              <label className="text-xs text-[#008C9C]/70 uppercase tracking-wide mb-1 block">
                 Notes
               </label>
               <input
@@ -310,9 +310,9 @@ export default function BudgetDashboardTab({ transactions, budgets }: Props) {
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-2xl border border-[#005F6A]/10 bg-white mb-5">
+      <div className="overflow-x-auto rounded-2xl border border-[#008C9C]/10 bg-white mb-5">
         <table className="w-full text-sm">
-          <thead className="bg-[#005F6A]/5 text-[#005F6A]/70 text-[10px] uppercase tracking-wider">
+          <thead className="bg-[#008C9C]/5 text-[#008C9C]/70 text-[10px] uppercase tracking-wider">
             <tr>
               <th className="text-left px-4 py-3 font-[500]">Category</th>
               <th className="text-right px-4 py-3 font-[500]">Budget</th>
@@ -324,14 +324,14 @@ export default function BudgetDashboardTab({ transactions, budgets }: Props) {
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.category} className="border-t border-[#005F6A]/5">
-                <td className="px-4 py-3 text-[#005F6A]/80">
+              <tr key={r.category} className="border-t border-[#008C9C]/5">
+                <td className="px-4 py-3 text-[#008C9C]/80">
                   {CATEGORY_LABELS[r.category]}
                 </td>
-                <td className="px-4 py-3 text-right text-[#005F6A]/80">
+                <td className="px-4 py-3 text-right text-[#008C9C]/80">
                   {formatCurrency(r.budgeted)}
                 </td>
-                <td className="px-4 py-3 text-right text-[#005F6A]/80">
+                <td className="px-4 py-3 text-right text-[#008C9C]/80">
                   {formatCurrency(r.actual)}
                 </td>
                 <td
@@ -343,7 +343,7 @@ export default function BudgetDashboardTab({ transactions, budgets }: Props) {
                 <td className="px-4 py-3 w-48">
                   {r.budgeted > 0 ? (
                     <div className="flex items-center gap-2">
-                      <div className="flex-1 h-2 rounded-full bg-[#005F6A]/10 overflow-hidden">
+                      <div className="flex-1 h-2 rounded-full bg-[#008C9C]/10 overflow-hidden">
                         <div
                           className={`h-full ${
                             rowColor(r.pct, r.category).split(" ")[0]
@@ -360,7 +360,7 @@ export default function BudgetDashboardTab({ transactions, budgets }: Props) {
                       </span>
                     </div>
                   ) : (
-                    <span className="text-xs text-[#005F6A]/40">
+                    <span className="text-xs text-[#008C9C]/40">
                       No budget set
                     </span>
                   )}
@@ -370,7 +370,7 @@ export default function BudgetDashboardTab({ transactions, budgets }: Props) {
                     <div className="inline-flex gap-1">
                       <button
                         onClick={() => openEdit(r)}
-                        className="p-1.5 rounded-lg hover:bg-[#005F6A]/10 text-[#005F6A]/70">
+                        className="p-1.5 rounded-lg hover:bg-[#008C9C]/10 text-[#008C9C]/70">
                         <Pencil className="w-3.5 h-3.5" />
                       </button>
                       <button
@@ -380,7 +380,7 @@ export default function BudgetDashboardTab({ transactions, budgets }: Props) {
                       </button>
                     </div>
                   ) : (
-                    <span className="text-xs text-[#005F6A]/40">—</span>
+                    <span className="text-xs text-[#008C9C]/40">—</span>
                   )}
                 </td>
               </tr>
@@ -390,8 +390,8 @@ export default function BudgetDashboardTab({ transactions, budgets }: Props) {
       </div>
 
       {chartData.length > 0 && (
-        <div className="rounded-2xl border border-[#005F6A]/10 bg-white p-4">
-          <h3 className="text-xs uppercase tracking-wider text-[#005F6A]/70 mb-3">
+        <div className="rounded-2xl border border-[#008C9C]/10 bg-white p-4">
+          <h3 className="text-xs uppercase tracking-wider text-[#008C9C]/70 mb-3">
             Budget vs Actual
           </h3>
           <CBarChart

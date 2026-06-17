@@ -168,7 +168,7 @@ export default function StrikesPanel({
             <select
               value={reasonCode}
               onChange={(e) => setReasonCode(e.target.value as StrikeReasonCode)}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#005F6A]">
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#008C9C]">
               {(Object.keys(STRIKE_REASON_LABELS) as StrikeReasonCode[]).map((code) => (
                 <option key={code} value={code}>
                   {STRIKE_REASON_LABELS[code]}
@@ -185,14 +185,14 @@ export default function StrikesPanel({
               onChange={(e) => setNote(e.target.value)}
               rows={2}
               placeholder="Why is this strike being added?"
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#005F6A]"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#008C9C]"
             />
           </div>
           <div className="flex gap-2">
             <button
               onClick={submitAdd}
               disabled={busy}
-              className="px-3 py-1.5 text-sm bg-[#005F6A] text-white rounded-lg hover:bg-[#005F6A]/90 disabled:opacity-50">
+              className="px-3 py-1.5 text-sm bg-[#008C9C] text-white rounded-lg hover:bg-[#008C9C]/90 disabled:opacity-50">
               {busy ? "Saving…" : "Add strike"}
             </button>
             <button
@@ -275,13 +275,13 @@ export default function StrikesPanel({
                       onChange={(e) => setActionNote(e.target.value)}
                       rows={2}
                       placeholder={`Reason for ${pending.action} (required)`}
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#005F6A]"
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#008C9C]"
                     />
                     <div className="flex gap-2">
                       <button
                         onClick={submitAction}
                         disabled={busy}
-                        className="px-3 py-1.5 text-sm bg-[#005F6A] text-white rounded-lg hover:bg-[#005F6A]/90 disabled:opacity-50">
+                        className="px-3 py-1.5 text-sm bg-[#008C9C] text-white rounded-lg hover:bg-[#008C9C]/90 disabled:opacity-50">
                         {busy ? "Saving…" : `Confirm ${pending.action}`}
                       </button>
                       <button

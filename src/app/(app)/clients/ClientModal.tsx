@@ -155,10 +155,10 @@ export default function ClientModal({
         <div className="px-6 md:px-8 py-6 md:py-8">
           <div className="flex items-start justify-between mb-6">
             <div>
-              <h1 className="text-2xl font-[350] tracking-tight text-[#005F6A]">
+              <h1 className="text-2xl font-[350] tracking-tight text-[#008C9C]">
                 {mode === "create" ? "New Client" : "Edit Client"}
               </h1>
-              <p className="text-sm text-[#005F6A]/60 mt-1">
+              <p className="text-sm text-[#008C9C]/60 mt-1">
                 {mode === "create"
                   ? "Add a new client to your roster"
                   : "Update client information"}
@@ -189,7 +189,7 @@ export default function ClientModal({
                 Name <span className="text-red-500">*</span>
               </label>
               <div className="relative">
-                <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#005F6A]/50" />
+                <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/50" />
                 <Input
                   variant="form"
                   size="md"
@@ -206,7 +206,7 @@ export default function ClientModal({
             <div>
               <label className="input-label tracking-tight">Email</label>
               <div className="relative">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#005F6A]/50" />
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/50" />
                 <Input
                   variant="form"
                   type="email"
@@ -224,7 +224,7 @@ export default function ClientModal({
             <div>
               <label className="input-label tracking-tight">Secondary email</label>
               <div className="relative">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#005F6A]/30" />
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/30" />
                 <Input
                   variant="form"
                   type="email"
@@ -242,7 +242,7 @@ export default function ClientModal({
             <div>
               <label className="input-label tracking-tight">Phone</label>
               <div className="relative">
-                <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#005F6A]/50" />
+                <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/50" />
                 <Input
                   variant="form"
                   size="md"
@@ -259,7 +259,7 @@ export default function ClientModal({
             <div>
               <label className="input-label tracking-tight">Secondary phone</label>
               <div className="relative">
-                <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#005F6A]/30" />
+                <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/30" />
                 <Input
                   variant="form"
                   size="md"
@@ -276,7 +276,7 @@ export default function ClientModal({
             <div>
               <label className="input-label tracking-tight">Company</label>
               <div className="relative">
-                <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#005F6A]/50" />
+                <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/50" />
                 <Input
                   variant="form"
                   size="md"
@@ -293,7 +293,7 @@ export default function ClientModal({
             <div>
               <label className="input-label tracking-tight">Address</label>
               <div className="relative">
-                <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#005F6A]/50" />
+                <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/50" />
                 <Input
                   variant="form"
                   size="md"
@@ -311,7 +311,7 @@ export default function ClientModal({
               <div>
                 <label className="input-label tracking-tight">Apt / Unit</label>
                 <div className="relative">
-                  <Hash className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#005F6A]/50" />
+                  <Hash className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/50" />
                   <Input
                     variant="form"
                     size="md"
@@ -370,7 +370,7 @@ export default function ClientModal({
                 Default Discount (%)
               </label>
               <div className="relative">
-                <Percent className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#005F6A]/50" />
+                <Percent className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/50" />
                 <Input
                   variant="form"
                   type="number"
@@ -386,7 +386,7 @@ export default function ClientModal({
                   border={false}
                 />
               </div>
-              <p className="text-[11px] text-[#005F6A]/50 mt-1">
+              <p className="text-[11px] text-[#008C9C]/50 mt-1">
                 Auto-applied to this client&apos;s jobs and invoices. Leave 0
                 for none.
               </p>

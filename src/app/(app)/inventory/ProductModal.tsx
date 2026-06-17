@@ -212,10 +212,10 @@ export function ProductModal({
             {/* Header */}
             <div className="w-full flex items-start justify-between gap-1 mb-8">
               <div>
-                <h1 className="text-3xl font-[350] tracking-tight text-[#005F6A] max-w-[40rem]">
+                <h1 className="text-3xl font-[350] tracking-tight text-[#008C9C] max-w-[40rem]">
                   {mode === "create" ? "Add New Product" : "Edit Product"}
                 </h1>
-                <p className="text-sm text-[#005F6A]/80">
+                <p className="text-sm text-[#008C9C]/80">
                   {mode === "create"
                     ? "Add a new product to your inventory"
                     : "Update product details"}
@@ -328,7 +328,7 @@ export function ProductModal({
                     rows={3}
                   />
                 </div>
-                <p className="text-xs text-[#005F6A]/60 mt-1">
+                <p className="text-xs text-[#008C9C]/60 mt-1">
                   Optional description for internal reference
                 </p>
               </div>
@@ -341,13 +341,13 @@ export function ProductModal({
                 <select
                   {...register("category")}
                   disabled={disableForm}
-                  className="w-full px-4 py-3 rounded-xl border border-[#005F6A]/15 bg-white text-[#003C46] text-sm focus:outline-none focus:border-[#005F6A] focus:ring-2 focus:ring-[#005F6A]/10">
+                  className="w-full px-4 py-3 rounded-xl border border-[#008C9C]/15 bg-white text-[#003C46] text-sm focus:outline-none focus:border-[#008C9C] focus:ring-2 focus:ring-[#008C9C]/10">
                   <option value="LIQUID_SPRAY">Liquid spray (Windex, all-purpose, CLR…)</option>
                   <option value="MOP_LIQUID">Mop-based liquid (floor cleaner, Murphy Oil…)</option>
                   <option value="DISPOSABLE">Disposable (sponges, gloves, paper towels…)</option>
                   <option value="OTHER">Other</option>
                 </select>
-                <p className="text-xs text-[#005F6A]/60 mt-1">
+                <p className="text-xs text-[#008C9C]/60 mt-1">
                   Determines how cleaners log usage at clock-out.
                 </p>
               </div>
@@ -359,7 +359,7 @@ export function ProductModal({
                     Unit <span className="text-red-500 ml-1">*</span>
                   </label>
                   <div className="relative">
-                    <Hash className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#005F6A]/50" />
+                    <Hash className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/50" />
                     <Input
                       variant="form"
                       type="text"
@@ -384,7 +384,7 @@ export function ProductModal({
                     Cost Per Unit <span className="text-red-500 ml-1">*</span>
                   </label>
                   <div className="relative">
-                    <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#005F6A]/50" />
+                    <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/50" />
                     <Input
                       variant="form"
                       type="number"
@@ -431,7 +431,7 @@ export function ProductModal({
                       {errors.stockLevel.message}
                     </p>
                   )}
-                  <p className="text-xs text-[#005F6A]/60 mt-1">
+                  <p className="text-xs text-[#008C9C]/60 mt-1">
                     Current quantity in warehouse
                   </p>
                 </div>
@@ -459,7 +459,7 @@ export function ProductModal({
                       {errors.minStock.message}
                     </p>
                   )}
-                  <p className="text-xs text-[#005F6A]/60 mt-1">
+                  <p className="text-xs text-[#008C9C]/60 mt-1">
                     Alert when stock falls below this level
                   </p>
                 </div>

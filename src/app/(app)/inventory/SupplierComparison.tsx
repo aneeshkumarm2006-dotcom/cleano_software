@@ -37,13 +37,13 @@ export default function SupplierComparison({
   if (productsWithMultiplePrices.length === 0) {
     return (
       <div className="text-center py-12">
-        <div className="w-16 h-16 bg-[#005F6A]/5 rounded-full flex items-center justify-center mx-auto mb-3">
-          <DollarSign className="w-8 h-8 text-[#005F6A]/40" />
+        <div className="w-16 h-16 bg-[#008C9C]/5 rounded-full flex items-center justify-center mx-auto mb-3">
+          <DollarSign className="w-8 h-8 text-[#008C9C]/40" />
         </div>
-        <p className="text-sm font-[350] text-[#005F6A]/70">
+        <p className="text-sm font-[350] text-[#008C9C]/70">
           No supplier pricing data available
         </p>
-        <p className="text-xs font-[350] text-[#005F6A]/60 mt-1">
+        <p className="text-xs font-[350] text-[#008C9C]/60 mt-1">
           Add supplier prices in Settings to see comparisons
         </p>
       </div>
@@ -54,10 +54,10 @@ export default function SupplierComparison({
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-[350] tracking-tight text-[#005F6A]">
+          <h2 className="text-lg font-[350] tracking-tight text-[#008C9C]">
             Supplier Comparison
           </h2>
-          <p className="text-sm text-[#005F6A]/70 mt-1">
+          <p className="text-sm text-[#008C9C]/70 mt-1">
             Compare prices across suppliers to find the best deals
           </p>
         </div>
@@ -72,29 +72,29 @@ export default function SupplierComparison({
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="bg-[#005F6A]/5">
-                  <th className="p-4 text-left text-xs font-[350] text-[#005F6A]/40 uppercase tracking-wide min-w-[180px]">
+                <tr className="bg-[#008C9C]/5">
+                  <th className="p-4 text-left text-xs font-[350] text-[#008C9C]/40 uppercase tracking-wide min-w-[180px]">
                     Product
                   </th>
-                  <th className="p-4 text-left text-xs font-[350] text-[#005F6A]/40 uppercase tracking-wide min-w-[100px]">
+                  <th className="p-4 text-left text-xs font-[350] text-[#008C9C]/40 uppercase tracking-wide min-w-[100px]">
                     Current Cost
                   </th>
                   {suppliers.map((s) => (
                     <th
                       key={s.id}
-                      className="p-4 text-left text-xs font-[350] text-[#005F6A]/40 uppercase tracking-wide min-w-[120px]">
+                      className="p-4 text-left text-xs font-[350] text-[#008C9C]/40 uppercase tracking-wide min-w-[120px]">
                       {s.name}
                     </th>
                   ))}
-                  <th className="p-4 text-left text-xs font-[350] text-[#005F6A]/40 uppercase tracking-wide min-w-[120px]">
+                  <th className="p-4 text-left text-xs font-[350] text-[#008C9C]/40 uppercase tracking-wide min-w-[120px]">
                     Best Price
                   </th>
-                  <th className="p-4 text-left text-xs font-[350] text-[#005F6A]/40 uppercase tracking-wide min-w-[100px]">
+                  <th className="p-4 text-left text-xs font-[350] text-[#008C9C]/40 uppercase tracking-wide min-w-[100px]">
                     Savings
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#005F6A]/4">
+              <tbody className="divide-y divide-[#008C9C]/4">
                 {productsWithMultiplePrices.map((product) => {
                   const prices = product.supplierPrices;
                   const cheapest =
@@ -114,17 +114,17 @@ export default function SupplierComparison({
                   return (
                     <tr
                       key={product.productId}
-                      className="hover:bg-[#005F6A]/1 transition-colors">
+                      className="hover:bg-[#008C9C]/1 transition-colors">
                       <td className="p-4">
-                        <p className="text-sm font-[350] text-[#005F6A]">
+                        <p className="text-sm font-[350] text-[#008C9C]">
                           {product.productName}
                         </p>
-                        <p className="text-xs text-[#005F6A]/50 mt-0.5">
+                        <p className="text-xs text-[#008C9C]/50 mt-0.5">
                           per {product.unit}
                         </p>
                       </td>
                       <td className="p-4">
-                        <span className="text-sm font-[350] text-[#005F6A]">
+                        <span className="text-sm font-[350] text-[#008C9C]">
                           ${product.costPerUnit.toFixed(2)}
                         </span>
                       </td>
@@ -141,7 +141,7 @@ export default function SupplierComparison({
                                 className={`text-sm font-[350] ${
                                   isCheapest
                                     ? "text-green-600 font-[500]"
-                                    : "text-[#005F6A]"
+                                    : "text-[#008C9C]"
                                 }`}>
                                 ${entry.price.toFixed(2)}
                                 {isCheapest && prices.length > 1 && (
@@ -151,7 +151,7 @@ export default function SupplierComparison({
                                 )}
                               </span>
                             ) : (
-                              <span className="text-sm text-[#005F6A]/30">
+                              <span className="text-sm text-[#008C9C]/30">
                                 -
                               </span>
                             )}
@@ -164,12 +164,12 @@ export default function SupplierComparison({
                             <span className="text-sm font-[400] text-green-600">
                               ${cheapest.price.toFixed(2)}
                             </span>
-                            <p className="text-xs text-[#005F6A]/50">
+                            <p className="text-xs text-[#008C9C]/50">
                               {cheapest.supplierName}
                             </p>
                           </div>
                         ) : (
-                          <span className="text-sm text-[#005F6A]/30">-</span>
+                          <span className="text-sm text-[#008C9C]/30">-</span>
                         )}
                       </td>
                       <td className="p-4">
@@ -178,7 +178,7 @@ export default function SupplierComparison({
                             ${savings.toFixed(2)} ({savingsPercent}%)
                           </Badge>
                         ) : (
-                          <span className="text-xs text-[#005F6A]/40">
+                          <span className="text-xs text-[#008C9C]/40">
                             No savings
                           </span>
                         )}
@@ -209,10 +209,10 @@ export default function SupplierComparison({
               <div className="space-y-3">
                 <div className="flex items-start justify-between">
                   <div>
-                    <p className="text-sm font-[400] text-[#005F6A]">
+                    <p className="text-sm font-[400] text-[#008C9C]">
                       {product.productName}
                     </p>
-                    <p className="text-xs text-[#005F6A]/60">
+                    <p className="text-xs text-[#008C9C]/60">
                       Current: ${product.costPerUnit.toFixed(2)} / {product.unit}
                     </p>
                   </div>
@@ -236,13 +236,13 @@ export default function SupplierComparison({
                           className={`text-xs ${
                             isCheapest
                               ? "text-green-700 font-[400]"
-                              : "text-[#005F6A]/70"
+                              : "text-[#008C9C]/70"
                           }`}>
                           {p.supplierName}
                         </span>
                         <span
                           className={`text-xs font-[400] ${
-                            isCheapest ? "text-green-600" : "text-[#005F6A]"
+                            isCheapest ? "text-green-600" : "text-[#008C9C]"
                           }`}>
                           ${p.price.toFixed(2)}
                         </span>

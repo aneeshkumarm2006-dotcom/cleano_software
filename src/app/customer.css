@@ -7,19 +7,19 @@
 
 .cl-customer {
   /* Brand palette (Cleano teal) */
-  --primary: #005F6A;
-  --primary-hover: #004952;
+  --primary: #008C9C;
+  --primary-hover: #00707D;
   --primary-light: #007580;
   --primary-deep:  #003940;
-  --primary-90: rgba(0, 95, 106, 0.9);
-  --primary-70: rgba(0, 95, 106, 0.7);
-  --primary-60: rgba(0, 95, 106, 0.6);
-  --primary-50: rgba(0, 95, 106, 0.5);
-  --primary-40: rgba(0, 95, 106, 0.4);
-  --primary-20: rgba(0, 95, 106, 0.2);
-  --primary-15: rgba(0, 95, 106, 0.15);
-  --primary-10: rgba(0, 95, 106, 0.1);
-  --primary-5:  rgba(0, 95, 106, 0.05);
+  --primary-90: rgba(0,140,156, 0.9);
+  --primary-70: rgba(0,140,156, 0.7);
+  --primary-60: rgba(0,140,156, 0.6);
+  --primary-50: rgba(0,140,156, 0.5);
+  --primary-40: rgba(0,140,156, 0.4);
+  --primary-20: rgba(0,140,156, 0.2);
+  --primary-15: rgba(0,140,156, 0.15);
+  --primary-10: rgba(0,140,156, 0.1);
+  --primary-5:  rgba(0,140,156, 0.05);
 
   --cream: #faf7f2;
   --cream-deep: #f4eee3;
@@ -155,7 +155,7 @@
   width: 100%;
   height: 52px;
   border-radius: var(--radius-input);
-  border: 1px solid rgba(0, 95, 106, 0.14);
+  border: 1px solid rgba(0,140,156, 0.14);
   background: #fff;
   padding: 0 16px;
   font-size: 15px;
@@ -173,12 +173,12 @@
   line-height: 1.5;
 }
 .cl-input:hover,
-.cl-textarea:hover { border-color: rgba(0, 95, 106, 0.24); }
+.cl-textarea:hover { border-color: rgba(0,140,156, 0.24); }
 .cl-input:focus,
 .cl-textarea:focus,
 .cl-select:focus {
   border-color: var(--primary);
-  box-shadow: 0 0 0 4px rgba(0, 95, 106, 0.12);
+  box-shadow: 0 0 0 4px rgba(0,140,156, 0.12);
 }
 .cl-input.error,
 .cl-textarea.error { border-color: var(--error); }
@@ -229,22 +229,22 @@
 }
 .cl-btn-primary {
   background: var(--primary);
-  box-shadow: 0 2px 12px rgba(0, 95, 106, 0.2), inset 0 1px 0 rgba(255,255,255,0.1);
+  box-shadow: 0 2px 12px rgba(0,140,156, 0.2), inset 0 1px 0 rgba(255,255,255,0.1);
 }
 .cl-btn-primary:hover:not(:disabled) {
   background: var(--primary-hover);
-  box-shadow: 0 4px 18px rgba(0, 95, 106, 0.28), inset 0 1px 0 rgba(255,255,255,0.1);
+  box-shadow: 0 4px 18px rgba(0,140,156, 0.28), inset 0 1px 0 rgba(255,255,255,0.1);
 }
 .cl-btn-ghost { background: transparent; color: var(--primary-70); }
 .cl-btn-ghost:hover:not(:disabled) { background: var(--primary-5); color: var(--primary); }
 .cl-btn-secondary {
   background: var(--cream);
   color: var(--primary);
-  border: 1px solid rgba(0, 95, 106, 0.12);
+  border: 1px solid rgba(0,140,156, 0.12);
 }
 .cl-btn-secondary:hover:not(:disabled) {
   background: var(--cream-deep);
-  border-color: rgba(0, 95, 106, 0.22);
+  border-color: rgba(0,140,156, 0.22);
 }
 .cl-btn-amber { background: var(--amber-600); color: #fff; }
 .cl-btn-amber:hover:not(:disabled) { background: var(--amber-700); }
@@ -308,7 +308,7 @@
   width: 18px;
   height: 18px;
   border-radius: 5px;
-  border: 1.5px solid rgba(0, 95, 106, 0.22);
+  border: 1.5px solid rgba(0,140,156, 0.22);
   background: #fff;
   cursor: pointer;
   display: inline-flex;
@@ -379,7 +379,7 @@
       rgba(8, 20, 22, 0.42) 78%,
       rgba(8, 20, 22, 0.86) 100%),
     var(--brand-image, none) var(--brand-pos, center) / cover no-repeat,
-    linear-gradient(135deg, #005F6A 0%, #007580 100%);
+    linear-gradient(135deg, #008C9C 0%, #007580 100%);
   z-index: 0;
 }
 .cl-split-brand > * { position: relative; z-index: 1; }
@@ -727,7 +727,7 @@
   align-items: center;
   justify-content: center;
   color: #fff;
-  box-shadow: 0 6px 16px rgba(0, 95, 106, 0.28);
+  box-shadow: 0 6px 16px rgba(0,140,156, 0.28);
 }
 .cl-logo-on-dark { color: #fff; }
 .cl-logo-on-dark .cl-logo-mark {
@@ -796,7 +796,7 @@
   gap: 4px;
   font-family: inherit;
 }
-.cl-choice:hover:not(:disabled) { background: var(--cream-deep); border-color: rgba(0, 95, 106, 0.1); }
+.cl-choice:hover:not(:disabled) { background: var(--cream-deep); border-color: rgba(0,140,156, 0.1); }
 .cl-choice.active,
 .cl-choice.active * {
   color: #fff !important;
@@ -804,7 +804,7 @@
 .cl-choice.active {
   background: var(--primary);
   border-color: var(--primary);
-  box-shadow: 0 6px 16px rgba(0, 95, 106, 0.22);
+  box-shadow: 0 6px 16px rgba(0,140,156, 0.22);
 }
 .cl-choice.active:hover:not(:disabled) {
   background: var(--primary);
@@ -981,14 +981,14 @@
   border: 1.5px solid transparent;
 }
 .cl-addon-row:hover { background: var(--cream-deep); }
-.cl-addon-row.active { background: rgba(0, 95, 106, 0.06); border-color: rgba(0, 95, 106, 0.18); }
-.cl-addon-row.active:hover { background: rgba(0, 95, 106, 0.06); border-color: rgba(0, 95, 106, 0.18); }
+.cl-addon-row.active { background: rgba(0,140,156, 0.06); border-color: rgba(0,140,156, 0.18); }
+.cl-addon-row.active:hover { background: rgba(0,140,156, 0.06); border-color: rgba(0,140,156, 0.18); }
 .cl-addon-name { font-size: 14.5px; color: var(--ink); font-weight: 500; }
 .cl-addon-price { font-size: 14px; color: var(--primary); font-weight: 600; }
 
 /* ── Payment placeholder ── */
 .cl-payment-placeholder {
-  border: 2px dashed rgba(0, 95, 106, 0.18);
+  border: 2px dashed rgba(0,140,156, 0.18);
   border-radius: 16px;
   padding: 22px;
   display: flex;
@@ -1010,7 +1010,7 @@
   width: 100%;
   height: 52px;
   border-radius: var(--radius-input);
-  border: 1px solid rgba(0, 95, 106, 0.14);
+  border: 1px solid rgba(0,140,156, 0.14);
   background: #fff;
   padding: 0 16px;
   font-size: 15px;
@@ -1023,11 +1023,11 @@
   color: var(--ink);
   transition: border-color .15s, box-shadow .15s;
 }
-.cl-dp-trigger:hover { border-color: rgba(0, 95, 106, 0.24); }
+.cl-dp-trigger:hover { border-color: rgba(0,140,156, 0.24); }
 .cl-dp-trigger:focus-visible {
   outline: none;
   border-color: var(--primary);
-  box-shadow: 0 0 0 4px rgba(0, 95, 106, 0.12);
+  box-shadow: 0 0 0 4px rgba(0,140,156, 0.12);
 }
 .cl-dp-pop {
   z-index: 80;
@@ -1066,7 +1066,7 @@
   transition: background .12s;
 }
 .cl-dp-nav { transition: background .15s, color .15s, transform .1s; }
-.cl-dp-nav:hover { background: rgba(0, 95, 106, 0.1); color: var(--primary); transform: scale(1.1); }
+.cl-dp-nav:hover { background: rgba(0,140,156, 0.1); color: var(--primary); transform: scale(1.1); }
 .cl-dp-weekdays {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
@@ -1102,7 +1102,7 @@
   font-family: inherit;
 }
 .cl-dp-day:hover:not(:disabled):not(.selected) {
-  background: rgba(0, 95, 106, 0.12);
+  background: rgba(0,140,156, 0.12);
   color: var(--primary);
   transform: scale(1.08);
 }

@@ -97,7 +97,7 @@ export default function SalesMapView({
               eventHandlers={{ click: () => onPinClick?.(area) }}>
               <Popup>
                 <div className="text-sm">
-                  <p className="font-[500] text-[#005F6A]">{area.name}</p>
+                  <p className="font-[500] text-[#008C9C]">{area.name}</p>
                   <p className="text-xs font-[600] uppercase tracking-wide" style={{ color }}>
                     {salesTypeLabel(area.type)}
                   </p>

@@ -15,8 +15,8 @@ function StarRow({ value }: { value: number }) {
           key={i}
           className={`w-5 h-5 ${
             i < filled
-              ? "fill-[#77C8CC] text-[#77C8CC]"
-              : "text-[#005F6A]/20"
+              ? "fill-[#3E7596] text-[#3E7596]"
+              : "text-[#008C9C]/20"
           }`}
         />
       ))}
@@ -27,7 +27,7 @@ function StarRow({ value }: { value: number }) {
 function TrendChart({ data }: { data: PerformanceData["trend90Day"] }) {
   if (data.length === 0) {
     return (
-      <p className="text-xs text-[#005F6A]/50 italic">
+      <p className="text-xs text-[#008C9C]/50 italic">
         No ratings yet in the last 90 days.
       </p>
     );
@@ -65,14 +65,14 @@ function TrendChart({ data }: { data: PerformanceData["trend90Day"] }) {
           y1={scaleY(4)}
           x2={width - padX}
           y2={scaleY(4)}
-          stroke="#005F6A"
+          stroke="#008C9C"
           strokeOpacity="0.1"
           strokeDasharray="3 3"
         />
         <path
           d={path}
           fill="none"
-          stroke="#005F6A"
+          stroke="#008C9C"
           strokeWidth="1.5"
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -83,11 +83,11 @@ function TrendChart({ data }: { data: PerformanceData["trend90Day"] }) {
             cx={scaleX(i)}
             cy={scaleY(p.average)}
             r="2.5"
-            fill="#005F6A"
+            fill="#008C9C"
           />
         ))}
       </svg>
-      <div className="flex justify-between text-[10px] text-[#005F6A]/50 mt-1">
+      <div className="flex justify-between text-[10px] text-[#008C9C]/50 mt-1">
         <span>{new Date(data[0].date).toLocaleDateString("en-US")}</span>
         <span>Latest: {last.average.toFixed(2)}★</span>
       </div>
@@ -137,7 +137,7 @@ export default function PerformanceSection({
   if (loading) {
     return (
       <SectionCard title="Performance" icon={Award}>
-        <p className="text-sm text-[#005F6A]/60">Loading performance...</p>
+        <p className="text-sm text-[#008C9C]/60">Loading performance...</p>
       </SectionCard>
     );
   }

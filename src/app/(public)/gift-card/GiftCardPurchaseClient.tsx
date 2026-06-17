@@ -76,11 +76,11 @@ export default function GiftCardPurchaseClient({ tiers, covers, minJobPrice }: P
         style={{
           padding: 32,
           background: "#fff",
-          border: "1px solid rgba(0,95,106,0.12)",
+          border: "1px solid rgba(0,140,156,0.12)",
           borderRadius: 16,
           textAlign: "center",
         }}>
-        <h2 style={{ margin: 0, fontSize: 22, color: "#005F6A" }}>
+        <h2 style={{ margin: 0, fontSize: 22, color: "#008C9C" }}>
           Gift card on its way
         </h2>
         <p style={{ marginTop: 12, fontSize: 14, color: "#3a5a62", lineHeight: 1.6 }}>
@@ -99,11 +99,11 @@ export default function GiftCardPurchaseClient({ tiers, covers, minJobPrice }: P
       <div
         style={{
           background: "#fff",
-          border: "1px solid rgba(0,95,106,0.12)",
+          border: "1px solid rgba(0,140,156,0.12)",
           borderRadius: 16,
           padding: 28,
         }}>
-        <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#005F6A" }}>
+        <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#008C9C" }}>
           Pay ${amount.toFixed(2)}
         </h2>
         <p style={{ marginTop: 8, fontSize: 13, color: "#3a5a62" }}>
@@ -132,10 +132,10 @@ export default function GiftCardPurchaseClient({ tiers, covers, minJobPrice }: P
     <div
       style={{
         background: "#fff",
-        border: "1px solid rgba(0,95,106,0.12)",
+        border: "1px solid rgba(0,140,156,0.12)",
         borderRadius: 16,
         padding: 28,
-        boxShadow: "0 8px 24px rgba(0,95,106,0.06)",
+        boxShadow: "0 8px 24px rgba(0,140,156,0.06)",
       }}>
       {/* Tier picker */}
       <section style={{ marginBottom: 24 }}>
@@ -158,9 +158,9 @@ export default function GiftCardPurchaseClient({ tiers, covers, minJobPrice }: P
                 padding: "16px 12px",
                 fontSize: 18,
                 fontWeight: 700,
-                background: amount === t ? "#005F6A" : "#fff",
+                background: amount === t ? "#008C9C" : "#fff",
                 color: amount === t ? "#fff" : "#0a1f24",
-                border: amount === t ? "2px solid #005F6A" : "1px solid rgba(0,95,106,0.18)",
+                border: amount === t ? "2px solid #008C9C" : "1px solid rgba(0,140,156,0.18)",
                 borderRadius: 10,
                 cursor: "pointer",
                 transition: "all 120ms ease",
@@ -190,8 +190,8 @@ export default function GiftCardPurchaseClient({ tiers, covers, minJobPrice }: P
                 padding: 0,
                 border:
                   coverKey === c.key
-                    ? "2px solid #005F6A"
-                    : "1px solid rgba(0,95,106,0.18)",
+                    ? "2px solid #008C9C"
+                    : "1px solid rgba(0,140,156,0.18)",
                 borderRadius: 10,
                 overflow: "hidden",
                 cursor: "pointer",
@@ -374,7 +374,7 @@ export default function GiftCardPurchaseClient({ tiers, covers, minJobPrice }: P
           fontSize: 15,
           fontWeight: 700,
           color: "#fff",
-          background: canSubmit ? "#005F6A" : "#7daab0",
+          background: canSubmit ? "#008C9C" : "#7daab0",
           border: "none",
           borderRadius: 10,
           cursor: canSubmit ? "pointer" : "default",
@@ -442,7 +442,7 @@ function PayForm({
           fontSize: 15,
           fontWeight: 700,
           color: "#fff",
-          background: busy ? "#7daab0" : "#005F6A",
+          background: busy ? "#7daab0" : "#008C9C",
           border: "none",
           borderRadius: 10,
           cursor: busy ? "default" : "pointer",
@@ -462,7 +462,7 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
         fontWeight: 700,
         letterSpacing: "0.12em",
         textTransform: "uppercase",
-        color: "#005F6A",
+        color: "#008C9C",
       }}>
       {children}
     </h2>
@@ -516,6 +516,6 @@ const inputStyle: React.CSSProperties = {
   fontSize: 14,
   color: "#0a1f24",
   background: "#fff",
-  border: "1px solid rgba(0,95,106,0.18)",
+  border: "1px solid rgba(0,140,156,0.18)",
   borderRadius: 8,
 };

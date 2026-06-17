@@ -6,7 +6,7 @@
 
 import { db } from "@/db";
 
-const BRAND = "#005F6A";
+const BRAND = "#008C9C";
 
 export interface InvoicePdfData {
   invoiceNumber: string;
@@ -101,7 +101,7 @@ export async function buildInvoicePdfBuffer(
     "@react-pdf/renderer"
   );
   const React = await import("react");
-  const tint = (a: number) => `rgba(0, 95, 106, ${a})`;
+  const tint = (a: number) => `rgba(0,140,156, ${a})`;
 
   const styles = StyleSheet.create({
     page: {

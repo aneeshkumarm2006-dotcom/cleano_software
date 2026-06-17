@@ -14,6 +14,7 @@ import { generateInvoiceFromJob } from "../../actions/generateInvoiceFromJob";
 import { markJobComplete } from "../../actions/markJobComplete";
 import { createRatingToken } from "../../actions/createRatingToken";
 import { setAfterPhotoOverride } from "../../actions/setAfterPhotoOverride";
+import { setJobPriorityLabel } from "../../actions/setJobPriorityLabel";
 import {
   ArrowLeft, MapPin, Clock, DollarSign, Users,
   CheckCircle2, Package, Pencil, History, Activity,
@@ -46,6 +47,7 @@ interface Job {
   location: string | null;
   description: string | null;
   jobType: string | null;
+  priorityLabel: string | null;
   jobDate: string | null;
   startTime: string;
   endTime: string | null;
@@ -225,6 +227,11 @@ export default function JobDetailView({
   const returnToUrl = searchParams.get("returnTo");
   const backUrl   = returnToUrl ? decodeURIComponent(returnToUrl) : "/jobs";
   const backLabel = returnToUrl ? "Back to Calendar" : "Back to Jobs";
+
+  const [priorityChoice, setPriorityChoice] = useState<string>(
+    job.priorityLabel ?? "AUTO"
+  );
+  const [savingPriority, setSavingPriority] = useState(false);
 
   const [activeView,       setActiveView]       = useState<TabView>("details");
 
@@ -453,6 +460,23 @@ export default function JobDetailView({
       setAfterPhotoOverrideAt(next ? new Date().toISOString() : null);
     }
     setIsTogglingPhotoOverride(false);
+  };
+
+  const handleChangePriority = async (choice: string) => {
+    if (savingPriority) return;
+    const prev = priorityChoice;
+    setPriorityChoice(choice);
+    setSavingPriority(true);
+    const res = await setJobPriorityLabel(
+      job.id,
+      choice as "AUTO" | "ROUTINE" | "IMPORTANT" | "NONE"
+    );
+    setSavingPriority(false);
+    if (!res.success) {
+      setPriorityChoice(prev);
+      return;
+    }
+    router.refresh();
   };
 
   const handleCopyReviewLink = () => {
@@ -711,7 +735,7 @@ export default function JobDetailView({
           </div>
 
           {job.depositPaid && (
-            <div className="pay-toggle" style={{ background: 'rgba(0,95,106,0.06)', borderRadius: 10, marginBottom: 4 }}>
+            <div className="pay-toggle" style={{ background: 'rgba(0,140,156,0.06)', borderRadius: 10, marginBottom: 4 }}>
               <div className="pay-toggle-info">
                 <div className="icon-bubble" style={{ background: 'rgba(22,163,74,0.12)' }}>
                   <CheckCircle2 size={18} style={{ color: '#16a34a' }} />
@@ -1195,6 +1219,35 @@ export default function JobDetailView({
             <div className="jdetail-meta-row">
               <StatusPill status={job.status} />
               <TypePill type={job.jobType} />
+              {isAdmin && (
+                <label
+                  title="Calendar priority label shown in the top-left of this booking"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--primary-60)' }}
+                >
+                  <span>Calendar label:</span>
+                  <select
+                    value={priorityChoice}
+                    disabled={savingPriority}
+                    onChange={(e) => handleChangePriority(e.target.value)}
+                    style={{
+                      fontFamily: 'inherit',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: 'var(--ink)',
+                      background: 'var(--primary-5)',
+                      border: '1px solid var(--primary-10)',
+                      borderRadius: 8,
+                      padding: '3px 8px',
+                      cursor: savingPriority ? 'wait' : 'pointer',
+                    }}
+                  >
+                    <option value="AUTO">Auto (by service type)</option>
+                    <option value="ROUTINE">Routine (R)</option>
+                    <option value="IMPORTANT">Important (I)</option>
+                    <option value="NONE">No label</option>
+                  </select>
+                </label>
+              )}
               <span style={{ fontSize: 11.5, color: 'var(--primary-50)', fontFamily: 'monospace' }}>{job.id}</span>
             </div>
             {(job.location || job.description) && (
@@ -1729,13 +1782,13 @@ export default function JobDetailView({
       {/* Cancel cleaning */}
       <Modal isOpen={showCancelModal} onClose={() => !isCancelling && setShowCancelModal(false)} title="Cancel cleaning?">
         <div className="space-y-4">
-          <p className="text-sm text-[#005F6A]/70">
+          <p className="text-sm text-[#008C9C]/70">
             This sets the job status to <strong>Cancelled</strong> and logs the change. The customer&apos;s saved card is not charged.
           </p>
           <div>
-            <label className="block text-xs font-semibold text-[#005F6A]/70 mb-1">Reason (optional)</label>
+            <label className="block text-xs font-semibold text-[#008C9C]/70 mb-1">Reason (optional)</label>
             <textarea
-              className="w-full rounded-xl border border-[#005F6A]/15 bg-[#005F6A]/5 px-3 py-2 text-sm outline-none focus:bg-white focus:border-[#005F6A]/40"
+              className="w-full rounded-xl border border-[#008C9C]/15 bg-[#008C9C]/5 px-3 py-2 text-sm outline-none focus:bg-white focus:border-[#008C9C]/40"
               rows={2}
               value={cancelReason}
               onChange={(e) => setCancelReason(e.target.value)}
@@ -1743,7 +1796,7 @@ export default function JobDetailView({
             />
           </div>
           {depositRemaining > 0 && (
-            <label className="flex items-center gap-2 text-sm text-[#005F6A] cursor-pointer">
+            <label className="flex items-center gap-2 text-sm text-[#008C9C] cursor-pointer">
               <input
                 type="checkbox"
                 checked={refundDepositOnCancel}
@@ -1771,7 +1824,7 @@ export default function JobDetailView({
       {/* Refund modal */}
       <Modal isOpen={showRefundModal} onClose={() => !isRefunding && setShowRefundModal(false)} title="Issue refund">
         <div className="space-y-4">
-          <p className="text-sm text-[#005F6A]/70">
+          <p className="text-sm text-[#008C9C]/70">
             {job.stripePaymentIntentId
               ? `Refundable: $${refundCap.toFixed(2)} (already refunded $${refundedSoFar.toFixed(2)}).`
               : depositRemaining > 0
@@ -1779,7 +1832,7 @@ export default function JobDetailView({
               : "Nothing left to refund."}
           </p>
           <div>
-            <label className="block text-xs font-semibold text-[#005F6A]/70 mb-1">Amount ($)</label>
+            <label className="block text-xs font-semibold text-[#008C9C]/70 mb-1">Amount ($)</label>
             <input
               type="number"
               step="0.01"
@@ -1787,13 +1840,13 @@ export default function JobDetailView({
               max={refundCap}
               value={refundAmount}
               onChange={(e) => setRefundAmount(e.target.value)}
-              className="w-full rounded-xl border border-[#005F6A]/15 bg-[#005F6A]/5 px-3 py-2 text-sm outline-none focus:bg-white focus:border-[#005F6A]/40"
+              className="w-full rounded-xl border border-[#008C9C]/15 bg-[#008C9C]/5 px-3 py-2 text-sm outline-none focus:bg-white focus:border-[#008C9C]/40"
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-[#005F6A]/70 mb-1">Reason (optional)</label>
+            <label className="block text-xs font-semibold text-[#008C9C]/70 mb-1">Reason (optional)</label>
             <textarea
-              className="w-full rounded-xl border border-[#005F6A]/15 bg-[#005F6A]/5 px-3 py-2 text-sm outline-none focus:bg-white focus:border-[#005F6A]/40"
+              className="w-full rounded-xl border border-[#008C9C]/15 bg-[#008C9C]/5 px-3 py-2 text-sm outline-none focus:bg-white focus:border-[#008C9C]/40"
               rows={2}
               value={refundReason}
               onChange={(e) => setRefundReason(e.target.value)}
@@ -1893,12 +1946,12 @@ function ChargeButton({ jobId, amount, compact }: { jobId: string; amount: numbe
 
       <Modal isOpen={open} onClose={() => !busy && setOpen(false)} title="Charge client?">
         <div className="space-y-4">
-          <p className="text-sm text-[#005F6A]/70">
+          <p className="text-sm text-[#008C9C]/70">
             This will charge the client&apos;s saved card via Stripe. The customer will receive a receipt email automatically.
           </p>
-          <div className="rounded-xl bg-[#005F6A]/5 px-4 py-3 flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wide text-[#005F6A]/70">Amount</span>
-            <span className="text-lg font-semibold text-[#005F6A]">${amount.toFixed(2)}</span>
+          <div className="rounded-xl bg-[#008C9C]/5 px-4 py-3 flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wide text-[#008C9C]/70">Amount</span>
+            <span className="text-lg font-semibold text-[#008C9C]">${amount.toFixed(2)}</span>
           </div>
           {result && !result.ok && (
             <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">

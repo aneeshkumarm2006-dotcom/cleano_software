@@ -297,7 +297,7 @@ export default function DatePicker({
               margin: "10px 12px 0",
               padding: "9px 12px",
               borderRadius: 10,
-              background: "rgba(0,95,106,0.08)",
+              background: "rgba(0,140,156,0.08)",
               color: "var(--primary)",
               fontSize: 12.5,
               lineHeight: 1.4,

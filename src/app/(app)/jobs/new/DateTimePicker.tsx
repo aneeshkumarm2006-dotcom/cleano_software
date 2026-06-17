@@ -57,21 +57,21 @@ export function ControlledTimePicker({
         height: H[size],
         padding: `0 ${size === "sm" ? 10 : 14}px`,
         borderRadius: BR[size],
-        border: "1px solid rgba(0,95,106,0.16)",
+        border: "1px solid rgba(0,140,156,0.16)",
         background: "#fff",
         fontSize: FS[size],
-        color: value ? "#111" : "rgba(0,95,106,0.38)",
+        color: value ? "#111" : "rgba(0,140,156,0.38)",
         fontFamily: "inherit",
         cursor: "pointer",
         outline: "none",
         boxSizing: "border-box",
       }}
       onFocus={(e) => {
-        e.currentTarget.style.border = "1.5px solid #005F6A";
-        e.currentTarget.style.boxShadow = "0 0 0 3px rgba(0,95,106,0.11)";
+        e.currentTarget.style.border = "1.5px solid #008C9C";
+        e.currentTarget.style.boxShadow = "0 0 0 3px rgba(0,140,156,0.11)";
       }}
       onBlur={(e) => {
-        e.currentTarget.style.border = "1px solid rgba(0,95,106,0.16)";
+        e.currentTarget.style.border = "1px solid rgba(0,140,156,0.16)";
         e.currentTarget.style.boxShadow = "none";
       }}
     />

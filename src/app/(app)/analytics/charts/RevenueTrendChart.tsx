@@ -9,7 +9,7 @@ interface RevenueTrendChartProps {
 export default function RevenueTrendChart({ data }: RevenueTrendChartProps) {
   if (data.length === 0) {
     return (
-      <p className="text-sm text-[#005F6A]/60 text-center py-8">
+      <p className="text-sm text-[#008C9C]/60 text-center py-8">
         No revenue data yet
       </p>
     );

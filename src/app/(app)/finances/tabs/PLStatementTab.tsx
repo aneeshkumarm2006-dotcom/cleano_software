@@ -72,20 +72,20 @@ export default function PLStatementTab({ transactions }: Props) {
     }, [transactions, period]);
 
   const selectCls =
-    "px-4 py-2 rounded-xl border border-transparent bg-[#005F6A]/5 text-sm text-[#005F6A] focus:outline-none focus:ring-2 focus:ring-[#005F6A]/20";
+    "px-4 py-2 rounded-xl border border-transparent bg-[#008C9C]/5 text-sm text-[#008C9C] focus:outline-none focus:ring-2 focus:ring-[#008C9C]/20";
 
   return (
     <Card variant="default" className="p-6">
       <div className="flex items-start justify-between gap-4 mb-5">
         <div className="flex items-start gap-2">
-          <div className="p-2 bg-[#005F6A]/10 rounded-lg">
-            <TrendingUp className="w-4 h-4 text-[#005F6A]" />
+          <div className="p-2 bg-[#008C9C]/10 rounded-lg">
+            <TrendingUp className="w-4 h-4 text-[#008C9C]" />
           </div>
           <div>
-            <h2 className="text-sm font-[350] text-[#005F6A]/80">
+            <h2 className="text-sm font-[350] text-[#008C9C]/80">
               P&L Statement
             </h2>
-            <p className="text-xs text-[#005F6A]/60 mt-1">
+            <p className="text-xs text-[#008C9C]/60 mt-1">
               Simplified profit & loss with margins.
             </p>
           </div>
@@ -104,24 +104,24 @@ export default function PLStatementTab({ transactions }: Props) {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-        <div className="rounded-xl bg-[#005F6A]/5 p-4">
-          <div className="text-xs uppercase tracking-wide text-[#005F6A]/60">
+        <div className="rounded-xl bg-[#008C9C]/5 p-4">
+          <div className="text-xs uppercase tracking-wide text-[#008C9C]/60">
             Revenue
           </div>
-          <div className="text-xl font-[400] text-[#005F6A] mt-1">
+          <div className="text-xl font-[400] text-[#008C9C] mt-1">
             {formatCurrency(revenue)}
           </div>
         </div>
-        <div className="rounded-xl bg-[#005F6A]/5 p-4">
-          <div className="text-xs uppercase tracking-wide text-[#005F6A]/60">
+        <div className="rounded-xl bg-[#008C9C]/5 p-4">
+          <div className="text-xs uppercase tracking-wide text-[#008C9C]/60">
             Expenses
           </div>
-          <div className="text-xl font-[400] text-[#005F6A] mt-1">
+          <div className="text-xl font-[400] text-[#008C9C] mt-1">
             {formatCurrency(expenses)}
           </div>
         </div>
-        <div className="rounded-xl bg-[#005F6A]/5 p-4">
-          <div className="text-xs uppercase tracking-wide text-[#005F6A]/60">
+        <div className="rounded-xl bg-[#008C9C]/5 p-4">
+          <div className="text-xs uppercase tracking-wide text-[#008C9C]/60">
             Net Profit
           </div>
           <div
@@ -131,8 +131,8 @@ export default function PLStatementTab({ transactions }: Props) {
             {formatCurrency(netProfit)}
           </div>
         </div>
-        <div className="rounded-xl bg-[#005F6A]/5 p-4">
-          <div className="text-xs uppercase tracking-wide text-[#005F6A]/60">
+        <div className="rounded-xl bg-[#008C9C]/5 p-4">
+          <div className="text-xs uppercase tracking-wide text-[#008C9C]/60">
             Net Margin
           </div>
           <div
@@ -145,8 +145,8 @@ export default function PLStatementTab({ transactions }: Props) {
       </div>
 
       {chartData.length > 0 ? (
-        <div className="rounded-2xl border border-[#005F6A]/10 bg-white p-4">
-          <h3 className="text-xs uppercase tracking-wider text-[#005F6A]/70 mb-3">
+        <div className="rounded-2xl border border-[#008C9C]/10 bg-white p-4">
+          <h3 className="text-xs uppercase tracking-wider text-[#008C9C]/70 mb-3">
             Revenue vs Expenses Over Time
           </h3>
           <CAreaChart
@@ -156,12 +156,12 @@ export default function PLStatementTab({ transactions }: Props) {
           />
         </div>
       ) : (
-        <div className="rounded-2xl border border-[#005F6A]/10 bg-white p-8 text-center text-sm text-[#005F6A]/60">
+        <div className="rounded-2xl border border-[#008C9C]/10 bg-white p-8 text-center text-sm text-[#008C9C]/60">
           No transactions in this period.
         </div>
       )}
 
-      <p className="text-[11px] text-[#005F6A]/50 mt-3">
+      <p className="text-[11px] text-[#008C9C]/50 mt-3">
         Gross margin: {grossMargin.toFixed(1)}% · Net margin: {netMargin.toFixed(1)}%
       </p>
     </Card>

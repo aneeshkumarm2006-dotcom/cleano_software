@@ -58,11 +58,11 @@ export default function QuoteFormClient() {
         style={{
           padding: 32,
           background: "#fff",
-          border: "1px solid rgba(0,95,106,0.12)",
+          border: "1px solid rgba(0,140,156,0.12)",
           borderRadius: 16,
           textAlign: "center",
         }}>
-        <h2 style={{ margin: 0, fontSize: 22, color: "#005F6A" }}>
+        <h2 style={{ margin: 0, fontSize: 22, color: "#008C9C" }}>
           Got it — we'll be in touch
         </h2>
         <p style={{ marginTop: 12, fontSize: 14, color: "#3a5a62", lineHeight: 1.6 }}>
@@ -78,10 +78,10 @@ export default function QuoteFormClient() {
       onSubmit={handleSubmit}
       style={{
         background: "#fff",
-        border: "1px solid rgba(0,95,106,0.12)",
+        border: "1px solid rgba(0,140,156,0.12)",
         borderRadius: 16,
         padding: 28,
-        boxShadow: "0 8px 24px rgba(0,95,106,0.06)",
+        boxShadow: "0 8px 24px rgba(0,140,156,0.06)",
       }}>
       <Row>
         <Field label="Full name" required>
@@ -208,7 +208,7 @@ export default function QuoteFormClient() {
           fontSize: 15,
           fontWeight: 700,
           color: "#fff",
-          background: pending ? "#7daab0" : "#005F6A",
+          background: pending ? "#7daab0" : "#008C9C",
           border: "none",
           borderRadius: 10,
           cursor: pending ? "default" : "pointer",
@@ -267,6 +267,6 @@ const inputStyle: React.CSSProperties = {
   fontSize: 14,
   color: "#0a1f24",
   background: "#fff",
-  border: "1px solid rgba(0,95,106,0.18)",
+  border: "1px solid rgba(0,140,156,0.18)",
   borderRadius: 8,
 };

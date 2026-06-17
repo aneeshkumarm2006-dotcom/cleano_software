@@ -148,7 +148,7 @@ export default function WebsiteTab({ settings }: Props) {
                   onChange={(e) => updateFaq(i, { answer: e.target.value })}
                   rows={3}
                   placeholder="Answer"
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#005F6A]"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#008C9C]"
                 />
               </div>
             ))}

@@ -92,14 +92,14 @@ export default function NavLink({
         href={href}
         className={`flex items-center gap-3 h-12 px-3 rounded-xl text-sm font-[350] transition-colors duration-150 ${
           isActive
-            ? "bg-[#005F6A] text-white shadow-sm"
-            : "text-[#005F6A] hover:bg-[#005F6A]/10 hover:text-[#005F6A]"
+            ? "bg-[#008C9C] text-white shadow-sm"
+            : "text-[#008C9C] hover:bg-[#008C9C]/10 hover:text-[#008C9C]"
         }`}>
         {Icon && (
           <Icon
             strokeWidth={1.6}
             className={`w-5 h-5 shrink-0 ${
-              isActive ? "text-white" : "text-[#005F6A]"
+              isActive ? "text-white" : "text-[#008C9C]"
             }`}
           />
         )}
@@ -114,14 +114,14 @@ export default function NavLink({
       href={href}
       className={`relative flex items-center justify-center w-12 h-12 rounded-xl transition-colors duration-150 ${
         isActive
-          ? "bg-[#005F6A] text-white shadow-sm"
-          : "text-[#005F6A] hover:bg-[#005F6A]/10 hover:text-[#005F6A]"
+          ? "bg-[#008C9C] text-white shadow-sm"
+          : "text-[#008C9C] hover:bg-[#008C9C]/10 hover:text-[#008C9C]"
       }`}>
       {Icon && (
         <Icon
           strokeWidth={1.6}
           className={`w-5 h-5 ${
-            isActive ? "text-white" : "text-[#005F6A]"
+            isActive ? "text-white" : "text-[#008C9C]"
           }`}
         />
       )}

@@ -209,10 +209,10 @@ function BookingRow({ job }: { job: WebJob }) {
     <article className="jcard">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <div className="flex items-center gap-2 text-[10px] uppercase tracking-wide text-[#005F6A]/60 font-medium">
+          <div className="flex items-center gap-2 text-[10px] uppercase tracking-wide text-[#008C9C]/60 font-medium">
             <span>Job #{job.jobNumber}</span>
             {job.parentJobId ? (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-[#005F6A]/5 text-[#005F6A] normal-case">
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-[#008C9C]/5 text-[#008C9C] normal-case">
                 <RotateCw className="w-3 h-3" /> recurring
               </span>
             ) : null}
@@ -222,19 +222,19 @@ function BookingRow({ job }: { job: WebJob }) {
               </span>
             ) : null}
           </div>
-          <div className="text-lg font-medium text-[#005F6A] mt-0.5">
+          <div className="text-lg font-medium text-[#008C9C] mt-0.5">
             {startStr}
           </div>
           {job.location ? (
-            <div className="text-xs text-[#005F6A]/60 mt-1">{job.location}</div>
+            <div className="text-xs text-[#008C9C]/60 mt-1">{job.location}</div>
           ) : null}
           {job.jobType ? (
-            <div className="text-xs text-[#005F6A]/70 mt-1">{job.jobType}</div>
+            <div className="text-xs text-[#008C9C]/70 mt-1">{job.jobType}</div>
           ) : null}
         </div>
         <div className="flex flex-col items-end gap-1">
           {job.price !== null ? (
-            <div className="text-lg font-medium text-[#005F6A]">
+            <div className="text-lg font-medium text-[#008C9C]">
               ${job.price.toFixed(2)}
             </div>
           ) : null}
@@ -251,7 +251,7 @@ function BookingRow({ job }: { job: WebJob }) {
         </div>
       </div>
 
-      <div className="text-xs text-[#005F6A]/70">
+      <div className="text-xs text-[#008C9C]/70">
         {job.client ? (
           <span>
             {job.client.name}
@@ -259,18 +259,18 @@ function BookingRow({ job }: { job: WebJob }) {
             {job.client.phone ? ` · ${job.client.phone}` : ""}
           </span>
         ) : (
-          <span className="text-[#005F6A]/40">No client linked</span>
+          <span className="text-[#008C9C]/40">No client linked</span>
         )}
       </div>
 
-      <div className="flex flex-wrap gap-2 items-center pt-3 border-t border-[#005F6A]/10">
+      <div className="flex flex-wrap gap-2 items-center pt-3 border-t border-[#008C9C]/10">
         <div className="flex items-center gap-2 text-xs">
-          <Users className="w-3.5 h-3.5 text-[#005F6A]/60" />
-          <span className="text-[#005F6A]/70">
+          <Users className="w-3.5 h-3.5 text-[#008C9C]/60" />
+          <span className="text-[#008C9C]/70">
             Cleaners: {job.cleaners.length} / {job.requiredCleaners}
           </span>
           {job.cleaners.length > 0 ? (
-            <span className="text-[#005F6A] font-medium">
+            <span className="text-[#008C9C] font-medium">
               {job.cleaners.map((c) => c.name).join(", ")}
             </span>
           ) : null}
@@ -294,7 +294,7 @@ function BookingRow({ job }: { job: WebJob }) {
         <div className="flex-1" />
         <Link
           href={`/jobs/${job.id}`}
-          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs bg-[#005F6A] text-white hover:bg-[#004952]">
+          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs bg-[#008C9C] text-white hover:bg-[#00707D]">
           <ExternalLink className="w-3.5 h-3.5" /> Open & assign
         </Link>
       </div>

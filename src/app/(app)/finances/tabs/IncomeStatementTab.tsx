@@ -86,20 +86,20 @@ export default function IncomeStatementTab({ transactions }: Props) {
     }, [transactions, period]);
 
   const selectCls =
-    "px-4 py-2 rounded-xl border border-transparent bg-[#005F6A]/5 text-sm text-[#005F6A] focus:outline-none focus:ring-2 focus:ring-[#005F6A]/20";
+    "px-4 py-2 rounded-xl border border-transparent bg-[#008C9C]/5 text-sm text-[#008C9C] focus:outline-none focus:ring-2 focus:ring-[#008C9C]/20";
 
   return (
     <Card variant="default" className="p-6">
       <div className="flex items-start justify-between gap-4 mb-5">
         <div className="flex items-start gap-2">
-          <div className="p-2 bg-[#005F6A]/10 rounded-lg">
-            <FileBarChart className="w-4 h-4 text-[#005F6A]" />
+          <div className="p-2 bg-[#008C9C]/10 rounded-lg">
+            <FileBarChart className="w-4 h-4 text-[#008C9C]" />
           </div>
           <div>
-            <h2 className="text-sm font-[350] text-[#005F6A]/80">
+            <h2 className="text-sm font-[350] text-[#008C9C]/80">
               Income Statement
             </h2>
-            <p className="text-xs text-[#005F6A]/60 mt-1">
+            <p className="text-xs text-[#008C9C]/60 mt-1">
               Automated profit & loss by period.
             </p>
           </div>
@@ -117,47 +117,47 @@ export default function IncomeStatementTab({ transactions }: Props) {
         />
       </div>
 
-      <div className="rounded-2xl border border-[#005F6A]/10 bg-white overflow-hidden">
+      <div className="rounded-2xl border border-[#008C9C]/10 bg-white overflow-hidden">
         <table className="w-full text-sm">
           <tbody>
-            <tr className="bg-[#005F6A]/5">
-              <td className="px-5 py-3 text-xs uppercase tracking-wider text-[#005F6A]/70 font-[500]">
+            <tr className="bg-[#008C9C]/5">
+              <td className="px-5 py-3 text-xs uppercase tracking-wider text-[#008C9C]/70 font-[500]">
                 Revenue
               </td>
               <td className="px-5 py-3"></td>
             </tr>
-            <tr className="border-t border-[#005F6A]/5">
-              <td className="px-5 py-3 text-[#005F6A]/80 pl-8">Total Revenue</td>
-              <td className="px-5 py-3 text-right text-[#005F6A] font-[500]">
+            <tr className="border-t border-[#008C9C]/5">
+              <td className="px-5 py-3 text-[#008C9C]/80 pl-8">Total Revenue</td>
+              <td className="px-5 py-3 text-right text-[#008C9C] font-[500]">
                 {formatCurrency(revenueTotal)}
               </td>
             </tr>
-            <tr className="bg-[#005F6A]/5 border-t border-[#005F6A]/10">
-              <td className="px-5 py-3 text-xs uppercase tracking-wider text-[#005F6A]/70 font-[500]">
+            <tr className="bg-[#008C9C]/5 border-t border-[#008C9C]/10">
+              <td className="px-5 py-3 text-xs uppercase tracking-wider text-[#008C9C]/70 font-[500]">
                 Expenses
               </td>
               <td className="px-5 py-3"></td>
             </tr>
             {EXPENSE_CATEGORIES.map((c) => (
-              <tr key={c} className="border-t border-[#005F6A]/5">
-                <td className="px-5 py-3 text-[#005F6A]/80 pl-8">
+              <tr key={c} className="border-t border-[#008C9C]/5">
+                <td className="px-5 py-3 text-[#008C9C]/80 pl-8">
                   {CATEGORY_LABELS[c]}
                 </td>
-                <td className="px-5 py-3 text-right text-[#005F6A]/80">
+                <td className="px-5 py-3 text-right text-[#008C9C]/80">
                   {formatCurrency(expenseByCategory[c])}
                 </td>
               </tr>
             ))}
-            <tr className="border-t border-[#005F6A]/10 bg-[#005F6A]/5">
-              <td className="px-5 py-3 text-[#005F6A] font-[500]">
+            <tr className="border-t border-[#008C9C]/10 bg-[#008C9C]/5">
+              <td className="px-5 py-3 text-[#008C9C] font-[500]">
                 Total Expenses
               </td>
-              <td className="px-5 py-3 text-right text-[#005F6A] font-[500]">
+              <td className="px-5 py-3 text-right text-[#008C9C] font-[500]">
                 {formatCurrency(expenseTotal)}
               </td>
             </tr>
-            <tr className="border-t border-[#005F6A]/15">
-              <td className="px-5 py-4 text-[#005F6A] font-[500] text-base">
+            <tr className="border-t border-[#008C9C]/15">
+              <td className="px-5 py-4 text-[#008C9C] font-[500] text-base">
                 Net Income
               </td>
               <td
@@ -173,12 +173,12 @@ export default function IncomeStatementTab({ transactions }: Props) {
 
       {rows.length > 1 && (
         <div className="mt-5">
-          <h3 className="text-xs uppercase tracking-wider text-[#005F6A]/70 mb-2">
+          <h3 className="text-xs uppercase tracking-wider text-[#008C9C]/70 mb-2">
             Monthly Breakdown
           </h3>
-          <div className="rounded-2xl border border-[#005F6A]/10 bg-white overflow-hidden">
+          <div className="rounded-2xl border border-[#008C9C]/10 bg-white overflow-hidden">
             <table className="w-full text-sm">
-              <thead className="bg-[#005F6A]/5 text-[#005F6A]/70 text-[10px] uppercase tracking-wider">
+              <thead className="bg-[#008C9C]/5 text-[#008C9C]/70 text-[10px] uppercase tracking-wider">
                 <tr>
                   <th className="text-left px-5 py-3 font-[500]">Month</th>
                   <th className="text-right px-5 py-3 font-[500]">Revenue</th>
@@ -190,12 +190,12 @@ export default function IncomeStatementTab({ transactions }: Props) {
                 {rows.map((r) => {
                   const net = r.revenue - r.expenses;
                   return (
-                    <tr key={r.month} className="border-t border-[#005F6A]/5">
-                      <td className="px-5 py-3 text-[#005F6A]/80">{r.month}</td>
-                      <td className="px-5 py-3 text-right text-[#005F6A]/80">
+                    <tr key={r.month} className="border-t border-[#008C9C]/5">
+                      <td className="px-5 py-3 text-[#008C9C]/80">{r.month}</td>
+                      <td className="px-5 py-3 text-right text-[#008C9C]/80">
                         {formatCurrency(r.revenue)}
                       </td>
-                      <td className="px-5 py-3 text-right text-[#005F6A]/80">
+                      <td className="px-5 py-3 text-right text-[#008C9C]/80">
                         {formatCurrency(r.expenses)}
                       </td>
                       <td

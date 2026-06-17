@@ -206,7 +206,7 @@ function Row({
   return (
     <div
       className={`flex justify-between items-center px-3 py-2 rounded-xl ${
-        highlight ? "bg-[#005F6A]/10" : "bg-gray-50"
+        highlight ? "bg-[#008C9C]/10" : "bg-gray-50"
       } ${subtle ? "opacity-80" : ""}`}>
       <div className="flex flex-col">
         <span
@@ -220,7 +220,7 @@ function Row({
       <span
         className={`text-sm ${
           bold ? "font-[500]" : "font-[400]"
-        } ${valueClass ?? (highlight ? "text-[#005F6A]" : "text-gray-900")}`}>
+        } ${valueClass ?? (highlight ? "text-[#008C9C]" : "text-gray-900")}`}>
         {value}
       </span>
     </div>

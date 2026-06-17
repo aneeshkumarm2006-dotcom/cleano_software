@@ -135,6 +135,7 @@ export default async function JobPage({
     location: job.location,
     description: job.description,
     jobType: job.jobType,
+    priorityLabel: job.priorityLabel,
     jobDate: job.jobDate?.toISOString() || null,
     startTime: job.startTime.toISOString(),
     endTime: job.endTime?.toISOString() || null,

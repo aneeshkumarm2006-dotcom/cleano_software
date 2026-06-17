@@ -75,7 +75,7 @@ interface RatingEntry {
   job: { id: string; jobNumber: number; jobDate: string | null } | null;
 }
 
-const AVATAR_COLORS = ["#005F6A", "#0284c7", "#7c3aed", "#dc2626", "#d97706", "#059669", "#0891b2", "#be185d"];
+const AVATAR_COLORS = ["#008C9C", "#0284c7", "#7c3aed", "#dc2626", "#d97706", "#059669", "#0891b2", "#be185d"];
 
 function avatarColor(name: string) {
   return AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length];
@@ -436,7 +436,7 @@ export default function ClientDetailView({
           <div className="stack-16">
             {/* Rating hero */}
             <div style={{
-              background: "linear-gradient(135deg, #004952 0%, #005F6A 60%, #007a88 100%)",
+              background: "linear-gradient(135deg, #00707D 0%, #008C9C 60%, #007a88 100%)",
               borderRadius: 16, padding: "28px 32px",
               display: "flex", alignItems: "center", gap: 24, flexWrap: "wrap",
             }}>

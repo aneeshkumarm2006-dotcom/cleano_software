@@ -245,7 +245,7 @@ export default function Sidebar({
         onClick={() => setMobileOpen(true)}
         aria-label="Open menu"
         aria-expanded={mobileOpen}
-        className="md:hidden fixed top-4 left-4 z-30 p-2.5 rounded-xl bg-white/80 backdrop-blur-md shadow-md text-[#005F6A] hover:bg-white transition-colors print:hidden">
+        className="md:hidden fixed top-4 left-4 z-30 p-2.5 rounded-xl bg-white/80 backdrop-blur-md shadow-md text-[#008C9C] hover:bg-white transition-colors print:hidden">
         <Menu className="w-6 h-6" />
       </button>
 
@@ -353,9 +353,9 @@ export default function Sidebar({
             }
           `}</style>
           <div style={{
-            background: "#005F6A",
+            background: "#008C9C",
             borderRadius: 16,
-            boxShadow: "0 8px 32px rgba(0,95,106,0.35), 0 2px 8px rgba(0,0,0,0.12)",
+            boxShadow: "0 8px 32px rgba(0,140,156,0.35), 0 2px 8px rgba(0,0,0,0.12)",
             padding: "14px 16px",
             display: "flex",
             gap: 12,

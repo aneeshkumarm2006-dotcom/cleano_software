@@ -56,7 +56,7 @@ const CATEGORY_META: Record<string, { color: string; label: string }> = {
   DEPOSIT: { color: "#0d9488", label: "Deposit" },
   WEBHOOK: { color: "#6366f1", label: "Webhook" },
   AUTH: { color: "#be185d", label: "Auth" },
-  BOOKING: { color: "#005F6A", label: "Booking" },
+  BOOKING: { color: "#008C9C", label: "Booking" },
   ADMIN: { color: "#64748b", label: "Admin" },
   CRON: { color: "#9333ea", label: "Cron" },
   SYSTEM: { color: "#475569", label: "System" },
@@ -648,8 +648,8 @@ const ActivityStyles = () => (
     .act-search-ic { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: var(--primary-50); pointer-events: none; }
     .act-filterbar .aselect { height: 42px; }
 
-    .act-control { height: 42px; padding: 0 14px; border-radius: 10px; border: 1px solid rgba(0,95,106,0.14); background: #fff; color: var(--primary); font-family: inherit; font-size: 13.5px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; transition: border-color .12s; }
-    .act-control:hover { border-color: rgba(0,95,106,0.3); }
+    .act-control { height: 42px; padding: 0 14px; border-radius: 10px; border: 1px solid rgba(0,140,156,0.14); background: #fff; color: var(--primary); font-family: inherit; font-size: 13.5px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; transition: border-color .12s; }
+    .act-control:hover { border-color: rgba(0,140,156,0.3); }
     .act-control.open, .act-control.has { border-color: var(--primary); }
     .act-control-badge { background: var(--primary); color: #fff; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 999px; }
     .act-pop-wrap { position: relative; }
