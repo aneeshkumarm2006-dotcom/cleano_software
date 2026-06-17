@@ -83,6 +83,9 @@ export const EventCard: React.FC<EventCardProps> = ({
           width: layout.width,
           background: m.tint,
           borderColor: m.color,
+          // Sit above the z-20 drag-create tiles so a click opens the event
+          // instead of starting a New Job selection (Day & Week views).
+          zIndex: isBeingMoved ? 30 : 22,
           ["--evc" as string]: m.color,
         } as React.CSSProperties
       }
