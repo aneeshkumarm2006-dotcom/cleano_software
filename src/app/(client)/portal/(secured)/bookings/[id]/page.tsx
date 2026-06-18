@@ -67,10 +67,14 @@ export default async function BookingDetailPage({
     "policy.cancellationFeeUsd": cancellationFeeUsd,
     "policy.cancellationFeeWindowHours": cancellationWindowHours,
     "customer.cancellationReasons": cancellationReasons,
+    "general.businessEmail": businessEmail,
+    "general.businessPhone": businessPhone,
   } = await getSettings([
     "policy.cancellationFeeUsd",
     "policy.cancellationFeeWindowHours",
     "customer.cancellationReasons",
+    "general.businessEmail",
+    "general.businessPhone",
   ]);
   const isCompletedOrPaid = job.status === "COMPLETED" || job.status === "PAID";
   const hasCancelRequest = !!job.cancellationRequestedAt;
@@ -353,8 +357,15 @@ export default async function BookingDetailPage({
                 margin: 0,
                 lineHeight: 1.55,
               }}>
-              Email <a className="cl-link">care@cleano.ca</a> or text us at{" "}
-              <a className="cl-link">(514) 555-CLEAN</a>.
+              Email{" "}
+              <a className="cl-link" href={`mailto:${businessEmail}`}>
+                {businessEmail}
+              </a>{" "}
+              or text us at{" "}
+              <a className="cl-link" href={`tel:${businessPhone.replace(/[^\d+]/g, "")}`}>
+                {businessPhone}
+              </a>
+              .
             </p>
           </section>
         </div>

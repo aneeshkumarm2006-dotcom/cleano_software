@@ -23,7 +23,15 @@ function formatPrice(n: number) {
   return `$${n.toFixed(2)}`;
 }
 
-export default function AccountForm({ initial }: { initial: Initial }) {
+export default function AccountForm({
+  initial,
+  businessEmail,
+  businessPhone,
+}: {
+  initial: Initial;
+  businessEmail: string;
+  businessPhone: string;
+}) {
   const [name, setName] = useState(initial.name);
   const [phone, setPhone] = useState(initial.phone);
   const [address, setAddress] = useState(initial.address);
@@ -225,9 +233,15 @@ export default function AccountForm({ initial }: { initial: Initial }) {
                 margin: 0,
                 lineHeight: 1.55,
               }}>
-              Email <a className="cl-link">care@cleano.ca</a> or text us at{" "}
-              <a className="cl-link">(514) 555-CLEAN</a>. We answer within an
-              hour, 7 days.
+              Email{" "}
+              <a className="cl-link" href={`mailto:${businessEmail}`}>
+                {businessEmail}
+              </a>{" "}
+              or text us at{" "}
+              <a className="cl-link" href={`tel:${businessPhone.replace(/[^\d+]/g, "")}`}>
+                {businessPhone}
+              </a>
+              . We answer within an hour, 7 days.
             </p>
           </div>
         </div>

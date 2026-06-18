@@ -109,6 +109,25 @@ function currency() {
   };
 }
 
+/** Supported store timezones (IANA), labelled for the admin dropdown. */
+export const TIMEZONE_OPTIONS: { value: string; label: string }[] = [
+  { value: "America/Toronto", label: "Eastern — Toronto / Montréal" },
+  { value: "America/Halifax", label: "Atlantic — Halifax" },
+  { value: "America/St_Johns", label: "Newfoundland — St. John's" },
+  { value: "America/Winnipeg", label: "Central — Winnipeg" },
+  { value: "America/Regina", label: "Saskatchewan — Regina" },
+  { value: "America/Edmonton", label: "Mountain — Edmonton / Calgary" },
+  { value: "America/Vancouver", label: "Pacific — Vancouver" },
+];
+
+function timezone() {
+  const allowed = new Set(TIMEZONE_OPTIONS.map((t) => t.value));
+  return (v: unknown): ValidationResult<string> => {
+    if (typeof v === "string" && allowed.has(v)) return { ok: true, value: v };
+    return { ok: false, error: "Pick a supported timezone" };
+  };
+}
+
 /** Non-empty trimmed string (e.g. a customer-facing message). */
 function text(maxLen = 500) {
   return (v: unknown): ValidationResult<string> => {
@@ -117,6 +136,18 @@ function text(maxLen = 500) {
     if (s.length === 0) return { ok: false, error: "Cannot be empty" };
     if (s.length > maxLen)
       return { ok: false, error: `Must be ${maxLen} characters or fewer` };
+    return { ok: true, value: s };
+  };
+}
+
+/** A contact email address. */
+function email() {
+  return (v: unknown): ValidationResult<string> => {
+    if (typeof v !== "string") return { ok: false, error: "Must be text" };
+    const s = v.trim();
+    if (s.length === 0) return { ok: false, error: "Cannot be empty" };
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s))
+      return { ok: false, error: "Enter a valid email address" };
     return { ok: true, value: s };
   };
 }
@@ -351,6 +382,47 @@ export const SETTINGS = {
     label: "Store currency",
     default: "CAD",
     validate: currency(),
+    audit: true,
+  }),
+  // Store timezone (IANA). Currently governs booking lead-time cut-offs;
+  // the source of truth for date/time handling going forward. Default matches
+  // the previously hardcoded "America/Toronto".
+  "general.timezone": def({
+    key: "general.timezone",
+    category: "general",
+    label: "Time zone",
+    default: "America/Toronto",
+    validate: timezone(),
+    audit: true,
+  }),
+  // Public-facing business name. Shown in the marketing site header/footer.
+  // Default = the brand name currently hardcoded there.
+  "general.businessName": def({
+    key: "general.businessName",
+    category: "general",
+    label: "Business name",
+    default: "Cleano",
+    validate: text(80),
+    audit: true,
+  }),
+  // Customer-facing contact email. Shown in the portal "Need help?" tiles.
+  // Default = the value currently hardcoded in those tiles.
+  "general.businessEmail": def({
+    key: "general.businessEmail",
+    category: "general",
+    label: "Contact email",
+    default: "care@cleano.ca",
+    validate: email(),
+    audit: true,
+  }),
+  // Customer-facing contact phone. Shown in the portal "Need help?" tiles.
+  // Default = the value currently hardcoded in those tiles.
+  "general.businessPhone": def({
+    key: "general.businessPhone",
+    category: "general",
+    label: "Contact phone",
+    default: "(514) 555-CLEAN",
+    validate: text(40),
     audit: true,
   }),
   // Public FAQ entries, rendered at /faq. Admin-managed; no migration.

@@ -75,6 +75,14 @@ function parseStartTime(date: string, timeSlot: string, isFlexible: boolean): Da
   return new Date(`${date}T${slot}:00`);
 }
 
+/** Add whole days to a YYYY-MM-DD string (UTC arithmetic, DST-safe). */
+function addDays(ymd: string, days: number): string {
+  const [y, m, d] = ymd.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + days);
+  return dt.toISOString().slice(0, 10);
+}
+
 export async function submitBooking(input: SubmitBookingInput) {
   try {
     // 1. Validate basics
@@ -93,6 +101,28 @@ export async function submitBooking(input: SubmitBookingInput) {
     }
     if (!input.date) {
       return { success: false, error: "Date is required" };
+    }
+
+    // Server-side lead-time guard (#72). The date picker greys out too-soon
+    // dates, but a crafted request could bypass it. "Today" is computed in the
+    // store timezone so an evening booking isn't falsely rejected by UTC skew.
+    const minLeadDays = await getSetting("scheduling.minLeadDays");
+    const storeTimezone = await getSetting("general.timezone");
+    const leadDays = Math.max(1, minLeadDays);
+    const todayStore = new Intl.DateTimeFormat("en-CA", {
+      timeZone: storeTimezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+    const earliest = addDays(todayStore, leadDays);
+    if (input.date < earliest) {
+      return {
+        success: false,
+        error: `Bookings must be at least ${leadDays} day${
+          leadDays === 1 ? "" : "s"
+        } in advance. The earliest available date is ${earliest}.`,
+      };
     }
     // Move-in/out is priced per square foot — require it.
     if (
