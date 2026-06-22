@@ -12,9 +12,11 @@ import {
   Sparkles,
   FileText,
   Check,
+  UserPlus,
 } from "lucide-react";
 import { initials } from "@/lib/avatar";
 import { updateApplicationStatus } from "../actions/updateApplicationStatus";
+import { hireApplicant } from "../actions/hireApplicant";
 
 type Status =
   | "NEW"
@@ -99,6 +101,10 @@ export default function ApplicationsInboxClient({
   const [notesDraft, setNotesDraft] = useState<Record<string, string>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
   const [savedFlash, setSavedFlash] = useState(false);
+  const [hiring, setHiring] = useState(false);
+  const [hireMsg, setHireMsg] = useState<
+    { kind: "password"; value: string } | { kind: "info" | "error"; value: string } | null
+  >(null);
 
   const counts = useMemo(() => {
     const m: Record<string, number> = { ALL: applications.length };
@@ -122,6 +128,24 @@ export default function ApplicationsInboxClient({
     const res = await updateApplicationStatus({ applicationId: sel.id, status });
     setSavingId(null);
     if (res.success) router.refresh();
+  }
+
+  async function hire() {
+    if (!sel) return;
+    setHiring(true);
+    setHireMsg(null);
+    const res = await hireApplicant(sel.id);
+    setHiring(false);
+    if ("error" in res) {
+      setHireMsg({ kind: "error", value: res.error });
+      return;
+    }
+    if (res.existing) {
+      setHireMsg({ kind: "info", value: "Existing account reactivated and marked hired." });
+    } else {
+      setHireMsg({ kind: "password", value: res.tempPassword });
+    }
+    router.refresh();
   }
 
   async function saveNotes() {
@@ -189,7 +213,7 @@ export default function ApplicationsInboxClient({
               <button
                 key={a.id}
                 className={`apps-card ${a.id === selId ? "active" : ""}`}
-                onClick={() => setSelId(a.id)}>
+                onClick={() => { setSelId(a.id); setHireMsg(null); }}>
                 <Avatar name={a.name} size={42} />
                 <div className="apps-card-body">
                   <div className="apps-card-name">{a.name}</div>
@@ -283,8 +307,50 @@ export default function ApplicationsInboxClient({
               </button>
             )}
 
+            {/* Hire → provision cleaner account */}
+            <div className="apps-section-label">Onboarding</div>
+            <button
+              className="btn btn-primary btn-sm"
+              disabled={hiring}
+              onClick={hire}>
+              <UserPlus size={14} />
+              {sel.status === "HIRED" ? "Re-provision cleaner account" : "Hire & create cleaner account"}
+            </button>
+            {hireMsg ? (
+              <div
+                style={{
+                  marginTop: 10,
+                  padding: "10px 14px",
+                  borderRadius: 10,
+                  fontSize: 13,
+                  background:
+                    hireMsg.kind === "error" ? "#fee2e2" : "rgba(0,140,156,0.08)",
+                  color: hireMsg.kind === "error" ? "#dc2626" : "var(--primary)",
+                }}>
+                {hireMsg.kind === "password" ? (
+                  <>
+                    Account created. Share this temporary password with the cleaner —
+                    they sign in at <strong>/cleanos/login</strong>:
+                    <div
+                      style={{
+                        marginTop: 6,
+                        fontFamily: "var(--font-mono)",
+                        fontSize: 15,
+                        fontWeight: 700,
+                        letterSpacing: "0.04em",
+                        userSelect: "all",
+                      }}>
+                      {hireMsg.value}
+                    </div>
+                  </>
+                ) : (
+                  hireMsg.value
+                )}
+              </div>
+            ) : null}
+
             {/* Status workflow */}
-            <div className="apps-section-label">Move to stage</div>
+            <div className="apps-section-label" style={{ marginTop: 18 }}>Move to stage</div>
             <div className="apps-status-grid">
               {ORDER.map((s) => {
                 const m = STATUS[s];

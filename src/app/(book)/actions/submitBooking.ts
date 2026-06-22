@@ -16,6 +16,7 @@ import {
   generateUniqueReferralCode,
 } from "@/lib/referral";
 import { getSetting } from "@/lib/settings";
+import { advanceContactLifecycleForBooking, logContactEvent } from "@/lib/crm";
 import {
   sendBookingConfirmation,
   sendAdminNewBookingNotification,
@@ -372,6 +373,22 @@ export async function submitBooking(input: SubmitBookingInput) {
       },
     });
 
+    // PIC-004: record the after-photo consent decision in the job audit log
+    // (admin-only — NOTE_ADDED is filtered out of the customer activity feed).
+    await db.jobLog
+      .create({
+        data: {
+          jobId: primaryJob.id,
+          action: "NOTE_ADDED",
+          field: "afterPhotoConsent",
+          newValue: consentGiven ? "granted" : "declined",
+          description: consentGiven
+            ? `Customer granted after-photo consent at booking (${AFTER_PHOTO_CONSENT_VERSION}).`
+            : "Customer declined after-photo consent at booking.",
+        },
+      })
+      .catch((e) => console.error("after-photo consent log", e));
+
     // Spend the credit on this client (deduct from balance)
     if (creditSpent > 0) {
       await db.client.update({
@@ -423,6 +440,15 @@ export async function submitBooking(input: SubmitBookingInput) {
           },
         })
         .catch((e) => console.error("reactivation update", e));
+      // §11: log win-back outcome on the CRM contact timeline.
+      await logContactEvent(
+        client.id,
+        usedOffer ? "LIFECYCLE" : "BOOKING",
+        usedOffer ? "Win-back offer redeemed" : "Reactivated after cancellation",
+        usedOffer && openCancellation.offerCode
+          ? `Booked again using win-back code ${openCancellation.offerCode}`
+          : "Customer booked again after cancelling recurring service"
+      );
     }
 
     // 7. Recurring jobs — copy the primary across future dates
@@ -534,6 +560,10 @@ export async function submitBooking(input: SubmitBookingInput) {
       // → cust.booking.receipt_rec
       recurring: input.frequency !== "ONE_TIME",
     });
+
+    // §7: advance the CRM contact lifecycle on a new booking (→ BOOKED, or
+    // → RETURNING for an existing customer). Best-effort, never blocks booking.
+    await advanceContactLifecycleForBooking(client.id, "BOOKING_CREATED");
 
     // If a referral code was applied, fire the dedicated catalog row
     // `admin.booking.new_via_referral` in addition to the regular

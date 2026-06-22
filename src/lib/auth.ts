@@ -38,6 +38,10 @@ export const auth = betterAuth({
       }).catch((e) => console.error("reset_password email", e));
     },
     onPasswordReset: async ({ user }) => {
+      // A completed reset always satisfies the forced first-login reset gate.
+      db.user
+        .update({ where: { id: user.id }, data: { mustChangePassword: false } })
+        .catch((e) => console.error("clear mustChangePassword", e));
       const role = await roleOf(user.id);
       sendAccountEmail({
         to: user.email,

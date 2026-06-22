@@ -54,7 +54,13 @@ export async function cancelJobByAdmin(input: CancelJobInput) {
     await db.$transaction([
       db.job.update({
         where: { id: input.jobId },
-        data: { status: "CANCELLED", cancellationRequestedAt: null },
+        data: {
+          status: "CANCELLED",
+          cancellationRequestedAt: null,
+          ...(input.reason?.trim()
+            ? { cancellationReason: input.reason.trim() }
+            : {}),
+        },
       }),
       db.jobLog.create({
         data: {

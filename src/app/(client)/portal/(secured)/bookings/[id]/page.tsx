@@ -12,6 +12,17 @@ import RequestActions from "./RequestActions";
 function formatPrice(n: number | null | undefined) {
   return `$${(n ?? 0).toFixed(2)}`;
 }
+
+// Curated, customer-safe labels for the portal activity feed. We never render
+// raw log descriptions (they can contain internal operational notes).
+const ACTIVITY_LABELS: Record<string, string> = {
+  CREATED: "Booking created",
+  STATUS_CHANGED: "Status updated",
+  PAYMENT_RECEIVED: "Payment received",
+  INVOICE_SENT: "Invoice sent",
+  CLOCKED_IN: "Cleaner arrived",
+  CLOCKED_OUT: "Cleaner finished",
+};
 function formatTime(iso: string) {
   return new Date(iso).toLocaleString("en-US", {
     hour: "numeric",
@@ -48,10 +59,24 @@ export default async function BookingDetailPage({
       cleaners: { select: { id: true, name: true } },
       addOns: { select: { name: true, price: true } },
       logs: {
+        // Customer-safe lifecycle events only. Internal free-text logs
+        // (NOTE_ADDED, UPDATED, PRODUCT_USED, cleaner churn) are excluded so
+        // operational notes — e.g. fee-collection instructions — never leak.
+        where: {
+          action: {
+            in: [
+              "CREATED",
+              "STATUS_CHANGED",
+              "PAYMENT_RECEIVED",
+              "INVOICE_SENT",
+              "CLOCKED_IN",
+              "CLOCKED_OUT",
+            ],
+          },
+        },
         select: {
           id: true,
           action: true,
-          description: true,
           createdAt: true,
         },
         orderBy: { createdAt: "desc" },
@@ -129,6 +154,17 @@ export default async function BookingDetailPage({
             {hasCancelRequest
               ? "Cancellation requested — awaiting confirmation from our team."
               : "Reschedule requested — we'll be in touch."}
+            {hasCancelRequest && job.cancellationReason
+              ? ` Reason: ${job.cancellationReason}.`
+              : ""}
+          </Banner>
+        </div>
+      ) : null}
+
+      {job.status === "CANCELLED" && job.cancellationReason ? (
+        <div style={{ marginBottom: 24 }}>
+          <Banner kind="amber">
+            This booking was cancelled. Reason: {job.cancellationReason}.
           </Banner>
         </div>
       ) : null}
@@ -241,7 +277,7 @@ export default async function BookingDetailPage({
                     />
                     <div style={{ flex: 1 }}>
                       <div style={{ color: "var(--ink)" }}>
-                        {log.description}
+                        {ACTIVITY_LABELS[log.action] ?? "Update"}
                       </div>
                       <div
                         style={{

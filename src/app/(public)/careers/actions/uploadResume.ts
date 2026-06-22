@@ -8,8 +8,6 @@ const ALLOWED_TYPES = [
   "application/pdf",
   "application/msword",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "image/jpeg",
-  "image/png",
 ];
 
 function streamUpload(buffer: Buffer, publicId: string): Promise<UploadApiResponse> {
@@ -36,7 +34,7 @@ export async function uploadResume(formData: FormData) {
     return { success: false, error: "File exceeds 8MB limit" };
   }
   if (!ALLOWED_TYPES.includes(file.type)) {
-    return { success: false, error: "Use a PDF, Word doc, or image" };
+    return { success: false, error: "Use a PDF or Word document" };
   }
   if (
     !process.env.CLOUDINARY_CLOUD_NAME ||

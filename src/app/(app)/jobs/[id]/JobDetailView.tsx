@@ -1400,6 +1400,30 @@ export default function JobDetailView({
               <div style={{ flex: 1, minWidth: 0 }}>
                 <strong>After-photos {allowed ? 'allowed' : 'not permitted'}.</strong>{' '}
                 {detail}
+                {(() => {
+                  const fmt = (iso: string) =>
+                    new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                  const history: string[] = [];
+                  if (job.afterPhotoConsentAt) {
+                    history.push(
+                      `Consent granted at booking — ${fmt(job.afterPhotoConsentAt)}${
+                        job.afterPhotoConsentVersion ? ` (${job.afterPhotoConsentVersion})` : ''
+                      }`
+                    );
+                  } else {
+                    history.push('Consent declined at booking');
+                  }
+                  if (afterPhotoOverrideAt) {
+                    history.push(`Admin override active since ${fmt(afterPhotoOverrideAt)}`);
+                  }
+                  return (
+                    <ul style={{ margin: '6px 0 0', paddingLeft: 16, fontSize: 12, opacity: 0.85 }}>
+                      {history.map((h, i) => (
+                        <li key={i}>{h}</li>
+                      ))}
+                    </ul>
+                  );
+                })()}
               </div>
               {isAdmin && !consented && (
                 <button

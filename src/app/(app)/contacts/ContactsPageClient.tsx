@@ -10,6 +10,8 @@ import type { LifecycleStage } from "@prisma/client";
 import type { ContactListItem, CrmStats } from "@/lib/crm-meta";
 import { LIFECYCLE_ORDER, LIFECYCLE_META, money, relativeTime } from "@/lib/crm-meta";
 import { Avatar, LifecyclePill, AStat, ScoreMeter, Pager } from "./_components";
+import Modal from "@/components/ui/Modal";
+import { createContact } from "@/app/(app)/actions/contactActions";
 
 type ColId = "lifecycle" | "source" | "owner" | "activity" | "nextstep" | "score" | "bookings" | "ltv";
 const COLUMNS: { id: ColId; label: string }[] = [
@@ -123,6 +125,38 @@ export default function ContactsPageClient({
   const show = (id: ColId) => cols.has(id);
   const open = (id: string) => router.push(`/contacts/${id}`);
 
+  // ── New-contact create modal ──
+  const [createOpen, setCreateOpen] = useState(false);
+  const [cForm, setCForm] = useState<{
+    name: string;
+    email: string;
+    phone: string;
+    address: string;
+    lifecycle: LifecycleStage;
+    source: string;
+  }>({ name: "", email: "", phone: "", address: "", lifecycle: "NEW_LEAD", source: "" });
+  const [cSaving, setCSaving] = useState(false);
+  const [cError, setCError] = useState<string | null>(null);
+
+  function openCreate() {
+    setCForm({ name: "", email: "", phone: "", address: "", lifecycle: "NEW_LEAD", source: "" });
+    setCError(null);
+    setCreateOpen(true);
+  }
+  async function submitCreate(e: React.FormEvent) {
+    e.preventDefault();
+    if (!cForm.name.trim()) return;
+    setCSaving(true);
+    setCError(null);
+    const res = await createContact(cForm);
+    if ("error" in res) {
+      setCError(res.error);
+      setCSaving(false);
+      return;
+    }
+    router.push(`/contacts/${res.id}`);
+  }
+
   return (
     <div className="admin-font">
       <header className="row-between" style={{ marginBottom: 32, alignItems: "flex-end", flexWrap: "wrap", gap: 16 }}>
@@ -136,11 +170,91 @@ export default function ContactsPageClient({
           <button className="btn btn-secondary" onClick={() => router.push("/contacts/duplicates")}>
             <Copy size={15} /> Manage duplicates
           </button>
-          <button className="btn btn-primary" onClick={() => alert("New contact — create form not built yet")}>
+          <button className="btn btn-primary" onClick={openCreate}>
             <Plus size={15} /> New contact
           </button>
         </div>
       </header>
+
+      <Modal isOpen={createOpen} onClose={() => setCreateOpen(false)} title="New contact">
+        <form onSubmit={submitCreate} className="stack-16" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <label style={{ display: "block" }}>
+            <span className="label">Name<span style={{ color: "var(--error)" }}> *</span></span>
+            <input
+              className="input"
+              value={cForm.name}
+              onChange={(e) => setCForm((f) => ({ ...f, name: e.target.value }))}
+              placeholder="Full name"
+              autoFocus
+            />
+          </label>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+            <label style={{ display: "block" }}>
+              <span className="label">Email</span>
+              <input
+                className="input"
+                type="email"
+                value={cForm.email}
+                onChange={(e) => setCForm((f) => ({ ...f, email: e.target.value }))}
+                placeholder="name@example.com"
+              />
+            </label>
+            <label style={{ display: "block" }}>
+              <span className="label">Phone</span>
+              <input
+                className="input"
+                value={cForm.phone}
+                onChange={(e) => setCForm((f) => ({ ...f, phone: e.target.value }))}
+                placeholder="(514) 555-0123"
+              />
+            </label>
+          </div>
+          <label style={{ display: "block" }}>
+            <span className="label">Address</span>
+            <input
+              className="input"
+              value={cForm.address}
+              onChange={(e) => setCForm((f) => ({ ...f, address: e.target.value }))}
+              placeholder="Street, city"
+            />
+          </label>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+            <label style={{ display: "block" }}>
+              <span className="label">Lifecycle stage</span>
+              <select
+                className="input"
+                value={cForm.lifecycle}
+                onChange={(e) => setCForm((f) => ({ ...f, lifecycle: e.target.value as LifecycleStage }))}>
+                {LIFECYCLE_ORDER.map((s) => (
+                  <option key={s} value={s}>{LIFECYCLE_META[s].label}</option>
+                ))}
+              </select>
+            </label>
+            <label style={{ display: "block" }}>
+              <span className="label">Source</span>
+              <input
+                className="input"
+                value={cForm.source}
+                onChange={(e) => setCForm((f) => ({ ...f, source: e.target.value }))}
+                placeholder="e.g. Referral, Website"
+              />
+            </label>
+          </div>
+          {cError && (
+            <div style={{ background: "#fee2e2", color: "#dc2626", padding: "10px 14px", borderRadius: 10, fontSize: 13 }}>
+              {cError}
+            </div>
+          )}
+          <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
+            <button type="button" className="btn btn-secondary" onClick={() => setCreateOpen(false)}>
+              Cancel
+            </button>
+            <button type="submit" className="btn btn-primary" disabled={cSaving || !cForm.name.trim()}>
+              {cSaving ? "Creating…" : "Create contact"}
+            </button>
+          </div>
+        </form>
+      </Modal>
 
       <div className="astat-grid" style={{ marginBottom: 28 }}>
         <AStat icon={Sparkles} label="Total contacts" value={initialStats.total} hint="across all stages" />

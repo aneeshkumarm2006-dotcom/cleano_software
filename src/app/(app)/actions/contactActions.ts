@@ -29,6 +29,65 @@ const EDITABLE_FIELDS = new Set([
   "campaign", "nextStep", "ownerId",
 ]);
 
+export async function createContact(input: {
+  name: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  lifecycle?: LifecycleStage;
+  source?: string;
+}): Promise<{ success: true; id: string } | { error: string }> {
+  const gate = await requireAdmin();
+  if ("error" in gate) return gate;
+
+  const name = input.name?.trim();
+  if (!name) return { error: "Name is required" };
+
+  const email = input.email?.trim().toLowerCase() || null;
+  const phone = input.phone?.trim() || null;
+  const source = input.source?.trim() || "Manual entry";
+
+  try {
+    // Soft duplicate guard: warn the admin if an active contact already
+    // matches on email or phone (does not hard-block — they may be intentional).
+    if (email || phone) {
+      const dupe = await db.contact.findFirst({
+        where: {
+          archivedAt: null,
+          OR: [
+            ...(email ? [{ email }] : []),
+            ...(phone ? [{ phone }] : []),
+          ],
+        },
+        select: { id: true, name: true },
+      });
+      if (dupe) {
+        return {
+          error: `A contact with that email or phone already exists (${dupe.name}). Open Manage duplicates to merge.`,
+        };
+      }
+    }
+
+    const contact = await db.contact.create({
+      data: {
+        name,
+        email,
+        phone,
+        address: input.address?.trim() || null,
+        lifecycle: input.lifecycle ?? "NEW_LEAD",
+        source,
+        latestSource: source,
+      },
+      select: { id: true },
+    });
+    revalidatePath("/contacts");
+    return { success: true, id: contact.id };
+  } catch (e) {
+    console.error("createContact", e);
+    return { error: "Failed to create contact" };
+  }
+}
+
 export async function updateContactField(id: string, field: string, value: string | null): Promise<Result> {
   const gate = await requireAdmin();
   if ("error" in gate) return gate;
@@ -151,14 +210,31 @@ export async function mergeContacts(
       lastActivityAt: new Date(),
       tags: (master.tags ?? []).filter((t) => t !== "Possible duplicate"),
     };
-    if (choices.name) data.name = pick("name").name;
-    if (choices.email) data.email = pick("email").email;
-    if (choices.phone) data.phone = pick("phone").phone;
-    if (choices.address) data.address = pick("address").address;
-    if (choices.lifecycle) data.lifecycle = pick("lifecycle").lifecycle;
-    if (choices.source) { const s = pick("source"); data.source = s.source; data.sourceDetail = s.sourceDetail; }
-    if (choices.owner) data.ownerId = pick("owner").ownerId;
-    if (choices.leadScore) data.leadScore = pick("leadScore").leadScore;
+    // DUP-004: capture the master's pre-merge values so any overwrite is
+    // auditable (losing records are archived, so their values are preserved).
+    const changes: string[] = [];
+    const note = (label: string, oldVal: unknown, newVal: unknown) => {
+      const o = (oldVal ?? "—").toString();
+      const n = (newVal ?? "—").toString();
+      if (o !== n) changes.push(`${label}: "${o}" → "${n}"`);
+    };
+    if (choices.name) { const v = pick("name").name; note("Name", master.name, v); data.name = v; }
+    if (choices.email) { const v = pick("email").email; note("Email", master.email, v); data.email = v; }
+    if (choices.phone) { const v = pick("phone").phone; note("Phone", master.phone, v); data.phone = v; }
+    if (choices.address) { const v = pick("address").address; note("Address", master.address, v); data.address = v; }
+    if (choices.lifecycle) { const v = pick("lifecycle").lifecycle; note("Lifecycle", master.lifecycle, v); data.lifecycle = v; }
+    if (choices.source) { const s = pick("source"); note("Source", master.source, s.source); data.source = s.source; data.sourceDetail = s.sourceDetail; }
+    if (choices.owner) { const v = pick("owner").ownerId; note("Owner", master.ownerId, v); data.ownerId = v; }
+    if (choices.leadScore) { const v = pick("leadScore").leadScore; note("Lead score", master.leadScore, v); data.leadScore = v; }
+
+    const archivedList = loserIds
+      .map((id) => map.get(id))
+      .filter((c): c is NonNullable<typeof c> => !!c)
+      .map((c) => `${c.name} (${c.email ?? c.phone ?? "no contact info"})`)
+      .join("; ");
+    const auditBody =
+      `Archived: ${archivedList || "—"}.` +
+      (changes.length ? ` Master values changed — ${changes.join("; ")}.` : " Master values unchanged.");
 
     await db.$transaction([
       db.contact.update({ where: { id: masterId }, data }),
@@ -168,7 +244,7 @@ export async function mergeContacts(
           contactId: masterId,
           type: "LIFECYCLE",
           title: `Merged ${loserIds.length} duplicate${loserIds.length > 1 ? "s" : ""}`,
-          body: "Old values archived to the audit log",
+          body: auditBody,
           actor: "name" in gate ? gate.name : "Admin",
         },
       }),

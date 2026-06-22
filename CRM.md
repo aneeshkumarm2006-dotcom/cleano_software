@@ -22,12 +22,12 @@ lands.
 | 3 | Contacts / Leads CRM | ✅ (CRM-002/005/006 remaining) |
 | 4 | Lead Source & True CPA | ✅ |
 | 5 | Custom Property Engine | ✅ registry + drives contact record |
-| 6 | Manage Duplicates | ✅ (DUP-004 partial) |
-| 7 | Lifecycle Automation | 🔴 |
-| 8 | Training — Job Applications | ⏭️ existing `/job-applications` (approve→invite 🔴) |
+| 6 | Manage Duplicates | ✅ |
+| 7 | Lifecycle Automation | ✅ (edit-booking promote skipped — low value) |
+| 8 | Training — Job Applications | ✅ existing `/job-applications` + hire→account (APP-002/004) |
 | 9 | Training Documents — Locked Access | ✅ `/training-docs` (verify gating) |
-| 10 | After-Photo Consent | 🟢 schema · 🟡 UI |
-| 11 | Cancellation Retention ($15 winback) | 🟡 |
+| 10 | After-Photo Consent | 🟢 schema · ✅ audit (PIC-004) · PIC-001/003 verify-at-runtime |
+| 11 | Cancellation Retention ($15 winback) | ✅ |
 | 12 | Post-Cleaning Ratings + Modal | 🟢 verify |
 | 13 | Three-Strike System | 🟢 verify |
 | 14 | P0 Software Fixes | 🟡 (FIX-001 ✅ /recurring; FIX-004 open) |
@@ -41,11 +41,11 @@ lands.
 | ID | Feature | Status | Notes |
 |---|---|---|---|
 | CRM-001 | Contacts navigation | ✅ | `/contacts`, saved views, filters, column selector |
-| CRM-002 | Create contact / lead | 🟡 | "New contact" button is a stub — no create form yet |
+| CRM-002 | Create contact / lead | ✅ | "New contact" modal (name/email/phone/address/lifecycle/source) → `createContact` action with admin gate + soft dedupe on email/phone; opens the new record |
 | CRM-003 | Contact record page | ✅ | `/contacts/[id]` — property cards, activity timeline, bookings, comms, source, ratings, duplicates tabs |
 | CRM-004 | Lifecycle stages | ✅ | `LifecycleStage` enum — 10 stages |
 | CRM-005 | Property-driven UI | ✅ | Contact record Overview now renders **from the registry**; custom properties auto-appear; bindings map to columns/props/system |
-| CRM-006 | Auto-property updates | 🔴 | Customer edits don't yet sync to contact properties |
+| CRM-006 | Auto-property updates | ✅ | `syncContactFromClient()` in `crm.ts` mirrors name/email/phone/address + `lastActivityAt` onto the linked contact; called from `updateClientProfile` (portal) and `updateClient` (admin) |
 
 **Files:** `src/app/(app)/contacts/*`, `src/lib/crm.ts`, `src/lib/crm-meta.ts`, `src/app/(app)/actions/contactActions.ts`
 **Data model:** `Contact`, `ContactActivity` (back-link `clientId`/`leadId`). Migration `20260615000000_contacts_crm` — backfilled 726 contacts (714 clients + 12 leads).
@@ -71,19 +71,24 @@ lands.
 | DUP-001 | Detect duplicate groups | ✅ | union-find on phone/email; score + matched fields |
 | DUP-002 | Side-by-side field selection | ✅ | merge comparator |
 | DUP-003 | "Use newest" one-click | ✅ | toggle in comparator |
-| DUP-004 | Safe merge audit trail | 🟡 | archives losers + audit entry; **no old-values snapshot** |
+| DUP-004 | Safe merge audit trail | ✅ | archives losers + audit entry now records the master's **pre-merge old-values diff** + the archived records' identities on the contact timeline |
 | DUP-005 | Delete / archive duplicates | ✅ | soft-archive (`archivedAt`) |
 
 **Files:** `src/app/(app)/contacts/duplicates/*` + merge/dismiss in `contactActions.ts`.
 
-## 7. Lifecycle Automation — Cancellations & Edits 🔴
+## 7. Lifecycle Automation — Cancellations & Edits ✅
 
-Auto-update contact lifecycle/properties on: cancel appointment, cancel recurring plan, edit booking, rebook. Guardrails (don't downgrade returning customers). **Not started.**
+`advanceContactLifecycleForBooking()` + `logContactCancellation()` in `crm.ts`.
+- **New booking / rebook** (`submitBooking`) → contact promoted to **BOOKED** (or **RETURNING** if they've booked before).
+- **Booking completed** (`markJobComplete`) → promoted to **ACTIVE** / **RETURNING**.
+- **Cancel appointment** (`requestCancellation`) + **cancel recurring** (`cancelRecurringService`) → logged on the contact timeline, **no lifecycle downgrade**.
+- **Guardrails:** promote-only (rank-based, never downgrades); frozen stages (LOST/DNC/CLEANER/APPLICANT) are never overridden; all calls are best-effort and never block the booking/cancel flow.
+- ⏭️ Edit-booking lifecycle change skipped — editing a booking doesn't meaningfully change lifecycle.
 
 ## 8. Training — Job Applications ⏭️
 
 Existing `/job-applications` + `JobApplication` model already cover intake. The design's richer outline form was **skipped** to avoid duplication.
-- 🔴 **APP-002 / APP-004**: Approve → create/unlock cleaner account + send invite — genuinely useful, not yet wired into the existing page.
+- ✅ **APP-002 / APP-004**: "Hire & create cleaner account" in the applications inbox → `hireApplicant()` marks the application HIRED and either **reactivates** an existing user or **creates an EMPLOYEE account** (auto-verified, active) with a generated temp password shown to the admin to relay; sends the provider welcome emails. ⏭️ **Email-based set-password invite** is a future refinement — the app has no cleaner password-reset flow yet, so onboarding uses the temp-password handoff (same model as admin-created employees). Decision for client: keep temp-password handoff or build email invites?
 
 ## 9. Training Documents — Locked Access ✅
 
@@ -97,11 +102,11 @@ Schema exists: `Job.afterPhotoConsent`, `afterPhotoConsentVersion`, `afterPhotoO
 | PIC-001 booking checkbox | 🟡 | verify present on booking page |
 | PIC-002 store consent | 🟢 | fields exist |
 | PIC-003 cleaner job view | 🟡 | verify |
-| PIC-004 audit history | 🔴 | |
+| PIC-004 audit history | ✅ | booking consent decision now logged to the job audit (`NOTE_ADDED`, admin-only); admin job detail shows a dated consent-history readout (granted/declined at booking + version, admin override since date). Overrides already logged via `setAfterPhotoOverride`. |
 
-## 11. Cancellation Retention ($15 winback) 🟡
+## 11. Cancellation Retention ($15 winback) ✅
 
-`RecurringCancellation` (offerType/offerStatus) + save-offer flow exist. Remaining: $15 single-use code generation + winback email + timeline logging — verify/complete.
+`cancelRecurringService` generates a **single-use promo code** (`BACK-XXXX`, maxUses 1, 60-day expiry, amount from the admin Retention config), sends the **win-back email**, records a `RecurringCancellation` with `offerStatus` (PENDING→SENT), and respects a cooldown. **Redemption tracking**: `submitBooking` flips `offerStatus`→REDEEMED + sets `reactivatedAt` when the win-back code is used on a new booking. **Timeline logging (this pass)**: the offer-sent and offer-redeemed/reactivated events are now logged on the CRM contact timeline via `logContactEvent()`. (The "$15" value is admin-editable in Settings → Retention.)
 
 ## 12. Post-Cleaning Ratings + Forced Modal 🟢
 

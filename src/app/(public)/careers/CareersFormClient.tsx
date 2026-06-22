@@ -48,16 +48,28 @@ export default function CareersFormClient() {
     setError(null);
     setResumeUrl(null);
     setResumeName(null);
+    if (file.size > 8 * 1024 * 1024) {
+      setUploading(false);
+      setError("Résumé is too large — please keep it under 8MB.");
+      if (fileRef.current) fileRef.current.value = "";
+      return;
+    }
     const fd = new FormData();
     fd.append("file", file);
-    const res = await uploadResume(fd);
-    setUploading(false);
-    if (res.success && res.url) {
-      setResumeUrl(res.url);
-      setResumeName(file.name);
-    } else {
-      setError(res.error ?? "Résumé upload failed.");
+    try {
+      const res = await uploadResume(fd);
+      if (res.success && res.url) {
+        setResumeUrl(res.url);
+        setResumeName(file.name);
+      } else {
+        setError(res.error ?? "Résumé upload failed.");
+        if (fileRef.current) fileRef.current.value = "";
+      }
+    } catch {
+      setError("Résumé upload failed — please try a smaller file or skip it.");
       if (fileRef.current) fileRef.current.value = "";
+    } finally {
+      setUploading(false);
     }
   }
 
@@ -270,7 +282,7 @@ export default function CareersFormClient() {
               <input
                 ref={fileRef}
                 type="file"
-                accept=".pdf,.doc,.docx,image/*"
+                accept=".pdf,.doc,.docx"
                 hidden
                 onChange={handleFile}
               />

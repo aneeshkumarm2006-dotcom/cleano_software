@@ -28,6 +28,17 @@ export default async function PortalLayout({
     redirect("/dashboard");
   }
 
+  // Forced first-login reset: temp-password (imported) accounts must set their
+  // own password before reaching any portal page. /portal/change-password lives
+  // outside this secured layout, so this redirect can't loop.
+  const account = await db.user.findUnique({
+    where: { id: session.user.id },
+    select: { mustChangePassword: true },
+  });
+  if (account?.mustChangePassword) {
+    redirect("/portal/change-password");
+  }
+
   // Resolve display name + email — prefer Client record, fall back to User.
   const email = session.user.email?.toLowerCase() ?? "";
   const client = email

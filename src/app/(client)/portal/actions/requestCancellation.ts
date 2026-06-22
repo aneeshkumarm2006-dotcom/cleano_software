@@ -10,6 +10,7 @@ import {
   sendCustomerFeesCharged,
 } from "@/lib/email";
 import { getSetting } from "@/lib/settings";
+import { logContactCancellation } from "@/lib/crm";
 
 // Per spec: cancellation requests are flagged for admin review — never auto-cancel.
 // If the request lands inside the late-cancellation window, the configured fee
@@ -114,6 +115,7 @@ export async function requestCancellation(jobId: string, reason?: string) {
         where: { id: jobId },
         data: {
           cancellationRequestedAt: now,
+          ...(reason?.trim() ? { cancellationReason: reason.trim() } : {}),
           ...(chargeOutcome === "charged"
             ? {
                 cancellationFeeChargedAt: now,
@@ -148,6 +150,16 @@ export async function requestCancellation(jobId: string, reason?: string) {
           ]
         : []),
     ]);
+
+    // §7: log the cancellation on the CRM contact timeline (no downgrade).
+    if (job.clientId) {
+      await logContactCancellation(
+        job.clientId,
+        `Cancellation requested for booking #${job.jobNumber}${
+          reason?.trim() ? ` — ${reason.trim()}` : ""
+        }`
+      );
+    }
 
     // Notify all admins (gated by Settings → Notifications).
     sendAdminBookingCancellationRequest({

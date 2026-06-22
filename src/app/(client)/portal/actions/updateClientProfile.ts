@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { syncContactFromClient } from "@/lib/crm";
 
 interface UpdateInput {
   name?: string;
@@ -30,6 +31,9 @@ export async function updateClientProfile(input: UpdateInput) {
     if (input.address !== undefined) data.address = input.address.trim();
 
     await db.client.update({ where: { id: client.id }, data });
+
+    // CRM-006: mirror identity changes onto the linked CRM contact.
+    await syncContactFromClient(client.id);
 
     // Keep User.name in sync if provided.
     if (data.name) {

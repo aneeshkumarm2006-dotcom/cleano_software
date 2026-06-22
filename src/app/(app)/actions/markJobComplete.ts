@@ -6,6 +6,7 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { ensureRatingRequest } from "@/lib/rating";
 import { isAdminRole } from "@/lib/role-routing";
+import { advanceContactLifecycleForBooking } from "@/lib/crm";
 
 export async function markJobComplete(jobId: string) {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -16,7 +17,7 @@ export async function markJobComplete(jobId: string) {
   const userId = session.user.id;
   const job = await db.job.findUnique({
     where: { id: jobId },
-    select: { employeeId: true, cleaners: { select: { id: true } } },
+    select: { employeeId: true, clientId: true, cleaners: { select: { id: true } } },
   });
   if (!job) return { error: "Job not found" };
   const isAssigned =
@@ -29,6 +30,11 @@ export async function markJobComplete(jobId: string) {
     where: { id: jobId },
     data: { status: "COMPLETED" },
   });
+
+  // §7: advance the CRM contact lifecycle (→ ACTIVE / RETURNING).
+  if (job.clientId) {
+    await advanceContactLifecycleForBooking(job.clientId, "BOOKING_COMPLETED");
+  }
 
   // Ask the customer to rate the cleaning (auto-email + portal pop-up token).
   await ensureRatingRequest(jobId).catch((e) =>

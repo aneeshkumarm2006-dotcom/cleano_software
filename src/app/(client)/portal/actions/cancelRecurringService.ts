@@ -12,6 +12,7 @@ import {
   SAVE_OFFER_COOLDOWN_DAYS,
   saveOfferLabel,
 } from "@/lib/retention";
+import { logContactCancellation, logContactEvent } from "@/lib/crm";
 
 interface Input {
   reason?: string;
@@ -113,6 +114,9 @@ export async function cancelRecurringService(input: Input = {}) {
       data: { cancellationRequestedAt: now },
     });
 
+    // §7: log the recurring-plan cancellation on the CRM timeline (no downgrade).
+    await logContactCancellation(client.id, "Recurring plan cancelled by customer");
+
     // Send the check-in + save offer (unless within cooldown).
     if (!withinCooldown && client.email) {
       const label =
@@ -132,6 +136,15 @@ export async function cancelRecurringService(input: Input = {}) {
           offerStatus: result.ok ? "SENT" : "PENDING",
         },
       });
+      // §11: log the win-back offer on the CRM contact timeline.
+      if (result.ok && makeOffer && label) {
+        await logContactEvent(
+          client.id,
+          "EMAIL",
+          "Win-back offer sent",
+          `${label}${offerCode ? ` — code ${offerCode}` : ""}`
+        );
+      }
       await db.emailLog
         .create({
           data: {

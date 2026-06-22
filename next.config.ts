@@ -5,6 +5,11 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   serverExternalPackages: ["@prisma/client", ".prisma/client"],
+  experimental: {
+    // Careers résumé uploads stream through a server action; the default 1 MB
+    // body limit 400s before our 8 MB size check runs. Keep these in sync.
+    serverActions: { bodySizeLimit: "10mb" },
+  },
   // Baseline security headers applied to every response. Intentionally NOT a
   // full CSP (would need per-source allowlisting for Stripe/Cloudinary/Leaflet/
   // inline styles); `frame-ancestors`/X-Frame-Options stop clickjacking without

@@ -30,12 +30,13 @@ function PortalLoginInner() {
     errorParam === "staff_account"
       ? "That account is a staff account. Use the staff sign-in page instead."
       : null;
+  // Shown after a successful password reset (from /portal/reset-password).
+  const resetSuccess = searchParams.get("reset") === "success";
 
   const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(Boolean(initialEmail));
   const [error, setError] = useState<string | null>(initialError);
-  const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
 
@@ -152,20 +153,20 @@ function PortalLoginInner() {
             />
             <span>Remember me</span>
           </label>
-          <a
-            href="#"
-            className="cl-link-muted"
-            onClick={(e) => {
-              e.preventDefault();
-              setNotice("Forgot password flow — coming soon.");
-            }}
-            style={{ fontSize: 13 }}>
+          <Link
+            href="/portal/forgot-password"
+            className="cl-link"
+            style={{ fontSize: 13, fontWeight: 600 }}>
             Forgot password?
-          </a>
+          </Link>
         </div>
 
+        {resetSuccess && !error ? (
+          <Banner kind="success">
+            Your password has been reset. Sign in with your new password.
+          </Banner>
+        ) : null}
         {error ? <Banner kind="error">{error}</Banner> : null}
-        {notice ? <Banner kind="amber">{notice}</Banner> : null}
 
         <Button type="submit" size="lg" block loading={loading}>
           {loading ? "Signing in…" : "Sign in →"}

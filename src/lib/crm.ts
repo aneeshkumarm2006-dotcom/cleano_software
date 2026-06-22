@@ -2,6 +2,7 @@
 // operational Client/Job rows it back-links to, and detects duplicates.
 import "server-only";
 import { db } from "@/db";
+import type { LifecycleStage, ContactActivityType } from "@prisma/client";
 import { avatarColor, initials } from "@/lib/avatar";
 import type {
   ContactListItem,
@@ -122,6 +123,162 @@ function toListItem(
     duplicateIds: dupIndex.get(c.id) ?? [],
     props: (c.props as CrmProps) ?? {},
   };
+}
+
+/**
+ * CRM-006: keep the unified Contact in sync when the underlying Client record
+ * is edited (by the customer in the portal or by an admin). Updates the linked
+ * contact's identity fields + `lastActivityAt`. Best-effort and a no-op when no
+ * contact is linked, so it never breaks the client-update flow.
+ */
+export async function syncContactFromClient(clientId: string): Promise<void> {
+  try {
+    const client = await db.client.findUnique({
+      where: { id: clientId },
+      select: { name: true, email: true, phone: true, address: true },
+    });
+    if (!client) return;
+    const contact = await db.contact.findUnique({
+      where: { clientId },
+      select: { id: true },
+    });
+    if (!contact) return;
+    await db.contact.update({
+      where: { id: contact.id },
+      data: {
+        name: client.name,
+        email: client.email ? client.email.toLowerCase() : null,
+        phone: client.phone ?? null,
+        address: client.address ?? null,
+        lastActivityAt: new Date(),
+      },
+    });
+  } catch (e) {
+    console.error("syncContactFromClient", e);
+  }
+}
+
+// §7 Lifecycle automation — promotion ranking. Higher = more advanced; we only
+// ever move a contact forward (never downgrade on cancellations).
+const LIFECYCLE_RANK: Record<LifecycleStage, number> = {
+  NEW_LEAD: 0,
+  QUALIFIED: 1,
+  BOOKED: 2,
+  ACTIVE: 3,
+  RETURNING: 4,
+  PAST: 1,
+  LOST: 0,
+  APPLICANT: 0,
+  CLEANER: 5,
+  DNC: 99,
+};
+// Manual/terminal stages automation must never override.
+const FROZEN_LIFECYCLE = new Set<LifecycleStage>([
+  "LOST",
+  "DNC",
+  "CLEANER",
+  "APPLICANT",
+]);
+
+/**
+ * §7: advance a client's linked contact on a booking event. Promotes lead →
+ * BOOKED on create / → ACTIVE on completion (or → RETURNING if they've booked
+ * before). Never downgrades, never touches frozen stages. Logs a BOOKING
+ * activity. Best-effort — never throws into the booking flow.
+ */
+export async function advanceContactLifecycleForBooking(
+  clientId: string,
+  event: "BOOKING_CREATED" | "BOOKING_COMPLETED"
+): Promise<void> {
+  try {
+    const contact = await db.contact.findUnique({
+      where: { clientId },
+      select: { id: true, lifecycle: true, bookingsCount: true },
+    });
+    if (!contact) return;
+
+    let next: LifecycleStage = contact.lifecycle;
+    if (!FROZEN_LIFECYCLE.has(contact.lifecycle)) {
+      const target: LifecycleStage =
+        contact.bookingsCount > 0
+          ? "RETURNING"
+          : event === "BOOKING_COMPLETED"
+            ? "ACTIVE"
+            : "BOOKED";
+      if (
+        (LIFECYCLE_RANK[target] ?? 0) > (LIFECYCLE_RANK[contact.lifecycle] ?? 0)
+      ) {
+        next = target;
+      }
+    }
+
+    await db.$transaction([
+      db.contactActivity.create({
+        data: {
+          contactId: contact.id,
+          type: "BOOKING",
+          title:
+            event === "BOOKING_COMPLETED"
+              ? "Booking completed"
+              : "Booking created",
+          actor: "System",
+        },
+      }),
+      db.contact.update({
+        where: { id: contact.id },
+        data: {
+          ...(next !== contact.lifecycle ? { lifecycle: next } : {}),
+          lastActivityAt: new Date(),
+        },
+      }),
+    ]);
+  } catch (e) {
+    console.error("advanceContactLifecycleForBooking", e);
+  }
+}
+
+/**
+ * §7: log a cancellation on the linked contact's timeline. Guardrail — it never
+ * downgrades the lifecycle (a returning customer who cancels one visit stays
+ * returning). Best-effort.
+ */
+export async function logContactEvent(
+  clientId: string,
+  type: ContactActivityType,
+  title: string,
+  body?: string
+): Promise<void> {
+  try {
+    const contact = await db.contact.findUnique({
+      where: { clientId },
+      select: { id: true },
+    });
+    if (!contact) return;
+    await db.$transaction([
+      db.contactActivity.create({
+        data: {
+          contactId: contact.id,
+          type,
+          title,
+          body: body ?? null,
+          actor: "System",
+        },
+      }),
+      db.contact.update({
+        where: { id: contact.id },
+        data: { lastActivityAt: new Date() },
+      }),
+    ]);
+  } catch (e) {
+    console.error("logContactEvent", e);
+  }
+}
+
+export async function logContactCancellation(
+  clientId: string,
+  body: string
+): Promise<void> {
+  return logContactEvent(clientId, "CANCEL", "Cancellation", body);
 }
 
 export async function listContacts(): Promise<ContactListItem[]> {

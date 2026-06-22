@@ -9,9 +9,15 @@ const PUBLIC_EXACT = new Set<string>([
   '/cleanos/login', // cleaner sign-in
   '/portal/login',
   '/portal/setup',
+  '/portal/forgot-password',
+  '/portal/reset-password',
   '/book',
   '/quote',
   '/gift-card',
+  '/careers', // public careers / hiring page
+  '/faq', // public FAQ
+  '/reviews', // public reviews
+  '/join-waitlist', // public waitlist signup
   '/apple-icon', // PWA icon for iOS home screen
 ])
 

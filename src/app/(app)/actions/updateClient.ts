@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { db } from "@/db";
 import { revalidatePath } from "next/cache";
+import { syncContactFromClient } from "@/lib/crm";
 
 export async function updateClient(formData: FormData) {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -49,6 +50,9 @@ export async function updateClient(formData: FormData) {
         discountPercent,
       },
     });
+
+    // CRM-006: mirror identity changes onto the linked CRM contact.
+    await syncContactFromClient(id);
 
     revalidatePath("/clients");
     revalidatePath(`/clients/${id}`);
