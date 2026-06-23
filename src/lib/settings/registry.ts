@@ -275,6 +275,17 @@ export const SETTINGS = {
     audit: true,
     sensitive: true,
   }),
+  // Single-use coupon a customer unlocks by sharing Cleano on social media
+  // (Facebook / X). $15 off per spec (#92-94).
+  "customer.shareCouponUsd": def({
+    key: "customer.shareCouponUsd",
+    category: "customer",
+    label: "Social-share coupon ($)",
+    default: 15,
+    validate: moneyRange(0, 200),
+    audit: true,
+    sensitive: true,
+  }),
   "customer.smsOptInDefault": def({
     key: "customer.smsOptInDefault",
     category: "customer",
@@ -306,6 +317,15 @@ export const SETTINGS = {
     category: "customer",
     label: "Minimum stars for a live review",
     default: 5,
+    validate: intRange(1, 5),
+  }),
+  // Only show an assigned cleaner's star rating to the customer when their
+  // average is at or above this (#66). Hides low/unproven ratings.
+  "customer.providerRatingThreshold": def({
+    key: "customer.providerRatingThreshold",
+    category: "customer",
+    label: "Minimum stars to show a cleaner's rating to customers",
+    default: 4,
     validate: intRange(1, 5),
   }),
   // Reasons a customer picks from when cancelling. Shown as a required

@@ -5107,6 +5107,61 @@ a.an-listrow:hover { background: var(--primary-10); }
 
 .cr-footer { text-align: center; margin-top: 28px; font-size: 12.5px; color: var(--primary-50); }
 
+/* ── Careers — multi-section additions ── */
+.cr-fr { color: var(--primary-40); font-weight: 400; font-size: 0.92em; }
+.cr-section { display: flex; align-items: center; gap: 12px; margin: 14px 0 2px; padding-top: 18px; border-top: 1px solid var(--primary-10); }
+.cr-section:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+.cr-section-num { flex: 0 0 auto; width: 28px; height: 28px; border-radius: 50%; background: var(--primary); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; box-shadow: 0 3px 10px rgba(0,140,156,0.25); }
+.cr-section-title { font-family: var(--font-serif); font-weight: 500; font-size: 19px; color: var(--ink); letter-spacing: -0.01em; line-height: 1.15; }
+.cr-section-fr { font-size: 12.5px; color: var(--primary-50); margin-top: 1px; }
+.cr-radios-wrap { flex-wrap: wrap; }
+.cr-radios-wrap .cr-radio { flex: 1 1 auto; min-width: 120px; padding: 0 14px; }
+
+/* Country select (matches .input) */
+.cr-select { appearance: none; -webkit-appearance: none; cursor: pointer; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23008C9C' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; padding-right: 38px; }
+
+/* Checkbox chips (available days, experience types) */
+.cr-checks { display: flex; flex-wrap: wrap; gap: 9px; }
+.cr-check { display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 15px; border-radius: var(--radius-input); border: 1px solid var(--primary-15); background: #fff; color: var(--primary-70); font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer; transition: border-color .12s, background .12s, color .12s; }
+.cr-check:hover { border-color: var(--primary-30); }
+.cr-check.on { border-color: var(--primary); background: var(--primary-5); color: var(--primary); font-weight: 600; }
+
+/* Reference blocks */
+.cr-refblock { display: flex; flex-direction: column; gap: 12px; padding: 16px; border: 1px solid var(--primary-10); border-radius: 14px; background: var(--cream); }
+.cr-reflabel { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; color: var(--primary-50); }
+
+/* Background-check consent */
+.cr-consent { display: flex; align-items: flex-start; gap: 12px; width: 100%; text-align: left; padding: 16px; border-radius: 14px; border: 1.5px solid var(--primary-15); background: #fff; color: var(--primary-70); font-family: inherit; font-size: 14px; line-height: 1.5; cursor: pointer; transition: border-color .12s, background .12s; }
+.cr-consent:hover { border-color: var(--primary-30); }
+.cr-consent.on { border-color: var(--primary); background: var(--primary-5); }
+.cr-consent-box { flex: 0 0 auto; width: 22px; height: 22px; border-radius: 6px; border: 1.5px solid var(--primary-30); background: #fff; display: inline-flex; align-items: center; justify-content: center; color: #fff; margin-top: 1px; transition: background .12s, border-color .12s; }
+.cr-consent.on .cr-consent-box { background: var(--primary); border-color: var(--primary); }
+
+/* ── Careers — selling hero ── */
+.cr-hero { text-align: center; margin-bottom: 24px; animation: crFade .4s ease; }
+.cr-hero-badge { display: inline-flex; align-items: center; gap: 6px; padding: 5px 13px; border-radius: 999px; background: var(--primary-5); color: var(--primary); font-size: 12px; font-weight: 700; letter-spacing: 0.01em; margin-bottom: 16px; }
+.cr-hero-title { font-family: var(--font-serif); font-weight: 500; font-size: clamp(28px, 5.5vw, 40px); line-height: 1.08; letter-spacing: -0.02em; color: var(--ink); margin: 0 0 12px; }
+.cr-hero-title em { font-style: italic; color: var(--primary); }
+.cr-hero-sub { font-size: 15.5px; line-height: 1.55; color: var(--primary-70); max-width: 450px; margin: 0 auto 20px; }
+.cr-perks { display: flex; flex-wrap: wrap; justify-content: center; gap: 9px; margin-bottom: 16px; }
+.cr-perk { display: inline-flex; align-items: center; gap: 7px; padding: 9px 14px; border-radius: 12px; background: #fff; border: 1px solid var(--primary-10); box-shadow: var(--shadow-soft); font-size: 13px; font-weight: 600; color: var(--ink); }
+.cr-perk svg { color: var(--primary); flex: 0 0 auto; }
+.cr-time { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--primary-50); font-weight: 600; }
+
+/* ── Careers — wizard progress + nav ── */
+.cr-progress { margin-bottom: 22px; }
+.cr-progress-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.cr-step-title { font-family: var(--font-serif); font-weight: 500; font-size: 19px; line-height: 1.15; color: var(--ink); letter-spacing: -0.01em; }
+.cr-step-title .cr-fr { display: block; font-family: inherit; font-size: 12.5px; margin-top: 1px; }
+.cr-step-count { flex: 0 0 auto; font-size: 11.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--primary-50); white-space: nowrap; }
+.cr-progress-track { height: 6px; border-radius: 999px; background: var(--primary-10); overflow: hidden; }
+.cr-progress-fill { height: 100%; border-radius: 999px; background: var(--primary); transition: width .4s cubic-bezier(.4,0,.2,1); }
+.cr-step { display: flex; flex-direction: column; gap: 18px; animation: crFade .28s ease; }
+.cr-wizard-nav { display: flex; gap: 12px; margin-top: 6px; }
+.cr-wizard-nav .btn { flex: 1; }
+.cr-wizard-nav .cr-back { flex: 0 0 auto; min-width: 110px; }
+@keyframes crFade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
 /* ── Admin Calendar — premium toolbar (/calendar) ── */
 .cal-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 18px; flex-wrap: wrap; }
 .cal-tb-left { display: flex; align-items: center; gap: 18px; }

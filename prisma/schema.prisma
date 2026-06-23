@@ -1459,20 +1459,58 @@ enum JobApplicationStatus {
 
 /// Cleaner job-application intake from the public careers page.
 model JobApplication {
-  id           String               @id @default(cuid())
-  name         String
-  email        String
-  phone        String?
-  cityArea     String?
-  availability String?
-  experience   String?
-  hasTransport Boolean?
-  resumeUrl    String?
-  status       JobApplicationStatus @default(NEW)
-  notes        String?
-  source       String?
-  createdAt    DateTime             @default(now())
-  updatedAt    DateTime             @updatedAt
+  id                String               @id @default(cuid())
+  // Personal information
+  name              String // combined "First Last", kept for display/avatars
+  firstName         String?
+  lastName          String?
+  gender            String?
+  dateOfBirth       String? // "YYYY-MM-DD"
+  email             String
+  phone             String?
+  addressStreet     String?
+  addressLine2      String?
+  cityArea          String? // City
+  province          String? // State / Province
+  postalCode        String?
+  country           String?
+  // Transportation
+  hasTransport      Boolean? // reliable vehicle
+  driversLicense    String?
+  hasInsurance      Boolean?
+  insuranceDetails  String?
+  // Availability
+  availability      String? // legacy / readable summary
+  availableDays     String[]             @default([])
+  preferredHours    String?
+  earliestStart     String? // "YYYY-MM-DD"
+  // Experience
+  yearsExperience   String?
+  experienceTypes   String[]             @default([])
+  experience        String? // free-text description
+  resumeUrl         String?
+  // About you
+  whyCleano         String?
+  hasConviction     Boolean?
+  convictionDetails String?
+  hearAbout         String?
+  referrerName      String?
+  // References
+  ref1Name          String?
+  ref1Relationship  String?
+  ref1Phone         String?
+  ref2Name          String?
+  ref2Relationship  String?
+  ref2Phone         String?
+  // Background-check consent
+  backgroundConsent Boolean              @default(false)
+  consentDate       String? // "YYYY-MM-DD"
+  // Meta
+  status            JobApplicationStatus @default(NEW)
+  notes             String?
+  source            String?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
 
   @@index([status])
   @@index([createdAt])

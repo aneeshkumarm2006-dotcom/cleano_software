@@ -9,6 +9,7 @@ import {
   Banner,
 } from "@/components/customer/Field";
 import { updateClientProfile } from "../../actions/updateClientProfile";
+import { generateShareCoupon } from "../../actions/generateShareCoupon";
 
 interface Initial {
   name: string;
@@ -40,6 +41,27 @@ export default function AccountForm({
     kind: "success" | "error";
     text: string;
   } | null>(null);
+  const [share, setShare] = useState<{ code: string; amount: number } | null>(null);
+  const [sharing, setSharing] = useState(false);
+
+  async function unlockShareCoupon() {
+    setSharing(true);
+    const res = await generateShareCoupon();
+    setSharing(false);
+    if (res.success) setShare({ code: res.code, amount: res.amount });
+    else setFlash({ kind: "error", text: res.error });
+  }
+
+  function openShare(network: "facebook" | "x") {
+    const url = typeof window !== "undefined" ? window.location.origin + "/book" : "";
+    const text = "I love my Cleano cleanings — book yours:";
+    const href =
+      network === "facebook"
+        ? `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`
+        : `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`;
+    if (typeof window !== "undefined") window.open(href, "_blank", "noopener,width=600,height=500");
+    void unlockShareCoupon();
+  }
 
   const dirty =
     name !== initial.name ||
@@ -220,6 +242,55 @@ export default function AccountForm({
                 {formatPrice(initial.referralCredit)}
               </span>
             </div>
+          </div>
+
+          <div className="cl-tile cl-tile-pad-lg">
+            <span className="cl-label">Share &amp; save</span>
+            <p style={{ fontSize: 13, color: "var(--primary-70)", margin: "10px 0 14px", lineHeight: 1.55 }}>
+              Share Cleano on social media and unlock a one-time coupon for your
+              next booking.
+            </p>
+            <div style={{ display: "flex", gap: 8 }}>
+              <Button variant="secondary" onClick={() => openShare("facebook")} type="button">
+                Share on Facebook
+              </Button>
+              <Button variant="secondary" onClick={() => openShare("x")} type="button">
+                Share on X
+              </Button>
+            </div>
+            {sharing ? (
+              <p style={{ fontSize: 12, color: "var(--primary-60)", marginTop: 12 }}>
+                Preparing your coupon…
+              </p>
+            ) : null}
+            {share ? (
+              <div
+                style={{
+                  marginTop: 14,
+                  padding: "12px 14px",
+                  borderRadius: 12,
+                  background: "var(--primary-5)",
+                }}>
+                <div style={{ fontSize: 12, color: "var(--primary-60)" }}>
+                  Your ${share.amount.toFixed(0)}-off code
+                </div>
+                <div
+                  style={{
+                    fontFamily: "var(--font-cl-mono)",
+                    fontSize: 20,
+                    fontWeight: 600,
+                    letterSpacing: "0.08em",
+                    color: "var(--primary)",
+                    userSelect: "all",
+                    marginTop: 4,
+                  }}>
+                  {share.code}
+                </div>
+                <div style={{ fontSize: 12, color: "var(--primary-60)", marginTop: 4 }}>
+                  Apply it at checkout on your next booking.
+                </div>
+              </div>
+            ) : null}
           </div>
 
           <div className="cl-tile cl-tile-pad-sm">

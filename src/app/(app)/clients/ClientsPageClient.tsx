@@ -10,6 +10,7 @@ import {
 import PremiumSelect from "@/components/ui/PremiumSelect";
 import ClientModal from "./ClientModal";
 import ImportCsvButton from "@/components/csv/ImportCsvButton";
+import BookingKoalaImportButton from "@/components/csv/BookingKoalaImportButton";
 import { ConfirmDeleteModal } from "@/components/common/ConfirmDeleteModal";
 import { deleteClient } from "../actions/deleteClient";
 
@@ -184,6 +185,7 @@ export default function ClientsPageClient({
           </h1>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
+          <BookingKoalaImportButton />
           <ImportCsvButton entity="clients" />
           <button type="button" className="btn btn-primary" onClick={handleCreate}>
             <Plus size={16} /> New Client

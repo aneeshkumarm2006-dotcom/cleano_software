@@ -1334,6 +1334,65 @@ export async function sendAccountEmail(opts: AccountEmailOpts) {
   });
 }
 
+// ── BookingKoala import welcome emails ───────────────────────────────────────
+// Sent only by the one-time migration (CLI or the admin import button). These
+// carry a temp password, so they are intentionally NOT gated by Settings →
+// Notifications — they are operational, not marketing. Links use the server's
+// NEXT_PUBLIC_APP_URL (the deployed domain on Vercel).
+
+function credentialsBox(email: string, tempPassword: string, loginUrl: string) {
+  return (
+    `<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #eee;border-radius:10px;margin:16px 0"><tr><td style="padding:16px">
+      <div style="font-size:13px;color:#666">Email</div>
+      <div style="font-size:15px;color:#111;font-weight:600;margin-bottom:10px">${email}</div>
+      <div style="font-size:13px;color:#666">Temporary password</div>
+      <div style="font-size:18px;color:#111;font-weight:700;font-family:monospace;letter-spacing:1px">${tempPassword}</div>
+    </td></tr></table>` +
+    btn("Log in", loginUrl) +
+    `<p style="margin:16px 0 0;font-size:13px;color:#888">You'll be asked to set your own password on first login.</p>`
+  );
+}
+
+export async function sendCustomerImportWelcome(opts: {
+  to: string;
+  name: string;
+  tempPassword: string;
+}) {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const html = layout(
+    h1(`Your Cleano account is ready, ${opts.name.split(" ")[0]}`) +
+      p(
+        "We've moved your bookings over to our new Cleano portal. Log in with the temporary password below to view and manage your upcoming cleanings."
+      ) +
+      credentialsBox(opts.to, opts.tempPassword, `${appUrl}/portal/login`)
+  );
+  return deliver({
+    to: opts.to,
+    subject: "Your Cleano account — log in to manage your bookings",
+    html,
+  });
+}
+
+export async function sendCleanerImportWelcome(opts: {
+  to: string;
+  name: string;
+  tempPassword: string;
+}) {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const html = layout(
+    h1(`Welcome to Cleano, ${opts.name.split(" ")[0]}!`) +
+      p(
+        "Your Cleano cleaner account is ready and your upcoming jobs are waiting in the app. Sign in to see your schedule, clock in, and get paid."
+      ) +
+      credentialsBox(opts.to, opts.tempPassword, `${appUrl}/cleanos/login`)
+  );
+  return deliver({
+    to: opts.to,
+    subject: "Your Cleano cleaner account is ready",
+    html,
+  });
+}
+
 // ──────────────────────────────────────────────────────────────────────
 // INVOICE LIFECYCLE
 // ──────────────────────────────────────────────────────────────────────

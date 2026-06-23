@@ -94,13 +94,34 @@ export default async function BookingDetailPage({
     "customer.cancellationReasons": cancellationReasons,
     "general.businessEmail": businessEmail,
     "general.businessPhone": businessPhone,
+    "customer.providerRatingThreshold": providerRatingThreshold,
   } = await getSettings([
     "policy.cancellationFeeUsd",
     "policy.cancellationFeeWindowHours",
     "customer.cancellationReasons",
     "general.businessEmail",
     "general.businessPhone",
+    "customer.providerRatingThreshold",
   ]);
+
+  // #66: show an assigned cleaner's average rating to the customer only when it
+  // meets the configured threshold (and they have at least 3 ratings).
+  const cleanerIds = job.cleaners.map((c) => c.id);
+  const ratingAgg = cleanerIds.length
+    ? await db.employeeRating.groupBy({
+        by: ["employeeId"],
+        where: { employeeId: { in: cleanerIds } },
+        _avg: { rating: true },
+        _count: { rating: true },
+      })
+    : [];
+  const cleanerRating = new Map<string, number>();
+  for (const r of ratingAgg) {
+    const avg = r._avg.rating ?? 0;
+    if (r._count.rating >= 3 && avg >= providerRatingThreshold) {
+      cleanerRating.set(r.employeeId, Math.round(avg * 10) / 10);
+    }
+  }
   const isCompletedOrPaid = job.status === "COMPLETED" || job.status === "PAID";
   const hasCancelRequest = !!job.cancellationRequestedAt;
   const hasRescheduleRequest = !!job.rescheduleRequestedAt;
@@ -201,7 +222,12 @@ export default async function BookingDetailPage({
                 dt="Cleaners"
                 dd={
                   job.cleaners.length
-                    ? job.cleaners.map((c) => c.name).join(", ")
+                    ? job.cleaners
+                        .map((c) => {
+                          const r = cleanerRating.get(c.id);
+                          return r ? `${c.name} (${r.toFixed(1)}★)` : c.name;
+                        })
+                        .join(", ")
                     : "Being assigned…"
                 }
               />

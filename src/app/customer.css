@@ -1222,3 +1222,89 @@
 @keyframes cl-cardIn { from { transform: translateY(8px); opacity: 0.4; } to { transform: translateY(0); opacity: 1; } }
 .cl-fade-up { animation: cl-cardIn .35s cubic-bezier(.2,.7,.3,1) both; }
 .cl-fade-up-2 { animation: cl-cardIn .4s cubic-bezier(.2,.7,.3,1) .06s both; }
+
+/* ── Careers — stronger contrast for the input-heavy application form ── */
+.cl-careers .cl-input,
+.cl-careers .cl-textarea,
+.cl-careers .cl-select {
+  border-color: rgba(0,140,156,0.38);
+}
+.cl-careers .cl-input:hover,
+.cl-careers .cl-textarea:hover,
+.cl-careers .cl-select:hover {
+  border-color: rgba(0,140,156,0.55);
+}
+.cl-careers .cl-input::placeholder,
+.cl-careers .cl-textarea::placeholder {
+  color: rgba(14,26,28,0.45);
+}
+/* Labels: darker ink instead of light teal so they read clearly */
+.cl-careers .cl-label {
+  color: var(--ink-soft);
+}
+/* Option tiles get a visible outline (cream-on-white was too subtle) */
+.cl-careers .cl-choice {
+  border-color: rgba(0,140,156,0.18);
+}
+.cl-careers .cl-choice:hover:not(:disabled) {
+  border-color: rgba(0,140,156,0.32);
+}
+.cl-careers .cl-choice.active {
+  border-color: var(--primary);
+}
+/* Reference blocks + consent row: clearer card edges */
+.cl-careers .cl-card-soft {
+  border: 1px solid rgba(0,140,156,0.18);
+}
+.cl-careers .cl-addon-row {
+  border-color: rgba(0,140,156,0.22);
+}
+.cl-careers .cl-check {
+  border-color: rgba(0,140,156,0.5);
+}
+/* Résumé upload dashed box — match the stronger borders */
+.cl-careers .cr-upload {
+  border-color: rgba(0,140,156,0.4);
+}
+
+/* ── Careers — mobile (sidebar is hidden < 700px) ── */
+/* Desktop: header keeps the right-aligned tagline; logo + step are hidden. */
+.cl-careers .cl-book-header { justify-content: space-between; }
+.cl-careers-header .cl-logo { display: none; }
+.cl-careers-tagline { color: var(--primary-70); }
+.cl-careers-mstep { display: none; }
+.cl-careers-mprogress { display: none; }
+.cl-careers-mprogress-fill {
+  height: 100%;
+  background: var(--primary);
+  border-radius: 999px;
+  transition: width .4s cubic-bezier(.4,0,.2,1);
+}
+
+@media (max-width: 700px) {
+  /* Surface brand + progress that normally live in the (now hidden) sidebar */
+  .cl-careers-tagline { display: none; }
+  .cl-careers-header .cl-logo { display: inline-flex; }
+  .cl-careers-mstep {
+    display: inline-flex;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--primary);
+    white-space: nowrap;
+  }
+  .cl-careers-mprogress {
+    display: block;
+    height: 4px;
+    background: var(--primary-10);
+  }
+  /* Roomier headline + tighter cards on small screens */
+  .cl-careers .cl-card-soft { padding: 16px; }
+  .cl-careers .cl-display { font-size: clamp(28px, 8vw, 36px) !important; }
+}
+
+/* Stack the Back / Continue buttons on very narrow screens */
+@media (max-width: 420px) {
+  .cl-careers-nav { flex-direction: column-reverse; }
+  .cl-careers-nav .cl-btn-ghost { width: 100%; }
+}

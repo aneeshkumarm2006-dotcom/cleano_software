@@ -90,11 +90,18 @@ export default function DatePicker({
     if (!triggerRef.current) return;
     const r = triggerRef.current.getBoundingClientRect();
     const CAL_W = 300;
+    const CAL_H = calRef.current?.offsetHeight || 360;
     let left = r.left;
     if (left + CAL_W > window.innerWidth - 12) left = r.right - CAL_W;
-    const top = r.bottom + 5 + window.scrollY;
-    // Use fixed positioning relative to viewport
-    setPos({ top: r.bottom + 5, left });
+    if (left < 12) left = 12;
+    // Flip above the trigger when there isn't room below it (viewport-relative,
+    // since the calendar is rendered with position: fixed).
+    const spaceBelow = window.innerHeight - r.bottom;
+    const top =
+      spaceBelow < CAL_H + 12 && r.top > spaceBelow
+        ? Math.max(12, r.top - 5 - CAL_H)
+        : r.bottom + 5;
+    setPos({ top, left });
   }
 
   useEffect(() => {

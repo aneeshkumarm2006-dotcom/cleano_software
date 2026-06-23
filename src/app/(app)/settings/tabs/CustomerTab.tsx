@@ -11,11 +11,13 @@ import { SETTINGS } from "@/lib/settings/registry";
 
 const DISCOUNT = SETTINGS["customer.newClientReferralDiscountUsd"];
 const CREDIT = SETTINGS["customer.referrerCreditUsd"];
+const SHARE = SETTINGS["customer.shareCouponUsd"];
 const REASONS = SETTINGS["customer.cancellationReasons"];
 const BLOCKED = SETTINGS["customer.blockedMessage"];
 const SMS_DEFAULT = SETTINGS["customer.smsOptInDefault"];
 const REVIEWS_ON = SETTINGS["customer.liveReviewsEnabled"];
 const REVIEW_MIN = SETTINGS["customer.liveReviewThreshold"];
+const PROVIDER_RATING_MIN = SETTINGS["customer.providerRatingThreshold"];
 
 interface Props {
   settings: AppSettingRecord[];
@@ -27,6 +29,9 @@ export default function CustomerTab({ settings }: Props) {
   );
   const [credit, setCredit] = useState<number>(
     getSetting<number>(settings, CREDIT.key, CREDIT.default)
+  );
+  const [shareCoupon, setShareCoupon] = useState<number>(
+    getSetting<number>(settings, SHARE.key, SHARE.default)
   );
   const [reasonsText, setReasonsText] = useState<string>(
     getSetting<string[]>(settings, REASONS.key, REASONS.default).join("\n")
@@ -42,6 +47,9 @@ export default function CustomerTab({ settings }: Props) {
   );
   const [reviewMin, setReviewMin] = useState<number>(
     getSetting<number>(settings, REVIEW_MIN.key, REVIEW_MIN.default)
+  );
+  const [providerRatingMin, setProviderRatingMin] = useState<number>(
+    getSetting<number>(settings, PROVIDER_RATING_MIN.key, PROVIDER_RATING_MIN.default)
   );
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<Msg>(null);
@@ -68,6 +76,11 @@ export default function CustomerTab({ settings }: Props) {
         value: credit,
       }),
       updateAppSetting({
+        key: SHARE.key,
+        category: SHARE.category,
+        value: shareCoupon,
+      }),
+      updateAppSetting({
         key: REASONS.key,
         category: REASONS.category,
         value: reasons,
@@ -91,6 +104,11 @@ export default function CustomerTab({ settings }: Props) {
         key: REVIEW_MIN.key,
         category: REVIEW_MIN.category,
         value: reviewMin,
+      }),
+      updateAppSetting({
+        key: PROVIDER_RATING_MIN.key,
+        category: PROVIDER_RATING_MIN.category,
+        value: providerRatingMin,
       }),
     ]);
 
@@ -125,6 +143,16 @@ export default function CustomerTab({ settings }: Props) {
               step="0.01"
               value={credit}
               onChange={(e) => setCredit(parseFloat(e.target.value) || 0)}
+            />
+          </Field>
+          <Field label={SHARE.label}>
+            <Input
+              variant="form"
+              type="number"
+              min="0"
+              step="0.01"
+              value={shareCoupon}
+              onChange={(e) => setShareCoupon(parseFloat(e.target.value) || 0)}
             />
           </Field>
         </div>
@@ -174,6 +202,17 @@ export default function CustomerTab({ settings }: Props) {
             step="1"
             value={reviewMin}
             onChange={(e) => setReviewMin(parseInt(e.target.value, 10) || 5)}
+          />
+        </Field>
+        <Field label={PROVIDER_RATING_MIN.label}>
+          <Input
+            variant="form"
+            type="number"
+            min="1"
+            max="5"
+            step="1"
+            value={providerRatingMin}
+            onChange={(e) => setProviderRatingMin(parseInt(e.target.value, 10) || 4)}
           />
         </Field>
         <p style={{ fontSize: 12, color: "var(--primary-60)" }}>

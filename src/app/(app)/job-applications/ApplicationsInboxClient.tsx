@@ -13,6 +13,13 @@ import {
   FileText,
   Check,
   UserPlus,
+  Calendar,
+  ShieldCheck,
+  Users,
+  Heart,
+  HelpCircle,
+  Cake,
+  BadgeCheck,
 } from "lucide-react";
 import { initials } from "@/lib/avatar";
 import { updateApplicationStatus } from "../actions/updateApplicationStatus";
@@ -29,13 +36,30 @@ type Status =
 interface Application {
   id: string;
   name: string;
+  gender: string | null;
+  dateOfBirth: string | null;
   email: string;
   phone: string | null;
+  address: string;
   cityArea: string | null;
-  availability: string | null;
-  experience: string | null;
   hasTransport: boolean | null;
+  driversLicense: string | null;
+  hasInsurance: boolean | null;
+  insuranceDetails: string | null;
+  availability: string | null;
+  earliestStart: string | null;
+  yearsExperience: string | null;
+  experienceTypes: string[];
+  experience: string | null;
   resumeUrl: string | null;
+  whyCleano: string | null;
+  hasConviction: boolean | null;
+  convictionDetails: string | null;
+  hearAbout: string | null;
+  referrerName: string | null;
+  references: string[];
+  backgroundConsent: boolean;
+  consentDate: string | null;
   source: string | null;
   status: Status;
   notes: string | null;
@@ -87,6 +111,28 @@ function Avatar({ name, size }: { name: string; size: number }) {
     </span>
   );
 }
+
+function Row({
+  icon,
+  k,
+  v,
+}: {
+  icon: React.ReactNode;
+  k: string;
+  v: React.ReactNode;
+}) {
+  if (v === null || v === undefined || v === "" || v === "—") return null;
+  return (
+    <div className="apps-row">
+      <span className="apps-row-k">
+        {icon} {k}
+      </span>
+      <span className="apps-row-v">{v}</span>
+    </div>
+  );
+}
+
+const yn = (b: boolean | null) => (b == null ? null : b ? "Yes" : "No");
 
 export default function ApplicationsInboxClient({
   applications,
@@ -254,42 +300,59 @@ export default function ApplicationsInboxClient({
             </div>
 
             <div className="apps-rows">
-              <div className="apps-row">
-                <span className="apps-row-k">
-                  <MapPin size={15} /> Area
-                </span>
-                <span className="apps-row-v">{sel.cityArea ?? "—"}</span>
-              </div>
-              <div className="apps-row">
-                <span className="apps-row-k">
-                  <Clock size={15} /> Availability
-                </span>
-                <span className="apps-row-v">{sel.availability ?? "—"}</span>
-              </div>
-              <div className="apps-row">
-                <span className="apps-row-k">
-                  <Briefcase size={15} /> Experience
-                </span>
-                <span className="apps-row-v">{sel.experience ?? "—"}</span>
-              </div>
-              <div className="apps-row">
-                <span className="apps-row-k">
-                  <Car size={15} /> Transport
-                </span>
-                <span className="apps-row-v">
-                  {sel.hasTransport == null
-                    ? "—"
+              <Row icon={<Cake size={15} />} k="Date of birth" v={sel.dateOfBirth} />
+              <Row icon={<Users size={15} />} k="Gender" v={sel.gender} />
+              <Row icon={<MapPin size={15} />} k="Address" v={sel.address || null} />
+              <Row
+                icon={<Car size={15} />}
+                k="Vehicle"
+                v={
+                  sel.hasTransport == null
+                    ? null
                     : sel.hasTransport
                     ? "Has own vehicle"
-                    : "No vehicle"}
-                </span>
-              </div>
-              <div className="apps-row">
-                <span className="apps-row-k">
-                  <Sparkles size={15} /> Source
-                </span>
-                <span className="apps-row-v">{sel.source ?? "—"}</span>
-              </div>
+                    : "No vehicle"
+                }
+              />
+              <Row icon={<BadgeCheck size={15} />} k="Driver's licence" v={sel.driversLicense} />
+              <Row icon={<ShieldCheck size={15} />} k="Liability insurance" v={yn(sel.hasInsurance)} />
+              <Row icon={<ShieldCheck size={15} />} k="Insurance details" v={sel.insuranceDetails} />
+              <Row icon={<Clock size={15} />} k="Availability" v={sel.availability} />
+              <Row icon={<Calendar size={15} />} k="Earliest start" v={sel.earliestStart} />
+              <Row icon={<Briefcase size={15} />} k="Years experience" v={sel.yearsExperience} />
+              <Row
+                icon={<Briefcase size={15} />}
+                k="Experience type"
+                v={sel.experienceTypes.length ? sel.experienceTypes.join(", ") : null}
+              />
+              <Row icon={<Briefcase size={15} />} k="Experience" v={sel.experience} />
+              <Row icon={<Heart size={15} />} k="Why Cleano" v={sel.whyCleano} />
+              <Row
+                icon={<ShieldCheck size={15} />}
+                k="Criminal conviction"
+                v={
+                  sel.hasConviction == null
+                    ? null
+                    : sel.hasConviction
+                    ? `Yes${sel.convictionDetails ? ` — ${sel.convictionDetails}` : ""}`
+                    : "No"
+                }
+              />
+              <Row icon={<HelpCircle size={15} />} k="Heard via" v={sel.hearAbout} />
+              <Row icon={<Users size={15} />} k="Referrer" v={sel.referrerName} />
+              {sel.references.map((r, i) => (
+                <Row key={i} icon={<Users size={15} />} k={`Reference ${i + 1}`} v={r} />
+              ))}
+              <Row
+                icon={<ShieldCheck size={15} />}
+                k="Background consent"
+                v={
+                  sel.backgroundConsent
+                    ? `Yes${sel.consentDate ? ` (${sel.consentDate})` : ""}`
+                    : "No"
+                }
+              />
+              <Row icon={<Sparkles size={15} />} k="Source" v={sel.source} />
             </div>
 
             {sel.resumeUrl ? (
