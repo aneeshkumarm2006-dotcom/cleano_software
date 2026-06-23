@@ -654,20 +654,20 @@ async function main() {
       const packages = clean(col(r, "Packages"));
       const pkgAddons = clean(col(r, "Package addons"));
       const items = clean(col(r, "Items"));
-      const noteParts: string[] = [];
       const addonText = [extras, addons, packages, pkgAddons, items]
         .filter(Boolean)
         .join("; ");
-      if (addonText) noteParts.push(`Add-ons: ${addonText}`);
       const bkBookingId = clean(col(r, "Booking id"));
       const freq = clean(col(r, "Frequency"));
-      noteParts.push(
-        `Imported from BookingKoala (booking ${bkBookingId || "?"}, ${freq || "?"}).`
-      );
-      if (providers.length)
-        noteParts.push(
-          `Team: ${providers.map((p) => `${p.name} ($${p.payment.toFixed(0)})`).join(", ")}.`
-        );
+      // Customer-/cleaner-facing note: only the add-ons (or none).
+      const customerNote = addonText ? `Add-ons: ${addonText}` : null;
+      // Internal traceability → admin-only NOTE_ADDED log (never shown to the
+      // customer or cleaner).
+      const importNote =
+        `Imported from BookingKoala (booking ${bkBookingId || "?"}, ${freq || "?"}).` +
+        (providers.length
+          ? ` Team: ${providers.map((p) => `${p.name} ($${p.payment.toFixed(0)})`).join(", ")}.`
+          : "");
 
       const address = clean(col(r, "Address"));
       const apt = cleanOrNull(col(r, "Apt"));
@@ -706,7 +706,7 @@ async function main() {
         employeePay: teamPayout || null,
         requiredCleaners: Math.max(1, providers.length),
         bookingSource: BOOKING_SOURCE,
-        notes: noteParts.join(" "),
+        notes: customerNote,
         ...(cleanerIds.length
           ? {
               // Use the relation connect — Prisma forbids the scalar employeeId
@@ -741,7 +741,12 @@ async function main() {
         }
       }
 
-      await db.job.create({ data });
+      const createdJob = await db.job.create({ data });
+      await db.jobLog
+        .create({
+          data: { jobId: createdJob.id, action: "NOTE_ADDED", description: importNote },
+        })
+        .catch(() => {});
       jobTally.created++;
     } catch (e) {
       jobTally.failed++;

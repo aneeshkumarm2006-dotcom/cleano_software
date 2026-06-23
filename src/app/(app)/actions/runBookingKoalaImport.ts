@@ -260,7 +260,7 @@ export async function runBookingKoalaImport(
           continue;
         }
       }
-      await db.job.create({
+      const created = await db.job.create({
         data: {
           clientName: r.job.clientName,
           ...(clientId ? { client: { connect: { id: clientId } } } : {}),
@@ -303,6 +303,13 @@ export async function runBookingKoalaImport(
             : {}),
         },
       });
+      // Internal traceability — NOTE_ADDED is excluded from the customer portal
+      // feed, so the source + team payout never show to customers or cleaners.
+      await db.jobLog
+        .create({
+          data: { jobId: created.id, action: "NOTE_ADDED", description: r.job.importNote },
+        })
+        .catch(() => {});
       report.jobs.created++;
     } catch (e) {
       report.jobs.failed++;

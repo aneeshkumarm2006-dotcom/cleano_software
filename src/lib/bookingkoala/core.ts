@@ -199,7 +199,10 @@ export interface NormalizedJob {
   paymentReceived: boolean;
   employeePay: number | null;
   requiredCleaners: number;
-  notes: string;
+  /** Customer-/cleaner-facing note (add-ons only); null when none. */
+  notes: string | null;
+  /** Internal traceability (source + team payout) → admin-only job log. */
+  importNote: string;
   startTime: Date;
   endTime: Date | null;
 }
@@ -295,17 +298,17 @@ export function parseAndNormalize(csvText: string): ParseResult {
     ]
       .filter(Boolean)
       .join("; ");
-    const noteParts: string[] = [];
-    if (addonText) noteParts.push(`Add-ons: ${addonText}`);
-    noteParts.push(
+    // Customer-/cleaner-facing note: ONLY the add-ons they booked (or nothing).
+    const customerNote = addonText ? `Add-ons: ${addonText}` : null;
+    // Internal traceability (source + team payout) — never shown to the customer
+    // or cleaner; persisted as an admin-only NOTE_ADDED job log instead.
+    const importNote =
       `Imported from BookingKoala (booking ${clean(get("Booking id")) || "?"}, ${
         clean(get("Frequency")) || "?"
-      }).`
-    );
-    if (providers.length)
-      noteParts.push(
-        `Team: ${providers.map((p) => `${p.name} ($${p.payment.toFixed(0)})`).join(", ")}.`
-      );
+      }).` +
+      (providers.length
+        ? ` Team: ${providers.map((p) => `${p.name} ($${p.payment.toFixed(0)})`).join(", ")}.`
+        : "");
 
     const email = cleanOrNull(get("Email"))?.toLowerCase() ?? null;
     const name = clean(get("Full name")) || email || "Customer";
@@ -355,7 +358,8 @@ export function parseAndNormalize(csvText: string): ParseResult {
         paymentReceived: paid,
         employeePay: teamPayout || null,
         requiredCleaners: Math.max(1, providers.length),
-        notes: noteParts.join(" "),
+        notes: customerNote,
+        importNote,
         startTime: start,
         endTime: end,
       },
