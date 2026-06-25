@@ -84,7 +84,7 @@ export default function InitialsDropdown({
 
   const handleAccountSettings = () => {
     setIsOpen(false);
-    router.push("/settings");
+    router.push("/admin/settings");
   };
 
   const handleSignOut = async () => {

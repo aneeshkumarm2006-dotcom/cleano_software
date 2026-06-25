@@ -87,27 +87,27 @@ export default function PortalShell({
             <ul className="cl-pnav" aria-label="Portal sections">
               <li>
                 <Link
-                  href="/portal"
+                  href="/"
                   onClick={() => setOpen(false)}
-                  className={isActive("/portal", pathname) && pathname === "/portal" ? "active" : ""}>
+                  className={isActive("/", pathname) && pathname === "/" ? "active" : ""}>
                   <Home size={16} />
                   <span>Overview</span>
                 </Link>
               </li>
               <li>
                 <Link
-                  href="/portal/bookings"
+                  href="/bookings"
                   onClick={() => setOpen(false)}
-                  className={pathname.startsWith("/portal/bookings") ? "active" : ""}>
+                  className={pathname.startsWith("/bookings") ? "active" : ""}>
                   <CalendarClock size={16} />
                   <span>Bookings</span>
                 </Link>
               </li>
               <li>
                 <Link
-                  href="/portal/account"
+                  href="/account"
                   onClick={() => setOpen(false)}
-                  className={pathname.startsWith("/portal/account") ? "active" : ""}>
+                  className={pathname.startsWith("/account") ? "active" : ""}>
                   <UserCircle size={16} />
                   <span>Account</span>
                 </Link>
@@ -162,5 +162,5 @@ export default function PortalShell({
 }
 
 function isActive(href: string, pathname: string) {
-  return href === "/portal" ? pathname === "/portal" : pathname.startsWith(href);
+  return href === "/" ? pathname === "/" : pathname.startsWith(href);
 }

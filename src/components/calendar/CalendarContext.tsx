@@ -570,7 +570,7 @@ export const CalendarProvider = ({
 
         // Import the update action dynamically
         const { updateJobDates } = await import(
-          "@/app/(app)/actions/updateJobDates"
+          "@/app/admin/actions/updateJobDates"
         );
 
         console.log("[CalendarContext] updateJobDates payload", {
@@ -685,7 +685,7 @@ export const CalendarProvider = ({
 
           // Import the update action dynamically
           const { updateJobDates } = await import(
-            "@/app/(app)/actions/updateJobDates"
+            "@/app/admin/actions/updateJobDates"
           );
 
           console.log("[CalendarContext] updateJobDates payload (resize)", {

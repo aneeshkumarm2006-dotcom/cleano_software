@@ -7,10 +7,10 @@ const PUBLIC_EXACT = new Set<string>([
   '/sign-in',
   '/sign-up',
   '/cleanos/login', // cleaner sign-in
-  '/portal/login',
-  '/portal/setup',
-  '/portal/forgot-password',
-  '/portal/reset-password',
+  '/login', // customer sign-in
+  '/setup',
+  '/forgot-password',
+  '/reset-password',
   '/book',
   '/quote',
   '/gift-card',
@@ -41,13 +41,8 @@ function isPublic(pathname: string): boolean {
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // If trying to access "/" route, always redirect to "/sign-in"
-  if (pathname === '/') {
-    const redirectToSignInUrl = new URL('/sign-in', request.url)
-    return NextResponse.redirect(redirectToSignInUrl)
-  }
-
-  // Allow public routes (customer-facing + auth pages)
+  // Allow public routes (customer-facing + auth pages). "/" is the customer
+  // home and is gated by the customer (secured) layout, not here.
   if (isPublic(pathname)) {
     return NextResponse.next()
   }
@@ -55,14 +50,21 @@ export async function proxy(request: NextRequest) {
   // Check for session cookie
   const sessionCookie = getSessionCookie(request.headers)
 
-  // If no session cookie exists, redirect to the appropriate sign-in.
-  // Customer area → /portal/login; everything else → /sign-in.
+  // If no session cookie exists, redirect to the login door for that area:
+  //   /admin/*    → staff sign-in (/sign-in)
+  //   /cleaners/* → cleaner sign-in (/cleanos/login)
+  //   everything else (customer area, incl. "/") → customer sign-in (/login)
   if (!sessionCookie) {
-    const isCustomerArea = pathname.startsWith('/portal')
-    const target = isCustomerArea ? '/portal/login' : '/sign-in'
+    const isAdminArea = pathname.startsWith('/admin')
+    const isCleanerArea = pathname.startsWith('/cleaners')
+    const target = isAdminArea
+      ? '/sign-in'
+      : isCleanerArea
+        ? '/cleanos/login'
+        : '/login'
     const signInUrl = new URL(target, request.url)
-    // Preserve the intended destination for redirect after login
-    if (!isCustomerArea) {
+    // Preserve the intended destination for redirect after login (staff areas).
+    if (isAdminArea || isCleanerArea) {
       signInUrl.searchParams.set('callbackUrl', pathname)
     }
     return NextResponse.redirect(signInUrl)

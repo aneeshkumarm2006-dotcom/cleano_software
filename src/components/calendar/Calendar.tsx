@@ -26,8 +26,8 @@ import JobModal, {
   type ClientLite,
   type User as JobModalUser,
   type AddOnCatalogItem,
-} from "../../app/(app)/jobs/JobModal";
-import { saveJob } from "../../app/(app)/actions/saveJob";
+} from "../../app/admin/jobs/JobModal";
+import { saveJob } from "../../app/admin/actions/saveJob";
 
 interface CalendarProps {
   initialDate?: Date;

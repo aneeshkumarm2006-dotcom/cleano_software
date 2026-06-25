@@ -11,7 +11,7 @@ import {
   Loader,
 } from "lucide-react";
 import Modal from "@/components/ui/Modal";
-import { runBookingKoalaImport } from "@/app/(app)/actions/runBookingKoalaImport";
+import { runBookingKoalaImport } from "@/app/admin/actions/runBookingKoalaImport";
 import type { ImportReport } from "@/lib/bookingkoala/core";
 
 const STATUS_COLOR: Record<string, string> = {

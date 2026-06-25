@@ -69,7 +69,7 @@ export async function GET(req: Request) {
   // Customer portal door — clients only.
   if (from === "portal") {
     if (!isClientRole(role)) {
-      return bounce(`/portal/login?error=staff_account`, "not a customer account");
+      return bounce(`/login?error=staff_account`, "not a customer account");
     }
     return granted(homeForRole(role));
   }
@@ -89,7 +89,7 @@ export async function GET(req: Request) {
       return bounce(`/cleanos/login?error=use_cleaner_login`, "cleaner should use the cleaner login");
     }
     if (isClientRole(role)) {
-      return bounce(`/portal/login?error=staff_account`, "customer should use the portal login");
+      return bounce(`/login?error=staff_account`, "customer should use the portal login");
     }
     return bounce(`/sign-in?error=no_access`, "role has no staff access");
   }

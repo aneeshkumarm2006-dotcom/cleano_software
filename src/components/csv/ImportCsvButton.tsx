@@ -21,7 +21,7 @@ import {
   buildTemplateCsv,
   type EntityKey,
 } from "@/lib/csv/entities";
-import { importCsv, type ImportResponse } from "@/app/(app)/actions/importCsv";
+import { importCsv, type ImportResponse } from "@/app/admin/actions/importCsv";
 
 interface ImportCsvButtonProps {
   entity: EntityKey;

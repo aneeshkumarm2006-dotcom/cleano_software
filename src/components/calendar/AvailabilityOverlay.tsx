@@ -2,8 +2,8 @@
 
 import React, { useEffect, useState } from "react";
 import { OfficeHours } from "./calendar-helpers";
-import { getAvailability } from "@/app/(app)/actions/getAvailability";
-import type { AvailabilitySlotDTO } from "@/app/(app)/actions/getAvailability.types";
+import { getAvailability } from "@/app/admin/actions/getAvailability";
+import type { AvailabilitySlotDTO } from "@/app/admin/actions/getAvailability.types";
 
 interface AvailabilityOverlayProps {
   day: Date;

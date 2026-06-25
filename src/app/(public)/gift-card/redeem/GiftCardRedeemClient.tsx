@@ -45,7 +45,7 @@ export default function GiftCardRedeemClient({
           The credit will auto-apply next time you're charged for a booking.
         </p>
         <a
-          href="/portal"
+          href="/"
           style={{
             display: "inline-block",
             marginTop: 16,
@@ -124,7 +124,7 @@ export default function GiftCardRedeemClient({
       </button>
       <p style={{ marginTop: 12, fontSize: 12, color: "#6b7d80", lineHeight: 1.5 }}>
         Don't have a Cleano account yet?{" "}
-        <a href="/portal/setup" style={{ color: "#008C9C" }}>
+        <a href="/setup" style={{ color: "#008C9C" }}>
           Create one
         </a>{" "}
         with the same email the gift card was sent to.

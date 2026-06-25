@@ -397,12 +397,12 @@ export default function BookPage() {
                       flexWrap: "wrap",
                     }}>
                     <Link
-                      href="/portal/bookings"
+                      href="/bookings"
                       className="cl-btn cl-btn-primary cl-btn-lg">
                       View my bookings
                     </Link>
                     <Link
-                      href="/portal"
+                      href="/"
                       className="cl-btn cl-btn-secondary cl-btn-lg">
                       Back to portal
                     </Link>
@@ -418,14 +418,14 @@ export default function BookPage() {
                       flexWrap: "wrap",
                     }}>
                     <Link
-                      href={`/portal/setup?email=${encodeURIComponent(
+                      href={`/setup?email=${encodeURIComponent(
                         draft.email
                       )}&name=${encodeURIComponent(draft.name)}`}
                       className="cl-btn cl-btn-primary cl-btn-lg">
                       Set up my account
                     </Link>
                     <Link
-                      href="/portal/login"
+                      href="/login"
                       className="cl-btn cl-btn-secondary cl-btn-lg">
                       Back to home
                     </Link>
@@ -437,7 +437,7 @@ export default function BookPage() {
                       color: "var(--primary-60)",
                     }}>
                     Already have an account?{" "}
-                    <Link href="/portal/login" className="cl-link">
+                    <Link href="/login" className="cl-link">
                       Log me in
                     </Link>
                   </div>
@@ -591,14 +591,14 @@ export default function BookPage() {
           <header className="cl-book-header">
             {isLoggedInClient && loggedInUser?.email ? (
               <Link
-                href="/portal"
+                href="/"
                 className="cl-link"
                 style={{ color: "var(--primary-70)" }}>
                 Signed in as {loggedInUser.email} · Back to portal →
               </Link>
             ) : (
               <Link
-                href="/portal/login"
+                href="/login"
                 className="cl-link"
                 style={{ color: "var(--primary-70)" }}>
                 Already a customer? Sign in →

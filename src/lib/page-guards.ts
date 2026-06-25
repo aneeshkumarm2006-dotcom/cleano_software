@@ -41,10 +41,10 @@ export async function requireClient() {
 }
 
 // For pages accessible to BOTH admins and cleaners (e.g. /calendar, /training,
-// /documents, /chat). Still bounces CLIENT users to /portal.
+// /documents, /chat). Still bounces CLIENT users to the customer home.
 export async function requireStaff() {
   const session = await requireSession();
   const role = (session.user as { role?: string }).role;
-  if (isClientRole(role)) redirect("/portal");
+  if (isClientRole(role)) redirect("/");
   return session;
 }

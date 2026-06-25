@@ -94,6 +94,6 @@ export async function redeemGiftCard(input: { code: string }) {
     }).catch((e) => console.error("redeem confirmation", e));
   }
 
-  revalidatePath("/portal");
+  revalidatePath("/");
   return { success: true, amount: card.amount, newBalance };
 }

@@ -20,8 +20,8 @@ import {
   ExternalLink,
   FileText,
 } from "lucide-react";
-import { markArrived } from "@/app/(app)/actions/markArrived";
-import { addJobNote } from "@/app/(app)/actions/addJobNote";
+import { markArrived } from "@/app/admin/actions/markArrived";
+import { addJobNote } from "@/app/admin/actions/addJobNote";
 
 const JOB_TYPE_LABELS: Record<string, string> = {
   R: "Residential",
@@ -57,7 +57,7 @@ export default function CalendarJobActions({
   const router = useRouter();
 
   // Admins land on the admin job view; cleaners on their own job page.
-  const jobBasePath = isEmployee ? "/my-jobs" : "/jobs";
+  const jobBasePath = isEmployee ? "/cleaners/my-jobs" : "/admin/jobs";
 
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [showNoteInput, setShowNoteInput] = useState(false);
@@ -137,13 +137,13 @@ export default function CalendarJobActions({
   }, [event, router, handleClose, jobBasePath]);
 
   const handleGetHelp = useCallback(() => {
-    router.push("/chat");
+    router.push("/admin/chat");
     handleClose();
   }, [router, handleClose]);
 
   const handleResolveEquipment = useCallback(() => {
     if (!event?.metadata?.jobId) return;
-    router.push(`/my-inventory/resolve?jobId=${event.metadata.jobId}`);
+    router.push(`/cleaners/my-inventory/resolve?jobId=${event.metadata.jobId}`);
     handleClose();
   }, [event, router, handleClose]);
 

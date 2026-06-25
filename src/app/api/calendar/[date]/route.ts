@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getJobsForDay } from "@/app/(app)/actions/getJobsForDay";
+import { getJobsForDay } from "@/app/admin/actions/getJobsForDay";
 
 export async function GET(
   _req: Request,

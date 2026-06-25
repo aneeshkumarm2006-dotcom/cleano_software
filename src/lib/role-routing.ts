@@ -28,9 +28,9 @@ export function isClientRole(role: string | null | undefined): boolean {
 // Where each role should land after sign-in, and where to redirect users who
 // hit a page they don't have access to.
 export function homeForRole(role: string | null | undefined): string {
-  if (isClientRole(role)) return "/portal";
-  if (isCleanerRole(role)) return "/my-jobs";
-  if (isAdminRole(role)) return "/dashboard";
+  if (isClientRole(role)) return "/";
+  if (isCleanerRole(role)) return "/cleaners/my-jobs";
+  if (isAdminRole(role)) return "/admin/dashboard";
   // Unknown / missing role → bounce to sign-in.
   return "/sign-in";
 }

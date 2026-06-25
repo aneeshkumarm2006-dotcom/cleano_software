@@ -206,8 +206,8 @@ export async function sendBookingConfirmation(opts: {
       p(`We've got you down for a ${opts.serviceType ?? "cleaning"} on <strong>${fmtDate(opts.startTime)}</strong>.`) +
       section(sectionRows) +
       p(chargeNote) +
-      btn("View this booking", `${appUrl}/portal/bookings/${opts.jobId}`) +
-      btn("Manage all my bookings", `${appUrl}/portal/bookings`)
+      btn("View this booking", `${appUrl}/bookings/${opts.jobId}`) +
+      btn("Manage all my bookings", `${appUrl}/bookings`)
   );
 
   return deliver({
@@ -247,8 +247,8 @@ export async function sendReminder24h(opts: {
       ]) +
       p(cleanerLine) +
       p("Please ensure access to your home and any parking instructions are noted. See you tomorrow!") +
-      btn("View this booking", `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/portal/bookings/${opts.jobId}`) +
-      btn("Manage all my bookings", `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/portal/bookings`)
+      btn("View this booking", `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/bookings/${opts.jobId}`) +
+      btn("Manage all my bookings", `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/bookings`)
   );
 
   return deliver({
@@ -293,7 +293,7 @@ export async function sendReceipt(opts: {
       ]) +
       p("You can also download a PDF receipt from your client portal.") +
       btn("Download receipt", `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/api/receipts/${opts.jobId}`) +
-      btn("Manage all my bookings", `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/portal/bookings`) +
+      btn("Manage all my bookings", `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/bookings`) +
       (ratingSection ? `<div style="margin-top:24px">${p("How did we do? A quick rating helps our team a lot.")}</div>${ratingSection}` : "")
   );
 
@@ -321,7 +321,7 @@ export async function sendRefundConfirmation(opts: {
       (opts.reason ? p(`Reason: ${opts.reason}`) : "") +
       p("The amount will appear on your original payment method within 5–10 business days, depending on your bank.") +
       p("If you have any questions, reply to this email or text us at (514) 555-CLEAN.") +
-      btn("View your bookings", `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/portal/bookings`)
+      btn("View your bookings", `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/bookings`)
   );
 
   return deliver({
@@ -395,7 +395,7 @@ export async function sendAdminNewBookingNotification(opts: {
         ["Service", opts.serviceType ?? "—"],
         ["Total", fmt(opts.price)],
       ]) +
-      btn("Open in admin", `${appUrl}/jobs/${opts.jobId}`)
+      btn("Open in admin", `${appUrl}/admin/jobs/${opts.jobId}`)
   );
 
   const catalogKey = opts.viaReferral
@@ -574,7 +574,7 @@ export async function sendAdminBookingModified(opts: LifecycleJobInfo & {
         ["Service", opts.serviceType ?? "—"],
       ]) +
       (opts.changesSummary ? p(`<em>${opts.changesSummary}</em>`) : "") +
-      btn("Open in admin", `${appUrl}/jobs/${opts.jobId}`)
+      btn("Open in admin", `${appUrl}/admin/jobs/${opts.jobId}`)
   );
 
   for (const admin of admins) {
@@ -613,7 +613,7 @@ export async function sendAdminBookingCanceled(opts: LifecycleJobInfo & {
         ["Service", opts.serviceType ?? "—"],
       ]) +
       (opts.reason ? p(`<strong>Reason:</strong> ${opts.reason}`) : "") +
-      btn("Open in admin", `${appUrl}/jobs/${opts.jobId}`)
+      btn("Open in admin", `${appUrl}/admin/jobs/${opts.jobId}`)
   );
 
   for (const admin of admins) {
@@ -643,7 +643,7 @@ export async function sendAdminBookingCancellationRequest(opts: LifecycleJobInfo
         ["Service", opts.serviceType ?? "—"],
       ]) +
       p("Review the request and either approve the cancellation or contact the customer.") +
-      btn("Open in admin", `${appUrl}/jobs/${opts.jobId}`)
+      btn("Open in admin", `${appUrl}/admin/jobs/${opts.jobId}`)
   );
 
   for (const admin of admins) {
@@ -673,7 +673,7 @@ export async function sendAdminBookingPostpone(opts: LifecycleJobInfo) {
         ["Service", opts.serviceType ?? "—"],
       ]) +
       p("Get in touch with the customer to confirm a new time.") +
-      btn("Open in admin", `${appUrl}/jobs/${opts.jobId}`)
+      btn("Open in admin", `${appUrl}/admin/jobs/${opts.jobId}`)
   );
 
   for (const admin of admins) {
@@ -703,7 +703,7 @@ export async function sendCustomerBookingConfirmed(opts: LifecycleJobInfo & {
         ["Service", opts.serviceType ?? "—"],
         ["Your cleaner" + (opts.cleanerNames.length > 1 ? "s" : ""), opts.cleanerNames.join(", ") || "—"],
       ]) +
-      btn("View this booking", `${appUrl}/portal/bookings/${opts.jobId}`)
+      btn("View this booking", `${appUrl}/bookings/${opts.jobId}`)
   );
 
   return deliver({
@@ -732,7 +732,7 @@ export async function sendCustomerBookingModified(opts: LifecycleJobInfo & {
       ]) +
       (opts.changesSummary ? p(`<em>${opts.changesSummary}</em>`) : "") +
       p("If anything looks off, just reply to this email and we'll sort it out.") +
-      btn("View this booking", `${appUrl}/portal/bookings/${opts.jobId}`)
+      btn("View this booking", `${appUrl}/bookings/${opts.jobId}`)
   );
 
   return deliver({
@@ -796,7 +796,7 @@ export async function sendCustomerBookingCharged(opts: {
         ["Paid by", opts.paymentMethod ?? "Card on file"],
       ]) +
       p("Your itemized receipt will follow shortly.") +
-      btn("View booking", `${appUrl}/portal/bookings/${opts.jobId}`)
+      btn("View booking", `${appUrl}/bookings/${opts.jobId}`)
   );
   return deliver({
     to: opts.to,
@@ -831,7 +831,7 @@ export async function sendCustomerFeesCharged(opts: {
         ["Type", labelMap[opts.feeType]],
         ["Amount", fmt(opts.amount)],
       ]) +
-      btn("View booking", `${appUrl}/portal/bookings/${opts.jobId}`)
+      btn("View booking", `${appUrl}/bookings/${opts.jobId}`)
   );
   return deliver({
     to: opts.to,
@@ -854,7 +854,7 @@ export async function sendCustomerBookingsPrepaid(opts: {
     h1("Deposit received") +
       p(`Hi ${opts.clientName.split(" ")[0]}, we collected your ${fmt(opts.amount)} deposit for booking #${opts.jobNumber}.`) +
       p("The balance will be charged after your cleaning is complete.") +
-      btn("View booking", `${appUrl}/portal/bookings/${opts.jobId}`)
+      btn("View booking", `${appUrl}/bookings/${opts.jobId}`)
   );
   return deliver({
     to: opts.to,
@@ -890,7 +890,7 @@ export async function sendCustomerCardDeclined(opts: {
       p(`Hi ${opts.clientName.split(" ")[0]}, we weren't able to process your card for booking #${opts.jobNumber}.`) +
       p(`<strong>Reason from your bank:</strong> ${opts.reason}`) +
       p("Please update your card details in the portal — we'll retry once it's saved.") +
-      btn("Update card", `${appUrl}/portal/bookings/${opts.jobId}`)
+      btn("Update card", `${appUrl}/bookings/${opts.jobId}`)
   );
   return deliver({
     to: opts.to,
@@ -927,7 +927,7 @@ export async function sendAdminCardDeclined(opts: {
         ["Amount", opts.amountAttempted ? fmt(opts.amountAttempted) : "—"],
         ["Reason", opts.reason],
       ]) +
-      btn("Open in admin", `${appUrl}/jobs/${opts.jobId}`)
+      btn("Open in admin", `${appUrl}/admin/jobs/${opts.jobId}`)
   );
   for (const admin of admins) {
     await deliver({
@@ -978,7 +978,7 @@ export async function sendAdminTipReceived(opts: {
       (opts.cleanerNames && opts.cleanerNames.length > 0
         ? p(`Goes to: ${opts.cleanerNames.join(", ")}`)
         : "") +
-      btn("Open in admin", `${appUrl}/jobs/${opts.jobId}`)
+      btn("Open in admin", `${appUrl}/admin/jobs/${opts.jobId}`)
   );
   for (const admin of admins) {
     await deliver({
@@ -1065,7 +1065,7 @@ export async function sendAdminNewReview(opts: {
       ["Overall after recalc", typeof opts.overallRating === "number" ? `${opts.overallRating.toFixed(2)}/5` : "—"],
     ]) +
     (opts.notes ? p(`<strong>Notes:</strong> ${opts.notes}`) : "") +
-    (opts.jobId ? btn("Open job", `${appUrl}/jobs/${opts.jobId}`) : "");
+    (opts.jobId ? btn("Open job", `${appUrl}/admin/jobs/${opts.jobId}`) : "");
 
   const html = layout(body);
 
@@ -1105,7 +1105,7 @@ export async function sendProviderNewReview(opts: {
         ["Job", opts.jobNumber ? `#${opts.jobNumber}` : "—"],
       ]) +
       (opts.notes ? p(`<strong>What the customer said:</strong> ${opts.notes}`) : "") +
-      (opts.jobId ? btn("Open job", `${appUrl}/my-jobs/${opts.jobId}`) : "")
+      (opts.jobId ? btn("Open job", `${appUrl}/cleaners/my-jobs/${opts.jobId}`) : "")
   );
   return deliver({
     to: opts.to,
@@ -1128,7 +1128,7 @@ export async function sendAdminClockedIn(opts: {
   const html = layout(
     h1(`${opts.cleanerName} clocked in`) +
       p(`Job #${opts.jobNumber} for <strong>${opts.clientName}</strong> just started.`) +
-      btn("Open job", `${appUrl}/jobs/${opts.jobId}`)
+      btn("Open job", `${appUrl}/admin/jobs/${opts.jobId}`)
   );
   for (const admin of admins) {
     await deliver({
@@ -1157,7 +1157,7 @@ export async function sendAdminClockedOut(opts: {
       section([
         ["Duration", `${opts.durationMinutes} min`],
       ]) +
-      btn("Open job", `${appUrl}/jobs/${opts.jobId}`)
+      btn("Open job", `${appUrl}/admin/jobs/${opts.jobId}`)
   );
   for (const admin of admins) {
     await deliver({
@@ -1186,7 +1186,7 @@ export async function sendAdminChecklistCompleted(opts: {
       section([
         ["Items completed", `${opts.itemCount}/${opts.itemCount}`],
       ]) +
-      btn("Open job", `${appUrl}/jobs/${opts.jobId}`)
+      btn("Open job", `${appUrl}/admin/jobs/${opts.jobId}`)
   );
   for (const admin of admins) {
     await deliver({
@@ -1364,7 +1364,7 @@ export async function sendCustomerImportWelcome(opts: {
       p(
         "We've moved your bookings over to our new Cleano portal. Log in with the temporary password below to view and manage your upcoming cleanings."
       ) +
-      credentialsBox(opts.to, opts.tempPassword, `${appUrl}/portal/login`)
+      credentialsBox(opts.to, opts.tempPassword, `${appUrl}/login`)
   );
   return deliver({
     to: opts.to,
@@ -1611,7 +1611,7 @@ export async function sendAdminUnassignedEvent(opts: {
         ["Date", fmtDate(opts.startTime)],
         ["Time", fmtTime(opts.startTime)],
       ]) +
-      btn("Open in admin", `${appUrl}/jobs/${opts.jobId}`)
+      btn("Open in admin", `${appUrl}/admin/jobs/${opts.jobId}`)
   );
   for (const admin of admins) {
     await deliver({
@@ -1694,7 +1694,7 @@ export async function sendAdminSignupReview(opts: {
   const html = layout(
     h1("New cleaner sign-up to review") +
       p(`<strong>${opts.applicantName}</strong> (${opts.applicantEmail}) signed up. Approve or reject from the admin.`) +
-      btn("Open admin", `${appUrl}/requests`)
+      btn("Open admin", `${appUrl}/admin/requests`)
   );
   // Fire two catalog rows — `admin.signup.new_provider` (informational) AND
   // `admin.signup.review_request` (review action needed).
@@ -1723,7 +1723,7 @@ export async function sendProviderNewTip(opts: {
   const html = layout(
     h1(`You received a tip!`) +
       p(`Hi ${opts.providerName.split(" ")[0]}, <strong>${opts.clientName}</strong> just tipped you ${fmt(opts.tipAmount)} on job #${opts.jobNumber}.`) +
-      btn("Open job", `${appUrl}/my-jobs/${opts.jobId}`)
+      btn("Open job", `${appUrl}/cleaners/my-jobs/${opts.jobId}`)
   );
   return deliver({
     to: opts.to,
@@ -1748,7 +1748,7 @@ export async function sendProviderPayoutRequested(opts: {
   const html = layout(
     h1("We got your payout request") +
       p(`Hi ${opts.providerName.split(" ")[0]}, we've received your request to withdraw <strong>${fmt(opts.amount)}</strong>${payoutMethod(opts.paymentMethod)}. We'll email you again as soon as it's on its way.`) +
-      btn("View my pay", `${appUrl}/my-pay`)
+      btn("View my pay", `${appUrl}/cleaners/my-pay`)
   );
   return deliver({
     to: opts.to,
@@ -1769,7 +1769,7 @@ export async function sendProviderPayoutCompleted(opts: {
   const html = layout(
     h1("Your payout is on its way 🎉") +
       p(`Hi ${opts.providerName.split(" ")[0]}, your withdrawal of <strong>${fmt(opts.amount)}</strong>${payoutMethod(opts.paymentMethod)} has been completed.`) +
-      btn("View my pay", `${appUrl}/my-pay`)
+      btn("View my pay", `${appUrl}/cleaners/my-pay`)
   );
   return deliver({
     to: opts.to,
@@ -1851,7 +1851,7 @@ export async function sendAdminUnassignedDeadline(opts: {
         ["Booking #", String(opts.jobNumber)],
         ["Start", `${fmtDate(opts.startTime)} at ${fmtTime(opts.startTime)}`],
       ]) +
-      btn("Assign now", `${appUrl}/jobs/${opts.jobId}`)
+      btn("Assign now", `${appUrl}/admin/jobs/${opts.jobId}`)
   );
   for (const admin of admins) {
     await deliver({
@@ -1880,7 +1880,7 @@ export async function sendAdminNotClockedIn(opts: {
     h1("Cleaner hasn't clocked in") +
       p(`Job #${opts.jobNumber} for <strong>${opts.clientName}</strong> was supposed to start at ${fmtTime(opts.startTime)}. No clock-in yet.`) +
       p(`Assigned: ${opts.cleanerNames.join(", ") || "—"}`) +
-      btn("Open job", `${appUrl}/jobs/${opts.jobId}`)
+      btn("Open job", `${appUrl}/admin/jobs/${opts.jobId}`)
   );
   for (const admin of admins) {
     await deliver({
@@ -1908,7 +1908,7 @@ export async function sendAdminCashCheckReminder(opts: {
   const html = layout(
     h1(`Upcoming cash/check booking`) +
       p(`Heads up — job #${opts.jobNumber} for <strong>${opts.clientName}</strong> uses ${opts.paymentType}. Cleaner should collect payment on-site.`) +
-      btn("Open job", `${appUrl}/jobs/${opts.jobId}`)
+      btn("Open job", `${appUrl}/admin/jobs/${opts.jobId}`)
   );
   for (const admin of admins) {
     await deliver({
@@ -1958,7 +1958,7 @@ export async function sendCustomerReminder48h(opts: JobReminderOpts) {
       p(opts.cleanerNames.length > 0
         ? `Your cleaner${opts.cleanerNames.length > 1 ? "s" : ""}: <strong>${opts.cleanerNames.join(", ")}</strong>`
         : "We're finalizing your cleaner assignment.") +
-      btn("View this booking", `${appUrl}/portal/bookings/${opts.jobId}`)
+      btn("View this booking", `${appUrl}/bookings/${opts.jobId}`)
   );
   return deliver({
     to: opts.to,
@@ -2006,7 +2006,7 @@ export async function sendCustomerLeaveTip(opts: {
   const html = layout(
     h1("Care to tip your cleaner?") +
       p(`Hi ${opts.clientName.split(" ")[0]}, if you enjoyed your cleaning, leaving a tip is a great way to show ${opts.cleanerNames.join(" and ") || "your cleaner"} you appreciated it.`) +
-      btn("Add a tip", `${appUrl}/portal/bookings/${opts.jobId}`)
+      btn("Add a tip", `${appUrl}/bookings/${opts.jobId}`)
   );
   return deliver({
     to: opts.to,
@@ -2050,7 +2050,7 @@ export async function sendProviderJobReminder(opts: {
             ["Address", opts.address],
           ])
         : "") +
-      btn("Open in app", `${appUrl}/my-jobs/${opts.jobId}`)
+      btn("Open in app", `${appUrl}/cleaners/my-jobs/${opts.jobId}`)
   );
   return deliver({
     to: opts.to,
@@ -2119,7 +2119,7 @@ export async function sendCustomerRequestResolved(opts: {
         ["Service", opts.serviceType ?? "—"],
       ]) +
       (opts.note ? p(`<strong>Note from our team:</strong> ${opts.note}`) : "") +
-      btn("View this booking", `${appUrl}/portal/bookings/${opts.jobId}`)
+      btn("View this booking", `${appUrl}/bookings/${opts.jobId}`)
   );
 
   // Catalog mapping:
@@ -2180,7 +2180,7 @@ export async function sendProviderBookingCanceled(opts: {
       (after5
         ? p("Sorry about the short notice — your pay multiplier for late cancellations is honored where applicable.")
         : "") +
-      btn("Open in app", `${appUrl}/my-jobs/${opts.jobId}`)
+      btn("Open in app", `${appUrl}/cleaners/my-jobs/${opts.jobId}`)
   );
 
   return deliver({
@@ -2251,7 +2251,7 @@ export async function sendAdminWeeklyRagWashDashboard(opts: {
         ["Payout total", fmt(opts.payoutsTotal)],
         ["Jobs flagged for review", String(opts.flaggedJobsCount)],
       ]) +
-      btn("Open wash payouts", `${appUrl}/wash-payouts`)
+      btn("Open wash payouts", `${appUrl}/admin/wash-payouts`)
   );
   for (const admin of admins) {
     try {
@@ -2282,7 +2282,7 @@ export async function sendAdminLateArrival(opts: {
   const html = layout(
     h1(`Late arrival — ${opts.cleanerName}`) +
       p(`<strong>${opts.cleanerName}</strong> clocked in <strong>${opts.minutesLate} min late</strong> for booking #${opts.jobNumber} (${opts.clientName}). This job's customer rating will be reduced by <strong>${opts.penalty} stars</strong>.`) +
-      btn("Open job", `${appUrl}/jobs/${opts.jobId}`)
+      btn("Open job", `${appUrl}/admin/jobs/${opts.jobId}`)
   );
   for (const admin of admins) {
     try {
@@ -2312,7 +2312,7 @@ export async function sendProviderLateArrival(opts: {
     h1(`Late arrival on booking #${opts.jobNumber}`) +
       p(`Hi ${opts.providerName.split(" ")[0]}, you clocked in <strong>${opts.minutesLate} min late</strong>. As per our service standards, your rating for this job will be reduced by <strong>${opts.penalty} stars</strong>.`) +
       p(`To avoid this in future, please clock in within 10 minutes of the booking start time.`) +
-      btn("Open job", `${appUrl}/my-jobs/${opts.jobId}`)
+      btn("Open job", `${appUrl}/cleaners/my-jobs/${opts.jobId}`)
   );
   return deliver({
     to: opts.to,
@@ -2542,7 +2542,7 @@ export async function sendAdminQuoteRequest(opts: {
         ["Service", opts.serviceType ?? "—"],
       ]) +
       (opts.message ? p(`<strong>Message:</strong> ${opts.message}`) : "") +
-      btn("Open quote inbox", `${appUrl}/quotes`)
+      btn("Open quote inbox", `${appUrl}/admin/quotes`)
   );
   for (const admin of admins) {
     try {
@@ -2644,7 +2644,7 @@ export async function sendProviderLastMinuteOpening(opts: {
         ["When", `${fmtDate(opts.startTime)} · ${fmtTime(opts.startTime)}`],
         ["Address", opts.address],
       ]) +
-      btn("Claim this booking", `${appUrl}/my-jobs/${opts.jobId}`)
+      btn("Claim this booking", `${appUrl}/cleaners/my-jobs/${opts.jobId}`)
   );
   return deliver({
     to: opts.to,
@@ -2736,7 +2736,7 @@ export async function sendAdminNewApplication(opts: {
         ["Has transport", opts.hasTransport == null ? "—" : opts.hasTransport ? "Yes" : "No"],
         ["Resume", opts.resumeUrl ? "Attached" : "Not provided"],
       ]) +
-      btn("Open applications", `${appUrl}/job-applications`)
+      btn("Open applications", `${appUrl}/admin/job-applications`)
   );
   for (const admin of admins) {
     try {
