@@ -20,6 +20,11 @@ const STATUS_COLOR: Record<string, string> = {
   CREATED: "text-gray-500",
 };
 
+// Commit the import in slices so each server request finishes well under the
+// serverless timeout (the whole-file commit 504s). 50 rows ≈ a few seconds of
+// DB writes — safely inside the page's 60s maxDuration.
+const BATCH_SIZE = 50;
+
 export default function BookingKoalaImportButton({
   triggerClassName,
 }: {
@@ -35,6 +40,13 @@ export default function BookingKoalaImportButton({
   const [busy, setBusy] = useState<null | "dry" | "commit">(null);
   const [report, setReport] = useState<ImportReport | null>(null);
   const [committed, setCommitted] = useState(false);
+  // Live batch progress during a chunked commit.
+  const [progress, setProgress] = useState<{
+    done: number;
+    total: number;
+    batch: number;
+    batches: number;
+  } | null>(null);
   // Email toggles — cleaners on by default; customers can be turned off so the
   // client doesn't notify customers at import time.
   const [emailCleaners, setEmailCleaners] = useState(true);
@@ -46,6 +58,7 @@ export default function BookingKoalaImportButton({
     setParseError(null);
     setReport(null);
     setCommitted(false);
+    setProgress(null);
     setBusy(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
@@ -75,17 +88,76 @@ export default function BookingKoalaImportButton({
   }
 
   async function handleCommit() {
-    if (!csvText) return;
+    if (!csvText || !report) return;
+    const total = report.totalRows ?? 0;
+    if (total === 0) {
+      setParseError("Nothing to import.");
+      return;
+    }
+    const batches = Math.ceil(total / BATCH_SIZE);
+
+    // Final summary is assembled from the batches. Cleaner/customer/address
+    // breakdown is taken from the dry-run (accurate, and avoids double-counting
+    // a "now-existing" account across later slices); jobs/emails/statuses are
+    // accumulated from the real writes.
+    const acc: ImportReport = {
+      ok: true,
+      dryRun: false,
+      parsedCount: report.parsedCount,
+      droppedCount: report.droppedCount,
+      mojibakeCount: report.mojibakeCount,
+      totalRows: total,
+      cleaners: { ...report.cleaners },
+      customers: { ...report.customers },
+      addresses: report.addresses,
+      jobs: { created: 0, skipped: 0, failed: 0 },
+      statusCounts: {},
+      emails: { sent: 0, failed: 0 },
+      sample: report.sample,
+      failures: [],
+    };
+
     setBusy("commit");
+    setProgress({ done: 0, total, batch: 0, batches });
     try {
-      const res = await runBookingKoalaImport(csvText, {
-        commit: true,
-        sendCleanerEmails: emailCleaners,
-        sendCustomerEmails: emailCustomers,
-      });
-      setReport(res);
-      setCommitted(res.ok);
-      if (res.ok) router.refresh();
+      for (let i = 0; i < batches; i++) {
+        const start = i * BATCH_SIZE;
+        const res = await runBookingKoalaImport(csvText, {
+          commit: true,
+          sendCleanerEmails: emailCleaners,
+          sendCustomerEmails: emailCustomers,
+          batch: { start, size: BATCH_SIZE },
+        });
+        if (!res.ok) {
+          // Stop on a hard failure — already-imported rows stay (idempotent), so
+          // the user can simply re-run to finish the rest.
+          setReport({ ...acc, ok: false, error: res.error ?? "Batch failed." });
+          setParseError(
+            `Batch ${i + 1} of ${batches} failed${res.error ? `: ${res.error}` : ""}. Already-imported rows are saved — click Import again to finish the rest.`
+          );
+          return;
+        }
+        acc.jobs.created += res.jobs.created;
+        acc.jobs.skipped += res.jobs.skipped;
+        acc.jobs.failed += res.jobs.failed;
+        acc.emails.sent += res.emails.sent;
+        acc.emails.failed += res.emails.failed;
+        for (const [k, v] of Object.entries(res.statusCounts)) {
+          acc.statusCounts[k] = (acc.statusCounts[k] ?? 0) + v;
+        }
+        acc.failures.push(...res.failures);
+        setProgress({
+          done: Math.min(start + BATCH_SIZE, total),
+          total,
+          batch: i + 1,
+          batches,
+        });
+        setReport({ ...acc });
+      }
+      acc.failures = acc.failures.slice(0, 50);
+      setReport({ ...acc });
+      setCommitted(true);
+      router.refresh();
     } finally {
       setBusy(null);
     }
@@ -256,6 +328,33 @@ export default function BookingKoalaImportButton({
             </div>
           )}
 
+          {/* Batch progress (during commit) */}
+          {busy === "commit" && progress && (
+            <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+              <div className="flex items-center justify-between text-xs text-gray-600 mb-1.5">
+                <span className="flex items-center gap-1.5">
+                  <Loader size={13} className="animate-spin" />
+                  Importing — batch {progress.batch} of {progress.batches}
+                </span>
+                <span className="font-medium text-gray-900">
+                  {progress.done} / {progress.total} rows
+                </span>
+              </div>
+              <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200">
+                <div
+                  className="h-full rounded-full bg-emerald-500 transition-all duration-300"
+                  style={{
+                    width: `${progress.total ? Math.round((progress.done / progress.total) * 100) : 0}%`,
+                  }}
+                />
+              </div>
+              <p className="mt-1.5 text-[11px] text-gray-400">
+                Please keep this window open — it sends rows in small batches so the
+                server never times out.
+              </p>
+            </div>
+          )}
+
           {/* Actions */}
           <div className="flex items-center justify-end gap-2 pt-1">
             <button type="button" className="btn btn-ghost" onClick={handleClose}>
@@ -269,7 +368,10 @@ export default function BookingKoalaImportButton({
                 onClick={handleCommit}>
                 {busy === "commit" ? (
                   <>
-                    <Loader size={15} className="animate-spin" /> Importing…
+                    <Loader size={15} className="animate-spin" />{" "}
+                    {progress
+                      ? `Importing ${progress.done}/${progress.total}…`
+                      : "Importing…"}
                   </>
                 ) : (
                   <>

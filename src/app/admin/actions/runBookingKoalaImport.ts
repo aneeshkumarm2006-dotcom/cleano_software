@@ -33,6 +33,14 @@ export async function runBookingKoalaImport(
     sendCleanerEmails?: boolean;
     /** Email customers their login (default true). Client can turn this off. */
     sendCustomerEmails?: boolean;
+    /**
+     * Process only a slice of the in-range rows — keeps each request well under
+     * the serverless timeout. The UI drives a full commit as a sequence of these
+     * (rows 0–99, 100–199, …). Omit to process the whole file (used for dry-run).
+     * Cleaner/customer find-or-create and job dedup are idempotent across slices,
+     * so batching is safe and re-runnable.
+     */
+    batch?: { start: number; size: number };
   }
 ): Promise<ImportReport> {
   const empty = (): ImportReport => ({
@@ -80,12 +88,21 @@ export async function runBookingKoalaImport(
   report.parsedCount = parsed.parsedCount;
   report.droppedCount = parsed.droppedCount;
   report.mojibakeCount = parsed.mojibakeCount;
+  report.totalRows = parsed.rows.length;
   const failures: string[] = [];
+
+  // Slice for batched commits — the UI sends rows 0–99, 100–199, … so each
+  // request finishes before the serverless timeout. Cleaners/customers are
+  // derived from (and created for) only the rows in this slice; find-or-create
+  // + booking-id dedup make overlapping/re-run slices safe.
+  const rows = opts.batch
+    ? parsed.rows.slice(opts.batch.start, opts.batch.start + opts.batch.size)
+    : parsed.rows;
 
   // ── 1. cleaners ────────────────────────────────────────────────────────────
   const cleanerUserId = new Map<string, string | null>();
   const cleanerCreds: { name: string; email: string; tempPassword: string }[] = [];
-  for (const p of collectCleaners(parsed.rows)) {
+  for (const p of collectCleaners(rows)) {
     const key = cleanerKey(p);
     if (!p.email) {
       report.cleaners.skipped++;
@@ -137,7 +154,7 @@ export async function runBookingKoalaImport(
   // ── 2. customers + addresses + logins ───────────────────────────────────────
   const clientIdByKey = new Map<string, string | null>();
   const custCreds: { name: string; email: string; tempPassword: string }[] = [];
-  for (const agg of aggregateCustomers(parsed.rows)) {
+  for (const agg of aggregateCustomers(rows)) {
     try {
       const primary = agg.addresses[0] ?? null;
       const existing = agg.email
@@ -232,7 +249,7 @@ export async function runBookingKoalaImport(
   // time, and those must all import. Fall back to customer+time only when a row
   // has no booking id.
   const seen = new Set<string>();
-  for (const r of parsed.rows) {
+  for (const r of rows) {
     const dedupKey = r.job.bookingId
       ? `bk:${r.job.bookingId}`
       : `${r.customerKey}|${r.job.startTime.toISOString()}`;

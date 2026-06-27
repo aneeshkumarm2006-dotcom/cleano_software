@@ -60,6 +60,11 @@ const argv = process.argv.slice(2);
 const COMMIT = argv.includes("--commit");
 const NO_EMAILS = argv.includes("--no-emails");
 const SEND_EMAILS = COMMIT && !NO_EMAILS;
+// Per-audience email control (so we can email cleaners but not customers, etc.)
+const NO_CUSTOMER_EMAILS = argv.includes("--no-customer-emails");
+const NO_CLEANER_EMAILS = argv.includes("--no-cleaner-emails");
+const SEND_CLEANER_EMAILS = SEND_EMAILS && !NO_CLEANER_EMAILS;
+const SEND_CUSTOMER_EMAILS = SEND_EMAILS && !NO_CUSTOMER_EMAILS;
 // Debug aid for the controlled dummy test — prints generated temp passwords to
 // stdout so we can verify login even if the email is delayed. Never use on the
 // real import (don't log credentials for 136 real customers).
@@ -73,9 +78,9 @@ const CSV_PATH =
     "1781752157_bookings_2026-06-01-to-2026-11-01.csv"
   );
 
-// Inclusive start, exclusive end — Jun 1 → Aug 1 2026.
+// Inclusive start, exclusive end — Jun 1 → Sep 1 2026 (includes August).
 const RANGE_START = new Date("2026-06-01T00:00:00-04:00");
-const RANGE_END = new Date("2026-08-01T00:00:00-04:00");
+const RANGE_END = new Date("2026-09-01T00:00:00-04:00");
 
 const BOOKING_SOURCE = "bookingkoala_import";
 
@@ -312,7 +317,7 @@ async function main() {
     });
   });
   note(
-    `Date filter [Jun 1 → Aug 1): kept ${inRange.length}, dropped ${droppedDate} out-of-range.`
+    `Date filter [Jun 1 → Sep 1): kept ${inRange.length}, dropped ${droppedDate} out-of-range.`
   );
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -382,7 +387,7 @@ async function main() {
       cleanerCreds.push({ name: p.name, email: p.email, tempPassword });
       cleanerTally.created++;
       note(`  + created ${p.name} <${p.email}>`);
-      if (SEND_EMAILS) await emailCleanerWelcome(p.name, p.email, tempPassword);
+      if (SEND_CLEANER_EMAILS) await emailCleanerWelcome(p.name, p.email, tempPassword);
     } catch (e) {
       cleanerTally.failed++;
       note(`  ✗ FAILED cleaner ${p.name} <${p.email}>: ${(e as Error).message}`);
@@ -578,7 +583,7 @@ async function main() {
             email: agg.email,
             tempPassword: linkedUser.tempPassword,
           });
-          if (SEND_EMAILS)
+          if (SEND_CUSTOMER_EMAILS)
             await emailCustomerWelcome(agg.name, agg.email, linkedUser.tempPassword);
         }
       } else {
@@ -605,10 +610,16 @@ async function main() {
     try {
       const key = clientKey(r);
       const clientId = clientIdByKey.get(key) ?? null;
-      const dedupKey = `${key}|${start.toISOString()}`;
+      // Dedup on the BookingKoala Booking id — the only true unique key. Keying
+      // on customer+start-time would wrongly drop legitimate concurrent bookings
+      // (e.g. a property manager with two cleanings at the same hour).
+      const bkBookingId = clean(col(r, "Booking id"));
+      const dedupKey = bkBookingId
+        ? `bk:${bkBookingId}`
+        : `${key}|${start.toISOString()}`;
       if (seen.has(dedupKey)) {
         jobTally.skipped++;
-        note(`  ↷ row ${rowNum}: dedup (same customer + start time)`);
+        note(`  ↷ row ${rowNum}: dedup (duplicate booking id ${bkBookingId || "—"})`);
         continue;
       }
       seen.add(dedupKey);
@@ -657,7 +668,6 @@ async function main() {
       const addonText = [extras, addons, packages, pkgAddons, items]
         .filter(Boolean)
         .join("; ");
-      const bkBookingId = clean(col(r, "Booking id"));
       const freq = clean(col(r, "Frequency"));
       // Customer-/cleaner-facing note: only the add-ons (or none).
       const customerNote = addonText ? `Add-ons: ${addonText}` : null;
@@ -706,6 +716,7 @@ async function main() {
         employeePay: teamPayout || null,
         requiredCleaners: Math.max(1, providers.length),
         bookingSource: BOOKING_SOURCE,
+        externalBookingId: bkBookingId || null,
         notes: customerNote,
         ...(cleanerIds.length
           ? {
@@ -727,9 +738,19 @@ async function main() {
         continue;
       }
 
-      // Persisted dedup guard (skip if an import job already exists for this
-      // customer + start time — makes re-runs safe).
-      if (clientId) {
+      // Persisted dedup guard — makes re-runs safe. Prefer the unique Booking id;
+      // fall back to customer+start-time only for rows with no Booking id.
+      if (bkBookingId) {
+        const dup = await db.job.findFirst({
+          where: { externalBookingId: bkBookingId, bookingSource: BOOKING_SOURCE },
+          select: { id: true },
+        });
+        if (dup) {
+          jobTally.skipped++;
+          note(`  ↷ row ${rowNum}: already imported (booking ${bkBookingId})`);
+          continue;
+        }
+      } else if (clientId) {
         const dup = await db.job.findFirst({
           where: { clientId, startTime: start, bookingSource: BOOKING_SOURCE },
           select: { id: true },

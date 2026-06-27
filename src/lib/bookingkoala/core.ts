@@ -467,6 +467,8 @@ export interface ImportReport {
   parsedCount: number;
   droppedCount: number;
   mojibakeCount: number;
+  /** Total in-range rows in the file — used to drive batched commits from the UI. */
+  totalRows?: number;
   cleaners: { created: number; existing: number; skipped: number; failed: number };
   customers: { created: number; existing: number; failed: number };
   addresses: number;
