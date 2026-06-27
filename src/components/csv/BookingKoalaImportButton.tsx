@@ -35,6 +35,10 @@ export default function BookingKoalaImportButton({
   const [busy, setBusy] = useState<null | "dry" | "commit">(null);
   const [report, setReport] = useState<ImportReport | null>(null);
   const [committed, setCommitted] = useState(false);
+  // Email toggles — cleaners on by default; customers can be turned off so the
+  // client doesn't notify customers at import time.
+  const [emailCleaners, setEmailCleaners] = useState(true);
+  const [emailCustomers, setEmailCustomers] = useState(true);
 
   function reset() {
     setFileName(null);
@@ -74,7 +78,11 @@ export default function BookingKoalaImportButton({
     if (!csvText) return;
     setBusy("commit");
     try {
-      const res = await runBookingKoalaImport(csvText, { commit: true });
+      const res = await runBookingKoalaImport(csvText, {
+        commit: true,
+        sendCleanerEmails: emailCleaners,
+        sendCustomerEmails: emailCustomers,
+      });
       setReport(res);
       setCommitted(res.ok);
       if (res.ok) router.refresh();
@@ -103,8 +111,9 @@ export default function BookingKoalaImportButton({
           <p className="text-xs text-gray-500">
             Upload a BookingKoala bookings export. We preview a full dry-run first
             (nothing is written) — review the numbers, then commit. Customers &amp;
-            cleaners get login accounts + welcome emails; booking-confirmation
-            emails are never sent and Stripe is never touched.
+            cleaners get login accounts; whether they&rsquo;re emailed their login is
+            controlled by the toggles below. Booking-confirmation emails are never
+            sent and Stripe is never touched.
           </p>
 
           {/* Upload */}
@@ -212,6 +221,37 @@ export default function BookingKoalaImportButton({
                     </tbody>
                   </table>
                 </div>
+              )}
+            </div>
+          )}
+
+          {/* Email options (before commit) */}
+          {report?.ok && !committed && (
+            <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
+              <div className="text-xs font-[450] text-gray-600 mb-2 uppercase tracking-wider">
+                Welcome / login emails on import
+              </div>
+              <label className="flex items-center gap-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={emailCleaners}
+                  onChange={(e) => setEmailCleaners(e.target.checked)}
+                />
+                Email cleaners their login + temporary password
+              </label>
+              <label className="flex items-center gap-2 text-sm text-gray-700 mt-1.5">
+                <input
+                  type="checkbox"
+                  checked={emailCustomers}
+                  onChange={(e) => setEmailCustomers(e.target.checked)}
+                />
+                Email customers their login + temporary password
+              </label>
+              {!emailCustomers && (
+                <p className="text-xs text-amber-600 mt-2">
+                  Customers will be imported but <strong>not</strong> emailed now — they
+                  won&rsquo;t be able to log in until you send their credentials later.
+                </p>
               )}
             </div>
           )}

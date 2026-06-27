@@ -27,7 +27,13 @@ import {
  */
 export async function runBookingKoalaImport(
   csvText: string,
-  opts: { commit: boolean; sendEmails?: boolean }
+  opts: {
+    commit: boolean;
+    /** Email cleaners their login (default true). */
+    sendCleanerEmails?: boolean;
+    /** Email customers their login (default true). Client can turn this off. */
+    sendCustomerEmails?: boolean;
+  }
 ): Promise<ImportReport> {
   const empty = (): ImportReport => ({
     ok: false,
@@ -52,7 +58,8 @@ export async function runBookingKoalaImport(
   }
 
   const commit = opts.commit;
-  const sendEmails = commit && opts.sendEmails !== false;
+  const sendCleanerEmails = commit && opts.sendCleanerEmails !== false;
+  const sendCustomerEmails = commit && opts.sendCustomerEmails !== false;
 
   let parsed;
   try {
@@ -321,9 +328,9 @@ export async function runBookingKoalaImport(
   }
 
   // ── 4. emails (commit only) ──────────────────────────────────────────────────
-  // Each temp-password welcome email is logged to the audit trail (event only —
-  // the password itself is NEVER recorded).
-  if (sendEmails) {
+  // Cleaner and customer welcome emails are toggled independently. Each send is
+  // logged to the audit trail (event only — the password itself is NEVER recorded).
+  if (sendCleanerEmails) {
     for (const c of cleanerCreds) {
       const res = await sendCleanerImportWelcome({ to: c.email, name: c.name, tempPassword: c.tempPassword });
       res?.ok ? report.emails.sent++ : report.emails.failed++;
@@ -335,6 +342,8 @@ export async function runBookingKoalaImport(
         message: `Temporary-password welcome email ${res?.ok ? "sent" : "failed"} to cleaner ${c.name} <${c.email}>.`,
       });
     }
+  }
+  if (sendCustomerEmails) {
     for (const c of custCreds) {
       const res = await sendCustomerImportWelcome({ to: c.email, name: c.name, tempPassword: c.tempPassword });
       res?.ok ? report.emails.sent++ : report.emails.failed++;
