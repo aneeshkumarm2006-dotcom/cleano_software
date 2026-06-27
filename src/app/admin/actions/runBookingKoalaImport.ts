@@ -227,9 +227,15 @@ export async function runBookingKoalaImport(
   }
 
   // ── 3. jobs ──────────────────────────────────────────────────────────────────
+  // Dedup on BookingKoala's unique booking id, NOT customer+time — one client
+  // (e.g. a property manager) can have several distinct bookings at the same
+  // time, and those must all import. Fall back to customer+time only when a row
+  // has no booking id.
   const seen = new Set<string>();
   for (const r of parsed.rows) {
-    const dedupKey = `${r.customerKey}|${r.job.startTime.toISOString()}`;
+    const dedupKey = r.job.bookingId
+      ? `bk:${r.job.bookingId}`
+      : `${r.customerKey}|${r.job.startTime.toISOString()}`;
     if (seen.has(dedupKey)) {
       report.jobs.skipped++;
       continue;
@@ -260,7 +266,18 @@ export async function runBookingKoalaImport(
     }
 
     try {
-      if (clientId) {
+      // Re-import idempotency: skip only an exact same booking (by external id),
+      // never a different booking that merely shares a client + time.
+      if (r.job.bookingId) {
+        const dup = await db.job.findFirst({
+          where: { externalBookingId: r.job.bookingId, bookingSource: BOOKING_SOURCE },
+          select: { id: true },
+        });
+        if (dup) {
+          report.jobs.skipped++;
+          continue;
+        }
+      } else if (clientId) {
         const dup = await db.job.findFirst({
           where: { clientId, startTime: r.job.startTime, bookingSource: BOOKING_SOURCE },
           select: { id: true },
@@ -304,6 +321,7 @@ export async function runBookingKoalaImport(
           employeePay: r.job.employeePay,
           requiredCleaners: r.job.requiredCleaners,
           bookingSource: BOOKING_SOURCE,
+          externalBookingId: r.job.bookingId,
           notes: r.job.notes,
           ...(cleanerIds.length
             ? {

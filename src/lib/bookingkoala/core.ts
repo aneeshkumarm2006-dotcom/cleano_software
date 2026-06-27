@@ -6,9 +6,9 @@
  */
 import { randomBytes } from "crypto";
 
-// Inclusive start, exclusive end — keep Jun 1 → Aug 1 2026.
+// Inclusive start, exclusive end — Jun 1 → Sep 1 2026 (covers Jun/Jul/Aug).
 export const RANGE_START = new Date("2026-06-01T00:00:00-04:00");
-export const RANGE_END = new Date("2026-08-01T00:00:00-04:00");
+export const RANGE_END = new Date("2026-09-01T00:00:00-04:00");
 export const BOOKING_SOURCE = "bookingkoala_import";
 
 // ── CSV parser (RFC-4180, handles quoted fields with embedded newlines) ──────
@@ -176,6 +176,9 @@ export function mapService(
 
 // ── normalized row ───────────────────────────────────────────────────────────
 export interface NormalizedJob {
+  /** BookingKoala's unique booking id — the dedup key (concurrent jobs at the
+   *  same time for one client are distinct bookings, so we never dedup on time). */
+  bookingId: string | null;
   clientName: string;
   location: string | null;
   aptNumber: string | null;
@@ -335,6 +338,7 @@ export function parseAndNormalize(csvText: string): ParseResult {
           }
         : null,
       job: {
+        bookingId: clean(get("Booking id")) || null,
         clientName: name,
         location: address || null,
         aptNumber: cleanOrNull(get("Apt")),

@@ -356,6 +356,9 @@ model Job {
   rescheduleRequestedAt          DateTime?
   parentJobId                    String?
   bookingSource                  String?
+  // External source's unique booking id (e.g. BookingKoala "Booking id") — the
+  // idempotency key for imports, so concurrent same-time jobs aren't deduped away.
+  externalBookingId              String?
   squareFootage                  Int?
   halfBathCount                  Int?
   // Rag-wash projection — computed from job specs at completion.
@@ -426,6 +429,7 @@ model Job {
   @@index([status])
   @@index([parentJobId])
   @@index([isFlexible])
+  @@index([externalBookingId])
 }
 
 model JobAddOn {
