@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
+import { db } from "@/db";
 import { auth } from "@/lib/auth";
 import { logActivity } from "@/lib/activity-log";
+import { notifyAdmins } from "@/lib/admin-alerts";
 import {
   homeForRole,
   isClientRole,
@@ -44,6 +46,41 @@ export async function GET(req: Request) {
       actorLabel: email,
       message: `Signed in via ${doorLabel} door (role: ${role ?? "?"})`,
     });
+
+    // First login = never seen before. Stamp lastSeenAt and, for imported
+    // (temp-password) accounts, alert admins that the account was activated.
+    try {
+      const u = await db.user.findUnique({
+        where: { id: session!.user.id },
+        select: { lastSeenAt: true, mustChangePassword: true, name: true },
+      });
+      if (u && u.lastSeenAt == null) {
+        await db.user.update({
+          where: { id: session!.user.id },
+          data: { lastSeenAt: new Date() },
+        });
+        await logActivity({
+          category: "AUTH",
+          action: "first_login",
+          status: "SUCCESS",
+          actorId: session!.user.id,
+          actorLabel: email,
+          message: `First login (${doorLabel} door, role: ${role ?? "?"}).`,
+        });
+        if (u.mustChangePassword) {
+          const label = isCleanerRole(role) ? "Cleaner" : "Customer";
+          await notifyAdmins({
+            title: `First login — ${u.name ?? email}`,
+            message: `${label} ${u.name ?? email} <${email}> logged in for the first time (imported account activated).`,
+            relatedId: session!.user.id,
+            relatedType: "User",
+          });
+        }
+      }
+    } catch (e) {
+      console.error("first-login hook", e);
+    }
+
     return NextResponse.redirect(`${baseUrl}${path}`);
   }
 

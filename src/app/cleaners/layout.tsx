@@ -33,11 +33,15 @@ export default async function CleanerLayout({
   // Deactivated cleaners see a configurable notice instead of the app.
   const dbUser = await db.user.findUnique({
     where: { id: userWithRole.id },
-    select: { isActive: true },
+    select: { isActive: true, mustChangePassword: true },
   });
   if (dbUser && dbUser.isActive === false) {
     const message = await getSetting("provider.deactivatedMessage");
     return <AccountDeactivated message={message} signOutAction={signOut} />;
+  }
+  // Imported cleaners on a temp password must set their own before the app.
+  if (dbUser?.mustChangePassword) {
+    redirect("/change-password");
   }
 
   return (

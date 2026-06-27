@@ -21,6 +21,7 @@ import CustomDropdown from "@/components/ui/custom-dropdown";
 import createEmployee from "../actions/createEmployee";
 import { updateEmployee } from "../actions/updateEmployee";
 import { deleteEmployee } from "../actions/deleteEmployee";
+import { setEmployeePassword } from "../actions/setEmployeePassword";
 
 interface Employee {
   id: string;
@@ -85,6 +86,29 @@ export function EmployeeModal({
     "OWNER" | "ADMIN" | "EMPLOYEE"
   >(employee?.role || "EMPLOYEE");
   const [isActive, setIsActive] = useState(employee?.isActive ?? true);
+  // Admin set/reset password (edit mode).
+  const [pwInput, setPwInput] = useState("");
+  const [pwBusy, setPwBusy] = useState(false);
+  const [pwResult, setPwResult] = useState<string | null>(null);
+  const [pwError, setPwError] = useState<string | null>(null);
+
+  async function handleSetPassword() {
+    if (!employee) return;
+    setPwBusy(true);
+    setPwError(null);
+    setPwResult(null);
+    const res = await setEmployeePassword({
+      userId: employee.id,
+      password: pwInput.trim() || undefined,
+    });
+    setPwBusy(false);
+    if (res.success) {
+      setPwResult(res.password);
+      setPwInput("");
+    } else {
+      setPwError(res.error);
+    }
+  }
 
   const createForm = useForm<CreateFormValues>({
     resolver: zodResolver(createFormSchema),
@@ -588,6 +612,53 @@ export function EmployeeModal({
                 </div>
               </div>
             </form>
+
+            {/* Admin set / reset password (edit mode only) */}
+            {mode === "edit" && employee && (
+              <div className="mt-8 pt-6 border-t border-[#008C9C]/10">
+                <h2 className="text-sm font-[450] text-[#008C9C] uppercase tracking-wider mb-1">
+                  Password
+                </h2>
+                <p className="text-xs text-gray-500 mb-3">
+                  Set a new password for this cleaner and share it with them. The
+                  current password can&rsquo;t be shown (it&rsquo;s securely
+                  hashed) — this replaces it. Leave blank to auto-generate a
+                  strong one.
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="text"
+                    value={pwInput}
+                    onChange={(e) => setPwInput(e.target.value)}
+                    placeholder="New password (or leave blank to generate)"
+                    className="flex-1 min-w-[220px] border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#008C9C]"
+                  />
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    type="button"
+                    onClick={handleSetPassword}
+                    disabled={pwBusy}>
+                    {pwBusy ? "Setting…" : "Set password"}
+                  </Button>
+                </div>
+                {pwError && (
+                  <p className="text-xs text-red-600 mt-2">{pwError}</p>
+                )}
+                {pwResult && (
+                  <div className="mt-3 p-3 rounded-lg bg-[#008C9C]/5">
+                    <div className="text-xs text-gray-500">
+                      New password — share it with the cleaner (shown once):
+                    </div>
+                    <div
+                      className="mt-1 font-mono text-base font-semibold text-[#008C9C] tracking-wide"
+                      style={{ userSelect: "all" }}>
+                      {pwResult}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </section>
       </div>

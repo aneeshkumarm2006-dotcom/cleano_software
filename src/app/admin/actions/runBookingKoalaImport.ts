@@ -9,6 +9,7 @@ import {
   sendCustomerImportWelcome,
   sendCleanerImportWelcome,
 } from "@/lib/email";
+import { logActivity } from "@/lib/activity-log";
 import {
   parseAndNormalize,
   aggregateCustomers,
@@ -105,6 +106,8 @@ export async function runBookingKoalaImport(
           emailVerified: true,
           isActive: true,
           role: "EMPLOYEE",
+          // Force the cleaner to retire the shared temp password on first login.
+          mustChangePassword: true,
         },
       });
       await db.account.create({
@@ -318,14 +321,30 @@ export async function runBookingKoalaImport(
   }
 
   // ── 4. emails (commit only) ──────────────────────────────────────────────────
+  // Each temp-password welcome email is logged to the audit trail (event only —
+  // the password itself is NEVER recorded).
   if (sendEmails) {
     for (const c of cleanerCreds) {
       const res = await sendCleanerImportWelcome({ to: c.email, name: c.name, tempPassword: c.tempPassword });
       res?.ok ? report.emails.sent++ : report.emails.failed++;
+      await logActivity({
+        category: "EMAIL",
+        action: "import_temp_password_email",
+        status: res?.ok ? "SUCCESS" : "FAILED",
+        actorLabel: c.email,
+        message: `Temporary-password welcome email ${res?.ok ? "sent" : "failed"} to cleaner ${c.name} <${c.email}>.`,
+      });
     }
     for (const c of custCreds) {
       const res = await sendCustomerImportWelcome({ to: c.email, name: c.name, tempPassword: c.tempPassword });
       res?.ok ? report.emails.sent++ : report.emails.failed++;
+      await logActivity({
+        category: "EMAIL",
+        action: "import_temp_password_email",
+        status: res?.ok ? "SUCCESS" : "FAILED",
+        actorLabel: c.email,
+        message: `Temporary-password welcome email ${res?.ok ? "sent" : "failed"} to customer ${c.name} <${c.email}>.`,
+      });
     }
   }
 
