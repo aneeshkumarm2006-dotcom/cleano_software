@@ -47,7 +47,7 @@ function ChangePasswordForm() {
 
   return (
     <SplitShell
-      image={BRAND_IMAGES.setup}
+      image={BRAND_IMAGES.changePassword}
       quoteHtml={"One quick step<br/>to secure your account."}
       quoteSub="Choose a password only you know."
       badge="Set your password">

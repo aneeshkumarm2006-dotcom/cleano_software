@@ -7,6 +7,8 @@ export const BRAND_IMAGES = {
     "https://images.unsplash.com/photo-1631679706909-1844bbd07221?w=1400&q=80&auto=format&fit=crop",
   setup:
     "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=1400&q=80&auto=format&fit=crop",
+  // Custom branded art for the "Set your password" (change-password) page.
+  changePassword: "/change-password.png",
   rate:
     "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=1400&q=80&auto=format&fit=crop",
   home:
