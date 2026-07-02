@@ -11,6 +11,9 @@ import PremiumSelect from "@/components/ui/PremiumSelect";
 import { EmployeeModal } from "../EmployeeModal";
 import { assignKit } from "../../actions/assignKit";
 import { setEmployeeRating } from "../../actions/setEmployeeRating";
+import { setCleanerTier } from "../../actions/setCleanerTier";
+import { setFieldLead } from "../../actions/setFieldLead";
+import { TIER_LABEL, type CleanerTier } from "@/lib/pay-tiers";
 import {
   ArrowLeft,
   Mail,
@@ -156,6 +159,17 @@ interface EmployeeDetailViewProps {
     unpaidJobs: number;
   };
   starRating?: number | null;
+  cleanerTier?: CleanerTier;
+  ratingCount?: number;
+  fieldLeadId?: string | null;
+  fieldLeadOptions?: Array<{ id: string; name: string }>;
+  weeklyBonus?: {
+    groupRevenue: number;
+    groupAvgRating: number | null;
+    bonusRate: number;
+    bonusAmount: number;
+    memberCount: number;
+  } | null;
   upcomingJobs: Job[];
   recentJobs: Job[];
   topProducts: ProductUsage[];
@@ -187,6 +201,11 @@ export default function EmployeeDetailView({
   employee,
   stats,
   starRating,
+  cleanerTier = "STANDARD",
+  ratingCount = 0,
+  fieldLeadId = null,
+  fieldLeadOptions = [],
+  weeklyBonus = null,
   upcomingJobs,
   recentJobs,
   topProducts,
@@ -215,6 +234,55 @@ export default function EmployeeDetailView({
   const [ratingEdit, setRatingEdit] = useState<string>(starRating != null ? starRating.toFixed(1) : "");
   const [ratingSaving, setRatingSaving] = useState(false);
   const [ratingMsg, setRatingMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [tier, setTier] = useState<CleanerTier>(cleanerTier);
+  const [tierSaving, setTierSaving] = useState(false);
+  const [tierMsg, setTierMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [leadId, setLeadId] = useState<string>(fieldLeadId ?? "");
+  const [leadSaving, setLeadSaving] = useState(false);
+
+  async function handleSetLead(next: string) {
+    setLeadSaving(true);
+    const prev = leadId;
+    setLeadId(next);
+    const res = await setFieldLead(employee.id, next || null);
+    setLeadSaving(false);
+    if (!res.success) setLeadId(prev);
+  }
+
+  async function handleSetTier(next: CleanerTier) {
+    setTierSaving(true);
+    setTierMsg(null);
+    const prev = tier;
+    setTier(next);
+    const res = await setCleanerTier(employee.id, next);
+    setTierSaving(false);
+    if (res.success) {
+      setTierMsg({ type: "success", text: `Tier set to ${TIER_LABEL[next]}.` });
+    } else {
+      setTier(prev);
+      setTierMsg({ type: "error", text: res.error ?? "Failed" });
+    }
+  }
+
+  // Pay-tier rate preview (mirrors src/lib/pay-tiers.ts).
+  const tierRatePct =
+    tier === "TRAINEE"
+      ? "30%"
+      : tier === "FIELD_LEAD"
+        ? "46%"
+        : ratingCount < 5 || starRating == null
+          ? `40% (locked — ${ratingCount}/5 ratings)`
+          : starRating >= 5
+            ? "45%"
+            : starRating >= 4.8
+              ? "44%"
+              : starRating >= 4.6
+                ? "43%"
+                : starRating >= 4.4
+                  ? "42%"
+                  : starRating >= 4.2
+                    ? "41%"
+                    : "40%";
 
   const selectedKit = kitTemplates.find((k) => k.id === selectedKitId) || null;
 
@@ -369,7 +437,7 @@ export default function EmployeeDetailView({
             <div className="flex items-center gap-3 mb-3">
               {starRating != null ? (
                 <span className="text-3xl font-[600] text-amber-500">
-                  {Math.min(5, Math.max(4, Math.round(starRating * 10) / 10)).toFixed(1)}
+                  {Math.min(5, Math.max(1, Math.round(starRating * 10) / 10)).toFixed(1)}
                 </span>
               ) : (
                 <span className="text-sm text-gray-400">No rating yet</span>
@@ -379,7 +447,7 @@ export default function EmployeeDetailView({
                   {[1, 2, 3, 4, 5].map((s) => (
                     <Star
                       key={s}
-                      className={`w-4 h-4 ${s <= Math.round(Math.min(5, Math.max(4, starRating))) ? "text-amber-400 fill-amber-400" : "text-gray-200 fill-gray-200"}`}
+                      className={`w-4 h-4 ${s <= Math.round(Math.min(5, Math.max(1, starRating))) ? "text-amber-400 fill-amber-400" : "text-gray-200 fill-gray-200"}`}
                     />
                   ))}
                 </div>
@@ -388,19 +456,19 @@ export default function EmployeeDetailView({
             <div className="flex items-center gap-2">
               <input
                 type="number"
-                min="4.0"
+                min="1.0"
                 max="5.0"
                 step="0.1"
                 value={ratingEdit}
                 onChange={(e) => setRatingEdit(e.target.value)}
-                placeholder="4.0 – 5.0"
+                placeholder="1.0 – 5.0"
                 className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm w-28 focus:outline-none focus:ring-1 focus:ring-[#008C9C]"
               />
               <button
                 onClick={async () => {
                   const val = parseFloat(ratingEdit);
-                  if (isNaN(val) || val < 4 || val > 5) {
-                    setRatingMsg({ type: "error", text: "Must be between 4.0 and 5.0" });
+                  if (isNaN(val) || val < 1 || val > 5) {
+                    setRatingMsg({ type: "error", text: "Must be between 1.0 and 5.0" });
                     return;
                   }
                   setRatingSaving(true);
@@ -425,6 +493,113 @@ export default function EmployeeDetailView({
             )}
             <p className="text-xs text-gray-400 mt-2">Admin override. Customer ratings also update this average.</p>
           </Card>
+
+          {/* Payroll Tier */}
+          <Card variant="default" className="p-5">
+            <div className="flex items-center gap-2 mb-3">
+              <DollarSign className="w-4 h-4 text-[#008C9C]" />
+              <h3 className="text-sm font-[600] text-gray-800">Payroll Tier</h3>
+            </div>
+            <div className="flex items-center gap-2 mb-3">
+              {(["TRAINEE", "STANDARD", "FIELD_LEAD"] as CleanerTier[]).map((t) => (
+                <button
+                  key={t}
+                  onClick={() => handleSetTier(t)}
+                  disabled={tierSaving}
+                  className={`px-3 py-1.5 text-sm rounded-lg border transition-colors disabled:opacity-50 ${
+                    tier === t
+                      ? "bg-[#008C9C] text-white border-[#008C9C]"
+                      : "bg-white text-gray-700 border-gray-200 hover:border-[#008C9C]"
+                  }`}>
+                  {TIER_LABEL[t]}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-gray-500">
+              Individual pay rate:{" "}
+              <span className="font-[600] text-gray-800">{tierRatePct}</span> of job price.
+            </p>
+            {tier === "TRAINEE" && (
+              <p className="text-xs text-gray-400 mt-1">
+                Trainees always work paired with a Field Lead; take-home comes from the split-job calculation.
+              </p>
+            )}
+            {tierMsg && (
+              <p className={`text-xs mt-2 ${tierMsg.type === "success" ? "text-green-600" : "text-red-500"}`}>
+                {tierMsg.text}
+              </p>
+            )}
+            <p className="text-xs text-gray-400 mt-2">
+              Set manually by admin. There is no automatic promotion.
+            </p>
+          </Card>
+
+          {/* Field Lead group + weekly bonus */}
+          {tier === "FIELD_LEAD" ? (
+            <Card variant="default" className="p-5">
+              <div className="flex items-center gap-2 mb-3">
+                <Briefcase className="w-4 h-4 text-[#008C9C]" />
+                <h3 className="text-sm font-[600] text-gray-800">Weekly Group Bonus</h3>
+              </div>
+              {weeklyBonus ? (
+                <div className="space-y-1.5 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Group members</span>
+                    <span className="text-gray-800">{weeklyBonus.memberCount}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Group revenue (7d)</span>
+                    <span className="text-gray-800">${weeklyBonus.groupRevenue.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Group avg rating</span>
+                    <span className="text-gray-800">
+                      {weeklyBonus.groupAvgRating != null
+                        ? weeklyBonus.groupAvgRating.toFixed(2)
+                        : "—"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between pt-1.5 mt-1.5 border-t border-gray-100">
+                    <span className="text-gray-600">
+                      Bonus ({Math.round(weeklyBonus.bonusRate * 100)}%)
+                    </span>
+                    <span className="font-[600] text-[#008C9C]">
+                      ${weeklyBonus.bonusAmount.toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-gray-400">No group activity this week.</p>
+              )}
+              <p className="text-xs text-gray-400 mt-2">
+                2% of group revenue at ≤4.5★, 3% above 4.5★. Based on the team average,
+                not personal rating. Paid out with each pay period.
+              </p>
+            </Card>
+          ) : (
+            <Card variant="default" className="p-5">
+              <div className="flex items-center gap-2 mb-3">
+                <Briefcase className="w-4 h-4 text-gray-400" />
+                <h3 className="text-sm font-[600] text-gray-800">Field Lead Group</h3>
+              </div>
+              <select
+                value={leadId}
+                onChange={(e) => handleSetLead(e.target.value)}
+                disabled={leadSaving}
+                className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-[#008C9C] disabled:opacity-50">
+                <option value="">— No Field Lead —</option>
+                {fieldLeadOptions.map((fl) => (
+                  <option key={fl.id} value={fl.id}>
+                    {fl.name}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-400 mt-2">
+                The Field Lead this cleaner reports to. Counts toward that lead&apos;s
+                weekly group-revenue bonus.
+              </p>
+            </Card>
+          )}
 
           {/* Financial Summary */}
           <Card variant="default" className="p-5">

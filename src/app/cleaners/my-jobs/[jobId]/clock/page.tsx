@@ -53,6 +53,7 @@ export default async function ClockPage({ params }: PageProps) {
       status={job.status}
       clockInTime={j.clockInTime?.toISOString() ?? null}
       clockOutTime={j.clockOutTime?.toISOString() ?? null}
+      onMyWayAt={j.onMyWayAt?.toISOString() ?? null}
       employeeProducts={employeeProducts}
     />
   );

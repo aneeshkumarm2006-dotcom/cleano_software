@@ -11,6 +11,7 @@ import {
   sendProviderBookingCanceled,
 } from "@/lib/email";
 import { isNotificationEnabled } from "@/lib/notifications";
+import { smsCancellation } from "@/lib/sms";
 
 interface CancelJobInput {
   jobId: string;
@@ -39,7 +40,7 @@ export async function cancelJobByAdmin(input: CancelJobInput) {
         startTime: true,
         location: true,
         jobType: true,
-        client: { select: { email: true } },
+        client: { select: { email: true, phone: true } },
         cleaners: { select: { id: true, name: true, email: true } },
       },
     });
@@ -108,6 +109,13 @@ export async function cancelJobByAdmin(input: CancelJobInput) {
         reason: input.reason,
         refundIssued: !!refund && refund.success,
       }).catch((e) => console.error("customer cancel email", e));
+    }
+    if (job.client?.phone) {
+      smsCancellation({
+        to: job.client.phone,
+        jobNumber: job.jobNumber,
+        reason: input.reason,
+      }).catch((e) => console.error("customer cancel sms", e));
     }
     // Notify each assigned cleaner — email + (gated) app-push alert.
     for (const c of job.cleaners) {

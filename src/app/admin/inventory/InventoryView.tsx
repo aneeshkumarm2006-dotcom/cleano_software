@@ -24,6 +24,7 @@ import Input from "@/components/ui/Input";
 import Badge from "@/components/ui/Badge";
 import CustomDropdown from "@/components/ui/custom-dropdown";
 import ImportCsvButton from "@/components/csv/ImportCsvButton";
+import { fmtDateTime } from "@/lib/time";
 
 type ProductCategory = "LIQUID_SPRAY" | "MOP_LIQUID" | "DISPOSABLE" | "OTHER";
 
@@ -36,6 +37,8 @@ interface Product {
   stockLevel: number;
   minStock: number;
   category?: ProductCategory;
+  stockUpdatedAt: string | null;
+  stockUpdatedByName: string | null;
   totalAssigned: number;
   employeeCount: number;
   totalInventory: number;
@@ -400,6 +403,14 @@ export default function InventoryView({
                           <p className="text-sm font-[350] text-[#008C9C]/100 truncate">
                             {product.stockLevel} {product.unit}
                           </p>
+                          {product.stockUpdatedAt && (
+                            <p className="text-xs text-[#008C9C]/50 font-[350] truncate mt-0.5">
+                              Updated {fmtDateTime(product.stockUpdatedAt)}
+                              {product.stockUpdatedByName
+                                ? ` by ${product.stockUpdatedByName}`
+                                : ""}
+                            </p>
+                          )}
                         </div>
 
                         {/* Min Stock */}
@@ -488,6 +499,14 @@ export default function InventoryView({
                           <p className="text-sm font-[350] text-[#008C9C]">
                             {product.stockLevel} {product.unit}
                           </p>
+                          {product.stockUpdatedAt && (
+                            <p className="text-xs text-[#008C9C]/50 font-[350] mt-0.5">
+                              Updated {fmtDateTime(product.stockUpdatedAt)}
+                              {product.stockUpdatedByName
+                                ? ` by ${product.stockUpdatedByName}`
+                                : ""}
+                            </p>
+                          )}
                         </div>
                         <div>{getProductStatusBadge(product)}</div>
                       </div>

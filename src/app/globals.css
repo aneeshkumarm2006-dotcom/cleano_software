@@ -2658,6 +2658,50 @@ body {
 .cl-jd-clock.out { background: var(--error); box-shadow: 0 6px 20px -4px rgba(220, 38, 38, 0.35); }
 .cl-jd-clock.out:hover { background: #b91c1c; }
 
+/* "On my way" (before clock-in) */
+.cl-jd-otw {
+  background: var(--primary-5);
+  color: var(--primary);
+  border: 1px solid var(--primary-15);
+  border-radius: 999px;
+  padding: 12px 22px;
+  font-family: inherit;
+  font-size: 14px; font-weight: 600;
+  cursor: pointer;
+  display: inline-flex; align-items: center; gap: 8px;
+  transition: background .15s, transform .08s;
+}
+.cl-jd-otw:hover { background: var(--primary-10); }
+.cl-jd-otw:active { transform: scale(0.98); }
+.cl-jd-otw:disabled { opacity: .6; cursor: default; }
+.cl-jd-otw-done {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: #e0f2fe; color: #075985;
+  border: 1px solid #bae6fd;
+  border-radius: 999px;
+  padding: 10px 18px;
+  font-size: 13px; font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* "On my way" on the clock page */
+.clk-action.otw {
+  background: transparent;
+  color: var(--primary);
+  border: 1.5px solid var(--primary-15);
+  box-shadow: none;
+  margin-bottom: 10px;
+}
+.clk-otw-done {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  background: #e0f2fe; color: #075985;
+  border: 1px solid #bae6fd;
+  border-radius: 14px;
+  padding: 12px 18px;
+  font-size: 14px; font-weight: 600;
+  margin-bottom: 10px;
+}
+
 .cl-jd-cancel {
   background: rgba(220, 38, 38, 0.04);
   border: 1px solid rgba(220, 38, 38, 0.15);

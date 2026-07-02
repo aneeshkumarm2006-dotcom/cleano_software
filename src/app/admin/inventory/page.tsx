@@ -98,6 +98,10 @@ export default async function InventoryPage({
       stockLevel: product.stockLevel,
       minStock: product.minStock,
       category: product.category,
+      stockUpdatedAt: product.stockUpdatedAt
+        ? product.stockUpdatedAt.toISOString()
+        : null,
+      stockUpdatedByName: product.stockUpdatedByName,
       totalAssigned,
       employeeCount,
       totalInventory: product.stockLevel + totalAssigned,
@@ -144,7 +148,11 @@ export default async function InventoryPage({
 
   const supplierData = {
     products: Array.from(supplierProductMap.values()),
-    suppliers: activeSuppliers.map((s) => ({ id: s.id, name: s.name })),
+    suppliers: activeSuppliers.map((s) => ({
+      id: s.id,
+      name: s.name,
+      website: s.website,
+    })),
   };
 
   // Build forecast data

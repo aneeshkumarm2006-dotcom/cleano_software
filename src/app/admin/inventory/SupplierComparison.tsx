@@ -23,7 +23,23 @@ interface ProductWithPrices {
 
 interface SupplierComparisonProps {
   products: ProductWithPrices[];
-  suppliers: Array<{ id: string; name: string }>;
+  suppliers: Array<{ id: string; name: string; website?: string | null }>;
+}
+
+/**
+ * Only http(s) URLs are safe to link to. Anything else (e.g. javascript:)
+ * is rejected so a stored value can never be used as an XSS vector.
+ */
+function safeWebsite(raw?: string | null): string | null {
+  if (!raw) return null;
+  try {
+    const url = new URL(raw);
+    return url.protocol === "http:" || url.protocol === "https:"
+      ? url.toString()
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 export default function SupplierComparison({
@@ -32,6 +48,10 @@ export default function SupplierComparison({
 }: SupplierComparisonProps) {
   const productsWithMultiplePrices = products.filter(
     (p) => p.supplierPrices.length > 0
+  );
+
+  const websiteById = new Map(
+    suppliers.map((s) => [s.id, safeWebsite(s.website)])
   );
 
   if (productsWithMultiplePrices.length === 0) {
@@ -79,13 +99,31 @@ export default function SupplierComparison({
                   <th className="p-4 text-left text-xs font-[350] text-[#008C9C]/40 uppercase tracking-wide min-w-[100px]">
                     Current Cost
                   </th>
-                  {suppliers.map((s) => (
-                    <th
-                      key={s.id}
-                      className="p-4 text-left text-xs font-[350] text-[#008C9C]/40 uppercase tracking-wide min-w-[120px]">
-                      {s.name}
-                    </th>
-                  ))}
+                  {suppliers.map((s) => {
+                    const url = websiteById.get(s.id);
+                    return (
+                      <th
+                        key={s.id}
+                        className="p-4 text-left text-xs font-[350] text-[#008C9C]/40 uppercase tracking-wide min-w-[120px]">
+                        {url ? (
+                          <a
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[#008C9C] hover:underline underline-offset-2 normal-case tracking-normal">
+                            {s.name}
+                          </a>
+                        ) : (
+                          s.name
+                        )}
+                        {url && (
+                          <span className="block normal-case tracking-normal text-[10px] text-[#008C9C]/40 truncate max-w-[140px]">
+                            {url.replace(/^https?:\/\//, "")}
+                          </span>
+                        )}
+                      </th>
+                    );
+                  })}
                   <th className="p-4 text-left text-xs font-[350] text-[#008C9C]/40 uppercase tracking-wide min-w-[120px]">
                     Best Price
                   </th>
@@ -137,19 +175,24 @@ export default function SupplierComparison({
                         return (
                           <td key={s.id} className="p-4">
                             {entry ? (
-                              <span
-                                className={`text-sm font-[350] ${
-                                  isCheapest
-                                    ? "text-green-600 font-[500]"
-                                    : "text-[#008C9C]"
-                                }`}>
-                                ${entry.price.toFixed(2)}
-                                {isCheapest && prices.length > 1 && (
-                                  <span className="ml-1 text-xs text-green-500">
-                                    *
-                                  </span>
-                                )}
-                              </span>
+                              <div>
+                                <span
+                                  className={`text-sm font-[350] ${
+                                    isCheapest
+                                      ? "text-green-600 font-[500]"
+                                      : "text-[#008C9C]"
+                                  }`}>
+                                  ${entry.price.toFixed(2)}
+                                  {isCheapest && prices.length > 1 && (
+                                    <span className="ml-1 text-xs text-green-500">
+                                      *
+                                    </span>
+                                  )}
+                                </span>
+                                <span className="block text-[10px] text-[#008C9C]/40">
+                                  per {entry.unit || product.unit}
+                                </span>
+                              </div>
                             ) : (
                               <span className="text-sm text-[#008C9C]/30">
                                 -
@@ -226,6 +269,7 @@ export default function SupplierComparison({
                   {prices.map((p) => {
                     const isCheapest =
                       cheapest && p.supplierId === cheapest.supplierId;
+                    const url = websiteById.get(p.supplierId);
                     return (
                       <div
                         key={p.supplierId}
@@ -238,13 +282,27 @@ export default function SupplierComparison({
                               ? "text-green-700 font-[400]"
                               : "text-[#008C9C]/70"
                           }`}>
-                          {p.supplierName}
+                          {url ? (
+                            <a
+                              href={url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="underline underline-offset-2">
+                              {p.supplierName}
+                            </a>
+                          ) : (
+                            p.supplierName
+                          )}
                         </span>
                         <span
                           className={`text-xs font-[400] ${
                             isCheapest ? "text-green-600" : "text-[#008C9C]"
                           }`}>
                           ${p.price.toFixed(2)}
+                          <span className="text-[#008C9C]/40">
+                            {" "}
+                            / {p.unit || product.unit}
+                          </span>
                         </span>
                       </div>
                     );

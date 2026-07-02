@@ -70,7 +70,7 @@ export async function updateEmployee(
         name,
         email,
         phone: phone || null,
-        role: role as "OWNER" | "ADMIN" | "EMPLOYEE",
+        role: role as "OWNER" | "ADMIN" | "OPS_MANAGER" | "FIELD_LEAD" | "EMPLOYEE",
         isActive,
       },
     });

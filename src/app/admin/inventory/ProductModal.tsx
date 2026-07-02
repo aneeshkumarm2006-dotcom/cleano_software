@@ -23,6 +23,11 @@ import { deleteProduct } from "../actions/deleteProduct";
 
 type ProductCategory = "LIQUID_SPRAY" | "MOP_LIQUID" | "DISPOSABLE" | "OTHER";
 
+// Preset unit options offered in the dropdown. Anything not in this list is
+// treated as a custom unit ("Other") so existing/free-text values still work.
+const UNIT_PRESETS = ["ml", "L", "gallons", "pieces", "units", "bottles", "kg"] as const;
+const UNIT_OTHER = "__other__";
+
 interface Product {
   id: string;
   name: string;
@@ -66,11 +71,17 @@ export function ProductModal({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // Whether the unit dropdown is set to "Other (custom)", revealing a free-text
+  // field. Existing/custom units that aren't in the preset list start here.
+  const [customUnit, setCustomUnit] = useState(false);
+
   const {
     register,
     handleSubmit,
     formState: { errors },
     reset,
+    setValue,
+    watch,
   } = useForm<FormInput, unknown, FormValues>({
     resolver: zodResolver(formSchema),
     mode: "onChange",
@@ -88,15 +99,21 @@ export function ProductModal({
   // Reset form when product or mode changes
   useEffect(() => {
     if (isOpen) {
+      const unit = product?.unit || UNIT_PRESETS[0];
       reset({
         name: product?.name || "",
         description: product?.description || "",
-        unit: product?.unit || "",
+        unit,
         costPerUnit: product?.costPerUnit || 0,
         stockLevel: product?.stockLevel || 0,
         minStock: product?.minStock || 0,
         category: product?.category || "OTHER",
       });
+      // If the existing unit isn't a preset (including a custom value on an
+      // existing product), default the dropdown to "Other" and keep the value.
+      setCustomUnit(
+        !!unit && !UNIT_PRESETS.includes(unit as (typeof UNIT_PRESETS)[number])
+      );
     }
   }, [isOpen, product, mode, reset]);
 
@@ -358,20 +375,43 @@ export function ProductModal({
                   <label className="input-label">
                     Unit <span className="text-red-500 ml-1">*</span>
                   </label>
-                  <div className="relative">
-                    <Hash className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/50" />
-                    <Input
-                      variant="form"
-                      type="text"
-                      size="md"
-                      {...register("unit")}
-                      disabled={disableForm}
-                      error={!!errors.unit}
-                      className="w-full pl-11 px-4 py-3"
-                      placeholder="e.g., bottles, liters, kg"
-                      border={false}
-                    />
-                  </div>
+                  <select
+                    value={customUnit ? UNIT_OTHER : watch("unit")}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === UNIT_OTHER) {
+                        setCustomUnit(true);
+                        setValue("unit", "", { shouldValidate: true });
+                      } else {
+                        setCustomUnit(false);
+                        setValue("unit", val, { shouldValidate: true });
+                      }
+                    }}
+                    disabled={disableForm}
+                    className="w-full px-4 py-3 rounded-xl border border-[#008C9C]/15 bg-white text-[#003C46] text-sm focus:outline-none focus:border-[#008C9C] focus:ring-2 focus:ring-[#008C9C]/10">
+                    {UNIT_PRESETS.map((u) => (
+                      <option key={u} value={u}>
+                        {u}
+                      </option>
+                    ))}
+                    <option value={UNIT_OTHER}>Other (custom)</option>
+                  </select>
+                  {customUnit && (
+                    <div className="relative mt-2">
+                      <Hash className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/50" />
+                      <Input
+                        variant="form"
+                        type="text"
+                        size="md"
+                        {...register("unit")}
+                        disabled={disableForm}
+                        error={!!errors.unit}
+                        className="w-full pl-11 px-4 py-3"
+                        placeholder="e.g., pouches, rolls, cans"
+                        border={false}
+                      />
+                    </div>
+                  )}
                   {errors.unit && (
                     <p className="my-1 text-xs text-red-600">
                       {errors.unit.message}

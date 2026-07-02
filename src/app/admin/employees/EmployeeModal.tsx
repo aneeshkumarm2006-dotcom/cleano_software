@@ -28,7 +28,7 @@ interface Employee {
   name: string;
   email: string;
   phone: string | null;
-  role: "OWNER" | "ADMIN" | "EMPLOYEE";
+  role: "OWNER" | "ADMIN" | "OPS_MANAGER" | "FIELD_LEAD" | "EMPLOYEE";
   isActive?: boolean;
 }
 
@@ -39,19 +39,21 @@ interface EmployeeModalProps {
   mode: "create" | "edit";
 }
 
+const ROLE_ENUM = ["OWNER", "ADMIN", "OPS_MANAGER", "FIELD_LEAD", "EMPLOYEE"] as const;
+
 const createFormSchema = z.object({
   name: z.string().min(1, "Name is required"),
   email: z.string().email("Valid email is required"),
   phone: z.string().optional(),
   password: z.string().min(8, "Password must be at least 8 characters"),
-  role: z.enum(["OWNER", "ADMIN", "EMPLOYEE"]),
+  role: z.enum(ROLE_ENUM),
 });
 
 const editFormSchema = z.object({
   name: z.string().min(1, "Name is required"),
   email: z.string().email("Valid email is required"),
   phone: z.string().optional(),
-  role: z.enum(["OWNER", "ADMIN", "EMPLOYEE"]),
+  role: z.enum(ROLE_ENUM),
 });
 
 type CreateFormValues = z.infer<typeof createFormSchema>;
@@ -62,6 +64,16 @@ const roleOptions = [
     value: "EMPLOYEE",
     label: "Employee",
     description: "Can log jobs and request inventory",
+  },
+  {
+    value: "FIELD_LEAD",
+    label: "Field Lead",
+    description: "Manager login — team oversight + admin app access",
+  },
+  {
+    value: "OPS_MANAGER",
+    label: "Ops Manager",
+    description: "Operations manager login",
   },
   { value: "ADMIN", label: "Admin", description: "Can manage everything" },
   {
@@ -83,7 +95,7 @@ export function EmployeeModal({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [selectedRole, setSelectedRole] = useState<
-    "OWNER" | "ADMIN" | "EMPLOYEE"
+    "OWNER" | "ADMIN" | "OPS_MANAGER" | "FIELD_LEAD" | "EMPLOYEE"
   >(employee?.role || "EMPLOYEE");
   const [isActive, setIsActive] = useState(employee?.isActive ?? true);
   // Admin set/reset password (edit mode).

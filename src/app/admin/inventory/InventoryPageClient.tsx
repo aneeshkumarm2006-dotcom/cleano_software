@@ -19,6 +19,8 @@ interface Product {
   stockLevel: number;
   minStock: number;
   category?: ProductCategory;
+  stockUpdatedAt: string | null;
+  stockUpdatedByName: string | null;
   totalAssigned: number;
   employeeCount: number;
   totalInventory: number;
@@ -68,7 +70,7 @@ interface InventoryPageClientProps {
   initialRowsPerPage: number;
   supplierData?: {
     products: ProductWithPrices[];
-    suppliers: Array<{ id: string; name: string }>;
+    suppliers: Array<{ id: string; name: string; website?: string | null }>;
   };
   forecastData?: ForecastEmployee[];
 }

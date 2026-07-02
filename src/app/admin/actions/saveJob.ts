@@ -18,6 +18,9 @@ import {
   sendProviderBookingCanceled,
 } from "@/lib/email";
 import { isNotificationEnabled } from "@/lib/notifications";
+import { smsBookingConfirmation, smsCancellation } from "@/lib/sms";
+import { getCleanerRateInputs } from "@/lib/cleaner-rates";
+import { computeJobPayout } from "@/lib/pay-tiers";
 import { createAssignmentInvites } from "@/lib/invites";
 import { getSetting } from "@/lib/settings";
 import {
@@ -120,6 +123,28 @@ export async function saveJob(formData: FormData) {
       discountAmount = +(price * (clientDiscountPercent / 100)).toFixed(2);
     }
 
+    // Auto-estimate cleaner pay from the tier-based pool when admin leaves the
+    // field blank. Manual entry still wins (acts as an override). Authoritative
+    // per-cleaner payout is recomputed from tiers at pay-period time.
+    const manualEmployeePay = parseOptionalFloat(formData.get("employeePay"));
+    let estimatedEmployeePay = manualEmployeePay;
+    if (manualEmployeePay === null && price !== null && price > 0 && cleanerIds.length > 0) {
+      const rateInputs = await getCleanerRateInputs([
+        session.user.id,
+        ...cleanerIds,
+      ]);
+      const rateList = [session.user.id, ...cleanerIds].map(
+        (id) =>
+          rateInputs.get(id) ?? {
+            id,
+            tier: "STANDARD" as const,
+            avgRating: null,
+            ratingCount: 0,
+          }
+      );
+      estimatedEmployeePay = computeJobPayout(price, rateList).pool;
+    }
+
     const jobData: any = {
       employeeId: session.user.id,
       clientName,
@@ -135,7 +160,7 @@ export async function saveJob(formData: FormData) {
           : new Date(),
       endTime: endDate && endTime ? new Date(`${endDate}T${endTime}`) : null,
       price,
-      employeePay: parseOptionalFloat(formData.get("employeePay")),
+      employeePay: estimatedEmployeePay,
       totalTip: parseOptionalFloat(formData.get("totalTip")),
       parking: parseOptionalFloat(formData.get("parking")),
       paymentReceived: formData.get("paymentReceived") === "on",
@@ -168,7 +193,7 @@ export async function saveJob(formData: FormData) {
           location: true,
           jobType: true,
           totalTip: true,
-          client: { select: { email: true, name: true } },
+          client: { select: { email: true, name: true, phone: true } },
           cleaners: { select: { id: true, name: true, email: true } },
         },
       });
@@ -239,6 +264,13 @@ export async function saveJob(formData: FormData) {
               to: existingJob.client.email,
             }).catch((e) => console.error("customer cancel email", e));
           }
+          // Customer SMS (gated by Twilio config + catalog toggle).
+          if (existingJob.client?.phone) {
+            smsCancellation({
+              to: existingJob.client.phone,
+              jobNumber: existingJob.jobNumber,
+            }).catch((e) => console.error("customer cancel sms", e));
+          }
 
           // Notify each assigned cleaner — email + app-push alert.
           for (const c of existingJob.cleaners) {
@@ -288,6 +320,14 @@ export async function saveJob(formData: FormData) {
             to: existingJob.client.email,
             cleanerNames: assignedCleaners.map((c) => c.name),
           }).catch((e) => console.error("customer confirmed email", e));
+          // Customer SMS (gated by Twilio config + catalog toggle).
+          if (existingJob.client?.phone) {
+            smsBookingConfirmation({
+              to: existingJob.client.phone,
+              jobNumber: existingJob.jobNumber,
+              startTime: existingJob.startTime.toISOString(),
+            }).catch((e) => console.error("customer confirmed sms", e));
+          }
         }
 
         // Admin + customer "Booking modified" on any other edit.

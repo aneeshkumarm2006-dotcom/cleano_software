@@ -13,6 +13,8 @@ interface SubmitRatingInput {
   token: string;
   stars: number;
   comment?: string;
+  /** URLs of client-attached photos (poor reviews only). Optional. */
+  photoUrls?: string[];
 }
 
 export async function submitRating(input: SubmitRatingInput) {
@@ -84,6 +86,27 @@ export async function submitRating(input: SubmitRatingInput) {
         data: { usedAt: new Date(), ratingStars: input.stars },
       }),
     ]);
+
+    // Persist any client-attached review photos (poor reviews). Sanitized to
+    // valid http(s) URLs, capped at 5.
+    const photoUrls = (input.photoUrls ?? [])
+      .filter(
+        (u): u is string =>
+          typeof u === "string" && /^https?:\/\//i.test(u.trim())
+      )
+      .map((u) => u.trim())
+      .slice(0, 5);
+    if (photoUrls.length > 0) {
+      await db.reviewPhoto
+        .createMany({
+          data: photoUrls.map((url) => ({
+            jobId: tokenRow.jobId,
+            url,
+            rating: input.stars,
+          })),
+        })
+        .catch((e) => console.error("review photo save", e));
+    }
 
     // Notify admin + each rated cleaner (gated). Recalc overall for the
     // `overall_dropped` check.

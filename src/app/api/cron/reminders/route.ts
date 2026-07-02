@@ -3,6 +3,7 @@ import { isAuthorizedCron } from "@/lib/cron-auth";
 import { logActivity } from "@/lib/activity-log";
 import { db } from "@/db";
 import { sendReminder24h } from "@/lib/email";
+import { smsReminder } from "@/lib/sms";
 
 // Vercel Cron: runs daily at 9 AM UTC (5 AM EST / 6 AM EDT)
 // vercel.json: { "crons": [{ "path": "/api/cron/reminders", "schedule": "0 9 * * *" }] }
@@ -26,7 +27,7 @@ export async function GET(req: NextRequest) {
       status: { notIn: ["CANCELLED"] },
     },
     include: {
-      client: { select: { name: true, email: true } },
+      client: { select: { name: true, email: true, phone: true } },
       cleaners: { select: { name: true } },
     },
   });
@@ -63,6 +64,15 @@ export async function GET(req: NextRequest) {
       cleanerNames: job.cleaners.map((c) => c.name),
       logId: log.id,
     });
+
+    // Customer SMS reminder (gated by Twilio config + catalog toggle).
+    if (job.client.phone) {
+      await smsReminder({
+        to: job.client.phone,
+        jobNumber: job.jobNumber,
+        startTime: job.startTime.toISOString(),
+      }).catch((e) => console.error("customer reminder sms", e));
+    }
 
     sent++;
   }

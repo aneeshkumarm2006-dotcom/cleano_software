@@ -37,6 +37,7 @@ import {
   Database,
   GraduationCap,
   Megaphone,
+  MessagesSquare,
   type LucideIcon,
 } from "lucide-react";
 import { getUnreadChatCount } from "./chat/actions";
@@ -97,6 +98,7 @@ const NAV: { label: string; items: NavItem[] }[] = [
       { href: "/admin/job-applications", label: "Job Applications", Icon: UserPlus },
       { href: "/admin/training-docs", label: "Training & Docs", Icon: GraduationCap },
       { href: "/admin/announcements", label: "Announcements", Icon: Megaphone },
+      { href: "/admin/group-chat", label: "Group Chat", Icon: MessagesSquare },
     ],
   },
   {

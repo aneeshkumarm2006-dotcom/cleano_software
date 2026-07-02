@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { RATING_MIN, RATING_MAX, DEFAULT_STARTING_RATING } from "@/lib/policy";
 
 export async function setEmployeeRating(
   employeeId: string,
@@ -17,7 +18,8 @@ export async function setEmployeeRating(
     return { success: false, error: "Not authorized" };
   }
 
-  const clamped = Math.round(Math.min(5, Math.max(4, rating)) * 10) / 10;
+  const clamped =
+    Math.round(Math.min(RATING_MAX, Math.max(RATING_MIN, rating)) * 10) / 10;
 
   await db.employeeRating.create({
     data: {
@@ -39,9 +41,10 @@ export async function getEmployeeAvgRating(employeeId: string): Promise<number |
     orderBy: { createdAt: "desc" },
   });
 
-  if (ratings.length === 0) return null;
+  // A cleaner with zero ratings starts at the default rating.
+  if (ratings.length === 0) return DEFAULT_STARTING_RATING;
 
   const avg = ratings.reduce((s, r) => s + r.rating, 0) / ratings.length;
-  // Clamp to 4.0–5.0 range and round to nearest tenth
-  return Math.round(Math.min(5, Math.max(4, avg)) * 10) / 10;
+  // Bound to 1.0–5.0 range and round to nearest tenth.
+  return Math.round(Math.min(RATING_MAX, Math.max(RATING_MIN, avg)) * 10) / 10;
 }

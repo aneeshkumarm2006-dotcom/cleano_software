@@ -76,7 +76,7 @@ export default async function createEmployee(
         email,
         phone: phone || null,
         emailVerified: true, // Auto-verify admin-created accounts
-        role: role as "OWNER" | "ADMIN" | "EMPLOYEE",
+        role: role as "OWNER" | "ADMIN" | "OPS_MANAGER" | "FIELD_LEAD" | "EMPLOYEE",
       },
     });
 

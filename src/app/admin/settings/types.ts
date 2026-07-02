@@ -56,6 +56,7 @@ export interface SupplierPriceRecord {
 export interface SupplierRecord {
   id: string;
   name: string;
+  website: string | null;
   contact: string | null;
   email: string | null;
   phone: string | null;

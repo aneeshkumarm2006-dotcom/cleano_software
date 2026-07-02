@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, MapPin, Clock } from "lucide-react";
 import PayBreakdownModal from "./PayBreakdownModal";
+import { fmtDate, fmtTime } from "@/lib/time";
 
 interface MissingEquipmentInfo {
   productId: string;
@@ -53,10 +54,12 @@ export function JobRow({ job, isMainEmployee, missingEquipment = [] }: JobRowPro
   const ctaLabel = canClockIn ? "Start job" : canClockOut ? "Complete job" : "View details";
   const sc = statusClass(job.status);
 
+  // Render the job date in the business timezone so a date-only value stored at
+  // UTC midnight does not roll back a day (fixes the "one day early" list bug).
   const date = job.jobDate ? new Date(job.jobDate) : null;
-  const mo = date ? date.toLocaleDateString("en-US", { month: "short" }).toUpperCase() : null;
-  const day = date ? date.getDate() : null;
-  const wd = date ? date.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase() : null;
+  const mo = date ? fmtDate(date, { month: "short" }).toUpperCase() : null;
+  const day = date ? fmtDate(date, { day: "numeric" }) : null;
+  const wd = date ? fmtDate(date, { weekday: "short" }).toUpperCase() : null;
 
   return (
     <>
@@ -104,8 +107,8 @@ export function JobRow({ job, isMainEmployee, missingEquipment = [] }: JobRowPro
             {job.startTime && (
               <span className="row">
                 <Clock size={13} className="icon" />
-                {new Date(job.startTime).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
-                {job.endTime && <> – {new Date(job.endTime).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</>}
+                {fmtTime(job.startTime)}
+                {job.endTime && <> – {fmtTime(job.endTime)}</>}
               </span>
             )}
           </div>

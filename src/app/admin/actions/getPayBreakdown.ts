@@ -4,6 +4,8 @@ import { db } from "@/db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import type { PayBreakdown } from "./getPayBreakdown.types";
+import { getCleanerRateInputs } from "@/lib/cleaner-rates";
+import { computeJobPayout, type CleanerTier } from "@/lib/pay-tiers";
 
 export async function getPayBreakdown(
   jobId: string
@@ -76,13 +78,46 @@ export async function getPayBreakdown(
         ? job.price
         : (basePrice ?? 0) + addOnsTotal - discount;
 
-    const employeeBasePay = job.employeePay || 0;
+    // Tier-based pay: compute the proportional split from the job price. The
+    // "viewer" is the current cleaner if they're on the job, otherwise the lead
+    // (so admins see the lead's pay).
+    const participantIds = Array.from(
+      new Set(
+        [job.employeeId, ...job.cleaners.map((c) => c.id)].filter(
+          (id): id is string => !!id
+        )
+      )
+    );
+    const rateInputs = await getCleanerRateInputs(participantIds);
+    const rateList = participantIds.map(
+      (id) =>
+        rateInputs.get(id) ?? {
+          id,
+          tier: "STANDARD" as const,
+          avgRating: null,
+          ratingCount: 0,
+        }
+    );
+    const payout = computeJobPayout(job.price, rateList);
+
+    const viewerId =
+      isCleaner || isLead ? session.user.id : job.employeeId ?? participantIds[0];
+    const viewerShare = payout.shares.find((s) => s.id === viewerId);
+    const viewerRate = rateInputs.get(viewerId ?? "");
+
+    const teamSize = 1 + job.cleaners.length;
+    const usePriceModel = (job.price ?? 0) > 0;
+
+    // Base pay (before the per-job multiplier/tip): tier share, or legacy even
+    // split of the stored employeePay for jobs with no price.
+    const employeeBasePay = usePriceModel
+      ? viewerShare?.amount ?? 0
+      : (job.employeePay || 0) / (teamSize || 1);
     const payMultiplier = job.payRateMultiplier ?? 1.0;
 
     const payAfterMultiplier = employeeBasePay * payMultiplier;
 
     const totalTip = job.totalTip || 0;
-    const teamSize = 1 + job.cleaners.length;
     const tipShare = teamSize > 0 ? totalTip / teamSize : 0;
 
     const totalEmployeePay = payAfterMultiplier + tipShare;
@@ -109,6 +144,10 @@ export async function getPayBreakdown(
         tipShare,
         totalEmployeePay,
         isLead,
+        tier: (viewerRate?.tier as CleanerTier) ?? "STANDARD",
+        individualRate: viewerShare?.rate ?? 0,
+        isSplit: payout.isSplit,
+        poolTotal: payout.pool,
       },
     };
   } catch (error) {

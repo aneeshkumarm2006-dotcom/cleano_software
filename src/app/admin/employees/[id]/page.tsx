@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/db";
 import EmployeeDetailView from "./EmployeeDetailView";
 import { getEmployeeAvgRating } from "../../actions/setEmployeeRating";
+import { getFieldLeadWeeklyBonus } from "@/lib/field-lead-bonus.server";
 import { getStrikeSummary, STRIKE_WINDOW_DAYS } from "@/lib/strikes";
 
 export default async function EmployeePage({
@@ -264,6 +265,35 @@ export default async function EmployeePage({
     .filter((c): c is NonNullable<typeof c> => c !== null);
 
   const starRating = await getEmployeeAvgRating(id);
+  const ratingCount = await db.employeeRating.count({ where: { employeeId: id } });
+
+  // Field Lead group: list of possible leads (for assignment) + this cleaner's
+  // current lead, and — if this cleaner IS a Field Lead — their weekly bonus.
+  const fieldLeadOptions = await db.user.findMany({
+    where: { cleanerTier: "FIELD_LEAD", id: { not: id } },
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+  });
+  let weeklyBonus: {
+    groupRevenue: number;
+    groupAvgRating: number | null;
+    bonusRate: number;
+    bonusAmount: number;
+    memberCount: number;
+  } | null = null;
+  if (employee.cleanerTier === "FIELD_LEAD") {
+    const weekStart = new Date(now);
+    weekStart.setDate(weekStart.getDate() - 6);
+    weekStart.setHours(0, 0, 0, 0);
+    const b = await getFieldLeadWeeklyBonus(id, weekStart, now);
+    weeklyBonus = {
+      groupRevenue: b.groupRevenue,
+      groupAvgRating: b.groupAvgRating,
+      bonusRate: b.bonusRate,
+      bonusAmount: b.bonusAmount,
+      memberCount: Math.max(0, b.groupMemberIds.length - 1),
+    };
+  }
 
   // Accountability strikes (rolling 30-day window).
   const strikeRows = await db.cleanerStrike.findMany({
@@ -300,6 +330,11 @@ export default async function EmployeePage({
         role: employee.role as "OWNER" | "ADMIN" | "EMPLOYEE",
       }}
       starRating={starRating}
+      cleanerTier={employee.cleanerTier}
+      ratingCount={ratingCount}
+      fieldLeadId={employee.fieldLeadId}
+      fieldLeadOptions={fieldLeadOptions}
+      weeklyBonus={weeklyBonus}
       availability={availabilitySlots}
       availabilityConflicts={conflicts}
       stats={{

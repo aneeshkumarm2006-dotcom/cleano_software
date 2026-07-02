@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 
 interface CreateSupplierParams {
   name: string;
+  website?: string | null;
   contact?: string | null;
   email?: string | null;
   phone?: string | null;
@@ -17,6 +18,24 @@ interface CreateSupplierParams {
 
 interface UpdateSupplierParams extends CreateSupplierParams {
   id: string;
+}
+
+/**
+ * Normalize a user-supplied supplier website. Returns null when empty.
+ * Prepends https:// when no scheme is given and only allows http(s) URLs so
+ * a malicious value like `javascript:` can never be stored and later linked.
+ */
+function normalizeWebsite(raw?: string | null): string | null {
+  const value = raw?.trim();
+  if (!value) return null;
+  const withScheme = /^https?:\/\//i.test(value) ? value : `https://${value}`;
+  try {
+    const url = new URL(withScheme);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
 }
 
 async function requireAdmin() {
@@ -41,6 +60,7 @@ export async function createSupplier(params: CreateSupplierParams) {
     const supplier = await db.supplier.create({
       data: {
         name: params.name.trim(),
+        website: normalizeWebsite(params.website),
         contact: params.contact?.trim() || null,
         email: params.email?.trim() || null,
         phone: params.phone?.trim() || null,
@@ -73,6 +93,7 @@ export async function updateSupplier(params: UpdateSupplierParams) {
       where: { id },
       data: {
         name: rest.name.trim(),
+        website: normalizeWebsite(rest.website),
         contact: rest.contact?.trim() || null,
         email: rest.email?.trim() || null,
         phone: rest.phone?.trim() || null,

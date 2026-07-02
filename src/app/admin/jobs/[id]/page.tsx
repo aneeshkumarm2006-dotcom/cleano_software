@@ -105,6 +105,12 @@ export default async function JobPage({
     orderBy: { createdAt: "desc" },
   });
 
+  // Fetch client-submitted review photos (attached to poor ratings)
+  const reviewPhotos = await db.reviewPhoto.findMany({
+    where: { jobId: id },
+    orderBy: { createdAt: "desc" },
+  });
+
   // Calculate total cost of products used
   const totalProductCost = job.productUsage.reduce((sum, usage) => {
     return sum + usage.quantity * usage.product.costPerUnit;
@@ -141,6 +147,10 @@ export default async function JobPage({
     endTime: job.endTime?.toISOString() || null,
     clockInTime: job.clockInTime?.toISOString() || null,
     clockOutTime: job.clockOutTime?.toISOString() || null,
+    onMyWayAt: job.onMyWayAt?.toISOString() || null,
+    onMyWayLat: job.onMyWayLat ?? null,
+    onMyWayLng: job.onMyWayLng ?? null,
+    onMyWayLocationAt: job.onMyWayLocationAt?.toISOString() || null,
     status: job.status,
     price: job.price,
     employeePay: job.employeePay,
@@ -213,12 +223,20 @@ export default async function JobPage({
     employee: { id: photo.employee.id, name: photo.employee.name },
   }));
 
+  const reviewPhotosData = reviewPhotos.map((photo) => ({
+    id: photo.id,
+    url: photo.url,
+    rating: photo.rating,
+    createdAt: photo.createdAt.toISOString(),
+  }));
+
   return (
     <JobDetailView
       job={jobData}
       productUsage={productUsageData}
       logs={logsData}
       photos={photosData}
+      reviewPhotos={reviewPhotosData}
       totalLogs={totalLogs}
       logsPage={logsPage}
       logsPerPage={logsPerPage}
@@ -227,6 +245,7 @@ export default async function JobPage({
       onDeleteJob={deleteJob}
       users={users}
       clients={clients}
+      currentUserName={session.user.name ?? undefined}
     />
   );
 }

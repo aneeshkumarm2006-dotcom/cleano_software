@@ -5,6 +5,8 @@ import { syncDefaultLocationStock } from "@/lib/inventory";
 import { revalidatePath } from "next/cache";
 import type { ProductCategory } from "@prisma/client";
 import { requireOwnerAdmin } from "@/lib/action-guards";
+import { auth } from "@/lib/auth";
+import { headers } from "next/headers";
 
 const ALLOWED_CATEGORIES: readonly ProductCategory[] = [
   "LIQUID_SPRAY",
@@ -65,6 +67,10 @@ export default async function createProduct(
       };
     }
 
+    // Stamp who set the initial count and when (always on create).
+    const session = await auth.api.getSession({ headers: await headers() });
+    const user = session?.user as { id?: string; name?: string } | undefined;
+
     // Create the product
     const product = await db.product.create({
       data: {
@@ -75,6 +81,9 @@ export default async function createProduct(
         stockLevel,
         minStock,
         category,
+        stockUpdatedAt: new Date(),
+        stockUpdatedById: user?.id ?? null,
+        stockUpdatedByName: user?.name ?? null,
       },
     });
 

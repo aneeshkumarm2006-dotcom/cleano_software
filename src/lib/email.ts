@@ -1140,6 +1140,31 @@ export async function sendAdminClockedIn(opts: {
   }
 }
 
+/** Admin email when a cleaner taps "On the way" (before clock-in). */
+export async function sendAdminOnTheWay(opts: {
+  jobId: string;
+  jobNumber: number;
+  clientName: string;
+  cleanerName: string;
+}) {
+  const admins = await fetchAdmins();
+  if (admins.length === 0) return;
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const html = layout(
+    h1(`${opts.cleanerName} is on the way`) +
+      p(`Job #${opts.jobNumber} for <strong>${opts.clientName}</strong> — the cleaner is en route and will clock in on arrival.`) +
+      btn("Open job", `${appUrl}/admin/jobs/${opts.jobId}`)
+  );
+  for (const admin of admins) {
+    await deliver({
+      to: admin.email,
+      subject: `On the way — ${opts.cleanerName} to #${opts.jobNumber}`,
+      html,
+      notification: { recipient: "ADMIN", key: "admin.clock.on_the_way" },
+    }).catch((e) => console.error("sendAdminOnTheWay", admin.email, e));
+  }
+}
+
 /** Admin email when a cleaner clocks out. */
 export async function sendAdminClockedOut(opts: {
   jobId: string;

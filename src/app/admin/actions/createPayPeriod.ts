@@ -4,6 +4,9 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { db } from "@/db";
 import { revalidatePath } from "next/cache";
+import { getCleanerRateInputs } from "@/lib/cleaner-rates";
+import { computeJobPayout } from "@/lib/pay-tiers";
+import { getFieldLeadWeeklyBonus } from "@/lib/field-lead-bonus.server";
 
 export async function createPayPeriod(formData: FormData) {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -61,6 +64,7 @@ export async function createPayPeriod(formData: FormData) {
         employeePay: true,
         totalTip: true,
         payRateMultiplier: true,
+        price: true,
         clockInTime: true,
         clockOutTime: true,
         startTime: true,
@@ -68,6 +72,14 @@ export async function createPayPeriod(formData: FormData) {
         cleaners: { select: { id: true } },
       },
     });
+
+    // Load each participating cleaner's tier + rating so the proportional
+    // split (src/lib/pay-tiers.ts) can compute individual rates.
+    const allParticipantIds = jobs.flatMap((j) => [
+      j.employeeId,
+      ...j.cleaners.map((c) => c.id),
+    ]);
+    const rateInputs = await getCleanerRateInputs(allParticipantIds);
 
     const payoutMap = new Map<
       string,
@@ -88,10 +100,25 @@ export async function createPayPeriod(formData: FormData) {
       );
       if (participantIds.length === 0) continue;
 
-      const basePay = (job.employeePay || 0) + (job.totalTip || 0);
-      const multiplier = job.payRateMultiplier ?? 1;
-      const jobPay = basePay * multiplier;
-      const perPerson = jobPay / participantIds.length;
+      const jobMultiplier = job.payRateMultiplier ?? 1;
+      const totalTip = job.totalTip || 0;
+      const tipShare = totalTip / participantIds.length;
+
+      // Tier-based proportional payout from the job price. Falls back to an even
+      // split of the stored employeePay for legacy jobs that have no price.
+      const rateList = participantIds.map(
+        (id) =>
+          rateInputs.get(id) ?? {
+            id,
+            tier: "STANDARD" as const,
+            avgRating: null,
+            ratingCount: 0,
+          }
+      );
+      const payout = computeJobPayout(job.price, rateList);
+      const amountById = new Map(payout.shares.map((s) => [s.id, s.amount]));
+      const legacyPerPerson =
+        (job.employeePay || 0) / participantIds.length;
 
       const start = job.clockInTime ?? job.startTime;
       const end = job.clockOutTime ?? job.endTime;
@@ -104,17 +131,35 @@ export async function createPayPeriod(formData: FormData) {
       }
       const perPersonHours = hours / participantIds.length;
 
+      const usePriceModel = (job.price ?? 0) > 0;
+
       for (const pid of participantIds) {
         if (!payoutMap.has(pid)) {
           payoutMap.set(pid, { base: 0, jobCount: 0, hours: 0 });
         }
         const entry = payoutMap.get(pid)!;
-        const empMultiplier =
-          employees.find((e) => e.id === pid)?.payMultiplier ?? 1;
-        entry.base += perPerson * empMultiplier;
+        const cleanerPay = usePriceModel
+          ? amountById.get(pid) ?? 0
+          : legacyPerPerson;
+        entry.base += cleanerPay * jobMultiplier + tipShare;
         entry.jobCount += 1;
         entry.hours += perPersonHours;
       }
+    }
+
+    // Field Lead weekly group-revenue bonus (2% / 3% by group avg rating).
+    // Computed over the pay-period window for every Field Lead-tier cleaner.
+    const fieldLeads = await db.user.findMany({
+      where: { cleanerTier: "FIELD_LEAD" },
+      select: { id: true },
+    });
+    for (const fl of fieldLeads) {
+      const bonus = await getFieldLeadWeeklyBonus(fl.id, startDate, rangeEnd);
+      if (bonus.bonusAmount <= 0) continue;
+      if (!payoutMap.has(fl.id)) {
+        payoutMap.set(fl.id, { base: 0, jobCount: 0, hours: 0 });
+      }
+      payoutMap.get(fl.id)!.base += bonus.bonusAmount;
     }
 
     const payPeriod = await db.payPeriod.create({

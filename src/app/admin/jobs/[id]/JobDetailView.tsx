@@ -20,7 +20,7 @@ import {
   CheckCircle2, Package, Pencil, History, Activity,
   AlertTriangle, Trash2, Loader, Briefcase, Receipt, Camera, X,
   ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, FileText,
-  Star, Copy, Check, Inbox, RotateCcw, XCircle,
+  Star, Copy, Check, Inbox, RotateCcw, XCircle, Navigation,
 } from "lucide-react";
 import { resolveJobRequest } from "../../actions/resolveJobRequest";
 import { fmtDateTime, fmtTime } from "@/lib/time";
@@ -29,6 +29,7 @@ import { ConfirmDeleteModal } from "@/components/common/ConfirmDeleteModal";
 import Modal from "@/components/ui/Modal";
 import { cancelJobByAdmin } from "../../actions/cancelJobByAdmin";
 import { issueRefund } from "../../actions/issueRefund";
+import JobChatThread from "@/components/JobChatThread";
 
 type TabView = "details" | "financials" | "products" | "logs" | "requests";
 
@@ -53,6 +54,10 @@ interface Job {
   endTime: string | null;
   clockInTime: string | null;
   clockOutTime: string | null;
+  onMyWayAt: string | null;
+  onMyWayLat: number | null;
+  onMyWayLng: number | null;
+  onMyWayLocationAt: string | null;
   status: string;
   price: number | null;
   employeePay: number | null;
@@ -125,6 +130,13 @@ interface JobPhoto {
   employee: { id: string; name: string; };
 }
 
+interface ReviewPhoto {
+  id: string;
+  url: string;
+  rating: number | null;
+  createdAt: string;
+}
+
 interface User { id: string; name: string; email: string; }
 
 interface JobDetailViewProps {
@@ -132,6 +144,7 @@ interface JobDetailViewProps {
   productUsage: ProductUsage[];
   logs: JobLog[];
   photos?: JobPhoto[];
+  reviewPhotos?: ReviewPhoto[];
   totalLogs: number;
   logsPage: number;
   logsPerPage: number;
@@ -140,6 +153,7 @@ interface JobDetailViewProps {
   onDeleteJob?: () => Promise<void>;
   users: User[];
   clients?: ClientLite[];
+  currentUserName?: string;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -212,6 +226,7 @@ export default function JobDetailView({
   productUsage,
   logs,
   photos = [],
+  reviewPhotos = [],
   totalLogs,
   logsPage,
   logsPerPage,
@@ -220,6 +235,7 @@ export default function JobDetailView({
   onDeleteJob,
   users,
   clients = [],
+  currentUserName,
 }: JobDetailViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -633,6 +649,27 @@ export default function JobDetailView({
           </div>
         </div>
       )}
+
+      {/* Job chat — read-only-ish moderation view; admin may also post as ADMIN */}
+      <div className="dcard tab-panel-wide">
+        <div className="dcard-head">
+          <h3>Job chat</h3>
+          <span style={{ fontSize: 12, color: 'var(--primary-50)' }}>
+            Cleaner ↔ client
+          </span>
+        </div>
+        <JobChatThread
+          jobId={job.id}
+          otherLabel="cleaner and client"
+          userName={currentUserName}
+          canSend={isAdmin}
+          height={320}
+        />
+        <p style={{ fontSize: 12, color: 'var(--primary-50)', margin: '10px 0 0', lineHeight: 1.5 }}>
+          The job-specific conversation between the assigned cleaner and the client.
+          {isAdmin ? ' Posting here sends a message as Admin.' : ' Read-only.'}
+        </p>
+      </div>
     </div>
   );
 
@@ -887,6 +924,33 @@ export default function JobDetailView({
           </div>
         )}
       </div>
+
+      {/* Client review photos (attached to poor ratings) */}
+      {reviewPhotos.length > 0 && (
+        <div className="dcard">
+          <div className="dcard-head">
+            <h3>Client review photos · {reviewPhotos.length}</h3>
+          </div>
+          <div className="photo-grid">
+            {reviewPhotos.map((photo, idx) => (
+              <a
+                key={photo.id}
+                href={photo.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="photo-cell"
+                aria-label={
+                  photo.rating != null
+                    ? `Client review photo ${idx + 1} (${photo.rating}★)`
+                    : `Client review photo ${idx + 1}`
+                }>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={photo.url} alt="Client review photo" loading="lazy" />
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Activity */}
       <div className="dcard">
@@ -1218,6 +1282,36 @@ export default function JobDetailView({
             <h1 className="jdetail-title">{job.clientName}</h1>
             <div className="jdetail-meta-row">
               <StatusPill status={job.status} />
+              {job.onMyWayAt && !job.clockInTime && (
+                <span
+                  title="Cleaner tapped On the way and has not clocked in yet"
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    fontSize: 12, fontWeight: 600, padding: '4px 10px',
+                    borderRadius: 999, background: '#e0f2fe', color: '#075985',
+                  }}
+                >
+                  <Navigation size={12} />
+                  On the way · since {fmtTime(job.onMyWayAt)}
+                </span>
+              )}
+              {job.onMyWayAt && !job.clockInTime && job.onMyWayLat != null && job.onMyWayLng != null && (
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${job.onMyWayLat},${job.onMyWayLng}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={job.onMyWayLocationAt ? `Last location ${fmtTime(job.onMyWayLocationAt)}` : "Cleaner's shared location"}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    fontSize: 12, fontWeight: 600, padding: '4px 10px',
+                    borderRadius: 999, background: '#dcfce7', color: '#166534',
+                    textDecoration: 'none',
+                  }}
+                >
+                  <MapPin size={12} />
+                  View location{job.onMyWayLocationAt ? ` · ${fmtTime(job.onMyWayLocationAt)}` : ""}
+                </a>
+              )}
               <TypePill type={job.jobType} />
               {isAdmin && (
                 <label

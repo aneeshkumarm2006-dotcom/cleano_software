@@ -25,8 +25,9 @@ export const CANCELLATION_FEE_WINDOW_HOURS = 48;
 /** Auto-rating posted on the cleaner's job when the customer is a no-show. */
 export const NO_SHOW_AUTO_STAR = 1;
 
-/** Minutes past start time before the cleaner late-penalty starts applying. */
-export const LATE_PENALTY_GRACE_MIN = 10;
+/** Minutes past start time before the cleaner late-penalty starts applying.
+ *  Spec: penalty applies when a cleaner is MORE THAN 15 minutes late. */
+export const LATE_PENALTY_GRACE_MIN = 15;
 
 /** Stars deducted from the job's customer rating for a late arrival (flat). */
 export const LATE_ARRIVAL_RATING_PENALTY = 0.5;
@@ -34,17 +35,26 @@ export const LATE_ARRIVAL_RATING_PENALTY = 0.5;
 /** Lowest a rating can be reduced to by the late-arrival penalty. */
 export const LATE_ARRIVAL_RATING_FLOOR = 0.5;
 
+/** Default running rating shown for a cleaner who has zero ratings logged.
+ *  Pay stays locked at the 40% floor until 5 ratings exist (see pay-tiers.ts),
+ *  so this default is display-only and does not inflate pay. */
+export const DEFAULT_STARTING_RATING = 5.0;
+
+/** Rating is bounded between this floor and RATING_MAX. */
+export const RATING_MIN = 1.0;
+export const RATING_MAX = 5.0;
+
 /**
  * Stars to deduct from this job's rating for a late arrival. Returns a flat
  * penalty once the grace window is exceeded, otherwise null (no penalty).
  *
- *   <= 10 min late → no penalty
- *   >  10 min late → −0.5 stars
+ *   <= 15 min late → no penalty
+ *   >  15 min late → −0.5 stars
  */
 export function computeLateArrivalPenalty(
   minutesLate: number
 ): number | null {
-  if (minutesLate < LATE_PENALTY_GRACE_MIN) return null;
+  if (minutesLate <= LATE_PENALTY_GRACE_MIN) return null;
   return LATE_ARRIVAL_RATING_PENALTY;
 }
 

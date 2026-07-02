@@ -11,6 +11,8 @@ import { generateJobChecklist } from "@/app/admin/actions/generateJobChecklist";
 import { getJobChecklist } from "@/app/admin/actions/getJobChecklist";
 import { updateChecklistItem } from "@/app/admin/actions/updateChecklistItem";
 import type { JobChecklistItemDTO } from "@/app/admin/actions/getJobChecklist.types";
+import { markOnMyWay } from "../onMyWay";
+import { getCoords } from "../OnMyWayButton";
 
 type ProductCategory = "LIQUID_SPRAY" | "MOP_LIQUID" | "DISPOSABLE" | "OTHER";
 
@@ -45,6 +47,7 @@ interface ClockPageClientProps {
   status: string;
   clockInTime: string | null;
   clockOutTime: string | null;
+  onMyWayAt?: string | null;
   employeeProducts?: EmployeeProduct[];
 }
 
@@ -150,12 +153,15 @@ export default function ClockPageClient({
   startTime,
   clockInTime,
   clockOutTime,
+  onMyWayAt = null,
   employeeProducts = [],
 }: ClockPageClientProps) {
   const router = useRouter();
   const [now, setNow] = useState(() => new Date());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [otwSince, setOtwSince] = useState<string | null>(onMyWayAt);
+  const [otwLoading, setOtwLoading] = useState(false);
 
   // Clock-out inventory modal state
   const [coOpen, setCoOpen] = useState(false);
@@ -268,6 +274,20 @@ export default function ClockPageClient({
     .slice(0, 2)
     .toUpperCase();
 
+  async function handleOnMyWay() {
+    setOtwLoading(true);
+    try {
+      const coords = await getCoords();
+      const res = await markOnMyWay(jobId, coords);
+      if (res.success) {
+        setOtwSince(res.onMyWayAt ?? new Date().toISOString());
+        router.refresh();
+      }
+    } finally {
+      setOtwLoading(false);
+    }
+  }
+
   async function handleClockIn() {
     setLoading(true);
     setError(null);
@@ -348,16 +368,37 @@ export default function ClockPageClient({
                 Clock out
               </button>
             ) : (
-              <button
-                className="clk-action"
-                onClick={handleClockIn}
-                disabled={loading}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <polygon points="5 3 19 12 5 21 5 3" />
-                </svg>
-                {loading ? "Clocking in…" : "Clock in"}
-              </button>
+              <>
+                {otwSince ? (
+                  <div className="clk-otw-done">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                    On my way · since {fmtShort(new Date(otwSince))}
+                  </div>
+                ) : (
+                  <button
+                    className="clk-action otw"
+                    onClick={handleOnMyWay}
+                    disabled={otwLoading}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <polygon points="3 11 22 2 13 21 11 13 3 11" />
+                    </svg>
+                    {otwLoading ? "Sharing…" : "On my way"}
+                  </button>
+                )}
+                <button
+                  className="clk-action"
+                  onClick={handleClockIn}
+                  disabled={loading}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <polygon points="5 3 19 12 5 21 5 3" />
+                  </svg>
+                  {loading ? "Clocking in…" : "Clock in"}
+                </button>
+              </>
             )
           ) : (
             <Link href={`/cleaners/my-jobs/${jobId}`} className="clk-action">

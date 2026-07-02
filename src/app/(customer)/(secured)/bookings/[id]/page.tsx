@@ -8,6 +8,7 @@ import { ArrowLeft, Download, MapPin, Users, CreditCard } from "lucide-react";
 import { StatusBadge, DateBadge } from "@/components/customer/atoms";
 import { Banner } from "@/components/customer/Field";
 import RequestActions from "./RequestActions";
+import JobChatThread from "@/components/JobChatThread";
 
 function formatPrice(n: number | null | undefined) {
   return `$${(n ?? 0).toFixed(2)}`;
@@ -235,6 +236,28 @@ export default async function BookingDetailPage({
                 <DetailRow dt="Notes" dd={job.notes} />
               ) : null}
             </dl>
+          </section>
+
+          <section className="cl-tile cl-tile-pad-lg">
+            <h2 className="cl-title-md" style={{ marginBottom: 6 }}>
+              Message your cleaner
+            </h2>
+            <p
+              style={{
+                fontSize: 13,
+                color: "var(--primary-60)",
+                margin: "0 0 16px",
+                lineHeight: 1.5,
+              }}>
+              Chat with the cleaner assigned to this booking about access,
+              parking, pets or anything specific to this visit.
+            </p>
+            <JobChatThread
+              jobId={job.id}
+              otherLabel="Cleaner"
+              userName={client.name ?? session.user.name ?? undefined}
+              height={320}
+            />
           </section>
 
           {job.addOns.length ? (

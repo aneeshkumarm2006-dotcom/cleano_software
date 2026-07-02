@@ -3,8 +3,10 @@
 import { db } from "@/db";
 import { syncDefaultLocationStock } from "@/lib/inventory";
 import { revalidatePath } from "next/cache";
-import type { ProductCategory } from "@prisma/client";
+import type { ProductCategory, Prisma } from "@prisma/client";
 import { requireOwnerAdmin } from "@/lib/action-guards";
+import { auth } from "@/lib/auth";
+import { headers } from "next/headers";
 
 const ALLOWED_CATEGORIES: readonly ProductCategory[] = [
   "LIQUID_SPRAY",
@@ -78,18 +80,29 @@ export async function updateProduct(
       select: { stockLevel: true },
     });
 
+    const data: Prisma.ProductUpdateInput = {
+      name,
+      description: description || null,
+      unit,
+      costPerUnit,
+      stockLevel,
+      minStock,
+      category,
+    };
+
+    // Only stamp who/when the count changed when the stock level actually moved.
+    if (previous && previous.stockLevel !== stockLevel) {
+      const session = await auth.api.getSession({ headers: await headers() });
+      const user = session?.user as { id?: string; name?: string } | undefined;
+      data.stockUpdatedAt = new Date();
+      data.stockUpdatedById = user?.id ?? null;
+      data.stockUpdatedByName = user?.name ?? null;
+    }
+
     // Update the product
     await db.product.update({
       where: { id: productId },
-      data: {
-        name,
-        description: description || null,
-        unit,
-        costPerUnit,
-        stockLevel,
-        minStock,
-        category,
-      },
+      data,
     });
 
     // Keep the cleaner-facing per-location stock in sync with the admin edit.

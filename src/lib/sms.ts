@@ -193,3 +193,29 @@ export function smsCancellation(opts: {
     notification: { recipient: "CUSTOMER", key: "cust.cancel.booking_cancellation" },
   });
 }
+
+/**
+ * Outbound leg of the job-specific chat SMS bridge (#11). Sends a cleaner/admin
+ * chat message to the client by SMS. The client's real number is never shown to
+ * the cleaner — the cleaner uses the app; the client texts the Cleano number,
+ * and inbound replies are routed back into the thread by the Twilio webhook
+ * (src/app/api/twilio/inbound/route.ts). Gated by the customer chat SMS toggle.
+ */
+export function smsJobChatMessage(opts: {
+  to: string;
+  jobNumber: number;
+  senderLabel: string;
+  body: string;
+}) {
+  const snippet = opts.body.length > 300 ? `${opts.body.slice(0, 297)}…` : opts.body;
+  return sendSms({
+    to: opts.to,
+    body: `Cleano (booking #${opts.jobNumber}) — ${opts.senderLabel}: ${snippet}\nReply to message back.`,
+    notification: { recipient: "CUSTOMER", key: "cust.chat.new_message" },
+  });
+}
+
+// Shared phone normalizer for the inbound webhook (client phone → E.164).
+export function toE164(input: string): string | null {
+  return normalizeE164(input);
+}

@@ -3,16 +3,19 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { getSetting } from "@/lib/settings";
+import { fmtDate, fmtTime } from "@/lib/time";
 import { Calendar, Users, Package, Zap, Camera, ListChecks, MapPin, DollarSign } from "lucide-react";
 import Link from "next/link";
 import BackButton from "../BackButton";
 import ClockInButton from "../ClockInButton";
+import OnMyWayButton from "./OnMyWayButton";
 import ClockOutButton from "../ClockOutButton";
 import CancelShiftButton from "../CancelShiftButton";
 import WhyThisPriceLink from "../WhyThisPriceLink";
 import PhotoGallery from "./PhotoGallery";
 import JobChecklistPanel from "./JobChecklistPanel";
 import MapLinks from "./MapLinksClient";
+import JobChatThread from "@/components/JobChatThread";
 
 type PageProps = {
   params: Promise<{ jobId: string }>;
@@ -143,7 +146,7 @@ export default async function JobDetailPage({ params }: PageProps) {
             <div className="cl-jd-quick-tile">
               <div className="lbl">Date</div>
               <div className="val">
-                {new Date(job.jobDate).toLocaleDateString("en-US", {
+                {fmtDate(job.jobDate, {
                   weekday: "short", month: "short", day: "numeric",
                 })}
               </div>
@@ -153,9 +156,7 @@ export default async function JobDetailPage({ params }: PageProps) {
             <div className="cl-jd-quick-tile">
               <div className="lbl">Start time</div>
               <div className="val">
-                {new Date(job.startTime).toLocaleTimeString("en-US", {
-                  hour: "numeric", minute: "2-digit", hour12: true,
-                })}
+                {fmtTime(job.startTime)}
               </div>
             </div>
           )}
@@ -216,6 +217,12 @@ export default async function JobDetailPage({ params }: PageProps) {
             </p>
           </div>
           <div className="cl-jd-track-action">
+            {canClockIn && (
+              <OnMyWayButton
+                jobId={job.id}
+                onMyWayAt={job.onMyWayAt?.toISOString() ?? null}
+              />
+            )}
             {canClockIn && (
               <ClockInButton jobId={job.id} jobStartTime={job.startTime ?? null} />
             )}
@@ -291,7 +298,7 @@ export default async function JobDetailPage({ params }: PageProps) {
               <div className="cl-jd-dl-row featured">
                 <dt>Job date</dt>
                 <dd>
-                  {new Date(job.jobDate).toLocaleDateString("en-US", {
+                  {fmtDate(job.jobDate, {
                     weekday: "short", month: "long", day: "numeric", year: "numeric",
                   })}
                 </dd>
@@ -301,9 +308,7 @@ export default async function JobDetailPage({ params }: PageProps) {
               <div className="cl-jd-dl-row">
                 <dt>Start time</dt>
                 <dd>
-                  {new Date(job.startTime).toLocaleTimeString("en-US", {
-                    hour: "numeric", minute: "2-digit", hour12: true,
-                  })}
+                  {fmtTime(job.startTime)}
                 </dd>
               </div>
             )}
@@ -311,9 +316,7 @@ export default async function JobDetailPage({ params }: PageProps) {
               <div className="cl-jd-dl-row">
                 <dt>End time</dt>
                 <dd>
-                  {new Date(job.endTime).toLocaleTimeString("en-US", {
-                    hour: "numeric", minute: "2-digit", hour12: true,
-                  })}
+                  {fmtTime(job.endTime)}
                 </dd>
               </div>
             )}
@@ -463,6 +466,19 @@ export default async function JobDetailPage({ params }: PageProps) {
           </div>
         </>
       )}
+
+      {/* Client chat — job-specific thread with the customer */}
+      <h2 className="cl-jd-section-title">Message <em>client.</em></h2>
+      <div style={{ marginBottom: 8 }}>
+        <JobChatThread
+          jobId={job.id}
+          otherLabel="Client"
+          userName={session.user.name ?? undefined}
+        />
+        <p style={{ fontSize: 11, color: "var(--primary-40)", margin: "8px 0 0", lineHeight: 1.5 }}>
+          Messages about this job go directly to the client. Keep it professional and job-related.
+        </p>
+      </div>
 
       {/* Notes */}
       <h2 className="cl-jd-section-title">Notes</h2>

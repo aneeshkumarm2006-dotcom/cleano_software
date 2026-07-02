@@ -17,6 +17,15 @@ model User {
   updatedAt                    DateTime               @updatedAt
   phone                        String?
   role                         Roles                  @default(EMPLOYEE)
+  // Payroll tier — set manually by admin, never auto-changed. Drives the
+  // individual pay rate used by the split-job calculation (see src/lib/pay-tiers.ts):
+  // Trainee = 30%, Standard = 40–45% (rating-based after 5 ratings), Field Lead = 46%.
+  cleanerTier                  CleanerTier            @default(STANDARD)
+  // Group membership — the Field Lead this cleaner reports to. Used for the
+  // Field Lead's weekly group-revenue bonus (see src/lib/field-lead-bonus.ts).
+  fieldLeadId                  String?
+  fieldLead                    User?                  @relation("FieldLeadGroup", fields: [fieldLeadId], references: [id], onDelete: SetNull)
+  groupMembers                 User[]                 @relation("FieldLeadGroup")
   emailVerified                Boolean                @default(false)
   // Admin can deactivate a provider/cleaner; deactivated users see the
   // configurable provider.deactivatedMessage instead of the app.
@@ -105,6 +114,11 @@ model Product {
   stockLevel        Float                    @default(0)
   minStock          Float                    @default(0)
   category          ProductCategory          @default(OTHER)
+  // Stock-count audit trail — who last edited the count and when. Denormalized
+  // name so the inventory screen can show "Updated by" without a join.
+  stockUpdatedAt    DateTime?
+  stockUpdatedById  String?
+  stockUpdatedByName String?
   createdAt         DateTime                 @default(now())
   updatedAt         DateTime                 @updatedAt
   employeeProducts  EmployeeProduct[]
@@ -167,6 +181,10 @@ model InventoryRule {
 model Supplier {
   id        String          @id @default(cuid())
   name      String
+  // Suppliers are treated as websites: the primary identifier is the store URL
+  // that admin compares prices across. contact/email/phone/address are legacy
+  // optional fields kept for backward compatibility.
+  website   String?
   contact   String?
   email     String?
   phone     String?
@@ -371,6 +389,14 @@ model Job {
   washActualRags                 Int?
   washActualPads                 Int?
   washCreditsAwarded             Boolean               @default(false)
+  // "On My Way" — set when the cleaner presses On My Way before clocking in.
+  // Visible to admin; triggers the customer on-the-way notification. Clock-in
+  // is still separate. onMyWayLat/Lng capture the cleaner's location at press
+  // time (optional, only when the cleaner grants geolocation) for live ETA.
+  onMyWayAt                      DateTime?
+  onMyWayLat                     Float?
+  onMyWayLng                     Float?
+  onMyWayLocationAt              DateTime?
   // No-show + late-arrival event timestamps (admin action + clock-in watcher).
   noShowAt                       DateTime?
   lateArrivalAt                  DateTime?
@@ -414,6 +440,8 @@ model Job {
   transactions                   Transaction[]
   invoices                       Invoice[]
   photos                         JobPhoto[]
+  reviewPhotos                   ReviewPhoto[]
+  chatMessages                   JobChatMessage[]
   checklists                     JobChecklist[]
   ratings                        EmployeeRating[]
   complaints                     Complaint[]
@@ -646,6 +674,14 @@ enum Roles {
   FIELD_LEAD
   EMPLOYEE
   CLIENT
+}
+
+// Payroll tier for a cleaner. Distinct from Roles (access control): a Field Lead
+// tier cleaner may still hold the FIELD_LEAD access role for their manager login.
+enum CleanerTier {
+  TRAINEE
+  STANDARD
+  FIELD_LEAD
 }
 
 enum ProductCategory {
@@ -1054,6 +1090,70 @@ model JobPhoto {
 
   @@index([jobId])
   @@index([employeeId])
+}
+
+enum JobChatSenderRole {
+  CLEANER
+  CLIENT
+  ADMIN
+}
+
+// Job-specific chat thread between the assigned cleaner and the client (admin
+// can view/moderate). Keyed by jobId — the job IS the thread. In-app both sides
+// (client uses the customer portal); a Twilio SMS bridge can be layered later.
+model JobChatMessage {
+  id         String            @id @default(cuid())
+  jobId      String
+  senderId   String?
+  senderRole JobChatSenderRole
+  senderName String
+  body       String            @db.Text
+  readByAdminAt    DateTime?
+  readByClientAt   DateTime?
+  readByCleanerAt  DateTime?
+  createdAt  DateTime          @default(now())
+  job        Job               @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId, createdAt])
+}
+
+// Cleaner group chat (spec #15). One default "All cleaners" channel; admin can
+// create more and moderate (soft-delete messages). Visible to all cleaners.
+model GroupChannel {
+  id        String         @id @default(cuid())
+  name      String
+  isDefault Boolean        @default(false)
+  isActive  Boolean        @default(true)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  messages  GroupMessage[]
+}
+
+model GroupMessage {
+  id         String       @id @default(cuid())
+  channelId  String
+  senderId   String
+  senderName String
+  body       String       @db.Text
+  deletedAt  DateTime?
+  createdAt  DateTime     @default(now())
+  channel    GroupChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@index([channelId, createdAt])
+}
+
+// Photos a CLIENT attaches to a poor review. Distinct from JobPhoto (cleaner
+// before/after photos) — these have no employeeId and are created from the
+// public/portal rating flow. Visible to admin alongside the review.
+model ReviewPhoto {
+  id        String   @id @default(cuid())
+  jobId     String
+  url       String
+  rating    Int?
+  createdAt DateTime @default(now())
+  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId])
 }
 
 model ChecklistTemplate {

@@ -24,7 +24,13 @@ import {
   deleteSupplierPrice,
 } from "../../actions/updateSupplierPrice";
 import { ProductRecord, SupplierRecord } from "../types";
-import { SectionCard, Field, Feedback, Msg } from "./_shared";
+import {
+  SectionCard,
+  Field,
+  Feedback,
+  Msg,
+  themedSelectClass,
+} from "./_shared";
 import ImportCsvButton from "@/components/csv/ImportCsvButton";
 
 interface SuppliersTabProps {
@@ -35,6 +41,7 @@ interface SuppliersTabProps {
 interface SupplierDraft {
   id: string | null;
   name: string;
+  website: string;
   contact: string;
   email: string;
   phone: string;
@@ -46,6 +53,7 @@ interface SupplierDraft {
 const EMPTY_DRAFT: SupplierDraft = {
   id: null,
   name: "",
+  website: "",
   contact: "",
   email: "",
   phone: "",
@@ -53,6 +61,18 @@ const EMPTY_DRAFT: SupplierDraft = {
   notes: "",
   isActive: true,
 };
+
+// Shared unit presets, matching the inventory vocabulary. "__custom" lets the
+// user type a free-form unit when none of the presets fit.
+const UNIT_PRESETS = [
+  "ml",
+  "L",
+  "gallons",
+  "pieces",
+  "units",
+  "bottles",
+  "kg",
+];
 
 export default function SuppliersTab({
   products,
@@ -94,6 +114,7 @@ export default function SuppliersTab({
     setDraft({
       id: s.id,
       name: s.name,
+      website: s.website || "",
       contact: s.contact || "",
       email: s.email || "",
       phone: s.phone || "",
@@ -113,6 +134,7 @@ export default function SuppliersTab({
     setMsg(null);
     const payload = {
       name: draft.name,
+      website: draft.website,
       contact: draft.contact,
       email: draft.email,
       phone: draft.phone,
@@ -212,25 +234,43 @@ export default function SuppliersTab({
               <div
                 key={s.id}
                 className="border border-[#008C9C]/10 rounded-xl overflow-hidden bg-white">
-                <div className="flex items-center justify-between p-3">
-                  <button
-                    type="button"
-                    onClick={() => setExpanded(isOpen ? null : s.id)}
-                    className="flex items-center gap-2 flex-1 text-left">
-                    {isOpen ? (
-                      <ChevronDown className="w-4 h-4 text-[#008C9C]/60" />
-                    ) : (
-                      <ChevronRight className="w-4 h-4 text-[#008C9C]/60" />
-                    )}
-                    <div>
-                      <div className="text-sm font-[400] text-[#008C9C]">
+                <div className="flex items-center justify-between p-3 gap-2">
+                  <div className="flex items-start gap-2 flex-1 min-w-0">
+                    <button
+                      type="button"
+                      onClick={() => setExpanded(isOpen ? null : s.id)}
+                      aria-expanded={isOpen}
+                      aria-label={isOpen ? `Collapse ${s.name}` : `Expand ${s.name}`}
+                      className="pt-0.5">
+                      {isOpen ? (
+                        <ChevronDown className="w-4 h-4 text-[#008C9C]/60" />
+                      ) : (
+                        <ChevronRight className="w-4 h-4 text-[#008C9C]/60" />
+                      )}
+                    </button>
+                    <div className="min-w-0">
+                      <button
+                        type="button"
+                        onClick={() => setExpanded(isOpen ? null : s.id)}
+                        className="text-sm font-[400] text-[#008C9C] text-left">
                         {s.name}
                         {!s.isActive && (
                           <span className="ml-2 text-xs text-[#008C9C]/40">
                             (inactive)
                           </span>
                         )}
-                      </div>
+                      </button>
+                      {s.website && (
+                        <div className="truncate">
+                          <a
+                            href={s.website}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-[#008C9C] underline underline-offset-2 hover:text-[#006b78]">
+                            {s.website}
+                          </a>
+                        </div>
+                      )}
                       {(s.contact || s.email || s.phone) && (
                         <div className="text-xs text-[#008C9C]/60">
                           {[s.contact, s.email, s.phone]
@@ -239,7 +279,7 @@ export default function SuppliersTab({
                         </div>
                       )}
                     </div>
-                  </button>
+                  </div>
                   <div className="flex gap-1">
                     <IconButton
                       icon={Pencil}
@@ -314,15 +354,11 @@ export default function SuppliersTab({
                                   />
                                 </td>
                                 <td className="py-2 pr-2">
-                                  <Input
-                                    variant="form"
+                                  <UnitField
                                     value={d.unit}
-                                    onChange={(e) =>
-                                      setPriceDraft(s.id, p.id, {
-                                        unit: e.target.value,
-                                      })
+                                    onChange={(unit) =>
+                                      setPriceDraft(s.id, p.id, { unit })
                                     }
-                                    className="max-w-[120px]"
                                   />
                                 </td>
                                 <td className="py-2 text-right space-x-1">
@@ -375,17 +411,31 @@ export default function SuppliersTab({
         onClose={() => setModalOpen(false)}
         title={draft.id ? "Edit Supplier" : "New Supplier"}>
         <div className="space-y-4">
+          <Field label="Name">
+            <Input
+              variant="form"
+              value={draft.name}
+              onChange={(e) =>
+                setDraft((prev) => ({ ...prev, name: e.target.value }))
+              }
+              placeholder="Supplier name"
+            />
+          </Field>
+          <Field
+            label="Website URL"
+            hint="The supplier's online store. Prices below are compared per unit across supplier websites.">
+            <Input
+              variant="form"
+              type="url"
+              inputMode="url"
+              value={draft.website}
+              onChange={(e) =>
+                setDraft((prev) => ({ ...prev, website: e.target.value }))
+              }
+              placeholder="https://supplier.com"
+            />
+          </Field>
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Name">
-              <Input
-                variant="form"
-                value={draft.name}
-                onChange={(e) =>
-                  setDraft((prev) => ({ ...prev, name: e.target.value }))
-                }
-                placeholder="Supplier name"
-              />
-            </Field>
             <Field label="Contact Person">
               <Input
                 variant="form"
@@ -479,5 +529,57 @@ export default function SuppliersTab({
         message="All associated prices will be removed."
       />
     </SectionCard>
+  );
+}
+
+/**
+ * Unit selector with the shared inventory presets plus an "Other" option that
+ * reveals a free-text field for custom units.
+ */
+function UnitField({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const [custom, setCustom] = useState(
+    value !== "" && !UNIT_PRESETS.includes(value)
+  );
+
+  return (
+    <div className="flex flex-col gap-1">
+      <select
+        aria-label="Unit"
+        className={`${themedSelectClass} max-w-[140px]`}
+        value={custom ? "__custom" : value}
+        onChange={(e) => {
+          if (e.target.value === "__custom") {
+            setCustom(true);
+            onChange("");
+          } else {
+            setCustom(false);
+            onChange(e.target.value);
+          }
+        }}>
+        <option value="">—</option>
+        {UNIT_PRESETS.map((u) => (
+          <option key={u} value={u}>
+            {u}
+          </option>
+        ))}
+        <option value="__custom">Other…</option>
+      </select>
+      {custom && (
+        <Input
+          variant="form"
+          aria-label="Custom unit"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="Custom unit"
+          className="max-w-[140px]"
+        />
+      )}
+    </div>
   );
 }

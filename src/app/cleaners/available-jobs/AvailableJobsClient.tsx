@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { claimJob } from "./claimJob";
+import { fmtDate as fmtDateTz, fmtTime as fmtTimeTz } from "@/lib/time";
 
 interface AvailableJob {
   id: string;
@@ -19,14 +20,14 @@ interface AvailableJob {
 }
 
 function fmtDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-US", {
+  return fmtDateTz(iso, {
     weekday: "short",
     month: "short",
     day: "numeric",
   });
 }
 function fmtTime(iso: string) {
-  return new Date(iso).toLocaleString("en-US", { hour: "numeric", minute: "2-digit" });
+  return fmtTimeTz(iso);
 }
 
 export default function AvailableJobsClient({ jobs }: { jobs: AvailableJob[] }) {

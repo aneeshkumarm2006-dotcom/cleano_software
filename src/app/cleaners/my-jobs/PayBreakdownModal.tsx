@@ -129,7 +129,22 @@ export default function PayBreakdownModal({
             </h3>
             <div className="space-y-2">
               <Row
-                label="Base employee pay"
+                label={`Your rate (${
+                  data.tier === "TRAINEE"
+                    ? "Trainee"
+                    : data.tier === "FIELD_LEAD"
+                    ? "Field Lead"
+                    : "Standard"
+                })`}
+                value={`${Math.round(data.individualRate * 100)}% of price`}
+                hint={
+                  data.isSplit
+                    ? "Split job — 50% pool shared by rate"
+                    : "Solo job — rate applied to full price"
+                }
+              />
+              <Row
+                label={data.isSplit ? "Your share of the pool" : "Base employee pay"}
                 value={`$${data.employeeBasePay.toFixed(2)}`}
               />
               {data.payMultiplier !== 1 && (

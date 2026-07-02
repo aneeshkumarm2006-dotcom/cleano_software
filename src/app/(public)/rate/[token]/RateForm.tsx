@@ -1,10 +1,46 @@
 "use client";
 
 import { useState } from "react";
-import { Star, Check, AlertCircle } from "lucide-react";
+import imageCompression from "browser-image-compression";
+import { Star, Check, AlertCircle, ImagePlus, X, Loader } from "lucide-react";
 import SplitShell, { BRAND_IMAGES } from "@/components/customer/SplitShell";
 import { Field, Textarea, Button } from "@/components/customer/Field";
 import { submitRating } from "../actions/submitRating";
+import { uploadReviewPhoto } from "../actions/uploadReviewPhoto";
+import { POOR_RATING_FOLLOWUP_STARS } from "@/lib/policy";
+
+const MAX_REVIEW_PHOTOS = 5;
+const COMPRESSION_THRESHOLD = 1 * 1024 * 1024;
+
+type ReviewPhoto = {
+  id: string;
+  preview: string;
+  status: "uploading" | "done" | "error";
+  url?: string;
+  error?: string;
+};
+
+async function compressIfNeeded(file: File): Promise<File> {
+  if (file.size <= COMPRESSION_THRESHOLD) return file;
+  try {
+    const compressed = await imageCompression(file, {
+      maxSizeMB: 1,
+      maxWidthOrHeight: 1920,
+      useWebWorker: true,
+      initialQuality: 0.75,
+      fileType: file.type === "image/png" ? "image/jpeg" : undefined,
+    });
+    if (compressed.size >= file.size) return file;
+    return new File(
+      [compressed],
+      file.name.replace(/\.[^.]+$/, "") +
+        (compressed.type === "image/jpeg" ? ".jpg" : ""),
+      { type: compressed.type }
+    );
+  } catch {
+    return file;
+  }
+}
 
 type Fallback = "expired" | "already" | "notfound";
 
@@ -50,10 +86,59 @@ export default function RateForm({
   const [comment, setComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [photos, setPhotos] = useState<ReviewPhoto[]>([]);
+
+  const isPoor = rating > 0 && rating <= POOR_RATING_FOLLOWUP_STARS;
+  const uploadingPhotos = photos.some((p) => p.status === "uploading");
+
+  async function onSelectPhotos(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    const slots = MAX_REVIEW_PHOTOS - photos.length;
+    if (slots <= 0) return;
+    const chosen = Array.from(files).slice(0, slots);
+
+    for (const file of chosen) {
+      const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const preview = URL.createObjectURL(file);
+      setPhotos((prev) => [...prev, { id, preview, status: "uploading" }]);
+      try {
+        const processed = await compressIfNeeded(file);
+        const fd = new FormData();
+        fd.append("token", token);
+        fd.append("file", processed);
+        const res = await uploadReviewPhoto(fd);
+        setPhotos((prev) =>
+          prev.map((p) =>
+            p.id === id
+              ? res.success
+                ? { ...p, status: "done", url: res.url }
+                : { ...p, status: "error", error: res.error }
+              : p
+          )
+        );
+      } catch {
+        setPhotos((prev) =>
+          prev.map((p) =>
+            p.id === id
+              ? { ...p, status: "error", error: "Upload failed" }
+              : p
+          )
+        );
+      }
+    }
+  }
+
+  function removePhoto(id: string) {
+    setPhotos((prev) => {
+      const target = prev.find((p) => p.id === id);
+      if (target) URL.revokeObjectURL(target.preview);
+      return prev.filter((p) => p.id !== id);
+    });
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!rating) return;
+    if (!rating || uploadingPhotos) return;
     setSubmitting(true);
     if (fallback) {
       // Demo route — just animate.
@@ -63,7 +148,12 @@ export default function RateForm({
       }, 700);
       return;
     }
-    const res = await submitRating({ token, stars: rating, comment });
+    const photoUrls = isPoor
+      ? photos
+          .filter((p) => p.status === "done" && p.url)
+          .map((p) => p.url as string)
+      : [];
+    const res = await submitRating({ token, stars: rating, comment, photoUrls });
     setSubmitting(false);
     if (res.success) setSubmitted(true);
   }
@@ -169,13 +259,144 @@ export default function RateForm({
               />
             </Field>
 
+            {isPoor && (
+              <Field
+                label="Add photos so we can make it right (optional)"
+                htmlFor="rate-photos">
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: 10,
+                    alignItems: "center",
+                  }}>
+                  {photos.map((p) => (
+                    <div
+                      key={p.id}
+                      style={{
+                        position: "relative",
+                        width: 72,
+                        height: 72,
+                        borderRadius: 12,
+                        overflow: "hidden",
+                        background: "var(--primary-5)",
+                        border: "1px solid var(--primary-10)",
+                      }}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={p.preview}
+                        alt="Review attachment"
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                          opacity: p.status === "done" ? 1 : 0.5,
+                        }}
+                      />
+                      {p.status === "uploading" && (
+                        <div
+                          style={{
+                            position: "absolute",
+                            inset: 0,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            color: "#fff",
+                            background: "rgba(0,0,0,0.35)",
+                          }}>
+                          <Loader
+                            size={18}
+                            style={{ animation: "cl-spin 0.8s linear infinite" }}
+                          />
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => removePhoto(p.id)}
+                        aria-label="Remove photo"
+                        style={{
+                          position: "absolute",
+                          top: 3,
+                          right: 3,
+                          width: 20,
+                          height: 20,
+                          borderRadius: "50%",
+                          border: "none",
+                          background: "rgba(0,0,0,0.6)",
+                          color: "#fff",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          cursor: "pointer",
+                        }}>
+                        <X size={12} />
+                      </button>
+                      {p.status === "error" && (
+                        <div
+                          style={{
+                            position: "absolute",
+                            inset: 0,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontSize: 10,
+                            color: "#fff",
+                            background: "rgba(185,28,28,0.7)",
+                            padding: 4,
+                            textAlign: "center",
+                          }}>
+                          Failed
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {photos.length < MAX_REVIEW_PHOTOS && (
+                    <label
+                      htmlFor="rate-photos"
+                      style={{
+                        width: 72,
+                        height: 72,
+                        borderRadius: 12,
+                        border: "1px dashed var(--primary-30)",
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 4,
+                        cursor: "pointer",
+                        color: "var(--primary-70)",
+                        fontSize: 10,
+                      }}>
+                      <ImagePlus size={20} />
+                      Add
+                    </label>
+                  )}
+                </div>
+                <input
+                  id="rate-photos"
+                  type="file"
+                  accept="image/jpeg,image/png,image/heic,image/heif,image/webp"
+                  multiple
+                  style={{ display: "none" }}
+                  onChange={(e) => {
+                    void onSelectPhotos(e.target.files);
+                    e.target.value = "";
+                  }}
+                />
+              </Field>
+            )}
+
             <Button
               type="submit"
               size="lg"
               block
               loading={submitting}
-              disabled={!rating}>
-              {submitting ? "Submitting…" : "Submit rating →"}
+              disabled={!rating || uploadingPhotos}>
+              {submitting
+                ? "Submitting…"
+                : uploadingPhotos
+                ? "Uploading photos…"
+                : "Submit rating →"}
             </Button>
           </div>
         </form>
