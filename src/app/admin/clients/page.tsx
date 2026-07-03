@@ -28,8 +28,10 @@ export default async function ClientsPage({
   const search = (params.search as string) || "";
   const page = Number(params.page) || 1;
   const rowsPerPage = Number(params.rowsPerPage) || 10;
+  const archived = params.archived === "1";
 
   const clients = await db.client.findMany({
+    where: { deletedAt: archived ? { not: null } : null },
     orderBy: { name: "asc" },
     include: {
       jobs: {
@@ -74,6 +76,7 @@ export default async function ClientsPage({
       zip: c.zip,
       notes: c.notes,
       discountPercent: c.discountPercent,
+      isActive: c.isActive,
       totalJobs,
       completedJobs,
       totalRevenue,
@@ -97,6 +100,7 @@ export default async function ClientsPage({
         initialSearch={search}
         initialPage={page}
         initialRowsPerPage={rowsPerPage}
+        archived={archived}
       />
     </div>
   );

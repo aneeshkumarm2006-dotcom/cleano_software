@@ -4,7 +4,13 @@ import { redirect } from "next/navigation";
 import { db } from "@/db";
 import InvoicesPageClient from "./InvoicesPageClient";
 
-export default async function InvoicesPage() {
+type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>;
+
+export default async function InvoicesPage({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) redirect("/sign-in");
 
@@ -13,8 +19,12 @@ export default async function InvoicesPage() {
     redirect("/admin/dashboard");
   }
 
+  const params = await searchParams;
+  const archived = params.archived === "1";
+
   const [invoices, clients, taxConfig] = await Promise.all([
     db.invoice.findMany({
+      where: { deletedAt: archived ? { not: null } : null },
       orderBy: { createdAt: "desc" },
       include: {
         client: { select: { id: true, name: true, email: true, phone: true, address: true } },
@@ -89,6 +99,7 @@ export default async function InvoicesPage() {
         invoices={invoiceRows}
         clients={clients}
         taxConfig={taxConfigValue}
+        archived={archived}
       />
     </div>
   );

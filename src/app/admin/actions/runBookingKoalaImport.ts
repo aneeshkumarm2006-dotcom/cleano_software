@@ -48,6 +48,7 @@ export async function runBookingKoalaImport(
     dryRun: !opts.commit,
     parsedCount: 0,
     droppedCount: 0,
+    problemRows: [],
     mojibakeCount: 0,
     cleaners: { created: 0, existing: 0, skipped: 0, failed: 0 },
     customers: { created: 0, existing: 0, failed: 0 },
@@ -81,12 +82,14 @@ export async function runBookingKoalaImport(
       error: "No valid bookings found in the file (check the Booking start date/time column).",
       parsedCount: parsed.parsedCount,
       droppedCount: parsed.droppedCount,
+      problemRows: parsed.problemRows,
     };
   }
 
   const report: ImportReport = { ...empty(), ok: true, dryRun: !commit };
   report.parsedCount = parsed.parsedCount;
   report.droppedCount = parsed.droppedCount;
+  report.problemRows = parsed.problemRows;
   report.mojibakeCount = parsed.mojibakeCount;
   report.totalRows = parsed.rows.length;
   const failures: string[] = [];

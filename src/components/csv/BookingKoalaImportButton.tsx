@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   Upload,
@@ -9,10 +9,12 @@ import {
   CheckCircle2,
   XCircle,
   Loader,
+  Table2,
 } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 import { runBookingKoalaImport } from "@/app/admin/actions/runBookingKoalaImport";
 import type { ImportReport } from "@/lib/bookingkoala/core";
+import { parseCsv } from "@/lib/csv/parse";
 
 const STATUS_COLOR: Record<string, string> = {
   PAID: "text-emerald-700",
@@ -51,6 +53,17 @@ export default function BookingKoalaImportButton({
   // client doesn't notify customers at import time.
   const [emailCleaners, setEmailCleaners] = useState(true);
   const [emailCustomers, setEmailCustomers] = useState(true);
+  const [showFullData, setShowFullData] = useState(false);
+
+  // Full CSV grid for the reference preview (parsed client-side from the file).
+  const fullData = useMemo(() => {
+    if (!csvText) return null;
+    try {
+      return parseCsv(csvText);
+    } catch {
+      return null;
+    }
+  }, [csvText]);
 
   function reset() {
     setFileName(null);
@@ -105,6 +118,7 @@ export default function BookingKoalaImportButton({
       dryRun: false,
       parsedCount: report.parsedCount,
       droppedCount: report.droppedCount,
+      problemRows: report.problemRows,
       mojibakeCount: report.mojibakeCount,
       totalRows: total,
       cleaners: { ...report.cleaners },
@@ -311,6 +325,83 @@ export default function BookingKoalaImportButton({
                           <td className="px-2 py-1">${s.price}</td>
                           <td className={`px-2 py-1 ${STATUS_COLOR[s.status] ?? ""}`}>{s.status}</td>
                           <td className="px-2 py-1 text-gray-500">{s.cleaners}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Will-not-import problem rows (#3) */}
+              {counts.problemRows.length > 0 && (
+                <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-2.5">
+                  <div className="flex items-center gap-1.5 text-[12px] font-medium text-amber-800 mb-1.5">
+                    <AlertTriangle size={13} />
+                    {counts.problemRows.length} row
+                    {counts.problemRows.length === 1 ? "" : "s"} will NOT be imported
+                  </div>
+                  <p className="text-[11px] text-amber-700 mb-2">
+                    These rows are missing a readable booking date, so a job can&apos;t be
+                    created. Fix them in your CSV and re-import — everything else imports fine.
+                  </p>
+                  <div className="max-h-40 overflow-auto rounded border border-amber-100 bg-white">
+                    <table className="w-full text-[11px]">
+                      <thead className="bg-amber-50/60 sticky top-0 text-left text-amber-700">
+                        <tr>
+                          <th className="px-2 py-1">Row</th>
+                          <th className="px-2 py-1">Customer</th>
+                          <th className="px-2 py-1">Booking ID</th>
+                          <th className="px-2 py-1">Reason</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {counts.problemRows.map((pr) => (
+                          <tr key={pr.rowNum} className="border-t border-amber-50">
+                            <td className="px-2 py-1 text-gray-500">{pr.rowNum}</td>
+                            <td className="px-2 py-1 text-gray-800">{pr.customer}</td>
+                            <td className="px-2 py-1 text-gray-500">{pr.bookingId ?? "—"}</td>
+                            <td className="px-2 py-1 text-amber-700">{pr.reason}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Full CSV data preview (#2) — every column and row, for reference */}
+          {fullData && fullData.records.length > 0 && !committed && (
+            <div className="rounded-xl border border-gray-100 p-3">
+              <button
+                type="button"
+                onClick={() => setShowFullData((s) => !s)}
+                className="flex w-full items-center justify-between text-sm font-medium text-gray-800">
+                <span className="flex items-center gap-1.5">
+                  <Table2 size={14} />
+                  Preview all data ({fullData.records.length} rows · {fullData.headers.length} columns)
+                </span>
+                <span className="text-xs text-[#008C9C]">{showFullData ? "Hide" : "Show"}</span>
+              </button>
+              {showFullData && (
+                <div className="mt-2 max-h-80 overflow-auto rounded-lg border border-gray-100">
+                  <table className="text-[11px] whitespace-nowrap">
+                    <thead className="bg-gray-50 sticky top-0 text-left text-gray-500">
+                      <tr>
+                        <th className="px-2 py-1 sticky left-0 bg-gray-50">#</th>
+                        {fullData.headers.map((h) => (
+                          <th key={h} className="px-2 py-1">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {fullData.records.map((rec, i) => (
+                        <tr key={i} className="border-t border-gray-50">
+                          <td className="px-2 py-1 text-gray-400 sticky left-0 bg-white">{i + 2}</td>
+                          {fullData.headers.map((h) => (
+                            <td key={h} className="px-2 py-1 text-gray-700">{rec[h]}</td>
+                          ))}
                         </tr>
                       ))}
                     </tbody>

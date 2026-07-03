@@ -13,6 +13,45 @@ async function requireAdmin() {
   return session;
 }
 
+// Bulk actions are gated on staff roles (OWNER / ADMIN / OPS_MANAGER).
+async function requireStaff(): Promise<{ ok: true } | { ok: false; error: string }> {
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session?.user) return { ok: false, error: "Not authenticated" };
+  const role = (session.user as { role?: string }).role;
+  if (role !== "OWNER" && role !== "ADMIN" && role !== "OPS_MANAGER") {
+    return { ok: false, error: "Not authorized" };
+  }
+  return { ok: true };
+}
+
+function sanitizePromoIds(ids: string[]): string[] {
+  return Array.from(new Set((ids ?? []).filter((id) => typeof id === "string" && id)));
+}
+
+// Bulk activate / deactivate promo codes (PromoCode.isActive).
+export async function bulkSetPromoActive(
+  ids: string[],
+  isActive: boolean
+): Promise<{ success: true; count: number } | { success: false; error: string }> {
+  const gate = await requireStaff();
+  if (!gate.ok) return { success: false, error: gate.error };
+
+  const cleanIds = sanitizePromoIds(ids);
+  if (cleanIds.length === 0) return { success: false, error: "Nothing selected" };
+
+  try {
+    const res = await db.promoCode.updateMany({
+      where: { id: { in: cleanIds }, deletedAt: null },
+      data: { isActive },
+    });
+    revalidatePath("/admin/promo-codes");
+    return { success: true, count: res.count };
+  } catch (e) {
+    console.error("bulkSetPromoActive", e);
+    return { success: false, error: "Failed to update selected promo codes" };
+  }
+}
+
 export async function createPromoCode(data: {
   code: string;
   description?: string;

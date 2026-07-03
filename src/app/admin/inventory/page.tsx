@@ -36,11 +36,13 @@ export default async function InventoryPage({
   const status = (params.status as string) || "all";
   const page = Number(params.page) || 1;
   const rowsPerPage = Number(params.rowsPerPage) || 10;
+  const archived = params.archived === "1";
 
   // Fetch all products with their employee assignments
   const [allProducts, supplierPrices, activeSuppliers, employees] =
     await Promise.all([
       db.product.findMany({
+        where: { deletedAt: archived ? { not: null } : null },
         include: {
           employeeProducts: {
             include: {
@@ -209,6 +211,7 @@ export default async function InventoryPage({
         initialRowsPerPage={rowsPerPage}
         supplierData={supplierData}
         forecastData={forecastData}
+        archived={archived}
       />
     </div>
   );

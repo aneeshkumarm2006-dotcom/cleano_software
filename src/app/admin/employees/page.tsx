@@ -37,13 +37,19 @@ export default async function EmployeesPage({
   const jobStatus = (params.jobStatus as string) || "all";
   const page = Number(params.page) || 1;
   const rowsPerPage = Number(params.rowsPerPage) || 10;
+  // Archived view lists soft-deleted (deletedAt != null) employees for restore.
+  const archived = params.archived === "1" || params.archived === "true";
 
   // Fetch all employees with their jobs
   // Staff only — never list CLIENT accounts here. Clients live on the Clients
   // page; without this filter every imported customer login showed up as an
   // "Employee" (inflating the count to all users).
   const employees = await db.user.findMany({
-    where: { role: { not: "CLIENT" } },
+    where: {
+      role: { not: "CLIENT" },
+      // Active view hides soft-deleted rows; archived view shows only them.
+      deletedAt: archived ? { not: null } : null,
+    },
     include: {
       jobs: true,
     },
@@ -51,6 +57,18 @@ export default async function EmployeesPage({
       name: "asc",
     },
   });
+
+  // Field Leads available as bulk-assignment targets (never soft-deleted).
+  const fieldLeadRows = await db.user.findMany({
+    where: {
+      role: { not: "CLIENT" },
+      cleanerTier: "FIELD_LEAD",
+      deletedAt: null,
+    },
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+  });
+  const fieldLeads = fieldLeadRows.map((f) => ({ id: f.id, name: f.name }));
 
   // Calculate stats for each employee
   const employeesData = employees.map((emp) => {
@@ -69,6 +87,8 @@ export default async function EmployeesPage({
       phone: emp.phone,
       role: emp.role as "OWNER" | "ADMIN" | "EMPLOYEE",
       isActive: emp.isActive,
+      cleanerTier: emp.cleanerTier as "TRAINEE" | "STANDARD" | "FIELD_LEAD",
+      fieldLeadId: emp.fieldLeadId,
       completedJobsCount: completedJobs.length,
       activeJobsCount: activeJobs.length,
       totalRevenue,
@@ -95,6 +115,8 @@ export default async function EmployeesPage({
         initialJobStatus={jobStatus}
         initialPage={page}
         initialRowsPerPage={rowsPerPage}
+        archived={archived}
+        fieldLeads={fieldLeads}
       />
     </div>
   );

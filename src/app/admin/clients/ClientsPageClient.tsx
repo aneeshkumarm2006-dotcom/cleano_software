@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   Search, Plus, Users, DollarSign, AlertTriangle,
   Briefcase, Pencil, SlidersHorizontal,
-  ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight, Trash2, UserX, UserCheck, RotateCcw, Archive, Mail,
 } from "lucide-react";
 import PremiumSelect from "@/components/ui/PremiumSelect";
 import ClientModal from "./ClientModal";
@@ -13,6 +13,11 @@ import ImportCsvButton from "@/components/csv/ImportCsvButton";
 import BookingKoalaImportButton from "@/components/csv/BookingKoalaImportButton";
 import { ConfirmDeleteModal } from "@/components/common/ConfirmDeleteModal";
 import { deleteClient } from "../actions/deleteClient";
+import { useRowSelection } from "@/components/common/useRowSelection";
+import BulkActionBar, { type BulkAction } from "@/components/common/BulkActionBar";
+import { bulkSoftDelete, bulkRestore } from "@/lib/bulk/actions";
+import { bulkSetClientActive } from "../actions/bulkSetClientActive";
+import { sendLoginInvites } from "../actions/sendLoginInvites";
 
 interface Client {
   id: string;
@@ -29,6 +34,7 @@ interface Client {
   zip: string | null;
   notes: string | null;
   discountPercent: number;
+  isActive: boolean;
   totalJobs: number;
   completedJobs: number;
   totalRevenue: number;
@@ -47,6 +53,7 @@ interface ClientsPageClientProps {
   initialSearch: string;
   initialPage: number;
   initialRowsPerPage: number;
+  archived: boolean;
 }
 
 const AVATAR_COLORS = ["#008C9C", "#0284c7", "#7c3aed", "#dc2626", "#d97706", "#059669", "#0891b2", "#be185d"];
@@ -82,6 +89,7 @@ export default function ClientsPageClient({
   initialSearch,
   initialPage,
   initialRowsPerPage,
+  archived,
 }: ClientsPageClientProps) {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState(initialSearch);
@@ -151,6 +159,61 @@ export default function ClientsPageClient({
 
   const goToPage = (p: number) => setPage(Math.min(Math.max(1, p), totalPages));
 
+  const visibleIds = useMemo(() => paginated.map((c) => c.id), [paginated]);
+  const selection = useRowSelection(visibleIds);
+
+  const afterBulk = () => { selection.clear(); router.refresh(); };
+
+  const bulkActions: BulkAction[] = archived
+    ? [
+        {
+          key: "restore",
+          label: "Restore",
+          icon: <RotateCcw size={14} />,
+          onRun: async () => { await bulkRestore("client", selection.selectedIds); afterBulk(); },
+        },
+      ]
+    : [
+        {
+          key: "invite",
+          label: "Send invite",
+          icon: <Mail size={14} />,
+          onRun: async () => {
+            const res = await sendLoginInvites("customer", selection.selectedIds);
+            if (res.success) {
+              alert(
+                `Invites sent to ${res.sent}.` +
+                  (res.skippedActive ? ` Skipped ${res.skippedActive} already logged in.` : "") +
+                  (res.skippedNoEmail ? ` ${res.skippedNoEmail} had no email.` : "")
+              );
+            } else {
+              alert(res.error ?? "Failed to send invites");
+            }
+            afterBulk();
+          },
+        },
+        {
+          key: "deactivate",
+          label: "Deactivate",
+          icon: <UserX size={14} />,
+          onRun: async () => { await bulkSetClientActive(selection.selectedIds, false); afterBulk(); },
+        },
+        {
+          key: "activate",
+          label: "Activate",
+          icon: <UserCheck size={14} />,
+          onRun: async () => { await bulkSetClientActive(selection.selectedIds, true); afterBulk(); },
+        },
+        {
+          key: "delete",
+          label: "Delete",
+          icon: <Trash2 size={14} />,
+          variant: "danger",
+          confirm: `Delete ${selection.count} client${selection.count === 1 ? "" : "s"}? Recoverable from Archived.`,
+          onRun: async () => { await bulkSoftDelete("client", selection.selectedIds); afterBulk(); },
+        },
+      ];
+
   const handleCreate = () => { setSelectedClient(null); setModalMode("create"); setIsModalOpen(true); };
   const handleEdit = (c: Client) => { setSelectedClient(c); setModalMode("edit"); setIsModalOpen(true); };
 
@@ -185,11 +248,20 @@ export default function ClientsPageClient({
           </h1>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <BookingKoalaImportButton />
-          <ImportCsvButton entity="clients" />
-          <button type="button" className="btn btn-primary" onClick={handleCreate}>
-            <Plus size={16} /> New Client
-          </button>
+          <a
+            href={archived ? "/admin/clients" : "/admin/clients?archived=1"}
+            className={`btn ${archived ? "btn-primary" : "btn-secondary"}`}>
+            <Archive size={16} /> {archived ? "Active clients" : "Archived"}
+          </a>
+          {!archived && (
+            <>
+              <BookingKoalaImportButton />
+              <ImportCsvButton entity="clients" />
+              <button type="button" className="btn btn-primary" onClick={handleCreate}>
+                <Plus size={16} /> New Client
+              </button>
+            </>
+          )}
         </div>
       </header>
 
@@ -306,6 +378,16 @@ export default function ClientsPageClient({
               <table className="atable">
                 <thead>
                   <tr>
+                    <th style={{ width: 40 }}>
+                      <input
+                        type="checkbox"
+                        aria-label="Select all clients"
+                        checked={selection.allSelected}
+                        ref={(el) => { if (el) el.indeterminate = selection.someSelected; }}
+                        onChange={selection.toggleAll}
+                        style={{ cursor: "pointer", width: 16, height: 16 }}
+                      />
+                    </th>
                     <th>Client</th>
                     <th>Contact</th>
                     <th className="num">Jobs</th>
@@ -317,7 +399,19 @@ export default function ClientsPageClient({
                 </thead>
                 <tbody>
                   {paginated.map(c => (
-                    <tr key={c.id} onClick={() => { window.location.href = `/admin/clients/${c.id}`; }}>
+                    <tr
+                      key={c.id}
+                      className={selection.isSelected(c.id) ? "row-selected" : undefined}
+                      onClick={() => { window.location.href = `/admin/clients/${c.id}`; }}>
+                      <td onClick={(e) => e.stopPropagation()} style={{ width: 40 }}>
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${c.name}`}
+                          checked={selection.isSelected(c.id)}
+                          onChange={() => selection.toggle(c.id)}
+                          style={{ cursor: "pointer", width: 16, height: 16 }}
+                        />
+                      </td>
                       <td style={{ minWidth: 200 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                           <span
@@ -376,9 +470,17 @@ export default function ClientsPageClient({
 
           <div id="cl-mobile" style={{ display: "none", flexDirection: "column", gap: 10, padding: 16 }}>
             {paginated.map(c => (
-              <article key={c.id} className="jcard" style={{ cursor: "pointer" }} onClick={() => { window.location.href = `/admin/clients/${c.id}`; }}>
+              <article key={c.id} className={`jcard${selection.isSelected(c.id) ? " row-selected" : ""}`} style={{ cursor: "pointer" }} onClick={() => { window.location.href = `/admin/clients/${c.id}`; }}>
                 <div className="jcard-top">
                   <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                    <input
+                      type="checkbox"
+                      aria-label={`Select ${c.name}`}
+                      checked={selection.isSelected(c.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={() => selection.toggle(c.id)}
+                      style={{ cursor: "pointer", width: 16, height: 16 }}
+                    />
                     <span className="avatar" style={{ background: avatarColor(c.name), fontSize: 12, width: 36, height: 36 }}>
                       {initials(c.name)}
                     </span>
@@ -424,6 +526,8 @@ export default function ClientsPageClient({
           #cl-desktop { display: none !important; }
           #cl-mobile  { display: flex !important; }
         }
+        .atable tbody tr.row-selected { background: var(--primary-05, #f0fdff); }
+        .jcard.row-selected { outline: 2px solid var(--primary-40, #008C9C); outline-offset: -1px; }
       `}</style>
 
       <ClientModal
@@ -440,6 +544,13 @@ export default function ClientsPageClient({
         fileName={clientToDelete?.name ?? "this client"}
         title="Delete client?"
         message="This action cannot be undone."
+      />
+
+      <BulkActionBar
+        noun="client"
+        count={selection.count}
+        actions={bulkActions}
+        onClear={selection.clear}
       />
     </div>
   );

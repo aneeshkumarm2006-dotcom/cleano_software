@@ -20,6 +20,7 @@ export async function getFieldLeadWeeklyBonus(
   // completed in the window. Distinct jobs so a shared job isn't double-counted.
   const jobs = await db.job.findMany({
     where: {
+      deletedAt: null,
       status: { in: ["COMPLETED", "PAID"] },
       AND: [
         {

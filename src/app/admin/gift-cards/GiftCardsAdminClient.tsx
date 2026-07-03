@@ -1,7 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Search, Gift, DollarSign, X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Search, Gift, DollarSign, X, Archive, CheckCircle, Ban, Trash2, RotateCcw } from "lucide-react";
+import { useRowSelection } from "@/components/common/useRowSelection";
+import BulkActionBar, { type BulkAction } from "@/components/common/BulkActionBar";
+import { bulkSoftDelete, bulkRestore } from "@/lib/bulk/actions";
+import { bulkSetGiftCardStatus } from "../actions/bulkSetGiftCardStatus";
 
 type Status = "PENDING_PAYMENT" | "ACTIVE" | "REDEEMED" | "REFUNDED" | "CANCELLED";
 
@@ -53,7 +58,8 @@ const AVATAR_COLORS = ["#008C9C", "#0284c7", "#7c3aed", "#dc2626", "#d97706", "#
 function avatarColor(name: string) { return AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length]; }
 function initials(name: string) { return name.split(" ").slice(0, 2).map(p => p[0] ?? "").join("").toUpperCase(); }
 
-export default function GiftCardsAdminClient({ cards }: { cards: GiftCard[] }) {
+export default function GiftCardsAdminClient({ cards, archived = false }: { cards: GiftCard[]; archived?: boolean }) {
+  const router = useRouter();
   const [filter, setFilter] = useState<Status | "ALL">("ALL");
   const [open, setOpen] = useState<GiftCard | null>(null);
   const [search, setSearch] = useState("");
@@ -73,6 +79,43 @@ export default function GiftCardsAdminClient({ cards }: { cards: GiftCard[] }) {
     });
   }, [cards, filter, search]);
 
+  const visibleIds = useMemo(() => filtered.map((c) => c.id), [filtered]);
+  const sel = useRowSelection(visibleIds);
+
+  const afterBulk = () => { sel.clear(); router.refresh(); };
+
+  const bulkActions: BulkAction[] = archived
+    ? [
+        {
+          key: "restore",
+          label: "Restore",
+          icon: <RotateCcw size={14} />,
+          onRun: async () => { await bulkRestore("giftCard", sel.selectedIds); afterBulk(); },
+        },
+      ]
+    : [
+        {
+          key: "activate",
+          label: "Activate",
+          icon: <CheckCircle size={14} />,
+          onRun: async () => { await bulkSetGiftCardStatus(sel.selectedIds, "ACTIVE"); afterBulk(); },
+        },
+        {
+          key: "deactivate",
+          label: "Deactivate",
+          icon: <Ban size={14} />,
+          onRun: async () => { await bulkSetGiftCardStatus(sel.selectedIds, "CANCELLED"); afterBulk(); },
+        },
+        {
+          key: "delete",
+          label: "Delete",
+          icon: <Trash2 size={14} />,
+          variant: "danger",
+          confirm: `Delete ${sel.count} gift card${sel.count === 1 ? "" : "s"}? Recoverable from Archived.`,
+          onRun: async () => { await bulkSoftDelete("giftCard", sel.selectedIds); afterBulk(); },
+        },
+      ];
+
   const stats = useMemo(() => {
     const active = cards.filter(c => c.status === "ACTIVE");
     const redeemed = cards.filter(c => c.status === "REDEEMED");
@@ -86,13 +129,20 @@ export default function GiftCardsAdminClient({ cards }: { cards: GiftCard[] }) {
 
   return (
     <div className="admin-font stack-24">
-      <header className="stack-8">
-        <p className="eyebrow">Sales & Marketing</p>
-        <h1 className="display">
-          Gift Cards{" "}
-          <span style={{ color: "var(--primary-40)", fontWeight: 300 }}>· {cards.length}</span>
-        </h1>
-        <p style={{ fontSize: 14, color: "var(--primary-60)" }}>Every gift card purchased through the public landing page.</p>
+      <header className="row-between" style={{ alignItems: "flex-end", flexWrap: "wrap", gap: 16 }}>
+        <div className="stack-8">
+          <p className="eyebrow">Sales & Marketing</p>
+          <h1 className="display">
+            {archived ? "Archived gift cards" : "Gift Cards"}{" "}
+            <span style={{ color: "var(--primary-40)", fontWeight: 300 }}>· {cards.length}</span>
+          </h1>
+          <p style={{ fontSize: 14, color: "var(--primary-60)" }}>Every gift card purchased through the public landing page.</p>
+        </div>
+        <a
+          href={archived ? "/admin/gift-cards" : "/admin/gift-cards?archived=1"}
+          className={`btn ${archived ? "btn-primary" : "btn-secondary"}`}>
+          <Archive size={16} /> {archived ? "Active gift cards" : "Archived"}
+        </a>
       </header>
 
       <div className="astat-grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}>

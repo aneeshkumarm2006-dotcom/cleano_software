@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   Search, SlidersHorizontal, Columns3, Plus, ChevronRight, Check,
   Sparkles, AlertCircle, CalendarClock, CheckCircle2, Flag, Copy,
+  Trash2, RotateCcw, Archive, Tag,
 } from "lucide-react";
 import type { LifecycleStage } from "@prisma/client";
 import type { ContactListItem, CrmStats } from "@/lib/crm-meta";
@@ -12,6 +13,10 @@ import { LIFECYCLE_ORDER, LIFECYCLE_META, money, relativeTime } from "@/lib/crm-
 import { Avatar, LifecyclePill, AStat, ScoreMeter, Pager } from "./_components";
 import Modal from "@/components/ui/Modal";
 import { createContact } from "@/app/admin/actions/contactActions";
+import { useRowSelection } from "@/components/common/useRowSelection";
+import BulkActionBar, { type BulkAction } from "@/components/common/BulkActionBar";
+import { bulkSoftDelete, bulkRestore } from "@/lib/bulk/actions";
+import { bulkSetContactLifecycle } from "@/app/admin/actions/bulkSetContactLifecycle";
 
 type ColId = "lifecycle" | "source" | "owner" | "activity" | "nextstep" | "score" | "bookings" | "ltv";
 const COLUMNS: { id: ColId; label: string }[] = [
@@ -40,10 +45,12 @@ export default function ContactsPageClient({
   initialContacts,
   initialStats,
   currentUserId,
+  archived = false,
 }: {
   initialContacts: ContactListItem[];
   initialStats: CrmStats;
   currentUserId?: string;
+  archived?: boolean;
 }) {
   const router = useRouter();
   const contacts = initialContacts;
@@ -125,6 +132,54 @@ export default function ContactsPageClient({
   const show = (id: ColId) => cols.has(id);
   const open = (id: string) => router.push(`/admin/contacts/${id}`);
 
+  // ── Multi-select bulk actions ──
+  const visibleIds = useMemo(() => paged.map((c) => c.id), [paged]);
+  const selection = useRowSelection(visibleIds);
+  const [stageMenuOpen, setStageMenuOpen] = useState(false);
+  const stageMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!stageMenuOpen) return;
+    function onDoc(e: MouseEvent) {
+      if (stageMenuRef.current && !stageMenuRef.current.contains(e.target as Node)) setStageMenuOpen(false);
+    }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [stageMenuOpen]);
+
+  const afterBulk = () => { selection.clear(); setStageMenuOpen(false); router.refresh(); };
+
+  async function applyLifecycle(stage: LifecycleStage) {
+    await bulkSetContactLifecycle(selection.selectedIds, stage);
+    afterBulk();
+  }
+
+  const bulkActions: BulkAction[] = archived
+    ? [
+        {
+          key: "restore",
+          label: "Restore",
+          icon: <RotateCcw size={14} />,
+          onRun: async () => { await bulkRestore("contact", selection.selectedIds); afterBulk(); },
+        },
+      ]
+    : [
+        {
+          key: "lifecycle",
+          label: "Set lifecycle stage",
+          icon: <Tag size={14} />,
+          onRun: () => { setStageMenuOpen((v) => !v); },
+        },
+        {
+          key: "delete",
+          label: "Delete",
+          icon: <Trash2 size={14} />,
+          variant: "danger",
+          confirm: `Delete ${selection.count} contact${selection.count === 1 ? "" : "s"}? Recoverable from Archived.`,
+          onRun: async () => { await bulkSoftDelete("contact", selection.selectedIds); afterBulk(); },
+        },
+      ];
+
   // ── New-contact create modal ──
   const [createOpen, setCreateOpen] = useState(false);
   const [cForm, setCForm] = useState<{
@@ -167,12 +222,21 @@ export default function ContactsPageClient({
           </h1>
         </div>
         <div className="row" style={{ gap: 8 }}>
-          <button className="btn btn-secondary" onClick={() => router.push("/admin/contacts/duplicates")}>
-            <Copy size={15} /> Manage duplicates
-          </button>
-          <button className="btn btn-primary" onClick={openCreate}>
-            <Plus size={15} /> New contact
-          </button>
+          <a
+            href={archived ? "/admin/contacts" : "/admin/contacts?archived=1"}
+            className={`btn ${archived ? "btn-primary" : "btn-secondary"}`}>
+            <Archive size={15} /> {archived ? "Active contacts" : "Archived"}
+          </a>
+          {!archived && (
+            <>
+              <button className="btn btn-secondary" onClick={() => router.push("/admin/contacts/duplicates")}>
+                <Copy size={15} /> Manage duplicates
+              </button>
+              <button className="btn btn-primary" onClick={openCreate}>
+                <Plus size={15} /> New contact
+              </button>
+            </>
+          )}
         </div>
       </header>
 
@@ -372,6 +436,16 @@ export default function ContactsPageClient({
               <table className="atable">
                 <thead>
                   <tr>
+                    <th style={{ width: 40 }}>
+                      <input
+                        type="checkbox"
+                        aria-label="Select all contacts"
+                        checked={selection.allSelected}
+                        ref={(el) => { if (el) el.indeterminate = selection.someSelected; }}
+                        onChange={selection.toggleAll}
+                        style={{ cursor: "pointer", width: 16, height: 16 }}
+                      />
+                    </th>
                     <th>Contact</th>
                     {show("lifecycle") ? <th>Lifecycle</th> : null}
                     {show("source") ? <th>Original source</th> : null}
@@ -385,7 +459,16 @@ export default function ContactsPageClient({
                   </tr>
                 </thead>
                 <tbody>
-                  {paged.map((c) => <ContactRow key={c.id} c={c} show={show} onClick={() => open(c.id)} />)}
+                  {paged.map((c) => (
+                    <ContactRow
+                      key={c.id}
+                      c={c}
+                      show={show}
+                      onClick={() => open(c.id)}
+                      selected={selection.isSelected(c.id)}
+                      onToggle={() => selection.toggle(c.id)}
+                    />
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -393,7 +476,15 @@ export default function ContactsPageClient({
           </div>
 
           <div id="contacts-mobile" style={{ display: "none", flexDirection: "column", gap: 10 }}>
-            {paged.map((c) => <ContactCard key={c.id} c={c} onClick={() => open(c.id)} />)}
+            {paged.map((c) => (
+              <ContactCard
+                key={c.id}
+                c={c}
+                onClick={() => open(c.id)}
+                selected={selection.isSelected(c.id)}
+                onToggle={() => selection.toggle(c.id)}
+              />
+            ))}
           </div>
 
           <style>{`
@@ -401,19 +492,90 @@ export default function ContactsPageClient({
               #contacts-desktop { display: none !important; }
               #contacts-mobile { display: flex !important; }
             }
+            .atable tbody tr.row-selected { background: var(--primary-05, #f0fdff); }
+            .jcard.row-selected { outline: 2px solid var(--primary-40, #008C9C); outline-offset: -1px; }
           `}</style>
         </>
       )}
+
+      {stageMenuOpen && selection.count > 0 && (
+        <div
+          ref={stageMenuRef}
+          style={{
+            position: "fixed",
+            left: "50%",
+            bottom: 76,
+            transform: "translateX(-50%)",
+            zIndex: 50,
+            background: "#fff",
+            borderRadius: 12,
+            boxShadow: "0 12px 40px rgba(0,0,0,0.22)",
+            border: "1px solid var(--primary-10, #e2e8f0)",
+            padding: 6,
+            minWidth: 220,
+            maxHeight: 320,
+            overflowY: "auto",
+          }}>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4, color: "var(--primary-60)", padding: "6px 10px 4px" }}>
+            Set lifecycle stage
+          </div>
+          {LIFECYCLE_ORDER.map((s) => (
+            <button
+              key={s}
+              onClick={() => applyLifecycle(s)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                width: "100%",
+                textAlign: "left",
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                padding: "8px 10px",
+                borderRadius: 8,
+                fontSize: 13,
+                color: "var(--ink)",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--primary-05, #f0fdff)")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "none")}>
+              <LifecyclePill stage={s} />
+            </button>
+          ))}
+        </div>
+      )}
+
+      <BulkActionBar
+        noun="contact"
+        count={selection.count}
+        actions={bulkActions}
+        onClear={selection.clear}
+      />
     </div>
   );
 }
 
-function ContactRow({ c, show, onClick }: { c: ContactListItem; show: (id: ColId) => boolean; onClick: () => void }) {
+function ContactRow({ c, show, onClick, selected, onToggle }: {
+  c: ContactListItem;
+  show: (id: ColId) => boolean;
+  onClick: () => void;
+  selected: boolean;
+  onToggle: () => void;
+}) {
   const due = c.nextStepDue ? new Date(c.nextStepDue) : null;
   const overdue = !!due && due < new Date(new Date().toDateString());
   const dueSoon = !!due && !overdue && +due - Date.now() < 2 * 86400000;
   return (
-    <tr onClick={onClick}>
+    <tr onClick={onClick} className={selected ? "row-selected" : undefined}>
+      <td onClick={(e) => e.stopPropagation()} style={{ width: 40 }}>
+        <input
+          type="checkbox"
+          aria-label={`Select ${c.name}`}
+          checked={selected}
+          onChange={onToggle}
+          style={{ cursor: "pointer", width: 16, height: 16 }}
+        />
+      </td>
       <td style={{ minWidth: 230 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <Avatar name={c.name} color="var(--primary)" size={36} />
@@ -467,11 +629,24 @@ function ContactRow({ c, show, onClick }: { c: ContactListItem; show: (id: ColId
   );
 }
 
-function ContactCard({ c, onClick }: { c: ContactListItem; onClick: () => void }) {
+function ContactCard({ c, onClick, selected, onToggle }: {
+  c: ContactListItem;
+  onClick: () => void;
+  selected: boolean;
+  onToggle: () => void;
+}) {
   return (
-    <article className="jcard" onClick={onClick}>
+    <article className={`jcard${selected ? " row-selected" : ""}`} onClick={onClick}>
       <div className="jcard-top">
         <div className="row" style={{ gap: 12 }}>
+          <input
+            type="checkbox"
+            aria-label={`Select ${c.name}`}
+            checked={selected}
+            onClick={(e) => e.stopPropagation()}
+            onChange={onToggle}
+            style={{ cursor: "pointer", width: 16, height: 16 }}
+          />
           <Avatar name={c.name} color="var(--primary)" size={36} />
           <div>
             <div className="jcard-client">{c.name}</div>

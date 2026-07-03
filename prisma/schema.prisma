@@ -9,6 +9,7 @@ datasource db {
 }
 
 model User {
+  deletedAt                    DateTime? // soft-delete (recoverable via Archived view)
   id                           String                 @id @default(cuid())
   name                         String
   email                        String                 @unique
@@ -106,6 +107,7 @@ model Verification {
 }
 
 model Product {
+  deletedAt         DateTime? // soft-delete (recoverable via Archived view)
   id                String                   @id @default(cuid())
   name              String
   description       String?
@@ -214,6 +216,7 @@ model SupplierPrice {
 }
 
 model Client {
+  deletedAt              DateTime? // soft-delete (recoverable via Archived view)
   id                     String                  @id @default(cuid())
   name                   String
   email                  String?
@@ -312,6 +315,9 @@ enum ServiceFrequency {
 }
 
 model Job {
+  // Soft delete — set when bulk/single deleted; hidden from lists, recoverable
+  // from the Archived view. Never hard-deleted.
+  deletedAt                      DateTime?
   id                             String                @id @default(cuid())
   jobNumber                      Int                   @unique @default(autoincrement())
   employeeId                     String?
@@ -789,6 +795,7 @@ enum InvoiceStatus {
 }
 
 model Invoice {
+  deletedAt      DateTime? // soft-delete (recoverable via Archived view)
   id             String            @id @default(cuid())
   invoiceNumber  String            @unique
   status         InvoiceStatus     @default(DRAFT)
@@ -1563,6 +1570,7 @@ enum JobApplicationStatus {
 
 /// Cleaner job-application intake from the public careers page.
 model JobApplication {
+  deletedAt         DateTime? // soft-delete (recoverable via Archived view)
   id                String               @id @default(cuid())
   // Personal information
   name              String // combined "First Last", kept for display/avatars
@@ -1655,6 +1663,7 @@ model ClientCardSetupToken {
 }
 
 model GiftCard {
+  deletedAt             DateTime? // soft-delete (recoverable via Archived view)
   id                    String         @id @default(cuid())
   code                  String         @unique
   amount                Float
@@ -1712,6 +1721,7 @@ model JobAssignmentInvite {
 }
 
 model QuoteRequest {
+  deletedAt     DateTime? // soft-delete (recoverable via Archived view)
   id            String             @id @default(cuid())
   name          String
   email         String
@@ -1747,6 +1757,7 @@ model ServiceArea {
 }
 
 model Lead {
+  deletedAt      DateTime? // soft-delete (recoverable via Archived view)
   id             String     @id @default(cuid())
   email          String
   name           String?
@@ -1784,6 +1795,7 @@ model Lead {
 /// (bedrooms, sqft, frequency, …) live in `props` until a full property-
 /// definition engine is built.
 model Contact {
+  deletedAt          DateTime? // soft-delete (recoverable via Archived view)
   id                 String            @id @default(cuid())
   name               String
   email              String?
@@ -1902,6 +1914,7 @@ model AdSpendImport {
 }
 
 model Waitlist {
+  deletedAt      DateTime? // soft-delete (recoverable via Archived view)
   id             String         @id @default(cuid())
   preferredDate  DateTime
   email          String
@@ -1968,6 +1981,7 @@ model JobRatingToken {
 }
 
 model PromoCode {
+  deletedAt     DateTime? // soft-delete (recoverable via Archived view)
   id            String    @id @default(cuid())
   code          String    @unique
   description   String?

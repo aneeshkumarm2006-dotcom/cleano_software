@@ -74,9 +74,11 @@ interface JobsPageClientProps {
   initialPage: number;
   initialRowsPerPage: number;
   users: User[];
+  cleaners?: User[];
   clients: ClientLite[];
   addOnCatalog?: Array<{ id: string; name: string; price: number }>;
   isAdmin: boolean;
+  archived?: boolean;
 }
 
 export default function JobsPageClient({
@@ -89,9 +91,11 @@ export default function JobsPageClient({
   initialPage,
   initialRowsPerPage,
   users,
+  cleaners = [],
   clients,
   addOnCatalog = [],
   isAdmin,
+  archived = false,
 }: JobsPageClientProps) {
   const router = useRouter();
   const [isLoading] = useState(false);
@@ -277,9 +281,23 @@ export default function JobsPageClient({
           />
         </div>
         {isAdmin && (
-          <div className="pt-1 flex gap-2">
-            <ImportCsvButton entity="jobs" />
-            <ExportButton filters={activeFilters} />
+          <div className="pt-1 flex gap-2 items-center">
+            <button
+              type="button"
+              onClick={() =>
+                router.push(archived ? "/admin/jobs" : "/admin/jobs?archived=1")
+              }
+              className="afilter-toggle"
+              style={archived ? { background: "var(--primary)", color: "#fff", borderColor: "var(--primary)" } : undefined}
+            >
+              {archived ? "Active jobs" : "Archived"}
+            </button>
+            {!archived && (
+              <>
+                <ImportCsvButton entity="jobs" />
+                <ExportButton filters={activeFilters} />
+              </>
+            )}
           </div>
         )}
       </div>
@@ -303,6 +321,8 @@ export default function JobsPageClient({
         onEditJob={handleOpenEditModal as any}
         clients={clients}
         users={users}
+        cleaners={cleaners}
+        archived={archived}
         startDate={startDate}
         endDate={endDate}
         jobTypeFilter={jobTypeFilter}

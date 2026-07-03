@@ -1,9 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Calendar, AlertCircle, MapPin, CheckCircle2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Calendar, AlertCircle, MapPin, CheckCircle2, Archive, Trash2, RotateCcw, Tag } from "lucide-react";
 import { markWaitlistNotified } from "../actions/markWaitlistNotified";
 import { updateWaitlistStatus } from "../actions/updateWaitlistStatus";
+import { useRowSelection } from "@/components/common/useRowSelection";
+import BulkActionBar, { type BulkAction } from "@/components/common/BulkActionBar";
+import { bulkSoftDelete, bulkRestore } from "@/lib/bulk/actions";
+import { bulkSetWaitlistStatus } from "../actions/bulkSetWaitlistStatus";
 
 type Status = "WAITING" | "NOTIFIED" | "CONVERTED" | "EXPIRED" | "CANCELLED";
 
@@ -84,7 +89,10 @@ const TABS = [
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
 
-export default function WaitlistPageClient({ entries }: { entries: Entry[] }) {
+const STATUS_OPTIONS: Status[] = ["WAITING", "NOTIFIED", "CONVERTED", "EXPIRED", "CANCELLED"];
+
+export default function WaitlistPageClient({ entries, archived }: { entries: Entry[]; archived: boolean }) {
+  const router = useRouter();
   const [tab, setTab] = useState<TabId>("all");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -107,6 +115,48 @@ export default function WaitlistPageClient({ entries }: { entries: Entry[] }) {
     return [...list].sort((a, b) =>
       new Date(a.preferredDate).getTime() - new Date(b.preferredDate).getTime());
   }, [tab, entries]);
+
+  const visibleIds = useMemo(() => filtered.map((w) => w.id), [filtered]);
+  const selection = useRowSelection(visibleIds);
+
+  const afterBulk = () => { selection.clear(); router.refresh(); };
+
+  const bulkActions: BulkAction[] = archived
+    ? [
+        {
+          key: "restore",
+          label: "Restore",
+          icon: <RotateCcw size={14} />,
+          onRun: async () => { await bulkRestore("waitlist", selection.selectedIds); afterBulk(); },
+        },
+      ]
+    : [
+        {
+          key: "status",
+          label: "Change status",
+          icon: <Tag size={14} />,
+          onRun: async () => {
+            const input = window.prompt(
+              `Set status for ${selection.count} entr${selection.count === 1 ? "y" : "ies"}.\nType one of: ${STATUS_OPTIONS.join(", ")}`,
+              "NOTIFIED"
+            );
+            if (!input) return;
+            const next = input.trim().toUpperCase() as Status;
+            if (!STATUS_OPTIONS.includes(next)) { setError(`Invalid status "${input}".`); return; }
+            const res = await bulkSetWaitlistStatus(selection.selectedIds, next);
+            if (!res.success) { setError(res.error); return; }
+            afterBulk();
+          },
+        },
+        {
+          key: "delete",
+          label: "Delete",
+          icon: <Trash2 size={14} />,
+          variant: "danger",
+          confirm: `Delete ${selection.count} entr${selection.count === 1 ? "y" : "ies"}? Recoverable from Archived.`,
+          onRun: async () => { await bulkSoftDelete("waitlist", selection.selectedIds); afterBulk(); },
+        },
+      ];
 
   async function handleNotify(id: string) {
     setBusyId(id); setError(null);
@@ -131,6 +181,11 @@ export default function WaitlistPageClient({ entries }: { entries: Entry[] }) {
             <span style={{ color: "var(--primary-40)", fontWeight: 300 }}>· {stats.total}</span>
           </h1>
         </div>
+        <a
+          href={archived ? "/admin/waitlist" : "/admin/waitlist?archived=1"}
+          className={`btn ${archived ? "btn-primary" : "btn-secondary"}`}>
+          <Archive size={16} /> {archived ? "Active waitlist" : "Archived"}
+        </a>
       </header>
 
       <div className="astat-grid">
@@ -172,6 +227,16 @@ export default function WaitlistPageClient({ entries }: { entries: Entry[] }) {
               <table className="atable">
                 <thead>
                   <tr>
+                    <th style={{ width: 40 }}>
+                      <input
+                        type="checkbox"
+                        aria-label="Select all entries"
+                        checked={selection.allSelected}
+                        ref={(el) => { if (el) el.indeterminate = selection.someSelected; }}
+                        onChange={selection.toggleAll}
+                        style={{ cursor: "pointer", width: 16, height: 16 }}
+                      />
+                    </th>
                     <th>Preferred date</th>
                     <th>Contact</th>
                     <th>Service</th>
@@ -183,7 +248,16 @@ export default function WaitlistPageClient({ entries }: { entries: Entry[] }) {
                   {filtered.map(w => {
                     const age = daysAgo(w.createdAt);
                     return (
-                      <tr key={w.id}>
+                      <tr key={w.id} className={selection.isSelected(w.id) ? "row-selected" : undefined}>
+                        <td onClick={(e) => e.stopPropagation()} style={{ width: 40 }}>
+                          <input
+                            type="checkbox"
+                            aria-label={`Select ${w.name || w.email}`}
+                            checked={selection.isSelected(w.id)}
+                            onChange={() => selection.toggle(w.id)}
+                            style={{ cursor: "pointer", width: 16, height: 16 }}
+                          />
+                        </td>
                         <td className="col-date" style={{ minWidth: 160 }}>
                           <div className="date-line">{dateStr(w.preferredDate)}</div>
                           <div className="time-line">Added {age === 0 ? "today" : `${age}d ago`}</div>
@@ -240,12 +314,21 @@ export default function WaitlistPageClient({ entries }: { entries: Entry[] }) {
             {filtered.map(w => {
               const age = daysAgo(w.createdAt);
               return (
-                <article key={w.id} className="jcard">
+                <article key={w.id} className={`jcard${selection.isSelected(w.id) ? " row-selected" : ""}`}>
                   <div className="jcard-top">
-                    <div>
-                      <div className="jcard-client">{w.name || w.email}</div>
-                      <div className="jcard-meta">{w.email}</div>
-                      {w.phone && <div className="jcard-meta">{w.phone}</div>}
+                    <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ${w.name || w.email}`}
+                        checked={selection.isSelected(w.id)}
+                        onChange={() => selection.toggle(w.id)}
+                        style={{ cursor: "pointer", width: 16, height: 16, marginTop: 3 }}
+                      />
+                      <div>
+                        <div className="jcard-client">{w.name || w.email}</div>
+                        <div className="jcard-meta">{w.email}</div>
+                        {w.phone && <div className="jcard-meta">{w.phone}</div>}
+                      </div>
                     </div>
                     <StatusPill status={w.status} />
                   </div>
@@ -282,9 +365,18 @@ export default function WaitlistPageClient({ entries }: { entries: Entry[] }) {
               #wl-desktop { display: none !important; }
               #wl-mobile  { display: flex !important; }
             }
+            .atable tbody tr.row-selected { background: var(--primary-05, #f0fdff); }
+            .jcard.row-selected { outline: 2px solid var(--primary-40, #008C9C); outline-offset: -1px; }
           `}</style>
         </>
       )}
+
+      <BulkActionBar
+        noun="entry"
+        count={selection.count}
+        actions={bulkActions}
+        onClear={selection.clear}
+      />
     </div>
   );
 }

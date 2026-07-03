@@ -1,6 +1,7 @@
 "use client";
 
-import React from "react";
+import React, { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Search,
   ChevronDown,
@@ -17,6 +18,10 @@ import {
   AlertTriangle,
   DollarSign,
   Users,
+  Trash2,
+  Tag,
+  Gauge,
+  RotateCcw,
 } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
@@ -25,6 +30,18 @@ import Badge from "@/components/ui/Badge";
 import CustomDropdown from "@/components/ui/custom-dropdown";
 import ImportCsvButton from "@/components/csv/ImportCsvButton";
 import { fmtDateTime } from "@/lib/time";
+import { useRowSelection } from "@/components/common/useRowSelection";
+import BulkActionBar, { BulkAction } from "@/components/common/BulkActionBar";
+import { bulkSoftDelete, bulkRestore } from "@/lib/bulk/actions";
+import { bulkSetProductCategory } from "../actions/bulkSetProductCategory";
+import { bulkSetProductMinStock } from "../actions/bulkSetProductMinStock";
+
+const CATEGORY_OPTIONS: Array<{ value: ProductCategory; label: string }> = [
+  { value: "LIQUID_SPRAY", label: "Liquid Spray" },
+  { value: "MOP_LIQUID", label: "Mop Liquid" },
+  { value: "DISPOSABLE", label: "Disposable" },
+  { value: "OTHER", label: "Other" },
+];
 
 type ProductCategory = "LIQUID_SPRAY" | "MOP_LIQUID" | "DISPOSABLE" | "OTHER";
 
@@ -63,6 +80,8 @@ interface InventoryViewProps {
   onAddProduct: () => void;
   // URL update function
   updateURLParams: (updates: Record<string, string | number>) => void;
+  // Archived (soft-deleted) view
+  archived?: boolean;
 }
 
 export default function InventoryView({
@@ -80,7 +99,9 @@ export default function InventoryView({
   onEditProduct,
   onAddProduct,
   updateURLParams,
+  archived = false,
 }: InventoryViewProps) {
+  const router = useRouter();
   const getProductStatusBadge = (product: Product) => {
     if (product.isLowStock) {
       return (
@@ -126,6 +147,110 @@ export default function InventoryView({
   const endIndex = startIndex + rowsPerPage;
   const paginatedProducts = filteredProducts.slice(startIndex, endIndex);
 
+  // ── Multi-select + bulk actions ──────────────────────────────────────────
+  const visibleIds = useMemo(
+    () => paginatedProducts.map((p) => p.id),
+    [paginatedProducts]
+  );
+  const sel = useRowSelection(visibleIds);
+  const [showCategory, setShowCategory] = useState(false);
+  const [showMinStock, setShowMinStock] = useState(false);
+  const [minStockValue, setMinStockValue] = useState("");
+  const [bulkBusy, setBulkBusy] = useState(false);
+
+  const closePanels = () => {
+    setShowCategory(false);
+    setShowMinStock(false);
+  };
+
+  async function runSetCategory(category: ProductCategory) {
+    if (sel.count === 0) return;
+    setBulkBusy(true);
+    try {
+      const res = await bulkSetProductCategory(sel.selectedIds, category);
+      if (!res.success) {
+        alert(res.error);
+        return;
+      }
+      closePanels();
+      sel.clear();
+      router.refresh();
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  async function runSetMinStock() {
+    if (sel.count === 0) return;
+    const value = Number(minStockValue);
+    if (!Number.isFinite(value) || value < 0) {
+      alert("Enter a valid min-stock value");
+      return;
+    }
+    setBulkBusy(true);
+    try {
+      const res = await bulkSetProductMinStock(sel.selectedIds, value);
+      if (!res.success) {
+        alert(res.error);
+        return;
+      }
+      closePanels();
+      setMinStockValue("");
+      sel.clear();
+      router.refresh();
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  const bulkActions: BulkAction[] = archived
+    ? [
+        {
+          key: "restore",
+          label: "Restore",
+          icon: <RotateCcw size={14} />,
+          onRun: async () => {
+            await bulkRestore("product", sel.selectedIds);
+            sel.clear();
+            router.refresh();
+          },
+        },
+      ]
+    : [
+        {
+          key: "category",
+          label: "Set category",
+          icon: <Tag size={14} />,
+          onRun: () => {
+            setShowMinStock(false);
+            setShowCategory(true);
+          },
+        },
+        {
+          key: "minStock",
+          label: "Set min-stock",
+          icon: <Gauge size={14} />,
+          onRun: () => {
+            setShowCategory(false);
+            setShowMinStock(true);
+          },
+        },
+        {
+          key: "delete",
+          label: "Delete",
+          icon: <Trash2 size={14} />,
+          variant: "danger",
+          confirm: `Delete ${sel.count} selected product${
+            sel.count === 1 ? "" : "s"
+          }? They can be restored from Archived.`,
+          onRun: async () => {
+            await bulkSoftDelete("product", sel.selectedIds);
+            sel.clear();
+            router.refresh();
+          },
+        },
+      ];
+
   // Helper functions for pagination
   const goToPage = (newPage: number) => {
     onPageChange(newPage);
@@ -166,15 +291,32 @@ export default function InventoryView({
           </h1>
         </div>
         <div className="flex items-center gap-2">
-          <ImportCsvButton entity="products" label="Import Products" triggerClassName="btn btn-secondary btn-sm" />
-          <ImportCsvButton entity="inventory-requests" label="Import Requests" triggerClassName="btn btn-secondary btn-sm" />
-          <Button
-            variant="primary"
-            border={false}
-            onClick={onAddProduct}
-            className="rounded-xl px-5 py-2.5">
-            <Plus className="w-4 h-4 mr-2" /> New product
-          </Button>
+          <button
+            type="button"
+            onClick={() =>
+              router.push(archived ? "/admin/inventory" : "/admin/inventory?archived=1")
+            }
+            className="btn btn-secondary btn-sm"
+            style={
+              archived
+                ? { background: "var(--primary)", color: "#fff", borderColor: "var(--primary)" }
+                : undefined
+            }>
+            {archived ? "Active products" : "Archived"}
+          </button>
+          {!archived && (
+            <>
+              <ImportCsvButton entity="products" label="Import Products" triggerClassName="btn btn-secondary btn-sm" />
+              <ImportCsvButton entity="inventory-requests" label="Import Requests" triggerClassName="btn btn-secondary btn-sm" />
+              <Button
+                variant="primary"
+                border={false}
+                onClick={onAddProduct}
+                className="rounded-xl px-5 py-2.5">
+                <Plus className="w-4 h-4 mr-2" /> New product
+              </Button>
+            </>
+          )}
         </div>
       </header>
 
@@ -358,6 +500,18 @@ export default function InventoryView({
                 <div className="min-w-max">
                   {/* Header */}
                   <div className="flex bg-[#008C9C]/5 rounded-t-2xl">
+                    <div className="w-[48px] p-4 flex items-center justify-center">
+                      <input
+                        type="checkbox"
+                        aria-label="Select all"
+                        checked={sel.allSelected}
+                        ref={(el) => {
+                          if (el) el.indeterminate = sel.someSelected;
+                        }}
+                        onChange={sel.toggleAll}
+                        style={{ cursor: "pointer" }}
+                      />
+                    </div>
                     {[
                       { label: "Product Name", className: "w-[220px]" },
                       { label: "Description", className: "w-[260px]" },
@@ -381,6 +535,19 @@ export default function InventoryView({
                       <div
                         key={product.id}
                         className="flex items-center hover:bg-[#008C9C]/1 transition-colors">
+                        {/* Select */}
+                        <div
+                          className="w-[48px] p-4 flex items-center justify-center"
+                          onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            aria-label="Select row"
+                            checked={sel.isSelected(product.id)}
+                            onChange={() => sel.toggle(product.id)}
+                            onClick={(e) => e.stopPropagation()}
+                            style={{ cursor: "pointer" }}
+                          />
+                        </div>
                         {/* Product Name */}
                         <div className="w-[220px] p-4">
                           <p className="text-sm font-[350] text-[#008C9C] truncate">
@@ -483,13 +650,23 @@ export default function InventoryView({
                     className="p-4 cursor-pointer"
                     onClick={() => onViewProduct(product)}>
                     <div className="space-y-3">
-                      <div>
-                        <p className="text-sm font-[400] text-[#008C9C]">
-                          {product.name}
-                        </p>
-                        <p className="text-xs text-[#008C9C]/70 mt-1">
-                          {product.description || "No description"}
-                        </p>
+                      <div className="flex items-start gap-3">
+                        <input
+                          type="checkbox"
+                          aria-label="Select row"
+                          checked={sel.isSelected(product.id)}
+                          onChange={() => sel.toggle(product.id)}
+                          onClick={(e) => e.stopPropagation()}
+                          style={{ cursor: "pointer", marginTop: 2 }}
+                        />
+                        <div>
+                          <p className="text-sm font-[400] text-[#008C9C]">
+                            {product.name}
+                          </p>
+                          <p className="text-xs text-[#008C9C]/70 mt-1">
+                            {product.description || "No description"}
+                          </p>
+                        </div>
                       </div>
                       <div className="flex items-center justify-between">
                         <div>

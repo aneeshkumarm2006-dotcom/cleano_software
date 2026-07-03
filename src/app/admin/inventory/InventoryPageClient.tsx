@@ -73,6 +73,7 @@ interface InventoryPageClientProps {
     suppliers: Array<{ id: string; name: string; website?: string | null }>;
   };
   forecastData?: ForecastEmployee[];
+  archived?: boolean;
 }
 
 const TABS: Array<{ id: TabId; label: string; icon: React.ReactNode }> = [
@@ -89,6 +90,7 @@ export default function InventoryPageClient({
   initialRowsPerPage,
   supplierData,
   forecastData,
+  archived = false,
 }: InventoryPageClientProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabId>("products");
@@ -186,6 +188,7 @@ export default function InventoryPageClient({
             onEditProduct={handleEditProduct}
             onAddProduct={handleAddProduct}
             updateURLParams={updateURLParams}
+            archived={archived}
           />
 
           <ProductModal

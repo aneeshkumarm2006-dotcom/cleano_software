@@ -1,11 +1,15 @@
 "use client";
 
-import { useState } from "react";
-import { Plus, Trash2, ToggleLeft, ToggleRight, Loader2, Tag } from "lucide-react";
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Plus, Trash2, ToggleLeft, ToggleRight, Loader2, Power, RotateCcw, Archive, ArchiveRestore } from "lucide-react";
 import DatePicker from "@/components/customer/DatePicker";
 import PremiumSelect from "@/components/ui/PremiumSelect";
 import { ConfirmDeleteModal } from "@/components/common/ConfirmDeleteModal";
-import { createPromoCode, togglePromoCode, deletePromoCode } from "./actions";
+import { useRowSelection } from "@/components/common/useRowSelection";
+import BulkActionBar, { type BulkAction } from "@/components/common/BulkActionBar";
+import { bulkSoftDelete, bulkRestore } from "@/lib/bulk/actions";
+import { createPromoCode, togglePromoCode, deletePromoCode, bulkSetPromoActive } from "./actions";
 
 interface PromoCode {
   id: string;
@@ -20,7 +24,8 @@ interface PromoCode {
   createdAt: string;
 }
 
-export default function PromoCodesClient({ codes }: { codes: PromoCode[] }) {
+export default function PromoCodesClient({ codes, archived = false }: { codes: PromoCode[]; archived?: boolean }) {
+  const router = useRouter();
   const [list, setList] = useState(codes);
   const [showForm, setShowForm] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -63,6 +68,55 @@ export default function PromoCodesClient({ codes }: { codes: PromoCode[] }) {
     setBusyId(null);
   }
 
+  const visibleIds = useMemo(() => list.map((c) => c.id), [list]);
+  const selection = useRowSelection(visibleIds);
+  const { selectedIds, clear } = selection;
+
+  // Run a bulk mutation, then clear the selection and refresh server data.
+  const runBulk = async (fn: () => Promise<{ success: boolean; error?: string }>) => {
+    const res = await fn();
+    if (!res.success) throw new Error(res.error || "Bulk action failed");
+    clear();
+    router.refresh();
+  };
+
+  const bulkActions: BulkAction[] = archived
+    ? [
+        {
+          key: "restore",
+          label: "Restore",
+          icon: <RotateCcw size={14} />,
+          onRun: () => runBulk(() => bulkRestore("promoCode", selectedIds)),
+        },
+      ]
+    : [
+        {
+          key: "activate",
+          label: "Activate",
+          icon: <Power size={14} />,
+          onRun: () => runBulk(() => bulkSetPromoActive(selectedIds, true)),
+        },
+        {
+          key: "deactivate",
+          label: "Deactivate",
+          icon: <Power size={14} />,
+          onRun: () => runBulk(() => bulkSetPromoActive(selectedIds, false)),
+        },
+        {
+          key: "delete",
+          label: "Delete",
+          icon: <Trash2 size={14} />,
+          variant: "danger",
+          confirm: "Archive the selected promo codes? They can be restored from the Archived view.",
+          onRun: () => runBulk(() => bulkSoftDelete("promoCode", selectedIds)),
+        },
+      ];
+
+  const toggleArchived = () => {
+    clear();
+    router.push(`/admin/promo-codes${archived ? "" : "?archived=1"}`);
+  };
+
   function fmt(c: PromoCode) {
     return c.discountType === "PERCENT" ? `${c.discountValue}% off` : `$${c.discountValue.toFixed(2)} off`;
   }
@@ -77,9 +131,21 @@ export default function PromoCodesClient({ codes }: { codes: PromoCode[] }) {
             <span style={{ color: "var(--primary-40)", fontWeight: 300 }}>· {list.length}</span>
           </h1>
         </div>
-        <button type="button" className="btn btn-primary" onClick={() => setShowForm(v => !v)}>
-          <Plus size={16} /> New code
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            type="button"
+            className={`btn ${archived ? "btn-primary" : "btn-secondary"}`}
+            onClick={toggleArchived}
+            title={archived ? "Back to active promo codes" : "View archived promo codes"}>
+            {archived ? <ArchiveRestore size={16} /> : <Archive size={16} />}
+            {archived ? "Active" : "Archived"}
+          </button>
+          {!archived && (
+            <button type="button" className="btn btn-primary" onClick={() => setShowForm(v => !v)}>
+              <Plus size={16} /> New code
+            </button>
+          )}
+        </div>
       </header>
 
       {showForm && (
@@ -159,7 +225,7 @@ export default function PromoCodesClient({ codes }: { codes: PromoCode[] }) {
 
       {list.length === 0 ? (
         <div className="atable-wrap" style={{ padding: "80px 40px", textAlign: "center", color: "var(--primary-60)" }}>
-          No promo codes yet.
+          {archived ? "No archived promo codes." : "No promo codes yet."}
         </div>
       ) : (
         <div className="atable-wrap">
@@ -167,6 +233,18 @@ export default function PromoCodesClient({ codes }: { codes: PromoCode[] }) {
             <table className="atable">
               <thead>
                 <tr>
+                  <th style={{ width: 40, paddingRight: 0 }}>
+                    <input
+                      type="checkbox"
+                      aria-label="Select all promo codes"
+                      checked={selection.allSelected}
+                      ref={(el) => {
+                        if (el) el.indeterminate = selection.someSelected;
+                      }}
+                      onChange={selection.toggleAll}
+                      style={{ cursor: "pointer", width: 16, height: 16 }}
+                    />
+                  </th>
                   <th>Code</th>
                   <th>Discount</th>
                   <th className="num">Uses</th>
@@ -177,7 +255,16 @@ export default function PromoCodesClient({ codes }: { codes: PromoCode[] }) {
               </thead>
               <tbody>
                 {list.map(c => (
-                  <tr key={c.id}>
+                  <tr key={c.id} className={selection.isSelected(c.id) ? "row-selected" : undefined}>
+                    <td style={{ width: 40, paddingRight: 0 }} onClick={(ev) => ev.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ${c.code}`}
+                        checked={selection.isSelected(c.id)}
+                        onChange={() => selection.toggle(c.id)}
+                        style={{ cursor: "pointer", width: 16, height: 16 }}
+                      />
+                    </td>
                     <td style={{ minWidth: 140 }}>
                       <div className="col-client" style={{ fontFamily: "monospace", letterSpacing: "0.06em" }}>{c.code}</div>
                       {c.description && <div className="col-client-sub">{c.description}</div>}
@@ -204,28 +291,30 @@ export default function PromoCodesClient({ codes }: { codes: PromoCode[] }) {
                         {c.isActive ? "Active" : "Inactive"}
                       </span>
                     </td>
-                    <td className="col-actions">
-                      <div className="row" style={{ gap: 6 }}>
-                        <button
-                          type="button"
-                          className="icon-btn"
-                          title={c.isActive ? "Deactivate" : "Activate"}
-                          disabled={busyId === c.id}
-                          onClick={() => handleToggle(c.id)}>
-                          {c.isActive
-                            ? <ToggleRight size={16} style={{ color: "#008C9C" }} />
-                            : <ToggleLeft size={16} />}
-                        </button>
-                        <button
-                          type="button"
-                          className="icon-btn"
-                          title="Delete"
-                          disabled={busyId === c.id}
-                          onClick={() => setDeleteId(c.id)}
-                          style={{ color: "#ef4444" }}>
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
+                    <td className="col-actions" onClick={(ev) => ev.stopPropagation()}>
+                      {!archived && (
+                        <div className="row" style={{ gap: 6 }}>
+                          <button
+                            type="button"
+                            className="icon-btn"
+                            title={c.isActive ? "Deactivate" : "Activate"}
+                            disabled={busyId === c.id}
+                            onClick={() => handleToggle(c.id)}>
+                            {c.isActive
+                              ? <ToggleRight size={16} style={{ color: "#008C9C" }} />
+                              : <ToggleLeft size={16} />}
+                          </button>
+                          <button
+                            type="button"
+                            className="icon-btn"
+                            title="Delete"
+                            disabled={busyId === c.id}
+                            onClick={() => setDeleteId(c.id)}
+                            style={{ color: "#ef4444" }}>
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -234,6 +323,19 @@ export default function PromoCodesClient({ codes }: { codes: PromoCode[] }) {
           </div>
         </div>
       )}
+
+      {selection.count > 0 && (
+        <BulkActionBar
+          count={selection.count}
+          noun="promo code"
+          actions={bulkActions}
+          onClear={clear}
+        />
+      )}
+
+      <style>{`
+        .atable tr.row-selected td { background: var(--primary-05, #f0fdfa); }
+      `}</style>
 
       <ConfirmDeleteModal
         isOpen={!!deleteId}

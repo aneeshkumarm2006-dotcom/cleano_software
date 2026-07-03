@@ -2,10 +2,22 @@ import { requireAdmin } from "@/lib/page-guards";
 import { db } from "@/db";
 import ApplicationsInboxClient from "./ApplicationsInboxClient";
 
-export default async function JobApplicationsPage() {
+type SearchParams = Promise<{
+  [key: string]: string | string[] | undefined;
+}>;
+
+export default async function JobApplicationsPage({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
   await requireAdmin();
 
+  const params = await searchParams;
+  const archived = params.archived === "1";
+
   const applications = await db.jobApplication.findMany({
+    where: { deletedAt: archived ? { not: null } : null },
     orderBy: { createdAt: "desc" },
     take: 300,
   });
@@ -13,6 +25,7 @@ export default async function JobApplicationsPage() {
   return (
     <div className="h-full overflow-hidden overflow-y-auto p-8">
       <ApplicationsInboxClient
+        archived={archived}
         applications={applications.map((a) => ({
           id: a.id,
           name: a.name,

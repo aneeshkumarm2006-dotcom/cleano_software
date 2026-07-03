@@ -234,11 +234,23 @@ export interface NormalizedRow {
   providers: ProviderInfo[];
 }
 
+// A row that could NOT be imported (surfaced to the user instead of silently
+// dropped) — currently only rows with a missing/unreadable start date/time,
+// since a job cannot exist without one. The user fixes these in the CSV and
+// re-imports.
+export interface ImportProblemRow {
+  rowNum: number; // spreadsheet row number (header = row 1)
+  reason: string;
+  customer: string;
+  bookingId: string | null;
+}
+
 export interface ParseResult {
   header: string[];
   rows: NormalizedRow[];
   parsedCount: number;
   droppedCount: number;
+  problemRows: ImportProblemRow[];
   mojibakeCount: number;
 }
 
@@ -257,15 +269,26 @@ export function parseAndNormalize(csvText: string): ParseResult {
 
   let mojibakeCount = 0;
   const out: NormalizedRow[] = [];
-  let dropped = 0;
+  const problemRows: ImportProblemRow[] = [];
 
   dataRows.forEach((r, i) => {
     const get = (name: string) => r[idx(name)] ?? "";
     if (/[ÃÂâ€]/.test(get("City") + get("Address") + get("State"))) mojibakeCount++;
 
-    const start = new Date(clean(get("Booking start date time")));
-    if (isNaN(start.getTime()) || start < RANGE_START || start >= RANGE_END) {
-      dropped++;
+    // No date-window filter — bookings from ANY date import. The only rows that
+    // can't import are ones with a missing/unreadable start date/time (a job
+    // needs a real start time). Those are recorded as problem rows, not dropped.
+    const startRaw = clean(get("Booking start date time"));
+    const start = new Date(startRaw);
+    if (!startRaw || isNaN(start.getTime())) {
+      problemRows.push({
+        rowNum: i + 2,
+        reason: startRaw
+          ? `Unreadable "Booking start date time": ${startRaw}`
+          : `Missing "Booking start date time"`,
+        customer: clean(get("Full name")) || clean(get("Email")) || "(unknown)",
+        bookingId: clean(get("Booking id")) || null,
+      });
       return;
     }
     const endRaw = clean(get("Booking end date time"));
@@ -378,7 +401,8 @@ export function parseAndNormalize(csvText: string): ParseResult {
     header,
     rows: out,
     parsedCount: dataRows.length,
-    droppedCount: dropped,
+    droppedCount: problemRows.length,
+    problemRows,
     mojibakeCount,
   };
 }
@@ -469,8 +493,9 @@ export interface ImportReport {
   dryRun: boolean;
   parsedCount: number;
   droppedCount: number;
+  problemRows: ImportProblemRow[];
   mojibakeCount: number;
-  /** Total in-range rows in the file — used to drive batched commits from the UI. */
+  /** Total importable rows in the file — used to drive batched commits from the UI. */
   totalRows?: number;
   cleaners: { created: number; existing: number; skipped: number; failed: number };
   customers: { created: number; existing: number; failed: number };

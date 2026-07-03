@@ -1,9 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertCircle, Calendar, UserX, Users, Search } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { AlertCircle, Calendar, UserX, Users, Search, Archive, Trash2, RotateCcw, Tag } from "lucide-react";
 import { updateLeadStatus } from "../actions/updateLeadStatus";
 import { convertLeadToJob } from "../actions/convertLeadToJob";
+import { bulkSetLeadStatus } from "../actions/bulkSetLeadStatus";
+import { useRowSelection } from "@/components/common/useRowSelection";
+import BulkActionBar, { type BulkAction } from "@/components/common/BulkActionBar";
+import { bulkSoftDelete, bulkRestore } from "@/lib/bulk/actions";
 import PremiumSelect from "@/components/ui/PremiumSelect";
 
 type Status = "NEW" | "CONTACTED" | "CONVERTED" | "DEAD" | "OUT_OF_AREA";
@@ -88,11 +93,13 @@ function dateStr(iso: string) {
   return new Date(iso).toLocaleDateString("en-CA", { month: "short", day: "numeric", year: "numeric" });
 }
 
-export default function LeadsPageClient({ leads }: { leads: Lead[] }) {
+export default function LeadsPageClient({ leads, archived = false }: { leads: Lead[]; archived?: boolean }) {
+  const router = useRouter();
   const [tab, setTab] = useState<TabId>("all");
   const [search, setSearch] = useState("");
   const [updating, setUpdating] = useState<string | null>(null);
   const [converting, setConverting] = useState<string | null>(null);
+  const [statusMenuOpen, setStatusMenuOpen] = useState(false);
 
   const stats = useMemo(() => ({
     total:       leads.length,
@@ -124,6 +131,42 @@ export default function LeadsPageClient({ leads }: { leads: Lead[] }) {
     );
   }, [tab, search, leads]);
 
+  const visibleIds = useMemo(() => filtered.map((l) => l.id), [filtered]);
+  const selection = useRowSelection(visibleIds);
+
+  const afterBulk = () => { selection.clear(); setStatusMenuOpen(false); router.refresh(); };
+
+  const bulkActions: BulkAction[] = archived
+    ? [
+        {
+          key: "restore",
+          label: "Restore",
+          icon: <RotateCcw size={14} />,
+          onRun: async () => { await bulkRestore("lead", selection.selectedIds); afterBulk(); },
+        },
+      ]
+    : [
+        {
+          key: "status",
+          label: "Change status",
+          icon: <Tag size={14} />,
+          onRun: () => setStatusMenuOpen((v) => !v),
+        },
+        {
+          key: "delete",
+          label: "Delete",
+          icon: <Trash2 size={14} />,
+          variant: "danger",
+          confirm: `Delete ${selection.count} lead${selection.count === 1 ? "" : "s"}? Recoverable from Archived.`,
+          onRun: async () => { await bulkSoftDelete("lead", selection.selectedIds); afterBulk(); },
+        },
+      ];
+
+  async function handleBulkStatus(status: Status) {
+    await bulkSetLeadStatus(selection.selectedIds, status);
+    afterBulk();
+  }
+
   async function handleStatusChange(id: string, status: Status) {
     setUpdating(id);
     await updateLeadStatus({ id, status });
@@ -145,9 +188,16 @@ export default function LeadsPageClient({ leads }: { leads: Lead[] }) {
         <div className="stack-8">
           <p className="eyebrow">Sales</p>
           <h1 className="display">
-            Leads{" "}
+            {archived ? "Archived leads" : "Leads"}{" "}
             <span style={{ color: "var(--primary-40)", fontWeight: 300 }}>· {stats.total}</span>
           </h1>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <a
+            href={archived ? "/admin/leads" : "/admin/leads?archived=1"}
+            className={`btn ${archived ? "btn-primary" : "btn-secondary"}`}>
+            <Archive size={16} /> {archived ? "Active leads" : "Archived"}
+          </a>
         </div>
       </header>
 
@@ -203,6 +253,16 @@ export default function LeadsPageClient({ leads }: { leads: Lead[] }) {
               <table className="atable">
                 <thead>
                   <tr>
+                    <th style={{ width: 40 }}>
+                      <input
+                        type="checkbox"
+                        aria-label="Select all leads"
+                        checked={selection.allSelected}
+                        ref={(el) => { if (el) el.indeterminate = selection.someSelected; }}
+                        onChange={selection.toggleAll}
+                        style={{ cursor: "pointer", width: 16, height: 16 }}
+                      />
+                    </th>
                     <th>Contact</th>
                     <th>Property</th>
                     <th>Preferred</th>
@@ -213,7 +273,16 @@ export default function LeadsPageClient({ leads }: { leads: Lead[] }) {
                 </thead>
                 <tbody>
                   {filtered.map(l => (
-                    <tr key={l.id}>
+                    <tr key={l.id} className={selection.isSelected(l.id) ? "row-selected" : undefined}>
+                      <td onClick={(e) => e.stopPropagation()} style={{ width: 40 }}>
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${l.name || l.email}`}
+                          checked={selection.isSelected(l.id)}
+                          onChange={() => selection.toggle(l.id)}
+                          style={{ cursor: "pointer", width: 16, height: 16 }}
+                        />
+                      </td>
                       <td style={{ minWidth: 200 }}>
                         <div className="col-client">
                           {l.name || <em style={{ color: "var(--primary-50)", fontStyle: "normal" }}>No name</em>}
@@ -292,12 +361,22 @@ export default function LeadsPageClient({ leads }: { leads: Lead[] }) {
             {filtered.map(l => {
               const c = STATUS_COLORS[l.status];
               return (
-                <article key={l.id} className="jcard">
+                <article key={l.id} className={`jcard${selection.isSelected(l.id) ? " row-selected" : ""}`}>
                   <div className="jcard-top">
-                    <div>
-                      <div className="jcard-client">{l.name || l.email}</div>
-                      <div className="jcard-meta">{l.email}</div>
-                      {l.phone && <div className="jcard-meta">{l.phone}</div>}
+                    <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ${l.name || l.email}`}
+                        checked={selection.isSelected(l.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={() => selection.toggle(l.id)}
+                        style={{ cursor: "pointer", width: 16, height: 16, marginTop: 2 }}
+                      />
+                      <div>
+                        <div className="jcard-client">{l.name || l.email}</div>
+                        <div className="jcard-meta">{l.email}</div>
+                        {l.phone && <div className="jcard-meta">{l.phone}</div>}
+                      </div>
                     </div>
                     <span className="pill" style={{ background: c.bg, color: c.fg }}>
                       <span className="pill-dot" style={{ background: c.dot }} />
@@ -354,9 +433,65 @@ export default function LeadsPageClient({ leads }: { leads: Lead[] }) {
               #ld-desktop { display: none !important; }
               #ld-mobile  { display: flex !important; }
             }
+            .atable tbody tr.row-selected { background: var(--primary-05, #f0fdff); }
+            .jcard.row-selected { outline: 2px solid var(--primary-40, #008C9C); outline-offset: -1px; }
           `}</style>
         </>
       )}
+
+      {statusMenuOpen && selection.count > 0 && !archived && (
+        <div
+          style={{
+            position: "sticky",
+            bottom: 76,
+            zIndex: 41,
+            margin: "0 auto",
+            maxWidth: "fit-content",
+            display: "flex",
+            flexDirection: "column",
+            gap: 2,
+            padding: 6,
+            borderRadius: 12,
+            background: "#0f172a",
+            boxShadow: "0 8px 30px rgba(0,0,0,0.25)",
+          }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.6)", padding: "4px 10px" }}>
+            Set status to…
+          </span>
+          {(Object.entries(STATUS_COLORS) as [Status, (typeof STATUS_COLORS)[Status]][]).map(([s, c]) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => handleBulkStatus(s)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                fontSize: 13,
+                fontWeight: 500,
+                textAlign: "left",
+                padding: "7px 10px",
+                borderRadius: 8,
+                border: "none",
+                background: "transparent",
+                color: "#fff",
+                cursor: "pointer",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.12)")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
+              <span style={{ width: 8, height: 8, borderRadius: 999, background: c.dot }} />
+              {c.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <BulkActionBar
+        noun="lead"
+        count={selection.count}
+        actions={bulkActions}
+        onClear={() => { setStatusMenuOpen(false); selection.clear(); }}
+      />
     </div>
   );
 }

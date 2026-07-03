@@ -2,10 +2,18 @@ import { requireAdmin } from "@/lib/page-guards";
 import { db } from "@/db";
 import QuotesInboxClient from "./QuotesInboxClient";
 
-export default async function QuotesPage() {
+export default async function QuotesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
   await requireAdmin();
 
+  const params = await searchParams;
+  const archived = params.archived === "1";
+
   const quotes = await db.quoteRequest.findMany({
+    where: { deletedAt: archived ? { not: null } : null },
     orderBy: { createdAt: "desc" },
     take: 200,
   });
@@ -13,6 +21,7 @@ export default async function QuotesPage() {
   return (
     <div className="h-full overflow-hidden overflow-y-auto p-8">
       <QuotesInboxClient
+        archived={archived}
         quotes={quotes.map((q) => ({
           id: q.id,
           name: q.name,

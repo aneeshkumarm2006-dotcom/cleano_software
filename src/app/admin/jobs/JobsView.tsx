@@ -1,13 +1,21 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import {
   Search, Filter, Briefcase, CheckCircle2, DollarSign,
   AlertTriangle, Loader, Plus, CalendarClock,
+  Trash2, XCircle, UserPlus, Tag, RotateCcw,
 } from "lucide-react";
 import Button from "@/components/ui/Button";
 import PremiumSelect from "@/components/ui/PremiumSelect";
 import DatePicker from "@/components/ui/DatePicker";
+import { useRowSelection } from "@/components/common/useRowSelection";
+import BulkActionBar, { BulkAction } from "@/components/common/BulkActionBar";
+import { bulkSoftDelete, bulkRestore } from "@/lib/bulk/actions";
+import { bulkCancelJobs } from "../actions/bulkCancelJobs";
+import { bulkSetJobStatus } from "../actions/bulkSetJobStatus";
+import { bulkAssignCleaner } from "../actions/bulkAssignCleaner";
 
 interface Job {
   id: string;
@@ -68,6 +76,8 @@ interface JobsViewProps {
   onEditJob: (job: Job) => void;
   clients?: ClientLite[];
   users?: UserLite[];
+  cleaners?: UserLite[];
+  archived?: boolean;
   startDate?: string;
   endDate?: string;
   jobTypeFilter?: string;
@@ -279,6 +289,8 @@ export default function JobsView({
   onEditJob,
   clients = [],
   users = [],
+  cleaners = [],
+  archived = false,
   startDate = '',
   endDate = '',
   jobTypeFilter = 'all',
@@ -345,6 +357,94 @@ export default function JobsView({
   const totalPages = Math.max(1, Math.ceil(totalJobs / rowsPerPage));
   const startIndex = (page - 1) * rowsPerPage;
   const paginatedJobs = filteredJobs.slice(startIndex, startIndex + rowsPerPage);
+
+  // ── Multi-select + bulk actions ────────────────────────────────────────────
+  const router = useRouter();
+  const visibleIds = useMemo(() => paginatedJobs.map(j => j.id), [paginatedJobs]);
+  const sel = useRowSelection(visibleIds);
+  const [showAssign, setShowAssign] = useState(false);
+  const [assignCleanerId, setAssignCleanerId] = useState('');
+  const [showStatus, setShowStatus] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
+
+  async function runAssign() {
+    if (!assignCleanerId || sel.count === 0) return;
+    setBulkBusy(true);
+    try {
+      const res = await bulkAssignCleaner(sel.selectedIds, assignCleanerId);
+      if (!res.success) { alert(res.error); return; }
+      setShowAssign(false);
+      setAssignCleanerId('');
+      sel.clear();
+      router.refresh();
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  async function runSetStatus(status: string) {
+    if (sel.count === 0) return;
+    setBulkBusy(true);
+    try {
+      const res = await bulkSetJobStatus(sel.selectedIds, status);
+      if (!res.success) { alert(res.error); return; }
+      setShowStatus(false);
+      sel.clear();
+      router.refresh();
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  const bulkActions: BulkAction[] = archived
+    ? [
+        {
+          key: 'restore',
+          label: 'Restore',
+          icon: <RotateCcw size={14} />,
+          onRun: async () => {
+            await bulkRestore('job', sel.selectedIds);
+            sel.clear();
+            router.refresh();
+          },
+        },
+      ]
+    : [
+        {
+          key: 'assign',
+          label: 'Assign cleaner',
+          icon: <UserPlus size={14} />,
+          onRun: () => { setShowStatus(false); setShowAssign(true); },
+        },
+        {
+          key: 'status',
+          label: 'Change status',
+          icon: <Tag size={14} />,
+          onRun: () => { setShowAssign(false); setShowStatus(true); },
+        },
+        {
+          key: 'cancel',
+          label: 'Cancel',
+          icon: <XCircle size={14} />,
+          onRun: async () => {
+            await bulkCancelJobs(sel.selectedIds);
+            sel.clear();
+            router.refresh();
+          },
+        },
+        {
+          key: 'delete',
+          label: 'Delete',
+          icon: <Trash2 size={14} />,
+          variant: 'danger',
+          confirm: `Delete ${sel.count} selected job${sel.count === 1 ? '' : 's'}? They can be restored from Archived.`,
+          onRun: async () => {
+            await bulkSoftDelete('job', sel.selectedIds);
+            sel.clear();
+            router.refresh();
+          },
+        },
+      ];
 
   const pageNumbers = useMemo(() => {
     const count = Math.min(5, totalPages);
@@ -602,6 +702,16 @@ export default function JobsView({
               <table className="atable">
                 <thead>
                   <tr>
+                    <th className="col-select" style={{ width: 40, textAlign: 'center' }}>
+                      <input
+                        type="checkbox"
+                        aria-label="Select all"
+                        checked={sel.allSelected}
+                        ref={(el) => { if (el) el.indeterminate = sel.someSelected; }}
+                        onChange={sel.toggleAll}
+                        style={{ cursor: 'pointer' }}
+                      />
+                    </th>
                     <th>Date</th>
                     <th>Client</th>
                     <th>Type</th>
@@ -619,6 +729,16 @@ export default function JobsView({
                 <tbody>
                   {paginatedJobs.map(job => (
                     <tr key={job.id} onClick={() => { window.location.href = `/admin/jobs/${job.id}`; }}>
+                      <td className="col-select" style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          aria-label="Select row"
+                          checked={sel.isSelected(job.id)}
+                          onChange={() => sel.toggle(job.id)}
+                          onClick={(e) => e.stopPropagation()}
+                          style={{ cursor: 'pointer' }}
+                        />
+                      </td>
                       <td className="col-date">
                         <div className="date-line">{formatDate(job.jobDate, job.startTime)}</div>
                         <div className="time-line">{formatTime(job.startTime)}</div>
@@ -648,6 +768,22 @@ export default function JobsView({
                       <td><PayIcons paymentReceived={job.paymentReceived} invoiceSent={job.invoiceSent} /></td>
                       <td className="col-actions">
                         <div className="row" style={{ justifyContent: 'flex-end', gap: 6 }}>
+                          {archived ? (
+                            <button
+                              type="button"
+                              className="icon-btn"
+                              aria-label="Restore"
+                              title="Restore"
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                await bulkRestore('job', [job.id]);
+                                router.refresh();
+                              }}
+                              style={{ width: 30, height: 30 }}
+                            >
+                              <RotateCcw size={14} />
+                            </button>
+                          ) : (
                           <button
                             type="button"
                             className="icon-btn"
@@ -657,6 +793,7 @@ export default function JobsView({
                           >
                             <EditSvg size={14} />
                           </button>
+                          )}
                           <button
                             type="button"
                             className="icon-btn"
@@ -685,10 +822,20 @@ export default function JobsView({
             {paginatedJobs.map(job => (
               <article key={job.id} className="jcard" onClick={() => { window.location.href = `/admin/jobs/${job.id}`; }}>
                 <div className="jcard-top">
-                  <div>
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                    <input
+                      type="checkbox"
+                      aria-label="Select row"
+                      checked={sel.isSelected(job.id)}
+                      onChange={() => sel.toggle(job.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      style={{ cursor: 'pointer', marginTop: 3 }}
+                    />
+                    <div>
                     <div className="jcard-client">{job.clientName}</div>
                     <div className="jcard-meta">{formatDate(job.jobDate, job.startTime)} · {formatTime(job.startTime)}</div>
                     {job.location && <div className="jcard-meta">{job.location.split(',')[0]}</div>}
+                    </div>
                   </div>
                   <StatusPill status={job.status} />
                 </div>
@@ -731,6 +878,111 @@ export default function JobsView({
           `}</style>
         </>
       )}
+
+      {/* Bulk-action pickers (shown above the floating bar) */}
+      {sel.count > 0 && (showAssign || showStatus) && (
+        <div
+          style={{
+            position: 'sticky',
+            bottom: 76,
+            zIndex: 41,
+            display: 'flex',
+            justifyContent: 'center',
+            marginTop: 12,
+          }}
+        >
+          {showAssign && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                background: '#fff',
+                border: '1px solid var(--primary-10)',
+                borderRadius: 12,
+                padding: '10px 14px',
+                boxShadow: '0 8px 30px rgba(0,0,0,0.15)',
+              }}
+            >
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--primary-80)' }}>
+                Assign to
+              </span>
+              <PremiumSelect
+                value={assignCleanerId}
+                onChange={setAssignCleanerId}
+                size="sm"
+                searchable={cleaners.length > 8}
+                style={{ width: 200 }}
+                options={[
+                  { value: '', label: 'Select a cleaner…' },
+                  ...cleaners.map((c) => ({ value: c.id, label: c.name })),
+                ]}
+              />
+              <Button
+                variant="primary"
+                border={false}
+                size="sm"
+                onClick={runAssign}
+                disabled={!assignCleanerId || bulkBusy}
+                className="rounded-lg px-4"
+              >
+                {bulkBusy ? 'Assigning…' : `Assign to ${sel.count}`}
+              </Button>
+              <button
+                type="button"
+                onClick={() => { setShowAssign(false); setAssignCleanerId(''); }}
+                style={{ background: 'none', border: 0, cursor: 'pointer', fontSize: 13, color: 'var(--primary-60)' }}
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+          {showStatus && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                background: '#fff',
+                border: '1px solid var(--primary-10)',
+                borderRadius: 12,
+                padding: '10px 14px',
+                boxShadow: '0 8px 30px rgba(0,0,0,0.15)',
+              }}
+            >
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--primary-80)' }}>
+                Set status to
+              </span>
+              {(['SCHEDULED', 'COMPLETED', 'PAID'] as const).map((s) => (
+                <Button
+                  key={s}
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => runSetStatus(s)}
+                  disabled={bulkBusy}
+                  className="rounded-lg px-3"
+                >
+                  {s.charAt(0) + s.slice(1).toLowerCase()}
+                </Button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setShowStatus(false)}
+                style={{ background: 'none', border: 0, cursor: 'pointer', fontSize: 13, color: 'var(--primary-60)' }}
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      <BulkActionBar
+        count={sel.count}
+        actions={bulkActions}
+        onClear={() => { sel.clear(); setShowAssign(false); setShowStatus(false); }}
+        noun="job"
+      />
     </div>
   );
 }

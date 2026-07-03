@@ -70,9 +70,9 @@ function buildDuplicateIndex(
 
 type ContactWithClient = Awaited<ReturnType<typeof fetchContactsRaw>>[number];
 
-function fetchContactsRaw() {
+function fetchContactsRaw(archived = false) {
   return db.contact.findMany({
-    where: { archivedAt: null },
+    where: { archivedAt: null, deletedAt: archived ? { not: null } : null },
     orderBy: { lastActivityAt: "desc" },
     include: {
       client: { select: { jobs: { select: { status: true, totalAmount: true, price: true } } } },
@@ -281,8 +281,8 @@ export async function logContactCancellation(
   return logContactEvent(clientId, "CANCEL", "Cancellation", body);
 }
 
-export async function listContacts(): Promise<ContactListItem[]> {
-  const raw = await fetchContactsRaw();
+export async function listContacts(archived = false): Promise<ContactListItem[]> {
+  const raw = await fetchContactsRaw(archived);
   const owners = await ownerMap(raw.map((c) => c.ownerId));
   const dupIndex = buildDuplicateIndex(raw);
   return raw.map((c) => toListItem(c, owners, dupIndex));

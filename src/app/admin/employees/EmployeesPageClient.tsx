@@ -11,10 +11,18 @@ interface Employee {
   email: string;
   phone: string | null;
   role: "OWNER" | "ADMIN" | "EMPLOYEE";
+  isActive?: boolean;
+  cleanerTier?: "TRAINEE" | "STANDARD" | "FIELD_LEAD";
+  fieldLeadId?: string | null;
   completedJobsCount: number;
   activeJobsCount: number;
   totalRevenue: number;
   unpaidJobs: number;
+}
+
+interface FieldLead {
+  id: string;
+  name: string;
 }
 
 interface EmployeeStats {
@@ -32,6 +40,8 @@ interface EmployeesPageClientProps {
   initialJobStatus: string;
   initialPage: number;
   initialRowsPerPage: number;
+  archived: boolean;
+  fieldLeads: FieldLead[];
 }
 
 export default function EmployeesPageClient({
@@ -42,6 +52,8 @@ export default function EmployeesPageClient({
   initialJobStatus,
   initialPage,
   initialRowsPerPage,
+  archived,
+  fieldLeads,
 }: EmployeesPageClientProps) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
@@ -85,6 +97,12 @@ export default function EmployeesPageClient({
     if (finalRowsPerPage !== 10)
       params.set("rowsPerPage", String(finalRowsPerPage));
 
+    // Preserve the archived view across filter/pagination changes unless the
+    // caller is explicitly toggling it.
+    const finalArchived =
+      updates.archived !== undefined ? String(updates.archived) : archived ? "1" : "";
+    if (finalArchived === "1") params.set("archived", "1");
+
     router.push(`/admin/employees?${params.toString()}`);
   };
 
@@ -116,6 +134,8 @@ export default function EmployeesPageClient({
         jobStatusFilter={jobStatusFilter}
         rowsPerPage={rowsPerPage}
         page={page}
+        archived={archived}
+        fieldLeads={fieldLeads}
         onSearchTermChange={setSearchTerm}
         onRoleFilterChange={setRoleFilter}
         onJobStatusFilterChange={setJobStatusFilter}

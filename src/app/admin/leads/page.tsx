@@ -4,13 +4,23 @@ import { redirect } from "next/navigation";
 import { db } from "@/db";
 import LeadsPageClient from "./LeadsPageClient";
 
-export default async function LeadsPage() {
+type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>;
+
+export default async function LeadsPage({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) redirect("/sign-in");
   const role = (session.user as { role?: string }).role;
   if (role !== "OWNER" && role !== "ADMIN") redirect("/admin/dashboard");
 
+  const params = await searchParams;
+  const archived = params.archived === "1";
+
   const leads = await db.lead.findMany({
+    where: { deletedAt: archived ? { not: null } : null },
     orderBy: [{ lastActivityAt: "desc" }, { createdAt: "desc" }],
     include: {
       convertedJob: {
@@ -48,7 +58,7 @@ export default async function LeadsPage() {
 
   return (
     <div className="h-full overflow-hidden overflow-y-auto p-8">
-      <LeadsPageClient leads={serialized} />
+      <LeadsPageClient leads={serialized} archived={archived} />
     </div>
   );
 }

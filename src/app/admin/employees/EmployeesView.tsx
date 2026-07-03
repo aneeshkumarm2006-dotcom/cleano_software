@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useRouter } from "next/navigation";
 import {
   Search,
   Plus,
@@ -12,9 +13,27 @@ import {
   ChevronRight,
   Pencil,
   SlidersHorizontal,
+  Trash2,
+  Power,
+  Layers,
+  UserCog,
+  Mail,
+  Archive,
+  ArchiveRestore,
+  RotateCcw,
 } from "lucide-react";
 import PremiumSelect from "@/components/ui/PremiumSelect";
 import ImportCsvButton from "@/components/csv/ImportCsvButton";
+import { useRowSelection } from "@/components/common/useRowSelection";
+import BulkActionBar, { type BulkAction } from "@/components/common/BulkActionBar";
+import { bulkSoftDelete, bulkRestore } from "@/lib/bulk/actions";
+import {
+  bulkSetEmployeeActive,
+  bulkSetCleanerTier,
+  bulkSetFieldLead,
+} from "../actions/bulkEmployeeActions";
+import { sendLoginInvites } from "../actions/sendLoginInvites";
+import type { CleanerTier } from "@/lib/pay-tiers";
 
 interface Employee {
   id: string;
@@ -23,11 +42,24 @@ interface Employee {
   phone: string | null;
   role: "OWNER" | "ADMIN" | "EMPLOYEE";
   isActive?: boolean;
+  cleanerTier?: "TRAINEE" | "STANDARD" | "FIELD_LEAD";
+  fieldLeadId?: string | null;
   completedJobsCount: number;
   activeJobsCount: number;
   totalRevenue: number;
   unpaidJobs: number;
 }
+
+interface FieldLead {
+  id: string;
+  name: string;
+}
+
+const TIER_OPTIONS: { value: CleanerTier; label: string }[] = [
+  { value: "TRAINEE", label: "Trainee" },
+  { value: "STANDARD", label: "Standard" },
+  { value: "FIELD_LEAD", label: "Field Lead" },
+];
 
 interface EmployeeStats {
   totalEmployees: number;
@@ -45,6 +77,8 @@ interface EmployeesViewProps {
   jobStatusFilter: string;
   rowsPerPage: number;
   page: number;
+  archived: boolean;
+  fieldLeads: FieldLead[];
   onSearchTermChange: (term: string) => void;
   onRoleFilterChange: (filter: string) => void;
   onJobStatusFilterChange: (filter: string) => void;
@@ -114,6 +148,8 @@ export default function EmployeesView({
   jobStatusFilter,
   rowsPerPage,
   page,
+  archived,
+  fieldLeads,
   onSearchTermChange,
   onRoleFilterChange,
   onJobStatusFilterChange,
@@ -123,7 +159,12 @@ export default function EmployeesView({
   onCreateEmployee,
   onEditEmployee,
 }: EmployeesViewProps) {
+  const router = useRouter();
   const [showFilters, setShowFilters] = React.useState(false);
+  // Which secondary bulk menu is open above the action bar (tier / field lead).
+  const [bulkMenu, setBulkMenu] = React.useState<null | "tier" | "fieldLead">(
+    null
+  );
 
   const filteredEmployees = employees.filter((e) => {
     const q = searchTerm.toLowerCase();
@@ -139,6 +180,105 @@ export default function EmployeesView({
   const totalPages = Math.max(1, Math.ceil(total / rowsPerPage));
   const startIdx = (page - 1) * rowsPerPage;
   const paginated = filteredEmployees.slice(startIdx, startIdx + rowsPerPage);
+
+  const visibleIds = React.useMemo(() => paginated.map((e) => e.id), [paginated]);
+  const selection = useRowSelection(visibleIds);
+  const { selectedIds, clear } = selection;
+
+  // Run a bulk mutation, then clear the selection and refresh server data.
+  const runBulk = async (
+    fn: () => Promise<{ success: boolean; error?: string }>
+  ) => {
+    const res = await fn();
+    if (!res.success) {
+      throw new Error(res.error || "Bulk action failed");
+    }
+    setBulkMenu(null);
+    clear();
+    router.refresh();
+  };
+
+  const applyTier = async (tier: CleanerTier) => {
+    await runBulk(() => bulkSetCleanerTier(selectedIds, tier));
+  };
+
+  const applyFieldLead = async (fieldLeadId: string | null) => {
+    await runBulk(() => bulkSetFieldLead(selectedIds, fieldLeadId));
+  };
+
+  // Archived rows only offer Restore; active rows get the full action set.
+  const bulkActions: BulkAction[] = archived
+    ? [
+        {
+          key: "restore",
+          label: "Restore",
+          icon: <RotateCcw size={14} />,
+          onRun: () => runBulk(() => bulkRestore("employee", selectedIds)),
+        },
+      ]
+    : [
+        {
+          key: "invite",
+          label: "Send invite",
+          icon: <Mail size={14} />,
+          onRun: async () => {
+            const res = await sendLoginInvites("cleaner", selectedIds);
+            if (res.success) {
+              alert(
+                `Invites sent to ${res.sent}.` +
+                  (res.skippedActive ? ` Skipped ${res.skippedActive} already logged in.` : "") +
+                  (res.skippedNoEmail ? ` ${res.skippedNoEmail} had no email.` : "")
+              );
+            } else {
+              alert(res.error ?? "Failed to send invites");
+            }
+            setBulkMenu(null);
+            clear();
+            router.refresh();
+          },
+        },
+        {
+          key: "delete",
+          label: "Delete",
+          icon: <Trash2 size={14} />,
+          variant: "danger",
+          confirm:
+            "Archive the selected cleaners? They can be restored from the Archived view.",
+          onRun: () => runBulk(() => bulkSoftDelete("employee", selectedIds)),
+        },
+        {
+          key: "deactivate",
+          label: "Deactivate",
+          icon: <Power size={14} />,
+          onRun: () => runBulk(() => bulkSetEmployeeActive(selectedIds, false)),
+        },
+        {
+          key: "activate",
+          label: "Activate",
+          icon: <Power size={14} />,
+          onRun: () => runBulk(() => bulkSetEmployeeActive(selectedIds, true)),
+        },
+        {
+          key: "tier",
+          label: "Set tier",
+          icon: <Layers size={14} />,
+          onRun: () => setBulkMenu((m) => (m === "tier" ? null : "tier")),
+        },
+        {
+          key: "fieldLead",
+          label: "Assign Field Lead",
+          icon: <UserCog size={14} />,
+          onRun: () =>
+            setBulkMenu((m) => (m === "fieldLead" ? null : "fieldLead")),
+        },
+      ];
+
+  const toggleArchived = () => {
+    // Reset page and selection when switching views.
+    onPageChange(1);
+    clear();
+    updateURLParams({ archived: archived ? "" : "1", page: 1 });
+  };
 
   const goToPage = (p: number) => {
     const np = Math.min(Math.max(1, p), totalPages);
@@ -166,10 +306,22 @@ export default function EmployeesView({
           </h1>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <ImportCsvButton entity="employees" />
-          <button type="button" className="btn btn-primary" onClick={onCreateEmployee}>
-            <Plus size={16} /> Add Employee
+          <button
+            type="button"
+            className={`btn ${archived ? "btn-primary" : "btn-secondary"}`}
+            onClick={toggleArchived}
+            title={archived ? "Back to active cleaners" : "View archived cleaners"}>
+            {archived ? <ArchiveRestore size={16} /> : <Archive size={16} />}
+            {archived ? "Active" : "Archived"}
           </button>
+          {!archived && (
+            <>
+              <ImportCsvButton entity="employees" />
+              <button type="button" className="btn btn-primary" onClick={onCreateEmployee}>
+                <Plus size={16} /> Add Employee
+              </button>
+            </>
+          )}
         </div>
       </header>
 
@@ -253,7 +405,7 @@ export default function EmployeesView({
         </div>
       ) : total === 0 ? (
         <div className="atable-wrap" style={{ padding: "80px 40px", textAlign: "center", color: "var(--primary-60)" }}>
-          No employees match these filters.
+          {archived ? "No archived cleaners." : "No employees match these filters."}
         </div>
       ) : (
         <div className="atable-wrap">
@@ -262,6 +414,18 @@ export default function EmployeesView({
               <table className="atable">
                 <thead>
                   <tr>
+                    <th style={{ width: 40, paddingRight: 0 }}>
+                      <input
+                        type="checkbox"
+                        aria-label="Select all cleaners on this page"
+                        checked={selection.allSelected}
+                        ref={(el) => {
+                          if (el) el.indeterminate = selection.someSelected;
+                        }}
+                        onChange={selection.toggleAll}
+                        style={{ cursor: "pointer", width: 16, height: 16 }}
+                      />
+                    </th>
                     <th>Employee</th>
                     <th>Contact</th>
                     <th>Role</th>
@@ -273,7 +437,21 @@ export default function EmployeesView({
                 </thead>
                 <tbody>
                   {paginated.map(e => (
-                    <tr key={e.id} onClick={() => { window.location.href = `/admin/employees/${e.id}`; }}>
+                    <tr
+                      key={e.id}
+                      className={selection.isSelected(e.id) ? "row-selected" : undefined}
+                      onClick={() => { window.location.href = `/admin/employees/${e.id}`; }}>
+                      <td
+                        style={{ width: 40, paddingRight: 0 }}
+                        onClick={(ev) => ev.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${e.name}`}
+                          checked={selection.isSelected(e.id)}
+                          onChange={() => selection.toggle(e.id)}
+                          style={{ cursor: "pointer", width: 16, height: 16 }}
+                        />
+                      </td>
                       <td style={{ minWidth: 200 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                           <span className="avatar" style={{ background: avatarColor(e.name), fontSize: 12, width: 36, height: 36 }}>
@@ -321,9 +499,17 @@ export default function EmployeesView({
 
           <div id="emp-mobile" style={{ display: "none", flexDirection: "column", gap: 10, padding: 16 }}>
             {paginated.map(e => (
-              <article key={e.id} className="jcard" style={{ cursor: "pointer" }} onClick={() => { window.location.href = `/admin/employees/${e.id}`; }}>
+              <article key={e.id} className={`jcard${selection.isSelected(e.id) ? " row-selected" : ""}`} style={{ cursor: "pointer" }} onClick={() => { window.location.href = `/admin/employees/${e.id}`; }}>
                 <div className="jcard-top">
                   <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                    <input
+                      type="checkbox"
+                      aria-label={`Select ${e.name}`}
+                      checked={selection.isSelected(e.id)}
+                      onClick={(ev) => ev.stopPropagation()}
+                      onChange={() => selection.toggle(e.id)}
+                      style={{ cursor: "pointer", width: 16, height: 16 }}
+                    />
                     <span className="avatar" style={{ background: avatarColor(e.name), fontSize: 12, width: 36, height: 36 }}>
                       {initials(e.name)}
                     </span>
@@ -370,10 +556,112 @@ export default function EmployeesView({
         </div>
       )}
 
+      {selection.count > 0 && (
+        <div
+          style={{
+            position: "sticky",
+            bottom: 16,
+            zIndex: 40,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 8,
+          }}>
+          {bulkMenu === "tier" && (
+            <div className="bulk-menu">
+              <div className="bulk-menu-title">Set tier for {selection.count}</div>
+              {TIER_OPTIONS.map((t) => (
+                <button
+                  key={t.value}
+                  type="button"
+                  className="bulk-menu-item"
+                  onClick={() => applyTier(t.value)}>
+                  <Layers size={14} /> {t.label}
+                </button>
+              ))}
+            </div>
+          )}
+          {bulkMenu === "fieldLead" && (
+            <div className="bulk-menu">
+              <div className="bulk-menu-title">Assign Field Lead</div>
+              <button
+                type="button"
+                className="bulk-menu-item"
+                onClick={() => applyFieldLead(null)}>
+                <UserCog size={14} /> Unassign (clear group)
+              </button>
+              {fieldLeads.length === 0 ? (
+                <div className="bulk-menu-empty">No Field Leads yet.</div>
+              ) : (
+                fieldLeads.map((fl) => (
+                  <button
+                    key={fl.id}
+                    type="button"
+                    className="bulk-menu-item"
+                    onClick={() => applyFieldLead(fl.id)}>
+                    <UserCog size={14} /> {fl.name}
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+          <BulkActionBar
+            count={selection.count}
+            noun="cleaner"
+            actions={bulkActions}
+            onClear={() => {
+              setBulkMenu(null);
+              clear();
+            }}
+          />
+        </div>
+      )}
+
       <style>{`
         @media (max-width: 900px) {
           #emp-desktop { display: none !important; }
           #emp-mobile  { display: flex !important; }
+        }
+        .atable tr.row-selected td { background: var(--primary-05, #f0fdfa); }
+        .jcard.row-selected { outline: 2px solid var(--primary-40, #008C9C); outline-offset: -1px; }
+        .bulk-menu {
+          background: #fff;
+          border: 1px solid var(--primary-10, #e2e8f0);
+          border-radius: 12px;
+          box-shadow: 0 8px 30px rgba(0,0,0,0.18);
+          padding: 6px;
+          min-width: 220px;
+          max-height: 260px;
+          overflow-y: auto;
+        }
+        .bulk-menu-title {
+          font-size: 11px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.04em;
+          color: var(--primary-50, #64748b);
+          padding: 6px 10px;
+        }
+        .bulk-menu-item {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          width: 100%;
+          text-align: left;
+          font-size: 13px;
+          font-weight: 500;
+          color: var(--ink, #0f172a);
+          background: transparent;
+          border: none;
+          border-radius: 8px;
+          padding: 8px 10px;
+          cursor: pointer;
+        }
+        .bulk-menu-item:hover { background: var(--primary-05, #f1f5f9); }
+        .bulk-menu-empty {
+          font-size: 12px;
+          color: var(--primary-50, #64748b);
+          padding: 8px 10px;
         }
       `}</style>
     </div>

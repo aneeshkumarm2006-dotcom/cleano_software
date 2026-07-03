@@ -2,10 +2,20 @@ import { requireAdmin } from "@/lib/page-guards";
 import { db } from "@/db";
 import GiftCardsAdminClient from "./GiftCardsAdminClient";
 
-export default async function GiftCardsAdminPage() {
+type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>;
+
+export default async function GiftCardsAdminPage({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
   await requireAdmin();
 
+  const params = await searchParams;
+  const archived = params.archived === "1";
+
   const cards = await db.giftCard.findMany({
+    where: { deletedAt: archived ? { not: null } : null },
     orderBy: { createdAt: "desc" },
     take: 200,
   });
@@ -33,6 +43,7 @@ export default async function GiftCardsAdminPage() {
           redeemedAt: c.redeemedAt?.toISOString() ?? null,
           createdAt: c.createdAt.toISOString(),
         }))}
+        archived={archived}
       />
     </div>
   );

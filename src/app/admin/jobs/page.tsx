@@ -36,14 +36,23 @@ export default async function JobsPage({
   const subTab = (params.subTab as string) || "all";
   const page = Number(params.page) || 1;
   const rowsPerPage = Number(params.rowsPerPage) || 10;
+  const archived = params.archived === "1";
 
   const baseWhere: any = {};
   if (!isAdmin) {
     baseWhere.employeeId = session.user.id;
   }
 
+  // Stats always reflect active (non-deleted) jobs; the list respects the
+  // Active/Archived toggle via `deletedAt`.
+  const statsWhere = { ...baseWhere, deletedAt: null };
+  const listWhere = {
+    ...baseWhere,
+    deletedAt: archived ? { not: null } : null,
+  };
+
   const allJobs = await db.job.findMany({
-    where: baseWhere,
+    where: listWhere,
     include: {
       employee: true,
       cleaners: true,
@@ -58,6 +67,13 @@ export default async function JobsPage({
 
   const users = await db.user.findMany({
     where: { role: { not: "CLIENT" } },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true, email: true },
+  });
+
+  // Assignable cleaners for the bulk "Assign cleaner" picker.
+  const cleaners = await db.user.findMany({
+    where: { role: { in: ["EMPLOYEE", "FIELD_LEAD"] } },
     orderBy: { name: "asc" },
     select: { id: true, name: true, email: true },
   });
@@ -79,19 +95,19 @@ export default async function JobsPage({
   const { addOns: addOnCatalog } = await getBookingConfig();
 
   const totalRevenue = await db.job.aggregate({
-    where: baseWhere,
+    where: statsWhere,
     _sum: { price: true },
   });
 
   const completedJobs = await db.job.count({
-    where: { ...baseWhere, status: "COMPLETED" },
+    where: { ...statsWhere, status: "COMPLETED" },
   });
 
   const pendingPaymentCount = await db.job.count({
-    where: { ...baseWhere, paymentReceived: false, status: "COMPLETED" },
+    where: { ...statsWhere, paymentReceived: false, status: "COMPLETED" },
   });
 
-  const totalJobsCount = allJobs.length;
+  const totalJobsCount = await db.job.count({ where: statsWhere });
 
   const jobsData = allJobs.map((job) => {
     const productCost = job.productUsage.reduce(
@@ -164,9 +180,11 @@ export default async function JobsPage({
         initialPage={page}
         initialRowsPerPage={rowsPerPage}
         users={users}
+        cleaners={cleaners}
         clients={clients}
         addOnCatalog={addOnCatalog}
         isAdmin={isAdmin}
+        archived={archived}
       />
     </div>
   );

@@ -5,12 +5,16 @@ import { useRouter } from "next/navigation";
 import {
   Search, Plus, FileText, DollarSign, AlertTriangle,
   ChevronLeft, ChevronRight, Send, CheckCircle2, Clock, XCircle,
-  Eye, Loader, SlidersHorizontal,
+  Eye, Loader, SlidersHorizontal, Ban, Trash2, RotateCcw, Archive,
 } from "lucide-react";
 import PremiumSelect from "@/components/ui/PremiumSelect";
 import CreateInvoiceModal from "./CreateInvoiceModal";
 import { sendInvoice } from "../actions/sendInvoice";
 import { updateInvoice } from "../actions/updateInvoice";
+import { useRowSelection } from "@/components/common/useRowSelection";
+import BulkActionBar, { type BulkAction } from "@/components/common/BulkActionBar";
+import { bulkSoftDelete, bulkRestore } from "@/lib/bulk/actions";
+import { bulkSetInvoiceStatus } from "../actions/bulkSetInvoiceStatus";
 
 interface LineItem {
   id: string;
@@ -60,6 +64,7 @@ interface InvoicesPageClientProps {
   invoices: Invoice[];
   clients: ClientOption[];
   taxConfig: { gstRate: number; qstRate: number; gstNumber: string; qstNumber: string };
+  archived: boolean;
 }
 
 const STATUS_CONFIG: Record<string, { label: string; bg: string; color: string }> = {
@@ -93,7 +98,7 @@ const AVATAR_COLORS = ["#008C9C", "#0284c7", "#7c3aed", "#dc2626", "#d97706", "#
 function avatarColor(name: string) { return AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length]; }
 function initials(name: string) { return name.split(" ").slice(0, 2).map(p => p[0] ?? "").join("").toUpperCase(); }
 
-export default function InvoicesPageClient({ invoices, clients, taxConfig }: InvoicesPageClientProps) {
+export default function InvoicesPageClient({ invoices, clients, taxConfig, archived }: InvoicesPageClientProps) {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -129,6 +134,43 @@ export default function InvoicesPageClient({ invoices, clients, taxConfig }: Inv
   const paginated = filtered.slice(startIdx, startIdx + rowsPerPage);
   const goToPage = (p: number) => setPage(Math.min(Math.max(1, p), totalPages));
 
+  const visibleIds = useMemo(() => paginated.map((inv) => inv.id), [paginated]);
+  const selection = useRowSelection(visibleIds);
+
+  const afterBulk = () => { selection.clear(); router.refresh(); };
+
+  const bulkActions: BulkAction[] = archived
+    ? [
+        {
+          key: "restore",
+          label: "Restore",
+          icon: <RotateCcw size={14} />,
+          onRun: async () => { await bulkRestore("invoice", selection.selectedIds); afterBulk(); },
+        },
+      ]
+    : [
+        {
+          key: "paid",
+          label: "Mark paid",
+          icon: <CheckCircle2 size={14} />,
+          onRun: async () => { await bulkSetInvoiceStatus(selection.selectedIds, "PAID"); afterBulk(); },
+        },
+        {
+          key: "void",
+          label: "Void",
+          icon: <Ban size={14} />,
+          onRun: async () => { await bulkSetInvoiceStatus(selection.selectedIds, "CANCELLED"); afterBulk(); },
+        },
+        {
+          key: "delete",
+          label: "Delete",
+          icon: <Trash2 size={14} />,
+          variant: "danger",
+          confirm: `Delete ${selection.count} invoice${selection.count === 1 ? "" : "s"}? Recoverable from Archived.`,
+          onRun: async () => { await bulkSoftDelete("invoice", selection.selectedIds); afterBulk(); },
+        },
+      ];
+
   const activeFilterCount = [statusFilter !== "", clientFilter !== ""].filter(Boolean).length;
 
   const handleSend = async (id: string) => {
@@ -155,9 +197,18 @@ export default function InvoicesPageClient({ invoices, clients, taxConfig }: Inv
             <span style={{ color: "var(--primary-40)", fontWeight: 300 }}>· {stats.total}</span>
           </h1>
         </div>
-        <button type="button" className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
-          <Plus size={16} /> New Invoice
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <a
+            href={archived ? "/admin/invoices" : "/admin/invoices?archived=1"}
+            className={`btn ${archived ? "btn-primary" : "btn-secondary"}`}>
+            <Archive size={16} /> {archived ? "Active invoices" : "Archived"}
+          </a>
+          {!archived && (
+            <button type="button" className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
+              <Plus size={16} /> New Invoice
+            </button>
+          )}
+        </div>
       </header>
 
       <div className="astat-grid">
@@ -265,6 +316,16 @@ export default function InvoicesPageClient({ invoices, clients, taxConfig }: Inv
               <table className="atable">
                 <thead>
                   <tr>
+                    <th style={{ width: 40 }}>
+                      <input
+                        type="checkbox"
+                        aria-label="Select all invoices"
+                        checked={selection.allSelected}
+                        ref={(el) => { if (el) el.indeterminate = selection.someSelected; }}
+                        onChange={selection.toggleAll}
+                        style={{ cursor: "pointer", width: 16, height: 16 }}
+                      />
+                    </th>
                     <th>Invoice</th>
                     <th>Client</th>
                     <th>Date</th>
@@ -276,7 +337,19 @@ export default function InvoicesPageClient({ invoices, clients, taxConfig }: Inv
                 </thead>
                 <tbody>
                   {paginated.map(inv => (
-                    <tr key={inv.id} onClick={() => { window.location.href = `/admin/invoices/${inv.id}`; }}>
+                    <tr
+                      key={inv.id}
+                      className={selection.isSelected(inv.id) ? "row-selected" : undefined}
+                      onClick={() => { window.location.href = `/admin/invoices/${inv.id}`; }}>
+                      <td onClick={(e) => e.stopPropagation()} style={{ width: 40 }}>
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${inv.invoiceNumber}`}
+                          checked={selection.isSelected(inv.id)}
+                          onChange={() => selection.toggle(inv.id)}
+                          style={{ cursor: "pointer", width: 16, height: 16 }}
+                        />
+                      </td>
                       <td style={{ minWidth: 140 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                           <StatusIcon status={inv.status} />
@@ -338,15 +411,25 @@ export default function InvoicesPageClient({ invoices, clients, taxConfig }: Inv
 
           <div id="inv-mobile" style={{ display: "none", flexDirection: "column", gap: 10, padding: 16 }}>
             {paginated.map(inv => (
-              <article key={inv.id} className="jcard" style={{ cursor: "pointer" }} onClick={() => { window.location.href = `/admin/invoices/${inv.id}`; }}>
+              <article key={inv.id} className={`jcard${selection.isSelected(inv.id) ? " row-selected" : ""}`} style={{ cursor: "pointer" }} onClick={() => { window.location.href = `/admin/invoices/${inv.id}`; }}>
                 <div className="jcard-top">
-                  <div>
+                  <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                    <input
+                      type="checkbox"
+                      aria-label={`Select ${inv.invoiceNumber}`}
+                      checked={selection.isSelected(inv.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={() => selection.toggle(inv.id)}
+                      style={{ cursor: "pointer", width: 16, height: 16, marginTop: 2 }}
+                    />
+                    <div>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
                       <StatusIcon status={inv.status} />
                       <div className="jcard-client">{inv.invoiceNumber}</div>
                     </div>
                     <div className="jcard-meta">{inv.clientName}</div>
                     {inv.dueDate && <div className="jcard-meta">Due {new Date(inv.dueDate).toLocaleDateString("en-US")}</div>}
+                    </div>
                   </div>
                   <div style={{ textAlign: "right" }}>
                     <div className="jcard-price">${inv.totalAmount.toFixed(2)}</div>
@@ -389,6 +472,8 @@ export default function InvoicesPageClient({ invoices, clients, taxConfig }: Inv
           #inv-desktop { display: none !important; }
           #inv-mobile  { display: flex !important; }
         }
+        .atable tbody tr.row-selected { background: var(--primary-05, #f0fdff); }
+        .jcard.row-selected { outline: 2px solid var(--primary-40, #008C9C); outline-offset: -1px; }
       `}</style>
 
       <CreateInvoiceModal
@@ -396,6 +481,13 @@ export default function InvoicesPageClient({ invoices, clients, taxConfig }: Inv
         onClose={() => setIsModalOpen(false)}
         clients={clients}
         taxConfig={taxConfig}
+      />
+
+      <BulkActionBar
+        noun="invoice"
+        count={selection.count}
+        actions={bulkActions}
+        onClear={selection.clear}
       />
     </div>
   );

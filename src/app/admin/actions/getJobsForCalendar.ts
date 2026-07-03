@@ -19,9 +19,9 @@ export async function getJobsForCalendar(startDate?: Date, endDate?: Date) {
     (session.user as any).role === "ADMIN" ||
     (session.user as any).role === "OWNER";
 
-  // Build where clause
-  const where: any = {};
-  
+  // Build where clause — never show soft-deleted jobs on the calendar.
+  const where: any = { deletedAt: null };
+
   if (!isAdmin) {
     // Regular employees see jobs where they are either the primary employee or a cleaner
     where.OR = [

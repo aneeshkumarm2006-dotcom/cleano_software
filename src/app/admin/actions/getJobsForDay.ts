@@ -51,6 +51,7 @@ export async function getJobsForDay(dateStr: string) {
   const { start, end } = getDayBounds(dateStr);
 
   const where: any = {
+    deletedAt: null,
     OR: [
       // jobDate within day
       { jobDate: { gte: start, lte: end } },

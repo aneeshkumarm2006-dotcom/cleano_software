@@ -20,10 +20,17 @@ import {
   HelpCircle,
   Cake,
   BadgeCheck,
+  Trash2,
+  RotateCcw,
+  Archive,
 } from "lucide-react";
 import { initials } from "@/lib/avatar";
 import { updateApplicationStatus } from "../actions/updateApplicationStatus";
+import { bulkSetApplicationStatus } from "../actions/bulkSetApplicationStatus";
 import { hireApplicant } from "../actions/hireApplicant";
+import { useRowSelection } from "@/components/common/useRowSelection";
+import BulkActionBar, { type BulkAction } from "@/components/common/BulkActionBar";
+import { bulkSoftDelete, bulkRestore } from "@/lib/bulk/actions";
 
 type Status =
   | "NEW"
@@ -136,8 +143,10 @@ const yn = (b: boolean | null) => (b == null ? null : b ? "Yes" : "No");
 
 export default function ApplicationsInboxClient({
   applications,
+  archived = false,
 }: {
   applications: Application[];
+  archived?: boolean;
 }) {
   const router = useRouter();
   const [filter, setFilter] = useState<"ALL" | Status>("ALL");
@@ -162,6 +171,75 @@ export default function ApplicationsInboxClient({
 
   const visible = filter === "ALL" ? applications : applications.filter((a) => a.status === filter);
   const sel = applications.find((a) => a.id === selId) ?? null;
+
+  const visibleIds = useMemo(() => visible.map((a) => a.id), [visible]);
+  const selection = useRowSelection(visibleIds);
+
+  const afterBulk = () => {
+    selection.clear();
+    router.refresh();
+  };
+
+  const bulkActions: BulkAction[] = archived
+    ? [
+        {
+          key: "restore",
+          label: "Restore",
+          icon: <RotateCcw size={14} />,
+          onRun: async () => {
+            await bulkRestore("jobApplication", selection.selectedIds);
+            afterBulk();
+          },
+        },
+      ]
+    : [
+        {
+          key: "contacted",
+          label: "Contacted",
+          onRun: async () => {
+            await bulkSetApplicationStatus(selection.selectedIds, "CONTACTED");
+            afterBulk();
+          },
+        },
+        {
+          key: "interviewing",
+          label: "Interviewing",
+          onRun: async () => {
+            await bulkSetApplicationStatus(selection.selectedIds, "INTERVIEWING");
+            afterBulk();
+          },
+        },
+        {
+          key: "rejected",
+          label: "Rejected",
+          onRun: async () => {
+            await bulkSetApplicationStatus(selection.selectedIds, "REJECTED");
+            afterBulk();
+          },
+        },
+        {
+          key: "archive",
+          label: "Archive",
+          icon: <Archive size={14} />,
+          onRun: async () => {
+            await bulkSetApplicationStatus(selection.selectedIds, "ARCHIVED");
+            afterBulk();
+          },
+        },
+        {
+          key: "delete",
+          label: "Delete",
+          icon: <Trash2 size={14} />,
+          variant: "danger",
+          confirm: `Delete ${selection.count} application${
+            selection.count === 1 ? "" : "s"
+          }? Recoverable from Archived.`,
+          onRun: async () => {
+            await bulkSoftDelete("jobApplication", selection.selectedIds);
+            afterBulk();
+          },
+        },
+      ];
 
   const FILTERS: { id: "ALL" | Status; label: string }[] = [
     { id: "ALL", label: "All" },
@@ -218,12 +296,20 @@ export default function ApplicationsInboxClient({
       <header style={{ marginBottom: 20 }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
           <h1 className="title" style={{ fontSize: 30 }}>
-            Job applications
+            {archived ? "Archived applications" : "Job applications"}
           </h1>
           <span className="apps-headcount">{applications.length}</span>
+          <a
+            href={archived ? "/admin/job-applications" : "/admin/job-applications?archived=1"}
+            className={`btn ${archived ? "btn-primary" : "btn-secondary"} btn-sm`}
+            style={{ marginLeft: "auto", textDecoration: "none" }}>
+            <Archive size={16} /> {archived ? "Active applications" : "Archived"}
+          </a>
         </div>
         <p className="subtitle" style={{ marginTop: 8, fontSize: 15 }}>
-          Move applicants through the hiring pipeline — from new lead to hired.
+          {archived
+            ? "Soft-deleted applications. Restore any you removed by mistake."
+            : "Move applicants through the hiring pipeline — from new lead to hired."}
         </p>
       </header>
 
@@ -255,21 +341,62 @@ export default function ApplicationsInboxClient({
               </p>
             </div>
           ) : (
-            visible.map((a) => (
-              <button
-                key={a.id}
-                className={`apps-card ${a.id === selId ? "active" : ""}`}
-                onClick={() => { setSelId(a.id); setHireMsg(null); }}>
-                <Avatar name={a.name} size={42} />
-                <div className="apps-card-body">
-                  <div className="apps-card-name">{a.name}</div>
-                  <div className="apps-card-sub">
-                    {[a.cityArea, a.source].filter(Boolean).join(" · ") || "—"}
+            <>
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: "6px 10px",
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                  color: "var(--slate-700)",
+                  cursor: "pointer",
+                }}>
+                <input
+                  type="checkbox"
+                  checked={selection.allSelected}
+                  ref={(el) => {
+                    if (el) el.indeterminate = selection.someSelected;
+                  }}
+                  onChange={selection.toggleAll}
+                />
+                {selection.count > 0 ? `${selection.count} selected` : "Select all"}
+              </label>
+              {visible.map((a) => (
+                <div
+                  key={a.id}
+                  role="button"
+                  tabIndex={0}
+                  className={`apps-card ${a.id === selId ? "active" : ""}${
+                    selection.isSelected(a.id) ? " row-selected" : ""
+                  }`}
+                  onClick={() => { setSelId(a.id); setHireMsg(null); }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setSelId(a.id);
+                      setHireMsg(null);
+                    }
+                  }}>
+                  <input
+                    type="checkbox"
+                    checked={selection.isSelected(a.id)}
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={() => selection.toggle(a.id)}
+                    style={{ flexShrink: 0 }}
+                  />
+                  <Avatar name={a.name} size={42} />
+                  <div className="apps-card-body">
+                    <div className="apps-card-name">{a.name}</div>
+                    <div className="apps-card-sub">
+                      {[a.cityArea, a.source].filter(Boolean).join(" · ") || "—"}
+                    </div>
                   </div>
+                  <StatusPill status={a.status} sm />
                 </div>
-                <StatusPill status={a.status} sm />
-              </button>
-            ))
+              ))}
+            </>
           )}
         </div>
 
@@ -459,6 +586,13 @@ export default function ApplicationsInboxClient({
           </div>
         )}
       </div>
+
+      <BulkActionBar
+        noun="application"
+        count={selection.count}
+        actions={bulkActions}
+        onClear={selection.clear}
+      />
     </div>
   );
 }

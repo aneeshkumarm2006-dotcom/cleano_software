@@ -12,8 +12,15 @@ import {
   Clock,
   ArrowRight,
   X,
+  Trash2,
+  Tag,
+  RotateCcw,
 } from "lucide-react";
 import { updateQuoteStatus } from "../actions/updateQuoteStatus";
+import { bulkSetQuoteStatus } from "../actions/bulkSetQuoteStatus";
+import { useRowSelection } from "@/components/common/useRowSelection";
+import BulkActionBar, { BulkAction } from "@/components/common/BulkActionBar";
+import { bulkSoftDelete, bulkRestore } from "@/lib/bulk/actions";
 
 type Status = "NEW" | "CONTACTED" | "CONVERTED" | "ARCHIVED";
 
@@ -36,6 +43,7 @@ interface Quote {
 
 interface Props {
   quotes: Quote[];
+  archived?: boolean;
 }
 
 const ORDER: Status[] = ["NEW", "CONTACTED", "CONVERTED", "ARCHIVED"];
@@ -64,9 +72,12 @@ function timeShort(iso: string) {
   return new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
 
-export default function QuotesInboxClient({ quotes }: Props) {
+export default function QuotesInboxClient({ quotes, archived = false }: Props) {
+  const router = useRouter();
   const [tab, setTab] = useState<Status | "all">("all");
   const [openId, setOpenId] = useState<string | null>(null);
+  const [showStatus, setShowStatus] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { all: quotes.length };
@@ -86,6 +97,61 @@ export default function QuotesInboxClient({ quotes }: Props) {
     [quotes, tab]
   );
   const open = quotes.find((q) => q.id === openId) ?? null;
+
+  // ── Multi-select + bulk actions ────────────────────────────────────────────
+  const visibleIds = useMemo(() => visible.map((q) => q.id), [visible]);
+  const sel = useRowSelection(visibleIds);
+
+  async function runSetStatus(status: Status) {
+    if (sel.count === 0) return;
+    setBulkBusy(true);
+    try {
+      const res = await bulkSetQuoteStatus(sel.selectedIds, status);
+      if (!res.success) {
+        alert(res.error);
+        return;
+      }
+      setShowStatus(false);
+      sel.clear();
+      router.refresh();
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  const bulkActions: BulkAction[] = archived
+    ? [
+        {
+          key: "restore",
+          label: "Restore",
+          icon: <RotateCcw size={14} />,
+          onRun: async () => {
+            await bulkRestore("quote", sel.selectedIds);
+            sel.clear();
+            router.refresh();
+          },
+        },
+      ]
+    : [
+        {
+          key: "status",
+          label: "Change status",
+          icon: <Tag size={14} />,
+          onRun: () => setShowStatus(true),
+        },
+        {
+          key: "delete",
+          label: "Delete",
+          icon: <Trash2 size={14} />,
+          variant: "danger",
+          confirm: `Delete ${sel.count} selected quote${sel.count === 1 ? "" : "s"}? They can be restored from Archived.`,
+          onRun: async () => {
+            await bulkSoftDelete("quote", sel.selectedIds);
+            sel.clear();
+            router.refresh();
+          },
+        },
+      ];
 
   return (
     <div className="admin-font stack-24" style={{ maxWidth: 1200, margin: "0 auto" }}>
@@ -120,6 +186,18 @@ export default function QuotesInboxClient({ quotes }: Props) {
           <table className="atable">
             <thead>
               <tr>
+                <th className="col-select" style={{ width: 40, textAlign: "center" }}>
+                  <input
+                    type="checkbox"
+                    aria-label="Select all"
+                    checked={sel.allSelected}
+                    ref={(el) => {
+                      if (el) el.indeterminate = sel.someSelected;
+                    }}
+                    onChange={sel.toggleAll}
+                    style={{ cursor: "pointer" }}
+                  />
+                </th>
                 <th>Name</th>
                 <th>Contact</th>
                 <th>Service</th>
@@ -131,13 +209,26 @@ export default function QuotesInboxClient({ quotes }: Props) {
             <tbody>
               {visible.length === 0 ? (
                 <tr>
-                  <td colSpan={6} style={{ textAlign: "center", padding: 56, color: "var(--primary-50)" }}>
+                  <td colSpan={7} style={{ textAlign: "center", padding: 56, color: "var(--primary-50)" }}>
                     No {tab === "all" ? "" : STATUS[tab].label.toLowerCase() + " "}quote requests.
                   </td>
                 </tr>
               ) : (
                 visible.map((q) => (
                   <tr key={q.id} onClick={() => setOpenId(q.id)}>
+                    <td
+                      className="col-select"
+                      style={{ textAlign: "center" }}
+                      onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        aria-label="Select row"
+                        checked={sel.isSelected(q.id)}
+                        onChange={() => sel.toggle(q.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        style={{ cursor: "pointer" }}
+                      />
+                    </td>
                     <td className="col-client">
                       {q.name}
                       {q.address && <div className="col-client-sub">{q.address.split(",")[0]}</div>}
@@ -187,6 +278,62 @@ export default function QuotesInboxClient({ quotes }: Props) {
           <span />
         </div>
       </div>
+
+      {/* Bulk status picker (shown above the floating bar) */}
+      {sel.count > 0 && showStatus && (
+        <div
+          style={{
+            position: "sticky",
+            bottom: 76,
+            zIndex: 41,
+            display: "flex",
+            justifyContent: "center",
+            marginTop: 12,
+          }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              flexWrap: "wrap",
+              background: "#fff",
+              border: "1px solid var(--primary-10)",
+              borderRadius: 12,
+              padding: "10px 14px",
+              boxShadow: "0 8px 30px rgba(0,0,0,0.15)",
+            }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--primary-80)" }}>
+              Set status to
+            </span>
+            {ORDER.map((s) => (
+              <button
+                key={s}
+                type="button"
+                className="btn btn-secondary btn-sm"
+                disabled={bulkBusy}
+                onClick={() => runSetStatus(s)}>
+                {STATUS[s].label}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setShowStatus(false)}
+              style={{ background: "none", border: 0, cursor: "pointer", fontSize: 13, color: "var(--primary-60)" }}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      <BulkActionBar
+        count={sel.count}
+        actions={bulkActions}
+        onClear={() => {
+          sel.clear();
+          setShowStatus(false);
+        }}
+        noun="quote"
+      />
 
       {open && <QuoteDrawer key={open.id} quote={open} onClose={() => setOpenId(null)} />}
     </div>

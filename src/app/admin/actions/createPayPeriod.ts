@@ -47,6 +47,7 @@ export async function createPayPeriod(formData: FormData) {
 
     const jobs = await db.job.findMany({
       where: {
+        deletedAt: null,
         status: { in: ["COMPLETED", "PAID"] },
         OR: [
           { jobDate: { gte: startDate, lte: rangeEnd } },

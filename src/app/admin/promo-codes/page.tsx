@@ -2,10 +2,20 @@ import { requireAdmin } from "@/lib/page-guards";
 import { db } from "@/db";
 import PromoCodesClient from "./PromoCodesClient";
 
-export default async function PromoCodesPage() {
+type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>;
+
+export default async function PromoCodesPage({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
   await requireAdmin();
 
+  const params = await searchParams;
+  const archived = params.archived === "1";
+
   const codes = await db.promoCode.findMany({
+    where: { deletedAt: archived ? { not: null } : null },
     orderBy: { createdAt: "desc" },
   });
 
@@ -28,7 +38,7 @@ export default async function PromoCodesPage() {
         <a href="/admin/gift-cards" style={{ padding: "8px 18px", fontSize: 13, fontWeight: 400, color: "rgba(0,140,156,0.5)", textDecoration: "none", borderBottom: "2px solid transparent", marginBottom: -1, display: "inline-block" }}>Gift Cards</a>
         <a href="/admin/promo-codes" style={{ padding: "8px 18px", fontSize: 13, fontWeight: 600, color: "#008C9C", textDecoration: "none", borderBottom: "2px solid #008C9C", marginBottom: -1, display: "inline-block" }}>Promo Codes</a>
       </div>
-      <PromoCodesClient codes={serialized} />
+      <PromoCodesClient codes={serialized} archived={archived} />
     </div>
   );
 }

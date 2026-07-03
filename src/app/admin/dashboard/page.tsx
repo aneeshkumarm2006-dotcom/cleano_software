@@ -170,21 +170,21 @@ export default async function DashboardPage() {
   const [
     totalJobs, completedJobs, inProgressJobs, pendingPaymentJobs, todaysJobs, upcomingJobs, recentJobs,
   ] = await Promise.all([
-    db.job.count(),
-    db.job.count({ where: { status: "COMPLETED" } }),
-    db.job.count({ where: { status: "IN_PROGRESS" } }),
-    db.job.count({ where: { status: "COMPLETED", paymentReceived: false } }),
+    db.job.count({ where: { deletedAt: null } }),
+    db.job.count({ where: { deletedAt: null, status: "COMPLETED" } }),
+    db.job.count({ where: { deletedAt: null, status: "IN_PROGRESS" } }),
+    db.job.count({ where: { deletedAt: null, status: "COMPLETED", paymentReceived: false } }),
     db.job.count({
-      where: { jobDate: { gte: startOfToday, lt: new Date(startOfToday.getTime() + 86400000) } },
+      where: { deletedAt: null, jobDate: { gte: startOfToday, lt: new Date(startOfToday.getTime() + 86400000) } },
     }),
     db.job.findMany({
-      where: { jobDate: { gte: new Date() }, status: { in: ["CREATED", "SCHEDULED"] } },
+      where: { deletedAt: null, jobDate: { gte: new Date() }, status: { in: ["CREATED", "SCHEDULED"] } },
       orderBy: { jobDate: "asc" },
       take: 5,
       select: { id: true, clientName: true, jobDate: true, startTime: true, price: true, discountAmount: true, status: true },
     }),
     db.job.findMany({
-      where: { status: "COMPLETED" },
+      where: { deletedAt: null, status: "COMPLETED" },
       orderBy: { updatedAt: "desc" },
       take: 5,
       select: { id: true, clientName: true, jobDate: true, startTime: true, price: true, discountAmount: true, status: true },
@@ -197,6 +197,7 @@ export default async function DashboardPage() {
     // that land as SCHEDULED). Future bookings and cancellations are excluded.
     db.job.aggregate({
       where: {
+        deletedAt: null,
         OR: [
           { status: { in: ["COMPLETED", "PAID"] } },
           { status: { in: ["SCHEDULED", "IN_PROGRESS"] }, startTime: { lt: now } },
@@ -208,6 +209,7 @@ export default async function DashboardPage() {
     // date, so a bulk import doesn't dump all revenue into the current month.
     db.job.aggregate({
       where: {
+        deletedAt: null,
         startTime: { gte: thirtyDaysAgo, lt: now },
         status: { in: ["COMPLETED", "PAID", "SCHEDULED", "IN_PROGRESS"] },
       },
