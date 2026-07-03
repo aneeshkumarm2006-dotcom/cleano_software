@@ -23,6 +23,7 @@ import { getCleanerRateInputs } from "@/lib/cleaner-rates";
 import { computeJobPayout } from "@/lib/pay-tiers";
 import { createAssignmentInvites } from "@/lib/invites";
 import { getSetting } from "@/lib/settings";
+import { fmtDate, fmtTime } from "@/lib/time";
 import {
   recurringDiscountPercent,
   recurrenceCount,
@@ -292,7 +293,7 @@ export async function saveJob(formData: FormData) {
                   type: "CANCELLATION",
                   severity: "WARNING",
                   title: `Booking canceled — ${existingJob.clientName}`,
-                  message: `Job #${existingJob.jobNumber} on ${existingJob.startTime.toLocaleDateString()} was canceled.`,
+                  message: `Job #${existingJob.jobNumber} on ${fmtDate(existingJob.startTime)} was canceled.`,
                   recipientUserId: c.id,
                   relatedId: editingJobId,
                   relatedType: "Job",
@@ -360,7 +361,7 @@ export async function saveJob(formData: FormData) {
                 type: "GENERAL",
                 severity: "INFO",
                 title: `New booking — ${existingJob.clientName}`,
-                message: `Job #${existingJob.jobNumber} on ${existingJob.startTime.toLocaleDateString()} at ${existingJob.startTime.toLocaleTimeString()} has been assigned to you.`,
+                message: `Job #${existingJob.jobNumber} on ${fmtDate(existingJob.startTime)} at ${fmtTime(existingJob.startTime)} has been assigned to you.`,
                 recipientUserId: cleanerId,
                 relatedId: editingJobId,
                 relatedType: "Job",
@@ -372,11 +373,58 @@ export async function saveJob(formData: FormData) {
         // Provider app-push for cleaners on a modified (already assigned) job.
         const stillAssigned = cleanerIds.filter((id) => previousCleanerIds.has(id));
         if (!justGotFirstCleaner && stillAssigned.length > 0) {
+          // Evaluate the "modified after 5 pm the day before the job" window in
+          // America/Toronto (business tz), NOT server-local (UTC). setHours on a
+          // UTC server would put the cutoff at 5 pm UTC = ~1 pm Toronto. Here we
+          // build the 17:00-Toronto-the-day-before instant explicitly.
           const after5 = (() => {
-            const dayBefore = new Date(existingJob.startTime);
-            dayBefore.setDate(dayBefore.getDate() - 1);
-            dayBefore.setHours(17, 0, 0, 0);
-            return new Date() >= dayBefore && new Date() < existingJob.startTime;
+            const TZ = "America/Toronto";
+            const now = new Date();
+            // DST-correct Toronto UTC offset (ms) at the job's time.
+            const tzOffsetMs = (d: Date) => {
+              const p = new Intl.DateTimeFormat("en-US", {
+                timeZone: TZ,
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+                hour12: false,
+              })
+                .formatToParts(d)
+                .reduce<Record<string, string>>((a, x) => {
+                  a[x.type] = x.value;
+                  return a;
+                }, {});
+              const asUTC = Date.UTC(
+                +p.year,
+                +p.month - 1,
+                +p.day,
+                +p.hour % 24,
+                +p.minute,
+                +p.second
+              );
+              return asUTC - d.getTime();
+            };
+            const offset = tzOffsetMs(existingJob.startTime);
+            // Toronto calendar date of the job.
+            const jp = new Intl.DateTimeFormat("en-US", {
+              timeZone: TZ,
+              year: "numeric",
+              month: "2-digit",
+              day: "2-digit",
+            })
+              .formatToParts(existingJob.startTime)
+              .reduce<Record<string, string>>((a, x) => {
+                a[x.type] = x.value;
+                return a;
+              }, {});
+            // 17:00 Toronto on the day BEFORE the job, as an absolute instant.
+            const cutoff = new Date(
+              Date.UTC(+jp.year, +jp.month - 1, +jp.day - 1, 17, 0, 0) - offset
+            );
+            return now >= cutoff && now < existingJob.startTime;
           })();
           const provKey = after5 ? "prov.booking.modified_after_5pm" : "prov.booking.modified";
           for (const cleanerId of stillAssigned) {
@@ -386,7 +434,7 @@ export async function saveJob(formData: FormData) {
                   type: "GENERAL",
                   severity: after5 ? "WARNING" : "INFO",
                   title: `Booking updated — ${existingJob.clientName}`,
-                  message: `Job #${existingJob.jobNumber} on ${existingJob.startTime.toLocaleDateString()} was modified${after5 ? " after 5 pm" : ""}.`,
+                  message: `Job #${existingJob.jobNumber} on ${fmtDate(existingJob.startTime)} was modified${after5 ? " after 5 pm" : ""}.`,
                   recipientUserId: cleanerId,
                   relatedId: editingJobId,
                   relatedType: "Job",

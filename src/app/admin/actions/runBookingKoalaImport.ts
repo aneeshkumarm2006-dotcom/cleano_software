@@ -78,7 +78,7 @@ export async function runBookingKoalaImport(
   if (parsed.rows.length === 0) {
     return {
       ...empty(),
-      error: "No in-range bookings found (Jun 1 → Aug 1 2026).",
+      error: "No valid bookings found in the file (check the Booking start date/time column).",
       parsedCount: parsed.parsedCount,
       droppedCount: parsed.droppedCount,
     };

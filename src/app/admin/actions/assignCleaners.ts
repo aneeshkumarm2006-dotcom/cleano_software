@@ -11,6 +11,7 @@ import {
 } from "@/lib/email";
 import { isNotificationEnabled } from "@/lib/notifications";
 import { createAssignmentInvites } from "@/lib/invites";
+import { fmtDate, fmtTime } from "@/lib/time";
 
 /**
  * Focused cleaner-assignment action used from the Team card on the Job
@@ -128,7 +129,7 @@ export async function assignCleaners(input: {
             type: "GENERAL",
             severity: "INFO",
             title: `New booking — ${job.clientName}`,
-            message: `Job #${job.jobNumber} on ${job.startTime.toLocaleDateString()} at ${job.startTime.toLocaleTimeString()} has been assigned to you.`,
+            message: `Job #${job.jobNumber} on ${fmtDate(job.startTime)} at ${fmtTime(job.startTime)} has been assigned to you.`,
             recipientUserId: cleanerId,
             relatedId: input.jobId,
             relatedType: "Job",

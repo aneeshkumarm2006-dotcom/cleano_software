@@ -57,6 +57,7 @@ export default async function JobsPage({
   });
 
   const users = await db.user.findMany({
+    where: { role: { not: "CLIENT" } },
     orderBy: { name: "asc" },
     select: { id: true, name: true, email: true },
   });

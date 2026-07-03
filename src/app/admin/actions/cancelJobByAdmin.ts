@@ -12,6 +12,7 @@ import {
 } from "@/lib/email";
 import { isNotificationEnabled } from "@/lib/notifications";
 import { smsCancellation } from "@/lib/sms";
+import { fmtDate } from "@/lib/time";
 
 interface CancelJobInput {
   jobId: string;
@@ -138,7 +139,7 @@ export async function cancelJobByAdmin(input: CancelJobInput) {
             type: "CANCELLATION",
             severity: "WARNING",
             title: `Booking canceled — ${job.clientName}`,
-            message: `Job #${job.jobNumber} on ${job.startTime.toLocaleDateString()} was canceled by admin.`,
+            message: `Job #${job.jobNumber} on ${fmtDate(job.startTime)} was canceled by admin.`,
             recipientUserId: c.id,
             relatedId: input.jobId,
             relatedType: "Job",

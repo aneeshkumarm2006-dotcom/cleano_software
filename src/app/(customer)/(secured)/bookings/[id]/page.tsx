@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { redirect, notFound } from "next/navigation";
 import { db } from "@/db";
 import { getSettings } from "@/lib/settings";
+import { fmtDateTime } from "@/lib/time";
 import Link from "next/link";
 import { ArrowLeft, Download, MapPin, Users, CreditCard } from "lucide-react";
 import { StatusBadge, DateBadge } from "@/components/customer/atoms";
@@ -334,7 +335,7 @@ export default async function BookingDetailPage({
                           color: "var(--primary-50)",
                           marginTop: 2,
                         }}>
-                        {new Date(log.createdAt).toLocaleString()}
+                        {fmtDateTime(log.createdAt)}
                       </div>
                     </div>
                   </li>

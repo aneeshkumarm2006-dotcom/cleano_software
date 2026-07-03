@@ -62,6 +62,7 @@ export default async function JobPage({
 
   // Fetch all users for the cleaner selector
   const users = await db.user.findMany({
+    where: { role: { not: "CLIENT" } },
     orderBy: { name: "asc" },
     select: {
       id: true,

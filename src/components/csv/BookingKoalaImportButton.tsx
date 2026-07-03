@@ -122,12 +122,35 @@ export default function BookingKoalaImportButton({
     try {
       for (let i = 0; i < batches; i++) {
         const start = i * BATCH_SIZE;
-        const res = await runBookingKoalaImport(csvText, {
-          commit: true,
-          sendCleanerEmails: emailCleaners,
-          sendCustomerEmails: emailCustomers,
-          batch: { start, size: BATCH_SIZE },
-        });
+        // Run one batch, retrying once on a thrown error (serverless 504 /
+        // network drop). Without this, a timed-out batch used to throw out of
+        // the loop with NO error shown, silently dropping every later batch.
+        let res: Awaited<ReturnType<typeof runBookingKoalaImport>> | null = null;
+        let lastErr: unknown = null;
+        for (let attempt = 0; attempt < 2 && !res; attempt++) {
+          try {
+            res = await runBookingKoalaImport(csvText, {
+              commit: true,
+              sendCleanerEmails: emailCleaners,
+              sendCustomerEmails: emailCustomers,
+              batch: { start, size: BATCH_SIZE },
+            });
+          } catch (e) {
+            lastErr = e;
+          }
+        }
+        if (!res) {
+          // Both attempts threw (timeout/network). Surface a clear message with
+          // how far we got — already-imported rows are idempotent, so re-running
+          // resumes safely.
+          setReport({ ...acc, ok: false, error: "Batch timed out." });
+          setParseError(
+            `Import stopped at batch ${i + 1} of ${batches} (server timed out${
+              lastErr instanceof Error ? `: ${lastErr.message}` : ""
+            }). ${acc.jobs.created} bookings saved so far — click Import again to finish the rest (already-imported rows are skipped).`
+          );
+          return;
+        }
         if (!res.ok) {
           // Stop on a hard failure — already-imported rows stay (idempotent), so
           // the user can simply re-run to finish the rest.
@@ -231,7 +254,7 @@ export default function BookingKoalaImportButton({
                   {committed ? "Import complete" : "Dry-run preview"}
                 </p>
                 <span className="text-[11px] text-gray-400">
-                  {counts.parsedCount} rows parsed · {counts.droppedCount} out of range
+                  {counts.parsedCount} rows parsed · {counts.droppedCount} skipped (unreadable/blank date)
                 </span>
               </div>
               <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs">

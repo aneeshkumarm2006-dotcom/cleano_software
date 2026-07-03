@@ -41,6 +41,7 @@ import { dismissAlert, markAlertRead } from "@/app/admin/actions/createAlert";
 import { createTarget } from "@/app/admin/actions/createTarget";
 import { updateTarget } from "@/app/admin/actions/updateTarget";
 import { deleteTarget } from "@/app/admin/actions/deleteTarget";
+import { fmtDate, fmtTime } from "@/lib/time";
 
 type TabView =
   | "overview"
@@ -1600,8 +1601,8 @@ export default function AnalyticsView({
                     <div className="an-alert-meta">
                       <span className="pill">{alert.type.replace(/_/g, " ")}</span>
                       <span>
-                        {new Date(alert.createdAt).toLocaleDateString("en-US")}{" "}
-                        {new Date(alert.createdAt).toLocaleTimeString()}
+                        {fmtDate(alert.createdAt)}{" "}
+                        {fmtTime(alert.createdAt)}
                       </span>
                     </div>
                   </div>

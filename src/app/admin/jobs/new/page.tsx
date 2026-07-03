@@ -58,6 +58,7 @@ export default async function JobFormPage({
 
   // Get all users to populate the cleaners dropdown
   const users = await db.user.findMany({
+    where: { role: { not: "CLIENT" } },
     orderBy: { name: "asc" },
     select: {
       id: true,

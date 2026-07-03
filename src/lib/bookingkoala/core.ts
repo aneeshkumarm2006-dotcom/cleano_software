@@ -6,9 +6,12 @@
  */
 import { randomBytes } from "crypto";
 
-// Inclusive start, exclusive end — Jun 1 → Sep 1 2026 (covers Jun/Jul/Aug).
-export const RANGE_START = new Date("2026-06-01T00:00:00-04:00");
-export const RANGE_END = new Date("2026-09-01T00:00:00-04:00");
+// Broad guard window — only rejects clearly-bogus dates, not real bookings.
+// Previously hardcoded to Jun 1–Sep 1 2026, which silently dropped every
+// booking outside those three months. Widened so the importer accepts whatever
+// date range the admin's exported CSV actually covers.
+export const RANGE_START = new Date("2015-01-01T00:00:00-05:00");
+export const RANGE_END = new Date("2035-01-01T00:00:00-05:00");
 export const BOOKING_SOURCE = "bookingkoala_import";
 
 // ── CSV parser (RFC-4180, handles quoted fields with embedded newlines) ──────

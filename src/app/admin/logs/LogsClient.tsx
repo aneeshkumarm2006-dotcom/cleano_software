@@ -15,6 +15,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { retryEmail } from "../actions/retryEmail";
+import { fmtDate, fmtTime, fmtDateTime } from "@/lib/time";
 
 export interface LogRow {
   id: string;
@@ -91,10 +92,10 @@ function money(n: number) {
   return `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 function dateStr(iso: string) {
-  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return fmtDate(iso, { month: "short", day: "numeric" });
 }
 function timeStr(iso: string) {
-  return new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  return fmtTime(iso);
 }
 
 // ─── Date helpers ───
@@ -327,7 +328,7 @@ function Drawer({
         {meta.label}
       </span>
     )],
-    ["When", new Date(entry.createdAt).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })],
+    ["When", fmtDateTime(entry.createdAt)],
   ];
   if (entry.recipient) rows.push(["Sent to", entry.recipient]);
   if (entry.actorLabel) rows.push(["By", entry.actorLabel]);

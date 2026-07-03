@@ -192,9 +192,25 @@ export default async function DashboardPage() {
   ]);
 
   const [revenueData, monthlyRevenueData, employeeCount, activeEmployees, products] = await Promise.all([
-    db.job.aggregate({ where: { status: { in: ["COMPLETED", "PAID"] } }, _sum: { price: true } }),
+    // Realized revenue: any non-cancelled job that has been paid/completed OR
+    // whose scheduled time has already passed (covers imported historical jobs
+    // that land as SCHEDULED). Future bookings and cancellations are excluded.
     db.job.aggregate({
-      where: { status: { in: ["COMPLETED", "PAID"] }, createdAt: { gte: thirtyDaysAgo } },
+      where: {
+        OR: [
+          { status: { in: ["COMPLETED", "PAID"] } },
+          { status: { in: ["SCHEDULED", "IN_PROGRESS"] }, startTime: { lt: now } },
+        ],
+      },
+      _sum: { price: true },
+    }),
+    // Monthly revenue keys off the JOB date (startTime), not the import/creation
+    // date, so a bulk import doesn't dump all revenue into the current month.
+    db.job.aggregate({
+      where: {
+        startTime: { gte: thirtyDaysAgo, lt: now },
+        status: { in: ["COMPLETED", "PAID", "SCHEDULED", "IN_PROGRESS"] },
+      },
       _sum: { price: true },
     }),
     db.user.count(),

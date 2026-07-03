@@ -23,6 +23,10 @@ function getResend() {
   return new Resend(process.env.RESEND_API_KEY);
 }
 
+// Business timezone — all customer/provider-facing times must render here,
+// not in the serverless UTC timezone. Keep in sync with src/lib/time.ts.
+const TZ = process.env.NEXT_PUBLIC_BUSINESS_TIMEZONE ?? "America/Toronto";
+
 function fmt(n: number | null | undefined) {
   return `$${(n ?? 0).toFixed(2)}`;
 }
@@ -32,12 +36,14 @@ function fmtDate(iso: string) {
     month: "long",
     day: "numeric",
     year: "numeric",
+    timeZone: TZ,
   });
 }
 function fmtTime(iso: string) {
   return new Date(iso).toLocaleString("en-US", {
     hour: "numeric",
     minute: "2-digit",
+    timeZone: TZ,
   });
 }
 

@@ -5,8 +5,8 @@ import { db } from "@/db";
 import { sendReminder24h } from "@/lib/email";
 import { smsReminder } from "@/lib/sms";
 
-// Vercel Cron: runs daily at 9 AM UTC (5 AM EST / 6 AM EDT)
-// vercel.json: { "crons": [{ "path": "/api/cron/reminders", "schedule": "0 9 * * *" }] }
+// Vercel Cron: runs daily at 13:00 UTC (~9 AM EDT / 8 AM EST — America/Toronto)
+// vercel.json: { "crons": [{ "path": "/api/cron/reminders", "schedule": "0 13 * * *" }] }
 
 export async function GET(req: NextRequest) {
   const secret = req.headers.get("authorization");

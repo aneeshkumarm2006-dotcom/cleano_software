@@ -39,7 +39,11 @@ export default async function EmployeesPage({
   const rowsPerPage = Number(params.rowsPerPage) || 10;
 
   // Fetch all employees with their jobs
+  // Staff only — never list CLIENT accounts here. Clients live on the Clients
+  // page; without this filter every imported customer login showed up as an
+  // "Employee" (inflating the count to all users).
   const employees = await db.user.findMany({
+    where: { role: { not: "CLIENT" } },
     include: {
       jobs: true,
     },

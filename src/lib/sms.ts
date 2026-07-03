@@ -21,6 +21,9 @@ import { isNotificationEnabled } from "./notifications";
 import type { Recipient } from "./notifications/catalog";
 import { logActivity } from "./activity-log";
 
+// Business timezone — customer-facing times must render here, not serverless UTC.
+const TZ = process.env.NEXT_PUBLIC_BUSINESS_TIMEZONE ?? "America/Toronto";
+
 export interface SmsGate {
   recipient: Recipient;
   key: string;
@@ -144,6 +147,7 @@ export function smsBookingConfirmation(opts: {
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
+    timeZone: TZ,
   });
   return sendSms({
     to: opts.to,
@@ -173,6 +177,7 @@ export function smsReminder(opts: {
     weekday: "short",
     hour: "numeric",
     minute: "2-digit",
+    timeZone: TZ,
   });
   return sendSms({
     to: opts.to,
