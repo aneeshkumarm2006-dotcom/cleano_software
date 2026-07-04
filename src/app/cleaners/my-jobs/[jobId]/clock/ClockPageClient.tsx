@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { clockIn } from "@/app/admin/actions/clockIn";
 import { clockOut } from "@/app/admin/actions/clockOut";
 import { createPortal } from "react-dom";
-import { fmtClockTz, fmtShortTz } from "@/lib/time";
+import { fmtClockTz, fmtDate, fmtShortTz } from "@/lib/time";
 import { generateJobChecklist } from "@/app/admin/actions/generateJobChecklist";
 import { getJobChecklist } from "@/app/admin/actions/getJobChecklist";
 import { updateChecklistItem } from "@/app/admin/actions/updateChecklistItem";
@@ -453,7 +453,7 @@ export default function ClockPageClient({
                   {fmtClock(clockInDate)} → now <span className="live-dot" />
                 </div>
                 <div className="clk-session-date">
-                  Live · started {clockInDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                  Live · started {fmtDate(clockInDate, { month: "short", day: "numeric" })}
                 </div>
               </div>
               <div className="clk-session-dur" style={{ color: "var(--emerald-600)" }}>
@@ -472,7 +472,7 @@ export default function ClockPageClient({
                   {fmtClock(clockInDate)} → {fmtClock(clockOutDate)}
                 </div>
                 <div className="clk-session-date">
-                  {clockInDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                  {fmtDate(clockInDate, { weekday: "short", month: "short", day: "numeric" })}
                 </div>
               </div>
               <div className="clk-session-dur">{fmtDuration(elapsedMs)}</div>

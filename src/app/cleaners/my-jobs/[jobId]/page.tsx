@@ -3,7 +3,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { getSetting } from "@/lib/settings";
-import { fmtDate, fmtTime } from "@/lib/time";
+import { fmtDate, fmtDateTime, fmtTime } from "@/lib/time";
 import { Calendar, Users, Package, Zap, Camera, ListChecks, MapPin, DollarSign } from "lucide-react";
 import Link from "next/link";
 import BackButton from "../BackButton";
@@ -256,20 +256,12 @@ export default async function JobDetailPage({ params }: PageProps) {
           <div className="cl-jd-time-summary">
             <div className="cl-jd-time-tile">
               <div className="lbl">Clocked in</div>
-              <div className="val">
-                {new Date(jobWithClock.clockInTime).toLocaleString("en-US", {
-                  month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true,
-                })}
-              </div>
+              <div className="val">{fmtDateTime(jobWithClock.clockInTime)}</div>
             </div>
             {jobWithClock.clockOutTime && (
               <div className="cl-jd-time-tile">
                 <div className="lbl">Clocked out</div>
-                <div className="val">
-                  {new Date(jobWithClock.clockOutTime).toLocaleString("en-US", {
-                    month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true,
-                  })}
-                </div>
+                <div className="val">{fmtDateTime(jobWithClock.clockOutTime)}</div>
               </div>
             )}
             {duration && (

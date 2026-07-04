@@ -16,6 +16,7 @@ import Badge from "@/components/ui/Badge";
 import { createInventoryRequest } from "@/app/admin/actions/createInventoryRequest";
 import type { ProductLocationStock } from "@/app/admin/actions/getLocationStock.types";
 import type { MissingEquipmentItem } from "@/app/admin/actions/checkEquipmentForJob.types";
+import { fmtDate } from "@/lib/time";
 
 interface JobInfo {
   id: string;
@@ -162,7 +163,7 @@ export default function ResolveClient({
             <p className="text-sm text-[#008C9C]/70 mt-1">
               For job: <strong>{job.clientName}</strong>
               {job.jobDate &&
-                ` · ${new Date(job.jobDate).toLocaleDateString("en-US", {
+                ` · ${fmtDate(job.jobDate, {
                   month: "short",
                   day: "numeric",
                   year: "numeric",

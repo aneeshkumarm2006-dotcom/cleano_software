@@ -88,6 +88,42 @@ export function normalizeJobType(raw: string | null | undefined): string | null 
   return CATEGORY_ALIASES[code] ?? null;
 }
 
+/** Concise human labels for job-type pills / descriptions (the settings UI
+ *  uses the longer SERVICE_CATEGORIES labels). */
+const JOB_TYPE_PRETTY_LABELS: Record<string, string> = {
+  RESIDENTIAL: "Residential",
+  DEEP: "Deep Cleaning",
+  MOVE_IN: "Move-in",
+  MOVE_OUT: "Move-out",
+  MOVE_IN_OUT: "Move-in / Move-out",
+  POST_CONSTRUCTION: "Post-Construction",
+  COMMERCIAL: "Commercial",
+  AIRBNB: "Airbnb",
+  FOLLOW_UP: "Follow-up",
+};
+
+/**
+ * Human label for any stored jobType representation ("MOVE_IN_OUT",
+ * "R - Residential", "R", …). Falls back to a title-cased cleanup of the raw
+ * value so raw enum text never leaks into the UI.
+ */
+export function jobTypeLabel(raw: string | null | undefined): string {
+  if (!raw) return "";
+  const category = normalizeJobType(raw);
+  if (category) {
+    return (
+      JOB_TYPE_PRETTY_LABELS[category] ??
+      SERVICE_CATEGORIES.find((c) => c.key === category)?.label ??
+      category
+    );
+  }
+  return raw
+    .replace(/_/g, " ")
+    .toLowerCase()
+    .replace(/(^|\s|-)\w/g, (ch) => ch.toUpperCase())
+    .trim();
+}
+
 export function isPriorityLabel(v: unknown): v is PriorityLabel {
   return v === "ROUTINE" || v === "IMPORTANT" || v === "NONE";
 }

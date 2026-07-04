@@ -14,15 +14,24 @@ export function JobsFilters() {
   const { setLoading } = useJobsLoading();
 
   const [search, setSearch] = useState(searchParams.get("search") || "");
-  const status = searchParams.get("status") || "all";
+  // "upcoming" is the default view, so a missing status param means upcoming.
+  const status = searchParams.get("status") || "upcoming";
   const jobType = searchParams.get("jobType") || "all";
   const perPage = searchParams.get("perPage") || "10";
+
+  // Values that match the server-side defaults are dropped from the URL.
+  const paramDefaults: Record<string, string> = {
+    status: "upcoming",
+    jobType: "all",
+    search: "",
+    perPage: "10",
+  };
 
   const buildUrl = (updates: Record<string, string>) => {
     const params = new URLSearchParams(searchParams.toString());
 
     Object.entries(updates).forEach(([key, value]) => {
-      if (value && value !== "all" && value !== "") {
+      if (value && value !== (paramDefaults[key] ?? "")) {
         params.set(key, value);
       } else {
         params.delete(key);
@@ -80,13 +89,15 @@ export function JobsFilters() {
     });
   };
 
-  const hasActiveFilters = search || status !== "all" || jobType !== "all";
+  const hasActiveFilters = search || status !== "upcoming" || jobType !== "all";
 
   const statusOptions = [
-    { value: "all", label: "All Statuses" },
     { value: "upcoming", label: "Upcoming" },
     { value: "in_progress", label: "In Progress" },
     { value: "completed", label: "Completed" },
+    { value: "past", label: "Past" },
+    { value: "cancelled", label: "Cancelled" },
+    { value: "all", label: "All Statuses" },
   ];
 
   const jobTypeOptions = [
@@ -145,7 +156,7 @@ export function JobsFilters() {
         <CustomDropdown
           trigger={
             <Button variant="outline" size="md" submit={false} className="w-full flex items-center !justify-between bg-white">
-              <span>{statusOptions.find((o) => o.value === status)?.label}</span>
+              <span>{statusOptions.find((o) => o.value === status)?.label ?? "Upcoming"}</span>
               <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>

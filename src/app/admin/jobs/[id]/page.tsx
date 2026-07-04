@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { revalidatePath } from "next/cache";
+import { getTaxRates } from "@/lib/tax.server";
 import JobDetailView from "./JobDetailView";
 
 export default async function JobPage({
@@ -122,6 +123,10 @@ export default async function JobPage({
     (session.user as any).role === "OWNER" ||
     (session.user as any).role === "ADMIN";
 
+  // Current admin-configured GST/QST rates — used to label the tax rows and to
+  // compute a display-only breakdown for older jobs saved without tax amounts.
+  const taxRates = await getTaxRates();
+
   // Server action to delete job
   async function deleteJob() {
     "use server";
@@ -154,6 +159,10 @@ export default async function JobPage({
     onMyWayLocationAt: job.onMyWayLocationAt?.toISOString() || null,
     status: job.status,
     price: job.price,
+    subtotalAmount: job.subtotalAmount,
+    gstAmount: job.gstAmount,
+    qstAmount: job.qstAmount,
+    totalAmount: job.totalAmount,
     employeePay: job.employeePay,
     totalTip: job.totalTip,
     parking: job.parking,
@@ -242,6 +251,7 @@ export default async function JobPage({
       logsPage={logsPage}
       logsPerPage={logsPerPage}
       totalProductCost={totalProductCost}
+      taxRates={taxRates}
       isAdmin={isAdmin}
       onDeleteJob={deleteJob}
       users={users}

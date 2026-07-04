@@ -30,6 +30,7 @@ import Modal from "@/components/ui/Modal";
 import { cancelJobByAdmin } from "../../actions/cancelJobByAdmin";
 import { issueRefund } from "../../actions/issueRefund";
 import JobChatThread from "@/components/JobChatThread";
+import { normalizeJobType, jobTypeLabel } from "@/lib/calendar-labels";
 
 type TabView = "details" | "financials" | "products" | "logs" | "requests";
 
@@ -60,6 +61,10 @@ interface Job {
   onMyWayLocationAt: string | null;
   status: string;
   price: number | null;
+  subtotalAmount?: number | null;
+  gstAmount?: number | null;
+  qstAmount?: number | null;
+  totalAmount?: number | null;
   employeePay: number | null;
   totalTip: number | null;
   parking: number | null;
@@ -149,6 +154,8 @@ interface JobDetailViewProps {
   logsPage: number;
   logsPerPage: number;
   totalProductCost: number;
+  /** Current admin-configured GST/QST rates (percent, e.g. 5 / 9.975). */
+  taxRates: { gstRate: number; qstRate: number };
   isAdmin: boolean;
   onDeleteJob?: () => Promise<void>;
   users: User[];
@@ -187,17 +194,34 @@ function StatusPill({ status }: { status: string }) {
   );
 }
 
+// Colors keyed off the NORMALIZED category so imported ("MOVE_IN_OUT") and
+// manual ("Move-in / Move-out") jobTypes render the same pill; jobTypeLabel()
+// keeps raw enum text out of the UI.
+const TYPE_PILL_COLORS: Record<string, { bg: string; color: string }> = {
+  RESIDENTIAL:       { bg: 'var(--primary-10)', color: 'var(--primary)' },
+  DEEP:              { bg: '#ede9fe',           color: '#5b21b6' },
+  MOVE_IN:           { bg: '#dcfce7',           color: '#166534' },
+  MOVE_OUT:          { bg: '#dcfce7',           color: '#166534' },
+  MOVE_IN_OUT:       { bg: '#dcfce7',           color: '#166534' },
+  COMMERCIAL:        { bg: '#dbeafe',           color: '#1e40af' },
+  POST_CONSTRUCTION: { bg: '#fef3c7',           color: '#92400e' },
+  AIRBNB:            { bg: '#ffe4e6',           color: '#9f1239' },
+  FOLLOW_UP:         { bg: '#f3f4f6',           color: '#374151' },
+};
+
 function TypePill({ type }: { type: string | null }) {
   if (!type) return null;
-  const labels: Record<string, string> = { R: 'Residential', C: 'Commercial', PC: 'Post-Construction', F: 'Follow-up' };
-  const bgs: Record<string, { bg: string; color: string }> = {
-    R:  { bg: 'var(--primary-10)', color: 'var(--primary)' },
-    C:  { bg: '#dbeafe',           color: '#1e40af' },
-    PC: { bg: '#fef3c7',           color: '#92400e' },
-    F:  { bg: '#f3f4f6',           color: '#374151' },
-  };
-  const s = bgs[type] || { bg: '#f3f4f6', color: '#374151' };
-  return <span className="pill" style={{ background: s.bg, color: s.color }}>{labels[type] || type}</span>;
+  const category = normalizeJobType(type);
+  const s = (category && TYPE_PILL_COLORS[category]) || { bg: '#f3f4f6', color: '#374151' };
+  return <span className="pill" style={{ background: s.bg, color: s.color }}>{jobTypeLabel(type)}</span>;
+}
+
+function CashJobPill() {
+  return (
+    <span className="pill" style={{ background: '#fef9c3', color: '#854d0e' }} title="Cash job — no Stripe charge, tax exempt">
+      Cash job
+    </span>
+  );
 }
 
 function payTypeLabel(type: string | null | undefined): string {
@@ -231,6 +255,7 @@ export default function JobDetailView({
   logsPage,
   logsPerPage,
   totalProductCost,
+  taxRates,
   isAdmin,
   onDeleteJob,
   users,
@@ -522,6 +547,23 @@ export default function JobDetailView({
 
   const netProfit = (job.price || 0) - (job.employeePay || 0) - (job.parking || 0) - totalProductCost;
   const grossRevenue = (job.price || 0) - (job.discountAmount || 0);
+
+  // Tax breakdown (Financials tab). Prefer the GST/QST stored on the job; when
+  // both are 0 on a NON-cash job (rows saved before taxes were persisted),
+  // compute display values from the current settings rates. Cash jobs are tax
+  // exempt. Net profit stays computed off pre-tax revenue — taxes are remitted,
+  // not profit.
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const taxSubtotal = Math.max(0, grossRevenue);
+  const hasStoredTax = (job.gstAmount || 0) > 0 || (job.qstAmount || 0) > 0;
+  const displayGst = job.isCashJob
+    ? 0
+    : hasStoredTax ? (job.gstAmount || 0) : round2((taxSubtotal * taxRates.gstRate) / 100);
+  const displayQst = job.isCashJob
+    ? 0
+    : hasStoredTax ? (job.qstAmount || 0) : round2((taxSubtotal * taxRates.qstRate) / 100);
+  const totalWithTax = round2(taxSubtotal + displayGst + displayQst);
+
   const totalLogsPages = Math.ceil(totalLogs / logsPerPage);
 
   const showPayWarning = job.status === "COMPLETED" && !paymentReceived;
@@ -728,8 +770,29 @@ export default function JobDetailView({
               </div>
             )}
             <div className="finrow">
-              <span className="finrow-label"><strong>Gross revenue</strong></span>
-              <span className="finrow-value">${grossRevenue.toFixed(2)}</span>
+              <span className="finrow-label"><strong>Subtotal</strong></span>
+              <span className="finrow-value">${taxSubtotal.toFixed(2)}</span>
+            </div>
+            {job.isCashJob ? (
+              <div className="finrow">
+                <span className="finrow-label" style={{ color: '#854d0e' }}>Cash job — tax exempt</span>
+                <span className="finrow-value">$0.00</span>
+              </div>
+            ) : (
+              <>
+                <div className="finrow">
+                  <span className="finrow-label">GST ({taxRates.gstRate}%)</span>
+                  <span className="finrow-value">+${displayGst.toFixed(2)}</span>
+                </div>
+                <div className="finrow">
+                  <span className="finrow-label">QST ({taxRates.qstRate}%)</span>
+                  <span className="finrow-value">+${displayQst.toFixed(2)}</span>
+                </div>
+              </>
+            )}
+            <div className="finrow">
+              <span className="finrow-label"><strong>Total with tax</strong></span>
+              <span className="finrow-value">${totalWithTax.toFixed(2)}</span>
             </div>
             {job.employeePay !== null && (
               <div className="finrow negative">
@@ -766,9 +829,12 @@ export default function JobDetailView({
         <div className="dcard">
           <div className="dcard-head">
             <h3>Payment</h3>
-            <span style={{ fontSize: 11, color: 'var(--primary-50)', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-              {payTypeLabel(job.paymentType)}
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {job.isCashJob && <CashJobPill />}
+              <span style={{ fontSize: 11, color: 'var(--primary-50)', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                {payTypeLabel(job.paymentType)}
+              </span>
+            </div>
           </div>
 
           {job.depositPaid && (
@@ -1313,6 +1379,7 @@ export default function JobDetailView({
                 </a>
               )}
               <TypePill type={job.jobType} />
+              {job.isCashJob && <CashJobPill />}
               {isAdmin && (
                 <label
                   title="Calendar priority label shown in the top-left of this booking"

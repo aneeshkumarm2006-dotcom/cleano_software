@@ -60,9 +60,12 @@ export default async function JobsPage({
       addOns: true,
       productUsage: { include: { product: true } },
     },
-    orderBy: {
-      jobDate: "desc",
-    },
+    // jobDate is nullable — push null-date jobs after dated ones instead of
+    // letting them float to the top, then break ties on the real start instant.
+    orderBy: [
+      { jobDate: { sort: "desc", nulls: "last" } },
+      { startTime: "desc" },
+    ],
   });
 
   const users = await db.user.findMany({
@@ -144,6 +147,7 @@ export default async function JobsPage({
       paymentReceived: job.paymentReceived,
       invoiceSent: job.invoiceSent,
       paymentType: job.paymentType,
+      isCashJob: job.isCashJob,
       discountAmount: job.discountAmount,
       bedCount: job.bedCount,
       bathCount: job.bathCount,

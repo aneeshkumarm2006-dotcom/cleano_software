@@ -9,6 +9,7 @@ import ExportButton from "./ExportButton";
 import ImportCsvButton from "@/components/csv/ImportCsvButton";
 import { saveJob } from "../actions/saveJob";
 import { deleteJob } from "../actions/deleteJob";
+import { normalizeJobType } from "@/lib/calendar-labels";
 
 interface User {
   id: string;
@@ -45,6 +46,7 @@ export interface Job {
   paymentReceived: boolean;
   invoiceSent: boolean;
   paymentType: string | null;
+  isCashJob?: boolean;
   discountAmount: number | null;
   bedCount: number | null;
   bathCount: number | null;
@@ -206,7 +208,14 @@ export default function JobsPageClient({
       if (startDate && jobTime < new Date(startDate).getTime()) return false;
       if (endDate && jobTime > new Date(endDate).getTime() + 86400000)
         return false;
-      if (jobTypeFilter !== "all" && job.jobType !== jobTypeFilter) return false;
+      // Compare normalized categories so imported ("MOVE_IN_OUT") and manual
+      // ("MOVE_IN - Move-in Cleaning") vocabularies both match the filter.
+      if (
+        jobTypeFilter !== "all" &&
+        normalizeJobType(job.jobType) !==
+          (normalizeJobType(jobTypeFilter) ?? jobTypeFilter)
+      )
+        return false;
       if (clientFilter !== "all" && job.clientId !== clientFilter) return false;
       if (
         employeeFilter !== "all" &&

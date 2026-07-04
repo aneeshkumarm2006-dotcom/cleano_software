@@ -16,6 +16,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { isAdminRole } from "@/lib/role-routing";
+import { fmtDate, fmtTime } from "@/lib/time";
 import CleanerDashboard from "./CleanerDashboard";
 
 export const dynamic = "force-dynamic";
@@ -32,12 +33,6 @@ function avatarBg(name: string): string {
 }
 function money(n: number): string {
   return `$${Math.round(n).toLocaleString("en-US")}`;
-}
-function fmtDate(d: Date): string {
-  return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
-}
-function fmtTime(d: Date): string {
-  return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
 
 const STATUS_PILL: Record<string, { label: string; bg: string; color: string; dot: string }> = {
@@ -139,7 +134,7 @@ function ListCard({
                 </div>
                 <div className="dash-listrow-meta">
                   <div className="dash-listrow-name">{j.clientName || "Unknown client"}</div>
-                  <div className="dash-listrow-sub">{fmtDate(when)} · {fmtTime(when)}</div>
+                  <div className="dash-listrow-sub">{fmtDate(when, { weekday: "short", month: "short", day: "numeric" })} · {fmtTime(when)}</div>
                 </div>
                 <div className="dash-listrow-right">
                   <div className="dash-listrow-price">{money((j.price || 0) - (j.discountAmount || 0))}</div>
@@ -239,7 +234,7 @@ export default async function DashboardPage() {
 
   const hours = now.getHours();
   const greeting = hours < 12 ? "Good morning" : hours < 18 ? "Good afternoon" : "Good evening";
-  const dateLabel = now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+  const dateLabel = fmtDate(now, { weekday: "long", month: "long", day: "numeric" });
   const firstName = (session.user.name ?? "there").split(/\s+/)[0];
 
   return (

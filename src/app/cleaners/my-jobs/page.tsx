@@ -1,6 +1,7 @@
 import { db } from "@/db";
 import { requireCleaner } from "@/lib/page-guards";
 import { Prisma } from "@prisma/client";
+import { startOfDayTz } from "@/lib/time";
 import { JobsFilters } from "./JobsFilters";
 import { JobsPagination } from "./JobsPagination";
 import { TableLoadingOverlay } from "./TableLoadingOverlay";
@@ -21,19 +22,35 @@ export default async function MyJobsPage({
 }) {
   const session = await requireCleaner();
 
-  // Parse search params
+  // Parse search params (allow-list everything that reaches the query)
   const params = await searchParams;
   const cursor = (params.cursor as string) || null;
   const direction = (params.direction as string) || null;
-  const perPage = Number(params.perPage) || 10;
+  const perPage = Math.min(Math.max(Number(params.perPage) || 10, 1), 100);
   const search = (params.search as string) || "";
-  const status = (params.status as string) || "all";
+  const validStatuses = ["all", "upcoming", "in_progress", "completed", "cancelled", "past"];
+  const statusParam = (params.status as string) || "upcoming";
+  // Default view: upcoming jobs, soonest first.
+  const status = validStatuses.includes(statusParam) ? statusParam : "upcoming";
   const jobType = (params.jobType as string) || "all";
-  const sortBy = (params.sortBy as string) || "jobDate";
-  const sortOrder = (params.sortOrder as string) || "asc";
+  const validSortFields = ["jobDate", "startTime", "clientName", "createdAt", "status"];
+  const sortByParam = (params.sortBy as string) || "startTime";
+  const sortBy = validSortFields.includes(sortByParam) ? sortByParam : "startTime";
+  // Upcoming/in-progress read best soonest-first; history reads best most-recent-first.
+  const defaultSortOrder = status === "upcoming" || status === "in_progress" ? "asc" : "desc";
+  const sortOrder: "asc" | "desc" =
+    params.sortOrder === "asc" || params.sortOrder === "desc"
+      ? params.sortOrder
+      : defaultSortOrder;
+
+  const now = new Date();
+  // Jobs stay "upcoming" until the business day ends, so a cleaner still sees
+  // today's job after its start time has passed.
+  const dayStart = startOfDayTz(now);
 
   // Build where clause
   const where: Prisma.JobWhereInput = {
+    deletedAt: null,
     OR: [
       { employeeId: session.user.id },
       {
@@ -46,29 +63,58 @@ export default async function MyJobsPage({
     ],
   };
 
+  const andFilters: Prisma.JobWhereInput[] = [];
+
   // Search filter
   if (search) {
-    where.AND = [
-      {
-        OR: [
-          { clientName: { contains: search, mode: "insensitive" } },
-          { location: { contains: search, mode: "insensitive" } },
-        ],
-      },
-    ];
+    andFilters.push({
+      OR: [
+        { clientName: { contains: search, mode: "insensitive" } },
+        { location: { contains: search, mode: "insensitive" } },
+      ],
+    });
   }
 
-  // Status filter - we'll apply this after fetching
-  // (Some filters need to check clockInTime/clockOutTime which aren't in Prisma filters)
+  // Status filter — applied in SQL so cursor pagination stays correct.
+  if (status === "upcoming") {
+    andFilters.push({
+      status: { notIn: ["COMPLETED", "CANCELLED"] },
+      clockOutTime: null,
+      startTime: { gte: dayStart },
+    });
+  } else if (status === "in_progress") {
+    andFilters.push({
+      OR: [
+        { status: "IN_PROGRESS" },
+        { clockInTime: { not: null }, clockOutTime: null, status: { not: "CANCELLED" } },
+      ],
+    });
+  } else if (status === "completed") {
+    andFilters.push({
+      OR: [{ status: "COMPLETED" }, { clockOutTime: { not: null } }],
+    });
+  } else if (status === "cancelled") {
+    andFilters.push({ status: "CANCELLED" });
+  } else if (status === "past") {
+    andFilters.push({ startTime: { lt: dayStart } });
+  }
 
   // Job type filter
   if (jobType !== "all") {
-    where.jobType = jobType;
+    andFilters.push({ jobType });
+  }
+
+  if (andFilters.length > 0) {
+    where.AND = andFilters;
   }
 
   // Cursor-based pagination
   const take = perPage + 1; // Fetch one extra to check if there's a next page
-  const orderBy: any = { [sortBy]: sortOrder };
+  // Secondary sort on id keeps the cursor stable when jobs share the same date.
+  const orderBy: Prisma.JobOrderByWithRelationInput[] = [
+    { [sortBy]: sortOrder },
+    { id: sortOrder },
+  ];
 
   let jobs;
 
@@ -92,9 +138,11 @@ export default async function MyJobsPage({
     });
   } else if (cursor && direction === "prev") {
     // Previous page - reverse the order
-    const reverseOrder: any = {
-      [sortBy]: sortOrder === "asc" ? "desc" : "asc",
-    };
+    const flipped: "asc" | "desc" = sortOrder === "asc" ? "desc" : "asc";
+    const reverseOrder: Prisma.JobOrderByWithRelationInput[] = [
+      { [sortBy]: flipped },
+      { id: flipped },
+    ];
     jobs = await db.job.findMany({
       where,
       include: {
@@ -131,24 +179,8 @@ export default async function MyJobsPage({
     });
   }
 
-  // Apply status filter (client-side for clock-in/out times)
-  let filteredJobs = jobs;
-  if (status === "upcoming") {
-    filteredJobs = jobs.filter(
-      (job) =>
-        job.status !== "COMPLETED" &&
-        job.status !== "CANCELLED" &&
-        !(job as any).clockOutTime
-    );
-  } else if (status === "in_progress") {
-    filteredJobs = jobs.filter(
-      (job) => (job as any).clockInTime && !(job as any).clockOutTime
-    );
-  } else if (status === "completed") {
-    filteredJobs = jobs.filter(
-      (job) => job.status === "COMPLETED" || (job as any).clockOutTime
-    );
-  }
+  // Status filtering happens in the query, so pagination math is exact.
+  const filteredJobs = jobs;
 
   // Check if there are more pages
   const hasNextPage = filteredJobs.length > perPage;
@@ -364,12 +396,14 @@ export default async function MyJobsPage({
               </div>
               <div>
                 <p style={{ fontWeight: 600, color: "var(--ink)", marginBottom: 4 }}>
-                  {search || status !== "all" || jobType !== "all"
+                  {search || jobType !== "all" || (status !== "all" && status !== "upcoming")
                     ? "No jobs match these filters."
-                    : "No jobs assigned yet."}
+                    : status === "upcoming"
+                      ? "No upcoming jobs."
+                      : "No jobs assigned yet."}
                 </p>
                 <p style={{ margin: 0, fontSize: 13 }}>
-                  {search || status !== "all" || jobType !== "all"
+                  {search || jobType !== "all" || (status !== "all" && status !== "upcoming")
                     ? "Try adjusting your search or filters."
                     : "Jobs you're assigned to will appear here."}
                 </p>

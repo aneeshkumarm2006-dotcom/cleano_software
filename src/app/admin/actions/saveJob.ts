@@ -21,6 +21,7 @@ import { isNotificationEnabled } from "@/lib/notifications";
 import { smsBookingConfirmation, smsCancellation } from "@/lib/sms";
 import { getCleanerRateInputs } from "@/lib/cleaner-rates";
 import { computeJobPayout } from "@/lib/pay-tiers";
+import { getTaxRates, computeJobTaxes } from "@/lib/tax.server";
 import { createAssignmentInvites } from "@/lib/invites";
 import { getSetting } from "@/lib/settings";
 import { fmtDate, fmtTime } from "@/lib/time";
@@ -146,6 +147,26 @@ export async function saveJob(formData: FormData) {
       estimatedEmployeePay = computeJobPayout(price, rateList).pool;
     }
 
+    // GST/QST on the discounted subtotal from the admin-configured rates. The
+    // job modal doesn't expose the cash-job toggle, so keep the existing job's
+    // isCashJob when editing (new modal jobs are non-cash); cash jobs are tax
+    // exempt (zero tax, total = subtotal).
+    const editingJobId = (formData.get("jobId") as string | null) || null;
+    let isCashJob = false;
+    if (editingJobId) {
+      const current = await db.job.findUnique({
+        where: { id: editingJobId },
+        select: { isCashJob: true },
+      });
+      isCashJob = current?.isCashJob ?? false;
+    }
+    const taxRates = await getTaxRates();
+    const taxes = computeJobTaxes(
+      (price ?? 0) - (discountAmount ?? 0),
+      taxRates,
+      isCashJob
+    );
+
     const jobData: any = {
       employeeId: session.user.id,
       clientName,
@@ -161,6 +182,10 @@ export async function saveJob(formData: FormData) {
           : new Date(),
       endTime: endDate && endTime ? new Date(`${endDate}T${endTime}`) : null,
       price,
+      subtotalAmount: taxes.subtotalAmount,
+      gstAmount: taxes.gstAmount,
+      qstAmount: taxes.qstAmount,
+      totalAmount: taxes.totalAmount,
       employeePay: estimatedEmployeePay,
       totalTip: parseOptionalFloat(formData.get("totalTip")),
       parking: parseOptionalFloat(formData.get("parking")),
@@ -176,7 +201,6 @@ export async function saveJob(formData: FormData) {
         parseOptionalFloat(formData.get("payRateMultiplier")) ?? 1.0,
     };
 
-    const editingJobId = formData.get("jobId") as string | null;
     const statusRaw = (formData.get("status") as string) || null;
 
     if (editingJobId) {

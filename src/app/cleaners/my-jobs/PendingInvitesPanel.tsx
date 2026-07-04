@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { respondToJobInvite } from "@/app/admin/actions/respondToJobInvite";
+import { fmtDate, fmtTime } from "@/lib/time";
 
 export interface PendingInvite {
   id: string;
@@ -20,13 +21,8 @@ function minutesUntil(iso: string): number {
 }
 
 function fmtSlot(iso: string) {
-  return new Date(iso).toLocaleString("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  // Business timezone, not the device's — matches the rest of the job UI.
+  return `${fmtDate(iso, { weekday: "short", month: "short", day: "numeric" })}, ${fmtTime(iso)}`;
 }
 
 export default function PendingInvitesPanel({

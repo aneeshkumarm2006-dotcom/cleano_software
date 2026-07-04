@@ -16,6 +16,7 @@ import { bulkSoftDelete, bulkRestore } from "@/lib/bulk/actions";
 import { bulkCancelJobs } from "../actions/bulkCancelJobs";
 import { bulkSetJobStatus } from "../actions/bulkSetJobStatus";
 import { bulkAssignCleaner } from "../actions/bulkAssignCleaner";
+import { normalizeJobType, jobTypeLabel } from "@/lib/calendar-labels";
 
 interface Job {
   id: string;
@@ -36,6 +37,7 @@ interface Job {
   paymentReceived: boolean;
   invoiceSent: boolean;
   paymentType?: string | null;
+  isCashJob?: boolean;
   discountAmount?: number | null;
   bedCount?: number | null;
   bathCount?: number | null;
@@ -141,16 +143,34 @@ function StatusPill({ status }: { status: string }) {
   );
 }
 
+// Colors keyed off the NORMALIZED category so "MOVE_IN_OUT" (imported) and
+// "Move-in / Move-out" (manual) render the same pill; jobTypeLabel() keeps raw
+// enum text out of the UI.
+const TYPE_PILL_COLORS: Record<string, { bg: string; color: string }> = {
+  RESIDENTIAL:       { bg: 'var(--primary-10)', color: 'var(--primary)' },
+  DEEP:              { bg: '#ede9fe',           color: '#5b21b6' },
+  MOVE_IN:           { bg: '#dcfce7',           color: '#166534' },
+  MOVE_OUT:          { bg: '#dcfce7',           color: '#166534' },
+  MOVE_IN_OUT:       { bg: '#dcfce7',           color: '#166534' },
+  COMMERCIAL:        { bg: '#dbeafe',           color: '#1e40af' },
+  POST_CONSTRUCTION: { bg: '#fef3c7',           color: '#92400e' },
+  AIRBNB:            { bg: '#ffe4e6',           color: '#9f1239' },
+  FOLLOW_UP:         { bg: '#f3f4f6',           color: '#374151' },
+};
+
 function TypePill({ type }: { type: string | null }) {
   if (!type) return null;
-  const map: Record<string, { label: string; bg: string; color: string }> = {
-    R:  { label: 'R',  bg: 'var(--primary-10)', color: 'var(--primary)' },
-    C:  { label: 'C',  bg: '#dbeafe',           color: '#1e40af' },
-    PC: { label: 'PC', bg: '#fef3c7',           color: '#92400e' },
-    F:  { label: 'F',  bg: '#f3f4f6',           color: '#374151' },
-  };
-  const c = map[type] || { label: type, bg: '#f3f4f6', color: '#374151' };
-  return <span className="pill" style={{ background: c.bg, color: c.color }}>{c.label}</span>;
+  const category = normalizeJobType(type);
+  const c = (category && TYPE_PILL_COLORS[category]) || { bg: '#f3f4f6', color: '#374151' };
+  return <span className="pill" style={{ background: c.bg, color: c.color }}>{jobTypeLabel(type)}</span>;
+}
+
+function CashPill() {
+  return (
+    <span className="pill" style={{ background: '#fef9c3', color: '#854d0e' }} title="Cash job — no Stripe charge, tax exempt">
+      Cash
+    </span>
+  );
 }
 
 function PayIcons({ paymentReceived, invoiceSent }: { paymentReceived: boolean; invoiceSent: boolean }) {
@@ -342,7 +362,10 @@ export default function JobsView({
         if (paymentFilter === 'pending') return !job.paymentReceived && job.status === 'COMPLETED';
         return true;
       })();
-      const matchesType    = jobTypeFilter === 'all' || job.jobType === jobTypeFilter;
+      // Match on normalized category so imported + manual jobType vocabularies
+      // both hit the same filter option.
+      const matchesType    = jobTypeFilter === 'all' ||
+        normalizeJobType(job.jobType) === (normalizeJobType(jobTypeFilter) ?? jobTypeFilter);
       const matchesClient  = clientFilter === 'all' || job.clientId === clientFilter;
       const matchesEmp     = employeeFilter === 'all' || job.cleaners.some(c => c.id === employeeFilter);
       const matchesPayType = paymentTypeFilter === 'all' || job.paymentType === paymentTypeFilter;
@@ -588,14 +611,15 @@ export default function JobsView({
               size="sm"
               options={[
                 { value: "all", label: "All types" },
-                { value: "R", label: "Residential (R)" },
+                { value: "RESIDENTIAL", label: "Residential" },
                 { value: "DEEP", label: "Deep Cleaning" },
                 { value: "MOVE_IN", label: "Move-in" },
                 { value: "MOVE_OUT", label: "Move-out" },
+                { value: "MOVE_IN_OUT", label: "Move-in / Move-out" },
                 { value: "AIRBNB", label: "Airbnb" },
-                { value: "C", label: "Commercial (C)" },
-                { value: "PC", label: "Post-Construction (PC)" },
-                { value: "F", label: "Follow-up (F)" },
+                { value: "COMMERCIAL", label: "Commercial" },
+                { value: "POST_CONSTRUCTION", label: "Post-Construction" },
+                { value: "FOLLOW_UP", label: "Follow-up" },
               ]}
             />
           </div>
@@ -763,7 +787,12 @@ export default function JobsView({
                           : <span style={{ color: 'var(--primary-40)' }}>—</span>
                         }
                       </td>
-                      <td><span style={{ fontSize: 12, color: 'var(--primary-70)' }}>{payTypeLabel(job.paymentType)}</span></td>
+                      <td>
+                        {job.isCashJob
+                          ? <CashPill />
+                          : <span style={{ fontSize: 12, color: 'var(--primary-70)' }}>{payTypeLabel(job.paymentType)}</span>
+                        }
+                      </td>
                       <td><StatusPill status={job.status} /></td>
                       <td><PayIcons paymentReceived={job.paymentReceived} invoiceSent={job.invoiceSent} /></td>
                       <td className="col-actions">
@@ -841,6 +870,7 @@ export default function JobsView({
                 </div>
                 <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
                   <TypePill type={job.jobType} />
+                  {job.isCashJob && <CashPill />}
                   <AvatarStack cleaners={job.cleaners} max={2} />
                 </div>
                 <div className="jcard-row" style={{ paddingTop: 10, borderTop: '1px solid var(--primary-10)' }}>

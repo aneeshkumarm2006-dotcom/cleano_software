@@ -6,6 +6,7 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import type { Prisma } from "@prisma/client";
 import { queueAndSendReceipt, sendCustomerBookingCharged } from "@/lib/email";
+import { getTaxRates } from "@/lib/tax.server";
 
 export async function togglePaymentReceived(jobId: string) {
   const session = await auth.api.getSession({
@@ -56,21 +57,23 @@ export async function togglePaymentReceived(jobId: string) {
     ];
 
     if (newStatus && job.price && job.price > 0) {
-      const taxConfig = await db.appSetting.findUnique({
-        where: { key: "tax.config" },
-      });
-      let taxAmount = 0;
-      if (taxConfig?.value) {
-        const cfg = taxConfig.value as {
-          gstRate?: number;
-          qstRate?: number;
-        };
-        const gst = (job.price * (cfg.gstRate ?? 0)) / 100;
-        const qst = (job.price * (cfg.qstRate ?? 0)) / 100;
-        taxAmount = gst + qst;
-      }
       const discount = job.discountAmount ?? 0;
       const netAmount = job.price - discount;
+      // Cash jobs are tax exempt. Otherwise prefer the GST/QST stored on the
+      // job (set at save/booking/import time); only recompute from the current
+      // tax.config rates for older rows saved before taxes were persisted —
+      // and on the DISCOUNTED subtotal, not the raw price.
+      let taxAmount = 0;
+      if (!job.isCashJob) {
+        const storedTax = (job.gstAmount ?? 0) + (job.qstAmount ?? 0);
+        if (storedTax > 0) {
+          taxAmount = storedTax;
+        } else {
+          const rates = await getTaxRates();
+          taxAmount =
+            (netAmount * rates.gstRate) / 100 + (netAmount * rates.qstRate) / 100;
+        }
+      }
       ops.push(
         db.transaction.create({
           data: {

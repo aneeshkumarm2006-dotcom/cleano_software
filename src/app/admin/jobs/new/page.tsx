@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { revalidatePath } from "next/cache";
+import { getTaxRates, computeJobTaxes } from "@/lib/tax.server";
 import CleanerSelector from "./CleanerSelector";
 import JobTypeSelector from "./JobTypeSelector";
 import SubmitButton from "./SubmitButton";
@@ -159,6 +160,15 @@ export default async function JobFormPage({
       }
     }
 
+    // GST/QST on the discounted subtotal from the admin-configured rates.
+    // Cash jobs are tax exempt (zero tax, total = subtotal).
+    const isCashJob = formData.get("isCashJob") === "on";
+    const taxes = computeJobTaxes(
+      (price ?? 0) - (discountAmount ?? 0),
+      await getTaxRates(),
+      isCashJob
+    );
+
     const jobData: any = {
       employeeId: session!.user.id,
       clientName: formData.get("clientName") as string,
@@ -173,6 +183,10 @@ export default async function JobFormPage({
           ? new Date(`${startDate}T${startTime}`)
           : new Date(),
       price,
+      subtotalAmount: taxes.subtotalAmount,
+      gstAmount: taxes.gstAmount,
+      qstAmount: taxes.qstAmount,
+      totalAmount: taxes.totalAmount,
       employeePay: formData.get("employeePay")
         ? parseFloat(formData.get("employeePay") as string)
         : null,
@@ -199,7 +213,7 @@ export default async function JobFormPage({
       payRateMultiplier: formData.get("payRateMultiplier")
         ? parseFloat(formData.get("payRateMultiplier") as string)
         : 1.0,
-      isCashJob: formData.get("isCashJob") === "on",
+      isCashJob,
     };
 
     const editingJobId = formData.get("jobId") as string | null;

@@ -28,7 +28,9 @@ export default async function AdminLayout({
   return (
     <Sidebar user={userWithRole} isAdmin signOutAction={signOut}>
       <PresenceHeartbeat />
-      {children}
+      {/* Mobile: clear the fixed hamburger (Sidebar renders it top-4 left-4,
+          md:hidden) so page headers aren't rendered underneath it. */}
+      <div className="h-full pt-16 md:pt-0 print:pt-0">{children}</div>
     </Sidebar>
   );
 }

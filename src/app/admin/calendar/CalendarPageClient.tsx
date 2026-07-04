@@ -29,6 +29,13 @@ function CalendarUrlSync() {
     const viewParam = searchParams.get("view");
     if (viewParam && validViews.has(viewParam)) {
       setView(viewParam as typeof view);
+    } else if (
+      !hydratedRef.current &&
+      window.matchMedia("(max-width: 767px)").matches
+    ) {
+      // Mobile default (no explicit ?view=): the 7-column month/week grids
+      // are cramped on phones — land on the Day view instead.
+      setView("day");
     }
 
     const dateParam = searchParams.get("date");

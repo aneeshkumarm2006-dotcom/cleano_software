@@ -10,6 +10,8 @@ import {
   sendCleanerImportWelcome,
 } from "@/lib/email";
 import { logActivity } from "@/lib/activity-log";
+import { getTaxRates, computeJobTaxes } from "@/lib/tax.server";
+import { jobTypeLabel } from "@/lib/calendar-labels";
 import {
   parseAndNormalize,
   aggregateCustomers,
@@ -252,6 +254,7 @@ export async function runBookingKoalaImport(
   // time, and those must all import. Fall back to customer+time only when a row
   // has no booking id.
   const seen = new Set<string>();
+  const taxRates = await getTaxRates();
   for (const r of rows) {
     const dedupKey = r.job.bookingId
       ? `bk:${r.job.bookingId}`
@@ -307,23 +310,36 @@ export async function runBookingKoalaImport(
           continue;
         }
       }
+      // GST/QST from the admin-configured rates on the discounted subtotal
+      // (cash rows stay tax exempt). The BookingKoala CSV's final amount is
+      // what was actually charged — trust it as totalAmount when it differs
+      // from the subtotal (it already includes tax); otherwise use our
+      // computed subtotal + tax.
+      const taxes = computeJobTaxes(
+        r.job.subtotalAmount - (r.job.discountAmount ?? 0),
+        taxRates,
+        r.job.isCashJob
+      );
+      const csvTotalHasTax =
+        r.job.totalAmount > 0 &&
+        Math.abs(r.job.totalAmount - r.job.subtotalAmount) > 0.01;
       const created = await db.job.create({
         data: {
           clientName: r.job.clientName,
           ...(clientId ? { client: { connect: { id: clientId } } } : {}),
           location: r.job.location,
           aptNumber: r.job.aptNumber,
-          description: `${r.job.jobType} cleaning`,
+          description: `${jobTypeLabel(r.job.jobType)} cleaning`,
           jobType: r.job.jobType,
           jobDate: r.job.startTime,
           startTime: r.job.startTime,
           endTime: r.job.endTime,
           status: r.job.status,
           price: r.job.price,
-          subtotalAmount: r.job.subtotalAmount,
-          totalAmount: r.job.totalAmount,
-          gstAmount: 0,
-          qstAmount: 0,
+          subtotalAmount: taxes.subtotalAmount,
+          totalAmount: csvTotalHasTax ? r.job.totalAmount : taxes.totalAmount,
+          gstAmount: taxes.gstAmount,
+          qstAmount: taxes.qstAmount,
           tipAmount: r.job.tipAmount,
           totalTip: r.job.totalTip,
           parking: r.job.parking,

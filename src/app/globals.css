@@ -5362,6 +5362,49 @@ a.an-listrow:hover { background: var(--primary-10); }
 .cal-ev-handle { position: absolute; left: 0; right: 0; height: 7px; cursor: ns-resize; z-index: 2; }
 .cal-ev-handle.top { top: 0; } .cal-ev-handle.bottom { bottom: 0; }
 
+/* ── Admin calendar — mobile (≤767px, matches the md: sidebar breakpoint) ── */
+@media (max-width: 767px) {
+  /* Toolbar: nav + title on one row, view controls below, New job on its own row */
+  .cal-toolbar { gap: 10px; }
+  .cal-tb-left { width: 100%; gap: 12px; min-width: 0; }
+  .cal-range { flex: 1; min-width: 0; font-size: 19px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cal-tb-right { width: 100%; gap: 8px; }
+  .cal-viewseg { flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+  .cal-viewseg::-webkit-scrollbar { display: none; }
+  .cal-vbtn { flex: 1 0 auto; padding: 7px 10px; }
+  .cal-new { order: 10; width: 100%; }
+
+  /* Overlay chips + status legend: one horizontally scrollable strip */
+  .cal-overlays { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 10px; scrollbar-width: none; }
+  .cal-overlays::-webkit-scrollbar { display: none; }
+  .cal-ovchip, .cal-leg { flex: 0 0 auto; white-space: nowrap; }
+  .cal-legend { flex-wrap: nowrap; margin-left: 4px; }
+
+  /* Time grid (Week/Day): give columns a readable min-width and scroll
+     horizontally inside the panel (.cal-grid is overflow:auto) instead of
+     squishing 7+ columns and spilling job blocks. Hour gutter stays pinned. */
+  .cal-grid-inner { width: max-content; min-width: 100%; }
+  .cal-grid-header { z-index: 40; }
+  .cal-dayhead, .cal-col { min-width: 96px; }
+  /* Cap long room names (Day view) so the header row can't grow wider than
+     the 96px columns beneath it */
+  .cal-dayhead-dow { max-width: 88px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cal-gutter-head, .cal-gutter { width: 48px; position: sticky; left: 0; background: #fff; }
+  /* Above event cards (.cal-col .cal-ev peaks at z 30), below the sticky header */
+  .cal-gutter { z-index: 31; }
+  .cal-hour span { right: 6px; }
+
+  /* Month view: tighter cells; chips show dot + name only */
+  .cal-month-dow > div { padding: 8px 2px; font-size: 10px; }
+  .cal-mcell { min-height: 74px; padding: 5px 4px; }
+  .cal-chip { padding: 3px 5px; gap: 4px; }
+  .cal-chip-t { display: none; }
+
+  /* List view: tighter row so the client name keeps room to truncate */
+  .cal-list-row { gap: 10px; padding: 10px 8px; }
+  .cal-list-time { width: 62px; }
+}
+
 /* ── Admin modal (AdminModal — centered dialog or right drawer) ── */
 .amodal-overlay { position: fixed; inset: 0; background: rgba(14,26,28,0.45); backdrop-filter: blur(4px); z-index: 300; display: flex; align-items: center; justify-content: center; padding: 24px; animation: amOverlay .16s ease-out; }
 .amodal-overlay.drawer { justify-content: flex-end; padding: 0; }
