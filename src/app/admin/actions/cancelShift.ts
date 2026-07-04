@@ -10,7 +10,6 @@ import { LAST_MINUTE_CLAIM_BONUS_USD } from "@/lib/policy";
 import { applyStrike } from "@/lib/strikes";
 
 const LATE_CANCEL_HOURS = 24;
-const LATE_CANCEL_FEE = 20;
 /** Inside this window the cleaner cancel triggers the last-minute repost. */
 const LAST_MINUTE_HOURS = 24;
 
@@ -59,13 +58,19 @@ export async function cancelShift(jobId: string): Promise<{ success: true; penal
         });
       }
 
+      // Mark this cleaner's assignment row cancelled (if one exists).
+      await tx.jobAssignment.updateMany({
+        where: { jobId, cleanerId: employeeId },
+        data: { status: "CANCELLED" },
+      });
+
       await tx.jobLog.create({
         data: {
           jobId,
           userId: employeeId,
           action: "NOTE_ADDED",
           description: isLateCancel
-            ? `Cleaner cancelled shift < ${LATE_CANCEL_HOURS}h before start — late-cancel penalty applied ($${LATE_CANCEL_FEE} deduction + 1-star rating)`
+            ? `Cleaner cancelled shift < ${LATE_CANCEL_HOURS}h before start — late-cancel penalty applied (1-star rating)`
             : "Cleaner cancelled shift",
         },
       });
@@ -81,28 +86,6 @@ export async function cancelShift(jobId: string): Promise<{ success: true; penal
             ratedBy: employeeId,
           },
         });
-
-        // $20 fee — add to deductions on the current open pay period payout
-        const openPeriod = await tx.payPeriod.findFirst({
-          where: { status: "DRAFT" },
-          orderBy: { startDate: "desc" },
-        });
-
-        if (openPeriod) {
-          await tx.payout.upsert({
-            where: { payPeriodId_employeeId: { payPeriodId: openPeriod.id, employeeId } },
-            create: {
-              payPeriodId: openPeriod.id,
-              employeeId,
-              deductions: LATE_CANCEL_FEE,
-              finalAmount: -LATE_CANCEL_FEE,
-            },
-            update: {
-              deductions: { increment: LATE_CANCEL_FEE },
-              finalAmount: { decrement: LATE_CANCEL_FEE },
-            },
-          });
-        }
       }
     });
 

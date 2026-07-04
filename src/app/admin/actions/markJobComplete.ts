@@ -31,6 +31,15 @@ export async function markJobComplete(jobId: string) {
     data: { status: "COMPLETED" },
   });
 
+  // Per-cleaner assignment status (item 9): cleaners who worked the job
+  // (clocked in/out) are marked COMPLETED when the job closes.
+  await db.jobAssignment
+    .updateMany({
+      where: { jobId, status: { in: ["CLOCKED_IN", "CLOCKED_OUT"] } },
+      data: { status: "COMPLETED" },
+    })
+    .catch((e) => console.error("markJobComplete assignments", e));
+
   // §7: advance the CRM contact lifecycle (→ ACTIVE / RETURNING).
   if (job.clientId) {
     await advanceContactLifecycleForBooking(job.clientId, "BOOKING_COMPLETED");

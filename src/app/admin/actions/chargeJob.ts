@@ -113,7 +113,8 @@ export async function chargeJob(jobId: string) {
       return { success: false, error: "Failed to apply gift card credit" };
     }
 
-    queueAndSendReceipt(jobId).catch(() => {});
+    // Receipt — gated by the per-booking notifyClient toggle.
+    if (job.notifyClient) queueAndSendReceipt(jobId).catch(() => {});
 
     await logActivity({
       category: "PAYMENT",
@@ -208,11 +209,12 @@ export async function chargeJob(jobId: string) {
       }),
     ]);
 
-    queueAndSendReceipt(jobId).catch(() => {});
+    // Receipt — gated by the per-booking notifyClient toggle.
+    if (job.notifyClient) queueAndSendReceipt(jobId).catch(() => {});
 
     // Customer "booking charged" notification (separate from the receipt;
-    // gated by `cust.fee.booking_charged`).
-    if (client.email) {
+    // gated by `cust.fee.booking_charged` + per-booking notifyClient).
+    if (job.notifyClient && client.email) {
       sendCustomerBookingCharged({
         to: client.email,
         clientName: client.name,

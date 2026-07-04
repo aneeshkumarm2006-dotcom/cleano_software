@@ -41,6 +41,9 @@ export async function cancelJobByAdmin(input: CancelJobInput) {
         startTime: true,
         location: true,
         jobType: true,
+        // Per-booking notification controls — gate job-scoped sends below.
+        notifyClient: true,
+        notifyProvider: true,
         client: { select: { email: true, phone: true } },
         cleaners: { select: { id: true, name: true, email: true } },
       },
@@ -103,7 +106,8 @@ export async function cancelJobByAdmin(input: CancelJobInput) {
       reason: input.reason,
       canceledBy: session.user.name ?? "Admin",
     }).catch((e) => console.error("admin cancel email", e));
-    if (job.client?.email) {
+    // Customer email/SMS — gated by the per-booking notifyClient toggle.
+    if (job.notifyClient && job.client?.email) {
       sendCustomerBookingCancellation({
         ...lifecycleInfo,
         to: job.client.email,
@@ -111,7 +115,7 @@ export async function cancelJobByAdmin(input: CancelJobInput) {
         refundIssued: !!refund && refund.success,
       }).catch((e) => console.error("customer cancel email", e));
     }
-    if (job.client?.phone) {
+    if (job.notifyClient && job.client?.phone) {
       smsCancellation({
         to: job.client.phone,
         jobNumber: job.jobNumber,
@@ -119,7 +123,8 @@ export async function cancelJobByAdmin(input: CancelJobInput) {
       }).catch((e) => console.error("customer cancel sms", e));
     }
     // Notify each assigned cleaner — email + (gated) app-push alert.
-    for (const c of job.cleaners) {
+    // Gated by the per-booking notifyProvider toggle.
+    for (const c of job.notifyProvider ? job.cleaners : []) {
       if (c.email) {
         sendProviderBookingCanceled({
           to: c.email,

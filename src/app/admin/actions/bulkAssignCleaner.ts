@@ -62,6 +62,14 @@ export async function bulkAssignCleaner(
           },
         })
       ),
+      // Per-cleaner assignment status row (item 9) — idempotent upsert.
+      ...jobs.map((j) =>
+        db.jobAssignment.upsert({
+          where: { jobId_cleanerId: { jobId: j.id, cleanerId } },
+          update: {},
+          create: { jobId: j.id, cleanerId, status: "ASSIGNED" },
+        })
+      ),
       ...jobs.map((j) =>
         db.jobLog.create({
           data: {

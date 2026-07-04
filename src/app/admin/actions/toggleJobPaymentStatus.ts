@@ -102,8 +102,9 @@ export async function togglePaymentReceived(jobId: string) {
 
     await db.$transaction(ops);
 
-    // Send receipt + "booking charged" email when payment is marked received
-    if (newStatus) {
+    // Send receipt + "booking charged" email when payment is marked received.
+    // Gated by the per-booking notifyClient toggle.
+    if (newStatus && job.notifyClient) {
       queueAndSendReceipt(jobId).catch(() => {});
 
       // The receipt has the formal totals; "booking charged" is the simpler

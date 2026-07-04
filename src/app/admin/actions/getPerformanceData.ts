@@ -109,6 +109,7 @@ export async function getPerformanceData(
       rating: r.rating,
       notes: r.notes,
       createdAt: r.createdAt.toISOString(),
+      editedAt: r.editedAt?.toISOString() ?? null,
       jobId: r.jobId,
       clientName: r.job?.clientName ?? null,
     }));

@@ -3,70 +3,43 @@
 import React, { useState } from "react";
 import {
   MessageCircle,
-  AlertCircle,
   Sparkles,
   Plus,
   Check,
   Pin,
+  Pencil,
+  Trash2,
+  Heart,
 } from "lucide-react";
+import useSWR from "swr";
 import { initials } from "@/lib/avatar";
 import AdminModal from "@/components/ui/AdminModal";
+import {
+  listAnnouncements,
+  createAnnouncement,
+  updateAnnouncement,
+  deleteAnnouncement,
+  togglePin,
+  reactToAnnouncement,
+  type AnnouncementDTO,
+} from "./announcements";
 
-interface Announcement {
-  id: string;
-  pinned: boolean;
-  audience: string;
-  author: string;
-  hoursAgo: number;
-  unread: boolean;
-  title: string;
-  body: string;
-  reactions: Record<string, number>;
-  acked: number;
-  total: number;
-  youAcked?: boolean;
+interface AnnouncementsClientProps {
+  initial: AnnouncementDTO[];
+  /** Admin/office users can publish, edit, pin, and delete. */
+  canManage: boolean;
 }
 
-const AUDIENCE = [
-  { id: "all", label: "All cleaners" },
-  { id: "leads", label: "Lead cleaners" },
-  { id: "trainees", label: "Trainees" },
-  { id: "office", label: "Office / dispatch" },
-];
-const audienceLabel = (id: string) =>
-  (AUDIENCE.find((a) => a.id === id) || AUDIENCE[0]).label;
-
+// Must match REACTION_EMOJIS on the server.
 const REACTION_SET = ["👍", "🎉", "❤️"];
 
-const INITIAL: Announcement[] = [
-  {
-    id: "AN-5", pinned: true, audience: "all", author: "Diane Moreau", hoursAgo: 5, unread: true,
-    title: "New supply pickup hours start Monday",
-    body: "The supply room is now open 7:00–9:30 AM on weekdays only. Please grab your rags and refills before your first job. Weekend pickups move to the Friday window.",
-    reactions: { "👍": 6, "🎉": 2 }, acked: 4, total: 12,
-  },
-  {
-    id: "AN-4", pinned: false, audience: "leads", author: "Karim Benali", hoursAgo: 28, unread: true,
-    title: "Lead cleaners: new quality checklist",
-    body: "We added 4 items to the move-out checklist (baseboards, inside window tracks, range hood filter, balcony sweep). Please review before your next move-out clean.",
-    reactions: { "👍": 3 }, acked: 2, total: 4,
-  },
-  {
-    id: "AN-3", pinned: false, audience: "all", author: "Diane Moreau", hoursAgo: 72, unread: false,
-    title: "Welcome Noémie to the crew! 🎉",
-    body: "Noémie joins us as a lead cleaner this week. Say hi if you see her on a shared job — she is shadowing Camille through Friday.",
-    reactions: { "🎉": 9, "👍": 5, "❤️": 4 }, acked: 11, total: 12,
-  },
-  {
-    id: "AN-2", pinned: false, audience: "all", author: "Diane Moreau", hoursAgo: 140, unread: false,
-    title: "Reminder: log rag washes for payout",
-    body: "Don't forget to log your rag washes in the app — each logged wash adds $0.50 to your next payout. Unlogged washes can't be reimbursed.",
-    reactions: { "👍": 7 }, acked: 9, total: 12,
-  },
-];
-
-function formatAgo(h: number) {
-  if (h <= 0) return "Just now";
+function formatAgo(iso: string) {
+  const ms = Date.now() - new Date(iso).getTime();
+  const h = Math.floor(ms / 3_600_000);
+  if (h <= 0) {
+    const m = Math.floor(ms / 60_000);
+    return m <= 1 ? "Just now" : `${m}m ago`;
+  }
   if (h < 24) return `${h}h ago`;
   const d = Math.round(h / 24);
   return `${d} day${d === 1 ? "" : "s"} ago`;
@@ -123,30 +96,48 @@ function Stat({
 }
 
 function ComposeModal({
+  editing,
   onClose,
-  onPublish,
+  onSave,
 }: {
+  editing: AnnouncementDTO | null;
   onClose: () => void;
-  onPublish: (a: { title: string; body: string; pinned: boolean; audience: string }) => void;
+  onSave: (a: {
+    title: string;
+    body: string;
+    pinned: boolean;
+  }) => Promise<string | null>;
 }) {
-  const [title, setTitle] = useState("");
-  const [body, setBody] = useState("");
-  const [pinned, setPinned] = useState(false);
-  const [audience, setAudience] = useState("all");
+  const [title, setTitle] = useState(editing?.title ?? "");
+  const [body, setBody] = useState(editing?.body ?? "");
+  const [pinned, setPinned] = useState(editing?.pinned ?? false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const valid = title.trim() && body.trim();
 
-  function publish() {
-    if (!valid) return;
-    onPublish({ title: title.trim(), body: body.trim(), pinned, audience });
+  async function save() {
+    if (!valid || saving) return;
+    setSaving(true);
+    setError(null);
+    const err = await onSave({ title: title.trim(), body: body.trim(), pinned });
+    setSaving(false);
+    if (err) {
+      setError(err);
+      return;
+    }
     onClose();
   }
 
   return (
     <AdminModal
       open
-      title="New announcement"
-      subtitle="Posts to the team hub and notifies the chosen audience."
+      title={editing ? "Edit announcement" : "New announcement"}
+      subtitle={
+        editing
+          ? "Changes are visible to the whole team immediately."
+          : "Posts to the team hub for all cleaners and staff."
+      }
       onClose={onClose}
       width={540}
       footer={
@@ -161,17 +152,35 @@ function ComposeModal({
           <button className="btn btn-secondary btn-sm" onClick={onClose}>
             Cancel
           </button>
-          <button className="btn btn-primary btn-sm" onClick={publish} disabled={!valid}>
-            Publish
+          <button
+            className="btn btn-primary btn-sm"
+            onClick={save}
+            disabled={!valid || saving}>
+            {saving ? "Saving…" : editing ? "Save changes" : "Publish"}
           </button>
         </>
       }>
+      {error && (
+        <div
+          style={{
+            fontSize: 13,
+            color: "#dc2626",
+            background: "#fef2f2",
+            border: "1px solid #fecaca",
+            borderRadius: 8,
+            padding: "8px 12px",
+            marginBottom: 12,
+          }}>
+          {error}
+        </div>
+      )}
       <Field label="Title">
         <input
           className="input aselect"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="e.g. Holiday schedule changes"
+          maxLength={120}
           autoFocus
         />
       </Field>
@@ -182,19 +191,8 @@ function ComposeModal({
           value={body}
           onChange={(e) => setBody(e.target.value)}
           placeholder="Write your announcement…"
+          maxLength={5000}
         />
-      </Field>
-      <Field label="Audience">
-        <select
-          className="aselect"
-          value={audience}
-          onChange={(e) => setAudience(e.target.value)}>
-          {AUDIENCE.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.label}
-            </option>
-          ))}
-        </select>
       </Field>
     </AdminModal>
   );
@@ -202,56 +200,75 @@ function ComposeModal({
 
 function AnnouncementCard({
   a,
-  onMarkRead,
+  canManage,
   onTogglePin,
   onReact,
-  onAck,
+  onEdit,
+  onDelete,
 }: {
-  a: Announcement;
-  onMarkRead: (id: string) => void;
+  a: AnnouncementDTO;
+  canManage: boolean;
   onTogglePin: (id: string) => void;
   onReact: (id: string, emoji: string) => void;
-  onAck: (id: string) => void;
+  onEdit: (a: AnnouncementDTO) => void;
+  onDelete: (id: string) => void;
 }) {
   return (
-    <article
-      className={`an-card ${a.pinned ? "pinned" : ""}`}
-      onMouseEnter={() => a.unread && onMarkRead(a.id)}>
+    <article className={`an-card ${a.pinned ? "pinned" : ""}`}>
       <div className="an-card-head">
-        <Avatar name={a.author} size={38} />
+        <Avatar name={a.authorName} size={38} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            <span className="an-author">{a.author}</span>
-            <span className="an-aud">{audienceLabel(a.audience)}</span>
-            {a.unread ? <span className="an-new">New</span> : null}
+            <span className="an-author">{a.authorName}</span>
           </div>
-          <div className="an-time">{formatAgo(a.hoursAgo)}</div>
+          <div className="an-time">{formatAgo(a.createdAt)}</div>
         </div>
         {a.pinned ? (
           <span className="an-pinned-badge">
             <Pin size={12} /> Pinned
           </span>
         ) : null}
-        <button
-          className="icon-btn"
-          style={{ width: 30, height: 30 }}
-          title={a.pinned ? "Unpin" : "Pin"}
-          onClick={() => onTogglePin(a.id)}>
-          <Pin size={13} />
-        </button>
+        {canManage && (
+          <>
+            <button
+              className="icon-btn"
+              style={{ width: 30, height: 30 }}
+              title={a.pinned ? "Unpin" : "Pin"}
+              onClick={() => onTogglePin(a.id)}>
+              <Pin size={13} />
+            </button>
+            <button
+              className="icon-btn"
+              style={{ width: 30, height: 30 }}
+              title="Edit"
+              onClick={() => onEdit(a)}>
+              <Pencil size={13} />
+            </button>
+            <button
+              className="icon-btn"
+              style={{ width: 30, height: 30 }}
+              title="Delete"
+              onClick={() => onDelete(a.id)}>
+              <Trash2 size={13} />
+            </button>
+          </>
+        )}
       </div>
 
       <h3 className="an-title">{a.title}</h3>
-      <p className="an-body">{a.body}</p>
+      <p className="an-body" style={{ whiteSpace: "pre-wrap" }}>{a.body}</p>
 
       <div className="an-foot">
         <div className="an-reactions">
           {REACTION_SET.map((e) => {
             const n = a.reactions[e] || 0;
+            const mine = a.myReaction === e;
             return (
               <button
                 key={e}
                 className={`an-react ${n ? "has" : ""}`}
+                title={mine ? "Remove your reaction" : "React"}
+                style={mine ? { borderColor: "var(--primary)", background: "var(--primary-5)" } : undefined}
                 onClick={() => onReact(a.id, e)}>
                 <span style={{ fontSize: 14 }}>{e}</span>
                 {n ? <span className="an-react-n">{n}</span> : null}
@@ -259,89 +276,107 @@ function AnnouncementCard({
             );
           })}
         </div>
-        <div className="an-ack">
-          <span className="an-ack-count">
-            {a.acked}/{a.total} read
-          </span>
-          <button
-            className={`btn btn-sm ${a.youAcked ? "btn-secondary" : "btn-primary"}`}
-            disabled={a.youAcked}
-            onClick={() => onAck(a.id)}>
-            {a.youAcked ? (
-              <>
-                <Check size={13} /> Acknowledged
-              </>
-            ) : (
-              "Mark as read"
-            )}
-          </button>
-        </div>
       </div>
     </article>
   );
 }
 
-export default function AnnouncementsClient() {
-  const [anns, setAnns] = useState<Announcement[]>(INITIAL);
-  const [seq, setSeq] = useState(100);
+export default function AnnouncementsClient({
+  initial,
+  canManage,
+}: AnnouncementsClientProps) {
   const [composing, setComposing] = useState(false);
+  const [editing, setEditing] = useState<AnnouncementDTO | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const items = [...anns].sort(
-    (a, b) => Number(b.pinned) - Number(a.pinned) || a.hoursAgo - b.hoursAgo
+  const { data, mutate } = useSWR<AnnouncementDTO[]>(
+    "announcements",
+    async () => {
+      const res = await listAnnouncements();
+      if (!res.success) throw new Error(res.error);
+      return res.data;
+    },
+    { fallbackData: initial, refreshInterval: 30000 }
   );
-  const unread = anns.filter((a) => a.unread).length;
-  const pinnedCount = anns.filter((a) => a.pinned).length;
 
-  function publish({
-    title,
-    body,
-    pinned,
-    audience,
-  }: {
+  const items = data ?? initial;
+  const pinnedCount = items.filter((a) => a.pinned).length;
+  const totalReactions = items.reduce(
+    (sum, a) => sum + Object.values(a.reactions).reduce((s, n) => s + n, 0),
+    0
+  );
+
+  async function handleSave(input: {
     title: string;
     body: string;
     pinned: boolean;
-    audience: string;
-  }) {
-    setAnns((prev) => [
-      {
-        id: "AN-" + seq,
-        pinned,
-        audience,
-        author: "Diane Moreau",
-        hoursAgo: 0,
-        unread: false,
-        title,
-        body,
-        reactions: {},
-        acked: 0,
-        total: 12,
-      },
-      ...prev,
-    ]);
-    setSeq((s) => s + 1);
+  }): Promise<string | null> {
+    const res = editing
+      ? await updateAnnouncement(editing.id, input)
+      : await createAnnouncement(input);
+    if (!res.success) return res.error;
+    await mutate();
+    return null;
   }
 
-  const markRead = (id: string) =>
-    setAnns((prev) => prev.map((a) => (a.id === id ? { ...a, unread: false } : a)));
-  const togglePin = (id: string) =>
-    setAnns((prev) => prev.map((a) => (a.id === id ? { ...a, pinned: !a.pinned } : a)));
-  const react = (id: string, emoji: string) =>
-    setAnns((prev) =>
-      prev.map((a) =>
-        a.id === id
-          ? { ...a, reactions: { ...a.reactions, [emoji]: (a.reactions[emoji] || 0) + 1 } }
-          : a
-      )
+  async function handleTogglePin(id: string) {
+    setError(null);
+    // Optimistic flip, reconciled by the revalidate below.
+    await mutate(
+      (cur) => cur?.map((a) => (a.id === id ? { ...a, pinned: !a.pinned } : a)),
+      { revalidate: false }
     );
-  const ack = (id: string) =>
-    setAnns((prev) =>
-      prev.map((a) =>
-        a.id === id
-          ? { ...a, acked: Math.min(a.total, a.acked + 1), youAcked: true, unread: false }
-          : a
-      )
+    const res = await togglePin(id);
+    if (!res.success) setError(res.error);
+    await mutate();
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm("Delete this announcement? The team will no longer see it.")) return;
+    setError(null);
+    await mutate((cur) => cur?.filter((a) => a.id !== id), { revalidate: false });
+    const res = await deleteAnnouncement(id);
+    if (!res.success) setError(res.error);
+    await mutate();
+  }
+
+  async function handleReact(id: string, emoji: string) {
+    setError(null);
+    // Optimistic single-reaction semantics: same emoji toggles off, a
+    // different one switches. Reconciled with the action's fresh counts.
+    await mutate(
+      (cur) =>
+        cur?.map((a) => {
+          if (a.id !== id) return a;
+          const reactions = { ...a.reactions };
+          if (a.myReaction) {
+            reactions[a.myReaction] = Math.max(0, (reactions[a.myReaction] || 1) - 1);
+            if (!reactions[a.myReaction]) delete reactions[a.myReaction];
+          }
+          if (a.myReaction === emoji) {
+            return { ...a, reactions, myReaction: null };
+          }
+          reactions[emoji] = (reactions[emoji] || 0) + 1;
+          return { ...a, reactions, myReaction: emoji };
+        }),
+      { revalidate: false }
     );
+    const res = await reactToAnnouncement(id, emoji);
+    if (!res.success) {
+      setError(res.error);
+      await mutate();
+      return;
+    }
+    await mutate(
+      (cur) =>
+        cur?.map((a) =>
+          a.id === id
+            ? { ...a, reactions: res.data.reactions, myReaction: res.data.myReaction }
+            : a
+        ),
+      { revalidate: false }
+    );
+  }
 
   return (
     <div className="admin-font">
@@ -354,34 +389,76 @@ export default function AnnouncementsClient() {
             Announcements
           </h1>
         </div>
-        <button className="btn btn-primary" onClick={() => setComposing(true)}>
-          <Plus size={15} /> New announcement
-        </button>
+        {canManage && (
+          <button
+            className="btn btn-primary"
+            onClick={() => {
+              setEditing(null);
+              setComposing(true);
+            }}>
+            <Plus size={15} /> New announcement
+          </button>
+        )}
       </header>
+
+      {error && (
+        <div
+          style={{
+            fontSize: 13,
+            color: "#dc2626",
+            background: "#fef2f2",
+            border: "1px solid #fecaca",
+            borderRadius: 8,
+            padding: "8px 12px",
+            marginBottom: 16,
+          }}>
+          {error}
+        </div>
+      )}
 
       <div
         className="astat-grid"
         style={{ marginBottom: 26, gridTemplateColumns: "repeat(3, minmax(0,1fr))" }}>
         <Stat icon={<MessageCircle size={16} />} label="Posts" value={items.length} hint="visible to the team" />
-        <Stat icon={<AlertCircle size={16} />} label="Unread" value={unread} hint="new since you last looked" up={unread > 0} />
         <Stat icon={<Sparkles size={16} />} label="Pinned" value={pinnedCount} hint="kept at the top" />
+        <Stat icon={<Heart size={16} />} label="Reactions" value={totalReactions} hint="from the crew" up={totalReactions > 0} />
       </div>
 
       <div className="an-feed">
-        {items.map((a) => (
-          <AnnouncementCard
-            key={a.id}
-            a={a}
-            onMarkRead={markRead}
-            onTogglePin={togglePin}
-            onReact={react}
-            onAck={ack}
-          />
-        ))}
+        {items.length === 0 ? (
+          <div
+            className="an-card"
+            style={{ textAlign: "center", color: "var(--primary-50)", fontSize: 14 }}>
+            No announcements yet.
+            {canManage ? " Publish the first one to keep the crew in the loop." : ""}
+          </div>
+        ) : (
+          items.map((a) => (
+            <AnnouncementCard
+              key={a.id}
+              a={a}
+              canManage={canManage}
+              onTogglePin={handleTogglePin}
+              onReact={handleReact}
+              onEdit={(an) => {
+                setEditing(an);
+                setComposing(true);
+              }}
+              onDelete={handleDelete}
+            />
+          ))
+        )}
       </div>
 
       {composing ? (
-        <ComposeModal onClose={() => setComposing(false)} onPublish={publish} />
+        <ComposeModal
+          editing={editing}
+          onClose={() => {
+            setComposing(false);
+            setEditing(null);
+          }}
+          onSave={handleSave}
+        />
       ) : null}
     </div>
   );

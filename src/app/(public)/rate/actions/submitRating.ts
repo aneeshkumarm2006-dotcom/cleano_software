@@ -46,12 +46,11 @@ export async function submitRating(input: SubmitRatingInput) {
     );
 
     if (!tokenRow) return { success: false, error: "Invalid rating link" };
-    if (tokenRow.usedAt) {
-      return { success: false, error: "This rating link has already been used" };
-    }
     if (tokenRow.expiresAt && tokenRow.expiresAt < new Date()) {
       return { success: false, error: "This rating link has expired" };
     }
+    // A used token means the client is editing their previous rating.
+    const isEdit = !!tokenRow.usedAt;
 
     // Cleaners to rate: prefer the explicit cleaner on the token, fall back
     // to all cleaners assigned to the job.
@@ -66,26 +65,66 @@ export async function submitRating(input: SubmitRatingInput) {
       };
     }
 
-    await db.$transaction([
-      ...cleanerIds.map((employeeId) =>
-        db.employeeRating.create({
-          data: {
-            jobId: tokenRow.jobId,
-            employeeId,
-            rating: effectiveStars,
-            notes:
-              effectiveStars !== input.stars
-                ? `${input.comment?.trim() ?? ""}${input.comment?.trim() ? " | " : ""}Late-arrival penalty applied (${input.stars} → ${effectiveStars})`.trim()
-                : input.comment?.trim() || null,
-            ratedBy: "client-link",
-          },
-        })
-      ),
-      db.jobRatingToken.update({
-        where: { id: tokenRow.id },
-        data: { usedAt: new Date(), ratingStars: input.stars },
-      }),
-    ]);
+    const ratingNotes =
+      effectiveStars !== input.stars
+        ? `${input.comment?.trim() ?? ""}${input.comment?.trim() ? " | " : ""}Late-arrival penalty applied (${input.stars} → ${effectiveStars})`.trim()
+        : input.comment?.trim() || null;
+
+    if (isEdit) {
+      // Update the rating rows created by the original submission in place
+      // (averages are computed live, so no separate recalc is needed).
+      const existing = await db.employeeRating.findMany({
+        where: {
+          jobId: tokenRow.jobId,
+          employeeId: { in: cleanerIds },
+          ratedBy: { in: ["client-link", "client-portal"] },
+        },
+        select: { id: true, employeeId: true },
+      });
+      const editedAt = new Date();
+      await db.$transaction([
+        ...cleanerIds.map((employeeId) => {
+          const row = existing.find((r) => r.employeeId === employeeId);
+          return row
+            ? db.employeeRating.update({
+                where: { id: row.id },
+                data: { rating: effectiveStars, notes: ratingNotes, editedAt },
+              })
+            : db.employeeRating.create({
+                data: {
+                  jobId: tokenRow.jobId,
+                  employeeId,
+                  rating: effectiveStars,
+                  notes: ratingNotes,
+                  ratedBy: "client-link",
+                  editedAt,
+                },
+              });
+        }),
+        db.jobRatingToken.update({
+          where: { id: tokenRow.id },
+          data: { ratingStars: input.stars },
+        }),
+      ]);
+    } else {
+      await db.$transaction([
+        ...cleanerIds.map((employeeId) =>
+          db.employeeRating.create({
+            data: {
+              jobId: tokenRow.jobId,
+              employeeId,
+              rating: effectiveStars,
+              notes: ratingNotes,
+              ratedBy: "client-link",
+            },
+          })
+        ),
+        db.jobRatingToken.update({
+          where: { id: tokenRow.id },
+          data: { usedAt: new Date(), ratingStars: input.stars },
+        }),
+      ]);
+    }
 
     // Persist any client-attached review photos (poor reviews). Sanitized to
     // valid http(s) URLs, capped at 5.
@@ -121,7 +160,12 @@ export async function submitRating(input: SubmitRatingInput) {
     });
 
     // 1-star follow-up: email the customer + create a CRITICAL admin alert.
-    if (input.stars <= POOR_RATING_FOLLOWUP_STARS) {
+    // On edits, only fire when the rating newly drops to poor.
+    const wasPoor =
+      isEdit &&
+      tokenRow.ratingStars != null &&
+      tokenRow.ratingStars <= POOR_RATING_FOLLOWUP_STARS;
+    if (input.stars <= POOR_RATING_FOLLOWUP_STARS && !wasPoor) {
       const clientEmail = job?.client?.email ?? null;
       const clientName =
         job?.client?.name ?? job?.clientName ?? "the customer";

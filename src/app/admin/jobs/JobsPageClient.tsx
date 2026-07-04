@@ -47,6 +47,7 @@ export interface Job {
   invoiceSent: boolean;
   paymentType: string | null;
   isCashJob?: boolean;
+  usesFixedPrice?: boolean;
   discountAmount: number | null;
   bedCount: number | null;
   bathCount: number | null;

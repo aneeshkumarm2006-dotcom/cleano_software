@@ -24,6 +24,7 @@ import { computeJobPayout } from "@/lib/pay-tiers";
 import { getTaxRates, computeJobTaxes } from "@/lib/tax.server";
 import { createAssignmentInvites } from "@/lib/invites";
 import { getSetting } from "@/lib/settings";
+import { syncJobAssignments } from "@/lib/job-assignments";
 import { fmtDate, fmtTime } from "@/lib/time";
 import {
   recurringDiscountPercent,
@@ -102,22 +103,44 @@ export async function saveJob(formData: FormData) {
     const clientId = (formData.get("clientId") as string) || null;
     let clientName = (formData.get("clientName") as string) || "";
     let clientDiscountPercent = 0;
+    let clientFixedPrice: number | null = null;
+    let clientFixedPriceRecurring = false;
+    let clientFixedPriceAllowFreqDiscount = false;
 
     if (clientId) {
       const existing = await db.client.findUnique({ where: { id: clientId } });
       if (existing) {
         if (!clientName) clientName = existing.name;
         clientDiscountPercent = existing.discountPercent || 0;
+        clientFixedPrice = existing.fixedPrice ?? null;
+        clientFixedPriceRecurring = existing.fixedPriceRecurring;
+        clientFixedPriceAllowFreqDiscount =
+          existing.fixedPriceAllowFrequencyDiscount;
       }
     }
 
-    const price = parseOptionalFloat(formData.get("price"));
+    let price = parseOptionalFloat(formData.get("price"));
+
+    // Customer-specific fixed pricing ("Change Total"). When the client has a
+    // fixed price and the admin left the price blank (or typed the fixed price
+    // itself), the job charges the fixed total. An explicitly different price
+    // wins and clears the flag.
+    let usesFixedPrice = false;
+    if (clientFixedPrice !== null && clientFixedPrice > 0) {
+      if (price === null || price === clientFixedPrice) {
+        price = clientFixedPrice;
+        usesFixedPrice = true;
+      }
+    }
+
     let discountAmount = parseOptionalFloat(formData.get("discountAmount"));
 
     // Auto-apply client default discount when admin hasn't entered one.
     // Treat null/empty as "not entered"; admin can pass "0" to opt out.
+    // Fixed-price jobs skip it — the fixed price IS the agreed total.
     if (
       discountAmount === null &&
+      !usesFixedPrice &&
       clientDiscountPercent > 0 &&
       price !== null &&
       price > 0
@@ -182,6 +205,7 @@ export async function saveJob(formData: FormData) {
           : new Date(),
       endTime: endDate && endTime ? new Date(`${endDate}T${endTime}`) : null,
       price,
+      usesFixedPrice,
       subtotalAmount: taxes.subtotalAmount,
       gstAmount: taxes.gstAmount,
       qstAmount: taxes.qstAmount,
@@ -218,6 +242,9 @@ export async function saveJob(formData: FormData) {
           location: true,
           jobType: true,
           totalTip: true,
+          // Per-booking notification controls — gate job-scoped sends below.
+          notifyClient: true,
+          notifyProvider: true,
           client: { select: { email: true, name: true, phone: true } },
           cleaners: { select: { id: true, name: true, email: true } },
         },
@@ -243,6 +270,9 @@ export async function saveJob(formData: FormData) {
         where: { id: editingJobId },
         data: updateData,
       });
+
+      // Keep per-cleaner JobAssignment rows in sync with the assigned team.
+      await syncJobAssignments(editingJobId, cleanerIds);
 
       // ── Booking lifecycle notifications ──────────────────────────
       const sessionUserName = session.user.name ?? "Admin";
@@ -282,15 +312,15 @@ export async function saveJob(formData: FormData) {
             canceledBy: sessionUserName,
           }).catch((e) => console.error("admin cancel email", e));
 
-          // Customer email
-          if (existingJob.client?.email) {
+          // Customer email — gated by the per-booking notifyClient toggle.
+          if (existingJob.notifyClient && existingJob.client?.email) {
             sendCustomerBookingCancellation({
               ...lifecycleInfo,
               to: existingJob.client.email,
             }).catch((e) => console.error("customer cancel email", e));
           }
-          // Customer SMS (gated by Twilio config + catalog toggle).
-          if (existingJob.client?.phone) {
+          // Customer SMS (gated by Twilio config + catalog toggle + per-booking notifyClient).
+          if (existingJob.notifyClient && existingJob.client?.phone) {
             smsCancellation({
               to: existingJob.client.phone,
               jobNumber: existingJob.jobNumber,
@@ -298,7 +328,8 @@ export async function saveJob(formData: FormData) {
           }
 
           // Notify each assigned cleaner — email + app-push alert.
-          for (const c of existingJob.cleaners) {
+          // Gated by the per-booking notifyProvider toggle.
+          for (const c of existingJob.notifyProvider ? existingJob.cleaners : []) {
             if (c.email) {
               sendProviderBookingCanceled({
                 to: c.email,
@@ -335,7 +366,8 @@ export async function saveJob(formData: FormData) {
           existingJob.cleaners.length === 0 && cleanerIds.length > 0;
 
         // Customer "Booking confirmed" when the first cleaner is paired.
-        if (justGotFirstCleaner && existingJob.client?.email) {
+        // Gated by the per-booking notifyClient toggle.
+        if (justGotFirstCleaner && existingJob.notifyClient && existingJob.client?.email) {
           const assignedCleaners = await db.user.findMany({
             where: { id: { in: cleanerIds } },
             select: { name: true },
@@ -361,7 +393,8 @@ export async function saveJob(formData: FormData) {
             ...lifecycleInfo,
             changedBy: sessionUserName,
           }).catch((e) => console.error("admin modified email", e));
-          if (existingJob.client?.email) {
+          // Customer "modified" email — gated by per-booking notifyClient.
+          if (existingJob.notifyClient && existingJob.client?.email) {
             sendCustomerBookingModified({
               ...lifecycleInfo,
               to: existingJob.client.email,
@@ -378,7 +411,8 @@ export async function saveJob(formData: FormData) {
         }
 
         // Provider app-push for newly assigned cleaners ("New booking" for them).
-        for (const cleanerId of cleanersAdded) {
+        // Gated by the per-booking notifyProvider toggle.
+        for (const cleanerId of existingJob.notifyProvider ? cleanersAdded : []) {
           if (await isNotificationEnabled("PROVIDER", "prov.booking.new", "APP_PUSH")) {
             await db.alert.create({
               data: {
@@ -395,8 +429,9 @@ export async function saveJob(formData: FormData) {
         }
 
         // Provider app-push for cleaners on a modified (already assigned) job.
+        // Gated by the per-booking notifyProvider toggle.
         const stillAssigned = cleanerIds.filter((id) => previousCleanerIds.has(id));
-        if (!justGotFirstCleaner && stillAssigned.length > 0) {
+        if (!justGotFirstCleaner && stillAssigned.length > 0 && existingJob.notifyProvider) {
           // Evaluate the "modified after 5 pm the day before the job" window in
           // America/Toronto (business tz), NOT server-local (UTC). setHours on a
           // UTC server would put the cutoff at 5 pm UTC = ~1 pm Toronto. Here we
@@ -515,7 +550,8 @@ export async function saveJob(formData: FormData) {
             tipAmount: tipDelta,
             cleanerNames: existingJob.cleaners.map((c) => c.name),
           }).catch((e) => console.error("admin tip-received email", e));
-          if (existingJob.client?.email) {
+          // Customer fee email — gated by per-booking notifyClient.
+          if (existingJob.notifyClient && existingJob.client?.email) {
             sendCustomerFeesCharged({
               ...lifecycleInfo,
               to: existingJob.client.email,
@@ -525,7 +561,8 @@ export async function saveJob(formData: FormData) {
             }).catch((e) => console.error("customer tip-fee email", e));
           }
           // Tell every assigned cleaner about their tip — split evenly.
-          if (existingJob.cleaners.length > 0) {
+          // Gated by per-booking notifyProvider.
+          if (existingJob.notifyProvider && existingJob.cleaners.length > 0) {
             const perCleaner = tipDelta / existingJob.cleaners.length;
             const cleanerUsers = await db.user.findMany({
               where: { id: { in: existingJob.cleaners.map((c) => c.id) } },
@@ -569,6 +606,11 @@ export async function saveJob(formData: FormData) {
 
       const newJob = await db.job.create({ data: jobData });
 
+      // Per-cleaner JobAssignment rows for the assigned team.
+      if (cleanerIds.length > 0) {
+        await syncJobAssignments(newJob.id, cleanerIds);
+      }
+
       // Accept/decline invite for any cleaners assigned at creation.
       if (cleanerIds.length > 0) {
         await createAssignmentInvites({
@@ -588,7 +630,15 @@ export async function saveJob(formData: FormData) {
         );
         const occurrences = recurrenceCount(recurringFrequency, weeklyHorizon);
         const basePrice = jobData.price ?? 0;
-        const discountPct = recurringDiscountPercent(recurringFrequency);
+        // Fixed-price clients: when the fixed total carries to recurring
+        // bookings, child jobs keep price = fixedPrice and get NO frequency
+        // discount unless the client explicitly allows stacking it on top.
+        const childUsesFixedPrice = usesFixedPrice && clientFixedPriceRecurring;
+        const skipFrequencyDiscount =
+          childUsesFixedPrice && !clientFixedPriceAllowFreqDiscount;
+        const discountPct = skipFrequencyDiscount
+          ? 0
+          : recurringDiscountPercent(recurringFrequency);
         const recurringDiscount =
           basePrice > 0 && discountPct > 0
             ? Math.round(((basePrice * discountPct) / 100) * 100) / 100
@@ -597,6 +647,13 @@ export async function saveJob(formData: FormData) {
           recurringDiscount > 0
             ? +((jobData.discountAmount ?? 0) + recurringDiscount).toFixed(2)
             : jobData.discountAmount;
+        // Child taxes are computed off the child's own discounted subtotal
+        // (the fixed price when it carries over), not the parent's amounts.
+        const childTaxes = computeJobTaxes(
+          basePrice - (childDiscount ?? 0),
+          taxRates,
+          isCashJob
+        );
 
         // Preserve the job's duration across occurrences.
         const durationMs =
@@ -613,6 +670,11 @@ export async function saveJob(formData: FormData) {
             startTime: cursor,
             endTime: durationMs != null ? new Date(cursor.getTime() + durationMs) : null,
             discountAmount: childDiscount,
+            usesFixedPrice: childUsesFixedPrice,
+            subtotalAmount: childTaxes.subtotalAmount,
+            gstAmount: childTaxes.gstAmount,
+            qstAmount: childTaxes.qstAmount,
+            totalAmount: childTaxes.totalAmount,
             bookingSource: "admin-recurring",
             parentJob: { connect: { id: newJob.id } },
           };
@@ -628,6 +690,7 @@ export async function saveJob(formData: FormData) {
           const child = await db.job.create({ data: childData });
 
           if (cleanerIds.length > 0) {
+            await syncJobAssignments(child.id, cleanerIds);
             await createAssignmentInvites({ jobId: child.id, cleanerIds });
           }
           await invalidateCalendarDay(cursor.toISOString().slice(0, 10));

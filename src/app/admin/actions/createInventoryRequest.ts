@@ -88,6 +88,7 @@ export async function createInventoryRequest(
         message: alertMessage,
         relatedId,
         relatedType,
+        employeeId: session.user.id,
       },
     });
 

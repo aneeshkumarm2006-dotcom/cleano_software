@@ -11,6 +11,7 @@ import PremiumSelect from "@/components/ui/PremiumSelect";
 import { EmployeeModal } from "../EmployeeModal";
 import { assignKit } from "../../actions/assignKit";
 import { setEmployeeRating } from "../../actions/setEmployeeRating";
+import { resolveInventoryRequest } from "../../actions/resolveInventoryRequest";
 import { setCleanerTier } from "../../actions/setCleanerTier";
 import { setFieldLead } from "../../actions/setFieldLead";
 import { TIER_LABEL, type CleanerTier } from "@/lib/pay-tiers";
@@ -100,6 +101,17 @@ interface AssignedProduct {
   costPerUnit: number;
 }
 
+interface InventoryRequestDTO {
+  id: string;
+  itemName: string;
+  isKit: boolean;
+  quantity: number;
+  unit: string | null;
+  reason: string | null;
+  status: "PENDING" | "APPROVED" | "REJECTED" | "FULFILLED";
+  createdAt: string;
+}
+
 interface KitTemplate {
   id: string;
   name: string;
@@ -161,6 +173,7 @@ interface EmployeeDetailViewProps {
   starRating?: number | null;
   cleanerTier?: CleanerTier;
   ratingCount?: number;
+  recentRatings?: RecentRatingDTO[];
   fieldLeadId?: string | null;
   fieldLeadOptions?: Array<{ id: string; name: string }>;
   weeklyBonus?: {
@@ -174,6 +187,7 @@ interface EmployeeDetailViewProps {
   recentJobs: Job[];
   topProducts: ProductUsage[];
   assignedProducts: AssignedProduct[];
+  inventoryRequests?: InventoryRequestDTO[];
   kitTemplates: KitTemplate[];
   forecast: ForecastItem[];
   upcomingJobCount: number;
@@ -182,6 +196,16 @@ interface EmployeeDetailViewProps {
   strikes: StrikeDTO[];
   strikeSummary: { activeCount: number; level: StrikeLevel };
   strikeWindowDays: number;
+}
+
+interface RecentRatingDTO {
+  id: string;
+  rating: number;
+  notes: string | null;
+  createdAt: string;
+  /** Set when the client edited their submitted rating. */
+  editedAt: string | null;
+  clientName: string | null;
 }
 
 interface StrikeDTO {
@@ -203,6 +227,7 @@ export default function EmployeeDetailView({
   starRating,
   cleanerTier = "STANDARD",
   ratingCount = 0,
+  recentRatings = [],
   fieldLeadId = null,
   fieldLeadOptions = [],
   weeklyBonus = null,
@@ -210,6 +235,7 @@ export default function EmployeeDetailView({
   recentJobs,
   topProducts,
   assignedProducts,
+  inventoryRequests = [],
   kitTemplates,
   forecast,
   upcomingJobCount,
@@ -283,6 +309,21 @@ export default function EmployeeDetailView({
                   : starRating >= 4.2
                     ? "41%"
                     : "40%";
+
+  const [requestBusy, setRequestBusy] = useState<string | null>(null);
+  const [requestError, setRequestError] = useState<string | null>(null);
+
+  async function handleResolveRequest(requestId: string, decision: "APPROVED" | "REJECTED") {
+    setRequestBusy(requestId);
+    setRequestError(null);
+    const res = await resolveInventoryRequest(requestId, decision);
+    setRequestBusy(null);
+    if (res.success) {
+      router.refresh();
+    } else {
+      setRequestError(res.error);
+    }
+  }
 
   const selectedKit = kitTemplates.find((k) => k.id === selectedKitId) || null;
 
@@ -492,6 +533,30 @@ export default function EmployeeDetailView({
               </p>
             )}
             <p className="text-xs text-gray-400 mt-2">Admin override. Customer ratings also update this average.</p>
+            {recentRatings.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-gray-100">
+                <h4 className="text-xs font-[600] text-gray-500 uppercase tracking-wide mb-2">Recent Ratings</h4>
+                <div className="space-y-2">
+                  {recentRatings.map((r) => (
+                    <div key={r.id} className="flex items-start justify-between gap-3 text-sm">
+                      <div className="min-w-0">
+                        <span className="font-[600] text-amber-500">{r.rating.toFixed(1)} ★</span>
+                        {r.editedAt && (
+                          <span className="ml-1.5 text-[11px] text-gray-400 italic" title={`Edited ${new Date(r.editedAt).toLocaleString()}`}>
+                            (edited)
+                          </span>
+                        )}
+                        {r.clientName && <span className="ml-1.5 text-xs text-gray-500">· {r.clientName}</span>}
+                        {r.notes && <p className="text-xs text-gray-500 italic truncate">&quot;{r.notes}&quot;</p>}
+                      </div>
+                      <span className="text-xs text-gray-400 whitespace-nowrap">
+                        {new Date(r.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </Card>
 
           {/* Payroll Tier */}
@@ -809,6 +874,79 @@ export default function EmployeeDetailView({
           Assign Starter Kit
         </Button>
       </div>
+
+      {/* Equipment / Refill Requests */}
+      {inventoryRequests.length > 0 && (
+        <Card variant="default" className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <div className="p-2 bg-[#008C9C]/10 rounded-lg">
+                <Package className="w-4 h-4 text-[#008C9C]" />
+              </div>
+              <h3 className="text-sm font-[350] text-[#008C9C]/80">
+                Equipment Requests
+              </h3>
+            </div>
+            {inventoryRequests.some((r) => r.status === "PENDING") && (
+              <Badge variant="warning" size="sm">
+                {inventoryRequests.filter((r) => r.status === "PENDING").length} pending
+              </Badge>
+            )}
+          </div>
+          {requestError && (
+            <p className="text-xs text-red-500 mb-3">{requestError}</p>
+          )}
+          <div className="space-y-2">
+            {inventoryRequests.map((req) => (
+              <div
+                key={req.id}
+                className={`flex items-center justify-between gap-3 p-3 rounded-xl ${
+                  req.status === "PENDING" ? "bg-amber-50 border border-amber-200" : "bg-[#008C9C]/5"
+                }`}>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-[400] text-[#008C9C]">
+                    {req.itemName}
+                    {req.isKit ? " (kit)" : ""}
+                    <span className="text-[#008C9C]/60"> · {req.quantity}{req.unit ? ` ${req.unit}` : ""}</span>
+                  </p>
+                  <p className="text-xs text-[#008C9C]/60 truncate">
+                    {new Date(req.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                    {req.reason ? ` · ${req.reason}` : ""}
+                  </p>
+                </div>
+                {req.status === "PENDING" ? (
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      border={false}
+                      disabled={requestBusy === req.id}
+                      onClick={() => handleResolveRequest(req.id, "APPROVED")}
+                      className="rounded-2xl px-4 py-2">
+                      {requestBusy === req.id ? "…" : "Approve"}
+                    </Button>
+                    <Button
+                      variant="default"
+                      size="sm"
+                      border={false}
+                      disabled={requestBusy === req.id}
+                      onClick={() => handleResolveRequest(req.id, "REJECTED")}
+                      className="rounded-2xl px-4 py-2">
+                      Reject
+                    </Button>
+                  </div>
+                ) : (
+                  <Badge
+                    variant={req.status === "REJECTED" ? "error" : "success"}
+                    size="sm">
+                    {req.status.charAt(0) + req.status.slice(1).toLowerCase()}
+                  </Badge>
+                )}
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {/* Inventory Forecast */}
       {forecast.length > 0 && (

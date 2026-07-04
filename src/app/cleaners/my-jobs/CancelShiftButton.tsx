@@ -57,7 +57,7 @@ export default function CancelShiftButton({ jobId, shiftStartTime }: Props) {
         <div style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 13, color: "#b91c1c" }}>
           <AlertTriangle size={15} style={{ marginTop: 1, flexShrink: 0 }} />
           <span>
-            <strong>Late cancellation:</strong> A $20 fee and a 1-star penalty will be applied.
+            <strong>Late cancellation:</strong> A 1-star penalty will be applied.
           </span>
         </div>
       )}

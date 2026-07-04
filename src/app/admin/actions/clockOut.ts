@@ -190,6 +190,23 @@ export async function clockOut(jobId: string, usage: PostJobUsage) {
       })
     );
 
+    // Per-cleaner assignment status (item 9) — upsert so legacy jobs without
+    // rows still start tracking from this clock-out.
+    ops.push(
+      db.jobAssignment.upsert({
+        where: {
+          jobId_cleanerId: { jobId, cleanerId: session.user.id },
+        },
+        update: { status: "CLOCKED_OUT", clockOutTime: now },
+        create: {
+          jobId,
+          cleanerId: session.user.id,
+          status: "CLOCKED_OUT",
+          clockOutTime: now,
+        },
+      })
+    );
+
     // Award rag + pad credits to each assigned cleaner, idempotent on the
     // washCreditsAwarded flag.
     if (!job.washCreditsAwarded && cleanerIdsForCredit.length > 0) {

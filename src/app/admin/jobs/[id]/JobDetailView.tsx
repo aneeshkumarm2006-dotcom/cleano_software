@@ -15,12 +15,14 @@ import { markJobComplete } from "../../actions/markJobComplete";
 import { createRatingToken } from "../../actions/createRatingToken";
 import { setAfterPhotoOverride } from "../../actions/setAfterPhotoOverride";
 import { setJobPriorityLabel } from "../../actions/setJobPriorityLabel";
+import { submitRating } from "../../actions/submitRating";
+import { updateJobNotificationPrefs } from "../../actions/updateJobNotificationPrefs";
 import {
   ArrowLeft, MapPin, Clock, DollarSign, Users,
   CheckCircle2, Package, Pencil, History, Activity,
   AlertTriangle, Trash2, Loader, Briefcase, Receipt, Camera, X,
   ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, FileText,
-  Star, Copy, Check, Inbox, RotateCcw, XCircle, Navigation,
+  Star, Copy, Check, Inbox, RotateCcw, XCircle, Navigation, Bell,
 } from "lucide-react";
 import { resolveJobRequest } from "../../actions/resolveJobRequest";
 import { fmtDateTime, fmtTime } from "@/lib/time";
@@ -70,6 +72,9 @@ interface Job {
   parking: number | null;
   paymentReceived: boolean;
   isCashJob?: boolean;
+  usesFixedPrice?: boolean;
+  notifyClient?: boolean;
+  notifyProvider?: boolean;
   invoiceSent: boolean;
   notes: string | null;
   paymentType?: string | null;
@@ -144,6 +149,28 @@ interface ReviewPhoto {
 
 interface User { id: string; name: string; email: string; }
 
+/** Per-cleaner live status row (item 9). Missing for legacy jobs — the view
+ *  derives a fallback from the job-level clock fields instead. */
+interface AssignmentLite {
+  cleanerId: string;
+  status: string;
+  onMyWayAt: string | null;
+  clockInTime: string | null;
+  clockOutTime: string | null;
+}
+
+/** Star rating attached to this job (customer review or admin-set). */
+interface JobRatingLite {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  rating: number;
+  notes: string | null;
+  /** Staff member who set it manually; null for customer-submitted ratings. */
+  raterName: string | null;
+  createdAt: string;
+}
+
 interface JobDetailViewProps {
   job: Job;
   productUsage: ProductUsage[];
@@ -161,6 +188,10 @@ interface JobDetailViewProps {
   users: User[];
   clients?: ClientLite[];
   currentUserName?: string;
+  assignments?: AssignmentLite[];
+  /** Cleaner id → pay share (tier-based proportional split incl. tip). */
+  payShares?: Record<string, number>;
+  jobRatings?: JobRatingLite[];
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -224,6 +255,57 @@ function CashJobPill() {
   );
 }
 
+function FixedPricePill() {
+  return (
+    <span className="pill" style={{ background: '#ede9fe', color: '#5b21b6' }} title="Client-specific fixed price applied to this booking">
+      Fixed price
+    </span>
+  );
+}
+
+// Per-cleaner assignment status pill (item 9).
+const CLEANER_STATUS_STYLES: Record<string, { label: string; bg: string; color: string; dot: string }> = {
+  ASSIGNED:    { label: 'Assigned',    bg: '#f3f4f6', color: '#374151', dot: '#9ca3af' },
+  ON_THE_WAY:  { label: 'On the way',  bg: '#e0f2fe', color: '#075985', dot: '#0284c7' },
+  CLOCKED_IN:  { label: 'Clocked in',  bg: '#fef3c7', color: '#92400e', dot: '#f59e0b' },
+  CLOCKED_OUT: { label: 'Clocked out', bg: '#dbeafe', color: '#1e40af', dot: '#3b82f6' },
+  COMPLETED:   { label: 'Completed',   bg: '#d1fae5', color: '#065f46', dot: '#10b981' },
+  CANCELLED:   { label: 'Cancelled',   bg: '#fee2e2', color: '#991b1b', dot: '#ef4444' },
+};
+
+function CleanerStatusPill({ status }: { status: string }) {
+  const c = CLEANER_STATUS_STYLES[status] || CLEANER_STATUS_STYLES.ASSIGNED;
+  return (
+    <span className="pill" style={{ background: c.bg, color: c.color, fontSize: 11 }}>
+      <span className="pill-dot" style={{ background: c.dot }} />
+      {c.label}
+    </span>
+  );
+}
+
+/** Derive a cleaner's status/times when no JobAssignment row exists (jobs
+ *  created before per-cleaner tracking): the job-level clock fields apply to
+ *  the whole team. */
+function fallbackAssignment(job: {
+  status: string;
+  onMyWayAt: string | null;
+  clockInTime: string | null;
+  clockOutTime: string | null;
+}): Omit<AssignmentLite, 'cleanerId'> {
+  let status = 'ASSIGNED';
+  if (job.status === 'CANCELLED') status = 'CANCELLED';
+  else if (job.status === 'COMPLETED' || job.status === 'PAID') status = 'COMPLETED';
+  else if (job.clockOutTime) status = 'CLOCKED_OUT';
+  else if (job.clockInTime) status = 'CLOCKED_IN';
+  else if (job.onMyWayAt) status = 'ON_THE_WAY';
+  return {
+    status,
+    onMyWayAt: job.onMyWayAt,
+    clockInTime: job.clockInTime,
+    clockOutTime: job.clockOutTime,
+  };
+}
+
 function payTypeLabel(type: string | null | undefined): string {
   const map: Record<string, string> = {
     CASH: 'Cash', CHEQUE: 'Cheque', E_TRANSFER: 'E-Transfer',
@@ -261,6 +343,9 @@ export default function JobDetailView({
   users,
   clients = [],
   currentUserName,
+  assignments = [],
+  payShares = {},
+  jobRatings = [],
 }: JobDetailViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -359,6 +444,18 @@ export default function JobDetailView({
     job.afterPhotoOverrideAt ?? null
   );
   const [isTogglingPhotoOverride, setIsTogglingPhotoOverride] = useState(false);
+  // Per-cleaner manual star rating (item 13).
+  const [ratingTarget, setRatingTarget] = useState<{ id: string; name: string } | null>(null);
+  const [ratingStars, setRatingStars] = useState(5);
+  const [ratingNote, setRatingNote] = useState("");
+  const [ratingSubmitting, setRatingSubmitting] = useState(false);
+  const [ratingError, setRatingError] = useState<string | null>(null);
+
+  // Per-booking notification toggles (item 15).
+  const [notifyClient, setNotifyClient] = useState(job.notifyClient ?? true);
+  const [notifyProvider, setNotifyProvider] = useState(job.notifyProvider ?? true);
+  const [savingNotifyPref, setSavingNotifyPref] = useState<"client" | "provider" | null>(null);
+
   // Cancel-with-prompt and Refund modals.
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
@@ -520,6 +617,58 @@ export default function JobDetailView({
     router.refresh();
   };
 
+  const openRatingModal = (cleaner: { id: string; name: string }) => {
+    setRatingStars(5);
+    setRatingNote("");
+    setRatingError(null);
+    setRatingTarget(cleaner);
+  };
+
+  const handleSubmitRating = async () => {
+    if (!ratingTarget || ratingSubmitting) return;
+    setRatingSubmitting(true);
+    setRatingError(null);
+    const res = await submitRating({
+      employeeId: ratingTarget.id,
+      rating: ratingStars,
+      jobId: job.id,
+      notes: ratingNote.trim() || null,
+    });
+    setRatingSubmitting(false);
+    if (!res.success) {
+      setRatingError(res.error || "Failed to save rating");
+      return;
+    }
+    setRatingTarget(null);
+    router.refresh();
+  };
+
+  const handleToggleNotifyPref = async (which: "client" | "provider") => {
+    if (!isAdmin || savingNotifyPref) return;
+    setSavingNotifyPref(which);
+    const prevClient = notifyClient;
+    const prevProvider = notifyProvider;
+    const next =
+      which === "client"
+        ? { notifyClient: !prevClient }
+        : { notifyProvider: !prevProvider };
+    // Optimistic flip; revert on failure.
+    if (which === "client") setNotifyClient(!prevClient);
+    else setNotifyProvider(!prevProvider);
+    try {
+      const res = await updateJobNotificationPrefs(job.id, next);
+      if (!res.success) {
+        setNotifyClient(prevClient);
+        setNotifyProvider(prevProvider);
+      }
+    } catch {
+      setNotifyClient(prevClient);
+      setNotifyProvider(prevProvider);
+    } finally {
+      setSavingNotifyPref(null);
+    }
+  };
+
   const handleCopyReviewLink = () => {
     if (!reviewLink) return;
     navigator.clipboard.writeText(reviewLink);
@@ -656,22 +805,172 @@ export default function JobDetailView({
               <div className="role">Created by</div>
             </div>
           </div>
-          {job.cleaners.map(c => (
-            <div key={c.id} className="team-row">
-              <div className="avatar avatar-lg" style={{ background: avatarBg(c.name) }}>
-                {initials(c.name)}
+          {job.cleaners.map(c => {
+            // Prefer the live per-cleaner assignment row; legacy jobs fall
+            // back to the job-level clock fields for the whole team.
+            const a = assignments.find(x => x.cleanerId === c.id) ?? fallbackAssignment(job);
+            const pay = payShares[c.id];
+            return (
+              <div key={c.id} className="team-row" style={{ alignItems: 'flex-start' }}>
+                <div className="avatar avatar-lg" style={{ background: avatarBg(c.name), flexShrink: 0 }}>
+                  {initials(c.name)}
+                </div>
+                <div className="team-meta" style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <div className="name">{c.name}</div>
+                    <CleanerStatusPill status={a.status} />
+                  </div>
+                  <div className="role" style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                    <span>Cleaner</span>
+                    {a.clockInTime && <span>In {fmtTime(a.clockInTime)}</span>}
+                    {a.clockOutTime && <span>Out {fmtTime(a.clockOutTime)}</span>}
+                    {!a.clockInTime && a.onMyWayAt && a.status === 'ON_THE_WAY' && (
+                      <span>Since {fmtTime(a.onMyWayAt)}</span>
+                    )}
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right', flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                  {pay !== undefined && pay > 0 && (
+                    <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--ink)' }} title="Tier-based pay share for this job (incl. tip split)">
+                      ${pay.toFixed(2)}
+                    </span>
+                  )}
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => openRatingModal(c)}
+                      style={{
+                        background: 'transparent',
+                        border: '1px solid var(--primary-10)',
+                        borderRadius: 999,
+                        padding: '3px 10px',
+                        fontSize: 11,
+                        fontWeight: 600,
+                        color: 'var(--primary)',
+                        cursor: 'pointer',
+                        fontFamily: 'inherit',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4,
+                      }}>
+                      <Star size={11} />
+                      Set rating
+                    </button>
+                  )}
+                </div>
               </div>
-              <div className="team-meta">
-                <div className="name">{c.name}</div>
-                <div className="role">Cleaner</div>
-              </div>
-            </div>
-          ))}
+            );
+          })}
           {job.cleaners.length === 0 && (
             <p style={{ color: 'var(--primary-50)', fontSize: 14, padding: '4px 0' }}>No cleaners assigned yet.</p>
           )}
         </div>
       </div>
+
+      {/* Ratings — customer reviews + admin-set stars for this job */}
+      <div className="dcard">
+        <div className="dcard-head">
+          <h3>Ratings</h3>
+          {jobRatings.length > 0 && (
+            <span style={{ fontSize: 12, color: 'var(--primary-50)' }}>{jobRatings.length}</span>
+          )}
+        </div>
+        {jobRatings.length === 0 ? (
+          <p style={{ color: 'var(--primary-50)', fontSize: 13.5, margin: 0, padding: '2px 0' }}>
+            No ratings for this job yet.{isAdmin ? ' Use "Set rating" on a cleaner to add one.' : ''}
+          </p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {jobRatings.map(r => (
+              <div key={r.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 0', borderBottom: '1px solid var(--primary-10)' }}>
+                <span style={{ display: 'inline-flex', gap: 1, flexShrink: 0, marginTop: 2 }}>
+                  {[1, 2, 3, 4, 5].map(s => (
+                    <Star
+                      key={s}
+                      size={13}
+                      style={{
+                        color: s <= Math.round(r.rating) ? '#f59e0b' : '#e5e7eb',
+                        fill: s <= Math.round(r.rating) ? '#f59e0b' : '#e5e7eb',
+                      }}
+                    />
+                  ))}
+                </span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--ink)' }}>
+                    {r.employeeName}
+                    <span style={{ fontWeight: 400, color: 'var(--primary-50)', marginLeft: 6, fontSize: 12 }}>
+                      {r.raterName ? `set by ${r.raterName} (admin)` : 'customer rating'}
+                    </span>
+                  </div>
+                  {r.notes && (
+                    <div style={{ fontSize: 12.5, color: 'var(--primary-60)', marginTop: 2, fontStyle: 'italic' }}>
+                      {r.notes}
+                    </div>
+                  )}
+                </div>
+                <span style={{ fontSize: 11.5, color: 'var(--primary-40)', flexShrink: 0 }}>
+                  {new Date(r.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Notifications — per-booking client/provider send controls */}
+      {isAdmin && (
+        <div className="dcard">
+          <div className="dcard-head">
+            <h3>Notifications</h3>
+            <Bell size={14} style={{ color: 'var(--primary-40)' }} />
+          </div>
+          <div className="pay-toggle">
+            <div className="pay-toggle-info">
+              <div className="label-stack">
+                <span className="top">Client notifications</span>
+                <span className="bottom">
+                  {notifyClient
+                    ? 'Booking emails, SMS, reminders and receipts are sent.'
+                    : 'Off — no booking emails, SMS, reminders or receipts for this job.'}
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              className={`tswitch ${notifyClient ? 'on' : ''}`}
+              onClick={() => handleToggleNotifyPref('client')}
+              disabled={savingNotifyPref !== null}
+              role="switch"
+              aria-checked={notifyClient}
+              aria-label="Toggle client notifications for this booking"
+            />
+          </div>
+          <div className="pay-toggle">
+            <div className="pay-toggle-info">
+              <div className="label-stack">
+                <span className="top">Provider notifications</span>
+                <span className="bottom">
+                  {notifyProvider
+                    ? 'Assignment invites and booking alerts reach the cleaners.'
+                    : 'Off — cleaners get no invites or alerts for this job.'}
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              className={`tswitch ${notifyProvider ? 'on' : ''}`}
+              onClick={() => handleToggleNotifyPref('provider')}
+              disabled={savingNotifyPref !== null}
+              role="switch"
+              aria-checked={notifyProvider}
+              aria-label="Toggle provider notifications for this booking"
+            />
+          </div>
+          <p style={{ fontSize: 11.5, color: 'var(--primary-50)', margin: '8px 0 0', lineHeight: 1.5 }}>
+            Applies to this booking only. Global notification settings still apply on top.
+          </p>
+        </div>
+      )}
 
       {/* Notes */}
       <div className="dcard tab-panel-wide">
@@ -831,6 +1130,7 @@ export default function JobDetailView({
             <h3>Payment</h3>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               {job.isCashJob && <CashJobPill />}
+              {job.usesFixedPrice && <FixedPricePill />}
               <span style={{ fontSize: 11, color: 'var(--primary-50)', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
                 {payTypeLabel(job.paymentType)}
               </span>
@@ -1380,6 +1680,7 @@ export default function JobDetailView({
               )}
               <TypePill type={job.jobType} />
               {job.isCashJob && <CashJobPill />}
+              {job.usesFixedPrice && <FixedPricePill />}
               {isAdmin && (
                 <label
                   title="Calendar priority label shown in the top-left of this booking"
@@ -1963,6 +2264,62 @@ export default function JobDetailView({
           message="This action cannot be undone. All job data will be permanently removed."
         />
       )}
+
+      {/* Set rating (admin manual star rating, item 13) */}
+      <Modal
+        isOpen={ratingTarget !== null}
+        onClose={() => !ratingSubmitting && setRatingTarget(null)}
+        title={ratingTarget ? `Rate ${ratingTarget.name}` : "Set rating"}>
+        <div className="space-y-4">
+          <p className="text-sm text-[#008C9C]/70">
+            Set a manual star rating for this cleaner on this job. It counts
+            toward their running average and pay tier.
+          </p>
+          <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+            {[1, 2, 3, 4, 5].map(s => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setRatingStars(s)}
+                disabled={ratingSubmitting}
+                aria-label={`${s} star${s === 1 ? '' : 's'}`}
+                style={{ background: 'transparent', border: 0, cursor: 'pointer', padding: 4 }}>
+                <Star
+                  size={28}
+                  style={{
+                    color: s <= ratingStars ? '#f59e0b' : '#e5e7eb',
+                    fill: s <= ratingStars ? '#f59e0b' : '#e5e7eb',
+                  }}
+                />
+              </button>
+            ))}
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-[#008C9C]/70 mb-1">Note (optional)</label>
+            <textarea
+              className="w-full rounded-xl border border-[#008C9C]/15 bg-[#008C9C]/5 px-3 py-2 text-sm outline-none focus:bg-white focus:border-[#008C9C]/40"
+              rows={2}
+              value={ratingNote}
+              onChange={(e) => setRatingNote(e.target.value)}
+              placeholder="e.g. Great feedback from the client, late arrival…"
+              disabled={ratingSubmitting}
+            />
+          </div>
+          {ratingError && (
+            <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              {ratingError}
+            </div>
+          )}
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="cancel" border={false} onClick={() => setRatingTarget(null)} disabled={ratingSubmitting}>
+              Cancel
+            </Button>
+            <Button variant="action" border={false} onClick={handleSubmitRating} disabled={ratingSubmitting}>
+              {ratingSubmitting ? "Saving…" : `Save ${ratingStars}-star rating`}
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Cancel cleaning */}
       <Modal isOpen={showCancelModal} onClose={() => !isCancelling && setShowCancelModal(false)} title="Cancel cleaning?">

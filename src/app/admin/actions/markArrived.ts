@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { setAssignmentProgress } from "@/lib/job-assignments";
 
 export async function markArrived(jobId: string) {
   const session = await auth.api.getSession({
@@ -59,6 +60,12 @@ export async function markArrived(jobId: string) {
         clockInTime: now,
         status: "IN_PROGRESS",
       },
+    });
+
+    // Per-cleaner assignment status (item 9).
+    await setAssignmentProgress(jobId, session.user.id, {
+      status: "CLOCKED_IN",
+      clockInTime: now,
     });
 
     // Create arrival log

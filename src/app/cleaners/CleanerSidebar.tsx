@@ -104,6 +104,12 @@ const ICONS = {
       <path d="M16 3.13a4 4 0 0 1 0 7.75" />
     </Svg>
   ),
+  announcements: (
+    <Svg>
+      <path d="m3 11 18-5v12L3 14v-3z" />
+      <path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" />
+    </Svg>
+  ),
   settings: (
     <Svg>
       <circle cx="12" cy="12" r="3" />
@@ -136,6 +142,7 @@ const NAV = [
       { href: "/cleaners/documents",  label: "Documents", icon: ICONS.docs },
       { href: "/cleaners/chat",       label: "Messages",  icon: ICONS.chat },
       { href: "/cleaners/group-chat", label: "Group chat", icon: ICONS.group },
+      { href: "/cleaners/announcements", label: "Announcements", icon: ICONS.announcements },
     ],
   },
 ];

@@ -133,8 +133,14 @@ export async function submitCustomerRating(
   if (tokenRow.job.clientId && tokenRow.job.clientId !== clientId) {
     return { success: false, error: "Not authorized" };
   }
-  if (tokenRow.usedAt || tokenRow.ratherNotAnswer) {
-    // Already handled — treat as success so the pop-up just closes.
+  // A used token means the customer is editing their previous rating.
+  const isEdit = !!tokenRow.usedAt;
+  if (!isEdit && tokenRow.ratherNotAnswer) {
+    // Already declined — treat as success so the pop-up just closes.
+    return { success: true };
+  }
+  if (isEdit && skipped) {
+    // Already rated; "rather not answer" can't retract it — just close.
     return { success: true };
   }
 
@@ -167,26 +173,66 @@ export async function submitCustomerRating(
     return { success: false, error: "No cleaners were assigned to this job" };
   }
 
-  await db.$transaction([
-    ...cleanerIds.map((employeeId) =>
-      db.employeeRating.create({
-        data: {
-          jobId: tokenRow.job.id,
-          employeeId,
-          rating: effectiveStars,
-          notes:
-            effectiveStars !== stars
-              ? `Late-arrival cap applied (${stars} → ${effectiveStars})`
-              : null,
-          ratedBy: "client-portal",
-        },
-      })
-    ),
-    db.jobRatingToken.update({
-      where: { id: tokenRow.id },
-      data: { usedAt: new Date(), ratingStars: stars },
-    }),
-  ]);
+  const ratingNotes =
+    effectiveStars !== stars
+      ? `Late-arrival cap applied (${stars} → ${effectiveStars})`
+      : null;
+
+  if (isEdit) {
+    // Update the rating rows created by the original submission in place
+    // (averages are computed live, so no separate recalc is needed).
+    const existing = await db.employeeRating.findMany({
+      where: {
+        jobId: tokenRow.job.id,
+        employeeId: { in: cleanerIds },
+        ratedBy: { in: ["client-link", "client-portal"] },
+      },
+      select: { id: true, employeeId: true },
+    });
+    const editedAt = new Date();
+    await db.$transaction([
+      ...cleanerIds.map((employeeId) => {
+        const row = existing.find((r) => r.employeeId === employeeId);
+        return row
+          ? db.employeeRating.update({
+              where: { id: row.id },
+              data: { rating: effectiveStars, notes: ratingNotes, editedAt },
+            })
+          : db.employeeRating.create({
+              data: {
+                jobId: tokenRow.job.id,
+                employeeId,
+                rating: effectiveStars,
+                notes: ratingNotes,
+                ratedBy: "client-portal",
+                editedAt,
+              },
+            });
+      }),
+      db.jobRatingToken.update({
+        where: { id: tokenRow.id },
+        data: { ratingStars: stars },
+      }),
+    ]);
+  } else {
+    await db.$transaction([
+      ...cleanerIds.map((employeeId) =>
+        db.employeeRating.create({
+          data: {
+            jobId: tokenRow.job.id,
+            employeeId,
+            rating: effectiveStars,
+            notes: ratingNotes,
+            ratedBy: "client-portal",
+          },
+        })
+      ),
+      db.jobRatingToken.update({
+        where: { id: tokenRow.id },
+        data: { usedAt: new Date(), ratingStars: stars },
+      }),
+    ]);
+  }
 
   // Accountability: two consecutive sub-3-star customer ratings → strike.
   for (const cleanerId of cleanerIds) {
@@ -196,7 +242,12 @@ export async function submitCustomerRating(
   }
 
   // 1-star follow-up: reassure the customer + raise a CRITICAL admin alert.
-  if (stars <= POOR_RATING_FOLLOWUP_STARS) {
+  // On edits, only fire when the rating newly drops to poor.
+  const wasPoor =
+    isEdit &&
+    tokenRow.ratingStars != null &&
+    tokenRow.ratingStars <= POOR_RATING_FOLLOWUP_STARS;
+  if (stars <= POOR_RATING_FOLLOWUP_STARS && !wasPoor) {
     const clientEmail = tokenRow.job.client?.email ?? null;
     const clientName =
       tokenRow.job.client?.name ?? tokenRow.job.clientName ?? "the customer";

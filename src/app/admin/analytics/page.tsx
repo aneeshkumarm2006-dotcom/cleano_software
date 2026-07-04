@@ -771,6 +771,7 @@ export default async function AnalyticsPage() {
     isRead: a.isRead,
     relatedId: a.relatedId,
     relatedType: a.relatedType,
+    employeeId: a.employeeId,
     createdAt: a.createdAt.toISOString(),
   }));
 

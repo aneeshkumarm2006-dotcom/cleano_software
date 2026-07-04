@@ -14,6 +14,7 @@ import {
   Percent,
   Building2,
   Hash,
+  DollarSign,
 } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
@@ -36,6 +37,9 @@ interface ClientLite {
   zip?: string | null;
   notes: string | null;
   discountPercent?: number | null;
+  fixedPrice?: number | null;
+  fixedPriceRecurring?: boolean;
+  fixedPriceAllowFrequencyDiscount?: boolean;
 }
 
 interface ClientModalProps {
@@ -69,6 +73,10 @@ export default function ClientModal({
   const [zip, setZip] = useState("");
   const [notes, setNotes] = useState("");
   const [discountPercent, setDiscountPercent] = useState("");
+  const [fixedPrice, setFixedPrice] = useState("");
+  const [fixedPriceRecurring, setFixedPriceRecurring] = useState(false);
+  const [fixedPriceAllowFreqDiscount, setFixedPriceAllowFreqDiscount] =
+    useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -90,6 +98,15 @@ export default function ClientModal({
         client?.discountPercent != null && client.discountPercent > 0
           ? String(client.discountPercent)
           : ""
+      );
+      setFixedPrice(
+        client?.fixedPrice != null && client.fixedPrice > 0
+          ? String(client.fixedPrice)
+          : ""
+      );
+      setFixedPriceRecurring(client?.fixedPriceRecurring ?? false);
+      setFixedPriceAllowFreqDiscount(
+        client?.fixedPriceAllowFrequencyDiscount ?? false
       );
     }
   }, [isOpen, client]);
@@ -119,6 +136,12 @@ export default function ClientModal({
     fd.append("zip", zip);
     fd.append("notes", notes);
     fd.append("discountPercent", discountPercent);
+    fd.append("fixedPrice", fixedPrice);
+    fd.append("fixedPriceRecurring", fixedPriceRecurring ? "true" : "false");
+    fd.append(
+      "fixedPriceAllowFrequencyDiscount",
+      fixedPriceAllowFreqDiscount ? "true" : "false"
+    );
 
     let result;
     if (mode === "edit" && client) {
@@ -390,6 +413,66 @@ export default function ClientModal({
                 Auto-applied to this client&apos;s jobs and invoices. Leave 0
                 for none.
               </p>
+            </div>
+
+            <div>
+              <label className="input-label tracking-tight">
+                Fixed price ($)
+              </label>
+              <div className="relative">
+                <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/50" />
+                <Input
+                  variant="form"
+                  type="number"
+                  size="md"
+                  min={0}
+                  step="0.01"
+                  value={fixedPrice}
+                  onChange={(e) => setFixedPrice(e.target.value)}
+                  disabled={submitting}
+                  className="w-full pl-11 px-4 py-3"
+                  placeholder="0.00"
+                  border={false}
+                />
+              </div>
+              <p className="text-[11px] text-[#008C9C]/50 mt-1">
+                New bookings for this client default to this total instead of
+                the standard price. Leave empty for none.
+              </p>
+
+              {fixedPrice.trim() !== "" && parseFloat(fixedPrice) > 0 && (
+                <div className="mt-3 space-y-2">
+                  <label className="flex items-center gap-2 text-sm text-[#008C9C] cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={fixedPriceRecurring}
+                      onChange={(e) => setFixedPriceRecurring(e.target.checked)}
+                      disabled={submitting}
+                      className="w-4 h-4 rounded accent-[#008C9C]"
+                    />
+                    <span>Apply to recurring bookings</span>
+                  </label>
+                  {fixedPriceRecurring && (
+                    <label className="flex items-center gap-2 text-sm text-[#008C9C] cursor-pointer select-none pl-6">
+                      <input
+                        type="checkbox"
+                        checked={fixedPriceAllowFreqDiscount}
+                        onChange={(e) =>
+                          setFixedPriceAllowFreqDiscount(e.target.checked)
+                        }
+                        disabled={submitting}
+                        className="w-4 h-4 rounded accent-[#008C9C]"
+                      />
+                      <span>
+                        Allow frequency discounts on top{" "}
+                        <span className="text-[#008C9C]/50 font-[400]">
+                          — weekly/biweekly discount stacks on the fixed price
+                        </span>
+                      </span>
+                    </label>
+                  )}
+                </div>
+              )}
             </div>
 
             <div>

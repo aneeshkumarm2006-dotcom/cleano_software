@@ -38,6 +38,7 @@ interface Job {
   invoiceSent: boolean;
   paymentType?: string | null;
   isCashJob?: boolean;
+  usesFixedPrice?: boolean;
   discountAmount?: number | null;
   bedCount?: number | null;
   bathCount?: number | null;
@@ -169,6 +170,14 @@ function CashPill() {
   return (
     <span className="pill" style={{ background: '#fef9c3', color: '#854d0e' }} title="Cash job — no Stripe charge, tax exempt">
       Cash
+    </span>
+  );
+}
+
+function FixedPricePill() {
+  return (
+    <span className="pill" style={{ background: '#ede9fe', color: '#5b21b6' }} title="Client-specific fixed price applied to this booking">
+      Fixed
     </span>
   );
 }
@@ -774,7 +783,10 @@ export default function JobsView({
                       <td><TypePill type={job.jobType} /></td>
                       <td><AvatarStack cleaners={job.cleaners} /></td>
                       <td className="num">{formatTimeSpent(job.timeSpentMs)}</td>
-                      <td className="num">{job.price !== null ? `$${job.price.toFixed(2)}` : '—'}</td>
+                      <td className="num">
+                        {job.price !== null ? `$${job.price.toFixed(2)}` : '—'}
+                        {job.usesFixedPrice && <span style={{ marginLeft: 6 }}><FixedPricePill /></span>}
+                      </td>
                       <td className="num">
                         {(job.discountAmount || 0) > 0
                           ? <span style={{ color: 'var(--amber-700)', fontWeight: 600 }}>−${job.discountAmount!.toFixed(2)}</span>
@@ -871,6 +883,7 @@ export default function JobsView({
                 <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
                   <TypePill type={job.jobType} />
                   {job.isCashJob && <CashPill />}
+                  {job.usesFixedPrice && <FixedPricePill />}
                   <AvatarStack cleaners={job.cleaners} max={2} />
                 </div>
                 <div className="jcard-row" style={{ paddingTop: 10, borderTop: '1px solid var(--primary-10)' }}>

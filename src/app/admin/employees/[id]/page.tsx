@@ -266,6 +266,20 @@ export default async function EmployeePage({
 
   const starRating = await getEmployeeAvgRating(id);
   const ratingCount = await db.employeeRating.count({ where: { employeeId: id } });
+  const recentRatingRows = await db.employeeRating.findMany({
+    where: { employeeId: id },
+    orderBy: { createdAt: "desc" },
+    take: 10,
+    include: { job: { select: { clientName: true } } },
+  });
+  const recentRatings = recentRatingRows.map((r) => ({
+    id: r.id,
+    rating: r.rating,
+    notes: r.notes,
+    createdAt: r.createdAt.toISOString(),
+    editedAt: r.editedAt?.toISOString() ?? null,
+    clientName: r.job?.clientName ?? null,
+  }));
 
   // Field Lead group: list of possible leads (for assignment) + this cleaner's
   // current lead, and — if this cleaner IS a Field Lead — their weekly bonus.
@@ -294,6 +308,27 @@ export default async function EmployeePage({
       memberCount: Math.max(0, b.groupMemberIds.length - 1),
     };
   }
+
+  // Equipment / refill requests from this cleaner (managed from this page).
+  const requestRows = await db.inventoryRequest.findMany({
+    where: { employeeId: id },
+    orderBy: [{ status: "asc" }, { createdAt: "desc" }],
+    take: 30,
+    include: {
+      product: { select: { name: true, unit: true } },
+      kitTemplate: { select: { name: true } },
+    },
+  });
+  const inventoryRequests = requestRows.map((r) => ({
+    id: r.id,
+    itemName: r.product?.name ?? r.kitTemplate?.name ?? "Unknown item",
+    isKit: !!r.kitId,
+    quantity: r.quantity,
+    unit: r.product?.unit ?? null,
+    reason: r.reason,
+    status: r.status,
+    createdAt: r.createdAt.toISOString(),
+  }));
 
   // Accountability strikes (rolling 30-day window).
   const strikeRows = await db.cleanerStrike.findMany({
@@ -332,6 +367,7 @@ export default async function EmployeePage({
       starRating={starRating}
       cleanerTier={employee.cleanerTier}
       ratingCount={ratingCount}
+      recentRatings={recentRatings}
       fieldLeadId={employee.fieldLeadId}
       fieldLeadOptions={fieldLeadOptions}
       weeklyBonus={weeklyBonus}
@@ -348,6 +384,7 @@ export default async function EmployeePage({
       recentJobs={recentJobs}
       topProducts={topProducts}
       assignedProducts={assignedProducts}
+      inventoryRequests={inventoryRequests}
       kitTemplates={kitTemplates}
       forecast={forecast}
       upcomingJobCount={upcomingEmployeeJobs}

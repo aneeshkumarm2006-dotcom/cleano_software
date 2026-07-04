@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { revalidatePath } from "next/cache";
 import { getTaxRates, computeJobTaxes } from "@/lib/tax.server";
+import { syncJobAssignments } from "@/lib/job-assignments";
 import CleanerSelector from "./CleanerSelector";
 import JobTypeSelector from "./JobTypeSelector";
 import SubmitButton from "./SubmitButton";
@@ -103,6 +104,7 @@ export default async function JobFormPage({
       email: true,
       phone: true,
       discountPercent: true,
+      fixedPrice: true,
       defaultPaymentMethodId: true,
     },
   });
@@ -135,26 +137,44 @@ export default async function JobFormPage({
     const rawClientId = (formData.get("clientId") as string) || "";
     const clientId = rawClientId || null;
 
-    const price = formData.get("price")
+    let price = formData.get("price")
       ? parseFloat(formData.get("price") as string)
       : null;
+
+    const savedClient = clientId
+      ? await db.client.findUnique({
+          where: { id: clientId },
+          select: { discountPercent: true, fixedPrice: true },
+        })
+      : null;
+
+    // Customer-specific fixed pricing ("Change Total"). When the client has a
+    // fixed price and the admin left the price blank (or typed the fixed price
+    // itself), the job charges the fixed total. An explicitly different price
+    // wins and clears the flag.
+    let usesFixedPrice = false;
+    const clientFixedPrice = savedClient?.fixedPrice ?? null;
+    if (clientFixedPrice !== null && clientFixedPrice > 0) {
+      if (price === null || price === clientFixedPrice) {
+        price = clientFixedPrice;
+        usesFixedPrice = true;
+      }
+    }
 
     let discountAmount = formData.get("discountAmount")
       ? parseFloat(formData.get("discountAmount") as string)
       : null;
 
-    // Auto-apply client default discount if admin didn't enter one
+    // Auto-apply client default discount if admin didn't enter one.
+    // Fixed-price jobs skip it — the fixed price IS the agreed total.
     if (
       (discountAmount === null || discountAmount === 0) &&
+      !usesFixedPrice &&
       clientId &&
       price !== null &&
       price > 0
     ) {
-      const c = await db.client.findUnique({
-        where: { id: clientId },
-        select: { discountPercent: true },
-      });
-      const pct = c?.discountPercent ?? 0;
+      const pct = savedClient?.discountPercent ?? 0;
       if (pct > 0) {
         discountAmount = +(price * (pct / 100)).toFixed(2);
       }
@@ -183,6 +203,7 @@ export default async function JobFormPage({
           ? new Date(`${startDate}T${startTime}`)
           : new Date(),
       price,
+      usesFixedPrice,
       subtotalAmount: taxes.subtotalAmount,
       gstAmount: taxes.gstAmount,
       qstAmount: taxes.qstAmount,
@@ -233,6 +254,11 @@ export default async function JobFormPage({
         },
       });
 
+      // Keep per-cleaner JobAssignment rows in sync with the assigned team.
+      if (cleanerIds.length > 0) {
+        await syncJobAssignments(editingJobId, cleanerIds);
+      }
+
       revalidatePath("/admin/jobs");
       redirect(`/admin/jobs/${editingJobId}`);
     } else {
@@ -244,9 +270,14 @@ export default async function JobFormPage({
         };
       }
 
-      await db.job.create({
+      const created = await db.job.create({
         data: jobData,
       });
+
+      // Per-cleaner JobAssignment rows for the assigned team.
+      if (cleanerIds.length > 0) {
+        await syncJobAssignments(created.id, cleanerIds);
+      }
 
       revalidatePath("/admin/jobs");
       redirect("/admin/jobs");

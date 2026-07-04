@@ -6,6 +6,7 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { smsOnTheWay } from "@/lib/sms";
 import { sendAdminOnTheWay } from "@/lib/email";
+import { setAssignmentProgress } from "@/lib/job-assignments";
 
 /** Default ETA (minutes) advertised to the customer when the cleaner taps
  *  "On my way". We don't run a maps SDK — this mirrors the catalog's default
@@ -46,8 +47,16 @@ export async function markOnMyWay(
       return { success: false, error: "You are not assigned to this job" as const };
     }
 
-    // Already marked — don't overwrite or re-notify.
+    // Already marked — don't overwrite or re-notify. Still record THIS
+    // cleaner's per-assignment status (a teammate may have set the job-level
+    // flag first on a multi-cleaner job).
     if (job.onMyWayAt) {
+      if (!job.clockInTime) {
+        await setAssignmentProgress(jobId, session.user.id, {
+          status: "ON_THE_WAY",
+          onMyWayAt: new Date(),
+        });
+      }
       return { success: true, onMyWayAt: job.onMyWayAt.toISOString(), alreadySet: true };
     }
 
@@ -67,6 +76,12 @@ export async function markOnMyWay(
       },
     });
 
+    // Per-cleaner assignment status (item 9).
+    await setAssignmentProgress(jobId, session.user.id, {
+      status: "ON_THE_WAY",
+      onMyWayAt: now,
+    });
+
     await db.jobLog.create({
       data: {
         jobId,
@@ -78,8 +93,9 @@ export async function markOnMyWay(
       },
     });
 
-    // Customer SMS — gated by `cust.booking.on_the_way` inside smsOnTheWay.
-    const phone = job.client?.phone;
+    // Customer SMS — gated by `cust.booking.on_the_way` inside smsOnTheWay
+    // AND the per-booking notifyClient toggle.
+    const phone = job.notifyClient ? job.client?.phone : null;
     if (phone) {
       smsOnTheWay({
         to: phone,

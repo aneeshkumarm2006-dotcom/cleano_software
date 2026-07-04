@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { revalidatePath } from "next/cache";
 import { getTaxRates } from "@/lib/tax.server";
+import { getCleanerRateInputs } from "@/lib/cleaner-rates";
+import { computeJobPayout } from "@/lib/pay-tiers";
 import JobDetailView from "./JobDetailView";
 
 export default async function JobPage({
@@ -41,6 +43,13 @@ export default async function JobPage({
       ratingTokens: {
         orderBy: { createdAt: "desc" },
         take: 1,
+      },
+      // Per-cleaner live status rows (item 9).
+      assignments: true,
+      // Manual/customer star ratings attached to this job (item 13).
+      ratings: {
+        include: { employee: { select: { id: true, name: true } } },
+        orderBy: { createdAt: "desc" },
       },
       _count: {
         select: { logs: true },
@@ -127,6 +136,38 @@ export default async function JobPage({
   // compute a display-only breakdown for older jobs saved without tax amounts.
   const taxRates = await getTaxRates();
 
+  // Per-cleaner pay shares — the SAME tier-based proportional split math used
+  // by getPayBreakdown / payroll (pool + split by individual rate), plus the
+  // per-job multiplier and an even tip split, so the Team card matches payday.
+  const participantIds = Array.from(
+    new Set(
+      [job.employeeId, ...job.cleaners.map((c) => c.id)].filter(
+        (uid): uid is string => !!uid
+      )
+    )
+  );
+  const rateInputs = await getCleanerRateInputs(participantIds);
+  const payout = computeJobPayout(
+    job.price,
+    participantIds.map(
+      (uid) =>
+        rateInputs.get(uid) ?? {
+          id: uid,
+          tier: "STANDARD" as const,
+          avgRating: null,
+          ratingCount: 0,
+        }
+    )
+  );
+  const payMultiplier = job.payRateMultiplier ?? 1.0;
+  const tipShare =
+    participantIds.length > 0 ? (job.totalTip || 0) / participantIds.length : 0;
+  const payShares: Record<string, number> = {};
+  for (const share of payout.shares) {
+    payShares[share.id] =
+      Math.round((share.amount * payMultiplier + tipShare) * 100) / 100;
+  }
+
   // Server action to delete job
   async function deleteJob() {
     "use server";
@@ -168,6 +209,9 @@ export default async function JobPage({
     parking: job.parking,
     paymentReceived: job.paymentReceived,
     isCashJob: job.isCashJob,
+    usesFixedPrice: job.usesFixedPrice,
+    notifyClient: job.notifyClient,
+    notifyProvider: job.notifyProvider,
     invoiceSent: job.invoiceSent,
     notes: job.notes,
     paymentType: job.paymentType,
@@ -240,6 +284,30 @@ export default async function JobPage({
     createdAt: photo.createdAt.toISOString(),
   }));
 
+  // Per-cleaner assignment status rows. Jobs created before this feature have
+  // none — the view derives a fallback from job-level clock fields.
+  const assignmentsData = job.assignments.map((a) => ({
+    cleanerId: a.cleanerId,
+    status: a.status as string,
+    onMyWayAt: a.onMyWayAt?.toISOString() ?? null,
+    clockInTime: a.clockInTime?.toISOString() ?? null,
+    clockOutTime: a.clockOutTime?.toISOString() ?? null,
+  }));
+
+  // Star ratings on this job. `ratedBy` holding a staff user id means the
+  // rating was set manually by an admin (customer ratings come through the
+  // review-token flow without a staff rater).
+  const staffById = new Map(users.map((u) => [u.id, u.name]));
+  const jobRatingsData = job.ratings.map((r) => ({
+    id: r.id,
+    employeeId: r.employeeId,
+    employeeName: r.employee.name,
+    rating: r.rating,
+    notes: r.notes,
+    raterName: r.ratedBy ? staffById.get(r.ratedBy) ?? null : null,
+    createdAt: r.createdAt.toISOString(),
+  }));
+
   return (
     <JobDetailView
       job={jobData}
@@ -257,6 +325,9 @@ export default async function JobPage({
       users={users}
       clients={clients}
       currentUserName={session.user.name ?? undefined}
+      assignments={assignmentsData}
+      payShares={payShares}
+      jobRatings={jobRatingsData}
     />
   );
 }

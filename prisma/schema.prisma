@@ -50,6 +50,7 @@ model User {
   sessions                     Session[]
   cleaningJobs                 Job[]                  @relation("JobCleaners")
   jobInvites                   JobAssignmentInvite[]
+  jobAssignments               JobAssignment[]        @relation("CleanerAssignments")
   jobLogs                      JobLog[]               @relation("UserJobLogs")
   payouts                      Payout[]
   approvedPeriods              PayPeriod[]            @relation("PayPeriodApprover")
@@ -231,6 +232,13 @@ model Client {
   zip                    String?
   notes                  String?
   discountPercent        Float                   @default(0)
+  // Customer-specific fixed pricing ("Change Total"). When set, new jobs for
+  // this client default to this total. `fixedPriceRecurring` carries it
+  // forward to generated recurring jobs. Frequency discounts are skipped for
+  // fixed-price jobs unless `fixedPriceAllowFrequencyDiscount` is true.
+  fixedPrice                       Float?
+  fixedPriceRecurring              Boolean @default(false)
+  fixedPriceAllowFrequencyDiscount Boolean @default(false)
   clientType             ClientType              @default(RESIDENTIAL)
   serviceFrequency       ServiceFrequency?
   isActive               Boolean                 @default(true)
@@ -362,6 +370,14 @@ model Job {
   paidAt                         DateTime?
   refundedAmount                 Float                 @default(0)
   isCashJob                      Boolean               @default(false)
+  // True when the price came from the client's customer-specific fixed price
+  // (Client.fixedPrice) — shown as a badge on the job detail/list.
+  usesFixedPrice                 Boolean               @default(false)
+  // Per-booking notification mutes (admin-controlled, job detail page).
+  // false = suppress client/provider notifications for THIS job only;
+  // global NotificationSetting preferences are untouched.
+  notifyClient                   Boolean               @default(true)
+  notifyProvider                 Boolean               @default(true)
   appliedPromoCode               String?
   promoDiscountAmount            Float?
   // Calendar priority badge override. null = follow the auto rule
@@ -448,6 +464,7 @@ model Job {
   photos                         JobPhoto[]
   reviewPhotos                   ReviewPhoto[]
   chatMessages                   JobChatMessage[]
+  assignments                    JobAssignment[]
   checklists                     JobChecklist[]
   ratings                        EmployeeRating[]
   complaints                     Complaint[]
@@ -848,6 +865,9 @@ model Alert {
   isDismissed     Boolean       @default(false)
   relatedId       String?
   relatedType     String?
+  // Employee who triggered the alert (refill/equipment requests) — used to
+  // deep-link the admin straight to /admin/employees/{id} inventory.
+  employeeId      String?
   recipientUserId String?
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
@@ -857,6 +877,7 @@ model Alert {
   @@index([isRead])
   @@index([createdAt])
   @@index([recipientUserId])
+  @@index([employeeId])
 }
 
 model Target {
@@ -1127,13 +1148,59 @@ model JobChatMessage {
 // Cleaner group chat (spec #15). One default "All cleaners" channel; admin can
 // create more and moderate (soft-delete messages). Visible to all cleaners.
 model GroupChannel {
-  id        String         @id @default(cuid())
-  name      String
-  isDefault Boolean        @default(false)
-  isActive  Boolean        @default(true)
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
-  messages  GroupMessage[]
+  id          String               @id @default(cuid())
+  name        String
+  isDefault   Boolean              @default(false)
+  isActive    Boolean              @default(true)
+  // Direct (1:1) cleaner-to-cleaner conversation — exactly two member rows.
+  isDirect    Boolean              @default(false)
+  createdById String?
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  messages    GroupMessage[]
+  members     GroupChannelMember[]
+}
+
+// Channel membership. The default (isDefault) channel has no member rows —
+// all staff belong implicitly. Custom channels and DMs list members explicitly.
+model GroupChannelMember {
+  id        String       @id @default(cuid())
+  channelId String
+  userId    String
+  createdAt DateTime     @default(now())
+  channel   GroupChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, userId])
+  @@index([userId])
+}
+
+model Announcement {
+  id         String                 @id @default(cuid())
+  title      String
+  body       String                 @db.Text
+  pinned     Boolean                @default(false)
+  // Denormalized author (same pattern as GroupMessage.senderName).
+  authorId   String?
+  authorName String?
+  createdAt  DateTime               @default(now())
+  updatedAt  DateTime               @updatedAt
+  reactions  AnnouncementReaction[]
+
+  @@index([createdAt])
+}
+
+// One reaction per user per announcement (unique constraint) — picking a
+// different emoji replaces the previous one; picking the same one removes it.
+model AnnouncementReaction {
+  id             String       @id @default(cuid())
+  announcementId String
+  userId         String
+  emoji          String
+  createdAt      DateTime     @default(now())
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+
+  @@unique([announcementId, userId])
+  @@index([announcementId])
 }
 
 model GroupMessage {
@@ -1308,6 +1375,8 @@ model EmployeeRating {
   rating     Float
   notes      String?
   ratedBy    String?
+  // Set when the client edits their submitted rating (shown to admin).
+  editedAt   DateTime?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   employee   User     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
@@ -1695,6 +1764,38 @@ model GiftCard {
   @@index([recipientEmail])
   @@index([scheduledDeliveryDate])
   @@index([createdAt])
+}
+
+enum JobCleanerStatus {
+  ASSIGNED
+  ON_THE_WAY
+  CLOCKED_IN
+  CLOCKED_OUT
+  COMPLETED
+  CANCELLED
+}
+
+// Per-cleaner live status + pay for a job. Complements the implicit
+// Job.cleaners M2M ("JobCleaners") — one row per cleaner per job, upserted on
+// assignment and updated by the cleaner clock actions. The job-level
+// clockInTime/clockOutTime/onMyWayAt stay as the legacy/first-cleaner fields.
+model JobAssignment {
+  id           String           @id @default(cuid())
+  jobId        String
+  cleanerId    String
+  status       JobCleanerStatus @default(ASSIGNED)
+  onMyWayAt    DateTime?
+  clockInTime  DateTime?
+  clockOutTime DateTime?
+  // This cleaner's pay for this job (same proportional-split math as payroll).
+  payAmount    Float?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  job          Job              @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  cleaner      User             @relation("CleanerAssignments", fields: [cleanerId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, cleanerId])
+  @@index([cleanerId])
 }
 
 model JobAssignmentInvite {

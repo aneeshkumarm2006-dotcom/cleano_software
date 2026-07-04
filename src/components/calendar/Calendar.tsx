@@ -131,6 +131,7 @@ const Calendar = React.forwardRef<CalendarRef, CalendarProps>(({ hideNewJobButto
   const [overlays, setOverlays] = useState<CalendarOverlays>({
     availability: true,
     blocks: true,
+    availabilityEmployeeId: null,
   });
   const { config: calendarConfig } = useCalendarConfig();
 
@@ -545,6 +546,35 @@ const Calendar = React.forwardRef<CalendarRef, CalendarProps>(({ hideNewJobButto
                 </span>
                 Availability
               </button>
+              {overlays.availability && users.length > 0 && (
+                <select
+                  value={overlays.availabilityEmployeeId ?? ""}
+                  onChange={(e) =>
+                    setOverlays((o) => ({
+                      ...o,
+                      availabilityEmployeeId: e.target.value || null,
+                    }))
+                  }
+                  aria-label="Show availability for cleaner"
+                  style={{
+                    fontSize: 12,
+                    padding: "3px 8px",
+                    borderRadius: 999,
+                    border: "1px solid var(--primary-10)",
+                    background: "#fff",
+                    color: "var(--ink)",
+                    fontFamily: "inherit",
+                    cursor: "pointer",
+                    maxWidth: 170,
+                  }}>
+                  <option value="">My availability</option>
+                  {users.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name}
+                    </option>
+                  ))}
+                </select>
+              )}
               <button
                 className={`cal-ovchip ${overlays.blocks ? "on" : ""}`}
                 onClick={() => setOverlays((o) => ({ ...o, blocks: !o.blocks }))}>

@@ -22,6 +22,7 @@ import {
   Bell,
   HeartHandshake,
   Wallet,
+  Target,
   Users,
   Globe,
   Globe2,
@@ -56,6 +57,7 @@ import SchedulingTab from "./tabs/SchedulingTab";
 import CalendarLabelsTab from "./tabs/CalendarLabelsTab";
 import PaymentsTab from "./tabs/PaymentsTab";
 import CustomerTab from "./tabs/CustomerTab";
+import BudgetsTab from "./tabs/BudgetsTab";
 import GeneralTab from "./tabs/GeneralTab";
 import ProviderTab from "./tabs/ProviderTab";
 import WebsiteTab from "./tabs/WebsiteTab";
@@ -70,6 +72,7 @@ import {
   ChecklistTemplateRecord,
   ServiceAreaRecord,
 } from "./types";
+import type { TransactionRow, BudgetRow } from "../finances/types";
 
 interface SettingsClientProps {
   user: SettingsUser;
@@ -86,6 +89,8 @@ interface SettingsClientProps {
   users: UserOption[];
   serviceAreas: ServiceAreaRecord[];
   notificationSettings: NotificationSettingRow[];
+  transactions: TransactionRow[];
+  budgets: BudgetRow[];
 }
 
 type TabId =
@@ -102,6 +107,7 @@ type TabId =
   | "training"
   | "documents"
   | "multipliers"
+  | "budgets"
   | "roles"
   | "suppliers"
   | "inventoryLocations"
@@ -138,6 +144,7 @@ const TAB_SUBTITLES: Record<TabId, string> = {
   training: "Modules, videos and quizzes for your team.",
   documents: "Documents your team must read and sign.",
   multipliers: "Pay multiplier at each rating band.",
+  budgets: "Monthly budgets per category vs actual spend.",
   roles: "What each role can access.",
   suppliers: "Vendors and their product pricing.",
   inventoryLocations: "Where inventory is stored and stocked.",
@@ -157,7 +164,7 @@ const TAB_SUBTITLES: Record<TabId, string> = {
 const TAB_GROUPS: { label: string; ids: TabId[] }[] = [
   { label: "You", ids: ["profile", "availability"] },
   { label: "Operations", ids: ["closures", "jobTypes", "checklistTemplates", "serviceAreas"] },
-  { label: "Money", ids: ["tax", "pricing", "paymentTypes", "multipliers", "payments"] },
+  { label: "Money", ids: ["tax", "pricing", "paymentTypes", "multipliers", "budgets", "payments"] },
   { label: "Inventory", ids: ["inventoryRules", "kitTemplates", "suppliers", "inventoryLocations"] },
   { label: "Team", ids: ["training", "documents", "roles"] },
   {
@@ -210,6 +217,7 @@ const TABS: TabDef[] = [
     adminOnly: true,
   },
   { id: "multipliers", label: "Multipliers", icon: Star, adminOnly: true },
+  { id: "budgets", label: "Budgets", icon: Target, adminOnly: true },
   { id: "roles", label: "Roles", icon: Shield, adminOnly: true },
   { id: "suppliers", label: "Suppliers", icon: Truck, adminOnly: true },
   {
@@ -270,6 +278,8 @@ export default function SettingsClient({
   users,
   serviceAreas,
   notificationSettings,
+  transactions,
+  budgets,
 }: SettingsClientProps) {
   const [activeTab, setActiveTab] = useState<TabId>("profile");
 
@@ -379,6 +389,9 @@ export default function SettingsClient({
           )}
           {activeTab === "multipliers" && isAdmin && (
             <MultipliersTab settings={appSettings} />
+          )}
+          {activeTab === "budgets" && isAdmin && (
+            <BudgetsTab transactions={transactions} budgets={budgets} />
           )}
           {activeTab === "roles" && isAdmin && <RolesTab />}
           {activeTab === "suppliers" && isAdmin && (

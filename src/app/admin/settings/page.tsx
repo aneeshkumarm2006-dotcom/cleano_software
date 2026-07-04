@@ -59,6 +59,8 @@ export default async function SettingsPage() {
     documents,
     users,
     serviceAreas,
+    transactions,
+    budgets,
   ] = isAdmin
     ? await Promise.all([
         db.appSetting.findMany(),
@@ -113,8 +115,13 @@ export default async function SettingsPage() {
           select: { id: true, name: true, role: true },
         }),
         db.serviceArea.findMany({ orderBy: { prefix: "asc" } }),
+        db.transaction.findMany({
+          orderBy: { date: "desc" },
+          include: { job: { select: { id: true, clientName: true } } },
+        }),
+        db.budget.findMany({ orderBy: [{ period: "desc" }, { category: "asc" }] }),
       ])
-    : [[], [], [], [], [], [], [], [], [], [], []];
+    : [[], [], [], [], [], [], [], [], [], [], [], [], []];
 
   // Notification catalog — auto-seed on first admin visit, then load.
   let notificationSettings: Array<{
@@ -143,6 +150,28 @@ export default async function SettingsPage() {
     });
   }
 
+  // Budget editor data (mirrors the finances page serialization).
+  const txRows = transactions.map((t) => ({
+    id: t.id,
+    date: t.date.toISOString(),
+    category: t.category,
+    amount: t.amount,
+    description: t.description,
+    notes: t.notes,
+    jobId: t.jobId,
+    jobClientName: t.job?.clientName ?? null,
+    source: t.source,
+    taxAmount: t.taxAmount,
+    isAuto: t.isAuto,
+  }));
+  const budgetRows = budgets.map((b) => ({
+    id: b.id,
+    category: b.category,
+    period: b.period,
+    amount: b.amount,
+    notes: b.notes,
+  }));
+
   return (
     <div className="h-full overflow-hidden overflow-y-auto p-8">
       <SettingsClient
@@ -160,6 +189,8 @@ export default async function SettingsPage() {
         users={users as never}
         serviceAreas={serviceAreas as never}
         notificationSettings={notificationSettings}
+        transactions={txRows}
+        budgets={budgetRows}
       />
     </div>
   );

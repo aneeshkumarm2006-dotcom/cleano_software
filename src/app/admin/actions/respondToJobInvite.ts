@@ -59,6 +59,21 @@ export async function respondToJobInvite(input: {
           where: { id: invite.jobId },
           data: { cleaners: { connect: { id: session.user.id } } },
         }),
+        // Per-cleaner assignment status row (item 9).
+        db.jobAssignment.upsert({
+          where: {
+            jobId_cleanerId: {
+              jobId: invite.jobId,
+              cleanerId: session.user.id,
+            },
+          },
+          update: { status: "ASSIGNED" },
+          create: {
+            jobId: invite.jobId,
+            cleanerId: session.user.id,
+            status: "ASSIGNED",
+          },
+        }),
         db.jobAssignmentInvite.updateMany({
           where: {
             jobId: invite.jobId,
@@ -109,6 +124,15 @@ export async function respondToJobInvite(input: {
         where: { id: invite.jobId },
         data: {
           cleaners: { disconnect: { id: session.user.id } },
+        },
+      }),
+      // Drop the per-cleaner assignment row for the declined cleaner
+      // (keep CANCELLED history rows, matching syncJobAssignments).
+      db.jobAssignment.deleteMany({
+        where: {
+          jobId: invite.jobId,
+          cleanerId: session.user.id,
+          status: { not: "CANCELLED" },
         },
       }),
       db.jobLog.create({

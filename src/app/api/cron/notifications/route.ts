@@ -505,6 +505,15 @@ export async function GET(req: NextRequest) {
           where: { id: inv.jobId },
           data: { cleaners: { disconnect: { id: inv.cleanerId } } },
         }),
+        // Drop the per-cleaner assignment row for the released cleaner
+        // (keep CANCELLED history rows, matching syncJobAssignments).
+        db.jobAssignment.deleteMany({
+          where: {
+            jobId: inv.jobId,
+            cleanerId: inv.cleanerId,
+            status: { not: "CANCELLED" },
+          },
+        }),
         db.jobLog.create({
           data: {
             jobId: inv.jobId,

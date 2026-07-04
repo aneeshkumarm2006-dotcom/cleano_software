@@ -51,6 +51,7 @@ export async function requestRefill(input: RequestRefillInput) {
         message: `${session.user.name} requested ${input.quantity} ${product.unit} of ${product.name}`,
         relatedId: product.id,
         relatedType: "Product",
+        employeeId: session.user.id,
       },
     });
 

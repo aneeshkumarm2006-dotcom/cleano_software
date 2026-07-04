@@ -11,6 +11,7 @@ import {
 } from "@/lib/email";
 import { isNotificationEnabled } from "@/lib/notifications";
 import { createAssignmentInvites } from "@/lib/invites";
+import { syncJobAssignments } from "@/lib/job-assignments";
 import { fmtDate, fmtTime } from "@/lib/time";
 
 /**
@@ -41,6 +42,9 @@ export async function assignCleaners(input: {
         location: true,
         jobType: true,
         status: true,
+        // Per-booking notification controls — gate job-scoped sends below.
+        notifyClient: true,
+        notifyProvider: true,
         client: { select: { email: true, name: true } },
         cleaners: { select: { id: true, name: true } },
       },
@@ -73,6 +77,9 @@ export async function assignCleaners(input: {
       }),
     ]);
 
+    // Keep per-cleaner JobAssignment rows in sync with the assigned team.
+    await syncJobAssignments(input.jobId, input.cleanerIds);
+
     const lifecycleInfo = {
       jobId: input.jobId,
       jobNumber: job.jobNumber,
@@ -83,7 +90,8 @@ export async function assignCleaners(input: {
     };
 
     // Customer "Booking confirmed" when first cleaner is paired.
-    if (justGotFirstCleaner && job.client?.email) {
+    // Gated by the per-booking notifyClient toggle.
+    if (justGotFirstCleaner && job.notifyClient && job.client?.email) {
       const assigned = await db.user.findMany({
         where: { id: { in: input.cleanerIds } },
         select: { name: true },
@@ -99,7 +107,8 @@ export async function assignCleaners(input: {
         ...lifecycleInfo,
         changedBy: session.user.name ?? "Admin",
       }).catch((e) => console.error("admin modified email", e));
-      if (job.client?.email) {
+      // Customer "modified" email — gated by per-booking notifyClient.
+      if (job.notifyClient && job.client?.email) {
         sendCustomerBookingModified({
           ...lifecycleInfo,
           to: job.client.email,
@@ -116,7 +125,8 @@ export async function assignCleaners(input: {
     }
 
     // Provider app-push alert for newly assigned cleaners.
-    for (const cleanerId of newlyAdded) {
+    // Gated by the per-booking notifyProvider toggle.
+    for (const cleanerId of job.notifyProvider ? newlyAdded : []) {
       const allow = await isNotificationEnabled(
         "PROVIDER",
         "prov.booking.new",

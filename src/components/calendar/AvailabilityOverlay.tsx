@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { OfficeHours } from "./calendar-helpers";
 import { getAvailability } from "@/app/admin/actions/getAvailability";
 import type { AvailabilitySlotDTO } from "@/app/admin/actions/getAvailability.types";
+import { useCalendarOverlays } from "./CalendarOverlaysContext";
 
 interface AvailabilityOverlayProps {
   day: Date;
@@ -21,15 +22,25 @@ const DAY_BY_INDEX = [
   "SATURDAY",
 ] as const;
 
-let cachedSlotsPromise: Promise<AvailabilitySlotDTO[] | null> | null = null;
+// Cache per viewed employee ("self" = the logged-in user) so the week view's
+// seven day columns share one fetch.
+const cachedSlotsPromises = new Map<
+  string,
+  Promise<AvailabilitySlotDTO[] | null>
+>();
 
-function loadSlots(): Promise<AvailabilitySlotDTO[] | null> {
-  if (!cachedSlotsPromise) {
-    cachedSlotsPromise = getAvailability().then((res) =>
+function loadSlots(
+  employeeId: string | null
+): Promise<AvailabilitySlotDTO[] | null> {
+  const key = employeeId ?? "self";
+  let promise = cachedSlotsPromises.get(key);
+  if (!promise) {
+    promise = getAvailability(employeeId ?? undefined).then((res) =>
       res.success ? res.slots : null
     );
+    cachedSlotsPromises.set(key, promise);
   }
-  return cachedSlotsPromise;
+  return promise;
 }
 
 function toMinutes(hhmm: string): number {
@@ -115,25 +126,28 @@ function computeUnavailableBands(
 }
 
 /**
- * Shades unavailable time bands for the current user on a single day column.
- * Applies to the user's own self-view — fetches the logged-in user's availability.
+ * Shades unavailable time bands on a single day column. By default this is
+ * the logged-in user's own availability; admins can pick a specific cleaner
+ * via the overlay toolbar, which flows in through the overlays context.
  */
 export const AvailabilityOverlay: React.FC<AvailabilityOverlayProps> = ({
   day,
   officeHours,
   zoomLevel,
 }) => {
+  const { availabilityEmployeeId } = useCalendarOverlays();
   const [slots, setSlots] = useState<AvailabilitySlotDTO[] | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    loadSlots().then((s) => {
+    setSlots(null);
+    loadSlots(availabilityEmployeeId).then((s) => {
       if (!cancelled) setSlots(s);
     });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [availabilityEmployeeId]);
 
   if (!slots || slots.length === 0) return null;
 

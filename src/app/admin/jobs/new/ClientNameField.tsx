@@ -16,6 +16,8 @@ interface ClientOption {
   email?: string | null;
   phone?: string | null;
   aptNumber?: string | null;
+  discountPercent?: number | null;
+  fixedPrice?: number | null;
   defaultPaymentMethodId?: string | null;
 }
 
@@ -77,6 +79,16 @@ export default function ClientNameField({
     setCardSavedNow(false);
     setField("location", c.address || "");
     setField("aptNumber", c.aptNumber || "");
+    // Fixed-price client: pre-fill the price with their agreed total, but
+    // never clobber a price the admin already typed.
+    if ((c.fixedPrice ?? 0) > 0) {
+      const priceEl = document.querySelector(
+        'input[name="price"]'
+      ) as HTMLInputElement | null;
+      if (priceEl && !priceEl.value) {
+        setField("price", String(c.fixedPrice));
+      }
+    }
     setOpen(false);
   }
 
@@ -126,6 +138,9 @@ export default function ClientNameField({
           ✓ Linked to saved customer
           {selected.email || selected.phone
             ? ` · ${[selected.email, selected.phone].filter(Boolean).join(" · ")}`
+            : ""}
+          {(selected.fixedPrice ?? 0) > 0
+            ? ` · Fixed price $${selected.fixedPrice!.toFixed(2)}`
             : ""}
         </div>
       )}

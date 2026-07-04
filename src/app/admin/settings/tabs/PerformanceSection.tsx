@@ -210,7 +210,12 @@ export default function PerformanceSection({
                 <StarRow value={r.rating} />
                 <div style={{ flex: 1 }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                    <span style={{ fontSize: 14, color: "var(--ink)", fontWeight: 600 }}>{r.rating.toFixed(1)}&nbsp;{"★"}</span>
+                    <span style={{ fontSize: 14, color: "var(--ink)", fontWeight: 600 }}>
+                      {r.rating.toFixed(1)}&nbsp;{"★"}
+                      {r.editedAt && (
+                        <span style={{ fontSize: 11, color: "var(--primary-60)", fontWeight: 500, marginLeft: 6 }}>(edited)</span>
+                      )}
+                    </span>
                     <span style={{ fontSize: 12, color: "var(--primary-60)" }}>{formatDate(r.createdAt)}</span>
                   </div>
                   {r.clientName && <p style={{ fontSize: 12, color: "var(--primary-70)", marginTop: 2 }}>Job for {r.clientName}</p>}

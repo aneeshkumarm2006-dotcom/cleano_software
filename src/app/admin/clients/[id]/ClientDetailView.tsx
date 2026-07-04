@@ -33,6 +33,9 @@ interface ClientData {
   zip?: string | null;
   notes: string | null;
   discountPercent: number;
+  fixedPrice?: number | null;
+  fixedPriceRecurring?: boolean;
+  fixedPriceAllowFrequencyDiscount?: boolean;
   createdAt: string;
   addresses?: ClientAddressLite[];
 }
@@ -192,6 +195,17 @@ export default function ClientDetailView({
                 <span className="pill" style={{ background: "#fffbeb", color: "#92400e" }}>
                   <span className="pill-dot" style={{ background: "#d97706" }} />
                   {client.discountPercent}% discount
+                </span>
+              )}
+              {(client.fixedPrice ?? 0) > 0 && (
+                <span
+                  className="pill"
+                  style={{ background: "#ede9fe", color: "#5b21b6" }}
+                  title={`New bookings default to $${client.fixedPrice!.toFixed(2)}${
+                    client.fixedPriceRecurring ? " (recurring too)" : ""
+                  }`}>
+                  <span className="pill-dot" style={{ background: "#7c3aed" }} />
+                  Fixed price ${client.fixedPrice!.toFixed(2)}
                 </span>
               )}
             </div>

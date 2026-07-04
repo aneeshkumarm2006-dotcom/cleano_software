@@ -3,6 +3,8 @@ export type RecentRating = {
   rating: number;
   notes: string | null;
   createdAt: string;
+  /** Set when the client edited their submitted rating. */
+  editedAt: string | null;
   jobId: string | null;
   clientName: string | null;
 };

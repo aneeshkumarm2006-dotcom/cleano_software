@@ -206,6 +206,8 @@ interface AlertItem {
   isRead: boolean;
   relatedId: string | null;
   relatedType: string | null;
+  /** Cleaner who triggered the alert (refill/equipment requests). */
+  employeeId: string | null;
   createdAt: string;
 }
 
@@ -1604,6 +1606,14 @@ export default function AnalyticsView({
                         {fmtDate(alert.createdAt)}{" "}
                         {fmtTime(alert.createdAt)}
                       </span>
+                      {alert.employeeId && (
+                        <Link
+                          href={`/admin/employees/${alert.employeeId}?tab=products`}
+                          className="link"
+                          style={{ fontSize: 12, fontWeight: 600 }}>
+                          View cleaner →
+                        </Link>
+                      )}
                     </div>
                   </div>
                   <div className="an-alert-actions">

@@ -36,6 +36,8 @@ export async function GET(req: NextRequest) {
   let skipped = 0;
 
   for (const job of jobs) {
+    // Per-booking notification control: client sends disabled for this job.
+    if (!job.notifyClient) { skipped++; continue; }
     if (!job.client?.email) { skipped++; continue; }
 
     // Skip if already sent for this job

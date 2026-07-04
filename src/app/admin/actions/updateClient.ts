@@ -31,6 +31,22 @@ export async function updateClient(formData: FormData) {
     discountPercent = n;
   }
 
+  // Customer-specific fixed pricing ("Change Total"). Empty clears it.
+  const fixedPriceRaw = formData.get("fixedPrice") as string | null;
+  let fixedPrice: number | null = null;
+  if (fixedPriceRaw !== null && fixedPriceRaw !== "") {
+    const n = parseFloat(fixedPriceRaw);
+    if (!Number.isFinite(n) || n < 0) {
+      return { error: "Fixed price must be a positive amount" };
+    }
+    fixedPrice = n > 0 ? n : null;
+  }
+  const fixedPriceRecurring =
+    fixedPrice !== null && formData.get("fixedPriceRecurring") === "true";
+  const fixedPriceAllowFrequencyDiscount =
+    fixedPriceRecurring &&
+    formData.get("fixedPriceAllowFrequencyDiscount") === "true";
+
   try {
     await db.client.update({
       where: { id },
@@ -48,6 +64,9 @@ export async function updateClient(formData: FormData) {
         zip: (formData.get("zip") as string) || null,
         notes: (formData.get("notes") as string) || null,
         discountPercent,
+        fixedPrice,
+        fixedPriceRecurring,
+        fixedPriceAllowFrequencyDiscount,
       },
     });
 

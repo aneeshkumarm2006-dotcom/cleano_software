@@ -34,6 +34,9 @@ interface Client {
   zip: string | null;
   notes: string | null;
   discountPercent: number;
+  fixedPrice?: number | null;
+  fixedPriceRecurring?: boolean;
+  fixedPriceAllowFrequencyDiscount?: boolean;
   isActive: boolean;
   totalJobs: number;
   completedJobs: number;

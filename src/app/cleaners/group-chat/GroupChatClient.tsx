@@ -1,14 +1,18 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Send, Users, MessageCircle } from "lucide-react";
+import { Send, Users, MessageCircle, Plus, X, Phone, Mail } from "lucide-react";
 import useSWR from "swr";
+import { initials } from "@/lib/avatar";
 import {
   listGroupChannels,
   getGroupMessages,
   sendGroupMessage,
+  listCleanerDirectory,
+  getOrCreateDirectChannel,
   type GroupChannelDTO,
   type GroupMessageDTO,
+  type CleanerDirectoryEntryDTO,
 } from "./groupChat";
 
 interface GroupChatClientProps {
@@ -17,6 +21,7 @@ interface GroupChatClientProps {
   initialMessages: GroupMessageDTO[];
   currentUserId: string;
   userName?: string;
+  dmEnabled: boolean;
 }
 
 function timeOnly(iso: string) {
@@ -60,6 +65,7 @@ export default function GroupChatClient({
   initialMessages,
   currentUserId,
   userName,
+  dmEnabled,
 }: GroupChatClientProps) {
   const [activeChannelId, setActiveChannelId] = useState<string | null>(
     initialChannelId
@@ -67,10 +73,12 @@ export default function GroupChatClient({
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [directoryOpen, setDirectoryOpen] = useState(false);
+  const [startingDmId, setStartingDmId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  const { data: channels } = useSWR<GroupChannelDTO[]>(
+  const { data: channels, mutate: mutateChannels } = useSWR<GroupChannelDTO[]>(
     "group-channels",
     async () => {
       const res = await listGroupChannels();
@@ -78,6 +86,16 @@ export default function GroupChatClient({
       return res.data;
     },
     { fallbackData: initialChannels, refreshInterval: 15000 }
+  );
+
+  // Directory of other cleaners — fetched lazily when the panel opens.
+  const { data: directory } = useSWR(
+    dmEnabled && directoryOpen ? "cleaner-directory" : null,
+    async () => {
+      const res = await listCleanerDirectory();
+      if (!res.success) throw new Error(res.error);
+      return res.data;
+    }
   );
 
   const channelList = channels ?? initialChannels;
@@ -145,6 +163,21 @@ export default function GroupChatClient({
     await mutate();
   }
 
+  async function handleStartDm(otherUserId: string) {
+    if (startingDmId) return;
+    setSendError(null);
+    setStartingDmId(otherUserId);
+    const res = await getOrCreateDirectChannel(otherUserId);
+    setStartingDmId(null);
+    if (!res.success) {
+      setSendError(res.error);
+      return;
+    }
+    await mutateChannels();
+    setActiveChannelId(res.data.id);
+    setDirectoryOpen(false);
+  }
+
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -200,11 +233,14 @@ export default function GroupChatClient({
               flexShrink: 0,
             }}>
             {channelList.map((c) => {
-              const active = c.id === activeChannel?.id;
+              const active = c.id === activeChannel?.id && !directoryOpen;
               return (
                 <button
                   key={c.id}
-                  onClick={() => setActiveChannelId(c.id)}
+                  onClick={() => {
+                    setDirectoryOpen(false);
+                    setActiveChannelId(c.id);
+                  }}
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
@@ -220,13 +256,197 @@ export default function GroupChatClient({
                     color: active ? "#fff" : "var(--primary-70)",
                     transition: "background 0.15s",
                   }}>
-                  <Users size={14} />
+                  {c.isDirect ? <MessageCircle size={14} /> : <Users size={14} />}
                   {c.name}
                 </button>
               );
             })}
+            {dmEnabled && (
+              <button
+                onClick={() => setDirectoryOpen((o) => !o)}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "7px 14px",
+                  borderRadius: 999,
+                  border: "1px dashed rgba(0,140,156,0.35)",
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  background: directoryOpen ? "var(--primary)" : "transparent",
+                  color: directoryOpen ? "#fff" : "var(--primary)",
+                  transition: "background 0.15s",
+                }}>
+                <Plus size={14} />
+                New chat
+              </button>
+            )}
           </div>
 
+          {directoryOpen ? (
+            /* Cleaner directory — pick someone to start a 1:1 chat with. */
+            <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+              <div className="chat-thread-head">
+                <div className="chat-avatar-wrap">
+                  <div
+                    style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: "50%",
+                      background: "var(--primary)",
+                      color: "#fff",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                    }}>
+                    <Plus size={20} />
+                  </div>
+                </div>
+                <div className="thread-meta">
+                  <div className="thread-name">Start a chat</div>
+                  <div className="thread-role">Message another cleaner directly</div>
+                </div>
+                <button
+                  onClick={() => setDirectoryOpen(false)}
+                  aria-label="Close directory"
+                  style={{
+                    marginLeft: "auto",
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    color: "var(--primary-50)",
+                    padding: 6,
+                    display: "flex",
+                  }}>
+                  <X size={18} />
+                </button>
+              </div>
+              <div
+                style={{
+                  flex: 1,
+                  overflowY: "auto",
+                  padding: "16px 20px",
+                  background: "var(--cream)",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 8,
+                }}>
+                {sendError && (
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color: "#dc2626",
+                      background: "#fef2f2",
+                      border: "1px solid #fecaca",
+                      borderRadius: 8,
+                      padding: "6px 12px",
+                    }}>
+                    {sendError}
+                  </div>
+                )}
+                {!directory ? (
+                  <p style={{ fontSize: 13, color: "var(--primary-50)", textAlign: "center", margin: "auto" }}>
+                    Loading cleaners…
+                  </p>
+                ) : directory.cleaners.length === 0 ? (
+                  <p style={{ fontSize: 13, color: "var(--primary-50)", textAlign: "center", margin: "auto" }}>
+                    No other cleaners to message right now.
+                  </p>
+                ) : (
+                  directory.cleaners.map((c: CleanerDirectoryEntryDTO) => (
+                    <div
+                      key={c.id}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 12,
+                        background: "#fff",
+                        border: "1px solid rgba(0,140,156,0.10)",
+                        borderRadius: 12,
+                        padding: "10px 14px",
+                      }}>
+                      <div
+                        style={{
+                          width: 38,
+                          height: 38,
+                          borderRadius: "50%",
+                          background: "var(--primary)",
+                          color: "#fff",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: 13,
+                          fontWeight: 700,
+                          flexShrink: 0,
+                        }}>
+                        {initials(c.name)}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div
+                          style={{
+                            fontSize: 14,
+                            fontWeight: 600,
+                            color: "var(--primary-80)",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}>
+                          {c.name}
+                        </div>
+                        {directory.showContactInfo && (c.phone || c.email) && (
+                          <div
+                            style={{
+                              display: "flex",
+                              gap: 12,
+                              fontSize: 12,
+                              color: "var(--primary-50)",
+                              marginTop: 2,
+                              flexWrap: "wrap",
+                            }}>
+                            {c.phone && (
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                                <Phone size={11} /> {c.phone}
+                              </span>
+                            )}
+                            {c.email && (
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                                <Mail size={11} /> {c.email}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => handleStartDm(c.id)}
+                        disabled={startingDmId !== null}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 6,
+                          padding: "7px 14px",
+                          borderRadius: 999,
+                          border: "none",
+                          cursor: "pointer",
+                          fontSize: 13,
+                          fontWeight: 600,
+                          background: "var(--primary)",
+                          color: "#fff",
+                          opacity: startingDmId && startingDmId !== c.id ? 0.5 : 1,
+                          flexShrink: 0,
+                        }}>
+                        <MessageCircle size={13} />
+                        {startingDmId === c.id ? "Opening…" : "Message"}
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          ) : (
+            <>
           {/* Thread header */}
           <div className="chat-thread-head">
             <div className="chat-avatar-wrap">
@@ -242,15 +462,23 @@ export default function GroupChatClient({
                   justifyContent: "center",
                   flexShrink: 0,
                 }}>
-                <Users size={20} />
+                {activeChannel?.isDirect ? <MessageCircle size={20} /> : <Users size={20} />}
               </div>
             </div>
             <div className="thread-meta">
               <div className="thread-name">
                 {activeChannel?.name ?? "Group chat"}
-                <span className="chat-role-pill">Crew</span>
+                <span className="chat-role-pill">
+                  {activeChannel?.isDirect ? "Direct" : "Crew"}
+                </span>
               </div>
-              <div className="thread-role">Visible to all cleaners</div>
+              <div className="thread-role">
+                {activeChannel?.isDirect
+                  ? "Private conversation"
+                  : activeChannel?.isDefault
+                    ? "Visible to all cleaners"
+                    : "Private channel"}
+              </div>
             </div>
           </div>
 
@@ -349,6 +577,8 @@ export default function GroupChatClient({
             </div>
             <div className="chat-composer-hint">⏎ to send · ⇧⏎ for new line</div>
           </div>
+            </>
+          )}
         </div>
       </div>
     </div>

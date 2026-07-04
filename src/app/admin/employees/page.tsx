@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
 import EmployeesPageClient from "./EmployeesPageClient";
+import AvailabilityOverview from "./AvailabilityOverview";
 
 type SearchParams = Promise<{
   [key: string]: string | string[] | undefined;
@@ -96,6 +97,37 @@ export default async function EmployeesPage({
     };
   });
 
+  // All-cleaners availability overview (one batched query; active view only).
+  const cleanerRows = employees.filter(
+    (e) => e.role === "EMPLOYEE" || e.role === "FIELD_LEAD"
+  );
+  const availabilitySlots = archived
+    ? []
+    : await db.employeeAvailability.findMany({
+        where: { employeeId: { in: cleanerRows.map((e) => e.id) } },
+        select: {
+          employeeId: true,
+          day: true,
+          startTime: true,
+          endTime: true,
+          isAvailable: true,
+        },
+      });
+  const availabilityRows = archived
+    ? []
+    : cleanerRows.map((e) => ({
+        employeeId: e.id,
+        employeeName: e.name,
+        slots: availabilitySlots
+          .filter((s) => s.employeeId === e.id)
+          .map((s) => ({
+            day: s.day as string,
+            startTime: s.startTime,
+            endTime: s.endTime,
+            isAvailable: s.isAvailable,
+          })),
+      }));
+
   // Calculate overall stats
   const stats = {
     totalEmployees: employees.length,
@@ -106,7 +138,7 @@ export default async function EmployeesPage({
   };
 
   return (
-    <div className="h-full overflow-hidden overflow-y-auto p-8">
+    <div className="h-full overflow-hidden overflow-y-auto p-8 space-y-6">
       <EmployeesPageClient
         initialEmployees={employeesData}
         initialStats={stats}
@@ -118,6 +150,7 @@ export default async function EmployeesPage({
         archived={archived}
         fieldLeads={fieldLeads}
       />
+      {!archived && <AvailabilityOverview rows={availabilityRows} />}
     </div>
   );
 }

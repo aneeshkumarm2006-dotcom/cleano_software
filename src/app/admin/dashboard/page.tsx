@@ -221,16 +221,30 @@ export default async function DashboardPage() {
   const lowStockProducts = products.filter((p) => p.stockLevel <= p.minStock).sort((a, b) => a.stockLevel - b.stockLevel).slice(0, 8);
   const totalInventoryValue = products.reduce((s, p) => s + p.stockLevel * p.costPerUnit, 0);
 
-  // Refill alerts (employee inventory below threshold)
+  // Refill alerts (employee inventory below threshold) — tracked per cleaner
+  // so the tile can deep-link to /admin/employees/{id}.
   const [inventoryRules, employeesWithProducts] = await Promise.all([
     db.inventoryRule.findMany(),
-    db.employeeProduct.findMany({ select: { productId: true, quantity: true } }),
+    db.employeeProduct.findMany({
+      select: {
+        productId: true,
+        quantity: true,
+        employee: { select: { id: true, name: true } },
+      },
+    }),
   ]);
   let refillAlertCount = 0;
+  const refillCleanerMap = new Map<string, { id: string; name: string; lowCount: number }>();
   for (const ep of employeesWithProducts) {
     const rule = inventoryRules.find((r) => r.productId === ep.productId);
-    if (rule && ep.quantity <= rule.refillThreshold) refillAlertCount++;
+    if (rule && ep.quantity <= rule.refillThreshold) {
+      refillAlertCount++;
+      const entry = refillCleanerMap.get(ep.employee.id);
+      if (entry) entry.lowCount++;
+      else refillCleanerMap.set(ep.employee.id, { id: ep.employee.id, name: ep.employee.name, lowCount: 1 });
+    }
   }
+  const refillCleaners = [...refillCleanerMap.values()].sort((a, b) => b.lowCount - a.lowCount);
 
   const hours = now.getHours();
   const greeting = hours < 12 ? "Good morning" : hours < 18 ? "Good afternoon" : "Good evening";
@@ -271,6 +285,22 @@ export default async function DashboardPage() {
           <AlertTile icon={MapPin} label="Refill alerts" value={refillAlertCount} hint="cleaners low on supplies" href="/admin/inventory" />
         )}
       </div>
+
+      {/* Per-cleaner refill detail — deep-links to each cleaner's inventory */}
+      {refillCleaners.length > 0 && (
+        <div className="dcard" style={{ marginBottom: 32, marginTop: -14, padding: "14px 18px", display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px 14px" }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--amber-800)" }}>Low on supplies:</span>
+          {refillCleaners.map((c) => (
+            <Link
+              key={c.id}
+              href={`/admin/employees/${c.id}?tab=products`}
+              className="link"
+              style={{ fontSize: 13, fontWeight: 500 }}>
+              {c.name} ({c.lowCount} {c.lowCount === 1 ? "item" : "items"}) →
+            </Link>
+          ))}
+        </div>
+      )}
 
       {/* Two-column lists */}
       <div className="tab-panel" style={{ marginBottom: lowStockProducts.length ? 18 : 32 }}>

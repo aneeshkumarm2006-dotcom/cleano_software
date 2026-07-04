@@ -11,6 +11,7 @@ import {
 } from "@/lib/email";
 import { computeLateArrivalPenalty } from "@/lib/policy";
 import { applyStrike } from "@/lib/strikes";
+import { setAssignmentProgress } from "@/lib/job-assignments";
 
 /** Minutes late that earns an accountability strike (subject to admin excuse). */
 const STRIKE_LATE_MIN = 45;
@@ -72,6 +73,12 @@ export async function clockIn(jobId: string) {
           ? { lateArrivalAt: now, lateArrivalRatingPenalty: penalty }
           : {}),
       },
+    });
+
+    // Per-cleaner assignment status (item 9).
+    await setAssignmentProgress(jobId, session.user.id, {
+      status: "CLOCKED_IN",
+      clockInTime: now,
     });
 
     // Create a log entry

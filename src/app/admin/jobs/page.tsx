@@ -148,6 +148,7 @@ export default async function JobsPage({
       invoiceSent: job.invoiceSent,
       paymentType: job.paymentType,
       isCashJob: job.isCashJob,
+      usesFixedPrice: job.usesFixedPrice,
       discountAmount: job.discountAmount,
       bedCount: job.bedCount,
       bathCount: job.bathCount,

@@ -20,6 +20,16 @@ interface CreateInviteOpts {
 
 export async function createAssignmentInvites(opts: CreateInviteOpts) {
   if (opts.cleanerIds.length === 0) return [];
+
+  // Per-booking notification control: when provider notifications are turned
+  // off for this job, skip the accept/decline invite ping — the cleaners stay
+  // directly assigned without being prompted.
+  const job = await db.job.findUnique({
+    where: { id: opts.jobId },
+    select: { notifyProvider: true },
+  });
+  if (job && !job.notifyProvider) return [];
+
   const now = new Date();
   const timeoutMin = await getSetting("scheduling.acceptDeclineTimeoutMin");
   const expiresAt = new Date(now.getTime() + timeoutMin * 60_000);

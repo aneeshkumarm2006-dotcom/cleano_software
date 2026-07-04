@@ -105,6 +105,10 @@ export default async function ClientDetailPage({
           zip: client.zip,
           notes: client.notes,
           discountPercent: client.discountPercent,
+          fixedPrice: client.fixedPrice,
+          fixedPriceRecurring: client.fixedPriceRecurring,
+          fixedPriceAllowFrequencyDiscount:
+            client.fixedPriceAllowFrequencyDiscount,
           createdAt: client.createdAt.toISOString(),
           addresses: client.addresses.map((a) => ({
             id: a.id,

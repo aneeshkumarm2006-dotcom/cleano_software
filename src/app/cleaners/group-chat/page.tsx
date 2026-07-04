@@ -5,6 +5,7 @@ import GroupChatClient from "./GroupChatClient";
 import {
   listGroupChannels,
   getGroupMessages,
+  getTeamChatSettings,
   type GroupMessageDTO,
 } from "./groupChat";
 
@@ -14,7 +15,10 @@ export default async function CleanerGroupChatPage() {
     redirect("/sign-in");
   }
 
-  const list = await listGroupChannels();
+  const [list, settings] = await Promise.all([
+    listGroupChannels(),
+    getTeamChatSettings(),
+  ]);
   const channels = list.success ? list.data : [];
   const initialChannelId = channels[0]?.id ?? null;
 
@@ -32,6 +36,7 @@ export default async function CleanerGroupChatPage() {
         initialMessages={initialMessages}
         currentUserId={session.user.id}
         userName={session.user.name ?? undefined}
+        dmEnabled={settings.success ? settings.data.dmEnabled : true}
       />
     </div>
   );

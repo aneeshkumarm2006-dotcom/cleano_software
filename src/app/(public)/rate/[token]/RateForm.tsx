@@ -51,6 +51,10 @@ interface Props {
   location?: string | null;
   cleaners?: { id: string; name: string }[];
   fallback?: Fallback;
+  /** True when the client already rated and is now editing. */
+  isEdit?: boolean;
+  previousStars?: number | null;
+  previousComment?: string | null;
 }
 
 const FALLBACK_COPY: Record<
@@ -80,10 +84,13 @@ export default function RateForm({
   location,
   cleaners = [],
   fallback,
+  isEdit = false,
+  previousStars,
+  previousComment,
 }: Props) {
-  const [rating, setRating] = useState(0);
+  const [rating, setRating] = useState(isEdit ? previousStars ?? 0 : 0);
   const [hover, setHover] = useState(0);
-  const [comment, setComment] = useState("");
+  const [comment, setComment] = useState(isEdit ? previousComment ?? "" : "");
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [photos, setPhotos] = useState<ReviewPhoto[]>([]);
@@ -194,9 +201,19 @@ export default function RateForm({
             <h1
               className="cl-display"
               style={{ fontSize: "clamp(32px, 4.4vw, 52px)" }}>
-              How was your
-              <br />
-              <em>cleaning?</em>
+              {isEdit ? (
+                <>
+                  Update your
+                  <br />
+                  <em>rating</em>
+                </>
+              ) : (
+                <>
+                  How was your
+                  <br />
+                  <em>cleaning?</em>
+                </>
+              )}
             </h1>
             <div
               style={{
@@ -217,7 +234,9 @@ export default function RateForm({
               {location ? <span>· {location}</span> : null}
             </div>
             <p className="cl-subtitle">
-              Rate your experience with {cleanerLabel}.
+              {isEdit
+                ? `You already rated this cleaning — you can change your rating for ${cleanerLabel} below.`
+                : `Rate your experience with ${cleanerLabel}.`}
             </p>
           </header>
 
@@ -396,6 +415,8 @@ export default function RateForm({
                 ? "Submitting…"
                 : uploadingPhotos
                 ? "Uploading photos…"
+                : isEdit
+                ? "Update rating →"
                 : "Submit rating →"}
             </Button>
           </div>

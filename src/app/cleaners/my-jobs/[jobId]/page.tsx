@@ -243,7 +243,7 @@ export default async function JobDetailPage({ params }: PageProps) {
           </span>
           <div className="cl-jd-cancel-meta">
             <strong>{"Can't make it?"}</strong>
-            <span>Cancelling less than 24 hours before the shift incurs a $20 fee and a 1-star penalty.</span>
+            <span>Cancelling less than 24 hours before the shift incurs a 1-star penalty.</span>
           </div>
           <CancelShiftButton jobId={job.id} shiftStartTime={job.startTime} />
         </div>
