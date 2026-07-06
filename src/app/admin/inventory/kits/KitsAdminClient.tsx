@@ -124,7 +124,7 @@ export default function KitsAdminClient({ cleaners, products }: Props) {
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "260px 1fr", gap: 20, alignItems: "start" }}>
+      <div className="stack-mobile" style={{ display: "grid", gridTemplateColumns: "260px 1fr", gap: 20, alignItems: "start" }}>
         {/* Cleaner list */}
         <div className="atable-wrap" style={{ padding: 0, overflow: "hidden" }}>
           <div style={{ padding: 12, borderBottom: "1px solid var(--primary-10)" }}>

@@ -5337,6 +5337,17 @@ a.an-listrow:hover { background: var(--primary-10); }
 .cal-ev-handle { position: absolute; left: 0; right: 0; height: 7px; cursor: ns-resize; z-index: 2; }
 .cal-ev-handle.top { top: 0; } .cal-ev-handle.bottom { bottom: 0; }
 
+/* ── Mobile card stacking: cards never squeeze side-by-side — they stack.
+   !important so inline gridTemplateColumns overrides (e.g. '1.4fr 1fr' on the
+   Financials tab) cannot force columns on a phone. ── */
+@media (max-width: 767px) {
+  .tab-panel, .td-grid { grid-template-columns: 1fr !important; }
+  .afilter-panel { grid-template-columns: 1fr !important; }
+  .astat-grid, .cl-income-stats-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)) !important; }
+  /* Sidebar-plus-content layouts (chat channels, kits, customer booking) stack too */
+  .stack-mobile { grid-template-columns: 1fr !important; }
+}
+
 /* ── Admin job detail — mobile: nothing may force page-level horizontal scroll ── */
 @media (max-width: 767px) {
   .jdetail-head { gap: 12px; }

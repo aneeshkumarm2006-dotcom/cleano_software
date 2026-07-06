@@ -400,6 +400,7 @@ export default function AdminGroupChatClient({
       )}
 
       <div
+        className="stack-mobile"
         style={{
           flex: 1,
           minHeight: 0,

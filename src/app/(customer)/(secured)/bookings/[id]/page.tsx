@@ -199,7 +199,7 @@ export default async function BookingDetailPage({
           gap: 24,
           alignItems: "flex-start",
         }}
-        className="cl-booking-detail-grid">
+        className="cl-booking-detail-grid stack-mobile">
         {/* Left column */}
         <div className="cl-stack-24">
           <section className="cl-tile cl-tile-pad-lg">
