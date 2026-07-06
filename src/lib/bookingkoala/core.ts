@@ -209,6 +209,8 @@ export interface NormalizedJob {
   notes: string | null;
   /** Internal traceability (source + team payout) → admin-only job log. */
   importNote: string;
+  /** Stripe PaymentIntent id from the CSV "Transaction id" column. */
+  transactionId: string | null;
   startTime: Date;
   endTime: Date | null;
 }
@@ -365,6 +367,7 @@ export function parseAndNormalize(csvText: string): ParseResult {
         : null,
       job: {
         bookingId: clean(get("Booking id")) || null,
+        transactionId: cleanOrNull(get("Transaction id")),
         clientName: name,
         location: address || null,
         aptNumber: cleanOrNull(get("Apt")),

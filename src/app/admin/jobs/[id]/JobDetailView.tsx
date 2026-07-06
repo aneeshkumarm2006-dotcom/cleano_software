@@ -1151,6 +1151,12 @@ export default function JobDetailView({
             </div>
           )}
 
+          {job.stripePaymentIntentId && (
+            <div style={{ fontSize: 11, color: 'var(--primary-50)', padding: '2px 4px 8px', wordBreak: 'break-all' }}>
+              Transaction ID: <span style={{ fontFamily: 'monospace' }}>{job.stripePaymentIntentId}</span>
+            </div>
+          )}
+
           <div className="pay-toggle">
             <div className="pay-toggle-info">
               <div className="icon-bubble">

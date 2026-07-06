@@ -358,6 +358,9 @@ export async function runBookingKoalaImport(
           requiredCleaners: r.job.requiredCleaners,
           bookingSource: BOOKING_SOURCE,
           externalBookingId: r.job.bookingId,
+          // Stripe PaymentIntent from the CSV "Transaction id" column — keeps
+          // the payment traceable (and refundable) from the job detail page.
+          stripePaymentIntentId: r.job.transactionId,
           notes: r.job.notes,
           ...(cleanerIds.length
             ? {

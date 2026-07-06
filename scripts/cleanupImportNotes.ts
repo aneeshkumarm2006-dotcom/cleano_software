@@ -23,10 +23,20 @@ async function main() {
         { notes: { startsWith: "Imported from BookingKoala" } },
       ],
     },
-    select: { id: true, notes: true, clientName: true },
+    select: {
+      id: true,
+      notes: true,
+      clientName: true,
+      stripePaymentIntentId: true,
+    },
   });
 
-  console.log(`${jobs.length} job(s) with legacy import notes`);
+  const withPi = jobs.filter(
+    (j) => j.notes?.match(/Transaction ID:\s*pi_\S+/) && !j.stripePaymentIntentId
+  ).length;
+  console.log(
+    `${jobs.length} job(s) with legacy import notes; ${withPi} carry a Stripe payment ID to backfill`
+  );
   for (const j of jobs.slice(0, 3)) {
     console.log(`  e.g. ${j.clientName}: ${j.notes?.slice(0, 80)}…`);
   }
@@ -36,7 +46,13 @@ async function main() {
   }
 
   let moved = 0;
+  let backfilled = 0;
   for (const j of jobs) {
+    // Legacy notes carry the Stripe PaymentIntent ("Transaction ID: pi_…") —
+    // backfill it onto the job's proper column before clearing the note.
+    const pi = j.notes?.match(/Transaction ID:\s*(pi_\S+)/)?.[1] ?? null;
+    const backfillPi = pi && !j.stripePaymentIntentId;
+    if (backfillPi) backfilled++;
     await db.$transaction([
       db.jobLog.create({
         data: {
@@ -46,11 +62,20 @@ async function main() {
           description: `Import traceability (moved from cleaner-visible notes): ${j.notes}`,
         },
       }),
-      db.job.update({ where: { id: j.id }, data: { notes: null } }),
+      db.job.update({
+        where: { id: j.id },
+        data: {
+          notes: null,
+          ...(backfillPi ? { stripePaymentIntentId: pi } : {}),
+        },
+      }),
     ]);
     moved++;
   }
-  console.log(`Moved ${moved} note(s) to admin-only job logs and cleared them.`);
+  console.log(
+    `Moved ${moved} note(s) to admin-only job logs and cleared them; ` +
+      `backfilled ${backfilled} Stripe payment ID(s) onto jobs.`
+  );
 }
 
 main()

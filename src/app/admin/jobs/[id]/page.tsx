@@ -222,6 +222,7 @@ export default async function JobPage({
     payRateMultiplier: job.payRateMultiplier,
     depositPaid: job.depositPaid,
     depositPaymentIntentId: job.depositPaymentIntentId,
+    stripePaymentIntentId: job.stripePaymentIntentId,
     addOns: job.addOns.map((a) => ({
       id: a.id,
       name: a.name,
