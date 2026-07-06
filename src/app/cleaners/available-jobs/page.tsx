@@ -27,6 +27,7 @@ export default async function AvailableJobsPage() {
   const serialized = openJobs.map((j) => ({
     id: j.id,
     jobNumber: j.jobNumber,
+    clientName: j.clientName,
     startTime: j.startTime.toISOString(),
     isFlexible: j.isFlexible,
     location: j.location,

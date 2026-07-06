@@ -7,6 +7,7 @@ import { fmtDate as fmtDateTz, fmtTime as fmtTimeTz } from "@/lib/time";
 interface AvailableJob {
   id: string;
   jobNumber: number;
+  clientName: string;
   startTime: string;
   isFlexible: boolean;
   location: string | null;
@@ -28,6 +29,18 @@ function fmtDate(iso: string) {
 }
 function fmtTime(iso: string) {
   return fmtTimeTz(iso);
+}
+
+// Legacy imports left machine-generated notes on jobs ("Source Booking ID …",
+// "Imported from BookingKoala …"). A data cleanup is nulling these, but hide
+// them defensively so they never clutter cleaner cards.
+function displayNotes(notes: string | null): string | null {
+  if (!notes) return null;
+  const trimmed = notes.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith("Source Booking ID")) return null;
+  if (trimmed.startsWith("Imported from BookingKoala")) return null;
+  return trimmed;
 }
 
 export default function AvailableJobsClient({ jobs }: { jobs: AvailableJob[] }) {
@@ -68,45 +81,34 @@ export default function AvailableJobsClient({ jobs }: { jobs: AvailableJob[] }) 
         const isBusy = busyId === job.id;
         const dateStr = fmtDate(job.startTime);
         const timeStr = !job.isFlexible ? fmtTime(job.startTime) : null;
+        const notes = displayNotes(job.notes);
 
         return (
           <article key={job.id} className="cl-job-card">
+            {/* Line 1: client name + job # */}
             <div className="cl-job-card-head">
-              <div>
-                <div className="cl-job-card-id">JOB #{job.jobNumber}</div>
-                <h3 className="cl-job-card-date">
-                  {dateStr}
-                  {timeStr && (
-                    <span style={{ fontFamily: "var(--font)", fontSize: 14, color: "var(--primary-60)", fontWeight: 500, marginLeft: 8 }}>
-                      · {timeStr}
-                    </span>
-                  )}
-                </h3>
-                {job.isFlexible && (
-                  <span className="cl-pill flex" style={{ marginTop: 8 }}>Flexible time</span>
-                )}
-              </div>
+              <h3 className="cl-job-card-client">{job.clientName}</h3>
+              <span className="cl-job-card-id">Job #{job.jobNumber}</span>
+            </div>
+
+            {/* Line 2: date + time on one line, pay right-aligned */}
+            <div className="cl-job-card-when">
+              <span className="cl-job-card-datetime">
+                {dateStr}
+                {timeStr && <span className="time"> · {timeStr}</span>}
+                {job.isFlexible && <span className="cl-pill flex">Flexible time</span>}
+              </span>
               {job.price != null && (
-                <div className="cl-job-card-pay">
-                  <div className="cl-job-card-pay-lbl">Est. pay</div>
-                  <div className="cl-job-card-pay-val">
-                    ${Math.round(job.price / 2)}<sup>+</sup>
-                  </div>
-                </div>
+                <span className="cl-job-card-pay">
+                  <span className="lbl">Est. pay</span>
+                  <span className="val">${Math.round(job.price / 2)}+</span>
+                </span>
               )}
             </div>
 
             <div className="cl-job-card-meta">
-              {job.location && (
-                <div className="row" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span className="icon">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z" /><circle cx="12" cy="10" r="3" /></svg>
-                  </span>
-                  <span>{job.location}</span>
-                </div>
-              )}
               {job.jobType && (
-                <div className="row" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div className="row">
                   <span className="icon">
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" /><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" /></svg>
                   </span>
@@ -118,27 +120,24 @@ export default function AvailableJobsClient({ jobs }: { jobs: AvailableJob[] }) 
                   </span>
                 </div>
               )}
-              {job.isFlexible && (
-                <div className="row" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              {job.location && (
+                <div className="row">
                   <span className="icon">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z" /><circle cx="12" cy="10" r="3" /></svg>
                   </span>
-                  <span>Time TBD by admin</span>
+                  <span className="cl-job-card-addr">{job.location}</span>
                 </div>
               )}
-              <div className="row" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span className="icon">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
-                </span>
-                <span><strong>{spotsLeft}</strong> spot{spotsLeft !== 1 ? "s" : ""} remaining</span>
-              </div>
             </div>
 
-            {job.notes && (
-              <p style={{ fontSize: 12, color: "var(--primary-60)", background: "var(--cream)", borderRadius: 10, padding: "10px 14px", fontStyle: "italic", margin: 0 }}>
-                {job.notes}
-              </p>
-            )}
+            {notes && <p className="cl-job-card-notes">{notes}</p>}
+
+            <div className="cl-job-card-spots">
+              <span className="icon">
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
+              </span>
+              <span><strong>{spotsLeft}</strong> spot{spotsLeft !== 1 ? "s" : ""} remaining</span>
+            </div>
 
             {errors[job.id] && (
               <p style={{ fontSize: 12, color: "#dc2626", margin: 0 }}>{errors[job.id]}</p>
