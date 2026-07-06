@@ -939,7 +939,10 @@ export default function JobsView({
               style={{
                 display: 'flex',
                 alignItems: 'center',
+                flexWrap: 'wrap',
+                justifyContent: 'center',
                 gap: 10,
+                maxWidth: 'calc(100vw - 32px)',
                 background: '#fff',
                 border: '1px solid var(--primary-10)',
                 borderRadius: 12,
@@ -985,7 +988,10 @@ export default function JobsView({
               style={{
                 display: 'flex',
                 alignItems: 'center',
+                flexWrap: 'wrap',
+                justifyContent: 'center',
                 gap: 8,
+                maxWidth: 'calc(100vw - 32px)',
                 background: '#fff',
                 border: '1px solid var(--primary-10)',
                 borderRadius: 12,
@@ -1025,6 +1031,9 @@ export default function JobsView({
         actions={bulkActions}
         onClear={() => { sel.clear(); setShowAssign(false); setShowStatus(false); }}
         noun="job"
+        total={visibleIds.length}
+        allSelected={sel.allSelected}
+        onToggleAll={sel.toggleAll}
       />
     </div>
   );

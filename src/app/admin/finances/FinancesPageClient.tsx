@@ -66,8 +66,9 @@ export default function FinancesPageClient({
         </p>
       </header>
 
-      <div style={{ display: "flex", gap: 24 }}>
-        <nav style={{ width: 220, flexShrink: 0 }}>
+      {/* Sidebar + content: stacks on phones via .stack-mobile */}
+      <div className="stack-mobile" style={{ display: "grid", gridTemplateColumns: "220px minmax(0, 1fr)", gap: 24, alignItems: "start" }}>
+        <nav>
           <div style={{ background: "var(--primary-5)", borderRadius: 16, padding: 6, display: "flex", flexDirection: "column", gap: 2 }}>
             {TABS.map((tab) => {
               const Icon = tab.icon;

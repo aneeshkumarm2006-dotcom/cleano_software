@@ -592,6 +592,9 @@ export default function ApplicationsInboxClient({
         count={selection.count}
         actions={bulkActions}
         onClear={selection.clear}
+        total={visibleIds.length}
+        allSelected={selection.allSelected}
+        onToggleAll={selection.toggleAll}
       />
     </div>
   );

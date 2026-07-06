@@ -491,6 +491,9 @@ export default function LeadsPageClient({ leads, archived = false }: { leads: Le
         count={selection.count}
         actions={bulkActions}
         onClear={() => { setStatusMenuOpen(false); selection.clear(); }}
+        total={visibleIds.length}
+        allSelected={selection.allSelected}
+        onToggleAll={selection.toggleAll}
       />
     </div>
   );

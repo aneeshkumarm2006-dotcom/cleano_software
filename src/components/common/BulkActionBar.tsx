@@ -21,11 +21,16 @@ interface BulkActionBarProps {
   onClear: () => void;
   /** Optional label for the selected unit, e.g. "job" → "3 jobs selected". */
   noun?: string;
+  /** Total visible rows — with onToggleAll, renders a "Select all N" chip
+      (the only select-all entry point on mobile card lists). */
+  total?: number;
+  allSelected?: boolean;
+  onToggleAll?: () => void;
 }
 
 // Floating bar shown when ≥1 row is selected. Renders the provided actions and a
 // clear button. Handles per-action busy state + optional confirm.
-export default function BulkActionBar({ count, actions, onClear, noun = "item" }: BulkActionBarProps) {
+export default function BulkActionBar({ count, actions, onClear, noun = "item", total, allSelected, onToggleAll }: BulkActionBarProps) {
   const [busy, setBusy] = useState<string | null>(null);
   if (count <= 0) return null;
 
@@ -50,11 +55,15 @@ export default function BulkActionBar({ count, actions, onClear, noun = "item" }
         zIndex: 40,
         display: "flex",
         alignItems: "center",
-        gap: 12,
+        justifyContent: "center",
+        flexWrap: "wrap",
+        gap: 10,
         margin: "0 auto",
-        maxWidth: "fit-content",
+        width: "fit-content",
+        // Never wider than the phone viewport — wrap into rows instead.
+        maxWidth: "calc(100vw - 32px)",
         padding: "10px 14px",
-        borderRadius: 999,
+        borderRadius: 20,
         background: "#0f172a",
         color: "#fff",
         boxShadow: "0 8px 30px rgba(0,0,0,0.25)",
@@ -63,7 +72,28 @@ export default function BulkActionBar({ count, actions, onClear, noun = "item" }
         {count} {noun}
         {count === 1 ? "" : "s"} selected
       </span>
-      <div style={{ display: "flex", gap: 8 }}>
+      {onToggleAll && typeof total === "number" && total > 0 && (
+        <button
+          onClick={onToggleAll}
+          disabled={busy !== null}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            fontSize: 13,
+            fontWeight: 600,
+            padding: "6px 12px",
+            borderRadius: 999,
+            border: "1px solid rgba(255,255,255,0.25)",
+            cursor: busy ? "default" : "pointer",
+            background: "transparent",
+            color: "#fff",
+            whiteSpace: "nowrap",
+          }}>
+          {allSelected ? "Deselect all" : `Select all ${total}`}
+        </button>
+      )}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
         {actions.map((a) => (
           <button
             key={a.key}
@@ -81,6 +111,7 @@ export default function BulkActionBar({ count, actions, onClear, noun = "item" }
               cursor: busy ? "default" : "pointer",
               background: a.variant === "danger" ? "#dc2626" : "rgba(255,255,255,0.12)",
               color: "#fff",
+              whiteSpace: "nowrap",
               opacity: busy && busy !== a.key ? 0.5 : 1,
             }}>
             {busy === a.key ? <Loader2 size={14} className="animate-spin" /> : a.icon}

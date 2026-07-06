@@ -106,7 +106,7 @@ export default function ClientAddressManager({ clientId, addresses }: Props) {
 
       {showAdd && (
         <div style={{ padding: 16, borderRadius: 14, background: "rgba(0,140,156,0.04)", border: "1px solid rgba(0,140,156,0.1)", marginBottom: 10 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, marginBottom: 10 }}>
             <div>
               <label style={{ fontSize: 11, fontWeight: 600, color: "var(--primary-60)", display: "block", marginBottom: 4 }}>Label</label>
               <input value={form.label} onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))} placeholder="e.g. Home, Office" style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid rgba(0,140,156,0.2)", fontSize: 13, outline: "none", boxSizing: "border-box" }} />

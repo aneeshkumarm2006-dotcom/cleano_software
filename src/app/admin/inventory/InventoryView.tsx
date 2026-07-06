@@ -290,7 +290,7 @@ export default function InventoryView({
             </span>
           </h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() =>
@@ -802,6 +802,115 @@ export default function InventoryView({
           )}
         </div>
       )}
+
+      {/* Bulk-action pickers (shown above the floating bar) */}
+      {sel.count > 0 && (showCategory || showMinStock) && (
+        <div
+          style={{
+            position: "sticky",
+            bottom: 76,
+            zIndex: 41,
+            display: "flex",
+            justifyContent: "center",
+            marginTop: 12,
+          }}>
+          {showCategory && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                flexWrap: "wrap",
+                justifyContent: "center",
+                gap: 8,
+                maxWidth: "calc(100vw - 32px)",
+                background: "#fff",
+                border: "1px solid var(--primary-10)",
+                borderRadius: 12,
+                padding: "10px 14px",
+                boxShadow: "0 8px 30px rgba(0,0,0,0.15)",
+              }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>
+                Set category to
+              </span>
+              {CATEGORY_OPTIONS.map((opt) => (
+                <Button
+                  key={opt.value}
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => runSetCategory(opt.value)}
+                  disabled={bulkBusy}
+                  className="rounded-lg px-3">
+                  {opt.label}
+                </Button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setShowCategory(false)}
+                style={{ background: "none", border: 0, cursor: "pointer", fontSize: 13, color: "var(--primary-60)" }}>
+                Cancel
+              </button>
+            </div>
+          )}
+          {showMinStock && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                flexWrap: "wrap",
+                justifyContent: "center",
+                gap: 10,
+                maxWidth: "calc(100vw - 32px)",
+                background: "#fff",
+                border: "1px solid var(--primary-10)",
+                borderRadius: 12,
+                padding: "10px 14px",
+                boxShadow: "0 8px 30px rgba(0,0,0,0.15)",
+              }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>
+                Set min-stock to
+              </span>
+              <input
+                type="number"
+                min={0}
+                value={minStockValue}
+                onChange={(e) => setMinStockValue(e.target.value)}
+                style={{
+                  width: 90,
+                  padding: "6px 10px",
+                  border: "1px solid var(--primary-20, #cbd5e1)",
+                  borderRadius: 8,
+                  fontSize: 13,
+                }}
+              />
+              <Button
+                variant="primary"
+                border={false}
+                size="sm"
+                onClick={runSetMinStock}
+                disabled={minStockValue === "" || bulkBusy}
+                className="rounded-lg px-4">
+                {bulkBusy ? "Saving…" : `Apply to ${sel.count}`}
+              </Button>
+              <button
+                type="button"
+                onClick={() => { setShowMinStock(false); setMinStockValue(""); }}
+                style={{ background: "none", border: 0, cursor: "pointer", fontSize: 13, color: "var(--primary-60)" }}>
+                Cancel
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      <BulkActionBar
+        count={sel.count}
+        actions={bulkActions}
+        onClear={() => { sel.clear(); closePanels(); }}
+        noun="product"
+        total={visibleIds.length}
+        allSelected={sel.allSelected}
+        onToggleAll={sel.toggleAll}
+      />
     </div>
   );
 }

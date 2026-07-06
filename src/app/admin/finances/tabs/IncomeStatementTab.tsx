@@ -176,7 +176,7 @@ export default function IncomeStatementTab({ transactions }: Props) {
           <h3 className="text-xs uppercase tracking-wider text-[#008C9C]/70 mb-2">
             Monthly Breakdown
           </h3>
-          <div className="rounded-2xl border border-[#008C9C]/10 bg-white overflow-hidden">
+          <div className="rounded-2xl border border-[#008C9C]/10 bg-white overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-[#008C9C]/5 text-[#008C9C]/70 text-[10px] uppercase tracking-wider">
                 <tr>

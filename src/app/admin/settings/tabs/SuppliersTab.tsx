@@ -304,6 +304,7 @@ export default function SuppliersTab({
                         No products to price.
                       </p>
                     ) : (
+                      <div className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead>
                           <tr className="text-left">
@@ -391,6 +392,7 @@ export default function SuppliersTab({
                           })}
                         </tbody>
                       </table>
+                      </div>
                     )}
                   </div>
                 )}

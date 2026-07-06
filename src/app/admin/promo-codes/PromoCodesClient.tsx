@@ -330,6 +330,9 @@ export default function PromoCodesClient({ codes, archived = false }: { codes: P
           noun="promo code"
           actions={bulkActions}
           onClear={clear}
+          total={visibleIds.length}
+          allSelected={selection.allSelected}
+          onToggleAll={selection.toggleAll}
         />
       )}
 

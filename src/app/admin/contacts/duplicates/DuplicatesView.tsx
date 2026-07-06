@@ -40,7 +40,7 @@ export default function DuplicatesView({ groups }: { groups: DuplicateGroup[] })
       <header className="row-between" style={{ marginBottom: 32, alignItems: "flex-end", flexWrap: "wrap", gap: 16 }}>
         <div className="stack-8" style={{ minWidth: 0 }}>
           <p className="eyebrow">CRM · Data hygiene</p>
-          <h1 className="display" style={{ fontSize: "clamp(34px, 4.2vw, 48px)", whiteSpace: "nowrap" }}>
+          <h1 className="display" style={{ fontSize: "clamp(34px, 4.2vw, 48px)" }}>
             Manage duplicates <span style={{ color: "var(--primary-40)", fontWeight: 300 }}>· {groups.length}</span>
           </h1>
         </div>
@@ -184,7 +184,9 @@ function MergeComparator({ group, onClose }: { group: DuplicateGroup; onClose: (
             <span style={{ fontSize: 12, color: "var(--primary-60)" }}>{members.length - 1} record{members.length > 2 ? "s" : ""} will be archived</span>
           </div>
 
-          <div className="merge-grid">
+          {/* Merge table scrolls horizontally on phones instead of squeezing columns */}
+          <div style={{ overflowX: "auto" }}>
+          <div className="merge-grid" style={{ minWidth: 170 + members.length * 190 }}>
             <div className="merge-row" style={{ gridTemplateColumns: cols }}>
               <div className="merge-corner"><span className="merge-corner-label">Field</span></div>
               {members.map((c) => {
@@ -232,6 +234,7 @@ function MergeComparator({ group, onClose }: { group: DuplicateGroup; onClose: (
                 </div>
               );
             })}
+          </div>
           </div>
 
           <div className="merge-preview">

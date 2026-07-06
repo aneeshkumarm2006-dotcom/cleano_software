@@ -189,6 +189,16 @@ export default function GiftCardsAdminClient({ cards, archived = false }: { card
               <table className="atable">
                 <thead>
                   <tr>
+                    <th className="col-select" style={{ width: 40, textAlign: "center" }}>
+                      <input
+                        type="checkbox"
+                        aria-label="Select all"
+                        checked={sel.allSelected}
+                        ref={el => { if (el) el.indeterminate = sel.someSelected; }}
+                        onChange={sel.toggleAll}
+                        style={{ cursor: "pointer" }}
+                      />
+                    </th>
                     <th>Code</th>
                     <th>From</th>
                     <th>To</th>
@@ -201,7 +211,16 @@ export default function GiftCardsAdminClient({ cards, archived = false }: { card
                 </thead>
                 <tbody>
                   {filtered.map(c => (
-                    <tr key={c.id}>
+                    <tr key={c.id} className={sel.isSelected(c.id) ? "row-selected" : undefined}>
+                      <td className="col-select" style={{ textAlign: "center" }} onClick={e => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          aria-label="Select row"
+                          checked={sel.isSelected(c.id)}
+                          onChange={() => sel.toggle(c.id)}
+                          style={{ cursor: "pointer" }}
+                        />
+                      </td>
                       <td style={{ minWidth: 120 }}>
                         <span className="col-client" style={{ fontFamily: "monospace", letterSpacing: "0.06em" }}>{c.code}</span>
                       </td>
@@ -246,12 +265,22 @@ export default function GiftCardsAdminClient({ cards, archived = false }: { card
 
           <div id="gc-mobile" style={{ display: "none", flexDirection: "column", gap: 10, padding: 16 }}>
             {filtered.map(c => (
-              <article key={c.id} className="jcard">
+              <article key={c.id} className={`jcard${sel.isSelected(c.id) ? " row-selected" : ""}`}>
                 <div className="jcard-top">
-                  <div>
-                    <div className="jcard-client" style={{ fontFamily: "monospace", letterSpacing: "0.06em" }}>{c.code}</div>
-                    <div className="jcard-meta">{c.purchaserName} → {c.recipientName}</div>
-                    <div className="jcard-meta">{fmtDay(c.createdAt)}</div>
+                  <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                    <input
+                      type="checkbox"
+                      aria-label="Select row"
+                      checked={sel.isSelected(c.id)}
+                      onChange={() => sel.toggle(c.id)}
+                      onClick={e => e.stopPropagation()}
+                      style={{ cursor: "pointer", marginTop: 3 }}
+                    />
+                    <div>
+                      <div className="jcard-client" style={{ fontFamily: "monospace", letterSpacing: "0.06em" }}>{c.code}</div>
+                      <div className="jcard-meta">{c.purchaserName} → {c.recipientName}</div>
+                      <div className="jcard-meta">{fmtDay(c.createdAt)}</div>
+                    </div>
                   </div>
                   <div style={{ textAlign: "right" }}>
                     <div className="jcard-price">${c.amount.toFixed(2)}</div>
@@ -305,11 +334,23 @@ export default function GiftCardsAdminClient({ cards, archived = false }: { card
         </div>
       )}
 
+      <BulkActionBar
+        count={sel.count}
+        actions={bulkActions}
+        onClear={sel.clear}
+        noun="gift card"
+        total={visibleIds.length}
+        allSelected={sel.allSelected}
+        onToggleAll={sel.toggleAll}
+      />
+
       <style>{`
         @media (max-width: 900px) {
           #gc-desktop { display: none !important; }
           #gc-mobile  { display: flex !important; }
         }
+        .atable tbody tr.row-selected td { background: var(--primary-05, #f0fdff); }
+        .jcard.row-selected { outline: 2px solid var(--primary-40, #008C9C); outline-offset: -1px; }
       `}</style>
     </div>
   );

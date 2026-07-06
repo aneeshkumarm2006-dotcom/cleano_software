@@ -252,7 +252,7 @@ export default function ContactsPageClient({
               autoFocus
             />
           </label>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 16 }}>
             <label style={{ display: "block" }}>
               <span className="label">Email</span>
               <input
@@ -282,7 +282,7 @@ export default function ContactsPageClient({
               placeholder="Street, city"
             />
           </label>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 16 }}>
             <label style={{ display: "block" }}>
               <span className="label">Lifecycle stage</span>
               <select
@@ -550,6 +550,9 @@ export default function ContactsPageClient({
         count={selection.count}
         actions={bulkActions}
         onClear={selection.clear}
+        total={visibleIds.length}
+        allSelected={selection.allSelected}
+        onToggleAll={selection.toggleAll}
       />
     </div>
   );

@@ -289,6 +289,7 @@ export default function WashPayoutsPageClient({
               No payouts yet.
             </div>
           ) : (
+            <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ background: "var(--primary-5)", textAlign: "left" }}>
@@ -319,6 +320,7 @@ export default function WashPayoutsPageClient({
                 ))}
               </tbody>
             </table>
+            </div>
           )}
         </div>
       )}
@@ -336,6 +338,7 @@ export default function WashPayoutsPageClient({
               No jobs over projection in the last 50 completed.
             </div>
           ) : (
+            <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ background: "var(--primary-5)", textAlign: "left" }}>
@@ -391,6 +394,7 @@ export default function WashPayoutsPageClient({
                 ))}
               </tbody>
             </table>
+            </div>
           )}
           <div
             style={{

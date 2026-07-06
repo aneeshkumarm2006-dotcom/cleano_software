@@ -146,7 +146,7 @@ export default function CampaignManager({ campaigns }: CampaignManagerProps) {
             const st = campaignStatusStyle(campaign.status);
             if (confirmDeleteId === campaign.id) {
               return (
-                <div key={campaign.id} className="dcard" style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
+                <div key={campaign.id} className="dcard" style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
                   <div>
                     <div className="sl-lp-title">Delete &ldquo;{campaign.name}&rdquo;?</div>
                     <div style={{ fontSize: 12.5, color: "var(--primary-50)", marginTop: 4 }}>This cannot be undone.</div>

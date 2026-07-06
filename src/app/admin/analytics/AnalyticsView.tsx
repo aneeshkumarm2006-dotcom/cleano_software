@@ -1410,7 +1410,7 @@ export default function AnalyticsView({
 
         <AnPanel
           style={{ gap: 0, padding: 0, overflow: "hidden" }}>
-          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, padding: "20px 22px", borderBottom: "1px solid var(--primary-10)" }}>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 12, padding: "20px 22px", borderBottom: "1px solid var(--primary-10)" }}>
             <div>
               <h3 style={{ margin: 0 }}>Employee payment summary</h3>
               <p style={{ margin: "4px 0 0", fontSize: 12.5, color: "var(--primary-60)" }}>

@@ -398,7 +398,7 @@ function SourceTab({ c }: { c: ContactDetail }) {
     <div className="prop-grid">
       <div className="dcard" style={{ gridColumn: "1 / -1" }}>
         <div className="dcard-head"><h3>Attribution path</h3></div>
-        <div style={{ display: "grid", gridTemplateColumns: `repeat(${steps.length}, 1fr)`, marginTop: 8 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", rowGap: 14, marginTop: 8 }}>
           {steps.map((s, i) => (
             <div key={i} style={{ position: "relative", paddingRight: 14 }}>
               <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.1em", fontWeight: 700, color: "var(--primary-50)" }}>{s.label}</div>
@@ -514,7 +514,9 @@ function DuplicatesTab({ c }: { c: ContactDetail }) {
               </div>
               <span className="pill" style={{ background: "rgba(217,119,6,0.12)", color: "var(--amber-800)" }}>{score}% match</span>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "120px 1fr 1fr", fontSize: 13 }}>
+            {/* Comparison table scrolls horizontally on phones instead of squeezing columns */}
+            <div style={{ overflowX: "auto" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "120px 1fr 1fr", fontSize: 13, minWidth: 480 }}>
               <div style={{ padding: "6px 0" }} />
               <div style={{ fontWeight: 600, color: "var(--ink)", padding: "6px 0" }}>This record</div>
               <div style={{ fontWeight: 600, color: "var(--ink)", padding: "6px 0" }}>{d.name}</div>
@@ -531,6 +533,7 @@ function DuplicatesTab({ c }: { c: ContactDetail }) {
                   </div>
                 );
               })}
+            </div>
             </div>
           </article>
         );

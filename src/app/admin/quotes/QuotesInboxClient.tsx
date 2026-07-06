@@ -333,6 +333,9 @@ export default function QuotesInboxClient({ quotes, archived = false }: Props) {
           setShowStatus(false);
         }}
         noun="quote"
+        total={visibleIds.length}
+        allSelected={sel.allSelected}
+        onToggleAll={sel.toggleAll}
       />
 
       {open && <QuoteDrawer key={open.id} quote={open} onClose={() => setOpenId(null)} />}

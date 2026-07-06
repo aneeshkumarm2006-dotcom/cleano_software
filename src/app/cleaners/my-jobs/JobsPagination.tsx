@@ -48,7 +48,7 @@ export function JobsPagination({
   const direction = searchParams.get("direction");
 
   return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 0", gap: 12 }}>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", padding: "16px 0", gap: 12 }}>
       <span style={{ fontSize: 13, color: "var(--primary-60)" }}>
         Showing <strong>{currentCount}</strong> job{currentCount !== 1 ? "s" : ""}
       </span>
