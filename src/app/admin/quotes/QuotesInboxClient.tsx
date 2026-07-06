@@ -302,7 +302,7 @@ export default function QuotesInboxClient({ quotes, archived = false }: Props) {
               padding: "10px 14px",
               boxShadow: "0 8px 30px rgba(0,0,0,0.15)",
             }}>
-            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--primary-80)" }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>
               Set status to
             </span>
             {ORDER.map((s) => (

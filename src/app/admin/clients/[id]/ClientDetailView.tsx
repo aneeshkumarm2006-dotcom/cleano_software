@@ -147,7 +147,7 @@ function DetailRow({ label, value }: { label: string; value: string }) {
       <span style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--primary-50)" }}>
         {label}
       </span>
-      <span style={{ fontSize: 14, color: "var(--primary-80)" }}>{value}</span>
+      <span style={{ fontSize: 14, color: "var(--ink)" }}>{value}</span>
     </div>
   );
 }

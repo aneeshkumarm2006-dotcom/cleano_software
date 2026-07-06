@@ -389,7 +389,7 @@ export default function GroupChatClient({
                           style={{
                             fontSize: 14,
                             fontWeight: 600,
-                            color: "var(--primary-80)",
+                            color: "var(--ink)",
                             overflow: "hidden",
                             textOverflow: "ellipsis",
                             whiteSpace: "nowrap",

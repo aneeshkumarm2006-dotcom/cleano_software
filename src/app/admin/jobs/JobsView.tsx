@@ -947,7 +947,7 @@ export default function JobsView({
                 boxShadow: '0 8px 30px rgba(0,0,0,0.15)',
               }}
             >
-              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--primary-80)' }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)' }}>
                 Assign to
               </span>
               <PremiumSelect
@@ -993,7 +993,7 @@ export default function JobsView({
                 boxShadow: '0 8px 30px rgba(0,0,0,0.15)',
               }}
             >
-              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--primary-80)' }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)' }}>
                 Set status to
               </span>
               {(['SCHEDULED', 'COMPLETED', 'PAID'] as const).map((s) => (

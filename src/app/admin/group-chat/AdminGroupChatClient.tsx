@@ -368,7 +368,7 @@ export default function AdminGroupChatClient({
                       />
                     </button>
                     <span>
-                      <span style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--primary-80)" }}>
+                      <span style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>
                         {s.label}
                       </span>
                       <span style={{ display: "block", fontSize: 12, color: "var(--primary-50)" }}>
