@@ -78,7 +78,52 @@ async function main() {
   );
 }
 
+/**
+ * Recovery pass: notes already moved to job logs by an earlier run of this
+ * script (before the backfill existed) may still carry a Stripe PaymentIntent
+ * that never reached Job.stripePaymentIntentId. Scan those logs and backfill.
+ */
+async function backfillFromLogs() {
+  const logs = await db.jobLog.findMany({
+    where: {
+      action: "NOTE_ADDED",
+      description: { contains: "Transaction ID: pi_" },
+    },
+    select: { jobId: true, description: true },
+  });
+
+  const byJob = new Map<string, string>();
+  for (const l of logs) {
+    const pi = l.description.match(/Transaction ID:\s*(pi_\S+)/)?.[1];
+    if (pi) byJob.set(l.jobId, pi);
+  }
+  if (byJob.size === 0) {
+    console.log("Recovery pass: no payment IDs found in job logs.");
+    return;
+  }
+
+  const jobs = await db.job.findMany({
+    where: { id: { in: [...byJob.keys()] }, stripePaymentIntentId: null },
+    select: { id: true },
+  });
+  console.log(
+    `Recovery pass: ${jobs.length} job(s) missing a payment ID that exists in their logs.`
+  );
+  if (!commit) return;
+
+  let n = 0;
+  for (const j of jobs) {
+    await db.job.update({
+      where: { id: j.id },
+      data: { stripePaymentIntentId: byJob.get(j.id) },
+    });
+    n++;
+  }
+  console.log(`Recovery pass: backfilled ${n} payment ID(s) from job logs.`);
+}
+
 main()
+  .then(backfillFromLogs)
   .catch((e) => {
     console.error(e);
     process.exit(1);
