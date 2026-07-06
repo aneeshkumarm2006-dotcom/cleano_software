@@ -401,6 +401,7 @@ export const DayView: React.FC = () => {
             height: position.height,
             left: position.left,
             width: position.width,
+            zIndex: position.zIndex,
           }}
           styleInfo={styleInfo}
           isBeingMoved={isBeingMoved}

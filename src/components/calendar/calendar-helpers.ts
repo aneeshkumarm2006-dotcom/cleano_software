@@ -23,6 +23,8 @@ export interface EventPosition {
   height: number;
   left: string;
   width: string;
+  /** Paint order for cascade-overlapped events (later starts on top). */
+  zIndex?: number;
 }
 
 export interface OfficeHours {
@@ -103,8 +105,27 @@ export function calculateEventPosition(
   // Calculate horizontal position based on overlapping events
   const gapWidth = layout.total > 1 ? 2 : 0;
   const availableWidth = 100 - (layout.total - 1) * gapWidth;
-  const width = `${availableWidth / layout.total}%`;
-  const left = `${layout.index * (availableWidth / layout.total) + layout.index * gapWidth}%`;
+  const lanePct = availableWidth / layout.total;
+
+  // Equal lane division turns into unreadable slivers when many events
+  // overlap (esp. narrow mobile columns). Below a minimum lane width,
+  // switch to a cascade: every event keeps MIN_LANE_PCT width and staggers
+  // across the column, later starts painting on top (Apple-calendar style).
+  const MIN_LANE_PCT = 45;
+  if (lanePct < MIN_LANE_PCT) {
+    const step = layout.total > 1 ? (100 - MIN_LANE_PCT) / (layout.total - 1) : 0;
+    return {
+      top,
+      height,
+      left: `${layout.index * step}%`,
+      width: `${MIN_LANE_PCT}%`,
+      // Cap below the sticky hour gutter (z 31) and drag preview (z 30).
+      zIndex: Math.min(22 + layout.index, 29),
+    };
+  }
+
+  const width = `${lanePct}%`;
+  const left = `${layout.index * lanePct + layout.index * gapWidth}%`;
 
   return { top, height, left, width };
 }

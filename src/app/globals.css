@@ -900,7 +900,7 @@ body {
 }
 .jdetail-meta-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
 .jdetail-desc { font-size: 14.5px; color: var(--primary-70); max-width: 720px; line-height: 1.55; }
-.jdetail-actions { display: flex; gap: 8px; }
+.jdetail-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
 /* Underline tabs for detail page */
 .dtabs {
@@ -5337,6 +5337,19 @@ a.an-listrow:hover { background: var(--primary-10); }
 .cal-ev-handle { position: absolute; left: 0; right: 0; height: 7px; cursor: ns-resize; z-index: 2; }
 .cal-ev-handle.top { top: 0; } .cal-ev-handle.bottom { bottom: 0; }
 
+/* ── Admin job detail — mobile: nothing may force page-level horizontal scroll ── */
+@media (max-width: 767px) {
+  .jdetail-head { gap: 12px; }
+  .jdetail-head-left { min-width: 0; width: 100%; }
+  .jdetail-actions { width: 100%; }
+  .jdetail-actions > * { flex: 1 1 auto; }
+  /* Tab strip scrolls horizontally inside itself instead of widening the page */
+  .dtabs { display: flex; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+  .dtabs::-webkit-scrollbar { display: none; }
+  .dtabs > * { flex: 0 0 auto; white-space: nowrap; }
+  .jdetail-desc { word-break: break-word; }
+}
+
 /* ── Admin calendar — mobile (≤767px, matches the md: sidebar breakpoint) ── */
 @media (max-width: 767px) {
   /* Toolbar: nav + title on one row, view controls below, New job on its own row */
@@ -5364,6 +5377,8 @@ a.an-listrow:hover { background: var(--primary-10); }
   /* Cap long room names (Day view) so the header row can't grow wider than
      the 96px columns beneath it */
   .cal-dayhead-dow { max-width: 88px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* Keep the per-day job-count badge in the corner instead of over the day name */
+  .cal-dayhead-count { top: 2px; right: 2px; }
   .cal-gutter-head, .cal-gutter { width: 48px; position: sticky; left: 0; background: #fff; }
   /* Above event cards (.cal-col .cal-ev peaks at z 30), below the sticky header */
   .cal-gutter { z-index: 31; }

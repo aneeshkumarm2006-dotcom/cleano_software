@@ -1721,7 +1721,14 @@ export default function JobDetailView({
             {(job.location || job.description) && (
               <p className="jdetail-desc">
                 {job.location}
-                {job.description ? <> · <span style={{ color: 'var(--ink-soft)' }}>{job.description}</span></> : null}
+                {job.description ? <> · <span style={{ color: 'var(--ink-soft)' }}>{
+                  // Legacy imports stored "RESIDENTIAL cleaning" / "MOVE_IN_OUT cleaning" —
+                  // prettify the enum token ("Deep Cleaning" already says cleaning).
+                  job.description.replace(/^([A-Z][A-Z_]+) cleaning$/, (_, t) => {
+                    const label = jobTypeLabel(t);
+                    return /clean/i.test(label) ? label : `${label} cleaning`;
+                  })
+                }</span></> : null}
               </p>
             )}
           </div>
