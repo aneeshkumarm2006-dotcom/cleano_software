@@ -150,6 +150,7 @@ export default function ServiceAreasTab({
           </div>
         ) : (
           <div className="rounded-2xl bg-[#008C9C]/5 overflow-hidden">
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-[10px] uppercase tracking-wide text-[#008C9C]/60">
@@ -206,6 +207,7 @@ export default function ServiceAreasTab({
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         )}
       </SectionCard>
