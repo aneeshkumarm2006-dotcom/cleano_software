@@ -63,6 +63,10 @@ export default async function CalendarPage() {
   // the add-on catalog.
   const [users, clients, bookingConfig] = await Promise.all([
     db.user.findMany({
+      // Staff only — exclude client-portal accounts (imported customers get a
+      // CLIENT-role User row) and archived/deactivated users. This list feeds
+      // the cleaner-assignment picker and the availability overlay picker.
+      where: { role: { not: "CLIENT" }, deletedAt: null, isActive: true },
       orderBy: { name: "asc" },
       select: { id: true, name: true, email: true },
     }),
