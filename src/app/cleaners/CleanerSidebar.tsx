@@ -63,6 +63,12 @@ const ICONS = {
       <line x1="3" y1="10" x2="21" y2="10" />
     </Svg>
   ),
+  availability: (
+    <Svg>
+      <circle cx="12" cy="12" r="9" />
+      <polyline points="12 7 12 12 15 14" />
+    </Svg>
+  ),
   pay: (
     <Svg>
       <rect x="2" y="5" width="20" height="14" rx="2" />
@@ -126,6 +132,7 @@ const NAV = [
       { href: "/cleaners/my-jobs",        label: "My jobs",        icon: ICONS.jobs },
       { href: "/cleaners/available-jobs", label: "Available jobs", icon: ICONS.avail },
       { href: "/cleaners/calendar",       label: "Calendar",       icon: ICONS.calendar },
+      { href: "/cleaners/availability",   label: "Availability",   icon: ICONS.availability },
     ],
   },
   {
