@@ -76,12 +76,14 @@ export async function cancelShift(jobId: string): Promise<{ success: true; penal
       });
 
       if (isLateCancel) {
-        // 1-star penalty rating (lowest on our 4.0-5.0 scale)
+        // 1-star penalty rating for the cancelled job (the rating scale floor
+        // is 1.0; see RATING_MIN in policy.ts). Feeds the running average like
+        // any other rating.
         await tx.employeeRating.create({
           data: {
             employeeId,
             jobId,
-            rating: 4.0,
+            rating: 1.0,
             notes: `penalty:late_cancel (cancelled ${Math.round(hoursUntilShift)}h before shift)`,
             ratedBy: employeeId,
           },

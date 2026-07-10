@@ -257,6 +257,18 @@ export const SETTINGS = {
     default: 10,
     validate: intRange(0, 240),
   }),
+  // Live GPS tracking (#10): when on, the cleaner's device shares its location
+  // between "On my way" and clock-in, and admins see a live map on the job.
+  // When off, no location is captured, no map/polling, and no geolocation
+  // prompt — only the plain "On the way" status remains. Default true =
+  // current behavior.
+  "tracking.gpsEnabled": def({
+    key: "tracking.gpsEnabled",
+    category: "scheduling",
+    label: "Live GPS tracking — show cleaner location to admin while on the way",
+    default: true,
+    validate: bool(),
+  }),
   "customer.newClientReferralDiscountUsd": def({
     key: "customer.newClientReferralDiscountUsd",
     category: "customer",

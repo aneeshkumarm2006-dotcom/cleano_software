@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
+import { getSetting } from "@/lib/settings";
 import ClockPageClient from "./ClockPageClient";
 
 type PageProps = { params: Promise<{ jobId: string }> };
@@ -44,6 +45,8 @@ export default async function ClockPage({ params }: PageProps) {
 
   const j = job as any;
 
+  const gpsEnabled = await getSetting("tracking.gpsEnabled");
+
   return (
     <ClockPageClient
       jobId={job.id}
@@ -55,6 +58,7 @@ export default async function ClockPage({ params }: PageProps) {
       clockOutTime={j.clockOutTime?.toISOString() ?? null}
       onMyWayAt={j.onMyWayAt?.toISOString() ?? null}
       employeeProducts={employeeProducts}
+      gpsEnabled={gpsEnabled}
     />
   );
 }

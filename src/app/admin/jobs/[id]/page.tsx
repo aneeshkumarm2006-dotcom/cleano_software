@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { revalidatePath } from "next/cache";
 import { getTaxRates } from "@/lib/tax.server";
+import { getSetting } from "@/lib/settings";
 import { getCleanerRateInputs } from "@/lib/cleaner-rates";
 import { computeJobPayout } from "@/lib/pay-tiers";
 import JobDetailView from "./JobDetailView";
@@ -135,6 +136,9 @@ export default async function JobPage({
   // Current admin-configured GST/QST rates — used to label the tax rows and to
   // compute a display-only breakdown for older jobs saved without tax amounts.
   const taxRates = await getTaxRates();
+
+  // Live GPS tracking toggle (#10) — gates the on-the-way map below.
+  const gpsEnabled = await getSetting("tracking.gpsEnabled");
 
   // Per-cleaner pay shares — the SAME tier-based proportional split math used
   // by getPayBreakdown / payroll (pool + split by individual rate), plus the
@@ -329,6 +333,7 @@ export default async function JobPage({
       assignments={assignmentsData}
       payShares={payShares}
       jobRatings={jobRatingsData}
+      gpsEnabled={gpsEnabled}
     />
   );
 }

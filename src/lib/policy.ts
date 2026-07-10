@@ -32,8 +32,9 @@ export const LATE_PENALTY_GRACE_MIN = 15;
 /** Stars deducted from the job's customer rating for a late arrival (flat). */
 export const LATE_ARRIVAL_RATING_PENALTY = 0.5;
 
-/** Lowest a rating can be reduced to by the late-arrival penalty. */
-export const LATE_ARRIVAL_RATING_FLOOR = 0.5;
+/** Lowest a rating can be reduced to by the late-arrival penalty. Matches the
+ *  scale minimum RATING_MIN (1.0) so a job rating never falls below 1 star. */
+export const LATE_ARRIVAL_RATING_FLOOR = 1.0;
 
 /** Default running rating shown for a cleaner who has zero ratings logged.
  *  Pay stays locked at the 40% floor until 5 ratings exist (see pay-tiers.ts),

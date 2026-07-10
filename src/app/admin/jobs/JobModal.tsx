@@ -53,6 +53,8 @@ interface Job {
   endTime: string | null;
   price: number | null;
   employeePay: number | null;
+  payType?: string | null;
+  hourlyRate?: number | null;
   totalTip: number | null;
   parking: number | null;
   notes: string | null;
@@ -98,6 +100,8 @@ const formSchema = z.object({
   startTime: z.string().optional(),
   price: z.union([z.coerce.number().min(0), z.literal("")]).optional(),
   employeePay: z.union([z.coerce.number().min(0), z.literal("")]).optional(),
+  payType: z.enum(["PERCENTAGE", "FLAT", "HOURLY"]).optional(),
+  hourlyRate: z.union([z.coerce.number().min(0), z.literal("")]).optional(),
   totalTip: z.union([z.coerce.number().min(0), z.literal("")]).optional(),
   parking: z.union([z.coerce.number().min(0), z.literal("")]).optional(),
   notes: z.string().optional(),
@@ -595,6 +599,7 @@ export default function JobModal({
     trigger,
     control,
     setValue,
+    watch,
   } = useForm<FormValues>({
     resolver: (zodResolver as any)(formSchema) as Resolver<FormValues>,
     mode: "onChange",
@@ -619,6 +624,8 @@ export default function JobModal({
             : "",
           price: job.price || "",
           employeePay: job.employeePay || "",
+          payType: (job.payType as "PERCENTAGE" | "FLAT" | "HOURLY") || "PERCENTAGE",
+          hourlyRate: job.hourlyRate || "",
           totalTip: job.totalTip || "",
           parking: job.parking || "",
           notes: job.notes || "",
@@ -657,6 +664,8 @@ export default function JobModal({
           startTime: "",
           price: "",
           employeePay: "",
+          payType: "PERCENTAGE",
+          hourlyRate: "",
           totalTip: "",
           parking: "",
           notes: "",
@@ -769,6 +778,8 @@ export default function JobModal({
       formData.append("startTime", values.startTime || "");
       formData.append("price", String(values.price || ""));
       formData.append("employeePay", String(values.employeePay || ""));
+      formData.append("payType", values.payType || "PERCENTAGE");
+      formData.append("hourlyRate", String(values.hourlyRate || ""));
       formData.append("totalTip", String(values.totalTip || ""));
       formData.append("parking", String(values.parking || ""));
       formData.append("notes", values.notes || "");
@@ -1349,6 +1360,44 @@ export default function JobModal({
                           />
                         </div>
                       </div>
+
+                      <div>
+                        <label className="input-label tracking-tight">
+                          Pay type
+                        </label>
+                        <select
+                          {...register("payType")}
+                          disabled={disableForm}
+                          className="w-full px-4 py-3 rounded-xl bg-[#008C9C]/5 text-sm tracking-tight outline-none focus:bg-white"
+                        >
+                          <option value="PERCENTAGE">Percentage (tier split)</option>
+                          <option value="FLAT">Flat rate</option>
+                          <option value="HOURLY">Hourly</option>
+                        </select>
+                      </div>
+
+                      {watch("payType") === "HOURLY" && (
+                        <div>
+                          <label className="input-label tracking-tight">
+                            Hourly Rate
+                          </label>
+                          <div className="relative">
+                            <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/50" />
+                            <Input
+                              variant="form"
+                              type="number"
+                              size="md"
+                              step="0.01"
+                              min="0"
+                              {...register("hourlyRate")}
+                              disabled={disableForm}
+                              className="w-full pl-11 px-4 py-3 tracking-tight placeholder:tracking-tight"
+                              placeholder="0.00"
+                              border={false}
+                            />
+                          </div>
+                        </div>
+                      )}
 
                       <div>
                         <label className="input-label tracking-tight">

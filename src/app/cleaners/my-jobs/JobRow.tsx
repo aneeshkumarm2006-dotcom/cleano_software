@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { AlertTriangle, MapPin, Clock } from "lucide-react";
 import PayBreakdownModal from "./PayBreakdownModal";
 import { fmtDate, fmtTime } from "@/lib/time";
+import { jobTypeLabel } from "@/lib/calendar-labels";
 
 interface MissingEquipmentInfo {
   productId: string;
@@ -27,17 +28,6 @@ function statusClass(status: string) {
     case "CANCELLED": return "cancelled";
     case "PAID": return "paid";
     default: return "created";
-  }
-}
-
-function jobTypeLabel(type: string | null) {
-  if (!type) return null;
-  switch (type) {
-    case "R": return "Residential";
-    case "C": return "Commercial";
-    case "PC": return "Post-Construction";
-    case "F": return "Follow-up";
-    default: return type;
   }
 }
 

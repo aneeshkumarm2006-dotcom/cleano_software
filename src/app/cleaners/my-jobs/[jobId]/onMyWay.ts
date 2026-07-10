@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { smsOnTheWay } from "@/lib/sms";
 import { sendAdminOnTheWay } from "@/lib/email";
 import { setAssignmentProgress } from "@/lib/job-assignments";
+import { getSetting } from "@/lib/settings";
 
 /** Default ETA (minutes) advertised to the customer when the cleaner taps
  *  "On my way". We don't run a maps SDK — this mirrors the catalog's default
@@ -62,11 +63,15 @@ export async function markOnMyWay(
 
     const now = new Date();
 
+    // Live GPS tracking (#10) is admin-gated. When off, we still record the
+    // "On my way" status but never store coordinates.
+    const gpsEnabled = await getSetting("tracking.gpsEnabled");
+
     await db.job.update({
       where: { id: jobId },
       data: {
         onMyWayAt: now,
-        ...(coords
+        ...(gpsEnabled && coords
           ? {
               onMyWayLat: coords.lat,
               onMyWayLng: coords.lng,
@@ -88,7 +93,7 @@ export async function markOnMyWay(
         userId: session.user.id,
         action: "NOTE_ADDED",
         description: `${session.user.name ?? "Cleaner"} is on the way${
-          coords ? " (location shared)" : ""
+          gpsEnabled && coords ? " (location shared)" : ""
         }`,
       },
     });
@@ -137,6 +142,14 @@ export async function updateOnMyWayLocation(
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) {
     return { success: false, error: "Not authenticated" as const };
+  }
+
+  // Live GPS tracking (#10) is admin-gated. When off, silently no-op so a stray
+  // in-flight poll (e.g. from a screen open when the setting flipped) never
+  // stores a location.
+  const gpsEnabled = await getSetting("tracking.gpsEnabled");
+  if (!gpsEnabled) {
+    return { success: true as const, skipped: true as const };
   }
 
   const job = await db.job.findUnique({

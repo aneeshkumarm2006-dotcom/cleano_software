@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/db";
 import JobsPageClient from "./JobsPageClient";
 import { getBookingConfig } from "../../(book)/actions/getBookingConfig";
+import { getTotalRevenue } from "@/lib/metrics";
 
 type SearchParams = Promise<{
   [key: string]: string | string[] | undefined;
@@ -97,10 +98,9 @@ export default async function JobsPage({
   // in the job form so staff don't have to retype them.
   const { addOns: addOnCatalog } = await getBookingConfig();
 
-  const totalRevenue = await db.job.aggregate({
-    where: statsWhere,
-    _sum: { price: true },
-  });
+  // Canonical revenue (completed+paid, less discount/refund, tax excluded) so
+  // this stat matches Dashboard/Analytics/Clients/Employees. See src/lib/metrics.
+  const totalRevenue = await getTotalRevenue();
 
   const completedJobs = await db.job.count({
     where: { ...statsWhere, status: "COMPLETED" },
@@ -169,7 +169,7 @@ export default async function JobsPage({
   const stats = {
     totalJobs: totalJobsCount,
     completedJobs,
-    totalRevenue: totalRevenue._sum.price || 0,
+    totalRevenue,
     pendingPayment: pendingPaymentCount,
   };
 

@@ -42,9 +42,20 @@ export async function bulkAssignCleaner(
         id: cleanerId,
         role: { in: ["EMPLOYEE", "FIELD_LEAD"] },
       },
-      select: { id: true },
+      select: { id: true, cleanerTier: true },
     });
     if (!cleaner) return { success: false, error: "Cleaner not found" };
+
+    // Trainees must be paired with a Field Lead (item 2). Bulk-assign adds one
+    // cleaner across many jobs and can't guarantee a Field Lead on each, so
+    // trainees are steered to the per-job Team card where pairing is enforced.
+    if (cleaner.cleanerTier === "TRAINEE") {
+      return {
+        success: false,
+        error:
+          "Trainees must be paired with a Field Lead — assign them from a job's Team card, not bulk assign.",
+      };
+    }
 
     const jobs = await db.job.findMany({
       where: { id: { in: cleanIds }, deletedAt: null },

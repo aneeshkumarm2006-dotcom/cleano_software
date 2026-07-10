@@ -68,6 +68,7 @@ export default async function JobDetailPage({ params }: PageProps) {
   if (!isEmployee && !isCleaner) redirect("/cleaners/my-jobs");
 
   const showCustomerPhone = await getSetting("provider.showCustomerPhone");
+  const gpsEnabled = await getSetting("tracking.gpsEnabled");
 
   const employeeProductsRaw = await db.employeeProduct.findMany({
     where: { employeeId: session.user.id },
@@ -221,6 +222,7 @@ export default async function JobDetailPage({ params }: PageProps) {
               <OnMyWayButton
                 jobId={job.id}
                 onMyWayAt={job.onMyWayAt?.toISOString() ?? null}
+                gpsEnabled={gpsEnabled}
               />
             )}
             {canClockIn && (

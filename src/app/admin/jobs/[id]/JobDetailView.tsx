@@ -1,9 +1,15 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import Button from "@/components/ui/Button";
 import JobModal from "../JobModal";
+
+// Live "on the way" map (#10). Leaflet needs browser APIs, so load client-only.
+const LiveLocationMap = dynamic(() => import("./LiveLocationMap"), {
+  ssr: false,
+});
 import { saveJob } from "../../actions/saveJob";
 import { deleteJob as deleteJobAction } from "../../actions/deleteJob";
 import { togglePaymentReceived } from "../../actions/toggleJobPaymentStatus";
@@ -192,6 +198,8 @@ interface JobDetailViewProps {
   /** Cleaner id → pay share (tier-based proportional split incl. tip). */
   payShares?: Record<string, number>;
   jobRatings?: JobRatingLite[];
+  /** Admin setting `tracking.gpsEnabled` — gates the live on-the-way map. */
+  gpsEnabled?: boolean;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -346,6 +354,7 @@ export default function JobDetailView({
   assignments = [],
   payShares = {},
   jobRatings = [],
+  gpsEnabled = true,
 }: JobDetailViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -1674,23 +1683,22 @@ export default function JobDetailView({
                   On the way · since {fmtTime(job.onMyWayAt)}
                 </span>
               )}
-              {job.onMyWayAt && !job.clockInTime && job.onMyWayLat != null && job.onMyWayLng != null && (
-                <a
-                  href={`https://www.google.com/maps/search/?api=1&query=${job.onMyWayLat},${job.onMyWayLng}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  title={job.onMyWayLocationAt ? `Last location ${fmtTime(job.onMyWayLocationAt)}` : "Cleaner's shared location"}
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 6,
-                    fontSize: 12, fontWeight: 600, padding: '4px 10px',
-                    borderRadius: 999, background: '#dcfce7', color: '#166534',
-                    textDecoration: 'none',
-                  }}
-                >
-                  <MapPin size={12} />
-                  View location{job.onMyWayLocationAt ? ` · ${fmtTime(job.onMyWayLocationAt)}` : ""}
-                </a>
-              )}
+              {gpsEnabled &&
+                job.onMyWayAt &&
+                !job.clockInTime &&
+                job.onMyWayLat != null &&
+                job.onMyWayLng != null && (
+                  <div style={{ flexBasis: '100%', marginTop: 4 }}>
+                    <LiveLocationMap
+                      jobId={job.id}
+                      initial={{
+                        lat: job.onMyWayLat,
+                        lng: job.onMyWayLng,
+                        at: job.onMyWayLocationAt ?? job.onMyWayAt,
+                      }}
+                    />
+                  </div>
+                )}
               <TypePill type={job.jobType} />
               {job.isCashJob && <CashJobPill />}
               {job.usesFixedPrice && <FixedPricePill />}

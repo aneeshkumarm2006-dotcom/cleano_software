@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { getTotalRevenue, getEmployeeCounts } from "@/lib/metrics";
+import { jobTypeLabel } from "@/lib/calendar-labels";
 import AnalyticsView from "./AnalyticsView";
 
 export default async function AnalyticsPage() {
@@ -462,7 +463,9 @@ export default async function AnalyticsPage() {
   // === JOB TYPE BREAKDOWN ===
   const jobTypeMap = new Map<string, { count: number; revenue: number }>();
   completedJobs.forEach((job) => {
-    const type = job.jobType || "Unspecified";
+    // Normalize so imported ("MOVE_IN_OUT") and manual labels collapse into one
+    // official display name instead of separate rows.
+    const type = job.jobType ? jobTypeLabel(job.jobType) : "Unspecified";
     const existing = jobTypeMap.get(type) || { count: 0, revenue: 0 };
     jobTypeMap.set(type, {
       count: existing.count + 1,

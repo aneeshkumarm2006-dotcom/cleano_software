@@ -24,7 +24,7 @@ import { computeJobPayout } from "@/lib/pay-tiers";
 import { getTaxRates, computeJobTaxes } from "@/lib/tax.server";
 import { createAssignmentInvites } from "@/lib/invites";
 import { getSetting } from "@/lib/settings";
-import { syncJobAssignments } from "@/lib/job-assignments";
+import { syncJobAssignments, validateTraineePairing } from "@/lib/job-assignments";
 import { fmtDate, fmtTime } from "@/lib/time";
 import {
   recurringDiscountPercent,
@@ -69,6 +69,11 @@ export async function saveJob(formData: FormData) {
 
   try {
     const cleanerIds = formData.getAll("cleaners") as string[];
+
+    // Trainees must be paired with a Field Lead (item 2) — block a solo trainee.
+    const pairingError = await validateTraineePairing(cleanerIds);
+    if (pairingError) return { error: pairingError };
+
     const frequencyRaw = (formData.get("frequency") as string) || "ONE_TIME";
     const recurringFrequency = RECURRING_FREQUENCIES.includes(
       frequencyRaw as RecurringFrequency
@@ -157,12 +162,27 @@ export async function saveJob(formData: FormData) {
     //  • FLAT: employeePay is the agreed fixed payout, exactly as entered.
     //  • HOURLY: hourlyRate drives it — employeePay = hourlyRate × hours when
     //    left blank, otherwise the entered override wins.
-    const payTypeRaw = (formData.get("payType") as string) || "PERCENTAGE";
-    const payType: PayType = VALID_PAY_TYPES.includes(payTypeRaw as PayType)
-      ? (payTypeRaw as PayType)
-      : "PERCENTAGE";
-    const hourlyRate =
-      payType === "HOURLY" ? parseOptionalFloat(formData.get("hourlyRate")) : null;
+    const editingJobIdForPay = (formData.get("jobId") as string | null) || null;
+    let payType: PayType = "PERCENTAGE";
+    let hourlyRate: number | null = null;
+    if (formData.has("payType")) {
+      const payTypeRaw = (formData.get("payType") as string) || "PERCENTAGE";
+      payType = VALID_PAY_TYPES.includes(payTypeRaw as PayType)
+        ? (payTypeRaw as PayType)
+        : "PERCENTAGE";
+      hourlyRate =
+        payType === "HOURLY" ? parseOptionalFloat(formData.get("hourlyRate")) : null;
+    } else if (editingJobIdForPay) {
+      // A form that doesn't expose the pay-type selector (e.g. the jobs-list
+      // quick-edit modal) must PRESERVE the job's existing pay model, not reset
+      // it to PERCENTAGE and null the hourly rate.
+      const cur = await db.job.findUnique({
+        where: { id: editingJobIdForPay },
+        select: { payType: true, hourlyRate: true },
+      });
+      payType = (cur?.payType as PayType) ?? "PERCENTAGE";
+      hourlyRate = cur?.hourlyRate ?? null;
+    }
 
     // Job duration in hours, for HOURLY pay estimation.
     const payHours = (() => {

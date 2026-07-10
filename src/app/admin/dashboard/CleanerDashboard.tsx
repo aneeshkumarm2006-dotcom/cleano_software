@@ -5,6 +5,7 @@ import {
   Calendar, Briefcase, ShieldAlert,
 } from "lucide-react";
 import { getStrikeSummary, STRIKE_THRESHOLD } from "@/lib/strikes";
+import { fmtDate, fmtTime } from "@/lib/time";
 
 interface Props {
   userId: string;
@@ -135,7 +136,7 @@ export default async function CleanerDashboard({ userId, userName }: Props) {
     : null;
 
   const { g, firstName } = greeting(userName);
-  const dateStr = now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+  const dateStr = fmtDate(now, { weekday: "long", month: "long", day: "numeric" });
 
   // Accountability strikes (rolling 30-day window).
   const strikeSummary = await getStrikeSummary(userId);
@@ -185,7 +186,7 @@ export default async function CleanerDashboard({ userId, userName }: Props) {
               {nextJob.jobDate && nextJob.startTime && (
                 <span className="row">
                   <Calendar size={14} />
-                  <span><strong>{new Date(nextJob.jobDate).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</strong> &middot; {new Date(nextJob.startTime).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</span>
+                  <span><strong>{fmtDate(nextJob.jobDate, { weekday: "long", month: "long", day: "numeric" })}</strong> &middot; {fmtTime(nextJob.startTime)}</span>
                 </span>
               )}
               {nextJob.location && (
@@ -230,7 +231,7 @@ export default async function CleanerDashboard({ userId, userName }: Props) {
           <div className="cl-dash-today">
             {todayJobs.map((j) => (
               <Link key={j.id} href={`/cleaners/my-jobs/${j.id}`} className="cl-dash-today-card">
-                {j.startTime && <div className="time">{new Date(j.startTime).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</div>}
+                {j.startTime && <div className="time">{fmtTime(j.startTime)}</div>}
                 <div className="name">{j.clientName}</div>
                 {j.jobType && <div className="type">{jobTypeLabel(j.jobType)}</div>}
               </Link>
@@ -313,7 +314,7 @@ export default async function CleanerDashboard({ userId, userName }: Props) {
               <div className="date-block">
                 {j.jobDate ? (
                   <>
-                    <span className="m">{new Date(j.jobDate).toLocaleDateString("en-US", { month: "short" }).toUpperCase()}</span>
+                    <span className="m">{fmtDate(j.jobDate, { month: "short" }).toUpperCase()}</span>
                     <span className="d">{new Date(j.jobDate).getDate()}</span>
                   </>
                 ) : <span className="m">—</span>}
@@ -321,7 +322,7 @@ export default async function CleanerDashboard({ userId, userName }: Props) {
               <div className="meta">
                 <div className="name">{j.clientName}</div>
                 <div className="sub">
-                  {j.startTime && new Date(j.startTime).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                  {j.startTime && fmtTime(j.startTime)}
                   {j.location ? ` · ${j.location}` : ""}
                 </div>
               </div>
@@ -375,7 +376,7 @@ export default async function CleanerDashboard({ userId, userName }: Props) {
               <div>
                 <div className="name">{j.clientName}</div>
                 <div className="sub">
-                  {j.jobDate ? new Date(j.jobDate).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : ""}
+                  {j.jobDate ? fmtDate(j.jobDate, { month: "short", day: "numeric" }) : ""}
                   {j.location ? ` · ${j.location}` : ""}
                 </div>
               </div>

@@ -11,7 +11,7 @@ import {
 } from "@/lib/email";
 import { isNotificationEnabled } from "@/lib/notifications";
 import { createAssignmentInvites } from "@/lib/invites";
-import { syncJobAssignments } from "@/lib/job-assignments";
+import { syncJobAssignments, validateTraineePairing } from "@/lib/job-assignments";
 import { fmtDate, fmtTime } from "@/lib/time";
 
 /**
@@ -30,6 +30,10 @@ export async function assignCleaners(input: {
   if (role !== "OWNER" && role !== "ADMIN") {
     return { success: false, error: "Not authorized" };
   }
+
+  // Trainees must be paired with a Field Lead (never assigned solo).
+  const pairingError = await validateTraineePairing(input.cleanerIds);
+  if (pairingError) return { success: false, error: pairingError };
 
   try {
     const job = await db.job.findUnique({

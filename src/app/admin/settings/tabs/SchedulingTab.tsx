@@ -17,6 +17,7 @@ const NO_SHOW = SETTINGS["scheduling.noShowFeeUsd"];
 const TIMEOUT = SETTINGS["scheduling.acceptDeclineTimeoutMin"];
 const HORIZON = SETTINGS["scheduling.recurringWeeklyHorizon"];
 const LEAD = SETTINGS["scheduling.minLeadDays"];
+const GPS = SETTINGS["tracking.gpsEnabled"];
 
 export default function SchedulingTab({ settings }: Props) {
   const [noShowFee, setNoShowFee] = useState<number>(
@@ -30,6 +31,9 @@ export default function SchedulingTab({ settings }: Props) {
   );
   const [leadDays, setLeadDays] = useState<number>(
     getSetting<number>(settings, LEAD.key, LEAD.default)
+  );
+  const [gpsEnabled, setGpsEnabled] = useState<boolean>(
+    getSetting<boolean>(settings, GPS.key, GPS.default)
   );
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<Msg>(null);
@@ -59,6 +63,11 @@ export default function SchedulingTab({ settings }: Props) {
         key: LEAD.key,
         category: LEAD.category,
         value: leadDays,
+      }),
+      updateAppSetting({
+        key: GPS.key,
+        category: GPS.category,
+        value: gpsEnabled,
       }),
     ]);
 
@@ -125,6 +134,22 @@ export default function SchedulingTab({ settings }: Props) {
           admin marks a booking as a no-show. The accept/decline timeout is how
           long a newly assigned cleaner has to respond before the job is
           released back to the unassigned folder.
+        </p>
+
+        <label className="flex items-center gap-2 text-sm text-gray-700">
+          <input
+            type="checkbox"
+            checked={gpsEnabled}
+            onChange={(e) => setGpsEnabled(e.target.checked)}
+          />
+          {GPS.label}
+        </label>
+        <p style={{ fontSize: 12, color: "var(--primary-60)" }}>
+          When on, a cleaner&rsquo;s device shares its location from
+          &ldquo;On my way&rdquo; until clock-in, and admins see a live map on
+          the job. When off, no location is captured or shown and the app never
+          prompts the cleaner for geolocation &mdash; only the plain
+          &ldquo;On the way&rdquo; status remains.
         </p>
 
         {msg && <Feedback msg={msg} />}

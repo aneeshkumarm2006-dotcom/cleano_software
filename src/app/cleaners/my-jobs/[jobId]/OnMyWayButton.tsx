@@ -27,9 +27,16 @@ export function getCoords(): Promise<{ lat: number; lng: number } | undefined> {
 interface OnMyWayButtonProps {
   jobId: string;
   onMyWayAt: string | null;
+  /** Admin setting `tracking.gpsEnabled`. When false, never prompt for or
+   *  share geolocation — only the plain "On my way" status is recorded. */
+  gpsEnabled?: boolean;
 }
 
-export default function OnMyWayButton({ jobId, onMyWayAt }: OnMyWayButtonProps) {
+export default function OnMyWayButton({
+  jobId,
+  onMyWayAt,
+  gpsEnabled = true,
+}: OnMyWayButtonProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [since, setSince] = useState<string | null>(onMyWayAt);
@@ -37,7 +44,9 @@ export default function OnMyWayButton({ jobId, onMyWayAt }: OnMyWayButtonProps) 
   // Basic live tracking (#10): while marked on-the-way and this screen is open,
   // push the cleaner's location every 30s. The server stops accepting updates
   // once the cleaner clocks in, so tracking ends automatically on arrival.
+  // Skipped entirely when the admin has GPS tracking disabled.
   useEffect(() => {
+    if (!gpsEnabled) return;
     if (!since) return;
     if (typeof navigator === "undefined" || !navigator.geolocation) return;
     let cancelled = false;
@@ -53,12 +62,13 @@ export default function OnMyWayButton({ jobId, onMyWayAt }: OnMyWayButtonProps) 
       cancelled = true;
       clearInterval(timer);
     };
-  }, [since, jobId]);
+  }, [since, jobId, gpsEnabled]);
 
   async function handleClick() {
     setLoading(true);
     try {
-      const coords = await getCoords();
+      // Only ask for geolocation when tracking is enabled.
+      const coords = gpsEnabled ? await getCoords() : undefined;
       const res = await markOnMyWay(jobId, coords);
       if (res.success) {
         setSince(res.onMyWayAt ?? new Date().toISOString());

@@ -49,6 +49,8 @@ interface ClockPageClientProps {
   clockOutTime: string | null;
   onMyWayAt?: string | null;
   employeeProducts?: EmployeeProduct[];
+  /** Admin setting `tracking.gpsEnabled`; when false, never prompt for GPS. */
+  gpsEnabled?: boolean;
 }
 
 function pad(n: number) {
@@ -155,6 +157,7 @@ export default function ClockPageClient({
   clockOutTime,
   onMyWayAt = null,
   employeeProducts = [],
+  gpsEnabled = true,
 }: ClockPageClientProps) {
   const router = useRouter();
   const [now, setNow] = useState(() => new Date());
@@ -277,7 +280,7 @@ export default function ClockPageClient({
   async function handleOnMyWay() {
     setOtwLoading(true);
     try {
-      const coords = await getCoords();
+      const coords = gpsEnabled ? await getCoords() : undefined;
       const res = await markOnMyWay(jobId, coords);
       if (res.success) {
         setOtwSince(res.onMyWayAt ?? new Date().toISOString());
