@@ -517,6 +517,19 @@ export default function JobDetailView({
     router.refresh();
   };
 
+  // Always open the job detail scrolled to the TOP, regardless of where the
+  // browser left the scroll position on the page we navigated from (Jobs,
+  // Calendar, Alerts). Resets both the window and the admin scroll container so
+  // it works on desktop and mobile. Runs once for this job id.
+  useEffect(() => {
+    window.scrollTo(0, 0);
+    const scroller = document.querySelector(
+      ".overflow-y-auto"
+    ) as HTMLElement | null;
+    if (scroller) scroller.scrollTop = 0;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [job.id]);
+
   // Lightbox keyboard nav
   useEffect(() => {
     if (lightboxIdx === null) return;
@@ -795,16 +808,10 @@ export default function JobDetailView({
             )}
           </div>
         </div>
+        {/* Assigned cleaners only. The job's creator / booking source lives in
+            Job Logs, not here — the Team card is purely the crew doing the work
+            (name · per-job status · per-job pay). */}
         <div className="team-list">
-          <div className="team-row">
-            <div className="avatar avatar-lg" style={{ background: avatarBg(job.employee.name) }}>
-              {initials(job.employee.name)}
-            </div>
-            <div className="team-meta">
-              <div className="name">{job.employee.name}</div>
-              <div className="role">Created by</div>
-            </div>
-          </div>
           {job.cleaners.map(c => {
             // Prefer the live per-cleaner assignment row; legacy jobs fall
             // back to the job-level clock fields for the whole team.

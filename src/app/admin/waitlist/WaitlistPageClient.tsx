@@ -79,6 +79,13 @@ function dateStr(iso: string) {
   return new Date(iso).toLocaleDateString("en-CA", { month: "short", day: "numeric", year: "numeric" });
 }
 
+// Preferred date is before the start of today (in the viewer's locale).
+function isPastDate(iso: string) {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  return new Date(iso).getTime() < start.getTime();
+}
+
 const TABS = [
   { id: "all",       label: "All" },
   { id: "waiting",   label: "Waiting" },
@@ -99,15 +106,23 @@ export default function WaitlistPageClient({ entries, archived }: { entries: Ent
 
   const stats = useMemo(() => ({
     total:     entries.length,
-    waiting:   entries.filter(e => e.status === "WAITING").length,
-    notified:  entries.filter(e => e.status === "NOTIFIED").length,
+    // "Waiting"/"Notified" here mean *active* demand: open entries whose
+    // preferred date has not yet passed. Past-dated entries are counted as
+    // stale and excluded so they do not inflate active demand.
+    waiting:   entries.filter(e => e.status === "WAITING"  && !isPastDate(e.preferredDate)).length,
+    notified:  entries.filter(e => e.status === "NOTIFIED" && !isPastDate(e.preferredDate)).length,
     converted: entries.filter(e => e.status === "CONVERTED").length,
     expired:   entries.filter(e => e.status === "EXPIRED").length,
     cancelled: entries.filter(e => e.status === "CANCELLED").length,
+    // Open entries whose preferred date is already in the past — need triage.
+    stale:     entries.filter(e => (e.status === "WAITING" || e.status === "NOTIFIED") && isPastDate(e.preferredDate)).length,
   }), [entries]);
 
+  // Tab badges reflect the number of rows actually listed under each tab
+  // (raw status counts), independent of the active-demand stat cards above.
   const countFor = (id: TabId) =>
-    id === "all" ? stats.total : stats[id as keyof typeof stats] ?? 0;
+    id === "all" ? entries.length
+      : entries.filter(e => e.status === id.toUpperCase()).length;
 
   const filtered = useMemo(() => {
     const list = tab === "all" ? entries
@@ -247,6 +262,8 @@ export default function WaitlistPageClient({ entries, archived }: { entries: Ent
                 <tbody>
                   {filtered.map(w => {
                     const age = daysAgo(w.createdAt);
+                    const past = isPastDate(w.preferredDate);
+                    const openStatus = w.status === "WAITING" || w.status === "NOTIFIED";
                     return (
                       <tr key={w.id} className={selection.isSelected(w.id) ? "row-selected" : undefined}>
                         <td onClick={(e) => e.stopPropagation()} style={{ width: 40 }}>
@@ -261,6 +278,12 @@ export default function WaitlistPageClient({ entries, archived }: { entries: Ent
                         <td className="col-date" style={{ minWidth: 160 }}>
                           <div className="date-line">{dateStr(w.preferredDate)}</div>
                           <div className="time-line">Added {age === 0 ? "today" : `${age}d ago`}</div>
+                          {past && openStatus && (
+                            <span className="pill" style={{ marginTop: 4, background: "rgba(148,163,184,0.18)", color: "#475569" }}>
+                              <span className="pill-dot" style={{ background: "#94a3b8" }} />
+                              Date passed
+                            </span>
+                          )}
                         </td>
                         <td style={{ minWidth: 220 }}>
                           <div className="col-client">
@@ -297,7 +320,13 @@ export default function WaitlistPageClient({ entries, archived }: { entries: Ent
                             {w.status === "NOTIFIED" && (
                               <button className="btn btn-primary btn-sm" disabled={busyId === w.id} onClick={() => handleStatus(w.id, "CONVERTED")}>Mark Converted</button>
                             )}
-                            {(w.status === "WAITING" || w.status === "NOTIFIED") && (
+                            {past && openStatus && (
+                              <button className="btn btn-secondary btn-sm" disabled={busyId === w.id} onClick={() => handleStatus(w.id, "EXPIRED")}>Mark expired</button>
+                            )}
+                            {w.status === "EXPIRED" && (
+                              <button className="btn btn-secondary btn-sm" disabled={busyId === w.id} onClick={() => handleStatus(w.id, "WAITING")}><RotateCcw size={13} /> Reactivate</button>
+                            )}
+                            {openStatus && (
                               <button className="btn btn-danger-ghost btn-sm" disabled={busyId === w.id} onClick={() => handleStatus(w.id, "CANCELLED")}>Cancel</button>
                             )}
                           </div>
@@ -313,6 +342,8 @@ export default function WaitlistPageClient({ entries, archived }: { entries: Ent
           <div id="wl-mobile" style={{ display: "none", flexDirection: "column", gap: 10 }}>
             {filtered.map(w => {
               const age = daysAgo(w.createdAt);
+              const past = isPastDate(w.preferredDate);
+              const openStatus = w.status === "WAITING" || w.status === "NOTIFIED";
               return (
                 <article key={w.id} className={`jcard${selection.isSelected(w.id) ? " row-selected" : ""}`}>
                   <div className="jcard-top">
@@ -336,6 +367,9 @@ export default function WaitlistPageClient({ entries, archived }: { entries: Ent
                     <div>
                       <div style={{ fontSize: 13, color: "var(--ink)", fontWeight: 500 }}>{dateStr(w.preferredDate)}</div>
                       <div style={{ fontSize: 11, color: "var(--primary-60)" }}>Added {age === 0 ? "today" : `${age}d ago`}</div>
+                      {past && openStatus && (
+                        <div style={{ fontSize: 11, color: "#475569", fontWeight: 600, marginTop: 2 }}>Date passed</div>
+                      )}
                     </div>
                     <div style={{ textAlign: "right" }}>
                       {w.serviceType && <div style={{ fontSize: 13, color: "var(--ink)", fontWeight: 500 }}>{SERVICE_LABELS[w.serviceType] ?? w.serviceType}</div>}
@@ -344,15 +378,23 @@ export default function WaitlistPageClient({ entries, archived }: { entries: Ent
                       )}
                     </div>
                   </div>
-                  {(w.status === "WAITING" || w.status === "NOTIFIED") && (
-                    <div style={{ paddingTop: 10, borderTop: "1px solid var(--primary-10)", display: "flex", gap: 8 }}>
+                  {(openStatus || w.status === "EXPIRED") && (
+                    <div style={{ paddingTop: 10, borderTop: "1px solid var(--primary-10)", display: "flex", gap: 8, flexWrap: "wrap" }}>
                       {w.status === "WAITING" && (
                         <button className="btn btn-primary btn-sm" disabled={busyId === w.id} onClick={() => handleNotify(w.id)}>Notify</button>
                       )}
                       {w.status === "NOTIFIED" && (
                         <button className="btn btn-primary btn-sm" disabled={busyId === w.id} onClick={() => handleStatus(w.id, "CONVERTED")}>Mark Converted</button>
                       )}
-                      <button className="btn btn-danger-ghost btn-sm" disabled={busyId === w.id} onClick={() => handleStatus(w.id, "CANCELLED")}>Cancel</button>
+                      {past && openStatus && (
+                        <button className="btn btn-secondary btn-sm" disabled={busyId === w.id} onClick={() => handleStatus(w.id, "EXPIRED")}>Mark expired</button>
+                      )}
+                      {w.status === "EXPIRED" && (
+                        <button className="btn btn-secondary btn-sm" disabled={busyId === w.id} onClick={() => handleStatus(w.id, "WAITING")}><RotateCcw size={13} /> Reactivate</button>
+                      )}
+                      {openStatus && (
+                        <button className="btn btn-danger-ghost btn-sm" disabled={busyId === w.id} onClick={() => handleStatus(w.id, "CANCELLED")}>Cancel</button>
+                      )}
                     </div>
                   )}
                 </article>

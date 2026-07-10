@@ -43,6 +43,9 @@ const VALID_PAYMENT_TYPES = [
   "OTHER",
 ] as const;
 
+const VALID_PAY_TYPES = ["PERCENTAGE", "FLAT", "HOURLY"] as const;
+type PayType = (typeof VALID_PAY_TYPES)[number];
+
 function parseOptionalFloat(value: FormDataEntryValue | null): number | null {
   if (value === null || value === "") return null;
   const n = parseFloat(value as string);
@@ -148,27 +151,60 @@ export async function saveJob(formData: FormData) {
       discountAmount = +(price * (clientDiscountPercent / 100)).toFixed(2);
     }
 
-    // Auto-estimate cleaner pay from the tier-based pool when admin leaves the
-    // field blank. Manual entry still wins (acts as an override). Authoritative
-    // per-cleaner payout is recomputed from tiers at pay-period time.
+    // Cleaner pay model for this job.
+    //  • PERCENTAGE (default): tier/split math — auto-estimate the pool when the
+    //    admin leaves employeePay blank (manual entry wins as an override).
+    //  • FLAT: employeePay is the agreed fixed payout, exactly as entered.
+    //  • HOURLY: hourlyRate drives it — employeePay = hourlyRate × hours when
+    //    left blank, otherwise the entered override wins.
+    const payTypeRaw = (formData.get("payType") as string) || "PERCENTAGE";
+    const payType: PayType = VALID_PAY_TYPES.includes(payTypeRaw as PayType)
+      ? (payTypeRaw as PayType)
+      : "PERCENTAGE";
+    const hourlyRate =
+      payType === "HOURLY" ? parseOptionalFloat(formData.get("hourlyRate")) : null;
+
+    // Job duration in hours, for HOURLY pay estimation.
+    const payHours = (() => {
+      if (startDate && startTime && endDate && endTime) {
+        const s = new Date(`${startDate}T${startTime}`).getTime();
+        const e = new Date(`${endDate}T${endTime}`).getTime();
+        const ms = e - s;
+        return ms > 0 ? ms / 3_600_000 : null;
+      }
+      return null;
+    })();
+
     const manualEmployeePay = parseOptionalFloat(formData.get("employeePay"));
     let estimatedEmployeePay = manualEmployeePay;
-    if (manualEmployeePay === null && price !== null && price > 0 && cleanerIds.length > 0) {
-      const rateInputs = await getCleanerRateInputs([
-        session.user.id,
-        ...cleanerIds,
-      ]);
-      const rateList = [session.user.id, ...cleanerIds].map(
-        (id) =>
-          rateInputs.get(id) ?? {
-            id,
-            tier: "STANDARD" as const,
-            avgRating: null,
-            ratingCount: 0,
-          }
-      );
-      estimatedEmployeePay = computeJobPayout(price, rateList).pool;
+    if (payType === "PERCENTAGE") {
+      if (
+        manualEmployeePay === null &&
+        price !== null &&
+        price > 0 &&
+        cleanerIds.length > 0
+      ) {
+        const rateInputs = await getCleanerRateInputs([
+          session.user.id,
+          ...cleanerIds,
+        ]);
+        const rateList = [session.user.id, ...cleanerIds].map(
+          (id) =>
+            rateInputs.get(id) ?? {
+              id,
+              tier: "STANDARD" as const,
+              avgRating: null,
+              ratingCount: 0,
+            }
+        );
+        estimatedEmployeePay = computeJobPayout(price, rateList).pool;
+      }
+    } else if (payType === "HOURLY") {
+      if (manualEmployeePay === null && hourlyRate !== null && payHours !== null) {
+        estimatedEmployeePay = +(hourlyRate * payHours).toFixed(2);
+      }
     }
+    // FLAT: estimatedEmployeePay stays as the manually entered payout.
 
     // GST/QST on the discounted subtotal from the admin-configured rates. The
     // job modal doesn't expose the cash-job toggle, so keep the existing job's
@@ -211,6 +247,8 @@ export async function saveJob(formData: FormData) {
       qstAmount: taxes.qstAmount,
       totalAmount: taxes.totalAmount,
       employeePay: estimatedEmployeePay,
+      payType,
+      hourlyRate,
       totalTip: parseOptionalFloat(formData.get("totalTip")),
       parking: parseOptionalFloat(formData.get("parking")),
       paymentReceived: formData.get("paymentReceived") === "on",
@@ -605,6 +643,19 @@ export async function saveJob(formData: FormData) {
       }
 
       const newJob = await db.job.create({ data: jobData });
+
+      // Creation / booking-source audit trail lives in Job Logs (not the Team
+      // card). Records that this job was admin-created and by whom.
+      await db.jobLog
+        .create({
+          data: {
+            jobId: newJob.id,
+            userId: session.user.id,
+            action: "CREATED",
+            description: `Job created by ${session.user.name ?? "an admin"} (admin)`,
+          },
+        })
+        .catch(() => {});
 
       // Per-cleaner JobAssignment rows for the assigned team.
       if (cleanerIds.length > 0) {

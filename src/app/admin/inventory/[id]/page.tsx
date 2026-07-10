@@ -48,6 +48,10 @@ export default async function ProductPage({
           assignedAt: "desc",
         },
       },
+      inventoryChanges: {
+        orderBy: { createdAt: "desc" },
+        take: 25,
+      },
     },
   });
 
@@ -76,7 +80,22 @@ export default async function ProductPage({
     costPerUnit: product.costPerUnit,
     stockLevel: product.stockLevel,
     minStock: product.minStock,
+    stockUpdatedAt: product.stockUpdatedAt
+      ? product.stockUpdatedAt.toISOString()
+      : null,
+    stockUpdatedByName: product.stockUpdatedByName,
   };
+
+  const changeHistory = product.inventoryChanges.map((c) => ({
+    id: c.id,
+    employeeName: c.employeeName,
+    quantityChange: c.quantityChange,
+    newQuantity: c.newQuantity,
+    unit: c.unit,
+    reason: c.reason,
+    changedByName: c.changedByName,
+    createdAt: c.createdAt.toISOString(),
+  }));
 
   const jobUsageData = product.jobUsage.map((usage) => ({
     id: usage.id,
@@ -110,6 +129,7 @@ export default async function ProductPage({
       employeeAssignments={employeeAssignmentsData}
       totalAssigned={totalAssigned}
       totalUsed={totalUsed}
+      changeHistory={changeHistory}
     />
   );
 }

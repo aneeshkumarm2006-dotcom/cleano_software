@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
+import { jobRevenue } from "@/lib/metrics";
 import ClientDetailView from "./ClientDetailView";
 
 export default async function ClientDetailPage({
@@ -63,7 +64,18 @@ export default async function ClientDetailPage({
     cleaners: j.cleaners,
   }));
 
-  const totalRevenue = jobs.reduce((sum, j) => sum + (j.price || 0), 0);
+  // Canonical revenue for this client: completed+paid only, discount/refund
+  // applied, tax excluded, soft-deleted jobs excluded (computed from the raw
+  // Job rows so refundedAmount/deletedAt are available). totalPaid/unpaidAmount
+  // keep their prior meaning below.
+  const totalRevenue = client.jobs
+    .filter(
+      (j) =>
+        j.deletedAt === null &&
+        j.paymentReceived &&
+        (j.status === "COMPLETED" || j.status === "PAID")
+    )
+    .reduce((sum, j) => sum + jobRevenue(j), 0);
   const totalPaid = jobs
     .filter((j) => j.paymentReceived)
     .reduce((sum, j) => sum + (j.price || 0), 0);

@@ -24,6 +24,7 @@ import {
   removeChannelMember,
   getTeamChatSettings,
   updateTeamChatSettings,
+  markChannelRead,
   type GroupChannelDTO,
   type GroupMessageDTO,
   type TeamChatSettingsDTO,
@@ -170,6 +171,18 @@ export default function AdminGroupChatClient({
   useEffect(() => {
     setMembersOpen(false);
   }, [activeChannel?.id]);
+
+  // Mark the open channel read (clears its unread badge) on open and as new
+  // messages arrive. Team-chat read state is tracked separately from job chat.
+  useEffect(() => {
+    if (!activeChannel) return;
+    let cancelled = false;
+    markChannelRead(activeChannel.id).then((res) => {
+      if (!cancelled && res.success) mutateChannels();
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeChannel?.id, msgs.length]);
 
   async function handleSend() {
     const body = draft.trim();
@@ -455,6 +468,25 @@ export default function AdminGroupChatClient({
                 <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {c.name}
                 </span>
+                {!active && c.unreadCount > 0 && (
+                  <span
+                    aria-label={`${c.unreadCount} unread`}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      minWidth: 18,
+                      height: 18,
+                      padding: "0 5px",
+                      borderRadius: 999,
+                      background: "#ef4444",
+                      color: "#fff",
+                      fontSize: 11,
+                      fontWeight: 700,
+                    }}>
+                    {c.unreadCount > 99 ? "99+" : c.unreadCount}
+                  </span>
+                )}
                 {(c.isDefault || c.isDirect) && (
                   <span
                     style={{

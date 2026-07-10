@@ -141,6 +141,68 @@ function Row({
 
 const yn = (b: boolean | null) => (b == null ? null : b ? "Yes" : "No");
 
+// --- Duplicate detection -------------------------------------------------
+// Likely-duplicate applicants share a normalized email, phone, or full name.
+// We union applications that share any of these keys so a person who applied
+// twice (or was imported from two sources) collapses into one group.
+const normEmail = (s: string | null) => (s ?? "").trim().toLowerCase();
+const normPhone = (s: string | null) => {
+  const d = (s ?? "").replace(/\D/g, "");
+  return d.length >= 10 ? d.slice(-10) : d; // ignore short/partial numbers
+};
+const normName = (s: string | null) => (s ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+
+interface DupResult {
+  dupIds: Set<string>;
+  groupOf: Map<string, string>; // id -> group root id
+  sizeByRoot: Map<string, number>;
+  uniqueCount: number;
+}
+
+function computeDuplicates(apps: Application[]): DupResult {
+  const parent = new Map<string, string>();
+  const find = (x: string): string => {
+    let r = x;
+    while (parent.get(r) !== r) r = parent.get(r)!;
+    // path-compress
+    let c = x;
+    while (parent.get(c) !== r) { const n = parent.get(c)!; parent.set(c, r); c = n; }
+    return r;
+  };
+  const union = (a: string, b: string) => {
+    const ra = find(a), rb = find(b);
+    if (ra !== rb) parent.set(ra, rb);
+  };
+  apps.forEach((a) => parent.set(a.id, a.id));
+
+  const byKey = new Map<string, string>(); // key -> first app id seen
+  const addKey = (prefix: string, value: string, id: string) => {
+    if (!value) return; // empty fields never match
+    const key = `${prefix}:${value}`;
+    const prev = byKey.get(key);
+    if (prev) union(prev, id);
+    else byKey.set(key, id);
+  };
+  apps.forEach((a) => {
+    addKey("e", normEmail(a.email), a.id);
+    addKey("p", normPhone(a.phone), a.id);
+    addKey("n", normName(a.name), a.id);
+  });
+
+  const sizeByRoot = new Map<string, number>();
+  const groupOf = new Map<string, string>();
+  apps.forEach((a) => {
+    const r = find(a.id);
+    groupOf.set(a.id, r);
+    sizeByRoot.set(r, (sizeByRoot.get(r) ?? 0) + 1);
+  });
+  const dupIds = new Set<string>();
+  apps.forEach((a) => {
+    if ((sizeByRoot.get(groupOf.get(a.id)!) ?? 0) > 1) dupIds.add(a.id);
+  });
+  return { dupIds, groupOf, sizeByRoot, uniqueCount: sizeByRoot.size };
+}
+
 export default function ApplicationsInboxClient({
   applications,
   archived = false,
@@ -169,8 +231,15 @@ export default function ApplicationsInboxClient({
     return m;
   }, [applications]);
 
+  const dup = useMemo(() => computeDuplicates(applications), [applications]);
+  // Number of duplicate applications beyond one-per-group (the inflation).
+  const dupExtra = applications.length - dup.uniqueCount;
+
   const visible = filter === "ALL" ? applications : applications.filter((a) => a.status === filter);
   const sel = applications.find((a) => a.id === selId) ?? null;
+  const dupMembers = sel
+    ? applications.filter((a) => a.id !== sel.id && dup.groupOf.get(a.id) === dup.groupOf.get(sel.id))
+    : [];
 
   const visibleIds = useMemo(() => visible.map((a) => a.id), [visible]);
   const selection = useRowSelection(visibleIds);
@@ -298,7 +367,18 @@ export default function ApplicationsInboxClient({
           <h1 className="title" style={{ fontSize: 30 }}>
             {archived ? "Archived applications" : "Job applications"}
           </h1>
-          <span className="apps-headcount">{applications.length}</span>
+          <span className="apps-headcount" title={dupExtra > 0 ? `${dup.uniqueCount} unique applicants · ${applications.length} records` : undefined}>
+            {archived ? applications.length : dup.uniqueCount}
+          </span>
+          {!archived && dupExtra > 0 && (
+            <span
+              className="pill"
+              title="Applications that share a name, email, or phone with another entry"
+              style={{ background: "var(--amber-50)", color: "var(--amber-800)", fontSize: 11.5 }}>
+              <span className="pill-dot" style={{ background: "#d97706" }} />
+              {dupExtra} possible duplicate{dupExtra === 1 ? "" : "s"}
+            </span>
+          )}
           <a
             href={archived ? "/admin/job-applications" : "/admin/job-applications?archived=1"}
             className={`btn ${archived ? "btn-primary" : "btn-secondary"} btn-sm`}
@@ -388,7 +468,16 @@ export default function ApplicationsInboxClient({
                   />
                   <Avatar name={a.name} size={42} />
                   <div className="apps-card-body">
-                    <div className="apps-card-name">{a.name}</div>
+                    <div className="apps-card-name">
+                      {a.name}
+                      {dup.dupIds.has(a.id) && (
+                        <span
+                          title="Shares a name, email, or phone with another application"
+                          style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: "var(--amber-800)", background: "var(--amber-50)", padding: "1px 6px", borderRadius: 6, verticalAlign: "middle" }}>
+                          DUP
+                        </span>
+                      )}
+                    </div>
                     <div className="apps-card-sub">
                       {[a.cityArea, a.source].filter(Boolean).join(" · ") || "—"}
                     </div>
@@ -425,6 +514,36 @@ export default function ApplicationsInboxClient({
               </div>
               <StatusPill status={sel.status} />
             </div>
+
+            {dupMembers.length > 0 && (
+              <div
+                style={{
+                  margin: "0 0 14px",
+                  padding: "10px 14px",
+                  borderRadius: 10,
+                  background: "var(--amber-50)",
+                  border: "1px solid rgba(217,119,6,0.25)",
+                  fontSize: 13,
+                  color: "var(--amber-800)",
+                }}>
+                <div style={{ fontWeight: 700, marginBottom: 6 }}>
+                  Possible duplicate — {dupMembers.length} other application{dupMembers.length === 1 ? "" : "s"} share a name, email, or phone.
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {dupMembers.map((m) => (
+                    <button
+                      key={m.id}
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => { setSelId(m.id); setHireMsg(null); }}>
+                      {m.name} · {STATUS[m.status].label}
+                    </button>
+                  ))}
+                </div>
+                <div style={{ marginTop: 8, fontSize: 12, color: "var(--amber-800)", opacity: 0.85 }}>
+                  Keep the best record and archive the rest using “Move to stage → Archive” below.
+                </div>
+              </div>
+            )}
 
             <div className="apps-rows">
               <Row icon={<Cake size={15} />} k="Date of birth" v={sel.dateOfBirth} />

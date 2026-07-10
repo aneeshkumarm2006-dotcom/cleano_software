@@ -32,7 +32,7 @@ export async function resolveInventoryRequest(
   try {
     const request = await db.inventoryRequest.findUnique({
       where: { id: requestId },
-      include: { product: true },
+      include: { product: true, employee: { select: { id: true, name: true } } },
     });
     if (!request) return { success: false, error: "Request not found" };
     if (request.status !== "PENDING") {
@@ -51,6 +51,18 @@ export async function resolveInventoryRequest(
           error: `Only ${request.product.stockLevel} ${request.product.unit} of ${request.product.name} in stock`,
         };
       }
+      const actor = session.user as { id?: string; name?: string };
+      const existing = await db.employeeProduct.findUnique({
+        where: {
+          employeeId_productId: {
+            employeeId: request.employeeId,
+            productId: request.productId,
+          },
+        },
+        select: { quantity: true },
+      });
+      const newWarehouse = request.product.stockLevel - request.quantity;
+      const newCleanerQty = (existing?.quantity ?? 0) + request.quantity;
       await db.$transaction([
         db.inventoryRequest.update({
           where: { id: requestId },
@@ -72,6 +84,34 @@ export async function resolveInventoryRequest(
             employeeId: request.employeeId,
             productId: request.productId,
             quantity: request.quantity,
+          },
+        }),
+        // Audit: warehouse decrement …
+        db.inventoryChange.create({
+          data: {
+            productId: request.productId,
+            employeeId: null,
+            employeeName: null,
+            quantityChange: -request.quantity,
+            newQuantity: newWarehouse,
+            unit: request.product.unit,
+            reason: `Fulfilled refill request for ${request.employee?.name ?? "cleaner"}`,
+            changedById: actor.id ?? null,
+            changedByName: actor.name ?? null,
+          },
+        }),
+        // … and the matching increment on the cleaner's assigned stock.
+        db.inventoryChange.create({
+          data: {
+            productId: request.productId,
+            employeeId: request.employeeId,
+            employeeName: request.employee?.name ?? null,
+            quantityChange: request.quantity,
+            newQuantity: newCleanerQty,
+            unit: request.product.unit,
+            reason: "Refill request approved",
+            changedById: actor.id ?? null,
+            changedByName: actor.name ?? null,
           },
         }),
       ]);

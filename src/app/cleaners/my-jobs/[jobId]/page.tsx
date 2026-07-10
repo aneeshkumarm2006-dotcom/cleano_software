@@ -312,14 +312,32 @@ export default async function JobDetailPage({ params }: PageProps) {
                 </dd>
               </div>
             )}
-            {job.employeePay != null && isEmployee && (
+            {isEmployee && job.payType === "HOURLY" && job.hourlyRate != null && (
               <div className="cl-jd-dl-row">
-                <dt>Est. pay</dt>
-                <dd>${job.employeePay.toFixed(2)}</dd>
+                <dt>Pay rate</dt>
+                <dd>
+                  ${job.hourlyRate.toFixed(2)}/hr
+                  {job.employeePay != null && (
+                    <span style={{ color: "var(--primary-50)", fontWeight: 400 }}>
+                      {" "}· ${job.employeePay.toFixed(2)} est.
+                    </span>
+                  )}
+                </dd>
               </div>
             )}
+            {isEmployee &&
+              job.payType !== "HOURLY" &&
+              job.employeePay != null && (
+                <div className="cl-jd-dl-row">
+                  {/* FLAT jobs show only the fixed payout — never "% of price". */}
+                  <dt>{job.payType === "FLAT" ? "Pay" : "Est. pay"}</dt>
+                  <dd>${job.employeePay.toFixed(2)}</dd>
+                </div>
+              )}
           </dl>
-          {job.employeePay != null && isEmployee && (
+          {/* The pay-breakdown ("Why this price?") exposes the % tier math, so it
+              only applies to PERCENTAGE jobs. FLAT/HOURLY show a plain amount. */}
+          {isEmployee && job.payType === "PERCENTAGE" && job.employeePay != null && (
             <div style={{ marginTop: -4 }}>
               <WhyThisPriceLink jobId={job.id} />
             </div>

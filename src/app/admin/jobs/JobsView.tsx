@@ -250,10 +250,44 @@ const TABS = [
   { id: 'upcoming',   label: 'Upcoming' },
   { id: 'completed',  label: 'Completed' },
   { id: 'overdue',    label: 'Overdue' },
+  { id: 'cancelled',  label: 'Cancelled' },
   { id: 'discounted', label: 'Discounted' },
   { id: 'free',       label: 'Free' },
 ] as const;
 type TabId = (typeof TABS)[number]['id'];
+
+// Single source of truth for tab membership, kept in lockstep with
+// src/lib/metrics.ts `jobStatusWhere` so a tab's COUNT and its filtered LIST
+// always use the exact same predicate:
+//   upcoming  = future start AND not completed/cancelled
+//   completed = COMPLETED | PAID
+//   overdue   = COMPLETED AND unpaid
+//   cancelled = CANCELLED
+//   free      = price null / 0
+// (`discounted` is a jobs-list convenience bucket, not a metrics bucket.)
+function jobMatchesTab(
+  tab: TabId,
+  job: { status: string; startTime: string; paymentReceived: boolean; price: number | null; discountAmount?: number | null },
+  now: number
+): boolean {
+  const jobTime = new Date(job.startTime).getTime();
+  switch (tab) {
+    case 'upcoming':
+      return jobTime >= now && ['CREATED', 'SCHEDULED', 'IN_PROGRESS'].includes(job.status);
+    case 'completed':
+      return ['COMPLETED', 'PAID'].includes(job.status);
+    case 'overdue':
+      return job.status === 'COMPLETED' && !job.paymentReceived;
+    case 'cancelled':
+      return job.status === 'CANCELLED';
+    case 'discounted':
+      return (job.discountAmount || 0) > 0;
+    case 'free':
+      return !job.price || job.price === 0;
+    default:
+      return true;
+  }
+}
 
 // ── Paginator ─────────────────────────────────────────────────────────────────
 
@@ -336,26 +370,32 @@ export default function JobsView({
   const [tab, setTab] = useState<TabId>('all');
   const [showFilters, setShowFilters] = useState(false);
 
-  // Tab-level filter (client-side)
+  // Tab-level filter (client-side). Upcoming is sorted soonest-first (past jobs
+  // already excluded by the predicate); every other tab keeps the server's
+  // most-recent-first order.
   const tabJobs = useMemo(() => {
-    switch (tab) {
-      case 'upcoming':   return jobs.filter(j => ['CREATED', 'SCHEDULED'].includes(j.status));
-      case 'completed':  return jobs.filter(j => ['COMPLETED', 'PAID'].includes(j.status));
-      case 'overdue':    return jobs.filter(j => ['COMPLETED', 'PAID'].includes(j.status) && !j.paymentReceived);
-      case 'discounted': return jobs.filter(j => (j.discountAmount || 0) > 0);
-      case 'free':       return jobs.filter(j => !j.price || j.price === 0);
-      default:           return jobs;
+    const now = Date.now();
+    const list = jobs.filter(j => jobMatchesTab(tab, j, now));
+    if (tab === 'upcoming') {
+      list.sort(
+        (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+      );
     }
+    return list;
   }, [tab, jobs]);
 
-  const tabCounts = useMemo(() => ({
-    all:        jobs.length,
-    upcoming:   jobs.filter(j => ['CREATED', 'SCHEDULED'].includes(j.status)).length,
-    completed:  jobs.filter(j => ['COMPLETED', 'PAID'].includes(j.status)).length,
-    overdue:    jobs.filter(j => ['COMPLETED', 'PAID'].includes(j.status) && !j.paymentReceived).length,
-    discounted: jobs.filter(j => (j.discountAmount || 0) > 0).length,
-    free:       jobs.filter(j => !j.price || j.price === 0).length,
-  }), [jobs]);
+  const tabCounts = useMemo(() => {
+    const now = Date.now();
+    return {
+      all:        jobs.length,
+      upcoming:   jobs.filter(j => jobMatchesTab('upcoming', j, now)).length,
+      completed:  jobs.filter(j => jobMatchesTab('completed', j, now)).length,
+      overdue:    jobs.filter(j => jobMatchesTab('overdue', j, now)).length,
+      cancelled:  jobs.filter(j => jobMatchesTab('cancelled', j, now)).length,
+      discounted: jobs.filter(j => jobMatchesTab('discounted', j, now)).length,
+      free:       jobs.filter(j => jobMatchesTab('free', j, now)).length,
+    } as Record<TabId, number>;
+  }, [jobs]);
 
   // Additional filters stacked on top of tab filter
   const filteredJobs = useMemo(() => {

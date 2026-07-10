@@ -315,10 +315,10 @@ export default function LeadsPageClient({ leads, archived = false }: { leads: Le
                       <td style={{ minWidth: 140 }}>
                         {l.preferredDate ? (
                           <>
-                            <div className="date-line">{dateStr(l.preferredDate)}</div>
-                            <div className="time-line">{l.isFlexible ? "Flexible" : (l.preferredSlot || "—")}</div>
+                            <div className="date-line" style={{ color: "var(--ink)", fontWeight: 600 }}>{dateStr(l.preferredDate)}</div>
+                            <div className="time-line" style={{ color: "var(--primary-70)", fontSize: 11.5 }}>{l.isFlexible ? "Flexible" : (l.preferredSlot || "—")}</div>
                           </>
-                        ) : <span style={{ color: "var(--primary-40)" }}>—</span>}
+                        ) : <span style={{ color: "var(--primary-60)" }}>—</span>}
                       </td>
                       <td>
                         <PremiumSelect
@@ -346,7 +346,7 @@ export default function LeadsPageClient({ leads, archived = false }: { leads: Le
                         ) : <span style={{ color: "var(--primary-40)" }}>—</span>}
                       </td>
                       <td style={{ minWidth: 100 }}>
-                        <div className="time-line" style={{ fontSize: 12 }}>
+                        <div className="time-line" style={{ fontSize: 12, color: "var(--primary-70)" }}>
                           {formatRelative(l.lastActivityAt)}
                         </div>
                       </td>

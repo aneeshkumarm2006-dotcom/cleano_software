@@ -32,7 +32,7 @@ export async function assignToCleanerKit(input: {
 
   const product = await db.product.findUnique({
     where: { id: input.productId },
-    select: { id: true, name: true },
+    select: { id: true, name: true, unit: true },
   });
   if (!product) return { success: false, error: "Product not found" };
 
@@ -42,23 +42,41 @@ export async function assignToCleanerKit(input: {
   });
   if (!cleaner) return { success: false, error: "Cleaner not found" };
 
-  await db.employeeProduct.upsert({
-    where: {
-      employeeId_productId: {
+  const actor = session.user as { id?: string; name?: string };
+
+  await db.$transaction(async (tx) => {
+    const updated = await tx.employeeProduct.upsert({
+      where: {
+        employeeId_productId: {
+          employeeId: input.cleanerId,
+          productId: input.productId,
+        },
+      },
+      create: {
         employeeId: input.cleanerId,
         productId: input.productId,
+        quantity: qty,
+        notes: input.notes?.trim() || null,
       },
-    },
-    create: {
-      employeeId: input.cleanerId,
-      productId: input.productId,
-      quantity: qty,
-      notes: input.notes?.trim() || null,
-    },
-    update: {
-      quantity: { increment: qty },
-      ...(input.notes?.trim() ? { notes: input.notes.trim() } : {}),
-    },
+      update: {
+        quantity: { increment: qty },
+        ...(input.notes?.trim() ? { notes: input.notes.trim() } : {}),
+      },
+    });
+
+    await tx.inventoryChange.create({
+      data: {
+        productId: input.productId,
+        employeeId: cleaner.id,
+        employeeName: cleaner.name,
+        quantityChange: qty,
+        newQuantity: updated.quantity,
+        unit: product.unit,
+        reason: input.notes?.trim() || "Assigned to cleaner kit",
+        changedById: actor.id ?? null,
+        changedByName: actor.name ?? null,
+      },
+    });
   });
 
   revalidatePath("/admin/inventory");
@@ -94,6 +112,10 @@ export async function removeFromCleanerKit(input: {
         productId: input.productId,
       },
     },
+    include: {
+      product: { select: { unit: true } },
+      employee: { select: { id: true, name: true } },
+    },
   });
   if (!kit) return { success: false, error: "Cleaner does not have this item" };
   if (kit.quantity < qty) {
@@ -103,14 +125,33 @@ export async function removeFromCleanerKit(input: {
     };
   }
 
-  if (kit.quantity === qty) {
-    await db.employeeProduct.delete({ where: { id: kit.id } });
-  } else {
-    await db.employeeProduct.update({
-      where: { id: kit.id },
-      data: { quantity: { decrement: qty } },
+  const actor = session.user as { id?: string; name?: string };
+  const newQuantity = kit.quantity - qty;
+
+  await db.$transaction(async (tx) => {
+    if (newQuantity === 0) {
+      await tx.employeeProduct.delete({ where: { id: kit.id } });
+    } else {
+      await tx.employeeProduct.update({
+        where: { id: kit.id },
+        data: { quantity: { decrement: qty } },
+      });
+    }
+
+    await tx.inventoryChange.create({
+      data: {
+        productId: input.productId,
+        employeeId: kit.employee.id,
+        employeeName: kit.employee.name,
+        quantityChange: -qty,
+        newQuantity,
+        unit: kit.product.unit,
+        reason: "Removed from cleaner kit",
+        changedById: actor.id ?? null,
+        changedByName: actor.name ?? null,
+      },
     });
-  }
+  });
 
   revalidatePath("/admin/inventory");
   revalidatePath("/cleaners/my-inventory");

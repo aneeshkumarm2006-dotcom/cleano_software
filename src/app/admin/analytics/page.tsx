@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
+import { getTotalRevenue, getEmployeeCounts } from "@/lib/metrics";
 import AnalyticsView from "./AnalyticsView";
 
 export default async function AnalyticsPage() {
@@ -124,6 +125,17 @@ export default async function AnalyticsPage() {
     }),
   ]);
 
+  // Canonical revenue + employee counts (shared helper) so Analytics agrees
+  // with Dashboard/Clients/Employees. Revenue = completed+paid, discount/refund
+  // applied, tax excluded, on a startTime date basis (not createdAt).
+  const [canonRevenue, canonMonthlyRevenue, canonWeeklyRevenue, employeeCounts] =
+    await Promise.all([
+      getTotalRevenue(),
+      getTotalRevenue({ from: startOfMonth }),
+      getTotalRevenue({ from: startOfWeek }),
+      getEmployeeCounts(),
+    ]);
+
   // === JOB STATS ===
   const completedJobs = jobs.filter(
     (j) => j.status === "COMPLETED" || j.status === "PAID"
@@ -158,16 +170,11 @@ export default async function AnalyticsPage() {
   };
 
   // === REVENUE STATS ===
-  const totalRevenue = completedJobs.reduce(
-    (sum, j) => sum + (j.price || 0),
-    0
-  );
-  const monthlyRevenue = completedJobs
-    .filter((j) => new Date(j.createdAt) >= startOfMonth)
-    .reduce((sum, j) => sum + (j.price || 0), 0);
-  const weeklyRevenue = completedJobs
-    .filter((j) => new Date(j.createdAt) >= startOfWeek)
-    .reduce((sum, j) => sum + (j.price || 0), 0);
+  // Revenue comes from the canonical helper (startTime basis, discount/refund
+  // applied); the old createdAt-keyed price sums are gone.
+  const totalRevenue = canonRevenue;
+  const monthlyRevenue = canonMonthlyRevenue;
+  const weeklyRevenue = canonWeeklyRevenue;
   const avgJobPrice =
     completedJobs.length > 0 ? totalRevenue / completedJobs.length : 0;
   const totalEmployeePay = completedJobs.reduce(
@@ -258,7 +265,9 @@ export default async function AnalyticsPage() {
       : null;
 
   const employeeStats = {
-    totalEmployees: employees.length,
+    // Canonical field-staff headcount (excludes CLIENT logins + soft-deleted)
+    // so this agrees with Dashboard and the Employees page.
+    totalEmployees: employeeCounts.active,
     admins: admins.length,
     activeNow: activeEmployees.length,
     avgJobsPerEmployee,

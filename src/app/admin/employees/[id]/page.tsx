@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
 import EmployeeDetailView from "./EmployeeDetailView";
+import { jobRevenue } from "@/lib/metrics";
 import { getEmployeeAvgRating } from "../../actions/setEmployeeRating";
 import { getFieldLeadWeeklyBonus } from "@/lib/field-lead-bonus.server";
 import { getStrikeSummary, STRIKE_WINDOW_DAYS } from "@/lib/strikes";
@@ -62,10 +63,17 @@ export default async function EmployeePage({
 
   // Calculate stats
   const completedJobs = employee.jobs.filter((j) => j.status === "COMPLETED");
-  const totalRevenue = completedJobs.reduce(
-    (sum, j) => sum + (j.price || 0),
-    0
-  );
+  // Canonical revenue attributed to this employee: completed+paid only,
+  // discount/refund applied, tax excluded, soft-deleted excluded. Matches the
+  // Employees list + Dashboard/Analytics (was COMPLETED-only raw price).
+  const totalRevenue = employee.jobs
+    .filter(
+      (j) =>
+        j.deletedAt === null &&
+        j.paymentReceived &&
+        (j.status === "COMPLETED" || j.status === "PAID")
+    )
+    .reduce((sum, j) => sum + jobRevenue(j), 0);
   const totalPaid = completedJobs.reduce(
     (sum, j) => sum + (j.employeePay || 0),
     0
@@ -363,6 +371,7 @@ export default async function EmployeePage({
         email: employee.email,
         phone: employee.phone,
         role: employee.role as "OWNER" | "ADMIN" | "EMPLOYEE",
+        lastSeenAt: employee.lastSeenAt?.toISOString() ?? null,
       }}
       starRating={starRating}
       cleanerTier={employee.cleanerTier}

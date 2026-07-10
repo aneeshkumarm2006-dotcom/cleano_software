@@ -67,6 +67,7 @@ function DocStatusPill({ status }: { status: DocStatus }) {
 }
 
 export default function DocumentsClient({ signatures }: DocumentsClientProps) {
+  const isAdminView = usePathname().startsWith("/admin");
   const pending = useMemo(() => signatures.filter((s) => s.status === "PENDING"), [signatures]);
   const signed = useMemo(() => signatures.filter((s) => s.status === "SIGNED"), [signatures]);
   const other = useMemo(
@@ -91,6 +92,30 @@ export default function DocumentsClient({ signatures }: DocumentsClientProps) {
           Review, sign, and keep your compliance paperwork up to date.
         </p>
       </header>
+
+      {isAdminView && (
+        <div
+          style={{
+            marginBottom: 24,
+            padding: "12px 16px",
+            borderRadius: 12,
+            background: "var(--primary-5, rgba(0,140,156,0.06))",
+            border: "1px solid rgba(0,140,156,0.18)",
+            fontSize: 13.5,
+            color: "var(--primary)",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            flexWrap: "wrap",
+          }}>
+          <FileText size={15} />
+          <span>This is your personal signing view. To create, assign, or remove team documents, go to</span>
+          <Link href="/admin/settings" style={{ fontWeight: 700, textDecoration: "underline" }}>
+            Settings → Documents
+          </Link>
+          .
+        </div>
+      )}
 
       <div
         className="astat-grid"

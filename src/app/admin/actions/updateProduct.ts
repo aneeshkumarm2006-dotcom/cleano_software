@@ -34,6 +34,9 @@ export async function updateProduct(
   const costPerUnit = parseFloat(formData.get("costPerUnit") as string);
   const stockLevel = parseFloat(formData.get("stockLevel") as string);
   const minStock = parseFloat(formData.get("minStock") as string);
+  // Optional free-text reason for the stock-count adjustment (audit trail).
+  const stockReasonRaw = (formData.get("stockReason") as string) || "";
+  const stockReason = stockReasonRaw.trim().slice(0, 500) || null;
   const categoryRaw = (formData.get("category") as string) || "OTHER";
   const category: ProductCategory = ALLOWED_CATEGORIES.includes(categoryRaw as ProductCategory)
     ? (categoryRaw as ProductCategory)
@@ -90,26 +93,43 @@ export async function updateProduct(
       category,
     };
 
+    const previousStock = previous?.stockLevel ?? 0;
+    const stockMoved = !!previous && previous.stockLevel !== stockLevel;
+
     // Only stamp who/when the count changed when the stock level actually moved.
-    if (previous && previous.stockLevel !== stockLevel) {
+    let actor: { id?: string; name?: string } | undefined;
+    if (stockMoved) {
       const session = await auth.api.getSession({ headers: await headers() });
-      const user = session?.user as { id?: string; name?: string } | undefined;
+      actor = session?.user as { id?: string; name?: string } | undefined;
       data.stockUpdatedAt = new Date();
-      data.stockUpdatedById = user?.id ?? null;
-      data.stockUpdatedByName = user?.name ?? null;
+      data.stockUpdatedById = actor?.id ?? null;
+      data.stockUpdatedByName = actor?.name ?? null;
     }
 
-    // Update the product
-    await db.product.update({
-      where: { id: productId },
-      data,
+    // Update the product and write the audit row atomically so the count and
+    // its history can never drift apart.
+    await db.$transaction(async (tx) => {
+      await tx.product.update({ where: { id: productId }, data });
+
+      if (stockMoved) {
+        await tx.inventoryChange.create({
+          data: {
+            productId,
+            employeeId: null,
+            employeeName: null,
+            quantityChange: stockLevel - previousStock,
+            newQuantity: stockLevel,
+            unit,
+            reason: stockReason,
+            changedById: actor?.id ?? null,
+            changedByName: actor?.name ?? null,
+          },
+        });
+      }
     });
 
     // Keep the cleaner-facing per-location stock in sync with the admin edit.
-    await syncDefaultLocationStock(
-      productId,
-      stockLevel - (previous?.stockLevel ?? 0)
-    );
+    await syncDefaultLocationStock(productId, stockLevel - previousStock);
 
     revalidatePath("/admin/inventory");
     return {

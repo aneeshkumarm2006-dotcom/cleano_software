@@ -27,6 +27,7 @@ interface FieldLead {
 
 interface EmployeeStats {
   totalEmployees: number;
+  inactiveEmployees: number;
   admins: number;
   activeEmployees: number;
   totalRevenue: number;

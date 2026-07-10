@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { isAdminRole } from "@/lib/role-routing";
 import { fmtDate, fmtTime } from "@/lib/time";
+import { getTotalRevenue, getEmployeeCounts } from "@/lib/metrics";
 import CleanerDashboard from "./CleanerDashboard";
 
 export const dynamic = "force-dynamic";
@@ -186,37 +187,19 @@ export default async function DashboardPage() {
     }),
   ]);
 
-  const [revenueData, monthlyRevenueData, employeeCount, activeEmployees, products] = await Promise.all([
-    // Realized revenue: any non-cancelled job that has been paid/completed OR
-    // whose scheduled time has already passed (covers imported historical jobs
-    // that land as SCHEDULED). Future bookings and cancellations are excluded.
-    db.job.aggregate({
-      where: {
-        deletedAt: null,
-        OR: [
-          { status: { in: ["COMPLETED", "PAID"] } },
-          { status: { in: ["SCHEDULED", "IN_PROGRESS"] }, startTime: { lt: now } },
-        ],
-      },
-      _sum: { price: true },
-    }),
-    // Monthly revenue keys off the JOB date (startTime), not the import/creation
-    // date, so a bulk import doesn't dump all revenue into the current month.
-    db.job.aggregate({
-      where: {
-        deletedAt: null,
-        startTime: { gte: thirtyDaysAgo, lt: now },
-        status: { in: ["COMPLETED", "PAID", "SCHEDULED", "IN_PROGRESS"] },
-      },
-      _sum: { price: true },
-    }),
-    db.user.count(),
+  const [totalRevenue, monthlyRevenue, employeeCounts, onSiteEmployees, products] = await Promise.all([
+    // Canonical realized revenue (completed+paid, discount/refund applied, tax
+    // excluded, startTime basis) — shared with Analytics/Clients/Employees.
+    getTotalRevenue(),
+    // Trailing-30-day slice of the same canonical rule (startTime basis) so a
+    // bulk import doesn't dump all revenue into the current month.
+    getTotalRevenue({ from: thirtyDaysAgo }),
+    getEmployeeCounts(),
     db.user.count({ where: { cleaningJobs: { some: { status: "IN_PROGRESS" } } } }),
     db.product.findMany(),
   ]);
 
-  const totalRevenue = revenueData._sum.price || 0;
-  const monthlyRevenue = monthlyRevenueData._sum.price || 0;
+  const employeeCount = employeeCounts.active;
   const totalProducts = products.length;
   const lowStockProducts = products.filter((p) => p.stockLevel <= p.minStock).sort((a, b) => a.stockLevel - b.stockLevel).slice(0, 8);
   const totalInventoryValue = products.reduce((s, p) => s + p.stockLevel * p.costPerUnit, 0);
@@ -267,7 +250,7 @@ export default async function DashboardPage() {
       <div className="astat-grid" style={{ marginBottom: 18 }}>
         <Stat icon={CreditCard} label="Total revenue" value={money(totalRevenue)} delta={money(monthlyRevenue)} deltaUp hint="this month" />
         <Stat icon={Briefcase} label="Total jobs" value={totalJobs} delta={String(completedJobs)} hint="completed" />
-        <Stat icon={Users} label="Employees" value={employeeCount} delta={String(activeEmployees)} deltaUp hint="active now" />
+        <Stat icon={Users} label="Employees" value={employeeCount} delta={String(onSiteEmployees)} deltaUp hint={employeeCounts.inactive > 0 ? `active now · ${employeeCounts.inactive} inactive` : "active now"} />
         <Stat icon={Package} label="Products" value={totalProducts} delta={money(totalInventoryValue)} hint="inventory value" />
       </div>
 
@@ -279,7 +262,7 @@ export default async function DashboardPage() {
           <AlertTile icon={AlertTriangle} label="Pending payment" value={pendingPaymentJobs} hint="jobs awaiting payment" href="/admin/jobs?payment=pending" />
         )}
         {lowStockProducts.length > 0 && (
-          <AlertTile icon={Package} label="Low stock" value={lowStockProducts.length} hint={lowStockProducts.length === 1 ? "1 product" : `${lowStockProducts.length} products`} href="/admin/inventory?status=low" />
+          <AlertTile icon={Package} label="Low stock" value={lowStockProducts.length} hint={lowStockProducts.length === 1 ? "1 product" : `${lowStockProducts.length} products`} href="/admin/inventory?status=low-stock" />
         )}
         {refillAlertCount > 0 && (
           <AlertTile icon={MapPin} label="Refill alerts" value={refillAlertCount} hint="cleaners low on supplies" href="/admin/inventory" />

@@ -41,7 +41,10 @@ export default function RetentionKpiClient() {
   const [range, setRange] = useState(presetRange("month"));
   const [data, setData] = useState<RetentionKpi | null>(null);
   const [loading, setLoading] = useState(true);
-  const [bucket, setBucket] = useState<Bucket>("cancelled");
+  const [bucket, setBucket] = useState<Bucket>("retained");
+  // Tracks whether the user has manually picked a bucket; until then we
+  // auto-select the first bucket that actually has rows for the period.
+  const [bucketTouched, setBucketTouched] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -51,6 +54,20 @@ export default function RetentionKpiClient() {
   }, [range]);
 
   useEffect(() => { load(); }, [load]);
+
+  // When new data arrives and the user hasn't chosen a tab, open on the first
+  // bucket that has data (retained first), so the page never lands on an empty tab.
+  useEffect(() => {
+    if (!data || bucketTouched) return;
+    const order: Bucket[] = ["retained", "cancelled", "paused", "reactivated"];
+    const firstWithData = order.find((b) => data[b].length > 0);
+    setBucket(firstWithData ?? "retained");
+  }, [data, bucketTouched]);
+
+  function chooseBucket(b: Bucket) {
+    setBucketTouched(true);
+    setBucket(b);
+  }
 
   function choosePreset(p: Preset) {
     setPreset(p);
@@ -148,7 +165,7 @@ export default function RetentionKpiClient() {
       {/* Bucket filter */}
       <div className="row" style={{ gap: 8, flexWrap: "wrap", margin: "24px 0 16px" }}>
         {BUCKETS.map((b) => (
-          <button key={b.id} className={`k-bucket ${bucket === b.id ? "active" : ""}`} onClick={() => setBucket(b.id)}>
+          <button key={b.id} className={`k-bucket ${bucket === b.id ? "active" : ""}`} onClick={() => chooseBucket(b.id)}>
             {b.label}<span className="k-bucket-count">{data ? data[b.id].length : 0}</span>
           </button>
         ))}

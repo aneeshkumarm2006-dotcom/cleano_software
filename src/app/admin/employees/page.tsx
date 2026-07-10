@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
+import { jobRevenue, getEmployeeCounts } from "@/lib/metrics";
 import EmployeesPageClient from "./EmployeesPageClient";
 import AvailabilityOverview from "./AvailabilityOverview";
 
@@ -75,10 +76,17 @@ export default async function EmployeesPage({
   const employeesData = employees.map((emp) => {
     const completedJobs = emp.jobs.filter((j) => j.status === "COMPLETED");
     const activeJobs = emp.jobs.filter((j) => j.status === "IN_PROGRESS");
-    const totalRevenue = completedJobs.reduce(
-      (sum, j) => sum + (j.price || 0),
-      0
-    );
+    // Canonical revenue attributed to this employee (employeeId relation):
+    // completed+paid only, discount/refund applied, tax excluded, soft-deleted
+    // excluded. Was previously COMPLETED-only with raw price.
+    const totalRevenue = emp.jobs
+      .filter(
+        (j) =>
+          j.deletedAt === null &&
+          j.paymentReceived &&
+          (j.status === "COMPLETED" || j.status === "PAID")
+      )
+      .reduce((sum, j) => sum + jobRevenue(j), 0);
     const unpaidJobs = completedJobs.filter((j) => !j.paymentReceived).length;
 
     return {
@@ -128,9 +136,14 @@ export default async function EmployeesPage({
           })),
       }));
 
+  // Canonical field-staff headcount (active/inactive) so the headline agrees
+  // with Dashboard and Analytics. Admins are surfaced separately below.
+  const employeeCounts = await getEmployeeCounts();
+
   // Calculate overall stats
   const stats = {
-    totalEmployees: employees.length,
+    totalEmployees: employeeCounts.active,
+    inactiveEmployees: employeeCounts.inactive,
     admins: employees.filter((e) => e.role === "ADMIN" || e.role === "OWNER")
       .length,
     activeEmployees: employeesData.filter((e) => e.activeJobsCount > 0).length,

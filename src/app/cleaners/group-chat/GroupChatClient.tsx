@@ -10,6 +10,7 @@ import {
   sendGroupMessage,
   listCleanerDirectory,
   getOrCreateDirectChannel,
+  markChannelRead,
   type GroupChannelDTO,
   type GroupMessageDTO,
   type CleanerDirectoryEntryDTO,
@@ -119,6 +120,19 @@ export default function GroupChatClient({
 
   const msgs = messages ?? [];
   const grouped = useMemo(() => groupByDay(msgs), [msgs]);
+
+  // Mark the open channel read (clears its unread badge) on open and whenever
+  // new messages arrive while it is focused. Team-chat read state is separate
+  // from job chat and 1:1 admin chat.
+  useEffect(() => {
+    if (!activeChannel || directoryOpen) return;
+    let cancelled = false;
+    markChannelRead(activeChannel.id).then((res) => {
+      if (!cancelled && res.success) mutateChannels();
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeChannel?.id, msgs.length, directoryOpen]);
 
   useEffect(() => {
     function scrollToBottom() {
@@ -258,6 +272,25 @@ export default function GroupChatClient({
                   }}>
                   {c.isDirect ? <MessageCircle size={14} /> : <Users size={14} />}
                   {c.name}
+                  {!active && c.unreadCount > 0 && (
+                    <span
+                      aria-label={`${c.unreadCount} unread`}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        minWidth: 18,
+                        height: 18,
+                        padding: "0 5px",
+                        borderRadius: 999,
+                        background: "#ef4444",
+                        color: "#fff",
+                        fontSize: 11,
+                        fontWeight: 700,
+                      }}>
+                      {c.unreadCount > 99 ? "99+" : c.unreadCount}
+                    </span>
+                  )}
                 </button>
               );
             })}

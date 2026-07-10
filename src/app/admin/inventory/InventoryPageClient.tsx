@@ -1,12 +1,25 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import InventoryView from "./InventoryView";
 import { ProductModal } from "./ProductModal";
 import SupplierComparison from "./SupplierComparison";
 import ForecastView from "./ForecastView";
-import { Package, DollarSign, TrendingDown } from "lucide-react";
+import CleanerInventoryView from "./CleanerInventoryView";
+import RequestsView from "./RequestsView";
+import Card from "@/components/ui/Card";
+import Button from "@/components/ui/Button";
+import {
+  Package,
+  DollarSign,
+  TrendingDown,
+  Users,
+  ClipboardList,
+  Settings,
+  ArrowUpRight,
+} from "lucide-react";
 
 type ProductCategory = "LIQUID_SPRAY" | "MOP_LIQUID" | "DISPOSABLE" | "OTHER";
 
@@ -60,12 +73,53 @@ interface ForecastEmployee {
   }>;
 }
 
-type TabId = "products" | "suppliers" | "forecast";
+type TabId =
+  | "products"
+  | "cleaners"
+  | "requests"
+  | "suppliers"
+  | "forecast"
+  | "settings";
+
+interface CleanerInventoryEntry {
+  employeeId: string;
+  employeeName: string;
+  role: string;
+  itemCount: number;
+  totalUnits: number;
+  totalValue: number;
+  lowCount: number;
+  items: Array<{
+    productId: string;
+    productName: string;
+    unit: string;
+    quantity: number;
+    costPerUnit: number;
+    refillThreshold: number;
+    isLow: boolean;
+  }>;
+}
+
+interface RequestEntry {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  productId: string | null;
+  itemName: string;
+  isKit: boolean;
+  unit: string | null;
+  warehouseStock: number | null;
+  quantity: number;
+  reason: string | null;
+  status: "PENDING" | "APPROVED" | "REJECTED" | "FULFILLED";
+  createdAt: string;
+}
 
 interface InventoryPageClientProps {
   initialProducts: Product[];
   initialSearch: string;
   initialStatus: string;
+  initialView?: string;
   initialPage: number;
   initialRowsPerPage: number;
   supplierData?: {
@@ -73,27 +127,67 @@ interface InventoryPageClientProps {
     suppliers: Array<{ id: string; name: string; website?: string | null }>;
   };
   forecastData?: ForecastEmployee[];
+  cleanerInventory?: CleanerInventoryEntry[];
+  requests?: RequestEntry[];
   archived?: boolean;
 }
 
-const TABS: Array<{ id: TabId; label: string; icon: React.ReactNode }> = [
-  { id: "products", label: "Products", icon: <Package size={15} /> },
-  { id: "suppliers", label: "Supplier Comparison", icon: <DollarSign size={15} /> },
-  { id: "forecast", label: "Forecast", icon: <TrendingDown size={15} /> },
-];
+function isTabId(v: string): v is TabId {
+  return (
+    v === "products" ||
+    v === "cleaners" ||
+    v === "requests" ||
+    v === "suppliers" ||
+    v === "forecast" ||
+    v === "settings"
+  );
+}
 
 export default function InventoryPageClient({
   initialProducts,
   initialSearch,
   initialStatus,
+  initialView = "products",
   initialPage,
   initialRowsPerPage,
   supplierData,
   forecastData,
+  cleanerInventory = [],
+  requests = [],
   archived = false,
 }: InventoryPageClientProps) {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<TabId>("products");
+
+  const pendingRequests = requests.filter((r) => r.status === "PENDING").length;
+  const lowCleanerCount = cleanerInventory.filter((c) => c.lowCount > 0).length;
+
+  const TABS: Array<{
+    id: TabId;
+    label: string;
+    icon: React.ReactNode;
+    badge?: number;
+  }> = [
+    { id: "products", label: "Products", icon: <Package size={15} /> },
+    {
+      id: "cleaners",
+      label: "Cleaner Inventory",
+      icon: <Users size={15} />,
+      badge: lowCleanerCount,
+    },
+    {
+      id: "requests",
+      label: "Requests",
+      icon: <ClipboardList size={15} />,
+      badge: pendingRequests,
+    },
+    { id: "suppliers", label: "Supplier Comparison", icon: <DollarSign size={15} /> },
+    { id: "forecast", label: "Forecast", icon: <TrendingDown size={15} /> },
+    { id: "settings", label: "Settings", icon: <Settings size={15} /> },
+  ];
+
+  const [activeTab, setActiveTab] = useState<TabId>(
+    isTabId(initialView) ? initialView : "products"
+  );
 
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);
@@ -166,6 +260,24 @@ export default function InventoryPageClient({
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
               {tab.icon}
               {tab.label}
+              {tab.badge ? (
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    minWidth: 18,
+                    height: 18,
+                    padding: "0 5px",
+                    borderRadius: 9,
+                    background: "var(--error, #dc2626)",
+                    color: "#fff",
+                    fontSize: 11,
+                    fontWeight: 600,
+                  }}>
+                  {tab.badge}
+                </span>
+              ) : null}
             </span>
           </button>
         ))}
@@ -187,6 +299,16 @@ export default function InventoryPageClient({
             onViewProduct={handleViewProduct}
             onEditProduct={handleEditProduct}
             onAddProduct={handleAddProduct}
+            onShowCleanerInventory={() => setActiveTab("cleaners")}
+            onShowLowStock={() => {
+              setStatusFilter("low-stock");
+              setPage(1);
+            }}
+            onClearFilters={() => {
+              setSearchTerm("");
+              setStatusFilter("all");
+              setPage(1);
+            }}
             updateURLParams={updateURLParams}
             archived={archived}
           />
@@ -200,6 +322,12 @@ export default function InventoryPageClient({
         </>
       )}
 
+      {activeTab === "cleaners" && (
+        <CleanerInventoryView cleaners={cleanerInventory} />
+      )}
+
+      {activeTab === "requests" && <RequestsView requests={requests} />}
+
       {activeTab === "suppliers" && supplierData && (
         <SupplierComparison
           products={supplierData.products}
@@ -209,6 +337,31 @@ export default function InventoryPageClient({
 
       {activeTab === "forecast" && forecastData && (
         <ForecastView employees={forecastData} />
+      )}
+
+      {activeTab === "settings" && (
+        <Card variant="default" className="p-8 max-w-2xl">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="p-2 bg-[#008C9C]/10 rounded-lg">
+              <Settings className="w-4 h-4 text-[#008C9C]" />
+            </div>
+            <h2 className="text-lg font-[350] tracking-tight text-[#008C9C]">
+              Inventory Settings
+            </h2>
+          </div>
+          <p className="text-sm text-[#008C9C]/70 mb-6">
+            Refill thresholds, per-job usage rules, units, suppliers and kit
+            templates are configured in Settings. Changes there drive the low-stock
+            alerts and forecasts shown across this hub.
+          </p>
+          <Link href="/admin/settings">
+            <Button variant="primary" border={false} className="rounded-xl px-5 py-2.5">
+              <Settings className="w-4 h-4 mr-2" />
+              Open inventory settings
+              <ArrowUpRight className="w-4 h-4 ml-2" />
+            </Button>
+          </Link>
+        </Card>
       )}
     </div>
   );

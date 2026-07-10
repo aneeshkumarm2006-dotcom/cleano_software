@@ -132,6 +132,7 @@ model Product {
   supplierPrices    SupplierPrice[]
   locationStock     InventoryLocationStock[]
   checkoutItems     InventoryCheckoutItem[]
+  inventoryChanges  InventoryChange[]
 }
 
 model AppSetting {
@@ -370,6 +371,11 @@ model Job {
   paidAt                         DateTime?
   refundedAmount                 Float                 @default(0)
   isCashJob                      Boolean               @default(false)
+  // Cleaner pay model for this job. PERCENTAGE (default) = existing tier/split
+  // math. FLAT = cleaner is shown a fixed payout only (no % of job price).
+  // HOURLY = cleaner is shown an hourly rate. employeePay stays the payout.
+  payType                        JobPayType            @default(PERCENTAGE)
+  hourlyRate                     Float?
   // True when the price came from the client's customer-specific fixed price
   // (Client.fixedPrice) — shown as a badge on the job detail/list.
   usesFixedPrice                 Boolean               @default(false)
@@ -558,6 +564,28 @@ model InventoryRequest {
   @@index([employeeId])
   @@index([productId])
   @@index([kitId])
+}
+
+// Audit trail for every inventory count change (admin warehouse stock OR a
+// cleaner's assigned stock). One row per adjustment: item, delta, reason, who,
+// when — surfaced on the redesigned inventory page.
+model InventoryChange {
+  id           String   @id @default(cuid())
+  productId    String
+  // Set when the change is to a specific cleaner's inventory; null = warehouse.
+  employeeId   String?
+  employeeName String?
+  quantityChange Float
+  newQuantity  Float
+  unit         String?
+  reason       String?
+  changedById  String?
+  changedByName String?
+  createdAt    DateTime @default(now())
+  product      Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, createdAt])
+  @@index([employeeId])
 }
 
 model EmployeeProduct {
@@ -784,6 +812,12 @@ enum PaymentType {
   E_TRANSFER
   CREDIT_CARD
   OTHER
+}
+
+enum JobPayType {
+  PERCENTAGE
+  FLAT
+  HOURLY
 }
 
 enum PayPeriodStatus {
@@ -1214,6 +1248,18 @@ model GroupMessage {
   channel    GroupChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
 
   @@index([channelId, createdAt])
+}
+
+// Per-user read cursor for a group channel — powers unread badges + read
+// receipts in team chat (spec: job chat and team chat track read separately).
+model GroupChannelRead {
+  id         String   @id @default(cuid())
+  channelId  String
+  userId     String
+  lastReadAt DateTime @default(now())
+
+  @@unique([channelId, userId])
+  @@index([userId])
 }
 
 // Photos a CLIENT attaches to a poor review. Distinct from JobPhoto (cleaner

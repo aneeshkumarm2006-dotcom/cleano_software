@@ -63,6 +63,7 @@ const TIER_OPTIONS: { value: CleanerTier; label: string }[] = [
 
 interface EmployeeStats {
   totalEmployees: number;
+  inactiveEmployees: number;
   admins: number;
   activeEmployees: number;
   totalRevenue: number;
@@ -326,7 +327,7 @@ export default function EmployeesView({
       </header>
 
       <div className="astat-grid">
-        <AStatCard icon={Users}      label="Total employees"  value={String(stats.totalEmployees)} hint="all time" />
+        <AStatCard icon={Users}      label="Total employees"  value={String(stats.totalEmployees)} hint={stats.inactiveEmployees > 0 ? `${stats.inactiveEmployees} inactive` : "active staff"} />
         <AStatCard icon={Users}      label="Admins"           value={String(stats.admins)} hint="admin or owner" />
         <AStatCard icon={Briefcase}  label="Active now"       value={String(stats.activeEmployees)} hint="with active jobs" />
         <AStatCard icon={DollarSign} label="Total revenue"    value={`$${stats.totalRevenue.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`} />

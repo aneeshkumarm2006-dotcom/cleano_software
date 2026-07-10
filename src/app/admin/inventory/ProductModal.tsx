@@ -54,6 +54,7 @@ const formSchema = z.object({
   stockLevel: z.coerce.number().min(0, "Stock level must be 0 or greater"),
   minStock: z.coerce.number().min(0, "Minimum stock must be 0 or greater"),
   category: z.enum(["LIQUID_SPRAY", "MOP_LIQUID", "DISPOSABLE", "OTHER"]).default("OTHER"),
+  stockReason: z.string().optional(),
 });
 
 type FormInput = z.input<typeof formSchema>;
@@ -93,6 +94,7 @@ export function ProductModal({
       stockLevel: 0,
       minStock: 0,
       category: "OTHER",
+      stockReason: "",
     },
   });
 
@@ -108,6 +110,7 @@ export function ProductModal({
         stockLevel: product?.stockLevel || 0,
         minStock: product?.minStock || 0,
         category: product?.category || "OTHER",
+        stockReason: "",
       });
       // If the existing unit isn't a preset (including a custom value on an
       // existing product), default the dropdown to "Other" and keep the value.
@@ -133,6 +136,7 @@ export function ProductModal({
       formData.append("stockLevel", String(values.stockLevel));
       formData.append("minStock", String(values.minStock));
       formData.append("category", values.category);
+      formData.append("stockReason", values.stockReason || "");
 
       let result;
       if (mode === "create") {
@@ -504,6 +508,32 @@ export function ProductModal({
                   </p>
                 </div>
               </div>
+
+              {/* Reason for stock adjustment — recorded in the audit trail when
+                  the warehouse count changes (edit mode only). */}
+              {mode === "edit" && (
+                <div>
+                  <label className="input-label">
+                    Reason for count change
+                  </label>
+                  <div className="relative">
+                    <Input
+                      variant="form"
+                      type="text"
+                      size="md"
+                      {...register("stockReason")}
+                      disabled={disableForm}
+                      className="w-full px-4 py-3"
+                      placeholder="e.g., Restocked from supplier, cycle count correction"
+                      border={false}
+                    />
+                  </div>
+                  <p className="text-xs text-[#008C9C]/60 mt-1">
+                    Optional. Saved to the stock history when the warehouse count
+                    changes.
+                  </p>
+                </div>
+              )}
 
               {/* Global Error */}
               {globalError && (

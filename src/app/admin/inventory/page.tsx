@@ -33,7 +33,12 @@ export default async function InventoryPage({
   // Parse search params
   const params = await searchParams;
   const search = (params.search as string) || "";
-  const status = (params.status as string) || "all";
+  // Accept the dashboard deep-link's shorthand (`?status=low`) and map it to the
+  // canonical filter value the inventory list understands.
+  const rawStatus = (params.status as string) || "all";
+  const status = rawStatus === "low" ? "low-stock" : rawStatus;
+  // Optional deep-link straight to a hub sub-view (e.g. ?view=requests).
+  const view = (params.view as string) || "products";
   const page = Number(params.page) || 1;
   const rowsPerPage = Number(params.rowsPerPage) || 10;
   const archived = params.archived === "1";
@@ -162,6 +167,62 @@ export default async function InventoryPage({
     include: { product: true },
   });
 
+  // Per-cleaner assigned-stock overview (aggregate EmployeeProduct). Only
+  // cleaners that actually hold stock are surfaced.
+  const cleanerInventory = employees
+    .map((emp) => {
+      const items = emp.assignedProducts.map((ep) => {
+        const rule = inventoryRules.find((r) => r.productId === ep.productId);
+        const threshold = rule?.refillThreshold ?? 0;
+        return {
+          productId: ep.productId,
+          productName: ep.product.name,
+          unit: ep.product.unit,
+          quantity: ep.quantity,
+          costPerUnit: ep.product.costPerUnit,
+          refillThreshold: threshold,
+          isLow: threshold > 0 && ep.quantity <= threshold,
+        };
+      });
+      return {
+        employeeId: emp.id,
+        employeeName: emp.name,
+        role: (emp as { role?: string }).role ?? "EMPLOYEE",
+        itemCount: items.length,
+        totalUnits: items.reduce((s, i) => s + i.quantity, 0),
+        totalValue: items.reduce((s, i) => s + i.quantity * i.costPerUnit, 0),
+        lowCount: items.filter((i) => i.isLow).length,
+        items,
+      };
+    })
+    .filter((e) => e.itemCount > 0);
+
+  // Equipment / refill requests — surfaced in the hub with approve/reject.
+  const requestRows = await db.inventoryRequest.findMany({
+    include: {
+      product: { select: { id: true, name: true, unit: true, stockLevel: true } },
+      kitTemplate: { select: { id: true, name: true } },
+      employee: { select: { id: true, name: true } },
+    },
+    orderBy: [{ status: "asc" }, { createdAt: "desc" }],
+    take: 200,
+  });
+
+  const requests = requestRows.map((r) => ({
+    id: r.id,
+    employeeId: r.employeeId,
+    employeeName: r.employee?.name ?? "Unknown",
+    productId: r.productId,
+    itemName: r.product?.name ?? r.kitTemplate?.name ?? "Unknown item",
+    isKit: !r.productId && !!r.kitId,
+    unit: r.product?.unit ?? null,
+    warehouseStock: r.product?.stockLevel ?? null,
+    quantity: r.quantity,
+    reason: r.reason,
+    status: r.status as "PENDING" | "APPROVED" | "REJECTED" | "FULFILLED",
+    createdAt: r.createdAt.toISOString(),
+  }));
+
   const forecastData = employees
     .map((emp) => {
       const upcomingJobCount = emp.jobs.length;
@@ -207,10 +268,13 @@ export default async function InventoryPage({
         initialProducts={productsWithStats}
         initialSearch={search}
         initialStatus={status}
+        initialView={view}
         initialPage={page}
         initialRowsPerPage={rowsPerPage}
         supplierData={supplierData}
         forecastData={forecastData}
+        cleanerInventory={cleanerInventory}
+        requests={requests}
         archived={archived}
       />
     </div>

@@ -23,9 +23,13 @@ import {
   Archive,
   DollarSign,
   TrendingUp,
+  Clock,
+  ArrowUpRight,
+  ArrowDownRight,
 } from "lucide-react";
+import { fmtDateTime } from "@/lib/time";
 
-type TabView = "overview" | "usage" | "assignments";
+type TabView = "overview" | "usage" | "assignments" | "history";
 
 const MENU_ITEMS: Array<{ id: TabView; label: string; icon: React.ReactNode }> =
   [
@@ -33,6 +37,11 @@ const MENU_ITEMS: Array<{ id: TabView; label: string; icon: React.ReactNode }> =
       id: "overview",
       label: "Overview",
       icon: <Package className="w-4 h-4" />,
+    },
+    {
+      id: "history",
+      label: "Stock History",
+      icon: <Clock className="w-4 h-4" />,
     },
     {
       id: "usage",
@@ -54,6 +63,19 @@ interface Product {
   costPerUnit: number;
   stockLevel: number;
   minStock: number;
+  stockUpdatedAt: string | null;
+  stockUpdatedByName: string | null;
+}
+
+interface ChangeEntry {
+  id: string;
+  employeeName: string | null;
+  quantityChange: number;
+  newQuantity: number;
+  unit: string | null;
+  reason: string | null;
+  changedByName: string | null;
+  createdAt: string;
 }
 
 interface JobUsage {
@@ -87,6 +109,7 @@ interface ProductDetailViewProps {
   employeeAssignments: EmployeeAssignment[];
   totalAssigned: number;
   totalUsed: number;
+  changeHistory: ChangeEntry[];
 }
 
 export default function ProductDetailView({
@@ -95,6 +118,7 @@ export default function ProductDetailView({
   employeeAssignments,
   totalAssigned,
   totalUsed,
+  changeHistory,
 }: ProductDetailViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -256,6 +280,21 @@ export default function ProductDetailView({
               )}
             </div>
           </div>
+          {product.stockUpdatedAt && (
+            <p className="text-xs text-[#008C9C]/50 mt-3">
+              Count last updated {fmtDateTime(product.stockUpdatedAt)}
+              {product.stockUpdatedByName
+                ? ` by ${product.stockUpdatedByName}`
+                : ""}
+              {" · "}
+              <button
+                type="button"
+                onClick={() => updateView("history")}
+                className="text-[#008C9C] underline underline-offset-2">
+                View stock history
+              </button>
+            </p>
+          )}
         </Card>
 
         {/* Pricing Card */}
@@ -375,6 +414,109 @@ export default function ProductDetailView({
             <p className="text-sm text-[#008C9C]/60">
               No usage recorded for this product
             </p>
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+
+  // Stock History Tab Content — audit trail of every count change.
+  const HistoryTab = () => (
+    <div className="space-y-6">
+      {/* Current state summary */}
+      <Card variant="cleano_light" className="p-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="input-label !text-[#008C9C]/70">Current warehouse count</p>
+            <p className="text-2xl font-[350] text-[#008C9C]">
+              {product.stockLevel} {product.unit}
+            </p>
+          </div>
+          {product.stockUpdatedAt && (
+            <div className="text-right">
+              <p className="input-label !text-[#008C9C]/70">Last updated</p>
+              <p className="text-sm text-[#008C9C]">
+                {fmtDateTime(product.stockUpdatedAt)}
+              </p>
+              {product.stockUpdatedByName && (
+                <p className="text-xs text-[#008C9C]/60">
+                  by {product.stockUpdatedByName}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      </Card>
+
+      {changeHistory.length === 0 ? (
+        <Card variant="ghost" className="p-8">
+          <div className="text-center">
+            <div className="w-12 h-12 bg-[#008C9C]/5 rounded-2xl flex items-center justify-center mx-auto mb-3">
+              <Clock className="w-6 h-6 text-[#008C9C]/40" />
+            </div>
+            <p className="text-sm text-[#008C9C]/60">
+              No stock changes recorded yet
+            </p>
+            <p className="text-xs text-[#008C9C]/50 mt-1">
+              Adjustments to the count will appear here with who changed it and why
+            </p>
+          </div>
+        </Card>
+      ) : (
+        <Card variant="default" className="p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="p-2 bg-[#008C9C]/10 rounded-lg">
+              <Clock className="w-4 h-4 text-[#008C9C]" />
+            </div>
+            <h3 className="text-sm font-[350] text-[#008C9C]/80">
+              Recent stock changes
+            </h3>
+          </div>
+          <div className="space-y-2">
+            {changeHistory.map((c) => {
+              const up = c.quantityChange >= 0;
+              return (
+                <div
+                  key={c.id}
+                  className="flex items-center justify-between gap-3 p-3 rounded-xl bg-[#008C9C]/5">
+                  <div className="flex items-start gap-3 min-w-0">
+                    <div
+                      className={`p-1.5 rounded-lg shrink-0 ${
+                        up ? "bg-green-100" : "bg-red-100"
+                      }`}>
+                      {up ? (
+                        <ArrowUpRight className="w-4 h-4 text-green-700" />
+                      ) : (
+                        <ArrowDownRight className="w-4 h-4 text-red-600" />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-[400] text-[#008C9C]">
+                        {up ? "+" : ""}
+                        {c.quantityChange} {c.unit || product.unit}
+                        <span className="text-[#008C9C]/60">
+                          {" "}
+                          → {c.newQuantity} {c.unit || product.unit}
+                        </span>
+                        {c.employeeName ? (
+                          <span className="text-[#008C9C]/60">
+                            {" "}
+                            · {c.employeeName}&rsquo;s kit
+                          </span>
+                        ) : (
+                          <span className="text-[#008C9C]/60"> · warehouse</span>
+                        )}
+                      </p>
+                      <p className="text-xs text-[#008C9C]/60 truncate">
+                        {fmtDateTime(c.createdAt)}
+                        {c.changedByName ? ` · by ${c.changedByName}` : ""}
+                        {c.reason ? ` · ${c.reason}` : ""}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </Card>
       )}
@@ -770,6 +912,7 @@ export default function ProductDetailView({
         {/* Content Area */}
         <div className="flex-1">
           {activeView === "overview" && <OverviewTab />}
+          {activeView === "history" && <HistoryTab />}
           {activeView === "usage" && <UsageHistoryTab />}
           {activeView === "assignments" && <AssignmentsTab />}
         </div>

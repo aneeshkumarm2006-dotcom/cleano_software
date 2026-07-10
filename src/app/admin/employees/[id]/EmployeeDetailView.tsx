@@ -15,6 +15,7 @@ import { resolveInventoryRequest } from "../../actions/resolveInventoryRequest";
 import { setCleanerTier } from "../../actions/setCleanerTier";
 import { setFieldLead } from "../../actions/setFieldLead";
 import { TIER_LABEL, type CleanerTier } from "@/lib/pay-tiers";
+import { fmtDateTime } from "@/lib/time";
 import {
   ArrowLeft,
   Mail,
@@ -74,6 +75,7 @@ interface Employee {
   email: string;
   phone: string | null;
   role: "OWNER" | "ADMIN" | "EMPLOYEE";
+  lastSeenAt: string | null;
 }
 
 interface Job {
@@ -465,6 +467,10 @@ export default function EmployeeDetailView({
               <InfoRow
                 label="Role"
                 valueNode={getRoleBadge(employee.role)}
+              />
+              <InfoRow
+                label="Last seen"
+                value={employee.lastSeenAt ? fmtDateTime(employee.lastSeenAt) : "Never signed in"}
               />
             </div>
           </Card>

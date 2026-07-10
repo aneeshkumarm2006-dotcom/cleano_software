@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
+import { jobRevenue } from "@/lib/metrics";
 import ClientsPageClient from "./ClientsPageClient";
 
 type SearchParams = Promise<{
@@ -38,8 +39,11 @@ export default async function ClientsPage({
         select: {
           id: true,
           price: true,
+          discountAmount: true,
+          refundedAmount: true,
           paymentReceived: true,
           status: true,
+          deletedAt: true,
           jobDate: true,
           startTime: true,
         },
@@ -50,7 +54,16 @@ export default async function ClientsPage({
   const clientsData = clients.map((c) => {
     const totalJobs = c.jobs.length;
     const completedJobs = c.jobs.filter((j) => j.status === "COMPLETED").length;
-    const totalRevenue = c.jobs.reduce((sum, j) => sum + (j.price || 0), 0);
+    // Canonical revenue: completed+paid, discount/refund applied, tax excluded,
+    // soft-deleted jobs excluded — matches Dashboard/Analytics/Employees.
+    const totalRevenue = c.jobs
+      .filter(
+        (j) =>
+          j.deletedAt === null &&
+          j.paymentReceived &&
+          (j.status === "COMPLETED" || j.status === "PAID")
+      )
+      .reduce((sum, j) => sum + jobRevenue(j), 0);
     const unpaidJobs = c.jobs.filter(
       (j) => j.status === "COMPLETED" && !j.paymentReceived
     ).length;

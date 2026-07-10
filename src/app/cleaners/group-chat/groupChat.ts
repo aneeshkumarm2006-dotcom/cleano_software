@@ -11,6 +11,8 @@ export interface GroupChannelDTO {
   name: string;
   isDefault: boolean;
   isDirect: boolean;
+  /** Messages in this channel newer than the caller's read cursor. */
+  unreadCount: number;
 }
 
 export interface GroupMessageDTO {
@@ -236,6 +238,30 @@ export async function listGroupChannels(): Promise<Result<GroupChannelDTO[]>> {
     return x.createdAt.getTime() - y.createdAt.getTime();
   });
 
+  // Per-channel unread badge: messages newer than the caller's read cursor
+  // (GroupChannelRead.lastReadAt) that the caller did not send themselves.
+  // No cursor yet → every message from others counts as unread.
+  const reads = await db.groupChannelRead.findMany({
+    where: { userId: a.user.id, channelId: { in: sorted.map((c) => c.id) } },
+    select: { channelId: true, lastReadAt: true },
+  });
+  const lastReadById = new Map(reads.map((r) => [r.channelId, r.lastReadAt]));
+  const unreadById = new Map<string, number>();
+  await Promise.all(
+    sorted.map(async (c) => {
+      const lastReadAt = lastReadById.get(c.id);
+      const count = await db.groupMessage.count({
+        where: {
+          channelId: c.id,
+          deletedAt: null,
+          senderId: { not: a.user.id },
+          ...(lastReadAt ? { createdAt: { gt: lastReadAt } } : {}),
+        },
+      });
+      unreadById.set(c.id, count);
+    })
+  );
+
   return {
     success: true,
     data: sorted.map((c) => {
@@ -252,9 +278,43 @@ export async function listGroupChannels(): Promise<Result<GroupChannelDTO[]>> {
             .join(" ↔ ") || c.name;
         }
       }
-      return { id: c.id, name, isDefault: c.isDefault, isDirect: c.isDirect };
+      return {
+        id: c.id,
+        name,
+        isDefault: c.isDefault,
+        isDirect: c.isDirect,
+        unreadCount: unreadById.get(c.id) ?? 0,
+      };
     }),
   };
+}
+
+/**
+ * Stamp the caller's read cursor for a channel to now, clearing its unread
+ * badge. Idempotent — safe to call every time a channel opens. Team-chat read
+ * state is tracked separately from job chat and 1:1 admin chat.
+ */
+export async function markChannelRead(
+  channelId: string
+): Promise<Result<{ channelId: string }>> {
+  const a = await requireUser();
+  if ("error" in a) return { success: false, error: a.error };
+  if (!canParticipate(a.role)) return { success: false, error: "Not authorized" };
+
+  const channel = await db.groupChannel.findUnique({ where: { id: channelId } });
+  if (!channel) return { success: false, error: "Channel not found" };
+  if (!(await canAccessChannel(channel, a.user.id, a.role))) {
+    return { success: false, error: "Not authorized" };
+  }
+
+  const now = new Date();
+  await db.groupChannelRead.upsert({
+    where: { channelId_userId: { channelId, userId: a.user.id } },
+    create: { channelId, userId: a.user.id, lastReadAt: now },
+    update: { lastReadAt: now },
+  });
+
+  return { success: true, data: { channelId } };
 }
 
 /** Non-deleted messages for a channel, oldest first. Members only. */
@@ -488,6 +548,7 @@ export async function createGroupChannel(
       name: channel.name,
       isDefault: channel.isDefault,
       isDirect: channel.isDirect,
+      unreadCount: 0,
     },
   };
 }
@@ -604,7 +665,7 @@ export async function getOrCreateDirectChannel(
   if (existing) {
     return {
       success: true,
-      data: { id: existing.id, name: other.name, isDefault: false, isDirect: true },
+      data: { id: existing.id, name: other.name, isDefault: false, isDirect: true, unreadCount: 0 },
     };
   }
 
@@ -621,7 +682,7 @@ export async function getOrCreateDirectChannel(
 
   return {
     success: true,
-    data: { id: channel.id, name: other.name, isDefault: false, isDirect: true },
+    data: { id: channel.id, name: other.name, isDefault: false, isDirect: true, unreadCount: 0 },
   };
 }
 

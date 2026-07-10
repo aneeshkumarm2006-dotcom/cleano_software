@@ -23,6 +23,7 @@ import {
   Gauge,
   RotateCcw,
 } from "lucide-react";
+import Link from "next/link";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import Input from "@/components/ui/Input";
@@ -78,6 +79,10 @@ interface InventoryViewProps {
   onViewProduct: (product: Product) => void;
   onEditProduct: (product: Product) => void;
   onAddProduct: () => void;
+  // Stat-card actions (wired to sibling tabs / filters in the parent)
+  onShowCleanerInventory?: () => void;
+  onShowLowStock?: () => void;
+  onClearFilters?: () => void;
   // URL update function
   updateURLParams: (updates: Record<string, string | number>) => void;
   // Archived (soft-deleted) view
@@ -98,16 +103,22 @@ export default function InventoryView({
   onViewProduct,
   onEditProduct,
   onAddProduct,
+  onShowCleanerInventory,
+  onShowLowStock,
+  onClearFilters,
   updateURLParams,
   archived = false,
 }: InventoryViewProps) {
   const router = useRouter();
   const getProductStatusBadge = (product: Product) => {
     if (product.isLowStock) {
+      // Low-stock indicator deep-links to the product so the admin can act on it.
       return (
-        <Badge variant="error" size="sm" className="px-2 py-1">
-          Low Stock
-        </Badge>
+        <Link href={`/admin/inventory/${product.id}`}>
+          <Badge variant="error" size="sm" className="px-2 py-1 cursor-pointer">
+            Low Stock
+          </Badge>
+        </Link>
       );
     }
     return (
@@ -115,6 +126,25 @@ export default function InventoryView({
         In Stock
       </Badge>
     );
+  };
+
+  // Apply the low-stock filter (used by the stat card). Falls back to updating
+  // the local filter when the parent doesn't provide a handler.
+  const applyLowStock = () => {
+    if (onShowLowStock) onShowLowStock();
+    else onStatusFilterChange("low-stock");
+    onPageChange(1);
+    updateURLParams({ status: "low-stock", page: 1 });
+  };
+
+  const applyClearFilters = () => {
+    if (onClearFilters) onClearFilters();
+    else {
+      onSearchTermChange("");
+      onStatusFilterChange("all");
+    }
+    onPageChange(1);
+    updateURLParams({ status: "all", search: "", page: 1 });
   };
 
   // Enhanced filtering logic for products
@@ -320,25 +350,37 @@ export default function InventoryView({
         </div>
       </header>
 
-      {/* Stats — matches Jobs page */}
+      {/* Stats — matches Jobs page. Cards are actionable: they filter the list
+          or jump to the related view. */}
       <div className="astat-grid" style={{ marginBottom: 28 }}>
-        <div className="astat">
+        <button
+          type="button"
+          onClick={applyClearFilters}
+          className="astat"
+          style={{ textAlign: "left", cursor: "pointer", font: "inherit", color: "inherit" }}
+          title="Show all products (clear filters)">
           <div className="astat-head">
             <span className="astat-label">Total products</span>
             <div className="astat-icon"><Boxes size={15} /></div>
           </div>
           <div className="astat-value">{totalProducts}</div>
-        </div>
-        <div className="astat">
+          <div className="astat-delta">View all</div>
+        </button>
+        <button
+          type="button"
+          onClick={applyLowStock}
+          className="astat"
+          style={{ textAlign: "left", cursor: "pointer", font: "inherit", color: "inherit" }}
+          title="Filter to low-stock products">
           <div className="astat-head">
             <span className="astat-label">Low stock</span>
             <div className="astat-icon"><AlertTriangle size={15} /></div>
           </div>
           <div className="astat-value">{lowStockCount}</div>
-          {lowStockCount > 0 && (
-            <div className="astat-delta">{lowStockCount} need refill</div>
-          )}
-        </div>
+          <div className="astat-delta">
+            {lowStockCount > 0 ? `${lowStockCount} need refill` : "Filter list"}
+          </div>
+        </button>
         <div className="astat">
           <div className="astat-head">
             <span className="astat-label">Stock value</span>
@@ -346,14 +388,19 @@ export default function InventoryView({
           </div>
           <div className="astat-value">${totalValue.toFixed(2)}</div>
         </div>
-        <div className="astat">
+        <button
+          type="button"
+          onClick={() => onShowCleanerInventory?.()}
+          className="astat"
+          style={{ textAlign: "left", cursor: "pointer", font: "inherit", color: "inherit" }}
+          title="View cleaner-assigned stock">
           <div className="astat-head">
             <span className="astat-label">Assigned to crew</span>
             <div className="astat-icon"><Users size={15} /></div>
           </div>
           <div className="astat-value">{assignedCount.toFixed(0)}</div>
-          <div className="astat-delta">units in field</div>
-        </div>
+          <div className="astat-delta">View cleaner inventory</div>
+        </button>
       </div>
 
       {/* Search and Filters */}

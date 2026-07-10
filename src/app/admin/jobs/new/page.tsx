@@ -12,6 +12,7 @@ import DeleteButton from "./DeleteButton";
 import ClientNameField from "./ClientNameField";
 import { ControlledDatePicker, ControlledTimePicker } from "./DateTimePicker";
 import PaymentTypeSelect from "./PaymentTypeSelect";
+import PayTypeFields from "./PayTypeFields";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
@@ -93,8 +94,10 @@ export default async function JobFormPage({
     })),
   }));
 
-  // Get all clients for the client selector
-  const clients = await db.client.findMany({
+  // Get all clients for the client selector. Includes contact fields (so
+  // selecting a client fills email/phone) and saved addresses (so the admin can
+  // pick among a client's addresses or add a new one).
+  const clientsRaw = await db.client.findMany({
     orderBy: { name: "asc" },
     select: {
       id: true,
@@ -106,8 +109,28 @@ export default async function JobFormPage({
       discountPercent: true,
       fixedPrice: true,
       defaultPaymentMethodId: true,
+      addresses: {
+        orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
+        select: {
+          id: true,
+          label: true,
+          address: true,
+          aptNumber: true,
+          isDefault: true,
+        },
+      },
     },
   });
+  const clients = clientsRaw.map((c) => ({
+    ...c,
+    addresses: c.addresses.map((a) => ({
+      id: a.id,
+      label: a.label,
+      address: a.address,
+      aptNumber: a.aptNumber,
+      isDefault: a.isDefault,
+    })),
+  }));
 
   async function saveJob(formData: FormData) {
     "use server";
@@ -135,7 +158,62 @@ export default async function JobFormPage({
       ? rawPaymentType
       : null;
     const rawClientId = (formData.get("clientId") as string) || "";
-    const clientId = rawClientId || null;
+    let clientId: string | null = rawClientId || null;
+
+    const clientName = ((formData.get("clientName") as string) || "").trim();
+    const clientEmail = ((formData.get("clientEmail") as string) || "").trim();
+    const clientPhone = ((formData.get("clientPhone") as string) || "").trim();
+    const locationInput = ((formData.get("location") as string) || "").trim();
+    const aptInput = ((formData.get("aptNumber") as string) || "").trim();
+
+    // New-customer capture: a name typed with no linked clientId creates a
+    // Client profile so the job is tied to a real customer record (not just a
+    // free-text name). Dedupe against an existing client by email/phone first so
+    // we don't fork a customer that already exists.
+    if (!clientId && clientName) {
+      let matched = null as { id: string } | null;
+      if (clientEmail || clientPhone) {
+        matched = await db.client.findFirst({
+          where: {
+            deletedAt: null,
+            OR: [
+              ...(clientEmail ? [{ email: clientEmail }] : []),
+              ...(clientPhone ? [{ phone: clientPhone }] : []),
+            ],
+          },
+          select: { id: true },
+        });
+      }
+      if (matched) {
+        clientId = matched.id;
+      } else {
+        const createdClient = await db.client.create({
+          data: {
+            name: clientName,
+            email: clientEmail || null,
+            phone: clientPhone || null,
+            address: locationInput || null,
+            aptNumber: aptInput || null,
+          },
+          select: { id: true },
+        });
+        clientId = createdClient.id;
+        // Seed the client's first saved address from the job's address.
+        if (locationInput) {
+          await db.clientAddress
+            .create({
+              data: {
+                clientId,
+                label: "Home",
+                address: locationInput,
+                aptNumber: aptInput || null,
+                isDefault: true,
+              },
+            })
+            .catch(() => {});
+        }
+      }
+    }
 
     let price = formData.get("price")
       ? parseFloat(formData.get("price") as string)
@@ -147,6 +225,31 @@ export default async function JobFormPage({
           select: { discountPercent: true, fixedPrice: true },
         })
       : null;
+
+    // For an existing linked client, persist a newly-typed address to their
+    // saved address book if it isn't there yet (so it's pickable next time).
+    if (rawClientId && locationInput) {
+      const already = await db.clientAddress.findFirst({
+        where: { clientId: rawClientId, address: locationInput },
+        select: { id: true },
+      });
+      if (!already) {
+        const hasAny = await db.clientAddress.count({
+          where: { clientId: rawClientId },
+        });
+        await db.clientAddress
+          .create({
+            data: {
+              clientId: rawClientId,
+              label: "Other",
+              address: locationInput,
+              aptNumber: aptInput || null,
+              isDefault: hasAny === 0,
+            },
+          })
+          .catch(() => {});
+      }
+    }
 
     // Customer-specific fixed pricing ("Change Total"). When the client has a
     // fixed price and the admin left the price blank (or typed the fixed price
@@ -189,9 +292,34 @@ export default async function JobFormPage({
       isCashJob
     );
 
+    // Cleaner pay model: PERCENTAGE (tier/split), FLAT (fixed payout as
+    // entered), HOURLY (hourlyRate × hours when employeePay is left blank).
+    const validPayTypes = ["PERCENTAGE", "FLAT", "HOURLY"];
+    const rawPayType = (formData.get("payType") as string) || "PERCENTAGE";
+    const payType = validPayTypes.includes(rawPayType)
+      ? rawPayType
+      : "PERCENTAGE";
+    const hourlyRate =
+      payType === "HOURLY" && formData.get("hourlyRate")
+        ? parseFloat(formData.get("hourlyRate") as string)
+        : null;
+    let employeePay = formData.get("employeePay")
+      ? parseFloat(formData.get("employeePay") as string)
+      : null;
+    if (payType === "HOURLY" && employeePay === null && hourlyRate !== null) {
+      const endDateVal = formData.get("endDate") as string;
+      const endTimeVal = formData.get("endTime") as string;
+      if (startDate && startTime && endDateVal && endTimeVal) {
+        const ms =
+          new Date(`${endDateVal}T${endTimeVal}`).getTime() -
+          new Date(`${startDate}T${startTime}`).getTime();
+        if (ms > 0) employeePay = +(hourlyRate * (ms / 3_600_000)).toFixed(2);
+      }
+    }
+
     const jobData: any = {
       employeeId: session!.user.id,
-      clientName: formData.get("clientName") as string,
+      clientName: clientName || (formData.get("clientName") as string),
       clientId,
       description: (formData.get("description") as string) || null,
       jobType: (formData.get("jobType") as string) || null,
@@ -208,9 +336,9 @@ export default async function JobFormPage({
       gstAmount: taxes.gstAmount,
       qstAmount: taxes.qstAmount,
       totalAmount: taxes.totalAmount,
-      employeePay: formData.get("employeePay")
-        ? parseFloat(formData.get("employeePay") as string)
-        : null,
+      employeePay,
+      payType,
+      hourlyRate,
       totalTip: formData.get("totalTip")
         ? parseFloat(formData.get("totalTip") as string)
         : null,
@@ -273,6 +401,18 @@ export default async function JobFormPage({
       const created = await db.job.create({
         data: jobData,
       });
+
+      // Creation / booking-source audit trail lives in Job Logs.
+      await db.jobLog
+        .create({
+          data: {
+            jobId: created.id,
+            userId: session!.user.id,
+            action: "CREATED",
+            description: `Job created by ${session!.user.name ?? "an admin"} (admin)`,
+          },
+        })
+        .catch(() => {});
 
       // Per-cleaner JobAssignment rows for the assigned team.
       if (cleanerIds.length > 0) {
@@ -451,6 +591,14 @@ export default async function JobFormPage({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
             <MoneyFieldWrap label="Price" id="price" name="price" defaultValue={prefill?.price} />
             <MoneyFieldWrap label="Employee pay" id="employeePay" name="employeePay" defaultValue={prefill?.employeePay} />
+
+            <div className="md:col-span-2">
+              <PayTypeFields
+                defaultValue={(prefill as any)?.payType || "PERCENTAGE"}
+                defaultHourlyRate={(prefill as any)?.hourlyRate ?? null}
+              />
+            </div>
+
             <MoneyFieldWrap label="Total tip" id="totalTip" name="totalTip" defaultValue={prefill?.totalTip} />
             <MoneyFieldWrap label="Parking" id="parking" name="parking" defaultValue={prefill?.parking} />
             <MoneyFieldWrap label="Discount amount" id="discountAmount" name="discountAmount" defaultValue={prefill?.discountAmount} />
