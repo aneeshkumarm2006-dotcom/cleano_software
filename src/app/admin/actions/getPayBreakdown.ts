@@ -50,6 +50,9 @@ export async function getPayBreakdown(
         employee: true,
         cleaners: true,
         addOns: true,
+        // Manual per-cleaner pay overrides — without these the number a cleaner
+        // sees here would disagree with what payroll actually pays them.
+        assignments: { select: { cleanerId: true, payAmount: true } },
       },
     });
 

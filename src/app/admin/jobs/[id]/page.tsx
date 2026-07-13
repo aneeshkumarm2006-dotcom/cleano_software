@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { getTaxRates } from "@/lib/tax.server";
 import { getSetting } from "@/lib/settings";
 import { getCleanerRateInputs } from "@/lib/cleaner-rates";
-import { computeJobPayout } from "@/lib/pay-tiers";
+import { computeJobPayShares, type JobPayInput } from "@/lib/cleaner-earnings";
 import JobDetailView from "./JobDetailView";
 
 export default async function JobPage({
@@ -140,9 +140,10 @@ export default async function JobPage({
   // Live GPS tracking toggle (#10) — gates the on-the-way map below.
   const gpsEnabled = await getSetting("tracking.gpsEnabled");
 
-  // Per-cleaner pay shares — the SAME tier-based proportional split math used
-  // by getPayBreakdown / payroll (pool + split by individual rate), plus the
-  // per-job multiplier and an even tip split, so the Team card matches payday.
+  // Per-cleaner pay — computed with the EXACT function payroll and My Pay use
+  // (computeJobPayShares), so the Team card, the cleaner's app, and payday can
+  // never disagree. It honours the pay type (PERCENTAGE tier split vs
+  // FLAT/HOURLY team-total split) and any manual per-cleaner override.
   const participantIds = Array.from(
     new Set(
       [job.employeeId, ...job.cleaners.map((c) => c.id)].filter(
@@ -151,25 +152,15 @@ export default async function JobPage({
     )
   );
   const rateInputs = await getCleanerRateInputs(participantIds);
-  const payout = computeJobPayout(
-    job.price,
-    participantIds.map(
-      (uid) =>
-        rateInputs.get(uid) ?? {
-          id: uid,
-          tier: "STANDARD" as const,
-          avgRating: null,
-          ratingCount: 0,
-        }
-    )
-  );
-  const payMultiplier = job.payRateMultiplier ?? 1.0;
-  const tipShare =
-    participantIds.length > 0 ? (job.totalTip || 0) / participantIds.length : 0;
+  const shares = computeJobPayShares(job as unknown as JobPayInput, rateInputs);
   const payShares: Record<string, number> = {};
-  for (const share of payout.shares) {
-    payShares[share.id] =
-      Math.round((share.amount * payMultiplier + tipShare) * 100) / 100;
+  for (const [id, share] of shares) {
+    payShares[id] = share.total;
+  }
+  // Current manual overrides, so the Team card can show which cleaners have one.
+  const payOverrides: Record<string, number | null> = {};
+  for (const a of job.assignments) {
+    payOverrides[a.cleanerId] = a.payAmount ?? null;
   }
 
   // Server action to delete job
@@ -332,6 +323,7 @@ export default async function JobPage({
       currentUserName={session.user.name ?? undefined}
       assignments={assignmentsData}
       payShares={payShares}
+      payOverrides={payOverrides}
       jobRatings={jobRatingsData}
       gpsEnabled={gpsEnabled}
     />

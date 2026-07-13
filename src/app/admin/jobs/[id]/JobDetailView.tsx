@@ -36,6 +36,7 @@ import { assignCleaners } from "../../actions/assignCleaners";
 import { ConfirmDeleteModal } from "@/components/common/ConfirmDeleteModal";
 import Modal from "@/components/ui/Modal";
 import { cancelJobByAdmin } from "../../actions/cancelJobByAdmin";
+import { setCleanerJobPay } from "../../actions/setCleanerJobPay";
 import { issueRefund } from "../../actions/issueRefund";
 import JobChatThread from "@/components/JobChatThread";
 import { normalizeJobType, jobTypeLabel } from "@/lib/calendar-labels";
@@ -197,6 +198,8 @@ interface JobDetailViewProps {
   assignments?: AssignmentLite[];
   /** Cleaner id → pay share (tier-based proportional split incl. tip). */
   payShares?: Record<string, number>;
+  /** Manual per-cleaner pay overrides (JobAssignment.payAmount). */
+  payOverrides?: Record<string, number | null>;
   jobRatings?: JobRatingLite[];
   /** Admin setting `tracking.gpsEnabled` — gates the live on-the-way map. */
   gpsEnabled?: boolean;
@@ -353,6 +356,7 @@ export default function JobDetailView({
   currentUserName,
   assignments = [],
   payShares = {},
+  payOverrides = {},
   jobRatings = [],
   gpsEnabled = true,
 }: JobDetailViewProps) {
@@ -397,6 +401,23 @@ export default function JobDetailView({
   // Non-blocking availability conflicts returned by assignCleaners (outside the
   // cleaner's recurring hours, or a blocked/time-off date). Admin can override.
   const [assignConflicts, setAssignConflicts] = useState<string[]>([]);
+  // Manual per-cleaner pay override editor (FLAT/HOURLY jobs pay a TEAM TOTAL
+  // split between the crew; this lets admin split it unevenly, e.g. 70/30).
+  const [payEditFor, setPayEditFor] = useState<string | null>(null);
+  const [payEditValue, setPayEditValue] = useState("");
+  const [paySaving, setPaySaving] = useState(false);
+
+  async function savePayOverride(cleanerId: string, clear = false) {
+    setPaySaving(true);
+    const amount = clear ? null : Number(payEditValue);
+    const res = await setCleanerJobPay({ jobId: job.id, cleanerId, amount });
+    setPaySaving(false);
+    if (!res.success) { alert(res.error); return; }
+    setPayEditFor(null);
+    setPayEditValue("");
+    router.refresh();
+  }
+
 
   function openAssignModal() {
     setAssignSelected(new Set(job.cleaners.map((c) => c.id)));
@@ -853,10 +874,46 @@ export default function JobDetailView({
                   </div>
                 </div>
                 <div style={{ textAlign: 'right', flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-                  {pay !== undefined && pay > 0 && (
-                    <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--ink)' }} title="Tier-based pay share for this job (incl. tip split)">
-                      ${pay.toFixed(2)}
-                    </span>
+                  {payEditFor === c.id ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontSize: 12 }}>$</span>
+                      <input
+                        type="number" step="0.01" min="0" autoFocus
+                        value={payEditValue}
+                        onChange={(e) => setPayEditValue(e.target.value)}
+                        style={{ width: 78, padding: '3px 6px', fontSize: 12, borderRadius: 6, border: '1px solid var(--primary-20)' }}
+                      />
+                      <button type="button" disabled={paySaving} onClick={() => savePayOverride(c.id)}
+                        style={{ fontSize: 11, padding: '3px 8px', borderRadius: 999, border: 'none', background: 'var(--primary)', color: '#fff', cursor: 'pointer' }}>
+                        {paySaving ? '…' : 'Save'}
+                      </button>
+                      <button type="button" disabled={paySaving} onClick={() => savePayOverride(c.id, true)}
+                        title="Clear the override and go back to the standard split"
+                        style={{ fontSize: 11, padding: '3px 8px', borderRadius: 999, border: '1px solid var(--primary-10)', background: 'transparent', cursor: 'pointer' }}>
+                        Reset
+                      </button>
+                      <button type="button" onClick={() => setPayEditFor(null)}
+                        style={{ fontSize: 11, padding: '3px 6px', border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--primary-50)' }}>
+                        ✕
+                      </button>
+                    </div>
+                  ) : (
+                    pay !== undefined && pay > 0 && (
+                      <span
+                        style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--ink)', cursor: isAdmin ? 'pointer' : 'default' }}
+                        title={payOverrides[c.id] != null
+                          ? 'Manual pay override for this cleaner — click to change'
+                          : 'Pay for this job (incl. tip split). Click to set a custom amount.'}
+                        onClick={isAdmin ? () => { setPayEditFor(c.id); setPayEditValue(String(payOverrides[c.id] ?? pay.toFixed(2))); } : undefined}
+                      >
+                        ${pay.toFixed(2)}
+                        {payOverrides[c.id] != null && (
+                          <span style={{ marginLeft: 4, fontSize: 10, color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 999, padding: '1px 5px' }}>
+                            custom
+                          </span>
+                        )}
+                      </span>
+                    )
                   )}
                   {isAdmin && (
                     <button

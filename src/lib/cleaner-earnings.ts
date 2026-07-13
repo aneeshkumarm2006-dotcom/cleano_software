@@ -40,6 +40,12 @@ export interface JobPayInput {
   endTime: Date | null;
   clockInTime: Date | null;
   clockOutTime: Date | null;
+  /**
+   * Per-cleaner manual pay overrides (JobAssignment.payAmount). Lets admin split
+   * a job's pay unevenly — e.g. a $100 FLAT job paid $70 / $30 instead of
+   * $50 / $50. A null payAmount means "no override, use the normal rule".
+   */
+  assignments?: { cleanerId: string; payAmount: number | null }[];
 }
 
 /** Prisma select shared by payroll and the earnings aggregate. */
@@ -58,6 +64,7 @@ export const JOB_PAY_SELECT = {
   clockInTime: true,
   clockOutTime: true,
   cleaners: { select: { id: true } },
+  assignments: { select: { cleanerId: true, payAmount: true } },
 } as const;
 
 /** Statuses payroll actually pays for. Estimates must use the same set. */
@@ -148,17 +155,47 @@ export function computeJobPayShares(
   const usePriceModel = (job.price ?? 0) > 0;
   const payout = computeJobPayout(job.price, rateList);
   const tierAmountById = new Map(payout.shares.map((s) => [s.id, s.amount]));
-  const legacyPerPerson = (job.employeePay || 0) / participantIds.length;
-  const fixedPerPerson = job.employeePay || 0;
+
+  // Manual per-cleaner overrides (JobAssignment.payAmount). An override always
+  // wins for that cleaner.
+  const overrideById = new Map<string, number>();
+  for (const a of job.assignments ?? []) {
+    if (a.payAmount != null && participantIds.includes(a.cleanerId)) {
+      overrideById.set(a.cleanerId, a.payAmount);
+    }
+  }
+
+  // FLAT / HOURLY: `employeePay` is the TEAM TOTAL for the job, divided between
+  // the assigned cleaners — NOT paid to each of them (client decision). Anyone
+  // with a manual override takes their fixed amount off the top; whoever is left
+  // splits the remainder evenly, so the crew can never be paid more than the
+  // agreed total.
+  const teamTotal = job.employeePay || 0;
+  const overriddenParticipants = participantIds.filter((id) =>
+    overrideById.has(id)
+  );
+  const unoverriddenCount =
+    participantIds.length - overriddenParticipants.length;
+  const overriddenSum = overriddenParticipants.reduce(
+    (s, id) => s + (overrideById.get(id) ?? 0),
+    0
+  );
+  const remainderPerPerson =
+    unoverriddenCount > 0
+      ? Math.max(0, teamTotal - overriddenSum) / unoverriddenCount
+      : 0;
 
   for (const id of participantIds) {
     let base: number;
-    if (payType === "FLAT" || payType === "HOURLY") {
-      base = fixedPerPerson;
+    const override = overrideById.get(id);
+    if (override != null) {
+      base = override;
+    } else if (payType === "FLAT" || payType === "HOURLY") {
+      base = remainderPerPerson;
     } else if (usePriceModel) {
       base = tierAmountById.get(id) ?? 0;
     } else {
-      base = legacyPerPerson;
+      base = teamTotal / participantIds.length;
     }
     const afterMultiplier = base * multiplier;
     result.set(id, {
