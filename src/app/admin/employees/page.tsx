@@ -107,6 +107,8 @@ export default async function EmployeesPage({
       activeJobsCount: activeJobs.length,
       totalRevenue,
       unpaidJobs,
+      // Last login / last active — shown on the profile AND in this list.
+      lastSeenAt: emp.lastSeenAt ? emp.lastSeenAt.toISOString() : null,
     };
   });
 

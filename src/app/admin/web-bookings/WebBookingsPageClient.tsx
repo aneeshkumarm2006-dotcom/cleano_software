@@ -11,6 +11,7 @@ import {
   RotateCw,
   Clock,
 } from "lucide-react";
+import { jobTypeLabel } from "@/lib/calendar-labels";
 
 interface WebJob {
   id: string;
@@ -229,7 +230,7 @@ function BookingRow({ job }: { job: WebJob }) {
             <div className="text-xs text-[#008C9C]/60 mt-1">{job.location}</div>
           ) : null}
           {job.jobType ? (
-            <div className="text-xs text-[#008C9C]/70 mt-1">{job.jobType}</div>
+            <div className="text-xs text-[#008C9C]/70 mt-1">{jobTypeLabel(job.jobType)}</div>
           ) : null}
         </div>
         <div className="flex flex-col items-end gap-1">

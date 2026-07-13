@@ -21,6 +21,7 @@ import PhotoGallery from "./PhotoGallery";
 import JobChecklistPanel from "./JobChecklistPanel";
 import MapLinks from "./MapLinksClient";
 import JobChatThread from "@/components/JobChatThread";
+import ScrollToTop from "./ScrollToTop";
 
 type PageProps = {
   params: Promise<{ jobId: string }>;
@@ -131,6 +132,7 @@ export default async function JobDetailPage({ params }: PageProps) {
 
   return (
     <div className="cl-jd-shell">
+      <ScrollToTop jobId={job.id} />
       {/* Back */}
       <BackButton />
 

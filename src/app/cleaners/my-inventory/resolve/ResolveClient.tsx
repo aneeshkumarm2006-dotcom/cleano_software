@@ -17,6 +17,7 @@ import { createInventoryRequest } from "@/app/admin/actions/createInventoryReque
 import type { ProductLocationStock } from "@/app/admin/actions/getLocationStock.types";
 import type { MissingEquipmentItem } from "@/app/admin/actions/checkEquipmentForJob.types";
 import { fmtDate } from "@/lib/time";
+import { jobTypeLabel } from "@/lib/calendar-labels";
 
 interface JobInfo {
   id: string;
@@ -168,7 +169,7 @@ export default function ResolveClient({
                   day: "numeric",
                   year: "numeric",
                 })}`}
-              {job.jobType && ` · ${job.jobType}`}
+              {job.jobType && ` · ${jobTypeLabel(job.jobType)}`}
             </p>
             {job.addOns.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-1">

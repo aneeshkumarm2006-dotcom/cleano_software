@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { db } from "@/db";
 import { revalidatePath } from "next/cache";
+import { jobTypeLabel } from "@/lib/calendar-labels";
 
 async function requireAdmin() {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -106,7 +107,7 @@ export async function generateInvoiceFromJob(jobId: string) {
     // Main service line
     const basePrice = job.price ?? 0;
     lineItems.push({
-      description: `Cleaning Service${job.jobType ? ` (${job.jobType})` : ""}${job.bedCount || job.bathCount ? ` — ${job.bedCount ?? 0} bed / ${job.bathCount ?? 0} bath` : ""}`,
+      description: `Cleaning Service${job.jobType ? ` (${jobTypeLabel(job.jobType)})` : ""}${job.bedCount || job.bathCount ? ` — ${job.bedCount ?? 0} bed / ${job.bathCount ?? 0} bath` : ""}`,
       quantity: 1,
       unitPrice: basePrice,
       amount: basePrice,

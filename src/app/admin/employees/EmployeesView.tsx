@@ -34,8 +34,11 @@ import {
 } from "../actions/bulkEmployeeActions";
 import { sendLoginInvites } from "../actions/sendLoginInvites";
 import type { CleanerTier } from "@/lib/pay-tiers";
+import { fmtDateTime } from "@/lib/time";
 
 interface Employee {
+  /** Last sign-in / app-open (business timezone). Null = never signed in. */
+  lastSeenAt?: string | null;
   id: string;
   name: string;
   email: string;
@@ -430,6 +433,7 @@ export default function EmployeesView({
                     <th>Employee</th>
                     <th>Contact</th>
                     <th>Role</th>
+                    <th>Last seen</th>
                     <th className="num">Completed</th>
                     <th className="num">Active</th>
                     <th className="num">Revenue</th>
@@ -472,6 +476,11 @@ export default function EmployeesView({
                         )}
                       </td>
                       <td><RolePill role={e.role} /></td>
+                      <td>
+                        <span className="col-client-sub">
+                          {e.lastSeenAt ? fmtDateTime(e.lastSeenAt) : "Never signed in"}
+                        </span>
+                      </td>
                       <td className="num">
                         <span style={{ fontWeight: 600, color: "var(--ink)" }}>{e.completedJobsCount}</span>
                       </td>

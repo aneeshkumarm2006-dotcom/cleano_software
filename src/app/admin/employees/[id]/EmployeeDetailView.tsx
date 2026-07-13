@@ -40,6 +40,7 @@ import {
 import StrikesPanel from "./StrikesPanel";
 import type { StrikeLevel } from "@/lib/strikes-constants";
 import type { StrikeReason } from "@prisma/client";
+import { jobTypeLabel } from "@/lib/calendar-labels";
 
 type TabView = "overview" | "jobs" | "products" | "availability" | "accountability";
 
@@ -959,7 +960,7 @@ export default function EmployeeDetailView({
                 <div className="flex items-center gap-3">
                   {job.jobType && (
                     <Badge variant="cleano" size="sm">
-                      {job.jobType}
+                      {jobTypeLabel(job.jobType)}
                     </Badge>
                   )}
                   {job.price && (

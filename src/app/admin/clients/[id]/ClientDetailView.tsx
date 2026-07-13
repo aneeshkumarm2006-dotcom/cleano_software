@@ -8,6 +8,7 @@ import {
 import ClientModal from "../ClientModal";
 import ClientAddressManager from "../ClientAddressManager";
 import ClientPaymentMethods from "./ClientPaymentMethods";
+import { jobTypeLabel } from "@/lib/calendar-labels";
 
 type TabKey = "history" | "payments" | "ratings";
 
@@ -356,7 +357,7 @@ export default function ClientDetailView({
                         <td>
                           {j.jobType ? (
                             <span className="pill" style={{ background: "var(--primary-10)", color: "var(--primary)" }}>
-                              {j.jobType}
+                              {jobTypeLabel(j.jobType)}
                             </span>
                           ) : <span style={{ color: "var(--primary-40)" }}>—</span>}
                         </td>
