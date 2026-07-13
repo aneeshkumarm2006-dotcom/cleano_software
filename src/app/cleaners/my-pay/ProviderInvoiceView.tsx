@@ -7,14 +7,13 @@ import { Download, FileText, CheckCircle2, AlertCircle } from "lucide-react";
 import { generateProviderInvoice } from "@/app/admin/actions/generateProviderInvoice";
 import { approveProviderInvoice } from "@/app/admin/actions/approveProviderInvoice";
 import type { ProviderInvoice } from "@/app/admin/actions/generateProviderInvoice.types";
+import { fmtDate } from "@/lib/time";
 
 function formatDate(s: string | null) {
   if (!s) return "—";
-  return new Date(s).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+  // Business timezone: a pay period ends Sun 23:59 local, which is Monday in
+  // UTC — a raw toLocaleDateString would show the period ending a day late.
+  return fmtDate(s, { month: "short", day: "numeric", year: "numeric" });
 }
 
 export default function ProviderInvoiceView() {

@@ -373,6 +373,21 @@ export async function submitBooking(input: SubmitBookingInput) {
       },
     });
 
+    // Booking source, as a clear activity-log label. Jobs can originate three
+    // ways — admin-created (saveJob / jobs/new), client-booked (here), or the
+    // BookingKoala import — and the job log is where admin reads that from.
+    await db.jobLog
+      .create({
+        data: {
+          jobId: primaryJob.id,
+          action: "CREATED",
+          field: "bookingSource",
+          newValue: "client-booked",
+          description: `Job booked online by the client (${client.name})`,
+        },
+      })
+      .catch((e) => console.error("submitBooking: source log", e));
+
     // PIC-004: record the after-photo consent decision in the job audit log
     // (admin-only — NOTE_ADDED is filtered out of the customer activity feed).
     await db.jobLog

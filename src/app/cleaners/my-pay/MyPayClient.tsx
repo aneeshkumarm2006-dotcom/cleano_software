@@ -11,6 +11,7 @@ import {
 import WithdrawModal from "./WithdrawModal";
 import PaymentHistory from "./PaymentHistory";
 import ProviderInvoiceView from "./ProviderInvoiceView";
+import { fmtDate } from "@/lib/time";
 
 type PayPeriod = {
   startDate: string;
@@ -114,11 +115,8 @@ const STATUS_LABELS: Record<string, string> = {
 type Tab = "current" | "history" | "income";
 
 function formatDate(s: string) {
-  return new Date(s).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+  // Business timezone — see ProviderInvoiceView: period ends Sun 23:59 local.
+  return fmtDate(s, { month: "short", day: "numeric", year: "numeric" });
 }
 
 export default function MyPayClient({
@@ -388,7 +386,7 @@ export default function MyPayClient({
                     {ragData.recentWashes.map((w) => (
                       <div key={w.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 13, padding: "4px 0" }}>
                         <span style={{ color: "var(--ink-soft)" }}>
-                          {new Date(w.washDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                          {fmtDate(w.washDate, { month: "short", day: "numeric" })}
                           {w.notes ? ` · ${w.notes}` : ""}
                         </span>
                         <span style={{ color: "var(--primary-60)" }}>

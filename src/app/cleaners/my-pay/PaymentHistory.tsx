@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { fmtDate } from "@/lib/time";
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -65,11 +66,9 @@ const WITHDRAWAL_STATUS_STYLES: Record<string, string> = {
 };
 
 function formatDate(d: Date) {
-  return d.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+  // Business timezone — pay-period dates must not shift a day for cleaners
+  // whose browser is in another zone.
+  return fmtDate(d, { month: "short", day: "numeric", year: "numeric" });
 }
 
 export default function PaymentHistory({
