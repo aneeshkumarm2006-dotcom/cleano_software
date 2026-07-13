@@ -5,7 +5,13 @@ import {
   Calendar, Briefcase, ShieldAlert,
 } from "lucide-react";
 import { getStrikeSummary, STRIKE_THRESHOLD } from "@/lib/strikes";
-import { fmtDate, fmtTime } from "@/lib/time";
+import { fmtDate, fmtTime, startOfDayTz } from "@/lib/time";
+import {
+  upcomingJobsWhere,
+  doneJobsWhere,
+  CLEANER_DONE_STATUSES,
+} from "@/lib/cleaner-jobs";
+import { tzMinOfDay } from "@/lib/tz-calendar";
 
 interface Props {
   userId: string;
@@ -23,8 +29,10 @@ function fmtCountdown(ms: number): string {
   return `${m}m`;
 }
 
-function greeting(name: string) {
-  const h = new Date().getHours();
+function greeting(name: string, now: Date) {
+  // Business-timezone hour — the server clock is usually UTC, which greeted
+  // Toronto cleaners with "Good evening" over lunch.
+  const h = Math.floor(tzMinOfDay(now) / 60);
   const g = h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
   const firstName = name.split(" ")[0];
   return { g, firstName };
@@ -38,27 +46,47 @@ function jobTypeLabel(type: string | null) {
 
 export default async function CleanerDashboard({ userId, userName }: Props) {
   const now = new Date();
-  const startOfToday = new Date(now); startOfToday.setHours(0, 0, 0, 0);
+  // Business-timezone day boundaries — the same ones My Jobs splits on.
+  const startOfToday = startOfDayTz(now);
+  // +36h then snap back to the day start: lands on tomorrow's midnight even
+  // across a DST shift (where "+24h" would be an hour off).
+  const startOfTomorrow = startOfDayTz(new Date(startOfToday.getTime() + 36 * 3_600_000));
   const startOfWeek = new Date(now); startOfWeek.setDate(now.getDate() - now.getDay()); startOfWeek.setHours(0, 0, 0, 0);
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  const [upcomingJobs, recentJobs, employeeProducts, ragWashes, ratings] = await Promise.all([
-    // Next 6 upcoming jobs
+  // One shared definition of "upcoming" / "done" (see @/lib/cleaner-jobs), so a
+  // job that shows on My Jobs also shows here — including IN_PROGRESS jobs and
+  // today's already-started job, and never a soft-deleted or cancelled one.
+  const upcomingWhere = upcomingJobsWhere(userId, now);
+  const doneWhere = doneJobsWhere(userId);
+
+  const [
+    upcomingJobs,
+    todayJobs,
+    upcomingCount,
+    doneCount,
+    recentJobs,
+    employeeProducts,
+    ragWashes,
+    ratings,
+  ] = await Promise.all([
+    // Next 6 upcoming jobs (list only — never the source of a count)
     db.job.findMany({
-      where: {
-        OR: [{ employeeId: userId }, { cleaners: { some: { id: userId } } }],
-        status: { in: ["CREATED", "SCHEDULED"] },
-        startTime: { gte: now },
-      },
+      where: upcomingWhere,
       orderBy: { startTime: "asc" },
       take: 6,
     }),
+    // Everything still on today's schedule
+    db.job.findMany({
+      where: { AND: [upcomingWhere, { startTime: { lt: startOfTomorrow } }] },
+      orderBy: { startTime: "asc" },
+    }),
+    // Real counts — the Performance tiles used to report the page size (6 / 4).
+    db.job.count({ where: upcomingWhere }),
+    db.job.count({ where: doneWhere }),
     // Recent completed jobs
     db.job.findMany({
-      where: {
-        OR: [{ employeeId: userId }, { cleaners: { some: { id: userId } } }],
-        status: { in: ["COMPLETED", "PAID"] },
-      },
+      where: doneWhere,
       orderBy: { jobDate: "desc" },
       take: 4,
     }),
@@ -81,30 +109,38 @@ export default async function CleanerDashboard({ userId, userName }: Props) {
     }).catch(() => []),
   ]);
 
-  // Week/month earnings from completed jobs
-  const [weekJobs, monthJobs] = await Promise.all([
-    db.job.findMany({
+  // Earnings — aggregated in SQL (the old version summed a take-limited array).
+  const [weekAgg, monthAgg, pendingAgg] = await Promise.all([
+    db.job.aggregate({
+      _sum: { employeePay: true },
+      _count: true,
       where: {
+        deletedAt: null,
         employeeId: userId,
-        status: { in: ["COMPLETED", "PAID"] },
+        status: { in: [...CLEANER_DONE_STATUSES] },
         jobDate: { gte: startOfWeek },
       },
-      select: { employeePay: true },
     }),
-    db.job.findMany({
+    db.job.aggregate({
+      _sum: { employeePay: true },
       where: {
+        deletedAt: null,
         employeeId: userId,
-        status: { in: ["COMPLETED", "PAID"] },
+        status: { in: [...CLEANER_DONE_STATUSES] },
         jobDate: { gte: startOfMonth },
       },
-      select: { employeePay: true },
+    }),
+    // Pay still to come: upcoming jobs this cleaner leads.
+    db.job.aggregate({
+      _sum: { employeePay: true },
+      where: { AND: [upcomingWhere, { employeeId: userId }] },
     }),
   ]);
 
-  const weekEarnings = weekJobs.reduce((s, j) => s + (Number(j.employeePay) || 0), 0);
-  const monthEarnings = monthJobs.reduce((s, j) => s + (Number(j.employeePay) || 0), 0);
-  const pendingJobs = upcomingJobs.filter((j) => j.employeeId === userId);
-  const pendingPay = pendingJobs.reduce((s, j) => s + (Number(j.employeePay) || 0), 0);
+  const weekEarnings = Number(weekAgg._sum.employeePay ?? 0);
+  const weekJobCount = weekAgg._count;
+  const monthEarnings = Number(monthAgg._sum.employeePay ?? 0);
+  const pendingPay = Number(pendingAgg._sum.employeePay ?? 0);
 
   // Low inventory
   const lowItems = employeeProducts.filter((ep) => {
@@ -117,13 +153,6 @@ export default async function CleanerDashboard({ userId, userName }: Props) {
   const nextJob = upcomingJobs[0] ?? null;
   const nextJobMs = nextJob?.startTime ? new Date(nextJob.startTime).getTime() - now.getTime() : null;
 
-  // Today's jobs (multiple)
-  const todayJobs = upcomingJobs.filter((j) => {
-    if (!j.startTime) return false;
-    const d = new Date(j.startTime);
-    return d >= startOfToday && d < new Date(startOfToday.getTime() + 86400000);
-  });
-
   // Rating
   const avgRating = ratings.length > 0
     ? ratings.reduce((s, r) => s + (r as any).rating, 0) / ratings.length
@@ -135,11 +164,20 @@ export default async function CleanerDashboard({ userId, userName }: Props) {
     ? Math.floor((now.getTime() - new Date((lastWash as any).washDate).getTime()) / 86400000)
     : null;
 
-  const { g, firstName } = greeting(userName);
+  const { g, firstName } = greeting(userName, now);
   const dateStr = fmtDate(now, { weekday: "long", month: "long", day: "numeric" });
 
-  // Accountability strikes (rolling 30-day window).
-  const strikeSummary = await getStrikeSummary(userId);
+  // Accountability strikes (rolling 30-day window). The banner carries the most
+  // recent strike so it isn't a context-free number — full history on
+  // /cleaners/strikes.
+  const [strikeSummary, latestStrike] = await Promise.all([
+    getStrikeSummary(userId),
+    db.cleanerStrike.findFirst({
+      where: { cleanerId: userId, status: "ACTIVE", expiresAt: { gt: now } },
+      orderBy: { createdAt: "desc" },
+      select: { reason: true, createdAt: true, expiresAt: true },
+    }),
+  ]);
 
   return (
     <div className="cl-dash-shell">
@@ -149,27 +187,48 @@ export default async function CleanerDashboard({ userId, userName }: Props) {
         <p>{dateStr} &middot; {todayJobs.length === 0 ? "No jobs today — nice and easy." : `${todayJobs.length} ${todayJobs.length === 1 ? "job" : "jobs"} today.`}</p>
       </div>
 
-      {/* Accountability strikes — only shown when the cleaner has any. */}
+      {/* Accountability strikes — only shown when the cleaner has any.
+          Neutral-but-serious: this is an informational status, not a
+          destructive one, so it stays amber/orange rather than alarm red. */}
       {strikeSummary.activeCount > 0 && (
         <div
           style={{
             display: "flex", alignItems: "flex-start", gap: 10,
             padding: "12px 14px", borderRadius: 12, marginBottom: 16,
             fontSize: 13.5, lineHeight: 1.5,
-            border: `1px solid ${strikeSummary.level === "REVIEW" ? "#fca5a5" : "#fcd34d"}`,
-            background: strikeSummary.level === "REVIEW" ? "#fef2f2" : "#fffbeb",
-            color: strikeSummary.level === "REVIEW" ? "#991b1b" : "#92400e",
+            border: `1px solid ${strikeSummary.level === "REVIEW" ? "#fdba74" : "#fcd34d"}`,
+            background: strikeSummary.level === "REVIEW" ? "#fff7ed" : "#fffbeb",
+            color: strikeSummary.level === "REVIEW" ? "#9a3412" : "#92400e",
           }}>
           <ShieldAlert size={16} style={{ flex: "0 0 auto", marginTop: 1 }} />
-          <span>
-            <strong>
-              {strikeSummary.activeCount} of {STRIKE_THRESHOLD} active strike
-              {strikeSummary.activeCount === 1 ? "" : "s"}.
-            </strong>{" "}
-            {strikeSummary.level === "REVIEW"
-              ? "You've reached the limit — an admin will review your account."
-              : `${STRIKE_THRESHOLD - strikeSummary.activeCount} more before admin review. Strikes roll off 30 days after they're applied.`}
-          </span>
+          <div style={{ minWidth: 0 }}>
+            <div>
+              <strong>
+                {strikeSummary.activeCount} of {STRIKE_THRESHOLD} active strike
+                {strikeSummary.activeCount === 1 ? "" : "s"}.
+              </strong>{" "}
+              {strikeSummary.level === "REVIEW"
+                ? "You've reached the limit — an admin will review your account. Nothing changes on your schedule until that review happens."
+                : `${STRIKE_THRESHOLD - strikeSummary.activeCount} more before admin review. Each strike rolls off 30 days after it's applied.`}
+            </div>
+            {latestStrike && (
+              <div style={{ marginTop: 4, fontSize: 12.5, opacity: 0.9 }}>
+                Most recent: {latestStrike.reason} &middot;{" "}
+                {fmtDate(latestStrike.createdAt, { month: "short", day: "numeric" })}
+                {" "}&middot; rolls off{" "}
+                {fmtDate(latestStrike.expiresAt, { month: "short", day: "numeric" })}
+              </div>
+            )}
+            <Link
+              href="/cleaners/strikes"
+              style={{
+                display: "inline-block", marginTop: 6, fontSize: 12.5,
+                fontWeight: 700, color: "inherit", textDecoration: "underline",
+                textUnderlineOffset: 2,
+              }}>
+              View my strikes →
+            </Link>
+          </div>
         </div>
       )}
 
@@ -255,7 +314,7 @@ export default async function CleanerDashboard({ userId, userName }: Props) {
             <div className="cl-dash-earn-tile featured">
               <div className="lbl">This week</div>
               <div className="val">${weekEarnings.toFixed(2)}</div>
-              <div className="delta">{weekJobs.length} job{weekJobs.length === 1 ? "" : "s"}</div>
+              <div className="delta">{weekJobCount} job{weekJobCount === 1 ? "" : "s"}</div>
             </div>
             <div className="cl-dash-earn-tile">
               <div className="lbl">This month</div>
@@ -283,14 +342,16 @@ export default async function CleanerDashboard({ userId, userName }: Props) {
             <span style={{ fontSize: 16, color: "rgba(255,255,255,0.6)", fontFamily: "var(--font)" }}> / 5</span>
           </div>
           <div className="cl-dash-perf-sub">{ratings.length > 0 ? `Based on ${ratings.length} review${ratings.length === 1 ? "" : "s"}` : "No reviews yet"}</div>
+          {/* Real counts from db.job.count() — these used to be the lengths of
+              take:4 / take:6 arrays, so they capped at 4 and 6. */}
           <div className="cl-dash-perf-mini-row">
             <div className="cl-dash-perf-mini">
               <div className="lbl">Jobs done</div>
-              <div className="val">{recentJobs.length}</div>
+              <div className="val">{doneCount}</div>
             </div>
             <div className="cl-dash-perf-mini">
               <div className="lbl">Upcoming</div>
-              <div className="val">{upcomingJobs.length}</div>
+              <div className="val">{upcomingCount}</div>
             </div>
           </div>
         </div>
@@ -314,8 +375,10 @@ export default async function CleanerDashboard({ userId, userName }: Props) {
               <div className="date-block">
                 {j.jobDate ? (
                   <>
+                    {/* Both halves come from the business timezone — the day
+                        number used to be browser-local next to a TZ month. */}
                     <span className="m">{fmtDate(j.jobDate, { month: "short" }).toUpperCase()}</span>
-                    <span className="d">{new Date(j.jobDate).getDate()}</span>
+                    <span className="d">{fmtDate(j.jobDate, { day: "numeric" })}</span>
                   </>
                 ) : <span className="m">—</span>}
               </div>
@@ -352,7 +415,7 @@ export default async function CleanerDashboard({ userId, userName }: Props) {
               <h4>Rag wash</h4>
               <p>{lastWash ? `Last washed ${daysSinceWash === 0 ? "today" : `${daysSinceWash}d ago`}` : "No wash logged yet."}</p>
             </div>
-            <Link href="/cleaners/my-inventory/rag-wash" className="cl-dash-reminder-btn">Log wash</Link>
+            {/* Wash logging is admin-controlled — no cleaner-facing log action. */}
           </div>
         </div>
       </div>

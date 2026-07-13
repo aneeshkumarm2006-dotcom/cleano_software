@@ -4,6 +4,11 @@ import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { getSetting } from "@/lib/settings";
 import { fmtDate, fmtDateTime, fmtTime } from "@/lib/time";
+import {
+  CLOCK_IN_BLOCKED_STATUSES,
+  CLOCK_IN_EARLY_WINDOW_MIN,
+  clockInOpensAt,
+} from "@/lib/cleaner-jobs";
 import { Calendar, Users, Package, Zap, Camera, ListChecks, MapPin, DollarSign } from "lucide-react";
 import Link from "next/link";
 import BackButton from "../BackButton";
@@ -61,7 +66,9 @@ export default async function JobDetailPage({ params }: PageProps) {
     },
   });
 
-  if (!job) redirect("/cleaners/my-jobs");
+  // Fail closed: soft-deleted jobs are invisible to cleaners everywhere else,
+  // so they can't be reachable by direct URL either.
+  if (!job || job.deletedAt) redirect("/cleaners/my-jobs");
 
   const isEmployee = job.employeeId === session.user.id;
   const isCleaner = job.cleaners.some((c) => c.id === session.user.id);
@@ -102,7 +109,15 @@ export default async function JobDetailPage({ params }: PageProps) {
         )
       : null;
 
-  const canClockIn = !jobWithClock.clockInTime && job.status !== "COMPLETED";
+  // Clock-in gate — mirrors the server guard in clockIn.ts. Cancelled/finished
+  // jobs can't be clocked into, and clock-in only opens a fixed window before
+  // the scheduled start (so nobody clocks in days early).
+  const now = new Date();
+  const clockInOpens = clockInOpensAt(job.startTime);
+  const clockInTooEarly = now.getTime() < clockInOpens.getTime();
+  const canClockIn =
+    !jobWithClock.clockInTime &&
+    !(CLOCK_IN_BLOCKED_STATUSES as readonly string[]).includes(job.status);
   const canClockOut = jobWithClock.clockInTime && !jobWithClock.clockOutTime;
   const canCancelShift =
     !jobWithClock.clockInTime &&
@@ -212,9 +227,11 @@ export default async function JobDetailPage({ params }: PageProps) {
           <div className="cl-jd-track-meta">
             <h3>Time tracking</h3>
             <p>
-              {canClockIn
-                ? "Clock in when you arrive on site to start your shift."
-                : "Clock out when you finish the job."}
+              {!canClockIn
+                ? "Clock out when you finish the job."
+                : clockInTooEarly
+                  ? `Clock-in opens ${CLOCK_IN_EARLY_WINDOW_MIN / 60}h before the start — from ${fmtDateTime(clockInOpens)}.`
+                  : "Clock in when you arrive on site to start your shift."}
             </p>
           </div>
           <div className="cl-jd-track-action">
@@ -226,7 +243,11 @@ export default async function JobDetailPage({ params }: PageProps) {
               />
             )}
             {canClockIn && (
-              <ClockInButton jobId={job.id} jobStartTime={job.startTime ?? null} />
+              <ClockInButton
+                jobId={job.id}
+                jobStartTime={job.startTime ?? null}
+                disabled={clockInTooEarly}
+              />
             )}
             {canClockOut && (
               <ClockOutButton jobId={job.id} employeeProducts={employeeProducts} />
@@ -533,9 +554,12 @@ export default async function JobDetailPage({ params }: PageProps) {
                   marginBottom: 14,
                   fontSize: 13.5,
                   lineHeight: 1.5,
-                  border: `1px solid ${afterPhotosAllowed ? "#6ee7b7" : "#fca5a5"}`,
-                  background: afterPhotosAllowed ? "#ecfdf5" : "#fef2f2",
-                  color: afterPhotosAllowed ? "#065f46" : "#991b1b",
+                  // "Not permitted" is a neutral policy statement about this
+                  // customer's preference — not an error the cleaner caused, so
+                  // it reads as info (slate/blue), not alarm red.
+                  border: `1px solid ${afterPhotosAllowed ? "#6ee7b7" : "#cbd5e1"}`,
+                  background: afterPhotosAllowed ? "#ecfdf5" : "#f8fafc",
+                  color: afterPhotosAllowed ? "#065f46" : "#334155",
                 }}>
                 <Camera size={16} style={{ flex: "0 0 auto", marginTop: 1 }} />
                 <span>
@@ -548,9 +572,10 @@ export default async function JobDetailPage({ params }: PageProps) {
                     </>
                   ) : (
                     <>
-                      <strong>After-photos not permitted.</strong> The customer did not
-                      consent for this job. Please don&apos;t take after-photos unless an
-                      admin enables it.
+                      <strong>After-photos are off for this job.</strong> This customer
+                      hasn&apos;t opted in, so just skip them — before-photos are all
+                      that&apos;s needed here. An admin can turn them on if it&apos;s
+                      needed.
                     </>
                   )}
                 </span>

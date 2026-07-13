@@ -14,6 +14,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAuthorizedCron } from "@/lib/cron-auth";
 import { logActivity } from "@/lib/activity-log";
+import { previousPayPeriodRange } from "@/lib/pay-period";
+import { generatePayPeriodForWeek } from "@/lib/pay-period.server";
 import { db } from "@/db";
 import {
   sendProviderWeeklyPerformance,
@@ -228,11 +230,31 @@ export async function GET(req: NextRequest) {
     runRagWashDashboard(start, end, label),
   ]);
 
+  // Auto-advance payroll: cut the DRAFT pay period for the week that just
+  // closed (Mon–Sun). Idempotent — an existing non-cancelled period for that
+  // week is left alone, so a cron re-run never double-pays a job.
+  let payroll: { created: boolean; label?: string; note?: string };
+  try {
+    const lastWeek = previousPayPeriodRange(now);
+    const res = await generatePayPeriodForWeek(
+      lastWeek,
+      "Auto-created by the Monday payroll cron"
+    );
+    payroll = res.success
+      ? { created: true, label: res.periodLabel }
+      : { created: false, note: res.error };
+  } catch (e) {
+    console.error("weekly cron: pay period", e);
+    payroll = { created: false, note: "Failed to create pay period" };
+  }
+
   await logActivity({
     category: "CRON",
     action: "weekly",
     status: "SUCCESS",
-    message: `Weekly cron ran for ${label}`,
+    message: `Weekly cron ran for ${label}${
+      payroll.created ? ` · pay period created (${payroll.label})` : ""
+    }`,
   });
-  return NextResponse.json({ ok: true, weekLabel: label, perf, dashboard });
+  return NextResponse.json({ ok: true, weekLabel: label, perf, dashboard, payroll });
 }

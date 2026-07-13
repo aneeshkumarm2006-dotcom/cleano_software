@@ -1,4 +1,30 @@
-export type PayBreakdown = {
+// Two payload shapes, one action (item 1).
+//
+// Cleaners must NEVER see internal pricing/payroll mechanics: client charges,
+// base price, discounts, the client total, their tier, their % of price, or the
+// split-pool math. They only ever see what they are paid. Redaction happens on
+// the SERVER (getPayBreakdown.ts) — the fields simply do not exist in the
+// response a cleaner receives.
+
+export type JobPayType = "PERCENTAGE" | "FLAT" | "HOURLY";
+
+/** What a cleaner is allowed to see about their own pay for a job. */
+export type CleanerPayBreakdown = {
+  audience: "CLEANER";
+  jobId: string;
+  clientName: string;
+  payType: JobPayType;
+  /** Only populated for HOURLY jobs. */
+  hourlyRate: number | null;
+  /** This cleaner's share of the job's tips (their own money — not internal). */
+  tipShare: number;
+  /** The bottom line: what this cleaner gets paid for this job. */
+  totalEmployeePay: number;
+};
+
+/** The full internal breakdown. ADMIN/OWNER only. */
+export type AdminPayBreakdown = {
+  audience: "ADMIN";
   jobId: string;
   clientName: string;
   bedCount: number | null;
@@ -10,6 +36,8 @@ export type PayBreakdown = {
   discount: number;
   parking: number;
   clientTotal: number;
+  payType: JobPayType;
+  hourlyRate: number | null;
   employeeBasePay: number;
   payMultiplier: number;
   payAfterMultiplier: number;
@@ -24,3 +52,5 @@ export type PayBreakdown = {
   isSplit: boolean; // true when 2+ cleaners share the 50% pool
   poolTotal: number; // combined pay pool for the job
 };
+
+export type PayBreakdown = CleanerPayBreakdown | AdminPayBreakdown;

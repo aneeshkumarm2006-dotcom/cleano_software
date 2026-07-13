@@ -3,7 +3,10 @@
 import React, { useEffect, useState } from "react";
 import { OfficeHours } from "./calendar-helpers";
 import { getAvailability } from "@/app/admin/actions/getAvailability";
-import type { AvailabilitySlotDTO } from "@/app/admin/actions/getAvailability.types";
+import type {
+  AvailabilityExceptionDTO,
+  AvailabilitySlotDTO,
+} from "@/app/admin/actions/getAvailability.types";
 import { useCalendarOverlays } from "./CalendarOverlaysContext";
 
 interface AvailabilityOverlayProps {
@@ -22,25 +25,41 @@ const DAY_BY_INDEX = [
   "SATURDAY",
 ] as const;
 
+interface AvailabilityData {
+  slots: AvailabilitySlotDTO[];
+  exceptions: AvailabilityExceptionDTO[];
+}
+
 // Cache per viewed employee ("self" = the logged-in user) so the week view's
 // seven day columns share one fetch.
 const cachedSlotsPromises = new Map<
   string,
-  Promise<AvailabilitySlotDTO[] | null>
+  Promise<AvailabilityData | null>
 >();
 
 function loadSlots(
   employeeId: string | null
-): Promise<AvailabilitySlotDTO[] | null> {
+): Promise<AvailabilityData | null> {
   const key = employeeId ?? "self";
   let promise = cachedSlotsPromises.get(key);
   if (!promise) {
     promise = getAvailability(employeeId ?? undefined).then((res) =>
-      res.success ? res.slots : null
+      res.success
+        ? { slots: res.slots, exceptions: res.exceptions }
+        : null
     );
     cachedSlotsPromises.set(key, promise);
   }
   return promise;
+}
+
+/** Local calendar date of the rendered column as a plain "YYYY-MM-DD" key. */
+function dayKey(day: Date): string {
+  return [
+    day.getFullYear(),
+    String(day.getMonth() + 1).padStart(2, "0"),
+    String(day.getDate()).padStart(2, "0"),
+  ].join("-");
 }
 
 function toMinutes(hhmm: string): number {
@@ -136,24 +155,48 @@ export const AvailabilityOverlay: React.FC<AvailabilityOverlayProps> = ({
   zoomLevel,
 }) => {
   const { availabilityEmployeeId } = useCalendarOverlays();
-  const [slots, setSlots] = useState<AvailabilitySlotDTO[] | null>(null);
+  const [data, setData] = useState<AvailabilityData | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    setSlots(null);
-    loadSlots(availabilityEmployeeId).then((s) => {
-      if (!cancelled) setSlots(s);
+    setData(null);
+    loadSlots(availabilityEmployeeId).then((d) => {
+      if (!cancelled) setData(d);
     });
     return () => {
       cancelled = true;
     };
   }, [availabilityEmployeeId]);
 
-  if (!slots || slots.length === 0) return null;
+  if (!data) return null;
+  const { slots, exceptions } = data;
 
   const visibleStartMin = (officeHours?.start ?? 0) * 60;
   const visibleEndMin = (officeHours?.end ?? 24) * 60;
   const officeStart = officeHours?.start ?? 0;
+
+  // A one-off blocked date (vacation / appointment / sick day) wins over the
+  // weekly rule — shade the whole column so a conflict is obvious on the
+  // calendar before anything gets scheduled on it.
+  const blocked = exceptions.find((e) => e.date === dayKey(day));
+  if (blocked) {
+    const top = 0;
+    const height = ((visibleEndMin - visibleStartMin) * zoomLevel) / 60;
+    if (height <= 0) return null;
+    return (
+      <div
+        className="cal-unavail"
+        style={{ top: `${top}px`, height: `${height}px`, zIndex: 5, opacity: 1 }}
+        title={
+          blocked.reason
+            ? `Time off — ${blocked.reason}`
+            : "Time off — blocked date"
+        }
+      />
+    );
+  }
+
+  if (slots.length === 0) return null;
 
   const bands = computeUnavailableBands(slots, day, visibleStartMin, visibleEndMin);
 

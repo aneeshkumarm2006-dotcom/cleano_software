@@ -22,6 +22,7 @@ import {
   Tag,
   Gauge,
   RotateCcw,
+  ExternalLink,
 } from "lucide-react";
 import Link from "next/link";
 import Button from "@/components/ui/Button";
@@ -31,6 +32,7 @@ import Badge from "@/components/ui/Badge";
 import CustomDropdown from "@/components/ui/custom-dropdown";
 import ImportCsvButton from "@/components/csv/ImportCsvButton";
 import { fmtDateTime } from "@/lib/time";
+import { sanitizeHttpUrl } from "@/lib/safe-url";
 import { useRowSelection } from "@/components/common/useRowSelection";
 import BulkActionBar, { BulkAction } from "@/components/common/BulkActionBar";
 import { bulkSoftDelete, bulkRestore } from "@/lib/bulk/actions";
@@ -46,6 +48,36 @@ const CATEGORY_OPTIONS: Array<{ value: ProductCategory; label: string }> = [
 
 type ProductCategory = "LIQUID_SPRAY" | "MOP_LIQUID" | "DISPOSABLE" | "OTHER";
 
+/**
+ * Outbound "buy again" icon. Renders the primary purchase link, falling back to
+ * the first additional link. The stored URL is re-sanitized here — an href is
+ * only ever emitted for an http(s) URL, so a bad row can't become script — and
+ * carries rel="noopener noreferrer" so the opened tab can't touch window.opener.
+ */
+function BuyLink({
+  product,
+}: {
+  product: { purchaseUrl: string | null; links: Array<{ label: string; url: string }> };
+}) {
+  const href =
+    sanitizeHttpUrl(product.purchaseUrl) ??
+    sanitizeHttpUrl(product.links[0]?.url) ??
+    null;
+  if (!href) return null;
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={(e) => e.stopPropagation()}
+      title="Open purchase link"
+      aria-label="Open purchase link"
+      className="shrink-0 text-[#008C9C]/50 hover:text-[#008C9C]">
+      <ExternalLink className="w-3.5 h-3.5" />
+    </a>
+  );
+}
+
 interface Product {
   id: string;
   name: string;
@@ -57,6 +89,8 @@ interface Product {
   category?: ProductCategory;
   stockUpdatedAt: string | null;
   stockUpdatedByName: string | null;
+  purchaseUrl: string | null;
+  links: Array<{ label: string; url: string }>;
   totalAssigned: number;
   employeeCount: number;
   totalInventory: number;
@@ -597,9 +631,12 @@ export default function InventoryView({
                         </div>
                         {/* Product Name */}
                         <div className="w-[220px] p-4">
-                          <p className="text-sm font-[350] text-[#008C9C] truncate">
-                            {product.name}
-                          </p>
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <p className="text-sm font-[350] text-[#008C9C] truncate">
+                              {product.name}
+                            </p>
+                            <BuyLink product={product} />
+                          </div>
                           <p className="text-xs text-[#008C9C]/50 font-[350] truncate mt-0.5">
                             ${product.costPerUnit.toFixed(2)} / {product.unit}
                           </p>
@@ -707,9 +744,12 @@ export default function InventoryView({
                           style={{ cursor: "pointer", marginTop: 2 }}
                         />
                         <div>
-                          <p className="text-sm font-[400] text-[#008C9C]">
-                            {product.name}
-                          </p>
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-sm font-[400] text-[#008C9C]">
+                              {product.name}
+                            </p>
+                            <BuyLink product={product} />
+                          </div>
                           <p className="text-xs text-[#008C9C]/70 mt-1">
                             {product.description || "No description"}
                           </p>

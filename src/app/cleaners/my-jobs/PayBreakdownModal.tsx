@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Modal from "@/components/ui/Modal";
-import { DollarSign, Info } from "lucide-react";
+import { Info } from "lucide-react";
 import { getPayBreakdown } from "@/app/admin/actions/getPayBreakdown";
 import type { PayBreakdown } from "@/app/admin/actions/getPayBreakdown.types";
 
@@ -12,6 +12,15 @@ interface PayBreakdownModalProps {
   onClose: () => void;
 }
 
+/**
+ * Cleaner-facing pay view (item 1). This modal lives on the cleaner app, so it
+ * only ever renders what a cleaner is allowed to see: their payout, their tip
+ * share, and the hourly rate on HOURLY jobs.
+ *
+ * The client charges, base price, discounts, tier name, "% of price" and the
+ * split-pool mechanics are no longer in the payload at all — getPayBreakdown
+ * redacts them server-side for non-admins.
+ */
 export default function PayBreakdownModal({
   jobId,
   isOpen,
@@ -43,11 +52,15 @@ export default function PayBreakdownModal({
     };
   }, [jobId, isOpen]);
 
+  // Both payload shapes carry the payout fields; nothing else is rendered here,
+  // so an admin opening this view sees the same cleaner-safe summary.
+  const hourlyRate = data?.payType === "HOURLY" ? data.hourlyRate : null;
+
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Pay Breakdown">
+    <Modal isOpen={isOpen} onClose={onClose} title="Your pay">
       {loading && (
         <div className="py-8 text-center text-sm text-gray-500">
-          Loading breakdown...
+          Loading your pay...
         </div>
       )}
 
@@ -56,136 +69,28 @@ export default function PayBreakdownModal({
       )}
 
       {data && (
-        <div className="space-y-6">
-          {/* Client total */}
-          <section>
-            <h3 className="text-xs font-[400] text-gray-500 uppercase tracking-wider mb-3">
-              Client Charges
-            </h3>
-            <div className="space-y-2">
-              {data.basePrice !== null && (
-                <Row
-                  label={
-                    data.bedCount !== null && data.bathCount !== null
-                      ? `Base price (${data.bedCount} bed · ${data.bathCount} bath)`
-                      : "Base price"
-                  }
-                  value={`$${data.basePrice.toFixed(2)}`}
-                  hint={
-                    data.basePriceSource === "PRICING_RULE"
-                      ? "From pricing rules"
-                      : data.basePriceSource === "JOB_PRICE"
-                      ? "Derived from job price"
-                      : undefined
-                  }
-                />
-              )}
-              {data.addOns.length > 0 && (
-                <div className="rounded-xl bg-gray-50 px-3 py-2">
-                  <div className="text-sm text-gray-600 mb-1.5">Add-Ons</div>
-                  <div className="space-y-1">
-                    {data.addOns.map((a, idx) => (
-                      <div
-                        key={idx}
-                        className="flex justify-between text-sm">
-                        <span className="text-gray-700">{a.name}</span>
-                        <span className="text-gray-900">
-                          ${a.price.toFixed(2)}
-                        </span>
-                      </div>
-                    ))}
-                    <div className="flex justify-between text-xs pt-1 border-t border-gray-200 text-gray-500">
-                      <span>Add-on subtotal</span>
-                      <span>${data.addOnsTotal.toFixed(2)}</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-              {data.discount > 0 && (
-                <Row
-                  label="Discount"
-                  value={`- $${data.discount.toFixed(2)}`}
-                  valueClass="text-red-600"
-                />
-              )}
-              {data.parking > 0 && (
-                <Row
-                  label="Parking"
-                  value={`$${data.parking.toFixed(2)}`}
-                />
-              )}
-              <Row
-                label="Client Total"
-                value={`$${data.clientTotal.toFixed(2)}`}
-                bold
-              />
+        <div className="space-y-4">
+          <div className="rounded-2xl bg-[#008C9C]/10 px-4 py-4 flex items-center justify-between">
+            <div className="flex flex-col">
+              <span className="text-sm font-[500] text-gray-900">Your pay</span>
+              <span className="text-xs text-gray-500">{data.clientName}</span>
             </div>
-          </section>
+            <span className="text-xl font-[500] text-[#008C9C]">
+              ${data.totalEmployeePay.toFixed(2)}
+            </span>
+          </div>
 
-          {/* Employee pay */}
-          <section>
-            <h3 className="text-xs font-[400] text-gray-500 uppercase tracking-wider mb-3">
-              Your Pay
-            </h3>
-            <div className="space-y-2">
-              <Row
-                label={`Your rate (${
-                  data.tier === "TRAINEE"
-                    ? "Trainee"
-                    : data.tier === "FIELD_LEAD"
-                    ? "Field Lead"
-                    : "Standard"
-                })`}
-                value={`${Math.round(data.individualRate * 100)}% of price`}
-                hint={
-                  data.isSplit
-                    ? "Split job — 50% pool shared by rate"
-                    : "Solo job — rate applied to full price"
-                }
-              />
-              <Row
-                label={data.isSplit ? "Your share of the pool" : "Base employee pay"}
-                value={`$${data.employeeBasePay.toFixed(2)}`}
-              />
-              {data.payMultiplier !== 1 && (
-                <>
-                  <Row
-                    label="Pay multiplier"
-                    value={`× ${data.payMultiplier.toFixed(2)}`}
-                  />
-                  <Row
-                    label="Pay after multiplier"
-                    value={`$${data.payAfterMultiplier.toFixed(2)}`}
-                    subtle
-                  />
-                </>
-              )}
-              {data.totalTip > 0 && (
-                <>
-                  <Row
-                    label={`Total tips (split ${data.teamSize} ${
-                      data.teamSize === 1 ? "way" : "ways"
-                    })`}
-                    value={`$${data.totalTip.toFixed(2)}`}
-                    subtle
-                  />
-                  <Row
-                    label="Your tip share"
-                    value={`+ $${data.tipShare.toFixed(2)}`}
-                    valueClass="text-green-600"
-                  />
-                </>
-              )}
-              <div className="pt-2 mt-2 border-t border-gray-200">
-                <Row
-                  label="Total Employee Pay"
-                  value={`$${data.totalEmployeePay.toFixed(2)}`}
-                  bold
-                  highlight
-                />
-              </div>
-            </div>
-          </section>
+          {hourlyRate != null && (
+            <Row label="Hourly rate" value={`$${hourlyRate.toFixed(2)}/hr`} />
+          )}
+
+          {data.tipShare > 0 && (
+            <Row
+              label="Includes your tip share"
+              value={`$${data.tipShare.toFixed(2)}`}
+              valueClass="text-green-600"
+            />
+          )}
 
           <div className="flex items-start gap-2 text-xs text-gray-500 bg-gray-50 rounded-xl p-3">
             <Info className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
@@ -204,38 +109,16 @@ export default function PayBreakdownModal({
 function Row({
   label,
   value,
-  hint,
-  bold,
-  highlight,
-  subtle,
   valueClass,
 }: {
   label: string;
   value: string;
-  hint?: string;
-  bold?: boolean;
-  highlight?: boolean;
-  subtle?: boolean;
   valueClass?: string;
 }) {
   return (
-    <div
-      className={`flex justify-between items-center px-3 py-2 rounded-xl ${
-        highlight ? "bg-[#008C9C]/10" : "bg-gray-50"
-      } ${subtle ? "opacity-80" : ""}`}>
-      <div className="flex flex-col">
-        <span
-          className={`text-sm ${
-            bold ? "font-[500] text-gray-900" : "text-gray-700"
-          }`}>
-          {label}
-        </span>
-        {hint && <span className="text-xs text-gray-400">{hint}</span>}
-      </div>
-      <span
-        className={`text-sm ${
-          bold ? "font-[500]" : "font-[400]"
-        } ${valueClass ?? (highlight ? "text-[#008C9C]" : "text-gray-900")}`}>
+    <div className="flex justify-between items-center px-3 py-2 rounded-xl bg-gray-50">
+      <span className="text-sm text-gray-700">{label}</span>
+      <span className={`text-sm font-[400] ${valueClass ?? "text-gray-900"}`}>
         {value}
       </span>
     </div>

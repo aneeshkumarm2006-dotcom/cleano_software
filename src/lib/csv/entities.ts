@@ -31,6 +31,25 @@ export interface CsvColumn {
   aliases?: readonly string[];
 }
 
+/**
+ * Import-time toggles the UI offers for an entity. Allow-listed keys only —
+ * importCsv re-derives this object as booleans server-side and never trusts the
+ * client's copy.
+ */
+export type ImportOptionKey = "skipSameDayDuplicates";
+
+export interface ImportOptions {
+  skipSameDayDuplicates?: boolean;
+}
+
+export interface ImportOptionDef {
+  key: ImportOptionKey;
+  label: string;
+  help?: string;
+  /** Shown when the option is switched ON, to warn about what it will drop. */
+  warning?: string;
+}
+
 export interface CsvEntityConfig {
   key: EntityKey;
   title: string;
@@ -40,6 +59,8 @@ export interface CsvEntityConfig {
   columns: CsvColumn[];
   /** Headers we knowingly ignore (so they don't trigger the "unknown column" banner). */
   ignoredHeaders?: readonly string[];
+  /** Optional duplicate-handling toggles. All default to OFF. */
+  importOptions?: readonly ImportOptionDef[];
 }
 
 // ---------------------------------------------------------------------------
@@ -91,7 +112,16 @@ export const CSV_ENTITIES: Record<EntityKey, CsvEntityConfig> = {
       "clientEmail links to an existing client; otherwise the client is matched by clientName.",
       "startDate uses YYYY-MM-DD and startTime uses 24h HH:MM.",
       "cleanerEmails is a semicolon-separated list of existing employee emails.",
-      "A row is skipped as duplicate when a job for the same clientName + start time already exists.",
+      "A row is skipped as duplicate when a LIVE job for the same clientName + start time already exists. Archived jobs never block a re-import.",
+    ],
+    importOptions: [
+      {
+        key: "skipSameDayDuplicates",
+        label: "Also skip a row if the client already has a job on the same day",
+        help: "Off by default: the normal duplicate check is client + exact start time.",
+        warning:
+          "Clients who legitimately book several cleanings on one day (e.g. property managers) will only get their first booking of that day imported.",
+      },
     ],
     columns: [
       { key: "clientName", type: "string", required: true, example: "Jane Doe" },

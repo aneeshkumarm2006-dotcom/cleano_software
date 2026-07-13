@@ -31,11 +31,28 @@ export async function createInventoryRequest(
     };
   }
 
-  if (input.quantity <= 0) {
+  if (!Number.isFinite(input.quantity) || input.quantity <= 0) {
     return { success: false, error: "Quantity must be greater than zero" };
   }
 
   try {
+    // Idempotency: one open request per employee + item. Re-requesting while a
+    // request is still PENDING returns the existing row instead of creating a
+    // duplicate row + duplicate admin alert (the cleaner UI also disables the
+    // button, this is the server-side backstop).
+    const existing = await db.inventoryRequest.findFirst({
+      where: {
+        employeeId: session.user.id,
+        status: "PENDING",
+        ...(input.productId
+          ? { productId: input.productId }
+          : { kitId: input.kitId }),
+      },
+    });
+    if (existing) {
+      return { success: true, request: existing, alreadyPending: true };
+    }
+
     let alertTitle = "Equipment requested";
     let alertMessage = `${session.user.name} requested ${input.quantity}`;
     let relatedId: string | null = null;

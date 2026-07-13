@@ -2,10 +2,29 @@
 
 import React, { useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import Card from "@/components/ui/Card";
 import Badge from "@/components/ui/Badge";
+import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
-import { Search, Users, AlertTriangle, ArrowUpRight } from "lucide-react";
+import {
+  Search,
+  Users,
+  AlertTriangle,
+  ArrowUpRight,
+  Pencil,
+  Loader,
+  X,
+} from "lucide-react";
+import { fmtDateTime } from "@/lib/time";
+import { setCleanerProductQuantity } from "../actions/setCleanerProductQuantity";
+
+interface LastChange {
+  at: string;
+  by: string | null;
+  delta: number;
+  reason: string | null;
+}
 
 interface CleanerItem {
   productId: string;
@@ -15,6 +34,8 @@ interface CleanerItem {
   costPerUnit: number;
   refillThreshold: number;
   isLow: boolean;
+  /** Most recent InventoryChange for this (cleaner, product) — admin OR cleaner. */
+  lastChange?: LastChange | null;
 }
 
 interface Cleaner {
@@ -30,11 +51,21 @@ interface Cleaner {
 
 interface Props {
   cleaners: Cleaner[];
+  /** OWNER/ADMIN only. The server action enforces this too — this just hides the UI. */
+  canEdit?: boolean;
 }
 
-export default function CleanerInventoryView({ cleaners }: Props) {
+export default function CleanerInventoryView({ cleaners, canEdit = false }: Props) {
+  const router = useRouter();
   const [search, setSearch] = useState("");
   const [lowOnly, setLowOnly] = useState(false);
+
+  // Inline "set quantity" editor — one row at a time, keyed by cleaner+product.
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+  const [qty, setQty] = useState("");
+  const [reason, setReason] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -49,6 +80,43 @@ export default function CleanerInventoryView({ cleaners }: Props) {
   }, [cleaners, search, lowOnly]);
 
   const totalLow = cleaners.reduce((s, c) => s + c.lowCount, 0);
+
+  const openEditor = (cleanerId: string, item: CleanerItem) => {
+    setEditingKey(`${cleanerId}|${item.productId}`);
+    setQty(String(item.quantity));
+    setReason("");
+    setError(null);
+  };
+
+  const closeEditor = () => {
+    setEditingKey(null);
+    setQty("");
+    setReason("");
+    setError(null);
+  };
+
+  async function save(cleanerId: string, item: CleanerItem) {
+    const value = Number(qty);
+    if (!Number.isFinite(value) || value < 0) {
+      setError("Enter a quantity of 0 or more.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    const res = await setCleanerProductQuantity({
+      cleanerId,
+      productId: item.productId,
+      quantity: value,
+      reason: reason.trim() || undefined,
+    });
+    setSaving(false);
+    if (!res.success) {
+      setError(res.error);
+      return;
+    }
+    closeEditor();
+    router.refresh();
+  }
 
   if (cleaners.length === 0) {
     return (
@@ -74,7 +142,9 @@ export default function CleanerInventoryView({ cleaners }: Props) {
             Cleaner Inventory
           </h2>
           <p className="text-sm text-[#008C9C]/70 mt-1">
-            Stock currently assigned to crew in the field
+            {canEdit
+              ? "Stock currently assigned to crew in the field — set a count to correct it"
+              : "Stock currently assigned to crew in the field"}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -142,36 +212,143 @@ export default function CleanerInventoryView({ cleaners }: Props) {
               )}
             </div>
             <div className="space-y-2">
-              {c.items.map((i) => (
-                <Link
-                  key={i.productId}
-                  href={`/admin/inventory/${i.productId}`}
-                  className={`flex items-center justify-between p-3 rounded-xl transition-colors ${
-                    i.isLow
-                      ? "bg-red-50 border border-red-200 hover:bg-red-100/60"
-                      : "bg-[#008C9C]/5 hover:bg-[#008C9C]/10"
-                  }`}>
-                  <span
-                    className={`text-sm font-[400] ${
-                      i.isLow ? "text-red-700" : "text-[#008C9C]"
+              {c.items.map((i) => {
+                const key = `${c.employeeId}|${i.productId}`;
+                const editing = editingKey === key;
+
+                if (editing) {
+                  return (
+                    <div
+                      key={i.productId}
+                      className="p-3 rounded-xl bg-white border border-[#008C9C]/30 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-[400] text-[#008C9C] truncate">
+                          {i.productName}
+                        </span>
+                        <button
+                          type="button"
+                          aria-label="Cancel"
+                          onClick={closeEditor}
+                          disabled={saving}
+                          className="text-[#008C9C]/50 hover:text-[#008C9C]">
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <label className="text-xs text-[#008C9C]/60 shrink-0">
+                          Set to
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          autoFocus
+                          value={qty}
+                          disabled={saving}
+                          onChange={(e) => setQty(e.target.value)}
+                          className="w-24 px-2 py-1.5 rounded-lg border border-[#008C9C]/20 text-sm text-[#003C46] focus:outline-none focus:border-[#008C9C]"
+                        />
+                        <span className="text-xs text-[#008C9C]/60">{i.unit}</span>
+                        <span className="text-xs text-[#008C9C]/40 ml-auto">
+                          was {i.quantity}
+                        </span>
+                      </div>
+                      <input
+                        type="text"
+                        value={reason}
+                        maxLength={500}
+                        disabled={saving}
+                        onChange={(e) => setReason(e.target.value)}
+                        placeholder="Reason (optional) — e.g. cycle count, restocked van"
+                        className="w-full px-2 py-1.5 rounded-lg border border-[#008C9C]/20 text-sm text-[#003C46] placeholder:text-[#008C9C]/40 focus:outline-none focus:border-[#008C9C]"
+                      />
+                      {error && <p className="text-xs text-red-600">{error}</p>}
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          border={false}
+                          disabled={saving}
+                          onClick={() => save(c.employeeId, i)}
+                          className="rounded-xl px-4 py-2">
+                          {saving ? (
+                            <>
+                              <Loader className="w-3 h-3 mr-2 animate-spin" />
+                              Saving…
+                            </>
+                          ) : (
+                            "Save count"
+                          )}
+                        </Button>
+                        <Button
+                          variant="default"
+                          size="sm"
+                          border={false}
+                          disabled={saving}
+                          onClick={closeEditor}
+                          className="rounded-xl px-4 py-2">
+                          Cancel
+                        </Button>
+                      </div>
+                      <p className="text-[11px] text-[#008C9C]/50">
+                        Recorded in the product&rsquo;s stock history with your name
+                        and the change amount. Warehouse stock is not affected.
+                      </p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div
+                    key={i.productId}
+                    className={`flex items-center justify-between gap-2 p-3 rounded-xl transition-colors ${
+                      i.isLow
+                        ? "bg-red-50 border border-red-200"
+                        : "bg-[#008C9C]/5"
                     }`}>
-                    {i.productName}
-                  </span>
-                  <span className="flex items-center gap-2">
-                    {i.isLow && (
-                      <Badge variant="warning" size="sm">
-                        Below {i.refillThreshold} {i.unit}
-                      </Badge>
-                    )}
-                    <span
-                      className={`text-sm ${
-                        i.isLow ? "text-red-700 font-[500]" : "text-[#008C9C]/70"
-                      }`}>
-                      {i.quantity} {i.unit}
+                    <div className="min-w-0">
+                      <Link
+                        href={`/admin/inventory/${i.productId}`}
+                        className={`text-sm font-[400] hover:underline ${
+                          i.isLow ? "text-red-700" : "text-[#008C9C]"
+                        }`}>
+                        {i.productName}
+                      </Link>
+                      {i.lastChange && (
+                        <p className="text-[11px] text-[#008C9C]/50 truncate mt-0.5">
+                          {i.lastChange.delta >= 0 ? "+" : ""}
+                          {i.lastChange.delta} {i.unit} ·{" "}
+                          {fmtDateTime(i.lastChange.at)}
+                          {i.lastChange.by ? ` by ${i.lastChange.by}` : ""}
+                        </p>
+                      )}
+                    </div>
+                    <span className="flex items-center gap-2 shrink-0">
+                      {i.isLow && (
+                        <Badge variant="warning" size="sm">
+                          Below {i.refillThreshold} {i.unit}
+                        </Badge>
+                      )}
+                      <span
+                        className={`text-sm ${
+                          i.isLow ? "text-red-700 font-[500]" : "text-[#008C9C]/70"
+                        }`}>
+                        {i.quantity} {i.unit}
+                      </span>
+                      {canEdit && (
+                        <button
+                          type="button"
+                          aria-label={`Set ${i.productName} quantity for ${c.employeeName}`}
+                          title="Set quantity"
+                          onClick={() => openEditor(c.employeeId, i)}
+                          className="p-1.5 rounded-lg text-[#008C9C]/60 hover:text-[#008C9C] hover:bg-[#008C9C]/10">
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </span>
-                  </span>
-                </Link>
-              ))}
+                  </div>
+                );
+              })}
             </div>
           </Card>
         ))}

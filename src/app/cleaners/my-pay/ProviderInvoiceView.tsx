@@ -119,7 +119,8 @@ export default function ProviderInvoiceView() {
           <Page size="A4" style={styles.page}>
             <View style={styles.header}>
               <View>
-                <Text style={styles.title}>PROVIDER INVOICE</Text>
+                {/* Cleaner-facing wording — no internal "provider" labelling. */}
+                <Text style={styles.title}>PAY STATEMENT</Text>
                 <Text style={styles.meta}>{invoice.invoiceNumber}</Text>
                 <Text style={styles.meta}>
                   Generated {formatDate(invoice.generatedAt)}
@@ -127,12 +128,12 @@ export default function ProviderInvoiceView() {
               </View>
               <View>
                 <Text style={{ fontSize: 14, color: "#008C9C" }}>Cleano</Text>
-                <Text style={styles.meta}>Service Provider Statement</Text>
+                <Text style={styles.meta}>Earnings Statement</Text>
               </View>
             </View>
 
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Provider</Text>
+              <Text style={styles.sectionTitle}>Cleaner</Text>
               <Text>{invoice.employee.name}</Text>
               <Text style={styles.meta}>{invoice.employee.email}</Text>
               {invoice.employee.phone ? (
@@ -201,11 +202,11 @@ export default function ProviderInvoiceView() {
           <div className="flex items-center gap-2">
             <FileText className="w-5 h-5 text-[#008C9C]" />
             <h2 className="text-lg font-[400] text-[#008C9C]">
-              Provider Invoice
+              Pay Statement
             </h2>
           </div>
           <p className="text-sm text-[#008C9C]/70 mt-1">
-            Generate an invoice from your payouts to send to accounting.
+            Generate a statement of your payouts to send for approval.
           </p>
         </div>
         {!invoice && (
@@ -214,7 +215,7 @@ export default function ProviderInvoiceView() {
             submit={false}
             onClick={handleGenerate}
             loading={loading}>
-            Generate Invoice
+            Generate Statement
           </Button>
         )}
       </div>
@@ -232,7 +233,7 @@ export default function ProviderInvoiceView() {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <p className="text-xs uppercase tracking-wider text-[#008C9C]/50">
-                  Invoice
+                  Statement
                 </p>
                 <p className="text-base font-[500] text-[#008C9C]">
                   {invoice.invoiceNumber}

@@ -1,20 +1,54 @@
 import { requireCleaner } from "@/lib/page-guards";
 import { db } from "@/db";
+import { claimableJobsWhere } from "@/lib/cleaner-jobs";
+import { getCleanerRateInputs } from "@/lib/cleaner-rates";
+import { computeJobPayout, type CleanerRateInput } from "@/lib/pay-tiers";
 import AvailableJobsClient from "./AvailableJobsClient";
+
+/**
+ * Coarse area for the filter dropdown, derived from the job address
+ * ("123 Rue Sainte-Catherine, Montreal, QC H2X 1Y4" → "Montreal"). Purely a
+ * scanning aid — an unparseable address just has no area.
+ */
+function deriveArea(location: string | null): string | null {
+  if (!location) return null;
+  const parts = location
+    .split(",")
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (parts.length < 2) return null;
+  const area = parts[1].replace(/\s+[A-Z]\d[A-Z]\s*\d[A-Z]\d$/i, "").trim();
+  return area || null;
+}
 
 export default async function AvailableJobsPage() {
   const session = await requireCleaner();
+  const cleanerId = session.user.id;
 
   const now = new Date();
 
-  // Jobs that: are upcoming, not cancelled, not fully staffed, and the cleaner hasn't already claimed
+  // Genuinely open, claimable jobs only (see @/lib/cleaner-jobs): not deleted,
+  // still ahead of us, CREATED/SCHEDULED only (IN_PROGRESS / PAID jobs are not
+  // "available"), and not a job this cleaner already leads or is already on.
   const jobs = await db.job.findMany({
-    where: {
-      startTime: { gte: now },
-      status: { notIn: ["CANCELLED", "COMPLETED"] },
-      cleaners: { none: { id: session.user.id } },
-    },
-    include: {
+    where: claimableJobsWhere(cleanerId, now),
+    select: {
+      id: true,
+      jobNumber: true,
+      clientName: true,
+      startTime: true,
+      endTime: true,
+      isFlexible: true,
+      location: true,
+      jobType: true,
+      price: true,
+      payType: true,
+      hourlyRate: true,
+      bedCount: true,
+      bathCount: true,
+      requiredCleaners: true,
+      notes: true,
+      employeeId: true,
       cleaners: { select: { id: true } },
     },
     orderBy: { startTime: "asc" },
@@ -24,21 +58,55 @@ export default async function AvailableJobsPage() {
   // Filter to only jobs that still need cleaners
   const openJobs = jobs.filter((j) => j.cleaners.length < j.requiredCleaners);
 
-  const serialized = openJobs.map((j) => ({
-    id: j.id,
-    jobNumber: j.jobNumber,
-    clientName: j.clientName,
-    startTime: j.startTime.toISOString(),
-    isFlexible: j.isFlexible,
-    location: j.location,
-    jobType: j.jobType,
-    price: j.price,
-    bedCount: j.bedCount,
-    bathCount: j.bathCount,
-    requiredCleaners: j.requiredCleaners,
-    claimedCount: j.cleaners.length,
-    notes: j.notes,
-  }));
+  // Estimated payout for THIS cleaner if they claimed the job. Computed
+  // server-side from the real tier/split math — the card used to print
+  // `price / 2`, which both leaked half the client price and wasn't the
+  // cleaner's actual pay. `price` never leaves the server.
+  const participantIds = new Set<string>([cleanerId]);
+  for (const j of openJobs) {
+    if (j.employeeId) participantIds.add(j.employeeId);
+    for (const c of j.cleaners) participantIds.add(c.id);
+  }
+  const rateInputs = await getCleanerRateInputs([...participantIds]);
+  const rateFor = (id: string): CleanerRateInput =>
+    rateInputs.get(id) ?? { id, tier: "STANDARD", avgRating: null, ratingCount: 0 };
+
+  const serialized = openJobs.map((j) => {
+    let estPay: number | null = null;
+    let estHourly: number | null = null;
+
+    if (j.payType === "HOURLY") {
+      estHourly = j.hourlyRate ?? null;
+    } else if (j.payType === "PERCENTAGE" && j.price != null && j.price > 0) {
+      // Simulate the roster with this cleaner added, then take their share.
+      const roster = new Set<string>([cleanerId]);
+      if (j.employeeId) roster.add(j.employeeId);
+      for (const c of j.cleaners) roster.add(c.id);
+      const payout = computeJobPayout(j.price, [...roster].map(rateFor));
+      estPay = payout.shares.find((s) => s.id === cleanerId)?.amount ?? null;
+    }
+    // FLAT: the payout is set by dispatch per assignment — no honest estimate
+    // to show here, so the card says so rather than inventing a number.
+
+    return {
+      id: j.id,
+      jobNumber: j.jobNumber,
+      clientName: j.clientName,
+      startTime: j.startTime.toISOString(),
+      isFlexible: j.isFlexible,
+      location: j.location,
+      area: deriveArea(j.location),
+      jobType: j.jobType,
+      payType: j.payType as string,
+      estPay,
+      estHourly,
+      bedCount: j.bedCount,
+      bathCount: j.bathCount,
+      requiredCleaners: j.requiredCleaners,
+      claimedCount: j.cleaners.length,
+      notes: j.notes,
+    };
+  });
 
   return (
     <div className="cl-page-wrap">

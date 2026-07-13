@@ -14,6 +14,7 @@ import { setEmployeeRating } from "../../actions/setEmployeeRating";
 import { resolveInventoryRequest } from "../../actions/resolveInventoryRequest";
 import { setCleanerTier } from "../../actions/setCleanerTier";
 import { setFieldLead } from "../../actions/setFieldLead";
+import { setCleanerProductQuantity } from "../../actions/setCleanerProductQuantity";
 import { TIER_LABEL, type CleanerTier } from "@/lib/pay-tiers";
 import { fmtDateTime } from "@/lib/time";
 import {
@@ -33,6 +34,8 @@ import {
   TrendingDown,
   Star,
   ShieldAlert,
+  Loader,
+  X,
 } from "lucide-react";
 import StrikesPanel from "./StrikesPanel";
 import type { StrikeLevel } from "@/lib/strikes-constants";
@@ -221,6 +224,178 @@ interface StrikeDTO {
   createdAt: string;
   expiresAt: string;
   excusedAt: string | null;
+}
+
+/**
+ * One row of the cleaner's assigned inventory, with an inline "set count" editor.
+ *
+ * Defined at module scope (not inside EmployeeDetailView) on purpose: ProductsTab
+ * is re-created on every parent render, so any state held up there would remount
+ * this subtree and steal focus on every keystroke. Keeping the edit state local
+ * means typing re-renders only this row.
+ *
+ * The page itself is already OWNER/ADMIN-only, and setCleanerProductQuantity
+ * re-checks the role server-side — the UI is not the authorization boundary.
+ */
+function AssignedProductRow({
+  employeeId,
+  item,
+}: {
+  employeeId: string;
+  item: AssignedProduct;
+}) {
+  const router = useRouter();
+  const [editing, setEditing] = useState(false);
+  const [qty, setQty] = useState(String(item.quantity));
+  const [reason, setReason] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const open = () => {
+    setQty(String(item.quantity));
+    setReason("");
+    setError(null);
+    setEditing(true);
+  };
+
+  const close = () => {
+    setEditing(false);
+    setError(null);
+  };
+
+  async function save() {
+    const value = Number(qty);
+    if (!Number.isFinite(value) || value < 0) {
+      setError("Enter a quantity of 0 or more.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    const res = await setCleanerProductQuantity({
+      cleanerId: employeeId,
+      productId: item.productId,
+      quantity: value,
+      reason: reason.trim() || undefined,
+    });
+    setSaving(false);
+    if (!res.success) {
+      setError(res.error);
+      return;
+    }
+    setEditing(false);
+    router.refresh();
+  }
+
+  if (editing) {
+    return (
+      <div className="p-3 rounded-xl bg-white border border-[#008C9C]/30 space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-sm font-[400] text-[#008C9C]">{item.productName}</p>
+          <button
+            type="button"
+            aria-label="Cancel"
+            onClick={close}
+            disabled={saving}
+            className="text-[#008C9C]/50 hover:text-[#008C9C]">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="text-xs text-[#008C9C]/60 shrink-0">Set to</label>
+          <input
+            type="number"
+            min={0}
+            step="0.01"
+            autoFocus
+            value={qty}
+            disabled={saving}
+            onChange={(e) => setQty(e.target.value)}
+            className="w-24 px-2 py-1.5 rounded-lg border border-[#008C9C]/20 text-sm text-[#003C46] focus:outline-none focus:border-[#008C9C]"
+          />
+          <span className="text-xs text-[#008C9C]/60">{item.unit}</span>
+          <span className="text-xs text-[#008C9C]/40 ml-auto">
+            was {item.quantity} {item.unit}
+          </span>
+        </div>
+        <input
+          type="text"
+          value={reason}
+          maxLength={500}
+          disabled={saving}
+          onChange={(e) => setReason(e.target.value)}
+          placeholder="Reason (optional) — e.g. cycle count, restocked van"
+          className="w-full px-2 py-1.5 rounded-lg border border-[#008C9C]/20 text-sm text-[#003C46] placeholder:text-[#008C9C]/40 focus:outline-none focus:border-[#008C9C]"
+        />
+        {error && <p className="text-xs text-red-600">{error}</p>}
+        <div className="flex items-center gap-2">
+          <Button
+            variant="primary"
+            size="sm"
+            border={false}
+            disabled={saving}
+            onClick={save}
+            className="rounded-2xl px-4 py-2">
+            {saving ? (
+              <>
+                <Loader className="w-3 h-3 mr-2 animate-spin" />
+                Saving…
+              </>
+            ) : (
+              "Save count"
+            )}
+          </Button>
+          <Button
+            variant="default"
+            size="sm"
+            border={false}
+            disabled={saving}
+            onClick={close}
+            className="rounded-2xl px-4 py-2">
+            Cancel
+          </Button>
+        </div>
+        <p className="text-[11px] text-[#008C9C]/50">
+          Saved to the product&rsquo;s stock history with your name and the change
+          amount. Warehouse stock is not affected.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center justify-between p-3 rounded-xl bg-[#008C9C]/5">
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-[400] text-[#008C9C] truncate">
+          {item.productName}
+        </p>
+        <p className="text-xs text-[#008C9C]/60">
+          {item.quantity} {item.unit}
+        </p>
+      </div>
+      <div className="flex items-center gap-3">
+        <span className="text-sm font-[400] text-[#008C9C]">
+          ${(item.quantity * item.costPerUnit).toFixed(2)}
+        </span>
+        <Button
+          variant="default"
+          size="sm"
+          border={false}
+          onClick={open}
+          className="rounded-2xl px-4 py-2.5">
+          <Pencil className="w-3 h-3 mr-2" />
+          Set count
+        </Button>
+        <Button
+          variant="default"
+          size="sm"
+          border={false}
+          href={`/admin/inventory/${item.productId}`}
+          className="rounded-2xl px-4 py-2.5">
+          View
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 export default function EmployeeDetailView({
@@ -1076,31 +1251,11 @@ export default function EmployeeDetailView({
           </div>
           <div className="space-y-2">
             {assignedProducts.map((item) => (
-              <div
+              <AssignedProductRow
                 key={item.id}
-                className="flex items-center justify-between p-3 rounded-xl bg-[#008C9C]/5">
-                <div className="flex-1">
-                  <p className="text-sm font-[400] text-[#008C9C]">
-                    {item.productName}
-                  </p>
-                  <p className="text-xs text-[#008C9C]/60">
-                    {item.quantity} {item.unit}
-                  </p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-sm font-[400] text-[#008C9C]">
-                    ${(item.quantity * item.costPerUnit).toFixed(2)}
-                  </span>
-                  <Button
-                    variant="default"
-                    size="sm"
-                    border={false}
-                    href={`/admin/inventory/${item.productId}`}
-                    className="rounded-2xl px-4 py-2.5">
-                    View
-                  </Button>
-                </div>
-              </div>
+                employeeId={employee.id}
+                item={item}
+              />
             ))}
           </div>
         </Card>

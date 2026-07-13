@@ -9,6 +9,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
+  Check,
   X,
   MapPin,
   CalendarClock,
@@ -18,6 +19,9 @@ import {
   Eye,
 } from "lucide-react";
 import { avatarColor, initials } from "@/lib/avatar";
+import { fmtDate as fmtDateTz, fmtTime as fmtTimeTz } from "@/lib/time";
+import { civilKey, tzDateKey, tzMinOfDay, tzToday } from "@/lib/tz-calendar";
+import { jobTypeLabel } from "@/lib/calendar-labels";
 
 interface CalJob {
   id: string;
@@ -45,6 +49,7 @@ const STATUS: Record<string, StatusMeta> = {
 };
 const meta = (s: string): StatusMeta => STATUS[s] ?? STATUS.SCHEDULED;
 const unconfirmed = (j: CalJob) => j.status === "CREATED";
+const isCancelled = (j: CalJob) => j.status === "CANCELLED";
 
 const START_HOUR = 6;
 const END_HOUR = 22;
@@ -53,6 +58,11 @@ const OFFICE_END = 18 * 60;
 const PX_PER_HOUR = 64;
 
 // ── date helpers ──
+//
+// A job is an INSTANT: its day column and its vertical position are derived in
+// the BUSINESS timezone (tzDateKey / tzMinOfDay), never with getDate() /
+// getHours(). Grid cells are CIVIL dates (local-midnight placeholders) and are
+// only ever compared via civilKey(). See @/lib/tz-calendar.
 const jobStart = (j: CalJob) => new Date(j.startTime ?? j.date);
 const jobDurMin = (j: CalJob) => {
   if (j.startTime && j.endTime) {
@@ -61,9 +71,13 @@ const jobDurMin = (j: CalJob) => {
   }
   return 120;
 };
-const minOfDay = (d: Date) => d.getHours() * 60 + d.getMinutes();
-const sameDay = (a: Date, b: Date) =>
-  a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+/** Business-timezone civil day a job belongs to — matches My Jobs / Job details. */
+const jobDayKey = (j: CalJob) => tzDateKey(jobStart(j));
+/** Jobs falling on a given grid cell, soonest first. */
+const jobsOn = (list: CalJob[], cell: Date) =>
+  list
+    .filter((j) => jobDayKey(j) === civilKey(cell))
+    .sort((a, b) => +jobStart(a) - +jobStart(b));
 function startOfWeek(d: Date) {
   const x = new Date(d);
   x.setHours(0, 0, 0, 0);
@@ -75,16 +89,15 @@ function addDays(d: Date, n: number) {
   x.setDate(x.getDate() + n);
   return x;
 }
-const fmtTime = (d: Date) =>
-  d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }).replace(":00", "");
+/** Compact business-timezone time: "9 AM", "10:30 AM". */
+const fmtTime = (d: Date) => fmtTimeTz(d).replace(":00", "");
 function fmtHour(h: number) {
   const ap = h < 12 ? "AM" : "PM";
   const hr = h % 12 === 0 ? 12 : h % 12;
   return `${hr} ${ap}`;
 }
 const money = (n: number) => "$" + Math.round(n).toLocaleString("en-US");
-const typeLabel = (t: string | null) =>
-  t ? t.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase()) : "Clean";
+const typeLabel = (t: string | null) => jobTypeLabel(t) || "Clean";
 
 type ViewKind = "month" | "week" | "day" | "agenda";
 
@@ -129,30 +142,32 @@ function StatusPill({ s }: { s: string }) {
 }
 
 // ── Month ──
-function MonthView({ anchor, jobs, onDay, onJob }: { anchor: Date; jobs: CalJob[]; onDay: (d: Date) => void; onJob: (j: CalJob) => void }) {
+// `jobs` = what we render (cancelled included only when the chip is on).
+// `countJobs` = what we count — cancelled work is NEVER counted anywhere.
+function MonthView({ anchor, jobs, countJobs, today, onDay, onJob }: { anchor: Date; jobs: CalJob[]; countJobs: CalJob[]; today: Date; onDay: (d: Date) => void; onJob: (j: CalJob) => void }) {
   const first = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
   const gridStart = startOfWeek(first);
   const cells = Array.from({ length: 42 }, (_, i) => addDays(gridStart, i));
-  const today = new Date();
   return (
     <div className="cal-month">
       <div className="cal-month-dow">{["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => <div key={d}>{d}</div>)}</div>
       <div className="cal-month-grid">
         {cells.map((d, i) => {
           const inMonth = d.getMonth() === anchor.getMonth();
-          const isToday = sameDay(d, today);
-          const list = jobs.filter((j) => sameDay(jobStart(j), d)).sort((a, b) => +jobStart(a) - +jobStart(b));
+          const isToday = civilKey(d) === civilKey(today);
+          const list = jobsOn(jobs, d);
+          const count = jobsOn(countJobs, d).length;
           return (
             <div key={i} className={`cal-mcell ${inMonth ? "" : "out"} ${isToday ? "today" : ""}`} onClick={() => onDay(d)}>
               <div className="cal-mcell-head">
-                {list.length ? <span className="cal-mcount">{list.length} {list.length === 1 ? "job" : "jobs"}</span> : <span />}
+                {count ? <span className="cal-mcount">{count} {count === 1 ? "job" : "jobs"}</span> : <span />}
                 <span className={`cal-mdate ${isToday ? "today" : ""}`}>{d.getDate()}</span>
               </div>
               <div className="cal-mcell-jobs">
                 {list.slice(0, 2).map((j) => {
                   const m = meta(j.status);
                   return (
-                    <button key={j.id} className={`cal-chip ${unconfirmed(j) ? "faded" : ""}`} style={{ background: m.tint, color: m.color }} onClick={(e) => { e.stopPropagation(); onJob(j); }}>
+                    <button key={j.id} className={`cal-chip ${unconfirmed(j) || isCancelled(j) ? "faded" : ""}`} style={{ background: m.tint, color: m.color }} onClick={(e) => { e.stopPropagation(); onJob(j); }}>
                       <span className="cal-chip-dot" style={{ background: m.color }} />
                       <span className="cal-chip-t">{fmtTime(jobStart(j))}</span>
                       <span className="cal-chip-n">{j.clientName.split(" ")[0]}</span>
@@ -170,14 +185,14 @@ function MonthView({ anchor, jobs, onDay, onJob }: { anchor: Date; jobs: CalJob[
 }
 
 // ── Agenda ──
-function AgendaView({ anchor, jobs, onJob }: { anchor: Date; jobs: CalJob[]; onJob: (j: CalJob) => void }) {
+function AgendaView({ anchor, jobs, today, onJob }: { anchor: Date; jobs: CalJob[]; today: Date; onJob: (j: CalJob) => void }) {
   const s = startOfWeek(anchor);
   const days = Array.from({ length: 7 }, (_, i) => addDays(s, i));
   return (
     <div className="cal-agenda">
       {days.map((d, i) => {
-        const list = jobs.filter((j) => sameDay(jobStart(j), d)).sort((a, b) => +jobStart(a) - +jobStart(b));
-        const isToday = sameDay(d, new Date());
+        const list = jobsOn(jobs, d);
+        const isToday = civilKey(d) === civilKey(today);
         return (
           <div key={i} className={`cal-ag-day ${isToday ? "today" : ""}`}>
             <div className="cal-ag-date">
@@ -191,10 +206,10 @@ function AgendaView({ anchor, jobs, onJob }: { anchor: Date; jobs: CalJob[]; onJ
                 list.map((j) => {
                   const m = meta(j.status);
                   return (
-                    <button key={j.id} className="cal-ag-row" style={{ borderLeftColor: m.color }} onClick={() => onJob(j)}>
+                    <button key={j.id} className={`cal-ag-row${isCancelled(j) ? " cancelled" : ""}`} style={{ borderLeftColor: m.color, opacity: isCancelled(j) ? 0.55 : 1 }} onClick={() => onJob(j)}>
                       <span className="cal-ag-time">{fmtTime(jobStart(j))}</span>
                       <span className="cal-ag-main">
-                        <strong>{j.clientName}</strong>
+                        <strong style={isCancelled(j) ? { textDecoration: "line-through" } : undefined}>{j.clientName}</strong>
                         <span>{typeLabel(j.jobType)}{j.employeePay != null ? ` · ${money(j.employeePay)}` : ""}</span>
                       </span>
                       <StatusPill s={j.status} />
@@ -211,9 +226,10 @@ function AgendaView({ anchor, jobs, onJob }: { anchor: Date; jobs: CalJob[]; onJ
 }
 
 // ── Time grid (week/day, read-only) ──
-function TimeGrid({ view, anchor, jobs, onJob }: { view: "week" | "day"; anchor: Date; jobs: CalJob[]; onJob: (j: CalJob) => void }) {
+function TimeGrid({ view, anchor, jobs, countJobs, today, onJob }: { view: "week" | "day"; anchor: Date; jobs: CalJob[]; countJobs: CalJob[]; today: Date; onJob: (j: CalJob) => void }) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [nowMin, setNowMin] = useState(minOfDay(new Date()));
+  // Business-timezone "now" line — was browser-local.
+  const [nowMin, setNowMin] = useState(() => tzMinOfDay(new Date()));
   const days = view === "day" ? [new Date(anchor)] : Array.from({ length: 7 }, (_, i) => addDays(startOfWeek(anchor), i));
 
   const totalMin = (END_HOUR - START_HOUR) * 60;
@@ -223,7 +239,7 @@ function TimeGrid({ view, anchor, jobs, onJob }: { view: "week" | "day"; anchor:
   for (let h = START_HOUR; h <= END_HOUR; h++) hours.push(h);
 
   useEffect(() => {
-    const t = setInterval(() => setNowMin(minOfDay(new Date())), 60000);
+    const t = setInterval(() => setNowMin(tzMinOfDay(new Date())), 60000);
     return () => clearInterval(t);
   }, []);
   useEffect(() => {
@@ -237,8 +253,8 @@ function TimeGrid({ view, anchor, jobs, onJob }: { view: "week" | "day"; anchor:
         <div className="cal-grid-header">
           <div className="cal-gutter-head" />
           {days.map((d, i) => {
-            const isToday = sameDay(d, new Date());
-            const count = jobs.filter((j) => sameDay(jobStart(j), d)).length;
+            const isToday = civilKey(d) === civilKey(today);
+            const count = jobsOn(countJobs, d).length;
             return (
               <div key={i} className={`cal-dayhead ${isToday ? "today" : ""}`}>
                 <span className="cal-dayhead-dow">{d.toLocaleDateString("en-US", { weekday: view === "day" ? "long" : "short" })}</span>
@@ -258,8 +274,8 @@ function TimeGrid({ view, anchor, jobs, onJob }: { view: "week" | "day"; anchor:
               {hours.map((h) => <div key={h} className="cal-hline" style={{ height: PX_PER_HOUR }} />)}
             </div>
             {days.map((d, i) => {
-              const dayJobs = layout(jobs.filter((j) => sameDay(jobStart(j), d)));
-              const isToday = sameDay(d, new Date());
+              const dayJobs = layout(jobsOn(jobs, d));
+              const isToday = civilKey(d) === civilKey(today);
               return (
                 <div key={i} className="cal-col">
                   <div className="cal-office" style={{ top: minToY(OFFICE_START), height: ((OFFICE_END - OFFICE_START) / 60) * PX_PER_HOUR }} />
@@ -268,7 +284,7 @@ function TimeGrid({ view, anchor, jobs, onJob }: { view: "week" | "day"; anchor:
                   ) : null}
                   {dayJobs.map(({ job, col, cols }) => {
                     const m = meta(job.status);
-                    const sMin = Math.max(START_HOUR * 60, minOfDay(jobStart(job)));
+                    const sMin = Math.max(START_HOUR * 60, tzMinOfDay(jobStart(job)));
                     const dur = jobDurMin(job);
                     const h = Math.max(22, (dur / 60) * PX_PER_HOUR - 3);
                     const compact = dur <= 60;
@@ -339,7 +355,7 @@ function JobModal({ job, onClose }: { job: CalJob; onClose: () => void }) {
             <div className="cjm-row">
               <span className="cjm-k"><CalendarClock size={15} /> When</span>
               <span className="cjm-v">
-                {start.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })} · {fmtTime(start)}{" "}
+                {fmtDateTz(start, { weekday: "short", month: "short", day: "numeric" })} · {fmtTime(start)}{" "}
                 <span style={{ color: "var(--primary-50)" }}>({Math.round((dur / 60) * 10) / 10}h)</span>
               </span>
             </div>
@@ -379,8 +395,19 @@ function JobModal({ job, onClose }: { job: CalJob; onClose: () => void }) {
 
 export default function CleanerCalendarClient({ jobs }: { jobs: CalJob[] }) {
   const [view, setView] = useState<ViewKind>("week");
-  const [anchor, setAnchor] = useState(new Date());
+  // Anchor/"today" follow the business calendar, not the browser's.
+  const [anchor, setAnchor] = useState(() => tzToday());
   const [modalJob, setModalJob] = useState<CalJob | null>(null);
+  // Cancelled jobs are OFF by default: they're not work, so they don't belong
+  // on the schedule and are never counted. The chip makes them reachable.
+  const [showCancelled, setShowCancelled] = useState(false);
+
+  const today = tzToday();
+
+  // Everything that counts as real scheduled work.
+  const activeJobs = useMemo(() => jobs.filter((j) => !isCancelled(j)), [jobs]);
+  const cancelledCount = jobs.length - activeJobs.length;
+  const visibleJobs = showCancelled ? jobs : activeJobs;
 
   const VIEWS: ViewKind[] = ["month", "week", "day", "agenda"];
 
@@ -408,12 +435,24 @@ export default function CleanerCalendarClient({ jobs }: { jobs: CalJob[] }) {
         <div className="cal-tb-left">
           <div className="cal-nav">
             <button className="cal-navbtn" onClick={() => go(-1)} aria-label="Previous"><ChevronLeft size={18} /></button>
-            <button className="cal-today" onClick={() => setAnchor(new Date())}>Today</button>
+            <button className="cal-today" onClick={() => setAnchor(tzToday())}>Today</button>
             <button className="cal-navbtn" onClick={() => go(1)} aria-label="Next"><ChevronRight size={18} /></button>
           </div>
           <h1 className="cal-range">{rangeLabel}</h1>
         </div>
         <div className="cal-tb-right">
+          {cancelledCount > 0 && (
+            <button
+              type="button"
+              className={`cal-ovchip${showCancelled ? " on" : ""}`}
+              aria-pressed={showCancelled}
+              onClick={() => setShowCancelled((v) => !v)}>
+              <span className="cal-ovchip-box" style={{ background: showCancelled ? "#dc2626" : "transparent" }}>
+                {showCancelled ? <Check size={11} strokeWidth={3} /> : null}
+              </span>
+              Show cancelled ({cancelledCount})
+            </button>
+          )}
           <div className="cal-viewseg">
             {VIEWS.map((v) => (
               <button key={v} className={`cal-vbtn ${view === v ? "active" : ""}`} onClick={() => setView(v)}>
@@ -425,9 +464,9 @@ export default function CleanerCalendarClient({ jobs }: { jobs: CalJob[] }) {
       </div>
 
       <div className="cal-body">
-        {view === "month" ? <MonthView anchor={anchor} jobs={jobs} onDay={(d) => { setAnchor(d); setView("day"); }} onJob={setModalJob} /> : null}
-        {view === "agenda" ? <AgendaView anchor={anchor} jobs={jobs} onJob={setModalJob} /> : null}
-        {view === "week" || view === "day" ? <TimeGrid view={view} anchor={anchor} jobs={jobs} onJob={setModalJob} /> : null}
+        {view === "month" ? <MonthView anchor={anchor} jobs={visibleJobs} countJobs={activeJobs} today={today} onDay={(d) => { setAnchor(d); setView("day"); }} onJob={setModalJob} /> : null}
+        {view === "agenda" ? <AgendaView anchor={anchor} jobs={visibleJobs} today={today} onJob={setModalJob} /> : null}
+        {view === "week" || view === "day" ? <TimeGrid view={view} anchor={anchor} jobs={visibleJobs} countJobs={activeJobs} today={today} onJob={setModalJob} /> : null}
       </div>
 
       {modalJob ? <JobModal job={modalJob} onClose={() => setModalJob(null)} /> : null}

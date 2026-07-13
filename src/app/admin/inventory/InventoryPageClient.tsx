@@ -34,6 +34,8 @@ interface Product {
   category?: ProductCategory;
   stockUpdatedAt: string | null;
   stockUpdatedByName: string | null;
+  purchaseUrl: string | null;
+  links: Array<{ label: string; url: string }>;
   totalAssigned: number;
   employeeCount: number;
   totalInventory: number;
@@ -97,6 +99,12 @@ interface CleanerInventoryEntry {
     costPerUnit: number;
     refillThreshold: number;
     isLow: boolean;
+    lastChange: {
+      at: string;
+      by: string | null;
+      delta: number;
+      reason: string | null;
+    } | null;
   }>;
 }
 
@@ -128,6 +136,8 @@ interface InventoryPageClientProps {
   };
   forecastData?: ForecastEmployee[];
   cleanerInventory?: CleanerInventoryEntry[];
+  /** OWNER/ADMIN may edit cleaner kit counts; everyone else gets read-only. */
+  canEditCleanerInventory?: boolean;
   requests?: RequestEntry[];
   archived?: boolean;
 }
@@ -153,6 +163,7 @@ export default function InventoryPageClient({
   supplierData,
   forecastData,
   cleanerInventory = [],
+  canEditCleanerInventory = false,
   requests = [],
   archived = false,
 }: InventoryPageClientProps) {
@@ -323,7 +334,10 @@ export default function InventoryPageClient({
       )}
 
       {activeTab === "cleaners" && (
-        <CleanerInventoryView cleaners={cleanerInventory} />
+        <CleanerInventoryView
+          cleaners={cleanerInventory}
+          canEdit={canEditCleanerInventory}
+        />
       )}
 
       {activeTab === "requests" && <RequestsView requests={requests} />}

@@ -52,13 +52,33 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
+// Pay periods are one Monday–Sunday week (enforced server-side in
+// createPayPeriod). Default the form to the LAST complete week, which is what
+// payroll actually runs on a Monday.
+function isoDay(d: Date) {
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${m}-${day}`;
+}
+function lastWeekMonday(): Date {
+  const d = new Date();
+  const back = ((d.getDay() + 6) % 7) + 7; // back to this week's Monday, then one more week
+  d.setDate(d.getDate() - back);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
 export default function PayoutsPageClient({ initialPeriods }: { initialPeriods: PayPeriodRow[] }) {
   const router = useRouter();
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [createSuccess, setCreateSuccess] = useState(false);
-  const [startDate, setStartDate] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 14); return d.toISOString().slice(0, 10); });
-  const [endDate, setEndDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [startDate, setStartDate] = useState(() => isoDay(lastWeekMonday()));
+  const [endDate, setEndDate] = useState(() => {
+    const d = lastWeekMonday();
+    d.setDate(d.getDate() + 6);
+    return isoDay(d);
+  });
   const [notes, setNotes] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -159,6 +179,10 @@ export default function PayoutsPageClient({ initialPeriods }: { initialPeriods: 
               />
             </div>
           </div>
+          <p style={{ fontSize: 12, color: "var(--primary-60)", marginTop: 10 }}>
+            Pay periods run Monday–Sunday. The range snaps to the week that
+            contains the start date; one period per week.
+          </p>
           {createError && <p style={{ fontSize: 13, color: "#b91c1c", marginTop: 12 }}>{createError}</p>}
           {createSuccess && (
             <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#15803d", marginTop: 12 }}>

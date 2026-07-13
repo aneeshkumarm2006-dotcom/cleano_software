@@ -20,6 +20,8 @@ import {
   findUnknownColumns,
   buildTemplateCsv,
   type EntityKey,
+  type ImportOptionKey,
+  type ImportOptions,
 } from "@/lib/csv/entities";
 import { importCsv, type ImportResponse } from "@/app/admin/actions/importCsv";
 
@@ -60,6 +62,9 @@ export default function ImportCsvButton({ entity, label, triggerClassName }: Imp
   const [parseError, setParseError] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<ImportResponse | null>(null);
+  // Duplicate-handling toggles declared by the entity config. All default OFF —
+  // the server re-derives them as booleans and never trusts this object.
+  const [options, setOptions] = useState<ImportOptions>({});
 
   const validCount = preview.filter((r) => r.errors.length === 0).length;
   const invalidCount = preview.length - validCount;
@@ -71,6 +76,7 @@ export default function ImportCsvButton({ entity, label, triggerClassName }: Imp
     setUnknownCols([]);
     setParseError(null);
     setResult(null);
+    setOptions({});
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
@@ -116,7 +122,7 @@ export default function ImportCsvButton({ entity, label, triggerClassName }: Imp
   async function handleImport() {
     setImporting(true);
     try {
-      const res = await importCsv(entity, records);
+      const res = await importCsv(entity, records, options);
       setResult(res);
       if (res.ok && res.summary.created > 0) router.refresh();
     } finally {
@@ -212,6 +218,42 @@ export default function ImportCsvButton({ entity, label, triggerClassName }: Imp
             </div>
           )}
 
+          {/* Duplicate-handling options (entity-declared, all default OFF) */}
+          {!result && preview.length > 0 && (config.importOptions?.length ?? 0) > 0 && (
+            <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+              <div className="text-xs font-[450] text-gray-600 mb-2 uppercase tracking-wider">
+                Duplicate handling
+              </div>
+              {config.importOptions!.map((opt) => {
+                const checked = options[opt.key] === true;
+                return (
+                  <div key={opt.key}>
+                    <label className="flex items-start gap-2 text-sm text-gray-700">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5"
+                        checked={checked}
+                        onChange={(e) =>
+                          setOptions((o) => ({
+                            ...o,
+                            [opt.key as ImportOptionKey]: e.target.checked,
+                          }))
+                        }
+                      />
+                      <span>{opt.label}</span>
+                    </label>
+                    {opt.help && (
+                      <p className="ml-6 text-xs text-gray-500 mt-0.5">{opt.help}</p>
+                    )}
+                    {checked && opt.warning && (
+                      <p className="ml-6 text-xs text-amber-600 mt-1">{opt.warning}</p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
           {/* Preview */}
           {!result && preview.length > 0 && (
             <div>
@@ -280,7 +322,13 @@ export default function ImportCsvButton({ entity, label, triggerClassName }: Imp
                       <CheckCircle2 size={14} /> {result.summary.created} created
                     </span>
                     <span className="flex items-center gap-1 text-gray-500">
-                      <MinusCircle size={14} /> {result.summary.skipped} skipped (duplicates)
+                      <MinusCircle size={14} /> {result.summary.skipped} skipped
+                      {result.summary.skipped > 0 &&
+                        ` (${result.summary.duplicates} duplicate${
+                          result.summary.skipped > result.summary.duplicates
+                            ? `, ${result.summary.skipped - result.summary.duplicates} other`
+                            : ""
+                        })`}
                     </span>
                     <span className="flex items-center gap-1 text-red-600">
                       <XCircle size={14} /> {result.summary.failed} failed

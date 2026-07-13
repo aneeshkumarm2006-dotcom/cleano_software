@@ -2,15 +2,26 @@
 // Analytics, Jobs, Clients, and Employees each computed "revenue" and
 // "employee count" with different predicates, so the same date range showed
 // different numbers per page. Every page must now use these helpers.
+//
+// The PURE predicates (jobRevenue, isRevenueJob, scheduled-value, EMPLOYEE_ROLES)
+// live in ./metrics-shared so client components can apply the identical rule to
+// a client-side filtered list. They are re-exported here — server code keeps
+// importing from "@/lib/metrics" and the two definitions can never drift.
 import "server-only";
 import { db } from "@/db";
 import type { Prisma } from "@prisma/client";
+import { jobRevenue, EMPLOYEE_ROLES } from "./metrics-shared";
+
+export * from "./metrics-shared";
 
 // ── Total Revenue ───────────────────────────────────────────────────────────
 // Spec: completed AND paid jobs only; excludes taxes; applies discounts;
 // subtracts refunds; includes paid cash jobs; excludes cancelled + unpaid.
 // The revenue date basis is startTime (non-nullable, reliable) so a given date
 // filter yields the same number everywhere.
+//
+// KEEP IN LOCKSTEP with isRevenueJob() in ./metrics-shared — this is the SQL
+// form of the same predicate.
 
 export type DateRange = { from?: Date; to?: Date };
 
@@ -29,18 +40,6 @@ export function revenueWhere(range?: DateRange): Prisma.JobWhereInput {
   return where;
 }
 
-// Per-job realized revenue: pre-tax price, less discount, less refunds.
-export function jobRevenue(j: {
-  price: number | null;
-  discountAmount: number | null;
-  refundedAmount: number | null;
-}): number {
-  return Math.max(
-    0,
-    (j.price ?? 0) - (j.discountAmount ?? 0) - (j.refundedAmount ?? 0)
-  );
-}
-
 export async function getTotalRevenue(range?: DateRange): Promise<number> {
   const jobs = await db.job.findMany({
     where: revenueWhere(range),
@@ -53,10 +52,7 @@ export async function getTotalRevenue(range?: DateRange): Promise<number> {
 // Spec: one count across Dashboard, Analytics, Employees. Active cleaner /
 // employee profiles only. Exclude clients (imported CLIENT-role logins),
 // archived (soft-deleted) users. Inactive shown separately.
-
-// Field staff — the people who actually clean or manage crews. Excludes CLIENT
-// (imported customers) and the office OWNER/ADMIN (counted separately).
-export const EMPLOYEE_ROLES = ["OPS_MANAGER", "FIELD_LEAD", "EMPLOYEE"] as const;
+// (EMPLOYEE_ROLES is defined in ./metrics-shared and re-exported above.)
 
 export function employeeWhere(activeOnly = true): Prisma.UserWhereInput {
   return {

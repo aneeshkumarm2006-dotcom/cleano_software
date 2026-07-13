@@ -283,10 +283,27 @@ export default function SettingsClient({
 }: SettingsClientProps) {
   const [activeTab, setActiveTab] = useState<TabId>("profile");
 
-  // Canonical 1–26 numbering follows the TABS order; groups only render their
-  // admin-visible tabs (non-admins see "You" only).
-  const tabNumber = (id: TabId) =>
-    String(TABS.findIndex((t) => t.id === id) + 1).padStart(2, "0");
+  // The number beside each sidebar item is a REAL record count for that section.
+  // (It used to be the tab's zero-padded ORDINAL — "04", "05", "07" — which read
+  // like a count of records and was wrong every time.)
+  //
+  // Only sections backed by a list of records get a number; config sections
+  // (Tax, Pricing, General, …) are single settings forms with nothing to count,
+  // so they show nothing rather than a fake number. Counts come straight from the
+  // props the server page already passes, so they update whenever records change.
+  const tabCounts: Partial<Record<TabId, number>> = {
+    inventoryRules: inventoryRules.length,
+    kitTemplates: kitTemplates.length,
+    checklistTemplates: checklistTemplates.length,
+    training: trainingModules.length,
+    documents: documents.length,
+    budgets: budgets.length,
+    suppliers: suppliers.length,
+    inventoryLocations: inventoryLocations.length,
+    serviceAreas: serviceAreas.length,
+    notifications: notificationSettings.length,
+  };
+
   const visibleGroups = TAB_GROUPS.map((g) => ({
     label: g.label,
     ids: g.ids.filter((id) => {
@@ -301,9 +318,16 @@ export default function SettingsClient({
   return (
     <div className="admin-font stack-24">
       <header className="stack-8">
-        <p className="eyebrow">Admin</p>
+        {/* The cleaner settings route re-exports this page, so this label must
+            follow the viewer's role — it used to read "Admin" for everyone,
+            including every cleaner. */}
+        <p className="eyebrow">{isAdmin ? "Admin" : "Account"}</p>
         <h1 className="display">Settings</h1>
-        <p style={{ fontSize: 15, color: "var(--primary-70)" }}>Manage your account and application configuration.</p>
+        <p style={{ fontSize: 15, color: "var(--primary-70)" }}>
+          {isAdmin
+            ? "Manage your account and application configuration."
+            : "Manage your account."}
+        </p>
       </header>
 
       <div className="set-layout">
@@ -315,6 +339,7 @@ export default function SettingsClient({
                 const tab = TABS.find((t) => t.id === id)!;
                 const Icon = tab.icon;
                 const active = activeTab === id;
+                const count = tabCounts[id];
                 return (
                   <button
                     key={id}
@@ -323,7 +348,13 @@ export default function SettingsClient({
                     onClick={() => setActiveTab(id)}>
                     <Icon strokeWidth={1.9} size={16} />
                     <span>{tab.label}</span>
-                    <span className="smenu-num">{tabNumber(id)}</span>
+                    {count !== undefined && (
+                      <span
+                        className="smenu-num"
+                        title={`${count} ${count === 1 ? "record" : "records"}`}>
+                        {count}
+                      </span>
+                    )}
                   </button>
                 );
               })}

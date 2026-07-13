@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import ClientModal from "../ClientModal";
 import ClientAddressManager from "../ClientAddressManager";
+import ClientPaymentMethods from "./ClientPaymentMethods";
 
 type TabKey = "history" | "payments" | "ratings";
 
@@ -382,57 +383,72 @@ export default function ClientDetailView({
         )
       )}
 
-      {/* Payments */}
+      {/* Payments — saved cards first, then the transaction history */}
       {tab === "payments" && (() => {
         const paid = jobs.filter(j => j.paymentReceived);
-        return paid.length === 0 ? (
-          <div className="atable-wrap" style={{ padding: "60px 40px", textAlign: "center", color: "var(--primary-60)" }}>
-            No payments recorded.
-          </div>
-        ) : (
-          <div className="atable-wrap">
-            <div className="atable-scroll">
-              <table className="atable">
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Job</th>
-                    <th className="num">Amount</th>
-                    <th>Payment type</th>
-                    <th>Received</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {paid.map(j => {
-                    const d = j.jobDate || j.startTime;
-                    return (
-                      <tr key={j.id} onClick={() => { window.location.href = `/admin/jobs/${j.id}`; }}>
-                        <td className="col-date" style={{ minWidth: 130 }}>
-                          <div className="date-line">{dateStr(d)}</div>
-                        </td>
-                        <td>
-                          <a href={`/admin/jobs/${j.id}`} className="link" onClick={e => e.stopPropagation()} style={{ fontSize: 13 }}>
-                            View job
-                          </a>
-                        </td>
-                        <td className="num" style={{ fontWeight: 600, color: "#059669" }}>
-                          +${(j.price || 0).toFixed(0)}
-                        </td>
-                        <td>
-                          {j.paymentType ? (
-                            <span className="pill" style={{ background: "var(--primary-10)", color: "var(--primary)" }}>
-                              {j.paymentType}
-                            </span>
-                          ) : <span style={{ color: "var(--primary-40)" }}>—</span>}
-                        </td>
-                        <td>
-                          <span className="pay-icon paid">✓</span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+        return (
+          <div className="stack-16">
+            <ClientPaymentMethods
+              clientId={client.id}
+              clientName={client.name}
+              clientEmail={client.email}
+            />
+
+            <div>
+              <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)", margin: "0 0 10px" }}>
+                Transaction history
+              </h3>
+              {paid.length === 0 ? (
+                <div className="atable-wrap" style={{ padding: "48px 40px", textAlign: "center", color: "var(--primary-60)" }}>
+                  No payments recorded.
+                </div>
+              ) : (
+                <div className="atable-wrap">
+                  <div className="atable-scroll">
+                    <table className="atable">
+                      <thead>
+                        <tr>
+                          <th>Date</th>
+                          <th>Job</th>
+                          <th className="num">Amount</th>
+                          <th>Payment type</th>
+                          <th>Received</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {paid.map(j => {
+                          const d = j.jobDate || j.startTime;
+                          return (
+                            <tr key={j.id} onClick={() => { window.location.href = `/admin/jobs/${j.id}`; }}>
+                              <td className="col-date" style={{ minWidth: 130 }}>
+                                <div className="date-line">{dateStr(d)}</div>
+                              </td>
+                              <td>
+                                <a href={`/admin/jobs/${j.id}`} className="link" onClick={e => e.stopPropagation()} style={{ fontSize: 13 }}>
+                                  View job
+                                </a>
+                              </td>
+                              <td className="num" style={{ fontWeight: 600, color: "#059669" }}>
+                                +${(j.price || 0).toFixed(0)}
+                              </td>
+                              <td>
+                                {j.paymentType ? (
+                                  <span className="pill" style={{ background: "var(--primary-10)", color: "var(--primary)" }}>
+                                    {j.paymentType}
+                                  </span>
+                                ) : <span style={{ color: "var(--primary-40)" }}>—</span>}
+                              </td>
+                              <td>
+                                <span className="pay-icon paid">✓</span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         );

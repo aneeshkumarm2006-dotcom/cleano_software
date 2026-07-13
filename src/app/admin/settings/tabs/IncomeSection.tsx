@@ -175,9 +175,8 @@ export default function IncomeSection({ employeeId }: IncomeSectionProps) {
                 </Text>
               </View>
               <View style={styles.kpiBox}>
-                <Text style={styles.kpiLabel}>
-                  EST. TAXES ({(summary.estimatedTaxRate * 100).toFixed(1)}%)
-                </Text>
+                {/* Estimate only — never presented as an official/internal rate. */}
+                <Text style={styles.kpiLabel}>EST. TAXES</Text>
                 <Text style={styles.kpiValue}>
                   {formatCurrency(summary.estimatedTaxes)}
                 </Text>
@@ -261,11 +260,31 @@ export default function IncomeSection({ employeeId }: IncomeSectionProps) {
     );
   }
 
+  // Zero-value cards are dropped rather than rendered as "$0.00" (item 6/11).
+  // The headline earnings cards always show so the section never looks broken.
+  const earningsStats: StatTile[] = ([
+    { label: `Earned ${data.year}`, value: formatCurrency(data.earnedYTD), show: true },
+    { label: "Paid out", value: formatCurrency(data.netYTD), show: true },
+    { label: "Gross", value: formatCurrency(data.grossYTD), show: data.grossYTD > 0 },
+    { label: "Estimated taxes", value: formatCurrency(data.estimatedTaxes), tone: "amber", show: data.estimatedTaxes > 0 },
+    { label: "Cleano deductions", value: formatCurrency(data.deductionsYTD), tone: "red", show: data.deductionsYTD !== 0 },
+    { label: "Adjustments", value: formatCurrency(data.adjustmentsYTD), tone: "blue", show: data.adjustmentsYTD !== 0 },
+    { label: "Reimbursements", value: formatCurrency(data.reimbursementsYTD), show: data.reimbursementsYTD !== 0 },
+    { label: "Hours worked", value: `${data.totalHoursYTD.toFixed(1)}h`, show: data.totalHoursYTD > 0 },
+    { label: "Jobs completed", value: String(data.jobsCompletedYTD), show: true },
+  ] as StatTile[]).filter((s) => s.show);
+
+  const activityStats: StatTile[] = [
+    { label: "Pending pay", value: formatCurrency(data.pendingAmount), show: data.pendingAmount > 0 },
+    { label: "Withdrawn YTD", value: formatCurrency(data.withdrawnYTD), show: data.withdrawnYTD > 0 },
+    { label: "Paid periods", value: String(data.paidPayoutCount), show: data.paidPayoutCount > 0 },
+  ].filter((s) => s.show);
+
   return (
     <div className="space-y-6">
       <SectionCard
         title={`Year-To-Date Earnings (${data.year})`}
-        description="Earnings from PAID payouts and estimated taxes."
+        description="Everything you earned for work done this year — paid and pending."
         icon={DollarSign}
         actions={
           <button className="cl-action-btn" onClick={handleDownload} disabled={downloading}>
@@ -274,64 +293,41 @@ export default function IncomeSection({ employeeId }: IncomeSectionProps) {
           </button>
         }>
         <div className="cl-income-stats-grid">
-          <div className="cl-income-mini"><div className="label">Gross YTD</div><div className="val">{formatCurrency(data.grossYTD)}</div></div>
-          <div className="cl-income-mini"><div className="label">Net income</div><div className="val">{formatCurrency(data.netYTD)}</div></div>
-          <div className="cl-income-mini"><div className="label">Est. taxes ({(data.estimatedTaxRate * 100).toFixed(1)}%)</div><div className="val amber">{formatCurrency(data.estimatedTaxes)}</div></div>
-          <div className="cl-income-mini"><div className="label">Cleano deductions</div><div className="val red">{formatCurrency(data.deductionsYTD)}</div></div>
-          <div className="cl-income-mini"><div className="label">Adjustments</div><div className="val blue">{formatCurrency(data.adjustmentsYTD)}</div></div>
-          <div className="cl-income-mini"><div className="label">Reimbursements</div><div className="val">{formatCurrency(data.reimbursementsYTD)}</div></div>
-          <div className="cl-income-mini"><div className="label">Hours worked</div><div className="val">{data.totalHoursYTD.toFixed(1)}h</div></div>
-          <div className="cl-income-mini"><div className="label">Jobs completed</div><div className="val">{data.jobsCompletedYTD}</div></div>
-        </div>
-      </SectionCard>
-
-      <SectionCard
-        title="Other Activity"
-        description="Pending earnings and withdrawals this year."
-        icon={FileText}>
-        <div className="cl-income-stats-grid" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
-          <div className="cl-income-mini"><div className="label">Pending pay</div><div className="val">{formatCurrency(data.pendingAmount)}</div></div>
-          <div className="cl-income-mini"><div className="label">Withdrawn YTD</div><div className="val">{formatCurrency(data.withdrawnYTD)}</div></div>
-          <div className="cl-income-mini"><div className="label">Paid periods</div><div className="val">{data.paidPayoutCount}</div></div>
+          {earningsStats.map((s) => (
+            <div className="cl-income-mini" key={s.label}>
+              <div className="label">{s.label}</div>
+              <div className={`val${s.tone ? ` ${s.tone}` : ""}`}>{s.value}</div>
+            </div>
+          ))}
         </div>
         <div className="cl-form-hint" style={{ marginTop: 14 }}>
-          Estimated taxes are an approximation; not an official tax document.
+          Estimated taxes are a rough approximation, not tax advice or an
+          official tax document.
         </div>
       </SectionCard>
+
+      {activityStats.length > 0 && (
+        <SectionCard
+          title="Other Activity"
+          description="Pending earnings and withdrawals this year."
+          icon={FileText}>
+          <div className="cl-income-stats-grid">
+            {activityStats.map((s) => (
+              <div className="cl-income-mini" key={s.label}>
+                <div className="label">{s.label}</div>
+                <div className={`val${s.tone ? ` ${s.tone}` : ""}`}>{s.value}</div>
+              </div>
+            ))}
+          </div>
+        </SectionCard>
+      )}
     </div>
   );
 }
 
-function Stat({
-  label,
-  value,
-  highlight,
-  tone,
-}: {
+type StatTile = {
   label: string;
   value: string;
-  highlight?: boolean;
   tone?: "amber" | "red" | "blue";
-}) {
-  const toneClass =
-    tone === "red"
-      ? "text-red-600"
-      : tone === "amber"
-        ? "text-amber-700"
-        : tone === "blue"
-          ? "text-blue-600"
-          : "text-[#008C9C]";
-  return (
-    <div className="rounded-2xl bg-[#008C9C]/5 p-4">
-      <p className="text-[10px] uppercase tracking-wider text-[#008C9C]/50 mb-1">
-        {label}
-      </p>
-      <p
-        className={`text-xl font-[400] ${toneClass} ${
-          highlight ? "font-[500]" : ""
-        }`}>
-        {value}
-      </p>
-    </div>
-  );
-}
+  show: boolean;
+};

@@ -26,8 +26,11 @@ import {
   Clock,
   ArrowUpRight,
   ArrowDownRight,
+  ExternalLink,
+  ShoppingCart,
 } from "lucide-react";
 import { fmtDateTime } from "@/lib/time";
+import { sanitizeHttpUrl, urlHost } from "@/lib/safe-url";
 
 type TabView = "overview" | "usage" | "assignments" | "history";
 
@@ -55,6 +58,12 @@ const MENU_ITEMS: Array<{ id: TabView; label: string; icon: React.ReactNode }> =
     },
   ];
 
+interface ProductLink {
+  id: string;
+  label: string;
+  url: string;
+}
+
 interface Product {
   id: string;
   name: string;
@@ -65,6 +74,8 @@ interface Product {
   minStock: number;
   stockUpdatedAt: string | null;
   stockUpdatedByName: string | null;
+  purchaseUrl: string | null;
+  links: ProductLink[];
 }
 
 interface ChangeEntry {
@@ -131,6 +142,35 @@ export default function ProductDetailView({
   const isLowStock = product.stockLevel <= product.minStock;
   const totalInventory = product.stockLevel + totalAssigned;
   const totalValue = totalInventory * product.costPerUnit;
+
+  // Primary purchase link first, then the extras. Anything that isn't an
+  // absolute http(s) URL is dropped rather than rendered — never trust a stored
+  // string that is about to become an href.
+  const purchaseLinks: Array<{
+    key: string;
+    label: string;
+    href: string;
+    isPrimary: boolean;
+  }> = [];
+  const primaryHref = sanitizeHttpUrl(product.purchaseUrl);
+  if (primaryHref) {
+    purchaseLinks.push({
+      key: "primary",
+      label: urlHost(primaryHref) || "Purchase link",
+      href: primaryHref,
+      isPrimary: true,
+    });
+  }
+  for (const l of product.links) {
+    const href = sanitizeHttpUrl(l.url);
+    if (!href) continue;
+    purchaseLinks.push({
+      key: l.id,
+      label: l.label || urlHost(href) || "Link",
+      href,
+      isPrimary: false,
+    });
+  }
 
   // Sync activeView with URL params
   useEffect(() => {
@@ -339,6 +379,50 @@ export default function ProductDetailView({
             </p>
           </div>
         </div>
+      )}
+
+      {/* Purchase links — where to re-order this exact product. Every href is
+          re-sanitized here (http/https only) and opened with rel="noopener
+          noreferrer" so the new tab can never reach back through window.opener. */}
+      {purchaseLinks.length > 0 && (
+        <>
+          <h2 className="input-label !text-[#008C9C]/70">Where to buy</h2>
+          <Card variant="default" className="p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="p-2 bg-[#008C9C]/10 rounded-lg">
+                <ShoppingCart className="w-4 h-4 text-[#008C9C]" />
+              </div>
+              <h3 className="text-sm font-[350] text-[#008C9C]/80">
+                Purchase links
+              </h3>
+            </div>
+            <div className="space-y-2">
+              {purchaseLinks.map((l) => (
+                <a
+                  key={l.key}
+                  href={l.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-between gap-3 p-3 rounded-xl bg-[#008C9C]/5 hover:bg-[#008C9C]/10 transition-colors">
+                  <div className="min-w-0">
+                    <p className="text-sm font-[400] text-[#008C9C] truncate">
+                      {l.label}
+                    </p>
+                    <p className="text-xs text-[#008C9C]/60 truncate">{l.href}</p>
+                  </div>
+                  <span className="flex items-center gap-2 shrink-0">
+                    {l.isPrimary && (
+                      <Badge variant="cleano" size="sm">
+                        Primary
+                      </Badge>
+                    )}
+                    <ExternalLink className="w-4 h-4 text-[#008C9C]/60" />
+                  </span>
+                </a>
+              ))}
+            </div>
+          </Card>
+        </>
       )}
 
       {/* Description */}

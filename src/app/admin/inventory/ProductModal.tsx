@@ -13,6 +13,8 @@ import {
   Hash,
   FileText,
   AlertTriangle,
+  Link2,
+  Plus,
 } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
@@ -20,6 +22,8 @@ import Textarea from "@/components/ui/Textarea";
 import createProduct from "../actions/createProduct";
 import { updateProduct } from "../actions/updateProduct";
 import { deleteProduct } from "../actions/deleteProduct";
+import { isHttpUrl } from "@/lib/safe-url";
+import { MAX_PRODUCT_LINKS, MAX_LINK_LABEL_LENGTH } from "@/lib/product-links";
 
 type ProductCategory = "LIQUID_SPRAY" | "MOP_LIQUID" | "DISPOSABLE" | "OTHER";
 
@@ -27,6 +31,11 @@ type ProductCategory = "LIQUID_SPRAY" | "MOP_LIQUID" | "DISPOSABLE" | "OTHER";
 // treated as a custom unit ("Other") so existing/free-text values still work.
 const UNIT_PRESETS = ["ml", "L", "gallons", "pieces", "units", "bottles", "kg"] as const;
 const UNIT_OTHER = "__other__";
+
+export interface ProductLinkRow {
+  label: string;
+  url: string;
+}
 
 interface Product {
   id: string;
@@ -37,6 +46,10 @@ interface Product {
   stockLevel: number;
   minStock: number;
   category?: ProductCategory;
+  /** The one exact re-order link. */
+  purchaseUrl?: string | null;
+  /** Any number of additional labelled links. */
+  links?: ProductLinkRow[];
 }
 
 interface ProductModalProps {
@@ -55,6 +68,14 @@ const formSchema = z.object({
   minStock: z.coerce.number().min(0, "Minimum stock must be 0 or greater"),
   category: z.enum(["LIQUID_SPRAY", "MOP_LIQUID", "DISPOSABLE", "OTHER"]).default("OTHER"),
   stockReason: z.string().optional(),
+  // Same allow-list the server enforces (http/https only) — this is UX, not the
+  // security boundary: createProduct/updateProduct re-validate every URL.
+  purchaseUrl: z
+    .string()
+    .optional()
+    .refine((v) => !v || !v.trim() || isHttpUrl(v), {
+      message: "Enter a full http:// or https:// URL",
+    }),
 });
 
 type FormInput = z.input<typeof formSchema>;
@@ -76,6 +97,11 @@ export function ProductModal({
   // field. Existing/custom units that aren't in the preset list start here.
   const [customUnit, setCustomUnit] = useState(false);
 
+  // Additional purchase links (label + url). Kept outside react-hook-form since
+  // it's a repeatable list; serialized to JSON on submit.
+  const [links, setLinks] = useState<ProductLinkRow[]>([]);
+  const [linkError, setLinkError] = useState<string | null>(null);
+
   const {
     register,
     handleSubmit,
@@ -95,6 +121,7 @@ export function ProductModal({
       minStock: 0,
       category: "OTHER",
       stockReason: "",
+      purchaseUrl: "",
     },
   });
 
@@ -111,7 +138,15 @@ export function ProductModal({
         minStock: product?.minStock || 0,
         category: product?.category || "OTHER",
         stockReason: "",
+        purchaseUrl: product?.purchaseUrl || "",
       });
+      setLinks(
+        (product?.links ?? []).map((l) => ({
+          label: l.label ?? "",
+          url: l.url,
+        }))
+      );
+      setLinkError(null);
       // If the existing unit isn't a preset (including a custom value on an
       // existing product), default the dropdown to "Other" and keep the value.
       setCustomUnit(
@@ -120,12 +155,44 @@ export function ProductModal({
     }
   }, [isOpen, product, mode, reset]);
 
+  const addLink = () => {
+    setLinks((prev) =>
+      prev.length >= MAX_PRODUCT_LINKS ? prev : [...prev, { label: "", url: "" }]
+    );
+  };
+
+  const updateLink = (index: number, patch: Partial<ProductLinkRow>) => {
+    setLinks((prev) =>
+      prev.map((l, i) => (i === index ? { ...l, ...patch } : l))
+    );
+    setLinkError(null);
+  };
+
+  const removeLink = (index: number) => {
+    setLinks((prev) => prev.filter((_, i) => i !== index));
+    setLinkError(null);
+  };
+
   const disableForm = submitting || isDeleting;
 
   const onSubmit = async (values: FormValues) => {
+    // Drop rows the user added but never filled in; anything left must be a real
+    // http(s) URL. (The server re-validates — this is just a friendlier error.)
+    const cleanedLinks = links
+      .map((l) => ({ label: l.label.trim(), url: l.url.trim() }))
+      .filter((l) => l.label || l.url);
+    const bad = cleanedLinks.find((l) => !isHttpUrl(l.url));
+    if (bad) {
+      setLinkError(
+        `"${bad.label || bad.url || "Link"}" needs a full http:// or https:// URL.`
+      );
+      return;
+    }
+
     setSubmitting(true);
     setGlobalError(null);
     setSuccessMessage(null);
+    setLinkError(null);
 
     try {
       const formData = new FormData();
@@ -137,6 +204,8 @@ export function ProductModal({
       formData.append("minStock", String(values.minStock));
       formData.append("category", values.category);
       formData.append("stockReason", values.stockReason || "");
+      formData.append("purchaseUrl", (values.purchaseUrl || "").trim());
+      formData.append("links", JSON.stringify(cleanedLinks));
 
       let result;
       if (mode === "create") {
@@ -507,6 +576,98 @@ export function ProductModal({
                     Alert when stock falls below this level
                   </p>
                 </div>
+              </div>
+
+              {/* Purchase links — where to re-order this exact product. */}
+              <div>
+                <label className="input-label">Purchase link</label>
+                <div className="relative">
+                  <Link2 className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/50" />
+                  <Input
+                    variant="form"
+                    type="url"
+                    size="md"
+                    inputMode="url"
+                    {...register("purchaseUrl")}
+                    disabled={disableForm}
+                    error={!!errors.purchaseUrl}
+                    className="w-full pl-11 px-4 py-3"
+                    placeholder="https://supplier.com/product/123"
+                    border={false}
+                  />
+                </div>
+                {errors.purchaseUrl ? (
+                  <p className="my-1 text-xs text-red-600">
+                    {errors.purchaseUrl.message}
+                  </p>
+                ) : (
+                  <p className="text-xs text-[#008C9C]/60 mt-1">
+                    The exact link to buy this product again. Must start with
+                    http:// or https://
+                  </p>
+                )}
+              </div>
+
+              {/* Additional links (label + url) */}
+              <div>
+                <div className="flex items-center justify-between gap-2">
+                  <label className="input-label">Additional links</label>
+                  <button
+                    type="button"
+                    onClick={addLink}
+                    disabled={disableForm || links.length >= MAX_PRODUCT_LINKS}
+                    className="inline-flex items-center gap-1 text-xs text-[#008C9C] disabled:text-[#008C9C]/40">
+                    <Plus className="w-3.5 h-3.5" />
+                    Add link
+                  </button>
+                </div>
+
+                {links.length === 0 ? (
+                  <p className="text-xs text-[#008C9C]/60 mt-1">
+                    Optional. Alternate suppliers, spec sheets, or bulk-order pages.
+                  </p>
+                ) : (
+                  <div className="space-y-2 mt-2">
+                    {links.map((link, i) => (
+                      <div key={i} className="flex items-start gap-2">
+                        <input
+                          type="text"
+                          value={link.label}
+                          maxLength={MAX_LINK_LABEL_LENGTH}
+                          disabled={disableForm}
+                          onChange={(e) => updateLink(i, { label: e.target.value })}
+                          placeholder="Label (e.g. Costco)"
+                          className="w-1/3 px-3 py-2.5 rounded-xl border border-[#008C9C]/15 bg-white text-[#003C46] text-sm placeholder:text-[#008C9C]/40 focus:outline-none focus:border-[#008C9C]"
+                        />
+                        <input
+                          type="url"
+                          inputMode="url"
+                          value={link.url}
+                          disabled={disableForm}
+                          onChange={(e) => updateLink(i, { url: e.target.value })}
+                          placeholder="https://…"
+                          className="flex-1 px-3 py-2.5 rounded-xl border border-[#008C9C]/15 bg-white text-[#003C46] text-sm placeholder:text-[#008C9C]/40 focus:outline-none focus:border-[#008C9C]"
+                        />
+                        <button
+                          type="button"
+                          aria-label="Remove link"
+                          onClick={() => removeLink(i)}
+                          disabled={disableForm}
+                          className="p-2.5 rounded-xl text-[#008C9C]/50 hover:text-red-600 hover:bg-red-50">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {linkError && (
+                  <p className="my-1 text-xs text-red-600">{linkError}</p>
+                )}
+                {links.length >= MAX_PRODUCT_LINKS && (
+                  <p className="text-xs text-[#008C9C]/60 mt-1">
+                    Maximum of {MAX_PRODUCT_LINKS} additional links.
+                  </p>
+                )}
               </div>
 
               {/* Reason for stock adjustment — recorded in the audit trail when

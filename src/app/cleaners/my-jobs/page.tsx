@@ -1,7 +1,14 @@
 import { db } from "@/db";
 import { requireCleaner } from "@/lib/page-guards";
 import { Prisma } from "@prisma/client";
-import { startOfDayTz } from "@/lib/time";
+import {
+  cleanerAssignedWhere,
+  upcomingFilter,
+  inProgressFilter,
+  doneFilter,
+  cancelledFilter,
+  pastFilter,
+} from "@/lib/cleaner-jobs";
 import { JobsFilters } from "./JobsFilters";
 import { JobsPagination } from "./JobsPagination";
 import { TableLoadingOverlay } from "./TableLoadingOverlay";
@@ -44,24 +51,10 @@ export default async function MyJobsPage({
       : defaultSortOrder;
 
   const now = new Date();
-  // Jobs stay "upcoming" until the business day ends, so a cleaner still sees
-  // today's job after its start time has passed.
-  const dayStart = startOfDayTz(now);
 
-  // Build where clause
-  const where: Prisma.JobWhereInput = {
-    deletedAt: null,
-    OR: [
-      { employeeId: session.user.id },
-      {
-        cleaners: {
-          some: {
-            id: session.user.id,
-          },
-        },
-      },
-    ],
-  };
+  // Base scope + status predicates come from @/lib/cleaner-jobs so My Jobs, the
+  // Cleaner Dashboard and the Cleaner Calendar agree on what "upcoming" means.
+  const where: Prisma.JobWhereInput = cleanerAssignedWhere(session.user.id);
 
   const andFilters: Prisma.JobWhereInput[] = [];
 
@@ -77,26 +70,15 @@ export default async function MyJobsPage({
 
   // Status filter — applied in SQL so cursor pagination stays correct.
   if (status === "upcoming") {
-    andFilters.push({
-      status: { notIn: ["COMPLETED", "CANCELLED"] },
-      clockOutTime: null,
-      startTime: { gte: dayStart },
-    });
+    andFilters.push(upcomingFilter(now));
   } else if (status === "in_progress") {
-    andFilters.push({
-      OR: [
-        { status: "IN_PROGRESS" },
-        { clockInTime: { not: null }, clockOutTime: null, status: { not: "CANCELLED" } },
-      ],
-    });
+    andFilters.push(inProgressFilter());
   } else if (status === "completed") {
-    andFilters.push({
-      OR: [{ status: "COMPLETED" }, { clockOutTime: { not: null } }],
-    });
+    andFilters.push(doneFilter());
   } else if (status === "cancelled") {
-    andFilters.push({ status: "CANCELLED" });
+    andFilters.push(cancelledFilter());
   } else if (status === "past") {
-    andFilters.push({ startTime: { lt: dayStart } });
+    andFilters.push(pastFilter(now));
   }
 
   // Job type filter

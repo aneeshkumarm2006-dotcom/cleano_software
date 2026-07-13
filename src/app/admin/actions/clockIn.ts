@@ -12,6 +12,12 @@ import {
 import { computeLateArrivalPenalty } from "@/lib/policy";
 import { applyStrike } from "@/lib/strikes";
 import { setAssignmentProgress } from "@/lib/job-assignments";
+import {
+  CLOCK_IN_BLOCKED_STATUSES,
+  CLOCK_IN_EARLY_WINDOW_MIN,
+  clockInOpensAt,
+} from "@/lib/cleaner-jobs";
+import { fmtDateTime } from "@/lib/time";
 
 /** Minutes late that earns an accountability strike (subject to admin excuse). */
 const STRIKE_LATE_MIN = 45;
@@ -35,7 +41,8 @@ export async function clockIn(jobId: string) {
       },
     });
 
-    if (!job) {
+    // Fail closed: a soft-deleted job is not clockable.
+    if (!job || job.deletedAt) {
       return { success: false, error: "Job not found" };
     }
 
@@ -54,7 +61,30 @@ export async function clockIn(jobId: string) {
       return { success: false, error: "Already clocked in" };
     }
 
+    // A cancelled / finished job can't be clocked into. This used to be
+    // unguarded, so a cleaner could clock in on a CANCELLED job.
+    if ((CLOCK_IN_BLOCKED_STATUSES as readonly string[]).includes(job.status)) {
+      return {
+        success: false,
+        error:
+          job.status === "CANCELLED"
+            ? "This job was cancelled — you can't clock in."
+            : "This job is already finished.",
+      };
+    }
+
     const now = new Date();
+
+    // Date guard: clock-in opens a fixed window before the scheduled start.
+    // Without this, a cleaner could clock in DAYS early and produce a
+    // clockInTime that predates the job date (and bogus hours/pay).
+    const opensAt = clockInOpensAt(job.startTime);
+    if (now.getTime() < opensAt.getTime()) {
+      return {
+        success: false,
+        error: `Too early to clock in. Clock-in opens ${CLOCK_IN_EARLY_WINDOW_MIN / 60} hours before the start — from ${fmtDateTime(opensAt)}.`,
+      };
+    }
 
     // Late-arrival detection: minutes between scheduled start and clock-in.
     const minutesLate = Math.max(

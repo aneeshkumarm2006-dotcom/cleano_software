@@ -8,11 +8,19 @@ import { hashPassword } from "better-auth/crypto";
 import { randomBytes } from "crypto";
 import { sendAccountEmail } from "@/lib/email";
 import { syncDefaultLocationStock } from "@/lib/inventory";
-import { CSV_ENTITIES, validateRecord, type EntityKey } from "@/lib/csv/entities";
+import { startOfDayTz } from "@/lib/time";
+import {
+  CSV_ENTITIES,
+  validateRecord,
+  type EntityKey,
+  type ImportOptions,
+} from "@/lib/csv/entities";
 
 export interface RowResult {
   row: number; // 1-based data row number (excludes header)
   status: "created" | "skipped" | "failed";
+  /** True when the row was skipped because the record already exists. */
+  duplicate?: boolean;
   reason?: string;
   label?: string;
 }
@@ -21,7 +29,14 @@ export interface ImportResponse {
   ok: boolean;
   error?: string;
   results: RowResult[];
-  summary: { created: number; skipped: number; failed: number; total: number };
+  /** `duplicates` ⊆ `skipped` — the rest are skips for other reasons. */
+  summary: {
+    created: number;
+    skipped: number;
+    duplicates: number;
+    failed: number;
+    total: number;
+  };
 }
 
 const MAX_ROWS = 2000;
@@ -30,8 +45,24 @@ const MAX_ROWS = 2000;
 const CONCURRENCY = 8;
 
 type Values = Record<string, unknown>;
-type HandlerOutcome = { status: RowResult["status"]; reason?: string; label?: string };
-type Handler = (v: Values) => Promise<HandlerOutcome>;
+type HandlerOutcome = {
+  status: RowResult["status"];
+  duplicate?: boolean;
+  reason?: string;
+  label?: string;
+};
+type Handler = (v: Values, opts: ImportOptions) => Promise<HandlerOutcome>;
+
+/**
+ * Half-open [start, end) instants of the BUSINESS-timezone calendar day that
+ * contains `d`. Both ends go through startOfDayTz (rather than +24h) so DST
+ * transition days stay correct.
+ */
+function dayBounds(d: Date): { start: Date; end: Date } {
+  const start = startOfDayTz(d);
+  const end = startOfDayTz(new Date(start.getTime() + 36 * 60 * 60 * 1000));
+  return { start, end };
+}
 
 const REVALIDATE: Record<EntityKey, string[]> = {
   clients: ["/admin/clients"],
@@ -83,7 +114,7 @@ const clientsHandler: Handler = async (v) => {
   const email = str(v.email);
   if (email) {
     const existing = await db.client.findFirst({ where: { email } });
-    if (existing) return { status: "skipped", reason: `Client with email ${email} already exists`, label: name };
+    if (existing) return { status: "skipped", duplicate: true, reason: `Client with email ${email} already exists`, label: name };
   }
   await db.client.create({
     data: {
@@ -108,7 +139,7 @@ const clientsHandler: Handler = async (v) => {
   return { status: "created", label: name };
 };
 
-const jobsHandler: Handler = async (v) => {
+const jobsHandler: Handler = async (v, opts) => {
   const clientName = v.clientName as string;
   const clientEmail = str(v.clientEmail);
 
@@ -130,9 +161,45 @@ const jobsHandler: Handler = async (v) => {
     endTime = combineDateTime(str(v.endDate) || v.startDate, str(v.endTime) || "00:00");
   }
 
-  const dup = await db.job.findFirst({ where: { clientName, startTime } });
+  // Duplicate = same client at the same exact start time. `deletedAt: null` is
+  // load-bearing: without it an ARCHIVED (soft-deleted) job matched here, so the
+  // row was reported as a duplicate skip and the job could never be re-imported.
+  // Only a LIVE job blocks a re-import.
+  const dup = await db.job.findFirst({
+    where: { clientName, startTime, deletedAt: null },
+    select: { id: true },
+  });
   if (dup) {
-    return { status: "skipped", reason: `Job for ${clientName} at that start time already exists`, label: clientName };
+    return {
+      status: "skipped",
+      duplicate: true,
+      reason: `Job for ${clientName} at that start time already exists`,
+      label: clientName,
+    };
+  }
+
+  // Opt-in guard (default OFF): also skip when this client already has a live
+  // job anywhere on the same calendar DAY. Off by default because one client
+  // (e.g. a property manager) legitimately books several cleanings in a day and
+  // this would drop all but the first.
+  if (opts.skipSameDayDuplicates) {
+    const { start, end } = dayBounds(startTime);
+    const sameDay = await db.job.findFirst({
+      where: {
+        ...(clientId ? { clientId } : { clientName }),
+        deletedAt: null,
+        startTime: { gte: start, lt: end },
+      },
+      select: { id: true },
+    });
+    if (sameDay) {
+      return {
+        status: "skipped",
+        duplicate: true,
+        reason: `${clientName} already has a job on that day (same-day duplicates are being skipped)`,
+        label: clientName,
+      };
+    }
   }
 
   let employeeId: string | null = null;
@@ -192,7 +259,7 @@ const employeesHandler: Handler = async (v) => {
   const email = (v.email as string).trim();
   const name = v.name as string;
   const existing = await db.user.findUnique({ where: { email } });
-  if (existing) return { status: "skipped", reason: `Employee ${email} already exists`, label: email };
+  if (existing) return { status: "skipped", duplicate: true, reason: `Employee ${email} already exists`, label: email };
 
   const role = (v.role as string) || "EMPLOYEE";
   const password = randomBytes(12).toString("base64url");
@@ -231,7 +298,7 @@ const employeesHandler: Handler = async (v) => {
 const productsHandler: Handler = async (v) => {
   const name = v.name as string;
   const existing = await db.product.findFirst({ where: { name: { equals: name, mode: "insensitive" } } });
-  if (existing) return { status: "skipped", reason: `Product "${name}" already exists`, label: name };
+  if (existing) return { status: "skipped", duplicate: true, reason: `Product "${name}" already exists`, label: name };
 
   const stockLevel = (v.stockLevel as number) ?? 0;
   const product = await db.product.create({
@@ -252,7 +319,7 @@ const productsHandler: Handler = async (v) => {
 const suppliersHandler: Handler = async (v) => {
   const name = v.name as string;
   const existing = await db.supplier.findFirst({ where: { name: { equals: name, mode: "insensitive" } } });
-  if (existing) return { status: "skipped", reason: `Supplier "${name}" already exists`, label: name };
+  if (existing) return { status: "skipped", duplicate: true, reason: `Supplier "${name}" already exists`, label: name };
 
   await db.supplier.create({
     data: {
@@ -274,7 +341,7 @@ const inventoryRulesHandler: Handler = async (v) => {
   if (!product) return { status: "failed", reason: `Product "${productName}" not found`, label: productName };
 
   const existing = await db.inventoryRule.findUnique({ where: { productId: product.id } });
-  if (existing) return { status: "skipped", reason: `Rule for "${productName}" already exists`, label: productName };
+  if (existing) return { status: "skipped", duplicate: true, reason: `Rule for "${productName}" already exists`, label: productName };
 
   await db.inventoryRule.create({
     data: {
@@ -289,7 +356,7 @@ const inventoryRulesHandler: Handler = async (v) => {
 const inventoryLocationsHandler: Handler = async (v) => {
   const name = v.name as string;
   const existing = await db.inventoryLocation.findFirst({ where: { name: { equals: name, mode: "insensitive" } } });
-  if (existing) return { status: "skipped", reason: `Location "${name}" already exists`, label: name };
+  if (existing) return { status: "skipped", duplicate: true, reason: `Location "${name}" already exists`, label: name };
 
   await db.inventoryLocation.create({
     data: { name, address: str(v.address), notes: str(v.notes), isActive: (v.isActive as boolean) ?? true },
@@ -339,7 +406,7 @@ const inventoryRequestsHandler: Handler = async (v) => {
 const kitTemplatesHandler: Handler = async (v) => {
   const name = v.name as string;
   const existing = await db.kitTemplate.findFirst({ where: { name: { equals: name, mode: "insensitive" } } });
-  if (existing) return { status: "skipped", reason: `Kit "${name}" already exists`, label: name };
+  if (existing) return { status: "skipped", duplicate: true, reason: `Kit "${name}" already exists`, label: name };
 
   const parts = String(v.items || "")
     .split(";")
@@ -388,8 +455,15 @@ const HANDLERS: Record<EntityKey, Handler> = {
 
 // --- entry point -----------------------------------------------------------
 
-export async function importCsv(entity: EntityKey, records: Record<string, string>[]): Promise<ImportResponse> {
-  const empty = { results: [] as RowResult[], summary: { created: 0, skipped: 0, failed: 0, total: 0 } };
+export async function importCsv(
+  entity: EntityKey,
+  records: Record<string, string>[],
+  options?: ImportOptions
+): Promise<ImportResponse> {
+  const empty = {
+    results: [] as RowResult[],
+    summary: { created: 0, skipped: 0, duplicates: 0, failed: 0, total: 0 },
+  };
 
   const guard = await requireAdmin();
   if ("error" in guard) return { ok: false, error: guard.error, ...empty };
@@ -404,6 +478,12 @@ export async function importCsv(entity: EntityKey, records: Record<string, strin
   if (records.length > MAX_ROWS) {
     return { ok: false, error: `Too many rows — max ${MAX_ROWS} per import`, ...empty };
   }
+
+  // Never trust the client's options object: re-derive an allow-listed, boolean
+  // shape rather than passing whatever arrived through to the handlers.
+  const opts: ImportOptions = {
+    skipSameDayDuplicates: options?.skipSameDayDuplicates === true,
+  };
 
   // Process rows with bounded concurrency so a large file finishes in seconds
   // (sequential per-row round-trips to a remote DB is what risks a timeout).
@@ -420,13 +500,13 @@ export async function importCsv(entity: EntityKey, records: Record<string, strin
         continue;
       }
       try {
-        const outcome = await handler(values);
+        const outcome = await handler(values, opts);
         results[i] = { row: rowNum, ...outcome };
       } catch (e) {
         // Unique-constraint conflict (e.g. a duplicate slipped past the dedupe
         // check) is a skip, not a failure.
         if ((e as { code?: string })?.code === "P2002") {
-          results[i] = { row: rowNum, status: "skipped", reason: "Duplicate — already exists" };
+          results[i] = { row: rowNum, status: "skipped", duplicate: true, reason: "Duplicate — already exists" };
         } else {
           console.error(`importCsv ${entity} row ${rowNum}`, e);
           results[i] = { row: rowNum, status: "failed", reason: "Server error while importing this row" };
@@ -442,6 +522,7 @@ export async function importCsv(entity: EntityKey, records: Record<string, strin
   const summary = {
     created: results.filter((r) => r.status === "created").length,
     skipped: results.filter((r) => r.status === "skipped").length,
+    duplicates: results.filter((r) => r.status === "skipped" && r.duplicate).length,
     failed: results.filter((r) => r.status === "failed").length,
     total: results.length,
   };

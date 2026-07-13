@@ -41,6 +41,14 @@ export function JobRow({ job, isMainEmployee, missingEquipment = [] }: JobRowPro
 
   const [payModalOpen, setPayModalOpen] = useState(false);
 
+  // The pay breakdown only makes sense for PERCENTAGE jobs — FLAT/HOURLY jobs
+  // are a fixed payout, and opening a "why this price" view on them would imply
+  // pay is derived from the client's price. Matches the job-detail gate.
+  const payType: string = job.payType ?? "PERCENTAGE";
+  const payBreakdownAvailable = payType === "PERCENTAGE";
+  const payLabel =
+    payType === "FLAT" ? "Pay" : isCompleted ? "Earned" : "Est. pay";
+
   const ctaLabel = canClockIn ? "Start job" : canClockOut ? "Complete job" : "View details";
   const sc = statusClass(job.status);
 
@@ -107,13 +115,22 @@ export function JobRow({ job, isMainEmployee, missingEquipment = [] }: JobRowPro
         {/* Side: pay + CTA */}
         <div className="cl-jobs2-side">
           {job.employeePay != null && isMainEmployee && (
-            <button
-              type="button"
-              className="cl-jobs2-pay"
-              onClick={(e) => { e.stopPropagation(); setPayModalOpen(true); }}>
-              <span className="lbl">{isCompleted ? "Earned" : "Est. pay"}</span>
-              ${Number(job.employeePay).toFixed(2)}
-            </button>
+            payBreakdownAvailable ? (
+              <button
+                type="button"
+                className="cl-jobs2-pay"
+                onClick={(e) => { e.stopPropagation(); setPayModalOpen(true); }}>
+                <span className="lbl">{payLabel}</span>
+                ${Number(job.employeePay).toFixed(2)}
+              </button>
+            ) : (
+              /* FLAT/HOURLY: a fixed amount — nothing to break down, and the
+                 breakdown must never hint at a % of the client's price. */
+              <div className="cl-jobs2-pay" style={{ cursor: "default" }}>
+                <span className="lbl">{payLabel}</span>
+                ${Number(job.employeePay).toFixed(2)}
+              </div>
+            )
           )}
           <a
             href={`/cleaners/my-jobs/${job.id}`}
@@ -124,11 +141,13 @@ export function JobRow({ job, isMainEmployee, missingEquipment = [] }: JobRowPro
         </div>
       </div>
 
-      <PayBreakdownModal
-        jobId={job.id}
-        isOpen={payModalOpen}
-        onClose={() => setPayModalOpen(false)}
-      />
+      {payBreakdownAvailable && (
+        <PayBreakdownModal
+          jobId={job.id}
+          isOpen={payModalOpen}
+          onClose={() => setPayModalOpen(false)}
+        />
+      )}
     </>
   );
 }

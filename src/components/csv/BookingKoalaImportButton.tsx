@@ -53,6 +53,10 @@ export default function BookingKoalaImportButton({
   // client doesn't notify customers at import time.
   const [emailCleaners, setEmailCleaners] = useState(true);
   const [emailCustomers, setEmailCustomers] = useState(true);
+  // Extra duplicate guard — OFF by default on purpose: a property-manager client
+  // legitimately has several distinct bookings on one day, and this would drop
+  // all but the first.
+  const [skipSameDay, setSkipSameDay] = useState(false);
   const [showFullData, setShowFullData] = useState(false);
 
   // Full CSV grid for the reference preview (parsed client-side from the file).
@@ -124,7 +128,7 @@ export default function BookingKoalaImportButton({
       cleaners: { ...report.cleaners },
       customers: { ...report.customers },
       addresses: report.addresses,
-      jobs: { created: 0, skipped: 0, failed: 0 },
+      jobs: { created: 0, skipped: 0, failed: 0, duplicates: 0, sameDay: 0 },
       statusCounts: {},
       emails: { sent: 0, failed: 0 },
       sample: report.sample,
@@ -147,6 +151,7 @@ export default function BookingKoalaImportButton({
               commit: true,
               sendCleanerEmails: emailCleaners,
               sendCustomerEmails: emailCustomers,
+              skipSameDayDuplicates: skipSameDay,
               batch: { start, size: BATCH_SIZE },
             });
           } catch (e) {
@@ -177,6 +182,8 @@ export default function BookingKoalaImportButton({
         acc.jobs.created += res.jobs.created;
         acc.jobs.skipped += res.jobs.skipped;
         acc.jobs.failed += res.jobs.failed;
+        acc.jobs.duplicates += res.jobs.duplicates;
+        acc.jobs.sameDay += res.jobs.sameDay;
         acc.emails.sent += res.emails.sent;
         acc.emails.failed += res.emails.failed;
         for (const [k, v] of Object.entries(res.statusCounts)) {
@@ -275,7 +282,7 @@ export default function BookingKoalaImportButton({
                 <Row label="Cleaners" v={`${counts.cleaners.created} new, ${counts.cleaners.existing} existing${counts.cleaners.failed ? `, ${counts.cleaners.failed} failed` : ""}`} />
                 <Row label="Customers" v={`${counts.customers.created} new, ${counts.customers.existing} existing${counts.customers.failed ? `, ${counts.customers.failed} failed` : ""}`} />
                 <Row label="Addresses" v={`${counts.addresses}`} />
-                <Row label="Jobs" v={`${counts.jobs.created} created, ${counts.jobs.skipped} skipped${counts.jobs.failed ? `, ${counts.jobs.failed} failed` : ""}`} />
+                <Row label="Jobs" v={jobsSummary(counts)} />
               </div>
 
               <div className="mt-2 flex flex-wrap gap-3 text-xs">
@@ -442,6 +449,39 @@ export default function BookingKoalaImportButton({
             </div>
           )}
 
+          {/* Duplicate handling (before commit) */}
+          {report?.ok && !committed && (
+            <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
+              <div className="text-xs font-[450] text-gray-600 mb-2 uppercase tracking-wider">
+                Duplicate handling
+              </div>
+              <p className="text-xs text-gray-500 mb-2">
+                A booking that was already imported is always skipped (matched on its
+                BookingKoala booking id). Archived jobs never block a re-import.
+              </p>
+              <label className="flex items-start gap-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={skipSameDay}
+                  onChange={(e) => setSkipSameDay(e.target.checked)}
+                />
+                <span>
+                  Also skip a row if the client already has a job on the{" "}
+                  <strong>same day</strong>
+                </span>
+              </label>
+              {skipSameDay && (
+                <p className="text-xs text-amber-600 mt-2">
+                  Careful: clients who legitimately book several cleanings on one day
+                  (e.g. property managers) will only get their <strong>first</strong>{" "}
+                  booking of that day imported. The summary reports how many rows this
+                  skipped.
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Batch progress (during commit) */}
           {busy === "commit" && progress && (
             <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
@@ -508,4 +548,21 @@ function Row({ label, v }: { label: string; v: string }) {
       <span className="text-gray-900 font-medium">{v}</span>
     </div>
   );
+}
+
+/** "12 created, 3 skipped (2 duplicate, 1 same-day), 1 failed" */
+function jobsSummary(r: ImportReport): string {
+  const parts = [`${r.jobs.created} created`];
+  if (r.jobs.skipped > 0) {
+    const why: string[] = [];
+    if (r.jobs.duplicates > 0) why.push(`${r.jobs.duplicates} duplicate`);
+    if (r.jobs.sameDay > 0) why.push(`${r.jobs.sameDay} same-day`);
+    parts.push(
+      `${r.jobs.skipped} skipped${why.length ? ` (${why.join(", ")})` : ""}`
+    );
+  } else {
+    parts.push("0 skipped");
+  }
+  if (r.jobs.failed > 0) parts.push(`${r.jobs.failed} failed`);
+  return parts.join(", ");
 }

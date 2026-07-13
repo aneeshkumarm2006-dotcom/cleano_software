@@ -2,94 +2,35 @@ import { db } from "@/db";
 import { requireCleaner } from "@/lib/page-guards";
 import MyPayClient from "./MyPayClient";
 import { getEmployeeAvgRating } from "@/app/admin/actions/setEmployeeRating";
+import { getCleanerEarnings } from "@/lib/cleaner-earnings";
 
 export default async function MyPayPage() {
   const session = await requireCleaner();
   const userId = session.user.id;
+  const now = new Date();
+  const year = now.getFullYear();
 
-  const [payouts, withdrawals, starRating, ragWashes, ragCreditSetting, completedJobs, allPayPeriods, userRecord] = await Promise.all([
-    db.payout.findMany({
-      where: { employeeId: userId },
-      include: { payPeriod: true },
-      orderBy: { payPeriod: { startDate: "desc" } },
-    }),
-    db.withdrawal.findMany({
-      where: { employeeId: userId },
-      orderBy: { createdAt: "desc" },
-    }),
-    getEmployeeAvgRating(userId),
-    db.ragWash.findMany({
-      where: { employeeId: userId },
-      orderBy: { washDate: "desc" },
-    }),
-    db.appSetting.findUnique({ where: { key: "payroll.ragCreditPerRag" } }),
-    // Fetch completed jobs for this cleaner to compute unprocessed earnings
-    db.job.findMany({
-      where: {
-        status: { in: ["COMPLETED", "IN_PROGRESS"] },
-        clockOutTime: { not: null },
-        employeePay: { gt: 0 },
-        OR: [
-          { employeeId: userId },
-          { cleaners: { some: { id: userId } } },
-        ],
-      },
-      select: {
-        id: true,
-        jobDate: true,
-        startTime: true,
-        employeeId: true,
-        employeePay: true,
-        totalTip: true,
-        payRateMultiplier: true,
-        cleaners: { select: { id: true } },
-      },
-    }),
-    db.payPeriod.findMany({
-      where: { payouts: { some: { employeeId: userId } } },
-      select: { startDate: true, endDate: true },
-    }),
-    db.user.findUnique({
-      where: { id: userId },
-      select: { payMultiplier: true },
-    }),
-  ]);
-
-  const currentPayout =
-    payouts.find(
-      (p) => p.payPeriod.status === "DRAFT" || p.payPeriod.status === "APPROVED"
-    ) ?? null;
-
-  const paidPayouts = payouts.filter((p) => p.payPeriod.status === "PAID");
-  const walletBalance = paidPayouts.reduce((sum, p) => sum + p.finalAmount, 0);
-  const pendingFromPayPeriods = payouts
-    .filter(
-      (p) =>
-        p.payPeriod.status === "DRAFT" || p.payPeriod.status === "APPROVED"
-    )
-    .reduce((sum, p) => sum + p.finalAmount, 0);
-
-  // Earnings from completed jobs not yet covered by any pay period
-  const empMultiplier = userRecord?.payMultiplier ?? 1;
-  const unprocessedEarnings = completedJobs
-    .filter((job) => {
-      const jobDate = new Date(job.jobDate ?? job.startTime);
-      return !allPayPeriods.some((pp) => {
-        const rangeEnd = new Date(pp.endDate);
-        rangeEnd.setHours(23, 59, 59, 999);
-        return jobDate >= pp.startDate && jobDate <= rangeEnd;
-      });
-    })
-    .reduce((sum, job) => {
-      const participants = Array.from(
-        new Set([job.employeeId, ...job.cleaners.map((c) => c.id)].filter(Boolean))
-      );
-      if (participants.length === 0) return sum;
-      const basePay = ((job.employeePay ?? 0) + (job.totalTip ?? 0)) * (job.payRateMultiplier ?? 1);
-      return sum + (basePay / participants.length) * empMultiplier;
-    }, 0);
-
-  const pendingAmount = pendingFromPayPeriods + unprocessedEarnings;
+  // All money figures come from the ONE shared computation (src/lib/cleaner-earnings.ts)
+  // that payroll and My Income also use — My Pay no longer invents its own math.
+  const [earnings, payouts, withdrawals, starRating, ragWashes, ragCreditSetting] =
+    await Promise.all([
+      getCleanerEarnings(userId, year, now),
+      db.payout.findMany({
+        where: { employeeId: userId },
+        include: { payPeriod: true },
+        orderBy: { payPeriod: { startDate: "desc" } },
+      }),
+      db.withdrawal.findMany({
+        where: { employeeId: userId },
+        orderBy: { createdAt: "desc" },
+      }),
+      getEmployeeAvgRating(userId),
+      db.ragWash.findMany({
+        where: { employeeId: userId },
+        orderBy: { washDate: "desc" },
+      }),
+      db.appSetting.findUnique({ where: { key: "payroll.ragCreditPerRag" } }),
+    ]);
 
   // Reserved = withdrawals not rejected
   const reservedTotal = withdrawals
@@ -101,16 +42,7 @@ export default async function MyPayPage() {
     )
     .reduce((sum, w) => sum + w.amount, 0);
 
-  const availableBalance = Math.max(0, walletBalance - reservedTotal);
-
-  const now = new Date();
-  const yearStart = new Date(now.getFullYear(), 0, 1);
-  const paidThisYear = paidPayouts
-    .filter((p) => p.payPeriod.paidAt && p.payPeriod.paidAt >= yearStart)
-    .reduce((sum, p) => sum + p.finalAmount, 0);
-  const totalHoursYear = paidPayouts
-    .filter((p) => p.payPeriod.paidAt && p.payPeriod.paidAt >= yearStart)
-    .reduce((sum, p) => sum + p.totalHours, 0);
+  const availableBalance = Math.max(0, earnings.walletBalance - reservedTotal);
 
   // Rag credit rate (default $0.50 per rag)
   const ragCreditRate =
@@ -121,13 +53,9 @@ export default async function MyPayPage() {
   const allTimeRags = ragWashes.reduce((s, w) => s + w.ragCount, 0);
   const allTimeCredit = Math.round(allTimeRags * ragCreditRate * 100) / 100;
 
-  // Rag washes during the current pay period
-  const currentPeriodStart = currentPayout
-    ? new Date(currentPayout.payPeriod.startDate)
-    : null;
-  const currentPeriodEnd = currentPayout
-    ? new Date(currentPayout.payPeriod.endDate)
-    : null;
+  // Rag washes inside the period that CONTAINS today (never a stale draft).
+  const currentPeriodStart = earnings.currentPeriod?.startDate ?? null;
+  const currentPeriodEnd = earnings.currentPeriod?.endDate ?? null;
 
   const periodRagWashes = ragWashes.filter((w) => {
     if (!currentPeriodStart || !currentPeriodEnd) return false;
@@ -168,6 +96,22 @@ export default async function MyPayPage() {
     },
   });
 
+  const currentPeriod = earnings.currentPeriod
+    ? {
+        startDate: earnings.currentPeriod.startDate.toISOString(),
+        endDate: earnings.currentPeriod.endDate.toISOString(),
+        status: earnings.currentPeriod.status,
+        isLive: earnings.currentPeriod.isLive,
+        baseAmount: earnings.currentPeriod.baseAmount,
+        adjustments: earnings.currentPeriod.adjustments,
+        deductions: earnings.currentPeriod.deductions,
+        reimbursements: earnings.currentPeriod.reimbursements,
+        finalAmount: earnings.currentPeriod.finalAmount,
+        jobCount: earnings.currentPeriod.jobCount,
+        totalHours: earnings.currentPeriod.totalHours,
+      }
+    : null;
+
   return (
     <MyPayClient
       payouts={payouts.map(serializePayout)}
@@ -180,14 +124,20 @@ export default async function MyPayPage() {
         processedAt: w.processedAt ? w.processedAt.toISOString() : null,
         notes: w.notes,
       }))}
-      walletBalance={walletBalance}
-      pendingAmount={pendingAmount}
-      unprocessedEarnings={unprocessedEarnings}
-      paidThisYear={paidThisYear}
-      totalHoursYear={totalHoursYear}
+      walletBalance={earnings.walletBalance}
+      pendingAmount={earnings.pendingAmount}
+      unprocessedEarnings={earnings.unprocessedEarnings}
+      earnedYTD={earnings.earnedYTD}
+      paidYTD={earnings.paidYTD}
+      grossYTD={earnings.grossYTD}
+      deductionsYTD={earnings.deductionsYTD}
+      adjustmentsYTD={earnings.adjustmentsYTD}
+      reimbursementsYTD={earnings.reimbursementsYTD}
+      hoursYTD={earnings.totalHoursYTD}
+      jobsCompletedYTD={earnings.jobsCompletedYTD}
       availableBalance={availableBalance}
-      currentPayout={currentPayout ? serializePayout(currentPayout) : null}
-      year={now.getFullYear()}
+      currentPeriod={currentPeriod}
+      year={year}
       starRating={starRating}
       ragData={ragData}
     />

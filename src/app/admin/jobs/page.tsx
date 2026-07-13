@@ -4,7 +4,6 @@ import { redirect } from "next/navigation";
 import { db } from "@/db";
 import JobsPageClient from "./JobsPageClient";
 import { getBookingConfig } from "../../(book)/actions/getBookingConfig";
-import { getTotalRevenue } from "@/lib/metrics";
 
 type SearchParams = Promise<{
   [key: string]: string | string[] | undefined;
@@ -44,9 +43,12 @@ export default async function JobsPage({
     baseWhere.employeeId = session.user.id;
   }
 
-  // Stats always reflect active (non-deleted) jobs; the list respects the
-  // Active/Archived toggle via `deletedAt`.
-  const statsWhere = { ...baseWhere, deletedAt: null };
+  // The list respects the Active/Archived toggle via `deletedAt`. Stats are NOT
+  // computed here any more: they used to be four server counts over ALL active
+  // jobs while the table showed a CLIENT-side filtered subset, so changing a
+  // date/client/cleaner filter moved the table but froze the cards. JobsView now
+  // derives every card from the same `filteredJobs` list it renders, using the
+  // canonical predicates in src/lib/metrics-shared.
   const listWhere = {
     ...baseWhere,
     deletedAt: archived ? { not: null } : null,
@@ -98,20 +100,6 @@ export default async function JobsPage({
   // in the job form so staff don't have to retype them.
   const { addOns: addOnCatalog } = await getBookingConfig();
 
-  // Canonical revenue (completed+paid, less discount/refund, tax excluded) so
-  // this stat matches Dashboard/Analytics/Clients/Employees. See src/lib/metrics.
-  const totalRevenue = await getTotalRevenue();
-
-  const completedJobs = await db.job.count({
-    where: { ...statsWhere, status: "COMPLETED" },
-  });
-
-  const pendingPaymentCount = await db.job.count({
-    where: { ...statsWhere, paymentReceived: false, status: "COMPLETED" },
-  });
-
-  const totalJobsCount = await db.job.count({ where: statsWhere });
-
   const jobsData = allJobs.map((job) => {
     const productCost = job.productUsage.reduce(
       (sum, u) => sum + u.quantity * u.product.costPerUnit,
@@ -150,6 +138,10 @@ export default async function JobsPage({
       isCashJob: job.isCashJob,
       usesFixedPrice: job.usesFixedPrice,
       discountAmount: job.discountAmount,
+      // Needed client-side by the canonical revenue predicate (metrics-shared):
+      // revenue = price − discount − refund, and only for non-archived rows.
+      refundedAmount: job.refundedAmount,
+      deletedAt: job.deletedAt?.toISOString() || null,
       bedCount: job.bedCount,
       bathCount: job.bathCount,
       halfBathCount: job.halfBathCount,
@@ -166,18 +158,10 @@ export default async function JobsPage({
     };
   });
 
-  const stats = {
-    totalJobs: totalJobsCount,
-    completedJobs,
-    totalRevenue,
-    pendingPayment: pendingPaymentCount,
-  };
-
   return (
     <div className="h-full overflow-hidden overflow-y-auto p-8">
       <JobsPageClient
         initialJobs={jobsData}
-        initialStats={stats}
         initialSearch={search}
         initialStatus={status}
         initialPayment={payment}

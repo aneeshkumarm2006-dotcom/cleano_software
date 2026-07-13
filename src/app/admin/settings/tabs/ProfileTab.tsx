@@ -269,7 +269,9 @@ export default function ProfileTab({ user }: ProfileTabProps) {
       {subTab === "profile" && <ProfileForms user={user} />}
       {subTab === "performance" && <PerformanceSection />}
       {subTab === "income" && <IncomeSection />}
-      {subTab === "notifications" && <NotificationSection />}
+      {/* Role drives which toggles are shown: a cleaner never sees admin/ops
+          rows (provider low stock, late payment, complaints, overdue invoices). */}
+      {subTab === "notifications" && <NotificationSection role={user.role} />}
     </div>
   );
 }

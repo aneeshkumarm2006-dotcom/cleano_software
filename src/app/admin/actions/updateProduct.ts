@@ -7,6 +7,8 @@ import type { ProductCategory, Prisma } from "@prisma/client";
 import { requireOwnerAdmin } from "@/lib/action-guards";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
+import { sanitizeHttpUrl } from "@/lib/safe-url";
+import { parseProductLinks } from "@/lib/product-links";
 
 const ALLOWED_CATEGORIES: readonly ProductCategory[] = [
   "LIQUID_SPRAY",
@@ -41,6 +43,25 @@ export async function updateProduct(
   const category: ProductCategory = ALLOWED_CATEGORIES.includes(categoryRaw as ProductCategory)
     ? (categoryRaw as ProductCategory)
     : "OTHER";
+
+  // Purchase links. The primary "buy it again" link plus any number of extras.
+  // Only absolute http(s) URLs are stored (sanitizeHttpUrl) — a javascript:/data:
+  // value would otherwise become an XSS payload the moment it's rendered as an
+  // <a href> on the product page.
+  const purchaseUrlRaw = (formData.get("purchaseUrl") as string) || "";
+  const purchaseUrl = purchaseUrlRaw.trim()
+    ? sanitizeHttpUrl(purchaseUrlRaw)
+    : null;
+  if (purchaseUrlRaw.trim() && !purchaseUrl) {
+    return {
+      message: "",
+      error: "The purchase link must be a full http:// or https:// URL.",
+    };
+  }
+  const parsedLinks = parseProductLinks(formData.get("links"));
+  if (!parsedLinks.ok) {
+    return { message: "", error: parsedLinks.error };
+  }
 
   // Validate required fields
   if (!name || !unit || isNaN(costPerUnit) || isNaN(stockLevel) || isNaN(minStock)) {
@@ -91,6 +112,7 @@ export async function updateProduct(
       stockLevel,
       minStock,
       category,
+      purchaseUrl,
     };
 
     const previousStock = previous?.stockLevel ?? 0;
@@ -110,6 +132,19 @@ export async function updateProduct(
     // its history can never drift apart.
     await db.$transaction(async (tx) => {
       await tx.product.update({ where: { id: productId }, data });
+
+      // The form submits the full list, so replace it wholesale (add/edit/remove
+      // in one shot) inside the same transaction as the product update.
+      await tx.productLink.deleteMany({ where: { productId } });
+      if (parsedLinks.links.length > 0) {
+        await tx.productLink.createMany({
+          data: parsedLinks.links.map((l) => ({
+            productId,
+            label: l.label,
+            url: l.url,
+          })),
+        });
+      }
 
       if (stockMoved) {
         await tx.inventoryChange.create({
@@ -132,6 +167,7 @@ export async function updateProduct(
     await syncDefaultLocationStock(productId, stockLevel - previousStock);
 
     revalidatePath("/admin/inventory");
+    revalidatePath(`/admin/inventory/${productId}`);
     return {
       message: "Product updated successfully!",
       error: "",

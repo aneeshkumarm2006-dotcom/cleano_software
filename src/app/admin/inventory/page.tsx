@@ -29,6 +29,10 @@ export default async function InventoryPage({
   if (userRole === "EMPLOYEE") {
     redirect("/admin/dashboard");
   }
+  // Editing a cleaner's kit count is OWNER/ADMIN only (setCleanerProductQuantity
+  // enforces the same rule server-side). Anyone else — e.g. an OPS_MANAGER who can
+  // still open this page — gets the read-only view. Fail closed.
+  const canEditCleanerInventory = userRole === "OWNER" || userRole === "ADMIN";
 
   // Parse search params
   const params = await searchParams;
@@ -54,6 +58,7 @@ export default async function InventoryPage({
               employee: true,
             },
           },
+          links: { orderBy: { createdAt: "asc" } },
         },
         orderBy: {
           name: "asc",
@@ -109,6 +114,9 @@ export default async function InventoryPage({
         ? product.stockUpdatedAt.toISOString()
         : null,
       stockUpdatedByName: product.stockUpdatedByName,
+      // Re-order links. Sanitized again on render (never trust stored data).
+      purchaseUrl: product.purchaseUrl,
+      links: product.links.map((l) => ({ label: l.label ?? "", url: l.url })),
       totalAssigned,
       employeeCount,
       totalInventory: product.stockLevel + totalAssigned,
@@ -167,6 +175,38 @@ export default async function InventoryPage({
     include: { product: true },
   });
 
+  // Most recent audit row per (cleaner, product) — powers the "last updated by X"
+  // line on each kit row, so admins can see cleaner-side edits (the cleaner app
+  // writes InventoryChange too) without opening the product's Stock History.
+  const recentKitChanges = await db.inventoryChange.findMany({
+    where: { employeeId: { not: null } },
+    orderBy: { createdAt: "desc" },
+    take: 500,
+    select: {
+      employeeId: true,
+      productId: true,
+      createdAt: true,
+      changedByName: true,
+      quantityChange: true,
+      reason: true,
+    },
+  });
+  const lastChangeByKey = new Map<
+    string,
+    { at: string; by: string | null; delta: number; reason: string | null }
+  >();
+  for (const c of recentKitChanges) {
+    const key = `${c.employeeId}|${c.productId}`;
+    // findMany is already newest-first, so the first hit for a key wins.
+    if (lastChangeByKey.has(key)) continue;
+    lastChangeByKey.set(key, {
+      at: c.createdAt.toISOString(),
+      by: c.changedByName,
+      delta: c.quantityChange,
+      reason: c.reason,
+    });
+  }
+
   // Per-cleaner assigned-stock overview (aggregate EmployeeProduct). Only
   // cleaners that actually hold stock are surfaced.
   const cleanerInventory = employees
@@ -182,6 +222,7 @@ export default async function InventoryPage({
           costPerUnit: ep.product.costPerUnit,
           refillThreshold: threshold,
           isLow: threshold > 0 && ep.quantity <= threshold,
+          lastChange: lastChangeByKey.get(`${emp.id}|${ep.productId}`) ?? null,
         };
       });
       return {
@@ -274,6 +315,7 @@ export default async function InventoryPage({
         supplierData={supplierData}
         forecastData={forecastData}
         cleanerInventory={cleanerInventory}
+        canEditCleanerInventory={canEditCleanerInventory}
         requests={requests}
         archived={archived}
       />

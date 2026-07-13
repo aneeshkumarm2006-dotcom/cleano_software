@@ -5,30 +5,16 @@ import { createPortal } from "react-dom";
 import Input from "@/components/ui/Input";
 import { X, Search, Users, CheckCircle2, AlertTriangle } from "lucide-react";
 import Badge from "@/components/ui/Badge";
-
-type AvailabilityDay =
-  | "MONDAY"
-  | "TUESDAY"
-  | "WEDNESDAY"
-  | "THURSDAY"
-  | "FRIDAY"
-  | "SATURDAY"
-  | "SUNDAY";
-
-interface AvailabilitySlot {
-  day: AvailabilityDay;
-  startTime: string;
-  endTime: string;
-  isAvailable: boolean;
-  effectiveFrom: string | null;
-  effectiveTo: string | null;
-}
+import { checkAvailabilityBatch } from "../../actions/checkAvailability";
+import type { EmployeeAvailabilityStatus } from "../../actions/checkAvailability.types";
 
 interface User {
   id: string;
   name: string;
   email: string;
-  availability?: AvailabilitySlot[];
+  /** Legacy prop — availability is now evaluated server-side by the shared
+   *  helper (which also knows about one-off blocked dates), so this is unused. */
+  availability?: unknown;
 }
 
 interface CleanerSelectorProps {
@@ -36,90 +22,33 @@ interface CleanerSelectorProps {
   initialSelectedIds?: string[];
 }
 
-type AvailabilityStatus =
-  | "AVAILABLE"
-  | "UNAVAILABLE"
-  | "OUTSIDE_HOURS"
-  | "NO_DATA"
-  | "NO_TIME";
+type StatusMap = Map<string, EmployeeAvailabilityStatus>;
 
-const DAY_BY_INDEX: AvailabilityDay[] = [
-  "SUNDAY",
-  "MONDAY",
-  "TUESDAY",
-  "WEDNESDAY",
-  "THURSDAY",
-  "FRIDAY",
-  "SATURDAY",
-];
-
-function toMinutes(hhmm: string): number {
-  const [h, m] = hhmm.split(":").map((p) => parseInt(p, 10));
-  return h * 60 + m;
-}
-
-function evaluateAvailability(
-  slots: AvailabilitySlot[] | undefined,
-  start: Date | null,
-  end: Date | null
-): AvailabilityStatus {
-  if (!start) return "NO_TIME";
-  if (!slots || slots.length === 0) return "NO_DATA";
-
-  const effectiveEnd = end ?? new Date(start.getTime() + 60 * 60 * 1000);
-  const day = DAY_BY_INDEX[start.getDay()];
-  const startMin = start.getHours() * 60 + start.getMinutes();
-  const endMin = effectiveEnd.getHours() * 60 + effectiveEnd.getMinutes();
-
-  const dailySlots = slots.filter((s) => {
-    if (s.day !== day) return false;
-    if (s.effectiveFrom && start < new Date(s.effectiveFrom)) return false;
-    if (s.effectiveTo && start > new Date(s.effectiveTo)) return false;
-    return true;
-  });
-
-  if (dailySlots.length === 0) return "OUTSIDE_HOURS";
-
-  const overlaps = (s: AvailabilitySlot) => {
-    const sStart = toMinutes(s.startTime);
-    const sEnd = toMinutes(s.endTime);
-    return startMin < sEnd && endMin > sStart;
-  };
-
-  const blocked = dailySlots.find((s) => !s.isAvailable && overlaps(s));
-  if (blocked) return "UNAVAILABLE";
-
-  const available = dailySlots.filter((s) => s.isAvailable);
-  if (available.length === 0) return "OUTSIDE_HOURS";
-
-  const fullyCovered = available.some((s) => {
-    const sStart = toMinutes(s.startTime);
-    const sEnd = toMinutes(s.endTime);
-    return startMin >= sStart && endMin <= sEnd;
-  });
-
-  return fullyCovered ? "AVAILABLE" : "OUTSIDE_HOURS";
-}
-
-function StatusIndicator({ status }: { status: AvailabilityStatus }) {
-  if (status === "NO_TIME" || status === "NO_DATA") return null;
-  if (status === "AVAILABLE") {
+function StatusIndicator({
+  status,
+}: {
+  status: EmployeeAvailabilityStatus | undefined;
+}) {
+  if (!status || status.result === "NO_DATA") return null;
+  if (status.result === "AVAILABLE") {
     return (
       <span title="Available" className="inline-flex items-center text-green-600">
         <CheckCircle2 className="w-3.5 h-3.5" />
       </span>
     );
   }
-  if (status === "UNAVAILABLE") {
+  if (status.result === "UNAVAILABLE") {
     return (
-      <span title="Marked unavailable" className="inline-flex items-center text-red-600">
+      <span
+        title={status.reason ?? "Marked unavailable"}
+        className="inline-flex items-center text-red-600">
         <X className="w-3.5 h-3.5" />
       </span>
     );
   }
   return (
     <span
-      title="Outside normal hours"
+      title={status.reason ?? "Outside normal hours"}
       className="inline-flex items-center text-yellow-600">
       <AlertTriangle className="w-3.5 h-3.5" />
     </span>
@@ -141,50 +70,70 @@ export default function CleanerSelector({
     width: 0,
   });
   const [highlightedIndex, setHighlightedIndex] = useState(0);
-  const [scheduledStart, setScheduledStart] = useState<Date | null>(null);
-  const [scheduledEnd, setScheduledEnd] = useState<Date | null>(null);
+  const [statuses, setStatuses] = useState<StatusMap>(() => new Map());
   const dropdownRef = useRef<HTMLDivElement>(null);
   const inputContainerRef = useRef<HTMLDivElement>(null);
 
-  // Watch the form's date/time fields so we can evaluate availability live
+  // Availability is evaluated by the shared server helper (checkAvailability),
+  // the single source of truth: recurring weekly rules PLUS one-off blocked
+  // dates. The form's date/time fields are already business wall clock, so they
+  // are sent through as-is — no browser-local timezone round trip.
+  //
+  // The pickers on this form (ControlledDatePicker / ControlledTimePicker) write
+  // into React-rendered HIDDEN inputs keyed by `name`, which emit no input/change
+  // events — so we poll their values and only hit the server when they actually
+  // change. (The previous implementation watched `getElementById("startDate")`,
+  // which never resolved, so the indicator never appeared at all.)
+  const userIds = useMemo(() => users.map((u) => u.id), [users]);
+
   useEffect(() => {
-    const startDateEl = document.getElementById("startDate") as HTMLInputElement | null;
-    const startTimeEl = document.getElementById("startTime") as HTMLInputElement | null;
-    const endDateEl = document.getElementById("endDate") as HTMLInputElement | null;
-    const endTimeEl = document.getElementById("endTime") as HTMLInputElement | null;
+    let lastKey = "";
+    let generation = 0;
 
-    const recompute = () => {
-      const sd = startDateEl?.value || "";
-      const st = startTimeEl?.value || "";
-      const ed = endDateEl?.value || "";
-      const et = endTimeEl?.value || "";
+    const read = (name: string) =>
+      document.querySelector<HTMLInputElement>(`input[name="${name}"]`)?.value ?? "";
 
-      if (sd && st) {
-        const start = new Date(`${sd}T${st}`);
-        setScheduledStart(Number.isNaN(start.getTime()) ? null : start);
-      } else {
-        setScheduledStart(null);
+    const tick = () => {
+      const startDate = read("startDate");
+      const startTime = read("startTime");
+      const endDate = read("endDate");
+      const endTime = read("endTime");
+
+      const key = [startDate, startTime, endDate, endTime].join("|");
+      if (key === lastKey) return;
+      lastKey = key;
+
+      if (!startDate || !startTime || userIds.length === 0) {
+        generation++;
+        setStatuses(new Map());
+        return;
       }
 
-      if (ed && et) {
-        const end = new Date(`${ed}T${et}`);
-        setScheduledEnd(Number.isNaN(end.getTime()) ? null : end);
-      } else {
-        setScheduledEnd(null);
-      }
+      const run = ++generation;
+      checkAvailabilityBatch({
+        employeeIds: userIds,
+        startDate,
+        startTime,
+        endDate: endDate || null,
+        endTime: endTime || null,
+      }).then((res) => {
+        // Ignore results from a superseded date/time edit.
+        if (run !== generation) return;
+        setStatuses(
+          res.success
+            ? new Map(res.statuses.map((s) => [s.employeeId, s]))
+            : new Map()
+        );
+      });
     };
 
-    recompute();
-    const els = [startDateEl, startTimeEl, endDateEl, endTimeEl].filter(
-      (el): el is HTMLInputElement => !!el
-    );
-    els.forEach((el) => el.addEventListener("change", recompute));
-    els.forEach((el) => el.addEventListener("input", recompute));
+    tick();
+    const interval = setInterval(tick, 500);
     return () => {
-      els.forEach((el) => el.removeEventListener("change", recompute));
-      els.forEach((el) => el.removeEventListener("input", recompute));
+      generation++;
+      clearInterval(interval);
     };
-  }, []);
+  }, [userIds]);
 
   // Update dropdown position based on input position
   const updateDropdownPosition = () => {
@@ -229,6 +178,21 @@ export default function CleanerSelector({
     const selectedIds = new Set(selectedCleaners.map((c) => c.id));
     return filteredUsers.filter((user) => !selectedIds.has(user.id));
   }, [filteredUsers, selectedCleaners]);
+
+  // Conflicts for the crew actually selected — shown BEFORE the job is created
+  // so the admin can fix or knowingly override the clash.
+  const conflicts = useMemo(() => {
+    return selectedCleaners
+      .map((c) => ({ cleaner: c, status: statuses.get(c.id) }))
+      .filter(
+        (
+          x
+        ): x is { cleaner: User; status: EmployeeAvailabilityStatus } =>
+          !!x.status &&
+          x.status.result !== "AVAILABLE" &&
+          x.status.result !== "NO_DATA"
+      );
+  }, [selectedCleaners, statuses]);
 
   useEffect(() => {
     if (isDropdownOpen) {
@@ -320,33 +284,26 @@ export default function CleanerSelector({
       }}>
       {availableUsers.length > 0 ? (
         <div className="py-1 overflow-y-auto max-h-60">
-          {availableUsers.map((user, index) => {
-            const status = evaluateAvailability(
-              user.availability,
-              scheduledStart,
-              scheduledEnd
-            );
-            return (
-              <button
-                key={user.id}
-                type="button"
-                onClick={() => handleSelectCleaner(user)}
-                onMouseEnter={() => setHighlightedIndex(index)}
-                className={`w-full px-3 py-2 text-left focus:outline-none transition-colors flex items-center justify-between gap-2 ${
-                  index === highlightedIndex ? "bg-gray-100" : "hover:bg-gray-50"
-                }`}>
-                <div className="min-w-0">
-                  <div className="font-[400] text-sm text-gray-900 truncate">
-                    {user.name}
-                  </div>
-                  <div className="text-xs text-gray-500 mt-0.5 truncate">
-                    {user.email}
-                  </div>
+          {availableUsers.map((user, index) => (
+            <button
+              key={user.id}
+              type="button"
+              onClick={() => handleSelectCleaner(user)}
+              onMouseEnter={() => setHighlightedIndex(index)}
+              className={`w-full px-3 py-2 text-left focus:outline-none transition-colors flex items-center justify-between gap-2 ${
+                index === highlightedIndex ? "bg-gray-100" : "hover:bg-gray-50"
+              }`}>
+              <div className="min-w-0">
+                <div className="font-[400] text-sm text-gray-900 truncate">
+                  {user.name}
                 </div>
-                <StatusIndicator status={status} />
-              </button>
-            );
-          })}
+                <div className="text-xs text-gray-500 mt-0.5 truncate">
+                  {user.email}
+                </div>
+              </div>
+              <StatusIndicator status={statuses.get(user.id)} />
+            </button>
+          ))}
         </div>
       ) : (
         <div className="px-4 py-8 text-center text-sm text-gray-500">
@@ -388,31 +345,50 @@ export default function CleanerSelector({
             Selected: {selectedCleaners.length}
           </p>
           <div className="flex flex-wrap gap-2">
-            {selectedCleaners.map((cleaner) => {
-              const status = evaluateAvailability(
-                cleaner.availability,
-                scheduledStart,
-                scheduledEnd
-              );
-              return (
-                <Badge
-                  key={cleaner.id}
-                  className="inline-flex items-center gap-2 !px-3 !py-1.5"
-                  variant="cleano"
-                  size="md">
-                  <StatusIndicator status={status} />
-                  <span>{cleaner.name}</span>
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveCleaner(cleaner.id)}
-                    className="hover:bg-neutral-950/10 rounded-full p-0.5 transition-colors"
-                    aria-label={`Remove ${cleaner.name}`}>
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </Badge>
-              );
-            })}
+            {selectedCleaners.map((cleaner) => (
+              <Badge
+                key={cleaner.id}
+                className="inline-flex items-center gap-2 !px-3 !py-1.5"
+                variant="cleano"
+                size="md">
+                <StatusIndicator status={statuses.get(cleaner.id)} />
+                <span>{cleaner.name}</span>
+                <button
+                  type="button"
+                  onClick={() => handleRemoveCleaner(cleaner.id)}
+                  className="hover:bg-neutral-950/10 rounded-full p-0.5 transition-colors"
+                  aria-label={`Remove ${cleaner.name}`}>
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </Badge>
+            ))}
           </div>
+        </div>
+      )}
+
+      {/* Availability conflicts, visible before the booking is saved. Advisory —
+          the admin can still create the job (nothing here blocks submit). */}
+      {conflicts.length > 0 && (
+        <div className="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3">
+          <div className="flex items-center gap-2 text-sm font-semibold text-amber-900">
+            <AlertTriangle className="w-4 h-4" />
+            Availability conflict
+          </div>
+          <ul className="mt-1.5 space-y-1">
+            {conflicts.map(({ cleaner, status }) => (
+              <li key={cleaner.id} className="text-xs text-amber-800">
+                <span className="font-medium">{cleaner.name}</span>
+                {" — "}
+                {status.reason ??
+                  (status.result === "UNAVAILABLE"
+                    ? "marked unavailable"
+                    : "outside their availability")}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-1.5 text-xs text-amber-700">
+            You can still book them — this is only a warning.
+          </p>
         </div>
       )}
 

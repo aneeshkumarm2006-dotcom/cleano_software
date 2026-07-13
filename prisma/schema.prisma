@@ -56,6 +56,7 @@ model User {
   approvedPeriods              PayPeriod[]            @relation("PayPeriodApprover")
   ragWashes                    RagWash[]
   availabilities               EmployeeAvailability[]
+  availabilityExceptions       AvailabilityException[]
   photos                       JobPhoto[]
   checklists                   JobChecklist[]
   signatures                   DocumentSignature[]
@@ -130,9 +131,27 @@ model Product {
   kitItems          KitTemplateItem[]
   inventoryRule     InventoryRule?
   supplierPrices    SupplierPrice[]
+  // Exact purchase link for re-ordering this product (the "one link" case).
+  // Additional links live in ProductLink.
+  purchaseUrl       String?
   locationStock     InventoryLocationStock[]
   checkoutItems     InventoryCheckoutItem[]
   inventoryChanges  InventoryChange[]
+  links             ProductLink[]
+}
+
+// Extra purchase links for a product (a product can be bought from several
+// places). `purchaseUrl` on Product stays the primary/exact link.
+model ProductLink {
+  id        String   @id @default(cuid())
+  productId String
+  label     String?
+  url       String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
 }
 
 model AppSetting {
@@ -263,10 +282,31 @@ model Client {
   referredBy             Client?                 @relation("ClientReferrals", fields: [referredByClientId], references: [id], onDelete: SetNull)
   referrals              Client[]                @relation("ClientReferrals")
   contact                Contact?
+  paymentMethods         ClientPaymentMethod[]
 
   @@index([clientType])
   @@index([isActive])
   @@index([referredByClientId])
+}
+
+// Saved cards on a client profile. Client.defaultPaymentMethodId still points
+// at the default Stripe payment-method id; this table lets admin save several
+// cards, see them (brand/last4/expiry), remove them, and switch the default.
+model ClientPaymentMethod {
+  id                    String   @id @default(cuid())
+  clientId              String
+  stripePaymentMethodId String   @unique
+  brand                 String?
+  last4                 String?
+  expMonth              Int?
+  expYear               Int?
+  isDefault             Boolean  @default(false)
+  label                 String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  client                Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
 }
 
 /// Recurring-service cancellation + save-offer tracking. Created only when a
@@ -1137,6 +1177,23 @@ model EmployeeAvailability {
 
   @@unique([employeeId, day])
   @@index([employeeId])
+}
+
+// One-off date blocks (vacation, appointment, sick day) layered ON TOP of the
+// recurring weekly EmployeeAvailability. EmployeeAvailability is unique per
+// (employee, weekday) so it can't express "this specific Monday is off" —
+// that's what this is for. A row = the cleaner is unavailable that date.
+model AvailabilityException {
+  id         String   @id @default(cuid())
+  employeeId String
+  // Date-only (midnight, business timezone) — the blocked day.
+  date       DateTime
+  reason     String?
+  createdAt  DateTime @default(now())
+  employee   User     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, date])
+  @@index([employeeId, date])
 }
 
 model JobPhoto {

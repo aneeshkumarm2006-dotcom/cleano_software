@@ -396,6 +396,17 @@ export const SETTINGS = {
       "We apologize for the inconvenience. Please contact our office if you have any questions.",
     validate: text(500),
   }),
+  // Fallback refill threshold for a cleaner's assigned stock when the product
+  // has no InventoryRule (InventoryRule.refillThreshold defaults to 0, which
+  // made "low" unreachable — a cleaner was only ever warned AT zero). With a
+  // non-zero floor, "Running low" fires BEFORE the item runs out.
+  "inventory.defaultRefillThreshold": def({
+    key: "inventory.defaultRefillThreshold",
+    category: "provider",
+    label: "Default refill threshold for cleaner supplies (units)",
+    default: 2,
+    validate: intRange(0, 1000),
+  }),
   // Gift-card purchase tiers. Default drops the old $100 tier so the minimum
   // purchase is $150 (client decision, 2026-06). Lowest tier = the minimum.
   "payments.giftCardTiers": def({

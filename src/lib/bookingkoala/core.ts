@@ -503,7 +503,20 @@ export interface ImportReport {
   cleaners: { created: number; existing: number; skipped: number; failed: number };
   customers: { created: number; existing: number; failed: number };
   addresses: number;
-  jobs: { created: number; skipped: number; failed: number };
+  /**
+   * `skipped` is the TOTAL skipped, broken down by cause so the summary can say
+   * WHY a row didn't import:
+   *   duplicates — same booking already imported (BookingKoala booking id, or
+   *                client+exact start time when the row has no booking id)
+   *   sameDay    — only when the opt-in "skip same-client same-day" guard is on
+   */
+  jobs: {
+    created: number;
+    skipped: number;
+    failed: number;
+    duplicates: number;
+    sameDay: number;
+  };
   statusCounts: Record<string, number>;
   emails: { sent: number; failed: number };
   sample: {

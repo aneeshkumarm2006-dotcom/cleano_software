@@ -4,6 +4,8 @@ import { db } from "@/db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import type { IncomeData } from "./getIncomeData.types";
+import { getCleanerEarnings } from "@/lib/cleaner-earnings";
+import { parseBusinessDate } from "@/lib/pay-period";
 
 interface GetInput {
   employeeId?: string;
@@ -15,6 +17,14 @@ const DEFAULT_TAX_RATE = 0.25;
 
 const TAX_SETTING_KEY = "income.estimatedTaxRate";
 
+/**
+ * My Income figures.
+ *
+ * AUTHZ: a user may only read their own income; ADMIN/OWNER may read anyone's.
+ *
+ * All earnings come from getCleanerEarnings() — the SAME computation My Pay and
+ * payroll use — so the two screens can no longer disagree (item 2/6).
+ */
 export async function getIncomeData(
   input: GetInput = {}
 ): Promise<
@@ -34,63 +44,51 @@ export async function getIncomeData(
       return { success: false, error: "Not authorized" };
     }
 
-    const year = input.year ?? new Date().getFullYear();
-    const yearStart = new Date(year, 0, 1);
-    const yearEnd = new Date(year + 1, 0, 1);
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    // Allow-list the year: an out-of-range value falls back to the current year.
+    const year =
+      typeof input.year === "number" &&
+      Number.isInteger(input.year) &&
+      input.year >= 2000 &&
+      input.year <= currentYear + 1
+        ? input.year
+        : currentYear;
 
-    let taxRate = input.taxRate ?? DEFAULT_TAX_RATE;
-    if (input.taxRate === undefined) {
+    let taxRate = DEFAULT_TAX_RATE;
+    if (
+      typeof input.taxRate === "number" &&
+      input.taxRate >= 0 &&
+      input.taxRate < 1
+    ) {
+      taxRate = input.taxRate;
+    } else {
       const setting = await db.appSetting.findUnique({
         where: { key: TAX_SETTING_KEY },
       });
-      if (setting && typeof setting.value === "number") {
-        taxRate = setting.value as number;
+      if (
+        typeof setting?.value === "number" &&
+        setting.value >= 0 &&
+        setting.value < 1
+      ) {
+        taxRate = setting.value;
       }
     }
 
-    const payouts = await db.payout.findMany({
-      where: {
-        employeeId: targetEmployeeId,
-        payPeriod: {
-          paidAt: { gte: yearStart, lt: yearEnd },
-          status: "PAID",
-        },
-      },
-      include: { payPeriod: true },
-    });
+    const earnings = await getCleanerEarnings(targetEmployeeId, year, now);
 
-    const pendingPayouts = await db.payout.findMany({
-      where: {
-        employeeId: targetEmployeeId,
-        payPeriod: {
-          status: { in: ["DRAFT", "APPROVED"] },
-        },
-      },
-    });
-
-    const grossYTD = payouts.reduce((s, p) => s + p.baseAmount, 0);
-    const netYTD = payouts.reduce((s, p) => s + p.finalAmount, 0);
-    const deductionsYTD = payouts.reduce((s, p) => s + p.deductions, 0);
-    const adjustmentsYTD = payouts.reduce((s, p) => s + p.adjustments, 0);
-    const reimbursementsYTD = payouts.reduce(
-      (s, p) => s + p.reimbursements,
-      0
-    );
-    const totalHoursYTD = payouts.reduce((s, p) => s + p.totalHours, 0);
-    const jobsCompletedYTD = payouts.reduce((s, p) => s + p.jobCount, 0);
-
-    const estimatedTaxes = Math.max(0, netYTD * taxRate);
-    const pendingAmount = pendingPayouts.reduce(
-      (s, p) => s + p.finalAmount,
-      0
-    );
-
+    // Withdrawals stay year-scoped by when they were processed.
+    const yearStart =
+      parseBusinessDate(`${year}-01-01`) ?? new Date(year, 0, 1);
+    const yearEnd =
+      parseBusinessDate(`${year + 1}-01-01`) ?? new Date(year + 1, 0, 1);
     const withdrawals = await db.withdrawal.findMany({
       where: {
         employeeId: targetEmployeeId,
         status: "COMPLETED",
         processedAt: { gte: yearStart, lt: yearEnd },
       },
+      select: { amount: true },
     });
     const withdrawnYTD = withdrawals.reduce((s, w) => s + w.amount, 0);
 
@@ -98,17 +96,20 @@ export async function getIncomeData(
       success: true,
       data: {
         year,
-        grossYTD,
-        netYTD,
-        deductionsYTD,
-        adjustmentsYTD,
-        reimbursementsYTD,
-        estimatedTaxes,
+        grossYTD: earnings.grossYTD,
+        netYTD: earnings.paidYTD,
+        earnedYTD: earnings.earnedYTD,
+        deductionsYTD: earnings.deductionsYTD,
+        adjustmentsYTD: earnings.adjustmentsYTD,
+        reimbursementsYTD: earnings.reimbursementsYTD,
+        estimatedTaxes: Math.max(0, earnings.paidYTD * taxRate),
         estimatedTaxRate: taxRate,
-        totalHoursYTD,
-        jobsCompletedYTD,
-        paidPayoutCount: payouts.length,
-        pendingAmount,
+        totalHoursYTD: earnings.totalHoursYTD,
+        // ALL completed work this year — not just jobs that already sit inside a
+        // PAID pay period (item 6).
+        jobsCompletedYTD: earnings.jobsCompletedYTD,
+        paidPayoutCount: earnings.paidPayoutCount,
+        pendingAmount: earnings.pendingAmount,
         withdrawnYTD,
       },
     };

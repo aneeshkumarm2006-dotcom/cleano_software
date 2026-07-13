@@ -4,7 +4,7 @@ import React, { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   Search, Filter, Briefcase, CheckCircle2, DollarSign,
-  AlertTriangle, Loader, Plus, CalendarClock,
+  AlertTriangle, Loader, Plus, CalendarClock, Wallet,
   Trash2, XCircle, UserPlus, Tag, RotateCcw,
 } from "lucide-react";
 import Button from "@/components/ui/Button";
@@ -17,6 +17,12 @@ import { bulkCancelJobs } from "../actions/bulkCancelJobs";
 import { bulkSetJobStatus } from "../actions/bulkSetJobStatus";
 import { bulkAssignCleaner } from "../actions/bulkAssignCleaner";
 import { normalizeJobType, jobTypeLabel } from "@/lib/calendar-labels";
+import {
+  isRevenueJob,
+  jobRevenue,
+  isScheduledValueJob,
+  jobScheduledValue,
+} from "@/lib/metrics-shared";
 
 interface Job {
   id: string;
@@ -40,6 +46,8 @@ interface Job {
   isCashJob?: boolean;
   usesFixedPrice?: boolean;
   discountAmount?: number | null;
+  refundedAmount?: number | null;
+  deletedAt?: string | null;
   bedCount?: number | null;
   bathCount?: number | null;
   payRateMultiplier?: number | null;
@@ -53,16 +61,8 @@ interface Job {
 interface ClientLite { id: string; name: string; }
 interface UserLite   { id: string; name: string; email: string; }
 
-interface JobStats {
-  totalJobs: number;
-  completedJobs: number;
-  totalRevenue: number;
-  pendingPayment: number;
-}
-
 interface JobsViewProps {
   jobs: Job[];
-  stats: JobStats;
   isLoading: boolean;
   searchTerm: string;
   statusFilter: string;
@@ -335,7 +335,6 @@ const ChevronRightSvg = ({ size = 14 }: { size?: number }) => (
 
 export default function JobsView({
   jobs,
-  stats,
   isLoading,
   searchTerm,
   statusFilter,
@@ -425,6 +424,37 @@ export default function JobsView({
     });
   }, [tabJobs, searchTerm, statusFilter, paymentFilter, jobTypeFilter, clientFilter, employeeFilter, paymentTypeFilter, startDate, endDate]);
 
+  // Stat cards are derived from the SAME list the table renders, so every
+  // filter (tab, date range, client, cleaner, type, pay type, payment status,
+  // search) moves the cards too. Previously these were four server counts over
+  // ALL jobs, so the cards sat frozen while the table filtered.
+  //
+  // Revenue uses the canonical rule from src/lib/metrics-shared (identical to
+  // the SQL `revenueWhere` the Dashboard/Analytics use): non-archived AND
+  // paymentReceived AND status ∈ {COMPLETED, PAID}, amount = price − discount −
+  // refund. "Scheduled value" is explicitly NOT revenue — it's the booked value
+  // of live work that hasn't been completed+paid yet, shown so a pipeline of
+  // priced-but-unpaid jobs doesn't read as "$0.00 revenue".
+  const stats = useMemo(() => {
+    let completedJobs = 0;
+    let pendingPayment = 0;
+    let totalRevenue = 0;
+    let scheduledValue = 0;
+    for (const j of filteredJobs) {
+      if (j.status === 'COMPLETED' || j.status === 'PAID') completedJobs++;
+      if (j.status === 'COMPLETED' && !j.paymentReceived) pendingPayment++;
+      if (isRevenueJob(j)) totalRevenue += jobRevenue(j);
+      else if (isScheduledValueJob(j)) scheduledValue += jobScheduledValue(j);
+    }
+    return {
+      totalJobs: filteredJobs.length,
+      completedJobs,
+      pendingPayment,
+      totalRevenue,
+      scheduledValue,
+    };
+  }, [filteredJobs]);
+
   const totalJobs  = filteredJobs.length;
   const totalPages = Math.max(1, Math.ceil(totalJobs / rowsPerPage));
   const startIndex = (page - 1) * rowsPerPage;
@@ -445,6 +475,13 @@ export default function JobsView({
     try {
       const res = await bulkAssignCleaner(sel.selectedIds, assignCleanerId);
       if (!res.success) { alert(res.error); return; }
+      // Availability conflicts never block the assign — surface them so the
+      // admin knows they've booked someone outside their hours / on time off.
+      if (res.warnings && res.warnings.length > 0) {
+        alert(
+          `Assigned, but note:\n\n${res.warnings.join('\n')}`
+        );
+      }
       setShowAssign(false);
       setAssignCleanerId('');
       sel.clear();
@@ -576,11 +613,27 @@ export default function JobsView({
         </Button>
       </header>
 
-      {/* Stats */}
-      <div className="astat-grid" style={{ marginBottom: 28 }}>
-        <AStatCard icon={CalendarClock} label="Total jobs"       value={stats.totalJobs} />
-        <AStatCard icon={CheckCircle2}  label="Completed"        value={stats.completedJobs} />
-        <AStatCard icon={DollarSign}    label="Total revenue"    value={`$${stats.totalRevenue.toFixed(2)}`} />
+      {/* Stats — all five reflect the CURRENT filters (see the `stats` memo). */}
+      <div className="astat-grid" id="jstats" style={{ marginBottom: 28 }}>
+        <AStatCard
+          icon={CalendarClock}
+          label="Total jobs"
+          value={stats.totalJobs}
+          hint={hasActiveFilters || searchTerm || tab !== 'all' ? 'Matching filters' : undefined}
+        />
+        <AStatCard icon={CheckCircle2} label="Completed" value={stats.completedJobs} />
+        <AStatCard
+          icon={DollarSign}
+          label="Total revenue"
+          value={`$${stats.totalRevenue.toFixed(2)}`}
+          hint="Completed & paid only"
+        />
+        <AStatCard
+          icon={Wallet}
+          label="Scheduled value"
+          value={`$${stats.scheduledValue.toFixed(2)}`}
+          hint="Booked · not yet earned"
+        />
         <AStatCard
           icon={AlertTriangle}
           label="Pending payment"
@@ -588,6 +641,11 @@ export default function JobsView({
           hint={stats.pendingPayment > 0 ? `${stats.pendingPayment} job${stats.pendingPayment === 1 ? '' : 's'}` : undefined}
         />
       </div>
+      {/* .astat-grid is 4-up by default; this page has 5 cards. Scoped so the
+          shared 2-up mobile rule still applies. */}
+      <style>{`
+        @media (min-width: 901px) { #jstats { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+      `}</style>
 
       {/* Segmented tabs */}
       <div style={{ marginBottom: 18 }}>

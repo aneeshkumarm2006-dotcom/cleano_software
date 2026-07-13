@@ -394,11 +394,15 @@ export default function JobDetailView({
   const [assignSearch, setAssignSearch] = useState("");
   const [assignSubmitting, setAssignSubmitting] = useState(false);
   const [assignError, setAssignError] = useState<string | null>(null);
+  // Non-blocking availability conflicts returned by assignCleaners (outside the
+  // cleaner's recurring hours, or a blocked/time-off date). Admin can override.
+  const [assignConflicts, setAssignConflicts] = useState<string[]>([]);
 
   function openAssignModal() {
     setAssignSelected(new Set(job.cleaners.map((c) => c.id)));
     setAssignSearch("");
     setAssignError(null);
+    setAssignConflicts([]);
     setAssignOpen(true);
   }
 
@@ -414,7 +418,10 @@ export default function JobDetailView({
       setAssignError(res.error || "Failed to assign");
       return;
     }
-    setAssignOpen(false);
+    // The assign succeeded; conflicts are advisory (admin override is allowed).
+    const conflicts = (res.conflicts ?? []).map((c) => c.warning);
+    setAssignConflicts(conflicts);
+    if (conflicts.length === 0) setAssignOpen(false);
     router.refresh();
   }
 
@@ -2239,6 +2246,15 @@ export default function JobDetailView({
             {assignError && (
               <div style={{ margin: "0 28px 12px", fontSize: 13, color: "#dc2626", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 10, padding: "8px 12px" }}>
                 {assignError}
+              </div>
+            )}
+
+            {assignConflicts.length > 0 && (
+              <div style={{ margin: "0 28px 12px", fontSize: 13, color: "#92400e", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 10, padding: "8px 12px" }}>
+                <strong>Assigned — availability conflict:</strong>
+                <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
+                  {assignConflicts.map((m, i) => <li key={i}>{m}</li>)}
+                </ul>
               </div>
             )}
 

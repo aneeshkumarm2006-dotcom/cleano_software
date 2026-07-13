@@ -5,6 +5,7 @@ import { db } from "@/db";
 import CalendarPageClient from "./CalendarPageClient";
 import CleanerCalendarClient from "./CleanerCalendarClient";
 import { getBookingConfig } from "../../(book)/actions/getBookingConfig";
+import { calendarJobsWhere } from "@/lib/cleaner-jobs";
 
 export default async function CalendarPage() {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -14,13 +15,13 @@ export default async function CalendarPage() {
   if (isEmployee && session) {
     const userId = session.user.id;
 
+    // Same scope as My Jobs / the dashboard (see @/lib/cleaner-jobs): only jobs
+    // this cleaner leads or is on, and never soft-deleted ones — the calendar
+    // used to have no status filter and no deletedAt filter at all. Cancelled
+    // jobs come through but the client hides them by default and never counts
+    // them.
     const jobs = await db.job.findMany({
-      where: {
-        OR: [
-          { employeeId: userId },
-          { cleaners: { some: { id: userId } } },
-        ],
-      },
+      where: calendarJobsWhere(userId),
       select: {
         id: true,
         jobNumber: true,

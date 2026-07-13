@@ -47,6 +47,9 @@ export interface Job {
   isCashJob?: boolean;
   usesFixedPrice?: boolean;
   discountAmount: number | null;
+  /** Canonical revenue inputs (see src/lib/metrics-shared). */
+  refundedAmount: number | null;
+  deletedAt: string | null;
   bedCount: number | null;
   bathCount: number | null;
   halfBathCount: number | null;
@@ -58,16 +61,8 @@ export interface Job {
   addOns: Array<{ id: string; name: string; price: number }>;
 }
 
-interface JobStats {
-  totalJobs: number;
-  completedJobs: number;
-  totalRevenue: number;
-  pendingPayment: number;
-}
-
 interface JobsPageClientProps {
   initialJobs: Job[];
-  initialStats: JobStats;
   initialSearch: string;
   initialStatus: string;
   initialPayment: string;
@@ -84,7 +79,6 @@ interface JobsPageClientProps {
 
 export default function JobsPageClient({
   initialJobs,
-  initialStats,
   initialSearch,
   initialStatus,
   initialPayment,
@@ -205,7 +199,6 @@ export default function JobsPageClient({
 
       <JobsView
         jobs={initialJobs}
-        stats={initialStats}
         isLoading={isLoading}
         searchTerm={searchTerm}
         statusFilter={statusFilter}

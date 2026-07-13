@@ -6,10 +6,23 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import {
   type NotificationPrefs,
-  DEFAULT_NOTIFICATION_PREFS,
+  defaultPrefsForRole,
 } from "./notificationPrefsConstants";
 
 const KEY_PREFIX = "notifications.prefs.";
+
+/**
+ * Defaults depend on the TARGET user's role (cleaners are opted in to
+ * job-critical notifications only; admins keep ops alerting on), so we resolve
+ * the role from the DB rather than trusting the caller's session role.
+ */
+async function targetDefaults(targetId: string): Promise<NotificationPrefs> {
+  const user = await db.user.findUnique({
+    where: { id: targetId },
+    select: { role: true },
+  });
+  return defaultPrefsForRole(user?.role);
+}
 
 export async function getNotificationPrefs(employeeId?: string): Promise<
   | { success: true; prefs: NotificationPrefs }
@@ -25,22 +38,24 @@ export async function getNotificationPrefs(employeeId?: string): Promise<
     const isAdmin = role === "OWNER" || role === "ADMIN";
     const targetId = employeeId || session.user.id;
 
+    // IDOR guard: only an admin may read someone else's preferences.
     if (!isAdmin && targetId !== session.user.id) {
       return { success: false, error: "Not authorized" };
     }
 
-    const setting = await db.appSetting.findUnique({
-      where: { key: KEY_PREFIX + targetId },
-    });
+    const [setting, defaults] = await Promise.all([
+      db.appSetting.findUnique({ where: { key: KEY_PREFIX + targetId } }),
+      targetDefaults(targetId),
+    ]);
 
     if (!setting) {
-      return { success: true, prefs: DEFAULT_NOTIFICATION_PREFS };
+      return { success: true, prefs: defaults };
     }
 
     const stored = setting.value as Partial<NotificationPrefs>;
     return {
       success: true,
-      prefs: { ...DEFAULT_NOTIFICATION_PREFS, ...stored },
+      prefs: { ...defaults, ...stored },
     };
   } catch (error) {
     console.error("Error getting notification preferences:", error);
@@ -62,14 +77,20 @@ export async function updateNotificationPrefs(input: {
     const isAdmin = role === "OWNER" || role === "ADMIN";
     const targetId = input.employeeId || session.user.id;
 
+    // IDOR guard: only an admin may write someone else's preferences.
     if (!isAdmin && targetId !== session.user.id) {
       return { success: false, error: "Not authorized" };
     }
 
-    const merged: NotificationPrefs = {
-      ...DEFAULT_NOTIFICATION_PREFS,
-      ...input.prefs,
-    };
+    // Allow-list the incoming payload: unknown keys are dropped and every value
+    // is coerced to a real boolean, so a hand-rolled request can't stash
+    // arbitrary JSON in the AppSetting row.
+    const defaults = await targetDefaults(targetId);
+    const merged: NotificationPrefs = { ...defaults };
+    for (const key of Object.keys(defaults) as (keyof NotificationPrefs)[]) {
+      const value = input.prefs?.[key];
+      if (typeof value === "boolean") merged[key] = value;
+    }
 
     const key = KEY_PREFIX + targetId;
     await db.appSetting.upsert({

@@ -11,8 +11,13 @@ import {
 } from "@/lib/email";
 import { isNotificationEnabled } from "@/lib/notifications";
 import { createAssignmentInvites } from "@/lib/invites";
-import { syncJobAssignments, validateTraineePairing } from "@/lib/job-assignments";
+import {
+  findAvailabilityConflicts,
+  syncJobAssignments,
+  validateTraineePairing,
+} from "@/lib/job-assignments";
 import { fmtDate, fmtTime } from "@/lib/time";
+import type { AvailabilityConflict } from "./checkAvailability.types";
 
 /**
  * Focused cleaner-assignment action used from the Team card on the Job
@@ -23,7 +28,10 @@ import { fmtDate, fmtTime } from "@/lib/time";
 export async function assignCleaners(input: {
   jobId: string;
   cleanerIds: string[];
-}) {
+}): Promise<
+  | { success: true; conflicts: AvailabilityConflict[] }
+  | { success: false; error: string }
+> {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) return { success: false, error: "Not authenticated" };
   const role = (session.user as { role?: string }).role;
@@ -43,6 +51,7 @@ export async function assignCleaners(input: {
         jobNumber: true,
         clientName: true,
         startTime: true,
+        endTime: true,
         location: true,
         jobType: true,
         status: true,
@@ -59,6 +68,16 @@ export async function assignCleaners(input: {
     const newlyAdded = input.cleanerIds.filter((id) => !previousIds.has(id));
     const justGotFirstCleaner =
       job.cleaners.length === 0 && input.cleanerIds.length > 0;
+
+    // Availability conflicts (item 8) — recurring rule + one-off blocked dates.
+    // ADVISORY ONLY: the admin can always override, so this never blocks the
+    // assignment. It is returned so the Team card can show the warning, and
+    // logged so the override is auditable.
+    const conflicts = await findAvailabilityConflicts(
+      input.cleanerIds,
+      job.startTime,
+      job.endTime
+    );
 
     await db.$transaction([
       db.job.update({
@@ -83,6 +102,22 @@ export async function assignCleaners(input: {
 
     // Keep per-cleaner JobAssignment rows in sync with the assigned team.
     await syncJobAssignments(input.jobId, input.cleanerIds);
+
+    if (conflicts.length > 0) {
+      await db.jobLog
+        .create({
+          data: {
+            jobId: input.jobId,
+            userId: session.user.id,
+            action: "UPDATED",
+            field: "cleaners",
+            description: `Availability conflict overridden — ${conflicts
+              .map((c) => c.warning)
+              .join("; ")}`,
+          },
+        })
+        .catch(() => {});
+    }
 
     const lifecycleInfo = {
       jobId: input.jobId,
@@ -154,7 +189,7 @@ export async function assignCleaners(input: {
 
     revalidatePath(`/admin/jobs/${input.jobId}`);
     revalidatePath("/admin/jobs");
-    return { success: true };
+    return { success: true, conflicts };
   } catch (error) {
     console.error("Error assigning cleaners:", error);
     return { success: false, error: "Failed to assign cleaners" };

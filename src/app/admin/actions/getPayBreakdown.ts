@@ -3,10 +3,28 @@
 import { db } from "@/db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
-import type { PayBreakdown } from "./getPayBreakdown.types";
+import type {
+  AdminPayBreakdown,
+  CleanerPayBreakdown,
+  JobPayType,
+  PayBreakdown,
+} from "./getPayBreakdown.types";
 import { getCleanerRateInputs } from "@/lib/cleaner-rates";
 import { computeJobPayout, type CleanerTier } from "@/lib/pay-tiers";
+import { cleanerJobPay, type JobPayInput } from "@/lib/cleaner-earnings";
 
+/**
+ * Pay breakdown for one job.
+ *
+ * AUTHZ: the caller must be the job's lead, an assigned cleaner, or an
+ * ADMIN/OWNER. Anything else is denied (fail closed).
+ *
+ * REDACTION (item 1): only ADMIN/OWNER get the internal breakdown (client
+ * charges, base price, discounts, tier, % of price, split-pool math). Everyone
+ * else — including the cleaners on the job — gets a payload that contains
+ * nothing but their own payout, so the internal numbers can't be read off the
+ * wire either.
+ */
 export async function getPayBreakdown(
   jobId: string
 ): Promise<
@@ -19,6 +37,10 @@ export async function getPayBreakdown(
 
   if (!session?.user) {
     return { success: false, error: "Not authenticated" };
+  }
+
+  if (typeof jobId !== "string" || jobId.length === 0 || jobId.length > 64) {
+    return { success: false, error: "Invalid request" };
   }
 
   try {
@@ -37,16 +59,51 @@ export async function getPayBreakdown(
 
     const isLead = job.employeeId === session.user.id;
     const isCleaner = job.cleaners.some((c) => c.id === session.user.id);
-    const isAdmin =
-      (session.user as any).role === "ADMIN" ||
-      (session.user as any).role === "OWNER";
+    const role = (session.user as { role?: string }).role;
+    const isAdmin = role === "ADMIN" || role === "OWNER";
 
     if (!isLead && !isCleaner && !isAdmin) {
       return { success: false, error: "You do not have access to this job" };
     }
 
+    const payType = (job.payType as JobPayType) ?? "PERCENTAGE";
+    const participantIds = Array.from(
+      new Set(
+        [job.employeeId, ...job.cleaners.map((c) => c.id)].filter(
+          (id): id is string => !!id
+        )
+      )
+    );
+    const rateInputs = await getCleanerRateInputs(participantIds);
+
+    // The "viewer" is the current cleaner when they're on the job, otherwise the
+    // lead (so an admin sees the lead's pay).
+    const viewerId =
+      isCleaner || isLead
+        ? session.user.id
+        : job.employeeId ?? participantIds[0] ?? "";
+
+    // Same math as payroll (src/lib/cleaner-earnings.ts) so the number a cleaner
+    // sees here is the number they get paid.
+    const share = cleanerJobPay(job as unknown as JobPayInput, rateInputs, viewerId);
+
+    // ── Cleaner (and any non-admin) payload: payout only. ────────────────────
+    if (!isAdmin) {
+      const redacted: CleanerPayBreakdown = {
+        audience: "CLEANER",
+        jobId: job.id,
+        clientName: job.clientName,
+        payType,
+        hourlyRate: payType === "HOURLY" ? job.hourlyRate ?? null : null,
+        tipShare: share.tip,
+        totalEmployeePay: share.total,
+      };
+      return { success: true, breakdown: redacted };
+    }
+
+    // ── Admin payload: full internal breakdown. ──────────────────────────────
     let basePrice: number | null = null;
-    let basePriceSource: PayBreakdown["basePriceSource"] = "NONE";
+    let basePriceSource: AdminPayBreakdown["basePriceSource"] = "NONE";
 
     if (job.bedCount !== null && job.bathCount !== null) {
       const rule = await db.pricingRule.findUnique({
@@ -72,23 +129,11 @@ export async function getPayBreakdown(
 
     const discount = job.discountAmount || 0;
     const parking = job.parking || 0;
-
     const clientTotal =
       job.price !== null
         ? job.price
         : (basePrice ?? 0) + addOnsTotal - discount;
 
-    // Tier-based pay: compute the proportional split from the job price. The
-    // "viewer" is the current cleaner if they're on the job, otherwise the lead
-    // (so admins see the lead's pay).
-    const participantIds = Array.from(
-      new Set(
-        [job.employeeId, ...job.cleaners.map((c) => c.id)].filter(
-          (id): id is string => !!id
-        )
-      )
-    );
-    const rateInputs = await getCleanerRateInputs(participantIds);
     const rateList = participantIds.map(
       (id) =>
         rateInputs.get(id) ?? {
@@ -99,57 +144,39 @@ export async function getPayBreakdown(
         }
     );
     const payout = computeJobPayout(job.price, rateList);
-
-    const viewerId =
-      isCleaner || isLead ? session.user.id : job.employeeId ?? participantIds[0];
     const viewerShare = payout.shares.find((s) => s.id === viewerId);
-    const viewerRate = rateInputs.get(viewerId ?? "");
+    const viewerRate = rateInputs.get(viewerId);
 
-    const teamSize = 1 + job.cleaners.length;
-    const usePriceModel = (job.price ?? 0) > 0;
-
-    // Base pay (before the per-job multiplier/tip): tier share, or legacy even
-    // split of the stored employeePay for jobs with no price.
-    const employeeBasePay = usePriceModel
-      ? viewerShare?.amount ?? 0
-      : (job.employeePay || 0) / (teamSize || 1);
-    const payMultiplier = job.payRateMultiplier ?? 1.0;
-
-    const payAfterMultiplier = employeeBasePay * payMultiplier;
-
-    const totalTip = job.totalTip || 0;
-    const tipShare = teamSize > 0 ? totalTip / teamSize : 0;
-
-    const totalEmployeePay = payAfterMultiplier + tipShare;
-
-    return {
-      success: true,
-      breakdown: {
-        jobId: job.id,
-        clientName: job.clientName,
-        bedCount: job.bedCount,
-        bathCount: job.bathCount,
-        basePrice,
-        basePriceSource,
-        addOns: job.addOns.map((a) => ({ name: a.name, price: a.price })),
-        addOnsTotal,
-        discount,
-        parking,
-        clientTotal,
-        employeeBasePay,
-        payMultiplier,
-        payAfterMultiplier,
-        totalTip,
-        teamSize,
-        tipShare,
-        totalEmployeePay,
-        isLead,
-        tier: (viewerRate?.tier as CleanerTier) ?? "STANDARD",
-        individualRate: viewerShare?.rate ?? 0,
-        isSplit: payout.isSplit,
-        poolTotal: payout.pool,
-      },
+    const breakdown: AdminPayBreakdown = {
+      audience: "ADMIN",
+      jobId: job.id,
+      clientName: job.clientName,
+      bedCount: job.bedCount,
+      bathCount: job.bathCount,
+      basePrice,
+      basePriceSource,
+      addOns: job.addOns.map((a) => ({ name: a.name, price: a.price })),
+      addOnsTotal,
+      discount,
+      parking,
+      clientTotal,
+      payType,
+      hourlyRate: job.hourlyRate ?? null,
+      employeeBasePay: share.base,
+      payMultiplier: job.payRateMultiplier ?? 1.0,
+      payAfterMultiplier: share.afterMultiplier,
+      totalTip: job.totalTip || 0,
+      teamSize: participantIds.length,
+      tipShare: share.tip,
+      totalEmployeePay: share.total,
+      isLead,
+      tier: (viewerRate?.tier as CleanerTier) ?? "STANDARD",
+      individualRate: viewerShare?.rate ?? 0,
+      isSplit: payout.isSplit,
+      poolTotal: payout.pool,
     };
+
+    return { success: true, breakdown };
   } catch (error) {
     console.error("Error getting pay breakdown:", error);
     return { success: false, error: "Failed to load pay breakdown" };

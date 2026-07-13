@@ -3,6 +3,11 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { jobRevenue, getEmployeeCounts } from "@/lib/metrics";
+import {
+  dateKeyFromStoredDate,
+  dateKeyToStoredDate,
+  dateKeyTz,
+} from "@/lib/availability";
 import EmployeesPageClient from "./EmployeesPageClient";
 import AvailabilityOverview from "./AvailabilityOverview";
 
@@ -121,6 +126,21 @@ export default async function EmployeesPage({
           isAvailable: true,
         },
       });
+  // Upcoming one-off time off (vacation / appointment / sick day). These beat the
+  // weekly rule, so the overview has to show them or the table lies.
+  const today = dateKeyToStoredDate(dateKeyTz(new Date()));
+  const timeOff =
+    archived || !today
+      ? []
+      : await db.availabilityException.findMany({
+          where: {
+            employeeId: { in: cleanerRows.map((e) => e.id) },
+            date: { gte: today },
+          },
+          orderBy: { date: "asc" },
+          select: { employeeId: true, date: true, reason: true },
+        });
+
   const availabilityRows = archived
     ? []
     : cleanerRows.map((e) => ({
@@ -133,6 +153,12 @@ export default async function EmployeesPage({
             startTime: s.startTime,
             endTime: s.endTime,
             isAvailable: s.isAvailable,
+          })),
+        timeOff: timeOff
+          .filter((t) => t.employeeId === e.id)
+          .map((t) => ({
+            date: dateKeyFromStoredDate(t.date),
+            reason: t.reason,
           })),
       }));
 

@@ -7,17 +7,24 @@ import {
   updateNotificationPrefs,
 } from "../../actions/updateNotificationPrefs";
 import {
-  DEFAULT_NOTIFICATION_PREFS,
+  defaultPrefsForRole,
+  notificationKeysForRole,
+  type NotificationKey,
   type NotificationPrefs,
 } from "../../actions/notificationPrefsConstants";
+import { isAdminRole } from "@/lib/role-routing";
 import { SectionCard, Feedback, Msg } from "./_shared";
 
 interface ToggleRow {
-  key: keyof NotificationPrefs;
+  key: NotificationKey;
   label: string;
   description: string;
 }
 
+// Copy for every key. Which of these a given user actually SEES is decided by
+// NOTIFICATION_AUDIENCE (see notificationPrefsConstants) — cleaners are not
+// shown admin/ops/billing toggles such as provider low stock, late payment,
+// client complaints or overdue commercial invoices.
 const ROWS: ToggleRow[] = [
   {
     key: "newJob",
@@ -98,13 +105,20 @@ const ROWS: ToggleRow[] = [
 
 interface NotificationSectionProps {
   employeeId?: string;
+  /** Role of the user whose preferences are being edited. Defaults to cleaner. */
+  role?: string;
 }
 
 export default function NotificationSection({
   employeeId,
+  role,
 }: NotificationSectionProps) {
-  const [prefs, setPrefs] = useState<NotificationPrefs>(
-    DEFAULT_NOTIFICATION_PREFS
+  const isAdmin = isAdminRole(role);
+  const allowedKeys = new Set(notificationKeysForRole(isAdmin));
+  const visibleRows = ROWS.filter((row) => allowedKeys.has(row.key));
+
+  const [prefs, setPrefs] = useState<NotificationPrefs>(() =>
+    defaultPrefsForRole(role)
   );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -132,7 +146,12 @@ export default function NotificationSection({
   async function handleSave() {
     setSaving(true);
     setMsg(null);
-    const res = await updateNotificationPrefs({ employeeId, prefs });
+    // Only submit toggles this role is allowed to see. Keys outside the
+    // audience keep their server-side role default (the action re-validates
+    // and allow-lists too — this is the UI half of the same rule).
+    const payload: Partial<NotificationPrefs> = {};
+    for (const row of visibleRows) payload[row.key] = prefs[row.key];
+    const res = await updateNotificationPrefs({ employeeId, prefs: payload });
     if (res.success) {
       setMsg({ type: "success", text: "Notification preferences saved." });
     } else {
@@ -141,7 +160,7 @@ export default function NotificationSection({
     setSaving(false);
   }
 
-  function toggle(key: keyof NotificationPrefs) {
+  function toggle(key: NotificationKey) {
     setPrefs((p) => ({ ...p, [key]: !p[key] }));
   }
 
@@ -154,7 +173,7 @@ export default function NotificationSection({
         <p style={{ fontSize: 13, color: "var(--primary-60)" }}>Loading preferences...</p>
       ) : (
         <>
-          {ROWS.map((row) => (
+          {visibleRows.map((row) => (
             <div className="cl-notif-row" key={row.key}>
               <div className="meta">
                 <div className="name">{row.label}</div>

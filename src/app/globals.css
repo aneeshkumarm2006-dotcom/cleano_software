@@ -1998,20 +1998,23 @@ body {
 .cl-module-summary { font-size: 13px; color: var(--primary-60); line-height: 1.5; }
 .cl-module-chev { flex: 0 0 auto; color: var(--primary-40); }
 
-/* Income grid */
-.cl-income-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; }
+/* Income grid — auto-fit so cards never overflow their container (item 6) */
+.cl-income-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; }
 .cl-income-tile {
   background: var(--cream);
   border-radius: 16px;
   padding: 20px 22px;
+  min-width: 0; /* grid items default to min-content — let long values shrink */
 }
-.cl-income-tile .label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--primary-50); font-weight: 700; margin-bottom: 6px; }
+.cl-income-tile .label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--primary-50); font-weight: 700; margin-bottom: 6px; overflow-wrap: anywhere; }
 .cl-income-tile .val {
   font-family: var(--font-serif);
-  font-size: 26px;
+  font-size: clamp(20px, 2.2vw, 26px);
   font-weight: 400;
   letter-spacing: -0.02em;
   color: var(--ink);
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .cl-income-tile .val.accent { color: var(--primary); }
 .cl-income-tile .val.neg { color: var(--error-text); }
@@ -2338,13 +2341,15 @@ body {
   cursor: pointer; transition: background .15s;
 }
 .cl-form-save:hover { background: var(--primary-hover); }
-.cl-income-stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
-@media (max-width: 900px) { .cl-income-stats-grid { grid-template-columns: repeat(2, 1fr); } }
-.cl-income-mini { background: var(--cream); border-radius: 14px; padding: 16px 20px; }
-.cl-income-mini .label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--primary-60); font-weight: 700; }
+/* Income stat cards — auto-fit + min-width:0 so the 768–900px band (and any
+   card count) wraps instead of overflowing the section card. */
+.cl-income-stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.cl-income-mini { background: var(--cream); border-radius: 14px; padding: 16px 18px; min-width: 0; }
+.cl-income-mini .label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--primary-60); font-weight: 700; overflow-wrap: anywhere; }
 .cl-income-mini .val {
-  font-family: var(--font-serif); font-size: 24px; font-weight: 400;
+  font-family: var(--font-serif); font-size: clamp(18px, 2vw, 24px); font-weight: 400;
   letter-spacing: -0.01em; color: var(--ink); margin-top: 6px; line-height: 1.1;
+  min-width: 0; overflow-wrap: anywhere;
 }
 .cl-income-mini .val.amber { color: var(--amber-700); }
 .cl-income-mini .val.red { color: var(--error); }

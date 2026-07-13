@@ -12,6 +12,7 @@ import {
 import { logActivity } from "@/lib/activity-log";
 import { getTaxRates, computeJobTaxes } from "@/lib/tax.server";
 import { jobTypeLabel } from "@/lib/calendar-labels";
+import { startOfDayTz } from "@/lib/time";
 import {
   parseAndNormalize,
   aggregateCustomers,
@@ -36,6 +37,14 @@ export async function runBookingKoalaImport(
     /** Email customers their login (default true). Client can turn this off. */
     sendCustomerEmails?: boolean;
     /**
+     * OPT-IN (default OFF): also skip a row when that client already has a
+     * non-deleted job on the same calendar DAY. Off by default because a
+     * property-manager client legitimately books several distinct cleanings on
+     * one day — turning this on would silently drop them. See the dedup notes
+     * in section 3 below.
+     */
+    skipSameDayDuplicates?: boolean;
+    /**
      * Process only a slice of the in-range rows — keeps each request well under
      * the serverless timeout. The UI drives a full commit as a sequence of these
      * (rows 0–99, 100–199, …). Omit to process the whole file (used for dry-run).
@@ -55,7 +64,7 @@ export async function runBookingKoalaImport(
     cleaners: { created: 0, existing: 0, skipped: 0, failed: 0 },
     customers: { created: 0, existing: 0, failed: 0 },
     addresses: 0,
-    jobs: { created: 0, skipped: 0, failed: 0 },
+    jobs: { created: 0, skipped: 0, failed: 0, duplicates: 0, sameDay: 0 },
     statusCounts: {},
     emails: { sent: 0, failed: 0 },
     sample: [],
@@ -71,6 +80,7 @@ export async function runBookingKoalaImport(
   const commit = opts.commit;
   const sendCleanerEmails = commit && opts.sendCleanerEmails !== false;
   const sendCustomerEmails = commit && opts.sendCustomerEmails !== false;
+  const skipSameDay = opts.skipSameDayDuplicates === true;
 
   let parsed;
   try {
@@ -253,7 +263,14 @@ export async function runBookingKoalaImport(
   // (e.g. a property manager) can have several distinct bookings at the same
   // time, and those must all import. Fall back to customer+time only when a row
   // has no booking id.
+  //
+  // The optional `skipSameDayDuplicates` guard (default OFF) additionally skips
+  // a row when the client already has a job on the same calendar DAY. It is
+  // opt-in precisely because it WOULD drop those legitimate same-day bookings.
   const seen = new Set<string>();
+  // Same-day keys claimed by rows earlier in THIS file (only used when the
+  // opt-in guard is on) — so two same-day rows in one upload also collapse.
+  const seenSameDay = new Set<string>();
   const taxRates = await getTaxRates();
   for (const r of rows) {
     const dedupKey = r.job.bookingId
@@ -261,9 +278,20 @@ export async function runBookingKoalaImport(
       : `${r.customerKey}|${r.job.startTime.toISOString()}`;
     if (seen.has(dedupKey)) {
       report.jobs.skipped++;
+      report.jobs.duplicates++;
       continue;
     }
     seen.add(dedupKey);
+
+    if (skipSameDay) {
+      const dayKey = `${r.customerKey}|${dayBounds(r.job.startTime).key}`;
+      if (seenSameDay.has(dayKey)) {
+        report.jobs.skipped++;
+        report.jobs.sameDay++;
+        continue;
+      }
+      seenSameDay.add(dayKey);
+    }
 
     const clientId = clientIdByKey.get(r.customerKey) ?? null;
     const cleanerIds = r.providers
@@ -291,22 +319,58 @@ export async function runBookingKoalaImport(
     try {
       // Re-import idempotency: skip only an exact same booking (by external id),
       // never a different booking that merely shares a client + time.
+      //
+      // `deletedAt: null` is load-bearing: without it an ARCHIVED (soft-deleted)
+      // job matched here and the row was reported as a duplicate skip, so an
+      // archived booking could never be re-imported. Only a LIVE job blocks a
+      // re-import.
       if (r.job.bookingId) {
         const dup = await db.job.findFirst({
-          where: { externalBookingId: r.job.bookingId, bookingSource: BOOKING_SOURCE },
+          where: {
+            externalBookingId: r.job.bookingId,
+            bookingSource: BOOKING_SOURCE,
+            deletedAt: null,
+          },
           select: { id: true },
         });
         if (dup) {
           report.jobs.skipped++;
+          report.jobs.duplicates++;
           continue;
         }
       } else if (clientId) {
         const dup = await db.job.findFirst({
-          where: { clientId, startTime: r.job.startTime, bookingSource: BOOKING_SOURCE },
+          where: {
+            clientId,
+            startTime: r.job.startTime,
+            bookingSource: BOOKING_SOURCE,
+            deletedAt: null,
+          },
           select: { id: true },
         });
         if (dup) {
           report.jobs.skipped++;
+          report.jobs.duplicates++;
+          continue;
+        }
+      }
+
+      // Opt-in guard: this client already has a live job somewhere on the same
+      // calendar day. Any source, not just BookingKoala — the point is "don't
+      // double-book this client today".
+      if (skipSameDay && clientId) {
+        const { start, end } = dayBounds(r.job.startTime);
+        const sameDay = await db.job.findFirst({
+          where: {
+            clientId,
+            deletedAt: null,
+            startTime: { gte: start, lt: end },
+          },
+          select: { id: true },
+        });
+        if (sameDay) {
+          report.jobs.skipped++;
+          report.jobs.sameDay++;
           continue;
         }
       }
@@ -421,6 +485,17 @@ export async function runBookingKoalaImport(
     revalidatePath("/admin/jobs");
   }
   return report;
+}
+
+/**
+ * Half-open [start, end) instants of the BUSINESS-timezone calendar day that
+ * contains `d`, plus a stable key for that day. Computed via startOfDayTz (not
+ * +24h arithmetic) on both ends so DST transition days stay correct.
+ */
+function dayBounds(d: Date): { start: Date; end: Date; key: string } {
+  const start = startOfDayTz(d);
+  const end = startOfDayTz(new Date(start.getTime() + 36 * 60 * 60 * 1000));
+  return { start, end, key: start.toISOString() };
 }
 
 /**

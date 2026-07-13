@@ -15,6 +15,9 @@ export interface AvailabilityOverviewRow {
     endTime: string;
     isAvailable: boolean;
   }>;
+  /** Upcoming one-off blocked dates ("YYYY-MM-DD"), soonest first. These
+   *  override the weekly slots for that specific day. */
+  timeOff?: Array<{ date: string; reason: string | null }>;
 }
 
 const DAYS = [
@@ -26,6 +29,16 @@ const DAYS = [
   { key: "SATURDAY", label: "Sat" },
   { key: "SUNDAY", label: "Sun" },
 ] as const;
+
+/** "2026-07-13" → "Jul 13" (plain calendar date — no timezone maths). */
+function shortDate(dateKey: string): string {
+  const [y, m, d] = dateKey.split("-").map(Number);
+  if (!y || !m || !d) return dateKey;
+  return new Date(y, m - 1, d).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+}
 
 /**
  * Compact all-cleaners availability table (cleaners × Mon–Sun). Collapsed by
@@ -73,6 +86,7 @@ export default function AvailabilityOverview({
                     {d.label}
                   </th>
                 ))}
+                <th className="py-2 pr-3 font-[600]">Time off</th>
               </tr>
             </thead>
             <tbody>
@@ -105,6 +119,25 @@ export default function AvailabilityOverview({
                         </td>
                       );
                     })}
+                    <td className="py-2 pr-3 whitespace-nowrap text-xs">
+                      {!row.timeOff || row.timeOff.length === 0 ? (
+                        <span className="text-gray-300">—</span>
+                      ) : (
+                        <span
+                          className="text-red-500"
+                          title={row.timeOff
+                            .map(
+                              (t) =>
+                                `${t.date}${t.reason ? ` — ${t.reason}` : ""}`
+                            )
+                            .join("\n")}>
+                          {row.timeOff.slice(0, 2).map((t) => shortDate(t.date)).join(", ")}
+                          {row.timeOff.length > 2
+                            ? ` +${row.timeOff.length - 2}`
+                            : ""}
+                        </span>
+                      )}
+                    </td>
                   </tr>
                 );
               })}

@@ -7,6 +7,8 @@ import type { ProductCategory } from "@prisma/client";
 import { requireOwnerAdmin } from "@/lib/action-guards";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
+import { sanitizeHttpUrl } from "@/lib/safe-url";
+import { parseProductLinks } from "@/lib/product-links";
 
 const ALLOWED_CATEGORIES: readonly ProductCategory[] = [
   "LIQUID_SPRAY",
@@ -37,6 +39,21 @@ export default async function createProduct(
   const category: ProductCategory = ALLOWED_CATEGORIES.includes(categoryRaw as ProductCategory)
     ? (categoryRaw as ProductCategory)
     : "OTHER";
+
+  // Purchase links — same allow-list rule as updateProduct: absolute http(s)
+  // only, so a stored link can never become script when rendered as an href.
+  const purchaseUrlRaw = (formData.get("purchaseUrl") as string) || "";
+  const purchaseUrl = purchaseUrlRaw.trim() ? sanitizeHttpUrl(purchaseUrlRaw) : null;
+  if (purchaseUrlRaw.trim() && !purchaseUrl) {
+    return {
+      message: "",
+      error: "The purchase link must be a full http:// or https:// URL.",
+    };
+  }
+  const parsedLinks = parseProductLinks(formData.get("links"));
+  if (!parsedLinks.ok) {
+    return { message: "", error: parsedLinks.error };
+  }
 
   // Validate required fields
   if (!name || !unit || isNaN(costPerUnit) || isNaN(stockLevel) || isNaN(minStock)) {
@@ -81,9 +98,20 @@ export default async function createProduct(
         stockLevel,
         minStock,
         category,
+        purchaseUrl,
         stockUpdatedAt: new Date(),
         stockUpdatedById: user?.id ?? null,
         stockUpdatedByName: user?.name ?? null,
+        ...(parsedLinks.links.length > 0
+          ? {
+              links: {
+                create: parsedLinks.links.map((l) => ({
+                  label: l.label,
+                  url: l.url,
+                })),
+              },
+            }
+          : {}),
       },
     });
 

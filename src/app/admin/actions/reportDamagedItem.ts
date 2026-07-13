@@ -13,6 +13,13 @@ import { revalidatePath } from "next/cache";
  *
  * Quantity defaults to 1 (most common case). Reason is optional but
  * recommended — it shows up directly in the admin alert.
+ *
+ * Both stock movements (the cleaner's kit AND master stock) are written to
+ * `InventoryChange` so cleaner-driven movements land in the product's Stock
+ * History audit log, not just in a transient alert.
+ *
+ * AUTHZ: the kit row is looked up by the SESSION user id — a cleaner can only
+ * ever report against their own kit.
  */
 export async function reportDamagedItem(input: {
   productId: string;
@@ -23,17 +30,26 @@ export async function reportDamagedItem(input: {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) return { success: false, error: "Not authenticated" };
 
-  const qty = Math.max(1, input.quantity ?? 1);
-  const kind = input.kind ?? "damaged";
+  const rawQty = Number(input.quantity ?? 1);
+  if (!Number.isFinite(rawQty) || rawQty <= 0) {
+    return { success: false, error: "Quantity must be greater than zero" };
+  }
+  const qty = Math.max(1, Math.floor(rawQty));
+  const kind = input.kind === "lost" ? "lost" : "damaged";
+  const reason = input.reason?.trim().slice(0, 300) ?? "";
+
+  const actor = session.user as { id: string; name?: string };
 
   const kit = await db.employeeProduct.findUnique({
     where: {
       employeeId_productId: {
-        employeeId: session.user.id,
+        employeeId: actor.id,
         productId: input.productId,
       },
     },
-    include: { product: { select: { name: true, stockLevel: true } } },
+    include: {
+      product: { select: { name: true, unit: true, stockLevel: true } },
+    },
   });
   if (!kit) {
     return { success: false, error: "This item is not in your kit" };
@@ -44,6 +60,12 @@ export async function reportDamagedItem(input: {
       error: `You only have ${kit.quantity} of this item in your kit`,
     };
   }
+
+  const newKitQty = kit.quantity - qty;
+  const newStockLevel = kit.product.stockLevel - qty;
+  const auditReason = `${kind === "damaged" ? "Damaged" : "Lost"} — reported by cleaner${
+    reason ? `: ${reason}` : ""
+  }`;
 
   await db.$transaction([
     // Reduce the cleaner's personal kit count.
@@ -56,14 +78,42 @@ export async function reportDamagedItem(input: {
       where: { id: input.productId },
       data: { stockLevel: { decrement: qty } },
     }),
+    // Audit: the cleaner's assigned stock …
+    db.inventoryChange.create({
+      data: {
+        productId: input.productId,
+        employeeId: actor.id,
+        employeeName: actor.name ?? null,
+        quantityChange: -qty,
+        newQuantity: newKitQty,
+        unit: kit.product.unit,
+        reason: auditReason,
+        changedById: actor.id,
+        changedByName: actor.name ?? null,
+      },
+    }),
+    // … and the matching write-off against master/warehouse stock.
+    db.inventoryChange.create({
+      data: {
+        productId: input.productId,
+        employeeId: null,
+        employeeName: null,
+        quantityChange: -qty,
+        newQuantity: newStockLevel,
+        unit: kit.product.unit,
+        reason: auditReason,
+        changedById: actor.id,
+        changedByName: actor.name ?? null,
+      },
+    }),
     // Alert admin to review and reorder.
     db.alert.create({
       data: {
         type: "LOW_INVENTORY",
         severity: "WARNING",
         title: `${kind === "damaged" ? "Damaged" : "Lost"} item: ${kit.product.name}`,
-        message: `${session.user.name ?? "A cleaner"} reported ${qty} ${kit.product.name} as ${kind}.${
-          input.reason?.trim() ? ` Reason: ${input.reason.trim()}` : ""
+        message: `${actor.name ?? "A cleaner"} reported ${qty} ${kit.product.name} as ${kind}.${
+          reason ? ` Reason: ${reason}` : ""
         } Master stock and the cleaner's kit have both been decremented.`,
         relatedId: input.productId,
         relatedType: "Product",

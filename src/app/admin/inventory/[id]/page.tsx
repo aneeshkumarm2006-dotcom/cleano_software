@@ -52,6 +52,7 @@ export default async function ProductPage({
         orderBy: { createdAt: "desc" },
         take: 25,
       },
+      links: { orderBy: { createdAt: "asc" } },
     },
   });
 
@@ -84,6 +85,13 @@ export default async function ProductPage({
       ? product.stockUpdatedAt.toISOString()
       : null,
     stockUpdatedByName: product.stockUpdatedByName,
+    // Re-order links. Re-sanitized in the view before they become an href.
+    purchaseUrl: product.purchaseUrl,
+    links: product.links.map((l) => ({
+      id: l.id,
+      label: l.label ?? "",
+      url: l.url,
+    })),
   };
 
   const changeHistory = product.inventoryChanges.map((c) => ({

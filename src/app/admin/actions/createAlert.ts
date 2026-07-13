@@ -3,7 +3,7 @@
 import { db } from "@/db";
 import type { AlertType, AlertSeverity, Prisma } from "@prisma/client";
 import {
-  DEFAULT_NOTIFICATION_PREFS,
+  defaultPrefsForRole,
   type NotificationPrefs,
 } from "./notificationPrefsConstants";
 import { getActor, requireOwnerAdmin } from "@/lib/action-guards";
@@ -169,23 +169,44 @@ export async function notifyByRule(
     const prefKey = ALERT_TYPE_TO_PREF_KEY[alertType];
     const prefsByUserId = new Map<string, NotificationPrefs>();
     if (prefKey) {
-      const keys = [...recipientIds].map((id) => PREFS_KEY_PREFIX + id);
-      const settings = await db.appSetting.findMany({
-        where: { key: { in: keys } },
-        select: { key: true, value: true },
-      });
+      // Defaults are role-dependent (a cleaner who has never opened settings is
+      // opted in to job notifications only; an admin keeps ops alerting on), so
+      // resolve each recipient's role before falling back.
+      const ids = [...recipientIds];
+      const [recipients, settings] = await Promise.all([
+        db.user.findMany({
+          where: { id: { in: ids } },
+          select: { id: true, role: true },
+        }),
+        db.appSetting.findMany({
+          where: { key: { in: ids.map((id) => PREFS_KEY_PREFIX + id) } },
+          select: { key: true, value: true },
+        }),
+      ]);
+
+      const defaultsByUserId = new Map<string, NotificationPrefs>();
+      for (const u of recipients) {
+        defaultsByUserId.set(u.id, defaultPrefsForRole(u.role));
+      }
       for (const s of settings) {
         const uid = s.key.slice(PREFS_KEY_PREFIX.length);
+        const defaults =
+          defaultsByUserId.get(uid) ?? defaultPrefsForRole(undefined);
         const stored = s.value as Partial<NotificationPrefs>;
-        prefsByUserId.set(uid, { ...DEFAULT_NOTIFICATION_PREFS, ...stored });
+        prefsByUserId.set(uid, { ...defaults, ...stored });
+      }
+      // Recipients with no stored row fall back to their role defaults.
+      for (const [uid, defaults] of defaultsByUserId) {
+        if (!prefsByUserId.has(uid)) prefsByUserId.set(uid, defaults);
       }
     }
 
     const data: Prisma.AlertCreateManyInput[] = [];
     for (const userId of recipientIds) {
       if (prefKey) {
-        const prefs = prefsByUserId.get(userId) ?? DEFAULT_NOTIFICATION_PREFS;
-        if (!prefs[prefKey]) continue;
+        // Fail closed: an unknown recipient (no User row) gets no alert.
+        const prefs = prefsByUserId.get(userId);
+        if (!prefs || !prefs[prefKey]) continue;
       }
       data.push({
         type: alertType,

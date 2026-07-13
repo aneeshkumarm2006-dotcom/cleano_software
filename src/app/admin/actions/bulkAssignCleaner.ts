@@ -4,6 +4,8 @@ import { db } from "@/db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { evaluateEmployeeWindows } from "@/lib/job-assignments";
+import { availabilityWarning, windowFromInstants } from "@/lib/availability";
 
 async function requireStaff(): Promise<
   { ok: true; userId: string; userName: string } | { ok: false; error: string }
@@ -25,16 +27,26 @@ function sanitizeIds(ids: string[]): string[] {
 
 // Bulk-assign a single cleaner to many jobs: connects the cleaner to each job's
 // `cleaners` relation (idempotent) and sets `employeeId` where it's still unset.
+//
+// Availability conflicts (item 8) come back as `warnings` — one line per job the
+// cleaner is being put on outside their recurring availability or on a blocked
+// date. Advisory only: the assignment still goes through so an admin can
+// override, exactly like the per-job Team card.
 export async function bulkAssignCleaner(
   jobIds: string[],
   cleanerId: string
-): Promise<{ success: true; count: number } | { success: false; error: string }> {
+): Promise<
+  | { success: true; count: number; warnings: string[] }
+  | { success: false; error: string }
+> {
   const gate = await requireStaff();
   if (!gate.ok) return { success: false, error: gate.error };
 
   const cleanIds = sanitizeIds(jobIds);
   if (cleanIds.length === 0) return { success: false, error: "Nothing selected" };
-  if (!cleanerId) return { success: false, error: "No cleaner chosen" };
+  if (!cleanerId || typeof cleanerId !== "string") {
+    return { success: false, error: "No cleaner chosen" };
+  }
 
   try {
     const cleaner = await db.user.findFirst({
@@ -42,7 +54,7 @@ export async function bulkAssignCleaner(
         id: cleanerId,
         role: { in: ["EMPLOYEE", "FIELD_LEAD"] },
       },
-      select: { id: true, cleanerTier: true },
+      select: { id: true, name: true, cleanerTier: true },
     });
     if (!cleaner) return { success: false, error: "Cleaner not found" };
 
@@ -59,9 +71,30 @@ export async function bulkAssignCleaner(
 
     const jobs = await db.job.findMany({
       where: { id: { in: cleanIds }, deletedAt: null },
-      select: { id: true, employeeId: true },
+      select: {
+        id: true,
+        jobNumber: true,
+        employeeId: true,
+        startTime: true,
+        endTime: true,
+      },
     });
     if (jobs.length === 0) return { success: false, error: "Nothing selected" };
+
+    // Availability check per job (recurring rule + one-off blocked dates), in
+    // two queries for the whole batch. Non-blocking — collected as warnings for
+    // the admin to review after the assignment lands.
+    const evaluations = await evaluateEmployeeWindows(
+      cleanerId,
+      jobs.map((j) => windowFromInstants(j.startTime, j.endTime))
+    );
+    const warnings: string[] = [];
+    jobs.forEach((j, i) => {
+      const ev = evaluations[i];
+      if (!ev) return;
+      const warning = availabilityWarning(cleaner.name, ev);
+      if (warning) warnings.push(`Job #${j.jobNumber}: ${warning}`);
+    });
 
     await db.$transaction([
       ...jobs.map((j) =>
@@ -81,21 +114,25 @@ export async function bulkAssignCleaner(
           create: { jobId: j.id, cleanerId, status: "ASSIGNED" },
         })
       ),
-      ...jobs.map((j) =>
+      ...jobs.map((j, i) =>
         db.jobLog.create({
           data: {
             jobId: j.id,
             userId: gate.userId,
             action: "UPDATED",
             field: "cleaners",
-            description: `Cleaner assigned via bulk action by ${gate.userName}`,
+            description: `Cleaner assigned via bulk action by ${gate.userName}${
+              evaluations[i] && availabilityWarning(cleaner.name, evaluations[i])
+                ? ` — availability conflict overridden (${availabilityWarning(cleaner.name, evaluations[i])})`
+                : ""
+            }`,
           },
         })
       ),
     ]);
 
     revalidatePath("/admin/jobs");
-    return { success: true, count: jobs.length };
+    return { success: true, count: jobs.length, warnings };
   } catch (e) {
     console.error("bulkAssignCleaner", e);
     return { success: false, error: "Failed to assign cleaner" };
