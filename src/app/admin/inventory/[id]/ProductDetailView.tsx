@@ -576,11 +576,14 @@ export default function ProductDetailView({
                     </div>
                     <div className="min-w-0">
                       <p className="text-sm font-[400] text-[#008C9C]">
-                        {up ? "+" : ""}
-                        {c.quantityChange} {c.unit || product.unit}
+                        {/* previous → new, plus the signed delta. `previous` is
+                            derived (new − change) so it can never disagree. */}
+                        {c.newQuantity - c.quantityChange} → {c.newQuantity}{" "}
+                        {c.unit || product.unit}
                         <span className="text-[#008C9C]/60">
                           {" "}
-                          → {c.newQuantity} {c.unit || product.unit}
+                          ({up ? "+" : ""}
+                          {c.quantityChange})
                         </span>
                         {c.employeeName ? (
                           <span className="text-[#008C9C]/60">
