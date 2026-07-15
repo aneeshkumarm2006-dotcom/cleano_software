@@ -56,12 +56,42 @@ export default async function JobsPage({
 
   const allJobs = await db.job.findMany({
     where: listWhere,
-    include: {
-      employee: true,
-      cleaners: true,
-      client: true,
-      addOns: true,
-      productUsage: { include: { product: true } },
+    // Lean select — only the fields the list rows + stat cards actually read.
+    // The old query pulled the FULL employee and client objects (never used)
+    // plus full user + product records for every one of ~800 jobs, which was a
+    // big part of why this page was slow. Behaviour is unchanged.
+    select: {
+      id: true,
+      clientName: true,
+      clientId: true,
+      location: true,
+      aptNumber: true,
+      description: true,
+      jobType: true,
+      jobDate: true,
+      startTime: true,
+      endTime: true,
+      status: true,
+      price: true,
+      employeePay: true,
+      totalTip: true,
+      parking: true,
+      notes: true,
+      paymentReceived: true,
+      invoiceSent: true,
+      paymentType: true,
+      isCashJob: true,
+      usesFixedPrice: true,
+      discountAmount: true,
+      refundedAmount: true,
+      deletedAt: true,
+      bedCount: true,
+      bathCount: true,
+      halfBathCount: true,
+      payRateMultiplier: true,
+      cleaners: { select: { id: true, name: true } },
+      addOns: { select: { id: true, name: true, price: true } },
+      productUsage: { select: { quantity: true, product: { select: { costPerUnit: true } } } },
     },
     // jobDate is nullable — push null-date jobs after dated ones instead of
     // letting them float to the top, then break ties on the real start instant.
