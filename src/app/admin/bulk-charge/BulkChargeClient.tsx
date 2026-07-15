@@ -176,8 +176,11 @@ export default function BulkChargeClient({ jobs }: Props) {
                 <tbody>
                   {jobs.map((j) => {
                     const disabled = !j.hasCardOnFile;
+                    // Ineligible rows (no card on file) stay READABLE — the admin
+                    // needs to see which clients + amounts need a card added.
+                    // Only the checkbox is disabled, not the text.
                     return (
-                      <tr key={j.id} style={{ opacity: disabled ? 0.5 : 1 }}>
+                      <tr key={j.id} style={{ opacity: disabled ? 0.85 : 1 }}>
                         <td style={{ textAlign: "center" }}>
                           <input
                             type="checkbox"

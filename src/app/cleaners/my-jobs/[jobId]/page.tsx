@@ -4,6 +4,11 @@ import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { getSetting } from "@/lib/settings";
 import { fmtDate, fmtDateTime, fmtTime } from "@/lib/time";
+
+// Photo upload (uploadJobPhoto) runs as a server action off this page. Give it
+// well beyond the default so a large HEIC photo on a slow phone connection has
+// time to reach Cloudinary instead of timing out.
+export const maxDuration = 90;
 import {
   CLOCK_IN_BLOCKED_STATUSES,
   CLOCK_IN_EARLY_WINDOW_MIN,

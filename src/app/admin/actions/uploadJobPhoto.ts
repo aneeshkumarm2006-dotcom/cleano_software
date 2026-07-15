@@ -30,6 +30,9 @@ function streamUpload(
         public_id: publicId,
         resource_type: "image",
         overwrite: false,
+        // Give slow phone uploads room; without this the default is short and a
+        // large HEIC on a cell connection silently fails.
+        timeout: 90_000,
       },
       (error, result) => {
         if (error || !result) {

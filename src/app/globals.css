@@ -573,10 +573,14 @@ body {
   --primary-15:    rgba(0,140,156,0.15);
   --primary-20:    rgba(0,140,156,0.20);
   --primary-30:    rgba(0,140,156,0.30);
-  --primary-40:    rgba(0,140,156,0.40);
-  --primary-50:    rgba(0,140,156,0.50);
-  --primary-60:    rgba(0,140,156,0.60);
-  --primary-70:    rgba(0,140,156,0.70);
+  /* Bumped up from 0.40/0.50/0.60 for readability — teal at low opacity on
+     white failed contrast (faint amounts, "No card on file", secondary labels
+     across many admin pages). These tokens are text/icon/border only, never a
+     background fill, so darkening them is safe app-wide. */
+  --primary-40:    rgba(0,140,156,0.62);
+  --primary-50:    rgba(0,140,156,0.70);
+  --primary-60:    rgba(0,140,156,0.78);
+  --primary-70:    rgba(0,140,156,0.82);
   --primary-light: #33b1c0;
   --primary-hover: #00707d;
   --cream-deep:    #e7edf3;

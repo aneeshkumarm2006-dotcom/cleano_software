@@ -19,7 +19,10 @@ export function getCoords(): Promise<{ lat: number; lng: number } | undefined> {
     navigator.geolocation.getCurrentPosition(
       (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
       () => resolve(undefined),
-      { timeout: 8000, maximumAge: 60000 }
+      // enableHighAccuracy uses real GPS instead of a coarse WiFi/cell-tower
+      // estimate (which could be kilometres off — the "location far away" bug).
+      // maximumAge: 0 forbids returning a stale cached fix.
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     );
   });
 }
