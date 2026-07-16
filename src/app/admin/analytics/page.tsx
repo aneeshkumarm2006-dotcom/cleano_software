@@ -48,6 +48,12 @@ export default async function AnalyticsPage() {
     employeeRatings,
   ] = await Promise.all([
     db.job.findMany({
+      // Exclude archived (soft-deleted) jobs so every Analytics metric — labour
+      // cost, service revenue, net profit, total jobs, jobs-by-type — matches
+      // the canonical Total Revenue card and the rest of the admin dashboard.
+      // Without this, deleted jobs inflated the banner ($87k) while the revenue
+      // card correctly read $0.
+      where: { deletedAt: null },
       include: {
         employee: { select: { id: true, name: true } },
         cleaners: { select: { id: true, name: true } },
@@ -62,7 +68,9 @@ export default async function AnalyticsPage() {
     db.product.findMany(),
     db.user.findMany({
       include: {
+        // Archived jobs excluded so per-employee analytics match the headline.
         cleaningJobs: {
+          where: { deletedAt: null },
           include: {
             productUsage: {
               include: { product: true },
