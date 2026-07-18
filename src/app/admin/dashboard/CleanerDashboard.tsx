@@ -67,7 +67,6 @@ export default async function CleanerDashboard({ userId, userName }: Props) {
     doneCount,
     recentJobs,
     employeeProducts,
-    ragWashes,
     ratings,
   ] = await Promise.all([
     // Next 6 upcoming jobs (list only — never the source of a count)
@@ -94,12 +93,6 @@ export default async function CleanerDashboard({ userId, userName }: Props) {
     db.employeeProduct.findMany({
       where: { employeeId: userId },
       include: { product: { include: { inventoryRule: true } } },
-    }),
-    // Rag washes
-    db.ragWash.findMany({
-      where: { employeeId: userId },
-      orderBy: { washDate: "desc" },
-      take: 1,
     }),
     // Employee ratings
     db.employeeRating.findMany({
@@ -156,12 +149,6 @@ export default async function CleanerDashboard({ userId, userName }: Props) {
   // Rating
   const avgRating = ratings.length > 0
     ? ratings.reduce((s, r) => s + (r as any).rating, 0) / ratings.length
-    : null;
-
-  // Last rag wash
-  const lastWash = ragWashes[0] ?? null;
-  const daysSinceWash = lastWash
-    ? Math.floor((now.getTime() - new Date((lastWash as any).washDate).getTime()) / 86400000)
     : null;
 
   const { g, firstName } = greeting(userName, now);
@@ -408,15 +395,6 @@ export default async function CleanerDashboard({ userId, userName }: Props) {
             </div>
           )}
 
-          {/* Rag wash reminder */}
-          <div className="cl-dash-reminder">
-            <div className="icon"><Package size={20} /></div>
-            <div className="meta">
-              <h4>Rag wash</h4>
-              <p>{lastWash ? `Last washed ${daysSinceWash === 0 ? "today" : `${daysSinceWash}d ago`}` : "No wash logged yet."}</p>
-            </div>
-            {/* Wash logging is admin-controlled — no cleaner-facing log action. */}
-          </div>
         </div>
       </div>
 
@@ -458,7 +436,7 @@ export default async function CleanerDashboard({ userId, userName }: Props) {
           <div className="cl-dash-quick-grid">
             {[
               { href: "/cleaners/my-pay",        icon: <DollarSign size={18} />, label: "My pay",       desc: "Earnings + withdraw" },
-              { href: "/cleaners/my-inventory",  icon: <Package size={18} />,    label: "My inventory", desc: "Kit + rag washes" },
+              { href: "/cleaners/my-inventory",  icon: <Package size={18} />,    label: "My inventory", desc: "Kit + supplies" },
               { href: "/cleaners/available-jobs",icon: <Briefcase size={18} />,  label: "Available",    desc: "Open shifts near you" },
               { href: "/cleaners/settings",      icon: <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>, label: "Settings", desc: "Profile + alerts" },
             ].map((q) => (

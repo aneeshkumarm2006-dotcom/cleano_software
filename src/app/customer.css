@@ -986,6 +986,70 @@
 .cl-addon-name { font-size: 14.5px; color: var(--ink); font-weight: 500; }
 .cl-addon-price { font-size: 14px; color: var(--primary); font-weight: 600; }
 
+/* ── Addon icon cards (spec item 22 — BookingKoala-style "Select Extras") ── */
+.cl-addon-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 10px;
+}
+.cl-addon-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  text-align: center;
+  background: var(--cream);
+  padding: 14px 10px 12px;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: background .15s, border-color .15s, transform .08s;
+  border: 1.5px solid transparent;
+  position: relative;
+}
+.cl-addon-card:hover { background: var(--cream-deep); }
+.cl-addon-card.active {
+  background: rgba(0,140,156, 0.06);
+  border-color: var(--primary);
+}
+.cl-addon-card .cl-addon-ic {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+  color: var(--primary);
+  border: 1px solid rgba(0,140,156, 0.15);
+}
+.cl-addon-card.active .cl-addon-ic { background: var(--primary); color: #fff; }
+.cl-addon-card .cl-addon-card-name {
+  font-size: 12.5px;
+  line-height: 1.3;
+  color: var(--ink);
+  font-weight: 500;
+}
+.cl-addon-card .cl-addon-card-price {
+  font-size: 12.5px;
+  color: var(--primary);
+  font-weight: 600;
+}
+.cl-addon-card .cl-addon-check {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+}
+
 /* ── Payment placeholder ── */
 .cl-payment-placeholder {
   border: 2px dashed rgba(0,140,156, 0.18);

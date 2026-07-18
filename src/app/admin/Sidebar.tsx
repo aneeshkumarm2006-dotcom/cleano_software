@@ -104,8 +104,8 @@ const NAV: { label: string; items: NavItem[] }[] = [
   {
     label: "Inventory & Supplies",
     items: [
-      { href: "/admin/inventory", label: "Inventory", Icon: Package, exclude: ["/admin/inventory/rag-wash"] },
-      { href: "/admin/inventory/rag-wash", label: "Rag Wash & Payouts", Icon: Droplets },
+      { href: "/admin/inventory", label: "Inventory", Icon: Package },
+      { href: "/admin/wash-payouts", label: "Wash Payouts", Icon: Droplets },
     ],
   },
   {

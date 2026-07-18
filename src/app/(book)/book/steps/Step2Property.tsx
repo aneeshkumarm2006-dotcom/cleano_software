@@ -3,6 +3,7 @@
 import { BookingDraft, SERVICE_TYPES, FREQUENCIES, AIRBNB_FREQUENCIES, RoomType } from "../types";
 import { Field, Input } from "@/components/customer/Field";
 import { NumberStepper, ChoiceButton } from "@/components/customer/atoms";
+import { addonIcon } from "@/lib/addon-icons";
 
 const ROOM_LABELS: Record<RoomType, string> = {
   KITCHEN: "Kitchen",
@@ -249,26 +250,31 @@ export default function Step2Property({ draft, onChange, basePrice = 0 }: Props)
                   }}>
                   {ROOM_LABELS[room]}
                 </span>
-                {items.map(({ a, idx }) => (
-                  <label
-                    key={a.id ?? `${a.name}-${idx}`}
-                    className={`cl-addon-row ${a.selected ? "active" : ""}`}>
-                    <div className="cl-row" style={{ gap: 12 }}>
-                      <input
-                        type="checkbox"
-                        className="cl-check"
-                        checked={a.selected}
-                        onChange={(e) => {
+                {/* Icon cards (spec item 22) — tap the card to toggle. */}
+                <div className="cl-addon-grid">
+                  {items.map(({ a, idx }) => {
+                    const Icon = addonIcon(a.name);
+                    return (
+                      <button
+                        type="button"
+                        key={a.id ?? `${a.name}-${idx}`}
+                        className={`cl-addon-card ${a.selected ? "active" : ""}`}
+                        aria-pressed={a.selected}
+                        onClick={() => {
                           const next = [...draft.addOns];
-                          next[idx] = { ...a, selected: e.target.checked };
+                          next[idx] = { ...a, selected: !a.selected };
                           onChange({ addOns: next });
-                        }}
-                      />
-                      <span className="cl-addon-name">{a.name}</span>
-                    </div>
-                    <span className="cl-addon-price">+${a.price.toFixed(2)}</span>
-                  </label>
-                ))}
+                        }}>
+                        {a.selected && <span className="cl-addon-check">✓</span>}
+                        <span className="cl-addon-ic">
+                          <Icon size={20} />
+                        </span>
+                        <span className="cl-addon-card-name">{a.name}</span>
+                        <span className="cl-addon-card-price">+${a.price.toFixed(2)}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             );
           });

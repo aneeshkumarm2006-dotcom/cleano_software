@@ -20,6 +20,7 @@ import {
   Check,
   ChevronDown,
 } from "lucide-react";
+import { addonIcon } from "@/lib/addon-icons";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import Textarea from "@/components/ui/Textarea";
@@ -1675,30 +1676,46 @@ export default function JobModal({
                         <p className="text-xs text-[#008C9C]/60">
                           Quick add from your configured add-ons:
                         </p>
-                        <div className="flex flex-wrap gap-2">
+                        {/* Icon cards (spec item 22) — icon + name + price,
+                            scannable grid instead of text pills. Click toggles. */}
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                           {addOnCatalog.map((cat) => {
                             const already = addOns.some(
                               (a) =>
                                 a.name.toLowerCase() === cat.name.toLowerCase()
                             );
+                            const Icon = addonIcon(cat.name);
                             return (
                               <button
                                 key={cat.id}
                                 type="button"
-                                disabled={disableForm || already}
+                                disabled={disableForm}
                                 onClick={() =>
-                                  setAddOns((prev) => [
-                                    ...prev,
-                                    { name: cat.name, price: cat.price },
-                                  ])
+                                  setAddOns((prev) =>
+                                    already
+                                      ? prev.filter(
+                                          (a) =>
+                                            a.name.toLowerCase() !==
+                                            cat.name.toLowerCase()
+                                        )
+                                      : [...prev, { name: cat.name, price: cat.price }]
+                                  )
                                 }
-                                className={`px-3 py-1.5 rounded-full text-xs font-[450] border transition-colors ${
+                                className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border text-center transition-colors ${
                                   already
-                                    ? "bg-[#008C9C]/10 text-[#008C9C]/40 border-transparent cursor-not-allowed"
-                                    : "bg-white text-[#008C9C] border-[#008C9C]/20 hover:border-[#008C9C]/50"
+                                    ? "bg-[#008C9C]/10 border-[#008C9C] text-[#008C9C]"
+                                    : "bg-white border-[#008C9C]/20 text-[#008C9C] hover:border-[#008C9C]/50"
                                 }`}>
-                                {already ? "✓ " : "+ "}
-                                {cat.name} · ${cat.price.toFixed(2)}
+                                <Icon className="w-5 h-5" />
+                                <span className="text-xs font-[450] leading-tight">
+                                  {cat.name}
+                                </span>
+                                <span className="text-[11px] text-[#008C9C]/70">
+                                  ${cat.price.toFixed(2)}
+                                </span>
+                                {already && (
+                                  <span className="text-[10px] font-[600]">✓ Added</span>
+                                )}
                               </button>
                             );
                           })}
