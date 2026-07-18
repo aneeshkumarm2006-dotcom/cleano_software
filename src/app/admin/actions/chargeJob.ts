@@ -51,7 +51,7 @@ export async function chargeJob(jobId: string) {
   // false→true proceeds; the rest abort. Rolled back if the charge fails.
   const claim = await db.job.updateMany({
     where: { id: jobId, paymentReceived: false },
-    data: { paymentReceived: true, paidAt: new Date() },
+    data: { paymentReceived: true, paidAt: new Date(), status: "PAID" },
   });
   if (claim.count === 0) {
     return { success: false, error: "Already paid" };
@@ -64,6 +64,8 @@ export async function chargeJob(jobId: string) {
         data: {
           paymentReceived: false,
           paidAt: null,
+          // Undo the claim's status flip — back to the pre-charge status.
+          status: job.status === "PAID" ? "COMPLETED" : job.status,
           ...(failureReason
             ? {
                 paymentFailedAt: new Date(),
@@ -81,7 +83,7 @@ export async function chargeJob(jobId: string) {
     await db.$transaction([
       db.job.update({
         where: { id: jobId },
-        data: { paymentReceived: true, paidAt: new Date() },
+        data: { paymentReceived: true, paidAt: new Date(), status: "PAID" },
       }),
       db.client.update({
         where: { id: client.id },

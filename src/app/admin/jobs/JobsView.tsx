@@ -16,12 +16,15 @@ import { bulkSoftDelete, bulkRestore } from "@/lib/bulk/actions";
 import { bulkCancelJobs } from "../actions/bulkCancelJobs";
 import { bulkSetJobStatus } from "../actions/bulkSetJobStatus";
 import { bulkAssignCleaner } from "../actions/bulkAssignCleaner";
+import { togglePaymentReceived, toggleInvoiceSent } from "../actions/toggleJobPaymentStatus";
+import { generateInvoiceFromJob } from "../actions/generateInvoiceFromJob";
 import { normalizeJobType, jobTypeLabel } from "@/lib/calendar-labels";
 import {
   isRevenueJob,
   jobRevenue,
   isScheduledValueJob,
   jobScheduledValue,
+  simpleJobStatus,
 } from "@/lib/metrics-shared";
 
 interface Job {
@@ -126,13 +129,16 @@ function AvatarStack({ cleaners, max = 3 }: { cleaners: Array<{ id: string; name
   );
 }
 
+// Renders the DERIVED operational status (simpleJobStatus), not the raw enum —
+// spec's three main statuses: Scheduled (future), Completed (date passed,
+// unpaid), Paid (payment received). "Paid" is distinct green-on-emerald so it
+// reads differently from Completed at a glance.
 function StatusPill({ status }: { status: string }) {
   const map: Record<string, { label: string; bg: string; color: string; dot: string }> = {
-    CREATED:     { label: 'Created',     bg: '#f3f4f6', color: '#374151', dot: '#9ca3af' },
     SCHEDULED:   { label: 'Scheduled',   bg: '#dbeafe', color: '#1e40af', dot: '#3b82f6' },
     IN_PROGRESS: { label: 'In Progress', bg: '#fef3c7', color: '#92400e', dot: '#f59e0b' },
     COMPLETED:   { label: 'Completed',   bg: '#d1fae5', color: '#065f46', dot: '#10b981' },
-    PAID:        { label: 'Paid',        bg: '#d1fae5', color: '#065f46', dot: '#059669' },
+    PAID:        { label: 'Paid',        bg: '#059669', color: '#ffffff', dot: '#a7f3d0' },
     CANCELLED:   { label: 'Cancelled',   bg: '#fee2e2', color: '#991b1b', dot: '#ef4444' },
   };
   const c = map[status] || { label: status, bg: '#f3f4f6', color: '#374151', dot: '#9ca3af' };
@@ -182,11 +188,39 @@ function FixedPricePill() {
   );
 }
 
-function PayIcons({ paymentReceived, invoiceSent }: { paymentReceived: boolean; invoiceSent: boolean }) {
+// Spec item 9: the $ icon marks payment received (job → Paid) and the mail
+// icon marks the invoice sent (generating the invoice record on first use),
+// straight from the table row. Optimistic — the row updates immediately and
+// reverts if the server action fails.
+function PayIcons({
+  paymentReceived,
+  invoiceSent,
+  busy,
+  onTogglePaid,
+  onToggleInvoice,
+}: {
+  paymentReceived: boolean;
+  invoiceSent: boolean;
+  busy?: boolean;
+  onTogglePaid: () => void;
+  onToggleInvoice: () => void;
+}) {
   return (
     <div className="pay-icons">
-      <span className={`pay-icon ${paymentReceived ? 'paid' : 'unpaid'}`} title={paymentReceived ? 'Paid' : 'Unpaid'}>$</span>
-      <span className={`pay-icon ${invoiceSent ? 'sent' : 'unsent'}`} title={invoiceSent ? 'Invoice sent' : 'No invoice'}>✉</span>
+      <button
+        type="button"
+        className={`pay-icon pay-icon-btn ${paymentReceived ? 'paid' : 'unpaid'}`}
+        title={paymentReceived ? 'Paid — click to mark as not received' : 'Mark payment received'}
+        disabled={busy}
+        onClick={(e) => { e.stopPropagation(); onTogglePaid(); }}
+      >$</button>
+      <button
+        type="button"
+        className={`pay-icon pay-icon-btn ${invoiceSent ? 'sent' : 'unsent'}`}
+        title={invoiceSent ? 'Invoice sent — click to un-mark' : 'Mark invoice sent (creates the invoice)'}
+        disabled={busy}
+        onClick={(e) => { e.stopPropagation(); onToggleInvoice(); }}
+      >✉</button>
     </div>
   );
 }
@@ -369,32 +403,47 @@ export default function JobsView({
   const [tab, setTab] = useState<TabId>('all');
   const [showFilters, setShowFilters] = useState(false);
 
+  // Optimistic per-row overrides for the $ / ✉ table actions — merged over the
+  // server-provided list so the row, pills, tabs, and stat cards all move the
+  // instant the icon is clicked, then reconciled by router.refresh().
+  const [rowOverrides, setRowOverrides] = useState<
+    Record<string, Partial<Pick<Job, 'paymentReceived' | 'invoiceSent' | 'status'>>>
+  >({});
+  const [payBusyId, setPayBusyId] = useState<string | null>(null);
+  const effectiveJobs = useMemo(
+    () =>
+      Object.keys(rowOverrides).length === 0
+        ? jobs
+        : jobs.map(j => (rowOverrides[j.id] ? { ...j, ...rowOverrides[j.id] } : j)),
+    [jobs, rowOverrides]
+  );
+
   // Tab-level filter (client-side). Upcoming is sorted soonest-first (past jobs
   // already excluded by the predicate); every other tab keeps the server's
   // most-recent-first order.
   const tabJobs = useMemo(() => {
     const now = Date.now();
-    const list = jobs.filter(j => jobMatchesTab(tab, j, now));
+    const list = effectiveJobs.filter(j => jobMatchesTab(tab, j, now));
     if (tab === 'upcoming') {
       list.sort(
         (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
       );
     }
     return list;
-  }, [tab, jobs]);
+  }, [tab, effectiveJobs]);
 
   const tabCounts = useMemo(() => {
     const now = Date.now();
     return {
-      all:        jobs.length,
-      upcoming:   jobs.filter(j => jobMatchesTab('upcoming', j, now)).length,
-      completed:  jobs.filter(j => jobMatchesTab('completed', j, now)).length,
-      overdue:    jobs.filter(j => jobMatchesTab('overdue', j, now)).length,
-      cancelled:  jobs.filter(j => jobMatchesTab('cancelled', j, now)).length,
-      discounted: jobs.filter(j => jobMatchesTab('discounted', j, now)).length,
-      free:       jobs.filter(j => jobMatchesTab('free', j, now)).length,
+      all:        effectiveJobs.length,
+      upcoming:   effectiveJobs.filter(j => jobMatchesTab('upcoming', j, now)).length,
+      completed:  effectiveJobs.filter(j => jobMatchesTab('completed', j, now)).length,
+      overdue:    effectiveJobs.filter(j => jobMatchesTab('overdue', j, now)).length,
+      cancelled:  effectiveJobs.filter(j => jobMatchesTab('cancelled', j, now)).length,
+      discounted: effectiveJobs.filter(j => jobMatchesTab('discounted', j, now)).length,
+      free:       effectiveJobs.filter(j => jobMatchesTab('free', j, now)).length,
     } as Record<TabId, number>;
-  }, [jobs]);
+  }, [effectiveJobs]);
 
   // Additional filters stacked on top of tab filter
   const filteredJobs = useMemo(() => {
@@ -403,7 +452,10 @@ export default function JobsView({
       const matchesSearch = !searchTerm ||
         job.clientName.toLowerCase().includes(q) ||
         (job.location && job.location.toLowerCase().includes(q));
-      const matchesStatus = statusFilter === 'all' || job.status === statusFilter;
+      // Filter on the DERIVED status so "Paid" (paymentReceived boolean or
+      // PAID enum) and "Completed" (incl. past-dated scheduled jobs the sweep
+      // hasn't flipped yet) match what the pill in the row says.
+      const matchesStatus = statusFilter === 'all' || simpleJobStatus(job) === statusFilter;
       const matchesPayment = (() => {
         if (paymentFilter === 'all') return true;
         if (paymentFilter === 'paid') return job.paymentReceived;
@@ -462,6 +514,56 @@ export default function JobsView({
 
   // ── Multi-select + bulk actions ────────────────────────────────────────────
   const router = useRouter();
+
+  // Row-level $ / ✉ actions (spec item 9). Optimistic: override the row first,
+  // revert on failure, reconcile with a refresh either way.
+  async function handleTogglePaid(job: Job) {
+    const next = !job.paymentReceived;
+    const optimisticStatus = job.status === 'CANCELLED'
+      ? job.status
+      : next
+        ? 'PAID'
+        : new Date(job.startTime).getTime() < Date.now() ? 'COMPLETED' : 'SCHEDULED';
+    setPayBusyId(job.id);
+    setRowOverrides(o => ({
+      ...o,
+      [job.id]: { ...o[job.id], paymentReceived: next, status: optimisticStatus },
+    }));
+    try {
+      const res = await togglePaymentReceived(job.id);
+      if (!res?.success) {
+        setRowOverrides(o => ({
+          ...o,
+          [job.id]: { ...o[job.id], paymentReceived: job.paymentReceived, status: job.status },
+        }));
+        alert(res?.error || 'Failed to update payment status');
+      }
+    } finally {
+      setPayBusyId(null);
+      router.refresh();
+    }
+  }
+
+  async function handleToggleInvoice(job: Job) {
+    const next = !job.invoiceSent;
+    setPayBusyId(job.id);
+    setRowOverrides(o => ({ ...o, [job.id]: { ...o[job.id], invoiceSent: next } }));
+    try {
+      // Marking sent generates the invoice record on first use (idempotent);
+      // un-marking just clears the flag.
+      const res = next
+        ? await generateInvoiceFromJob(job.id)
+        : await toggleInvoiceSent(job.id);
+      if (!res?.success) {
+        setRowOverrides(o => ({ ...o, [job.id]: { ...o[job.id], invoiceSent: job.invoiceSent } }));
+        alert(('error' in (res ?? {}) && (res as { error?: string }).error) || 'Failed to update invoice status');
+      }
+    } finally {
+      setPayBusyId(null);
+      router.refresh();
+    }
+  }
+
   const visibleIds = useMemo(() => paginatedJobs.map(j => j.id), [paginatedJobs]);
   const sel = useRowSelection(visibleIds);
   const [showAssign, setShowAssign] = useState(false);
@@ -738,10 +840,10 @@ export default function JobsView({
               size="sm"
               options={[
                 { value: "all", label: "Any status" },
-                { value: "CREATED", label: "Created" },
                 { value: "SCHEDULED", label: "Scheduled" },
                 { value: "IN_PROGRESS", label: "In Progress" },
                 { value: "COMPLETED", label: "Completed" },
+                { value: "PAID", label: "Paid" },
                 { value: "CANCELLED", label: "Cancelled" },
               ]}
             />
@@ -903,8 +1005,16 @@ export default function JobsView({
                           : <span style={{ fontSize: 12, color: 'var(--primary-70)' }}>{payTypeLabel(job.paymentType)}</span>
                         }
                       </td>
-                      <td><StatusPill status={job.status} /></td>
-                      <td><PayIcons paymentReceived={job.paymentReceived} invoiceSent={job.invoiceSent} /></td>
+                      <td><StatusPill status={simpleJobStatus(job)} /></td>
+                      <td>
+                        <PayIcons
+                          paymentReceived={job.paymentReceived}
+                          invoiceSent={job.invoiceSent}
+                          busy={payBusyId === job.id}
+                          onTogglePaid={() => handleTogglePaid(job)}
+                          onToggleInvoice={() => handleToggleInvoice(job)}
+                        />
+                      </td>
                       <td className="col-actions">
                         <div className="row" style={{ justifyContent: 'flex-end', gap: 6 }}>
                           {archived ? (
@@ -976,7 +1086,7 @@ export default function JobsView({
                     {job.location && <div className="jcard-meta">{job.location.split(',')[0]}</div>}
                     </div>
                   </div>
-                  <StatusPill status={job.status} />
+                  <StatusPill status={simpleJobStatus(job)} />
                 </div>
                 <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
                   <TypePill type={job.jobType} />
@@ -989,7 +1099,13 @@ export default function JobsView({
                     {job.price !== null ? `$${((job.price || 0) - (job.discountAmount || 0)).toFixed(2)}` : '—'}
                   </div>
                   <div className="row" style={{ gap: 10 }}>
-                    <PayIcons paymentReceived={job.paymentReceived} invoiceSent={job.invoiceSent} />
+                    <PayIcons
+                      paymentReceived={job.paymentReceived}
+                      invoiceSent={job.invoiceSent}
+                      busy={payBusyId === job.id}
+                      onTogglePaid={() => handleTogglePaid(job)}
+                      onToggleInvoice={() => handleToggleInvoice(job)}
+                    />
                     <button
                       type="button"
                       className="icon-btn"

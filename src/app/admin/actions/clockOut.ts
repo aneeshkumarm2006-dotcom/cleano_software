@@ -175,7 +175,10 @@ export async function clockOut(jobId: string, usage: PostJobUsage) {
         where: { id: jobId },
         data: {
           clockOutTime: now,
-          status: "COMPLETED",
+          // Paid stays Paid — clock-out must never downgrade a job whose
+          // payment was already received.
+          status:
+            job.status === "PAID" || job.paymentReceived ? "PAID" : "COMPLETED",
           washProjectedRags: projection.projectedRags,
           washProjectedPads: projection.projectedPads,
           washCappedRags: projection.cappedRags,

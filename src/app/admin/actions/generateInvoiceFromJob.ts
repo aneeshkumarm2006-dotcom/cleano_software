@@ -53,8 +53,15 @@ export async function generateInvoiceFromJob(jobId: string) {
 
     if (!job) return { success: false, error: "Job not found" };
 
-    // If invoice already exists for this job, return it
+    // If invoice already exists for this job, return it — but still (re)mark
+    // the job's invoice-sent flag, since the Jobs-table ✉ action relies on
+    // this call after an un-mark.
     if (job.invoices.length > 0) {
+      if (!job.invoiceSent) {
+        await db.job.update({ where: { id: jobId }, data: { invoiceSent: true } });
+        revalidatePath("/admin/jobs");
+        revalidatePath(`/admin/jobs/${jobId}`);
+      }
       return { success: true, invoiceId: job.invoices[0].id, existing: true };
     }
 

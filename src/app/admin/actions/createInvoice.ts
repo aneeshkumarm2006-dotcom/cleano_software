@@ -5,6 +5,8 @@ import { headers } from "next/headers";
 import { db } from "@/db";
 import { revalidatePath } from "next/cache";
 import { sendInvoiceEmail } from "@/lib/email";
+import { jobTypeLabel } from "@/lib/calendar-labels";
+import { fmtDate } from "@/lib/time";
 
 async function requireAdmin() {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -41,11 +43,15 @@ interface LineItemInput {
   description: string;
   quantity: number;
   unitPrice: number;
+  jobId?: string | null;
 }
 
 interface CreateInvoiceParams {
   clientId: string;
   jobId?: string | null;
+  // Consolidated invoice: one line item per selected job, each linked via
+  // InvoiceLineItem.jobId so paying the invoice pays every covered job.
+  jobIds?: string[];
   lineItems: LineItemInput[];
   discountAmount?: number;
   discountPercent?: number;
@@ -61,8 +67,11 @@ export async function createInvoice(params: CreateInvoiceParams) {
     if (!params.clientId) {
       return { success: false, error: "Client is required" };
     }
-    if (!params.lineItems || params.lineItems.length === 0) {
-      return { success: false, error: "At least one line item is required" };
+    if (
+      (!params.lineItems || params.lineItems.length === 0) &&
+      (!params.jobIds || params.jobIds.length === 0)
+    ) {
+      return { success: false, error: "Add at least one line item or select jobs" };
     }
 
     // Get tax config
@@ -76,13 +85,42 @@ export async function createInvoice(params: CreateInvoiceParams) {
     const gstRate = raw?.gstRate ?? 5;
     const qstRate = raw?.qstRate ?? 9.975;
 
-    const lineItemsData = params.lineItems.map((li, idx) => ({
-      description: li.description.trim(),
-      quantity: li.quantity,
-      unitPrice: li.unitPrice,
-      amount: li.quantity * li.unitPrice,
+    // Selected jobs become the leading line items of a consolidated invoice.
+    const jobIds = Array.from(new Set((params.jobIds ?? []).filter(Boolean)));
+    const selectedJobs = jobIds.length
+      ? await db.job.findMany({
+          where: { id: { in: jobIds }, deletedAt: null, clientId: params.clientId },
+          select: {
+            id: true,
+            jobNumber: true,
+            jobType: true,
+            startTime: true,
+            price: true,
+            discountAmount: true,
+          },
+          orderBy: { startTime: "asc" },
+        })
+      : [];
+    const jobLineItems = selectedJobs.map((job, idx) => ({
+      description: `Job #${job.jobNumber}${job.jobType ? ` — ${jobTypeLabel(job.jobType)}` : ""} — ${fmtDate(job.startTime, { month: "short", day: "numeric", year: "numeric" })}`,
+      quantity: 1,
+      unitPrice: Math.max(0, (job.price ?? 0) - (job.discountAmount ?? 0)),
+      amount: Math.max(0, (job.price ?? 0) - (job.discountAmount ?? 0)),
       sortOrder: idx,
+      jobId: job.id,
     }));
+
+    const lineItemsData = [
+      ...jobLineItems,
+      ...params.lineItems.map((li, idx) => ({
+        description: li.description.trim(),
+        quantity: li.quantity,
+        unitPrice: li.unitPrice,
+        amount: li.quantity * li.unitPrice,
+        sortOrder: jobLineItems.length + idx,
+        jobId: li.jobId || null,
+      })),
+    ];
 
     const subtotal = lineItemsData.reduce((sum, li) => sum + li.amount, 0);
 
@@ -125,7 +163,9 @@ export async function createInvoice(params: CreateInvoiceParams) {
         invoiceNumber,
         status: "DRAFT",
         clientId: params.clientId,
-        jobId: params.jobId || null,
+        // Single-job invoices keep the primary link; a consolidated invoice
+        // links jobs per line item instead.
+        jobId: params.jobId || (selectedJobs.length === 1 ? selectedJobs[0].id : null),
         subtotal,
         gstAmount,
         qstAmount,

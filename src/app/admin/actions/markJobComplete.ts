@@ -17,7 +17,13 @@ export async function markJobComplete(jobId: string) {
   const userId = session.user.id;
   const job = await db.job.findUnique({
     where: { id: jobId },
-    select: { employeeId: true, clientId: true, cleaners: { select: { id: true } } },
+    select: {
+      employeeId: true,
+      clientId: true,
+      status: true,
+      paymentReceived: true,
+      cleaners: { select: { id: true } },
+    },
   });
   if (!job) return { error: "Job not found" };
   const isAssigned =
@@ -28,7 +34,11 @@ export async function markJobComplete(jobId: string) {
 
   await db.job.update({
     where: { id: jobId },
-    data: { status: "COMPLETED" },
+    // Paid stays Paid — completing a job never downgrades received payment.
+    data: {
+      status:
+        job.status === "PAID" || job.paymentReceived ? "PAID" : "COMPLETED",
+    },
   });
 
   // Per-cleaner assignment status (item 9): cleaners who worked the job

@@ -8,6 +8,12 @@ import Input from "@/components/ui/Input";
 import PremiumSelect from "@/components/ui/PremiumSelect";
 import DatePicker from "@/components/ui/DatePicker";
 import { createInvoice } from "../actions/createInvoice";
+import {
+  getClientJobsForInvoice,
+  type InvoiceJobOption,
+} from "../actions/getClientJobsForInvoice";
+import { jobTypeLabel } from "@/lib/calendar-labels";
+import { fmtDate } from "@/lib/time";
 
 interface ClientOption {
   id: string;
@@ -55,6 +61,30 @@ export default function CreateInvoiceModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Consolidated invoices: pick any number of the client's unpaid jobs — each
+  // becomes a linked line item, so paying this invoice pays those jobs.
+  const [clientJobs, setClientJobs] = useState<InvoiceJobOption[]>([]);
+  const [selectedJobIds, setSelectedJobIds] = useState<string[]>([]);
+  const [jobsLoading, setJobsLoading] = useState(false);
+
+  useEffect(() => {
+    setSelectedJobIds([]);
+    setClientJobs([]);
+    if (!clientId) return;
+    let cancelled = false;
+    setJobsLoading(true);
+    getClientJobsForInvoice(clientId)
+      .then((res) => {
+        if (!cancelled && res.success) setClientJobs(res.jobs);
+      })
+      .finally(() => {
+        if (!cancelled) setJobsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [clientId]);
+
   const selectedClient = clients.find((c) => c.id === clientId) || null;
 
   // Auto-prefill discount from client's default unless admin has touched the field
@@ -70,10 +100,12 @@ export default function CreateInvoiceModal({
 
   if (!isOpen) return null;
 
-  const subtotal = lineItems.reduce(
-    (sum, li) => sum + li.quantity * li.unitPrice,
-    0
-  );
+  const selectedJobsTotal = clientJobs
+    .filter((j) => selectedJobIds.includes(j.id))
+    .reduce((sum, j) => sum + j.amount, 0);
+  const subtotal =
+    selectedJobsTotal +
+    lineItems.reduce((sum, li) => sum + li.quantity * li.unitPrice, 0);
   const discountValue = parseFloat(discountInput);
   const discount =
     Number.isFinite(discountValue) && discountValue > 0
@@ -114,8 +146,17 @@ export default function CreateInvoiceModal({
       setError("Please select a client");
       return;
     }
-    if (lineItems.some((li) => !li.description.trim())) {
+    // Blank rows are dropped (a jobs-only consolidated invoice needs no manual
+    // lines); a row with any amount still needs a description.
+    const filledLineItems = lineItems.filter(
+      (li) => li.description.trim() || li.quantity * li.unitPrice > 0
+    );
+    if (filledLineItems.some((li) => !li.description.trim())) {
       setError("All line items need a description");
+      return;
+    }
+    if (filledLineItems.length === 0 && selectedJobIds.length === 0) {
+      setError("Select at least one job or add a line item");
       return;
     }
 
@@ -124,7 +165,8 @@ export default function CreateInvoiceModal({
 
     const result = await createInvoice({
       clientId,
-      lineItems: lineItems.map((li) => ({
+      jobIds: selectedJobIds,
+      lineItems: filledLineItems.map((li) => ({
         description: li.description,
         quantity: li.quantity,
         unitPrice: li.unitPrice,
@@ -192,6 +234,54 @@ export default function CreateInvoiceModal({
               size="md"
             />
           </div>
+
+          {/* Jobs to consolidate (optional) */}
+          {clientId && (
+            <div>
+              <label className="input-label !text-[#008C9C]/70 block mb-1.5">
+                Include jobs{selectedJobIds.length > 0 ? ` (${selectedJobIds.length} selected)` : ""}
+              </label>
+              {jobsLoading ? (
+                <p className="text-xs text-[#008C9C]/50">Loading jobs…</p>
+              ) : clientJobs.length === 0 ? (
+                <p className="text-xs text-[#008C9C]/50">
+                  No unpaid jobs for this client — use line items below.
+                </p>
+              ) : (
+                <div className="max-h-44 overflow-y-auto rounded-2xl border border-[#008C9C]/10 divide-y divide-[#008C9C]/5">
+                  {clientJobs.map((j) => (
+                    <label
+                      key={j.id}
+                      className="flex items-center gap-3 px-3 py-2 text-sm cursor-pointer hover:bg-[#008C9C]/5">
+                      <input
+                        type="checkbox"
+                        checked={selectedJobIds.includes(j.id)}
+                        onChange={(e) =>
+                          setSelectedJobIds((ids) =>
+                            e.target.checked
+                              ? [...ids, j.id]
+                              : ids.filter((id) => id !== j.id)
+                          )
+                        }
+                      />
+                      <span className="flex-1 text-[#008C9C]">
+                        Job #{j.jobNumber}
+                        {j.jobType ? ` · ${jobTypeLabel(j.jobType)}` : ""} ·{" "}
+                        {fmtDate(j.startTime, { month: "short", day: "numeric", year: "numeric" })}
+                        {j.invoiceSent && (
+                          <span className="ml-2 text-[11px] text-amber-600">already invoiced</span>
+                        )}
+                      </span>
+                      <span className="text-[#008C9C]/70">${j.amount.toFixed(2)}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+              <p className="text-[11px] text-[#008C9C]/50 mt-1">
+                Selected jobs become line items; marking this invoice paid marks every included job paid.
+              </p>
+            </div>
+          )}
 
           {/* Line Items */}
           <div>

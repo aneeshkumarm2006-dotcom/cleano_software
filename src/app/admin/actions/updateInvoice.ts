@@ -6,6 +6,7 @@ import { db } from "@/db";
 import { revalidatePath } from "next/cache";
 import { InvoiceStatus } from "@prisma/client";
 import { sendInvoiceEmail } from "@/lib/email";
+import { syncJobsForInvoiceStatus } from "@/lib/invoice-sync";
 
 async function requireAdmin() {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -108,6 +109,13 @@ export async function updateInvoice(params: UpdateInvoiceParams) {
         where: { id: params.id },
         data: updateData,
       });
+    }
+
+    // Invoice → job sync (spec item 10): PAID flips every covered job to Paid,
+    // SENT marks them invoice-sent, un-paying reverts them.
+    if (params.status !== undefined && params.status !== existing.status) {
+      await syncJobsForInvoiceStatus(params.id, params.status, existing.status);
+      revalidatePath("/admin/jobs");
     }
 
     revalidatePath("/admin/invoices");

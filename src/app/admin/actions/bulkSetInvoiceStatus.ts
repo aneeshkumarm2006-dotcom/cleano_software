@@ -5,6 +5,7 @@ import { headers } from "next/headers";
 import { db } from "@/db";
 import { InvoiceStatus, Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
+import { syncJobsForInvoiceStatus } from "@/lib/invoice-sync";
 
 type Result = { success: true; count: number } | { success: false; error: string };
 
@@ -39,11 +40,23 @@ export async function bulkSetInvoiceStatus(
   else if (nextStatus === InvoiceStatus.CANCELLED) data.paidAt = null;
 
   try {
+    // Snapshot prior statuses so the per-invoice job sync knows the transition.
+    const prior = await db.invoice.findMany({
+      where: { id: { in: cleanIds }, deletedAt: null },
+      select: { id: true, status: true },
+    });
     const res = await db.invoice.updateMany({
       where: { id: { in: cleanIds }, deletedAt: null },
       data,
     });
+    // Invoice → job sync (spec item 10) for each invoice that actually moved.
+    for (const inv of prior) {
+      await syncJobsForInvoiceStatus(inv.id, nextStatus, inv.status).catch((e) =>
+        console.error("bulk invoice job sync", inv.id, e)
+      );
+    }
     revalidatePath("/admin/invoices");
+    revalidatePath("/admin/jobs");
     return { success: true, count: res.count };
   } catch (e) {
     console.error("bulkSetInvoiceStatus", e);

@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import type { Prisma } from "@prisma/client";
 import { queueAndSendReceipt, sendCustomerBookingCharged } from "@/lib/email";
 import { getTaxRates } from "@/lib/tax.server";
+import { startOfDayTz } from "@/lib/time";
 
 export async function togglePaymentReceived(jobId: string) {
   const session = await auth.api.getSession({
@@ -34,12 +35,37 @@ export async function togglePaymentReceived(jobId: string) {
 
     const newStatus = !job.paymentReceived;
 
+    // Keep the status enum in lockstep with the paymentReceived boolean —
+    // "Paid" must never be representable two divergent ways. Un-marking
+    // reverts to Completed (past job) or Scheduled (future job); a cancelled
+    // job stays cancelled either way.
+    const syncedStatus = (() => {
+      if (job.status === "CANCELLED") return undefined;
+      if (newStatus) return "PAID" as const;
+      return new Date(job.startTime) < startOfDayTz(new Date())
+        ? ("COMPLETED" as const)
+        : ("SCHEDULED" as const);
+    })();
+
     const ops: Prisma.PrismaPromise<unknown>[] = [
       db.job.update({
         where: { id: jobId },
         data: {
           paymentReceived: newStatus,
+          ...(syncedStatus ? { status: syncedStatus } : {}),
+          paidAt: newStatus ? new Date() : null,
         },
+      }),
+      // Job → invoice sync (spec item 10): this job's own invoice follows the
+      // payment mark. Consolidated multi-job invoices are left alone — one job
+      // paid doesn't mean the whole invoice is.
+      db.invoice.updateMany({
+        where: newStatus
+          ? { jobId, deletedAt: null, status: { notIn: ["PAID", "CANCELLED"] } }
+          : { jobId, deletedAt: null, status: "PAID" },
+        data: newStatus
+          ? { status: "PAID", paidAt: new Date() }
+          : { status: "SENT", paidAt: null },
       }),
       db.jobLog.create({
         data: {

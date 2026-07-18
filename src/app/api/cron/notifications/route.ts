@@ -11,6 +11,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { isAuthorizedCron } from "@/lib/cron-auth";
+import { sweepPastScheduledJobs } from "@/lib/job-sweep";
 import { logActivity } from "@/lib/activity-log";
 import { db } from "@/db";
 import {
@@ -99,6 +100,16 @@ export async function GET(req: NextRequest) {
     provider_unassigned_pool: 0,
     skipped: 0,
   };
+
+  // ─── Auto-complete past jobs (spec item 8) ────────────────────────
+  // Yesterday-or-earlier CREATED/SCHEDULED/IN_PROGRESS jobs become
+  // COMPLETED (or PAID when payment was already received). Runs before the
+  // notification windows so e.g. "not clocked in" doesn't fire for jobs the
+  // sweep just closed.
+  const swept = await sweepPastScheduledJobs(now).catch((e) => {
+    console.error("job sweep failed", e);
+    return { completed: 0, paid: 0 };
+  });
 
   // ─── Unassigned booking deadlines (admin) ─────────────────────────
   // Three windows: ~12h, ~4h, ~1h out. 10-minute window each to overlap
@@ -574,5 +585,7 @@ export async function GET(req: NextRequest) {
     counts,
     expiredInvites: expiredInvites.length,
     giftCardsDelivered,
+    sweptCompleted: swept.completed,
+    sweptPaid: swept.paid,
   });
 }

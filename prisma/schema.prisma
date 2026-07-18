@@ -60,6 +60,7 @@ model User {
   photos                       JobPhoto[]
   checklists                   JobChecklist[]
   signatures                   DocumentSignature[]
+  documentAccessLogs           DocumentAccessLog[]
   trainingProgress             TrainingProgress[]
   ratings                      EmployeeRating[]
   withdrawals                  Withdrawal[]
@@ -484,9 +485,10 @@ model Job {
   holdReleasedAt                 DateTime?
   holdCaptureFailedAt            DateTime?
   holdCaptureFailReason          String?
-  // After-photo consent captured at booking time. `afterPhotoOverrideAt`
-  // lets admin authorise after-photos for a job even without consent.
-  afterPhotoConsent              Boolean               @default(false)
+  // After-photos are ALLOWED by default (spec item 21) — this flag is now an
+  // opt-out: admin sets it false on a specific job to block after-photos.
+  // `afterPhotoOverrideAt` records an explicit admin re-allow.
+  afterPhotoConsent              Boolean               @default(true)
   afterPhotoConsentAt            DateTime?
   afterPhotoConsentVersion       String?
   afterPhotoOverrideAt           DateTime?
@@ -507,6 +509,7 @@ model Job {
   addOns                         JobAddOn[]
   transactions                   Transaction[]
   invoices                       Invoice[]
+  invoiceLineItems               InvoiceLineItem[]     @relation("InvoiceLineJobs")
   photos                         JobPhoto[]
   reviewPhotos                   ReviewPhoto[]
   chatMessages                   JobChatMessage[]
@@ -917,6 +920,9 @@ model Invoice {
 model InvoiceLineItem {
   id          String   @id @default(cuid())
   invoiceId   String
+  // Consolidated invoices: a multi-job invoice links each line to its job so
+  // marking the invoice paid can flip every covered job to Paid.
+  jobId       String?
   description String
   quantity    Float    @default(1)
   unitPrice   Float    @default(0)
@@ -925,8 +931,10 @@ model InvoiceLineItem {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  jobLink     Job?     @relation("InvoiceLineJobs", fields: [jobId], references: [id], onDelete: SetNull)
 
   @@index([invoiceId])
+  @@index([jobId])
 }
 
 model Alert {
@@ -1404,6 +1412,23 @@ model Document {
   createdAt   DateTime            @default(now())
   updatedAt   DateTime            @updatedAt
   signatures  DocumentSignature[]
+  accessLogs  DocumentAccessLog[]
+}
+
+// Real document activity for the Training & Docs "Document access log"
+// (spec item 20) — who opened/downloaded/completed which document, when.
+model DocumentAccessLog {
+  id         String   @id @default(cuid())
+  documentId String
+  userId     String
+  action     String // OPEN | VIEW | DOWNLOAD | COMPLETE
+  createdAt  DateTime @default(now())
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([documentId, createdAt])
+  @@index([userId, createdAt])
+  @@index([createdAt])
 }
 
 model DocumentSignature {

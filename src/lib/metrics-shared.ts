@@ -7,6 +7,8 @@
 // same rule the server uses. metrics.ts re-exports everything here, so server
 // code keeps importing from "@/lib/metrics" and the two can never drift.
 
+import { startOfDayTz } from "./time";
+
 // ── Total Revenue ───────────────────────────────────────────────────────────
 // Spec: completed AND paid jobs only; excludes taxes; applies discounts;
 // subtracts refunds; includes paid cash jobs; excludes cancelled + unpaid.
@@ -81,3 +83,37 @@ export function totalScheduledValueOf(jobs: RevenueJobShape[]): number {
 // Field staff — the people who actually clean or manage crews. Excludes CLIENT
 // (imported customers) and the office OWNER/ADMIN (counted separately).
 export const EMPLOYEE_ROLES = ["OPS_MANAGER", "FIELD_LEAD", "EMPLOYEE"] as const;
+
+// ── Simplified operational status ───────────────────────────────────────────
+// The three main operational statuses per spec: Scheduled (job date still
+// ahead), Completed (date passed, payment not received), Paid (payment
+// received). Derived, not stored — so a job whose date passed overnight reads
+// "Completed" immediately even before the daily sweep updates the DB row, and
+// "Paid" can never diverge between the status enum and the paymentReceived
+// boolean. IN_PROGRESS (cleaner on site) and CANCELLED pass through untouched.
+export type SimpleJobStatus =
+  | "SCHEDULED"
+  | "IN_PROGRESS"
+  | "COMPLETED"
+  | "PAID"
+  | "CANCELLED";
+
+export function simpleJobStatus(
+  j: {
+    status: string;
+    paymentReceived?: boolean | null;
+    startTime?: Date | string | null;
+  },
+  now: Date = new Date()
+): SimpleJobStatus {
+  if (j.status === "CANCELLED") return "CANCELLED";
+  if (j.paymentReceived || j.status === "PAID") return "PAID";
+  if (j.status === "IN_PROGRESS") return "IN_PROGRESS";
+  if (j.status === "COMPLETED") return "COMPLETED";
+  // CREATED / SCHEDULED: the job date has passed (previous business day or
+  // earlier) → Completed. Same-day jobs stay Scheduled until clock-out.
+  if (j.startTime && new Date(j.startTime) < startOfDayTz(now)) {
+    return "COMPLETED";
+  }
+  return "SCHEDULED";
+}

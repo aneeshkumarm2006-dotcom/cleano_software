@@ -853,6 +853,18 @@ body {
 .pay-icon.unpaid { background: var(--cream); color: var(--primary-50); }
 .pay-icon.sent   { background: var(--blue-100); color: var(--blue-800); }
 .pay-icon.unsent { background: var(--cream); color: var(--primary-50); }
+/* Interactive variant — the Jobs-table $ / ✉ actions (mark paid / invoice sent) */
+.pay-icon-btn {
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+.pay-icon-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: var(--primary-30);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+}
+.pay-icon-btn:disabled { opacity: 0.55; cursor: default; }
 
 /* Pagination */
 .apager {
