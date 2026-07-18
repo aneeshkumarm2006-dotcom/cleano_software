@@ -147,8 +147,9 @@ const NAV = [
     items: [
       { href: "/cleaners/training",   label: "Training",  icon: ICONS.training },
       { href: "/cleaners/documents",  label: "Documents", icon: ICONS.docs },
+      // Item 24: one Messages entry — direct + group chat are sub-tabs on the
+      // chat pages themselves.
       { href: "/cleaners/chat",       label: "Messages",  icon: ICONS.chat },
-      { href: "/cleaners/group-chat", label: "Group chat", icon: ICONS.group },
       { href: "/cleaners/announcements", label: "Announcements", icon: ICONS.announcements },
     ],
   },
@@ -274,6 +275,10 @@ export default function CleanerSidebar({ user, signOutAction }: Props) {
 
   const isActive = (href: string) => {
     if (href === "/cleaners/dashboard") return pathname === "/cleaners/dashboard";
+    // Item 24: group chat is a sub-tab of Messages — keep the entry lit.
+    if (href === "/cleaners/chat" && pathname.startsWith("/cleaners/group-chat")) {
+      return true;
+    }
     return pathname.startsWith(href);
   };
 

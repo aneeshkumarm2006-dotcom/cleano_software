@@ -37,7 +37,6 @@ import {
   Database,
   GraduationCap,
   Megaphone,
-  MessagesSquare,
   type LucideIcon,
 } from "lucide-react";
 import { getUnreadChatCount } from "./chat/actions";
@@ -65,6 +64,9 @@ interface NavItem {
   Icon: LucideIcon;
   badge?: Badge;
   exclude?: string[];
+  // Extra paths that keep this item highlighted (e.g. the Messages entry
+  // covers both /admin/chat and /admin/group-chat sub-tabs).
+  also?: string[];
 }
 
 const NAV: { label: string; items: NavItem[] }[] = [
@@ -88,7 +90,9 @@ const NAV: { label: string; items: NavItem[] }[] = [
       { href: "/admin/clients", label: "Clients", Icon: Contact },
       { href: "/admin/web-bookings", label: "Web Bookings", Icon: Globe },
       { href: "/admin/leads", label: "Leads", Icon: Flame },
-      { href: "/admin/chat", label: "Chat", Icon: MessageCircle, badge: "chat" },
+      // Item 24: one communication entry — direct messages + group chat live
+      // behind sub-tabs on the chat pages.
+      { href: "/admin/chat", label: "Messages", Icon: MessageCircle, badge: "chat", also: ["/admin/group-chat"] },
     ],
   },
   {
@@ -98,7 +102,6 @@ const NAV: { label: string; items: NavItem[] }[] = [
       { href: "/admin/job-applications", label: "Job Applications", Icon: UserPlus },
       { href: "/admin/training-docs", label: "Training & Docs", Icon: GraduationCap },
       { href: "/admin/announcements", label: "Announcements", Icon: Megaphone },
-      { href: "/admin/group-chat", label: "Group Chat", Icon: MessagesSquare },
     ],
   },
   {
@@ -235,6 +238,9 @@ export default function Sidebar({
   function isActive(item: NavItem): boolean {
     if (item.exclude?.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
       return false;
+    }
+    if (item.also?.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
+      return true;
     }
     return pathname === item.href || pathname.startsWith(item.href + "/");
   }

@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { isAdminRole, homeForRole } from "@/lib/role-routing";
 import AdminGroupChatClient from "./AdminGroupChatClient";
+import ChatTabs from "@/components/chat/ChatTabs";
 import {
   listGroupChannels,
   getGroupMessages,
@@ -31,13 +32,16 @@ export default async function AdminGroupChatPage() {
   }
 
   return (
-    <div className="h-full overflow-hidden">
-      <AdminGroupChatClient
-        initialChannels={channels}
-        initialChannelId={initialChannelId}
-        initialMessages={initialMessages}
-        currentUserId={session.user.id}
-      />
+    <div className="h-full overflow-hidden flex flex-col">
+      <ChatTabs variant="admin" />
+      <div className="flex-1 overflow-hidden">
+        <AdminGroupChatClient
+          initialChannels={channels}
+          initialChannelId={initialChannelId}
+          initialMessages={initialMessages}
+          currentUserId={session.user.id}
+        />
+      </div>
     </div>
   );
 }

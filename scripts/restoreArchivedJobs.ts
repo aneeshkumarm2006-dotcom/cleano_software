@@ -16,8 +16,13 @@ const db = new PrismaClient();
 const commit = process.argv.includes("--commit");
 
 // The mass-archive event. Only jobs deleted inside this window are restored.
-const INCIDENT_FROM = new Date("2026-07-11T18:30:00.000Z");
-const INCIDENT_TO = new Date("2026-07-11T18:45:00.000Z");
+// 2026-07-18 update: DB analysis shows the archive that actually emptied the
+// Jobs page happened 2026-07-13 21:37–21:38Z (two bulk batches, 300 + 531 =
+// all 831 archived jobs — 119 PAID + 262 COMPLETED history among them). The
+// original 07-11 window restored nothing because that earlier incident had
+// already been recovered.
+const INCIDENT_FROM = new Date("2026-07-13T21:35:00.000Z");
+const INCIDENT_TO = new Date("2026-07-13T21:45:00.000Z");
 
 async function main() {
   const where = {

@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import GroupChatClient from "./GroupChatClient";
+import ChatTabs from "@/components/chat/ChatTabs";
 import {
   listGroupChannels,
   getGroupMessages,
@@ -29,15 +30,18 @@ export default async function CleanerGroupChatPage() {
   }
 
   return (
-    <div className="h-full overflow-hidden">
-      <GroupChatClient
-        initialChannels={channels}
-        initialChannelId={initialChannelId}
-        initialMessages={initialMessages}
-        currentUserId={session.user.id}
-        userName={session.user.name ?? undefined}
-        dmEnabled={settings.success ? settings.data.dmEnabled : true}
-      />
+    <div className="h-full overflow-hidden flex flex-col">
+      <ChatTabs variant="cleaner" />
+      <div className="flex-1 overflow-hidden">
+        <GroupChatClient
+          initialChannels={channels}
+          initialChannelId={initialChannelId}
+          initialMessages={initialMessages}
+          currentUserId={session.user.id}
+          userName={session.user.name ?? undefined}
+          dmEnabled={settings.success ? settings.data.dmEnabled : true}
+        />
+      </div>
     </div>
   );
 }
