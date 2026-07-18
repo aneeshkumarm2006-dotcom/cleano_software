@@ -7,6 +7,7 @@ import { useRowSelection } from "@/components/common/useRowSelection";
 import BulkActionBar, { type BulkAction } from "@/components/common/BulkActionBar";
 import { bulkSoftDelete, bulkRestore } from "@/lib/bulk/actions";
 import { bulkSetGiftCardStatus } from "../actions/bulkSetGiftCardStatus";
+import { avatarColor, initials } from "@/lib/avatar";
 
 type Status = "PENDING_PAYMENT" | "ACTIVE" | "REDEEMED" | "REFUNDED" | "CANCELLED";
 
@@ -53,10 +54,6 @@ function fmtDay(iso: string | null) {
   if (!iso) return "—";
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
-
-const AVATAR_COLORS = ["#008C9C", "#0284c7", "#7c3aed", "#dc2626", "#d97706", "#059669"];
-function avatarColor(name: string) { return AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length]; }
-function initials(name: string) { return name.split(" ").slice(0, 2).map(p => p[0] ?? "").join("").toUpperCase(); }
 
 export default function GiftCardsAdminClient({ cards, archived = false }: { cards: GiftCard[]; archived?: boolean }) {
   const router = useRouter();

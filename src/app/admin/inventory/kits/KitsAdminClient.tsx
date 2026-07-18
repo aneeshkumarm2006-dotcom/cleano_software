@@ -6,6 +6,7 @@ import {
   assignToCleanerKit,
   removeFromCleanerKit,
 } from "../../actions/assignToCleanerKit";
+import { avatarColor, initials } from "@/lib/avatar";
 
 interface KitItem {
   employeeProductId: string;
@@ -36,10 +37,6 @@ interface Props {
   cleaners: Cleaner[];
   products: Product[];
 }
-
-const AVATAR_COLORS = ["#008C9C", "#0284c7", "#7c3aed", "#dc2626", "#d97706", "#059669"];
-function avatarColor(name: string) { return AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length]; }
-function initials(name: string) { return name.split(" ").slice(0, 2).map(p => p[0] ?? "").join("").toUpperCase(); }
 
 export default function KitsAdminClient({ cleaners, products }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(

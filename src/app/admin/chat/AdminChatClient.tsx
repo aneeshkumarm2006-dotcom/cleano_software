@@ -8,18 +8,13 @@ import imageCompression from "browser-image-compression";
 import { getAdminChat, getAdminChatList, sendChatMessage, uploadChatAttachment } from "./actions";
 import type { AdminChatPayload, AdminConversationSummary } from "./types";
 import Receipt from "./Receipt";
+import { avatarColor } from "@/lib/avatar";
 
 interface AdminChatClientProps {
   initialList: AdminConversationSummary[];
 }
 
-// Deterministic color per employee name
-const AVATAR_COLORS = ["#008C9C","#0284c7","#7c3aed","#d97706","#dc2626","#059669","#be185d","#0891b2"];
-function avatarColor(name: string) {
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xffffffff;
-  return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length];
-}
+// Chat-specific initials: first + last word (canonical lib takes first two words).
 function initials(name: string) {
   const parts = name.trim().split(/\s+/);
   return parts.length >= 2

@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import { resolveJobRequest } from "../../actions/resolveJobRequest";
 import { fmtDateTime, fmtTime } from "@/lib/time";
+import { avatarColor, initials } from "@/lib/avatar";
 import { assignCleaners } from "../../actions/assignCleaners";
 import { ConfirmDeleteModal } from "@/components/common/ConfirmDeleteModal";
 import Modal from "@/components/ui/Modal";
@@ -207,17 +208,6 @@ interface JobDetailViewProps {
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-
-function avatarBg(name: string): string {
-  const palette = ['#2c6e75','#1a5c63','#3d7f87','#0e4a52','#4f9097','#246a72'];
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0x7fffffff;
-  return palette[h % palette.length];
-}
-
-function initials(name: string): string {
-  return name.split(' ').map(w => w[0] || '').join('').slice(0, 2).toUpperCase();
-}
 
 // Same derived-status pill as the Jobs table (spec's three operational
 // statuses) — the detail page must never disagree with the list row.
@@ -861,7 +851,7 @@ export default function JobDetailView({
             const pay = payShares[c.id];
             return (
               <div key={c.id} className="team-row" style={{ alignItems: 'flex-start' }}>
-                <div className="avatar avatar-lg" style={{ background: avatarBg(c.name), flexShrink: 0 }}>
+                <div className="avatar avatar-lg" style={{ background: avatarColor(c.name), flexShrink: 0 }}>
                   {initials(c.name)}
                 </div>
                 <div className="team-meta" style={{ flex: 1, minWidth: 0 }}>
@@ -2263,7 +2253,7 @@ export default function JobDetailView({
                       }}>
                       <span style={{
                         width: 36, height: 36, borderRadius: 999,
-                        background: avatarBg(u.name),
+                        background: avatarColor(u.name),
                         color: "#fff",
                         display: "inline-flex", alignItems: "center", justifyContent: "center",
                         fontSize: 13, fontWeight: 600, flexShrink: 0,

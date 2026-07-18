@@ -8,6 +8,7 @@ import {
   type RetentionClientRow,
 } from "../actions/getRetentionKpi";
 import { updateRecurringCancellation } from "../actions/updateRecurringCancellation";
+import { avatarColor, initials } from "@/lib/avatar";
 
 type Preset = "month" | "quarter" | "year" | "custom";
 type Bucket = "retained" | "cancelled" | "paused" | "reactivated";
@@ -15,16 +16,6 @@ type Bucket = "retained" | "cancelled" | "paused" | "reactivated";
 function fmtDate(d: Date) {
   return d.toISOString().slice(0, 10);
 }
-function avatarBg(name: string): string {
-  const palette = ["#2c6e75","#1a5c63","#3d7f87","#0e4a52","#4f9097","#246a72","#538c94","#1c6068"];
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0x7fffffff;
-  return palette[h % palette.length];
-}
-function initials(name: string): string {
-  return (name || "?").split(/\s+/).map((w) => w[0] || "").join("").slice(0, 2).toUpperCase();
-}
-
 function presetRange(p: Exclude<Preset, "custom">): { from: string; to: string } {
   const now = new Date();
   const to = fmtDate(now);
@@ -194,7 +185,7 @@ export default function RetentionKpiClient() {
                 <tr key={`${r.clientId}-${r.cancellationId ?? "x"}`} style={{ cursor: "default" }}>
                   <td>
                     <div className="row" style={{ gap: 10 }}>
-                      <div className="avatar" style={{ background: avatarBg(r.name) }}>{initials(r.name)}</div>
+                      <div className="avatar" style={{ background: avatarColor(r.name) }}>{initials(r.name)}</div>
                       <div><div className="col-client">{r.name}</div><div className="col-client-sub">{r.email ?? "—"}</div></div>
                     </div>
                   </td>

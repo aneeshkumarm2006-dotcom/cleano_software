@@ -19,6 +19,7 @@ import { bulkAssignCleaner } from "../actions/bulkAssignCleaner";
 import { togglePaymentReceived, toggleInvoiceSent } from "../actions/toggleJobPaymentStatus";
 import { generateInvoiceFromJob } from "../actions/generateInvoiceFromJob";
 import { normalizeJobType, jobTypeLabel } from "@/lib/calendar-labels";
+import { avatarColor, initials } from "@/lib/avatar";
 import {
   isRevenueJob,
   jobRevenue,
@@ -100,17 +101,6 @@ interface JobsViewProps {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function avatarBg(name: string): string {
-  const palette = ['#2c6e75','#1a5c63','#3d7f87','#0e4a52','#4f9097','#246a72','#538c94','#1c6068'];
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0x7fffffff;
-  return palette[h % palette.length];
-}
-
-function initials(name: string): string {
-  return name.split(' ').map(w => w[0] || '').join('').slice(0, 2).toUpperCase();
-}
-
 function AvatarStack({ cleaners, max = 3 }: { cleaners: Array<{ id: string; name: string }>; max?: number }) {
   if (!cleaners.length) return <span style={{ color: 'var(--primary-40)', fontSize: 13 }}>—</span>;
   const shown = cleaners.slice(0, max);
@@ -118,7 +108,7 @@ function AvatarStack({ cleaners, max = 3 }: { cleaners: Array<{ id: string; name
   return (
     <div className="avstack" title={cleaners.map(c => c.name).join(', ')}>
       {shown.map(c => (
-        <div key={c.id} className="avatar" style={{ background: avatarBg(c.name) }}>
+        <div key={c.id} className="avatar" style={{ background: avatarColor(c.name) }}>
           {initials(c.name)}
         </div>
       ))}

@@ -17,31 +17,24 @@ import {
 } from "lucide-react";
 import { isAdminRole } from "@/lib/role-routing";
 import { fmtDate, fmtTime, startOfDayTz } from "@/lib/time";
-import { getTotalRevenue, getEmployeeCounts, productWhere } from "@/lib/metrics";
+import { getTotalRevenue, getEmployeeCounts, productWhere, simpleJobStatus } from "@/lib/metrics";
+import { avatarColor, initials } from "@/lib/avatar";
 import CleanerDashboard from "./CleanerDashboard";
 
 export const dynamic = "force-dynamic";
 
 // ── helpers ───────────────────────────────────────────────
-function initials(name: string): string {
-  return (name || "?").split(/\s+/).map((w) => w[0] || "").join("").slice(0, 2).toUpperCase();
-}
-function avatarBg(name: string): string {
-  const palette = ["#2c6e75","#1a5c63","#3d7f87","#0e4a52","#4f9097","#246a72","#538c94","#1c6068"];
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0x7fffffff;
-  return palette[h % palette.length];
-}
 function money(n: number): string {
   return `$${Math.round(n).toLocaleString("en-US")}`;
 }
 
+// Derived-status pill map (matches the Jobs table — spec's three operational
+// statuses, with Paid visually distinct).
 const STATUS_PILL: Record<string, { label: string; bg: string; color: string; dot: string }> = {
-  CREATED: { label: "Created", bg: "#f3f4f6", color: "#374151", dot: "#9ca3af" },
   SCHEDULED: { label: "Scheduled", bg: "#dbeafe", color: "#1e40af", dot: "#3b82f6" },
   IN_PROGRESS: { label: "In Progress", bg: "#fef3c7", color: "#92400e", dot: "#f59e0b" },
   COMPLETED: { label: "Completed", bg: "#d1fae5", color: "#065f46", dot: "#10b981" },
-  PAID: { label: "Paid", bg: "#d1fae5", color: "#065f46", dot: "#059669" },
+  PAID: { label: "Paid", bg: "#059669", color: "#ffffff", dot: "#a7f3d0" },
   CANCELLED: { label: "Cancelled", bg: "#fee2e2", color: "#991b1b", dot: "#ef4444" },
 };
 function StatusPill({ status }: { status: string }) {
@@ -130,7 +123,7 @@ function ListCard({
             const when = j.jobDate ?? j.startTime;
             return (
               <Link key={j.id} href={`/admin/jobs/${j.id}`} className="dash-listrow">
-                <div className="avatar" style={{ background: avatarBg(j.clientName), width: 36, height: 36 }}>
+                <div className="avatar" style={{ background: avatarColor(j.clientName), width: 36, height: 36 }}>
                   {initials(j.clientName)}
                 </div>
                 <div className="dash-listrow-meta">
@@ -139,7 +132,7 @@ function ListCard({
                 </div>
                 <div className="dash-listrow-right">
                   <div className="dash-listrow-price">{money((j.price || 0) - (j.discountAmount || 0))}</div>
-                  <StatusPill status={j.status} />
+                  <StatusPill status={simpleJobStatus(j)} />
                 </div>
               </Link>
             );

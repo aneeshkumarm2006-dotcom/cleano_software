@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { CalendarClock, MapPin, Briefcase, CheckCircle2, X } from "lucide-react";
 import { resolveJobRequest } from "../actions/resolveJobRequest";
 import { fmtDate, fmtTime } from "@/lib/time";
+import { avatarColor, initials } from "@/lib/avatar";
 
 interface JobRow {
   id: string;
@@ -23,15 +24,6 @@ interface JobRow {
 type Filter = "all" | "cancellation" | "reschedule";
 type Kind = "cancellation" | "reschedule";
 
-function initials(name: string) {
-  return (name || "?").split(/\s+/).map((w) => w[0] || "").join("").slice(0, 2).toUpperCase();
-}
-function avatarBg(name: string) {
-  const palette = ["#2c6e75","#1a5c63","#3d7f87","#0e4a52","#4f9097","#246a72","#538c94","#1c6068"];
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0x7fffffff;
-  return palette[h % palette.length];
-}
 function relativeTime(iso: string) {
   const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
   if (mins < 1) return "just now";
@@ -170,7 +162,7 @@ export default function RequestsPageClient({ jobs }: { jobs: JobRow[] }) {
                   {j.client && (
                     <div className="req-row">
                       <span className="req-row-ic">
-                        <span className="avatar" style={{ background: avatarBg(j.client.name), width: 24, height: 24, fontSize: 10 }}>{initials(j.client.name)}</span>
+                        <span className="avatar" style={{ background: avatarColor(j.client.name), width: 24, height: 24, fontSize: 10 }}>{initials(j.client.name)}</span>
                       </span>
                       <div>
                         <div className="req-row-main">{j.client.name}</div>
@@ -184,7 +176,7 @@ export default function RequestsPageClient({ jobs }: { jobs: JobRow[] }) {
                       {j.cleaners.length > 0 ? (
                         <span className="avstack">
                           {j.cleaners.slice(0, 3).map((c) => (
-                            <span key={c.id} className="avatar" style={{ background: avatarBg(c.name) }} title={c.name}>{initials(c.name)}</span>
+                            <span key={c.id} className="avatar" style={{ background: avatarColor(c.name) }} title={c.name}>{initials(c.name)}</span>
                           ))}
                         </span>
                       ) : (

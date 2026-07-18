@@ -9,6 +9,7 @@ import ClientModal from "../ClientModal";
 import ClientAddressManager from "../ClientAddressManager";
 import ClientPaymentMethods from "./ClientPaymentMethods";
 import { jobTypeLabel } from "@/lib/calendar-labels";
+import { avatarColor, initials } from "@/lib/avatar";
 
 type TabKey = "history" | "payments" | "ratings";
 
@@ -78,15 +79,6 @@ interface RatingEntry {
   createdAt: string;
   employee: { id: string; name: string };
   job: { id: string; jobNumber: number; jobDate: string | null } | null;
-}
-
-const AVATAR_COLORS = ["#008C9C", "#0284c7", "#7c3aed", "#dc2626", "#d97706", "#059669", "#0891b2", "#be185d"];
-
-function avatarColor(name: string) {
-  return AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length];
-}
-function initials(name: string) {
-  return name.split(" ").slice(0, 2).map(p => p[0] ?? "").join("").toUpperCase();
 }
 
 const STATUS_PILLS: Record<string, { bg: string; fg: string; dot: string; label: string }> = {
