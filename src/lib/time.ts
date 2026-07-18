@@ -58,6 +58,46 @@ export function startOfDayTz(d: Date = new Date()): Date {
   return new Date(d.getTime() - msIntoDay);
 }
 
+// Offset of the business timezone from UTC at instant `d` (Toronto in July =
+// -4h). Derived via Intl so DST is handled without a date library.
+function tzOffsetMs(d: Date): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(d);
+  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0);
+  const wallAsUtc = Date.UTC(
+    get("year"),
+    get("month") - 1,
+    get("day"),
+    get("hour") % 24,
+    get("minute"),
+    get("second")
+  );
+  return wallAsUtc - (d.getTime() - d.getMilliseconds());
+}
+
+// UTC instant for a wall-clock date/time in the business timezone. Form inputs
+// ("2026-07-16" + "09:00") mean 9 AM in America/Toronto regardless of where
+// the server runs; `new Date("...T09:00")` would interpret them as server-local
+// (UTC on Vercel) and shift every manually created job by 4-5 hours.
+export function tzWallClockToUtc(dateStr: string, timeStr = "00:00:00"): Date {
+  const [y, mo, day] = dateStr.split("-").map(Number);
+  const [h = 0, mi = 0, s = 0] = timeStr.split(":").map(Number);
+  const wallAsUtc = Date.UTC(y, (mo ?? 1) - 1, day ?? 1, h, mi, s);
+  let offset = tzOffsetMs(new Date(wallAsUtc));
+  // Re-derive once in case the first guess crossed a DST boundary.
+  const refined = tzOffsetMs(new Date(wallAsUtc - offset));
+  if (refined !== offset) offset = refined;
+  return new Date(wallAsUtc - offset);
+}
+
 export function fmtShortTz(d: Date): string {
   return d.toLocaleTimeString("en-US", {
     hour: "numeric",

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useMemo } from "react";
+import { fmtTime } from "@/lib/time";
 import { Send, Paperclip, Smile, Phone, MoreHorizontal, Shield, Briefcase } from "lucide-react";
 import useSWR from "swr";
 import imageCompression from "browser-image-compression";
@@ -14,7 +15,7 @@ interface EmployeeChatClientProps {
 }
 
 function timeOnly(iso: string) {
-  return new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  return fmtTime(iso);
 }
 
 function dayLabel(d: Date) {

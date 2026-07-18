@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { fmtTime } from "@/lib/time";
 import { Send, Search, Phone, MoreHorizontal, Paperclip, Smile, User as UserIcon, MessageCircle } from "lucide-react";
 import useSWR from "swr";
 import imageCompression from "browser-image-compression";
@@ -40,7 +41,7 @@ function formatRelative(iso: string | null) {
 }
 
 function timeOnly(iso: string) {
-  return new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  return fmtTime(iso);
 }
 
 function dayLabel(d: Date) {

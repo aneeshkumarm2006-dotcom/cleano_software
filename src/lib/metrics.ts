@@ -74,6 +74,13 @@ export async function getEmployeeCounts(): Promise<{
   return { active, inactive };
 }
 
+// ── Product (inventory) count ───────────────────────────────────────────────
+// Spec: Dashboard product/low-stock/inventory-value tiles must count the same
+// records as the Inventory page's active view — soft-deleted products excluded.
+export function productWhere(archived = false): Prisma.ProductWhereInput {
+  return { deletedAt: archived ? { not: null } : null };
+}
+
 // ── Job status classification (canonical) ───────────────────────────────────
 // Shared so the Jobs list tabs, Dashboard, and reports bucket jobs identically.
 export type JobStatusBucket =

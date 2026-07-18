@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { revalidatePath } from "next/cache";
 import { getTaxRates, computeJobTaxes } from "@/lib/tax.server";
+import { tzWallClockToUtc } from "@/lib/time";
 import { syncJobAssignments } from "@/lib/job-assignments";
 import CleanerSelector from "./CleanerSelector";
 import JobTypeSelector from "./JobTypeSelector";
@@ -311,8 +312,8 @@ export default async function JobFormPage({
       const endTimeVal = formData.get("endTime") as string;
       if (startDate && startTime && endDateVal && endTimeVal) {
         const ms =
-          new Date(`${endDateVal}T${endTimeVal}`).getTime() -
-          new Date(`${startDate}T${startTime}`).getTime();
+          tzWallClockToUtc(endDateVal, endTimeVal).getTime() -
+          tzWallClockToUtc(startDate, startTime).getTime();
         if (ms > 0) employeePay = +(hourlyRate * (ms / 3_600_000)).toFixed(2);
       }
     }
@@ -325,11 +326,15 @@ export default async function JobFormPage({
       jobType: (formData.get("jobType") as string) || null,
       location: (formData.get("location") as string) || null,
       aptNumber: (formData.get("aptNumber") as string) || null,
-      jobDate: startDate ? new Date(startDate) : null,
+      // Wall-clock form inputs are America/Toronto; jobDate mirrors startTime's
+      // instant (same convention as the BookingKoala importer).
+      jobDate: startDate
+        ? startTime
+          ? tzWallClockToUtc(startDate, startTime)
+          : tzWallClockToUtc(startDate)
+        : null,
       startTime:
-        startDate && startTime
-          ? new Date(`${startDate}T${startTime}`)
-          : new Date(),
+        startDate && startTime ? tzWallClockToUtc(startDate, startTime) : new Date(),
       price,
       usesFixedPrice,
       subtotalAmount: taxes.subtotalAmount,

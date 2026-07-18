@@ -1,6 +1,7 @@
 "use client";
 
 import type { ChatMessageDTO } from "./types";
+import { fmtTime } from "@/lib/time";
 
 interface MessageBubbleProps {
   message: ChatMessageDTO;
@@ -8,12 +9,7 @@ interface MessageBubbleProps {
 }
 
 function formatTime(iso: string) {
-  const d = new Date(iso);
-  return d.toLocaleTimeString(undefined, {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
+  return fmtTime(iso);
 }
 
 export default function MessageBubble({ message, isMine }: MessageBubbleProps) {

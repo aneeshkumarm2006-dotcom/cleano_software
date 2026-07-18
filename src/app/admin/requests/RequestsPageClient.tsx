@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { CalendarClock, MapPin, Briefcase, CheckCircle2, X } from "lucide-react";
 import { resolveJobRequest } from "../actions/resolveJobRequest";
+import { fmtDate, fmtTime } from "@/lib/time";
 
 interface JobRow {
   id: string;
@@ -155,9 +156,9 @@ export default function RequestsPageClient({ jobs }: { jobs: JobRow[] }) {
                   <div className="req-row">
                     <span className="req-row-ic"><CalendarClock size={15} /></span>
                     <div className="req-row-main">
-                      {when.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                      {fmtDate(when, { weekday: "short", month: "short", day: "numeric" })}
                       {" · "}
-                      {j.isFlexible ? "flexible time" : when.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                      {j.isFlexible ? "flexible time" : fmtTime(when)}
                     </div>
                   </div>
                   {j.location && (

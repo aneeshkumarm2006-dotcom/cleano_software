@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
+import { productWhere } from "@/lib/metrics";
 import InventoryPageClient from "./InventoryPageClient";
 
 type SearchParams = Promise<{
@@ -51,7 +52,7 @@ export default async function InventoryPage({
   const [allProducts, supplierPrices, activeSuppliers, employees] =
     await Promise.all([
       db.product.findMany({
-        where: { deletedAt: archived ? { not: null } : null },
+        where: productWhere(archived),
         include: {
           employeeProducts: {
             include: {

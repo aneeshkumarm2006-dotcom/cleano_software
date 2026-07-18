@@ -16,8 +16,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { isAdminRole } from "@/lib/role-routing";
-import { fmtDate, fmtTime } from "@/lib/time";
-import { getTotalRevenue, getEmployeeCounts } from "@/lib/metrics";
+import { fmtDate, fmtTime, startOfDayTz } from "@/lib/time";
+import { getTotalRevenue, getEmployeeCounts, productWhere } from "@/lib/metrics";
 import CleanerDashboard from "./CleanerDashboard";
 
 export const dynamic = "force-dynamic";
@@ -160,7 +160,9 @@ export default async function DashboardPage() {
   }
 
   const now = new Date();
-  const startOfToday = new Date(new Date().setHours(0, 0, 0, 0));
+  // Business-timezone day boundary — setHours() would be the server's midnight
+  // (UTC on Vercel), shifting the "Today's jobs" tile by 4-5 hours.
+  const startOfToday = startOfDayTz(now);
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
   const [
@@ -196,7 +198,9 @@ export default async function DashboardPage() {
     getTotalRevenue({ from: thirtyDaysAgo }),
     getEmployeeCounts(),
     db.user.count({ where: { cleaningJobs: { some: { status: "IN_PROGRESS" } } } }),
-    db.product.findMany(),
+    // Same active-record rule as the Inventory page — soft-deleted products
+    // must not inflate the Products/low-stock/inventory-value tiles.
+    db.product.findMany({ where: productWhere() }),
   ]);
 
   const employeeCount = employeeCounts.active;

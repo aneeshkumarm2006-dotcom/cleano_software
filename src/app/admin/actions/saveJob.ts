@@ -25,7 +25,7 @@ import { getTaxRates, computeJobTaxes } from "@/lib/tax.server";
 import { createAssignmentInvites } from "@/lib/invites";
 import { getSetting } from "@/lib/settings";
 import { syncJobAssignments, validateTraineePairing } from "@/lib/job-assignments";
-import { fmtDate, fmtTime } from "@/lib/time";
+import { fmtDate, fmtTime, tzWallClockToUtc } from "@/lib/time";
 import {
   recurringDiscountPercent,
   recurrenceCount,
@@ -187,8 +187,8 @@ export async function saveJob(formData: FormData) {
     // Job duration in hours, for HOURLY pay estimation.
     const payHours = (() => {
       if (startDate && startTime && endDate && endTime) {
-        const s = new Date(`${startDate}T${startTime}`).getTime();
-        const e = new Date(`${endDate}T${endTime}`).getTime();
+        const s = tzWallClockToUtc(startDate, startTime).getTime();
+        const e = tzWallClockToUtc(endDate, endTime).getTime();
         const ms = e - s;
         return ms > 0 ? ms / 3_600_000 : null;
       }
@@ -254,12 +254,17 @@ export async function saveJob(formData: FormData) {
       jobType: (formData.get("jobType") as string) || null,
       location: (formData.get("location") as string) || null,
       aptNumber: (formData.get("aptNumber") as string) || null,
-      jobDate: startDate ? new Date(startDate) : null,
+      // Wall-clock form inputs are America/Toronto; jobDate mirrors startTime's
+      // instant (same convention as the BookingKoala importer) so tz-aware
+      // date formatting never shows the previous day.
+      jobDate: startDate
+        ? startTime
+          ? tzWallClockToUtc(startDate, startTime)
+          : tzWallClockToUtc(startDate)
+        : null,
       startTime:
-        startDate && startTime
-          ? new Date(`${startDate}T${startTime}`)
-          : new Date(),
-      endTime: endDate && endTime ? new Date(`${endDate}T${endTime}`) : null,
+        startDate && startTime ? tzWallClockToUtc(startDate, startTime) : new Date(),
+      endTime: endDate && endTime ? tzWallClockToUtc(endDate, endTime) : null,
       price,
       usesFixedPrice,
       subtotalAmount: taxes.subtotalAmount,

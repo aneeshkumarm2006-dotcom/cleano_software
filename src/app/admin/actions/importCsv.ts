@@ -8,7 +8,7 @@ import { hashPassword } from "better-auth/crypto";
 import { randomBytes } from "crypto";
 import { sendAccountEmail } from "@/lib/email";
 import { syncDefaultLocationStock } from "@/lib/inventory";
-import { startOfDayTz } from "@/lib/time";
+import { startOfDayTz, tzWallClockToUtc } from "@/lib/time";
 import {
   CSV_ENTITIES,
   validateRecord,
@@ -101,6 +101,13 @@ function combineDateTime(dateStr: unknown, timeStr: unknown): Date | null {
   const ds = str(dateStr);
   if (!ds) return null;
   const ts = str(timeStr) || "00:00";
+  // CSV date+time columns are business-timezone wall clock (America/Toronto),
+  // not server-local — parsing with `new Date("...T09:00")` on Vercel (UTC)
+  // would store every imported job 4-5 hours off.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(ds)) {
+    const d = tzWallClockToUtc(ds, normalizeTime(ts));
+    if (!isNaN(d.getTime())) return d;
+  }
   const d = new Date(`${ds}T${normalizeTime(ts)}`);
   if (!isNaN(d.getTime())) return d;
   const d2 = new Date(`${ds} ${ts}`);
