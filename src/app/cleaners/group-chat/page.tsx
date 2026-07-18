@@ -12,7 +12,7 @@ import {
 export default async function CleanerGroupChatPage() {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) {
-    redirect("/sign-in");
+    redirect("/cleanos/login");
   }
 
   const [list, settings] = await Promise.all([

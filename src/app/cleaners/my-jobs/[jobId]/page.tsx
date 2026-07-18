@@ -57,7 +57,7 @@ function jobTypeSlug(type: string | null) {
 
 export default async function JobDetailPage({ params }: PageProps) {
   const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) redirect("/sign-in");
+  if (!session) redirect("/cleanos/login");
 
   const { jobId } = await params;
 

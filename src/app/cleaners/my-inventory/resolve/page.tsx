@@ -21,7 +21,7 @@ export default async function ResolvePage({
   });
 
   if (!session) {
-    redirect("/sign-in");
+    redirect("/cleanos/login");
   }
 
   const params = await searchParams;

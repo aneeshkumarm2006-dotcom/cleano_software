@@ -25,6 +25,13 @@ export const auth = betterAuth({
   database: prismaAdapter(db, {
     provider: "postgresql",
   }),
+  // Spec item 14 (staff homescreen-app login persistence): sessions last 30
+  // days and slide forward daily with use, so cleaners opening the installed
+  // app day-to-day stay signed in instead of hitting a login wall.
+  session: {
+    expiresIn: 60 * 60 * 24 * 30,
+    updateAge: 60 * 60 * 24,
+  },
   emailAndPassword: {
     enabled: true,
     sendResetPassword: async ({ user, url }) => {

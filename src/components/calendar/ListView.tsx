@@ -14,19 +14,14 @@ import { AlertCircle } from "lucide-react";
 import {
   statusMeta,
   hasMissingEquipment,
-  payLabel,
+  priceLabel,
+  cleanerLabel,
   shortLocation,
 } from "./status-meta";
+import { jobTypeLabel } from "@/lib/calendar-labels";
 
 type ListViewProps = {
   view: "month" | "week" | "day";
-};
-
-const JOB_TYPE_LABEL: Record<string, string> = {
-  R: "Residential",
-  C: "Commercial",
-  PC: "Post construction",
-  F: "Follow-up",
 };
 
 function timeStr(d: Date) {
@@ -95,9 +90,10 @@ export const ListView: React.FC<ListViewProps> = ({ view }) => {
             {dayEvents.map((event) => {
               const m = statusMeta(event);
               const jt = event.metadata?.jobType as string | undefined;
-              const typeName = (jt && JOB_TYPE_LABEL[jt]) || jt || "Clean";
+              const typeName = jt ? jobTypeLabel(jt) : "Clean";
               const loc = shortLocation(event);
-              const pay = payLabel(event);
+              const pay = priceLabel(event);
+              const who = cleanerLabel(event);
               return (
                 <button
                   key={event.id}
@@ -119,6 +115,7 @@ export const ListView: React.FC<ListViewProps> = ({ view }) => {
                     </span>
                     <span className="cal-list-sub">
                       {typeName}
+                      {who ? ` · ${who}` : ""}
                       {loc ? ` · ${loc}` : ""}
                     </span>
                   </span>

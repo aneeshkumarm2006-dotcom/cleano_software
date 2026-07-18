@@ -106,6 +106,27 @@ export function payLabel(event: CalendarEvent): string | null {
   return `$${Number(p).toFixed(0)}`;
 }
 
+// Spec item 17: cards show the BOOKING price, not cleaner pay — this calendar
+// is admin-only (cleaners get CleanerCalendarClient), so no redaction concern.
+export function priceLabel(event: CalendarEvent): string | null {
+  const p = event.metadata?.price;
+  if (p == null) return null;
+  return `$${Number(p).toFixed(0)}`;
+}
+
+// First name(s) of the assigned crew for compact card display.
+export function cleanerLabel(event: CalendarEvent): string | null {
+  const cleaners = event.metadata?.cleaners as
+    | Array<{ name?: string | null }>
+    | undefined;
+  const names = (cleaners ?? [])
+    .map((c) => (c.name ?? "").trim().split(/\s+/)[0])
+    .filter(Boolean);
+  if (names.length === 0) return null;
+  if (names.length <= 2) return names.join(" & ");
+  return `${names[0]} +${names.length - 1}`;
+}
+
 /** Short trailing locality from a full address ("…, Verdun" → "Verdun"). */
 export function shortLocation(event: CalendarEvent): string | null {
   const loc = event.metadata?.location as string | undefined;

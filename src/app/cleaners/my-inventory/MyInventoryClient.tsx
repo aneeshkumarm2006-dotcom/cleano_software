@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { reportDamagedItem } from "@/app/admin/actions/reportDamagedItem";
 import { createInventoryRequest } from "@/app/admin/actions/createInventoryRequest";
 import { updateMyInventoryCount } from "@/app/admin/actions/updateMyInventoryCount";
+import { addMyInventoryItem } from "./addMyInventoryItem";
 
 interface PendingRequest {
   quantity: number;
@@ -33,9 +34,16 @@ interface Location {
   address: string | null;
 }
 
+interface CatalogProduct {
+  id: string;
+  name: string;
+  unit: string | null;
+}
+
 interface MyInventoryClientProps {
   items: InventoryItem[];
   locations?: Location[];
+  catalog?: CatalogProduct[];
 }
 
 /** Shared modal shell — matches the damage-report dialog already in use here. */
@@ -95,7 +103,7 @@ const inputStyle: React.CSSProperties = {
   borderRadius: 8,
 };
 
-export default function MyInventoryClient({ items }: MyInventoryClientProps) {
+export default function MyInventoryClient({ items, catalog = [] }: MyInventoryClientProps) {
   const needAttn = items.filter((i) => i.isLow || i.isOutOfStock).length;
   const totalUnits = items.reduce((s, i) => s + i.quantity, 0);
   const hasItems = items.length > 0;
@@ -178,6 +186,35 @@ export default function MyInventoryClient({ items }: MyInventoryClientProps) {
     });
   }
 
+  /* --------------------- starting inventory (add item) --------------------- */
+  // Spec item 15: cleaners record what they already have on hand — products
+  // not yet in the kit — without waiting for an admin assignment.
+  const [addOpen, setAddOpen] = useState(false);
+  const [addProductId, setAddProductId] = useState("");
+  const [addQty, setAddQty] = useState(1);
+  const [addError, setAddError] = useState<string | null>(null);
+  const [addBusy, startAdd] = useTransition();
+  const inKit = new Set(items.map((i) => i.productId));
+  const addable = catalog.filter((p) => !inKit.has(p.id));
+
+  function submitAdd() {
+    if (!addProductId) {
+      setAddError("Pick a product");
+      return;
+    }
+    setAddError(null);
+    startAdd(async () => {
+      const res = await addMyInventoryItem({ productId: addProductId, quantity: addQty });
+      if (!res.success) {
+        setAddError(res.error ?? "Failed to add item");
+        return;
+      }
+      setAddOpen(false);
+      setAddProductId("");
+      setAddQty(1);
+    });
+  }
+
   /* ------------------------- cleaner count correction ------------------------- */
   const [editItem, setEditItem] = useState<InventoryItem | null>(null);
   const [editQty, setEditQty] = useState(0);
@@ -237,6 +274,15 @@ export default function MyInventoryClient({ items }: MyInventoryClientProps) {
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" /><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" /></svg>
               Pick up from storage
             </a>
+            {addable.length > 0 && (
+              <button
+                type="button"
+                className="cl-inv-hero-btn"
+                onClick={() => { setAddOpen(true); setAddError(null); }}>
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                Add item I already have
+              </button>
+            )}
           </div>
         </div>
 
@@ -420,6 +466,54 @@ export default function MyInventoryClient({ items }: MyInventoryClientProps) {
       )}
 
       {/* Cleaner-side count correction */}
+      {addOpen && (
+        <Modal title="Add item I already have" onClose={() => setAddOpen(false)}>
+          <p style={{ marginTop: 8, fontSize: 13, color: "var(--primary-60)" }}>
+            Record supplies already in your kit (e.g. your starting inventory).
+            The add is logged to the item&apos;s stock history.
+          </p>
+
+          <label style={labelStyle}>Product</label>
+          <select
+            value={addProductId}
+            onChange={(e) => setAddProductId(e.target.value)}
+            style={{ ...inputStyle, background: "#fff" }}>
+            <option value="">Select a product…</option>
+            {addable.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}{p.unit ? ` (${p.unit})` : ""}
+              </option>
+            ))}
+          </select>
+
+          <label style={labelStyle}>Quantity</label>
+          <input
+            type="number"
+            min={1}
+            value={addQty}
+            onChange={(e) => setAddQty(Math.max(1, Math.floor(Number(e.target.value) || 1)))}
+            style={inputStyle}
+          />
+
+          {addError && (
+            <p style={{ marginTop: 12, fontSize: 13, color: "var(--error-text)" }}>{addError}</p>
+          )}
+
+          <div style={{ marginTop: 20, display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <button type="button" className="cl-action-btn" onClick={() => setAddOpen(false)}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="cl-action-btn solid"
+              onClick={submitAdd}
+              disabled={addBusy || !addProductId}>
+              {addBusy ? "Adding..." : "Add to my kit"}
+            </button>
+          </div>
+        </Modal>
+      )}
+
       {editItem && (
         <Modal title={`Update count: ${editItem.productName}`} onClose={() => setEditItem(null)}>
           <p style={{ marginTop: 8, fontSize: 13, color: "var(--primary-60)" }}>

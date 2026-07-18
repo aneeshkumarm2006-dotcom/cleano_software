@@ -5,10 +5,12 @@ import {
   statusMeta,
   isUnconfirmed,
   isCancelled,
-  payLabel,
+  priceLabel,
+  cleanerLabel,
   shortLocation,
 } from "./status-meta";
 import CornerBadge from "./CornerBadge";
+import { jobTypeLabel } from "@/lib/calendar-labels";
 
 export interface EventCardProps {
   event: CalendarEvent;
@@ -28,13 +30,6 @@ export interface EventCardProps {
   renderLocation?: (event: CalendarEvent, color: string) => React.ReactNode;
   className?: string;
 }
-
-const JOB_TYPE_LABEL: Record<string, string> = {
-  R: "Residential",
-  C: "Commercial",
-  PC: "Post construction",
-  F: "Follow-up",
-};
 
 function timeStr(d: Date) {
   return d
@@ -56,12 +51,14 @@ export const EventCard: React.FC<EventCardProps> = ({
 }) => {
   const m = statusMeta(event);
   const jt = event.metadata?.jobType as string | undefined;
-  const typeName = (jt && JOB_TYPE_LABEL[jt]) || jt || "Clean";
+  const typeName = jt ? jobTypeLabel(jt) : "Clean";
   const loc = shortLocation(event);
-  const pay = payLabel(event);
+  // Spec item 17: card shows client, time, service type, cleaner, and PRICE.
+  const price = priceLabel(event);
+  const who = cleanerLabel(event);
 
   const showMeta = layout.height >= 34;
-  const showFoot = layout.height >= 72 && (loc || pay);
+  const showFoot = layout.height >= 72 && (loc || who || price);
 
   const classes = [
     "cal-ev",
@@ -105,8 +102,8 @@ export const EventCard: React.FC<EventCardProps> = ({
         ) : null}
         {showFoot ? (
           <div className="cal-ev-foot">
-            {loc ? <span className="cal-ev-loc">{loc}</span> : <span />}
-            {pay ? <span className="cal-ev-pay">{pay}</span> : null}
+            <span className="cal-ev-loc">{who ?? loc ?? ""}</span>
+            {price ? <span className="cal-ev-pay">{price}</span> : null}
           </div>
         ) : null}
       </div>

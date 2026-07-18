@@ -81,7 +81,18 @@ export async function GET(req: Request) {
       console.error("first-login hook", e);
     }
 
-    return NextResponse.redirect(`${baseUrl}${path}`);
+    const res = NextResponse.redirect(`${baseUrl}${path}`);
+    // Remember which login door this account belongs to (outlives the
+    // session) so an expired session in the installed homescreen app is sent
+    // back to the RIGHT login page instead of the customer one (item 14).
+    const door = isCleanerRole(role) ? "cleaner" : isAdminRole(role) ? "staff" : "portal";
+    res.cookies.set("cleano_door", door, {
+      maxAge: 60 * 60 * 24 * 365,
+      path: "/",
+      sameSite: "lax",
+      httpOnly: true,
+    });
+    return res;
   }
 
   // Sign the wrong-role account out so it doesn't sit in a half-state, record

@@ -9,7 +9,7 @@ type PageProps = { params: Promise<{ jobId: string }> };
 
 export default async function ClockPage({ params }: PageProps) {
   const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) redirect("/sign-in");
+  if (!session) redirect("/cleanos/login");
 
   const { jobId } = await params;
 

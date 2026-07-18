@@ -77,10 +77,10 @@ export async function setAssignmentProgress(
 }
 
 /**
- * Spec rule (pay/rating doc item 2): a Trainee must always work paired with a
- * Field Lead — never assigned solo (a lone trainee would be paid a flat 30% of
- * the full price, which the spec forbids). Returns an error message when the
- * assignment breaks the rule, or null when it's fine.
+ * Spec rule (item 12): a Trainee must always work paired with a Field Lead or
+ * an approved (Standard) cleaner — never solo (a lone trainee would be paid a
+ * flat 30% of the full price, which the spec forbids). Returns an error
+ * message when the assignment breaks the rule, or null when it's fine.
  */
 export async function validateTraineePairing(
   cleanerIds: string[]
@@ -92,9 +92,9 @@ export async function validateTraineePairing(
     select: { cleanerTier: true },
   });
   const hasTrainee = crew.some((c) => c.cleanerTier === "TRAINEE");
-  const hasFieldLead = crew.some((c) => c.cleanerTier === "FIELD_LEAD");
-  if (hasTrainee && !hasFieldLead) {
-    return "A Trainee must be paired with a Field Lead on the job. Add a Field Lead or change the trainee's assignment.";
+  const hasApproved = crew.some((c) => c.cleanerTier !== "TRAINEE");
+  if (hasTrainee && !hasApproved) {
+    return "A Trainee must be paired with a Field Lead or an approved cleaner. Add one, or change the trainee's assignment.";
   }
   return null;
 }

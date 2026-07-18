@@ -10,7 +10,7 @@ export default async function CheckoutPage() {
   });
 
   if (!session) {
-    redirect("/sign-in");
+    redirect("/cleanos/login");
   }
 
   const locations = await db.inventoryLocation.findMany({

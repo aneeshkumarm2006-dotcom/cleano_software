@@ -7,7 +7,7 @@ export default async function MyInventoryPage() {
   const session = await requireCleaner();
   const userId = session.user.id;
 
-  const [employeeProducts, inventoryLocations, pendingRequests, defaultThreshold] =
+  const [employeeProducts, inventoryLocations, pendingRequests, defaultThreshold, catalog] =
     await Promise.all([
       db.employeeProduct.findMany({
         where: { employeeId: userId },
@@ -37,6 +37,12 @@ export default async function MyInventoryPage() {
         select: { productId: true, quantity: true, createdAt: true },
       }),
       getSetting("inventory.defaultRefillThreshold"),
+      // Product catalog for the "Add item" (starting inventory) picker.
+      db.product.findMany({
+        where: { deletedAt: null },
+        select: { id: true, name: true, unit: true },
+        orderBy: { name: "asc" },
+      }),
     ]);
 
   const pendingByProductId = new Map(
@@ -93,6 +99,7 @@ export default async function MyInventoryPage() {
           name: l.name,
           address: l.address,
         }))}
+        catalog={catalog}
       />
     </div>
   );

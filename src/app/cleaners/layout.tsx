@@ -20,7 +20,7 @@ export default async function CleanerLayout({
   const session = await getCachedSession();
 
   if (!session) {
-    redirect("/sign-in");
+    redirect("/cleanos/login");
   }
 
   const { user } = session;

@@ -43,6 +43,31 @@ export async function claimJob(jobId: string) {
     return { success: false, error: "You already claimed this job" };
   }
 
+  // Spec item 12: trainees can't claim solo work — only jobs that already
+  // have a Field Lead or approved cleaner on the crew.
+  const me = await db.user.findUnique({
+    where: { id: userId },
+    select: { cleanerTier: true },
+  });
+  if (me?.cleanerTier === "TRAINEE") {
+    const crewIds = [
+      ...job.cleaners.map((c) => c.id),
+      ...(job.employeeId ? [job.employeeId] : []),
+    ];
+    const approvedOnCrew = crewIds.length
+      ? await db.user.count({
+          where: { id: { in: crewIds }, cleanerTier: { not: "TRAINEE" } },
+        })
+      : 0;
+    if (approvedOnCrew === 0) {
+      return {
+        success: false,
+        error:
+          "Trainees can't claim solo jobs — this job needs a Field Lead or approved cleaner first.",
+      };
+    }
+  }
+
   // Only genuinely open work is claimable — mirrors claimableJobsWhere().
   if (job.status !== "CREATED" && job.status !== "SCHEDULED") {
     return { success: false, error: "This job is no longer available" };

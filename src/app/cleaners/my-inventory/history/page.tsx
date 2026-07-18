@@ -19,7 +19,7 @@ export default async function CheckoutHistoryPage({
   });
 
   if (!session) {
-    redirect("/sign-in");
+    redirect("/cleanos/login");
   }
 
   const params = await searchParams;

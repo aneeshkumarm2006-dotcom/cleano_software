@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { headers } from "next/headers";
+import { headers, cookies } from "next/headers";
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { getSetting } from "@/lib/settings";
@@ -21,6 +21,12 @@ export default async function PortalLayout({
   const session = await auth.api.getSession({ headers: await headers() });
 
   if (!session) {
+    // The homescreen app's start URL is "/", so staff/cleaners with an
+    // expired session land here too — the door cookie (set at sign-in)
+    // routes each audience back to its own login page (item 14).
+    const door = (await cookies()).get("cleano_door")?.value;
+    if (door === "cleaner") redirect("/cleanos/login");
+    if (door === "staff") redirect("/sign-in");
     redirect("/login");
   }
 

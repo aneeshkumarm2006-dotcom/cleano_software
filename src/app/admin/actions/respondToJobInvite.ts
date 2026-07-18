@@ -44,6 +44,37 @@ export async function respondToJobInvite(input: {
   const now = new Date();
 
   if (input.decision === "ACCEPT") {
+    // Spec item 12: a trainee can't accept a last-minute broadcast onto a job
+    // with no Field Lead / approved cleaner — that would put them solo.
+    if (invite.isLastMinute) {
+      const me = await db.user.findUnique({
+        where: { id: session.user.id },
+        select: { cleanerTier: true },
+      });
+      if (me?.cleanerTier === "TRAINEE") {
+        const job = await db.job.findUnique({
+          where: { id: invite.jobId },
+          select: { employeeId: true, cleaners: { select: { id: true } } },
+        });
+        const crewIds = [
+          ...(job?.cleaners.map((c) => c.id) ?? []),
+          ...(job?.employeeId ? [job.employeeId] : []),
+        ];
+        const approvedOnCrew = crewIds.length
+          ? await db.user.count({
+              where: { id: { in: crewIds }, cleanerTier: { not: "TRAINEE" } },
+            })
+          : 0;
+        if (approvedOnCrew === 0) {
+          return {
+            success: false,
+            error:
+              "Trainees can't take solo jobs — this booking needs a Field Lead or approved cleaner first.",
+          };
+        }
+      }
+    }
+
     // Was this a last-minute broadcast? If so, the cleaner is being
     // newly attached to the job (the invite was created for a pool of
     // available cleaners, not a pre-assigned individual). We connect

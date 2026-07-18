@@ -108,7 +108,7 @@ export async function checkoutInventory(input: CheckoutInventoryInput) {
             data: { stockLevel: { decrement: item.quantity } },
           });
 
-          await tx.employeeProduct.upsert({
+          const kitRow = await tx.employeeProduct.upsert({
             where: {
               employeeId_productId: {
                 employeeId: session.user.id,
@@ -121,6 +121,38 @@ export async function checkoutInventory(input: CheckoutInventoryInput) {
               productId: item.productId,
               quantity: item.quantity,
             },
+          });
+
+          // Unified audit trail (spec item 15): pickups appear in the same
+          // Stock History as every other change — one row for the cleaner's
+          // kit (+), one for the warehouse (−).
+          const product = stockByProduct.get(item.productId)!.product;
+          const warehouseAfter = product.stockLevel - item.quantity;
+          await tx.inventoryChange.createMany({
+            data: [
+              {
+                productId: item.productId,
+                employeeId: session.user.id,
+                employeeName: session.user.name ?? null,
+                quantityChange: item.quantity,
+                newQuantity: kitRow.quantity,
+                unit: product.unit,
+                reason: `Warehouse pickup — ${location.name}`,
+                changedById: session.user.id,
+                changedByName: session.user.name ?? null,
+              },
+              {
+                productId: item.productId,
+                employeeId: null,
+                employeeName: null,
+                quantityChange: -item.quantity,
+                newQuantity: warehouseAfter,
+                unit: product.unit,
+                reason: `Warehouse pickup by ${session.user.name ?? "cleaner"} — ${location.name}`,
+                changedById: session.user.id,
+                changedByName: session.user.name ?? null,
+              },
+            ],
           });
         }
 
