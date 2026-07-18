@@ -37,6 +37,14 @@ export default async function DocumentSigningPage({
     notFound();
   }
 
+  // Item 20: record the open in the document access log (best-effort — a
+  // logging hiccup must never block the signing view).
+  await db.documentAccessLog
+    .create({
+      data: { documentId: id, userId: employeeId, action: "OPEN" },
+    })
+    .catch((e) => console.error("document access log", e));
+
   return (
     <div className="h-full overflow-hidden overflow-y-auto p-8">
       <DocumentSigningView

@@ -13,6 +13,7 @@ import {
   Download,
 } from "lucide-react";
 import { signDocument } from "../../actions/signDocument";
+import { logDocumentAccess } from "../../actions/logDocumentAccess";
 
 type DocStatus = "PENDING" | "SIGNED" | "EXPIRED" | "REVOKED";
 
@@ -148,7 +149,11 @@ export default function DocumentSigningView({
                   target="_blank"
                   rel="noopener noreferrer"
                   className="btn btn-secondary btn-sm"
-                  style={{ marginTop: 12, textDecoration: "none" }}>
+                  style={{ marginTop: 12, textDecoration: "none" }}
+                  onClick={() => {
+                    // Fire-and-forget download tracking (item 20).
+                    logDocumentAccess(document.id, "DOWNLOAD").catch(() => {});
+                  }}>
                   <Download size={14} /> Download PDF
                 </a>
               </div>

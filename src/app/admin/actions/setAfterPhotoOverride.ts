@@ -44,3 +44,45 @@ export async function setAfterPhotoOverride(jobId: string, enabled: boolean) {
   revalidatePath(`/admin/jobs/${jobId}`);
   return { success: true };
 }
+
+/**
+ * Spec item 21: after-photos are allowed by default; this is the per-job
+ * OPT-OUT. Disabling clears any override too, so the job is unambiguously off.
+ */
+export async function setAfterPhotosEnabled(jobId: string, enabled: boolean) {
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session) return { success: false, error: "Not authenticated" };
+
+  const role = (session.user as { role?: string }).role;
+  if (role !== "OWNER" && role !== "ADMIN") {
+    return { success: false, error: "Not authorized" };
+  }
+  if (!jobId) return { success: false, error: "Missing jobId" };
+
+  await db.job.update({
+    where: { id: jobId },
+    data: enabled
+      ? { afterPhotoConsent: true }
+      : {
+          afterPhotoConsent: false,
+          afterPhotoOverrideAt: null,
+          afterPhotoOverrideBy: null,
+        },
+  });
+
+  await db.jobLog.create({
+    data: {
+      jobId,
+      userId: session.user.id,
+      action: "UPDATED",
+      field: "afterPhotos",
+      newValue: enabled ? "enabled" : "disabled",
+      description: `${session.user.name ?? "Admin"} ${
+        enabled ? "enabled" : "disabled"
+      } after-photos for this job`,
+    },
+  });
+
+  revalidatePath(`/admin/jobs/${jobId}`);
+  return { success: true };
+}

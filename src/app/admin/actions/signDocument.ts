@@ -104,6 +104,11 @@ export async function signDocument(input: SignDocumentInput) {
       },
     });
 
+    // Item 20: signing = completing the document, into the access log.
+    await db.documentAccessLog
+      .create({ data: { documentId, userId: employeeId, action: "COMPLETE" } })
+      .catch((e) => console.error("document access log", e));
+
     revalidatePath("/admin/documents");
     revalidatePath(`/admin/documents/${documentId}`);
     revalidatePath("/admin/settings");

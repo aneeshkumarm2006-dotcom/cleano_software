@@ -20,7 +20,7 @@ import { generateInvoiceFromJob } from "../../actions/generateInvoiceFromJob";
 import { markJobComplete } from "../../actions/markJobComplete";
 import { simpleJobStatus } from "@/lib/metrics-shared";
 import { createRatingToken } from "../../actions/createRatingToken";
-import { setAfterPhotoOverride } from "../../actions/setAfterPhotoOverride";
+import { setAfterPhotosEnabled } from "../../actions/setAfterPhotoOverride";
 import { setJobPriorityLabel } from "../../actions/setJobPriorityLabel";
 import { submitRating } from "../../actions/submitRating";
 import { updateJobNotificationPrefs } from "../../actions/updateJobNotificationPrefs";
@@ -479,9 +479,11 @@ export default function JobDetailView({
   const [isSendingReview, setIsSendingReview] = useState(false);
   const [reviewCopied, setReviewCopied] = useState(false);
   const [currentStatus, setCurrentStatus] = useState(job.status);
-  const [afterPhotoOverrideAt, setAfterPhotoOverrideAt] = useState<string | null>(
+  const [afterPhotoOverrideAt] = useState<string | null>(
     job.afterPhotoOverrideAt ?? null
   );
+  // Item 21: after-photos are on by default; this is the per-job opt-out.
+  const [photosEnabled, setPhotosEnabled] = useState(!!job.afterPhotoConsent);
   const [isTogglingPhotoOverride, setIsTogglingPhotoOverride] = useState(false);
   // Per-cleaner manual star rating (item 13).
   const [ratingTarget, setRatingTarget] = useState<{ id: string; name: string } | null>(null);
@@ -641,13 +643,14 @@ export default function JobDetailView({
     setIsSendingReview(false);
   };
 
-  const handleTogglePhotoOverride = async () => {
+  const handleToggleAfterPhotos = async () => {
     if (isTogglingPhotoOverride) return;
     setIsTogglingPhotoOverride(true);
-    const next = afterPhotoOverrideAt === null;
-    const result = await setAfterPhotoOverride(job.id, next);
+    const next = !photosEnabled;
+    const result = await setAfterPhotosEnabled(job.id, next);
     if (result.success) {
-      setAfterPhotoOverrideAt(next ? new Date().toISOString() : null);
+      setPhotosEnabled(next);
+      router.refresh();
     }
     setIsTogglingPhotoOverride(false);
   };
@@ -1932,68 +1935,51 @@ export default function JobDetailView({
           );
         })()}
 
-        {/* After-photo consent status */}
+        {/* After-photos policy (item 21: allowed by default, per-job opt-out).
+            No banner in the default allowed state — only a quiet disable
+            control; a banner appears only when photos are explicitly OFF. */}
         {(() => {
-          const consented = !!job.afterPhotoConsent;
-          const overridden = afterPhotoOverrideAt !== null;
-          const allowed = consented || overridden;
-          const detail = consented
-            ? `Customer consented at booking${
-                job.afterPhotoConsentVersion ? ` (${job.afterPhotoConsentVersion})` : ""
-              }.`
-            : overridden
-            ? "No customer consent — enabled by admin override."
-            : "Customer did not consent. Cleaners are blocked from uploading after-photos.";
+          const allowed = photosEnabled || afterPhotoOverrideAt !== null;
+          if (allowed) {
+            if (!isAdmin) return null;
+            return (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--primary-60)' }}>
+                <Camera size={14} style={{ flex: '0 0 auto' }} />
+                <span>After-photos enabled for this job.</span>
+                <button
+                  type="button"
+                  onClick={handleToggleAfterPhotos}
+                  disabled={isTogglingPhotoOverride}
+                  style={{
+                    fontSize: 12, padding: '2px 8px', borderRadius: 8,
+                    border: '1px solid var(--primary-20)', background: 'transparent',
+                    color: 'var(--primary-60)', cursor: 'pointer',
+                  }}>
+                  {isTogglingPhotoOverride ? 'Saving…' : 'Disable'}
+                </button>
+              </div>
+            );
+          }
           return (
             <div
               className="banner"
-              style={{
-                background: allowed ? '#ecfdf5' : '#fef2f2',
-                borderColor: allowed ? '#6ee7b7' : '#fca5a5',
-                color: allowed ? '#065f46' : '#991b1b',
-              }}>
-              <Camera size={16} style={{ flex: '0 0 auto', color: allowed ? '#10b981' : '#ef4444' }} />
+              style={{ background: '#fffbeb', borderColor: '#fcd34d', color: '#92400e' }}>
+              <Camera size={16} style={{ flex: '0 0 auto', color: '#f59e0b' }} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <strong>After-photos {allowed ? 'allowed' : 'not permitted'}.</strong>{' '}
-                {detail}
-                {(() => {
-                  const fmt = (iso: string) =>
-                    new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-                  const history: string[] = [];
-                  if (job.afterPhotoConsentAt) {
-                    history.push(
-                      `Consent granted at booking — ${fmt(job.afterPhotoConsentAt)}${
-                        job.afterPhotoConsentVersion ? ` (${job.afterPhotoConsentVersion})` : ''
-                      }`
-                    );
-                  } else {
-                    history.push('Consent declined at booking');
-                  }
-                  if (afterPhotoOverrideAt) {
-                    history.push(`Admin override active since ${fmt(afterPhotoOverrideAt)}`);
-                  }
-                  return (
-                    <ul style={{ margin: '6px 0 0', paddingLeft: 16, fontSize: 12, opacity: 0.85 }}>
-                      {history.map((h, i) => (
-                        <li key={i}>{h}</li>
-                      ))}
-                    </ul>
-                  );
-                })()}
+                <strong>After-photos are turned off for this job.</strong>{' '}
+                Cleaners can&apos;t upload after-photos until they&apos;re re-enabled.
               </div>
-              {isAdmin && !consented && (
+              {isAdmin && (
                 <button
                   type="button"
-                  onClick={handleTogglePhotoOverride}
+                  onClick={handleToggleAfterPhotos}
                   disabled={isTogglingPhotoOverride}
                   style={{
                     fontSize: 12, padding: '4px 10px', borderRadius: 8, border: 'none',
                     cursor: 'pointer', flexShrink: 0,
-                    background: overridden ? '#991b1b' : '#10b981', color: '#fff',
+                    background: '#10b981', color: '#fff',
                   }}>
-                  {isTogglingPhotoOverride
-                    ? 'Saving…'
-                    : overridden ? 'Remove override' : 'Override · allow photos'}
+                  {isTogglingPhotoOverride ? 'Saving…' : 'Enable after-photos'}
                 </button>
               )}
             </div>

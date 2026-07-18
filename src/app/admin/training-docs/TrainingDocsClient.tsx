@@ -23,13 +23,6 @@ interface Doc {
   kind: string;
   pages: number;
 }
-interface LogEntry {
-  who: string;
-  docId: string;
-  action: "unlocked" | "viewed" | "downloaded";
-  minsAgo: number;
-}
-
 const VIDEOS: Video[] = [
   { id: "V-1", title: "Welcome & professional standards", duration: "8:24" },
   { id: "V-2", title: "Equipment & approved products", duration: "12:10" },
@@ -43,18 +36,21 @@ const DOCS: Doc[] = [
   { id: "D-4", title: "Code of conduct & confidentiality", kind: "PDF", pages: 6 },
 ];
 
-const LOG: LogEntry[] = [
-  { who: "Aïcha Diallo", docId: "D-1", action: "unlocked", minsAgo: 40 },
-  { who: "Aïcha Diallo", docId: "D-1", action: "viewed", minsAgo: 38 },
-  { who: "Diego Ramírez", docId: "D-2", action: "viewed", minsAgo: 190 },
-  { who: "Camille Bouchard", docId: "D-3", action: "downloaded", minsAgo: 1440 },
-  { who: "Sophie Lavoie", docId: "D-1", action: "unlocked", minsAgo: 2880 },
-];
+// Real activity rows (item 20) — recorded by the document open/download/sign
+// flows and passed in from the server page. No sample data.
+export interface AccessLogEntry {
+  id: string;
+  who: string;
+  docTitle: string;
+  action: string; // OPEN | VIEW | DOWNLOAD | COMPLETE
+  at: string; // ISO timestamp
+}
 
-const ACTION_TINT: Record<LogEntry["action"], { bg: string; fg: string }> = {
-  unlocked: { bg: "var(--emerald-50)", fg: "var(--emerald-600)" },
-  viewed: { bg: "var(--blue-100)", fg: "var(--blue-800)" },
-  downloaded: { bg: "var(--amber-50)", fg: "var(--amber-800)" },
+const ACTION_TINT: Record<string, { bg: string; fg: string }> = {
+  OPEN: { bg: "var(--blue-100)", fg: "var(--blue-800)" },
+  VIEW: { bg: "var(--blue-100)", fg: "var(--blue-800)" },
+  DOWNLOAD: { bg: "var(--amber-50)", fg: "var(--amber-800)" },
+  COMPLETE: { bg: "var(--emerald-50)", fg: "var(--emerald-600)" },
 };
 
 function formatAgo(mins: number) {
@@ -83,7 +79,11 @@ function Avatar({ name, size }: { name: string; size: number }) {
   );
 }
 
-export default function TrainingDocsClient() {
+export default function TrainingDocsClient({
+  accessLog = [],
+}: {
+  accessLog?: AccessLogEntry[];
+}) {
   const [watched, setWatched] = useState<Record<string, boolean>>({});
   const [passed, setPassed] = useState(false);
   const [admin, setAdmin] = useState(false);
@@ -333,49 +333,64 @@ export default function TrainingDocsClient() {
               · admin only
             </span>
           </div>
-          <div className="atable-wrap">
-            <div className="atable-scroll">
-              <table className="atable">
-                <thead>
-                  <tr>
-                    <th>Person</th>
-                    <th>Document</th>
-                    <th>Action</th>
-                    <th>When</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {LOG.map((l, i) => {
-                    const doc = DOCS.find((d) => d.id === l.docId);
-                    const cfg = ACTION_TINT[l.action];
-                    return (
-                      <tr key={i} style={{ cursor: "default" }}>
-                        <td>
-                          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                            <Avatar name={l.who} size={30} />
-                            <span style={{ fontWeight: 600, color: "var(--ink)" }}>
-                              {l.who}
-                            </span>
-                          </div>
-                        </td>
-                        <td style={{ color: "var(--ink-soft)" }}>
-                          {doc ? doc.title : l.docId}
-                        </td>
-                        <td>
-                          <span className="pill" style={{ background: cfg.bg, color: cfg.fg }}>
-                            {l.action}
-                          </span>
-                        </td>
-                        <td style={{ color: "var(--primary-60)", fontSize: 12.5 }}>
-                          {formatAgo(l.minsAgo)}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+          {accessLog.length === 0 ? (
+            <div
+              style={{
+                padding: "18px 16px",
+                borderRadius: 12,
+                border: "1px dashed var(--primary-20)",
+                color: "var(--primary-60)",
+                fontSize: 13.5,
+              }}>
+              No document activity yet. Opens, downloads, and completed
+              signatures will appear here as staff work through their documents.
             </div>
-          </div>
+          ) : (
+            <div className="atable-wrap">
+              <div className="atable-scroll">
+                <table className="atable">
+                  <thead>
+                    <tr>
+                      <th>Person</th>
+                      <th>Document</th>
+                      <th>Action</th>
+                      <th>When</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {accessLog.map((l) => {
+                      const cfg = ACTION_TINT[l.action] ?? ACTION_TINT.OPEN;
+                      const mins = Math.max(
+                        0,
+                        Math.round((Date.now() - new Date(l.at).getTime()) / 60000)
+                      );
+                      return (
+                        <tr key={l.id} style={{ cursor: "default" }}>
+                          <td>
+                            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                              <Avatar name={l.who} size={30} />
+                              <span style={{ fontWeight: 600, color: "var(--ink)" }}>
+                                {l.who}
+                              </span>
+                            </div>
+                          </td>
+                          <td style={{ color: "var(--ink-soft)" }}>{l.docTitle}</td>
+                          <td>
+                            <span className="pill" style={{ background: cfg.bg, color: cfg.fg }}>
+                              {l.action.toLowerCase()}
+                            </span>
+                          </td>
+                          <td style={{ color: "var(--primary-60)", fontSize: 12.5 }}>
+                            {formatAgo(mins)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       ) : null}
     </div>

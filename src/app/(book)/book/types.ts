@@ -92,7 +92,9 @@ export const EMPTY_DRAFT: BookingDraft = {
   email: "",
   notes: "",
   referralCode: "",
-  afterPhotoConsent: false,
+  // Item 21: after-photos are allowed by default — pre-checked; the customer
+  // unchecks to opt out for their booking.
+  afterPhotoConsent: true,
   smsConsent: true,
 };
 

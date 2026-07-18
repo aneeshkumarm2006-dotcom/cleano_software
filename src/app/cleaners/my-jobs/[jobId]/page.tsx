@@ -546,49 +546,32 @@ export default async function JobDetailPage({ params }: PageProps) {
             <Camera size={22} />
             Photos
           </h2>
-          {(() => {
-            const afterPhotosAllowed =
-              job.afterPhotoConsent || job.afterPhotoOverrideAt !== null;
-            const overridden = !job.afterPhotoConsent && job.afterPhotoOverrideAt !== null;
-            return (
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "flex-start",
-                  gap: 10,
-                  padding: "12px 14px",
-                  borderRadius: 12,
-                  marginBottom: 14,
-                  fontSize: 13.5,
-                  lineHeight: 1.5,
-                  // "Not permitted" is a neutral policy statement about this
-                  // customer's preference — not an error the cleaner caused, so
-                  // it reads as info (slate/blue), not alarm red.
-                  border: `1px solid ${afterPhotosAllowed ? "#6ee7b7" : "#cbd5e1"}`,
-                  background: afterPhotosAllowed ? "#ecfdf5" : "#f8fafc",
-                  color: afterPhotosAllowed ? "#065f46" : "#334155",
-                }}>
-                <Camera size={16} style={{ flex: "0 0 auto", marginTop: 1 }} />
-                <span>
-                  {afterPhotosAllowed ? (
-                    <>
-                      <strong>After-photos allowed.</strong>{" "}
-                      {overridden
-                        ? "Enabled by an admin override for this job."
-                        : "The customer consented to after-photos for quality control."}
-                    </>
-                  ) : (
-                    <>
-                      <strong>After-photos are off for this job.</strong> This customer
-                      hasn&apos;t opted in, so just skip them — before-photos are all
-                      that&apos;s needed here. An admin can turn them on if it&apos;s
-                      needed.
-                    </>
-                  )}
-                </span>
-              </div>
-            );
-          })()}
+          {/* Item 21: after-photos are allowed by default — no banner in the
+              normal case. Only an explicitly-disabled job shows a notice. */}
+          {!(job.afterPhotoConsent || job.afterPhotoOverrideAt !== null) && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 10,
+                padding: "12px 14px",
+                borderRadius: 12,
+                marginBottom: 14,
+                fontSize: 13.5,
+                lineHeight: 1.5,
+                // A neutral policy statement, not an error the cleaner caused.
+                border: "1px solid #cbd5e1",
+                background: "#f8fafc",
+                color: "#334155",
+              }}>
+              <Camera size={16} style={{ flex: "0 0 auto", marginTop: 1 }} />
+              <span>
+                <strong>After-photos are off for this job.</strong> An admin turned
+                them off, so just skip them — before-photos are all that&apos;s
+                needed here.
+              </span>
+            </div>
+          )}
           <div className="cl-jd-photos-wrap">
             <PhotoGallery
               jobId={job.id}
