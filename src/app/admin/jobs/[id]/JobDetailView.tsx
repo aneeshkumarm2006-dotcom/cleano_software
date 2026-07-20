@@ -548,18 +548,11 @@ export default function JobDetailView({
     router.refresh();
   };
 
-  // Always open the job detail scrolled to the TOP, regardless of where the
-  // browser left the scroll position on the page we navigated from (Jobs,
-  // Calendar, Alerts). Resets both the window and the admin scroll container so
-  // it works on desktop and mobile. Runs once for this job id.
-  useEffect(() => {
-    window.scrollTo(0, 0);
-    const scroller = document.querySelector(
-      ".overflow-y-auto"
-    ) as HTMLElement | null;
-    if (scroller) scroller.scrollTop = 0;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [job.id]);
+  // Scroll-to-top on navigation is handled globally by <ScrollReset> (mounted
+  // in the admin shell). The previous effect here called
+  // document.querySelector(".overflow-y-auto"), which matched the SIDEBAR nav —
+  // the first such element in the DOM — so it reset the sidebar instead of this
+  // page and the job detail still opened mid-scroll.
 
   // Lightbox keyboard nav
   useEffect(() => {
