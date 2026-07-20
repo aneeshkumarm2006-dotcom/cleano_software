@@ -8,6 +8,7 @@
 
 import { db } from "@/db";
 import type { JobCleanerStatus } from "@prisma/client";
+import { notifyAdmins } from "@/lib/admin-alerts";
 import {
   availabilityWarning,
   dateKeyToStoredDate,
@@ -97,6 +98,54 @@ export async function validateTraineePairing(
     return "A Trainee must be paired with a Field Lead or an approved cleaner. Add one, or change the trainee's assignment.";
   }
   return null;
+}
+
+/**
+ * Spec item 12 backstop: a Trainee must never be left as the only worker on a
+ * job. The assign/claim/accept paths guard the entry, but an approved cleaner
+ * or Field Lead can still cancel or decline AFTER assignment, stranding the
+ * trainee solo. Call this after any such departure — if the remaining crew is
+ * trainees-only, it alerts admins so they can re-pair. Best-effort (never
+ * throws into the caller's transaction).
+ */
+export async function alertIfTraineeLeftUnpaired(jobId: string): Promise<void> {
+  try {
+    const job = await db.job.findUnique({
+      where: { id: jobId },
+      select: {
+        jobNumber: true,
+        clientName: true,
+        employeeId: true,
+        cleaners: { select: { id: true, name: true, cleanerTier: true } },
+        employee: { select: { id: true, cleanerTier: true } },
+      },
+    });
+    if (!job) return;
+
+    const crew = [
+      ...job.cleaners.map((c) => ({ id: c.id, tier: c.cleanerTier })),
+      ...(job.employee ? [{ id: job.employee.id, tier: job.employee.cleanerTier }] : []),
+    ];
+    const trainees = crew.filter((c) => c.tier === "TRAINEE");
+    const hasApproved = crew.some((c) => c.tier !== "TRAINEE");
+    // Only fire when there's at least one trainee and nobody approved to
+    // supervise. An empty crew is handled by the last-minute repost, not here.
+    if (trainees.length === 0 || hasApproved) return;
+
+    const traineeNames = job.cleaners
+      .filter((c) => c.cleanerTier === "TRAINEE")
+      .map((c) => c.name)
+      .join(", ");
+    await notifyAdmins({
+      severity: "WARNING",
+      title: `Trainee left unpaired — Job #${job.jobNumber}`,
+      message: `${traineeNames || "A trainee"} is now the only cleaner on Job #${job.jobNumber} (${job.clientName}) after a teammate cancelled/declined. Assign a Field Lead or approved cleaner.`,
+      relatedId: jobId,
+      relatedType: "Job",
+    });
+  } catch (e) {
+    console.error("alertIfTraineeLeftUnpaired", jobId, e);
+  }
 }
 
 // ---------------------------------------------------------------------------

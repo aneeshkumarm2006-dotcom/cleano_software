@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import { jobTypeLabel } from "@/lib/calendar-labels";
 import {
   Search, Plus, FileText, DollarSign, AlertTriangle,
   ChevronLeft, ChevronRight, Send, CheckCircle2, Clock, XCircle,
@@ -352,7 +353,7 @@ export default function InvoicesPageClient({ invoices, clients, taxConfig, archi
                           <StatusIcon status={inv.status} />
                           <span className="col-client">{inv.invoiceNumber}</span>
                         </div>
-                        {inv.jobType && <div className="col-client-sub">{inv.jobType}</div>}
+                        {inv.jobType && <div className="col-client-sub">{jobTypeLabel(inv.jobType)}</div>}
                       </td>
                       <td style={{ minWidth: 180 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>

@@ -11,7 +11,6 @@ import {
 } from "./status-meta";
 import CornerBadge from "./CornerBadge";
 import { jobTypeLabel } from "@/lib/calendar-labels";
-import { fmtTime } from "@/lib/time";
 
 export interface EventCardProps {
   event: CalendarEvent;
@@ -33,8 +32,11 @@ export interface EventCardProps {
 }
 
 function timeStr(d: Date) {
-  // Business timezone (America/Toronto) — not the viewer's browser tz.
-  return fmtTime(d).replace(":00", "");
+  // `d` is a floating Toronto wall-clock date (getJobsForDay → toBusinessWallClock),
+  // so browser-local formatting already shows business time for every viewer.
+  return d
+    .toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+    .replace(":00", "");
 }
 
 /**

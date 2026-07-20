@@ -22,6 +22,9 @@ interface LineItemInput {
   description: string;
   quantity: number;
   unitPrice: number;
+  // Job link for consolidated invoices — carried through the delete+recreate so
+  // marking the invoice paid still flips every covered job (spec item 10).
+  jobId?: string | null;
 }
 
 interface UpdateInvoiceParams {
@@ -56,12 +59,25 @@ export async function updateInvoice(params: UpdateInvoiceParams) {
       const gstRate = raw?.gstRate ?? 5;
       const qstRate = raw?.qstRate ?? 9.975;
 
+      // Preserve existing job links across the delete+recreate: an edit payload
+      // that doesn't carry jobId (the current UI) must not strip a consolidated
+      // invoice's line→job links, or marking it paid would flip no jobs.
+      const priorLinks = await db.invoiceLineItem.findMany({
+        where: { invoiceId: params.id },
+        select: { description: true, jobId: true },
+      });
+      const jobIdByDesc = new Map<string, string>();
+      for (const p of priorLinks) {
+        if (p.jobId) jobIdByDesc.set(p.description, p.jobId);
+      }
+
       const lineItemsData = params.lineItems.map((li, idx) => ({
         description: li.description.trim(),
         quantity: li.quantity,
         unitPrice: li.unitPrice,
         amount: li.quantity * li.unitPrice,
         sortOrder: idx,
+        jobId: li.jobId ?? jobIdByDesc.get(li.description.trim()) ?? null,
       }));
 
       const subtotal = lineItemsData.reduce((sum, li) => sum + li.amount, 0);

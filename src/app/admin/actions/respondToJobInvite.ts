@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { alertIfTraineeLeftUnpaired } from "@/lib/job-assignments";
 
 /**
  * Cleaner responds to a job-assignment invite from /my-jobs.
@@ -177,6 +178,9 @@ export async function respondToJobInvite(input: {
         },
       }),
     ]);
+    // Spec item 12 backstop: declining may have left a trainee solo — alert
+    // admins to re-pair.
+    await alertIfTraineeLeftUnpaired(invite.jobId);
   }
 
   revalidatePath("/cleaners/my-jobs");

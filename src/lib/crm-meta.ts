@@ -179,7 +179,11 @@ export function dateStr(iso: string | null, opts: { year?: boolean } = {}): stri
 
 export function timeStr(iso: string | null): string {
   if (!iso) return "—";
-  return new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  return new Date(iso).toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "America/Toronto",
+  });
 }
 
 // ─── Property Engine → contact record binding ───

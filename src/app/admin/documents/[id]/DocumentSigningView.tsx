@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import SignatureCanvas from "react-signature-canvas";
 import {
@@ -84,6 +84,15 @@ export default function DocumentSigningView({
   const [hasInk, setHasInk] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Item 20: record that this staff member OPENED the document (once per mount)
+  // so the access log reflects reads, not just downloads/completions.
+  const loggedOpenRef = useRef(false);
+  useEffect(() => {
+    if (loggedOpenRef.current) return;
+    loggedOpenRef.current = true;
+    logDocumentAccess(document.id, "OPEN").catch(() => {});
+  }, [document.id]);
 
   const signable = signature.status === "PENDING";
 

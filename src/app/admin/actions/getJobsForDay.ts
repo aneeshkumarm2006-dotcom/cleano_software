@@ -18,21 +18,28 @@ function getDayBounds(dateStr: string) {
   return { start, end };
 }
 
-// Helper to format date preserving the UTC values as local time
-// The database stores the intended local time (EST) as UTC timestamps
-// We need to extract the UTC values and present them as local time
-function preserveTimeAsLocal(date: Date): string {
-  // Get the UTC components (which represent the intended local time)
-  const year = date.getUTCFullYear();
-  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(date.getUTCDate()).padStart(2, '0');
-  const hours = String(date.getUTCHours()).padStart(2, '0');
-  const minutes = String(date.getUTCMinutes()).padStart(2, '0');
-  const seconds = String(date.getUTCSeconds()).padStart(2, '0');
-  const ms = String(date.getUTCMilliseconds()).padStart(3, '0');
-  
-  // Return without 'Z' suffix so it's parsed as local time
-  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.${ms}`;
+// The shared calendar components position events with browser-local
+// getHours()/getDate() and render labels in browser-local time. To make them
+// show the BUSINESS timezone (America/Toronto) for every viewer regardless of
+// their own tz, we hand them a "floating" datetime string (no Z) whose
+// components are the Toronto wall-clock of the true instant. Parsed as local,
+// getHours() then yields the Toronto hour and a plain local label shows Toronto
+// time — consistent for all viewers.
+function toBusinessWallClock(date: Date): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Toronto",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "00";
+  // Intl can emit "24" for midnight; normalize to "00".
+  const hh = get("hour") === "24" ? "00" : get("hour");
+  return `${get("year")}-${get("month")}-${get("day")}T${hh}:${get("minute")}:${get("second")}.000`;
 }
 
 export async function getJobsForDay(dateStr: string) {
@@ -107,9 +114,10 @@ export async function getJobsForDay(dateStr: string) {
       title: job.clientName,
       description: job.description || undefined,
       label,
-      // Preserve the UTC time components as local time
-      start: preserveTimeAsLocal(startTime),
-      end: endTime ? preserveTimeAsLocal(endTime) : undefined,
+      // Floating Toronto wall-clock so the calendar grid + labels show business
+      // time for every viewer (see toBusinessWallClock).
+      start: toBusinessWallClock(startTime),
+      end: endTime ? toBusinessWallClock(endTime) : undefined,
       confirmed: job.status !== "CREATED" && job.status !== "CANCELLED",
       importance:
         job.status === "IN_PROGRESS"

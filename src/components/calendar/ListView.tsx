@@ -19,14 +19,16 @@ import {
   shortLocation,
 } from "./status-meta";
 import { jobTypeLabel } from "@/lib/calendar-labels";
-import { fmtTime } from "@/lib/time";
 
 type ListViewProps = {
   view: "month" | "week" | "day";
 };
 
 function timeStr(d: Date) {
-  return fmtTime(d).replace(":00", "");
+  // Floating Toronto wall-clock date (see getJobsForDay/toBusinessWallClock).
+  return d
+    .toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+    .replace(":00", "");
 }
 
 function durationLabel(event: CalendarEvent) {

@@ -8,6 +8,7 @@ import { createAssignmentInvites } from "@/lib/invites";
 import { sendProviderLastMinuteOpening } from "@/lib/email";
 import { LAST_MINUTE_CLAIM_BONUS_USD } from "@/lib/policy";
 import { applyStrike } from "@/lib/strikes";
+import { alertIfTraineeLeftUnpaired } from "@/lib/job-assignments";
 
 const LATE_CANCEL_HOURS = 24;
 /** Inside this window the cleaner cancel triggers the last-minute repost. */
@@ -151,6 +152,11 @@ export async function cancelShift(jobId: string): Promise<{ success: true; penal
         }
       }
     }
+
+    // Spec item 12 backstop: if this departure left a trainee as the only
+    // worker, alert admins to re-pair (the repost above only fires for a fully
+    // empty crew).
+    await alertIfTraineeLeftUnpaired(jobId);
 
     revalidatePath("/cleaners/my-jobs");
     revalidatePath(`/cleaners/my-jobs/${jobId}`);

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { jobTypeLabel } from "@/lib/calendar-labels";
 import { Download, X } from "lucide-react";
 import { Banner, Button, Field, Textarea } from "@/components/customer/Field";
 import { StatusBadge, DateBadge } from "@/components/customer/atoms";
@@ -369,7 +370,7 @@ function BookingCard({
       </div>
 
       <div className="cl-bcard-meta">
-        {b.jobType ? <span style={{ fontWeight: 500, color: "var(--ink)" }}>{b.jobType}</span> : null}
+        {b.jobType ? <span style={{ fontWeight: 500, color: "var(--ink)" }}>{jobTypeLabel(b.jobType)}</span> : null}
         {b.cleaners.length ? <span>· with {b.cleaners.map((c) => c.name).join(", ")}</span> : null}
         {b.seriesSize > 1 ? (
           <span
