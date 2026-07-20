@@ -32,7 +32,7 @@ import {
   Star, Copy, Check, Inbox, RotateCcw, XCircle, Navigation, Bell,
 } from "lucide-react";
 import { resolveJobRequest } from "../../actions/resolveJobRequest";
-import { fmtDateTime, fmtTime } from "@/lib/time";
+import { fmtDate, fmtDateTime, fmtTime } from "@/lib/time";
 import { avatarColor, initials } from "@/lib/avatar";
 import { assignCleaners } from "../../actions/assignCleaners";
 import { ConfirmDeleteModal } from "@/components/common/ConfirmDeleteModal";
@@ -762,11 +762,11 @@ export default function JobDetailView({
 
   const showPayWarning = job.status === "COMPLETED" && !paymentReceived;
 
-  // Date hero values
-  const jobDateObj = job.jobDate ? new Date(job.jobDate) : new Date(job.startTime);
-  const dayOfWeek = jobDateObj.toLocaleDateString('en-US', { weekday: 'long' });
-  const dayNum    = jobDateObj.toLocaleDateString('en-US', { day: 'numeric' });
-  const mon       = jobDateObj.toLocaleDateString('en-US', { month: 'short' });
+  // Date hero values — startTime is the reliable instant; rendered in the
+  // BUSINESS timezone so admins browsing from any timezone see Toronto's day.
+  const dayOfWeek = fmtDate(job.startTime, { weekday: 'long' });
+  const dayNum    = fmtDate(job.startTime, { day: 'numeric' });
+  const mon       = fmtDate(job.startTime, { month: 'short' });
   const startTimeStr = fmtTime(job.startTime);
   const endTimeStr   = job.endTime ? fmtTime(job.endTime) : null;
 
@@ -984,7 +984,7 @@ export default function JobDetailView({
                   )}
                 </div>
                 <span style={{ fontSize: 11.5, color: 'var(--primary-40)', flexShrink: 0 }}>
-                  {new Date(r.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  {fmtDate(r.createdAt, { month: 'short', day: 'numeric' })}
                 </span>
               </div>
             ))}
@@ -1422,10 +1422,10 @@ export default function JobDetailView({
                     )}
                   </div>
                   <div className="tline-ts">
-                    {new Date(log.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    {fmtDate(log.createdAt, { month: 'short', day: 'numeric' })}
                     <br />
                     <span style={{ fontSize: 11, color: 'var(--primary-40)' }}>
-                      {new Date(log.createdAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                      {fmtTime(log.createdAt)}
                     </span>
                   </div>
                 </div>

@@ -19,15 +19,14 @@ import {
   shortLocation,
 } from "./status-meta";
 import { jobTypeLabel } from "@/lib/calendar-labels";
+import { fmtTime } from "@/lib/time";
 
 type ListViewProps = {
   view: "month" | "week" | "day";
 };
 
 function timeStr(d: Date) {
-  return d
-    .toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
-    .replace(":00", "");
+  return fmtTime(d).replace(":00", "");
 }
 
 function durationLabel(event: CalendarEvent) {

@@ -41,6 +41,7 @@ import {
 } from "lucide-react";
 import { getUnreadChatCount } from "./chat/actions";
 import { getPendingRequestCount } from "./actions/getPendingRequestCount";
+import ScrollReset from "@/components/ScrollReset";
 
 interface User {
   id: string;
@@ -337,8 +338,10 @@ export default function Sidebar({
 
       {/* Main content */}
       <div
+        data-scroll-reset
         className="md:ml-[240px] h-screen overflow-hidden overflow-y-auto print:!ml-0 print:!h-auto print:!overflow-visible"
         style={{ background: "var(--cream)" }}>
+        <ScrollReset />
         <main className="h-full print:!h-auto">{children}</main>
       </div>
 

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Home, CalendarClock, UserCircle, LogOut, Sparkles, Menu, X } from "lucide-react";
+import ScrollReset from "@/components/ScrollReset";
 
 interface PortalShellProps {
   user: { name: string; email: string };
@@ -153,7 +154,8 @@ export default function PortalShell({
           </div>
         </aside>
 
-        <main className="cl-pmain">
+        <main className="cl-pmain" data-scroll-reset>
+          <ScrollReset />
           <div className="cl-pmain-inner cl-fade-up">{children}</div>
         </main>
       </div>

@@ -204,6 +204,7 @@ function BookingRow({ job }: { job: WebJob }) {
         : "numeric",
     hour: "numeric",
     minute: "2-digit",
+    timeZone: "America/Toronto",
   });
 
   return (

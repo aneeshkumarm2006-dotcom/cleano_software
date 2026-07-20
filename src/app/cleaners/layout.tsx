@@ -6,6 +6,7 @@ import { isCleanerRole, homeForRole } from "@/lib/role-routing";
 import signOut from "@/app/admin/actions/signOut";
 import AccountDeactivated from "./AccountDeactivated";
 import CleanerSidebar from "./CleanerSidebar";
+import ScrollReset from "@/components/ScrollReset";
 import InstallPrompt from "@/components/InstallPrompt";
 import { InstallProvider } from "@/components/InstallContext";
 import PresenceHeartbeat from "@/components/PresenceHeartbeat";
@@ -48,7 +49,8 @@ export default async function CleanerLayout({
     <InstallProvider>
       <div className="cl-app-shell">
         <CleanerSidebar user={userWithRole} signOutAction={signOut} />
-        <main className="cl-app-main">
+        <main className="cl-app-main" data-scroll-reset>
+          <ScrollReset />
           <div className="cl-app-main-inner">{children}</div>
         </main>
         <InstallPrompt />

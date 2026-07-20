@@ -71,7 +71,7 @@ const fmtDateFull = (iso: string) =>
     year: "numeric",
   });
 const fmtTime = (iso: string) =>
-  new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/Toronto" });
 const inputDate = (iso: string) => new Date(iso).toISOString().slice(0, 10);
 const inputTime = (iso: string) => {
   const d = new Date(iso);

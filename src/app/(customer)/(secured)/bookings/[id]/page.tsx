@@ -29,6 +29,7 @@ function formatTime(iso: string) {
   return new Date(iso).toLocaleString("en-US", {
     hour: "numeric",
     minute: "2-digit",
+    timeZone: "America/Toronto",
   });
 }
 function formatLongDate(iso: string) {
@@ -37,6 +38,7 @@ function formatLongDate(iso: string) {
     month: "long",
     day: "numeric",
     year: "numeric",
+    timeZone: "America/Toronto",
   });
 }
 

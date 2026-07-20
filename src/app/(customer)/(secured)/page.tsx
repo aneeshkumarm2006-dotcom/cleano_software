@@ -10,6 +10,7 @@ function formatTime(iso: string) {
   return new Date(iso).toLocaleString("en-US", {
     hour: "numeric",
     minute: "2-digit",
+    timeZone: "America/Toronto",
   });
 }
 

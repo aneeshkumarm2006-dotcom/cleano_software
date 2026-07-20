@@ -11,6 +11,7 @@ import {
 } from "./status-meta";
 import CornerBadge from "./CornerBadge";
 import { jobTypeLabel } from "@/lib/calendar-labels";
+import { fmtTime } from "@/lib/time";
 
 export interface EventCardProps {
   event: CalendarEvent;
@@ -32,9 +33,8 @@ export interface EventCardProps {
 }
 
 function timeStr(d: Date) {
-  return d
-    .toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
-    .replace(":00", "");
+  // Business timezone (America/Toronto) — not the viewer's browser tz.
+  return fmtTime(d).replace(":00", "");
 }
 
 /**

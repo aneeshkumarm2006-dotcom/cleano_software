@@ -16,7 +16,7 @@ import { setCleanerTier } from "../../actions/setCleanerTier";
 import { setFieldLead } from "../../actions/setFieldLead";
 import { setCleanerProductQuantity } from "../../actions/setCleanerProductQuantity";
 import { TIER_LABEL, type CleanerTier } from "@/lib/pay-tiers";
-import { fmtDateTime } from "@/lib/time";
+import { fmtDateTime, fmtDate, fmtTime } from "@/lib/time";
 import {
   ArrowLeft,
   Mail,
@@ -950,11 +950,7 @@ export default function EmployeeDetailView({
                     {job.clientName}
                   </p>
                   <p className="text-xs text-[#008C9C]/60">
-                    {new Date(job.startTime).toLocaleDateString("en-US")} at{" "}
-                    {new Date(job.startTime).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
+                    {fmtDate(job.startTime)} at {fmtTime(job.startTime)}
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
@@ -1377,12 +1373,7 @@ export default function EmployeeDetailView({
                       {c.clientName}
                     </p>
                     <p className="text-xs text-[#008C9C]/60">
-                      {new Date(c.startTime).toLocaleDateString("en-US")} at{" "}
-                      {new Date(c.startTime).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}{" "}
-                      · {c.reason}
+                      {fmtDate(c.startTime)} at {fmtTime(c.startTime)} · {c.reason}
                     </p>
                   </div>
                   <Button

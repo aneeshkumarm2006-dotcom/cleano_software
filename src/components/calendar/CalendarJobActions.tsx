@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { markArrived } from "@/app/admin/actions/markArrived";
 import { addJobNote } from "@/app/admin/actions/addJobNote";
+import { fmtTime } from "@/lib/time";
 
 const JOB_TYPE_LABELS: Record<string, string> = {
   R: "Residential",
@@ -188,16 +189,13 @@ export default function CalendarJobActions({
             <div className="flex items-center gap-2 text-sm text-gray-600">
               <Clock className="w-4 h-4 text-gray-400 flex-shrink-0" />
               <span>
-                {event.start.toLocaleTimeString("en-US", {
-                  hour: "numeric",
-                  minute: "2-digit",
-                  hour12: true,
-                })}
+                {fmtTime(event.start)}
                 {event.end &&
                   ` - ${event.end.toLocaleTimeString("en-US", {
                     hour: "numeric",
                     minute: "2-digit",
                     hour12: true,
+                    timeZone: "America/Toronto",
                   })}`}
               </span>
             </div>

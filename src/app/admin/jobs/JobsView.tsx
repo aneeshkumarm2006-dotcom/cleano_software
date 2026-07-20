@@ -19,6 +19,7 @@ import { bulkAssignCleaner } from "../actions/bulkAssignCleaner";
 import { togglePaymentReceived, toggleInvoiceSent } from "../actions/toggleJobPaymentStatus";
 import { generateInvoiceFromJob } from "../actions/generateInvoiceFromJob";
 import { normalizeJobType, jobTypeLabel } from "@/lib/calendar-labels";
+import { fmtDate, fmtTime } from "@/lib/time";
 import { avatarColor, initials } from "@/lib/avatar";
 import {
   isRevenueJob,
@@ -228,22 +229,16 @@ function AStatCard({ icon: Icon, label, value, hint }: { icon: any; label: strin
   );
 }
 
-function formatDate(dateStr: string | null, fallback: string): string {
-  // `jobDate` is stored as a calendar date at midnight UTC, so format it in UTC
-  // to avoid showing the previous day in negative-offset timezones. The
-  // `startTime` fallback is a real instant, so it's rendered in local time.
-  if (dateStr) {
-    return new Date(dateStr).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      timeZone: 'UTC',
-    });
-  }
-  return new Date(fallback).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+// Always render off `startTime` (a real instant) in the BUSINESS timezone —
+// browser-local formatting showed a 1 PM Toronto job as 6:30 PM to anyone
+// browsing from another timezone, and the legacy midnight-UTC `jobDate` field
+// can disagree with startTime by a day.
+function formatDate(_dateStr: string | null, fallback: string): string {
+  return fmtDate(fallback, { month: 'short', day: 'numeric' });
 }
 
 function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  return fmtTime(iso);
 }
 
 function formatTimeSpent(ms: number | undefined): string {
