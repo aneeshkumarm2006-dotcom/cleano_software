@@ -6486,3 +6486,51 @@ a.q-v.link:hover { text-decoration: underline; }
   .cl-jobs2-list > *:active,
   .cl-jd-clock:active { transform: none; }
 }
+
+/* ── Crew app: pull-to-refresh + manual refresh ────────────────────────────
+   An installed PWA has no browser reload button, so without these there was
+   no way to fetch fresh jobs short of force-quitting the app. */
+.cl-ptr {
+  position: fixed;
+  top: 62px;            /* just below the fixed top bar */
+  left: 50%;
+  z-index: 58;
+  width: 38px; height: 38px;
+  margin-left: -19px;
+  border-radius: 50%;
+  display: none;
+  align-items: center; justify-content: center;
+  background: #fff;
+  color: var(--primary-hover);
+  box-shadow: var(--elev-2);
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+@media (max-width: 900px) { .cl-ptr { display: flex; } }
+/* While the finger is down the indicator tracks it 1:1 (no transition), so it
+   feels attached. Once released it eases home. */
+.cl-ptr:not([data-active]) { transition: transform var(--dur-base) var(--ease-out-quart), opacity var(--dur-fast) linear; }
+.cl-ptr[data-refreshing] svg { animation: cl-ptr-spin 700ms linear infinite; }
+@keyframes cl-ptr-spin { to { transform: rotate(360deg); } }
+
+/* Top-bar refresh button */
+.cl-mobile-refresh {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px;
+  border: 0; border-radius: 11px;
+  background: rgba(255,255,255,0.12);
+  color: #fff;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition: background var(--dur-fast) var(--ease-standard),
+              transform var(--dur-instant) var(--ease-standard);
+}
+.cl-mobile-refresh:active { transform: scale(0.9); background: rgba(255,255,255,0.2); }
+.cl-mobile-refresh.spinning svg { animation: cl-ptr-spin 700ms linear infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cl-ptr[data-refreshing] svg,
+  .cl-mobile-refresh.spinning svg { animation-duration: 1.4s; }
+  .cl-mobile-refresh:active { transform: none; }
+}

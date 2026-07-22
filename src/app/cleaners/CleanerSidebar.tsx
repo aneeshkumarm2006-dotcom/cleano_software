@@ -162,6 +162,17 @@ export default function CleanerSidebar({ user, signOutAction }: Props) {
   const { canInstall, isStandalone, isIOSSafari, install } = useInstall();
   const showInstall = !isStandalone && (canInstall || isIOSSafari);
 
+  // Manual refresh for the installed app (no browser reload button exists).
+  const [refreshing, setRefreshing] = useState(false);
+  function handleRefresh() {
+    if (refreshing) return;
+    setRefreshing(true);
+    navigator.vibrate?.(8);
+    router.refresh();
+    // Keep the spin visible long enough to read as a deliberate action.
+    setTimeout(() => setRefreshing(false), 900);
+  }
+
   const [chatUnread, setChatUnread] = useState(0);
   const [chatToast, setChatToast] = useState<{ senderName: string; body: string } | null>(null);
   const prevLatestAtRef = useRef<string | null>(null);
@@ -298,6 +309,19 @@ export default function CleanerSidebar({ user, signOutAction }: Props) {
         </button>
         <span className="cl-mobile-title">cleano</span>
         <span className="cl-mobile-spacer" />
+        {/* Installed apps have no browser reload button, so without this the
+            only way to get fresh jobs was to kill the app. Pull-to-refresh
+            covers the gesture; this covers everyone who doesn't find it. */}
+        <button
+          type="button"
+          className={`cl-mobile-refresh${refreshing ? " spinning" : ""}`}
+          onClick={handleRefresh}
+          aria-label="Refresh">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+            <polyline points="21 3 21 9 15 9" />
+          </svg>
+        </button>
         <div className="cl-mobile-avatar">{initials}</div>
       </header>
 
