@@ -33,15 +33,42 @@ export default function PullToRefresh() {
   const passedThreshold = useRef(false);
 
   useEffect(() => {
-    // The crew shell scrolls an inner container, not the window.
-    const scroller = () =>
-      document.querySelector<HTMLElement>(".cl-app-main") ??
-      document.scrollingElement as HTMLElement | null;
+    // Pages nest their OWN `overflow-y: auto` wrapper inside .cl-app-main, so
+    // checking .cl-app-main's scrollTop was useless — it's always 0, which
+    // armed the gesture on every touch and fired a refresh on an ordinary
+    // swipe-up. Walk up from whatever was actually touched to find the element
+    // that really scrolls, and test that.
+    // Returns the real scrolling ancestor, or null when there isn't one.
+    // Deliberately NOT falling back to document.scrollingElement: that is
+    // always at scrollTop 0 here (the page itself never scrolls), so using it
+    // as a fallback armed the gesture from anywhere on the screen.
+    function scrollerFor(node: EventTarget | null): HTMLElement | null {
+      let el = node instanceof Element ? (node as HTMLElement) : null;
+      while (el && el !== document.body) {
+        const oy = getComputedStyle(el).overflowY;
+        if ((oy === "auto" || oy === "scroll") && el.scrollHeight > el.clientHeight + 1) {
+          return el;
+        }
+        el = el.parentElement;
+      }
+      return null;
+    }
+    let active: HTMLElement | null = null;
+    let decided = false;   // direction lock, resolved on the first real move
 
     function onStart(e: TouchEvent) {
       if (refreshing || e.touches.length !== 1) return;
-      const el = scroller();
-      if (!el || el.scrollTop > 0) return;   // only at the very top
+      active = scrollerFor(e.target);
+      if (active) {
+        // An inner container scrolls — it must be at its very top.
+        if (active.scrollTop > 0) return;
+      } else {
+        // Nothing inner scrolls, so the page itself does (this varies by
+        // screen). Require the window to be at the top instead.
+        const top = window.scrollY || document.documentElement.scrollTop || 0;
+        if (top > 0) return;
+      }
+      decided = false;
       armed.current = true;
       passedThreshold.current = false;
       startY.current = e.touches[0].clientY;
@@ -50,9 +77,19 @@ export default function PullToRefresh() {
     function onMove(e: TouchEvent) {
       if (!armed.current || startY.current === null || refreshing) return;
       const raw = e.touches[0].clientY - startY.current;
-      if (raw <= 0) { setPull(0); return; }   // dragging up = normal scroll
-      const el = scroller();
-      if (el && el.scrollTop > 0) { armed.current = false; setPull(0); return; }
+
+      // Direction lock: commit on the first movement past a small deadzone.
+      // If that movement is upward (a normal scroll, including the
+      // swipe-up-from-bottom that was falsely refreshing), disarm for the rest
+      // of this gesture — it can't become a pull later.
+      if (!decided) {
+        if (Math.abs(raw) < 8) return;
+        decided = true;
+        if (raw < 0) { armed.current = false; setPull(0); return; }
+      }
+
+      if (raw <= 0) { armed.current = false; setPull(0); return; }
+      if (active && active.scrollTop > 0) { armed.current = false; setPull(0); return; }
       const damped = Math.min(raw * DAMPING, MAX_PULL);
       setPull(damped);
       if (damped > 6 && e.cancelable) e.preventDefault(); // stop rubber-banding
@@ -63,7 +100,8 @@ export default function PullToRefresh() {
     }
 
     function onEnd() {
-      if (!armed.current) return;
+      active = null;
+      if (!armed.current) { setPull(0); return; }  // always reset, never stick
       armed.current = false;
       startY.current = null;
       setPull((current) => {

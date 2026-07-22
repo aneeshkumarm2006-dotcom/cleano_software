@@ -9,7 +9,7 @@ export default function manifest(): MetadataRoute.Manifest {
     display: "standalone",
     orientation: "portrait",
     background_color: "#F5F1E8",
-    theme_color: "#008C9C",
+    theme_color: "#19356D",
     // Static PNGs, NOT the dynamic /icon/* routes: those rendered 32x32 for
     // every size, so Chrome rejected the manifest (an icon must really be the
     // dimensions it declares) and refused to install the app — "Add to Home

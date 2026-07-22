@@ -37,7 +37,10 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#008C9C",
+  // Navy, matching the app's top bar (--primary-deep). It was teal, so the OS
+  // status bar sat as a bright green-teal band above a navy header — the seam
+  // is the main thing that reads as "a web page in a shell" rather than an app.
+  themeColor: "#19356D",
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",

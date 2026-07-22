@@ -23,8 +23,8 @@ export function GET() {
       scope: "/cleaners",
       display: "standalone",
       orientation: "portrait",
-      background_color: "#F5F1E8",
-      theme_color: "#008C9C",
+      background_color: "#19356D",
+      theme_color: "#19356D",
       // Static PNGs — see src/app/manifest.ts: the dynamic /icon/* routes all
       // rendered 32x32, which fails Chrome's icon-size validation and blocks
       // installation.

@@ -6534,3 +6534,23 @@ a.q-v.link:hover { text-decoration: underline; }
   .cl-mobile-refresh.spinning svg { animation-duration: 1.4s; }
   .cl-mobile-refresh:active { transform: none; }
 }
+
+/* ── Crew app: job card + form alignment ───────────────────────────────────
+   Measured on device: the location row's pin icon and address were landing on
+   separate lines (icon@y461, text@y482) because the inline-flex row wrapped
+   once the address got long. A 2-column grid pins the icon to its own column
+   and lets the text wrap inside the second — they can no longer separate. */
+.cl-jobs2-meta-rows .row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+}
+.cl-jobs2-meta-rows .icon { margin-top: 1px; }
+
+/* Inputs inside cards must never outgrow the card (time pickers in the
+   availability rows were pushing past their container's padding). */
+.cl-app-main input,
+.cl-app-main select { max-width: 100%; }
+.cl-avail-row, .cl-avail-times { min-width: 0; }
+.cl-avail-times > * { min-width: 0; }
