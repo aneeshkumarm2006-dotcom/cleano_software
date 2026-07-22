@@ -6429,3 +6429,60 @@ a.q-v.link:hover { text-decoration: underline; }
     white-space: nowrap;
   }
 }
+
+/* ── Crew app: job list + clock-in polish ──────────────────────────────────
+   Presentation only — the clock-in button keeps its existing single-tap
+   behaviour; this just gives the app's most-used action real physicality. */
+
+/* Job list rows: layered elevation instead of a flat border, and a press
+   response so a tap feels acknowledged before the next screen loads. */
+.cl-jobs2-list > * {
+  box-shadow: var(--elev-1);
+  transition:
+    transform var(--dur-instant) var(--ease-standard),
+    box-shadow var(--dur-fast) var(--ease-standard);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.cl-jobs2-list > *:active { transform: scale(0.985); box-shadow: var(--elev-2); }
+@media (hover: hover) and (pointer: fine) {
+  .cl-jobs2-list > *:hover { box-shadow: var(--elev-2); }
+}
+
+/* The date pill is the fastest way to scan a list of shifts — give it weight
+   and lock the digits so rows align vertically down the list. */
+.cl-jobs2-datepill { font-variant-numeric: tabular-nums; box-shadow: var(--elev-1); }
+
+/* Clock in — the single most-tapped control in the product.
+   AA-compliant fill, a coloured glow so it reads as the primary action, and a
+   springy press. Generous target: this gets tapped with gloves on. */
+.cl-jd-clock {
+  background: var(--primary-hover);
+  box-shadow: var(--elev-primary);
+  min-height: 48px;
+  padding: 14px 28px;
+  font-size: 15px;
+  letter-spacing: 0.01em;
+  transition:
+    background var(--dur-fast) var(--ease-standard),
+    transform var(--dur-instant) var(--ease-standard),
+    box-shadow var(--dur-fast) var(--ease-standard);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.cl-jd-clock:active {
+  transform: scale(0.96);
+  box-shadow: 0 2px 6px rgba(0, 140, 156, 0.28);
+}
+.cl-jd-clock:disabled { opacity: 0.62; box-shadow: none; transform: none; }
+/* Clock OUT is destructive-adjacent — keep the red but match the new depth. */
+.cl-jd-clock.out { box-shadow: 0 4px 14px rgba(220, 38, 38, 0.32); }
+
+/* Status/among-card pills: lock height so a card with a "Missing equipment"
+   badge is the same height as one without, preventing row-to-row jitter. */
+.cl-pill, .cl-job-card-warn { min-height: 24px; display: inline-flex; align-items: center; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cl-jobs2-list > *:active,
+  .cl-jd-clock:active { transform: none; }
+}
