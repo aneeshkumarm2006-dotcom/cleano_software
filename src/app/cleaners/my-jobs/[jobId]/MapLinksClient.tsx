@@ -14,11 +14,20 @@ export default function MapLinks({ address }: { address: string }) {
     });
   }
 
+  // These sit on the DARK job-detail hero. They were previously teal (#008C9C)
+  // and green (#00a868) on a near-transparent fill — colours picked for a white
+  // card — which left the labels barely legible against the dark gradient, and
+  // unreadable outdoors. White on a translucent white fill reads cleanly on the
+  // hero at any brightness. Sizes also bumped: 12px text in a 6px-tall pill was
+  // well under a comfortable touch target for the app's most urgent action
+  // (navigating to the job).
   const base: React.CSSProperties = {
-    display: "inline-flex", alignItems: "center", gap: 5,
-    padding: "6px 12px", borderRadius: 8, fontSize: 12, fontWeight: 500,
-    textDecoration: "none", border: "1px solid rgba(0,140,156,0.2)",
-    color: "#008C9C", background: "rgba(0,140,156,0.05)", whiteSpace: "nowrap",
+    display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
+    padding: "10px 14px", minHeight: 40, borderRadius: 10,
+    fontSize: 13, fontWeight: 600, letterSpacing: "0.01em",
+    textDecoration: "none", border: "1px solid rgba(255,255,255,0.28)",
+    color: "#ffffff", background: "rgba(255,255,255,0.14)", whiteSpace: "nowrap",
+    WebkitTapHighlightColor: "transparent", touchAction: "manipulation",
   };
 
   return (
@@ -27,9 +36,9 @@ export default function MapLinks({ address }: { address: string }) {
         href={`https://waze.com/ul?q=${encoded}&navigate=yes`}
         target="_blank"
         rel="noopener noreferrer"
-        style={{ ...base, borderColor: "rgba(0,168,104,0.3)", color: "#00a868", background: "rgba(0,168,104,0.06)" }}
+        style={{ ...base, borderColor: "rgba(120,255,190,0.45)", background: "rgba(0,200,120,0.22)" }}
       >
-        <Navigation size={11} /> Waze
+        <Navigation size={14} /> Waze
       </a>
       <a
         href={`https://maps.google.com/?q=${encoded}`}
@@ -37,7 +46,7 @@ export default function MapLinks({ address }: { address: string }) {
         rel="noopener noreferrer"
         style={base}
       >
-        <Navigation size={11} /> Google Maps
+        <Navigation size={14} /> Google Maps
       </a>
       <a
         href={`https://maps.apple.com/?q=${encoded}`}
@@ -45,19 +54,21 @@ export default function MapLinks({ address }: { address: string }) {
         rel="noopener noreferrer"
         style={base}
       >
-        <Navigation size={11} /> Apple Maps
+        <Navigation size={14} /> Apple Maps
       </a>
       <button
         type="button"
         onClick={handleCopy}
         style={{
           ...base, cursor: "pointer",
-          background: copied ? "rgba(5,150,105,0.1)" : "rgba(0,140,156,0.05)",
-          borderColor: copied ? "rgba(5,150,105,0.3)" : "rgba(0,140,156,0.2)",
-          color: copied ? "#059669" : "#008C9C",
+          background: copied ? "rgba(16,220,140,0.28)" : "rgba(255,255,255,0.14)",
+          borderColor: copied ? "rgba(120,255,190,0.5)" : "rgba(255,255,255,0.28)",
+          // Stays white in both states — the old teal/green was picked for a
+          // white card and vanished against the dark hero.
+          color: "#ffffff",
         }}
       >
-        {copied ? <Check size={11} /> : <Copy size={11} />}
+        {copied ? <Check size={14} /> : <Copy size={14} />}
         {copied ? "Copied!" : "Copy"}
       </button>
     </div>
