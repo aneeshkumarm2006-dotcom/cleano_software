@@ -25,10 +25,14 @@ export function GET() {
       orientation: "portrait",
       background_color: "#F5F1E8",
       theme_color: "#008C9C",
+      // Static PNGs — see src/app/manifest.ts: the dynamic /icon/* routes all
+      // rendered 32x32, which fails Chrome's icon-size validation and blocks
+      // installation.
       icons: [
-        { src: "/icon/192", sizes: "192x192", type: "image/png", purpose: "any" },
-        { src: "/icon/512", sizes: "512x512", type: "image/png", purpose: "any" },
-        { src: "/icon/512", sizes: "512x512", type: "image/png", purpose: "maskable" },
+        { src: "/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+        { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+        { src: "/icon-maskable-192.png", sizes: "192x192", type: "image/png", purpose: "maskable" },
+        { src: "/icon-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
       ],
     },
     { headers: { "Content-Type": "application/manifest+json" } }
