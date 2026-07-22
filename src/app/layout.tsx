@@ -41,9 +41,11 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  // Lock the page from accidentally pinch-zooming, since installed PWA shouldn't behave like a web page.
-  maximumScale: 1,
-  userScalable: false,
+  // Pinch-zoom stays ENABLED: blocking it (maximumScale 1 / userScalable false)
+  // is a WCAG failure, and cleaners read addresses and job notes on small
+  // screens in bad light. `touch-action: manipulation` on controls already
+  // removes the double-tap-zoom delay, which was the real reason to lock it.
+  maximumScale: 5,
 };
 
 export default function RootLayout({

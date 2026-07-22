@@ -568,6 +568,34 @@ body {
   --shadow-soft:   0 2px 16px rgba(0,140,156,0.08), 0 0 0 1px rgba(0,140,156,0.04);
   --shadow-card:   0 8px 30px rgba(0,140,156,0.10), 0 0 0 1px rgba(0,140,156,0.05);
   --radius-input:  12px;
+
+  /* ── Crew-app motion system ──────────────────────────────────────────────
+     One vocabulary for the whole cleaner app so timing feels intentional
+     rather than per-component guesswork. Durations are short on purpose:
+     cleaners use this one-handed, mid-shift, and anything over ~250ms starts
+     to feel like waiting rather than responding.
+
+     ease-out-quart  — decelerate hard: things ENTERING (cards, sheets)
+     ease-spring     — slight overshoot: confirmations, success, count-ups
+     ease-standard   — symmetric: colour/opacity changes, hovers          */
+  --dur-instant: 90ms;   /* press feedback — must beat perception */
+  --dur-fast:    160ms;  /* taps, toggles, badges */
+  --dur-base:    220ms;  /* card entrance, tab switch */
+  --dur-slow:    340ms;  /* sheets, hero reveal */
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-spring:    cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-standard:  cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ── Crew-app elevation ──────────────────────────────────────────────────
+     Layered, low-alpha, tinted with the brand navy rather than pure black —
+     black shadows go muddy/grey on the app's blue-grey background. Each step
+     pairs a tight contact shadow with a wider ambient one. */
+  --elev-1: 0 1px 2px rgba(16, 33, 61, 0.05), 0 1px 3px rgba(16, 33, 61, 0.04);
+  --elev-2: 0 2px 4px rgba(16, 33, 61, 0.05), 0 4px 12px rgba(16, 33, 61, 0.07);
+  --elev-3: 0 4px 8px rgba(16, 33, 61, 0.06), 0 12px 28px rgba(16, 33, 61, 0.10);
+  --elev-4: 0 8px 16px rgba(16, 33, 61, 0.08), 0 24px 48px rgba(16, 33, 61, 0.14);
+  /* Coloured glow for the primary action (clock in / claim job) */
+  --elev-primary: 0 4px 14px rgba(0, 140, 156, 0.32);
   --primary-5:     rgba(0,140,156,0.05);
   --primary-10:    rgba(0,140,156,0.10);
   --primary-15:    rgba(0,140,156,0.15);
@@ -3291,6 +3319,81 @@ body {
 .cl-dash-quick .desc { font-size: 11px; color: var(--primary-60); margin-top: 2px; }
 
 /* Cleaner app shell */
+/* ═══════════════════════════════════════════════════════════════════════════
+   CREW APP — shared interaction layer
+   Applied via the motion tokens above so every screen shares one feel.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Tap feedback. Touch devices have no hover, and :hover on them STICKS after a
+   tap (the element stays "hovered" until you tap elsewhere) — so hover effects
+   are gated behind a real pointer, while :active handles touch. The scale is
+   deliberately small: at 0.97 it reads as a physical press without shifting
+   surrounding layout. */
+.cl-press {
+  transition:
+    transform var(--dur-instant) var(--ease-standard),
+    box-shadow var(--dur-fast) var(--ease-standard),
+    border-color var(--dur-fast) var(--ease-standard),
+    background-color var(--dur-fast) var(--ease-standard);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation; /* kills the legacy 300ms click delay */
+}
+.cl-press:active { transform: scale(0.97); }
+@media (hover: hover) and (pointer: fine) {
+  .cl-press:hover { transform: translateY(-2px); box-shadow: var(--elev-3); }
+}
+
+/* Cards/rows lift slightly on press instead of shrinking — shrinking a large
+   card looks like it's receding, lifting reads as "picked up". */
+.cl-press-lift:active { transform: scale(0.985); box-shadow: var(--elev-1); }
+
+/* Entrance choreography. Content is server-rendered, so this runs on paint and
+   costs nothing — it turns a static dump of cards into a deliberate reveal.
+   transform+opacity only, so it stays on the compositor (no layout thrash). */
+@keyframes cl-rise {
+  from { opacity: 0; transform: translate3d(0, 12px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+.cl-rise { animation: cl-rise var(--dur-base) var(--ease-out-quart) both; }
+/* Stagger: each subsequent child starts 45ms later. Capped at 8 so a long list
+   never leaves the last item hanging for a noticeable beat. */
+.cl-stagger > * { animation: cl-rise var(--dur-base) var(--ease-out-quart) both; }
+.cl-stagger > *:nth-child(1) { animation-delay: 0ms; }
+.cl-stagger > *:nth-child(2) { animation-delay: 45ms; }
+.cl-stagger > *:nth-child(3) { animation-delay: 90ms; }
+.cl-stagger > *:nth-child(4) { animation-delay: 135ms; }
+.cl-stagger > *:nth-child(5) { animation-delay: 180ms; }
+.cl-stagger > *:nth-child(6) { animation-delay: 225ms; }
+.cl-stagger > *:nth-child(7) { animation-delay: 270ms; }
+.cl-stagger > *:nth-child(n+8) { animation-delay: 315ms; }
+
+/* Money and big stats: a subtle scale-in gives figures a moment of weight.
+   Used on payout/earnings numerals, which are what cleaners open the app for. */
+@keyframes cl-figure-in {
+  from { opacity: 0; transform: scale(0.94); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.cl-figure { animation: cl-figure-in var(--dur-slow) var(--ease-spring) both; }
+
+/* Accessibility: honour reduced-motion by removing MOVEMENT while keeping
+   opacity, so the interface still reads as responsive rather than dead. */
+@media (prefers-reduced-motion: reduce) {
+  .cl-rise,
+  .cl-stagger > *,
+  .cl-figure {
+    animation-duration: 1ms;
+    animation-delay: 0ms !important;
+    transform: none !important;
+  }
+  .cl-press,
+  .cl-press-lift { transition-duration: 1ms; }
+  .cl-press:active,
+  .cl-press-lift:active { transform: none; }
+  @media (hover: hover) and (pointer: fine) {
+    .cl-press:hover { transform: none; }
+  }
+}
+
 .cl-app-shell { min-height: 100vh; display: flex; background: var(--cream); }
 .cl-app-main { flex: 1; min-width: 0; padding: 40px 48px 80px; overflow-y: auto; background: var(--cream); }
 .cl-app-main-inner { max-width: 1280px; margin: 0 auto; width: 100%; }
@@ -6116,3 +6219,170 @@ a.q-v.link:hover { text-decoration: underline; }
 
 /* Windowed pager ellipsis gap */
 .apager-gap { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; color: var(--primary-40); font-weight: 600; user-select: none; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CREW APP REDESIGN — mobile polish pass
+   Reference: "Cleano Mobile Redesign" deck. Presentation only: no markup,
+   routes or behaviour change, and no feature in the deck that doesn't already
+   exist in the app is introduced here.
+   Scoped to .cl-* (cleaner) classes so admin and the customer portal are
+   untouched.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Entrance choreography ─────────────────────────────────────────────────
+   Attached by selector rather than by adding classes in TSX, so the redesign
+   stays purely presentational. */
+.cl-dash-shell > * {
+  animation: cl-rise var(--dur-base) var(--ease-out-quart) both;
+}
+/* Tab-switched screens get opacity ONLY — no movement. Switching tabs is a
+   100+/day action, and an entrance animation on something that frequent reads
+   as lag, not polish. The dashboard (landing screen, seen once a session) is
+   the one place the staggered rise earns its keep. */
+@keyframes cl-fade-in { from { opacity: 0; } to { opacity: 1; } }
+.cl-page-wrap { animation: cl-fade-in 90ms var(--ease-standard) both; }
+.cl-dash-shell > *:nth-child(1) { animation-delay: 0ms; }
+.cl-dash-shell > *:nth-child(2) { animation-delay: 45ms; }
+.cl-dash-shell > *:nth-child(3) { animation-delay: 90ms; }
+.cl-dash-shell > *:nth-child(4) { animation-delay: 135ms; }
+.cl-dash-shell > *:nth-child(5) { animation-delay: 180ms; }
+.cl-dash-shell > *:nth-child(n+6) { animation-delay: 225ms; }
+
+/* ── Hero: the screen's anchor ─────────────────────────────────────────────
+   Deeper, richer gradient than the flat original, plus real elevation so it
+   sits above the page rather than printed on it. */
+.cl-dash-hero {
+  background:
+    radial-gradient(120% 120% at 100% 0%, rgba(51,177,192,0.55) 0%, transparent 55%),
+    linear-gradient(150deg, #0b4f57 0%, var(--primary) 55%, #0d6b76 100%);
+  box-shadow: var(--elev-3);
+  border-radius: 20px;
+}
+.cl-dash-hero-cta {
+  box-shadow: var(--elev-2);
+  transition: transform var(--dur-instant) var(--ease-standard),
+              box-shadow var(--dur-fast) var(--ease-standard);
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  min-height: 44px; /* iOS minimum touch target */
+}
+.cl-dash-hero-cta:active { transform: scale(0.96); }
+/* The countdown is the single most glanceable number on the screen —
+   tabular figures stop it juddering as the digits tick. */
+.cl-dash-countdown .val { font-variant-numeric: tabular-nums; }
+
+/* ── Stat + earnings tiles ─────────────────────────────────────────────────
+   Money is why cleaners open the app, so the figures get weight and a soft
+   reveal; tabular numerals keep columns aligned across tiles. */
+.cl-dash-earn-tile {
+  box-shadow: var(--elev-1);
+  border: 1px solid rgba(16, 33, 61, 0.04);
+  transition: box-shadow var(--dur-fast) var(--ease-standard),
+              transform var(--dur-instant) var(--ease-standard);
+}
+.cl-dash-earn-tile .val {
+  font-variant-numeric: tabular-nums;
+  animation: cl-figure-in var(--dur-slow) var(--ease-spring) both;
+  animation-delay: 120ms;
+}
+.cl-dash-earn-tile.featured { box-shadow: var(--elev-2); }
+
+/* ── Performance card ──────────────────────────────────────────────────────*/
+.cl-dash-perf { box-shadow: var(--elev-3); }
+
+/* ── Today strip + list rows: physical press feedback ──────────────────────*/
+.cl-dash-today-card,
+.cl-dash-listrow,
+.cl-jobcard,
+.cl-inv-item {
+  transition:
+    transform var(--dur-instant) var(--ease-standard),
+    box-shadow var(--dur-fast) var(--ease-standard),
+    border-color var(--dur-fast) var(--ease-standard);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.cl-dash-today-card:active,
+.cl-dash-listrow:active,
+.cl-jobcard:active,
+.cl-inv-item:active { transform: scale(0.985); }
+@media (hover: hover) and (pointer: fine) {
+  .cl-dash-today-card:hover,
+  .cl-jobcard:hover { box-shadow: var(--elev-2); }
+}
+
+/* ── Bottom tab bar ────────────────────────────────────────────────────────
+   Frosted, layered above content, with a spring on the active icon so
+   switching tabs feels responsive rather than instantaneous-but-flat. */
+@media (max-width: 900px) {
+  .cl-tabbar {
+    background: rgba(255, 255, 255, 0.86);
+    -webkit-backdrop-filter: saturate(180%) blur(16px);
+    backdrop-filter: saturate(180%) blur(16px);
+    box-shadow: 0 -1px 0 rgba(16, 33, 61, 0.06), 0 -8px 24px rgba(16, 33, 61, 0.08);
+  }
+  .cl-tab {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    min-height: 48px; /* comfortable target with gloves on */
+  }
+  .cl-tab .cl-tab-icon-wrap {
+    transition: transform var(--dur-fast) var(--ease-spring);
+  }
+  .cl-tab:active .cl-tab-icon-wrap { transform: scale(0.88); }
+  .cl-tab.active .cl-tab-icon-wrap { transform: translateY(-1px) scale(1.06); }
+}
+
+/* ── Reduced motion: strip movement, keep the fade ─────────────────────────*/
+@media (prefers-reduced-motion: reduce) {
+  .cl-dash-shell > *,
+  .cl-page-wrap > *,
+  .cl-dash-earn-tile .val {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+    transform: none !important;
+  }
+  .cl-dash-hero-cta:active,
+  .cl-dash-today-card:active,
+  .cl-dash-listrow:active,
+  .cl-jobcard:active,
+  .cl-inv-item:active,
+  .cl-tab:active .cl-tab-icon-wrap { transform: none; }
+}
+
+/* ── Crew app: contrast + input polish ─────────────────────────────────────
+   #008C9C on white is 3.6:1 — below the 4.5:1 AA floor for text, and these
+   screens get used outdoors in direct sun. Solid primary buttons therefore
+   fill with --primary-hover (#00707d, 5.4:1) while #008C9C stays for
+   gradients and decorative fills where no text sits on it. */
+.cl-action-btn.solid,
+.cl-inv-hero-btn,
+.cl-installcard-btn,
+.cl-jobcard-cta,
+.cl-primary-btn {
+  background: var(--primary-hover);
+}
+
+/* Every figure the crew reads — money, counts, timers — uses tabular
+   numerals so digits never re-flow as values tick or update. */
+.cl-dash-countdown .val,
+.cl-dash-earn-tile .val,
+.cl-stat-val,
+.cl-pay-val,
+.cl-jobcard-payout,
+.cl-money { font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; }
+
+/* Visible keyboard focus (was relying on the UA default, which the custom
+   backgrounds often washed out). */
+.cl-app-shell :focus-visible,
+.cl-page-wrap :focus-visible {
+  outline: 3px solid var(--primary-hover);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Scroll containers must clear the fixed tab bar, or the last job card sits
+   underneath it and can't be tapped. */
+@media (max-width: 900px) {
+  .cl-app-main { padding-bottom: calc(84px + env(safe-area-inset-bottom)); }
+}
