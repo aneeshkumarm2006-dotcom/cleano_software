@@ -10,6 +10,7 @@ import ScrollReset from "@/components/ScrollReset";
 import InstallPrompt from "@/components/InstallPrompt";
 import { InstallProvider } from "@/components/InstallContext";
 import PresenceHeartbeat from "@/components/PresenceHeartbeat";
+import CrewDoorMarker from "./CrewDoorMarker";
 
 // Installing to the home screen from inside the crew app must use the CREW
 // manifest, whose start_url is /cleaners/my-jobs. The root manifest starts at
@@ -63,6 +64,9 @@ export default async function CleanerLayout({
         </main>
         <InstallPrompt />
         <PresenceHeartbeat />
+        {/* Remembers this device as a crew device so an expired session on an
+            already-installed "/" shortcut still lands on the crew login. */}
+        <CrewDoorMarker />
       </div>
     </InstallProvider>
   );
