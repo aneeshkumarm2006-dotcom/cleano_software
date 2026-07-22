@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Manrope, Fraunces, Montserrat } from "next/font/google";
 import "./globals.css";
 import "./customer.css";
+import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
 
 const manrope = Manrope({
   subsets: ["latin"],
@@ -63,7 +64,10 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className={`!font-tt-norms-pro`} suppressHydrationWarning>{children}</body>
+      <body className={`!font-tt-norms-pro`} suppressHydrationWarning>
+        <ServiceWorkerRegistrar />
+        {children}
+      </body>
     </html>
   );
 }

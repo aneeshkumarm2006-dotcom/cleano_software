@@ -38,9 +38,13 @@ export default function InstallAppCard({
     );
   }
 
-  const iosSteps = isIOSSafari || /iPad|iPhone|iPod/.test(
-    typeof navigator === "undefined" ? "" : navigator.userAgent
-  );
+  const ua = typeof navigator === "undefined" ? "" : navigator.userAgent;
+  const iosSteps = isIOSSafari || /iPad|iPhone|iPod/.test(ua);
+  // Android Chrome sometimes hasn't fired beforeinstallprompt yet (it needs a
+  // moment after the service worker registers). Telling these users to "open
+  // this in Chrome" is nonsense — they ARE in Chrome — so give them the menu
+  // path instead.
+  const androidChrome = /Android/.test(ua) && /Chrome/.test(ua);
 
   return (
     <div className="cl-installcard">
@@ -55,6 +59,12 @@ export default function InstallAppCard({
           <span>
             In Safari: tap <strong>Share</strong> <Share size={12} style={{ verticalAlign: "-1px" }} /> →{" "}
             <strong>Add to Home Screen</strong>.
+          </span>
+        ) : androidChrome ? (
+          <span>
+            Tap Chrome&apos;s <strong>⋮</strong> menu → <strong>Add to Home screen</strong>{" "}
+            → <strong>Install</strong>. If it only offers a shortcut, reload the
+            page once and try again.
           </span>
         ) : (
           <span>
