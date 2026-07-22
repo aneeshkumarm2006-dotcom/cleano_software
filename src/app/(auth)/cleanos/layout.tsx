@@ -2,6 +2,8 @@
 // Screen" while signed out). Point it at the CREW manifest so the shortcut
 // starts at /cleaners/my-jobs rather than "/" (the customer portal) — the page
 // itself is a client component, so the manifest override lives here.
+import { InstallProvider } from "@/components/InstallContext";
+
 export const metadata = {
   manifest: "/api/cleaner-manifest",
 };
@@ -11,5 +13,7 @@ export default function CleanosAuthLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return children;
+  // Provider so the login page can offer a real "Install app" button — this is
+  // where crew members go looking for the download.
+  return <InstallProvider>{children}</InstallProvider>;
 }

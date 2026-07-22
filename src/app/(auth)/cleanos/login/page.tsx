@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState, FormEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 import SplitShell from "@/components/customer/SplitShell";
+import InstallAppCard from "@/components/InstallAppCard";
 import CleanoLoader from "@/components/ui/CleanoLoader";
 import {
   Field,
@@ -176,6 +177,9 @@ function CleanerLoginInner() {
         <Button type="submit" size="lg" block loading={loading}>
           {loading ? "Signing in…" : "Sign in →"}
         </Button>
+
+        {/* Install entry point — crew members look for the download here. */}
+        <InstallAppCard />
 
         {/* Counterpart to the crew link on the customer login. `stay=1` stops
             the installed-app redirect from bouncing a customer straight back

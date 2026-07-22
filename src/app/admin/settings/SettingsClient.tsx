@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import InstallAppCard from "@/components/InstallAppCard";
 import {
   User as UserIcon,
   Percent,
@@ -329,6 +330,12 @@ export default function SettingsClient({
             : "Manage your account."}
         </p>
       </header>
+
+      {/* Permanent install entry point. The floating prompt is dismissible and
+          desktop-hidden, and the sidebar entry only lives in the mobile
+          drawer, so Settings is where people go looking for "download the
+          app". */}
+      <InstallAppCard />
 
       <div className="set-layout">
         <nav className="set-menu">

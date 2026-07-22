@@ -3416,6 +3416,47 @@ html, body { overscroll-behavior-y: contain; }
 }
 
 /* ── Install prompt (PWA "Install Cleano" floating card) ── */
+/* Permanent "Install app" card (Settings + crew login). Unlike the floating
+   prompt below, this is never hidden and works on desktop too. */
+.cl-installcard {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #fff;
+  border: 1px solid rgba(0, 140, 156, 0.14);
+  border-radius: 16px;
+  padding: 14px 16px;
+  margin-bottom: 18px;
+}
+.cl-installcard.installed { background: var(--emerald-50, #ecfdf5); border-color: #a7f3d0; }
+.cl-installcard-ic {
+  width: 38px; height: 38px; flex: 0 0 auto;
+  border-radius: 11px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--primary-10, rgba(0,140,156,.1));
+  color: var(--primary, #008C9C);
+}
+.cl-installcard.installed .cl-installcard-ic { background: #d1fae5; color: #065f46; }
+.cl-installcard-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.cl-installcard-body strong { font-size: 14px; color: var(--ink, #0f2a2e); font-weight: 600; }
+.cl-installcard-body span { font-size: 12.5px; color: var(--primary-70, #3d7f87); line-height: 1.5; }
+.cl-installcard-btn {
+  flex: 0 0 auto;
+  background: var(--primary, #008C9C);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 9px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.cl-installcard-btn:hover { filter: brightness(1.06); }
+@media (max-width: 560px) {
+  .cl-installcard { flex-wrap: wrap; }
+  .cl-installcard-btn { width: 100%; }
+}
+
 .cl-install-prompt { display: none; }
 @media (max-width: 900px) {
   .cl-install-prompt {

@@ -55,6 +55,14 @@ export function InstallProvider({ children }: { children: ReactNode }) {
       /iPad|iPhone|iPod/.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua)
     );
 
+    // `beforeinstallprompt` usually fires before React hydrates, so the root
+    // layout stashes it at parse time. Pick that up first, then keep listening
+    // for a later one (Chrome can re-fire it on navigation).
+    const stashed = (window as unknown as {
+      __cleanoInstallEvent?: BeforeInstallPromptEvent | null;
+    }).__cleanoInstallEvent;
+    if (stashed) setDeferred(stashed);
+
     const handler = (e: Event) => {
       e.preventDefault();
       setDeferred(e as BeforeInstallPromptEvent);

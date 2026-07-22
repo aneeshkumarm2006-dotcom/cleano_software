@@ -52,6 +52,17 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${fraunces.variable} ${montserrat.variable}`}>
+      <head>
+        {/* Chrome fires `beforeinstallprompt` very early — often BEFORE React
+            hydrates, so a listener attached in a component effect misses it
+            and no install button ever appears. Capture it here at parse time
+            and stash it; InstallProvider picks up the stashed event on mount. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){window.__cleanoInstallEvent=null;window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();window.__cleanoInstallEvent=e;});window.addEventListener('appinstalled',function(){window.__cleanoInstallEvent=null;});})();`,
+          }}
+        />
+      </head>
       <body className={`!font-tt-norms-pro`} suppressHydrationWarning>{children}</body>
     </html>
   );
