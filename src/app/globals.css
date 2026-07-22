@@ -6386,3 +6386,46 @@ a.q-v.link:hover { text-decoration: underline; }
 @media (max-width: 900px) {
   .cl-app-main { padding-bottom: calc(84px + env(safe-area-inset-bottom)); }
 }
+
+/* ── Crew app: mobile alignment fixes ──────────────────────────────────────
+   Found during device QA at 412px. */
+
+@media (max-width: 900px) {
+  /* The filter toolbar was a wrapping flexbox, so each control sized to its
+     own content: Status and Job type shared a row at one width while Per page
+     dropped to a row of its own at a narrower width — visibly ragged. A
+     2-column grid gives every control an identical width and a predictable
+     rhythm; search spans the full row above them. */
+  .cl-toolbar {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    align-items: end;
+  }
+  .cl-toolbar > * { min-width: 0; }
+  .cl-toolbar > *:first-child { grid-column: 1 / -1; }
+  /* Controls fill their cell rather than sizing to content. Deliberately NOT
+     `button` — the search field's submit icon is absolutely positioned inside
+     the input, and stretching it to 100% threw the magnifier out to the far
+     left of the row. The dropdown triggers already carry w-full. */
+  .cl-toolbar .input,
+  .cl-toolbar select,
+  .cl-toolbar .cl-action-btn { width: 100%; }
+
+  /* Empty states were 64px of padding plus a large icon — roughly 700px tall
+     on a phone, which pushed real content off the fold and made the screen
+     read as broken rather than simply empty. */
+  .cl-empty-block { padding: 36px 20px; }
+  .cl-dash-empty-hero { padding: 32px 22px; }
+  .cl-dash-empty-hero .icon { transform: scale(0.85); }
+
+  /* Long client names / addresses must ellipsize rather than force a card
+     wider than the screen. */
+  .cl-jobcard-client,
+  .cl-dash-listrow-name,
+  .cl-dash-today-card .name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
