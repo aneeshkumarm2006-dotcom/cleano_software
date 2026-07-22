@@ -28,7 +28,7 @@ function PortalLoginInner() {
   const errorParam = searchParams.get("error");
   const initialError =
     errorParam === "staff_account"
-      ? "That account is a staff account. Use the staff sign-in page instead."
+      ? "That's a staff account — use the crew sign-in link below."
       : null;
   // Shown after a successful password reset (from /reset-password).
   const resetSuccess = searchParams.get("reset") === "success";
@@ -38,6 +38,21 @@ function PortalLoginInner() {
   const [remember, setRemember] = useState(Boolean(initialEmail));
   const [error, setError] = useState<string | null>(initialError);
   const [loading, setLoading] = useState(false);
+
+  // A home-screen app installed from the root manifest always launches at "/",
+  // which lands here once the session lapses — and the shortcut's URL can't be
+  // edited from the home screen. If this device was last used to sign in as
+  // crew, send it to the crew door instead of stranding it on the customer
+  // login. Deliberately limited to INSTALLED (standalone) launches so a normal
+  // browser visit is never hijacked; `?stay=1` opts out and prevents loops.
+  useEffect(() => {
+    if (searchParams.get("stay") === "1" || errorParam) return;
+    if (localStorage.getItem("cleano_door") !== "cleaner") return;
+    const standalone =
+      window.matchMedia("(display-mode: standalone)").matches ||
+      (window.navigator as { standalone?: boolean }).standalone === true;
+    if (standalone) window.location.replace("/cleanos/login");
+  }, [searchParams, errorParam]);
   const [redirecting, setRedirecting] = useState(false);
 
   useEffect(() => {
@@ -194,6 +209,15 @@ function PortalLoginInner() {
             Booked recently but no password yet?{" "}
             <Link href="/setup" className="cl-link">
               Set up your account →
+            </Link>
+          </div>
+          {/* Escape hatch: a home-screen app installed from "/" always opens
+              here, so crew/staff whose session lapsed need a way across —
+              the installed shortcut's URL can't be edited. */}
+          <div style={{ fontSize: 13 }}>
+            Cleaner or staff?{" "}
+            <Link href="/cleanos/login" className="cl-link">
+              Sign in to the crew app →
             </Link>
           </div>
         </div>

@@ -11,6 +11,14 @@ import InstallPrompt from "@/components/InstallPrompt";
 import { InstallProvider } from "@/components/InstallContext";
 import PresenceHeartbeat from "@/components/PresenceHeartbeat";
 
+// Installing to the home screen from inside the crew app must use the CREW
+// manifest, whose start_url is /cleaners/my-jobs. The root manifest starts at
+// "/" (the customer portal), which is why an expired crew session used to open
+// on the customer login with no way to change the shortcut.
+export const metadata = {
+  manifest: "/api/cleaner-manifest",
+};
+
 // /cleaners/* — field crew (EMPLOYEE role). Admins and customers are bounced
 // to their own area's home.
 export default async function CleanerLayout({

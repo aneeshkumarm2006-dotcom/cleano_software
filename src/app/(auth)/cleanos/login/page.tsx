@@ -78,6 +78,12 @@ function CleanerLoginInner() {
       }
       if (remember) localStorage.setItem(rememberedKey, email);
       else localStorage.removeItem(rememberedKey);
+      // Remember which door this device belongs to. The server also sets an
+      // httpOnly `cleano_door` cookie, but a home-screen app whose session has
+      // lapsed can lose cookies while localStorage survives — this lets the
+      // customer login bounce a crew member back here instead of stranding
+      // them (the installed shortcut's URL can't be edited).
+      localStorage.setItem("cleano_door", "cleaner");
       setRedirecting(true);
       window.location.href = CALLBACK;
     } catch {
@@ -170,6 +176,16 @@ function CleanerLoginInner() {
         <Button type="submit" size="lg" block loading={loading}>
           {loading ? "Signing in…" : "Sign in →"}
         </Button>
+
+        {/* Counterpart to the crew link on the customer login. `stay=1` stops
+            the installed-app redirect from bouncing a customer straight back
+            here, so neither door can trap the wrong audience. */}
+        <div style={{ fontSize: 13, textAlign: "center", color: "var(--primary-70)" }}>
+          Are you a customer?{" "}
+          <a href="/login?stay=1" className="cl-link">
+            Go to the customer login →
+          </a>
+        </div>
       </form>
     </SplitShell>
     </>
