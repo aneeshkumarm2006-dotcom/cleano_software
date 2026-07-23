@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Controller, Resolver, SubmitHandler, useForm } from "react-hook-form";
@@ -566,6 +567,7 @@ export default function JobModal({
   onDelete,
   addOnCatalog = [],
 }: JobModalProps) {
+  const router = useRouter();
   const [currentStep, setCurrentStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
   const [globalError, setGlobalError] = useState<string | null>(null);
@@ -829,7 +831,12 @@ export default function JobModal({
 
       setTimeout(() => {
         handleClose();
-        window.location.reload();
+        // router.refresh() re-fetches the jobs data but PRESERVES the client
+        // component state — the active status tab, search, date range, and the
+        // type/client/employee/pay filters — so saving a booking returns the
+        // admin to the exact same filtered view. window.location.reload()
+        // wiped all of that.
+        router.refresh();
       }, 1000);
     } catch (error) {
       console.error("Submit error:", error);
@@ -857,7 +864,8 @@ export default function JobModal({
       }
 
       handleClose();
-      window.location.reload();
+      // Preserve the current filtered view on delete too.
+      router.refresh();
     } catch (error) {
       setGlobalError(
         error instanceof Error ? error.message : "Failed to delete job"

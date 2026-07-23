@@ -761,9 +761,12 @@ export default function JobsView({
             placeholder="Search by client, address…"
             value={searchTerm}
             onChange={(e) => {
+              // Search is filtered CLIENT-side (see filteredJobs); the server
+              // query ignores the term. Writing it to the URL per keystroke
+              // triggered an RSC re-render that remounted this input and dropped
+              // focus after every character. Keep it as local state only.
               onSearchTermChange(e.target.value);
               onPageChange(1);
-              updateURLParams({ search: e.target.value, page: 1 });
             }}
           />
         </div>
