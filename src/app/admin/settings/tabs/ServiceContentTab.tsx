@@ -89,7 +89,7 @@ export default function ServiceContentTab({ settings }: ServiceContentTabProps) 
               />
             </Field>
 
-            <Field label="Graphic (optional)" hint="JPG, PNG, GIF or WebP, up to 10MB.">
+            <Field label="Graphic (optional)" hint="JPG, PNG, GIF, WebP or HEIC, up to 10MB.">
               <ImagePicker
                 imageUrl={entry.imageUrl}
                 uploading={uploading === s.value}

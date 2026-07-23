@@ -32,9 +32,13 @@ export function normalizeServiceContent(raw: unknown): ServiceContentConfig {
     const e = (stored[k] && typeof stored[k] === "object"
       ? stored[k]
       : {}) as Record<string, unknown>;
+    const rawUrl = typeof e.imageUrl === "string" ? e.imageUrl.trim() : "";
+    // Only allow http(s) image URLs — this string is rendered into <img src> on
+    // the public booking page, so reject javascript:/data: and other schemes.
+    const imageUrl = /^https?:\/\//i.test(rawUrl) ? rawUrl : "";
     out[k] = {
       text: typeof e.text === "string" ? e.text : "",
-      imageUrl: typeof e.imageUrl === "string" ? e.imageUrl : "",
+      imageUrl,
     };
   }
   return out;

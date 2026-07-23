@@ -137,7 +137,12 @@ export function frequencyDiscountFromConfig(
   frequency: FrequencyValue
 ): number {
   if (frequency === "ONE_TIME") return 0;
-  const cat = normalizeJobType(serviceType) ?? "RESIDENTIAL";
+  let cat = normalizeJobType(serviceType) ?? "RESIDENTIAL";
+  // The discount grid only carries a combined MOVE_IN_OUT row, but an admin job
+  // typed "MOVE_IN - …" / "MOVE_OUT - …" normalizes to MOVE_IN / MOVE_OUT. Fold
+  // them in so a recurring move job uses the move rates, not the RESIDENTIAL
+  // fallback.
+  if (cat === "MOVE_IN" || cat === "MOVE_OUT") cat = "MOVE_IN_OUT";
   const row =
     cfg.frequencyDiscounts[cat] ?? cfg.frequencyDiscounts.RESIDENTIAL ?? {};
   return row[frequency] ?? 0;

@@ -167,9 +167,18 @@ export default function BookPage() {
             applied: !!r.minApplied,
             min: r.minJobPrice ?? 0,
           });
+        } else {
+          // Quote failed / returned no price — clear stale price + "minimum
+          // applied" so the sidebar doesn't keep showing a previous service's
+          // numbers.
+          setBasePrice(0);
+          setMinInfo({ applied: false, min: 0 });
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        setBasePrice(0);
+        setMinInfo({ applied: false, min: 0 });
+      });
   }, [
     step,
     draft.serviceType,
