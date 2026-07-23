@@ -28,6 +28,7 @@ import MapLinks from "./MapLinksClient";
 import JobChatThread from "@/components/JobChatThread";
 import ScrollToTop from "./ScrollToTop";
 import { cleanerPayoutForJobs } from "@/lib/cleaner-pay-display";
+import { sanitizeCleanerNotes } from "@/lib/cleaner-notes";
 
 type PageProps = {
   params: Promise<{ jobId: string }>;
@@ -527,11 +528,19 @@ export default async function JobDetailPage({ params }: PageProps) {
         </p>
       </div>
 
-      {/* Notes */}
-      <h2 className="cl-jd-section-title">Notes</h2>
-      <div className={`cl-jd-notes${!job.notes ? " empty" : ""}`}>
-        {job.notes || "No special instructions from the client. The team will be in touch if anything changes."}
-      </div>
+      {/* Notes — stripped of any billing/price text so cleaners never see the
+          total booking value (item 10). */}
+      {(() => {
+        const safeNotes = sanitizeCleanerNotes(job.notes);
+        return (
+          <>
+            <h2 className="cl-jd-section-title">Notes</h2>
+            <div className={`cl-jd-notes${!safeNotes ? " empty" : ""}`}>
+              {safeNotes || "No special instructions from the client. The team will be in touch if anything changes."}
+            </div>
+          </>
+        );
+      })()}
 
       {/* Checklist */}
       {["SCHEDULED", "IN_PROGRESS", "COMPLETED", "PAID"].includes(job.status) && (

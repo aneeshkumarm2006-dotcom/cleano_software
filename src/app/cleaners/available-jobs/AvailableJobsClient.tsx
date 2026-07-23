@@ -5,6 +5,7 @@ import { claimJob } from "./claimJob";
 import { fmtDate as fmtDateTz, fmtTime as fmtTimeTz } from "@/lib/time";
 import { tzDateKey } from "@/lib/tz-calendar";
 import { jobTypeLabel } from "@/lib/calendar-labels";
+import { sanitizeCleanerNotes } from "@/lib/cleaner-notes";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import CustomDropdown from "@/components/ui/custom-dropdown";
@@ -42,16 +43,12 @@ function fmtTime(iso: string) {
   return fmtTimeTz(iso);
 }
 
-// Legacy imports left machine-generated notes on jobs ("Source Booking ID …",
-// "Imported from BookingKoala …"). A data cleanup is nulling these, but hide
-// them defensively so they never clutter cleaner cards.
+// Notes shown to cleaners are stripped of any billing/price text (item 10):
+// legacy imported jobs still carry machine billing lines, and cleaners must
+// never see the total booking value. Shared helper covers both this board and
+// the job-detail screen.
 function displayNotes(notes: string | null): string | null {
-  if (!notes) return null;
-  const trimmed = notes.trim();
-  if (!trimmed) return null;
-  if (trimmed.startsWith("Source Booking ID")) return null;
-  if (trimmed.startsWith("Imported from BookingKoala")) return null;
-  return trimmed;
+  return sanitizeCleanerNotes(notes);
 }
 
 /** "3bd · 2ba" — only the parts we actually know. Never "0bd / 4ba". */
