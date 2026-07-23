@@ -39,6 +39,10 @@ interface CalendarState {
   events: CalendarEvent[];
   setEvents: (events: CalendarEvent[]) => void;
   eventsLoading: boolean;
+  /** Calendar search (fix 3): filters visible events by client, address,
+      cleaner, service type and notes. */
+  searchQuery: string;
+  setSearchQuery: (q: string) => void;
 
   showModal: boolean;
   setShowModal: (show: boolean) => void;
@@ -236,6 +240,34 @@ export const CalendarProvider = ({
   const [recommendationsLoading, setRecommendationsLoading] = useState(false);
 
   const [prefetchEnabled, setPrefetchEnabled] = useState<boolean>(true);
+
+  // Calendar search (fix 3). Filters the visible events by client name,
+  // address, cleaner, service type and notes. Client-side over the already
+  // loaded month, so typing is instant and never refetches.
+  const [searchQuery, setSearchQuery] = useState("");
+  const filteredEvents = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return localEvents;
+    return localEvents.filter((e) => {
+      const m = (e.metadata ?? {}) as Record<string, unknown>;
+      const cleaners = Array.isArray(m.cleaners)
+        ? (m.cleaners as { name?: string }[]).map((c) => c.name ?? "").join(" ")
+        : "";
+      const hay = [
+        e.title,
+        e.label ?? "",
+        m.location as string,
+        m.jobType as string,
+        m.notes as string,
+        m.employeeName as string,
+        cleaners,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return hay.includes(q);
+    });
+  }, [localEvents, searchQuery]);
 
   const [isDraggingSelection, setIsDraggingSelection] = useState(false);
   const [dragSelectionStart, setDragSelectionStart] = useState<{
@@ -789,9 +821,11 @@ export const CalendarProvider = ({
     setView,
     zoomLevel,
     setZoomLevel,
-    events: localEvents,
+    events: filteredEvents,
     setEvents: setLocalEvents,
     eventsLoading: swrLoading,
+    searchQuery,
+    setSearchQuery,
     showModal,
     setShowModal,
     modalDate,

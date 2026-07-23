@@ -15,6 +15,8 @@ import {
   Inbox,
   Plus,
   Check,
+  Search,
+  X,
 } from "lucide-react";
 import {
   CalendarOverlaysProvider,
@@ -51,6 +53,8 @@ const Calendar = React.forwardRef<CalendarRef, CalendarProps>(({ hideNewJobButto
     handlePrev,
     handleNext,
     handleToday,
+    searchQuery,
+    setSearchQuery,
     currentDate,
     openEventDetailsModal,
     setModalDate,
@@ -481,6 +485,27 @@ const Calendar = React.forwardRef<CalendarRef, CalendarProps>(({ hideNewJobButto
               </button>
             </div>
             <h1 className="cal-range">{getHeaderTitle()}</h1>
+            {/* Calendar search (fix 3): filters by client, address, cleaner,
+                service type and notes. Client-side, instant, no refetch. */}
+            <div className="cal-search">
+              <Search size={15} className="cal-search-ic" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search client, address, cleaner…"
+                aria-label="Search jobs on the calendar"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  className="cal-search-clear"
+                  aria-label="Clear search"
+                  onClick={() => setSearchQuery("")}>
+                  <X size={14} />
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="cal-tb-right">

@@ -6554,3 +6554,54 @@ a.q-v.link:hover { text-decoration: underline; }
 .cl-app-main select { max-width: 100%; }
 .cl-avail-row, .cl-avail-times { min-width: 0; }
 .cl-avail-times > * { min-width: 0; }
+
+/* ── Calendar search (fix 3) ────────────────────────────────────────────────
+   Filters visible events by client, address, cleaner, service type, notes. */
+.cal-search {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-width: 240px;
+  max-width: 320px;
+}
+.cal-search .cal-search-ic {
+  position: absolute;
+  left: 11px;
+  color: var(--primary-50);
+  pointer-events: none;
+}
+.cal-search input {
+  width: 100%;
+  height: 38px;
+  padding: 0 32px 0 34px;
+  font-size: 13.5px;
+  font-family: inherit;
+  color: var(--ink);
+  background: var(--cream);
+  border: 1px solid var(--primary-15);
+  border-radius: 999px;
+  outline: none;
+  transition: border-color var(--dur-fast, .16s) ease, background var(--dur-fast, .16s) ease;
+}
+.cal-search input:focus {
+  border-color: var(--primary);
+  background: #fff;
+}
+.cal-search input::placeholder { color: var(--primary-40); }
+.cal-search-clear {
+  position: absolute;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px; height: 22px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--primary-10);
+  color: var(--primary-60);
+  cursor: pointer;
+}
+.cal-search-clear:hover { background: var(--primary-15); }
+@media (max-width: 640px) {
+  .cal-search { min-width: 0; width: 100%; max-width: none; }
+}
