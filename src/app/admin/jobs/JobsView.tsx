@@ -13,6 +13,7 @@ import DatePicker from "@/components/ui/DatePicker";
 import { useRowSelection } from "@/components/common/useRowSelection";
 import BulkActionBar, { BulkAction } from "@/components/common/BulkActionBar";
 import { bulkSoftDelete, bulkRestore } from "@/lib/bulk/actions";
+import { permanentlyDeleteJobs } from "../actions/permanentlyDeleteJobs";
 import { bulkCancelJobs } from "../actions/bulkCancelJobs";
 import { bulkSetJobStatus } from "../actions/bulkSetJobStatus";
 import { bulkAssignCleaner } from "../actions/bulkAssignCleaner";
@@ -604,6 +605,19 @@ export default function JobsView({
             router.refresh();
           },
         },
+        {
+          key: 'permanent-delete',
+          label: 'Delete permanently',
+          icon: <Trash2 size={14} />,
+          variant: 'danger',
+          confirm: `Permanently delete ${sel.count} archived job${sel.count === 1 ? '' : 's'}? This cannot be undone — the job is removed from Jobs, Calendar, Archived, cleaner views and payroll. Use this only for test jobs, duplicate imports, or incorrect imports.`,
+          onRun: async () => {
+            const res = await permanentlyDeleteJobs(sel.selectedIds);
+            if ('error' in res && res.error) { alert(res.error); return; }
+            sel.clear();
+            router.refresh();
+          },
+        },
       ]
     : [
         {
@@ -1006,6 +1020,7 @@ export default function JobsView({
                       <td className="col-actions">
                         <div className="row" style={{ justifyContent: 'flex-end', gap: 6 }}>
                           {archived ? (
+                            <>
                             <button
                               type="button"
                               className="icon-btn"
@@ -1020,6 +1035,23 @@ export default function JobsView({
                             >
                               <RotateCcw size={14} />
                             </button>
+                            <button
+                              type="button"
+                              className="icon-btn"
+                              aria-label="Delete permanently"
+                              title="Delete permanently"
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                if (!window.confirm('Permanently delete this archived job? This cannot be undone — it is removed from Jobs, Calendar, Archived, cleaner views and payroll.')) return;
+                                const res = await permanentlyDeleteJobs([job.id]);
+                                if ('error' in res && res.error) { alert(res.error); return; }
+                                router.refresh();
+                              }}
+                              style={{ width: 30, height: 30, color: 'var(--error)' }}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                            </>
                           ) : (
                           <button
                             type="button"
