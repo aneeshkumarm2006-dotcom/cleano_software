@@ -142,8 +142,15 @@ export default function CalendarJobActions({
   }, [router, handleClose]);
 
   const handleResolveEquipment = useCallback(() => {
-    if (!event?.metadata?.jobId) return;
-    router.push(`/cleaners/my-inventory/resolve?jobId=${event.metadata.jobId}`);
+    // Admin calendar → link straight to THAT cleaner's inventory (item 6), not
+    // the cleaner-facing self-resolve page. Prefer an assigned cleaner; fall
+    // back to the lead employee.
+    const meta = event?.metadata as
+      | { cleaners?: { id: string }[]; employeeId?: string }
+      | undefined;
+    const cleanerId = meta?.cleaners?.[0]?.id || meta?.employeeId;
+    if (!cleanerId) return;
+    router.push(`/admin/employees/${cleanerId}?tab=products`);
     handleClose();
   }, [event, router, handleClose]);
 
@@ -241,7 +248,7 @@ export default function CalendarJobActions({
                 size="sm"
                 onClick={handleResolveEquipment}
                 className="mt-1 !text-yellow-700 !text-xs !px-0">
-                Resolve Equipment
+                View cleaner inventory
                 <ExternalLink className="w-3 h-3 ml-1" />
               </Button>
             </div>
