@@ -380,37 +380,13 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
         </p>
       </SectionCard>
 
-      {/* Post-construction — hourly with a package */}
+      {/* Post-construction — straight hourly, per cleaner, with a minimum */}
       <SectionCard
         title="Post-construction pricing"
-        description="A flat package covers the first hours, then an hourly rate for extra hours."
+        description="Charged per cleaner per hour, with a minimum number of billable hours."
         icon={HardHat}>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <Field label="Package price ($)">
-            <Input
-              variant="form"
-              type="number"
-              min="0"
-              step="1"
-              value={svc.postConstruction.packagePrice}
-              onChange={(e) =>
-                updatePc({ packagePrice: parseFloat(e.target.value) || 0 })
-              }
-            />
-          </Field>
-          <Field label="Package hours">
-            <Input
-              variant="form"
-              type="number"
-              min="1"
-              step="1"
-              value={svc.postConstruction.packageHours}
-              onChange={(e) =>
-                updatePc({ packageHours: parseFloat(e.target.value) || 0 })
-              }
-            />
-          </Field>
-          <Field label="Extra hour rate ($/hr)">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field label="Hourly rate ($/hr per cleaner)">
             <Input
               variant="form"
               type="number"
@@ -422,20 +398,29 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
               }
             />
           </Field>
+          <Field label="Minimum hours">
+            <Input
+              variant="form"
+              type="number"
+              min="1"
+              step="1"
+              value={svc.postConstruction.minHours}
+              onChange={(e) =>
+                updatePc({ minHours: parseFloat(e.target.value) || 0 })
+              }
+            />
+          </Field>
         </div>
         <p className="text-sm text-[#008C9C]/60 mt-3">
-          {svc.postConstruction.packageHours}h ={" "}
-          <strong>${svc.postConstruction.packagePrice.toFixed(2)}</strong> ·{" "}
-          {svc.postConstruction.packageHours + 2}h ={" "}
+          {svc.postConstruction.minHours}h × 1 cleaner ={" "}
           <strong>
-            $
-            {(
-              svc.postConstruction.packagePrice +
-              2 * svc.postConstruction.hourlyRate
-            ).toFixed(2)}
+            ${(svc.postConstruction.minHours * svc.postConstruction.hourlyRate).toFixed(2)}
           </strong>{" "}
-          · under {svc.postConstruction.packageHours}h billed at $
-          {svc.postConstruction.hourlyRate.toFixed(2)}/hr
+          · 6h × 2 cleaners ={" "}
+          <strong>
+            ${(6 * svc.postConstruction.hourlyRate * 2).toFixed(2)}
+          </strong>{" "}
+          · anything under {svc.postConstruction.minHours}h bills at {svc.postConstruction.minHours}h
         </p>
       </SectionCard>
 

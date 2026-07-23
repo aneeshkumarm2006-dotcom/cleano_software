@@ -12,18 +12,18 @@ export interface ServicePricingConfig {
     rateAtOrAbove: number; // $/sqft for large homes (default 0.25)
     rateBelow: number; // $/sqft for smaller homes (default 0.28)
   };
-  // Post-construction: a flat package covers the first N hours, then a flat
-  // hourly rate for every extra hour. Under the package size it's hourly.
+  // Post-construction: straight hourly, per cleaner, with an enforced minimum
+  // number of billable hours. price = max(minHours, hours) × hourlyRate ×
+  // cleaners.
   postConstruction: {
-    packagePrice: number; // default $439
-    packageHours: number; // default 10
-    hourlyRate: number; // default $50/hr
+    hourlyRate: number; // default $50/hr per cleaner
+    minHours: number; // default 4 (minimum billable hours)
   };
 }
 
 export const SERVICE_PRICING_DEFAULTS: ServicePricingConfig = {
   moveInOut: { thresholdSqft: 1000, rateAtOrAbove: 0.25, rateBelow: 0.28 },
-  postConstruction: { packagePrice: 439, packageHours: 10, hourlyRate: 50 },
+  postConstruction: { hourlyRate: 50, minHours: 4 },
 };
 
 function num(v: unknown, fallback: number): number {
@@ -44,9 +44,9 @@ export function normalizeServicePricing(raw: unknown): ServicePricingConfig {
       rateBelow: num(mi.rateBelow, d.moveInOut.rateBelow),
     },
     postConstruction: {
-      packagePrice: num(pc.packagePrice, d.postConstruction.packagePrice),
-      packageHours: num(pc.packageHours, d.postConstruction.packageHours),
       hourlyRate: num(pc.hourlyRate, d.postConstruction.hourlyRate),
+      // minHours accepts a legacy 0 → falls back to the default 4.
+      minHours: num(pc.minHours, d.postConstruction.minHours) || d.postConstruction.minHours,
     },
   };
 }
@@ -65,19 +65,20 @@ export function moveInOutBasePrice(
 }
 
 /**
- * Post-construction base price: the package covers the first `packageHours`,
- * then `hourlyRate` per extra hour. Below the package size it's plain hourly.
+ * Post-construction base price: straight hourly, per cleaner, with a minimum
+ * number of billable hours. price = max(minHours, hours) × hourlyRate × cleaners.
+ * e.g. 2h with 1 cleaner at $50/hr, 4h minimum → 4 × 50 × 1 = $200;
+ *      6h with 2 cleaners → 6 × 50 × 2 = $600.
  */
 export function postConstructionBasePrice(
   hours: number,
+  cleaners: number = 1,
   cfg: ServicePricingConfig = SERVICE_PRICING_DEFAULTS
 ): number {
-  const h = Math.max(0, Math.round(hours || 0));
-  const { packagePrice, packageHours, hourlyRate } = cfg.postConstruction;
-  if (h >= packageHours) {
-    return +(packagePrice + (h - packageHours) * hourlyRate).toFixed(2);
-  }
-  return +(h * hourlyRate).toFixed(2);
+  const { hourlyRate, minHours } = cfg.postConstruction;
+  const billableHours = Math.max(minHours, Math.max(0, Math.round(hours || 0)));
+  const crew = Math.max(1, Math.round(cleaners || 1));
+  return +(billableHours * hourlyRate * crew).toFixed(2);
 }
 
 export function isSqftService(serviceType?: string): boolean {

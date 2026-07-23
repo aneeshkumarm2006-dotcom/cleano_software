@@ -144,6 +144,7 @@ export default function BookPage() {
       halfBathCount: draft.halfBathCount,
       squareFootage: draft.squareFootage,
       pcHours: draft.pcHours,
+      pcCleaners: draft.pcCleaners,
     })
       .then((r) => {
         if (r.success && typeof r.basePrice === "number") setBasePrice(r.basePrice);
@@ -157,6 +158,7 @@ export default function BookPage() {
     draft.halfBathCount,
     draft.squareFootage,
     draft.pcHours,
+    draft.pcCleaners,
   ]);
 
   function patch(p: Partial<BookingDraft>) {
@@ -241,6 +243,7 @@ export default function BookPage() {
       squareFootage: draft.squareFootage,
       serviceType: draft.serviceType,
       pcHours: draft.pcHours,
+      pcCleaners: draft.pcCleaners,
       frequency: draft.frequency,
       addOns: draft.addOns
         .filter((a) => a.selected)

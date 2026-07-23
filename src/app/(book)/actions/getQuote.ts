@@ -16,6 +16,7 @@ interface GetQuoteInput {
   halfBathCount?: number;
   squareFootage?: number;
   pcHours?: number;
+  pcCleaners?: number;
 }
 
 async function getPerUnitRates() {
@@ -41,6 +42,7 @@ export async function getQuote({
   halfBathCount = 0,
   squareFootage = 0,
   pcHours = 0,
+  pcCleaners = 1,
 }: GetQuoteInput) {
   try {
     // Per-service-type pricing overrides the bed/bath model.
@@ -50,7 +52,7 @@ export async function getQuote({
     }
     if (isHourlyService(serviceType)) {
       const cfg = await getServicePricingConfig();
-      return { success: true, basePrice: postConstructionBasePrice(pcHours, cfg) };
+      return { success: true, basePrice: postConstructionBasePrice(pcHours, pcCleaners, cfg) };
     }
 
     // Prefer flat per-unit rates (new model set in Settings > Pricing Rules)

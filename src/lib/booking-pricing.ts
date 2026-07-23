@@ -17,6 +17,7 @@ export interface PricingInput {
   halfBathCount?: number;
   squareFootage?: number;
   pcHours?: number;
+  pcCleaners?: number;
   addOns: { name: string; price: number }[];
   travelFee?: number;
   discountAmount?: number;
@@ -62,7 +63,7 @@ async function resolveBasePrice(input: PricingInput): Promise<number> {
   }
   if (isHourlyService(input.serviceType)) {
     const cfg = await getServicePricingConfig();
-    return postConstructionBasePrice(input.pcHours ?? 0, cfg);
+    return postConstructionBasePrice(input.pcHours ?? 0, input.pcCleaners ?? 1, cfg);
   }
 
   // Prefer flat per-unit rates set in Settings > Pricing Rules

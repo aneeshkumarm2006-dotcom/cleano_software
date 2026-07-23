@@ -44,7 +44,8 @@ interface SubmitBookingInput {
   halfBathCount: number;
   squareFootage: number;
   serviceType: string;
-  pcHours?: number; // post-construction hours (drives hourly/package pricing)
+  pcHours?: number; // post-construction hours (drives hourly pricing)
+  pcCleaners?: number; // post-construction crew size (× hourly)
   frequency: Frequency;
   // Client sends id (preferred) and/or name; the price is resolved server-side
   // from the catalog and any client-supplied price is ignored.
@@ -285,6 +286,7 @@ export async function submitBooking(input: SubmitBookingInput) {
       halfBathCount: input.halfBathCount,
       squareFootage: input.squareFootage,
       pcHours: input.pcHours,
+      pcCleaners: input.pcCleaners,
       addOns: resolvedAddOns,
       travelFee: areaCheck.travelFee ?? 0,
       discountAmount,
@@ -484,6 +486,7 @@ export async function submitBooking(input: SubmitBookingInput) {
             halfBathCount: input.halfBathCount ?? 0,
             squareFootage: input.squareFootage,
             pcHours: input.pcHours,
+            pcCleaners: input.pcCleaners,
             addOns: resolvedAddOns,
             travelFee: pricing.travelFee,
             discountAmount: discountAmount + recurringDiscount,

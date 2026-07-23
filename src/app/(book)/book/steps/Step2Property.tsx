@@ -101,10 +101,10 @@ export default function Step2Property({ draft, onChange, basePrice = 0 }: Props)
         <div className="cl-stack-12">
           <div className="cl-grid-2">
             <NumberStepper
-              label="Estimated hours"
+              label="Estimated hours (4 hr min)"
               value={draft.pcHours}
               onChange={(v) => onChange({ pcHours: v })}
-              min={1}
+              min={4}
               max={24}
             />
             <NumberStepper
