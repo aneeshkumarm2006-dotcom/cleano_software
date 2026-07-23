@@ -390,6 +390,7 @@ export default async function JobFormPage({
       // Keep per-cleaner JobAssignment rows in sync with the assigned team.
       if (cleanerIds.length > 0) {
         await syncJobAssignments(editingJobId, cleanerIds);
+        await applyManualPayouts(editingJobId, cleanerIds, formData);
       }
 
       revalidatePath("/admin/jobs");
@@ -422,10 +423,36 @@ export default async function JobFormPage({
       // Per-cleaner JobAssignment rows for the assigned team.
       if (cleanerIds.length > 0) {
         await syncJobAssignments(created.id, cleanerIds);
+        await applyManualPayouts(created.id, cleanerIds, formData);
       }
 
       revalidatePath("/admin/jobs");
       redirect("/admin/jobs");
+    }
+  }
+
+  // Optional manual per-cleaner payout (fix 4). Reads the `payFor_<id>` fields
+  // from the create/edit form and writes them onto JobAssignment.payAmount,
+  // which always wins over the automatic tier/flat calc for that cleaner (and
+  // is import-safe — imports never set it). A blank field clears any override.
+  async function applyManualPayouts(
+    jobId: string,
+    cleanerIds: string[],
+    formData: FormData
+  ) {
+    "use server";
+    for (const cleanerId of cleanerIds) {
+      const raw = formData.get(`payFor_${cleanerId}`);
+      const str = typeof raw === "string" ? raw.trim() : "";
+      // Blank = "leave as-is", so editing a job here never wipes an override
+      // set on the job detail page (which has its own Reset control). Only a
+      // real number applies a manual amount.
+      if (str === "") continue;
+      const amount = Number(str);
+      if (!Number.isFinite(amount) || amount < 0) continue;
+      await db.jobAssignment
+        .updateMany({ where: { jobId, cleanerId }, data: { payAmount: amount } })
+        .catch(() => {});
     }
   }
 

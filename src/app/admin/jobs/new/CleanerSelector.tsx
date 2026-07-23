@@ -392,6 +392,34 @@ export default function CleanerSelector({
         </div>
       )}
 
+      {/* Optional manual payout per cleaner (fix 4). Overrides the automatic
+          tier/flat calc for that cleaner on this job — for free, discounted,
+          courtesy or special jobs. Leave blank to use the automatic amount.
+          Submitted as payFor_<id>; the cleaner sees only the final amount. */}
+      {selectedCleaners.length > 0 && (
+        <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+            Custom pay <span className="font-normal normal-case">(optional — overrides the automatic amount)</span>
+          </p>
+          {selectedCleaners.map((cleaner) => (
+            <div key={cleaner.id} className="flex items-center justify-between gap-3">
+              <span className="text-sm text-gray-700 truncate">{cleaner.name}</span>
+              <div className="relative w-32 shrink-0">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+                <input
+                  type="number"
+                  name={`payFor_${cleaner.id}`}
+                  min={0}
+                  step="0.01"
+                  placeholder="Auto"
+                  className="w-full pl-6 pr-2 py-1.5 text-sm bg-white border border-gray-200 rounded-lg outline-none focus:border-[#008C9C]"
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {selectedCleaners.length === 0 && (
         <div className="text-sm text-gray-500 flex items-center gap-2 bg-gray-50 px-4 py-3 rounded-2xl border border-gray-200">
           <Users className="w-4 h-4" />
