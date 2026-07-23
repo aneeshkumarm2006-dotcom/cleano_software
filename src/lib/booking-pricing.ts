@@ -41,7 +41,12 @@ export interface PricingResult extends TaxBreakdown {
 export async function computeBookingPrice(
   input: PricingInput
 ): Promise<PricingResult> {
-  const basePrice = await resolveBasePrice(input);
+  const rawBase = await resolveBasePrice(input);
+  // Client-facing minimum job price (item 9): a customer booking's base service
+  // price can never be quoted below this floor. Admins price jobs manually via
+  // saveJob and are not subject to it.
+  const cfg = await getServicePricingConfig();
+  const basePrice = Math.max(rawBase, cfg.minJobPrice);
   const addOnTotal = input.addOns.reduce((s, a) => s + a.price, 0);
   const travelFee = input.travelFee ?? 0;
   const discountAmount = input.discountAmount ?? 0;

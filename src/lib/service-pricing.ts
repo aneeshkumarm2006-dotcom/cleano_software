@@ -19,11 +19,15 @@ export interface ServicePricingConfig {
     hourlyRate: number; // default $50/hr per cleaner
     minHours: number; // default 4 (minimum billable hours)
   };
+  // Minimum base price a CUSTOMER booking can be quoted (item 9). Clients can
+  // never be quoted below this; admins can still price a job manually below it.
+  minJobPrice: number; // default $119
 }
 
 export const SERVICE_PRICING_DEFAULTS: ServicePricingConfig = {
   moveInOut: { thresholdSqft: 1000, rateAtOrAbove: 0.25, rateBelow: 0.28 },
   postConstruction: { hourlyRate: 50, minHours: 4 },
+  minJobPrice: 119,
 };
 
 function num(v: unknown, fallback: number): number {
@@ -34,7 +38,7 @@ function num(v: unknown, fallback: number): number {
 export function normalizeServicePricing(raw: unknown): ServicePricingConfig {
   const d = SERVICE_PRICING_DEFAULTS;
   if (!raw || typeof raw !== "object") return d;
-  const r = raw as { moveInOut?: unknown; postConstruction?: unknown };
+  const r = raw as { moveInOut?: unknown; postConstruction?: unknown; minJobPrice?: unknown };
   const mi = (r.moveInOut ?? {}) as Record<string, unknown>;
   const pc = (r.postConstruction ?? {}) as Record<string, unknown>;
   return {
@@ -48,6 +52,7 @@ export function normalizeServicePricing(raw: unknown): ServicePricingConfig {
       // minHours accepts a legacy 0 → falls back to the default 4.
       minHours: num(pc.minHours, d.postConstruction.minHours) || d.postConstruction.minHours,
     },
+    minJobPrice: num(r.minJobPrice, d.minJobPrice),
   };
 }
 

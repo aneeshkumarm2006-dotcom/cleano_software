@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Trash2, Sparkles, BedDouble, Truck, HardHat } from "lucide-react";
+import { Plus, Trash2, Sparkles, BedDouble, Truck, HardHat, DollarSign } from "lucide-react";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import IconButton from "@/components/ui/IconButton";
@@ -311,6 +311,31 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
             </div>
           ))}
         </div>
+      </SectionCard>
+
+      {/* Minimum job price — client-facing floor (item 9) */}
+      <SectionCard
+        title="Minimum job price"
+        description="The lowest price a customer booking can be quoted. Admins can still price a job below this manually."
+        icon={DollarSign}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field label="Minimum ($)">
+            <Input
+              variant="form"
+              type="number"
+              min="0"
+              step="1"
+              value={svc.minJobPrice}
+              onChange={(e) =>
+                setSvc((s) => ({ ...s, minJobPrice: parseFloat(e.target.value) || 0 }))
+              }
+            />
+          </Field>
+        </div>
+        <p className="text-sm text-[#008C9C]/60 mt-3">
+          A booking that computes below <strong>${svc.minJobPrice.toFixed(2)}</strong> is
+          charged this minimum. Applies to the customer booking page only.
+        </p>
       </SectionCard>
 
       {/* Move-in / Move-out — priced per square foot */}

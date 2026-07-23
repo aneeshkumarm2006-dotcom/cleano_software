@@ -47,6 +47,10 @@ export default function BookPage() {
   const [step, setStep] = useState(0);
   const [draft, setDraft] = useState<BookingDraft>(EMPTY_DRAFT);
   const [basePrice, setBasePrice] = useState(0);
+  const [minInfo, setMinInfo] = useState<{ applied: boolean; min: number }>({
+    applied: false,
+    min: 0,
+  });
   const [agree, setAgree] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -147,7 +151,13 @@ export default function BookPage() {
       pcCleaners: draft.pcCleaners,
     })
       .then((r) => {
-        if (r.success && typeof r.basePrice === "number") setBasePrice(r.basePrice);
+        if (r.success && "basePrice" in r && typeof r.basePrice === "number") {
+          setBasePrice(r.basePrice);
+          setMinInfo({
+            applied: !!r.minApplied,
+            min: r.minJobPrice ?? 0,
+          });
+        }
       })
       .catch(() => {});
   }, [
@@ -540,9 +550,16 @@ export default function BookPage() {
                 </span>
               </div>
               <div className="cl-summary-row">
-                <span>Base service</span>
+                <span>Base service{minInfo.applied ? " (minimum)" : ""}</span>
                 <strong>${effectiveBase.toFixed(2)}</strong>
               </div>
+              {minInfo.applied && minInfo.min > 0 && (
+                <div
+                  className="cl-summary-row"
+                  style={{ fontSize: 11, color: "rgba(255,255,255,0.55)" }}>
+                  <span>Minimum charge of ${minInfo.min.toFixed(2)} applied</span>
+                </div>
+              )}
               {airbnbDiscountPct > 0 && (
                 <div className="cl-summary-row" style={{ color: "#059669" }}>
                   <span>Airbnb discount (−{airbnbDiscountPct}%)</span>

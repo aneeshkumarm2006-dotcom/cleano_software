@@ -45,41 +45,51 @@ export async function getQuote({
   pcCleaners = 1,
 }: GetQuoteInput) {
   try {
-    // Per-service-type pricing overrides the bed/bath model.
+    const cfg = await getServicePricingConfig();
+    // Compute the raw base per model, then apply the client minimum (item 9).
+    let rawBase: number;
+    let fallback = false;
+
     if (isSqftService(serviceType)) {
-      const cfg = await getServicePricingConfig();
-      return { success: true, basePrice: moveInOutBasePrice(squareFootage, cfg) };
+      rawBase = moveInOutBasePrice(squareFootage, cfg);
+    } else if (isHourlyService(serviceType)) {
+      rawBase = postConstructionBasePrice(pcHours, pcCleaners, cfg);
+    } else {
+      const rates = await getPerUnitRates();
+      if (rates) {
+        rawBase =
+          rates.baseServicePrice +
+          bedCount * rates.perBedroom +
+          bathCount * rates.perFullBath +
+          halfBathCount * rates.perHalfBath;
+      } else {
+        const exact = await db.pricingRule.findFirst({
+          where: { bedCount, bathCount, isActive: true },
+        });
+        const closest =
+          exact ??
+          (await db.pricingRule.findFirst({
+            where: { bedCount, isActive: true },
+            orderBy: { bathCount: "desc" },
+          }));
+        if (closest) {
+          rawBase = closest.basePrice;
+        } else {
+          rawBase = 120 + bedCount * 30 + bathCount * 20;
+          fallback = true;
+        }
+      }
     }
-    if (isHourlyService(serviceType)) {
-      const cfg = await getServicePricingConfig();
-      return { success: true, basePrice: postConstructionBasePrice(pcHours, pcCleaners, cfg) };
-    }
 
-    // Prefer flat per-unit rates (new model set in Settings > Pricing Rules)
-    const rates = await getPerUnitRates();
-    if (rates) {
-      const basePrice =
-        rates.baseServicePrice +
-        bedCount * rates.perBedroom +
-        bathCount * rates.perFullBath +
-        halfBathCount * rates.perHalfBath;
-      return { success: true, basePrice };
-    }
-
-    // Fall back to legacy PricingRule table rows
-    const exact = await db.pricingRule.findFirst({
-      where: { bedCount, bathCount, isActive: true },
-    });
-    if (exact) return { success: true, basePrice: exact.basePrice };
-
-    const closest = await db.pricingRule.findFirst({
-      where: { bedCount, isActive: true },
-      orderBy: { bathCount: "desc" },
-    });
-    if (closest) return { success: true, basePrice: closest.basePrice };
-
-    const fallback = 120 + bedCount * 30 + bathCount * 20;
-    return { success: true, basePrice: fallback, fallback: true as const };
+    // A customer can never be quoted below the minimum job price.
+    const basePrice = Math.max(rawBase, cfg.minJobPrice);
+    return {
+      success: true as const,
+      basePrice,
+      minJobPrice: cfg.minJobPrice,
+      minApplied: rawBase < cfg.minJobPrice,
+      ...(fallback ? { fallback: true as const } : {}),
+    };
   } catch (error) {
     console.error("Error fetching quote:", error);
     return { success: false, error: "Failed to compute quote" };
