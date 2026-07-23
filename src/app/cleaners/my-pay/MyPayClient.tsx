@@ -5,8 +5,6 @@ import {
   Calendar,
   ArrowUpRight,
   Star,
-  Droplets,
-  ExternalLink,
 } from "lucide-react";
 import WithdrawModal from "./WithdrawModal";
 import PaymentHistory from "./PaymentHistory";
@@ -137,7 +135,6 @@ export default function MyPayClient({
   currentPeriod,
   year,
   starRating,
-  ragData,
 }: MyPayClientProps) {
   const [tab, setTab] = useState<Tab>("current");
   const [withdrawOpen, setWithdrawOpen] = useState(false);
@@ -348,70 +345,9 @@ export default function MyPayClient({
               </div>
             )}
 
-            {/* Rag Wash & Credits */}
-            {ragData && (
-              <div className="cl-block">
-                <div className="cl-block-head">
-                  <h2 className="cl-block-title">
-                    <Droplets className="w-5 h-5" style={{ color: "var(--primary)" }} />
-                    Rag Wash Credits
-                  </h2>
-                  {/* Wash logging is admin-controlled — cleaners view credits only. */}
-                </div>
-
-                <div className="cl-block-stats">
-                  <div>
-                    <div className="cl-block-stat-label">Rags this period</div>
-                    <div className="cl-block-stat-val">{ragData.periodRags}</div>
-                  </div>
-                  <div>
-                    <div className="cl-block-stat-label">Credits this period</div>
-                    <div className="cl-block-stat-val pos">+${ragData.periodCredit.toFixed(2)}</div>
-                  </div>
-                  <div>
-                    <div className="cl-block-stat-label">All-time rags</div>
-                    <div className="cl-block-stat-val">{ragData.allTimeRags}</div>
-                  </div>
-                  <div>
-                    <div className="cl-block-stat-label">All-time credits</div>
-                    <div className="cl-block-stat-val pos">+${ragData.allTimeCredit.toFixed(2)}</div>
-                  </div>
-                </div>
-
-                {ragData.recentWashes.length > 0 ? (
-                  <div style={{ borderTop: "1px solid rgba(0,140,156,0.07)", paddingTop: 12 }}>
-                    <p style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--primary-50)", marginBottom: 8 }}>
-                      Recent Washes
-                    </p>
-                    {ragData.recentWashes.map((w) => (
-                      <div key={w.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 13, padding: "4px 0" }}>
-                        <span style={{ color: "var(--ink-soft)" }}>
-                          {fmtDate(w.washDate, { month: "short", day: "numeric" })}
-                          {w.notes ? ` · ${w.notes}` : ""}
-                        </span>
-                        <span style={{ color: "var(--primary-60)" }}>
-                          {w.ragCount} rag{w.ragCount !== 1 ? "s" : ""} ·{" "}
-                          <span style={{ color: "#059669", fontWeight: 600 }}>
-                            +${(w.ragCount * ragData.creditRate).toFixed(2)}
-                          </span>
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div style={{ borderTop: "1px solid rgba(0,140,156,0.07)", paddingTop: 12, textAlign: "center" }}>
-                    <p style={{ fontSize: 13, color: "var(--primary-50)" }}>
-                      No washes logged yet. Your credits appear here once the
-                      office records a wash.
-                    </p>
-                  </div>
-                )}
-
-                <div style={{ borderTop: "1px solid rgba(0,140,156,0.07)", paddingTop: 10, fontSize: 11, color: "var(--primary-50)" }}>
-                  Rate: ${ragData.creditRate.toFixed(2)} per rag · Credits are added as adjustments by admin at period close
-                </div>
-              </div>
-            )}
+            {/* Rag Wash Credits removed from the cleaner side for now (fix 5).
+                The ragData prop is no longer passed from the page; the block and
+                its dormant code stay in the tree for a future reintroduction. */}
 
             <ProviderInvoiceView />
           </>

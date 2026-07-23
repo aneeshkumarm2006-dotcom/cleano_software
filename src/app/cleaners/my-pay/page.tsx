@@ -12,7 +12,9 @@ export default async function MyPayPage() {
 
   // All money figures come from the ONE shared computation (src/lib/cleaner-earnings.ts)
   // that payroll and My Income also use — My Pay no longer invents its own math.
-  const [earnings, payouts, withdrawals, starRating, ragWashes, ragCreditSetting] =
+  // Rag-wash credits are removed from the cleaner side for now (fix 5) — no
+  // longer queried or passed to the client.
+  const [earnings, payouts, withdrawals, starRating] =
     await Promise.all([
       getCleanerEarnings(userId, year, now),
       db.payout.findMany({
@@ -25,11 +27,6 @@ export default async function MyPayPage() {
         orderBy: { createdAt: "desc" },
       }),
       getEmployeeAvgRating(userId),
-      db.ragWash.findMany({
-        where: { employeeId: userId },
-        orderBy: { washDate: "desc" },
-      }),
-      db.appSetting.findUnique({ where: { key: "payroll.ragCreditPerRag" } }),
     ]);
 
   // Reserved = withdrawals not rejected
@@ -43,40 +40,6 @@ export default async function MyPayPage() {
     .reduce((sum, w) => sum + w.amount, 0);
 
   const availableBalance = Math.max(0, earnings.walletBalance - reservedTotal);
-
-  // Rag credit rate (default $0.50 per rag)
-  const ragCreditRate =
-    typeof (ragCreditSetting?.value as Record<string, unknown> | null)?.rate === "number"
-      ? (ragCreditSetting!.value as Record<string, unknown>).rate as number
-      : 0.5;
-
-  const allTimeRags = ragWashes.reduce((s, w) => s + w.ragCount, 0);
-  const allTimeCredit = Math.round(allTimeRags * ragCreditRate * 100) / 100;
-
-  // Rag washes inside the period that CONTAINS today (never a stale draft).
-  const currentPeriodStart = earnings.currentPeriod?.startDate ?? null;
-  const currentPeriodEnd = earnings.currentPeriod?.endDate ?? null;
-
-  const periodRagWashes = ragWashes.filter((w) => {
-    if (!currentPeriodStart || !currentPeriodEnd) return false;
-    return w.washDate >= currentPeriodStart && w.washDate <= currentPeriodEnd;
-  });
-  const periodRags = periodRagWashes.reduce((s, w) => s + w.ragCount, 0);
-  const periodCredit = Math.round(periodRags * ragCreditRate * 100) / 100;
-
-  const ragData = {
-    allTimeRags,
-    allTimeCredit,
-    periodRags,
-    periodCredit,
-    creditRate: ragCreditRate,
-    recentWashes: ragWashes.slice(0, 5).map((w) => ({
-      id: w.id,
-      washDate: w.washDate.toISOString(),
-      ragCount: w.ragCount,
-      notes: w.notes,
-    })),
-  };
 
   // Serialize Dates to strings for client component
   const serializePayout = (p: (typeof payouts)[number]) => ({
@@ -139,7 +102,6 @@ export default async function MyPayPage() {
       currentPeriod={currentPeriod}
       year={year}
       starRating={starRating}
-      ragData={ragData}
     />
   );
 }

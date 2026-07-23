@@ -5,7 +5,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import type { Prisma } from "@prisma/client";
-import { projectWashables, CREDIT_PER_RAG, CREDIT_PER_PAD } from "@/lib/wash";
+import { projectWashables } from "@/lib/wash";
 import { sendAdminClockedOut } from "@/lib/email";
 import { ensureRatingRequest } from "@/lib/rating";
 
@@ -210,29 +210,13 @@ export async function clockOut(jobId: string, usage: PostJobUsage) {
       })
     );
 
-    // Award rag + pad credits to each assigned cleaner, idempotent on the
-    // washCreditsAwarded flag.
-    if (!job.washCreditsAwarded && cleanerIdsForCredit.length > 0) {
-      const ragShare = Math.floor(
-        (projection.cappedRags * CREDIT_PER_RAG) / cleanerIdsForCredit.length
-      );
-      const padShare = Math.floor(
-        (projection.cappedPads * CREDIT_PER_PAD) / cleanerIdsForCredit.length
-      );
-      if (ragShare > 0 || padShare > 0) {
-        for (const cleanerId of cleanerIdsForCredit) {
-          ops.push(
-            db.user.update({
-              where: { id: cleanerId },
-              data: {
-                ragCredits: { increment: ragShare },
-                padCredits: { increment: padShare },
-              },
-            })
-          );
-        }
-      }
-    }
+    // Rag/pad credit accrual is DISABLED for now (fix 5: "rag wash should not
+    // affect cleaner pay, credits, or payroll"). Clock-out no longer increments
+    // User.ragCredits/padCredits. The wash projection fields are still written
+    // above so the underlying data stays intact for a future reintroduction;
+    // they simply feed nothing on the cleaner side anymore.
+    // (Previously: awarded ragShare/padShare to each assigned cleaner here.)
+    void cleanerIdsForCredit;
 
     ops.push(
       db.jobLog.create({
