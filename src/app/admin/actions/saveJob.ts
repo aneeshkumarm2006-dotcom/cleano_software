@@ -714,7 +714,10 @@ export async function saveJob(formData: FormData) {
           childUsesFixedPrice && !clientFixedPriceAllowFreqDiscount;
         const discountPct = skipFrequencyDiscount
           ? 0
-          : recurringDiscountPercent(recurringFrequency);
+          : await recurringDiscountPercent(
+              recurringFrequency,
+              (formData.get("jobType") as string) || undefined
+            );
         const recurringDiscount =
           basePrice > 0 && discountPct > 0
             ? Math.round(((basePrice * discountPct) / 100) * 100) / 100

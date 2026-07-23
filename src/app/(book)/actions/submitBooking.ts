@@ -474,7 +474,10 @@ export async function submitBooking(input: SubmitBookingInput) {
     const childJobIds: string[] = [];
     if (recurrences > 0 && input.frequency !== "ONE_TIME") {
       // Compute discounted price for 2nd+ cleanings (first cleaning is full price)
-      const discountPct = recurringDiscountPercent(input.frequency);
+      const discountPct = await recurringDiscountPercent(
+        input.frequency,
+        input.serviceType
+      );
       const recurringDiscount = discountPct > 0
         ? Math.round((pricing.basePrice * discountPct / 100) * 100) / 100
         : 0;

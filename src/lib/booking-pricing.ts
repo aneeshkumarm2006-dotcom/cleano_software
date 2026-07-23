@@ -1,5 +1,6 @@
 import { db } from "@/db";
 import { calculateTax, TaxBreakdown } from "./tax";
+import { normalizeJobType } from "./calendar-labels";
 import {
   SERVICE_PRICING_KEY,
   ServicePricingConfig,
@@ -106,23 +107,40 @@ async function resolveBasePrice(input: PricingInput): Promise<number> {
   return 120 + bedCount * 30 + bathCount * 20;
 }
 
-// Returns the recurring discount percentage for the 2nd+ cleaning.
-// First cleaning is always full price.
-export function recurringDiscountPercent(
-  frequency: "ONE_TIME" | "WEEKLY" | "BIWEEKLY" | "MONTHLY" | "QUARTERLY" | "TWICE_WEEKLY" | "HIGH_FREQUENCY"
+type FrequencyValue =
+  | "ONE_TIME"
+  | "WEEKLY"
+  | "BIWEEKLY"
+  | "MONTHLY"
+  | "QUARTERLY"
+  | "TWICE_WEEKLY"
+  | "HIGH_FREQUENCY";
+
+/**
+ * Recurring discount % for the 2nd+ cleaning, resolved from the admin-config
+ * per-service-category table (item 7). First cleaning is always full price.
+ * Reads config from `pricing.serviceTypes`.
+ */
+export async function recurringDiscountPercent(
+  frequency: FrequencyValue,
+  serviceType?: string
+): Promise<number> {
+  if (frequency === "ONE_TIME") return 0;
+  const cfg = await getServicePricingConfig();
+  return frequencyDiscountFromConfig(cfg, serviceType, frequency);
+}
+
+/** Pure resolver: pick the discount % for a category+frequency from a config. */
+export function frequencyDiscountFromConfig(
+  cfg: ServicePricingConfig,
+  serviceType: string | undefined,
+  frequency: FrequencyValue
 ): number {
-  switch (frequency) {
-    case "WEEKLY":
-      return 12;
-    case "BIWEEKLY":
-      return 8;
-    case "TWICE_WEEKLY":
-      return 15;
-    case "HIGH_FREQUENCY":
-      return 20;
-    default:
-      return 0;
-  }
+  if (frequency === "ONE_TIME") return 0;
+  const cat = normalizeJobType(serviceType) ?? "RESIDENTIAL";
+  const row =
+    cfg.frequencyDiscounts[cat] ?? cfg.frequencyDiscounts.RESIDENTIAL ?? {};
+  return row[frequency] ?? 0;
 }
 
 // Returns the date for the next occurrence given a base date and frequency.

@@ -2,6 +2,7 @@
 
 import { db } from "@/db";
 import { getSetting } from "@/lib/settings";
+import { getServicePricingConfig } from "@/lib/booking-pricing";
 
 export type RoomType =
   | "KITCHEN"
@@ -50,26 +51,30 @@ export async function getBookingConfig(): Promise<{
   addOns: BookingAddOn[];
   minLeadDays: number;
   smsOptInDefault: boolean;
+  /** Per-service-category recurring discount table (item 7), for display. */
+  frequencyDiscounts: Record<string, Record<string, number>>;
 }> {
-  const [minLeadDays, smsOptInDefault] = await Promise.all([
+  const [minLeadDays, smsOptInDefault, pricingCfg] = await Promise.all([
     getSetting("scheduling.minLeadDays"),
     getSetting("customer.smsOptInDefault"),
+    getServicePricingConfig(),
   ]);
+  const frequencyDiscounts = pricingCfg.frequencyDiscounts;
   try {
     const setting = await db.appSetting.findUnique({
       where: { key: "pricing.addOns" },
     });
 
     if (!setting || !Array.isArray(setting.value)) {
-      return { addOns: [], minLeadDays, smsOptInDefault };
+      return { addOns: [], minLeadDays, smsOptInDefault, frequencyDiscounts };
     }
 
     const normalized = setting.value
       .map(normalizeAddOn)
       .filter((a): a is BookingAddOn => a !== null);
 
-    return { addOns: normalized, minLeadDays, smsOptInDefault };
+    return { addOns: normalized, minLeadDays, smsOptInDefault, frequencyDiscounts };
   } catch {
-    return { addOns: [], minLeadDays, smsOptInDefault };
+    return { addOns: [], minLeadDays, smsOptInDefault, frequencyDiscounts };
   }
 }

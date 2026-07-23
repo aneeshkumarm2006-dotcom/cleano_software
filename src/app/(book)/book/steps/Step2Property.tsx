@@ -4,6 +4,7 @@ import { BookingDraft, SERVICE_TYPES, FREQUENCIES, AIRBNB_FREQUENCIES, RoomType 
 import { Field, Input } from "@/components/customer/Field";
 import { NumberStepper, ChoiceButton } from "@/components/customer/atoms";
 import { addonIcon } from "@/lib/addon-icons";
+import { normalizeJobType } from "@/lib/calendar-labels";
 
 const ROOM_LABELS: Record<RoomType, string> = {
   KITCHEN: "Kitchen",
@@ -30,6 +31,8 @@ interface Props {
   onChange: (patch: Partial<BookingDraft>) => void;
   /** Server-computed base price (before add-ons/tax) for the current inputs. */
   basePrice?: number;
+  /** Per-service-category recurring discount table (item 7). */
+  freqDiscounts?: Record<string, Record<string, number>>;
 }
 
 /** An add-on shows when it has no service restriction, or includes this service. */
@@ -37,10 +40,14 @@ function addOnForService(a: { services?: string[] }, serviceType: string): boole
   return !a.services || a.services.length === 0 || a.services.includes(serviceType);
 }
 
-export default function Step2Property({ draft, onChange, basePrice = 0 }: Props) {
+export default function Step2Property({ draft, onChange, basePrice = 0, freqDiscounts = {} }: Props) {
   const isPC = draft.serviceType === "POST_CONSTRUCTION";
   const isAirbnb = draft.serviceType === "AIRBNB";
   const isMoveInOut = draft.serviceType === "MOVE_IN_OUT";
+
+  // Resolve this service's discount row from the admin config (item 7).
+  const category = normalizeJobType(draft.serviceType) ?? "RESIDENTIAL";
+  const discountRow = freqDiscounts[category] ?? freqDiscounts.RESIDENTIAL ?? {};
 
   // Switching service hides add-ons that don't apply — deselect them so a hidden
   // add-on can't stay in the total.
@@ -54,8 +61,10 @@ export default function Step2Property({ draft, onChange, basePrice = 0 }: Props)
     });
   }
 
-  const activeAirbnbFreq = AIRBNB_FREQUENCIES.find((f) => f.value === draft.frequency);
-  const airbnbDiscount = activeAirbnbFreq?.discount ?? 0;
+  const airbnbDiscount =
+    discountRow[draft.frequency] ??
+    AIRBNB_FREQUENCIES.find((f) => f.value === draft.frequency)?.discount ??
+    0;
 
   return (
     <div className="cl-stack-32">
@@ -201,15 +210,26 @@ export default function Step2Property({ draft, onChange, basePrice = 0 }: Props)
             </p>
           )}
           <div className="cl-grid-2">
-            {(isAirbnb ? AIRBNB_FREQUENCIES : FREQUENCIES).map((f) => (
-              <ChoiceButton
-                key={f.value}
-                active={draft.frequency === f.value}
-                title={f.label}
-                hint={f.hint}
-                onClick={() => onChange({ frequency: f.value })}
-              />
-            ))}
+            {(isAirbnb ? AIRBNB_FREQUENCIES : FREQUENCIES).map((f) => {
+              const pct = discountRow[f.value] ?? 0;
+              // Airbnb discounts every visit; other services discount the 2nd+
+              // visit (the first cleaning is always full price).
+              const discountHint =
+                f.value === "ONE_TIME" || pct <= 0
+                  ? f.hint
+                  : isAirbnb
+                    ? `${pct}% off every visit`
+                    : `${pct}% off from your 2nd visit`;
+              return (
+                <ChoiceButton
+                  key={f.value}
+                  active={draft.frequency === f.value}
+                  title={f.label}
+                  hint={discountHint}
+                  onClick={() => onChange({ frequency: f.value })}
+                />
+              );
+            })}
           </div>
           {isAirbnb && airbnbDiscount > 0 && (
             <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", borderRadius: 12, background: "rgba(5,150,105,0.08)", border: "1px solid rgba(5,150,105,0.2)" }}>

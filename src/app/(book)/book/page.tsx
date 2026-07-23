@@ -57,6 +57,10 @@ export default function BookPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [confirmedTotal, setConfirmedTotal] = useState<number | null>(null);
   const [minLeadDays, setMinLeadDays] = useState(1);
+  // Per-service-category recurring discount table (item 7), for display.
+  const [freqDiscounts, setFreqDiscounts] = useState<
+    Record<string, Record<string, number>>
+  >({});
 
   // Hard guard against double-submit. The button is disabled while
   // `submitting` is true, but state updates are async so a fast double-click
@@ -77,9 +81,10 @@ export default function BookPage() {
   // Load admin-managed add-on catalog on first mount.
   useEffect(() => {
     let cancelled = false;
-    getBookingConfig().then(({ addOns, minLeadDays, smsOptInDefault }) => {
+    getBookingConfig().then(({ addOns, minLeadDays, smsOptInDefault, frequencyDiscounts }) => {
       if (cancelled) return;
       setMinLeadDays(minLeadDays);
+      setFreqDiscounts(frequencyDiscounts);
       setDraft((d) => ({ ...d, smsConsent: smsOptInDefault }));
       setDraft((d) =>
         d.addOns.length > 0
@@ -296,8 +301,13 @@ export default function BookPage() {
   const isAirbnb = draft.serviceType === "AIRBNB";
   const effectiveBase = basePrice;
 
+  // Airbnb turnover discounts apply to every visit and are admin-configurable
+  // (item 7). Read from the AIRBNB category of the config, falling back to the
+  // legacy hardcoded ladder if the config hasn't loaded yet.
   const airbnbDiscountPct = isAirbnb
-    ? (AIRBNB_FREQUENCIES.find((f) => f.value === draft.frequency)?.discount ?? 0)
+    ? (freqDiscounts.AIRBNB?.[draft.frequency] ??
+        AIRBNB_FREQUENCIES.find((f) => f.value === draft.frequency)?.discount ??
+        0)
     : 0;
 
   const addOnTotal = draft.addOns
@@ -635,7 +645,12 @@ export default function BookPage() {
               />
             )}
             {step === 1 && (
-              <Step2Property draft={draft} onChange={patch} basePrice={basePrice} />
+              <Step2Property
+                draft={draft}
+                onChange={patch}
+                basePrice={basePrice}
+                freqDiscounts={freqDiscounts}
+              />
             )}
             {step === 2 && (
               <Step3Schedule
@@ -651,6 +666,7 @@ export default function BookPage() {
                   draft={draft}
                   basePrice={basePrice}
                   onChange={patch}
+                  freqDiscounts={freqDiscounts}
                 />
                 <label
                   className="cl-check-row"

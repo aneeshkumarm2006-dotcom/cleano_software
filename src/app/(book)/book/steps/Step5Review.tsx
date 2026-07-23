@@ -7,6 +7,7 @@ import { CreditCard, Loader2, ShieldCheck, Tag, CheckCircle2, Banknote } from "l
 import { applyPromoCode } from "../../actions/applyPromoCode";
 import { BookingDraft, SERVICE_TYPES, FREQUENCIES } from "../types";
 import { calculateTax } from "@/lib/tax";
+import { normalizeJobType } from "@/lib/calendar-labels";
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
@@ -14,9 +15,11 @@ interface Props {
   draft: BookingDraft;
   basePrice: number;
   onChange: (patch: Partial<BookingDraft>) => void;
+  /** Per-service-category recurring discount table (item 7). */
+  freqDiscounts?: Record<string, Record<string, number>>;
 }
 
-export default function Step5Review({ draft, basePrice, onChange }: Props) {
+export default function Step5Review({ draft, basePrice, onChange, freqDiscounts = {} }: Props) {
   const breakdown = useMemo(() => {
     const addOnTotal = draft.addOns
       .filter((a) => a.selected)
@@ -81,6 +84,16 @@ export default function Step5Review({ draft, basePrice, onChange }: Props) {
   const service = SERVICE_TYPES.find((s) => s.value === draft.serviceType);
   const freq = FREQUENCIES.find((f) => f.value === draft.frequency);
 
+  // Recurring discount for the 2nd+ cleaning, from the admin config (item 7).
+  const isAirbnb = draft.serviceType === "AIRBNB";
+  const discountCategory = normalizeJobType(draft.serviceType) ?? "RESIDENTIAL";
+  const recurringPct =
+    draft.frequency === "ONE_TIME"
+      ? 0
+      : freqDiscounts[discountCategory]?.[draft.frequency] ??
+        freqDiscounts.RESIDENTIAL?.[draft.frequency] ??
+        0;
+
   const propertyLine = [
     `${draft.bedCount} bed`,
     `${draft.bathCount} bath${draft.halfBathCount ? ` + ${draft.halfBathCount} half` : ""}`,
@@ -143,13 +156,13 @@ export default function Step5Review({ draft, basePrice, onChange }: Props) {
           <Row dt="GST (5%)" dd={`$${breakdown.gstAmount.toFixed(2)}`} />
           <Row dt="QST (9.975%)" dd={`$${breakdown.qstAmount.toFixed(2)}`} />
           <RowBorder total dt="Total (1st cleaning)" dd={`$${(breakdown.total - (draft.promoDiscount ?? 0)).toFixed(2)}`} />
-          {(draft.frequency === "WEEKLY" || draft.frequency === "BIWEEKLY") && (
+          {recurringPct > 0 && (
             <div className="cl-dlist-row" style={{ marginTop: 6 }}>
               <dt style={{ color: "var(--primary)", fontSize: 12 }}>
-                {draft.frequency === "WEEKLY" ? "12%" : "8%"} off from 2nd cleaning
+                {recurringPct}% off {isAirbnb ? "every visit" : "from 2nd cleaning"}
               </dt>
               <dd style={{ color: "var(--primary)", fontSize: 12, fontWeight: 600 }}>
-                −${(basePrice * (draft.frequency === "WEEKLY" ? 0.12 : 0.08)).toFixed(2)}/visit
+                −${(basePrice * (recurringPct / 100)).toFixed(2)}/visit
               </dd>
             </div>
           )}

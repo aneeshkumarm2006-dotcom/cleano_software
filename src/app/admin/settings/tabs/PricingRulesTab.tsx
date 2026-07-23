@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Trash2, Sparkles, BedDouble, Truck, HardHat, DollarSign } from "lucide-react";
+import { Plus, Trash2, Sparkles, BedDouble, Truck, HardHat, DollarSign, Repeat } from "lucide-react";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import IconButton from "@/components/ui/IconButton";
@@ -12,7 +12,27 @@ import {
   SERVICE_PRICING_KEY,
   ServicePricingConfig,
   normalizeServicePricing,
+  DISCOUNTABLE_CATEGORIES,
+  FREQ_DISCOUNT_KEYS,
 } from "@/lib/service-pricing";
+
+// Human labels for the discount grid.
+const CATEGORY_LABELS: Record<string, string> = {
+  RESIDENTIAL: "Residential",
+  DEEP: "Deep",
+  MOVE_IN_OUT: "Move-in/out",
+  POST_CONSTRUCTION: "Post-construction",
+  AIRBNB: "Airbnb",
+  COMMERCIAL: "Commercial",
+};
+const FREQ_LABELS: Record<string, string> = {
+  WEEKLY: "Weekly",
+  BIWEEKLY: "Bi-weekly",
+  TWICE_WEEKLY: "2×/week",
+  HIGH_FREQUENCY: "Daily / 20+",
+  MONTHLY: "Monthly",
+  QUARTERLY: "Quarterly",
+};
 
 interface PricingRulesTabProps {
   settings: AppSettingRecord[];
@@ -105,6 +125,16 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
   }
   function updatePc(patch: Partial<ServicePricingConfig["postConstruction"]>) {
     setSvc((s) => ({ ...s, postConstruction: { ...s.postConstruction, ...patch } }));
+  }
+  function updateFreqDiscount(cat: string, freq: string, value: number) {
+    const clamped = Math.min(100, Math.max(0, value));
+    setSvc((s) => ({
+      ...s,
+      frequencyDiscounts: {
+        ...s.frequencyDiscounts,
+        [cat]: { ...(s.frequencyDiscounts[cat] ?? {}), [freq]: clamped },
+      },
+    }));
   }
 
   function updateAddOn(id: string, patch: Partial<AddOn>) {
@@ -446,6 +476,64 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
             ${(6 * svc.postConstruction.hourlyRate * 2).toFixed(2)}
           </strong>{" "}
           · anything under {svc.postConstruction.minHours}h bills at {svc.postConstruction.minHours}h
+        </p>
+      </SectionCard>
+
+      {/* Recurring frequency discounts — per service category (item 7) */}
+      <SectionCard
+        title="Recurring discounts"
+        description="Discount applied to the 2nd and later cleanings of a recurring booking (the first cleaning is always full price). Set a cell to 0 for no discount. Configurable per service category."
+        icon={Repeat}>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm border-collapse">
+            <thead>
+              <tr>
+                <th className="text-left font-medium text-[#008C9C] py-2 pr-3 whitespace-nowrap">
+                  Service
+                </th>
+                {FREQ_DISCOUNT_KEYS.map((f) => (
+                  <th
+                    key={f}
+                    className="text-center font-medium text-[#008C9C]/70 py-2 px-1 whitespace-nowrap">
+                    {FREQ_LABELS[f] ?? f}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {DISCOUNTABLE_CATEGORIES.map((cat) => (
+                <tr key={cat} className="border-t border-[#008C9C]/10">
+                  <td className="py-2 pr-3 font-medium text-[#0F172A] whitespace-nowrap">
+                    {CATEGORY_LABELS[cat] ?? cat}
+                  </td>
+                  {FREQ_DISCOUNT_KEYS.map((f) => (
+                    <td key={f} className="py-1 px-1">
+                      <div className="relative">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="1"
+                          value={svc.frequencyDiscounts[cat]?.[f] ?? 0}
+                          onChange={(e) =>
+                            updateFreqDiscount(cat, f, parseFloat(e.target.value) || 0)
+                          }
+                          className="w-16 rounded-lg border border-[#008C9C]/20 bg-white py-1.5 pl-2 pr-5 text-right text-[#0F172A] focus:border-[#008C9C] focus:outline-none"
+                        />
+                        <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-[#008C9C]/50">
+                          %
+                        </span>
+                      </div>
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="text-sm text-[#008C9C]/60 mt-3">
+          Airbnb turnovers apply the discount to every visit; all other services
+          apply it from the 2nd cleaning onward.
         </p>
       </SectionCard>
 

@@ -22,12 +22,52 @@ export interface ServicePricingConfig {
   // Minimum base price a CUSTOMER booking can be quoted (item 9). Clients can
   // never be quoted below this; admins can still price a job manually below it.
   minJobPrice: number; // default $119
+  // Recurring frequency discounts, configurable PER SERVICE CATEGORY (item 7),
+  // BookingKoala-style. Keyed by normalized category → frequency → percent.
+  // First cleaning is always full price; the discount applies to the 2nd+
+  // recurring visits. A category with 0 for a frequency = no discount there
+  // (e.g. weekly with no discount).
+  frequencyDiscounts: Record<string, Record<string, number>>;
 }
+
+export const FREQ_DISCOUNT_KEYS = [
+  "WEEKLY",
+  "BIWEEKLY",
+  "TWICE_WEEKLY",
+  "HIGH_FREQUENCY",
+  "MONTHLY",
+  "QUARTERLY",
+] as const;
+
+// Categories that carry their own discount table in the admin UI.
+export const DISCOUNTABLE_CATEGORIES = [
+  "RESIDENTIAL",
+  "DEEP",
+  "MOVE_IN_OUT",
+  "POST_CONSTRUCTION",
+  "AIRBNB",
+  "COMMERCIAL",
+] as const;
+
+// Default recurring discounts (the client's stated 12% weekly / 8% biweekly,
+// applied to every category; twice-weekly/high-frequency mirror the old
+// hardcoded ladder). Admins can zero any cell out.
+const DEFAULT_FREQ_ROW: Record<string, number> = {
+  WEEKLY: 12,
+  BIWEEKLY: 8,
+  TWICE_WEEKLY: 15,
+  HIGH_FREQUENCY: 20,
+  MONTHLY: 0,
+  QUARTERLY: 0,
+};
 
 export const SERVICE_PRICING_DEFAULTS: ServicePricingConfig = {
   moveInOut: { thresholdSqft: 1000, rateAtOrAbove: 0.25, rateBelow: 0.28 },
   postConstruction: { hourlyRate: 50, minHours: 4 },
   minJobPrice: 119,
+  frequencyDiscounts: Object.fromEntries(
+    DISCOUNTABLE_CATEGORIES.map((c) => [c, { ...DEFAULT_FREQ_ROW }])
+  ),
 };
 
 function num(v: unknown, fallback: number): number {
@@ -38,7 +78,12 @@ function num(v: unknown, fallback: number): number {
 export function normalizeServicePricing(raw: unknown): ServicePricingConfig {
   const d = SERVICE_PRICING_DEFAULTS;
   if (!raw || typeof raw !== "object") return d;
-  const r = raw as { moveInOut?: unknown; postConstruction?: unknown; minJobPrice?: unknown };
+  const r = raw as {
+    moveInOut?: unknown;
+    postConstruction?: unknown;
+    minJobPrice?: unknown;
+    frequencyDiscounts?: unknown;
+  };
   const mi = (r.moveInOut ?? {}) as Record<string, unknown>;
   const pc = (r.postConstruction ?? {}) as Record<string, unknown>;
   return {
@@ -53,7 +98,28 @@ export function normalizeServicePricing(raw: unknown): ServicePricingConfig {
       minHours: num(pc.minHours, d.postConstruction.minHours) || d.postConstruction.minHours,
     },
     minJobPrice: num(r.minJobPrice, d.minJobPrice),
+    frequencyDiscounts: normalizeFreqDiscounts(r.frequencyDiscounts),
   };
+}
+
+/** Merge stored per-category discount rows over the defaults, clamped 0–100. */
+function normalizeFreqDiscounts(raw: unknown): Record<string, Record<string, number>> {
+  const stored = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const out: Record<string, Record<string, number>> = {};
+  for (const cat of DISCOUNTABLE_CATEGORIES) {
+    const row = (stored[cat] && typeof stored[cat] === "object"
+      ? stored[cat]
+      : {}) as Record<string, unknown>;
+    out[cat] = {};
+    for (const f of FREQ_DISCOUNT_KEYS) {
+      const v = row[f];
+      out[cat][f] =
+        typeof v === "number" && Number.isFinite(v)
+          ? Math.min(100, Math.max(0, v))
+          : DEFAULT_FREQ_ROW[f];
+    }
+  }
+  return out;
 }
 
 /** Move-in/out base price: sqft × (sqft >= threshold ? lowRate : highRate). */
