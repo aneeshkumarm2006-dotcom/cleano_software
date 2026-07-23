@@ -3,6 +3,11 @@
 import { db } from "@/db";
 import { getSetting } from "@/lib/settings";
 import { getServicePricingConfig } from "@/lib/booking-pricing";
+import {
+  SERVICE_CONTENT_KEY,
+  ServiceContentConfig,
+  normalizeServiceContent,
+} from "@/lib/service-content";
 
 export type RoomType =
   | "KITCHEN"
@@ -53,28 +58,32 @@ export async function getBookingConfig(): Promise<{
   smsOptInDefault: boolean;
   /** Per-service-category recurring discount table (item 7), for display. */
   frequencyDiscounts: Record<string, Record<string, number>>;
+  /** "What's included" text + graphic per service type (item 3). */
+  serviceContent: ServiceContentConfig;
 }> {
-  const [minLeadDays, smsOptInDefault, pricingCfg] = await Promise.all([
+  const [minLeadDays, smsOptInDefault, pricingCfg, contentSetting] = await Promise.all([
     getSetting("scheduling.minLeadDays"),
     getSetting("customer.smsOptInDefault"),
     getServicePricingConfig(),
+    db.appSetting.findUnique({ where: { key: SERVICE_CONTENT_KEY } }),
   ]);
   const frequencyDiscounts = pricingCfg.frequencyDiscounts;
+  const serviceContent = normalizeServiceContent(contentSetting?.value);
   try {
     const setting = await db.appSetting.findUnique({
       where: { key: "pricing.addOns" },
     });
 
     if (!setting || !Array.isArray(setting.value)) {
-      return { addOns: [], minLeadDays, smsOptInDefault, frequencyDiscounts };
+      return { addOns: [], minLeadDays, smsOptInDefault, frequencyDiscounts, serviceContent };
     }
 
     const normalized = setting.value
       .map(normalizeAddOn)
       .filter((a): a is BookingAddOn => a !== null);
 
-    return { addOns: normalized, minLeadDays, smsOptInDefault, frequencyDiscounts };
+    return { addOns: normalized, minLeadDays, smsOptInDefault, frequencyDiscounts, serviceContent };
   } catch {
-    return { addOns: [], minLeadDays, smsOptInDefault, frequencyDiscounts };
+    return { addOns: [], minLeadDays, smsOptInDefault, frequencyDiscounts, serviceContent };
   }
 }

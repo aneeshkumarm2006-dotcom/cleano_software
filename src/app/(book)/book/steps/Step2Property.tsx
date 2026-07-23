@@ -33,6 +33,8 @@ interface Props {
   basePrice?: number;
   /** Per-service-category recurring discount table (item 7). */
   freqDiscounts?: Record<string, Record<string, number>>;
+  /** "What's included" text + graphic per service type (item 3). */
+  serviceContent?: Record<string, { text: string; imageUrl: string }>;
 }
 
 /** An add-on shows when it has no service restriction, or includes this service. */
@@ -40,7 +42,7 @@ function addOnForService(a: { services?: string[] }, serviceType: string): boole
   return !a.services || a.services.length === 0 || a.services.includes(serviceType);
 }
 
-export default function Step2Property({ draft, onChange, basePrice = 0, freqDiscounts = {} }: Props) {
+export default function Step2Property({ draft, onChange, basePrice = 0, freqDiscounts = {}, serviceContent = {} }: Props) {
   const isPC = draft.serviceType === "POST_CONSTRUCTION";
   const isAirbnb = draft.serviceType === "AIRBNB";
   const isMoveInOut = draft.serviceType === "MOVE_IN_OUT";
@@ -48,6 +50,11 @@ export default function Step2Property({ draft, onChange, basePrice = 0, freqDisc
   // Resolve this service's discount row from the admin config (item 7).
   const category = normalizeJobType(draft.serviceType) ?? "RESIDENTIAL";
   const discountRow = freqDiscounts[category] ?? freqDiscounts.RESIDENTIAL ?? {};
+
+  // "What's included" content for the selected service (item 3).
+  const activeContent = serviceContent[draft.serviceType];
+  const hasContent =
+    !!activeContent && (!!activeContent.text.trim() || !!activeContent.imageUrl);
 
   // Switching service hides add-ons that don't apply — deselect them so a hidden
   // add-on can't stay in the total.
@@ -104,6 +111,47 @@ export default function Step2Property({ draft, onChange, basePrice = 0, freqDisc
           ))}
         </div>
       </div>
+
+      {hasContent && (
+        <div
+          className="cl-stack-12"
+          style={{
+            padding: "18px 20px",
+            borderRadius: 16,
+            background: "var(--primary-05, rgba(0,140,156,0.05))",
+            border: "1px solid var(--primary-15, rgba(0,140,156,0.15))",
+          }}>
+          <span className="cl-label" style={{ color: "var(--primary)" }}>
+            What&apos;s included
+          </span>
+          {activeContent?.imageUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={activeContent.imageUrl}
+              alt="What's included in this service"
+              style={{
+                width: "100%",
+                borderRadius: 12,
+                display: "block",
+                maxHeight: 320,
+                objectFit: "cover",
+              }}
+            />
+          )}
+          {activeContent?.text.trim() && (
+            <p
+              style={{
+                margin: 0,
+                fontSize: 14,
+                lineHeight: 1.6,
+                color: "var(--primary-80, #0F172A)",
+                whiteSpace: "pre-wrap",
+              }}>
+              {activeContent.text}
+            </p>
+          )}
+        </div>
+      )}
 
       {isPC ? (
         /* Post-construction: hours × cleaners estimate */

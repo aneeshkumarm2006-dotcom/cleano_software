@@ -61,6 +61,10 @@ export default function BookPage() {
   const [freqDiscounts, setFreqDiscounts] = useState<
     Record<string, Record<string, number>>
   >({});
+  // "What's included" text + graphic per service type (item 3).
+  const [serviceContent, setServiceContent] = useState<
+    Record<string, { text: string; imageUrl: string }>
+  >({});
 
   // Hard guard against double-submit. The button is disabled while
   // `submitting` is true, but state updates are async so a fast double-click
@@ -81,10 +85,11 @@ export default function BookPage() {
   // Load admin-managed add-on catalog on first mount.
   useEffect(() => {
     let cancelled = false;
-    getBookingConfig().then(({ addOns, minLeadDays, smsOptInDefault, frequencyDiscounts }) => {
+    getBookingConfig().then(({ addOns, minLeadDays, smsOptInDefault, frequencyDiscounts, serviceContent }) => {
       if (cancelled) return;
       setMinLeadDays(minLeadDays);
       setFreqDiscounts(frequencyDiscounts);
+      setServiceContent(serviceContent);
       setDraft((d) => ({ ...d, smsConsent: smsOptInDefault }));
       setDraft((d) =>
         d.addOns.length > 0
@@ -650,6 +655,7 @@ export default function BookPage() {
                 onChange={patch}
                 basePrice={basePrice}
                 freqDiscounts={freqDiscounts}
+                serviceContent={serviceContent}
               />
             )}
             {step === 2 && (

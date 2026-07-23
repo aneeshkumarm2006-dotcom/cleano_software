@@ -29,6 +29,7 @@ import {
   Globe2,
   HardHat,
   Tags,
+  FileText,
 } from "lucide-react";
 import ProfileTab from "./tabs/ProfileTab";
 import TaxSettingsTab from "./tabs/TaxSettingsTab";
@@ -62,6 +63,7 @@ import BudgetsTab from "./tabs/BudgetsTab";
 import GeneralTab from "./tabs/GeneralTab";
 import ProviderTab from "./tabs/ProviderTab";
 import WebsiteTab from "./tabs/WebsiteTab";
+import ServiceContentTab from "./tabs/ServiceContentTab";
 import {
   SettingsUser,
   AppSettingRecord,
@@ -101,6 +103,7 @@ type TabId =
   | "tax"
   | "pricing"
   | "jobTypes"
+  | "serviceContent"
   | "paymentTypes"
   | "inventoryRules"
   | "kitTemplates"
@@ -138,6 +141,7 @@ const TAB_SUBTITLES: Record<TabId, string> = {
   tax: "GST / QST rates and registration numbers.",
   pricing: "Per-unit pricing, add-ons and specialty packages.",
   jobTypes: "Define the kinds of jobs you offer.",
+  serviceContent: "What's included text + graphic shown per service on booking.",
   paymentTypes: "Customer-facing labels for each payment method.",
   inventoryRules: "Per-job usage and refill thresholds.",
   kitTemplates: "Bundled product sets for each visit type.",
@@ -164,7 +168,7 @@ const TAB_SUBTITLES: Record<TabId, string> = {
 // Sidebar groupings (label → ordered tab ids).
 const TAB_GROUPS: { label: string; ids: TabId[] }[] = [
   { label: "You", ids: ["profile", "availability"] },
-  { label: "Operations", ids: ["closures", "jobTypes", "checklistTemplates", "serviceAreas"] },
+  { label: "Operations", ids: ["closures", "jobTypes", "serviceContent", "checklistTemplates", "serviceAreas"] },
   { label: "Money", ids: ["tax", "pricing", "paymentTypes", "multipliers", "budgets", "payments"] },
   { label: "Inventory", ids: ["inventoryRules", "kitTemplates", "suppliers", "inventoryLocations"] },
   { label: "Team", ids: ["training", "documents", "roles"] },
@@ -181,6 +185,12 @@ const TABS: TabDef[] = [
   { id: "tax", label: "Tax", icon: Percent, adminOnly: true },
   { id: "pricing", label: "Pricing Rules", icon: DollarSign, adminOnly: true },
   { id: "jobTypes", label: "Job Types", icon: Briefcase, adminOnly: true },
+  {
+    id: "serviceContent",
+    label: "What's Included",
+    icon: FileText,
+    adminOnly: true,
+  },
   {
     id: "paymentTypes",
     label: "Payment Types",
@@ -397,6 +407,9 @@ export default function SettingsClient({
           )}
           {activeTab === "jobTypes" && isAdmin && (
             <JobTypesTab settings={appSettings} />
+          )}
+          {activeTab === "serviceContent" && isAdmin && (
+            <ServiceContentTab settings={appSettings} />
           )}
           {activeTab === "paymentTypes" && isAdmin && (
             <PaymentTypesTab settings={appSettings} />
