@@ -481,20 +481,27 @@ export async function submitBooking(input: SubmitBookingInput) {
       const recurringDiscount = discountPct > 0
         ? Math.round((pricing.basePrice * discountPct / 100) * 100) / 100
         : 0;
-      const childPricing = recurringDiscount > 0
-        ? await computeBookingPrice({
-            serviceType: input.serviceType,
-            bedCount: input.bedCount,
-            bathCount: input.bathCount,
-            halfBathCount: input.halfBathCount ?? 0,
-            squareFootage: input.squareFootage,
-            pcHours: input.pcHours,
-            pcCleaners: input.pcCleaners,
-            addOns: resolvedAddOns,
-            travelFee: pricing.travelFee,
-            discountAmount: discountAmount + recurringDiscount,
-          })
-        : pricing;
+      // Child jobs (2nd+ visits) carry ONLY the recurring frequency discount.
+      // The one-shot referral discount / spent credit (`discountAmount`) belongs
+      // to the FIRST booking — the client's credit balance is decremented just
+      // once (above), so re-applying it to every visit in the series would give
+      // free money on jobs 2..N. Recompute whenever either discount is in play;
+      // otherwise the child equals the (undiscounted) primary pricing.
+      const childPricing =
+        recurringDiscount > 0 || discountAmount > 0
+          ? await computeBookingPrice({
+              serviceType: input.serviceType,
+              bedCount: input.bedCount,
+              bathCount: input.bathCount,
+              halfBathCount: input.halfBathCount ?? 0,
+              squareFootage: input.squareFootage,
+              pcHours: input.pcHours,
+              pcCleaners: input.pcCleaners,
+              addOns: resolvedAddOns,
+              travelFee: pricing.travelFee,
+              discountAmount: recurringDiscount,
+            })
+          : pricing;
 
       let cursor = startTime;
       for (let i = 0; i < recurrences; i++) {
