@@ -18,6 +18,9 @@ interface JobRowProps {
   job: any;
   isMainEmployee: boolean;
   missingEquipment?: MissingEquipmentInfo[];
+  /** Correct per-cleaner payout (tier calc / override) from the server. The
+      raw job.employeePay column is wrong for imports, so prefer this. */
+  cleanerPay?: number;
 }
 
 function statusClass(status: string) {
@@ -31,7 +34,11 @@ function statusClass(status: string) {
   }
 }
 
-export function JobRow({ job, isMainEmployee, missingEquipment = [] }: JobRowProps) {
+export function JobRow({ job, isMainEmployee, missingEquipment = [], cleanerPay }: JobRowProps) {
+  // Server-computed payout wins; fall back to the column only if it wasn't
+  // provided (e.g. a caller that hasn't been migrated yet).
+  const payAmount = cleanerPay != null ? cleanerPay : Number(job.employeePay);
+  const hasPay = cleanerPay != null || job.employeePay != null;
   const router = useRouter();
   const jobWithClock = job as any;
   const canClockIn = !jobWithClock.clockInTime && !["COMPLETED", "CANCELLED", "PAID"].includes(job.status);
@@ -114,21 +121,21 @@ export function JobRow({ job, isMainEmployee, missingEquipment = [] }: JobRowPro
 
         {/* Side: pay + CTA */}
         <div className="cl-jobs2-side">
-          {job.employeePay != null && isMainEmployee && (
+          {hasPay && isMainEmployee && (
             payBreakdownAvailable ? (
               <button
                 type="button"
                 className="cl-jobs2-pay"
                 onClick={(e) => { e.stopPropagation(); setPayModalOpen(true); }}>
                 <span className="lbl">{payLabel}</span>
-                ${Number(job.employeePay).toFixed(2)}
+                ${payAmount.toFixed(2)}
               </button>
             ) : (
               /* FLAT/HOURLY: a fixed amount — nothing to break down, and the
                  breakdown must never hint at a % of the client's price. */
               <div className="cl-jobs2-pay" style={{ cursor: "default" }}>
                 <span className="lbl">{payLabel}</span>
-                ${Number(job.employeePay).toFixed(2)}
+                ${payAmount.toFixed(2)}
               </div>
             )
           )}

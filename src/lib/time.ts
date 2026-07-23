@@ -98,6 +98,30 @@ export function tzWallClockToUtc(dateStr: string, timeStr = "00:00:00"): Date {
   return new Date(wallAsUtc - offset);
 }
 
+// Inverse of tzWallClockToUtc: split a stored UTC instant into the date/time
+// input strings a form expects, in the BUSINESS timezone. Using
+// `new Date(x).toISOString().slice(...)` here (UTC) is what made the job edit
+// modal show a 6 PM Toronto job as 10 PM — the +4/5h offset — while the jobs
+// list (which formats in Toronto) showed it correctly.
+export function tzInputParts(date: Date | string): { date: string; time: string } {
+  const d = typeof date === "string" ? new Date(date) : date;
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(d);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+  const hh = get("hour") === "24" ? "00" : get("hour");
+  return {
+    date: `${get("year")}-${get("month")}-${get("day")}`,
+    time: `${hh}:${get("minute")}`,
+  };
+}
+
 export function fmtShortTz(d: Date): string {
   return d.toLocaleTimeString("en-US", {
     hour: "numeric",

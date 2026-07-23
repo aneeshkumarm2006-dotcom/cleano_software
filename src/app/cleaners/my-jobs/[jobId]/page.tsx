@@ -27,6 +27,7 @@ import JobChecklistPanel from "./JobChecklistPanel";
 import MapLinks from "./MapLinksClient";
 import JobChatThread from "@/components/JobChatThread";
 import ScrollToTop from "./ScrollToTop";
+import { cleanerPayoutForJobs } from "@/lib/cleaner-pay-display";
 
 type PageProps = {
   params: Promise<{ jobId: string }>;
@@ -78,6 +79,12 @@ export default async function JobDetailPage({ params }: PageProps) {
 
   const isEmployee = job.employeeId === session.user.id;
   const isCleaner = job.cleaners.some((c) => c.id === session.user.id);
+
+  // Correct payout for THIS cleaner (base price × rating rate / manual
+  // override) — never the raw employeePay column, which for imports is the
+  // BookingKoala provider payment.
+  const myPayout =
+    (await cleanerPayoutForJobs([job.id], session.user.id)).get(job.id) ?? 0;
   if (!isEmployee && !isCleaner) redirect("/cleaners/my-jobs");
 
   const showCustomerPhone = await getSetting("provider.showCustomerPhone");
@@ -211,8 +218,8 @@ export default async function JobDetailPage({ params }: PageProps) {
             <strong>Instant Payout Eligible</strong>
             <span>
               Payment received.{" "}
-              {job.employeePay != null
-                ? `Request a withdrawal of $${job.employeePay.toFixed(2)} from My Pay.`
+              {myPayout > 0
+                ? `Request a withdrawal of $${myPayout.toFixed(2)} from My Pay.`
                 : "Request a withdrawal from My Pay."}
             </span>
           </div>
@@ -347,9 +354,9 @@ export default async function JobDetailPage({ params }: PageProps) {
                 <dt>Pay rate</dt>
                 <dd>
                   ${job.hourlyRate.toFixed(2)}/hr
-                  {job.employeePay != null && (
+                  {myPayout > 0 && (
                     <span style={{ color: "var(--primary-50)", fontWeight: 400 }}>
-                      {" "}· ${job.employeePay.toFixed(2)} est.
+                      {" "}· ${myPayout.toFixed(2)} est.
                     </span>
                   )}
                 </dd>
@@ -357,11 +364,11 @@ export default async function JobDetailPage({ params }: PageProps) {
             )}
             {isEmployee &&
               job.payType !== "HOURLY" &&
-              job.employeePay != null && (
+              (myPayout > 0 || job.employeePay != null) && (
                 <div className="cl-jd-dl-row">
                   {/* FLAT jobs show only the fixed payout — never "% of price". */}
                   <dt>{job.payType === "FLAT" ? "Pay" : "Est. pay"}</dt>
-                  <dd>${job.employeePay.toFixed(2)}</dd>
+                  <dd>${myPayout.toFixed(2)}</dd>
                 </div>
               )}
           </dl>

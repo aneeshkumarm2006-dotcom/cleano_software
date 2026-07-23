@@ -21,6 +21,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { addonIcon } from "@/lib/addon-icons";
+import { tzInputParts } from "@/lib/time";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import Textarea from "@/components/ui/Textarea";
@@ -617,12 +618,11 @@ export default function JobModal({
           aptNumber: job.aptNumber || "",
           description: job.description || "",
           jobType: job.jobType || "",
-          startDate: job.startTime
-            ? new Date(job.startTime).toISOString().split("T")[0]
-            : "",
-          startTime: job.startTime
-            ? new Date(job.startTime).toISOString().split("T")[1].slice(0, 5)
-            : "",
+          // Pre-fill the date/time inputs in the BUSINESS timezone. Reading
+          // the instant with toISOString() (UTC) showed a 6 PM Toronto job as
+          // 10 PM in this modal while the jobs list showed 6 PM.
+          startDate: job.startTime ? tzInputParts(job.startTime).date : "",
+          startTime: job.startTime ? tzInputParts(job.startTime).time : "",
           price: job.price || "",
           employeePay: job.employeePay || "",
           payType: (job.payType as "PERCENTAGE" | "FLAT" | "HOURLY") || "PERCENTAGE",

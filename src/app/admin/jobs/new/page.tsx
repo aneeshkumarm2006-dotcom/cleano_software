@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { revalidatePath } from "next/cache";
 import { getTaxRates, computeJobTaxes } from "@/lib/tax.server";
-import { tzWallClockToUtc } from "@/lib/time";
+import { tzWallClockToUtc, tzInputParts } from "@/lib/time";
 import { syncJobAssignments } from "@/lib/job-assignments";
 import CleanerSelector from "./CleanerSelector";
 import JobTypeSelector from "./JobTypeSelector";
@@ -561,7 +561,7 @@ export default async function JobFormPage({
                 name="startDate"
                 defaultValue={
                   isEditing && existingJob?.startTime
-                    ? new Date(existingJob.startTime).toISOString().split("T")[0]
+                    ? tzInputParts(existingJob.startTime).date
                     : ""
                 }
                 size="md"
@@ -573,7 +573,7 @@ export default async function JobFormPage({
                 name="startTime"
                 defaultValue={
                   isEditing && existingJob?.startTime
-                    ? new Date(existingJob.startTime).toISOString().split("T")[1].slice(0, 5)
+                    ? tzInputParts(existingJob.startTime).time
                     : ""
                 }
                 size="md"

@@ -17,6 +17,7 @@ import { ClearLoadingOnMount } from "./ClearLoadingOnMount";
 import { JobRow } from "./JobRow";
 import { Calendar } from "lucide-react";
 import PendingInvitesPanel from "./PendingInvitesPanel";
+import { cleanerPayoutForJobs } from "@/lib/cleaner-pay-display";
 
 type SearchParams = Promise<{
   [key: string]: string | string[] | undefined;
@@ -316,6 +317,14 @@ export default async function MyJobsPage({
     }
   }
 
+  // Correct per-cleaner payout (base price × rating rate, or manual override) —
+  // NOT the raw employeePay column, which for imports holds the BookingKoala
+  // provider payment.
+  const payoutByJob = await cleanerPayoutForJobs(
+    filteredJobs.map((j) => j.id),
+    session.user.id
+  );
+
   // Pending accept/decline invites for this cleaner.
   const pendingInviteRows = await db.jobAssignmentInvite.findMany({
     where: {
@@ -399,6 +408,7 @@ export default async function MyJobsPage({
                   job={job}
                   isMainEmployee={isMainEmployee(job.id)}
                   missingEquipment={missingEquipmentByJob.get(job.id) || []}
+                  cleanerPay={payoutByJob.get(job.id)}
                 />
               ))}
             </div>

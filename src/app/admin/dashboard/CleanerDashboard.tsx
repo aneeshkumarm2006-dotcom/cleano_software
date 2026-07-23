@@ -5,6 +5,7 @@ import {
   Calendar, Briefcase, ShieldAlert,
 } from "lucide-react";
 import { getStrikeSummary, STRIKE_THRESHOLD } from "@/lib/strikes";
+import { cleanerPayoutForJobs } from "@/lib/cleaner-pay-display";
 import { fmtDate, fmtTime, startOfDayTz } from "@/lib/time";
 import {
   upcomingJobsWhere,
@@ -102,38 +103,45 @@ export default async function CleanerDashboard({ userId, userName }: Props) {
     }).catch(() => []),
   ]);
 
-  // Earnings — aggregated in SQL (the old version summed a take-limited array).
-  const [weekAgg, monthAgg, pendingAgg] = await Promise.all([
-    db.job.aggregate({
-      _sum: { employeePay: true },
-      _count: true,
+  // Earnings — must use the correct per-cleaner payout (base price × rating
+  // rate / manual override), NOT the raw employeePay column, which for
+  // BookingKoala imports holds the provider payment. We fetch the job ids in
+  // each window, compute the real payout, and sum.
+  const [weekJobRows, monthJobRows, pendingJobRows] = await Promise.all([
+    db.job.findMany({
       where: {
-        deletedAt: null,
-        employeeId: userId,
+        deletedAt: null, employeeId: userId,
         status: { in: [...CLEANER_DONE_STATUSES] },
         jobDate: { gte: startOfWeek },
       },
+      select: { id: true },
     }),
-    db.job.aggregate({
-      _sum: { employeePay: true },
+    db.job.findMany({
       where: {
-        deletedAt: null,
-        employeeId: userId,
+        deletedAt: null, employeeId: userId,
         status: { in: [...CLEANER_DONE_STATUSES] },
         jobDate: { gte: startOfMonth },
       },
+      select: { id: true },
     }),
-    // Pay still to come: upcoming jobs this cleaner leads.
-    db.job.aggregate({
-      _sum: { employeePay: true },
+    db.job.findMany({
       where: { AND: [upcomingWhere, { employeeId: userId }] },
+      select: { id: true },
     }),
   ]);
 
-  const weekEarnings = Number(weekAgg._sum.employeePay ?? 0);
-  const weekJobCount = weekAgg._count;
-  const monthEarnings = Number(monthAgg._sum.employeePay ?? 0);
-  const pendingPay = Number(pendingAgg._sum.employeePay ?? 0);
+  const allIds = [
+    ...weekJobRows, ...monthJobRows, ...pendingJobRows,
+    ...recentJobs.map((j) => ({ id: j.id })),
+  ].map((j) => j.id);
+  const payoutByJob = await cleanerPayoutForJobs(allIds, userId);
+  const sumPayout = (rows: { id: string }[]) =>
+    rows.reduce((s, r) => s + (payoutByJob.get(r.id) ?? 0), 0);
+
+  const weekEarnings = sumPayout(weekJobRows);
+  const weekJobCount = weekJobRows.length;
+  const monthEarnings = sumPayout(monthJobRows);
+  const pendingPay = sumPayout(pendingJobRows);
 
   // Low inventory
   const lowItems = employeeProducts.filter((ep) => {
@@ -421,8 +429,8 @@ export default async function CleanerDashboard({ userId, userName }: Props) {
                   {j.location ? ` · ${j.location}` : ""}
                 </div>
               </div>
-              {j.employeePay != null && j.employeeId === userId && (
-                <div className="amt">${Number(j.employeePay).toFixed(2)}</div>
+              {j.employeeId === userId && (payoutByJob.get(j.id) ?? 0) > 0 && (
+                <div className="amt">${(payoutByJob.get(j.id) ?? 0).toFixed(2)}</div>
               )}
             </Link>
           ))}
