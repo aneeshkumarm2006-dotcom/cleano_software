@@ -4,6 +4,9 @@ import { redirect } from "next/navigation";
 import { db } from "@/db";
 import JobsPageClient from "./JobsPageClient";
 import { getBookingConfig } from "../../(book)/actions/getBookingConfig";
+import { getServicePricingConfig } from "@/lib/booking-pricing";
+import { getServiceCatalog } from "@/lib/service-catalog.server";
+import { serviceOptions } from "@/lib/service-catalog";
 
 type SearchParams = Promise<{
   [key: string]: string | string[] | undefined;
@@ -81,6 +84,7 @@ export default async function JobsPage({
       invoiceSent: true,
       paymentType: true,
       isCashJob: true,
+      taxExempt: true,
       usesFixedPrice: true,
       discountAmount: true,
       refundedAmount: true,
@@ -130,6 +134,15 @@ export default async function JobsPage({
   // in the job form so staff don't have to retype them.
   const { addOns: addOnCatalog } = await getBookingConfig();
 
+  // Move-in/out per-sq-ft rates, so the job modal can show the derived price
+  // for square-foot-priced services (item 8).
+  const sqftRates = (await getServicePricingConfig()).moveInOut;
+
+  // THE service list (item 20) — Settings → Job Types drives the form picker
+  // and the filter, so they can never drift apart.
+  const serviceCatalog = await getServiceCatalog();
+  const serviceOptionList = serviceOptions(serviceCatalog);
+
   const jobsData = allJobs.map((job) => {
     const productCost = job.productUsage.reduce(
       (sum, u) => sum + u.quantity * u.product.costPerUnit,
@@ -166,6 +179,7 @@ export default async function JobsPage({
       invoiceSent: job.invoiceSent,
       paymentType: job.paymentType,
       isCashJob: job.isCashJob,
+      taxExempt: job.taxExempt,
       usesFixedPrice: job.usesFixedPrice,
       discountAmount: job.discountAmount,
       // Needed client-side by the canonical revenue predicate (metrics-shared):
@@ -202,6 +216,8 @@ export default async function JobsPage({
         cleaners={cleaners}
         clients={clients}
         addOnCatalog={addOnCatalog}
+        serviceOptions={serviceOptionList}
+        sqftRates={sqftRates}
         isAdmin={isAdmin}
         archived={archived}
       />

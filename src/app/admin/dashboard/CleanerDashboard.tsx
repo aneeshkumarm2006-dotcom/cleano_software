@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { getStrikeSummary, STRIKE_THRESHOLD } from "@/lib/strikes";
 import { cleanerPayoutForJobs } from "@/lib/cleaner-pay-display";
+import { isCleanerLow } from "@/lib/inventory-thresholds";
 import { fmtDate, fmtTime, startOfDayTz } from "@/lib/time";
 import {
   upcomingJobsWhere,
@@ -143,12 +144,15 @@ export default async function CleanerDashboard({ userId, userName }: Props) {
   const monthEarnings = sumPayout(monthJobRows);
   const pendingPay = sumPayout(pendingJobRows);
 
-  // Low inventory
-  const lowItems = employeeProducts.filter((ep) => {
-    const rule = ep.product.inventoryRule;
-    if (!rule) return false;
-    return ep.quantity <= rule.refillThreshold;
-  });
+  // Low inventory — CLEANER restock threshold (item 14). Previously a product
+  // with no InventoryRule row was skipped entirely, so it could never show as
+  // low no matter how empty the cleaner's kit was.
+  const lowItems = employeeProducts.filter((ep) =>
+    isCleanerLow(ep.quantity, {
+      cleanerRestockThreshold: ep.product.cleanerRestockThreshold,
+      usagePerJob: ep.product.inventoryRule?.usagePerJob ?? 0,
+    })
+  );
 
   // Next job
   const nextJob = upcomingJobs[0] ?? null;

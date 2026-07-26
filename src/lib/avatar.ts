@@ -22,6 +22,22 @@ export function avatarColor(name: string): string {
   return AV_PALETTE[Math.abs(h) % AV_PALETTE.length];
 }
 
+/**
+ * A name shortened for tight spaces: "Premsai Kilaru" → "Premsai K."
+ *
+ * The calendar month view previously did `name.split(" ")[0]`, which threw the
+ * surname away entirely — two clients called "David" were indistinguishable on
+ * the card (awer_fixes.pdf item 28, "client name, shortened if needed").
+ * Single-word names are returned as-is.
+ */
+export function shortName(name: string): string {
+  const parts = (name || "").trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "";
+  if (parts.length === 1) return parts[0];
+  const last = parts[parts.length - 1];
+  return `${parts[0]} ${last[0].toUpperCase()}.`;
+}
+
 /** Up to two uppercase initials from a name. */
 export function initials(name: string): string {
   return (name || "")

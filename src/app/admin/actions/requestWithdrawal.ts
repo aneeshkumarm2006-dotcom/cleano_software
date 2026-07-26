@@ -9,6 +9,7 @@ import {
   sendProviderPayoutRequested,
   sendAdminPayoutRequest,
 } from "@/lib/email";
+import { summarisePayouts } from "@/lib/payout-math";
 
 interface RequestWithdrawalInput {
   amount: number;
@@ -46,9 +47,11 @@ export async function requestWithdrawal(
       }),
     ]);
 
-    const paidTotal = payouts
-      .filter((p) => p.payPeriod.status === "PAID")
-      .reduce((sum, p) => sum + p.finalAmount, 0);
+    // Clamped read — a legacy negative payout must not shrink the withdrawable
+    // balance below what the cleaner was actually paid (fix list item 1).
+    const paidTotal = summarisePayouts(
+      payouts.filter((p) => p.payPeriod.status === "PAID")
+    ).totalFinal;
 
     const reservedTotal = withdrawals
       .filter(

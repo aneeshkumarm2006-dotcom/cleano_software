@@ -49,29 +49,43 @@ export async function checkoutInventory(input: CheckoutInventoryInput) {
     }
 
     const productIds = input.items.map((i) => i.productId);
+
+    // Products are loaded independently of location stock: a cleaner may pick up
+    // something this location has never carried a stock row for, and that must
+    // not block them (fix list items 5 + 19).
+    const products = await db.product.findMany({
+      where: { id: { in: productIds }, deletedAt: null },
+    });
+    const productById = new Map(products.map((p) => [p.id, p]));
+
+    const missing = input.items.filter((i) => !productById.has(i.productId));
+    if (missing.length > 0) {
+      // A product that doesn't exist is a bad request, not a stock problem.
+      return { success: false, error: "One or more products no longer exist" };
+    }
+
     const stocks = await db.inventoryLocationStock.findMany({
       where: {
         locationId: input.locationId,
         productId: { in: productIds },
       },
-      include: { product: true },
     });
-
     const stockByProduct = new Map(stocks.map((s) => [s.productId, s]));
 
+    // Low/zero stock is a WARNING, never a block. Supplies are routinely
+    // restocked or handed out outside the app, so the locker count is an
+    // estimate — letting it go negative and reconciling later is correct, and
+    // is far better than stranding a cleaner who needs product for a job.
+    const warnings: string[] = [];
     for (const item of input.items) {
-      const stock = stockByProduct.get(item.productId);
-      if (!stock) {
-        return {
-          success: false,
-          error: `Product is not stocked at this location`,
-        };
-      }
-      if (stock.quantity < item.quantity) {
-        return {
-          success: false,
-          error: `Only ${stock.quantity} ${stock.product.unit} of ${stock.product.name} available at this location`,
-        };
+      const product = productById.get(item.productId)!;
+      const available = stockByProduct.get(item.productId)?.quantity ?? 0;
+      if (available < item.quantity) {
+        const after = available - item.quantity;
+        warnings.push(
+          `${product.name}: ${available} ${product.unit} on record at this location, ` +
+            `taking ${item.quantity} — locker will show ${after} and is flagged for admin review.`
+        );
       }
     }
 
@@ -92,14 +106,22 @@ export async function checkoutInventory(input: CheckoutInventoryInput) {
         });
 
         for (const item of input.items) {
-          await tx.inventoryLocationStock.update({
+          // upsert, not update: this location may have no stock row for the
+          // product at all. Creating it at a negative quantity records the debt
+          // instead of rejecting the pickup (fix list item 5).
+          await tx.inventoryLocationStock.upsert({
             where: {
               locationId_productId: {
                 locationId: input.locationId,
                 productId: item.productId,
               },
             },
-            data: { quantity: { decrement: item.quantity } },
+            update: { quantity: { decrement: item.quantity } },
+            create: {
+              locationId: input.locationId,
+              productId: item.productId,
+              quantity: -item.quantity,
+            },
           });
 
           // Keep the global stockLevel admins see in sync with pickups.
@@ -126,7 +148,7 @@ export async function checkoutInventory(input: CheckoutInventoryInput) {
           // Unified audit trail (spec item 15): pickups appear in the same
           // Stock History as every other change — one row for the cleaner's
           // kit (+), one for the warehouse (−).
-          const product = stockByProduct.get(item.productId)!.product;
+          const product = productById.get(item.productId)!;
           const warehouseAfter = product.stockLevel - item.quantity;
           await tx.inventoryChange.createMany({
             data: [
@@ -171,7 +193,10 @@ export async function checkoutInventory(input: CheckoutInventoryInput) {
     revalidatePath("/cleaners/my-inventory/history");
     revalidatePath("/admin/inventory");
 
-    return { success: true, checkoutId: checkout.id };
+    // `warnings` is non-empty when the locker went low/negative. The pickup
+    // still succeeded — the UI shows these for information and the admin
+    // inventory view flags the negative rows for reconciliation.
+    return { success: true, checkoutId: checkout.id, warnings };
   } catch (error: unknown) {
     console.error("Error during checkout:", error);
     const detail =

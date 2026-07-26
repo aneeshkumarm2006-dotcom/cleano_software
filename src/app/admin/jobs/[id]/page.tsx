@@ -47,6 +47,9 @@ export default async function JobPage({
       },
       // Per-cleaner live status rows (item 9).
       assignments: true,
+      // Breaks taken on this job (item 26) — the time summary shows active
+      // working time, which is elapsed minus these.
+      breaks: true,
       // Manual/customer star ratings attached to this job (item 13).
       ratings: {
         include: { employee: { select: { id: true, name: true } } },
@@ -204,6 +207,13 @@ export default async function JobPage({
     parking: job.parking,
     paymentReceived: job.paymentReceived,
     isCashJob: job.isCashJob,
+    taxExempt: job.taxExempt,
+    discountReason: job.discountReason,
+    breaks: (job.breaks ?? []).map((b: { cleanerId: string; startedAt: Date; endedAt: Date | null }) => ({
+      cleanerId: b.cleanerId,
+      startedAt: b.startedAt.toISOString(),
+      endedAt: b.endedAt ? b.endedAt.toISOString() : null,
+    })),
     usesFixedPrice: job.usesFixedPrice,
     notifyClient: job.notifyClient,
     notifyProvider: job.notifyProvider,

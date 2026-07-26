@@ -3,6 +3,8 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { getSetting } from "@/lib/settings";
+import { jobTypeLabel } from "@/lib/calendar-labels";
+import { getServiceCatalogWithLabels } from "@/lib/service-catalog.server";
 import { fmtDate, fmtDateTime, fmtTime } from "@/lib/time";
 
 // Photo upload (uploadJobPhoto) runs as a server action off this page. Give it
@@ -34,17 +36,10 @@ type PageProps = {
   params: Promise<{ jobId: string }>;
 };
 
-function jobTypeLabel(type: string | null) {
-  if (!type) return null;
-  switch (type) {
-    case "R": return "Residential cleaning";
-    case "C": return "Commercial cleaning";
-    case "PC": return "Post-construction cleaning";
-    case "F": return "Follow-up cleaning";
-    case "move-in-out": return "Move-in / move-out cleaning";
-    default: return type;
-  }
-}
+// Local switch removed (item 20): it was a SEVENTH job-type list, understood
+// only 5 legacy codes, and echoed the raw stored value for everything else — so
+// a cleaner could see "MOVE_IN_OUT" on their job screen. Now uses the shared
+// resolver with the admin's own service names from Settings.
 
 function jobTypeSlug(type: string | null) {
   if (!type) return null;
@@ -59,6 +54,8 @@ function jobTypeSlug(type: string | null) {
 
 export default async function JobDetailPage({ params }: PageProps) {
   const session = await auth.api.getSession({ headers: await headers() });
+  // Admin's own service names from Settings (item 20).
+  const { labels: serviceLabels } = await getServiceCatalogWithLabels();
   if (!session) redirect("/cleanos/login");
 
   const { jobId } = await params;
@@ -161,8 +158,8 @@ export default async function JobDetailPage({ params }: PageProps) {
           </>
         )}
         <h1>{job.clientName}</h1>
-        {jobTypeLabel(job.jobType) && (
-          <div className="job-type">{jobTypeLabel(job.jobType)}</div>
+        {jobTypeLabel(job.jobType, serviceLabels) && (
+          <div className="job-type">{jobTypeLabel(job.jobType, serviceLabels)}</div>
         )}
         <div className="pills">
           <span className={`cl-pill ${statusSlug}`}>{job.status.replace("_", " ")}</span>

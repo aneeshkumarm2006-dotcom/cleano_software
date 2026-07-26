@@ -24,6 +24,9 @@ export async function assignKit(params: AssignKitParams) {
       return { success: false, error: "Employee and kit template are required" };
     }
 
+    const actorId = session.user.id;
+    const actorName = session.user.name ?? null;
+
     const kit = await db.kitTemplate.findUnique({
       where: { id: kitTemplateId },
       include: { items: { include: { product: true } } },
@@ -82,6 +85,38 @@ export async function assignKit(params: AssignKitParams) {
             },
           });
         }
+
+        // Audit rows — kit assignments were moving stock with no trace, so they
+        // were invisible in both the activity log and the product's Stock
+        // History (fix list item 18). One row for the cleaner's kit, one for
+        // the warehouse, matching every other assignment path.
+        const before = existing?.quantity ?? 0;
+        await tx.inventoryChange.createMany({
+          data: [
+            {
+              productId: item.productId,
+              employeeId,
+              employeeName: employee.name ?? null,
+              quantityChange: item.quantity,
+              newQuantity: before + item.quantity,
+              unit: item.product.unit,
+              reason: `Assigned via kit: ${kit.name}`,
+              changedById: actorId,
+              changedByName: actorName,
+            },
+            {
+              productId: item.productId,
+              employeeId: null,
+              employeeName: null,
+              quantityChange: -item.quantity,
+              newQuantity: item.product.stockLevel - item.quantity,
+              unit: item.product.unit,
+              reason: `Kit "${kit.name}" issued to ${employee.name ?? "cleaner"}`,
+              changedById: actorId,
+              changedByName: actorName,
+            },
+          ],
+        });
       }
     });
 

@@ -9,6 +9,11 @@ import SupplierComparison from "./SupplierComparison";
 import ForecastView from "./ForecastView";
 import CleanerInventoryView from "./CleanerInventoryView";
 import RequestsView from "./RequestsView";
+import QuickAssignModal, {
+  type QuickAssignCleaner,
+  type QuickAssignProduct,
+} from "./QuickAssignModal";
+import ActivityView from "./ActivityView";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import {
@@ -19,6 +24,7 @@ import {
   ClipboardList,
   Settings,
   ArrowUpRight,
+  Activity,
 } from "lucide-react";
 
 type ProductCategory = "LIQUID_SPRAY" | "MOP_LIQUID" | "DISPOSABLE" | "OTHER";
@@ -78,6 +84,7 @@ interface ForecastEmployee {
 type TabId =
   | "products"
   | "cleaners"
+  | "activity"
   | "requests"
   | "suppliers"
   | "forecast"
@@ -138,6 +145,10 @@ interface InventoryPageClientProps {
   cleanerInventory?: CleanerInventoryEntry[];
   /** OWNER/ADMIN may edit cleaner kit counts; everyone else gets read-only. */
   canEditCleanerInventory?: boolean;
+  /** Quick-assign source data (items 6 + 13) — ALL products / ALL cleaners. */
+  assignProducts?: QuickAssignProduct[];
+  assignCleaners?: QuickAssignCleaner[];
+  assignLocations?: { id: string; name: string }[];
   requests?: RequestEntry[];
   archived?: boolean;
 }
@@ -146,6 +157,7 @@ function isTabId(v: string): v is TabId {
   return (
     v === "products" ||
     v === "cleaners" ||
+    v === "activity" ||
     v === "requests" ||
     v === "suppliers" ||
     v === "forecast" ||
@@ -164,10 +176,22 @@ export default function InventoryPageClient({
   forecastData,
   cleanerInventory = [],
   canEditCleanerInventory = false,
+  assignProducts = [],
+  assignCleaners = [],
+  assignLocations = [],
   requests = [],
   archived = false,
 }: InventoryPageClientProps) {
   const router = useRouter();
+
+  // Quick assign (items 6 + 13). `assignFor` pre-selects a cleaner when opened
+  // from a specific row via "Assign more" (item 17).
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [assignFor, setAssignFor] = useState<string | null>(null);
+  const openAssign = (cleanerId?: string) => {
+    setAssignFor(cleanerId ?? null);
+    setAssignOpen(true);
+  };
 
   const pendingRequests = requests.filter((r) => r.status === "PENDING").length;
   const lowCleanerCount = cleanerInventory.filter((c) => c.lowCount > 0).length;
@@ -185,6 +209,7 @@ export default function InventoryPageClient({
       icon: <Users size={15} />,
       badge: lowCleanerCount,
     },
+    { id: "activity", label: "Activity", icon: <Activity size={15} /> },
     {
       id: "requests",
       label: "Requests",
@@ -337,6 +362,26 @@ export default function InventoryPageClient({
         <CleanerInventoryView
           cleaners={cleanerInventory}
           canEdit={canEditCleanerInventory}
+          onAssign={canEditCleanerInventory ? openAssign : undefined}
+        />
+      )}
+
+      {canEditCleanerInventory && (
+        <QuickAssignModal
+          key={assignFor ?? "any"}
+          isOpen={assignOpen}
+          onClose={() => setAssignOpen(false)}
+          products={assignProducts}
+          cleaners={assignCleaners}
+          locations={assignLocations}
+          initialCleanerId={assignFor}
+        />
+      )}
+
+      {activeTab === "activity" && (
+        <ActivityView
+          cleaners={assignCleaners.map((c) => ({ id: c.id, name: c.name }))}
+          products={assignProducts.map((p) => ({ id: p.id, name: p.name }))}
         />
       )}
 

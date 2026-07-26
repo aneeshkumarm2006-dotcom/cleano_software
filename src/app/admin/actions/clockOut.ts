@@ -8,6 +8,7 @@ import type { Prisma } from "@prisma/client";
 import { projectWashables } from "@/lib/wash";
 import { sendAdminClockedOut } from "@/lib/email";
 import { ensureRatingRequest } from "@/lib/rating";
+import { isCleanerLow } from "@/lib/inventory-thresholds";
 
 const ML_PER_SPRAY = 1.25;
 
@@ -133,6 +134,26 @@ export async function clockOut(jobId: string, usage: PostJobUsage) {
         })
       );
 
+      // Audit row — job usage must appear in the inventory activity log
+      // alongside assignments, pickups and adjustments (fix list item 18).
+      // Without this the log silently omitted the single biggest source of
+      // stock movement: product actually consumed on jobs.
+      ops.push(
+        db.inventoryChange.create({
+          data: {
+            productId,
+            employeeId: session.user.id,
+            employeeName: session.user.name ?? null,
+            quantityChange: -actualUsed,
+            newQuantity: inventoryAfter,
+            unit: ep.product.unit,
+            reason: `Used on job #${job.jobNumber}`,
+            changedById: session.user.id,
+            changedByName: session.user.name ?? null,
+          },
+        })
+      );
+
       // Job log.
       ops.push(
         db.jobLog.create({
@@ -145,9 +166,15 @@ export async function clockOut(jobId: string, usage: PostJobUsage) {
         })
       );
 
-      // Threshold check — per the spec, restock alert fires when stock <= threshold.
-      const threshold = ep.product.inventoryRule?.refillThreshold ?? ep.product.minStock ?? 0;
-      if (threshold > 0 && inventoryAfter <= threshold) {
+      // Restock alert fires when the CLEANER's kit hits THEIR threshold.
+      // This used to fall back to `minStock` — the company reorder point — so a
+      // cleaner was judged against a warehouse number (fix list item 14).
+      if (
+        isCleanerLow(inventoryAfter, {
+          cleanerRestockThreshold: ep.product.cleanerRestockThreshold,
+          usagePerJob: ep.product.inventoryRule?.usagePerJob,
+        })
+      ) {
         restockNeeded.push({ name: ep.product.name, productId });
       }
     }
@@ -207,6 +234,16 @@ export async function clockOut(jobId: string, usage: PostJobUsage) {
           status: "CLOCKED_OUT",
           clockOutTime: now,
         },
+      })
+    );
+
+    // Any break still running is closed at clock-out (item 26). Left open it
+    // would never end, and the job's active working time would keep shrinking
+    // as the clock ran on.
+    ops.push(
+      db.jobBreak.updateMany({
+        where: { jobId, cleanerId: session.user.id, endedAt: null },
+        data: { endedAt: now },
       })
     );
 

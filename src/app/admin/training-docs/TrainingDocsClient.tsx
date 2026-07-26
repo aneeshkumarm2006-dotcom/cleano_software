@@ -9,32 +9,16 @@ import {
   Download,
   Lock,
   Play,
+  Eye,
+  GraduationCap,
+  Users,
 } from "lucide-react";
+import Link from "next/link";
 import { initials } from "@/lib/avatar";
 
-interface Video {
-  id: string;
-  title: string;
-  duration: string;
-}
-interface Doc {
-  id: string;
-  title: string;
-  kind: string;
-  pages: number;
-}
-const VIDEOS: Video[] = [
-  { id: "V-1", title: "Welcome & professional standards", duration: "8:24" },
-  { id: "V-2", title: "Equipment & approved products", duration: "12:10" },
-  { id: "V-3", title: "Health, safety & WHMIS basics", duration: "9:46" },
-];
-
-const DOCS: Doc[] = [
-  { id: "D-1", title: "Employee handbook", kind: "PDF", pages: 24 },
-  { id: "D-2", title: "Service checklists (all clean types)", kind: "PDF", pages: 11 },
-  { id: "D-3", title: "Safety data sheets (SDS) binder", kind: "PDF", pages: 38 },
-  { id: "D-4", title: "Code of conduct & confidentiality", kind: "PDF", pages: 6 },
-];
+// The employee preview renders REAL training modules and REAL documents. It
+// previously used hardcoded sample videos and PDFs, so an admin "previewing"
+// the employee experience was shown content that does not exist (item 22).
 
 // Real activity rows (item 20) — recorded by the document open/download/sign
 // flows and passed in from the server page. No sample data.
@@ -79,14 +63,65 @@ function Avatar({ name, size }: { name: string; size: number }) {
   );
 }
 
+export interface TrainingModuleRow {
+  id: string;
+  title: string;
+  description: string | null;
+  duration: number | null;
+  isRequired: boolean;
+  isActive: boolean;
+  hasVideo: boolean;
+  quizCount: number;
+}
+
+export interface TrainingProgressRow {
+  employeeId: string;
+  employeeName: string;
+  completed: number;
+  requiredTotal: number;
+  avgQuizScore: number | null;
+  lastActivityAt: string | null;
+}
+
+export interface TrainingDocumentRow {
+  id: string;
+  title: string;
+  description: string | null;
+  version: string;
+  hasFile: boolean;
+}
+
 export default function TrainingDocsClient({
+  modules = [],
+  progress = [],
+  documents = [],
   accessLog = [],
 }: {
+  modules?: TrainingModuleRow[];
+  progress?: TrainingProgressRow[];
+  documents?: TrainingDocumentRow[];
   accessLog?: AccessLogEntry[];
 }) {
+  // What a cleaner actually has to get through.
+  const VIDEOS = modules
+    .filter((m) => m.isActive && m.isRequired)
+    .map((m) => ({
+      id: m.id,
+      title: m.title,
+      duration: m.duration ? `${m.duration} min` : "Video",
+    }));
+  const DOCS = documents.map((d) => ({
+    id: d.id,
+    title: d.title,
+    kind: d.hasFile ? "PDF" : "Doc",
+    version: d.version,
+  }));
   const [watched, setWatched] = useState<Record<string, boolean>>({});
   const [passed, setPassed] = useState(false);
-  const [admin, setAdmin] = useState(false);
+  // Item 22: admins land on the MANAGEMENT view. The employee onboarding flow
+  // is a deliberate preview, not the default — an admin must never be shown
+  // locked training steps as though they were the employee completing them.
+  const [previewAsEmployee, setPreviewAsEmployee] = useState(false);
 
   const watchedCount = VIDEOS.filter((v) => watched[v.id]).length;
   const videosDone = watchedCount === VIDEOS.length;
@@ -102,7 +137,9 @@ export default function TrainingDocsClient({
     },
     {
       label: "Pass the quiz",
-      sub: unlocked ? "Passed · 92%" : videosDone ? "Ready to take" : "Locked",
+      // No invented score: this is a preview simulation, and a fabricated
+      // percentage is exactly the kind of fake data the client flagged.
+      sub: unlocked ? "Passed" : videosDone ? "Ready to take" : "Locked",
       done: unlocked,
       active: videosDone && !unlocked,
     },
@@ -126,11 +163,28 @@ export default function TrainingDocsClient({
           </h1>
         </div>
         <button
-          className={`td-viewtoggle ${admin ? "on" : ""}`}
-          onClick={() => setAdmin((a) => !a)}>
-          {admin ? "Viewing as admin" : "View as admin"}
+          className={`td-viewtoggle ${previewAsEmployee ? "on" : ""}`}
+          onClick={() => setPreviewAsEmployee((v) => !v)}>
+          {previewAsEmployee ? "Back to admin view" : "View as employee"}
         </button>
       </header>
+
+      {previewAsEmployee ? (
+        <>
+          {/* Banner so the admin is never confused about whose screen this is. */}
+          <div
+            style={{
+              display: "flex", alignItems: "center", gap: 10,
+              padding: "10px 14px", borderRadius: 12, marginBottom: 18,
+              background: "var(--amber-50)", border: "1px solid var(--amber-200, #fde68a)",
+              color: "var(--amber-800, #92400e)", fontSize: 13,
+            }}>
+            <Eye size={16} />
+            <span>
+              <strong>Preview — employee view.</strong> This is what a cleaner
+              sees. Nothing here is recorded against your account.
+            </span>
+          </div>
 
       {/* Unlock-gate stepper */}
       <div className="td-stepper">
@@ -203,7 +257,7 @@ export default function TrainingDocsClient({
             <div style={{ flex: 1 }}>
               <div className="td-quiz-title">
                 {unlocked
-                  ? "Quiz passed — 92%"
+                  ? "Quiz passed"
                   : quizActuallyAvailable
                   ? "Quiz ready"
                   : "Quiz locked"}
@@ -212,7 +266,7 @@ export default function TrainingDocsClient({
                 {unlocked
                   ? "Documents are now unlocked below."
                   : quizActuallyAvailable
-                  ? "10 questions · 80% to pass"
+                  ? "Knowledge quiz"
                   : "Watch all required videos to unlock the quiz."}
               </div>
             </div>
@@ -283,7 +337,7 @@ export default function TrainingDocsClient({
                     <Lock size={13} />
                     <span>{d.title}</span>
                     <span className="td-lockedlist-meta">
-                      {d.kind} · {d.pages}p
+                      {d.kind} · v{d.version}
                     </span>
                   </div>
                 ))}
@@ -299,7 +353,7 @@ export default function TrainingDocsClient({
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div className="td-doc-title">{d.title}</div>
                     <div className="td-doc-meta">
-                      {d.kind} · {d.pages} pages
+                      {d.kind} · version {d.version}
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: 6 }}>
@@ -318,8 +372,13 @@ export default function TrainingDocsClient({
         </div>
       </div>
 
-      {/* Admin access log */}
-      {admin ? (
+        </>
+      ) : (
+        <AdminManagementView modules={modules} progress={progress} />
+      )}
+
+      {/* Document access log — admin only, hidden while previewing. */}
+      {!previewAsEmployee ? (
         <div style={{ marginTop: 26 }}>
           <div className="td-seclabel">
             Document access log{" "}
@@ -393,6 +452,207 @@ export default function TrainingDocsClient({
           )}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * The admin-facing half of the page (item 22): manage training CONTENT and see
+ * employee PROGRESS. Built entirely from real TrainingModule / TrainingProgress
+ * data — the page previously rendered hardcoded sample videos, sample PDFs and
+ * a fabricated "Passed · 92%".
+ */
+function AdminManagementView({
+  modules,
+  progress,
+}: {
+  modules: TrainingModuleRow[];
+  progress: TrainingProgressRow[];
+}) {
+  const activeModules = modules.filter((m) => m.isActive);
+  const requiredCount = activeModules.filter((m) => m.isRequired).length;
+  const fullyTrained = progress.filter(
+    (p) => p.requiredTotal > 0 && p.completed >= p.requiredTotal
+  ).length;
+
+  return (
+    <div className="stack-8" style={{ display: "grid", gap: 26 }}>
+      <div className="astat-grid">
+        <div className="astat">
+          <div className="astat-head">
+            <span className="astat-label">Training modules</span>
+            <div className="astat-icon"><GraduationCap size={15} /></div>
+          </div>
+          <div className="astat-value">{activeModules.length}</div>
+          <div className="astat-delta">
+            {requiredCount} required · {modules.length - activeModules.length} inactive
+          </div>
+        </div>
+        <div className="astat">
+          <div className="astat-head">
+            <span className="astat-label">Fully trained</span>
+            <div className="astat-icon"><Users size={15} /></div>
+          </div>
+          <div className="astat-value">
+            {fullyTrained}/{progress.length}
+          </div>
+          <div className="astat-delta">
+            {requiredCount === 0
+              ? "No required modules set"
+              : "Completed every required module"}
+          </div>
+        </div>
+      </div>
+
+      {/* Training content */}
+      <div>
+        <div className="td-seclabel" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span>Training content</span>
+          <Link href="/admin/settings?tab=training" className="btn btn-secondary btn-sm">
+            Manage modules
+          </Link>
+        </div>
+        {activeModules.length === 0 ? (
+          <div
+            style={{
+              padding: "18px 16px", borderRadius: 12,
+              border: "1px dashed var(--primary-20)",
+              color: "var(--primary-60)", fontSize: 13.5,
+            }}>
+            No training modules yet. Add them in Settings → Training and they will
+            appear here and in every employee&apos;s onboarding.
+          </div>
+        ) : (
+          <div className="atable-wrap">
+            <div className="atable-scroll">
+              <table className="atable">
+                <thead>
+                  <tr>
+                    <th>Module</th>
+                    <th>Length</th>
+                    <th>Quiz</th>
+                    <th>Required</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {activeModules.map((m) => (
+                    <tr key={m.id} style={{ cursor: "default" }}>
+                      <td>
+                        <div style={{ fontWeight: 600, color: "var(--ink)" }}>{m.title}</div>
+                        {m.description && (
+                          <div style={{ fontSize: 12.5, color: "var(--primary-60)" }}>
+                            {m.description}
+                          </div>
+                        )}
+                      </td>
+                      <td style={{ color: "var(--ink-soft)" }}>
+                        {m.duration ? `${m.duration} min` : m.hasVideo ? "Video" : "—"}
+                      </td>
+                      <td style={{ color: "var(--ink-soft)" }}>
+                        {m.quizCount > 0 ? `${m.quizCount} question${m.quizCount === 1 ? "" : "s"}` : "None"}
+                      </td>
+                      <td>
+                        <span
+                          className="pill"
+                          style={
+                            m.isRequired
+                              ? { background: "var(--amber-50)", color: "var(--amber-800, #92400e)" }
+                              : { background: "var(--primary-5)", color: "var(--primary-60)" }
+                          }>
+                          {m.isRequired ? "Required" : "Optional"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Employee progress */}
+      <div>
+        <div className="td-seclabel">Employee progress</div>
+        {progress.length === 0 ? (
+          <div
+            style={{
+              padding: "18px 16px", borderRadius: 12,
+              border: "1px dashed var(--primary-20)",
+              color: "var(--primary-60)", fontSize: 13.5,
+            }}>
+            No active employees to track yet.
+          </div>
+        ) : (
+          <div className="atable-wrap">
+            <div className="atable-scroll">
+              <table className="atable">
+                <thead>
+                  <tr>
+                    <th>Employee</th>
+                    <th>Required modules</th>
+                    <th>Avg quiz score</th>
+                    <th>Last activity</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {progress.map((p) => {
+                    const pct =
+                      p.requiredTotal > 0
+                        ? Math.round((p.completed / p.requiredTotal) * 100)
+                        : 0;
+                    const complete = p.requiredTotal > 0 && p.completed >= p.requiredTotal;
+                    return (
+                      <tr key={p.employeeId} style={{ cursor: "default" }}>
+                        <td>
+                          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                            <Avatar name={p.employeeName} size={30} />
+                            <span style={{ fontWeight: 600, color: "var(--ink)" }}>
+                              {p.employeeName}
+                            </span>
+                          </div>
+                        </td>
+                        <td style={{ minWidth: 180 }}>
+                          <div
+                            style={{
+                              display: "flex", alignItems: "center", gap: 8,
+                              color: complete ? "var(--emerald-600)" : "var(--ink-soft)",
+                              fontVariantNumeric: "tabular-nums",
+                            }}>
+                            <span>
+                              {p.completed}/{p.requiredTotal}
+                            </span>
+                            <div className="score-bar" style={{ flex: 1, height: 7 }}>
+                              <span className="score-fill" style={{ width: `${pct}%` }} />
+                            </div>
+                          </div>
+                        </td>
+                        <td style={{ color: "var(--ink-soft)", fontVariantNumeric: "tabular-nums" }}>
+                          {/* Never render "0%" for someone who simply hasn't
+                              taken a quiz yet. */}
+                          {p.avgQuizScore === null ? "—" : `${p.avgQuizScore}%`}
+                        </td>
+                        <td style={{ color: "var(--primary-60)", fontSize: 12.5 }}>
+                          {p.lastActivityAt
+                            ? formatAgo(
+                                Math.max(
+                                  0,
+                                  Math.round(
+                                    (Date.now() - new Date(p.lastActivityAt).getTime()) / 60000
+                                  )
+                                )
+                              )
+                            : "Not started"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

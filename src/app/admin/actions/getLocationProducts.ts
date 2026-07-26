@@ -36,11 +36,29 @@ export async function getLocationProducts(
       return { success: false, error: "Location not found" };
     }
 
-    const stocks = await db.inventoryLocationStock.findMany({
-      where: { locationId, quantity: { gt: 0 } },
-      include: { product: true },
-      orderBy: { product: { name: "asc" } },
-    });
+    // EVERY active product is listed, not just the ones this location currently
+    // has stock for. Hiding out-of-stock items was a hard block by omission: a
+    // cleaner could not pick up something that had been restocked outside the
+    // app, and had no way to record that they took it (fix list items 5 + 19).
+    const [products, stocks] = await Promise.all([
+      db.product.findMany({
+        where: { deletedAt: null },
+        orderBy: { name: "asc" },
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          unit: true,
+          minStock: true,
+        },
+      }),
+      db.inventoryLocationStock.findMany({
+        where: { locationId },
+        select: { productId: true, quantity: true },
+      }),
+    ]);
+
+    const qtyByProduct = new Map(stocks.map((s) => [s.productId, s.quantity]));
 
     return {
       success: true,
@@ -49,12 +67,13 @@ export async function getLocationProducts(
         name: location.name,
         address: location.address,
       },
-      products: stocks.map((s) => ({
-        productId: s.productId,
-        productName: s.product.name,
-        productDescription: s.product.description,
-        unit: s.product.unit,
-        available: s.quantity,
+      products: products.map((p) => ({
+        productId: p.id,
+        productName: p.name,
+        productDescription: p.description,
+        unit: p.unit,
+        available: qtyByProduct.get(p.id) ?? 0,
+        minStock: p.minStock,
       })),
     };
   } catch (error) {

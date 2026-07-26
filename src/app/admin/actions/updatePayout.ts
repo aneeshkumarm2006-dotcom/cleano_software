@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { db } from "@/db";
 import { revalidatePath } from "next/cache";
+import { computePayoutTotals } from "@/lib/payout-math";
 
 function parseFloatSafe(v: FormDataEntryValue | null): number {
   if (v === null || v === "") return 0;
@@ -39,7 +40,15 @@ export async function updatePayout(formData: FormData) {
     const reimbursements = parseFloatSafe(formData.get("reimbursements"));
     const notes = (formData.get("notes") as string) || null;
 
-    const finalAmount = baseAmount + adjustments - deductions + reimbursements;
+    // Floored at $0 — payroll pays out, it never claws back. Any un-recovered
+    // deduction is reported to the caller as `shortfall` for admin review
+    // rather than being stored as a negative payout (fix list item 1).
+    const totals = computePayoutTotals({
+      baseAmount,
+      adjustments,
+      deductions,
+      reimbursements,
+    });
 
     await db.payout.update({
       where: { id },
@@ -48,14 +57,14 @@ export async function updatePayout(formData: FormData) {
         adjustments,
         deductions,
         reimbursements,
-        finalAmount: Number(finalAmount.toFixed(2)),
+        finalAmount: totals.final,
         notes,
       },
     });
 
     revalidatePath("/admin/payouts");
     revalidatePath(`/admin/payouts/${payout.payPeriodId}`);
-    return { success: true };
+    return { success: true, shortfall: totals.shortfall };
   } catch (error) {
     console.error("Error updating payout:", error);
     return { error: "Failed to update payout" };

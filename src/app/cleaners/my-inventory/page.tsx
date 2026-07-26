@@ -1,6 +1,11 @@
 import { db } from "@/db";
 import { requireCleaner } from "@/lib/page-guards";
 import { getSetting } from "@/lib/settings";
+import {
+  cleanerRestockThreshold,
+  isCleanerLow,
+  usesDefaultCleanerThreshold,
+} from "@/lib/inventory-thresholds";
 import MyInventoryClient from "./MyInventoryClient";
 
 export default async function MyInventoryPage() {
@@ -57,19 +62,20 @@ export default async function MyInventoryPage() {
   const items = employeeProducts.map((ep) => {
     const rule = ep.product.inventoryRule;
     const usagePerJob = rule?.usagePerJob ?? 0;
-    const ruleThreshold = rule?.refillThreshold ?? 0;
 
-    // InventoryRule.refillThreshold defaults to 0, so a product without a rule
-    // could never be "low" — the cleaner was only ever warned once the item hit
-    // zero. Fall back to a threshold that fires BEFORE empty: enough stock to
-    // cover at least one more job, or the configured floor, whichever is larger.
-    const usesDefault = ruleThreshold <= 0;
-    const refillThreshold = usesDefault
-      ? Math.max(defaultThreshold, usagePerJob)
-      : ruleThreshold;
+    // CLEANER restock threshold only — never the company reorder point
+    // (fix list item 14). A configured 0 falls back to covering one more job,
+    // so a cleaner is warned before they hit empty rather than after.
+    const thresholdInput = {
+      cleanerRestockThreshold: ep.product.cleanerRestockThreshold,
+      usagePerJob,
+      defaultThreshold,
+    };
+    const usesDefault = usesDefaultCleanerThreshold(thresholdInput);
+    const refillThreshold = cleanerRestockThreshold(thresholdInput);
 
     const isOutOfStock = ep.quantity <= 0;
-    const isLow = !isOutOfStock && ep.quantity <= refillThreshold;
+    const isLow = !isOutOfStock && isCleanerLow(ep.quantity, thresholdInput);
     const pending = pendingByProductId.get(ep.productId) ?? null;
 
     return {

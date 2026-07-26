@@ -12,15 +12,26 @@
 //     After 5 ratings, pay tracks their running rating via STANDARD_RATE_TABLE,
 //     with 40% as a hard floor (rating can never drop pay below 40%).
 //
-//   • Solo job (1 cleaner): payout = individualRate × jobPrice.
-//   • Split job (2+ cleaners): the combined pay pool = 50% of jobPrice, divided
-//     PROPORTIONALLY by each cleaner's individual rate — NOT an even split.
-//         share_i = (rate_i / Σ rate) × pool
+//   • EVERY cleaner on the job earns individualRate × jobPrice — solo or paired.
 //
-// Worked example from the spec: $196 job, pool = $98.
-//   Trainee (0.30) + Field Lead (0.46) → combined 0.76
-//   Field Lead payout = 0.46/0.76 × $98 = $59.32
-//   Trainee    payout = 0.30/0.76 × $98 = $38.68
+// The 50% "split pool" (paired jobs shared half the price, divided
+// proportionally by rate) was RETIRED per awer_fixes.pdf item 3, which
+// supersedes the earlier spec. Its three worked examples are the acceptance
+// test and none of them halve anything:
+//
+//     $112 at 40%           → $44.80
+//     $112 at 45% (5-star)  → $50.40
+//     $220 at Tanya's 45%   → $99.00   ("not $55.00 or 25%")
+//
+// $55.00 is exactly what the old model produced for a 45% cleaner on a paired
+// $220 job (half the price, split two ways), which is the number the client
+// rejected by name.
+//
+// CONSEQUENCE, deliberately accepted by the client: a 2-cleaner job now costs
+// ~80–90% of the job price in labour rather than 50%. That is a pricing
+// decision, not a defect. Item 11's "split evenly between assigned cleaners"
+// governs a fixed/custom TOTAL payout (the FLAT / HOURLY path in
+// cleaner-earnings.ts), not this percentage model.
 
 export type CleanerTier = "TRAINEE" | "STANDARD" | "FIELD_LEAD";
 
@@ -32,7 +43,11 @@ export const STANDARD_MAX_RATE = 0.45;
 // Standard pay only starts tracking rating once this many ratings exist.
 export const STANDARD_RATINGS_REQUIRED = 5;
 
-// Fraction of the job price that forms the combined pool on a split (2+) job.
+/**
+ * @deprecated Retired by awer_fixes.pdf item 3 — paired jobs no longer share a
+ * halved pool. Kept only so any stale import fails loudly at review rather than
+ * silently reintroducing the halving. Do not use.
+ */
 export const SPLIT_POOL_FRACTION = 0.5;
 
 // Standard rating → rate table (only applied after STANDARD_RATINGS_REQUIRED).
@@ -53,6 +68,12 @@ export interface CleanerRateInput {
   avgRating: number | null;
   /** Number of ratings logged (drives the 5-rating lock for Standard). */
   ratingCount: number;
+  /**
+   * The user's role, when known. Used ONLY to stop an admin/owner who was
+   * auto-stamped onto Job.employeeId from being paid as if they worked the job
+   * (see jobParticipantIds in cleaner-earnings.ts). Never affects the rate.
+   */
+  role?: string | null;
 }
 
 // A cleaner's individual pay rate as a fraction of the job price.
@@ -81,9 +102,9 @@ export interface PayoutShare {
 }
 
 export interface JobPayout {
-  /** Total cleaner pay pool for the job (sum of shares). */
+  /** Total cleaner cost of the job — the sum of every cleaner's share. */
   pool: number;
-  /** True when 2+ cleaners share the 50% pool. */
+  /** True when 2+ cleaners are on the job. Each is still paid their full rate. */
   isSplit: boolean;
   shares: PayoutShare[];
 }
@@ -105,28 +126,20 @@ export function computeJobPayout(
     return { pool: 0, isSplit: false, shares: [] };
   }
 
-  // Solo job: individual rate applied directly to the full price.
-  if (valid.length === 1) {
-    const rate = individualRate(valid[0]);
-    const amount = round2(Math.max(0, p) * rate);
-    return { pool: amount, isSplit: false, shares: [{ id: valid[0].id, rate, amount }] };
-  }
+  // Every cleaner earns their own rate on the FULL job price, whether they are
+  // working alone or paired. No halving, no proportional redistribution — see
+  // the worked examples in the module header (awer_fixes.pdf item 3).
+  const base = Math.max(0, p);
+  const shares: PayoutShare[] = valid.map((c) => {
+    const rate = individualRate(c);
+    return { id: c.id, rate, amount: round2(base * rate) };
+  });
 
-  // Split job: pool = 50% of price, divided proportionally by individual rate.
-  const pool = Math.max(0, p) * SPLIT_POOL_FRACTION;
-  const rates = valid.map(individualRate);
-  const combined = rates.reduce((s, r) => s + r, 0);
-
-  const shares: PayoutShare[] = valid.map((c, i) => ({
-    id: c.id,
-    rate: rates[i],
-    amount:
-      combined > 0
-        ? round2(pool * (rates[i] / combined))
-        : round2(pool / valid.length),
-  }));
-
-  return { pool: round2(pool), isSplit: true, shares };
+  return {
+    pool: round2(shares.reduce((sum, s) => sum + s.amount, 0)),
+    isSplit: valid.length > 1,
+    shares,
+  };
 }
 
 export const TIER_LABEL: Record<CleanerTier, string> = {

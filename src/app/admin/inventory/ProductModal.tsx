@@ -45,6 +45,7 @@ interface Product {
   costPerUnit: number;
   stockLevel: number;
   minStock: number;
+  cleanerRestockThreshold?: number;
   category?: ProductCategory;
   /** The one exact re-order link. */
   purchaseUrl?: string | null;
@@ -66,6 +67,9 @@ const formSchema = z.object({
   costPerUnit: z.coerce.number().min(0, "Cost must be 0 or greater"),
   stockLevel: z.coerce.number().min(0, "Stock level must be 0 or greater"),
   minStock: z.coerce.number().min(0, "Minimum stock must be 0 or greater"),
+  cleanerRestockThreshold: z.coerce
+    .number()
+    .min(0, "Cleaner restock threshold must be 0 or greater"),
   category: z.enum(["LIQUID_SPRAY", "MOP_LIQUID", "DISPOSABLE", "OTHER"]).default("OTHER"),
   stockReason: z.string().optional(),
   // Same allow-list the server enforces (http/https only) — this is UX, not the
@@ -119,6 +123,7 @@ export function ProductModal({
       costPerUnit: 0,
       stockLevel: 0,
       minStock: 0,
+      cleanerRestockThreshold: 0,
       category: "OTHER",
       stockReason: "",
       purchaseUrl: "",
@@ -136,6 +141,7 @@ export function ProductModal({
         costPerUnit: product?.costPerUnit || 0,
         stockLevel: product?.stockLevel || 0,
         minStock: product?.minStock || 0,
+        cleanerRestockThreshold: product?.cleanerRestockThreshold || 0,
         category: product?.category || "OTHER",
         stockReason: "",
         purchaseUrl: product?.purchaseUrl || "",
@@ -202,6 +208,10 @@ export function ProductModal({
       formData.append("costPerUnit", String(values.costPerUnit));
       formData.append("stockLevel", String(values.stockLevel));
       formData.append("minStock", String(values.minStock));
+      formData.append(
+        "cleanerRestockThreshold",
+        String(values.cleanerRestockThreshold)
+      );
       formData.append("category", values.category);
       formData.append("stockReason", values.stockReason || "");
       formData.append("purchaseUrl", (values.purchaseUrl || "").trim());
@@ -549,9 +559,11 @@ export function ProductModal({
                   </p>
                 </div>
 
+                {/* Item 14: two separate thresholds, labelled by the action
+                    each one triggers, so they can't be confused. */}
                 <div>
                   <label className="input-label">
-                    Minimum Stock Level{" "}
+                    Company Reorder Threshold{" "}
                     <span className="text-red-500 ml-1">*</span>
                   </label>
                   <Input
@@ -573,7 +585,34 @@ export function ProductModal({
                     </p>
                   )}
                   <p className="text-xs text-[#008C9C]/60 mt-1">
-                    Alert when stock falls below this level
+                    Warehouse/locker stock. Below this, <strong>Cleano needs to
+                    purchase more</strong>.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="input-label">Cleaner Restock Threshold</label>
+                  <Input
+                    variant="form"
+                    type="number"
+                    size="md"
+                    step="0.01"
+                    min="0"
+                    {...register("cleanerRestockThreshold")}
+                    disabled={disableForm}
+                    error={!!errors.cleanerRestockThreshold}
+                    className="w-full px-4 py-3"
+                    placeholder="0"
+                    border={false}
+                  />
+                  {errors.cleanerRestockThreshold && (
+                    <p className="my-1 text-xs text-red-600">
+                      {errors.cleanerRestockThreshold.message}
+                    </p>
+                  )}
+                  <p className="text-xs text-[#008C9C]/60 mt-1">
+                    Each cleaner&apos;s own kit. Below this, <strong>that cleaner
+                    needs a restock</strong>. Leave 0 for the default.
                   </p>
                 </div>
               </div>

@@ -107,7 +107,7 @@ export default function InventoryRulesTab({
                   Usage / Job
                 </th>
                 <th className="py-3 pr-3 text-xs font-[350] text-[#008C9C]/70 uppercase tracking-wide">
-                  Refill Threshold
+                  Cleaner Restock Threshold
                 </th>
                 <th className="py-3 pr-3 text-xs font-[350] text-[#008C9C]/70 uppercase tracking-wide">
                   Stock

@@ -18,12 +18,13 @@ export default function CartItem({
   onChange,
   onRemove,
 }: CartItemProps) {
+  // Taking more than the locker shows is allowed — supplies get restocked and
+  // handed out outside the app, so the count is an estimate, not a gate. We
+  // inform the cleaner and let the admin reconcile later (fix list items 5 + 19).
   const overLimit = quantity > product.available;
 
   function increment() {
-    if (quantity < product.available) {
-      onChange(product.productId, quantity + 1);
-    }
+    onChange(product.productId, quantity + 1);
   }
 
   function decrement() {
@@ -41,6 +42,12 @@ export default function CartItem({
         <div className="text-xs text-gray-500 mt-0.5">
           {product.available} {product.unit} available
         </div>
+        {overLimit && (
+          <div className="text-xs text-amber-700 mt-0.5">
+            More than the locker shows — you can still take it, it&apos;ll be
+            flagged for admin to reconcile.
+          </div>
+        )}
       </div>
       <div className="flex items-center gap-2 shrink-0">
         <Button
@@ -62,7 +69,7 @@ export default function CartItem({
             onChange(product.productId, parseFloat(e.target.value) || 0)
           }
           className={`!w-20 text-center ${
-            overLimit ? "!border-red-400 !text-red-700" : ""
+            overLimit ? "!border-amber-400 !text-amber-700" : ""
           }`}
         />
         <Button
@@ -70,7 +77,6 @@ export default function CartItem({
           size="sm"
           submit={false}
           onClick={increment}
-          disabled={quantity >= product.available}
           className="!px-2">
           <Plus className="w-3 h-3" />
         </Button>

@@ -100,6 +100,7 @@ const NAV: { label: string; items: NavItem[] }[] = [
     label: "Staff",
     items: [
       { href: "/admin/employees", label: "Employees", Icon: Users },
+      { href: "/admin/time-tracking", label: "Time Tracking", Icon: Clock },
       { href: "/admin/job-applications", label: "Job Applications", Icon: UserPlus },
       { href: "/admin/training-docs", label: "Training & Docs", Icon: GraduationCap },
       { href: "/admin/announcements", label: "Announcements", Icon: Megaphone },

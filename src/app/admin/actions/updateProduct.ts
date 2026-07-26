@@ -36,6 +36,17 @@ export async function updateProduct(
   const costPerUnit = parseFloat(formData.get("costPerUnit") as string);
   const stockLevel = parseFloat(formData.get("stockLevel") as string);
   const minStock = parseFloat(formData.get("minStock") as string);
+  // Cleaner restock threshold (item 14). Optional — absent/blank means "use the
+  // default", so it must not fail the isNaN validation below.
+  const cleanerRestockRaw = formData.get("cleanerRestockThreshold");
+  const cleanerRestockParsed =
+    typeof cleanerRestockRaw === "string" && cleanerRestockRaw.trim() !== ""
+      ? parseFloat(cleanerRestockRaw)
+      : 0;
+  const cleanerRestockThreshold =
+    Number.isFinite(cleanerRestockParsed) && cleanerRestockParsed > 0
+      ? cleanerRestockParsed
+      : 0;
   // Optional free-text reason for the stock-count adjustment (audit trail).
   const stockReasonRaw = (formData.get("stockReason") as string) || "";
   const stockReason = stockReasonRaw.trim().slice(0, 500) || null;
@@ -111,6 +122,7 @@ export async function updateProduct(
       costPerUnit,
       stockLevel,
       minStock,
+      cleanerRestockThreshold,
       category,
       purchaseUrl,
     };

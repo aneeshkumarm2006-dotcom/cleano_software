@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Pencil, Loader, Check, X } from "lucide-react";
+import { Pencil, Loader, Check, X, AlertTriangle } from "lucide-react";
 import Button from "@/components/ui/Button";
 import { updatePayout } from "../actions/updatePayout";
 import { PayoutRow } from "./PayoutsPageClient";
+import { computePayoutTotals } from "@/lib/payout-math";
 
 interface Props {
   payout: PayoutRow;
@@ -24,11 +25,14 @@ export default function PayoutEditor({ payout, locked }: Props) {
   const [reim, setReim] = useState(payout.reimbursements.toString());
   const [notes, setNotes] = useState(payout.notes || "");
 
-  const computedFinal =
-    (parseFloat(base) || 0) +
-    (parseFloat(adj) || 0) -
-    (parseFloat(ded) || 0) +
-    (parseFloat(reim) || 0);
+  // Same helper the server writes with, so the live preview and the saved value
+  // can never disagree — including the $0 floor.
+  const computed = computePayoutTotals({
+    baseAmount: parseFloat(base) || 0,
+    adjustments: parseFloat(adj) || 0,
+    deductions: parseFloat(ded) || 0,
+    reimbursements: parseFloat(reim) || 0,
+  });
 
   const handleSave = async () => {
     setSaving(true);
@@ -90,6 +94,13 @@ export default function PayoutEditor({ payout, locked }: Props) {
               </span>
             )}
           </div>
+          {payout.shortfall > 0 && (
+            <p className="mt-1 flex items-center gap-1 text-xs font-[500] text-red-600">
+              <AlertTriangle className="w-3 h-3 flex-shrink-0" />
+              Floored to $0.00 — ${payout.shortfall.toFixed(2)} of deductions
+              not recovered this period
+            </p>
+          )}
           {payout.notes && (
             <p className="text-xs text-[#008C9C]/50 mt-1 italic">
               {payout.notes}
@@ -160,11 +171,23 @@ export default function PayoutEditor({ payout, locked }: Props) {
           className="w-full px-3 py-2 rounded-xl bg-[#008C9C]/5 text-sm text-[#008C9C] focus:outline-none placeholder:text-[#008C9C]/40"
         />
       </div>
+      {computed.shortfall > 0 && (
+        <p className="mt-3 flex items-start gap-2 rounded-xl bg-red-50 px-3 py-2 text-xs text-red-700">
+          <AlertTriangle className="w-3.5 h-3.5 mt-px flex-shrink-0" />
+          <span>
+            Deductions exceed earnings by{" "}
+            <strong>${computed.shortfall.toFixed(2)}</strong>. This payout will
+            be saved as <strong>$0.00</strong> — payroll never pays a negative
+            amount. Carry the ${computed.shortfall.toFixed(2)} to a later period
+            or adjust the deduction.
+          </span>
+        </p>
+      )}
       <div className="flex items-center justify-between mt-4 pt-3 border-t border-[#008C9C]/10">
         <span className="text-sm text-[#008C9C]/70">
           Final:{" "}
           <span className="text-[#008C9C] font-[500]">
-            ${computedFinal.toFixed(2)}
+            ${computed.final.toFixed(2)}
           </span>
         </span>
         <div className="flex gap-2">

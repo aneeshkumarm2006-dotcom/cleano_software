@@ -13,7 +13,9 @@ export async function getCleanerRateInputs(
   const [users, grouped] = await Promise.all([
     db.user.findMany({
       where: { id: { in: ids } },
-      select: { id: true, cleanerTier: true },
+      // `role` is carried so payroll can tell a real assigned cleaner from an
+      // admin who was auto-stamped onto Job.employeeId. It never affects the rate.
+      select: { id: true, cleanerTier: true, role: true },
     }),
     db.employeeRating.groupBy({
       by: ["employeeId"],
@@ -37,6 +39,7 @@ export async function getCleanerRateInputs(
       tier: (u.cleanerTier as CleanerTier) ?? "STANDARD",
       avgRating: s?.avg ?? null,
       ratingCount: s?.count ?? 0,
+      role: u.role ?? null,
     });
   }
   return map;

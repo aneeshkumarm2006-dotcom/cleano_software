@@ -47,6 +47,14 @@ export default async function ClockPage({ params }: PageProps) {
 
   const gpsEnabled = await getSetting("tracking.gpsEnabled");
 
+  // Is a break already running? Read server-side so reloading mid-break keeps
+  // the button in the right state (item 26).
+  const runningBreak = await db.jobBreak.findFirst({
+    where: { jobId: job.id, cleanerId: session.user.id, endedAt: null },
+    select: { id: true },
+  });
+  const onBreak = !!runningBreak;
+
   return (
     <ClockPageClient
       jobId={job.id}
@@ -56,6 +64,7 @@ export default async function ClockPage({ params }: PageProps) {
       status={job.status}
       clockInTime={j.clockInTime?.toISOString() ?? null}
       clockOutTime={j.clockOutTime?.toISOString() ?? null}
+      initialOnBreak={onBreak}
       onMyWayAt={j.onMyWayAt?.toISOString() ?? null}
       employeeProducts={employeeProducts}
       gpsEnabled={gpsEnabled}

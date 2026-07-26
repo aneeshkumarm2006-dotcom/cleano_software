@@ -1,5 +1,7 @@
 import { db } from "@/db";
 import { requireCleaner } from "@/lib/page-guards";
+import { getServiceCatalog } from "@/lib/service-catalog.server";
+import { serviceOptions } from "@/lib/service-catalog";
 import { Prisma } from "@prisma/client";
 import {
   cleanerAssignedWhere,
@@ -29,6 +31,9 @@ export default async function MyJobsPage({
   searchParams: SearchParams;
 }) {
   const session = await requireCleaner();
+
+  // Same service list the admin forms use (item 20).
+  const serviceOptionList = serviceOptions(await getServiceCatalog());
 
   // Parse search params (allow-list everything that reaches the query)
   const params = await searchParams;
@@ -374,7 +379,7 @@ export default async function MyJobsPage({
         <PendingInvitesPanel invites={pendingInvites} />
 
         {/* Filters */}
-        <JobsFilters />
+        <JobsFilters serviceOptions={serviceOptionList} />
 
 
         {/* Job cards */}

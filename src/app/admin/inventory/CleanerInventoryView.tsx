@@ -15,8 +15,10 @@ import {
   Pencil,
   Loader,
   X,
+  PackagePlus,
 } from "lucide-react";
 import { fmtDateTime } from "@/lib/time";
+import { LOW_STOCK_LABEL } from "@/lib/inventory-thresholds";
 import { setCleanerProductQuantity } from "../actions/setCleanerProductQuantity";
 
 interface LastChange {
@@ -53,9 +55,15 @@ interface Props {
   cleaners: Cleaner[];
   /** OWNER/ADMIN only. The server action enforces this too — this just hides the UI. */
   canEdit?: boolean;
+  /** Opens the bulk assign screen, optionally pre-selecting a cleaner (item 17). */
+  onAssign?: (cleanerId?: string) => void;
 }
 
-export default function CleanerInventoryView({ cleaners, canEdit = false }: Props) {
+export default function CleanerInventoryView({
+  cleaners,
+  canEdit = false,
+  onAssign,
+}: Props) {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [lowOnly, setLowOnly] = useState(false);
@@ -130,6 +138,17 @@ export default function CleanerInventoryView({ cleaners, canEdit = false }: Prop
         <p className="text-xs font-[350] text-[#008C9C]/60 mt-1">
           Assign products to cleaners to see their field inventory here
         </p>
+        {/* Without this the empty state was a dead end — the only way to assign
+            stock was from a cleaner who already had some. */}
+        {onAssign && (
+          <button
+            type="button"
+            onClick={() => onAssign()}
+            className="btn btn-primary btn-sm mt-4">
+            <PackagePlus className="w-4 h-4 mr-2" />
+            Assign inventory
+          </button>
+        )}
       </div>
     );
   }
@@ -156,6 +175,15 @@ export default function CleanerInventoryView({ cleaners, canEdit = false }: Prop
           <Badge variant="cleano" size="sm">
             {cleaners.length} cleaner{cleaners.length !== 1 ? "s" : ""}
           </Badge>
+          {onAssign && (
+            <button
+              type="button"
+              onClick={() => onAssign()}
+              className="btn btn-primary btn-sm">
+              <PackagePlus className="w-4 h-4 mr-2" />
+              Assign inventory
+            </button>
+          )}
         </div>
       </div>
 
@@ -205,11 +233,23 @@ export default function CleanerInventoryView({ cleaners, canEdit = false }: Prop
                   {c.totalUnits} units · ${c.totalValue.toFixed(2)}
                 </p>
               </div>
-              {c.lowCount > 0 && (
-                <Badge variant="error" size="sm">
-                  {c.lowCount} low
-                </Badge>
-              )}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {c.lowCount > 0 && (
+                  <Badge variant="error" size="sm">
+                    {c.lowCount} low
+                  </Badge>
+                )}
+                {/* Item 17: open inventory assignment for THIS cleaner. */}
+                {onAssign && (
+                  <button
+                    type="button"
+                    onClick={() => onAssign(c.employeeId)}
+                    className="btn btn-secondary btn-sm whitespace-nowrap">
+                    <PackagePlus className="w-3.5 h-3.5 mr-1" />
+                    Assign more
+                  </button>
+                )}
+              </div>
             </div>
             <div className="space-y-2">
               {c.items.map((i) => {
@@ -324,9 +364,14 @@ export default function CleanerInventoryView({ cleaners, canEdit = false }: Prop
                       )}
                     </div>
                     <span className="flex items-center gap-2 shrink-0">
+                      {/* Item 14: name the action. This is the CLEANER restock
+                          threshold, not the company reorder point. */}
                       {i.isLow && (
-                        <Badge variant="warning" size="sm">
-                          Below {i.refillThreshold} {i.unit}
+                        <Badge
+                          variant="warning"
+                          size="sm"
+                          title={`${LOW_STOCK_LABEL.CLEANER_RESTOCK} — at or below the cleaner restock threshold of ${i.refillThreshold} ${i.unit}`}>
+                          Restock needed
                         </Badge>
                       )}
                       <span

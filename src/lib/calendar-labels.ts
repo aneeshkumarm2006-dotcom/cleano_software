@@ -107,11 +107,28 @@ const JOB_TYPE_PRETTY_LABELS: Record<string, string> = {
  * "R - Residential", "R", …). Falls back to a title-cased cleanup of the raw
  * value so raw enum text never leaks into the UI.
  */
-export function jobTypeLabel(raw: string | null | undefined): string {
+export function jobTypeLabel(
+  raw: string | null | undefined,
+  /**
+   * Optional category -> admin label map from the Settings service catalog
+   * (item 20). When supplied, an admin's own service name wins, so renaming a
+   * service in Settings renames it everywhere it appears. Omitted callers keep
+   * the built-in labels, so this stays backward compatible.
+   */
+  adminLabels?: Record<string, string>
+): string {
   if (!raw) return "";
   const category = normalizeJobType(raw);
   if (category) {
+    // A legacy MOVE_IN / MOVE_OUT job folds onto the combined service when the
+    // business now offers only the combined one.
+    const adminLabel =
+      adminLabels?.[category] ??
+      ((category === "MOVE_IN" || category === "MOVE_OUT")
+        ? adminLabels?.MOVE_IN_OUT
+        : undefined);
     return (
+      adminLabel ??
       JOB_TYPE_PRETTY_LABELS[category] ??
       SERVICE_CATEGORIES.find((c) => c.key === category)?.label ??
       category

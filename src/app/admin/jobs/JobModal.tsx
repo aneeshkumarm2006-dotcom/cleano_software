@@ -23,6 +23,14 @@ import {
 } from "lucide-react";
 import { addonIcon } from "@/lib/addon-icons";
 import { tzInputParts } from "@/lib/time";
+import { isSqftJobType, moveInOutBasePrice } from "@/lib/service-pricing";
+import {
+  DEFAULT_SERVICE_CATALOG,
+  resolveServiceValue,
+  serviceOptions as catalogServiceOptions,
+} from "@/lib/service-catalog";
+import { getJobSeriesInfo } from "../actions/getJobSeriesInfo";
+import { DISCOUNT_REASONS, NO_REASON_LABEL } from "@/lib/discount-reasons";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import Textarea from "@/components/ui/Textarea";
@@ -66,7 +74,12 @@ interface Job {
   bedCount?: number | null;
   bathCount?: number | null;
   halfBathCount?: number | null;
+  squareFootage?: number | null;
   payRateMultiplier?: number | null;
+  /** Per-job sales-tax exemption (item 7). */
+  taxExempt?: boolean | null;
+  /** Why a discount was applied (item 29). */
+  discountReason?: string | null;
   cleaners: Array<{ id: string; name: string }>;
   addOns?: Array<{ id: string; name: string; price: number }>;
 }
@@ -87,10 +100,27 @@ interface JobModalProps {
   mode: "create" | "edit";
   users: User[];
   clients?: ClientLite[];
-  onSubmit: (data: FormData) => Promise<{ success?: boolean; error?: string }>;
+  onSubmit: (data: FormData) => Promise<{
+    success?: boolean;
+    error?: string;
+    /** Set when the edit was applied across a recurring series (item 9). */
+    seriesUpdated?: number;
+    seriesSkipped?: number;
+  }>;
   onDelete?: (jobId: string) => Promise<{ success?: boolean; error?: string }>;
   /** Add-ons configured in Settings → Pricing Rules; offered as quick-add chips. */
   addOnCatalog?: AddOnCatalogItem[];
+  /** Service list from Settings → Job Types (item 20). */
+  serviceOptions?: { value: string; label: string }[];
+  /**
+   * Move-in/out per-square-foot rates (Settings → Pricing Rules), so the modal
+   * can show the live derived price for square-foot services (item 8).
+   */
+  sqftRates?: {
+    thresholdSqft: number;
+    rateBelow: number;
+    rateAtOrAbove: number;
+  } | null;
 }
 
 const formSchema = z.object({
@@ -111,29 +141,27 @@ const formSchema = z.object({
   bedCount: z.union([z.coerce.number().int().min(0), z.literal("")]).optional(),
   bathCount: z.union([z.coerce.number().int().min(0), z.literal("")]).optional(),
   halfBathCount: z.union([z.coerce.number().int().min(0), z.literal("")]).optional(),
+  squareFootage: z.union([z.coerce.number().int().min(0), z.literal("")]).optional(),
   discountAmount: z.union([z.coerce.number().min(0), z.literal("")]).optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
 
-const jobTypes = [
-  { value: "", label: "Select type" },
-  { value: "R", label: "Residential" },
-  { value: "DEEP", label: "Deep Cleaning" },
-  { value: "MOVE_IN", label: "Move-in Cleaning" },
-  { value: "MOVE_OUT", label: "Move-out Cleaning" },
-  { value: "AIRBNB", label: "Airbnb Cleaning" },
-  { value: "C", label: "Commercial" },
-  { value: "PC", label: "Post-Construction" },
-  { value: "F", label: "Follow-up" },
-];
+// Job types come from the Settings service catalog (item 20) — no hardcoded
+// list here. Values are canonical category keys, so renaming a service in
+// Settings never orphans an existing job.
 
-// Recurring-booking frequencies. Weekly/biweekly auto-create the next few
-// occurrences at a discount (first cleaning full price); see saveJob.
+// Recurring-booking frequencies (item 9). Each auto-creates the next few
+// occurrences; any configured discount applies from the 2nd cleaning (the first
+// is always full price). Discount percentages come from Settings -> Pricing
+// Rules per service category, so the hints here stay generic rather than
+// hardcoding numbers that can drift from the config.
 const frequencies = [
   { value: "ONE_TIME", label: "One-time", hint: "" },
-  { value: "WEEKLY", label: "Weekly", hint: "12% off from the 2nd cleaning" },
-  { value: "BIWEEKLY", label: "Biweekly", hint: "8% off from the 2nd cleaning" },
+  { value: "DAILY", label: "Daily", hint: "Repeats every day" },
+  { value: "WEEKLY", label: "Weekly", hint: "Repeats every week" },
+  { value: "BIWEEKLY", label: "Biweekly", hint: "Repeats every 2 weeks" },
+  { value: "MONTHLY", label: "Monthly", hint: "Repeats every month" },
 ];
 
 const STEPS = [
@@ -566,6 +594,8 @@ export default function JobModal({
   onSubmit,
   onDelete,
   addOnCatalog = [],
+  serviceOptions = [],
+  sqftRates = null,
 }: JobModalProps) {
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState(1);
@@ -594,6 +624,17 @@ export default function JobModal({
   );
   const [discountInput, setDiscountInput] = useState<string>("");
   const [discountTouched, setDiscountTouched] = useState(false);
+  // Per-job sales-tax exemption (item 7).
+  const [taxExempt, setTaxExempt] = useState(false);
+  // Why a discount was given (item 29). The reason field only appears once a
+  // discount is actually entered.
+  const [discountReason, setDiscountReason] = useState("");
+  // Recurring-series edit scope (item 9). Opt-in per save; never sticky.
+  const [applyToSeries, setApplyToSeries] = useState(false);
+  const [seriesInfo, setSeriesInfo] = useState<{
+    isSeries: boolean;
+    editableCount: number;
+  } | null>(null);
 
   const {
     register,
@@ -635,15 +676,35 @@ export default function JobModal({
           bedCount: job.bedCount ?? "",
           bathCount: job.bathCount ?? "",
           halfBathCount: job.halfBathCount ?? "",
+          squareFootage: job.squareFootage ?? "",
           discountAmount: job.discountAmount ?? "",
         });
         setSelectedCleaners(job.cleaners?.map((c) => c.id) || []);
-        setSelectedJobType(job.jobType || "");
+        // Legacy jobs store "R - Residential" / "MOVE_IN" / "STANDARD"; map
+        // them onto the currently offered service so editing an old job doesn't
+        // silently blank its type (item 20 — "existing jobs mapped where
+        // possible"). A MOVE_IN job folds onto a combined Move-in/out service.
+        setSelectedJobType(
+          resolveServiceValue(
+            job.jobType,
+            serviceOptions.length > 0
+              ? serviceOptions.map((o) => ({
+                  id: o.value,
+                  name: o.label,
+                  category: o.value,
+                  isActive: true,
+                }))
+              : DEFAULT_SERVICE_CATALOG
+          )
+        );
         // Recurrence is generated only at creation time; editing never
         // re-spawns a series, so always start the picker at one-time.
         setSelectedFrequency("ONE_TIME");
         setSelectedClientId(job.clientId || "");
         setSelectedPaymentType(job.paymentType || "");
+        setTaxExempt(!!job.taxExempt);
+        setDiscountReason(job.discountReason ?? "");
+        setApplyToSeries(false);
         setCardSavedNow(false);
         setAddOns(
           (job.addOns || []).map((a) => ({ name: a.name, price: a.price }))
@@ -675,6 +736,7 @@ export default function JobModal({
           bedCount: "",
           bathCount: "",
           halfBathCount: "",
+          squareFootage: "",
           discountAmount: "",
         });
         setSelectedCleaners([]);
@@ -682,6 +744,10 @@ export default function JobModal({
         setSelectedFrequency("ONE_TIME");
         setSelectedClientId("");
         setSelectedPaymentType("");
+        setTaxExempt(false);
+        setDiscountReason("");
+        setApplyToSeries(false);
+        setSeriesInfo(null);
         setCardSavedNow(false);
         setAddOns([]);
         setDiscountMode("percent");
@@ -703,7 +769,54 @@ export default function JobModal({
     }
   }, [isOpen, selectedClientId, clients, discountTouched]);
 
+  // Load recurring-series membership so the "apply to series" control only
+  // appears for a job that actually has siblings, with a real count (item 9).
+  useEffect(() => {
+    if (!isOpen || mode !== "edit" || !job?.id) {
+      setSeriesInfo(null);
+      return;
+    }
+    let cancelled = false;
+    getJobSeriesInfo(job.id).then((res) => {
+      if (cancelled) return;
+      setSeriesInfo(
+        res.success
+          ? { isSeries: res.isSeries, editableCount: res.editableCount }
+          : null
+      );
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, mode, job?.id]);
+
+  // The Settings catalog plus a blank "Select type" row. Falls back to the
+  // shipped defaults if a page hasn't passed the catalog through yet.
+  const serviceChoices = [
+    { value: "", label: "Select type" },
+    ...(serviceOptions.length > 0
+      ? serviceOptions
+      : catalogServiceOptions(DEFAULT_SERVICE_CATALOG)),
+  ];
+
+  const discountIsSet = (parseFloat(discountInput) || 0) > 0;
+
   const disableForm = submitting || isDeleting;
+
+  // Square-footage pricing feedback (item 8). `selectedJobType` is the admin
+  // vocabulary ("MOVE_IN - Move-in Cleaning"); isSqftJobType folds both halves
+  // of a move, matching what saveJob does on the server.
+  const sqftPriced = isSqftJobType(selectedJobType);
+  const watchedSqft = Number(watch("squareFootage")) || 0;
+  const watchedPrice = Number(watch("price")) || 0;
+  const sqftDerivedPrice =
+    sqftPriced && sqftRates && watchedSqft > 0
+      ? moveInOutBasePrice(watchedSqft, {
+          // Only the move-in/out block is used by this helper; the rest of the
+          // config is irrelevant here.
+          moveInOut: sqftRates,
+        } as Parameters<typeof moveInOutBasePrice>[1])
+      : null;
 
   // Step validation
   const validateStep = async (step: number): Promise<boolean> => {
@@ -789,6 +902,7 @@ export default function JobModal({
       formData.append("bedCount", String(values.bedCount || ""));
       formData.append("bathCount", String(values.bathCount || ""));
       formData.append("halfBathCount", String(values.halfBathCount || ""));
+      formData.append("squareFootage", String(values.squareFootage || ""));
 
       // Resolve discount: convert percent to amount if needed.
       // If admin has touched the field, send an explicit value (including "0")
@@ -809,6 +923,12 @@ export default function JobModal({
         resolvedDiscount = "0";
       }
       formData.append("discountAmount", resolvedDiscount);
+      formData.append(
+        "discountReason",
+        discountReason === "Other" ? "" : discountReason
+      );
+      if (taxExempt) formData.append("taxExempt", "on");
+      if (applyToSeries) formData.append("applyToSeries", "on");
       formData.append("paymentType", selectedPaymentType);
       formData.append("addOns", JSON.stringify(addOns));
 
@@ -823,9 +943,16 @@ export default function JobModal({
         throw new Error(result.error);
       }
 
+      const updated = result.seriesUpdated ?? 0;
+      const skipped = result.seriesSkipped ?? 0;
       setSuccessMessage(
         mode === "create"
           ? "Job created successfully"
+          : updated > 0
+          ? `Job updated — ${updated} other occurrence${updated === 1 ? "" : "s"} in the series also updated` +
+            (skipped > 0
+              ? `, ${skipped} left untouched (completed or paid)`
+              : "")
           : "Job updated successfully"
       );
 
@@ -1133,13 +1260,13 @@ export default function JobModal({
                           disabled={disableForm}
                           className="w-full h-[44px] px-4 py-3 flex items-center !justify-between bg-[#008C9C]/5">
                           <span className="text-sm font-[350] text-[#008C9C]">
-                            {jobTypes.find((t) => t.value === selectedJobType)
+                            {serviceChoices.find((t) => t.value === selectedJobType)
                               ?.label || "Select type"}
                           </span>
                           <ChevronDown className="w-4 h-4 text-[#008C9C]/50" />
                         </Button>
                       }
-                      options={jobTypes.map((type) => ({
+                      options={serviceChoices.map((type) => ({
                         label: type.label,
                         onClick: () => setSelectedJobType(type.value),
                       }))}
@@ -1242,11 +1369,47 @@ export default function JobModal({
                           )?.hint;
                           return hint ? (
                             <p className="mt-2 text-xs text-[#008C9C]/60 tracking-tight">
-                              Recurring: the first cleaning is full price, then
-                              future cleanings are auto-created — {hint}.
+                              {hint}. The first cleaning is full price; future
+                              cleanings are auto-created and get any recurring
+                              discount configured for this service.
                             </p>
                           ) : null;
                         })()}
+                      </div>
+                    )}
+
+                    {/* Item 9: editing ONE occurrence must not change the rest,
+                        so this is opt-in and only shown for a real series. */}
+                    {mode === "edit" && seriesInfo?.isSeries && (
+                      <div
+                        className={`rounded-xl px-3 py-2.5 border ${
+                          applyToSeries
+                            ? "bg-amber-50 border-amber-200"
+                            : "bg-[#008C9C]/5 border-transparent"
+                        }`}>
+                        <label className="flex items-start gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={applyToSeries}
+                            onChange={(e) => setApplyToSeries(e.target.checked)}
+                            disabled={disableForm}
+                            className="mt-0.5"
+                          />
+                          <span className="text-xs">
+                            <span className="font-[500] text-[#008C9C]">
+                              Apply changes to the whole recurring series
+                            </span>
+                            <span className="block text-[#008C9C]/60 mt-0.5">
+                              {applyToSeries
+                                ? `Updates this and ${seriesInfo.editableCount} other occurrence${
+                                    seriesInfo.editableCount === 1 ? "" : "s"
+                                  }. Each keeps its own date and time; completed, paid and cancelled visits are left untouched.`
+                                : `Only this occurrence changes. ${seriesInfo.editableCount} other visit${
+                                    seriesInfo.editableCount === 1 ? "" : "s"
+                                  } in the series stay as they are.`}
+                            </span>
+                          </span>
+                        </label>
                       </div>
                     )}
                   </div>
@@ -1518,6 +1681,94 @@ export default function JobModal({
                           })()}
                       </div>
 
+                      {/* Item 29: why the discount was given. Only shown when
+                          there IS a discount — asking for a reason on a job
+                          with no discount is noise. */}
+                      {discountIsSet && (
+                        <div className="sm:col-span-2">
+                          <label className="input-label tracking-tight">
+                            Discount reason
+                          </label>
+                          <div className="flex gap-2 flex-wrap">
+                            <select
+                              value={
+                                discountReason === "" ||
+                                DISCOUNT_REASONS.includes(
+                                  discountReason as (typeof DISCOUNT_REASONS)[number]
+                                )
+                                  ? discountReason
+                                  : "Other"
+                              }
+                              onChange={(e) => setDiscountReason(e.target.value)}
+                              disabled={disableForm}
+                              className="flex-1 min-w-[10rem] px-4 py-3 rounded-xl bg-[#008C9C]/5 text-sm text-[#008C9C] focus:outline-none">
+                              <option value="">Select a reason…</option>
+                              {DISCOUNT_REASONS.map((r) => (
+                                <option key={r} value={r}>
+                                  {r}
+                                </option>
+                              ))}
+                            </select>
+                            {/* "select OR enter" — picking Other (or editing a
+                                custom value) reveals free text. */}
+                            {(discountReason === "Other" ||
+                              (discountReason !== "" &&
+                                !DISCOUNT_REASONS.includes(
+                                  discountReason as (typeof DISCOUNT_REASONS)[number]
+                                ))) && (
+                              <Input
+                                variant="form"
+                                size="md"
+                                value={discountReason === "Other" ? "" : discountReason}
+                                onChange={(e) => setDiscountReason(e.target.value)}
+                                disabled={disableForm}
+                                placeholder="Type the reason"
+                                className="flex-1 min-w-[12rem] px-4 py-3"
+                                border={false}
+                              />
+                            )}
+                          </div>
+                          {!discountReason && (
+                            <p className="text-[11px] text-[#008C9C]/60 mt-1">
+                              Optional, but it appears in job details and
+                              reporting — blank shows as &quot;{NO_REASON_LABEL}&quot;.
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Item 7: per-job sales-tax exemption. Applies to THIS
+                          job only — there is no global switch here. */}
+                      <div className="sm:col-span-2">
+                        <label className="input-label tracking-tight">
+                          Sales tax
+                        </label>
+                        <label
+                          className={`flex items-start gap-2 rounded-xl px-3 py-2.5 cursor-pointer border ${
+                            taxExempt
+                              ? "bg-amber-50 border-amber-200"
+                              : "bg-[#008C9C]/5 border-transparent"
+                          }`}>
+                          <input
+                            type="checkbox"
+                            checked={taxExempt}
+                            onChange={(e) => setTaxExempt(e.target.checked)}
+                            disabled={disableForm}
+                            className="mt-0.5"
+                          />
+                          <span className="text-xs">
+                            <span className="font-[500] text-[#008C9C]">
+                              Exempt this job from sales tax
+                            </span>
+                            <span className="block text-[#008C9C]/60 mt-0.5">
+                              {taxExempt
+                                ? "Taxes EXCLUDED — no GST/QST on this job. Cleaner pay is unaffected (always calculated before tax)."
+                                : "Taxes INCLUDED — GST/QST are added to this job's total."}
+                            </span>
+                          </span>
+                        </label>
+                      </div>
+
                       <div>
                         <label className="input-label tracking-tight">
                           Bed Count
@@ -1567,6 +1818,44 @@ export default function JobModal({
                           placeholder="0"
                           border={false}
                         />
+                      </div>
+
+                      {/* Item 8: Square Footage. Stored on every job as
+                          property info; only drives the price on square-foot
+                          priced services (move in / move out). */}
+                      <div className="sm:col-span-2">
+                        <label className="input-label tracking-tight">
+                          Square Footage
+                        </label>
+                        <Input
+                          variant="form"
+                          type="number"
+                          size="md"
+                          min="0"
+                          {...register("squareFootage")}
+                          disabled={disableForm}
+                          className="w-full px-4 py-3"
+                          placeholder="e.g. 1200"
+                          border={false}
+                        />
+                        <p className="text-[11px] text-[#008C9C]/60 mt-1">
+                          {sqftPriced ? (
+                            sqftDerivedPrice !== null ? (
+                              <>
+                                This service is priced per square foot —{" "}
+                                <strong>${sqftDerivedPrice.toFixed(2)}</strong> at{" "}
+                                {watchedSqft} sq ft.{" "}
+                                {watchedPrice
+                                  ? "Your entered price is used instead."
+                                  : "Leave Price blank to use it."}
+                              </>
+                            ) : (
+                              "This service is priced per square foot — enter the area to calculate the price."
+                            )
+                          ) : (
+                            "Saved as job information. This service isn't priced per square foot, so it won't change the price."
+                          )}
+                        </p>
                       </div>
 
                       <div className="col-span-2">

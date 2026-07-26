@@ -3,6 +3,7 @@
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { db } from "@/db";
+import { discountReasonLabel } from "@/lib/discount-reasons";
 import type { JobExportRow } from "./exportJobs.types";
 
 interface ExportFilters {
@@ -93,6 +94,9 @@ export async function exportJobs(filters: ExportFilters): Promise<
       Status: j.status,
       Price: j.price ?? "",
       Discount: j.discountAmount ?? "",
+      // Item 29: the reason travels with the discount into reporting, so a
+      // discounted-jobs export can be grouped by why.
+      "Discount Reason": discountReasonLabel(j) ?? "",
       "Employee Pay": j.employeePay ?? "",
       Tip: j.totalTip ?? "",
       Parking: j.parking ?? "",
@@ -113,6 +117,7 @@ export async function exportJobs(filters: ExportFilters): Promise<
         Status: "",
         Price: "",
         Discount: "",
+        "Discount Reason": "",
         "Employee Pay": "",
         Tip: "",
         Parking: "",

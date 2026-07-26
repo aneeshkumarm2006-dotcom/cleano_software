@@ -3,9 +3,14 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { revalidatePath } from "next/cache";
-import { getTaxRates, computeJobTaxes } from "@/lib/tax.server";
+import { getTaxRates, computeJobTaxes, isJobTaxExempt } from "@/lib/tax.server";
+import { getServicePricingConfig } from "@/lib/booking-pricing";
+import { isSqftJobType, moveInOutBasePrice } from "@/lib/service-pricing";
 import { tzWallClockToUtc, tzInputParts } from "@/lib/time";
 import { syncJobAssignments } from "@/lib/job-assignments";
+import { requireAdmin } from "@/lib/page-guards";
+import { getServiceCatalog } from "@/lib/service-catalog.server";
+import { serviceOptions } from "@/lib/service-catalog";
 import CleanerSelector from "./CleanerSelector";
 import JobTypeSelector from "./JobTypeSelector";
 import SubmitButton from "./SubmitButton";
@@ -30,13 +35,17 @@ export default async function JobFormPage({
   const { edit: jobId, duplicate: duplicateId } = await searchParams;
   const isEditing = !!jobId;
 
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  // This form edits price, cleaner pay and payment status, so it is ADMIN/OWNER
+  // only. It previously had NO role check — the sole gate was
+  // `existingJob.employeeId === session.user.id`, which worked only because
+  // saveJob stamped every job's employeeId with the acting admin. That gate was
+  // wrong in both directions: one admin could not edit another admin's job, and
+  // once employeeId holds the LEAD CLEANER (as it should) an assigned cleaner
+  // would have been able to open the admin job form. Guard on role instead.
+  const session = await requireAdmin();
 
-  if (!session) {
-    redirect("/sign-in");
-  }
+  // THE service list (item 20) — same source as the modal and the filters.
+  const serviceOptionList = serviceOptions(await getServiceCatalog());
 
   // Get existing job if editing
   let existingJob = null;
@@ -46,7 +55,7 @@ export default async function JobFormPage({
       include: { cleaners: true },
     });
 
-    if (!existingJob || existingJob.employeeId !== session.user.id) {
+    if (!existingJob) {
       redirect("/admin/jobs");
     }
   }
@@ -220,6 +229,25 @@ export default async function JobFormPage({
       ? parseFloat(formData.get("price") as string)
       : null;
 
+    // Square footage (item 8) — stored on every job; drives the price only on
+    // square-foot-priced services, and never overwrites a price the admin typed.
+    const squareFootage = formData.get("squareFootage")
+      ? parseInt(formData.get("squareFootage") as string, 10)
+      : null;
+    const jobTypeRaw = (formData.get("jobType") as string) || null;
+    if (
+      price === null &&
+      squareFootage !== null &&
+      squareFootage > 0 &&
+      isSqftJobType(jobTypeRaw)
+    ) {
+      const derived = moveInOutBasePrice(
+        squareFootage,
+        await getServicePricingConfig()
+      );
+      if (derived > 0) price = derived;
+    }
+
     const savedClient = clientId
       ? await db.client.findUnique({
           where: { id: clientId },
@@ -285,12 +313,14 @@ export default async function JobFormPage({
     }
 
     // GST/QST on the discounted subtotal from the admin-configured rates.
-    // Cash jobs are tax exempt (zero tax, total = subtotal).
+    // Cash jobs are untaxed as a payment method; `taxExempt` is the explicit
+    // per-job tax status an admin can set independently (item 7).
     const isCashJob = formData.get("isCashJob") === "on";
+    const taxExempt = formData.get("taxExempt") === "on";
     const taxes = computeJobTaxes(
       (price ?? 0) - (discountAmount ?? 0),
       await getTaxRates(),
-      isCashJob
+      isJobTaxExempt({ isCashJob, taxExempt })
     );
 
     // Cleaner pay model: PERCENTAGE (tier/split), FLAT (fixed payout as
@@ -319,7 +349,10 @@ export default async function JobFormPage({
     }
 
     const jobData: any = {
-      employeeId: session!.user.id,
+      // Lead cleaner, NOT the acting admin — see the matching comment in
+      // saveJob.ts (fix list items 3 + 4).
+      employeeId: cleanerIds[0] ?? null,
+      taxExempt,
       clientName: clientName || (formData.get("clientName") as string),
       clientId,
       description: (formData.get("description") as string) || null,
@@ -355,6 +388,7 @@ export default async function JobFormPage({
       notes: (formData.get("notes") as string) || null,
       paymentType,
       discountAmount,
+      squareFootage,
       bedCount: formData.get("bedCount")
         ? parseInt(formData.get("bedCount") as string, 10)
         : null,
@@ -373,11 +407,16 @@ export default async function JobFormPage({
     const editingJobId = formData.get("jobId") as string | null;
 
     if (editingJobId) {
-      // UPDATE existing job
+      // UPDATE existing job.
+      // This form leaves the existing team alone when no cleaners are submitted,
+      // so the lead (`employeeId`) must be left alone too — otherwise editing an
+      // unrelated field would strip the lead off an already-assigned job.
+      const { employeeId: leadFromForm, ...jobDataWithoutLead } = jobData;
       await db.job.update({
         where: { id: editingJobId },
         data: {
-          ...jobData,
+          ...jobDataWithoutLead,
+          ...(cleanerIds.length > 0 ? { employeeId: leadFromForm } : {}),
           cleaners:
             cleanerIds.length > 0
               ? {
@@ -389,7 +428,8 @@ export default async function JobFormPage({
 
       // Keep per-cleaner JobAssignment rows in sync with the assigned team.
       if (cleanerIds.length > 0) {
-        await syncJobAssignments(editingJobId, cleanerIds);
+        const sync = await syncJobAssignments(editingJobId, cleanerIds);
+        if (!sync.ok) throw new Error(sync.error);
         await applyManualPayouts(editingJobId, cleanerIds, formData);
       }
 
@@ -422,7 +462,8 @@ export default async function JobFormPage({
 
       // Per-cleaner JobAssignment rows for the assigned team.
       if (cleanerIds.length > 0) {
-        await syncJobAssignments(created.id, cleanerIds);
+        const sync = await syncJobAssignments(created.id, cleanerIds);
+        if (!sync.ok) throw new Error(sync.error);
         await applyManualPayouts(created.id, cleanerIds, formData);
       }
 
@@ -543,7 +584,10 @@ export default async function JobFormPage({
             </div>
 
             <FieldWrap label="Job type">
-              <JobTypeSelector initialValue={prefill?.jobType} />
+              <JobTypeSelector
+                initialValue={prefill?.jobType}
+                options={serviceOptionList}
+              />
             </FieldWrap>
 
             <FieldWrap label="Location" hint="Street address">
@@ -686,6 +730,21 @@ export default async function JobFormPage({
                 name="halfBathCount"
                 defaultValue={(prefill as any)?.halfBathCount ?? ""}
                 placeholder="0"
+              />
+            </FieldWrap>
+
+            {/* Item 8: square footage — stored on every job; drives the price
+                only on square-foot-priced services (move in / move out). */}
+            <FieldWrap
+              label="Square footage"
+              hint="Saved on the job. Used to price move-in / move-out cleans when Price is left blank.">
+              <Input
+                type="number"
+                min="0"
+                id="squareFootage"
+                name="squareFootage"
+                defaultValue={(prefill as any)?.squareFootage ?? ""}
+                placeholder="e.g. 1200"
               />
             </FieldWrap>
           </div>

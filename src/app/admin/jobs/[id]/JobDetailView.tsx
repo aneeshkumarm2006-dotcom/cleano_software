@@ -33,6 +33,15 @@ import {
 } from "lucide-react";
 import { resolveJobRequest } from "../../actions/resolveJobRequest";
 import { fmtDate, fmtDateTime, fmtTime } from "@/lib/time";
+import { discountReasonLabel, isMissingReason } from "@/lib/discount-reasons";
+import {
+  resolveClockEntry,
+  formatWorkedDuration,
+  openShiftMinutes,
+  isStaleOpenShift,
+  summariseBreaks,
+  activeMinutes,
+} from "@/lib/time-tracking";
 import { avatarColor, initials } from "@/lib/avatar";
 import { assignCleaners } from "../../actions/assignCleaners";
 import { ConfirmDeleteModal } from "@/components/common/ConfirmDeleteModal";
@@ -81,6 +90,16 @@ interface Job {
   parking: number | null;
   paymentReceived: boolean;
   isCashJob?: boolean;
+  /** Per-job sales-tax exemption (item 7). */
+  taxExempt?: boolean;
+  /** Why a discount was applied (item 29). */
+  discountReason?: string | null;
+  /** Breaks taken on this job, per cleaner (item 26). */
+  breaks?: Array<{
+    cleanerId: string;
+    startedAt: string;
+    endedAt: string | null;
+  }>;
   usesFixedPrice?: boolean;
   notifyClient?: boolean;
   notifyProvider?: boolean;
@@ -743,10 +762,14 @@ export default function JobDetailView({
   const round2 = (n: number) => Math.round(n * 100) / 100;
   const taxSubtotal = Math.max(0, grossRevenue);
   const hasStoredTax = (job.gstAmount || 0) > 0 || (job.qstAmount || 0) > 0;
-  const displayGst = job.isCashJob
+  // Untaxed for either reason: cash payment, or an explicit per-job exemption
+  // (item 7). Without the taxExempt arm the detail page would keep imputing
+  // GST/QST onto an exempt job whose stored amounts are legitimately zero.
+  const untaxed = !!job.isCashJob || !!job.taxExempt;
+  const displayGst = untaxed
     ? 0
     : hasStoredTax ? (job.gstAmount || 0) : round2((taxSubtotal * taxRates.gstRate) / 100);
-  const displayQst = job.isCashJob
+  const displayQst = untaxed
     ? 0
     : hasStoredTax ? (job.qstAmount || 0) : round2((taxSubtotal * taxRates.qstRate) / 100);
   const totalWithTax = round2(taxSubtotal + displayGst + displayQst);
@@ -859,6 +882,47 @@ export default function JobDetailView({
                     {!a.clockInTime && a.onMyWayAt && a.status === 'ON_THE_WAY' && (
                       <span>Since {fmtTime(a.onMyWayAt)}</span>
                     )}
+                    {/* Item 12: total time worked belongs next to in/out, so
+                        payroll review doesn't have to subtract by hand. An open
+                        shift shows elapsed time, clearly labelled as not final. */}
+                    {(() => {
+                      const entry = resolveClockEntry({ assignment: a });
+                      const brk = summariseBreaks(
+                        (job.breaks ?? []).filter((b: { cleanerId: string }) => b.cleanerId === c.id)
+                      );
+                      const active = activeMinutes(entry.minutesWorked, brk.minutes);
+                      return (
+                        <>
+                          {/* Item 26: the job time summary shows clock-in/out
+                              (above), break total, and ACTIVE working time —
+                              elapsed minus breaks. */}
+                          {active !== null ? (
+                            <span style={{ fontWeight: 600, color: 'var(--ink)' }}>
+                              {formatWorkedDuration(active)} active
+                            </span>
+                          ) : (() => {
+                            const open = openShiftMinutes(entry);
+                            return open !== null ? (
+                              <span style={{ fontWeight: 600, color: '#b45309' }}>
+                                {formatWorkedDuration(open)} elapsed
+                                {isStaleOpenShift(entry) ? ' — check clock-out' : ''}
+                              </span>
+                            ) : null;
+                          })()}
+                          {brk.minutes > 0 && (
+                            <span style={{ color: '#b45309' }}>
+                              {formatWorkedDuration(brk.minutes)} break
+                              {brk.count > 1 ? ` (${brk.count})` : ''}
+                            </span>
+                          )}
+                          {brk.isOnBreak && (
+                            <span style={{ fontWeight: 600, color: '#b45309' }}>
+                              On break now
+                            </span>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
                 <div style={{ textAlign: 'right', flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
@@ -876,7 +940,7 @@ export default function JobDetailView({
                         {paySaving ? '…' : 'Save'}
                       </button>
                       <button type="button" disabled={paySaving} onClick={() => savePayOverride(c.id, true)}
-                        title="Clear the override and go back to the standard split"
+                        title="Clear the override and go back to the automatic rate-based amount"
                         style={{ fontSize: 11, padding: '3px 8px', borderRadius: 999, border: '1px solid var(--primary-10)', background: 'transparent', cursor: 'pointer' }}>
                         Reset
                       </button>
@@ -895,9 +959,15 @@ export default function JobDetailView({
                         onClick={isAdmin ? () => { setPayEditFor(c.id); setPayEditValue(String(payOverrides[c.id] ?? pay.toFixed(2))); } : undefined}
                       >
                         ${pay.toFixed(2)}
-                        {payOverrides[c.id] != null && (
+                        {/* Item 11: automatic vs manually overridden must be
+                            explicit, not inferred from a missing badge. */}
+                        {payOverrides[c.id] != null ? (
                           <span style={{ marginLeft: 4, fontSize: 10, color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 999, padding: '1px 5px' }}>
                             custom
+                          </span>
+                        ) : (
+                          <span style={{ marginLeft: 4, fontSize: 10, color: 'var(--primary-60)', background: 'var(--primary-5)', border: '1px solid var(--primary-10)', borderRadius: 999, padding: '1px 5px' }}>
+                            auto
                           </span>
                         )}
                       </span>
@@ -1132,7 +1202,29 @@ export default function JobDetailView({
             )}
             {(job.discountAmount || 0) > 0 && (
               <div className="finrow negative">
-                <span className="finrow-label">Discount</span>
+                {/* Item 29: the reason sits with the discount, and a missing
+                    one reads as "No reason assigned" rather than nothing —
+                    silence would look like there was no discount to explain. */}
+                <span className="finrow-label">
+                  Discount
+                  {(() => {
+                    const reason = discountReasonLabel(job);
+                    return reason ? (
+                      <span
+                        style={{
+                          marginLeft: 6,
+                          fontSize: 11,
+                          fontWeight: 600,
+                          borderRadius: 999,
+                          padding: '1px 7px',
+                          background: isMissingReason(job) ? 'var(--primary-5)' : '#fffbeb',
+                          color: isMissingReason(job) ? 'var(--primary-60)' : '#92400e',
+                        }}>
+                        {reason}
+                      </span>
+                    ) : null;
+                  })()}
+                </span>
                 <span className="finrow-value">−${job.discountAmount!.toFixed(2)}</span>
               </div>
             )}
@@ -1140,9 +1232,13 @@ export default function JobDetailView({
               <span className="finrow-label"><strong>Subtotal</strong></span>
               <span className="finrow-value">${taxSubtotal.toFixed(2)}</span>
             </div>
-            {job.isCashJob ? (
+            {untaxed ? (
               <div className="finrow">
-                <span className="finrow-label" style={{ color: '#854d0e' }}>Cash job — tax exempt</span>
+                <span className="finrow-label" style={{ color: '#854d0e' }}>
+                  {job.taxExempt
+                    ? 'Taxes excluded — job marked tax-exempt'
+                    : 'Cash job — tax exempt'}
+                </span>
                 <span className="finrow-value">$0.00</span>
               </div>
             ) : (

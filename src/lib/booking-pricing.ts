@@ -109,6 +109,7 @@ async function resolveBasePrice(input: PricingInput): Promise<number> {
 
 type FrequencyValue =
   | "ONE_TIME"
+  | "DAILY"
   | "WEEKLY"
   | "BIWEEKLY"
   | "MONTHLY"
@@ -151,10 +152,20 @@ export function frequencyDiscountFromConfig(
 // Returns the date for the next occurrence given a base date and frequency.
 export function nextOccurrence(
   base: Date,
-  frequency: "WEEKLY" | "BIWEEKLY" | "MONTHLY" | "QUARTERLY" | "TWICE_WEEKLY" | "HIGH_FREQUENCY"
+  frequency:
+    | "DAILY"
+    | "WEEKLY"
+    | "BIWEEKLY"
+    | "MONTHLY"
+    | "QUARTERLY"
+    | "TWICE_WEEKLY"
+    | "HIGH_FREQUENCY"
 ): Date {
   const d = new Date(base);
   switch (frequency) {
+    case "DAILY":
+      d.setDate(d.getDate() + 1);
+      break;
     case "WEEKLY":
     case "HIGH_FREQUENCY":
       d.setDate(d.getDate() + 7);
@@ -166,13 +177,37 @@ export function nextOccurrence(
       d.setDate(d.getDate() + 14);
       break;
     case "MONTHLY":
-      d.setMonth(d.getMonth() + 1);
+      addMonthsClamped(d, 1);
       break;
     case "QUARTERLY":
-      d.setMonth(d.getMonth() + 3);
+      addMonthsClamped(d, 3);
       break;
   }
   return d;
+}
+
+/**
+ * Add whole months, clamping to the last day of the target month.
+ *
+ * Plain `setMonth(m + 1)` overflows: Jan 31 becomes **March 3**, silently
+ * skipping February entirely, so a monthly cleaning booked on the 31st would
+ * lose a visit. Clamping gives Jan 31 → Feb 28 (Feb 29 in a leap year), which
+ * is what every calendar app does and what a customer expects.
+ *
+ * Mutates `d` in place; the time of day is untouched.
+ */
+function addMonthsClamped(d: Date, months: number): void {
+  const targetDay = d.getDate();
+  // Move to the 1st first so the month arithmetic can't overflow, then clamp
+  // the day to whatever the target month actually has.
+  d.setDate(1);
+  d.setMonth(d.getMonth() + months);
+  const daysInTargetMonth = new Date(
+    d.getFullYear(),
+    d.getMonth() + 1,
+    0
+  ).getDate();
+  d.setDate(Math.min(targetDay, daysInTargetMonth));
 }
 
 // How many additional jobs to auto-create for recurring bookings.
@@ -181,10 +216,22 @@ export function nextOccurrence(
 // frequencies (setting `scheduling.recurringWeeklyHorizon`); it defaults to 3
 // so callers that don't pass it keep the original behavior.
 export function recurrenceCount(
-  frequency: "ONE_TIME" | "WEEKLY" | "BIWEEKLY" | "MONTHLY" | "QUARTERLY" | "TWICE_WEEKLY" | "HIGH_FREQUENCY",
+  frequency:
+    | "ONE_TIME"
+    | "DAILY"
+    | "WEEKLY"
+    | "BIWEEKLY"
+    | "MONTHLY"
+    | "QUARTERLY"
+    | "TWICE_WEEKLY"
+    | "HIGH_FREQUENCY",
   weeklyHorizon = 3
 ): number {
   switch (frequency) {
+    // Same look-ahead WINDOW as the weekly setting, expressed in days, so
+    // "3 weeks ahead" means the same span whichever cadence is chosen.
+    case "DAILY":
+      return weeklyHorizon * 7;
     case "WEEKLY":
     case "TWICE_WEEKLY":
     case "HIGH_FREQUENCY":

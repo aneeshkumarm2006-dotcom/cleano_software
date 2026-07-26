@@ -20,12 +20,36 @@ import {
 import type { AvailabilityConflict } from "@/app/admin/actions/checkAvailability.types";
 
 /**
+ * The job's lead cleaner (`Job.employeeId`) for a given assigned team.
+ *
+ * `employeeId` is the legacy single-cleaner column that the cleaner app's
+ * my-jobs query, `claimJob` and `bulkAssignCleaner` all read as "the cleaner on
+ * this job". It must therefore always point at a real member of the team — it
+ * is NOT a "created by" field, which is what the admin job forms were using it
+ * as (fix list items 3 + 4).
+ *
+ * An existing lead who is still on the team is kept, so re-saving a job never
+ * reshuffles who the lead is; otherwise the first assigned cleaner takes over,
+ * and an empty team clears it.
+ */
+export function resolveJobLead(
+  currentLeadId: string | null | undefined,
+  cleanerIds: string[]
+): string | null {
+  if (currentLeadId && cleanerIds.includes(currentLeadId)) return currentLeadId;
+  return cleanerIds[0] ?? null;
+}
+
+/**
  * Reconcile JobAssignment rows with the cleaners currently assigned to a job.
  * Upserts an ASSIGNED row per cleaner (existing rows keep their live status)
  * and removes rows for cleaners no longer on the job, preserving CANCELLED
  * rows as history.
  */
-export async function syncJobAssignments(jobId: string, cleanerIds: string[]) {
+export async function syncJobAssignments(
+  jobId: string,
+  cleanerIds: string[]
+): Promise<{ ok: true } | { ok: false; error: string }> {
   const ids = Array.from(new Set(cleanerIds.filter((id): id is string => !!id)));
 
   try {
@@ -46,9 +70,17 @@ export async function syncJobAssignments(jobId: string, cleanerIds: string[]) {
         create: { jobId, cleanerId, status: "ASSIGNED" },
       });
     }
+    return { ok: true };
   } catch (e) {
-    // Assignment rows are a status overlay — never fail the parent action.
+    // Previously swallowed: the job saved, the per-cleaner rows didn't, and the
+    // admin was told the save succeeded while the assignment quietly reverted
+    // on reopen. The caller now decides what to surface (fix list item 4).
     console.error("syncJobAssignments failed", jobId, e);
+    return {
+      ok: false,
+      error:
+        "The job was saved, but the cleaner assignment could not be recorded. Reopen the job and set the cleaners again.",
+    };
   }
 }
 

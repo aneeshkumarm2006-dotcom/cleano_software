@@ -3,27 +3,47 @@
 import { useState } from "react";
 import Button from "@/components/ui/Button";
 import CustomDropdown from "@/components/ui/custom-dropdown";
+import {
+  DEFAULT_SERVICE_CATALOG,
+  resolveServiceValue,
+  serviceOptions as catalogServiceOptions,
+} from "@/lib/service-catalog";
 
 interface JobTypeSelectorProps {
   initialValue?: string | null;
+  /**
+   * Service list from Settings → Job Types (item 20). This component used to
+   * carry its own hardcoded list that also disagreed with the modal's about
+   * what to STORE ("MOVE_IN - Move-in Cleaning" vs "MOVE_IN").
+   */
+  options?: { value: string; label: string }[];
 }
-
-const jobTypeOptions = [
-  { value: "", label: "Select Type" },
-  { value: "R - Residential", label: "R - Residential" },
-  { value: "DEEP - Deep Cleaning", label: "DEEP - Deep Cleaning" },
-  { value: "MOVE_IN - Move-in Cleaning", label: "MOVE_IN - Move-in Cleaning" },
-  { value: "MOVE_OUT - Move-out Cleaning", label: "MOVE_OUT - Move-out Cleaning" },
-  { value: "AIRBNB - Airbnb Cleaning", label: "AIRBNB - Airbnb Cleaning" },
-  { value: "C - Commercial", label: "C - Commercial" },
-  { value: "PC - Post Construction", label: "PC - Post Construction" },
-  { value: "F - Follow-up", label: "F - Follow-up" },
-];
 
 export default function JobTypeSelector({
   initialValue,
+  options = [],
 }: JobTypeSelectorProps) {
-  const [jobType, setJobType] = useState(initialValue || "");
+  const jobTypeOptions = [
+    { value: "", label: "Select Type" },
+    ...(options.length > 0
+      ? options
+      : catalogServiceOptions(DEFAULT_SERVICE_CATALOG)),
+  ];
+  // A legacy stored value ("R - Residential") maps onto the offered service so
+  // editing an old job doesn't blank its type.
+  const [jobType, setJobType] = useState(() =>
+    resolveServiceValue(
+      initialValue,
+      options.length > 0
+        ? options.map((o) => ({
+            id: o.value,
+            name: o.label,
+            category: o.value,
+            isActive: true,
+          }))
+        : DEFAULT_SERVICE_CATALOG
+    )
+  );
 
   return (
     <>

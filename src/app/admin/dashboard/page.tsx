@@ -18,6 +18,7 @@ import {
 import { isAdminRole } from "@/lib/role-routing";
 import { fmtDate, fmtTime, startOfDayTz } from "@/lib/time";
 import { getTotalRevenue, getEmployeeCounts, productWhere, simpleJobStatus } from "@/lib/metrics";
+import { isCleanerLow } from "@/lib/inventory-thresholds";
 import { avatarColor, initials } from "@/lib/avatar";
 import CleanerDashboard from "./CleanerDashboard";
 
@@ -209,6 +210,7 @@ export default async function DashboardPage() {
       select: {
         productId: true,
         quantity: true,
+        product: { select: { cleanerRestockThreshold: true } },
         employee: { select: { id: true, name: true } },
       },
     }),
@@ -217,7 +219,15 @@ export default async function DashboardPage() {
   const refillCleanerMap = new Map<string, { id: string; name: string; lowCount: number }>();
   for (const ep of employeesWithProducts) {
     const rule = inventoryRules.find((r) => r.productId === ep.productId);
-    if (rule && ep.quantity <= rule.refillThreshold) {
+    // Uses the CLEANER restock threshold, and no longer requires an
+    // InventoryRule row to exist — products without one were previously
+    // incapable of ever raising a refill alert (fix list item 14).
+    if (
+      isCleanerLow(ep.quantity, {
+        cleanerRestockThreshold: ep.product.cleanerRestockThreshold,
+        usagePerJob: rule?.usagePerJob ?? 0,
+      })
+    ) {
       refillAlertCount++;
       const entry = refillCleanerMap.get(ep.employee.id);
       if (entry) entry.lowCount++;

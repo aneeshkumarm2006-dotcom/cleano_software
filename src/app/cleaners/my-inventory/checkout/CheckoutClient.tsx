@@ -96,6 +96,8 @@ export default function CheckoutClient({ locations }: CheckoutClientProps) {
   }, [cart, products]);
 
   const cartCount = cartItems.length;
+  // Informational only — taking more than the locker shows is permitted and is
+  // reconciled by admin later. It must never gate the pickup (fix list item 5).
   const hasOverLimit = cartItems.some((i) => i.quantity > i.available);
 
   function selectLocation(id: string) {
@@ -110,8 +112,8 @@ export default function CheckoutClient({ locations }: CheckoutClientProps) {
   function addToCart(product: LocationProductEntry) {
     setCart((prev) => {
       const existing = prev[product.productId] || 0;
-      const next = Math.min(existing + 1, product.available);
-      return { ...prev, [product.productId]: next };
+      // No ceiling: a cleaner can add an out-of-stock item to the cart.
+      return { ...prev, [product.productId]: existing + 1 };
     });
   }
 
@@ -137,13 +139,6 @@ export default function CheckoutClient({ locations }: CheckoutClientProps) {
 
   async function confirmCheckout() {
     if (!locationId || cartItems.length === 0) return;
-    if (hasOverLimit) {
-      setFeedback({
-        type: "error",
-        text: "Some items exceed available stock. Adjust quantities to continue.",
-      });
-      return;
-    }
 
     setSubmitting(true);
     setFeedback(null);
@@ -160,9 +155,14 @@ export default function CheckoutClient({ locations }: CheckoutClientProps) {
     setSubmitting(false);
 
     if (res.success) {
+      const warnings = res.warnings ?? [];
       setFeedback({
         type: "success",
-        text: `Pickup confirmed. ${cartItems.length} item(s) added to your inventory.`,
+        text:
+          `Pickup confirmed. ${cartItems.length} item(s) added to your inventory.` +
+          (warnings.length > 0
+            ? ` ${warnings.length} item(s) took the locker below the recorded count — flagged for admin to reconcile.`
+            : ""),
       });
       // Keep cart contents on screen so the summary doesn't blank out while we
       // wait to redirect. `submitted` disables Confirm/Back so the user can't
@@ -324,9 +324,9 @@ export default function CheckoutClient({ locations }: CheckoutClientProps) {
                 </div>
                 {products.length === 0 ? (
                   <div>
-                    <strong>No items in stock at this location.</strong>
+                    <strong>No products set up yet.</strong>
                     <p style={{ fontSize: 12, color: "var(--primary-50)", margin: "4px 0 0" }}>
-                      Try selecting a different location, or contact your manager to restock.
+                      Ask your manager to add products to the catalogue.
                     </p>
                   </div>
                 ) : (
@@ -337,6 +337,13 @@ export default function CheckoutClient({ locations }: CheckoutClientProps) {
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {filteredProducts.map((p) => {
                   const inCart = cart[p.productId] || 0;
+                  // Stock status is shown, never enforced (fix list item 19).
+                  const status =
+                    p.available <= 0
+                      ? { label: "Out of stock", color: "#b91c1c", bg: "#fee2e2" }
+                      : p.available <= (p.minStock ?? 0)
+                      ? { label: "Low stock", color: "#b45309", bg: "#fef3c7" }
+                      : { label: "In stock", color: "#15803d", bg: "#dcfce7" };
                   return (
                     <div key={p.productId} className="cl-co-prod-row">
                       <div style={{ flex: 1, minWidth: 0 }}>
@@ -344,8 +351,23 @@ export default function CheckoutClient({ locations }: CheckoutClientProps) {
                         {p.productDescription && (
                           <div className="cl-co-prod-desc">{p.productDescription}</div>
                         )}
-                        <span className="cl-co-prod-avail">
-                          {p.available} {p.unit} available
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                          <span className="cl-co-prod-avail">
+                            {p.available} {p.unit} available
+                          </span>
+                          <span
+                            style={{
+                              background: status.bg,
+                              color: status.color,
+                              fontSize: 10,
+                              fontWeight: 700,
+                              borderRadius: 20,
+                              padding: "1px 7px",
+                              letterSpacing: "0.03em",
+                              textTransform: "uppercase",
+                            }}>
+                            {status.label}
+                          </span>
                         </span>
                       </div>
                       {inCart > 0 ? (
@@ -398,15 +420,16 @@ export default function CheckoutClient({ locations }: CheckoutClientProps) {
               </div>
             )}
             {hasOverLimit && (
-              <p style={{ fontSize: 12, color: "#dc2626" }}>
-                Some items exceed available stock.
+              <p style={{ fontSize: 12, color: "#b45309" }}>
+                Some items are above the recorded locker count. You can still
+                take them — the difference is flagged for admin to reconcile.
               </p>
             )}
             <button
               type="button"
               className="cl-co-review-btn"
               onClick={() => setStep(3)}
-              disabled={cartItems.length === 0 || hasOverLimit}>
+              disabled={cartItems.length === 0}>
               Review pickup
               <ArrowRight className="w-4 h-4" />
             </button>

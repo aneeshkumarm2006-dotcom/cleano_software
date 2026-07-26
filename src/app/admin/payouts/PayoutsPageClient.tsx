@@ -19,7 +19,10 @@ export type PayoutRow = {
   adjustments: number;
   deductions: number;
   reimbursements: number;
+  /** Already floored at $0 by the server (src/lib/payout-math.ts). */
   finalAmount: number;
+  /** Deductions this period could not cover. > 0 means the payout was floored. */
+  shortfall: number;
   jobCount: number;
   totalHours: number;
   notes: string | null;
@@ -35,6 +38,10 @@ export type PayPeriodRow = {
   approvedBy: { id: string; name: string } | null;
   paidAt: string | null;
   totalFinal: number;
+  /** Sum of un-recovered deductions across this period's payouts. */
+  totalShortfall: number;
+  /** How many payouts in this period were floored at $0. */
+  shortfallCount: number;
   employeeCount: number;
   payouts: PayoutRow[];
 };
@@ -226,6 +233,15 @@ export default function PayoutsPageClient({ initialPeriods }: { initialPeriods: 
                       <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 4, fontSize: 12, color: "var(--primary-60)", flexWrap: "wrap" }}>
                         <span style={{ display: "flex", alignItems: "center", gap: 4 }}><Users size={12} /> {p.employeeCount} employees</span>
                         <span style={{ display: "flex", alignItems: "center", gap: 4 }}><DollarSign size={12} /> ${p.totalFinal.toFixed(2)}</span>
+                        {p.shortfallCount > 0 && (
+                          <span
+                            style={{ display: "flex", alignItems: "center", gap: 4, color: "#b91c1c", fontWeight: 600 }}
+                            title="Deductions exceeded earnings on one or more payouts. Those payouts are floored at $0.00 — review before approving.">
+                            <AlertTriangle size={12} />
+                            ${p.totalShortfall.toFixed(2)} not recovered
+                            {p.shortfallCount > 1 ? ` (${p.shortfallCount} employees)` : ""}
+                          </span>
+                        )}
                         {p.notes && <span>· {p.notes}</span>}
                       </div>
                     </div>

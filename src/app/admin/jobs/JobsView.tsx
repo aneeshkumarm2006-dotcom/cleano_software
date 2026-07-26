@@ -15,6 +15,10 @@ import BulkActionBar, { BulkAction } from "@/components/common/BulkActionBar";
 import { bulkSoftDelete, bulkRestore } from "@/lib/bulk/actions";
 import { permanentlyDeleteJobs } from "../actions/permanentlyDeleteJobs";
 import { bulkCancelJobs } from "../actions/bulkCancelJobs";
+import {
+  DEFAULT_SERVICE_CATALOG,
+  serviceOptions as catalogServiceOptions,
+} from "@/lib/service-catalog";
 import { bulkSetJobStatus } from "../actions/bulkSetJobStatus";
 import { bulkAssignCleaner } from "../actions/bulkAssignCleaner";
 import { togglePaymentReceived, toggleInvoiceSent } from "../actions/toggleJobPaymentStatus";
@@ -68,6 +72,8 @@ interface ClientLite { id: string; name: string; }
 interface UserLite   { id: string; name: string; email: string; }
 
 interface JobsViewProps {
+  /** Service list from Settings → Job Types (item 20). */
+  serviceOptions?: { value: string; label: string }[];
   jobs: Job[];
   isLoading: boolean;
   searchTerm: string;
@@ -385,7 +391,17 @@ export default function JobsView({
   onClientFilterChange,
   onEmployeeFilterChange,
   onPaymentTypeFilterChange,
+  serviceOptions = [],
 }: JobsViewProps) {
+  // "All types" plus the configured services. Falls back to the shipped
+  // defaults so the filter is never empty.
+  const serviceFilterOptions = [
+    { value: "all", label: "All types" },
+    ...(serviceOptions.length > 0
+      ? serviceOptions
+      : catalogServiceOptions(DEFAULT_SERVICE_CATALOG)),
+  ];
+
   const [tab, setTab] = useState<TabId>('all');
   const [showFilters, setShowFilters] = useState(false);
 
@@ -820,18 +836,9 @@ export default function JobsView({
               value={jobTypeFilter}
               onChange={(v) => onJobTypeFilterChange?.(v)}
               size="sm"
-              options={[
-                { value: "all", label: "All types" },
-                { value: "RESIDENTIAL", label: "Residential" },
-                { value: "DEEP", label: "Deep Cleaning" },
-                { value: "MOVE_IN", label: "Move-in" },
-                { value: "MOVE_OUT", label: "Move-out" },
-                { value: "MOVE_IN_OUT", label: "Move-in / Move-out" },
-                { value: "AIRBNB", label: "Airbnb" },
-                { value: "COMMERCIAL", label: "Commercial" },
-                { value: "POST_CONSTRUCTION", label: "Post-Construction" },
-                { value: "FOLLOW_UP", label: "Follow-up" },
-              ]}
+              /* Filter options come from the Settings service catalog so they
+                 can never drift from what the job form offers (item 20). */
+              options={serviceFilterOptions}
             />
           </div>
           <div className="field">

@@ -2,6 +2,14 @@
 
 import { useState, useTransition } from "react";
 import { reportDamagedItem } from "@/app/admin/actions/reportDamagedItem";
+import {
+  INVENTORY_ISSUE_TYPES,
+  ISSUE_HINT,
+  ISSUE_LABEL,
+  needsRestock,
+  writesOffCompanyStock,
+  type InventoryIssueType,
+} from "@/lib/inventory-issues";
 import { createInventoryRequest } from "@/app/admin/actions/createInventoryRequest";
 import { updateMyInventoryCount } from "@/app/admin/actions/updateMyInventoryCount";
 import { addMyInventoryItem } from "./addMyInventoryItem";
@@ -112,7 +120,7 @@ export default function MyInventoryClient({ items, catalog = [] }: MyInventoryCl
   const [damageItem, setDamageItem] = useState<InventoryItem | null>(null);
   const [damageQty, setDamageQty] = useState(1);
   const [damageReason, setDamageReason] = useState("");
-  const [damageKind, setDamageKind] = useState<"damaged" | "lost">("damaged");
+  const [damageKind, setDamageKind] = useState<InventoryIssueType>("LOST");
   const [damageError, setDamageError] = useState<string | null>(null);
   const [damageBusy, startDamage] = useTransition();
 
@@ -120,7 +128,7 @@ export default function MyInventoryClient({ items, catalog = [] }: MyInventoryCl
     setDamageItem(item);
     setDamageQty(1);
     setDamageReason("");
-    setDamageKind("damaged");
+    setDamageKind("LOST");
     setDamageError(null);
   }
 
@@ -415,7 +423,7 @@ export default function MyInventoryClient({ items, catalog = [] }: MyInventoryCl
                     className="cl-action-btn"
                     onClick={() => openDamage(item)}
                     disabled={item.quantity <= 0}>
-                    Report damaged or lost
+                    Report an issue
                   </button>
                 </div>
               </article>
@@ -541,7 +549,7 @@ export default function MyInventoryClient({ items, catalog = [] }: MyInventoryCl
             style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }}
           />
           <div style={{ marginTop: 6, fontSize: 12, color: "var(--primary-60)" }}>
-            Damaged or lost items should go through <strong>Report damaged or lost</strong> so
+            Lost, broken or used-up items should go through <strong>Report an issue</strong> so
             master stock is adjusted too.
           </div>
 
@@ -568,42 +576,54 @@ export default function MyInventoryClient({ items, catalog = [] }: MyInventoryCl
       {damageItem && (
         <Modal title={`Report ${damageItem.productName}`} onClose={() => setDamageItem(null)}>
           <p style={{ marginTop: 8, fontSize: 13, color: "var(--primary-60)" }}>
-            This will deduct from both your kit and master inventory, and alert admin.
+            {writesOffCompanyStock(damageKind)
+              ? "This deducts from your kit and writes the item off company stock, and alerts admin."
+              : needsRestock(damageKind)
+              ? "This reduces your kit and tells admin you may need a restock."
+              : "This reduces your kit and flags it for admin to review."}
           </p>
 
-          <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
-            <button
-              type="button"
-              onClick={() => setDamageKind("damaged")}
-              style={{
-                flex: 1,
-                padding: "8px 12px",
-                borderRadius: 8,
-                fontSize: 13,
-                fontWeight: 600,
-                background: damageKind === "damaged" ? "var(--primary)" : "#fff",
-                color: damageKind === "damaged" ? "#fff" : "var(--ink)",
-                border: `1px solid ${damageKind === "damaged" ? "var(--primary)" : "var(--primary-15)"}`,
-                cursor: "pointer",
-              }}>
-              Damaged
-            </button>
-            <button
-              type="button"
-              onClick={() => setDamageKind("lost")}
-              style={{
-                flex: 1,
-                padding: "8px 12px",
-                borderRadius: 8,
-                fontSize: 13,
-                fontWeight: 600,
-                background: damageKind === "lost" ? "var(--primary)" : "#fff",
-                color: damageKind === "lost" ? "#fff" : "var(--ink)",
-                border: `1px solid ${damageKind === "lost" ? "var(--primary)" : "var(--primary-15)"}`,
-                cursor: "pointer",
-              }}>
-              Lost
-            </button>
+          {/* Item 15: four issue types, each with a hint so the right one
+              gets picked — they behave differently in the books. */}
+          <div
+            style={{
+              marginTop: 16,
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 8,
+            }}>
+            {INVENTORY_ISSUE_TYPES.map((t) => {
+              const active = damageKind === t;
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setDamageKind(t)}
+                  style={{
+                    padding: "10px 12px",
+                    borderRadius: 8,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    textAlign: "left",
+                    background: active ? "var(--primary)" : "#fff",
+                    color: active ? "#fff" : "var(--ink)",
+                    border: `1px solid ${active ? "var(--primary)" : "var(--primary-15)"}`,
+                    cursor: "pointer",
+                  }}>
+                  {ISSUE_LABEL[t]}
+                  <span
+                    style={{
+                      display: "block",
+                      fontSize: 11,
+                      fontWeight: 400,
+                      marginTop: 2,
+                      color: active ? "rgba(255,255,255,0.8)" : "var(--primary-60)",
+                    }}>
+                    {ISSUE_HINT[t]}
+                  </span>
+                </button>
+              );
+            })}
           </div>
 
           <label style={labelStyle}>

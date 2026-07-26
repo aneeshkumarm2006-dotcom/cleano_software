@@ -26,13 +26,24 @@ export async function createInventoryRule(params: CreateInventoryRuleParams) {
       return { success: false, error: "Values cannot be negative" };
     }
 
-    await db.inventoryRule.upsert({
-      where: { productId },
-      create: { productId, usagePerJob, refillThreshold },
-      update: { usagePerJob, refillThreshold },
-    });
+    // Product.cleanerRestockThreshold is the authoritative cleaner restock
+    // threshold (fix list item 14); InventoryRule.refillThreshold is kept in
+    // step so this legacy editor can't silently disagree with the product page.
+    // Both are written together so neither can drift.
+    await db.$transaction([
+      db.inventoryRule.upsert({
+        where: { productId },
+        create: { productId, usagePerJob, refillThreshold },
+        update: { usagePerJob, refillThreshold },
+      }),
+      db.product.update({
+        where: { id: productId },
+        data: { cleanerRestockThreshold: refillThreshold },
+      }),
+    ]);
 
     revalidatePath("/admin/settings");
+    revalidatePath("/admin/inventory");
     return { success: true };
   } catch (error) {
     console.error("Error creating inventory rule:", error);

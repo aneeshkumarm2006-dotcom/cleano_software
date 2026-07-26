@@ -16,6 +16,8 @@
 import { db } from "@/db";
 import { getCleanerRateInputs } from "./cleaner-rates";
 import { computeJobPayout, type CleanerRateInput } from "./pay-tiers";
+import { computePayoutTotals } from "./payout-math";
+import { summariseBreaks } from "./time-tracking";
 import {
   currentPayPeriodRange,
   parseBusinessDate,
@@ -46,6 +48,11 @@ export interface JobPayInput {
    * $50 / $50. A null payAmount means "no override, use the normal rule".
    */
   assignments?: { cleanerId: string; payAmount: number | null }[];
+  /**
+   * Breaks taken on this job (item 26). Deducted from worked hours so paid
+   * time reflects ACTIVE work.
+   */
+  breaks?: { startedAt: Date | string; endedAt?: Date | string | null }[];
 }
 
 /** Prisma select shared by payroll and the earnings aggregate. */
@@ -65,6 +72,7 @@ export const JOB_PAY_SELECT = {
   clockOutTime: true,
   cleaners: { select: { id: true } },
   assignments: { select: { cleanerId: true, payAmount: true } },
+  breaks: { select: { startedAt: true, endedAt: true } },
 } as const;
 
 /** Statuses payroll actually pays for. Estimates must use the same set. */
@@ -74,14 +82,50 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
-/** Lead + assigned cleaners, de-duplicated. */
-export function jobParticipantIds(job: JobPayInput): string[] {
+/**
+ * Who actually gets paid for this job: the lead (`employeeId`) plus every
+ * assigned cleaner, de-duplicated.
+ *
+ * GUARD (fix list items 3 + 4): `Job.employeeId` is meant to be the job's LEAD
+ * CLEANER — that's how `bulkAssignCleaner`, `claimJob` and the cleaner app's
+ * my-jobs query all treat it. The admin job modal used to stamp it with the
+ * ACTING ADMIN instead, which had two silent money consequences:
+ *
+ *   • a job with ONE cleaner became a TWO-person job, dropping the payout from
+ *     the cleaner's full rate to a proportional slice of the 50% split pool
+ *     ($112 at 45% paid $29.65 instead of $50.40); and
+ *   • a job with NO cleaner paid the admin outright.
+ *
+ * The write side is fixed in saveJob, but historical rows still carry the bad
+ * value, so an ADMIN/OWNER who is not ALSO an explicitly assigned cleaner (via
+ * the `cleaners` relation or a JobAssignment row) is never a payable
+ * participant. An owner who genuinely works jobs is assigned like anyone else
+ * and is unaffected.
+ *
+ * `rates` is optional so pure callers keep working; the role check is simply
+ * skipped when it isn't supplied.
+ */
+export function jobParticipantIds(
+  job: JobPayInput,
+  rates?: Map<string, CleanerRateInput>
+): string[] {
+  const explicit = new Set(
+    [
+      ...job.cleaners.map((c) => c.id),
+      ...(job.assignments ?? []).map((a) => a.cleanerId),
+    ].filter((id): id is string => !!id)
+  );
+
+  const lead = job.employeeId;
+  if (lead && !explicit.has(lead)) {
+    const role = rates?.get(lead)?.role;
+    if (role === "ADMIN" || role === "OWNER") {
+      return Array.from(explicit);
+    }
+  }
+
   return Array.from(
-    new Set(
-      [job.employeeId, ...job.cleaners.map((c) => c.id)].filter(
-        (id): id is string => !!id
-      )
-    )
+    new Set([lead, ...explicit].filter((id): id is string => !!id))
   );
 }
 
@@ -90,10 +134,15 @@ export function jobWorkedHours(job: JobPayInput): number {
   const start = job.clockInTime ?? job.startTime;
   const end = job.clockOutTime ?? job.endTime;
   if (!start || !end) return 0;
-  return Math.max(
+  const elapsedHours = Math.max(
     0,
     (new Date(end).getTime() - new Date(start).getTime()) / 3_600_000
   );
+  // Breaks are ACTIVE-time deductions (awer_fixes.pdf item 26): "break time
+  // should not inflate total active work time". Hourly pay bills these hours,
+  // so a lunch break must not be paid to the cleaner or billed to the customer.
+  const breakHours = summariseBreaks(job.breaks).minutes / 60;
+  return Math.max(0, elapsedHours - breakHours);
 }
 
 /** The instant a job counts against for period/year bucketing. */
@@ -118,7 +167,8 @@ export interface JobPayShare {
 /**
  * THE per-job pay calculation. Payroll and every estimate must call this.
  *
- *   • PERCENTAGE — tier/split math from the job price (src/lib/pay-tiers.ts).
+ *   • PERCENTAGE — each cleaner earns their own rating-based rate on the FULL
+ *     job price (src/lib/pay-tiers.ts). Paired jobs no longer halve anything.
  *     Legacy jobs with no price fall back to an even split of employeePay.
  *   • FLAT       — employeePay is the fixed payout the admin promised the
  *     cleaner ("Cleaner is paid the fixed amount you enter in Employee pay"),
@@ -133,7 +183,7 @@ export function computeJobPayShares(
   job: JobPayInput,
   rates: Map<string, CleanerRateInput>
 ): Map<string, JobPayShare> {
-  const participantIds = jobParticipantIds(job);
+  const participantIds = jobParticipantIds(job, rates);
   const result = new Map<string, JobPayShare>();
   if (participantIds.length === 0) return result;
 
@@ -329,8 +379,14 @@ export async function getCleanerEarnings(
     inYear(new Date(p.payPeriod.endDate))
   );
 
-  const walletBalance = paidPayouts.reduce((s, p) => s + p.finalAmount, 0);
-  const paidYTD = paidThisYear.reduce((s, p) => s + p.finalAmount, 0);
+  // Payout money is read through the canonical helper rather than the stored
+  // column so a row written before the $0 floor landed can never show a cleaner
+  // a negative wallet or pending balance (fix list item 1).
+  const payoutFinal = (p: { baseAmount: number; adjustments: number; deductions: number; reimbursements: number }) =>
+    computePayoutTotals(p).final;
+
+  const walletBalance = paidPayouts.reduce((s, p) => s + payoutFinal(p), 0);
+  const paidYTD = paidThisYear.reduce((s, p) => s + payoutFinal(p), 0);
   const grossYTD = paidThisYear.reduce((s, p) => s + p.baseAmount, 0);
   const deductionsYTD = paidThisYear.reduce((s, p) => s + p.deductions, 0);
   const adjustmentsYTD = paidThisYear.reduce((s, p) => s + p.adjustments, 0);
@@ -339,12 +395,12 @@ export async function getCleanerEarnings(
     0
   );
   const pendingFromPeriods = openPayouts.reduce(
-    (s, p) => s + p.finalAmount,
+    (s, p) => s + payoutFinal(p),
     0
   );
   const pendingThisYearFromPeriods = openPayouts
     .filter((p) => inYear(new Date(p.payPeriod.endDate)))
-    .reduce((s, p) => s + p.finalAmount, 0);
+    .reduce((s, p) => s + payoutFinal(p), 0);
 
   // ── Job-derived figures ───────────────────────────────────────────────────
   // A job is "processed" once a live pay period the cleaner has a payout in
@@ -421,7 +477,7 @@ export async function getCleanerEarnings(
         adjustments: currentPayout.adjustments,
         deductions: currentPayout.deductions,
         reimbursements: currentPayout.reimbursements,
-        finalAmount: currentPayout.finalAmount,
+        finalAmount: payoutFinal(currentPayout),
         jobCount: currentPayout.jobCount,
         totalHours: currentPayout.totalHours,
         isLive: false,

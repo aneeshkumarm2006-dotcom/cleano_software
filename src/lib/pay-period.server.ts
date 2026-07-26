@@ -9,6 +9,7 @@ import { db } from "@/db";
 import { getCleanerRateInputs } from "@/lib/cleaner-rates";
 import { getFieldLeadWeeklyBonus } from "@/lib/field-lead-bonus.server";
 import { formatPayPeriodRange, type PayPeriodRange } from "@/lib/pay-period";
+import { computePayoutTotals } from "@/lib/payout-math";
 import {
   JOB_PAY_SELECT,
   PAYABLE_JOB_STATUSES,
@@ -89,7 +90,7 @@ export async function generatePayPeriodForWeek(
 
   for (const job of jobs) {
     const input = job as unknown as JobPayInput;
-    if (jobParticipantIds(input).length === 0) continue;
+    if (jobParticipantIds(input, rateInputs).length === 0) continue;
     // Same function My Pay uses, so a cleaner's "pending" equals their payout.
     const shares = computeJobPayShares(input, rateInputs);
     for (const [pid, share] of shares) {
@@ -126,13 +127,26 @@ export async function generatePayPeriodForWeek(
       payouts: {
         create: Array.from(payoutMap.entries())
           .filter(([, v]) => v.jobCount > 0 || v.base > 0)
-          .map(([employeeId, v]) => ({
-            employeeId,
-            baseAmount: Number(v.base.toFixed(2)),
-            finalAmount: Number(v.base.toFixed(2)),
-            jobCount: v.jobCount,
-            totalHours: Number(v.hours.toFixed(2)),
-          })),
+          .map(([employeeId, v]) => {
+            const baseAmount = Number(v.base.toFixed(2));
+            // A freshly generated period has no adjustments/deductions yet, but
+            // route it through the canonical helper anyway so a negative base
+            // (e.g. a negative per-cleaner override) can never be written as a
+            // negative payout. See src/lib/payout-math.ts.
+            const { final } = computePayoutTotals({
+              baseAmount,
+              adjustments: 0,
+              deductions: 0,
+              reimbursements: 0,
+            });
+            return {
+              employeeId,
+              baseAmount,
+              finalAmount: final,
+              jobCount: v.jobCount,
+              totalHours: Number(v.hours.toFixed(2)),
+            };
+          }),
       },
     },
   });

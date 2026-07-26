@@ -45,6 +45,7 @@ export interface Job {
   invoiceSent: boolean;
   paymentType: string | null;
   isCashJob?: boolean;
+  taxExempt?: boolean;
   usesFixedPrice?: boolean;
   discountAmount: number | null;
   /** Canonical revenue inputs (see src/lib/metrics-shared). */
@@ -73,6 +74,10 @@ interface JobsPageClientProps {
   cleaners?: User[];
   clients: ClientLite[];
   addOnCatalog?: Array<{ id: string; name: string; price: number }>;
+  /** Service list from Settings → Job Types (item 20). */
+  serviceOptions?: { value: string; label: string }[];
+  /** Move-in/out per-sq-ft rates for the modal's derived-price hint (item 8). */
+  sqftRates?: { thresholdSqft: number; rateBelow: number; rateAtOrAbove: number } | null;
   isAdmin: boolean;
   archived?: boolean;
 }
@@ -88,6 +93,8 @@ export default function JobsPageClient({
   cleaners = [],
   clients,
   addOnCatalog = [],
+  serviceOptions = [],
+  sqftRates = null,
   isAdmin,
   archived = false,
 }: JobsPageClientProps) {
@@ -198,6 +205,7 @@ export default function JobsPageClient({
       </div>
 
       <JobsView
+        serviceOptions={serviceOptions}
         jobs={initialJobs}
         isLoading={isLoading}
         searchTerm={searchTerm}
@@ -238,6 +246,8 @@ export default function JobsPageClient({
         users={users}
         clients={clients}
         addOnCatalog={addOnCatalog}
+        serviceOptions={serviceOptions}
+        sqftRates={sqftRates}
         onSubmit={handleSubmit}
         onDelete={handleDelete}
       />

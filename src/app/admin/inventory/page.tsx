@@ -3,6 +3,11 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { productWhere } from "@/lib/metrics";
+import {
+  cleanerRestockThreshold,
+  isCleanerLow,
+  isCompanyLow,
+} from "@/lib/inventory-thresholds";
 import InventoryPageClient from "./InventoryPageClient";
 
 type SearchParams = Promise<{
@@ -110,6 +115,7 @@ export default async function InventoryPage({
       costPerUnit: product.costPerUnit,
       stockLevel: product.stockLevel,
       minStock: product.minStock,
+      cleanerRestockThreshold: product.cleanerRestockThreshold,
       category: product.category,
       stockUpdatedAt: product.stockUpdatedAt
         ? product.stockUpdatedAt.toISOString()
@@ -121,7 +127,9 @@ export default async function InventoryPage({
       totalAssigned,
       employeeCount,
       totalInventory: product.stockLevel + totalAssigned,
-      isLowStock: product.stockLevel <= product.minStock,
+      // COMPANY reorder point only — this drives the "needs purchasing" tile
+      // and badge. Cleaner kits are judged separately (fix list item 14).
+      isLowStock: isCompanyLow(product),
     };
   });
 
@@ -214,15 +222,20 @@ export default async function InventoryPage({
     .map((emp) => {
       const items = emp.assignedProducts.map((ep) => {
         const rule = inventoryRules.find((r) => r.productId === ep.productId);
-        const threshold = rule?.refillThreshold ?? 0;
+        // CLEANER restock threshold — the company reorder point (minStock) has
+        // no bearing on how much one cleaner should carry (fix list item 14).
+        const thresholdInput = {
+          cleanerRestockThreshold: ep.product.cleanerRestockThreshold,
+          usagePerJob: rule?.usagePerJob ?? 0,
+        };
         return {
           productId: ep.productId,
           productName: ep.product.name,
           unit: ep.product.unit,
           quantity: ep.quantity,
           costPerUnit: ep.product.costPerUnit,
-          refillThreshold: threshold,
-          isLow: threshold > 0 && ep.quantity <= threshold,
+          refillThreshold: cleanerRestockThreshold(thresholdInput),
+          isLow: isCleanerLow(ep.quantity, thresholdInput),
           lastChange: lastChangeByKey.get(`${emp.id}|${ep.productId}`) ?? null,
         };
       });
@@ -282,11 +295,18 @@ export default async function InventoryPage({
             unit: ep.product.unit,
             currentQuantity: ep.quantity,
             usagePerJob,
-            refillThreshold: rule?.refillThreshold || 0,
+            refillThreshold: cleanerRestockThreshold({
+              cleanerRestockThreshold: ep.product.cleanerRestockThreshold,
+              usagePerJob,
+            }),
             projectedUsage,
             deficit,
             needsRefill:
-              deficit > 0 || ep.quantity <= (rule?.refillThreshold || 0),
+              deficit > 0 ||
+              isCleanerLow(ep.quantity, {
+                cleanerRestockThreshold: ep.product.cleanerRestockThreshold,
+                usagePerJob,
+              }),
           };
         })
         .filter((f) => f.usagePerJob > 0);
@@ -299,6 +319,44 @@ export default async function InventoryPage({
       };
     })
     .filter((e) => e.items.length > 0);
+
+  // ── Quick-assign data (items 6 + 13) ──────────────────────────────────────
+  // Deliberately NOT derived from `cleanerInventory`, which only lists cleaners
+  // that already hold stock — you must be able to assign to someone with an
+  // empty kit. Same for products: every active product is offered, including
+  // ones nobody holds yet.
+  const [assignLocations, allLocationStock] = await Promise.all([
+    db.inventoryLocation.findMany({
+      where: { isActive: true },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
+    db.inventoryLocationStock.findMany({
+      select: { locationId: true, productId: true, quantity: true },
+    }),
+  ]);
+
+  const stockByProductLocation = new Map<string, Record<string, number>>();
+  for (const row of allLocationStock) {
+    const existing = stockByProductLocation.get(row.productId) ?? {};
+    existing[row.locationId] = row.quantity;
+    stockByProductLocation.set(row.productId, existing);
+  }
+
+  const assignProducts = productsWithStats.map((p) => ({
+    id: p.id,
+    name: p.name,
+    unit: p.unit,
+    stockByLocation: stockByProductLocation.get(p.id) ?? {},
+  }));
+
+  const assignCleaners = employees.map((emp) => ({
+    id: emp.id,
+    name: emp.name,
+    held: Object.fromEntries(
+      emp.assignedProducts.map((ep) => [ep.productId, ep.quantity])
+    ) as Record<string, number>,
+  }));
 
   return (
     <div className="h-full overflow-hidden overflow-y-auto p-8">
@@ -317,6 +375,9 @@ export default async function InventoryPage({
         forecastData={forecastData}
         cleanerInventory={cleanerInventory}
         canEditCleanerInventory={canEditCleanerInventory}
+        assignProducts={assignProducts}
+        assignCleaners={assignCleaners}
+        assignLocations={assignLocations}
         requests={requests}
         archived={archived}
       />

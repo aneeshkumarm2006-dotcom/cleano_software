@@ -25,6 +25,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import Link from "next/link";
+import { LOW_STOCK_LABEL } from "@/lib/inventory-thresholds";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import Input from "@/components/ui/Input";
@@ -145,12 +146,31 @@ export default function InventoryView({
 }: InventoryViewProps) {
   const router = useRouter();
   const getProductStatusBadge = (product: Product) => {
-    if (product.isLowStock) {
-      // Low-stock indicator deep-links to the product so the admin can act on it.
+    // Cleaner pickups are no longer blocked by low/zero stock, so a locker count
+    // can legitimately go negative. Surface that as its own state so the admin
+    // knows to reconcile it rather than reading it as ordinary low stock
+    // (fix list item 5).
+    if (product.stockLevel < 0) {
       return (
         <Link href={`/admin/inventory/${product.id}`}>
           <Badge variant="error" size="sm" className="px-2 py-1 cursor-pointer">
-            Low Stock
+            Reconcile ({product.stockLevel})
+          </Badge>
+        </Link>
+      );
+    }
+    if (product.isLowStock) {
+      // Item 14: say WHICH action this alert is asking for. "Low Stock" alone
+      // didn't distinguish "Cleano must buy more" from "a cleaner needs a
+      // top-up" — this badge is driven by the COMPANY reorder threshold.
+      return (
+        <Link href={`/admin/inventory/${product.id}`}>
+          <Badge
+            variant="error"
+            size="sm"
+            className="px-2 py-1 cursor-pointer"
+            title={`${LOW_STOCK_LABEL.COMPANY_PURCHASE} — at or below the company reorder threshold of ${product.minStock} ${product.unit}`}>
+            Purchase needed
           </Badge>
         </Link>
       );
@@ -330,6 +350,9 @@ export default function InventoryView({
   // Inventory stats — derived from product list (matches Jobs page pattern).
   const totalProducts = products.length;
   const lowStockCount = products.filter((p) => p.isLowStock).length;
+  // Locker counts that went negative from unblocked pickups — these need an
+  // admin stock count, not a purchase order (fix list item 5).
+  const negativeStockCount = products.filter((p) => p.stockLevel < 0).length;
   const totalValue = products.reduce((s, p) => s + p.totalInventory * p.costPerUnit, 0);
   const assignedCount = products.reduce((s, p) => s + p.totalAssigned, 0);
 
@@ -407,12 +430,16 @@ export default function InventoryView({
           style={{ textAlign: "left", cursor: "pointer", font: "inherit", color: "inherit" }}
           title="Filter to low-stock products">
           <div className="astat-head">
-            <span className="astat-label">Low stock</span>
+            <span className="astat-label">Needs purchasing</span>
             <div className="astat-icon"><AlertTriangle size={15} /></div>
           </div>
           <div className="astat-value">{lowStockCount}</div>
           <div className="astat-delta">
-            {lowStockCount > 0 ? `${lowStockCount} need refill` : "Filter list"}
+            {negativeStockCount > 0
+              ? `${negativeStockCount} negative — reconcile`
+              : lowStockCount > 0
+              ? `${lowStockCount} to re-order`
+              : "Filter list"}
           </div>
         </button>
         <div className="astat">

@@ -21,10 +21,18 @@ import { isNotificationEnabled } from "@/lib/notifications";
 import { smsBookingConfirmation, smsCancellation } from "@/lib/sms";
 import { getCleanerRateInputs } from "@/lib/cleaner-rates";
 import { computeJobPayout } from "@/lib/pay-tiers";
-import { getTaxRates, computeJobTaxes } from "@/lib/tax.server";
+import { getTaxRates, computeJobTaxes, isJobTaxExempt } from "@/lib/tax.server";
+import { getServicePricingConfig } from "@/lib/booking-pricing";
+import { isSqftJobType, moveInOutBasePrice } from "@/lib/service-pricing";
+import { applyToJobSeries, seriesRootId, type SeriesUpdateResult } from "@/lib/job-series";
+import { AUTO_REASON, normalizeDiscountReason } from "@/lib/discount-reasons";
 import { createAssignmentInvites } from "@/lib/invites";
 import { getSetting } from "@/lib/settings";
-import { syncJobAssignments, validateTraineePairing } from "@/lib/job-assignments";
+import {
+  resolveJobLead,
+  syncJobAssignments,
+  validateTraineePairing,
+} from "@/lib/job-assignments";
 import { fmtDate, fmtTime, tzWallClockToUtc } from "@/lib/time";
 import {
   recurringDiscountPercent,
@@ -32,7 +40,10 @@ import {
   nextOccurrence,
 } from "@/lib/booking-pricing";
 
-const RECURRING_FREQUENCIES = ["WEEKLY", "BIWEEKLY"] as const;
+// Admin recurring cadences (awer_fixes.pdf item 9 — daily, weekly, biweekly,
+// monthly). The pricing engine already understood MONTHLY; DAILY was added
+// alongside it. QUARTERLY/TWICE_WEEKLY/HIGH_FREQUENCY remain booking-flow only.
+const RECURRING_FREQUENCIES = ["DAILY", "WEEKLY", "BIWEEKLY", "MONTHLY"] as const;
 type RecurringFrequency = (typeof RECURRING_FREQUENCIES)[number];
 
 const VALID_PAYMENT_TYPES = [
@@ -129,6 +140,21 @@ export async function saveJob(formData: FormData) {
 
     let price = parseOptionalFloat(formData.get("price"));
 
+    // Square footage (item 8). Stored on EVERY job as property information; it
+    // only drives the price on square-foot-priced services (move in/out).
+    const squareFootage = parseOptionalInt(formData.get("squareFootage"));
+    const jobTypeRaw = (formData.get("jobType") as string) || null;
+
+    // Derive the price from square footage when the service is sqft-priced and
+    // the admin left the price blank. An explicitly entered price always wins —
+    // admins price jobs manually (courtesy jobs, negotiated totals), so this
+    // must never overwrite a number a human typed.
+    if (price === null && squareFootage !== null && squareFootage > 0 && isSqftJobType(jobTypeRaw)) {
+      const pricingCfg = await getServicePricingConfig();
+      const derived = moveInOutBasePrice(squareFootage, pricingCfg);
+      if (derived > 0) price = derived;
+    }
+
     // Customer-specific fixed pricing ("Change Total"). When the client has a
     // fixed price and the admin left the price blank (or typed the fixed price
     // itself), the job charges the fixed total. An explicitly different price
@@ -142,6 +168,9 @@ export async function saveJob(formData: FormData) {
     }
 
     let discountAmount = parseOptionalFloat(formData.get("discountAmount"));
+    // Why the discount was given (item 29). Free-form so an admin can type a
+    // reason the presets don't cover.
+    let discountReason = normalizeDiscountReason(formData.get("discountReason"));
 
     // Auto-apply client default discount when admin hasn't entered one.
     // Treat null/empty as "not entered"; admin can pass "0" to opt out.
@@ -154,6 +183,13 @@ export async function saveJob(formData: FormData) {
       price > 0
     ) {
       discountAmount = +(price * (clientDiscountPercent / 100)).toFixed(2);
+    }
+
+    // A discount with no reason is what item 29 exists to stop. Where the
+    // SYSTEM applied it we know why, so label it rather than leaving a blank
+    // that reporting can't explain. An admin-entered reason always wins.
+    if (!discountReason && (discountAmount ?? 0) > 0 && recurringFrequency) {
+      discountReason = AUTO_REASON.RECURRING;
     }
 
     // Cleaner pay model for this job.
@@ -204,11 +240,11 @@ export async function saveJob(formData: FormData) {
         price > 0 &&
         cleanerIds.length > 0
       ) {
-        const rateInputs = await getCleanerRateInputs([
-          session.user.id,
-          ...cleanerIds,
-        ]);
-        const rateList = [session.user.id, ...cleanerIds].map(
+        // Only the ASSIGNED CLEANERS form the payout pool. The acting admin used
+        // to be prepended here, which inflated the team size by one and pushed
+        // every solo job onto the 50% split-pool path (fix list item 3).
+        const rateInputs = await getCleanerRateInputs(cleanerIds);
+        const rateList = cleanerIds.map(
           (id) =>
             rateInputs.get(id) ?? {
               id,
@@ -228,8 +264,7 @@ export async function saveJob(formData: FormData) {
 
     // GST/QST on the discounted subtotal from the admin-configured rates. The
     // job modal doesn't expose the cash-job toggle, so keep the existing job's
-    // isCashJob when editing (new modal jobs are non-cash); cash jobs are tax
-    // exempt (zero tax, total = subtotal).
+    // isCashJob when editing (new modal jobs are non-cash).
     const editingJobId = (formData.get("jobId") as string | null) || null;
     let isCashJob = false;
     if (editingJobId) {
@@ -239,15 +274,23 @@ export async function saveJob(formData: FormData) {
       });
       isCashJob = current?.isCashJob ?? false;
     }
+    // Per-job tax exemption (item 7) — the modal DOES expose this one, and it
+    // applies to this job alone.
+    const taxExempt = formData.get("taxExempt") === "on";
     const taxRates = await getTaxRates();
     const taxes = computeJobTaxes(
       (price ?? 0) - (discountAmount ?? 0),
       taxRates,
-      isCashJob
+      isJobTaxExempt({ isCashJob, taxExempt })
     );
 
     const jobData: any = {
-      employeeId: session.user.id,
+      // The job's LEAD CLEANER — the same meaning bulkAssignCleaner, claimJob
+      // and the cleaner app's my-jobs query give this column. This used to be
+      // `session.user.id`, which stamped the ACTING ADMIN onto every job saved
+      // from the modal: a 1-cleaner job was then paid as a 2-way split, and a
+      // job with no cleaner paid the admin outright (fix list items 3 + 4).
+      employeeId: cleanerIds[0] ?? null,
       clientName,
       clientId,
       description: (formData.get("description") as string) || null,
@@ -267,6 +310,7 @@ export async function saveJob(formData: FormData) {
       endTime: endDate && endTime ? tzWallClockToUtc(endDate, endTime) : null,
       price,
       usesFixedPrice,
+      taxExempt,
       subtotalAmount: taxes.subtotalAmount,
       gstAmount: taxes.gstAmount,
       qstAmount: taxes.qstAmount,
@@ -281,6 +325,7 @@ export async function saveJob(formData: FormData) {
       notes: (formData.get("notes") as string) || null,
       paymentType,
       discountAmount,
+      squareFootage,
       bedCount: parseOptionalInt(formData.get("bedCount")),
       bathCount: parseOptionalInt(formData.get("bathCount")),
       halfBathCount: parseOptionalInt(formData.get("halfBathCount")),
@@ -289,6 +334,8 @@ export async function saveJob(formData: FormData) {
     };
 
     const statusRaw = (formData.get("status") as string) || null;
+    // Populated when the admin chose to apply this edit across the series.
+    let seriesResult: SeriesUpdateResult | null = null;
 
     if (editingJobId) {
       // Snapshot the existing job so we can detect transitions:
@@ -301,6 +348,8 @@ export async function saveJob(formData: FormData) {
           status: true,
           clientName: true,
           jobNumber: true,
+          employeeId: true,
+          parentJobId: true,
           startTime: true,
           location: true,
           jobType: true,
@@ -315,6 +364,9 @@ export async function saveJob(formData: FormData) {
 
       const updateData: any = {
         ...jobData,
+        // Keep an existing lead who is still on the team, so re-saving a job
+        // never reshuffles the lead; otherwise take the first assigned cleaner.
+        employeeId: resolveJobLead(existingJob?.employeeId, cleanerIds),
         cleaners:
           cleanerIds.length > 0
             ? { set: cleanerIds.map((id) => ({ id })) }
@@ -335,7 +387,30 @@ export async function saveJob(formData: FormData) {
       });
 
       // Keep per-cleaner JobAssignment rows in sync with the assigned team.
-      await syncJobAssignments(editingJobId, cleanerIds);
+      // A failure here is reported rather than swallowed — the admin must not
+      // be told the save succeeded while the assignment silently reverts.
+      const assignmentSync = await syncJobAssignments(editingJobId, cleanerIds);
+      if (!assignmentSync.ok) {
+        return { error: assignmentSync.error };
+      }
+
+      // "Apply to the whole series" (item 9). Off by default: editing one
+      // occurrence must never silently rewrite the rest of the series, which is
+      // the behaviour the spec explicitly wants preserved. Dates are never
+      // propagated, and completed/paid/cancelled occurrences are skipped so
+      // financial history can't be rewritten.
+      if (formData.get("applyToSeries") === "on" && existingJob) {
+        const rootId = seriesRootId({
+          id: editingJobId,
+          parentJobId: existingJob.parentJobId ?? null,
+        });
+        seriesResult = await applyToJobSeries(
+          editingJobId,
+          rootId,
+          jobData,
+          cleanerIds
+        );
+      }
 
       // ── Booking lifecycle notifications ──────────────────────────
       const sessionUserName = session.user.name ?? "Admin";
@@ -654,7 +729,14 @@ export async function saveJob(formData: FormData) {
       revalidatePath("/admin/jobs");
       revalidatePath(`/admin/jobs/${editingJobId}`);
       revalidatePath("/admin/analytics");
-      return { success: true };
+      revalidatePath("/admin/calendar");
+      return {
+        success: true,
+        // Reported back so the modal can say exactly what the series edit did,
+        // including how many occurrences were protected from rewriting.
+        seriesUpdated: seriesResult?.updated ?? 0,
+        seriesSkipped: seriesResult?.skipped ?? 0,
+      };
     } else {
       if (cleanerIds.length > 0) {
         jobData.cleaners = {
@@ -682,9 +764,13 @@ export async function saveJob(formData: FormData) {
         })
         .catch(() => {});
 
-      // Per-cleaner JobAssignment rows for the assigned team.
+      // Per-cleaner JobAssignment rows for the assigned team. Reported, not
+      // swallowed — see the edit path above (fix list item 4).
       if (cleanerIds.length > 0) {
-        await syncJobAssignments(newJob.id, cleanerIds);
+        const sync = await syncJobAssignments(newJob.id, cleanerIds);
+        if (!sync.ok) {
+          return { error: sync.error, jobId: newJob.id };
+        }
       }
 
       // Accept/decline invite for any cleaners assigned at creation.
@@ -728,10 +814,13 @@ export async function saveJob(formData: FormData) {
             : jobData.discountAmount;
         // Child taxes are computed off the child's own discounted subtotal
         // (the fixed price when it carries over), not the parent's amounts.
+        // The exemption is a property of the booking, so it carries to every
+        // occurrence in the series (item 7). Each child can still be edited
+        // individually afterwards.
         const childTaxes = computeJobTaxes(
           basePrice - (childDiscount ?? 0),
           taxRates,
-          isCashJob
+          isJobTaxExempt({ isCashJob, taxExempt })
         );
 
         // Preserve the job's duration across occurrences.
@@ -749,6 +838,11 @@ export async function saveJob(formData: FormData) {
             startTime: cursor,
             endTime: durationMs != null ? new Date(cursor.getTime() + durationMs) : null,
             discountAmount: childDiscount,
+            // Children carry ONLY the recurring frequency discount, so their
+            // reason is that — regardless of why the first visit was discounted
+            // (item 29, and see the referral/credit fix in commit d00415e).
+            discountReason:
+              recurringDiscount > 0 ? AUTO_REASON.RECURRING : jobData.discountReason,
             usesFixedPrice: childUsesFixedPrice,
             subtotalAmount: childTaxes.subtotalAmount,
             gstAmount: childTaxes.gstAmount,

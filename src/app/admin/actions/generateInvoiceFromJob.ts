@@ -5,6 +5,8 @@ import { headers } from "next/headers";
 import { db } from "@/db";
 import { revalidatePath } from "next/cache";
 import { jobTypeLabel } from "@/lib/calendar-labels";
+import { isJobTaxExempt } from "@/lib/tax.server";
+import { getServiceCatalogWithLabels } from "@/lib/service-catalog.server";
 
 async function requireAdmin() {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -52,6 +54,10 @@ export async function generateInvoiceFromJob(jobId: string) {
     });
 
     if (!job) return { success: false, error: "Job not found" };
+
+    // Invoice line items use the admin's own service names (item 20), so
+    // renaming a service in Settings renames it on new invoices too.
+    const { labels: serviceLabels } = await getServiceCatalogWithLabels();
 
     // If invoice already exists for this job, return it — but still (re)mark
     // the job's invoice-sent flag, since the Jobs-table ✉ action relies on
@@ -114,7 +120,7 @@ export async function generateInvoiceFromJob(jobId: string) {
     // Main service line
     const basePrice = job.price ?? 0;
     lineItems.push({
-      description: `Cleaning Service${job.jobType ? ` (${jobTypeLabel(job.jobType)})` : ""}${job.bedCount || job.bathCount ? ` — ${job.bedCount ?? 0} bed / ${job.bathCount ?? 0} bath` : ""}`,
+      description: `Cleaning Service${job.jobType ? ` (${jobTypeLabel(job.jobType, serviceLabels)})` : ""}${job.bedCount || job.bathCount ? ` — ${job.bedCount ?? 0} bed / ${job.bathCount ?? 0} bath` : ""}`,
       quantity: 1,
       unitPrice: basePrice,
       amount: basePrice,
@@ -150,9 +156,14 @@ export async function generateInvoiceFromJob(jobId: string) {
       }
     }
 
+    // The invoice must match the tax setting on the job (item 7): a job marked
+    // tax-exempt — or a cash job — invoices with no GST/QST. Previously the
+    // invoice re-derived tax from the rates alone and would have billed tax on
+    // a job whose own total excluded it.
     const taxableAmount = subtotal - discount;
-    const gstAmount = (taxableAmount * gstRate) / 100;
-    const qstAmount = (taxableAmount * qstRate) / 100;
+    const untaxed = isJobTaxExempt(job);
+    const gstAmount = untaxed ? 0 : (taxableAmount * gstRate) / 100;
+    const qstAmount = untaxed ? 0 : (taxableAmount * qstRate) / 100;
     const totalAmount = taxableAmount + gstAmount + qstAmount;
 
     const invoiceNumber = await generateInvoiceNumber();

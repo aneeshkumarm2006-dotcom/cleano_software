@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { clockIn } from "@/app/admin/actions/clockIn";
 import { clockOut } from "@/app/admin/actions/clockOut";
+import { startJobBreak, endJobBreak } from "@/app/admin/actions/jobBreak";
 import { createPortal } from "react-dom";
 import { fmtClockTz, fmtDate, fmtShortTz } from "@/lib/time";
 import { generateJobChecklist } from "@/app/admin/actions/generateJobChecklist";
@@ -47,6 +48,8 @@ interface ClockPageClientProps {
   status: string;
   clockInTime: string | null;
   clockOutTime: string | null;
+  /** True when a break is already running (item 26). */
+  initialOnBreak?: boolean;
   onMyWayAt?: string | null;
   employeeProducts?: EmployeeProduct[];
   /** Admin setting `tracking.gpsEnabled`; when false, never prompt for GPS. */
@@ -155,6 +158,7 @@ export default function ClockPageClient({
   startTime,
   clockInTime,
   clockOutTime,
+  initialOnBreak = false,
   onMyWayAt = null,
   employeeProducts = [],
   gpsEnabled = true,
@@ -254,6 +258,25 @@ export default function ClockPageClient({
     const id = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(id);
   }, []);
+
+  // Break state (item 26). `initialOnBreak` comes from the server so a reload
+  // mid-break doesn't lose it.
+  const [onBreak, setOnBreak] = useState(initialOnBreak);
+  const [breakBusy, setBreakBusy] = useState(false);
+  const [breakError, setBreakError] = useState<string | null>(null);
+
+  const toggleBreak = async () => {
+    setBreakBusy(true);
+    setBreakError(null);
+    const res = onBreak ? await endJobBreak(jobId) : await startJobBreak(jobId);
+    setBreakBusy(false);
+    if (!res.success) {
+      setBreakError(res.error ?? "Could not update your break.");
+      return;
+    }
+    setOnBreak(!onBreak);
+    router.refresh();
+  };
 
   const isLive = !!clockInTime && !clockOutTime;
   const isDone = !!clockInTime && !!clockOutTime;
@@ -361,15 +384,40 @@ export default function ClockPageClient({
 
           {!isDone ? (
             isLive ? (
-              <button
-                className="clk-action out"
-                onClick={openClockOut}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="6" y="6" width="12" height="12" rx="2" />
-                </svg>
-                Clock out
-              </button>
+              <>
+                {/* Item 26: break / pause, available only once clocked in. */}
+                <button
+                  className={`clk-action ${onBreak ? "" : "break"}`}
+                  disabled={breakBusy}
+                  onClick={toggleBreak}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    {onBreak ? (
+                      <polygon points="6 4 20 12 6 20 6 4" />
+                    ) : (
+                      <>
+                        <rect x="7" y="5" width="3.5" height="14" rx="1" />
+                        <rect x="13.5" y="5" width="3.5" height="14" rx="1" />
+                      </>
+                    )}
+                  </svg>
+                  {breakBusy ? "…" : onBreak ? "End break" : "Start break"}
+                </button>
+                {breakError ? (
+                  <p style={{ color: "#b91c1c", fontSize: 13, marginTop: 8 }}>
+                    {breakError}
+                  </p>
+                ) : null}
+                <button
+                  className="clk-action out"
+                  onClick={openClockOut}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="6" y="6" width="12" height="12" rx="2" />
+                  </svg>
+                  Clock out
+                </button>
+              </>
             ) : (
               <>
                 {otwSince ? (

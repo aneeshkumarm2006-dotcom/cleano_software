@@ -6,6 +6,7 @@ import { db } from "@/db";
 import { revalidatePath } from "next/cache";
 import { isNotificationEnabled } from "@/lib/notifications";
 import type { NotificationGate } from "@/lib/email";
+import { computePayoutTotals, summarisePayouts } from "@/lib/payout-math";
 import { Resend } from "resend";
 
 const FROM = process.env.EMAIL_FROM ?? "Cleano <no-reply@cleano.ca>";
@@ -62,10 +63,10 @@ export async function completePayPeriod(payPeriodId: string) {
     }
 
     const paidAt = new Date();
-    const totalLabour = period.payouts.reduce(
-      (sum, p) => sum + p.finalAmount,
-      0
-    );
+    // Sum through the canonical helper, not the stored column: a payout written
+    // before the $0 floor landed could otherwise subtract from the labour
+    // expense and under-state payroll cost. See src/lib/payout-math.ts.
+    const totalLabour = summarisePayouts(period.payouts).totalFinal;
     const periodLabel = `${period.startDate.toISOString().slice(0, 10)} → ${period.endDate.toISOString().slice(0, 10)}`;
 
     await db.$transaction(async (tx) => {
@@ -102,7 +103,10 @@ export async function completePayPeriod(payPeriodId: string) {
     // Notify each cleaner who received a payout — gated by `prov.payments.received` EMAIL.
     const byEmployee = new Map<string, number>();
     for (const p of period.payouts) {
-      byEmployee.set(p.employeeId, (byEmployee.get(p.employeeId) ?? 0) + p.finalAmount);
+      byEmployee.set(
+        p.employeeId,
+        (byEmployee.get(p.employeeId) ?? 0) + computePayoutTotals(p).final
+      );
     }
     const employees = await db.user.findMany({
       where: { id: { in: Array.from(byEmployee.keys()) } },

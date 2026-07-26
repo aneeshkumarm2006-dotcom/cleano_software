@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Plus,
   Trash2,
@@ -22,6 +22,7 @@ import { deleteChecklistTemplate } from "../../actions/deleteChecklistTemplate";
 import {
   ChecklistTemplateRecord,
   AppSettingRecord,
+  getSetting,
 } from "../types";
 import {
   SectionCard,
@@ -31,6 +32,11 @@ import {
   themedInputClass,
   themedSelectClass,
 } from "./_shared";
+import {
+  DEFAULT_SERVICE_CATALOG,
+  serviceOptions as catalogServiceOptions,
+} from "@/lib/service-catalog";
+import { addOnKey } from "@/lib/checklist-triggers";
 
 interface ChecklistTemplatesTabProps {
   templates: ChecklistTemplateRecord[];
@@ -53,17 +59,10 @@ interface DraftTemplate {
   items: DraftItem[];
 }
 
-// Fixed job type values — must match what JobTypeSelector writes to Job.jobType
-const JOB_TYPE_OPTIONS = [
-  { value: "R - Residential", label: "R - Residential" },
-  { value: "DEEP - Deep Cleaning", label: "DEEP - Deep Cleaning" },
-  { value: "MOVE_IN - Move-in Cleaning", label: "MOVE_IN - Move-in Cleaning" },
-  { value: "MOVE_OUT - Move-out Cleaning", label: "MOVE_OUT - Move-out Cleaning" },
-  { value: "AIRBNB - Airbnb Cleaning", label: "AIRBNB - Airbnb Cleaning" },
-  { value: "C - Commercial", label: "C - Commercial" },
-  { value: "PC - Post Construction", label: "PC - Post Construction" },
-  { value: "F - Follow-up", label: "F - Follow-up" },
-];
+// Job types come from the Settings service catalog (item 20). Template matching
+// is done on the NORMALIZED category, so templates keep working across the old
+// stored vocabularies too.
+const JOB_TYPE_OPTIONS = catalogServiceOptions(DEFAULT_SERVICE_CATALOG);
 
 const EMPTY_TEMPLATE: DraftTemplate = {
   id: null,
@@ -77,7 +76,36 @@ const EMPTY_TEMPLATE: DraftTemplate = {
 
 export default function ChecklistTemplatesTab({
   templates,
+  settings = [],
 }: ChecklistTemplatesTabProps) {
+  // Add-on triggers are chosen from the add-ons configured in Settings →
+  // Pricing Rules (item 27), so a trigger can't be a typo. Any add-on already
+  // referenced by a saved template is unioned in, so renaming an add-on never
+  // makes an existing trigger disappear from the picker.
+  const addOnChoices = useMemo(() => {
+    const configured = getSetting<Array<{ name?: unknown }>>(
+      settings,
+      "pricing.addOns",
+      []
+    )
+      .map((a: { name?: unknown }) =>
+        typeof a?.name === "string" ? a.name.trim() : ""
+      )
+      .filter(Boolean);
+
+    const used = templates
+      .map((t) => t.addOnName?.trim())
+      .filter((n): n is string => !!n);
+
+    const seen = new Set<string>();
+    return [...configured, ...used].filter((n) => {
+      const k = addOnKey(n);
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+  }, [settings, templates]);
+
   const [modalOpen, setModalOpen] = useState(false);
   const [draft, setDraft] = useState<DraftTemplate>(EMPTY_TEMPLATE);
   const [saving, setSaving] = useState(false);
@@ -243,6 +271,14 @@ export default function ChecklistTemplatesTab({
                       Add-on: {tpl.addOnName}
                     </span>
                   )}
+                  {/* Item 27: make the AND explicit — a template scoped to both
+                      fires only when the job matches both, and that used to be
+                      silently wrong. */}
+                  {tpl.jobType && tpl.addOnName && (
+                    <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">
+                      Both must match
+                    </span>
+                  )}
                   {!tpl.jobType && !tpl.addOnName && (
                     <span className="text-xs bg-neutral-200 text-neutral-600 px-2 py-0.5 rounded-full">
                       Standard (all jobs)
@@ -331,21 +367,42 @@ export default function ChecklistTemplatesTab({
               />
             </Field>
 
+            {/* Item 27: picked from the add-ons configured in Settings →
+                Pricing Rules, not typed by hand. Free text made a trigger that
+                silently never fired if the spelling or case differed. */}
             <Field
-              label="Add-On Name"
-              hint="Triggers when a job has this add-on (case-sensitive match).">
-              <input
-                type="text"
+              label="Add-On"
+              hint={
+                draft.jobType && draft.addOnName
+                  ? "Triggers only when the job is this service type AND has this add-on."
+                  : "Triggers when a job has this add-on. Combine with a job type to narrow it further."
+              }>
+              <select
                 value={draft.addOnName}
                 onChange={(e) =>
-                  setDraft((prev) => ({
-                    ...prev,
-                    addOnName: e.target.value,
-                  }))
+                  setDraft((prev) => ({ ...prev, addOnName: e.target.value }))
                 }
-                placeholder="e.g. Inside Fridge"
-                className={themedInputClass}
-              />
+                className={themedSelectClass}>
+                <option value="">No add-on trigger</option>
+                {addOnChoices.map((name: string) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+              {/* A template saved against an add-on that has since been renamed
+                  or removed keeps its value visible instead of silently
+                  resetting to "no trigger". */}
+              {draft.addOnName &&
+                !addOnChoices.some(
+                  (n: string) => addOnKey(n) === addOnKey(draft.addOnName)
+                ) && (
+                  <p className="mt-1 text-xs text-amber-700">
+                    &quot;{draft.addOnName}&quot; is not in Settings → Pricing Rules
+                    add-ons. It will still match jobs carrying that add-on, but
+                    pick from the list if it has been renamed.
+                  </p>
+                )}
             </Field>
           </div>
 

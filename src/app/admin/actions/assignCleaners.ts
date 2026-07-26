@@ -13,6 +13,7 @@ import { isNotificationEnabled } from "@/lib/notifications";
 import { createAssignmentInvites } from "@/lib/invites";
 import {
   findAvailabilityConflicts,
+  resolveJobLead,
   syncJobAssignments,
   validateTraineePairing,
 } from "@/lib/job-assignments";
@@ -49,6 +50,7 @@ export async function assignCleaners(input: {
       select: {
         id: true,
         jobNumber: true,
+        employeeId: true,
         clientName: true,
         startTime: true,
         endTime: true,
@@ -83,6 +85,10 @@ export async function assignCleaners(input: {
       db.job.update({
         where: { id: input.jobId },
         data: {
+          // Keep the lead pointing at a real member of the team. Without this
+          // the column kept whatever it held before — including an admin left
+          // over from the old saveJob behaviour (fix list items 3 + 4).
+          employeeId: resolveJobLead(job.employeeId, input.cleanerIds),
           cleaners:
             input.cleanerIds.length > 0
               ? { set: input.cleanerIds.map((id) => ({ id })) }
@@ -101,7 +107,10 @@ export async function assignCleaners(input: {
     ]);
 
     // Keep per-cleaner JobAssignment rows in sync with the assigned team.
-    await syncJobAssignments(input.jobId, input.cleanerIds);
+    // Surfaced, not swallowed — the admin must not be told the assignment saved
+    // when the per-cleaner rows did not (fix list item 4).
+    const sync = await syncJobAssignments(input.jobId, input.cleanerIds);
+    if (!sync.ok) return { success: false, error: sync.error };
 
     if (conflicts.length > 0) {
       await db.jobLog

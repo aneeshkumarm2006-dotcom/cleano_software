@@ -6,8 +6,17 @@ import Input from "@/components/ui/Input";
 import CustomDropdown from "@/components/ui/custom-dropdown";
 import Button from "@/components/ui/Button";
 import { useJobsLoading } from "./JobsLoadingContext";
+import {
+  DEFAULT_SERVICE_CATALOG,
+  serviceOptions as catalogServiceOptions,
+} from "@/lib/service-catalog";
 
-export function JobsFilters() {
+export function JobsFilters({
+  serviceOptions = [],
+}: {
+  /** Service list from Settings → Job Types (item 20). */
+  serviceOptions?: { value: string; label: string }[];
+} = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
@@ -100,16 +109,14 @@ export function JobsFilters() {
     { value: "all", label: "All Statuses" },
   ];
 
+  // Cleaner job-type filter reads the same Settings service catalog the admin
+  // forms use, so a cleaner never sees a service the business no longer offers
+  // (item 20).
   const jobTypeOptions = [
     { value: "all", label: "All Types" },
-    { value: "R", label: "Residential" },
-    { value: "DEEP", label: "Deep Cleaning" },
-    { value: "MOVE_IN", label: "Move-in Cleaning" },
-    { value: "MOVE_OUT", label: "Move-out Cleaning" },
-    { value: "AIRBNB", label: "Airbnb Cleaning" },
-    { value: "C", label: "Commercial" },
-    { value: "PC", label: "Post-Construction" },
-    { value: "F", label: "Follow-up" },
+    ...(serviceOptions.length > 0
+      ? serviceOptions
+      : catalogServiceOptions(DEFAULT_SERVICE_CATALOG)),
   ];
 
   const perPageOptions = [

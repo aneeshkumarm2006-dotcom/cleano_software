@@ -78,11 +78,10 @@ export default async function AvailableJobsPage() {
     if (j.payType === "HOURLY") {
       estHourly = j.hourlyRate ?? null;
     } else if (j.payType === "PERCENTAGE" && j.price != null && j.price > 0) {
-      // Simulate the roster with this cleaner added, then take their share.
-      const roster = new Set<string>([cleanerId]);
-      if (j.employeeId) roster.add(j.employeeId);
-      for (const c of j.cleaners) roster.add(c.id);
-      const payout = computeJobPayout(j.price, [...roster].map(rateFor));
+      // Each cleaner earns their own rate on the full price, so the estimate no
+      // longer depends on who else is on the job — no roster simulation, and no
+      // way for a stale employeeId to skew the number (awer_fixes.pdf item 3).
+      const payout = computeJobPayout(j.price, [rateFor(cleanerId)]);
       estPay = payout.shares.find((s) => s.id === cleanerId)?.amount ?? null;
     }
     // FLAT: the payout is set by dispatch per assignment — no honest estimate

@@ -13,8 +13,31 @@ import {
 } from "@/components/calendar/utils";
 import { statusMeta, isUnconfirmed } from "./status-meta";
 import CornerBadge from "./CornerBadge";
+import { avatarColor, initials, shortName } from "@/lib/avatar";
 
 const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/** How many job cards a day cell shows before collapsing to "+N more". */
+const MONTH_CARDS_PER_DAY = 3;
+
+/**
+ * The person a month card is colour-keyed to: the first assigned cleaner,
+ * falling back to the job's lead employee. Null when nobody is assigned — that
+ * must stay visually distinct rather than borrowing someone's colour
+ * (awer_fixes.pdf item 28).
+ */
+function assigneeOf(event: {
+  metadata?: {
+    cleaners?: { name?: string | null }[];
+    employeeName?: string | null;
+  };
+}): string | null {
+  const first = event.metadata?.cleaners?.[0]?.name;
+  if (first) return first;
+  const lead = event.metadata?.employeeName;
+  if (lead && lead !== "Unassigned") return lead;
+  return null;
+}
 
 export const MonthView = () => {
   const {
@@ -77,8 +100,9 @@ export const MonthView = () => {
                 </span>
               </div>
               <div className="cal-mcell-jobs">
-                {list.slice(0, 2).map((event) => {
+                {list.slice(0, MONTH_CARDS_PER_DAY).map((event) => {
                   const m = statusMeta(event);
+                  const assignee = assigneeOf(event);
                   return (
                     <button
                       key={event.id}
@@ -87,26 +111,45 @@ export const MonthView = () => {
                       onClick={(e) => {
                         e.stopPropagation();
                         openEventDetailsModal(event);
-                      }}>
+                      }}
+                      /* Item 28: the card is scannable BY CLEANER, so the
+                         assignee belongs in the tooltip too. */
+                      title={`${format(event.start, "h:mm a")} · ${event.title ?? ""}${
+                        assignee ? ` · ${assignee}` : " · Unassigned"
+                      }`}>
                       <CornerBadge event={event} />
-                      <span className="cal-chip-dot" style={{ background: m.color }} />
+                      {/* The dot is keyed to the ASSIGNED CLEANER, not the job
+                          status — status is already carried by the chip's own
+                          tint, and colouring by person is what makes a month
+                          grid scannable at a glance. Unassigned stays neutral
+                          so it reads as "nobody", not as a person. */}
+                      <span
+                        className="cal-chip-dot"
+                        style={{
+                          background: assignee ? avatarColor(assignee) : "transparent",
+                          border: assignee ? undefined : `1.5px dashed ${m.color}`,
+                        }}
+                      />
                       <span className="cal-chip-t">
                         {format(event.start, "h:mm a").replace(":00", "")}
                       </span>
                       <span className="cal-chip-n">
-                        {(event.title || "").split(" ")[0]}
+                        {shortName(event.title || "")}
                       </span>
+                      {assignee ? (
+                        <span className="cal-chip-who">{initials(assignee)}</span>
+                      ) : null}
                     </button>
                   );
                 })}
-                {list.length > 2 ? (
+                {list.length > MONTH_CARDS_PER_DAY ? (
                   <button
                     className="cal-more"
                     onClick={(e) => {
                       e.stopPropagation();
                       goToDay(day);
                     }}>
-                    +{list.length - 2} more
+                    +{list.length - MONTH_CARDS_PER_DAY} more
                   </button>
                 ) : null}
               </div>

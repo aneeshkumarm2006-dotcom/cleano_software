@@ -31,6 +31,10 @@ export interface ServicePricingConfig {
 }
 
 export const FREQ_DISCOUNT_KEYS = [
+  // DAILY is admin-recurring only (awer_fixes.pdf item 9). Distinct from
+  // HIGH_FREQUENCY ("Daily / 20+ per month"), which is the Airbnb every-visit
+  // model and advances on a weekly cadence.
+  "DAILY",
   "WEEKLY",
   "BIWEEKLY",
   "TWICE_WEEKLY",
@@ -53,6 +57,9 @@ export const DISCOUNTABLE_CATEGORIES = [
 // applied to every category; twice-weekly/high-frequency mirror the old
 // hardcoded ladder). Admins can zero any cell out.
 const DEFAULT_FREQ_ROW: Record<string, number> = {
+  // Defaults to 0 rather than an invented rate — admins set this per category
+  // in Settings -> Pricing Rules, same as MONTHLY/QUARTERLY.
+  DAILY: 0,
   WEEKLY: 12,
   BIWEEKLY: 8,
   TWICE_WEEKLY: 15,
@@ -157,4 +164,34 @@ export function isSqftService(serviceType?: string): boolean {
 }
 export function isHourlyService(serviceType?: string): boolean {
   return serviceType === "POST_CONSTRUCTION";
+}
+
+/**
+ * Square-foot pricing test that accepts EITHER vocabulary
+ * (awer_fixes.pdf item 8).
+ *
+ * `isSqftService` above only matches the booking flow's "MOVE_IN_OUT". The
+ * admin job form stores "MOVE_IN - Move-in Cleaning" / "MOVE_OUT - Move-out
+ * Cleaning", which normalize to MOVE_IN / MOVE_OUT — neither of which is
+ * MOVE_IN_OUT. Both halves of a move are square-foot priced, so they are folded
+ * together here, the same fold the frequency-discount grid already does.
+ *
+ * Kept string-based and pure so the job modal (client) and saveJob (server)
+ * agree on whether square footage drives the price.
+ */
+export function isSqftJobType(rawJobType?: string | null): boolean {
+  if (!rawJobType) return false;
+  const code = rawJobType
+    .split(" - ")[0]
+    .trim()
+    .toUpperCase()
+    .replace(/[\s-]+/g, "_");
+  return (
+    code === "MOVE_IN_OUT" ||
+    code === "MOVEINOUT" ||
+    code === "MOVE_IN" ||
+    code === "MOVEIN" ||
+    code === "MOVE_OUT" ||
+    code === "MOVEOUT"
+  );
 }

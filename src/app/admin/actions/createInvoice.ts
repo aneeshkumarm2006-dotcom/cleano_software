@@ -7,6 +7,8 @@ import { revalidatePath } from "next/cache";
 import { sendInvoiceEmail } from "@/lib/email";
 import { jobTypeLabel } from "@/lib/calendar-labels";
 import { fmtDate } from "@/lib/time";
+import { isJobTaxExempt } from "@/lib/tax.server";
+import { getServiceCatalogWithLabels } from "@/lib/service-catalog.server";
 
 async function requireAdmin() {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -97,12 +99,18 @@ export async function createInvoice(params: CreateInvoiceParams) {
             startTime: true,
             price: true,
             discountAmount: true,
+            // Needed so an exempt job's amount is excluded from the taxable
+            // base on a consolidated invoice (item 7).
+            isCashJob: true,
+            taxExempt: true,
           },
           orderBy: { startTime: "asc" },
         })
       : [];
+    // Admin's own service names on invoice lines (item 20).
+    const { labels: serviceLabels } = await getServiceCatalogWithLabels();
     const jobLineItems = selectedJobs.map((job, idx) => ({
-      description: `Job #${job.jobNumber}${job.jobType ? ` — ${jobTypeLabel(job.jobType)}` : ""} — ${fmtDate(job.startTime, { month: "short", day: "numeric", year: "numeric" })}`,
+      description: `Job #${job.jobNumber}${job.jobType ? ` — ${jobTypeLabel(job.jobType, serviceLabels)}` : ""} — ${fmtDate(job.startTime, { month: "short", day: "numeric", year: "numeric" })}`,
       quantity: 1,
       unitPrice: Math.max(0, (job.price ?? 0) - (job.discountAmount ?? 0)),
       amount: Math.max(0, (job.price ?? 0) - (job.discountAmount ?? 0)),
@@ -149,9 +157,21 @@ export async function createInvoice(params: CreateInvoiceParams) {
       }
     }
 
+    // An invoice can consolidate several jobs, so exemption is applied PER JOB
+    // rather than all-or-nothing: the amounts of tax-exempt jobs are removed
+    // from the taxable base, while other jobs and manual line items are still
+    // taxed (item 7 — "invoice records should match the tax setting on the job").
+    const exemptAmount = selectedJobs
+      .filter((j) => isJobTaxExempt(j))
+      .reduce(
+        (sum, j) => sum + Math.max(0, (j.price ?? 0) - (j.discountAmount ?? 0)),
+        0
+      );
+
     const taxableAmount = subtotal - discount;
-    const gstAmount = (taxableAmount * gstRate) / 100;
-    const qstAmount = (taxableAmount * qstRate) / 100;
+    const taxableBase = Math.max(0, taxableAmount - exemptAmount);
+    const gstAmount = (taxableBase * gstRate) / 100;
+    const qstAmount = (taxableBase * qstRate) / 100;
     const totalAmount = taxableAmount + gstAmount + qstAmount;
 
     const invoiceNumber = await generateInvoiceNumber();
