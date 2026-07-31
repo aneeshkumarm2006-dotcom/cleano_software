@@ -75,7 +75,7 @@ model JobChatMessage {
 
 ## 3. `CLN-P0-3-14` — disable messaging per booking or per user
 
-Migration `20260731000000_job_chat_attachments` (same file — one migration for the whole chat batch keeps the manual apply to one step).
+Migration `20260731001000_job_chat_disable`. (One migration per sub-item, not one for the chat batch: `prisma migrate deploy` applies everything pending in timestamp order, so three files are still one manual command, and each commit stays self-contained.)
 
 ```prisma
 model Job    { chatDisabledAt DateTime? }
@@ -101,7 +101,7 @@ The spec says "for a specific booking **or user**", and a "user" on this surface
 
 ## 4. `CLN-P0-3-17` — admin hide/moderate, original preserved
 
-Same migration.
+Migration `20260731002000_job_chat_moderation`.
 
 ```prisma
 model JobChatMessage {
@@ -197,7 +197,7 @@ FAQ edits are audit-logged today only because `content.faqs` carries `audit: tru
 
 ## 6. FAQ analytics — `CLN-P1-4-17`
 
-Same migration.
+Migration `20260731030000_faq_analytics`.
 
 ```prisma
 enum FaqEventType { VIEW OPEN SEARCH SEARCH_NO_RESULT }
@@ -235,10 +235,16 @@ The requirement asks for four things; two of them are the same signal on an acco
 
 ## 7. Migration files in this batch
 
-| File | Contents | Applied? |
-|---|---|---|
-| `20260731000000_job_chat_attachments` | 5 columns on `JobChatMessage`, 1 each on `Job`/`User`/`Client`, 1 index | ❌ NOT APPLIED |
-| `20260731020000_faq_tables` | 2 enums + `FaqCategory`/`Faq`, category seed, data copy out of `content.faqs` | ❌ NOT APPLIED |
-| `20260731030000_faq_analytics` | `FaqEventType` enum + `FaqEvent` table | ❌ NOT APPLIED |
+Five files, one per sub-item. `prisma migrate deploy` applies all pending migrations in timestamp order, so this is still **one** manual command — the split just keeps each commit self-contained and each rollback independent.
+
+| # | File | Contents | Commit | Applied? |
+|---|---|---|---|---|
+| 1 | `20260731000000_job_chat_attachments` | 3 columns on `JobChatMessage` | `4384c3f` | ❌ NOT APPLIED |
+| 2 | `20260731001000_job_chat_disable` | `chatDisabledAt` on `Job`, `User`, `Client` | `77f4dca` | ❌ NOT APPLIED |
+| 3 | `20260731002000_job_chat_moderation` | `hiddenAt` + `hiddenById` on `JobChatMessage` | `0426280` | ❌ NOT APPLIED |
+| 4 | `20260731020000_faq_tables` | 2 enums + `FaqCategory`/`Faq`, category seed, data copy out of `content.faqs` | `9b41755` | ❌ NOT APPLIED |
+| 5 | `20260731030000_faq_analytics` | `FaqEventType` enum + `FaqEvent` table | `51da2e5` | ❌ NOT APPLIED |
 
 Each file's header carries its own pre-flight query, post-apply verification query, and rollback SQL.
+
+**No migration in this batch declares an index Prisma cannot express in `schema.prisma`.** A partial index on `hiddenAt IS NULL` was considered for #3 and dropped for exactly that reason — it would have reappeared as schema drift on the next diff, which is what `20260728010000_align_schema_drift` already had to clean up once.
