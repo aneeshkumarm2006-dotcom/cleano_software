@@ -1302,6 +1302,17 @@ model JobChatMessage {
   attachmentUrl    String?
   attachmentWidth  Int?
   attachmentHeight Int?
+  // Admin moderation (CLN-P0-3-17). Named hiddenAt, not deletedAt: the
+  // requirement is "hide … while preserving the original in audit history", and
+  // a column called deletedAt invites a future cleanup job to hard-delete the
+  // row. `body` and `attachmentUrl` are never rewritten — that IS the
+  // preservation — and the hide action also copies the original text into
+  // ActivityLog, which has no FK to Job and therefore survives a permanent job
+  // delete. Hidden messages are invisible to the cleaner and the client and
+  // visible, marked, to admins. hiddenById is a soft reference, matching
+  // senderId's existing convention on this table.
+  hiddenAt         DateTime?
+  hiddenById       String?
   readByAdminAt    DateTime?
   readByClientAt   DateTime?
   readByCleanerAt  DateTime?

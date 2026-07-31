@@ -209,3 +209,94 @@ export async function setParticipantChatDisabled(input: {
   if (input.jobId) revalidatePath(`/admin/jobs/${input.jobId}`);
   return { success: true, data: { chatDisabledAt: next?.toISOString() ?? null } };
 }
+
+/* ── Hide / restore a single message (CLN-P0-3-17) ─────────────────────────── */
+
+/**
+ * Hide one message from the cleaner and the client, preserving the original.
+ *
+ * Nothing about the row's content is touched: `body` and `attachmentUrl` are
+ * left exactly as sent, and only `hiddenAt`/`hiddenById` are stamped. The
+ * original text is additionally copied into the ActivityLog row, because
+ * ActivityLog carries no FK to Job and therefore survives the
+ * permanentlyDeleteJobs cascade that would otherwise take the conversation with
+ * the booking — see the cascade question in the Stage 5 design note.
+ */
+export async function hideJobChatMessage(
+  messageId: string
+): Promise<Result<{ id: string; hiddenAt: string | null }>> {
+  return setMessageHidden(messageId, true);
+}
+
+/** Put a hidden message back in front of the cleaner and the client. */
+export async function unhideJobChatMessage(
+  messageId: string
+): Promise<Result<{ id: string; hiddenAt: string | null }>> {
+  return setMessageHidden(messageId, false);
+}
+
+async function setMessageHidden(
+  messageId: string,
+  hidden: boolean
+): Promise<Result<{ id: string; hiddenAt: string | null }>> {
+  const guard = await requireOwnerAdmin();
+  if (!guard.ok) return { success: false, error: guard.error };
+  if (typeof messageId !== "string" || !messageId) {
+    return { success: false, error: "Message is required" };
+  }
+
+  const message = await db.jobChatMessage.findUnique({
+    where: { id: messageId },
+    select: {
+      id: true,
+      jobId: true,
+      body: true,
+      attachmentUrl: true,
+      senderRole: true,
+      senderName: true,
+      senderId: true,
+      createdAt: true,
+      hiddenAt: true,
+      job: { select: { jobNumber: true } },
+    },
+  });
+  if (!message) return { success: false, error: "Message not found" };
+
+  // Already in the requested state — don't restamp or log a non-change.
+  if (!!message.hiddenAt === hidden) {
+    return {
+      success: true,
+      data: { id: messageId, hiddenAt: message.hiddenAt?.toISOString() ?? null },
+    };
+  }
+
+  const now = hidden ? new Date() : null;
+  await db.jobChatMessage.update({
+    where: { id: messageId },
+    // Only the moderation columns. The message itself is evidence.
+    data: { hiddenAt: now, hiddenById: hidden ? guard.userId : null },
+  });
+
+  await logActivity({
+    category: "ADMIN",
+    action: hidden ? "jobChat.hideMessage" : "jobChat.unhideMessage",
+    actorId: guard.userId,
+    targetType: "jobChatMessage",
+    targetId: messageId,
+    message: `Chat message from ${message.senderName} on booking #${message.job?.jobNumber ?? "?"} ${hidden ? "hidden" : "restored"}`,
+    metadata: {
+      jobId: message.jobId,
+      jobNumber: message.job?.jobNumber ?? null,
+      senderRole: message.senderRole,
+      senderName: message.senderName,
+      senderId: message.senderId,
+      sentAt: message.createdAt.toISOString(),
+      // The preserved original. Survives even a permanent job delete.
+      originalBody: message.body,
+      originalAttachmentUrl: message.attachmentUrl,
+    },
+  });
+
+  revalidatePath(`/admin/jobs/${message.jobId}`);
+  return { success: true, data: { id: messageId, hiddenAt: now?.toISOString() ?? null } };
+}

@@ -1,0 +1,45 @@
+-- Admin hide/moderate a job-chat message, original preserved (CLN-P0-3-17).
+--
+-- Two nullable columns on JobChatMessage. NULL = visible, which is every row
+-- that exists today.
+--
+--   hiddenAt   — when an admin hid it
+--   hiddenById — which admin (soft reference, like the existing senderId)
+--
+-- Named hiddenAt rather than deletedAt on purpose. The cleaner group chat's
+-- GroupMessage.deletedAt is the pattern this copies, but the requirement here
+-- is "hide … while PRESERVING the original in audit history", and a column
+-- called deletedAt invites a future cleanup job to hard-delete the row.
+--
+-- `body` and `attachmentUrl` are never rewritten by the hide action — that is
+-- the preservation. On top of it, hideJobChatMessage copies the original text
+-- into ActivityLog.metadata; ActivityLog has no FK to Job, so that copy also
+-- survives the permanentlyDeleteJobs cascade that would otherwise destroy the
+-- conversation (see the cascade question in the Stage 5 design note).
+--
+-- Reads: cleaner/client see `hiddenAt IS NULL` only; admins see everything with
+-- the hidden ones marked. Unread badges exclude hidden messages on all three
+-- sides, so a hidden message can't leave a count nobody can clear.
+--
+-- No new index. The reads are always scoped to one job and the existing
+-- @@index([jobId, createdAt]) already serves them; a partial index on
+-- "hiddenAt IS NULL" cannot be expressed in schema.prisma, so it would reappear
+-- as schema drift on the next diff — the exact problem
+-- 20260728010000_align_schema_drift had to clean up.
+--
+-- PRE-FLIGHT (should return 0 — the columns must not already exist):
+--   SELECT count(*) FROM information_schema.columns
+--    WHERE table_name = 'JobChatMessage'
+--      AND column_name IN ('hiddenAt','hiddenById');
+--
+-- POST-APPLY VERIFICATION:
+--   SELECT column_name, is_nullable FROM information_schema.columns
+--    WHERE table_name = 'JobChatMessage' AND column_name IN ('hiddenAt','hiddenById');
+--   -- expect 0: nothing is hidden until an admin hides it
+--   SELECT count(*) FROM "JobChatMessage" WHERE "hiddenAt" IS NOT NULL;
+--
+-- ROLLBACK (no data loss — no message text is altered by this migration):
+--   ALTER TABLE "JobChatMessage" DROP COLUMN "hiddenAt", DROP COLUMN "hiddenById";
+
+ALTER TABLE "JobChatMessage" ADD COLUMN "hiddenAt" TIMESTAMP(3);
+ALTER TABLE "JobChatMessage" ADD COLUMN "hiddenById" TEXT;

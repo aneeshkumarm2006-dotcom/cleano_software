@@ -1230,6 +1230,7 @@ export default function JobDetailView({
           otherLabel="cleaner and client"
           userName={currentUserName}
           canSend={isAdmin}
+          canModerate={isAdmin}
           height={320}
         />
         <p style={{ fontSize: 12, color: 'var(--primary-50)', margin: '10px 0 0', lineHeight: 1.5 }}>

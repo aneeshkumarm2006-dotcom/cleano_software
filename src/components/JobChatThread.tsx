@@ -1,7 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Send, MessageSquare, MessageSquareOff, Paperclip, X } from "lucide-react";
+import {
+  Send,
+  MessageSquare,
+  MessageSquareOff,
+  Paperclip,
+  X,
+  EyeOff,
+  Eye,
+} from "lucide-react";
 import useSWR from "swr";
 import {
   getJobChatMessages,
@@ -11,6 +19,10 @@ import {
   type JobChatMessageDTO,
   type JobChatRole,
 } from "@/lib/jobChatActions";
+import {
+  hideJobChatMessage,
+  unhideJobChatMessage,
+} from "@/app/admin/actions/jobChatModeration";
 
 interface JobChatThreadProps {
   jobId: string;
@@ -27,6 +39,12 @@ interface JobChatThreadProps {
    * CLEANER_QUICK_MESSAGES.
    */
   quickMessages?: string[];
+  /**
+   * Show the per-message hide/restore control (CLN-P0-3-17). Admin surface
+   * only, and OWNER/ADMIN only within it — the server re-checks, so passing
+   * this from anywhere else grants nothing.
+   */
+  canModerate?: boolean;
   /** Optional height for the scrollable message area. */
   height?: number;
 }
@@ -102,6 +120,7 @@ export default function JobChatThread({
   userName,
   canSend = true,
   quickMessages,
+  canModerate = false,
   height = 360,
 }: JobChatThreadProps) {
   const [draft, setDraft] = useState("");
@@ -112,6 +131,8 @@ export default function JobChatThread({
   const [pendingPhoto, setPendingPhoto] = useState<
     { file: File; previewUrl: string } | null
   >(null);
+  /** Message id currently being hidden/restored, so its control can't double-fire. */
+  const [moderating, setModerating] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -191,6 +212,8 @@ export default function JobChatThread({
       attachmentHeight: null,
       createdAt: new Date().toISOString(),
       mine: true,
+      hidden: false,
+      hiddenAt: null,
     };
     await mutate(
       (current) =>
@@ -226,6 +249,18 @@ export default function JobChatThread({
       e.preventDefault();
       handleSend();
     }
+  }
+
+  async function handleToggleHidden(m: JobChatMessageDTO) {
+    if (moderating) return;
+    setModerating(m.id);
+    setSendError(null);
+    const res = m.hidden
+      ? await unhideJobChatMessage(m.id)
+      : await hideJobChatMessage(m.id);
+    if (!res.success) setSendError(res.error);
+    await mutate();
+    setModerating(null);
   }
 
   function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
@@ -299,9 +334,32 @@ export default function JobChatThread({
               {group.messages.map((m) => (
                 <div
                   key={m.id}
-                  className={`chat-msg ${m.mine ? "mine" : "theirs"}`}
+                  className={`chat-msg ${m.mine ? "mine" : "theirs"}${m.hidden ? " hidden-msg" : ""}`}
                   style={{ marginTop: 4 }}>
+                  {/* Hide/restore, admin surface only. Sits outside the bubble
+                      so it never overlaps the message it acts on. */}
+                  {canModerate && !m.id.startsWith("optimistic-") && (
+                    <button
+                      type="button"
+                      className="chat-moderate-btn"
+                      onClick={() => handleToggleHidden(m)}
+                      disabled={moderating !== null}
+                      title={
+                        m.hidden
+                          ? "Restore this message for the cleaner and client"
+                          : "Hide this message from the cleaner and client (the original is kept)"
+                      }
+                      aria-label={m.hidden ? "Restore message" : "Hide message"}>
+                      {m.hidden ? <Eye size={13} /> : <EyeOff size={13} />}
+                    </button>
+                  )}
                   <div className="chat-msg-bubble">
+                    {m.hidden && (
+                      <div className="chat-hidden-tag">
+                        <EyeOff size={11} aria-hidden="true" />
+                        Hidden from the cleaner and client · original kept
+                      </div>
+                    )}
                     {!m.mine && (
                       <div
                         style={{

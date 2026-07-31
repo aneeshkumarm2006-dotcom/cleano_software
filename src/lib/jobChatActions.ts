@@ -25,6 +25,13 @@ export interface JobChatMessageDTO {
   createdAt: string;
   /** True when this message was sent by the current viewer. */
   mine: boolean;
+  /**
+   * Hidden by an admin (CLN-P0-3-17). Only ever true on an admin's copy of the
+   * thread — a cleaner or client never receives the row at all, so this cannot
+   * leak a moderated message to the browser it was hidden from.
+   */
+  hidden: boolean;
+  hiddenAt: string | null;
 }
 
 export interface JobChatPayload {
@@ -181,6 +188,7 @@ function toDTO(
     attachmentUrl: string | null;
     attachmentWidth: number | null;
     attachmentHeight: number | null;
+    hiddenAt: Date | null;
     createdAt: Date;
   },
   viewerRole: JobChatRole,
@@ -198,6 +206,8 @@ function toDTO(
     attachmentHeight: m.attachmentHeight,
     createdAt: m.createdAt.toISOString(),
     mine: m.senderRole === viewerRole && m.senderId === viewerId,
+    hidden: m.hiddenAt !== null,
+    hiddenAt: m.hiddenAt?.toISOString() ?? null,
   };
 }
 
@@ -213,6 +223,7 @@ const MESSAGE_SELECT = {
   attachmentUrl: true,
   attachmentWidth: true,
   attachmentHeight: true,
+  hiddenAt: true,
   createdAt: true,
 } as const;
 
@@ -247,7 +258,11 @@ export async function getJobChatMessages(
   });
 
   const messages = await db.jobChatMessage.findMany({
-    where: { jobId },
+    // CLN-P0-3-17 — a moderated message is filtered out server-side for the
+    // cleaner and the client, so it never reaches the browser it was hidden
+    // from. An admin gets it, marked, because the point is to preserve the
+    // original for disputes rather than to erase it.
+    where: { jobId, ...(role === "ADMIN" ? {} : { hiddenAt: null }) },
     orderBy: { createdAt: "asc" },
     select: MESSAGE_SELECT,
   });

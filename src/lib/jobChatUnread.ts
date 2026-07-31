@@ -58,11 +58,15 @@ export async function getJobChatUnread(
     // must not sit in a badge nobody can clear.
     let where: Prisma.JobChatMessageWhereInput;
 
+    // A message an admin has hidden (CLN-P0-3-17) badges nobody. The cleaner
+    // and the client can't open it to clear the count, and an admin hiding a
+    // message has by definition already read it.
     if (scope === "admin") {
       if (!isAdminRole(user.role)) return EMPTY;
       where = {
         senderRole: { not: "ADMIN" },
         readByAdminAt: null,
+        hiddenAt: null,
         job: { deletedAt: null },
       };
     } else if (scope === "cleaner") {
@@ -70,6 +74,7 @@ export async function getJobChatUnread(
       where = {
         senderRole: { not: "CLEANER" },
         readByCleanerAt: null,
+        hiddenAt: null,
         job: {
           deletedAt: null,
           OR: [{ employeeId: user.id }, { cleaners: { some: { id: user.id } } }],
@@ -86,6 +91,7 @@ export async function getJobChatUnread(
       where = {
         senderRole: { not: "CLIENT" },
         readByClientAt: null,
+        hiddenAt: null,
         job: { deletedAt: null, clientId: client.id },
       };
     }

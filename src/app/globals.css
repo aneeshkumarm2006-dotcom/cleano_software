@@ -1598,6 +1598,31 @@ body {
 .chat-icon-btn:hover { background: rgba(0,140,156,0.06); color: var(--primary); }
 .chat-icon-btn:disabled { opacity: 0.45; cursor: default; }
 
+/* Admin-moderated message (CLN-P0-3-17). Only ever rendered on the admin
+   surface — the cleaner and client never receive the row. */
+.chat-msg.hidden-msg { align-items: center; gap: 4px; }
+.chat-msg.hidden-msg .chat-msg-bubble { opacity: 0.62; border: 1px dashed rgba(220,38,38,0.45); }
+.chat-hidden-tag {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #b91c1c; margin-bottom: 4px;
+}
+.chat-msg.mine .chat-hidden-tag { color: #ffe4e6; }
+.chat-moderate-btn {
+  background: transparent; border: 0; cursor: pointer;
+  color: var(--primary-40); padding: 4px; border-radius: 6px;
+  display: inline-flex; align-self: center; flex: 0 0 auto;
+  opacity: 0; transition: opacity .12s, background .12s, color .12s;
+}
+/* Incoming messages are left-aligned, so the control goes AFTER the bubble —
+   otherwise its (always-present) box would shove every incoming message right. */
+.chat-msg.theirs .chat-moderate-btn { order: 2; }
+.chat-msg:hover .chat-moderate-btn, .chat-moderate-btn:focus-visible { opacity: 1; }
+.chat-moderate-btn:hover { background: rgba(0,140,156,0.08); color: var(--primary); }
+.chat-moderate-btn:disabled { cursor: default; }
+.chat-msg.hidden-msg .chat-moderate-btn { opacity: 1; color: #b91c1c; }
+
 /* Job chat closed by an admin (CLN-P0-3-14) — replaces the composer */
 .chat-disabled-note {
   display: flex; align-items: flex-start; gap: 9px;
