@@ -519,22 +519,53 @@ export async function submitBooking(input: SubmitBookingInput) {
     // the browser, so the discount figure and the code itself are both
     // tamperable. We re-run the lookup against the SERVER-computed subtotal and
     // record only what the catalog actually authorises.
-    //
-    // Note this value is recorded for reporting only — `chargeJob` bills
-    // `price - discountAmount` and never reads `promoDiscountAmount`, so a
-    // forged figure cannot reduce a charge today. Validating it anyway keeps
-    // that from becoming a self-service discount the moment someone wires this
-    // field into a total.
     let appliedPromoCode: string | null = null;
     let promoDiscountAmount: number | null = null;
     const submittedPromo = input.promoCode?.trim();
     if (submittedPromo) {
-      const promo = await applyPromoCode(submittedPromo, pricing.subtotal);
+      // The promo is resolved against the GROSS pre-tax subtotal — base +
+      // add-ons + travel, before the referral credit — which is exactly the
+      // figure Step 5 quotes the code against. Using `pricing.subtotal`
+      // (already net of the referral credit) would make a PERCENT code worth
+      // less on the server than the amount the customer was shown.
+      const promoBaseSubtotal =
+        pricing.basePrice + pricing.addOnTotal + pricing.travelFee;
+      const promo = await applyPromoCode(submittedPromo, promoBaseSubtotal);
       if (promo.valid && promo.discountAmount && promo.discountAmount > 0) {
         appliedPromoCode = submittedPromo.toUpperCase();
         promoDiscountAmount = promo.discountAmount;
       }
     }
+
+    // 5b-ter. Fold the validated promo into the price the FIRST booking is
+    // charged. Every charge path bills `Job.price - Job.discountAmount`
+    // (`chargeJob`, `cardHoldActions`, invoicing, revenue metrics), so a promo
+    // that is only recorded in `promoDiscountAmount` discounts nothing — the
+    // customer sees a discounted quote and is billed in full. Recomputing here
+    // puts it in `Job.price` the same way the referral credit already flows,
+    // which keeps one source of truth instead of teaching five charge paths
+    // about a second discount column.
+    //
+    // Deliberately NOT added to `Job.discountAmount`: that column is subtracted
+    // AGAIN at charge time, so carrying the promo in both places would take it
+    // off twice. It stays recorded in `promoDiscountAmount` for reporting.
+    //
+    // Pre-tax, like every other discount here, so GST/QST are charged on what
+    // the customer actually pays.
+    const primaryPricing = promoDiscountAmount
+      ? await computeBookingPrice({
+          serviceType: input.serviceType,
+          bedCount: input.bedCount,
+          bathCount: input.bathCount,
+          halfBathCount: input.halfBathCount,
+          squareFootage: input.squareFootage,
+          pcHours: input.pcHours,
+          pcCleaners: input.pcCleaners,
+          addOns: resolvedAddOns,
+          travelFee: areaCheck.travelFee ?? 0,
+          discountAmount: discountAmount + promoDiscountAmount,
+        })
+      : pricing;
 
     // 5c. Idempotency guard — if the same client just created a job for the
     // same date + service within the last 60 seconds, treat this as a retry
@@ -563,7 +594,7 @@ export async function submitBooking(input: SubmitBookingInput) {
         success: true,
         jobId: recentDuplicate.id,
         childJobIds: [],
-        total: recentDuplicate.price ?? pricing.total,
+        total: recentDuplicate.price ?? primaryPricing.total,
       };
     }
 
@@ -599,10 +630,13 @@ export async function submitBooking(input: SubmitBookingInput) {
         squareFootage: input.squareFootage > 0 ? input.squareFootage : null,
         isFlexible: input.isFlexible,
         requiredCleaners: 1,
-        price: pricing.total,
-        subtotalAmount: pricing.subtotal,
-        gstAmount: pricing.gstAmount,
-        qstAmount: pricing.qstAmount,
+        // Net of BOTH the referral credit and the promo (see 5b-ter).
+        price: primaryPricing.total,
+        subtotalAmount: primaryPricing.subtotal,
+        gstAmount: primaryPricing.gstAmount,
+        qstAmount: primaryPricing.qstAmount,
+        // Referral credit / spent balance only — the promo is already inside
+        // `price`, and this column is subtracted from it again at charge time.
         discountAmount: discountAmount > 0 ? discountAmount : null,
         appliedPromoCode,
         promoDiscountAmount,
@@ -648,7 +682,7 @@ export async function submitBooking(input: SubmitBookingInput) {
             success: true,
             jobId: winner.id,
             childJobIds: [],
-            total: winner.price ?? pricing.total,
+            total: winner.price ?? primaryPricing.total,
           };
         }
       }
@@ -797,6 +831,12 @@ export async function submitBooking(input: SubmitBookingInput) {
       // once (above), so re-applying it to every visit in the series would give
       // free money on jobs 2..N. Recompute whenever either discount is in play;
       // otherwise the child equals the (undiscounted) primary pricing.
+      //
+      // The promo code is a one-shot discount for the same reason: `usesCount`
+      // is burned exactly once, so it applies to the first booking only. This
+      // is why the child branches read `pricing` (referral-only) and never
+      // `primaryPricing` — the latter has the promo folded in, and using it
+      // here would repeat a single-use discount on every visit in the series.
       const childPricing =
         recurringDiscount > 0 || discountAmount > 0
           ? await computeBookingPrice({
@@ -888,10 +928,10 @@ export async function submitBooking(input: SubmitBookingInput) {
       isFlexible: input.isFlexible,
       address: input.address.trim(),
       serviceType: input.serviceType,
-      subtotal: pricing.subtotal,
-      gst: pricing.gstAmount,
-      qst: pricing.qstAmount,
-      total: pricing.total,
+      subtotal: primaryPricing.subtotal,
+      gst: primaryPricing.gstAmount,
+      qst: primaryPricing.qstAmount,
+      total: primaryPricing.total,
       // Always true now — a booking cannot be created without a verified deposit.
       depositPaid: true,
       logId: emailLog.id,
@@ -918,7 +958,7 @@ export async function submitBooking(input: SubmitBookingInput) {
         isFlexible: input.isFlexible,
         address: input.address.trim(),
         serviceType: input.serviceType,
-        price: pricing.total,
+        price: primaryPricing.total,
         bookingSource: "web (referral)",
         viaReferral: true,
       }).catch((err) =>
@@ -937,7 +977,7 @@ export async function submitBooking(input: SubmitBookingInput) {
       isFlexible: input.isFlexible,
       address: input.address.trim(),
       serviceType: input.serviceType,
-      price: pricing.total,
+      price: primaryPricing.total,
       bookingSource: "web",
     }).catch((err) =>
       console.error("admin new-booking notification failed", err)
@@ -966,7 +1006,7 @@ export async function submitBooking(input: SubmitBookingInput) {
       success: true,
       jobId: primaryJob.id,
       childJobIds,
-      total: pricing.total,
+      total: primaryPricing.total,
     };
   } catch (error) {
     console.error("Error submitting booking:", error);

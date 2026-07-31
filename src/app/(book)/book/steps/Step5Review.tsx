@@ -24,11 +24,24 @@ export default function Step5Review({ draft, basePrice, onChange, freqDiscounts 
     const addOnTotal = draft.addOns
       .filter((a) => a.selected)
       .reduce((s, a) => s + a.price, 0);
+    // GROSS pre-tax subtotal. This is the figure a promo code is quoted
+    // against, and the same one `submitBooking` re-resolves the code against
+    // server-side, so the discount shown here is the discount that is applied.
     const subtotal = basePrice + addOnTotal + draft.travelFee;
-    const tax = calculateTax(subtotal);
+    const promoDiscount =
+      draft.promoApplied && draft.promoDiscount
+        ? Math.min(draft.promoDiscount, subtotal)
+        : 0;
+    // The promo comes off BEFORE tax, exactly as the server does it
+    // (`computeBookingPrice` folds every discount into the pre-tax amount), so
+    // GST/QST are charged on what the customer actually pays. Subtracting it
+    // from the taxed total instead quotes a total the booking never gets
+    // charged — the same class of bug as not applying it at all.
+    const tax = calculateTax(subtotal - promoDiscount);
     return {
       addOnTotal,
-      subtotal: tax.subtotal,
+      subtotal: Math.round(subtotal * 100) / 100,
+      promoDiscount,
       gstAmount: tax.gstAmount,
       qstAmount: tax.qstAmount,
       total: tax.total,
@@ -56,6 +69,33 @@ export default function Step5Review({ draft, basePrice, onChange, freqDiscounts 
       }
     });
   }
+
+  // Validate a code entered back in step 4 as soon as the customer lands here,
+  // instead of waiting for them to press "Apply code". The server honours any
+  // valid code at submit, so a code that is silently ignored by this screen
+  // would quote a total higher than the one actually charged. Invalid codes
+  // stay quiet — the explicit button is what surfaces the reason.
+  const promoCodeTrimmed = draft.promoCode?.trim() ?? "";
+  const promoSubtotal = breakdown.subtotal;
+  const promoAlreadyApplied = draft.promoApplied === true;
+  useEffect(() => {
+    if (!promoCodeTrimmed || promoAlreadyApplied) return;
+    let cancelled = false;
+    applyPromoCode(promoCodeTrimmed, promoSubtotal)
+      .then((res) => {
+        if (cancelled || !res.valid || !res.discountAmount) return;
+        onChange({ promoDiscount: res.discountAmount, promoApplied: true });
+        setPromoMsg({
+          ok: true,
+          text: `Code applied — -$${res.discountAmount.toFixed(2)} off`,
+        });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [promoCodeTrimmed, promoSubtotal, promoAlreadyApplied]);
 
   // Create a $20 deposit PaymentIntent when contact info is known
   useEffect(() => {
@@ -150,12 +190,12 @@ export default function Step5Review({ draft, basePrice, onChange, freqDiscounts 
             <Row dt="Travel fee" dd={`+$${draft.travelFee.toFixed(2)}`} />
           ) : null}
           <RowBorder dt="Subtotal" dd={`$${breakdown.subtotal.toFixed(2)}`} />
-          {draft.promoApplied && draft.promoDiscount ? (
-            <Row dt={`Promo (${draft.promoCode})`} dd={`-$${draft.promoDiscount.toFixed(2)}`} />
+          {breakdown.promoDiscount > 0 ? (
+            <Row dt={`Promo (${draft.promoCode})`} dd={`-$${breakdown.promoDiscount.toFixed(2)}`} />
           ) : null}
           <Row dt="GST (5%)" dd={`$${breakdown.gstAmount.toFixed(2)}`} />
           <Row dt="QST (9.975%)" dd={`$${breakdown.qstAmount.toFixed(2)}`} />
-          <RowBorder total dt="Total (1st cleaning)" dd={`$${(breakdown.total - (draft.promoDiscount ?? 0)).toFixed(2)}`} />
+          <RowBorder total dt="Total (1st cleaning)" dd={`$${breakdown.total.toFixed(2)}`} />
           {recurringPct > 0 && (
             <div className="cl-dlist-row" style={{ marginTop: 6 }}>
               <dt style={{ color: "var(--primary)", fontSize: 12 }}>

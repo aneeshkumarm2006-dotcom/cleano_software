@@ -351,7 +351,7 @@ Scoped from a threat model of the public booking flow. Verified: `npx tsc --noEm
 ### Outstanding
 
 - ~~**Anti-replay index (needs migration).**~~ **DONE** — shipped in `20260730120000_booking_payment_binding` (see WP-4 below) and applied to production 2026-07-30 with a clean pre-flight. Note: the `.env` database **is** production (confirmed by Prem); its small row count is the result of an old hard-delete bug, not a separate environment.
-- **Promo codes are end-to-end non-functional — awaiting a decision.** `book/page.tsx` never passes `promoCode` to `submitBooking` at all. The customer is shown a discounted total (`Step5Review.tsx:158`) and charged full price: `chargeJob.ts:37` bills `price - discountAmount` and never reads `promoDiscountAmount`. Win-back redemption tracking therefore can never fire, permanently skewing the retention KPI. Wiring the code through *without* also fixing the charge would burn promo quota for discounts never given, so both must land together.
+- ~~**Promo codes are end-to-end non-functional — awaiting a decision.**~~ **FIXED** — see WP-5 below (2026-07-31). Original finding: `book/page.tsx` never passes `promoCode` to `submitBooking` at all. The customer is shown a discounted total (`Step5Review.tsx:158`) and charged full price: `chargeJob.ts:37` bills `price - discountAmount` and never reads `promoDiscountAmount`. Win-back redemption tracking therefore can never fire, permanently skewing the retention KPI. Wiring the code through *without* also fixing the charge would burn promo quota for discounts never given, so both must land together.
 - **Orphan-charge window.** The deposit is confirmed client-side before `submitBooking` runs, and the Stripe webhook ignores deposit intents (no `metadata.jobId`), so a failure in between leaves a charged customer with no booking and no reconciliation record.
 - **No rate limiting anywhere.** `/api/stripe/charge-deposit` is unauthenticated and unmetered; lead and quote submission likewise. Separate ticket.
 
@@ -437,3 +437,83 @@ Verified: `npx tsc --noEmit` clean, `npm run build` exit 0, migration applied an
 ### Still open in this area
 
 `CLN-P1-7-07` (customer picks a card for a specific booking) — the column exists now, so it's UI + a server action, no migration.
+
+## 2026-07-31 — WP-5: promo codes actually discount the booking (no migration)
+
+Verified: `npx tsc --noEmit` clean, `npm run build` exit 0, 18/18 money-math assertions.
+**Not yet verified against the database** — see "Environment gap" below.
+
+### The defect
+
+A customer entered a valid promo code, Step 5 showed a discounted total, and the card
+was charged full price. `book/page.tsx` never passed `promoCode` into `submitBooking`,
+so `input.promoCode` was always `undefined`: the server-side `5b-bis` validation block
+was live but inert, `Job.appliedPromoCode` / `Job.promoDiscountAmount` were always NULL,
+`PromoCode.usesCount` never moved, and the win-back funnel could never record a
+redemption.
+
+### What changed
+
+| File | Change |
+|---|---|
+| `src/app/(book)/book/page.tsx` | Passes `promoCode: draft.promoCode` (the code only — never the discount figure). Live-estimate sidebar subtracts an applied promo pre-tax and shows it as a row. |
+| `src/app/(book)/actions/submitBooking.ts` | New `5b-ter`: the server-validated promo is folded into `computeBookingPrice`, so it lands in `Job.price`. `5b-bis` now resolves the code against the GROSS pre-tax subtotal. Primary job, confirmation email, admin notifications and the returned total all read the promo-inclusive `primaryPricing`. |
+| `src/app/(book)/book/steps/Step5Review.tsx` | Promo now comes off BEFORE tax in the displayed breakdown (it was subtracted from the taxed total, which no code path ever charged). Auto-validates a code typed in step 4 on arrival, instead of requiring the "Apply code" button. |
+
+### Design decisions
+
+- **The discount lands in `Job.price`, not in a second column.** All five charge paths
+  and every revenue metric bill `price - discountAmount` (`chargeJob.ts:38`,
+  `cardHoldActions.ts:69/148`, `createInvoice`, `metrics-shared`). Recomputing the price
+  with the promo included means every one of them is correct with no changes, which is
+  the same route the referral credit already takes. `promoDiscountAmount` stays as the
+  reporting record of what was taken off.
+- **Deliberately NOT added to `Job.discountAmount`.** That column is subtracted from
+  `price` again at charge time; carrying the promo in both places would discount it
+  twice.
+- **Pre-tax, so GST/QST are charged on what the customer actually pays** — consistent
+  with every other discount in `computeBookingPrice`. The review step used to subtract
+  the promo from the *taxed* total, which no server path ever produced; that display is
+  now the same arithmetic as the server.
+- **Resolved against the GROSS subtotal** (base + add-ons + travel, before referral
+  credit), because that is the figure Step 5 quotes a PERCENT code against. Using
+  `pricing.subtotal` would have made the same code worth less on the server than the
+  amount the customer was shown.
+- **One-shot, first booking only** — recurring children keep carrying only the frequency
+  discount. `usesCount` is burned once, so repeating the promo on visits 2..N would be
+  the `d00415e` referral bug again. The child branches read `pricing` (referral-only),
+  never `primaryPricing`.
+- **Auto-validation on the review step.** A valid code the customer typed but never
+  pressed "Apply" on would otherwise be honoured by the server while the screen quoted
+  full price — the same quoted-vs-charged mismatch, just in the other direction.
+- **No new double-burn risk.** Both idempotency paths (recent-duplicate at `5c`, `P2002`
+  on the deposit intent) return before the `usesCount` UPDATE at `6b`, so only a
+  successfully created job burns a use.
+
+### Environment gap — DB-backed verification NOT done
+
+The `.env` in this working copy has **no `DATABASE_URL` / `DIRECT_URL`** (nor
+`BETTER_AUTH_SECRET`), so `npx prisma migrate status` cannot run and no booking could be
+made against the Prem Sai test data. `node_modules` was also missing five packages
+(`stripe`, `resend`, `@stripe/stripe-js`, `@stripe/react-stripe-js`, `playwright`) and
+the generated Prisma client was stale — `npm install` + `npx prisma generate` fixed both,
+after which the baseline was clean. The end-to-end checks (charged == quoted,
+`usesCount` +1 exactly, win-back `offerStatus` → `REDEEMED`) still have to be run by
+someone with database access before this is pushed.
+
+### Adjacent money defects found while in here — NOT fixed, need Prem's decision
+
+Both change billing amounts, so per the stage rules they were left alone:
+
+1. **The referral credit is subtracted twice.** `submitBooking` writes
+   `price = pricing.total` (already net of the credit) *and*
+   `discountAmount = <same credit>`; `chargeJob.ts:38` then bills
+   `price - discountAmount`. A $25 referral credit takes ~$50 off. The same shape
+   applies to recurring children (`childPricing.discountAmount` is stored while
+   `childPricing.total` already excludes it). Admin-created jobs are correct — `saveJob`
+   stores a pre-discount `price`, which is the convention `chargeJob` was written for.
+   The promo fix does not touch this and does not make it worse.
+2. **The $20 deposit is never credited against the final charge.** The confirmation
+   email says "A $20 deposit was collected at booking. The remaining balance is charged
+   only after your cleaning" (`email.ts:206`), but `chargeJob` bills the full
+   `price - discountAmount` with no deposit deduction.

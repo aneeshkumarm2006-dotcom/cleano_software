@@ -309,6 +309,9 @@ export default function BookPage() {
           : "",
       ].filter(Boolean).join("\n\n"),
       referralCode: draft.referralCode,
+      // The code only — never the discount figure. The server re-validates it
+      // against the catalog and re-derives the amount from its own subtotal.
+      promoCode: draft.promoCode,
       afterPhotoConsent: draft.afterPhotoConsent,
       smsConsent: draft.smsConsent,
       // The Stripe customer and payment-method ids are intentionally not sent:
@@ -347,7 +350,15 @@ export default function BookPage() {
   const discountedBase = airbnbDiscountPct > 0
     ? effectiveBase * (1 - airbnbDiscountPct / 100)
     : effectiveBase;
-  const subtotal = discountedBase + addOnTotal + draft.travelFee;
+  // A validated promo comes off before tax, matching Step 5 and the server, so
+  // the live estimate can't sit next to the review card showing a different
+  // total for the same booking.
+  const grossSubtotal = discountedBase + addOnTotal + draft.travelFee;
+  const promoDiscount =
+    draft.promoApplied && draft.promoDiscount
+      ? Math.min(draft.promoDiscount, grossSubtotal)
+      : 0;
+  const subtotal = grossSubtotal - promoDiscount;
   const tax = calculateTax(subtotal);
   const showSummary = step >= 1 && (effectiveBase > 0);
 
@@ -650,6 +661,12 @@ export default function BookPage() {
                 <div className="cl-summary-row">
                   <span>Travel fee</span>
                   <strong>${draft.travelFee.toFixed(2)}</strong>
+                </div>
+              ) : null}
+              {promoDiscount > 0 ? (
+                <div className="cl-summary-row" style={{ color: "#059669" }}>
+                  <span>Promo ({draft.promoCode})</span>
+                  <strong>−${promoDiscount.toFixed(2)}</strong>
                 </div>
               ) : null}
               <div className="cl-summary-row">
