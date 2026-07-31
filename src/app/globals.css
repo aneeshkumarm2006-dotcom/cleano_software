@@ -1596,6 +1596,46 @@ body {
   flex: 0 0 auto;
 }
 .chat-icon-btn:hover { background: rgba(0,140,156,0.06); color: var(--primary); }
+.chat-icon-btn:disabled { opacity: 0.45; cursor: default; }
+
+/* Job-chat photo attachments (CLN-P0-3-05) */
+.chat-attachment { display: block; border-radius: 10px; overflow: hidden; }
+.chat-attachment img {
+  display: block;
+  max-width: min(240px, 100%);
+  max-height: 280px;
+  width: auto; height: auto;
+  border-radius: 10px;
+  background: rgba(0,0,0,0.04);
+}
+/* The paperclip sits inside the pill, so claw back the row's left padding. */
+.chat-composer-row > .chat-icon-btn:first-child { margin-left: -8px; }
+.chat-attach-preview {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px; margin-bottom: 10px;
+  border: 1px solid rgba(0,140,156,0.18);
+  border-radius: 12px;
+  background: rgba(0,140,156,0.04);
+}
+.chat-attach-preview img {
+  width: 40px; height: 40px; object-fit: cover;
+  border-radius: 8px; flex: 0 0 auto;
+}
+.chat-attach-preview-meta {
+  display: flex; flex-direction: column; min-width: 0; flex: 1;
+}
+.chat-attach-preview-meta .name {
+  font-size: 12.5px; font-weight: 600; color: var(--ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.chat-attach-preview-meta .size { font-size: 11px; color: var(--primary-50); }
+.chat-attach-preview button {
+  background: transparent; border: 0; cursor: pointer;
+  color: var(--primary-60); padding: 5px; border-radius: 6px;
+  display: inline-flex; flex: 0 0 auto;
+}
+.chat-attach-preview button:hover { background: rgba(0,140,156,0.08); }
+.chat-attach-preview button:disabled { opacity: 0.45; cursor: default; }
 
 /* Role badge (Dispatch, etc.) */
 .chat-role-pill {

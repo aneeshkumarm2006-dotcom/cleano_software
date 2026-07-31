@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Send, MessageSquare } from "lucide-react";
+import { Send, MessageSquare, Paperclip, X } from "lucide-react";
 import useSWR from "swr";
 import {
   getJobChatMessages,
   sendJobChatMessage,
+  sendJobChatPhoto,
   type JobChatPayload,
   type JobChatMessageDTO,
   type JobChatRole,
@@ -84,6 +85,17 @@ const ROLE_LABEL: Record<JobChatRole, string> = {
   ADMIN: "Admin",
 };
 
+/** Mirrors the server-side gate in sendJobChatPhoto — same cap, same list. */
+const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+const ALLOWED_ATTACHMENT_TYPES = [
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/heic",
+  "image/heif",
+  "image/webp",
+];
+
 export default function JobChatThread({
   jobId,
   otherLabel,
@@ -95,8 +107,14 @@ export default function JobChatThread({
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  // Photo staged in the composer but not yet sent. `previewUrl` is a local
+  // object URL so the thumbnail (and the optimistic bubble) appear instantly.
+  const [pendingPhoto, setPendingPhoto] = useState<
+    { file: File; previewUrl: string } | null
+  >(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data, mutate } = useSWR<JobChatPayload>(
     ["job-chat", jobId],
@@ -121,14 +139,45 @@ export default function JobChatThread({
     });
   }, [messages.length]);
 
+  // Release the object URL when the staged photo is replaced or the thread
+  // unmounts, so a long chat session doesn't leak every photo it previewed.
+  useEffect(() => {
+    const url = pendingPhoto?.previewUrl;
+    return () => {
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [pendingPhoto]);
+
+  function handlePickPhoto(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    // Let the same photo be chosen again after a cancel/failed send.
+    e.target.value = "";
+    if (!file) return;
+    if (!ALLOWED_ATTACHMENT_TYPES.includes(file.type.toLowerCase())) {
+      setSendError("Unsupported file type. Use JPG, PNG, HEIC, or WebP.");
+      return;
+    }
+    if (file.size > MAX_ATTACHMENT_BYTES) {
+      setSendError("Photo exceeds the 10MB limit.");
+      return;
+    }
+    setSendError(null);
+    setPendingPhoto({ file, previewUrl: URL.createObjectURL(file) });
+  }
+
   async function handleSend(override?: string) {
     const body = (override ?? draft).trim();
-    if (!body || sending) return;
+    const photo = override === undefined ? pendingPhoto : null;
+    // A photo may travel with an empty caption; text alone still can't.
+    if ((!body && !photo) || sending) return;
     setSendError(null);
     setSending(true);
     // Only clear the box when sending what's in it — a quick message must not
     // wipe something the user was part-way through typing.
-    if (override === undefined) setDraft("");
+    if (override === undefined) {
+      setDraft("");
+      setPendingPhoto(null);
+    }
 
     const optimistic: JobChatMessageDTO = {
       id: `optimistic-${Date.now()}`,
@@ -137,6 +186,9 @@ export default function JobChatThread({
       senderRole: data?.viewerRole ?? "CLEANER",
       senderName: userName ?? "You",
       body,
+      attachmentUrl: photo?.previewUrl ?? null,
+      attachmentWidth: null,
+      attachmentHeight: null,
       createdAt: new Date().toISOString(),
       mine: true,
     };
@@ -146,12 +198,22 @@ export default function JobChatThread({
       { revalidate: false }
     );
 
-    const res = await sendJobChatMessage(jobId, body);
+    let res: Awaited<ReturnType<typeof sendJobChatMessage>>;
+    if (photo) {
+      const fd = new FormData();
+      fd.append("jobId", jobId);
+      fd.append("file", photo.file);
+      fd.append("body", body);
+      res = await sendJobChatPhoto(fd);
+    } else {
+      res = await sendJobChatMessage(jobId, body);
+    }
     setSending(false);
     if (!res.success) {
       // Restore into the box only if it's still empty, so a failed quick
       // message doesn't clobber typing the user started meanwhile.
       setDraft((current) => (current.trim() ? current : body));
+      if (photo) setPendingPhoto(photo);
       setSendError(res.error);
       await mutate();
       return;
@@ -256,6 +318,25 @@ export default function JobChatThread({
                         </span>
                       </div>
                     )}
+                    {m.attachmentUrl && (
+                      <a
+                        href={m.attachmentUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="chat-attachment"
+                        style={{ marginBottom: m.body ? 6 : 0 }}>
+                        {/* width/height give the browser the aspect ratio up
+                            front, so a photo decoding mid-poll doesn't shove
+                            the thread around under the auto-scroll. */}
+                        <img
+                          src={m.attachmentUrl}
+                          alt={m.body || "Photo shared in this conversation"}
+                          width={m.attachmentWidth ?? undefined}
+                          height={m.attachmentHeight ?? undefined}
+                          loading="lazy"
+                        />
+                      </a>
+                    )}
                     {m.body && <div>{m.body}</div>}
                     <div className="chat-msg-time">{timeOnly(m.createdAt)}</div>
                   </div>
@@ -314,23 +395,66 @@ export default function JobChatThread({
               ))}
             </div>
           )}
+          {pendingPhoto && (
+            <div className="chat-attach-preview">
+              <img src={pendingPhoto.previewUrl} alt="" />
+              <div className="chat-attach-preview-meta">
+                <span className="name">{pendingPhoto.file.name}</span>
+                <span className="size">
+                  {(pendingPhoto.file.size / (1024 * 1024)).toFixed(1)} MB
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPendingPhoto(null)}
+                disabled={sending}
+                aria-label="Remove photo">
+                <X size={14} />
+              </button>
+            </div>
+          )}
           <div className="chat-composer-row">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/jpg,image/png,image/heic,image/heif,image/webp"
+              onChange={handlePickPhoto}
+              style={{ display: "none" }}
+              tabIndex={-1}
+            />
+            <button
+              type="button"
+              className="chat-icon-btn"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={sending}
+              title="Attach a photo"
+              aria-label="Attach a photo">
+              <Paperclip size={16} />
+            </button>
             <textarea
               rows={1}
               value={draft}
               onChange={handleChange}
               onKeyDown={handleKeyDown}
-              placeholder={`Message the ${otherLabel.toLowerCase()}…`}
+              placeholder={
+                pendingPhoto
+                  ? "Add a caption (optional)…"
+                  : `Message the ${otherLabel.toLowerCase()}…`
+              }
             />
             <button
               className="chat-send"
               onClick={() => handleSend()}
-              disabled={sending || draft.trim().length === 0}
+              disabled={sending || (draft.trim().length === 0 && !pendingPhoto)}
               aria-label="Send">
               <Send size={14} />
             </button>
           </div>
-          <div className="chat-composer-hint">⏎ to send · ⇧⏎ for new line</div>
+          <div className="chat-composer-hint">
+            {sending && pendingPhoto
+              ? "Uploading photo…"
+              : "⏎ to send · ⇧⏎ for new line · 📎 photo up to 10MB"}
+          </div>
         </div>
       )}
     </div>

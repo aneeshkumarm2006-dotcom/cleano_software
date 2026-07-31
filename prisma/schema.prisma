@@ -1274,17 +1274,27 @@ enum JobChatSenderRole {
 // can view/moderate). Keyed by jobId — the job IS the thread. In-app both sides
 // (client uses the customer portal); a Twilio SMS bridge can be layered later.
 model JobChatMessage {
-  id              String            @id @default(cuid())
-  jobId           String
-  senderId        String?
-  senderRole      JobChatSenderRole
-  senderName      String
-  body            String            @db.Text
-  readByAdminAt   DateTime?
-  readByClientAt  DateTime?
-  readByCleanerAt DateTime?
-  createdAt       DateTime          @default(now())
-  job             Job               @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  id               String            @id @default(cuid())
+  jobId            String
+  senderId         String?
+  senderRole       JobChatSenderRole
+  senderName       String
+  body             String            @db.Text
+  // Photo attachment (CLN-P0-3-05). One per message — a second photo is a
+  // second message, which is how every chat product behaves and avoids adding
+  // another cascade edge to the job. NULL = text-only, so every existing row
+  // is unchanged. `body` stays NOT NULL: a photo-only message stores "", which
+  // JobChatThread already renders correctly (it guards `{m.body && …}`).
+  // Dimensions come back free from the Cloudinary upload and let the thread
+  // reserve the image's box, so a 4s poll + auto-scroll doesn't jump.
+  attachmentUrl    String?
+  attachmentWidth  Int?
+  attachmentHeight Int?
+  readByAdminAt    DateTime?
+  readByClientAt   DateTime?
+  readByCleanerAt  DateTime?
+  createdAt        DateTime          @default(now())
+  job              Job               @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
   @@index([jobId, createdAt])
 }
@@ -1542,14 +1552,14 @@ model TrainingProgress {
 }
 
 model EmployeeRating {
-  id         String    @id @default(cuid())
-  employeeId String
-  jobId      String?
-  rating     Float
-  notes      String?
-  ratedBy    String?
+  id             String    @id @default(cuid())
+  employeeId     String
+  jobId          String?
+  rating         Float
+  notes          String?
+  ratedBy        String?
   // Set when the client edits their submitted rating (shown to admin).
-  editedAt   DateTime?
+  editedAt       DateTime?
   // Admin exclusion (AwerNewFixes.pdf item 5). An excluded rating is KEPT —
   // the row stays for admin review — but drops out of every average, rating
   // count and pay-tier calculation. Used for a rating left on a test job, a
@@ -1559,10 +1569,10 @@ model EmployeeRating {
   /// User id of the admin who excluded it (matches `ratedBy`'s convention).
   excludedById   String?
   excludedReason String?
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  employee   User      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  job        Job?      @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  employee       User      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  job            Job?      @relation(fields: [jobId], references: [id], onDelete: SetNull)
 
   @@index([employeeId])
   @@index([jobId])

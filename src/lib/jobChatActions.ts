@@ -4,6 +4,8 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { db } from "@/db";
 import { smsJobChatMessage } from "@/lib/sms";
+import { cloudinary } from "@/lib/cloudinary";
+import type { UploadApiResponse } from "cloudinary";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -16,6 +18,10 @@ export interface JobChatMessageDTO {
   senderRole: JobChatRole;
   senderName: string;
   body: string;
+  /** Photo attached to this message, or null for a text-only message. */
+  attachmentUrl: string | null;
+  attachmentWidth: number | null;
+  attachmentHeight: number | null;
   createdAt: string;
   /** True when this message was sent by the current viewer. */
   mine: boolean;
@@ -109,6 +115,9 @@ function toDTO(
     senderRole: JobChatRole;
     senderName: string;
     body: string;
+    attachmentUrl: string | null;
+    attachmentWidth: number | null;
+    attachmentHeight: number | null;
     createdAt: Date;
   },
   viewerRole: JobChatRole,
@@ -121,10 +130,28 @@ function toDTO(
     senderRole: m.senderRole,
     senderName: m.senderName,
     body: m.body,
+    attachmentUrl: m.attachmentUrl,
+    attachmentWidth: m.attachmentWidth,
+    attachmentHeight: m.attachmentHeight,
     createdAt: m.createdAt.toISOString(),
     mine: m.senderRole === viewerRole && m.senderId === viewerId,
   };
 }
+
+/** Columns every read of a message returns — kept in one place so the DTO and
+ *  the queries can't drift as the row grows. */
+const MESSAGE_SELECT = {
+  id: true,
+  jobId: true,
+  senderId: true,
+  senderRole: true,
+  senderName: true,
+  body: true,
+  attachmentUrl: true,
+  attachmentWidth: true,
+  attachmentHeight: true,
+  createdAt: true,
+} as const;
 
 // ── Actions ──────────────────────────────────────────────────────────────────
 
@@ -159,15 +186,7 @@ export async function getJobChatMessages(
   const messages = await db.jobChatMessage.findMany({
     where: { jobId },
     orderBy: { createdAt: "asc" },
-    select: {
-      id: true,
-      jobId: true,
-      senderId: true,
-      senderRole: true,
-      senderName: true,
-      body: true,
-      createdAt: true,
-    },
+    select: MESSAGE_SELECT,
   });
 
   return {
@@ -211,15 +230,7 @@ export async function sendJobChatMessage(
       readByClientAt: role === "CLIENT" ? now : null,
       readByAdminAt: role === "ADMIN" ? now : null,
     },
-    select: {
-      id: true,
-      jobId: true,
-      senderId: true,
-      senderRole: true,
-      senderName: true,
-      body: true,
-      createdAt: true,
-    },
+    select: MESSAGE_SELECT,
   });
 
   // Outbound SMS bridge (#11): a cleaner/admin message is delivered to the
@@ -238,6 +249,149 @@ export async function sendJobChatMessage(
         jobNumber: job!.jobNumber,
         senderLabel: role === "CLEANER" ? "your cleaner" : "Cleano",
         body: trimmed,
+      }).catch((e) => console.error("job chat outbound sms", e));
+    }
+  }
+
+  return { success: true, data: toDTO(message, role, user.id) };
+}
+
+// ── Photo attachments (CLN-P0-3-05) ──────────────────────────────────────────
+
+/** Matches uploadJobPhoto — one cap for every photo a phone sends us. */
+const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+const ALLOWED_ATTACHMENT_TYPES = [
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/heic",
+  "image/heif",
+  "image/webp",
+];
+
+function streamUpload(
+  buffer: Buffer,
+  folder: string,
+  publicId: string
+): Promise<UploadApiResponse> {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        folder,
+        public_id: publicId,
+        resource_type: "image",
+        overwrite: false,
+        // A large HEIC on a cell connection needs far longer than the default.
+        timeout: 90_000,
+      },
+      (error, result) => {
+        if (error || !result) reject(error || new Error("Upload failed"));
+        else resolve(result);
+      }
+    );
+    stream.end(buffer);
+  });
+}
+
+/**
+ * Post a photo (with an optional caption) to a job's chat thread.
+ *
+ * Authorization goes through the same `resolveParticipant` gate as a text
+ * message — deliberately NOT through `uploadJobPhoto`, which admits admins and
+ * assigned cleaners only. The client is a first-class participant here and is
+ * absent from that list; reusing it would have let cleaners send photos and
+ * silently refused the customer.
+ *
+ * The upload happens before the row is written, so a failed upload leaves no
+ * empty message behind.
+ */
+export async function sendJobChatPhoto(
+  formData: FormData
+): Promise<{ success: true; data: JobChatMessageDTO } | { success: false; error: string }> {
+  const jobId = formData.get("jobId");
+  if (typeof jobId !== "string" || !jobId) {
+    return { success: false, error: "Missing job" };
+  }
+
+  const r = await resolveParticipant(jobId);
+  if ("error" in r) return { success: false, error: r.error };
+  const { user, role } = r.participant;
+
+  const file = formData.get("file");
+  if (!file || typeof file === "string") {
+    return { success: false, error: "No photo provided" };
+  }
+  if (file.size === 0) return { success: false, error: "Empty file" };
+  if (file.size > MAX_ATTACHMENT_BYTES) {
+    return { success: false, error: "Photo exceeds the 10MB limit" };
+  }
+  if (!ALLOWED_ATTACHMENT_TYPES.includes(file.type.toLowerCase())) {
+    return {
+      success: false,
+      error: "Unsupported file type. Use JPG, PNG, HEIC, or WebP.",
+    };
+  }
+
+  const captionRaw = formData.get("body");
+  const caption = typeof captionRaw === "string" ? captionRaw.trim() : "";
+  if (caption.length > 4000) {
+    return { success: false, error: "Message is too long (max 4000 characters)" };
+  }
+
+  if (
+    !process.env.CLOUDINARY_CLOUD_NAME ||
+    !process.env.CLOUDINARY_API_KEY ||
+    !process.env.CLOUDINARY_API_SECRET
+  ) {
+    return { success: false, error: "Photo uploads are not configured on the server" };
+  }
+
+  let uploaded: UploadApiResponse;
+  try {
+    const buffer = Buffer.from(await file.arrayBuffer());
+    uploaded = await streamUpload(
+      buffer,
+      `cleano/job-chat/${jobId}`,
+      `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    );
+  } catch (e) {
+    console.error("job chat photo upload", e);
+    return { success: false, error: "Failed to upload the photo" };
+  }
+
+  const now = new Date();
+  const message = await db.jobChatMessage.create({
+    data: {
+      jobId,
+      senderId: user.id,
+      senderRole: role,
+      senderName: user.name,
+      // Photo-only messages store "" rather than making the column nullable.
+      body: caption,
+      attachmentUrl: uploaded.secure_url,
+      attachmentWidth: uploaded.width ?? null,
+      attachmentHeight: uploaded.height ?? null,
+      readByCleanerAt: role === "CLEANER" ? now : null,
+      readByClientAt: role === "CLIENT" ? now : null,
+      readByAdminAt: role === "ADMIN" ? now : null,
+    },
+    select: MESSAGE_SELECT,
+  });
+
+  // Same outbound SMS bridge as a text message. The photo can't ride an SMS,
+  // so the caption (or a stand-in) goes out and the photo waits in the portal.
+  if (role === "CLEANER" || role === "ADMIN") {
+    const job = await db.job.findUnique({
+      where: { id: jobId },
+      select: { jobNumber: true, client: { select: { phone: true } } },
+    });
+    const phone = job?.client?.phone;
+    if (phone) {
+      smsJobChatMessage({
+        to: phone,
+        jobNumber: job!.jobNumber,
+        senderLabel: role === "CLEANER" ? "your cleaner" : "Cleano",
+        body: caption ? `${caption} (photo attached — open your booking to view)` : "Sent a photo — open your booking to view it.",
       }).catch((e) => console.error("job chat outbound sms", e));
     }
   }
