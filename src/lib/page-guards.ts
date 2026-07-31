@@ -26,6 +26,21 @@ export async function requireAdmin() {
   return session;
 }
 
+// OWNER/ADMIN only — the page equivalent of `requireOwnerAdmin` in
+// `src/lib/action-guards.ts`. For pages OPS_MANAGER / FIELD_LEAD must not see
+// (bulk card charging, the audit trail). `homeForRole` sends those two to
+// /admin/dashboard and everyone else to their own area's home.
+//
+// A page using this must also carry `adminOnly: true` on its nav entry in
+// `src/app/admin/Sidebar.tsx`, and its server actions need `requireOwnerAdmin`
+// from `action-guards` — a page redirect alone leaves the actions callable.
+export async function requireOwnerAdmin() {
+  const session = await requireSession();
+  const role = (session.user as { role?: string }).role;
+  if (role !== "OWNER" && role !== "ADMIN") redirect(homeForRole(role));
+  return session;
+}
+
 export async function requireCleaner() {
   const session = await requireSession();
   const role = (session.user as { role?: string }).role;

@@ -1,6 +1,4 @@
-import { redirect } from "next/navigation";
-import { getCachedSession } from "@/lib/auth";
-import { isAdminRole, homeForRole } from "@/lib/role-routing";
+import { requireOwnerAdmin } from "@/lib/page-guards";
 import { db } from "@/db";
 import {
   actionTitle,
@@ -18,10 +16,10 @@ export const dynamic = "force-dynamic";
 const LIMIT = 500;
 
 export default async function LogsPage() {
-  const session = await getCachedSession();
-  if (!session) redirect("/sign-in");
-  const role = (session.user as { role?: string }).role;
-  if (!isAdminRole(role)) redirect(homeForRole(role));
+  // The full system audit trail (every email, charge, and admin action) —
+  // OWNER/ADMIN only. This previously used `isAdminRole`, which also admits
+  // OPS_MANAGER and FIELD_LEAD.
+  await requireOwnerAdmin();
 
   const [emails, acts, emailCounts, activityCounts] = await Promise.all([
     db.emailLog.findMany({ orderBy: { createdAt: "desc" }, take: LIMIT }),

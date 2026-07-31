@@ -1,9 +1,11 @@
-import { requireAdmin } from "@/lib/page-guards";
+import { requireOwnerAdmin } from "@/lib/page-guards";
 import { db } from "@/db";
 import BulkChargeClient from "./BulkChargeClient";
 
 export default async function BulkChargePage() {
-  await requireAdmin();
+  // Charges real customer cards in bulk — OWNER/ADMIN only, matching the guard
+  // inside `bulkChargeJobs`. `requireAdmin` would admit OPS_MANAGER/FIELD_LEAD.
+  await requireOwnerAdmin();
 
   const jobs = await db.job.findMany({
     where: {

@@ -216,7 +216,12 @@ const NAV: { label: string; items: NavItem[] }[] = [
         Icon: FileText,
         adminOnly: true,
       },
-      { href: "/admin/bulk-charge", label: "Bulk Charge", Icon: Banknote },
+      {
+        href: "/admin/bulk-charge",
+        label: "Bulk Charge",
+        Icon: Banknote,
+        adminOnly: true,
+      },
     ],
   },
   {
@@ -228,7 +233,12 @@ const NAV: { label: string; items: NavItem[] }[] = [
         Icon: Database,
         adminOnly: true,
       },
-      { href: "/admin/logs", label: "Logs", Icon: ScrollText },
+      {
+        href: "/admin/logs",
+        label: "Logs",
+        Icon: ScrollText,
+        adminOnly: true,
+      },
       {
         href: "/admin/settings",
         label: "Settings",
