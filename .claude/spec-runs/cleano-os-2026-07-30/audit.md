@@ -520,3 +520,90 @@ Both change billing amounts, so per the stage rules they were left alone:
    email says "A $20 deposit was collected at booking. The remaining balance is charged
    only after your cleaning" (`email.ts:206`), but `chargeJob` bills the full
    `price - discountAmount` with no deposit deduction.
+
+## 2026-07-31 — WP-6: restrict /admin/bulk-charge and /admin/logs to OWNER/ADMIN (no migration)
+
+Commit `f692d03` on `main` — **committed, not pushed** (a push is a production deploy;
+the sign-in-as-each-role check below needs someone with database access).
+
+Verified: `npx tsc --noEmit` clean, `npm run build` exit 0, 38/38 role-routing assertions.
+
+### The gap
+
+The admin area admits OWNER, ADMIN, OPS_MANAGER and FIELD_LEAD. Both pages *had* guards,
+but one tier too wide:
+
+- `bulk-charge/page.tsx` called `requireAdmin()` (`page-guards.ts:22`), which passes
+  anything `isAdminRole()` accepts — all four staff roles (`role-routing.ts:14`).
+- `logs/page.tsx` open-coded the same `isAdminRole()` check.
+
+So a FIELD_LEAD could type either URL and open bulk card charging or the full system
+audit trail. The Sidebar's `adminOnly` filter was already built and working, but neither
+entry carried the flag, so both links were also advertised to those roles.
+
+### What changed
+
+| File | Change |
+|---|---|
+| `src/lib/page-guards.ts` | New `requireOwnerAdmin()` — the page equivalent of the identically-named helper in `action-guards.ts`. Redirects via `homeForRole(role)`. |
+| `src/app/admin/bulk-charge/page.tsx` | `requireAdmin()` → `requireOwnerAdmin()`. |
+| `src/app/admin/logs/page.tsx` | Inline `isAdminRole` check → `requireOwnerAdmin()`; the now-unused `redirect` / `getCachedSession` / `role-routing` imports dropped. |
+| `src/app/admin/Sidebar.tsx` | `adminOnly: true` on the `/admin/bulk-charge` and `/admin/logs` entries. |
+
+### Design decisions
+
+- **A shared helper rather than the inline check copy-pasted from `leads/page.tsx:16-17`.**
+  Both `page-guards.ts` and `action-guards.ts` now expose `requireOwnerAdmin`, so the page
+  gate and the action gate read the same and stay findable together. `leads/page.tsx` was
+  left alone — it already behaves correctly and rewriting it is outside this stage.
+- **Redirect target is `homeForRole(role)`, not a hardcoded `/admin/dashboard`.** For the
+  two roles this stage is about it resolves to exactly `/admin/dashboard`, matching the
+  leads precedent. For an EMPLOYEE or CLIENT who somehow reaches the URL it resolves to
+  their own home instead of sending them to `/admin/dashboard`, which `admin/layout.tsx:25`
+  would only bounce them off again.
+- **The server actions were already correct — verified, not changed.** `bulkChargeJobs`
+  (`:18`) and the `chargeJob` it delegates to (`:22`) both reject anything that isn't
+  OWNER/ADMIN, and `retryEmail` (the only action behind the logs page) already used
+  `requireOwnerAdmin` from `action-guards`. A page redirect on its own would have been
+  cosmetic, since server actions are independently callable RPC endpoints.
+- **Two nav sections now disappear entirely for OPS_MANAGER / FIELD_LEAD.** Finance
+  (Payouts, Finances, Invoices were already `adminOnly`; Bulk Charge was the last item
+  they could see) and Admin (Property Engine and Settings likewise; Logs was the last).
+  That is the `CLN-P1-5-09` "hide a whole section when no subsection is accessible"
+  behaviour working as designed, not a regression.
+
+### Requirement status
+
+| ID | Was | Now | Evidence |
+|---|---|---|---|
+| CLN-P1-5-09 | ⚠️ | ⚠️ | Nav flags and page gates are back in sync for the two sensitive pages, and both empty sections now hide. Still partial for the same reason as before: the seven-section restructure (5-01…5-11) is untouched, and the remaining ungated pages are pending Prem's answer below. |
+
+### Verification
+
+38/38 assertions over the shipped guard logic and source wiring:
+
+- OWNER and ADMIN render both pages and see both nav links — unchanged behaviour.
+- OPS_MANAGER and FIELD_LEAD are redirected to `/admin/dashboard` from both URLs and
+  see neither link.
+- EMPLOYEE → `/cleaners/my-jobs`, CLIENT → `/`, missing role → `/sign-in` (no bounce
+  loop through the admin layout).
+- No role outside OWNER/ADMIN renders either page.
+- Source assertions: both pages call `requireOwnerAdmin`, neither retains the old wider
+  check, both nav entries carry `adminOnly: true`, and all three server actions reject
+  non-OWNER/ADMIN.
+
+**Still to be done by someone with database access:** sign in as a real FIELD_LEAD and a
+real OPS_MANAGER and confirm the links are absent and both URLs redirect; sign in as
+OWNER and ADMIN and confirm both pages work as before.
+
+### ⛔ Question for Prem — the rest of the ungated admin pages
+
+Per the stage instructions these were **deliberately not gated** without his answer,
+because OPS_MANAGER / FIELD_LEAD may legitimately need them day to day. Which of these
+should those two roles keep?
+
+`promo-codes`, `gift-cards`, `quotes`, `documents`, `jobs`, `web-bookings`, `requests`,
+`time-tracking`, `job-applications`, `training-docs`, `wash-payouts`, `inventory/kits`,
+`inventory/rag-wash`, `recurring`, `calendar`, `dashboard`, `kpi`, `jobs/new`.
+
+(Tracked as Q6 in the TODO's Stage 6 block. Answer goes here and there.)
