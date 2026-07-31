@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Home, CalendarClock, UserCircle, LogOut, Sparkles, Menu, X } from "lucide-react";
 import ScrollReset from "@/components/ScrollReset";
+import { useJobChatUnread } from "@/components/JobChatUnread";
 
 interface PortalShellProps {
   user: { name: string; email: string };
@@ -19,6 +20,8 @@ export default function PortalShell({
 }: PortalShellProps) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  // Unread messages from the cleaner/office on this customer's bookings.
+  const { total: jobChatUnread } = useJobChatUnread("client");
 
   // Close the drawer whenever the route changes.
   useEffect(() => {
@@ -102,6 +105,13 @@ export default function PortalShell({
                   className={pathname.startsWith("/bookings") ? "active" : ""}>
                   <CalendarClock size={16} />
                   <span>Bookings</span>
+                  {jobChatUnread > 0 && (
+                    <span
+                      className="cl-pnav-count"
+                      title={`${jobChatUnread} unread message${jobChatUnread === 1 ? "" : "s"}`}>
+                      {jobChatUnread > 99 ? "99+" : jobChatUnread}
+                    </span>
+                  )}
                 </Link>
               </li>
               <li>

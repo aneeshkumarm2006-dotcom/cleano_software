@@ -6,6 +6,7 @@ import Link from "next/link";
 import { LogOut, Download, Share, MessageCircle, X } from "lucide-react";
 import { useInstall } from "@/components/InstallContext";
 import { getUnreadChatCount } from "@/app/admin/chat/actions";
+import { useJobChatUnread } from "@/components/JobChatUnread";
 
 interface Props {
   user: { name: string; email: string; role: string };
@@ -174,6 +175,9 @@ export default function CleanerSidebar({ user, signOutAction }: Props) {
   }
 
   const [chatUnread, setChatUnread] = useState(0);
+  // Job chat (client ↔ this cleaner) unread — separate from the staff chat
+  // above, and shared with the badges on the My jobs list.
+  const { total: jobChatUnread } = useJobChatUnread("cleaner");
   const [chatToast, setChatToast] = useState<{ senderName: string; body: string } | null>(null);
   const prevLatestAtRef = useRef<string | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -370,6 +374,11 @@ export default function CleanerSidebar({ user, signOutAction }: Props) {
                     {chatUnread > 99 ? "99+" : chatUnread}
                   </span>
                 )}
+                {item.href === "/cleaners/my-jobs" && jobChatUnread > 0 && (
+                  <span className="cl-snav-badge-count">
+                    {jobChatUnread > 99 ? "99+" : jobChatUnread}
+                  </span>
+                )}
               </Link>
             ))}
           </div>
@@ -473,6 +482,11 @@ export default function CleanerSidebar({ user, signOutAction }: Props) {
               {t.href === "/cleaners/chat" && chatUnread > 0 && (
                 <span className="cl-tab-badge">
                   {chatUnread > 9 ? "9+" : chatUnread}
+                </span>
+              )}
+              {t.href === "/cleaners/my-jobs" && jobChatUnread > 0 && (
+                <span className="cl-tab-badge">
+                  {jobChatUnread > 9 ? "9+" : jobChatUnread}
                 </span>
               )}
             </span>

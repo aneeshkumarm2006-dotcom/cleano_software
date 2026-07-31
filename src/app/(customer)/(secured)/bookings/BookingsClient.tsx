@@ -11,6 +11,7 @@ import CustomerModal from "@/components/customer/Modal";
 import DatePicker from "@/components/customer/DatePicker";
 import { requestCancellation } from "../../actions/requestCancellation";
 import { requestReschedule } from "../../actions/requestReschedule";
+import JobChatUnreadPill from "@/components/JobChatUnread";
 
 function tomorrowISO() {
   const d = new Date();
@@ -356,7 +357,10 @@ function BookingCard({
         <div style={{ display: "flex", alignItems: "flex-start", gap: 18, minWidth: 0, flex: 1 }}>
           <DateBadge iso={b.startTime} />
           <div className="cl-stack-4" style={{ minWidth: 0 }}>
-            <span className="cl-bcard-id">Job #{b.jobNumber}</span>
+            <span className="cl-bcard-id">
+              Job #{b.jobNumber}
+              <JobChatUnreadPill jobId={b.id} scope="client" />
+            </span>
             <h3 className="cl-bcard-date">
               {formatTime(b.startTime)}
               {b.isFlexible ? (

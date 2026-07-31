@@ -42,6 +42,7 @@ import {
 import { getUnreadChatCount } from "./chat/actions";
 import { getPendingRequestCount } from "./actions/getPendingRequestCount";
 import ScrollReset from "@/components/ScrollReset";
+import { useJobChatUnread } from "@/components/JobChatUnread";
 
 interface User {
   id: string;
@@ -57,7 +58,7 @@ interface SidebarProps {
   children: React.ReactNode;
 }
 
-type Badge = "chat" | "requests";
+type Badge = "chat" | "requests" | "jobChat";
 interface NavItem {
   href: string;
   label: string;
@@ -102,7 +103,13 @@ const NAV: { label: string; items: NavItem[] }[] = [
         Icon: IdCard,
         adminOnly: true,
       },
-      { href: "/admin/jobs", label: "Jobs", Icon: Briefcase },
+      {
+        href: "/admin/jobs",
+        label: "Jobs",
+        Icon: Briefcase,
+        // Unread cleaner↔client messages across live jobs (CLN-P0-3-08).
+        badge: "jobChat",
+      },
       {
         href: "/admin/requests",
         label: "Requests",
@@ -289,6 +296,8 @@ export default function Sidebar({
   const pathname = usePathname();
   const [chatUnread, setChatUnread] = useState(0);
   const [pendingRequests, setPendingRequests] = useState(0);
+  // Job chat (cleaner ↔ client) unread, shared with any list on the page.
+  const { total: jobChatUnread } = useJobChatUnread("admin");
   const [chatToast, setChatToast] = useState<{
     senderName: string;
     body: string;
@@ -456,7 +465,9 @@ export default function Sidebar({
                     ? chatUnread
                     : item.badge === "requests"
                       ? pendingRequests
-                      : 0;
+                      : item.badge === "jobChat"
+                        ? jobChatUnread
+                        : 0;
                 const Icon = item.Icon;
                 return (
                   <Link

@@ -19,6 +19,7 @@ import {
   DEFAULT_SERVICE_CATALOG,
   serviceOptions as catalogServiceOptions,
 } from "@/lib/service-catalog";
+import JobChatUnreadPill from "@/components/JobChatUnread";
 import { bulkSetJobStatus } from "../actions/bulkSetJobStatus";
 import { bulkAssignCleaner } from "../actions/bulkAssignCleaner";
 import { togglePaymentReceived, toggleInvoiceSent } from "../actions/toggleJobPaymentStatus";
@@ -986,7 +987,10 @@ export default function JobsView({
                         <div className="time-line">{formatTime(job.startTime)}</div>
                       </td>
                       <td>
-                        <div className="col-client">{job.clientName}</div>
+                        <div className="col-client">
+                          {job.clientName}
+                          <JobChatUnreadPill jobId={job.id} scope="admin" />
+                        </div>
                         {job.location && <div className="col-client-sub">{job.location.split(',')[0]}</div>}
                       </td>
                       <td><TypePill type={job.jobType} /></td>

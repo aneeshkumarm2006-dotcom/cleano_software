@@ -3960,6 +3960,25 @@ html, body { overscroll-behavior-y: contain; }
   line-height: 1;
 }
 
+/* Unread job-chat pill — job/booking lists on all three sides (CLN-P0-3-08).
+   Shares the red of the nav counts so "someone is waiting on you" reads the
+   same everywhere. */
+.job-chat-unread-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.6;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
 /* Chat notification toast (cleaner end) */
 .cl-chat-toast {
   position: fixed;

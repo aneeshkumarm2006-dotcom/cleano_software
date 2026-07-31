@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, MapPin, Clock } from "lucide-react";
 import PayBreakdownModal from "./PayBreakdownModal";
+import JobChatUnreadPill from "@/components/JobChatUnread";
 import { fmtDate, fmtTime } from "@/lib/time";
 import { jobTypeLabel } from "@/lib/calendar-labels";
 
@@ -92,6 +93,8 @@ export function JobRow({ job, isMainEmployee, missingEquipment = [], cleanerPay 
             {instantPayoutEligible && (
               <span className="cl-pill" style={{ background: "#fef3c7", color: "#b45309" }}>Instant payout</span>
             )}
+            <JobChatUnreadPill jobId={job.id} scope="cleaner" />
+
             {missingEquipment.length > 0 && (
               <button
                 type="button"
