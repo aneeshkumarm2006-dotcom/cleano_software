@@ -6,6 +6,7 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { stripe } from "@/lib/stripe";
 import { logActivity } from "@/lib/activity-log";
+import { resolveChargePaymentMethod } from "@/lib/payment-methods";
 import {
   queueAndSendReceipt,
   sendCustomerBookingCharged,
@@ -50,7 +51,8 @@ export async function chargeJob(jobId: string) {
   // admins) can't both reach Stripe. Only the call that flips paymentReceived
   // false→true proceeds; the rest abort. Rolled back if the charge fails.
   const claim = await db.job.updateMany({
-    where: { id: jobId, paymentReceived: false },
+    // An archived job is not chargeable (new fix list item 1).
+    where: { id: jobId, deletedAt: null, paymentReceived: false },
     data: { paymentReceived: true, paidAt: new Date(), status: "PAID" },
   });
   if (claim.count === 0) {
@@ -140,8 +142,15 @@ export async function chargeJob(jobId: string) {
     };
   }
 
-  // Stripe path is required for the remaining amount.
-  if (!client.stripeCustomerId || !client.defaultPaymentMethodId) {
+  // Stripe path is required for the remaining amount. Charge the card this
+  // booking was pinned to at confirmation, falling back to the client's current
+  // default for jobs that predate pinning or whose pinned card is gone.
+  const chargeCard = await resolveChargePaymentMethod({
+    clientId: client.id,
+    pinnedPaymentMethodId: job.stripePaymentMethodId,
+    clientDefaultPaymentMethodId: client.defaultPaymentMethodId,
+  });
+  if (!client.stripeCustomerId || !chargeCard) {
     await releaseClaim();
     return { success: false, error: "No saved card on file for this client" };
   }
@@ -151,7 +160,7 @@ export async function chargeJob(jobId: string) {
       amount: amountCents,
       currency: "cad",
       customer: client.stripeCustomerId,
-      payment_method: client.defaultPaymentMethodId,
+      payment_method: chargeCard,
       off_session: true,
       confirm: true,
       description: `Cleano job #${job.jobNumber} — ${job.jobType ?? "cleaning"}`,

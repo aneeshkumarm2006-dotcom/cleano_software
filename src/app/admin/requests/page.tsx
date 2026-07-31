@@ -7,6 +7,8 @@ export default async function RequestsPage() {
 
   const jobs = await db.job.findMany({
     where: {
+      // Archived jobs don't raise open requests (new fix list item 1).
+      deletedAt: null,
       OR: [
         { cancellationRequestedAt: { not: null } },
         { rescheduleRequestedAt: { not: null } },

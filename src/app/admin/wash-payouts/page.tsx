@@ -25,6 +25,8 @@ export default async function WashPayoutsPage() {
     }),
     db.job.findMany({
       where: {
+        // Archived jobs are out of the payout review queue (item 1).
+        deletedAt: null,
         status: "COMPLETED",
         washCreditsAwarded: true,
         washActualRags: { not: null },

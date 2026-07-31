@@ -65,6 +65,15 @@ const WITHDRAWAL_STATUS_STYLES: Record<string, string> = {
   COMPLETED: "bg-green-50 text-green-700",
 };
 
+// The four states a cleaner should see on a withdrawal (new fix list item 3).
+// The stored enum keeps its own names; only the wording changes here.
+const WITHDRAWAL_STATUS_LABELS: Record<string, string> = {
+  PENDING: "Requested",
+  APPROVED: "Approved",
+  REJECTED: "Rejected",
+  COMPLETED: "Paid",
+};
+
 function formatDate(d: Date) {
   // Business timezone — pay-period dates must not shift a day for cleaners
   // whose browser is in another zone.
@@ -109,14 +118,15 @@ export default function PaymentHistory({
           : w.createdAt instanceof Date
           ? w.createdAt
           : new Date(w.createdAt);
+      // The method is blank until an admin picks one when processing.
       const method = w.paymentMethod
         ? w.paymentMethod.replaceAll("_", " ").toLowerCase()
-        : "withdrawal";
+        : null;
       return {
         kind: "WITHDRAWAL",
         id: w.id,
         date,
-        description: `Withdrawal · ${method}`,
+        description: method ? `Withdrawal · ${method}` : "Withdrawal",
         amount: w.amount,
         status: w.status,
       };
@@ -171,6 +181,9 @@ export default function PaymentHistory({
         const statusStyles = isPayout
           ? PAYOUT_STATUS_STYLES[e.status]
           : WITHDRAWAL_STATUS_STYLES[e.status];
+        const statusLabel = isPayout
+          ? e.status
+          : WITHDRAWAL_STATUS_LABELS[e.status] ?? e.status;
         const Icon = isPayout ? ArrowDownLeft : ArrowUpRight;
         const sign = isPayout ? "+" : "−";
         const colorClass = isPayout ? "text-green-600" : "text-red-600";
@@ -196,7 +209,7 @@ export default function PaymentHistory({
                   </span>
                   <span
                     className={`text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-[500] ${statusStyles}`}>
-                    {e.status}
+                    {statusLabel}
                   </span>
                 </div>
                 <div className="flex items-center gap-3 mt-1 text-xs text-[#008C9C]/60">

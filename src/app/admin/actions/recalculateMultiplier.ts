@@ -38,6 +38,7 @@ export async function recalculateMultiplier(input: RecalculateInput = {}) {
     const ratings = await db.employeeRating.findMany({
       where: {
         employeeId: targetEmployeeId,
+        excludedAt: null,
         createdAt: { gte: since },
       },
       select: { rating: true },

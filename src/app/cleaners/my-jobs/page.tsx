@@ -330,12 +330,37 @@ export default async function MyJobsPage({
     session.user.id
   );
 
-  // Pending accept/decline invites for this cleaner.
+  // Accept/decline invites still awaiting this cleaner's answer.
+  //
+  // A DIRECT assignment invite stays answerable after it expires: the cleaner
+  // is still on the job (new fix list item 2), so hiding the panel would leave
+  // them assigned with no way to confirm. Expired LAST-MINUTE broadcasts drop
+  // off — those are a race for an open job and may already be taken.
   const pendingInviteRows = await db.jobAssignmentInvite.findMany({
     where: {
       cleanerId: session.user.id,
-      decision: "PENDING",
-      expiresAt: { gt: new Date() },
+      // Closed / archived jobs never ask for an answer.
+      job: {
+        deletedAt: null,
+        status: { notIn: ["COMPLETED", "PAID", "CANCELLED"] },
+      },
+      OR: [
+        // A broadcast for an open job — a race, and it does lapse.
+        {
+          decision: "PENDING",
+          isLastMinute: true,
+          expiresAt: { gt: new Date() },
+        },
+        // A direct assignment, answerable until answered — but ONLY while the
+        // cleaner is actually on the job. Invites that predate this fix were
+        // expired by the old sweep, which detached the cleaner at the same
+        // time; those must not resurface as something to accept.
+        {
+          decision: { in: ["PENDING", "EXPIRED"] },
+          isLastMinute: false,
+          job: { cleaners: { some: { id: session.user.id } } },
+        },
+      ],
     },
     orderBy: { expiresAt: "asc" },
     include: {

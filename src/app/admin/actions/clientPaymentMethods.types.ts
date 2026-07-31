@@ -11,6 +11,13 @@ export interface ClientPaymentMethodDTO {
   label: string | null;
   /** True when the card's expiry month has already passed. */
   isExpired: boolean;
+  /**
+   * How many upcoming bookings are pinned to this card and will be charged on
+   * it. Non-zero means the card cannot be removed until those are completed or
+   * cancelled. Always 0 for bookings made before card pinning existed — those
+   * fall back to the client's current default.
+   */
+  upcomingBookings: number;
 }
 
 export interface ListClientPaymentMethodsResult {

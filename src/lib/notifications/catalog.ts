@@ -271,6 +271,15 @@ export const NOTIFICATION_CATALOG: CatalogEntry[] = [
   {
     recipient: "ADMIN",
     category: "Payments / cards",
+    key: "admin.card.expiring",
+    label: "Saved card expiring before an upcoming booking",
+    trigger:
+      "A client's default card expires before a booking they already have scheduled.",
+    channels: { EMAIL: true, SMS: false },
+  },
+  {
+    recipient: "ADMIN",
+    category: "Payments / cards",
     key: "admin.card.declined_on_hold",
     label: "Card declined on hold",
     trigger: "Card declines while trying to place a hold.",
@@ -613,6 +622,7 @@ export const NOTIFICATION_CATALOG: CatalogEntry[] = [
   { recipient: "CUSTOMER", category: "Booking fee charged & refund", key: "cust.fee.bulk_charge_auth", label: "Bulk bookings charge authentication", trigger: "Customer must authenticate card for a bulk booking charge.", channels: { EMAIL: true } },
   // Card declined
   { recipient: "CUSTOMER", category: "Card declined", key: "cust.card.declined", label: "Card declined", trigger: "Customer card declines.", channels: { EMAIL: true } },
+  { recipient: "CUSTOMER", category: "Card declined", key: "cust.card.expiring", label: "Saved card expiring before a booking", trigger: "Customer's saved card expires before a booking they already have scheduled.", channels: { EMAIL: true } },
   { recipient: "CUSTOMER", category: "Card declined", key: "cust.card.declined_on_hold", label: "Card declined on hold", trigger: "Customer card declines during card hold process.", channels: { EMAIL: true } },
   { recipient: "CUSTOMER", category: "Card declined", key: "cust.card.modified_hold_failed", label: "Booking modified but card hold failed", trigger: "Booking was modified but card hold failed.", channels: { EMAIL: true } },
   { recipient: "CUSTOMER", category: "Card declined", key: "cust.card.hold_auth", label: "Card hold authentication", trigger: "Customer must authenticate card for card hold/pre-authorization.", channels: { EMAIL: true } },

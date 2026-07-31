@@ -25,6 +25,8 @@ export async function getPendingRequestCount(): Promise<{ count: number }> {
 
     const count = await db.job.count({
       where: {
+        // Matches the Requests page — archived jobs excluded (item 1).
+        deletedAt: null,
         OR: [
           { cancellationRequestedAt: { not: null } },
           { rescheduleRequestedAt: { not: null } },

@@ -26,6 +26,8 @@ export async function getDayAvailability(
 
   const jobs = await db.job.findMany({
     where: {
+      // An archived job doesn't occupy a booking slot (item 1).
+      deletedAt: null,
       startTime: { gte: dayStart, lte: dayEnd },
       status: { notIn: ["CANCELLED"] },
       isFlexible: false,

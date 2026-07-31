@@ -24,22 +24,53 @@ export async function respondToJobInvite(input: {
   const invite = await db.jobAssignmentInvite.findUnique({
     where: { id: input.inviteId },
     include: {
-      job: { select: { id: true, jobNumber: true } },
+      job: {
+        select: {
+          id: true,
+          jobNumber: true,
+          cleaners: { select: { id: true } },
+        },
+      },
     },
   });
   if (!invite) return { success: false, error: "Invite not found" };
   if (invite.cleanerId !== session.user.id) {
     return { success: false, error: "Not your invite" };
   }
-  if (invite.decision !== "PENDING") {
+  // A DIRECT assignment invite that ran out of time is still answerable: the
+  // cleaner stays on the job when the invite expires (new fix list item 2), so
+  // a late tap just records the confirmation they always could have given. A
+  // LAST-MINUTE broadcast is different — it's a race for an open job, and an
+  // expired one may already be someone else's.
+  const isExpired =
+    invite.decision === "EXPIRED" || invite.expiresAt < new Date();
+  const answerable =
+    invite.decision === "PENDING" || (invite.decision === "EXPIRED" && !invite.isLastMinute);
+
+  if (!answerable) {
     return { success: false, error: `Already ${invite.decision.toLowerCase()}` };
   }
-  if (invite.expiresAt < new Date()) {
-    await db.jobAssignmentInvite.update({
-      where: { id: invite.id },
-      data: { decision: "EXPIRED", respondedAt: new Date() },
-    });
+  if (isExpired && invite.isLastMinute) {
+    if (invite.decision === "PENDING") {
+      await db.jobAssignmentInvite.update({
+        where: { id: invite.id },
+        data: { decision: "EXPIRED", respondedAt: new Date() },
+      });
+    }
     return { success: false, error: "Invite expired" };
+  }
+  // Invites expired by the OLD sweep detached the cleaner at the same time.
+  // Answering one of those would confirm a job they're no longer on, so a late
+  // answer only stands while the assignment does.
+  if (
+    isExpired &&
+    !invite.isLastMinute &&
+    !invite.job.cleaners.some((c) => c.id === session.user.id)
+  ) {
+    return {
+      success: false,
+      error: "You're no longer assigned to this job — ask an admin to reassign it.",
+    };
   }
 
   const now = new Date();

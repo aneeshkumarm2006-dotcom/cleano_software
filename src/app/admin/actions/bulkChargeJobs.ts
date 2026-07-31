@@ -22,6 +22,8 @@ export async function bulkChargeJobs(jobIds: string[]) {
   const eligible = await db.job.findMany({
     where: {
       id: { in: jobIds },
+      // An archived job is never chargeable (new fix list item 1).
+      deletedAt: null,
       paymentReceived: false,
       status: "COMPLETED",
       isCashJob: false,

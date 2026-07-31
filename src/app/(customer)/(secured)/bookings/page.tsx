@@ -31,7 +31,8 @@ export default async function BookingsPage() {
   }
 
   const jobs = await db.job.findMany({
-    where: { clientId: client.id },
+    // Archived bookings are gone from the customer's history (item 1).
+    where: { clientId: client.id, deletedAt: null },
     orderBy: { startTime: "desc" },
     take: 100,
     include: {

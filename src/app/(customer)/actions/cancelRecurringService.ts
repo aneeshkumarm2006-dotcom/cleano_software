@@ -107,6 +107,7 @@ export async function cancelRecurringService(input: Input = {}) {
     await db.job.updateMany({
       where: {
         clientId: client.id,
+        deletedAt: null,
         status: { in: ["CREATED", "SCHEDULED"] },
         startTime: { gte: now },
         cancellationRequestedAt: null,

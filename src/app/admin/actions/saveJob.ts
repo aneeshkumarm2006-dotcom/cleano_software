@@ -81,9 +81,21 @@ export async function saveJob(formData: FormData) {
   try {
     const cleanerIds = formData.getAll("cleaners") as string[];
 
+    // Does THIS submission carry the team picker at all?
+    //
+    // `cleaners` is a repeated field: a job with no cleaners and a form that
+    // never rendered the picker both arrive as zero entries, and the edit path
+    // used to read both as "the admin cleared the team" and wipe the
+    // assignment (new fix list item 2). Forms that own the picker post an
+    // explicit `cleanersSubmitted` marker, so an empty list from them is a
+    // real clear; any other caller leaves the existing team untouched.
+    const teamSubmitted = formData.has("cleanersSubmitted");
+
     // Trainees must be paired with a Field Lead (item 2) — block a solo trainee.
-    const pairingError = await validateTraineePairing(cleanerIds);
-    if (pairingError) return { error: pairingError };
+    if (teamSubmitted) {
+      const pairingError = await validateTraineePairing(cleanerIds);
+      if (pairingError) return { error: pairingError };
+    }
 
     const frequencyRaw = (formData.get("frequency") as string) || "ONE_TIME";
     const recurringFrequency = RECURRING_FREQUENCIES.includes(
@@ -362,20 +374,33 @@ export async function saveJob(formData: FormData) {
         },
       });
 
+      // The team this job ends up with. When the submission didn't carry the
+      // picker, that's the team it already had — the notification/lifecycle
+      // checks below must reason about the real team, not an empty list.
+      const existingCleanerIds = existingJob?.cleaners.map((c) => c.id) ?? [];
+      const effectiveCleanerIds = teamSubmitted ? cleanerIds : existingCleanerIds;
+
+      // `employeeId` is dropped from the generic field set: it holds the LEAD
+      // CLEANER, and jobData derives it from the submitted picker. A save
+      // without the picker must not null it out.
+      const jobDataNoLead: Record<string, unknown> = { ...jobData };
+      delete jobDataNoLead.employeeId;
+
       const updateData: any = {
-        ...jobData,
-        // Keep an existing lead who is still on the team, so re-saving a job
-        // never reshuffles the lead; otherwise take the first assigned cleaner.
-        employeeId: resolveJobLead(existingJob?.employeeId, cleanerIds),
-        cleaners:
-          cleanerIds.length > 0
-            ? { set: cleanerIds.map((id) => ({ id })) }
-            : { set: [] },
+        ...jobDataNoLead,
         addOns: {
           deleteMany: {},
           create: addOns.map((a) => ({ name: a.name, price: a.price })),
         },
       };
+
+      // Only a submission that owns the team picker may rewrite the team.
+      if (teamSubmitted) {
+        // Keep an existing lead who is still on the team, so re-saving a job
+        // never reshuffles the lead; otherwise take the first assigned cleaner.
+        updateData.employeeId = resolveJobLead(existingJob?.employeeId, cleanerIds);
+        updateData.cleaners = { set: cleanerIds.map((id) => ({ id })) };
+      }
 
       if (statusRaw) {
         updateData.status = statusRaw;
@@ -389,9 +414,13 @@ export async function saveJob(formData: FormData) {
       // Keep per-cleaner JobAssignment rows in sync with the assigned team.
       // A failure here is reported rather than swallowed — the admin must not
       // be told the save succeeded while the assignment silently reverts.
-      const assignmentSync = await syncJobAssignments(editingJobId, cleanerIds);
-      if (!assignmentSync.ok) {
-        return { error: assignmentSync.error };
+      // Skipped when the team wasn't submitted: syncing against an empty list
+      // would delete the live assignment rows this save never touched.
+      if (teamSubmitted) {
+        const assignmentSync = await syncJobAssignments(editingJobId, cleanerIds);
+        if (!assignmentSync.ok) {
+          return { error: assignmentSync.error };
+        }
       }
 
       // "Apply to the whole series" (item 9). Off by default: editing one
@@ -407,8 +436,11 @@ export async function saveJob(formData: FormData) {
         seriesResult = await applyToJobSeries(
           editingJobId,
           rootId,
-          jobData,
-          cleanerIds
+          jobDataNoLead,
+          // undefined = don't touch the siblings' teams. Propagating an empty
+          // list from a save that never carried the picker would unassign the
+          // whole series (new fix list item 2).
+          teamSubmitted ? cleanerIds : undefined
         );
       }
 
@@ -499,15 +531,17 @@ export async function saveJob(formData: FormData) {
         // Case B — non-cancel edit. Detect "cleaners just got assigned"
         // (customer "Booking confirmed") + generic "Booking modified".
         const previousCleanerIds = new Set(existingJob.cleaners.map((c) => c.id));
-        const cleanersAdded = cleanerIds.filter((id) => !previousCleanerIds.has(id));
+        const cleanersAdded = effectiveCleanerIds.filter(
+          (id) => !previousCleanerIds.has(id)
+        );
         const justGotFirstCleaner =
-          existingJob.cleaners.length === 0 && cleanerIds.length > 0;
+          existingJob.cleaners.length === 0 && effectiveCleanerIds.length > 0;
 
         // Customer "Booking confirmed" when the first cleaner is paired.
         // Gated by the per-booking notifyClient toggle.
         if (justGotFirstCleaner && existingJob.notifyClient && existingJob.client?.email) {
           const assignedCleaners = await db.user.findMany({
-            where: { id: { in: cleanerIds } },
+            where: { id: { in: effectiveCleanerIds } },
             select: { name: true },
           });
           sendCustomerBookingConfirmed({
@@ -568,7 +602,9 @@ export async function saveJob(formData: FormData) {
 
         // Provider app-push for cleaners on a modified (already assigned) job.
         // Gated by the per-booking notifyProvider toggle.
-        const stillAssigned = cleanerIds.filter((id) => previousCleanerIds.has(id));
+        const stillAssigned = effectiveCleanerIds.filter((id) =>
+          previousCleanerIds.has(id)
+        );
         if (!justGotFirstCleaner && stillAssigned.length > 0 && existingJob.notifyProvider) {
           // Evaluate the "modified after 5 pm the day before the job" window in
           // America/Toronto (business tz), NOT server-local (UTC). setHours on a
@@ -647,7 +683,7 @@ export async function saveJob(formData: FormData) {
       // transitions and fire the right catalog row.
       if (existingJob && lifecycleInfo) {
         const previouslyUnassigned = existingJob.cleaners.length === 0;
-        const nowUnassigned = cleanerIds.length === 0;
+        const nowUnassigned = effectiveCleanerIds.length === 0;
         const openStatus =
           statusRaw !== "CANCELLED" &&
           statusRaw !== "COMPLETED" &&

@@ -9,6 +9,7 @@ import {
 import DatePicker from "@/components/ui/DatePicker";
 import { createPayPeriod } from "../actions/createPayPeriod";
 import PayPeriodDetail from "./PayPeriodDetail";
+import WithdrawalsPanel, { type WithdrawalRow } from "./WithdrawalsPanel";
 
 export type PayoutRow = {
   id: string;
@@ -75,7 +76,13 @@ function lastWeekMonday(): Date {
   return d;
 }
 
-export default function PayoutsPageClient({ initialPeriods }: { initialPeriods: PayPeriodRow[] }) {
+export default function PayoutsPageClient({
+  initialPeriods,
+  withdrawals,
+}: {
+  initialPeriods: PayPeriodRow[];
+  withdrawals: WithdrawalRow[];
+}) {
   const router = useRouter();
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -161,6 +168,8 @@ export default function PayoutsPageClient({ initialPeriods }: { initialPeriods: 
           <button type="button" onClick={() => setErrorMsg(null)} style={{ fontSize: 12, color: "#b91c1c", cursor: "pointer", textDecoration: "underline", background: "none", border: 0 }}>dismiss</button>
         </div>
       )}
+
+      <WithdrawalsPanel withdrawals={withdrawals} />
 
       {showCreate && (
         <div className="atable-wrap" style={{ padding: 24 }}>

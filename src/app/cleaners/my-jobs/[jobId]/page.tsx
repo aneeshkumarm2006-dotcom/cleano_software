@@ -27,7 +27,9 @@ import WhyThisPriceLink from "../WhyThisPriceLink";
 import PhotoGallery from "./PhotoGallery";
 import JobChecklistPanel from "./JobChecklistPanel";
 import MapLinks from "./MapLinksClient";
-import JobChatThread from "@/components/JobChatThread";
+import JobChatThread, {
+  CLEANER_QUICK_MESSAGES,
+} from "@/components/JobChatThread";
 import ScrollToTop from "./ScrollToTop";
 import { cleanerPayoutForJobs } from "@/lib/cleaner-pay-display";
 import { sanitizeCleanerNotes } from "@/lib/cleaner-notes";
@@ -519,6 +521,7 @@ export default async function JobDetailPage({ params }: PageProps) {
           jobId={job.id}
           otherLabel="Client"
           userName={session.user.name ?? undefined}
+          quickMessages={CLEANER_QUICK_MESSAGES}
         />
         <p style={{ fontSize: 11, color: "var(--primary-40)", margin: "8px 0 0", lineHeight: 1.5 }}>
           Messages about this job go directly to the client. Keep it professional and job-related.

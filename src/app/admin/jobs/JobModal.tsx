@@ -932,7 +932,11 @@ export default function JobModal({
       formData.append("paymentType", selectedPaymentType);
       formData.append("addOns", JSON.stringify(addOns));
 
-      // Add cleaners
+      // Add cleaners. The marker tells saveJob this submission owns the team
+      // picker, so an empty selection means "the admin cleared the team"
+      // rather than "this form doesn't manage cleaners" — without it, saveJob
+      // leaves the existing assignment alone (new fix list item 2).
+      formData.append("cleanersSubmitted", "1");
       selectedCleaners.forEach((id) => {
         formData.append("cleaners", id);
       });
@@ -1114,11 +1118,12 @@ export default function JobModal({
                 <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
                 <div className="flex flex-col gap-2 flex-1">
                   <p className="text-sm text-red-700 font-[400]">
-                    Are you sure you want to delete this job?
+                    Archive this job?
                   </p>
                   <p className="text-xs text-red-600/70">
-                    This action cannot be undone. All job data will be
-                    permanently removed.
+                    It moves to Jobs &rarr; Archived and drops out of every list,
+                    count and report. You can restore it from there, or delete it
+                    permanently once archived.
                   </p>
                   <div className="flex flex-wrap gap-2 mt-2">
                     <Button

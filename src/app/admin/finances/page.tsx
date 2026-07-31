@@ -23,6 +23,9 @@ export default async function FinancesPage() {
     db.budget.findMany({ orderBy: [{ period: "desc" }, { category: "asc" }] }),
     db.appSetting.findUnique({ where: { key: "tax.config" } }),
     db.job.findMany({
+      // Job picker for linking a transaction — archived jobs aren't offered
+      // (new fix list item 1).
+      where: { deletedAt: null },
       select: { id: true, clientName: true, jobDate: true },
       orderBy: { createdAt: "desc" },
       take: 500,

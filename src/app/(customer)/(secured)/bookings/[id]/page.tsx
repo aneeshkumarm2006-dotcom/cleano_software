@@ -114,7 +114,7 @@ export default async function BookingDetailPage({
   const ratingAgg = cleanerIds.length
     ? await db.employeeRating.groupBy({
         by: ["employeeId"],
-        where: { employeeId: { in: cleanerIds } },
+        where: { employeeId: { in: cleanerIds }, excludedAt: null },
         _avg: { rating: true },
         _count: { rating: true },
       })

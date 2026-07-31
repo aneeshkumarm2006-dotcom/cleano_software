@@ -35,7 +35,9 @@ export default async function ClientDetailPage({
   if (!client) redirect("/admin/clients");
 
   const rawRatings = await db.employeeRating.findMany({
-    where: { jobId: { in: jobIds } },
+    // Excluded ratings don't count toward the shown average (item 5); they
+    // stay visible on the job they belong to.
+    where: { jobId: { in: jobIds }, excludedAt: null },
     include: {
       employee: { select: { id: true, name: true } },
       job: { select: { id: true, jobNumber: true, jobDate: true } },

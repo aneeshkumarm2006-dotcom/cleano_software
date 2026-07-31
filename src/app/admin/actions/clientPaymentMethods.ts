@@ -3,6 +3,8 @@
 import { db } from "@/db";
 import { stripe } from "@/lib/stripe";
 import { requireOwnerAdmin } from "@/lib/action-guards";
+import { logActivity } from "@/lib/activity-log";
+import { getCardRemovalBlock } from "@/lib/payment-methods";
 import { revalidatePath } from "next/cache";
 import { randomBytes } from "crypto";
 import { sendAccountEmail } from "@/lib/email";
@@ -36,7 +38,10 @@ function isExpired(expMonth: number | null, expYear: number | null): boolean {
   return endOfMonth.getTime() <= now.getTime();
 }
 
-function toDTO(row: ClientPaymentMethod): ClientPaymentMethodDTO {
+function toDTO(
+  row: ClientPaymentMethod,
+  upcomingBookings = 0
+): ClientPaymentMethodDTO {
   return {
     id: row.id,
     stripePaymentMethodId: row.stripePaymentMethodId,
@@ -47,7 +52,33 @@ function toDTO(row: ClientPaymentMethod): ClientPaymentMethodDTO {
     isDefault: row.isDefault,
     label: row.label,
     isExpired: isExpired(row.expMonth, row.expYear),
+    upcomingBookings,
   };
+}
+
+/**
+ * How many upcoming bookings each of these cards is pinned to, in one grouped
+ * query rather than a count per card.
+ */
+async function upcomingBookingsByCard(
+  clientId: string
+): Promise<Map<string, number>> {
+  const rows = await db.job.groupBy({
+    by: ["stripePaymentMethodId"],
+    where: {
+      clientId,
+      deletedAt: null,
+      status: { notIn: ["CANCELLED"] },
+      startTime: { gte: new Date() },
+      stripePaymentMethodId: { not: null },
+    },
+    _count: { _all: true },
+  });
+  return new Map(
+    rows
+      .filter((r) => r.stripePaymentMethodId)
+      .map((r) => [r.stripePaymentMethodId as string, r._count._all])
+  );
 }
 
 /** Loads the client, or fails closed. OWNER/ADMIN only. */
@@ -70,7 +101,52 @@ async function loadClient(clientId: unknown) {
     },
   });
   if (!client) return { ok: false as const, error: "Client not found" };
-  return { ok: true as const, client };
+  // The actor rides along so every mutation below can name WHO did it in the
+  // payment-method history (admin activity log).
+  return { ok: true as const, client, actorId: gate.userId, actorRole: gate.role };
+}
+
+/**
+ * Payment-method history. Every add / default-change / removal / add-card-link
+ * is recorded against the client so admin can answer "when was this card added,
+ * made default, or replaced, and by whom".
+ *
+ * Card identity is keyed on the Stripe `pm_` id, never the local mirror row id —
+ * `listClientPaymentMethods` deletes and recreates mirror rows when it syncs, so
+ * a mirror id would dangle. Only brand/last4/expiry are ever recorded; the PAN
+ * and CVV never reach this server.
+ */
+async function logCardActivity(opts: {
+  actorId: string;
+  actorRole: string;
+  clientId: string;
+  clientName: string;
+  action: string;
+  message: string;
+  paymentMethodId: string | null;
+  status?: "SUCCESS" | "FAILED";
+  card?: { brand: string | null; last4: string | null } | null;
+  extra?: Record<string, unknown>;
+}): Promise<void> {
+  await logActivity({
+    category: "PAYMENT",
+    action: opts.action,
+    status: opts.status ?? "SUCCESS",
+    actorId: opts.actorId,
+    actorLabel: opts.actorRole,
+    targetType: "Client",
+    targetId: opts.clientId,
+    message: opts.message,
+    providerId: opts.paymentMethodId,
+    metadata: {
+      clientName: opts.clientName,
+      paymentMethodId: opts.paymentMethodId,
+      ...(opts.card
+        ? { cardBrand: opts.card.brand, cardLast4: opts.card.last4 }
+        : {}),
+      ...(opts.extra ?? {}),
+    },
+  });
 }
 
 /**
@@ -183,9 +259,12 @@ export async function listClientPaymentMethods(
       orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }],
     });
 
+    const pinned = await upcomingBookingsByCard(client.id);
     return {
       success: true,
-      methods: rows.map(toDTO),
+      methods: rows.map((r) =>
+        toDTO(r, pinned.get(r.stripePaymentMethodId) ?? 0)
+      ),
       synced: true,
       hasStripeCustomer: true,
     };
@@ -195,9 +274,12 @@ export async function listClientPaymentMethods(
       where: { clientId: client.id },
       orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }],
     });
+    const pinned = await upcomingBookingsByCard(client.id);
     return {
       success: true,
-      methods: rows.map(toDTO),
+      methods: rows.map((r) =>
+        toDTO(r, pinned.get(r.stripePaymentMethodId) ?? 0)
+      ),
       synced: false,
       hasStripeCustomer: true,
     };
@@ -215,7 +297,7 @@ export async function setDefaultClientPaymentMethod(input: {
 }): Promise<{ success: true } | { success: false; error: string }> {
   const gate = await loadClient(input?.clientId);
   if (!gate.ok) return { success: false, error: gate.error };
-  const { client } = gate;
+  const { client, actorId, actorRole } = gate;
 
   const owned = await assertOwnedCard(
     client.id,
@@ -224,6 +306,12 @@ export async function setDefaultClientPaymentMethod(input: {
   );
   if (!owned.ok) return { success: false, error: owned.error };
   const paymentMethodId = input.paymentMethodId;
+
+  const previousDefault = client.defaultPaymentMethodId;
+  const card = await db.clientPaymentMethod.findFirst({
+    where: { clientId: client.id, stripePaymentMethodId: paymentMethodId },
+    select: { brand: true, last4: true },
+  });
 
   try {
     await stripe.customers.update(client.stripeCustomerId!, {
@@ -245,11 +333,34 @@ export async function setDefaultClientPaymentMethod(input: {
       }),
     ]);
 
+    await logCardActivity({
+      actorId,
+      actorRole,
+      clientId: client.id,
+      clientName: client.name,
+      action: "card.set_default",
+      message: `Made ${card?.brand ?? "card"} •••• ${card?.last4 ?? "????"} the default payment method for ${client.name}.`,
+      paymentMethodId,
+      card,
+      extra: { previousDefaultPaymentMethodId: previousDefault },
+    });
+
     revalidatePath(`/admin/clients/${client.id}`);
     revalidatePath("/admin/jobs");
     return { success: true };
   } catch (error) {
     console.error("setDefaultClientPaymentMethod failed", error);
+    await logCardActivity({
+      actorId,
+      actorRole,
+      clientId: client.id,
+      clientName: client.name,
+      action: "card.set_default",
+      status: "FAILED",
+      message: `Failed to make ${card?.brand ?? "card"} •••• ${card?.last4 ?? "????"} the default for ${client.name}.`,
+      paymentMethodId,
+      card,
+    });
     return { success: false, error: "Could not set that card as default" };
   }
 }
@@ -268,7 +379,7 @@ export async function removeClientPaymentMethod(input: {
 > {
   const gate = await loadClient(input?.clientId);
   if (!gate.ok) return { success: false, error: gate.error };
-  const { client } = gate;
+  const { client, actorId, actorRole } = gate;
 
   const owned = await assertOwnedCard(
     client.id,
@@ -277,6 +388,37 @@ export async function removeClientPaymentMethod(input: {
   );
   if (!owned.ok) return { success: false, error: owned.error };
   const paymentMethodId = input.paymentMethodId;
+
+  // Read the card's identity BEFORE the mirror row is deleted, so the history
+  // entry can still name which card was removed.
+  const card = await db.clientPaymentMethod.findFirst({
+    where: { clientId: client.id, stripePaymentMethodId: paymentMethodId },
+    select: { brand: true, last4: true },
+  });
+  const wasDefault = client.defaultPaymentMethodId === paymentMethodId;
+
+  // Don't strip the last card off a client who still has work booked or owing —
+  // that silently disables auto-charging. Previously this only produced a
+  // warning AFTER the card was already detached.
+  const block = await getCardRemovalBlock(client.id, paymentMethodId);
+  if (block) {
+    await logCardActivity({
+      actorId,
+      actorRole,
+      clientId: client.id,
+      clientName: client.name,
+      action: "card.remove_blocked",
+      status: "FAILED",
+      message: `Blocked removal of ${card?.brand ?? "card"} •••• ${card?.last4 ?? "????"} for ${client.name}: ${block.message}`,
+      paymentMethodId,
+      card,
+      extra: {
+        upcomingCount: block.upcomingCount,
+        unsettledCount: block.unsettledCount,
+      },
+    });
+    return { success: false, error: block.message };
+  }
 
   try {
     try {
@@ -331,11 +473,48 @@ export async function removeClientPaymentMethod(input: {
       }
     }
 
+    await logCardActivity({
+      actorId,
+      actorRole,
+      clientId: client.id,
+      clientName: client.name,
+      action: "card.removed",
+      message: `Removed ${card?.brand ?? "card"} •••• ${card?.last4 ?? "????"} from ${client.name}.${warning ? ` ${warning}` : ""}`,
+      paymentMethodId,
+      card,
+      extra: {
+        wasDefault,
+        // What the client is left with, so the history explains why later
+        // charges moved to a different card (or stopped).
+        replacementDefaultPaymentMethodId: wasDefault
+          ? ((
+              await db.client.findUnique({
+                where: { id: client.id },
+                select: { defaultPaymentMethodId: true },
+              })
+            )?.defaultPaymentMethodId ?? null)
+          : client.defaultPaymentMethodId,
+        leftWithNoCard: warning?.includes("only card") ?? false,
+      },
+    });
+
     revalidatePath(`/admin/clients/${client.id}`);
     revalidatePath("/admin/jobs");
     return { success: true, warning };
   } catch (error) {
     console.error("removeClientPaymentMethod failed", error);
+    await logCardActivity({
+      actorId,
+      actorRole,
+      clientId: client.id,
+      clientName: client.name,
+      action: "card.removed",
+      status: "FAILED",
+      message: `Failed to remove ${card?.brand ?? "card"} •••• ${card?.last4 ?? "????"} from ${client.name}.`,
+      paymentMethodId,
+      card,
+      extra: { wasDefault },
+    });
     return { success: false, error: "Could not remove that card" };
   }
 }
@@ -355,7 +534,7 @@ export async function sendClientAddCardLink(
 > {
   const gate = await loadClient(clientId);
   if (!gate.ok) return { success: false, error: gate.error };
-  const { client } = gate;
+  const { client, actorId, actorRole } = gate;
 
   if (!client.email) {
     return { success: false, error: "Client has no email on file" };
@@ -394,12 +573,45 @@ export async function sendClientAddCardLink(
     if (!result.ok) {
       // Detail stays in the server log; the admin gets a generic message.
       console.error("sendClientAddCardLink: email failed", result);
+      await logCardActivity({
+        actorId,
+        actorRole,
+        clientId: client.id,
+        clientName: client.name,
+        action: "card.add_link_sent",
+        status: "FAILED",
+        message: `Failed to email an add-card link to ${client.name}.`,
+        paymentMethodId: null,
+      });
       return { success: false, error: "Could not send the email" };
     }
+
+    await logCardActivity({
+      actorId,
+      actorRole,
+      clientId: client.id,
+      clientName: client.name,
+      action: "card.add_link_sent",
+      message: `Emailed ${client.name} a one-time link to add a payment method.`,
+      paymentMethodId: null,
+      // `reused` distinguishes a fresh mint from the cooldown re-send, so the
+      // history doesn't read as if two separate links went out.
+      extra: { expiresAt: expiresAt.toISOString(), reused: !!recent },
+    });
 
     return { success: true, expiresAt: expiresAt.toISOString() };
   } catch (error) {
     console.error("sendClientAddCardLink failed", error);
+    await logCardActivity({
+      actorId,
+      actorRole,
+      clientId: client.id,
+      clientName: client.name,
+      action: "card.add_link_sent",
+      status: "FAILED",
+      message: `Failed to email an add-card link to ${client.name}.`,
+      paymentMethodId: null,
+    });
     return { success: false, error: "Could not send the email" };
   }
 }

@@ -17,6 +17,12 @@ interface ExportFilters {
   status?: string;
   discountedOnly?: boolean;
   unpaidOnly?: boolean;
+  /**
+   * Archived (soft-deleted) jobs are excluded by default so an export matches
+   * the active reporting set (new fix list item 1). Set from the Archived view,
+   * where exporting archived history is the explicit intent.
+   */
+  includeArchived?: boolean;
 }
 
 function csvEscape(value: unknown): string {
@@ -51,6 +57,8 @@ export async function exportJobs(filters: ExportFilters): Promise<
   const isAdmin = role === "OWNER" || role === "ADMIN";
 
   const where: any = {};
+  // Active-only unless the caller explicitly asked for the archive.
+  where.deletedAt = filters.includeArchived ? { not: null } : null;
   if (!isAdmin) where.employeeId = session.user.id;
 
   if (filters.startDate || filters.endDate) {

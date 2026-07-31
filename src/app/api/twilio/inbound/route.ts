@@ -88,16 +88,27 @@ export async function POST(req: NextRequest) {
   });
   if (!client) return twiml();
 
-  // Find the most relevant job to attach the reply to: the client's job with
+  // Find the most relevant job to attach the reply to: the client's thread with
   // the most recent chat activity, else their nearest active (non-cancelled)
   // job. This keeps a running conversation on the same thread.
-  const jobWithChat = await db.job.findFirst({
-    where: { clientId: client.id, chatMessages: { some: {} } },
-    orderBy: { chatMessages: { _count: "desc" } },
-    select: { id: true },
+  //
+  // Ordered by the newest MESSAGE, not by message count. Counting meant a
+  // client's chattiest old booking captured every later reply forever, so
+  // answers to a recent "I'm on my way" landed on a months-old job.
+  //
+  // Bounded to a recent window so a long-dormant thread doesn't swallow what is
+  // really a new conversation — past that, the active-job fallback is better.
+  const RETHREAD_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+  const latestChat = await db.jobChatMessage.findFirst({
+    where: {
+      job: { clientId: client.id },
+      createdAt: { gte: new Date(Date.now() - RETHREAD_WINDOW_MS) },
+    },
+    orderBy: { createdAt: "desc" },
+    select: { jobId: true },
   });
 
-  let jobId = jobWithChat?.id ?? null;
+  let jobId = latestChat?.jobId ?? null;
   if (!jobId) {
     const activeJob = await db.job.findFirst({
       where: {

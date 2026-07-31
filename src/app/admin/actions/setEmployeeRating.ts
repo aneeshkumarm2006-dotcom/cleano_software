@@ -36,7 +36,7 @@ export async function setEmployeeRating(
 
 export async function getEmployeeAvgRating(employeeId: string): Promise<number | null> {
   const ratings = await db.employeeRating.findMany({
-    where: { employeeId },
+    where: { employeeId, excludedAt: null },
     select: { rating: true },
     orderBy: { createdAt: "desc" },
   });

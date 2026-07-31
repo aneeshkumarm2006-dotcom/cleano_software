@@ -19,6 +19,13 @@ interface JobChatThreadProps {
   userName?: string;
   /** When false, the composer is hidden (read-only). Defaults to true. */
   canSend?: boolean;
+  /**
+   * One-tap canned messages shown above the composer. Tapping sends straight
+   * away — the point is that a cleaner on the move doesn't have to type.
+   * Callers pass the list appropriate to their side of the conversation; see
+   * CLEANER_QUICK_MESSAGES.
+   */
+  quickMessages?: string[];
   /** Optional height for the scrollable message area. */
   height?: number;
 }
@@ -59,6 +66,18 @@ function groupByDay(messages: JobChatMessageDTO[]) {
   return groups;
 }
 
+/**
+ * The cleaner-side quick messages, worded exactly as specified so the customer
+ * sees consistent, predictable updates.
+ */
+export const CLEANER_QUICK_MESSAGES = [
+  "I am on my way",
+  "I have arrived",
+  "I am having trouble accessing the property",
+  "I am running approximately 15 minutes late",
+  "Could you confirm the parking instructions?",
+];
+
 const ROLE_LABEL: Record<JobChatRole, string> = {
   CLEANER: "Cleaner",
   CLIENT: "Client",
@@ -70,6 +89,7 @@ export default function JobChatThread({
   otherLabel,
   userName,
   canSend = true,
+  quickMessages,
   height = 360,
 }: JobChatThreadProps) {
   const [draft, setDraft] = useState("");
@@ -101,12 +121,14 @@ export default function JobChatThread({
     });
   }, [messages.length]);
 
-  async function handleSend() {
-    const body = draft.trim();
+  async function handleSend(override?: string) {
+    const body = (override ?? draft).trim();
     if (!body || sending) return;
     setSendError(null);
     setSending(true);
-    setDraft("");
+    // Only clear the box when sending what's in it — a quick message must not
+    // wipe something the user was part-way through typing.
+    if (override === undefined) setDraft("");
 
     const optimistic: JobChatMessageDTO = {
       id: `optimistic-${Date.now()}`,
@@ -127,7 +149,9 @@ export default function JobChatThread({
     const res = await sendJobChatMessage(jobId, body);
     setSending(false);
     if (!res.success) {
-      setDraft(body);
+      // Restore into the box only if it's still empty, so a failed quick
+      // message doesn't clobber typing the user started meanwhile.
+      setDraft((current) => (current.trim() ? current : body));
       setSendError(res.error);
       await mutate();
       return;
@@ -260,6 +284,36 @@ export default function JobChatThread({
               Failed to send: {sendError}
             </div>
           )}
+          {quickMessages && quickMessages.length > 0 && (
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 6,
+                marginBottom: 10,
+              }}>
+              {quickMessages.map((msg) => (
+                <button
+                  key={msg}
+                  type="button"
+                  disabled={sending}
+                  onClick={() => handleSend(msg)}
+                  title={`Send: ${msg}`}
+                  style={{
+                    fontSize: 12,
+                    padding: "5px 10px",
+                    borderRadius: 999,
+                    border: "1px solid rgba(0,140,156,0.25)",
+                    background: "rgba(0,140,156,0.06)",
+                    color: "#00424a",
+                    cursor: sending ? "default" : "pointer",
+                    opacity: sending ? 0.5 : 1,
+                  }}>
+                  {msg}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="chat-composer-row">
             <textarea
               rows={1}
@@ -270,7 +324,7 @@ export default function JobChatThread({
             />
             <button
               className="chat-send"
-              onClick={handleSend}
+              onClick={() => handleSend()}
               disabled={sending || draft.trim().length === 0}
               aria-label="Send">
               <Send size={14} />

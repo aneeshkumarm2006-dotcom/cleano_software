@@ -19,7 +19,8 @@ export async function getCleanerRateInputs(
     }),
     db.employeeRating.groupBy({
       by: ["employeeId"],
-      where: { employeeId: { in: ids } },
+      // Admin-excluded ratings never touch pay (item 5).
+      where: { employeeId: { in: ids }, excludedAt: null },
       _avg: { rating: true },
       _count: { rating: true },
     }),

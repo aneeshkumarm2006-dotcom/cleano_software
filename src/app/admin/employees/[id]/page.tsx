@@ -32,6 +32,9 @@ export default async function EmployeePage({
     where: { id },
     include: {
       jobs: {
+        // Archived jobs stay out of this cleaner's stats, job history and
+        // product-usage totals (new fix list item 1).
+        where: { deletedAt: null },
         include: {
           productUsage: {
             include: {
@@ -175,6 +178,7 @@ export default async function EmployeePage({
   // Forecast for this employee — upcoming jobs × usagePerJob vs currentQuantity
   const upcomingEmployeeJobs = await db.job.count({
     where: {
+      deletedAt: null,
       OR: [
         { employeeId: employee.id },
         { cleaners: { some: { id: employee.id } } },
@@ -273,9 +277,13 @@ export default async function EmployeePage({
     .filter((c): c is NonNullable<typeof c> => c !== null);
 
   const starRating = await getEmployeeAvgRating(id);
-  const ratingCount = await db.employeeRating.count({ where: { employeeId: id } });
+  // Excluded ratings drop out of the count, the average and the pay tier
+  // (item 5) — they stay visible on the job they belong to.
+  const ratingCount = await db.employeeRating.count({
+    where: { employeeId: id, excludedAt: null },
+  });
   const recentRatingRows = await db.employeeRating.findMany({
-    where: { employeeId: id },
+    where: { employeeId: id, excludedAt: null },
     orderBy: { createdAt: "desc" },
     take: 10,
     include: { job: { select: { clientName: true } } },

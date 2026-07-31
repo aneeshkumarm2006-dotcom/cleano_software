@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { getSettings } from "@/lib/settings";
 import AccountForm from "./AccountForm";
+import PaymentMethods from "./PaymentMethods";
 
 export default async function AccountPage() {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -28,17 +29,22 @@ export default async function AccountPage() {
   } = await getSettings(["general.businessEmail", "general.businessPhone"]);
 
   return (
-    <AccountForm
-      initial={{
-        name: client.name,
-        email: client.email ?? email ?? "",
-        phone: client.phone ?? "",
-        address: client.address ?? "",
-        referralCode: client.referralCode,
-        referralCredit: client.referralCredit,
-      }}
-      businessEmail={businessEmail}
-      businessPhone={businessPhone}
-    />
+    <>
+      <AccountForm
+        initial={{
+          name: client.name,
+          email: client.email ?? email ?? "",
+          phone: client.phone ?? "",
+          address: client.address ?? "",
+          referralCode: client.referralCode,
+          referralCredit: client.referralCredit,
+        }}
+        businessEmail={businessEmail}
+        businessPhone={businessPhone}
+      />
+      {/* Payment methods subsection. Loads its own data client-side so the
+          profile form above keeps rendering if Stripe is unreachable. */}
+      <PaymentMethods />
+    </>
   );
 }

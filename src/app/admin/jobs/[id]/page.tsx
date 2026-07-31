@@ -312,6 +312,11 @@ export default async function JobPage({
     notes: r.notes,
     raterName: r.ratedBy ? staffById.get(r.ratedBy) ?? null : null,
     createdAt: r.createdAt.toISOString(),
+    // Item 5: an excluded rating stays visible here (with who pulled it and
+    // why) while counting for nothing in the cleaner's score.
+    excludedAt: r.excludedAt ? r.excludedAt.toISOString() : null,
+    excludedByName: r.excludedById ? staffById.get(r.excludedById) ?? null : null,
+    excludedReason: r.excludedReason,
   }));
 
   return (

@@ -11,12 +11,6 @@ interface WithdrawModalProps {
   availableBalance: number;
 }
 
-const PAYMENT_METHODS = [
-  { value: "E_TRANSFER", label: "E-Transfer" },
-  { value: "CASH", label: "Direct Deposit" },
-  { value: "CHEQUE", label: "Cheque" },
-];
-
 const INSTANT_FEE_PCT = 0.05;
 
 export default function WithdrawModal({
@@ -26,7 +20,6 @@ export default function WithdrawModal({
 }: WithdrawModalProps) {
   const router = useRouter();
   const [amount, setAmount] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState("E_TRANSFER");
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -38,7 +31,6 @@ export default function WithdrawModal({
 
   function reset() {
     setAmount("");
-    setPaymentMethod("E_TRANSFER");
     setNotes("");
     setError(null);
     setSuccess(false);
@@ -63,9 +55,9 @@ export default function WithdrawModal({
     }
 
     setSubmitting(true);
+    // Amount only — how it's paid out is the admin's call (new fix list item 3).
     const result = await requestWithdrawal({
       amount: netAmt,
-      paymentMethod: paymentMethod as "CASH" | "CHEQUE" | "E_TRANSFER" | "CREDIT_CARD" | "OTHER",
       notes: notes.trim() || undefined,
     });
     setSubmitting(false);
@@ -173,22 +165,8 @@ export default function WithdrawModal({
               </div>
             )}
 
-            {/* Payment method */}
-            <div className="cl-modal-section">
-              <label className="label">Payment method</label>
-              <div className="cl-modal-methods">
-                {PAYMENT_METHODS.map((m) => (
-                  <button
-                    key={m.value}
-                    type="button"
-                    className={`cl-modal-method${paymentMethod === m.value ? " active" : ""}`}
-                    onClick={() => setPaymentMethod(m.value)}>
-                    {m.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
+            {/* No payment-method picker: the office decides how each payout
+                is sent (new fix list item 3). */}
             {/* Notes */}
             <div className="cl-modal-section">
               <label className="label">Notes (optional)</label>

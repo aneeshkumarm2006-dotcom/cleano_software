@@ -98,7 +98,8 @@ export default async function CleanerDashboard({ userId, userName }: Props) {
     }),
     // Employee ratings
     db.employeeRating.findMany({
-      where: { employeeId: userId },
+      // Excluded ratings are out of the cleaner's score (item 5).
+      where: { employeeId: userId, excludedAt: null },
       orderBy: { createdAt: "desc" },
       take: 30,
     }).catch(() => []),

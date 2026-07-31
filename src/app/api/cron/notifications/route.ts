@@ -13,6 +13,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { isAuthorizedCron } from "@/lib/cron-auth";
 import { sweepPastScheduledJobs } from "@/lib/job-sweep";
 import { logActivity } from "@/lib/activity-log";
+import { notifyAdmins } from "@/lib/admin-alerts";
 import { db } from "@/db";
 import {
   sendAdminUnassignedDeadline,
@@ -24,6 +25,8 @@ import {
   sendCustomerLeaveTip,
   sendProviderJobReminder,
   sendGiftCardToRecipient,
+  sendCustomerCardExpiring,
+  sendAdminCardExpiring,
 } from "@/lib/email";
 
 const MINUTE = 60_000;
@@ -123,6 +126,8 @@ export async function GET(req: NextRequest) {
     const windowEnd = new Date(now.getTime() + w.hi);
     const jobs = await db.job.findMany({
       where: {
+        // Archived jobs raise no alerts and send no mail (item 1).
+        deletedAt: null,
         startTime: { gte: windowStart, lt: windowEnd },
         status: { notIn: ["CANCELLED", "COMPLETED", "PAID"] },
         cleaners: { none: {} },
@@ -159,6 +164,7 @@ export async function GET(req: NextRequest) {
     const hi = new Date(now.getTime() - 15 * MINUTE);
     const jobs = await db.job.findMany({
       where: {
+        deletedAt: null,
         startTime: { gte: lo, lt: hi },
         clockInTime: null,
         status: { in: ["CREATED", "SCHEDULED"] },
@@ -190,6 +196,7 @@ export async function GET(req: NextRequest) {
     const hi = new Date(now.getTime() + 24 * HOUR + 30 * MINUTE);
     const jobs = await db.job.findMany({
       where: {
+        deletedAt: null,
         startTime: { gte: lo, lt: hi },
         paymentType: { in: ["CASH", "CHEQUE"] },
         status: { notIn: ["CANCELLED", "COMPLETED", "PAID"] },
@@ -219,6 +226,7 @@ export async function GET(req: NextRequest) {
     const hi = new Date(now.getTime() + 48 * HOUR + 30 * MINUTE);
     const jobs = await db.job.findMany({
       where: {
+        deletedAt: null,
         startTime: { gte: lo, lt: hi },
         status: { notIn: ["CANCELLED"] },
       },
@@ -259,6 +267,7 @@ export async function GET(req: NextRequest) {
     const hi = new Date(now.getTime() + 30 * MINUTE);
     const jobs = await db.job.findMany({
       where: {
+        deletedAt: null,
         startTime: { gte: lo, lt: hi },
         status: { notIn: ["CANCELLED", "COMPLETED", "PAID"] },
         cleaners: { none: {} },
@@ -298,6 +307,7 @@ export async function GET(req: NextRequest) {
     const hi = new Date(now.getTime() - 24 * HOUR + 30 * MINUTE);
     const jobs = await db.job.findMany({
       where: {
+        deletedAt: null,
         clockOutTime: { gte: lo, lt: hi },
         status: "COMPLETED",
         OR: [{ totalTip: null }, { totalTip: 0 }],
@@ -339,6 +349,7 @@ export async function GET(req: NextRequest) {
     const hi = new Date(now.getTime() + 24 * HOUR + 30 * MINUTE);
     const jobs = await db.job.findMany({
       where: {
+        deletedAt: null,
         startTime: { gte: lo, lt: hi },
         status: { notIn: ["CANCELLED"] },
         cleaners: { some: {} },
@@ -378,6 +389,7 @@ export async function GET(req: NextRequest) {
     const hi = new Date(now.getTime() + 60 * MINUTE + 10 * MINUTE);
     const jobs = await db.job.findMany({
       where: {
+        deletedAt: null,
         startTime: { gte: lo, lt: hi },
         status: { notIn: ["CANCELLED"] },
         cleaners: { some: {} },
@@ -418,6 +430,7 @@ export async function GET(req: NextRequest) {
     const todayKey = now.toISOString().slice(0, 10); // YYYY-MM-DD
     const open = await db.job.count({
       where: {
+        deletedAt: null,
         startTime: { gte: now, lt: new Date(now.getTime() + 7 * DAY) },
         status: { notIn: ["CANCELLED", "COMPLETED", "PAID"] },
         cleaners: { none: {} },
@@ -463,7 +476,8 @@ export async function GET(req: NextRequest) {
   {
     const sevenDaysAgo = new Date(now.getTime() - 7 * DAY);
     const poorRatings = await db.employeeRating.findMany({
-      where: { rating: { lte: 3 }, createdAt: { gte: sevenDaysAgo } },
+      // An excluded rating never triggers a low-rating alert (item 5).
+      where: { rating: { lte: 3 }, excludedAt: null, createdAt: { gte: sevenDaysAgo } },
       select: { employeeId: true },
     });
     const byCleaner = new Map<string, number>();
@@ -498,8 +512,14 @@ export async function GET(req: NextRequest) {
   }
 
   // ── Sweep expired job-assignment invites ─────────────────────────
-  // Cleaners who don't accept/decline within the configured window
-  // (default 10 min) are auto-released so the job returns to unassigned.
+  // A cleaner who doesn't accept/decline within the configured window
+  // (default 10 min) leaves the invite UNCONFIRMED — they stay assigned.
+  //
+  // This used to disconnect them from the job and delete their JobAssignment
+  // row, which is how admins watched cleaners silently fall off jobs minutes
+  // after being assigned (new fix list item 2: nothing unassigns a cleaner
+  // except an admin or the cleaner's own decline). The expiry is now a
+  // flag + an admin alert, not a removal.
   const expiredInvites = await db.jobAssignmentInvite.findMany({
     where: { decision: "PENDING", expiresAt: { lt: now } },
     select: { id: true, jobId: true, cleanerId: true },
@@ -512,29 +532,37 @@ export async function GET(req: NextRequest) {
           where: { id: inv.id },
           data: { decision: "EXPIRED", respondedAt: now },
         }),
-        db.job.update({
-          where: { id: inv.jobId },
-          data: { cleaners: { disconnect: { id: inv.cleanerId } } },
-        }),
-        // Drop the per-cleaner assignment row for the released cleaner
-        // (keep CANCELLED history rows, matching syncJobAssignments).
-        db.jobAssignment.deleteMany({
-          where: {
-            jobId: inv.jobId,
-            cleanerId: inv.cleanerId,
-            status: { not: "CANCELLED" },
-          },
-        }),
         db.jobLog.create({
           data: {
             jobId: inv.jobId,
             userId: inv.cleanerId,
             action: "NOTE_ADDED",
             description:
-              "Assignment auto-declined (no response within the configured window).",
+              "Assignment invite expired — no response within the configured window. The cleaner remains assigned; confirm manually or reassign.",
           },
         }),
       ]);
+
+      // Surface it instead of acting on it: the admin decides whether to keep
+      // the cleaner, chase them, or reassign.
+      const job = await db.job.findUnique({
+        where: { id: inv.jobId },
+        select: { jobNumber: true, clientName: true, deletedAt: true },
+      });
+      const cleaner = await db.user.findUnique({
+        where: { id: inv.cleanerId },
+        select: { name: true },
+      });
+      if (job && !job.deletedAt) {
+        await notifyAdmins({
+          type: "GENERAL",
+          severity: "WARNING",
+          title: `Assignment unconfirmed — ${job.clientName}`,
+          message: `${cleaner?.name ?? "A cleaner"} hasn't responded to the invite for job #${job.jobNumber}. They are still assigned — confirm or reassign.`,
+          relatedId: inv.jobId,
+          relatedType: "Job",
+        });
+      }
     } catch (e) {
       console.error("expired invite sweep failed", inv.id, e);
     }
@@ -573,11 +601,133 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // ---- Saved card expiring before an upcoming booking ---------------------
+  // Warns BEFORE the charge fails rather than after. Only the client's earliest
+  // upcoming booking is considered — one warning per client, not one per visit.
+  let cardExpiryNotices = 0;
+  try {
+    const upcomingJobs = await db.job.findMany({
+      where: {
+        deletedAt: null,
+        status: { notIn: ["CANCELLED"] },
+        startTime: { gte: now },
+        clientId: { not: null },
+      },
+      orderBy: { startTime: "asc" },
+      select: {
+        id: true,
+        jobNumber: true,
+        startTime: true,
+        client: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            defaultPaymentMethodId: true,
+          },
+        },
+      },
+    });
+
+    const seenClients = new Set<string>();
+
+    for (const job of upcomingJobs) {
+      const client = job.client;
+      if (!client?.defaultPaymentMethodId || !job.startTime) continue;
+      if (seenClients.has(client.id)) continue;
+      seenClients.add(client.id);
+
+      const card = await db.clientPaymentMethod.findFirst({
+        where: {
+          clientId: client.id,
+          stripePaymentMethodId: client.defaultPaymentMethodId,
+        },
+        select: { brand: true, last4: true, expMonth: true, expYear: true },
+      });
+      if (!card?.expMonth || !card.expYear) continue;
+
+      // A card is valid through the last day of its expiry month, so it dies at
+      // the start of the following month.
+      const cardExpiresAt = new Date(card.expYear, card.expMonth, 1);
+      if (cardExpiresAt > job.startTime) continue; // still valid on the day
+
+      const expLabel = `${String(card.expMonth).padStart(2, "0")}/${card.expYear}`;
+      const jobDateLabel = job.startTime.toLocaleDateString("en-CA", {
+        weekday: "long",
+        month: "long",
+        day: "numeric",
+      });
+
+      if (client.email) {
+        const log = await ensureNotSent(
+          "cust.card.expiring",
+          job.id,
+          client.email
+        );
+        if (log) {
+          try {
+            await sendCustomerCardExpiring({
+              to: client.email,
+              clientName: client.name,
+              brand: card.brand,
+              last4: card.last4,
+              expLabel,
+              jobNumber: job.jobNumber,
+              jobDateLabel,
+            });
+            await db.emailLog.update({
+              where: { id: log.id },
+              data: { status: "SENT" },
+            });
+            cardExpiryNotices++;
+          } catch (e) {
+            console.error("card expiring (customer)", client.id, e);
+            await db.emailLog
+              .update({ where: { id: log.id }, data: { status: "FAILED" } })
+              .catch(() => {});
+          }
+        }
+      }
+
+      const adminLog = await ensureNotSent(
+        "admin.card.expiring",
+        job.id,
+        "admins"
+      );
+      if (adminLog) {
+        try {
+          await sendAdminCardExpiring({
+            clientId: client.id,
+            clientName: client.name,
+            brand: card.brand,
+            last4: card.last4,
+            expLabel,
+            jobId: job.id,
+            jobNumber: job.jobNumber,
+            jobDateLabel,
+          });
+          await db.emailLog.update({
+            where: { id: adminLog.id },
+            data: { status: "SENT" },
+          });
+        } catch (e) {
+          console.error("card expiring (admin)", client.id, e);
+          await db.emailLog
+            .update({ where: { id: adminLog.id }, data: { status: "FAILED" } })
+            .catch(() => {});
+        }
+      }
+    }
+  } catch (e) {
+    // Never let this sweep take down the rest of the cron.
+    console.error("card expiry sweep failed", e);
+  }
+
   await logActivity({
     category: "CRON",
     action: "notifications",
     status: "SUCCESS",
-    message: `Notifications cron ran (${expiredInvites.length} expired invites, ${giftCardsDelivered} gift cards delivered)`,
+    message: `Notifications cron ran (${expiredInvites.length} expired invites, ${giftCardsDelivered} gift cards delivered, ${cardExpiryNotices} card-expiry notices)`,
   });
   return NextResponse.json({
     ok: true,
@@ -585,6 +735,7 @@ export async function GET(req: NextRequest) {
     counts,
     expiredInvites: expiredInvites.length,
     giftCardsDelivered,
+    cardExpiryNotices,
     sweptCompleted: swept.completed,
     sweptPaid: swept.paid,
   });

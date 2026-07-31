@@ -20,6 +20,15 @@ export const stripe = new Proxy({} as Stripe, {
   },
 });
 
+/**
+ * The booking deposit, in cents. Charged by `/api/stripe/charge-deposit` and
+ * re-verified by `submitBooking`, which is why it lives here rather than being
+ * written out at both ends — the two must never drift apart, or verification
+ * would reject legitimate deposits.
+ */
+export const BOOKING_DEPOSIT_CENTS = 2000;
+export const BOOKING_DEPOSIT_CURRENCY = "cad";
+
 export async function getOrCreateStripeCustomer(clientId: string, email: string, name: string) {
   const { db } = await import("@/db");
   const client = await db.client.findUnique({ where: { id: clientId }, select: { stripeCustomerId: true } });

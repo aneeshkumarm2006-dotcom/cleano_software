@@ -24,6 +24,13 @@ import {
 } from "@/lib/email";
 import { isValidEmail, isValidPhone } from "@/lib/validation";
 import { AFTER_PHOTO_CONSENT_VERSION } from "@/lib/policy";
+import {
+  stripe,
+  BOOKING_DEPOSIT_CENTS,
+  BOOKING_DEPOSIT_CURRENCY,
+} from "@/lib/stripe";
+import { logActivity } from "@/lib/activity-log";
+import { applyPromoCode } from "./applyPromoCode";
 
 type Frequency =
   | "ONE_TIME"
@@ -63,12 +70,167 @@ interface SubmitBookingInput {
   afterPhotoConsent?: boolean;
   smsConsent?: boolean;
   promoCode?: string;
-  promoDiscount?: number;
+  // NOTE: no `promoDiscount`. The discount figure is re-derived server-side
+  // from the catalog — accepting it from the client is how a discount becomes
+  // self-service.
   // Optional
   leadId?: string;
+  // The deposit PaymentIntent, created by /api/stripe/charge-deposit and
+  // confirmed in the browser before this action runs. REQUIRED: it is verified
+  // against Stripe below and is what proves the booking was actually paid for.
+  //
+  // The Stripe customer and payment-method ids are deliberately NOT accepted
+  // from the client. They are read off the verified PaymentIntent instead, so a
+  // crafted request can't point a client record at someone else's card.
   depositPaymentIntentId?: string;
-  stripeCustomerId?: string;
-  stripePaymentMethodId?: string;
+}
+
+/** Shape returned by `verifyBookingDeposit` on success. */
+interface VerifiedDeposit {
+  paymentIntentId: string;
+  stripeCustomerId: string;
+  stripePaymentMethodId: string | null;
+}
+
+/**
+ * `already_used` is not a failure — the deposit intent is the natural
+ * idempotency key for a booking, so a retry that presents the same intent gets
+ * the job it already paid for rather than an error or a second job.
+ */
+type DepositVerification =
+  | { status: "ok"; deposit: VerifiedDeposit }
+  | { status: "rejected"; error: string }
+  | { status: "already_used"; jobId: string };
+
+/**
+ * Proves a booking deposit was genuinely paid, for this booking, exactly once.
+ *
+ * `submitBooking` is a PUBLIC, unauthenticated server action — the browser's
+ * "you must add a card" gate is cosmetic and a crafted request bypasses it
+ * entirely. Everything downstream that spends money keys off what we write
+ * here: `depositPaid` drives the refund amount, and `depositPaymentIntentId`
+ * is the refund TARGET, so an unverified id here means a refund can be issued
+ * against a stranger's charge.
+ *
+ * Each check below closes a specific hole; see the inline notes.
+ */
+async function verifyBookingDeposit(
+  paymentIntentId: unknown,
+  bookingEmail: string,
+  existingStripeCustomerId: string | null
+): Promise<DepositVerification> {
+  const GENERIC =
+    "We couldn't verify your deposit payment. Please try again, or contact us if the problem continues.";
+
+  // (1) Shape-check before spending a Stripe round-trip on obvious garbage.
+  if (
+    typeof paymentIntentId !== "string" ||
+    !/^pi_[A-Za-z0-9_]+$/.test(paymentIntentId)
+  ) {
+    return { status: "rejected", error: GENERIC };
+  }
+
+  // (2) Must actually exist under OUR key. A forged or test-mode id 404s here.
+  let pi;
+  try {
+    pi = await stripe.paymentIntents.retrieve(paymentIntentId, {
+      expand: ["latest_charge"],
+    });
+  } catch {
+    return { status: "rejected", error: GENERIC };
+  }
+
+  // (3) Only a succeeded intent is paid. requires_payment_method / canceled /
+  // requires_capture are all "not paid".
+  if (pi.status !== "succeeded") {
+    return { status: "rejected", error: GENERIC };
+  }
+
+  // (4) amount_received, NOT amount — `amount` is only the intent, and proves
+  // nothing was actually captured.
+  if ((pi.amount_received ?? 0) < BOOKING_DEPOSIT_CENTS) {
+    return { status: "rejected", error: GENERIC };
+  }
+
+  // (5) Blocks a $20 intent denominated in a weaker currency.
+  if (pi.currency !== BOOKING_DEPOSIT_CURRENCY) {
+    return { status: "rejected", error: GENERIC };
+  }
+
+  // (6) Must be a BOOKING DEPOSIT. Without this, any succeeded intent the payer
+  // legitimately owns — a gift-card purchase (kind: "gift_card"), a job charge,
+  // a cancellation fee — could be replayed here to mint a "paid" booking, and
+  // would then become the refund target. `type` is accepted alongside the newer
+  // `kind` so intents created before this shipped still verify.
+  const isDeposit =
+    pi.metadata?.kind === "booking_deposit" || pi.metadata?.type === "deposit";
+  if (!isDeposit) {
+    return { status: "rejected", error: GENERIC };
+  }
+
+  // (7) Bind the payment to the email being booked. This is the only identity
+  // binding available in a guest flow. Enforced only when present: intents
+  // created before this shipped carry no email, and rejecting those would fail
+  // real customers mid-checkout during a deploy. New intents always carry it.
+  const piEmail = pi.metadata?.email;
+  if (piEmail && piEmail !== bookingEmail) {
+    return { status: "rejected", error: GENERIC };
+  }
+
+  // (8) A livemode mismatch means a misconfigured key — fail loudly rather than
+  // accept a test-mode payment as real money.
+  const expectLive = !!process.env.STRIPE_SECRET_KEY?.startsWith("sk_live");
+  if (pi.livemode !== expectLive) {
+    return { status: "rejected", error: GENERIC };
+  }
+
+  // (9) Blocks pay → refund → replay.
+  const charge = typeof pi.latest_charge === "string" ? null : pi.latest_charge;
+  if (charge && (charge.refunded || (charge.amount_refunded ?? 0) > 0)) {
+    return { status: "rejected", error: GENERIC };
+  }
+
+  // (10) Bounds how far back an intent can be resurrected. Generous, because a
+  // customer can legitimately leave the review step open for a while.
+  const ageMs = Date.now() - pi.created * 1000;
+  if (ageMs > 24 * 60 * 60 * 1000) {
+    return { status: "rejected", error: GENERIC };
+  }
+
+  // (11) The customer must be resolvable, and must match the client's existing
+  // Stripe customer when they have one — blocks cross-customer intent reuse.
+  const stripeCustomerId =
+    typeof pi.customer === "string" ? pi.customer : (pi.customer?.id ?? null);
+  if (!stripeCustomerId) {
+    return { status: "rejected", error: GENERIC };
+  }
+  if (existingStripeCustomerId && stripeCustomerId !== existingStripeCustomerId) {
+    return { status: "rejected", error: GENERIC };
+  }
+
+  // (12) Anti-replay. The real fix is a UNIQUE index on
+  // Job.depositPaymentIntentId (migration pending) — this lookup closes casual
+  // reuse but not two concurrent requests racing on the same intent.
+  const alreadyUsed = await db.job.findFirst({
+    where: { depositPaymentIntentId: paymentIntentId },
+    select: { id: true },
+  });
+  if (alreadyUsed) {
+    return { status: "already_used", jobId: alreadyUsed.id };
+  }
+
+  // The payment method is read off the verified intent — never from the client.
+  // charge-deposit sets setup_future_usage: "off_session", so on success the
+  // card is already attached to the customer and is safe to make the default.
+  const stripePaymentMethodId =
+    typeof pi.payment_method === "string"
+      ? pi.payment_method
+      : (pi.payment_method?.id ?? null);
+
+  return {
+    status: "ok",
+    deposit: { paymentIntentId, stripeCustomerId, stripePaymentMethodId },
+  };
 }
 
 function parseStartTime(date: string, timeSlot: string, isFlexible: boolean): Date {
@@ -196,6 +358,59 @@ export async function submitBooking(input: SubmitBookingInput) {
       where: { email },
     });
 
+    // 4a. Verify the deposit BEFORE anything is created. This action is public
+    // and unauthenticated, so without a mandatory verified deposit anyone can
+    // POST it and mint unlimited real jobs (and, on a recurring frequency, a
+    // whole series of them) for free. The verified payment is what stands in
+    // for authentication in the guest booking flow.
+    const verification = await verifyBookingDeposit(
+      input.depositPaymentIntentId,
+      email,
+      existingClient?.stripeCustomerId ?? null
+    );
+    if (verification.status === "rejected") {
+      await logActivity({
+        category: "DEPOSIT",
+        action: "booking.deposit_rejected",
+        status: "FAILED",
+        actorLabel: "GUEST",
+        message: `Rejected a booking attempt for ${email}: the deposit payment could not be verified.`,
+        providerId:
+          typeof input.depositPaymentIntentId === "string"
+            ? input.depositPaymentIntentId
+            : null,
+        metadata: { email, hadPaymentIntent: !!input.depositPaymentIntentId },
+      });
+      return { success: false, error: verification.error };
+    }
+
+    // Retry of a booking that already went through on this deposit — hand back
+    // the same job. Without this, a resubmit (flaky network, double submit)
+    // would be rejected as a replay even though the customer did nothing wrong.
+    if (verification.status === "already_used") {
+      const existingJob = await db.job.findUnique({
+        where: { id: verification.jobId },
+        select: { id: true, price: true },
+      });
+      if (existingJob) {
+        return {
+          success: true,
+          jobId: existingJob.id,
+          childJobIds: [],
+          total: existingJob.price ?? 0,
+        };
+      }
+      // The job vanished between the two lookups (permanently deleted). Don't
+      // create a second booking on a spent deposit.
+      return {
+        success: false,
+        error:
+          "This payment has already been used for a booking. Please contact us so we can help.",
+      };
+    }
+
+    const deposit = verification.deposit;
+
     const isNewClient = !existingClient;
     const newReferralCode = isNewClient ? await generateUniqueReferralCode() : null;
 
@@ -214,8 +429,13 @@ export async function submitBooking(input: SubmitBookingInput) {
             phone: input.phone.trim(),
             address: input.address.trim(),
             serviceFrequency: storeFrequency,
-            ...(input.stripeCustomerId && { stripeCustomerId: input.stripeCustomerId }),
-            ...(input.stripePaymentMethodId && { defaultPaymentMethodId: input.stripePaymentMethodId }),
+            // Both ids come from the VERIFIED PaymentIntent, never from the
+            // request body. Accepting them from the client let anyone repoint
+            // any customer's default card by booking on their email address.
+            stripeCustomerId: deposit.stripeCustomerId,
+            ...(deposit.stripePaymentMethodId && {
+              defaultPaymentMethodId: deposit.stripePaymentMethodId,
+            }),
           },
         })
       : await db.client.create({
@@ -227,8 +447,10 @@ export async function submitBooking(input: SubmitBookingInput) {
             serviceFrequency: storeFrequency,
             referredByClientId,
             referralCode: newReferralCode,
-            ...(input.stripeCustomerId && { stripeCustomerId: input.stripeCustomerId }),
-            ...(input.stripePaymentMethodId && { defaultPaymentMethodId: input.stripePaymentMethodId }),
+            stripeCustomerId: deposit.stripeCustomerId,
+            ...(deposit.stripePaymentMethodId && {
+              defaultPaymentMethodId: deposit.stripePaymentMethodId,
+            }),
           },
         });
 
@@ -292,6 +514,28 @@ export async function submitBooking(input: SubmitBookingInput) {
       discountAmount,
     });
 
+    // 5b-bis. Re-resolve the promo code server-side. `applyPromoCode` runs as a
+    // separate public action during checkout and its result comes back through
+    // the browser, so the discount figure and the code itself are both
+    // tamperable. We re-run the lookup against the SERVER-computed subtotal and
+    // record only what the catalog actually authorises.
+    //
+    // Note this value is recorded for reporting only — `chargeJob` bills
+    // `price - discountAmount` and never reads `promoDiscountAmount`, so a
+    // forged figure cannot reduce a charge today. Validating it anyway keeps
+    // that from becoming a self-service discount the moment someone wires this
+    // field into a total.
+    let appliedPromoCode: string | null = null;
+    let promoDiscountAmount: number | null = null;
+    const submittedPromo = input.promoCode?.trim();
+    if (submittedPromo) {
+      const promo = await applyPromoCode(submittedPromo, pricing.subtotal);
+      if (promo.valid && promo.discountAmount && promo.discountAmount > 0) {
+        appliedPromoCode = submittedPromo.toUpperCase();
+        promoDiscountAmount = promo.discountAmount;
+      }
+    }
+
     // 5c. Idempotency guard — if the same client just created a job for the
     // same date + service within the last 60 seconds, treat this as a retry
     // and return that job instead of creating a duplicate.
@@ -312,12 +556,14 @@ export async function submitBooking(input: SubmitBookingInput) {
       orderBy: { createdAt: "desc" },
     });
     if (recentDuplicate) {
+      // No `deduplicated` flag in the response: this action is public, and the
+      // flag told an unauthenticated caller whether a given email had just
+      // booked a given service at a given time.
       return {
         success: true,
         jobId: recentDuplicate.id,
         childJobIds: [],
         total: recentDuplicate.price ?? pricing.total,
-        deduplicated: true as const,
       };
     }
 
@@ -335,7 +581,9 @@ export async function submitBooking(input: SubmitBookingInput) {
       smsConsent: input.smsConsent !== false,
     };
 
-    const primaryJob = await db.job.create({
+    let primaryJob;
+    try {
+      primaryJob = await db.job.create({
       data: {
         clientName: client.name,
         client: { connect: { id: client.id } },
@@ -356,16 +604,22 @@ export async function submitBooking(input: SubmitBookingInput) {
         gstAmount: pricing.gstAmount,
         qstAmount: pricing.qstAmount,
         discountAmount: discountAmount > 0 ? discountAmount : null,
-        appliedPromoCode: input.promoCode?.trim() || null,
-        promoDiscountAmount: input.promoDiscount && input.promoDiscount > 0 ? input.promoDiscount : null,
+        appliedPromoCode,
+        promoDiscountAmount,
         bookingSource: "web",
         ...afterPhotoConsentData,
         notes: input.notes?.trim() || null,
-        ...(input.depositPaymentIntentId && {
-          depositPaymentIntentId: input.depositPaymentIntentId,
-          depositPaid: true,
-          depositPaidAt: new Date(),
-        }),
+        // Unconditional: a booking cannot reach this point without a verified
+        // deposit. `depositPaymentIntentId` is also the refund target, so it
+        // must only ever hold an intent we confirmed belongs to this booking.
+        // It is UNIQUE — a concurrent replay of the same intent loses the race
+        // with P2002 and is resolved to the winning job below.
+        depositPaymentIntentId: deposit.paymentIntentId,
+        depositPaid: true,
+        depositPaidAt: new Date(),
+        // Pin the card this booking was confirmed on, so a later card change
+        // doesn't silently move the charge to a different card.
+        stripePaymentMethodId: deposit.stripePaymentMethodId,
         addOns: {
           create: resolvedAddOns.map((a) => ({
             name: a.name,
@@ -373,7 +627,33 @@ export async function submitBooking(input: SubmitBookingInput) {
           })),
         },
       },
-    });
+      });
+    } catch (e) {
+      // P2002 on depositPaymentIntentId: another request claimed this deposit
+      // between our replay check and this insert. That request's booking is the
+      // real one — return it instead of erroring or creating a second job on a
+      // single payment.
+      if (
+        (e as { code?: string })?.code === "P2002" &&
+        String((e as { meta?: { target?: unknown } })?.meta?.target ?? "").includes(
+          "depositPaymentIntentId"
+        )
+      ) {
+        const winner = await db.job.findFirst({
+          where: { depositPaymentIntentId: deposit.paymentIntentId },
+          select: { id: true, price: true },
+        });
+        if (winner) {
+          return {
+            success: true,
+            jobId: winner.id,
+            childJobIds: [],
+            total: winner.price ?? pricing.total,
+          };
+        }
+      }
+      throw e;
+    }
 
     // Booking source, as a clear activity-log label. Jobs can originate three
     // ways — admin-created (saveJob / jobs/new), client-booked (here), or the
@@ -406,6 +686,27 @@ export async function submitBooking(input: SubmitBookingInput) {
       })
       .catch((e) => console.error("after-photo consent log", e));
 
+    // Payment audit trail: records the verified deposit and the card the
+    // booking attached to the client, so a later dispute (or an attempt to
+    // repoint a client's default card) is reconstructable from the admin log.
+    await logActivity({
+      category: "DEPOSIT",
+      action: "booking.deposit_verified",
+      actorLabel: "GUEST",
+      targetType: "Client",
+      targetId: client.id,
+      message: `Verified $${(BOOKING_DEPOSIT_CENTS / 100).toFixed(2)} deposit for ${client.name} and created booking.`,
+      amount: BOOKING_DEPOSIT_CENTS / 100,
+      providerId: deposit.paymentIntentId,
+      metadata: {
+        jobId: primaryJob.id,
+        email,
+        stripeCustomerId: deposit.stripeCustomerId,
+        paymentMethodId: deposit.stripePaymentMethodId,
+        isNewClient,
+      },
+    });
+
     // Spend the credit on this client (deduct from balance)
     if (creditSpent > 0) {
       await db.client.update({
@@ -427,12 +728,19 @@ export async function submitBooking(input: SubmitBookingInput) {
       });
     }
 
-    // 6b. Increment promo code usage if applied
-    if (input.promoCode?.trim() && input.promoDiscount && input.promoDiscount > 0) {
-      await db.promoCode.updateMany({
-        where: { code: input.promoCode.trim().toUpperCase(), isActive: true },
-        data: { usesCount: { increment: 1 } },
-      }).catch(() => {});
+    // 6b. Burn one use of the promo code — only for a code the server itself
+    // validated above. Done as a single conditional UPDATE so the `maxUses` cap
+    // is enforced atomically; a read-then-increment lets concurrent bookings
+    // push a limited code past its cap.
+    if (appliedPromoCode) {
+      await db.$executeRaw`
+        UPDATE "PromoCode"
+           SET "usesCount" = "usesCount" + 1
+         WHERE "code" = ${appliedPromoCode}
+           AND "isActive" = true
+           AND "deletedAt" IS NULL
+           AND ("maxUses" IS NULL OR "usesCount" < "maxUses")
+      `.catch(() => {});
     }
 
     // 6c. Win-back: if this client previously cancelled their recurring
@@ -443,11 +751,13 @@ export async function submitBooking(input: SubmitBookingInput) {
       orderBy: { cancelledAt: "desc" },
     });
     if (openCancellation) {
+      // Compare against the SERVER-validated code, so the retention funnel
+      // can't be marked "offer redeemed" by simply typing the code without it
+      // actually being valid.
       const usedOffer =
-        !!input.promoCode?.trim() &&
+        !!appliedPromoCode &&
         !!openCancellation.offerCode &&
-        input.promoCode.trim().toUpperCase() ===
-          openCancellation.offerCode.toUpperCase();
+        appliedPromoCode === openCancellation.offerCode.toUpperCase();
       await db.recurringCancellation
         .update({
           where: { id: openCancellation.id },
@@ -582,7 +892,8 @@ export async function submitBooking(input: SubmitBookingInput) {
       gst: pricing.gstAmount,
       qst: pricing.qstAmount,
       total: pricing.total,
-      depositPaid: !!input.depositPaymentIntentId,
+      // Always true now — a booking cannot be created without a verified deposit.
+      depositPaid: true,
       logId: emailLog.id,
       // ONE_TIME → cust.booking.receipt_ot; anything else (weekly/monthly/etc.)
       // → cust.booking.receipt_rec
@@ -632,17 +943,15 @@ export async function submitBooking(input: SubmitBookingInput) {
       console.error("admin new-booking notification failed", err)
     );
 
-    // Customer "Bookings pre-paid" email when a deposit was collected at
-    // booking time — gated by `cust.fee.bookings_prepaid`.
-    if (input.depositPaymentIntentId) {
-      sendCustomerBookingsPrepaid({
-        to: email,
-        clientName: client.name,
-        jobId: primaryJob.id,
-        jobNumber: primaryJob.jobNumber,
-        amount: 20, // $20 deposit per the existing booking flow
-      }).catch((err) => console.error("customer prepaid email", err));
-    }
+    // Customer "Bookings pre-paid" email — gated by `cust.fee.bookings_prepaid`.
+    // Unconditional now: every web booking carries a verified deposit.
+    sendCustomerBookingsPrepaid({
+      to: email,
+      clientName: client.name,
+      jobId: primaryJob.id,
+      jobNumber: primaryJob.jobNumber,
+      amount: BOOKING_DEPOSIT_CENTS / 100,
+    }).catch((err) => console.error("customer prepaid email", err));
 
     // 10. Log the booking activity on the primary job
     await db.jobLog.create({

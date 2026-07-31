@@ -47,3 +47,7 @@ next-env.d.ts
 
 # Design handoff reference (not shipped)
 .design-ref/
+.env.e2e
+scripts/shots/
+scripts/shots-all/
+scripts/shots-cleaner/

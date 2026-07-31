@@ -128,7 +128,11 @@ export default function PendingInvitesPanel({
                   }}>
                   {mins > 0
                     ? `Expires in ${mins} min`
-                    : "Expiring now…"}
+                    : invite.isLastMinute
+                      ? "Expiring now…"
+                      : // A direct assignment doesn't lapse — the cleaner stays
+                        // on the job either way, so the ask is just to confirm.
+                        "Still waiting on your answer — you're on this job"}
                 </div>
               </div>
               <div style={{ display: "flex", gap: 8 }}>

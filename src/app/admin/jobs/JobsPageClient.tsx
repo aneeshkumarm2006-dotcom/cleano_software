@@ -177,6 +177,10 @@ export default function JobsPageClient({
     employeeId: employeeFilter,
     paymentType: paymentTypeFilter,
     status: statusFilter,
+    // The export follows the view: the Active list exports live jobs, the
+    // Archived list exports the archive (new fix list item 1 — archived data
+    // only ever appears when it's the thing being looked at).
+    includeArchived: archived,
   };
 
   return (
@@ -194,12 +198,10 @@ export default function JobsPageClient({
             >
               {archived ? "Active jobs" : "Archived"}
             </button>
-            {!archived && (
-              <>
-                <ImportCsvButton entity="jobs" />
-                <ExportButton filters={activeFilters} />
-              </>
-            )}
+            {!archived && <ImportCsvButton entity="jobs" />}
+            {/* Export is available on both views; `includeArchived` above keeps
+                each one exporting exactly what it shows. */}
+            <ExportButton filters={activeFilters} />
           </div>
         )}
       </div>

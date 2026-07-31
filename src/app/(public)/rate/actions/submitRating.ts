@@ -200,7 +200,8 @@ export async function submitRating(input: SubmitRatingInput) {
       });
       if (!cleaner) continue;
       const allRatings = await db.employeeRating.aggregate({
-        where: { employeeId },
+        // Excluded ratings are out of the quoted overall score (item 5).
+        where: { employeeId, excludedAt: null },
         _avg: { rating: true },
       });
       const overall = allRatings._avg.rating ?? null;

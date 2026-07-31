@@ -52,6 +52,9 @@ export async function getLabourCostMetric(
   if (!isAdminRole(role)) return { success: false, error: "Not authorized" };
 
   const where: Prisma.JobWhereInput = {
+    // Archived jobs are out of the active reporting set (new fix list item 1)
+    // — the same rule the dashboard, analytics and revenue metrics follow.
+    deletedAt: null,
     status: { in: ["COMPLETED", "PAID"] },
   };
 
@@ -100,7 +103,8 @@ export async function getLabourCostMetric(
       orderBy: { name: "asc" },
     }),
     db.job.findMany({
-      where: { jobType: { not: null } },
+      // The filter list is built from live jobs only (item 1).
+      where: { jobType: { not: null }, deletedAt: null },
       select: { jobType: true },
       distinct: ["jobType"],
     }),

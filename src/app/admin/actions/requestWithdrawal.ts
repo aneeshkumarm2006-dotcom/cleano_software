@@ -4,16 +4,21 @@ import { db } from "@/db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
-import type { PaymentType } from "@prisma/client";
 import {
   sendProviderPayoutRequested,
   sendAdminPayoutRequest,
 } from "@/lib/email";
 import { summarisePayouts } from "@/lib/payout-math";
 
+/**
+ * A cleaner submits an AMOUNT, nothing else (new fix list item 3).
+ *
+ * How the money actually goes out is an admin/back-office decision, so
+ * `Withdrawal.paymentMethod` is left null here and filled in when an admin
+ * approves or pays the request.
+ */
 interface RequestWithdrawalInput {
   amount: number;
-  paymentMethod: PaymentType;
   notes?: string;
 }
 
@@ -75,7 +80,8 @@ export async function requestWithdrawal(
       data: {
         employeeId: userId,
         amount,
-        paymentMethod: input.paymentMethod,
+        // Left for the admin to set when the payout is actually processed.
+        paymentMethod: null,
         status: "PENDING",
         notes: input.notes?.trim() || null,
       },
@@ -86,7 +92,7 @@ export async function requestWithdrawal(
         type: "GENERAL",
         severity: "INFO",
         title: "Withdrawal request",
-        message: `${session.user.name} requested a withdrawal of $${amount.toFixed(2)} via ${input.paymentMethod}`,
+        message: `${session.user.name} requested a withdrawal of $${amount.toFixed(2)}`,
         relatedId: withdrawal.id,
         relatedType: "Withdrawal",
       },
@@ -101,13 +107,11 @@ export async function requestWithdrawal(
         to: email,
         providerName,
         amount,
-        paymentMethod: input.paymentMethod,
       }).catch((e) => console.error("payout-requested email", e));
     }
     await sendAdminPayoutRequest({
       providerName: session.user.name ?? "A cleaner",
       amount,
-      paymentMethod: input.paymentMethod,
     }).catch((e) => console.error("admin payout-request email", e));
 
     revalidatePath("/cleaners/my-pay");

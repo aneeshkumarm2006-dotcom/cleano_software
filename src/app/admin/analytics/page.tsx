@@ -127,6 +127,8 @@ export default async function AnalyticsPage() {
       _count: true,
     }),
     db.employeeRating.findMany({
+      // Admin-excluded ratings are out of every analytics average (item 5).
+      where: { excludedAt: null },
       include: {
         employee: { select: { id: true, name: true } },
       },

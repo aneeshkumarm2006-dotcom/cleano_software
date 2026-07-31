@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/db";
+import { resolveChargePaymentMethod } from "@/lib/payment-methods";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
@@ -51,7 +52,17 @@ export async function placeCardHold(jobId: string) {
     return { success: false, error: "Booking is already paid" };
   }
   const client = job.client;
-  if (!client?.stripeCustomerId || !client?.defaultPaymentMethodId) {
+  if (!client?.stripeCustomerId) {
+    return { success: false, error: "No saved card on file for this client" };
+  }
+  // Hold against the card the booking is pinned to, so a hold and the eventual
+  // charge always land on the same card.
+  const holdCard = await resolveChargePaymentMethod({
+    clientId: client.id,
+    pinnedPaymentMethodId: job.stripePaymentMethodId,
+    clientDefaultPaymentMethodId: client.defaultPaymentMethodId,
+  });
+  if (!holdCard) {
     return { success: false, error: "No saved card on file for this client" };
   }
 
@@ -64,7 +75,7 @@ export async function placeCardHold(jobId: string) {
       amount: amountCents,
       currency: "cad",
       customer: client.stripeCustomerId,
-      payment_method: client.defaultPaymentMethodId,
+      payment_method: holdCard,
       off_session: true,
       confirm: true,
       capture_method: "manual",

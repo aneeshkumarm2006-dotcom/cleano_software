@@ -72,6 +72,11 @@ model User {
   resolvedComplaints           Complaint[]             @relation("ResolvedComplaints")
   receivedAlerts               Alert[]                 @relation("RecipientAlerts")
   strikes                      CleanerStrike[]         @relation("CleanerStrikes")
+
+  // Present in the database since an earlier migration but never declared here,
+  // which showed up as schema drift. Field-lead grouping reads this column, so
+  // the index is kept and declared rather than dropped.
+  @@index([fieldLeadId])
 }
 
 model Account {
@@ -419,9 +424,23 @@ model Job {
   totalAmount                    Float                 @default(0)
   stripeSetupIntentId            String?
   stripePaymentIntentId          String?
-  depositPaymentIntentId         String?
+  // UNIQUE: the deposit intent is the booking's idempotency key. A retry that
+  // presents the same intent must return the job it already paid for, and one
+  // paid intent must never mint a second booking. Postgres allows many NULLs
+  // under a UNIQUE index, so admin/imported jobs (no deposit) are unaffected,
+  // as are recurring child jobs — only the first visit carries the deposit.
+  depositPaymentIntentId         String?               @unique
   depositPaid                    Boolean               @default(false)
   depositPaidAt                  DateTime?
+  // The card this booking is attached to, captured when the booking was
+  // confirmed. NULL means "no card was pinned" — every charge path falls back
+  // to the client's current default, which is exactly the old behaviour, so
+  // existing rows keep working untouched.
+  //
+  // Stores the Stripe `pm_` id rather than a ClientPaymentMethod row id: the
+  // local mirror is deleted and recreated whenever it syncs from Stripe, so a
+  // row id would dangle.
+  stripePaymentMethodId          String?
   paymentFailedAt                DateTime?
   paymentFailureReason           String?
   paidAt                         DateTime?
@@ -553,6 +572,9 @@ model Job {
   @@index([parentJobId])
   @@index([isFlexible])
   @@index([externalBookingId])
+  // Used to answer "which bookings is this card attached to?" — needed before
+  // a card can be safely removed.
+  @@index([stripePaymentMethodId])
 }
 
 model JobAddOn {
@@ -1528,6 +1550,15 @@ model EmployeeRating {
   ratedBy    String?
   // Set when the client edits their submitted rating (shown to admin).
   editedAt   DateTime?
+  // Admin exclusion (AwerNewFixes.pdf item 5). An excluded rating is KEPT —
+  // the row stays for admin review — but drops out of every average, rating
+  // count and pay-tier calculation. Used for a rating left on a test job, a
+  // cancelled job, a mis-tap, or a complaint the office resolved in the
+  // cleaner's favour. NULL = active. Reads must filter on `excludedAt: null`.
+  excludedAt     DateTime?
+  /// User id of the admin who excluded it (matches `ratedBy`'s convention).
+  excludedById   String?
+  excludedReason String?
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
   employee   User      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
@@ -1536,6 +1567,8 @@ model EmployeeRating {
   @@index([employeeId])
   @@index([jobId])
   @@index([createdAt])
+  // Averages/counts always read the ACTIVE subset (item 5).
+  @@index([employeeId, excludedAt])
 }
 
 model Withdrawal {
@@ -2165,7 +2198,9 @@ model PropertyDefinition {
   sortOrder    Int       @default(0)
   archivedAt   DateTime?
   createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  // The DEFAULT exists in the database already; declaring it keeps the schema
+  // and the database in sync and lets raw inserts omit the column.
+  updatedAt    DateTime  @default(now()) @updatedAt
 
   @@unique([objectType, internalName])
   @@index([objectType])

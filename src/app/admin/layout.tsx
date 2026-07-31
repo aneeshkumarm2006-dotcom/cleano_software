@@ -30,7 +30,10 @@ export default async function AdminLayout({
     // InstallProvider so the Settings "Install app" card can capture
     // beforeinstallprompt here too (the crew app has its own provider).
     <InstallProvider>
-      <Sidebar user={userWithRole} isAdmin signOutAction={signOut}>
+      {/* Role-based nav filtering happens inside Sidebar off `user.role`. The
+          old `isAdmin` prop was passed as a bare attribute (always true), so it
+          could never have gated anything. */}
+      <Sidebar user={userWithRole} signOutAction={signOut}>
         <PresenceHeartbeat />
         {/* Mobile: clear the fixed hamburger (Sidebar renders it top-4 left-4,
             md:hidden) so page headers aren't rendered underneath it. */}

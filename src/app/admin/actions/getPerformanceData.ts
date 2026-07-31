@@ -54,6 +54,7 @@ export async function getPerformanceData(
     const ratings90 = await db.employeeRating.findMany({
       where: {
         employeeId: targetEmployeeId,
+        excludedAt: null,
         createdAt: { gte: ninetyDaysAgo },
       },
       orderBy: { createdAt: "asc" },

@@ -26,7 +26,8 @@ export default async function ReviewsPage() {
 
   const ratings = enabled
     ? await db.employeeRating.findMany({
-        where: { rating: { gte: threshold }, notes: { not: null } },
+        // A rating an admin pulled never appears as a public review (item 5).
+        where: { rating: { gte: threshold }, notes: { not: null }, excludedAt: null },
         orderBy: { createdAt: "desc" },
         take: 30,
         include: { job: { include: { client: { select: { name: true } } } } },

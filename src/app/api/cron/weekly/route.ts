@@ -86,6 +86,8 @@ async function runProviderPerformance(weekStart: Date, weekEnd: Date, label: str
     const completedJobs = await db.job.findMany({
       where: {
         status: "COMPLETED",
+        // Archived jobs are out of weekly provider stats (item 1).
+        deletedAt: null,
         clockOutTime: { gte: weekStart, lt: weekEnd },
         cleaners: { some: { id: provider.id } },
       },
@@ -111,6 +113,7 @@ async function runProviderPerformance(weekStart: Date, weekEnd: Date, label: str
     const ratingAgg = await db.employeeRating.aggregate({
       where: {
         employeeId: provider.id,
+        excludedAt: null,
         createdAt: { gte: weekStart, lt: weekEnd },
       },
       _avg: { rating: true },
@@ -159,6 +162,7 @@ async function runRagWashDashboard(weekStart: Date, weekEnd: Date, label: string
   // Jobs completed this week → sum cappedRags/cappedPads credits
   const jobs = await db.job.findMany({
     where: {
+      deletedAt: null,
       clockOutTime: { gte: weekStart, lt: weekEnd },
       washCreditsAwarded: true,
     },
@@ -188,6 +192,7 @@ async function runRagWashDashboard(weekStart: Date, weekEnd: Date, label: string
   const FLAG_PADS = 4;
   const flaggedJobsCount = await db.job.count({
     where: {
+      deletedAt: null,
       clockOutTime: { gte: weekStart, lt: weekEnd },
       OR: [
         { washCappedRags: { gt: FLAG_RAGS } },

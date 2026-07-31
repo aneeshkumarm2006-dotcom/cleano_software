@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/db";
+import { resolveChargePaymentMethod } from "@/lib/payment-methods";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
@@ -68,13 +69,21 @@ export async function requestCancellation(jobId: string, reason?: string) {
     if (withinFeeWindow && job.cancellationFeeChargedAt) {
       chargeOutcome = "already_charged";
     } else if (withinFeeWindow) {
-      if (client?.stripeCustomerId && client.defaultPaymentMethodId) {
+      // Charge the cancellation fee on the card the booking was pinned to.
+      const feeCard = client
+        ? await resolveChargePaymentMethod({
+            clientId: client.id,
+            pinnedPaymentMethodId: job.stripePaymentMethodId,
+            clientDefaultPaymentMethodId: client.defaultPaymentMethodId,
+          })
+        : null;
+      if (client?.stripeCustomerId && feeCard) {
         try {
           const pi = await stripe.paymentIntents.create({
             amount: amountCents,
             currency: "cad",
             customer: client.stripeCustomerId,
-            payment_method: client.defaultPaymentMethodId,
+            payment_method: feeCard,
             off_session: true,
             confirm: true,
             description: `Cleano late-cancellation fee — job #${job.jobNumber}`,

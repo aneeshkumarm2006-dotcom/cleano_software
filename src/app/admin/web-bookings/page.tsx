@@ -6,7 +6,8 @@ export default async function WebBookingsPage() {
   await requireAdmin();
 
   const jobs = await db.job.findMany({
-    where: { bookingSource: "web" },
+    // Archived bookings only show in Jobs → Archived (new fix list item 1).
+    where: { bookingSource: "web", deletedAt: null },
     orderBy: { startTime: "asc" },
     include: {
       client: { select: { id: true, name: true, email: true, phone: true } },

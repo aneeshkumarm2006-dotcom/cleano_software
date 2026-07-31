@@ -35,6 +35,10 @@ export async function createSetupIntentForToken(token: string) {
     customer: customerId,
     payment_method_types: ["card"],
     usage: "off_session",
+    // Binds the intent to the client and the one-time token it was minted for.
+    // `finalizeCardSetup` re-checks this so a SetupIntent belonging to someone
+    // else can't be redeemed against this token.
+    metadata: { clientId: client.id, cardSetupTokenId: row.id },
   });
 
   return {

@@ -7,6 +7,7 @@ import Badge from "@/components/ui/Badge";
 import Select from "@/components/ui/Select";
 import { fmtDate, fmtTime } from "@/lib/time";
 import { getClockActivity } from "../actions/getClockActivity";
+import ClockTimeEditor from "../jobs/[id]/ClockTimeEditor";
 import type { ClockActivityEntry } from "../actions/getClockActivity.types";
 import {
   CLOCK_STATUS_LABEL,
@@ -215,6 +216,25 @@ export default function TimeTrackingClient({ cleaners }: Props) {
                   </div>
                   <div>
                     Out: {e.clockOutTime ? fmtTime(e.clockOutTime) : "—"}
+                  </div>
+                  {/* Item 4: correct a missed clock-in / wrong clock-out from
+                      the time-tracking view as well as the job page. A legacy
+                      row has no assignment, so it edits the job-level fields. */}
+                  <div className="mt-1">
+                    <ClockTimeEditor
+                      jobId={e.jobId}
+                      cleanerId={e.isLegacy ? null : e.cleanerId}
+                      cleanerName={e.isLegacy ? null : e.cleanerName}
+                      clockInTime={e.clockInTime}
+                      clockOutTime={e.clockOutTime}
+                      label="Edit"
+                      onSaved={() => {
+                        setEntries([]);
+                        setCursor(null);
+                        setHasMore(true);
+                        load({ reset: true });
+                      }}
+                    />
                   </div>
                 </div>
 

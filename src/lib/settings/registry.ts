@@ -486,6 +486,9 @@ export const SETTINGS = {
       },
     ],
     validate: faqList(),
+    // The editor tells admins "Changes are audit-logged"; without this flag the
+    // settings spine skips the ActivityLog write and that promise was false.
+    audit: true,
   }),
   // Calendar priority badges: which service type gets "R" (Routine, blue) or
   // "I" (Important, yellow) in the top-left of a booking. Admin-editable in

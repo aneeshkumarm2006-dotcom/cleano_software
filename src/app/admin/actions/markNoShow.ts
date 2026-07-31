@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/db";
+import { resolveChargePaymentMethod } from "@/lib/payment-methods";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
@@ -42,13 +43,21 @@ export async function markNoShow(jobId: string) {
   let paymentIntentId: string | undefined;
   let chargeError: string | undefined;
 
-  if (client.stripeCustomerId && client.defaultPaymentMethodId) {
+  // Fee goes on the card the booking is pinned to, falling back to the
+  // client's current default.
+  const feeCard = await resolveChargePaymentMethod({
+    clientId: client.id,
+    pinnedPaymentMethodId: job.stripePaymentMethodId,
+    clientDefaultPaymentMethodId: client.defaultPaymentMethodId,
+  });
+
+  if (client.stripeCustomerId && feeCard) {
     try {
       const pi = await stripe.paymentIntents.create({
         amount: amountCents,
         currency: "cad",
         customer: client.stripeCustomerId,
-        payment_method: client.defaultPaymentMethodId,
+        payment_method: feeCard,
         off_session: true,
         confirm: true,
         description: `Cleano no-show fee — job #${job.jobNumber}`,

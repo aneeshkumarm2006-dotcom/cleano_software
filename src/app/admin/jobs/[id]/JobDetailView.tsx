@@ -48,6 +48,8 @@ import { ConfirmDeleteModal } from "@/components/common/ConfirmDeleteModal";
 import Modal from "@/components/ui/Modal";
 import { cancelJobByAdmin } from "../../actions/cancelJobByAdmin";
 import { setCleanerJobPay } from "../../actions/setCleanerJobPay";
+import ClockTimeEditor from "./ClockTimeEditor";
+import RatingExclusionControl from "./RatingExclusionControl";
 import { issueRefund } from "../../actions/issueRefund";
 import JobChatThread from "@/components/JobChatThread";
 import { normalizeJobType, jobTypeLabel } from "@/lib/calendar-labels";
@@ -197,6 +199,10 @@ interface JobRatingLite {
   /** Staff member who set it manually; null for customer-submitted ratings. */
   raterName: string | null;
   createdAt: string;
+  /** Set when an admin excluded this rating from the cleaner's score (item 5). */
+  excludedAt?: string | null;
+  excludedByName?: string | null;
+  excludedReason?: string | null;
 }
 
 interface JobDetailViewProps {
@@ -920,6 +926,19 @@ export default function JobDetailView({
                               On break now
                             </span>
                           )}
+                          {/* Item 4: admins correct a missed clock-in or a
+                              wrong clock-out right here, where the times are
+                              read. Every edit is logged. */}
+                          {isAdmin && (
+                            <ClockTimeEditor
+                              jobId={job.id}
+                              cleanerId={c.id}
+                              cleanerName={c.name}
+                              clockInTime={a.clockInTime}
+                              clockOutTime={a.clockOutTime}
+                              label={entry.clockInTime ? 'Edit times' : 'Add times'}
+                            />
+                          )}
                         </>
                       );
                     })()}
@@ -1002,6 +1021,35 @@ export default function JobDetailView({
           {job.cleaners.length === 0 && (
             <p style={{ color: 'var(--primary-50)', fontSize: 14, padding: '4px 0' }}>No cleaners assigned yet.</p>
           )}
+          {/* Job-level clock times (item 4). These are the legacy fields older
+              jobs recorded before per-cleaner assignments, and the fallback the
+              Team card reads when a cleaner has no assignment row. */}
+          {isAdmin && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                flexWrap: 'wrap',
+                paddingTop: 10,
+                marginTop: 6,
+                borderTop: '1px solid var(--primary-10)',
+                fontSize: 12,
+                color: 'var(--primary-60)',
+              }}>
+              <span>
+                Job clock: {job.clockInTime ? fmtDateTime(job.clockInTime) : '—'}
+                {' → '}
+                {job.clockOutTime ? fmtDateTime(job.clockOutTime) : '—'}
+              </span>
+              <ClockTimeEditor
+                jobId={job.id}
+                clockInTime={job.clockInTime}
+                clockOutTime={job.clockOutTime}
+                label="Edit job times"
+              />
+            </div>
+          )}
         </div>
       </div>
 
@@ -1010,7 +1058,13 @@ export default function JobDetailView({
         <div className="dcard-head">
           <h3>Ratings</h3>
           {jobRatings.length > 0 && (
-            <span style={{ fontSize: 12, color: 'var(--primary-50)' }}>{jobRatings.length}</span>
+            <span style={{ fontSize: 12, color: 'var(--primary-50)' }}>
+              {(() => {
+                const active = jobRatings.filter(r => !r.excludedAt).length;
+                const excluded = jobRatings.length - active;
+                return excluded > 0 ? `${active} active · ${excluded} excluded` : `${active}`;
+              })()}
+            </span>
           )}
         </div>
         {jobRatings.length === 0 ? (
@@ -1039,16 +1093,49 @@ export default function JobDetailView({
                     <span style={{ fontWeight: 400, color: 'var(--primary-50)', marginLeft: 6, fontSize: 12 }}>
                       {r.raterName ? `set by ${r.raterName} (admin)` : 'customer rating'}
                     </span>
+                    {/* Item 5: the job always shows whether a rating counts. */}
+                    <span
+                      style={{
+                        marginLeft: 8,
+                        fontSize: 10,
+                        fontWeight: 700,
+                        letterSpacing: '0.04em',
+                        textTransform: 'uppercase',
+                        borderRadius: 999,
+                        padding: '2px 8px',
+                        background: r.excludedAt ? '#fee2e2' : '#dcfce7',
+                        color: r.excludedAt ? '#b91c1c' : '#15803d',
+                      }}>
+                      {r.excludedAt ? 'Excluded' : 'Active'}
+                    </span>
                   </div>
+                  {r.excludedAt && (
+                    <div style={{ fontSize: 12, color: '#b91c1c', marginTop: 3 }}>
+                      Excluded {fmtDate(r.excludedAt, { month: 'short', day: 'numeric' })}
+                      {r.excludedByName ? ` by ${r.excludedByName}` : ''}
+                      {r.excludedReason ? ` — ${r.excludedReason}` : ''}
+                      {' · not counted in their average or pay tier'}
+                    </div>
+                  )}
                   {r.notes && (
                     <div style={{ fontSize: 12.5, color: 'var(--primary-60)', marginTop: 2, fontStyle: 'italic' }}>
                       {r.notes}
                     </div>
                   )}
                 </div>
-                <span style={{ fontSize: 11.5, color: 'var(--primary-40)', flexShrink: 0 }}>
-                  {fmtDate(r.createdAt, { month: 'short', day: 'numeric' })}
-                </span>
+                <div style={{ flexShrink: 0, textAlign: 'right' }}>
+                  <span style={{ fontSize: 11.5, color: 'var(--primary-40)' }}>
+                    {fmtDate(r.createdAt, { month: 'short', day: 'numeric' })}
+                  </span>
+                  {isAdmin && (
+                    <div style={{ marginTop: 4 }}>
+                      <RatingExclusionControl
+                        ratingId={r.id}
+                        excluded={!!r.excludedAt}
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -2428,8 +2515,8 @@ export default function JobDetailView({
           onClose={() => setShowDeleteConfirm(false)}
           onConfirm={handleDelete}
           fileName={job.clientName || 'this job'}
-          title="Delete Job"
-          message="This action cannot be undone. All job data will be permanently removed."
+          title="Archive Job"
+          message="It moves to Jobs → Archived, out of every list, count and report. You can restore it from there, or delete it permanently once archived."
         />
       )}
 

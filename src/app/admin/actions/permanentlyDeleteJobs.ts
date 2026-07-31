@@ -5,6 +5,7 @@ import { headers } from "next/headers";
 import { db } from "@/db";
 import { revalidatePath } from "next/cache";
 import { invalidateCalendarDay } from "./invalidateCalendarDay";
+import { logActivity } from "@/lib/activity-log";
 
 /**
  * Permanent (hard) delete of ARCHIVED jobs (fix 8). Separate from
@@ -42,7 +43,9 @@ export async function permanentlyDeleteJobs(jobIds: string[]) {
   // Only archived jobs are eligible — a live booking can never be hard-deleted.
   const eligible = await db.job.findMany({
     where: { id: { in: ids }, deletedAt: { not: null } },
-    select: { id: true, startTime: true },
+    // jobNumber + clientName are captured for the audit record below: once the
+    // rows are gone, the ids mean nothing to a human reading the log.
+    select: { id: true, startTime: true, jobNumber: true, clientName: true },
   });
   if (eligible.length === 0) {
     return { error: "These jobs must be archived before permanent delete" as const };
@@ -50,6 +53,25 @@ export async function permanentlyDeleteJobs(jobIds: string[]) {
 
   try {
     await db.job.deleteMany({ where: { id: { in: eligible.map((j) => j.id) } } });
+
+    // Irreversible destruction of business records leaves a trace. Nothing on
+    // any delete path used to write one, which is why 1533 jobs vanished from
+    // this database in July 2026 with no way to tell who did it or when.
+    // JobLog can't serve here — it cascades away with the job.
+    await logActivity({
+      category: "ADMIN",
+      action: "job.permanent_delete",
+      actorId: session.user.id,
+      actorLabel: session.user.email ?? session.user.name ?? null,
+      targetType: "job",
+      targetId: eligible.length === 1 ? eligible[0].id : null,
+      message: `Permanently deleted ${eligible.length} archived job${eligible.length === 1 ? "" : "s"}`,
+      metadata: {
+        count: eligible.length,
+        jobNumbers: eligible.map((j) => j.jobNumber),
+        clients: Array.from(new Set(eligible.map((j) => j.clientName))).slice(0, 50),
+      },
+    });
 
     // Refresh any calendar days those jobs touched.
     const days = new Set(

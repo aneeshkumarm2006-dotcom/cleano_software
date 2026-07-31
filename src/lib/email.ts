@@ -906,6 +906,74 @@ export async function sendCustomerCardDeclined(opts: {
   });
 }
 
+/**
+ * Warns the customer that their saved card expires before a booking they
+ * already have scheduled — sent ahead of time so the booking doesn't fail at
+ * charge time, rather than after a decline.
+ */
+export async function sendCustomerCardExpiring(opts: {
+  to: string;
+  clientName: string;
+  brand: string | null;
+  last4: string | null;
+  expLabel: string;
+  jobNumber: number;
+  jobDateLabel: string;
+}) {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const card = `${opts.brand ?? "card"} •••• ${opts.last4 ?? "????"}`;
+
+  const html = layout(
+    h1("Your saved card is expiring") +
+      p(`Hi ${opts.clientName.split(" ")[0]}, your ${card} expires ${opts.expLabel} — before your cleaning on ${opts.jobDateLabel} (booking #${opts.jobNumber}).`) +
+      p("Please add an up-to-date card so we can process payment for that visit without any interruption.") +
+      btn("Update your payment method", `${appUrl}/account`)
+  );
+  return deliver({
+    to: opts.to,
+    subject: "Your saved card expires before your next cleaning",
+    html,
+    notification: { recipient: "CUSTOMER", key: "cust.card.expiring" },
+  });
+}
+
+/** Admin heads-up for the same situation. */
+export async function sendAdminCardExpiring(opts: {
+  clientId: string;
+  clientName: string;
+  brand: string | null;
+  last4: string | null;
+  expLabel: string;
+  jobId: string;
+  jobNumber: number;
+  jobDateLabel: string;
+}) {
+  const admins = await fetchAdmins();
+  if (admins.length === 0) return;
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+
+  const html = layout(
+    h1(`Card expiring — ${opts.clientName}`) +
+      p("This client's default card expires before a booking they already have scheduled. Their payment will fail unless they add a new card.") +
+      section([
+        ["Customer", opts.clientName],
+        ["Card", `${opts.brand ?? "card"} •••• ${opts.last4 ?? "????"}`],
+        ["Expires", opts.expLabel],
+        ["Next booking", `#${opts.jobNumber} on ${opts.jobDateLabel}`],
+      ]) +
+      btn("Open client", `${appUrl}/admin/clients/${opts.clientId}`)
+  );
+
+  for (const admin of admins) {
+    await deliver({
+      to: admin.email,
+      subject: `Card expiring before booking — ${opts.clientName}`,
+      html,
+      notification: { recipient: "ADMIN", key: "admin.card.expiring" },
+    }).catch((e) => console.error("sendAdminCardExpiring", admin.email, e));
+  }
+}
+
 /** Admin email when a customer card is declined. Context picks the catalog key. */
 export async function sendAdminCardDeclined(opts: {
   jobId: string;

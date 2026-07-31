@@ -14,6 +14,26 @@ export default async function PayoutsPage() {
     redirect("/admin/dashboard");
   }
 
+  // Cleaner withdrawal requests, reviewed alongside payroll (new fix list
+  // item 3) — this is where the payment method actually gets chosen.
+  const withdrawalRows = await db.withdrawal.findMany({
+    orderBy: { createdAt: "desc" },
+    take: 100,
+    include: { employee: { select: { name: true, email: true } } },
+  });
+
+  const withdrawals = withdrawalRows.map((w) => ({
+    id: w.id,
+    employeeName: w.employee?.name ?? "Unknown cleaner",
+    employeeEmail: w.employee?.email ?? null,
+    amount: w.amount,
+    status: w.status,
+    paymentMethod: w.paymentMethod,
+    notes: w.notes,
+    createdAt: w.createdAt.toISOString(),
+    processedAt: w.processedAt ? w.processedAt.toISOString() : null,
+  }));
+
   const periods = await db.payPeriod.findMany({
     orderBy: { startDate: "desc" },
     include: {
@@ -68,7 +88,7 @@ export default async function PayoutsPage() {
 
   return (
     <div className="h-full overflow-hidden overflow-y-auto p-8">
-      <PayoutsPageClient initialPeriods={data} />
+      <PayoutsPageClient initialPeriods={data} withdrawals={withdrawals} />
     </div>
   );
 }

@@ -228,6 +228,15 @@ export default function ClientPaymentMethods({
                             Expired
                           </span>
                         )}
+                        {pm.upcomingBookings > 0 && (
+                          <span
+                            className="pill"
+                            style={{ background: "#fef3c7", color: "#92400e" }}
+                            title="Upcoming bookings are pinned to this card and will be charged on it. It can't be removed until they're completed or cancelled.">
+                            {pm.upcomingBookings} upcoming booking
+                            {pm.upcomingBookings === 1 ? "" : "s"}
+                          </span>
+                        )}
                       </div>
                       <div style={{ fontSize: 12, color: "var(--primary-60)", marginTop: 2 }}>
                         Expires {expLabel(pm.expMonth, pm.expYear)}

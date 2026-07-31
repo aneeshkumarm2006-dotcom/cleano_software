@@ -7,6 +7,8 @@ export default async function BulkChargePage() {
 
   const jobs = await db.job.findMany({
     where: {
+      // Archived jobs are never charged (new fix list item 1).
+      deletedAt: null,
       paymentReceived: false,
       status: "COMPLETED",
       isCashJob: false,

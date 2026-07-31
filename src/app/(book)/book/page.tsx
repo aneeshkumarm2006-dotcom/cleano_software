@@ -56,6 +56,14 @@ export default function BookPage() {
   const [submitted, setSubmitted] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [confirmedTotal, setConfirmedTotal] = useState<number | null>(null);
+  // Whether step 1 can offer "Back" to wherever the customer came from. Only
+  // true when there IS somewhere to return to — a visitor who opened /book
+  // directly gets no dead Back control, and we can't send them to "/" because
+  // that's the authenticated portal, which would bounce them to login.
+  const [canLeaveToReferrer, setCanLeaveToReferrer] = useState(false);
+  useEffect(() => {
+    setCanLeaveToReferrer(window.history.length > 1);
+  }, []);
   const [minLeadDays, setMinLeadDays] = useState(1);
   // Per-service-category recurring discount table (item 7), for display.
   const [freqDiscounts, setFreqDiscounts] = useState<
@@ -249,19 +257,28 @@ export default function BookPage() {
       | undefined;
 
     let depositPaymentIntentId: string | undefined;
-    let stripePaymentMethodId: string | undefined;
 
-    if (confirmFn) {
-      const depositResult = await confirmFn();
-      if (!depositResult) {
-        setSubmitError("Payment failed. Please check your card details and try again.");
-        setSubmitting(false);
-        submittingRef.current = false;
-        return;
-      }
-      depositPaymentIntentId = depositResult.paymentIntentId;
-      stripePaymentMethodId = depositResult.paymentMethodId;
+    // The card form registers this. If it never mounted (Stripe failed to
+    // load), we must NOT fall through and submit — the server now requires a
+    // verified deposit and would reject with a generic message, so fail here
+    // with something the customer can act on.
+    if (!confirmFn) {
+      setSubmitError(
+        "The payment form didn't load. Please refresh the page and try again."
+      );
+      setSubmitting(false);
+      submittingRef.current = false;
+      return;
     }
+
+    const depositResult = await confirmFn();
+    if (!depositResult) {
+      setSubmitError("Payment failed. Please check your card details and try again.");
+      setSubmitting(false);
+      submittingRef.current = false;
+      return;
+    }
+    depositPaymentIntentId = depositResult.paymentIntentId;
 
     const res = await submitBooking({
       postalCode: draft.postalCode,
@@ -294,9 +311,9 @@ export default function BookPage() {
       referralCode: draft.referralCode,
       afterPhotoConsent: draft.afterPhotoConsent,
       smsConsent: draft.smsConsent,
+      // The Stripe customer and payment-method ids are intentionally not sent:
+      // the server reads them off the verified PaymentIntent instead.
       depositPaymentIntentId,
-      stripeCustomerId: draft.stripeCustomerId,
-      stripePaymentMethodId,
     });
     setSubmitting(false);
     if (!res.success) {
@@ -538,8 +555,12 @@ export default function BookPage() {
             {STEP_LABELS.map((label, i) => {
               const cls =
                 i < step ? "cl-vstep done" : i === step ? "cl-vstep active" : "cl-vstep";
-              return (
-                <li key={label} className={cls}>
+              // Completed steps are clickable shortcuts back. Only backwards —
+              // jumping forward would skip the per-step validation that gates
+              // Next, so it could reach review with an incomplete draft.
+              const canJump = i < step && !submitting;
+              const dot = (
+                <>
                   <span className="cl-vstep-dot">
                     {i < step ? <Check size={14} strokeWidth={2.4} /> : i + 1}
                   </span>
@@ -547,6 +568,30 @@ export default function BookPage() {
                     <span className="cl-vstep-label">{label}</span>
                     <span className="cl-vstep-hint">{STEP_HINTS[i]}</span>
                   </div>
+                </>
+              );
+              return (
+                <li key={label} className={cls}>
+                  {canJump ? (
+                    <button
+                      type="button"
+                      onClick={() => setStep(i)}
+                      aria-label={`Back to step ${i + 1}: ${label}`}
+                      style={{
+                        display: "contents",
+                        background: "none",
+                        border: "none",
+                        padding: 0,
+                        cursor: "pointer",
+                        textAlign: "left",
+                        font: "inherit",
+                        color: "inherit",
+                      }}>
+                      {dot}
+                    </button>
+                  ) : (
+                    dot
+                  )}
                 </li>
               );
             })}
@@ -758,6 +803,21 @@ export default function BookPage() {
                       : "Continue →"}
                   </Button>
                 </div>
+              </div>
+            ) : canLeaveToReferrer ? (
+              // Step 1 has its own Continue button inside the step, so this row
+              // carries only Back — returning the customer to wherever they came
+              // from rather than stranding them at the start of the flow.
+              <div
+                style={{
+                  display: "flex",
+                  marginTop: 40,
+                  paddingTop: 24,
+                  borderTop: "1px solid var(--primary-10)",
+                }}>
+                <Button variant="ghost" onClick={() => window.history.back()}>
+                  ← Back
+                </Button>
               </div>
             ) : null}
           </div>

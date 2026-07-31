@@ -20,6 +20,7 @@ interface ExportButtonProps {
     status?: string;
     discountedOnly?: boolean;
     unpaidOnly?: boolean;
+    includeArchived?: boolean;
   };
 }
 

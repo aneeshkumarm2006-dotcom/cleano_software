@@ -13,6 +13,9 @@ export async function applyPromoCode(code: string, subtotal: number): Promise<{
     where: {
       code: code.trim().toUpperCase(),
       isActive: true,
+      // Archived codes are soft-deleted, not removed — they must not stay
+      // redeemable just because the row is still there.
+      deletedAt: null,
     },
   });
 

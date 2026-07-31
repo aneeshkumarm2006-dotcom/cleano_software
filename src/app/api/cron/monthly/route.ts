@@ -97,6 +97,8 @@ export async function GET(req: NextRequest) {
     const jobs = await db.job.findMany({
       where: {
         clientId: client.id,
+        // Archived jobs stay off client statements (item 1).
+        deletedAt: null,
         startTime: { gte: period.start, lt: period.end },
       },
       orderBy: { startTime: "asc" },

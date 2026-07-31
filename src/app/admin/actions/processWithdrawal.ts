@@ -4,15 +4,24 @@ import { db } from "@/db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
-import type { WithdrawalStatus } from "@prisma/client";
+import type { PaymentType, WithdrawalStatus } from "@prisma/client";
 import { sendProviderPayoutCompleted } from "@/lib/email";
 
 type Action = "APPROVE" | "REJECT" | "COMPLETE";
 
+interface ProcessOptions {
+  notes?: string;
+  /**
+   * How the payout is being sent. Chosen HERE, by an admin — cleaners submit an
+   * amount only (new fix list item 3). Left null until someone picks one.
+   */
+  paymentMethod?: PaymentType | null;
+}
+
 export async function processWithdrawal(
   withdrawalId: string,
   action: Action,
-  notes?: string
+  opts: ProcessOptions = {}
 ) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) {
@@ -75,7 +84,12 @@ export async function processWithdrawal(
           nextStatus === "COMPLETED" || nextStatus === "REJECTED"
             ? new Date()
             : withdrawal.processedAt,
-        notes: notes?.trim() ? notes.trim() : withdrawal.notes,
+        notes: opts.notes?.trim() ? opts.notes.trim() : withdrawal.notes,
+        // Keep whatever was already recorded when this call doesn't set one.
+        paymentMethod:
+          opts.paymentMethod !== undefined
+            ? opts.paymentMethod
+            : withdrawal.paymentMethod,
       },
     });
 
@@ -85,12 +99,12 @@ export async function processWithdrawal(
         to: withdrawal.employee.email,
         providerName: withdrawal.employee.name ?? "there",
         amount: withdrawal.amount,
-        paymentMethod: withdrawal.paymentMethod,
+        paymentMethod: updated.paymentMethod,
       }).catch((e) => console.error("payout-completed email", e));
     }
 
     revalidatePath("/cleaners/my-pay");
-    revalidatePath("/withdrawals");
+    revalidatePath("/admin/payouts");
 
     return { success: true, withdrawal: updated };
   } catch (error) {

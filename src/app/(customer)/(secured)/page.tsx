@@ -47,13 +47,14 @@ export default async function PortalHome() {
   const now = new Date();
   const [upcoming, pastCount] = await Promise.all([
     db.job.findMany({
-      where: { clientId: client.id, startTime: { gte: now } },
+      // Archived bookings are gone from the customer's portal (item 1).
+      where: { clientId: client.id, deletedAt: null, startTime: { gte: now } },
       orderBy: { startTime: "asc" },
       take: 5,
       include: { cleaners: { select: { id: true, name: true } } },
     }),
     db.job.count({
-      where: { clientId: client.id, startTime: { lt: now } },
+      where: { clientId: client.id, deletedAt: null, startTime: { lt: now } },
     }),
   ]);
 
