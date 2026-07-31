@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, CalendarClock, UserCircle, LogOut, Sparkles, Menu, X } from "lucide-react";
+import { Home, CalendarClock, UserCircle, HelpCircle, LogOut, Sparkles, Menu, X } from "lucide-react";
 import ScrollReset from "@/components/ScrollReset";
 import { useJobChatUnread } from "@/components/JobChatUnread";
 
@@ -121,6 +121,18 @@ export default function PortalShell({
                   className={pathname.startsWith("/account") ? "active" : ""}>
                   <UserCircle size={16} />
                   <span>Account</span>
+                </Link>
+              </li>
+              <li>
+                {/* /faq is the public page and is whitelisted in the proxy;
+                    the in-portal copy lives at /help so it stays behind the
+                    session gate and can't shadow it. */}
+                <Link
+                  href="/help"
+                  onClick={() => setOpen(false)}
+                  className={pathname.startsWith("/help") ? "active" : ""}>
+                  <HelpCircle size={16} />
+                  <span>FAQ</span>
                 </Link>
               </li>
             </ul>

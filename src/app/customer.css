@@ -618,6 +618,47 @@
   font-size: 11px; font-weight: 700;
   display: inline-flex; align-items: center; justify-content: center;
 }
+/* FAQ accordion — portal help centre (CLN-P1-4-01) and the public /faq page. */
+.cl-faq-item {
+  background: #fff;
+  border: 1px solid var(--primary-10);
+  border-radius: 16px;
+  padding: 4px 22px;
+  box-shadow: var(--shadow-soft);
+  transition: border-color .15s;
+}
+.cl-faq-item[open] { border-color: rgba(0,140,156,0.28); }
+.cl-faq-q {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 0;
+  font-size: 15.5px;
+  font-weight: 500;
+  color: var(--ink);
+  cursor: pointer;
+  list-style: none;
+}
+.cl-faq-q::-webkit-details-marker { display: none; }
+.cl-faq-chevron {
+  flex-shrink: 0;
+  width: 9px; height: 9px;
+  border-right: 2px solid var(--primary-50);
+  border-bottom: 2px solid var(--primary-50);
+  transform: rotate(45deg) translate(-2px, -2px);
+  transition: transform .18s;
+}
+.cl-faq-item[open] .cl-faq-chevron { transform: rotate(-135deg) translate(-2px, -2px); }
+.cl-faq-a {
+  margin: 0;
+  padding: 0 0 18px;
+  font-size: 14.5px;
+  line-height: 1.65;
+  color: var(--primary-70);
+  white-space: pre-wrap;
+}
+
 .cl-psidebar-user {
   margin-top: auto;
   padding: 14px;
