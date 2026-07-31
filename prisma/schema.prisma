@@ -2460,7 +2460,49 @@ model Faq {
   createdAt  DateTime      @default(now())
   updatedAt  DateTime      @updatedAt
   category   FaqCategory?  @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  events     FaqEvent[]
 
   @@index([status, visibility])
   @@index([categoryId, sortOrder])
+}
+
+/**
+ * FAQ analytics (CLN-P1-4-17). The requirement asks for four things and two of
+ * them are the same signal on an accordion, which this records rather than
+ * inventing a distinction:
+ * most-viewed questions   → OPEN   ┐ identical: a question is only ever
+ * questions opened most   → OPEN   ┘ "viewed" by being expanded
+ * popular searches        → SEARCH (debounced, so one search is one row)
+ * searches with no result → SEARCH_NO_RESULT
+ * VIEW is one row per FAQ page load (faqId NULL) and exists as the denominator
+ * — "40 opens across 300 visits" says something "40 opens" does not.
+ * ⚠️ The public page must be able to write here, so the action behind this is
+ * unauthenticated and unmetered — the same gap as /api/stripe/charge-deposit
+ * and lead/quote submission. Flagged, not silently patched: rate limiting is a
+ * separate ticket, and fixing it here alone would imply the money endpoints
+ * were covered too.
+ */
+enum FaqEventType {
+  VIEW
+  OPEN
+  SEARCH
+  SEARCH_NO_RESULT
+}
+
+model FaqEvent {
+  id        String       @id @default(cuid())
+  type      FaqEventType
+  // SetNull, not Cascade: deleting a question must not rewrite history and
+  // erase the traffic it once had.
+  faqId     String?
+  // Normalised search term (lowercased, trimmed, capped) for SEARCH events.
+  query     String?
+  /// "public" | "portal"
+  surface   String
+  createdAt DateTime     @default(now())
+  faq       Faq?         @relation(fields: [faqId], references: [id], onDelete: SetNull)
+
+  @@index([type, createdAt])
+  @@index([faqId, type])
+  @@index([query])
 }

@@ -63,6 +63,7 @@ export default async function FaqPage({
         <FaqAccordion
           groups={groups}
           lang={lang}
+          surface="public"
           langHref={(l) => (l === "fr" ? "/faq?lang=fr" : "/faq")}
           emptyMessage={
             lang === "fr"

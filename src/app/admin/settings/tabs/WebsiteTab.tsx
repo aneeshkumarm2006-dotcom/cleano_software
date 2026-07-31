@@ -9,6 +9,7 @@ import { AppSettingRecord, getSetting } from "../types";
 import { SectionCard, Field, Feedback, Msg } from "./_shared";
 import { SETTINGS } from "@/lib/settings/registry";
 import FaqManager from "./FaqManager";
+import FaqAnalyticsPanel from "./FaqAnalyticsPanel";
 
 const DOMAIN = SETTINGS["website.customDomain"];
 
@@ -74,6 +75,10 @@ export default function WebsiteTab({ settings }: Props) {
           FAQ pages until you publish them.
         </p>
         <FaqManager />
+      </div>
+
+      <div style={{ marginTop: 26, borderTop: "1px solid var(--primary-10)", paddingTop: 20 }}>
+        <FaqAnalyticsPanel />
       </div>
 
       <EmbedCodes domain={domain} />

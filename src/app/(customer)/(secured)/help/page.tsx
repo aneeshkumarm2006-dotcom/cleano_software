@@ -50,6 +50,7 @@ export default async function PortalFaqPage({
       <FaqAccordion
         groups={groups}
         lang={lang}
+        surface="portal"
         langHref={(l) => (l === "fr" ? "/help?lang=fr" : "/help")}
         emptyMessage={
           lang === "fr"

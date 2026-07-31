@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Search, X } from "lucide-react";
 import type { FaqGroup, FaqLang } from "@/lib/faq";
+import { recordFaqEvent } from "@/lib/faqAnalytics";
 
 /**
  * Searchable, categorised FAQ accordion, shared by the public /faq page and the
@@ -21,12 +22,15 @@ export default function FaqAccordion({
   emptyMessage = "No FAQs are available right now. Please contact our office for help.",
   lang = "en",
   langHref,
+  surface = "public",
 }: {
   groups: FaqGroup[];
   emptyMessage?: string;
   lang?: FaqLang;
   /** Builds the href for the EN/FR switch. Omit to hide the switch. */
   langHref?: (lang: FaqLang) => string;
+  /** Which page this is, for analytics (CLN-P1-4-17). */
+  surface?: "public" | "portal";
 }) {
   const [query, setQuery] = useState("");
 
@@ -59,6 +63,45 @@ export default function FaqAccordion({
     () => matched.reduce((n, g) => n + g.items.length, 0),
     [matched]
   );
+
+  /* ── Analytics (CLN-P1-4-17) ─────────────────────────────────────────────
+     All three writes are fire-and-forget: the server action swallows its own
+     failures, and nothing here awaits them, so a slow or broken analytics call
+     can never delay a reader's answer. */
+
+  // One VIEW per page load. The ref survives React's development double-mount,
+  // which would otherwise double every visit count.
+  const viewSent = useRef(false);
+  useEffect(() => {
+    if (viewSent.current) return;
+    viewSent.current = true;
+    void recordFaqEvent({ type: "VIEW", surface });
+  }, [surface]);
+
+  // Searches are debounced so one search is one row, not one per keystroke,
+  // and a term is only recorded once it stops changing.
+  useEffect(() => {
+    const term = query.trim();
+    if (term.length < 2) return;
+    const t = setTimeout(() => {
+      void recordFaqEvent({
+        // The distinction the requirement actually asks for: which searches are
+        // popular, and which ones find nothing.
+        type: matchCount === 0 ? "SEARCH_NO_RESULT" : "SEARCH",
+        query: term,
+        surface,
+      });
+    }, 700);
+    return () => clearTimeout(t);
+  }, [query, matchCount, surface]);
+
+  function handleToggle(id: string, e: React.SyntheticEvent<HTMLDetailsElement>) {
+    // Only the expansion counts — collapsing again is not a second read.
+    if (!e.currentTarget.open) return;
+    // Legacy fallback ids have no row to point at; the server drops the id and
+    // keeps the event.
+    void recordFaqEvent({ type: "OPEN", faqId: id, surface });
+  }
 
   const t =
     lang === "fr"
@@ -173,7 +216,8 @@ export default function FaqAccordion({
                     // neighbour.
                     key={f.id}
                     className="cl-faq-item"
-                    open={searching && matchCount === 1}>
+                    open={searching && matchCount === 1}
+                    onToggle={(e) => handleToggle(f.id, e)}>
                     <summary className="cl-faq-q">
                       <span>{f.question}</span>
                       <span className="cl-faq-chevron" aria-hidden="true" />
