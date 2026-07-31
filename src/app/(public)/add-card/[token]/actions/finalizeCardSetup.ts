@@ -3,6 +3,7 @@
 import { db } from "@/db";
 import { stripe } from "@/lib/stripe";
 import { logActivity } from "@/lib/activity-log";
+import { notifyCardReplaced } from "@/lib/payment-methods";
 
 /**
  * Called after `stripe.confirmSetup` succeeds on the public /add-card
@@ -113,6 +114,13 @@ export async function finalizeCardSetup(input: {
       previousDefaultPaymentMethodId: previousDefault,
       source: "add-card-link",
     },
+  });
+
+  await notifyCardReplaced({
+    clientId: client.id,
+    previousDefaultPaymentMethodId: previousDefault,
+    newDefaultPaymentMethodId: paymentMethodId,
+    reason: `${client.name} added a new card via the emailed add-card link, and it is now their default.`,
   });
 
   return { success: true };

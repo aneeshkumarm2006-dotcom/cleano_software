@@ -6,7 +6,7 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { stripe, getOrCreateStripeCustomer } from "@/lib/stripe";
 import { logActivity } from "@/lib/activity-log";
-import { getCardRemovalBlock } from "@/lib/payment-methods";
+import { getCardRemovalBlock, notifyCardReplaced } from "@/lib/payment-methods";
 
 /**
  * Customer-facing payment methods (Account → Payment methods).
@@ -296,6 +296,13 @@ export async function finalizeMyCardSetup(
       },
     });
 
+    await notifyCardReplaced({
+      clientId: client.id,
+      previousDefaultPaymentMethodId: previousDefault,
+      newDefaultPaymentMethodId: paymentMethodId,
+      reason: `${client.name} added a new card from their account, and it is now their default.`,
+    });
+
     revalidatePath("/account");
     return { success: true };
   } catch (error) {
@@ -360,6 +367,13 @@ export async function setMyDefaultPaymentMethod(
         previousDefaultPaymentMethodId: previousDefault,
         source: "customer_account",
       },
+    });
+
+    await notifyCardReplaced({
+      clientId: client.id,
+      previousDefaultPaymentMethodId: previousDefault,
+      newDefaultPaymentMethodId: owned.id,
+      reason: `${client.name} switched their default card from their account.`,
     });
 
     revalidatePath("/account");
@@ -462,6 +476,12 @@ export async function removeMyPaymentMethod(
           }),
         ]);
         warning = `${next.brand ?? "Your other card"} •••• ${next.last4 ?? "????"} is now your default payment method.`;
+        await notifyCardReplaced({
+          clientId: client.id,
+          previousDefaultPaymentMethodId: owned.id,
+          newDefaultPaymentMethodId: next.stripePaymentMethodId,
+          reason: `${client.name} removed their default card from their account, so the newest remaining card was promoted.`,
+        });
       } else {
         await db.client.update({
           where: { id: client.id },

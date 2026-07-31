@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { db } from "@/db";
 import { logActivity } from "@/lib/activity-log";
+import { notifyCardReplaced } from "@/lib/payment-methods";
 import {
   queueAndSendReceipt,
   queueAndSendRefund,
@@ -181,6 +182,7 @@ async function handleSetupIntentSucceeded(si: Stripe.SetupIntent) {
   });
 
   const isNewCard = client && client.defaultPaymentMethodId !== paymentMethodId;
+  const previousDefault = client?.defaultPaymentMethodId ?? null;
 
   await db.client.updateMany({
     where: { stripeCustomerId: customerId },
@@ -199,6 +201,17 @@ async function handleSetupIntentSucceeded(si: Stripe.SetupIntent) {
       clientName: client.name,
       clientEmail: client.email ?? "—",
     }).catch((e) => console.error("admin new-card email", e));
+
+    // A card that displaces an existing default is a replacement, not just an
+    // addition. Deduplicated on the new card's id, so whichever of this webhook
+    // and the action that saved the card gets there first wins and the other
+    // is a no-op.
+    await notifyCardReplaced({
+      clientId: client.id,
+      previousDefaultPaymentMethodId: previousDefault,
+      newDefaultPaymentMethodId: paymentMethodId,
+      reason: `${client.name} added a new card, and it is now their default.`,
+    });
   }
 }
 

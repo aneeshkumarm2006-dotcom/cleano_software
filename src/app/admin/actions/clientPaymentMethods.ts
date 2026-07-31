@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { stripe } from "@/lib/stripe";
 import { requireOwnerAdmin } from "@/lib/action-guards";
 import { logActivity } from "@/lib/activity-log";
-import { getCardRemovalBlock } from "@/lib/payment-methods";
+import { getCardRemovalBlock, notifyCardReplaced } from "@/lib/payment-methods";
 import { revalidatePath } from "next/cache";
 import { randomBytes } from "crypto";
 import { sendAccountEmail } from "@/lib/email";
@@ -345,6 +345,13 @@ export async function setDefaultClientPaymentMethod(input: {
       extra: { previousDefaultPaymentMethodId: previousDefault },
     });
 
+    await notifyCardReplaced({
+      clientId: client.id,
+      previousDefaultPaymentMethodId: previousDefault,
+      newDefaultPaymentMethodId: paymentMethodId,
+      reason: `An admin made a different saved card the default for ${client.name}.`,
+    });
+
     revalidatePath(`/admin/clients/${client.id}`);
     revalidatePath("/admin/jobs");
     return { success: true };
@@ -463,6 +470,12 @@ export async function removeClientPaymentMethod(input: {
           }),
         ]);
         warning = `Removed the default card — ${next.brand ?? "card"} •••• ${next.last4 ?? "????"} is now the default.`;
+        await notifyCardReplaced({
+          clientId: client.id,
+          previousDefaultPaymentMethodId: paymentMethodId,
+          newDefaultPaymentMethodId: next.stripePaymentMethodId,
+          reason: `An admin removed ${client.name}'s default card, so the newest remaining card was promoted.`,
+        });
       } else {
         await db.client.update({
           where: { id: client.id },

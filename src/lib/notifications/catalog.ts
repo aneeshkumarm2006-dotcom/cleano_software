@@ -280,6 +280,15 @@ export const NOTIFICATION_CATALOG: CatalogEntry[] = [
   {
     recipient: "ADMIN",
     category: "Payments / cards",
+    key: "admin.card.replaced",
+    label: "Saved card replaced before an upcoming booking",
+    trigger:
+      "A client's default card changes to a different card while they have a booking scheduled — added, switched, or promoted after the old one was removed.",
+    channels: { EMAIL: true, SMS: false },
+  },
+  {
+    recipient: "ADMIN",
+    category: "Payments / cards",
     key: "admin.card.declined_on_hold",
     label: "Card declined on hold",
     trigger: "Card declines while trying to place a hold.",

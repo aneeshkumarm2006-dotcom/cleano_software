@@ -64,6 +64,136 @@ export async function countUpcomingBookingsOnCard(
   });
 }
 
+/**
+ * Tell admins a client's default card was replaced before an upcoming job
+ * (CLN-P1-7-09, the third of "fails, expires, or is replaced").
+ *
+ * "Replaced" is a *change of default from one card to another*, which is the
+ * one event that changes what gets charged. It therefore covers all three ways
+ * that happens — a new card added (which auto-defaults), a different saved card
+ * chosen, or the newest remaining card promoted after the default was removed —
+ * and deliberately excludes a client's FIRST card, which replaces nothing.
+ *
+ * Every default-changing path calls this, rather than each one deciding for
+ * itself, so the admin surface, the customer account, the emailed add-card link
+ * and the Stripe webhook can't drift apart on when this fires.
+ *
+ * Never throws: a notification must not be able to fail a card operation that
+ * has already been committed to Stripe.
+ */
+export async function notifyCardReplaced(opts: {
+  clientId: string;
+  previousDefaultPaymentMethodId: string | null;
+  newDefaultPaymentMethodId: string;
+  /** Plain-words explanation of how the change happened, for the email body. */
+  reason: string;
+}): Promise<void> {
+  try {
+    // A first card replaces nothing, and re-confirming the same card is not a
+    // change at all.
+    if (!opts.previousDefaultPaymentMethodId) return;
+    if (opts.previousDefaultPaymentMethodId === opts.newDefaultPaymentMethodId)
+      return;
+
+    const client = await db.client.findUnique({
+      where: { id: opts.clientId },
+      select: { id: true, name: true },
+    });
+    if (!client) return;
+
+    // "…before an upcoming job": a client with nothing booked has nothing at
+    // risk, and admins don't need the noise.
+    const upcoming = await db.job.findMany({
+      where: {
+        clientId: opts.clientId,
+        deletedAt: null,
+        status: { notIn: ["CANCELLED"] },
+        startTime: { gte: new Date() },
+      },
+      orderBy: { startTime: "asc" },
+      select: { jobNumber: true, startTime: true },
+    });
+    if (upcoming.length === 0) return;
+
+    // One notice per card that becomes the default. Without this, a customer
+    // toggling between two saved cards would mail every admin on each toggle.
+    const already = await db.emailLog.findFirst({
+      where: {
+        notificationKey: "admin.card.replaced",
+        providerId: opts.newDefaultPaymentMethodId,
+        recipient: "admins",
+        status: { in: ["SENT", "PENDING", "FAILED"] },
+      },
+      select: { id: true },
+    });
+    if (already) return;
+    const log = await db.emailLog.create({
+      data: {
+        kind: "OTHER",
+        notificationKey: "admin.card.replaced",
+        recipient: "admins",
+        subject: "admin.card.replaced",
+        status: "PENDING",
+        providerId: opts.newDefaultPaymentMethodId,
+      },
+      select: { id: true },
+    });
+
+    const [newCard, oldCard] = await Promise.all([
+      db.clientPaymentMethod.findFirst({
+        where: {
+          clientId: opts.clientId,
+          stripePaymentMethodId: opts.newDefaultPaymentMethodId,
+        },
+        select: { brand: true, last4: true },
+      }),
+      db.clientPaymentMethod.findFirst({
+        where: {
+          clientId: opts.clientId,
+          stripePaymentMethodId: opts.previousDefaultPaymentMethodId,
+        },
+        select: { brand: true, last4: true },
+      }),
+    ]);
+
+    const next = upcoming[0];
+    // Imported lazily: email.ts pulls in Resend and the whole template set, and
+    // this module is imported by charge paths that must stay light.
+    const { sendAdminCardReplaced } = await import("@/lib/email");
+    try {
+      await sendAdminCardReplaced({
+        clientId: client.id,
+        clientName: client.name,
+        newBrand: newCard?.brand ?? null,
+        newLast4: newCard?.last4 ?? null,
+        // The old card's mirror row is already gone when the replacement came
+        // from a removal, so this is best-effort by design.
+        oldBrand: oldCard?.brand ?? null,
+        oldLast4: oldCard?.last4 ?? null,
+        reason: opts.reason,
+        upcomingBookings: upcoming.length,
+        nextJobNumber: next.jobNumber,
+        nextJobDateLabel: next.startTime.toLocaleDateString("en-CA", {
+          weekday: "long",
+          month: "long",
+          day: "numeric",
+        }),
+      });
+      await db.emailLog.update({
+        where: { id: log.id },
+        data: { status: "SENT" },
+      });
+    } catch (e) {
+      console.error("notifyCardReplaced send", opts.clientId, e);
+      await db.emailLog
+        .update({ where: { id: log.id }, data: { status: "FAILED" } })
+        .catch(() => {});
+    }
+  } catch (e) {
+    console.error("notifyCardReplaced", opts.clientId, e);
+  }
+}
+
 export interface CardRemovalBlock {
   /** Bookings not yet in the past that still need a payment method. */
   upcomingCount: number;

@@ -974,6 +974,64 @@ export async function sendAdminCardExpiring(opts: {
   }
 }
 
+/**
+ * Admin email when a client's default card is swapped for a different one while
+ * they still have a booking scheduled. Completes CLN-P1-7-09 alongside the
+ * failure and expiry notices.
+ */
+export async function sendAdminCardReplaced(opts: {
+  clientId: string;
+  clientName: string;
+  newBrand: string | null;
+  newLast4: string | null;
+  oldBrand: string | null;
+  oldLast4: string | null;
+  /** How the change happened, in plain words for the email body. */
+  reason: string;
+  upcomingBookings: number;
+  nextJobNumber: number | null;
+  nextJobDateLabel: string | null;
+}) {
+  const admins = await fetchAdmins();
+  if (admins.length === 0) return;
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+
+  const html = layout(
+    h1(`Card replaced — ${opts.clientName}`) +
+      p(
+        `${opts.reason} This client has ${opts.upcomingBookings} upcoming booking${
+          opts.upcomingBookings === 1 ? "" : "s"
+        }; bookings already pinned to the old card keep charging it, and anything not pinned will now charge the new one.`
+      ) +
+      section([
+        ["Customer", opts.clientName],
+        ["New default", `${opts.newBrand ?? "card"} •••• ${opts.newLast4 ?? "????"}`],
+        [
+          "Previous default",
+          opts.oldLast4
+            ? `${opts.oldBrand ?? "card"} •••• ${opts.oldLast4}`
+            : "—",
+        ],
+        [
+          "Next booking",
+          opts.nextJobNumber
+            ? `#${opts.nextJobNumber} on ${opts.nextJobDateLabel}`
+            : "—",
+        ],
+      ]) +
+      btn("Open client", `${appUrl}/admin/clients/${opts.clientId}`)
+  );
+
+  for (const admin of admins) {
+    await deliver({
+      to: admin.email,
+      subject: `Card replaced before booking — ${opts.clientName}`,
+      html,
+      notification: { recipient: "ADMIN", key: "admin.card.replaced" },
+    }).catch((e) => console.error("sendAdminCardReplaced", admin.email, e));
+  }
+}
+
 /** Admin email when a customer card is declined. Context picks the catalog key. */
 export async function sendAdminCardDeclined(opts: {
   jobId: string;
