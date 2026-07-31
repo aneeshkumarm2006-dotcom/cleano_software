@@ -36,6 +36,76 @@ const STEP_HINTS = [
   "Confirm & book",
 ] as const;
 
+const LAST_STEP = STEP_LABELS.length - 1;
+
+/**
+ * Where an in-progress booking is parked so browser Back — or a reload, or a
+ * tab restore — doesn't throw the answers away.
+ *
+ * sessionStorage, not localStorage: this holds the customer's name, address,
+ * email and phone, and it should die with the tab rather than sit on a shared
+ * computer. The version suffix means a future change to BookingDraft can't
+ * resurrect a stale shape.
+ */
+const DRAFT_STORAGE_KEY = "cleano.book.draft.v1";
+
+interface StoredDraft {
+  v: 1;
+  step: number;
+  draft: BookingDraft;
+}
+
+/**
+ * What a given step requires before the wizard may move past it. Pure, and
+ * module-level, so the same rule gates the Continue button, the browser's
+ * Forward button, and a restored session — rather than the first of those
+ * having a rule the other two can walk around.
+ */
+function stepRequirementsMet(
+  s: number,
+  draft: BookingDraft,
+  agree: boolean
+): boolean {
+  switch (s) {
+    case 0:
+      return draft.postalCovered === true;
+    case 1:
+      if (!(draft.address.trim() && draft.serviceType && draft.frequency))
+        return false;
+      // Move-in/out is priced per square foot — require it before continuing.
+      if (draft.serviceType === "MOVE_IN_OUT" && !(draft.squareFootage > 0))
+        return false;
+      return true;
+    case 2:
+      return !!(
+        draft.date &&
+        (draft.isFlexible || (draft.timeSlot && draft.timeSlotValid !== false))
+      );
+    case 3:
+      return !!(
+        draft.name.trim() &&
+        isValidEmail(draft.email) &&
+        isValidPhone(draft.phone)
+      );
+    case 4:
+      return agree && !!draft.stripeCardReady;
+    default:
+      return false;
+  }
+}
+
+/**
+ * The furthest step a draft actually justifies being on: the first step whose
+ * own requirements aren't met. Step 4's requirements (terms ticked, card ready)
+ * gate submission, not arrival, so they are deliberately not consulted here.
+ */
+function maxReachableStep(draft: BookingDraft, agree: boolean): number {
+  for (let i = 0; i < LAST_STEP; i++) {
+    if (!stepRequirementsMet(i, draft, agree)) return i;
+  }
+  return LAST_STEP;
+}
+
 export default function BookPage() {
   const session = authClient.useSession();
   const loggedInUser = session.data?.session
@@ -79,6 +149,19 @@ export default function BookPage() {
   // could fire two requests. This ref blocks the second one synchronously.
   const submittingRef = useRef(false);
 
+  // ── Draft persistence + history sync ──────────────────────────────────────
+  // True once the restore pass has run, so the save effect can't write an empty
+  // draft over a stored one on the very first render.
+  const hydratedRef = useRef(false);
+  // A restored draft's add-on selection, replayed once the live catalog loads
+  // (see below) so prices come from the server rather than from storage.
+  const restoredAddOnKeysRef = useRef<string[] | null>(null);
+  // Suppresses the smsConsent default when the customer's own choice was
+  // restored — a stored "unchecked" must not silently flip back to opted in.
+  const restoredDraftRef = useRef(false);
+  const stepRef = useRef(0);
+  stepRef.current = step;
+
   // Pre-fill contact info when the visitor is already signed in.
   useEffect(() => {
     if (!isLoggedInClient || !loggedInUser) return;
@@ -90,6 +173,101 @@ export default function BookPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoggedInClient, loggedInUser?.email]);
 
+  // Restore an interrupted booking, then lay down one history entry per step
+  // already completed so browser Back walks back through the wizard instead of
+  // leaving it. Runs once, before anything can write to storage.
+  useEffect(() => {
+    let restoredStep = 0;
+    try {
+      const raw = sessionStorage.getItem(DRAFT_STORAGE_KEY);
+      if (raw) {
+        const saved = JSON.parse(raw) as StoredDraft | null;
+        if (saved && saved.v === 1 && saved.draft) {
+          const restoredDraft: BookingDraft = {
+            ...EMPTY_DRAFT,
+            ...saved.draft,
+            // Re-fetched from the live catalog below, so a price that changed
+            // while the tab sat idle can't be quoted from storage.
+            addOns: [],
+            // A restored session has no mounted Stripe Element, so nothing may
+            // look like a card is ready to charge. The customer re-enters the
+            // card (and re-ticks the terms box, which is never stored) before
+            // Confirm can fire.
+            stripeCardReady: false,
+            stripeCustomerId: undefined,
+          };
+          restoredAddOnKeysRef.current = (saved.draft.addOns ?? [])
+            .filter((a) => a.selected)
+            .map((a) => a.id ?? a.name);
+          restoredDraftRef.current = true;
+          setDraft(restoredDraft);
+          // The stored step is only a hint — it is checked against the stored
+          // draft with the same rule that gates Continue, so nothing hand-edited
+          // into storage can open a step the answers don't support. `agree` is
+          // never stored, hence false.
+          restoredStep = Math.min(
+            Math.max(0, Math.floor(saved.step ?? 0)),
+            maxReachableStep(restoredDraft, false)
+          );
+          setStep(restoredStep);
+        }
+      }
+    } catch {
+      // Storage unavailable or corrupt — start clean rather than break booking.
+    }
+    try {
+      window.history.replaceState({ ...window.history.state, bookStep: 0 }, "");
+      for (let i = 1; i <= restoredStep; i++) {
+        window.history.pushState({ bookStep: i }, "");
+      }
+    } catch {
+      /* ignore */
+    }
+    hydratedRef.current = true;
+  }, []);
+
+  // Replay a restored add-on selection onto the freshly loaded catalog.
+  useEffect(() => {
+    const keys = restoredAddOnKeysRef.current;
+    if (!keys || draft.addOns.length === 0) return;
+    restoredAddOnKeysRef.current = null;
+    if (keys.length === 0) return;
+    setDraft((d) => ({
+      ...d,
+      addOns: d.addOns.map((a) =>
+        keys.includes(a.id ?? a.name) ? { ...a, selected: true } : a
+      ),
+    }));
+  }, [draft.addOns]);
+
+  // Persist after every change. The draft is small, so this is a plain write
+  // rather than another debounce to reason about.
+  useEffect(() => {
+    if (!hydratedRef.current || submitted) return;
+    try {
+      const payload: StoredDraft = {
+        v: 1,
+        step,
+        // Never persist anything that could make a restored tab look
+        // payment-ready.
+        draft: { ...draft, stripeCardReady: false, stripeCustomerId: undefined },
+      };
+      sessionStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(payload));
+    } catch {
+      /* quota or private mode — persistence is a convenience, not a dependency */
+    }
+  }, [draft, step, submitted]);
+
+  // A completed booking must not be restorable.
+  useEffect(() => {
+    if (!submitted) return;
+    try {
+      sessionStorage.removeItem(DRAFT_STORAGE_KEY);
+    } catch {
+      /* ignore */
+    }
+  }, [submitted]);
+
   // Load admin-managed add-on catalog on first mount.
   useEffect(() => {
     let cancelled = false;
@@ -98,7 +276,11 @@ export default function BookPage() {
       setMinLeadDays(minLeadDays);
       setFreqDiscounts(frequencyDiscounts);
       setServiceContent(serviceContent);
-      setDraft((d) => ({ ...d, smsConsent: smsOptInDefault }));
+      // Only seed the default when this isn't a restored session — otherwise a
+      // customer who deliberately opted out gets silently opted back in.
+      if (!restoredDraftRef.current) {
+        setDraft((d) => ({ ...d, smsConsent: smsOptInDefault }));
+      }
       setDraft((d) =>
         d.addOns.length > 0
           ? d
@@ -202,47 +384,93 @@ export default function BookPage() {
     setDraft((d) => ({ ...d, ...p }));
   }
 
-  function canProceed(): boolean {
-    switch (step) {
-      case 0:
-        return draft.postalCovered === true;
-      case 1:
-        if (!(draft.address.trim() && draft.serviceType && draft.frequency))
-          return false;
-        // Move-in/out is priced per square foot — require it before continuing.
-        if (draft.serviceType === "MOVE_IN_OUT" && !(draft.squareFootage > 0))
-          return false;
-        return true;
-      case 2:
-        return !!(
-          draft.date &&
-          (draft.isFlexible || (draft.timeSlot && draft.timeSlotValid !== false))
-        );
-      case 3:
-        return !!(
-          draft.name.trim() &&
-          isValidEmail(draft.email) &&
-          isValidPhone(draft.phone)
-        );
-      case 4:
-        return agree && !!draft.stripeCardReady;
-      default:
-        return false;
-    }
+  function canProceedFrom(s: number): boolean {
+    return stepRequirementsMet(s, draft, agree);
   }
+
+  function canProceed(): boolean {
+    return canProceedFrom(step);
+  }
+
+  // Read by the popstate listener, which is registered once and would otherwise
+  // close over a stale draft.
+  const maxReachableRef = useRef(0);
+  maxReachableRef.current = maxReachableStep(draft, agree);
+
+  /** Forward one step: a new history entry, so Back returns here. */
+  function advanceTo(n: number) {
+    try {
+      window.history.pushState({ bookStep: n }, "");
+    } catch {
+      /* ignore */
+    }
+    setStep(n);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  /**
+   * Backwards: pop the history instead of setting state, so the wizard's own
+   * Back control and the browser's are the same action and can't disagree
+   * about where the stack is. Falls back to plain state if the current entry
+   * isn't one of ours (then the button still works).
+   */
+  function retreatTo(n: number) {
+    const from = stepRef.current;
+    if (n >= from) return;
+    const ours = (window.history.state as { bookStep?: number } | null)?.bookStep;
+    if (typeof ours === "number") {
+      window.history.go(n - from);
+      return;
+    }
+    setStep(n);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  // Browser Back / Forward drive the wizard rather than leaving it.
+  useEffect(() => {
+    function onPopState(e: PopStateEvent) {
+      const target = (e.state as { bookStep?: number } | null)?.bookStep;
+      if (typeof target !== "number") return; // not ours — let it navigate
+
+      // Mid-payment: the deposit confirmation is already in flight and the
+      // booking may be moments from existing. Stay put and put the entry back.
+      if (submittingRef.current) {
+        try {
+          window.history.pushState({ bookStep: stepRef.current }, "");
+        } catch {
+          /* ignore */
+        }
+        return;
+      }
+
+      const clamped = Math.max(0, Math.min(target, maxReachableRef.current));
+      if (clamped !== target) {
+        // Refused to open the step the entry asked for (an answer it depends on
+        // has since been cleared). Relabel the entry we're on so the stack never
+        // claims a step that isn't the one being shown.
+        try {
+          window.history.replaceState({ bookStep: clamped }, "");
+        } catch {
+          /* ignore */
+        }
+      }
+      setStep(clamped);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
 
   function next() {
     if (!canProceed()) return;
-    if (step === 4) {
+    if (step === LAST_STEP) {
       handleSubmit();
       return;
     }
-    setStep((s) => s + 1);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    advanceTo(step + 1);
   }
   function back() {
-    setStep((s) => Math.max(0, s - 1));
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    retreatTo(Math.max(0, step - 1));
   }
 
   async function handleSubmit() {
@@ -586,7 +814,7 @@ export default function BookPage() {
                   {canJump ? (
                     <button
                       type="button"
-                      onClick={() => setStep(i)}
+                      onClick={() => retreatTo(i)}
                       aria-label={`Back to step ${i + 1}: ${label}`}
                       style={{
                         display: "contents",
@@ -717,7 +945,7 @@ export default function BookPage() {
               <Step1PostalCode
                 draft={draft}
                 onChange={patch}
-                onContinue={() => setStep(1)}
+                onContinue={() => advanceTo(1)}
               />
             )}
             {step === 1 && (
