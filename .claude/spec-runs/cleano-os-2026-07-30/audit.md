@@ -440,6 +440,9 @@ Verified: `npx tsc --noEmit` clean, `npm run build` exit 0, migration applied an
 
 ## 2026-07-31 — WP-5: promo codes actually discount the booking (no migration)
 
+Commit `0f55fb0` on `main` — **committed, not pushed** (a push is a production deploy and
+the DB-backed checks below are still outstanding).
+
 Verified: `npx tsc --noEmit` clean, `npm run build` exit 0, 18/18 money-math assertions.
 **Not yet verified against the database** — see "Environment gap" below.
 
