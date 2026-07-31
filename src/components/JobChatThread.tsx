@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Send, MessageSquare, Paperclip, X } from "lucide-react";
+import { Send, MessageSquare, MessageSquareOff, Paperclip, X } from "lucide-react";
 import useSWR from "swr";
 import {
   getJobChatMessages,
@@ -348,8 +348,22 @@ export default function JobChatThread({
         <div ref={bottomRef} aria-hidden="true" />
       </div>
 
+      {/* Messaging switched off for this viewer (CLN-P0-3-14). The thread above
+          stays readable — only the composer goes. Admins are never blocked, so
+          this never fires on the admin surface. */}
+      {canSend && data?.messagingDisabled && (
+        <div className="chat-composer chat-disabled-note">
+          <MessageSquareOff size={15} aria-hidden="true" />
+          <span>
+            {data.messagingDisabledReason ??
+              "Messaging is turned off for this booking."}{" "}
+            You can still read everything that was sent.
+          </span>
+        </div>
+      )}
+
       {/* Composer */}
-      {canSend && (
+      {canSend && !data?.messagingDisabled && (
         <div className="chat-composer" style={{ padding: "12px 16px 14px" }}>
           {sendError && (
             <div

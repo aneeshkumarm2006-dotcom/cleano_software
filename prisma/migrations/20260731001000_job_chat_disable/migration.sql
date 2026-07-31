@@ -1,0 +1,43 @@
+-- Disable job-chat messaging per booking or per user (CLN-P0-3-14).
+--
+-- One nullable timestamp on each of the three entities the spec's "a specific
+-- booking or user" can mean:
+--
+--   Job.chatDisabledAt     — this booking's thread is closed to both parties
+--   User.chatDisabledAt    — this cleaner is blocked on every job they work
+--   Client.chatDisabledAt  — this customer is blocked on every booking
+--
+-- NULL means "messaging allowed", so every existing row is allowed and nothing
+-- changes until an admin flips a switch. No `chatDisabledBy` / reason columns:
+-- who, when and why is exactly what logActivity() already records, and the
+-- server actions write an ADMIN activity row on every flip.
+--
+-- Semantics enforced in code, recorded here so the columns are not
+-- misinterpreted later:
+--   * Disabled is READ-ONLY, never invisible. The thread still renders its full
+--     history; only the composer is withdrawn. Hiding history would contradict
+--     CLN-P0-3-10 (visible after completion) and CLN-P0-3-15 (permanent record).
+--   * Admins are exempt. Moderation is the reason the switch exists and someone
+--     has to be able to say why the thread was closed.
+--   * Enforced in sendJobChatMessage, sendJobChatPhoto AND the Twilio inbound
+--     webhook — without the third, a blocked customer just texts instead.
+--
+-- PRE-FLIGHT (should return 0 — none of the columns may already exist):
+--   SELECT count(*) FROM information_schema.columns
+--    WHERE column_name = 'chatDisabledAt'
+--      AND table_name IN ('Job','User','Client');
+--
+-- POST-APPLY VERIFICATION (expect 3 rows, all is_nullable = YES, no defaults):
+--   SELECT table_name, column_name, is_nullable, column_default
+--     FROM information_schema.columns
+--    WHERE column_name = 'chatDisabledAt'
+--      AND table_name IN ('Job','User','Client');
+--
+-- ROLLBACK (no data loss — nothing is backfilled):
+--   ALTER TABLE "Job"    DROP COLUMN "chatDisabledAt";
+--   ALTER TABLE "User"   DROP COLUMN "chatDisabledAt";
+--   ALTER TABLE "Client" DROP COLUMN "chatDisabledAt";
+
+ALTER TABLE "Job" ADD COLUMN "chatDisabledAt" TIMESTAMP(3);
+ALTER TABLE "User" ADD COLUMN "chatDisabledAt" TIMESTAMP(3);
+ALTER TABLE "Client" ADD COLUMN "chatDisabledAt" TIMESTAMP(3);

@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import crypto from "crypto";
 import { db } from "@/db";
 import { toE164 } from "@/lib/sms";
+import { isJobChatOpenForClient } from "@/lib/jobChatActions";
 
 // Inbound leg of the job-specific chat SMS bridge (#11). Twilio POSTs here
 // (application/x-www-form-urlencoded) when a client texts the Cleano number.
@@ -122,6 +123,14 @@ export async function POST(req: NextRequest) {
   }
 
   if (!jobId) return twiml();
+
+  // CLN-P0-3-14 — an admin who turned messaging off for this booking, or for
+  // this customer, must not be bypassed by the customer texting instead. This
+  // is the one write path into job chat with no session behind it, so the check
+  // cannot come from resolveParticipant. Silently accepted (empty TwiML) rather
+  // than answered: telling a blocked sender they are blocked invites a retry
+  // storm, and Twilio would keep redelivering a non-2xx.
+  if (!(await isJobChatOpenForClient(jobId, client.id))) return twiml();
 
   await db.jobChatMessage.create({
     data: {

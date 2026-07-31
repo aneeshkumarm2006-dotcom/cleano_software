@@ -31,6 +31,10 @@ model User {
   // Admin can deactivate a provider/cleaner; deactivated users see the
   // configurable provider.deactivatedMessage instead of the app.
   isActive                     Boolean                 @default(true)
+  // This cleaner is blocked from posting in job chat, on every job they are
+  // assigned to (CLN-P0-3-14). NULL = allowed. Distinct from isActive, which
+  // locks them out of the app entirely.
+  chatDisabledAt               DateTime?
   payMultiplier                Float                   @default(1.0)
   multiplierLastRecalculatedAt DateTime?
   // Forces a password change on next login (set on temp-password accounts
@@ -278,6 +282,9 @@ model Client {
   clientType                       ClientType              @default(RESIDENTIAL)
   serviceFrequency                 ServiceFrequency?
   isActive                         Boolean                 @default(true)
+  // This customer is blocked from posting in job chat, on every one of their
+  // bookings (CLN-P0-3-14 — "a specific booking or user"). NULL = allowed.
+  chatDisabledAt                   DateTime?
   stripeCustomerId                 String?                 @unique
   defaultPaymentMethodId           String?
   referralCode                     String?                 @unique
@@ -466,6 +473,11 @@ model Job {
   // global NotificationSetting preferences are untouched.
   notifyClient                   Boolean               @default(true)
   notifyProvider                 Boolean               @default(true)
+  // Job chat switched off for THIS booking (CLN-P0-3-14). NULL = messaging on,
+  // which is every existing row. Read-only, never invisible: the history stays
+  // rendered, only the composer goes away, because 3-10/3-15 require the record
+  // to survive. Admins are exempt — moderation is why the switch exists.
+  chatDisabledAt                 DateTime?
   appliedPromoCode               String?
   promoDiscountAmount            Float?
   // Calendar priority badge override. null = follow the auto rule

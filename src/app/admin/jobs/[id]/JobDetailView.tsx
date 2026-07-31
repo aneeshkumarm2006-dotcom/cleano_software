@@ -52,6 +52,7 @@ import ClockTimeEditor from "./ClockTimeEditor";
 import RatingExclusionControl from "./RatingExclusionControl";
 import { issueRefund } from "../../actions/issueRefund";
 import JobChatThread from "@/components/JobChatThread";
+import JobChatModeration from "@/components/JobChatModeration";
 import { normalizeJobType, jobTypeLabel } from "@/lib/calendar-labels";
 
 type TabView = "details" | "financials" | "products" | "logs" | "requests";
@@ -1235,6 +1236,10 @@ export default function JobDetailView({
           The job-specific conversation between the assigned cleaner and the client.
           {isAdmin ? ' Posting here sends a message as Admin.' : ' Read-only.'}
         </p>
+        {/* Messaging controls sit under the thread, where the decision is made.
+            The panel authorizes itself and renders nothing for anyone below
+            OWNER/ADMIN. */}
+        {isAdmin && <JobChatModeration jobId={job.id} />}
       </div>
     </div>
   );

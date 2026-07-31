@@ -32,6 +32,14 @@ export interface JobChatPayload {
   /** Viewer's own role in this thread. */
   viewerRole: JobChatRole;
   messages: JobChatMessageDTO[];
+  /**
+   * Messaging is switched off for this viewer (CLN-P0-3-14) — the composer
+   * must be withdrawn. The thread itself stays readable: 3-10 and 3-15 require
+   * the record to survive, so "disabled" means read-only, never invisible.
+   */
+  messagingDisabled: boolean;
+  /** Shown in place of the composer. Null when messaging is allowed. */
+  messagingDisabledReason: string | null;
 }
 
 // Must match ADMIN_ROLES in src/lib/role-routing.ts
@@ -49,12 +57,22 @@ type SessionUser = { id: string; name: string; email?: string; role?: string };
 type Participant = {
   user: SessionUser;
   role: JobChatRole;
+  /** Null when this participant may post; otherwise why they may not. */
+  postingBlockedReason: string | null;
 };
+
+const BLOCKED_BOOKING = "Messaging is turned off for this booking.";
+const BLOCKED_PARTICIPANT = "Messaging has been turned off for your account.";
 
 /**
  * Resolve the current session against a job and decide the caller's role in the
  * job's chat thread. Returns an error string if the caller is not a participant
  * (not the assigned cleaner/lead, not the job's client, and not an admin).
+ *
+ * Also resolves whether that participant may POST (CLN-P0-3-14). The job row,
+ * the assigned cleaners' flags and the client's flag all come back in the one
+ * query the function already made, so the check costs no extra round trip on a
+ * thread that polls every 4 seconds.
  */
 async function resolveParticipant(
   jobId: string
@@ -69,15 +87,31 @@ async function resolveParticipant(
       id: true,
       employeeId: true,
       clientId: true,
-      cleaners: { select: { id: true } },
+      chatDisabledAt: true,
+      employee: { select: { id: true, chatDisabledAt: true } },
+      cleaners: { select: { id: true, chatDisabledAt: true } },
     },
   });
   if (!job) return { error: "Job not found" };
 
+  const bookingBlocked = job.chatDisabledAt ? BLOCKED_BOOKING : null;
+
   // 1) Cleaner — the job's employee lead or any assigned cleaner.
-  const isCleaner =
-    job.employeeId === user.id || job.cleaners.some((c) => c.id === user.id);
-  if (isCleaner) return { participant: { user, role: "CLEANER" } };
+  const cleanerRow =
+    (job.employee?.id === user.id ? job.employee : null) ??
+    job.cleaners.find((c) => c.id === user.id) ??
+    null;
+  if (cleanerRow || job.employeeId === user.id) {
+    return {
+      participant: {
+        user,
+        role: "CLEANER",
+        postingBlockedReason:
+          bookingBlocked ??
+          (cleanerRow?.chatDisabledAt ? BLOCKED_PARTICIPANT : null),
+      },
+    };
+  }
 
   // 2) Client — the customer that owns this job. Job.clientId points at a
   //    Client record; the portal session is a User, so match by email.
@@ -86,25 +120,54 @@ async function resolveParticipant(
     if (email) {
       const client = await db.client.findFirst({
         where: { email },
-        select: { id: true, name: true },
+        select: { id: true, name: true, chatDisabledAt: true },
       });
       if (client && client.id === job.clientId) {
         return {
           participant: {
             user: { ...user, name: client.name ?? user.name },
             role: "CLIENT",
+            postingBlockedReason:
+              bookingBlocked ??
+              (client.chatDisabledAt ? BLOCKED_PARTICIPANT : null),
           },
         };
       }
     }
   }
 
-  // 3) Admin — OWNER/ADMIN/OPS_MANAGER/FIELD_LEAD may view and post.
+  // 3) Admin — OWNER/ADMIN/OPS_MANAGER/FIELD_LEAD may view and post. Admins are
+  //    exempt from the disable: moderation is the reason the switch exists, and
+  //    someone has to be able to say why the thread was closed.
   if (isAdminRole(user.role)) {
-    return { participant: { user, role: "ADMIN" } };
+    return { participant: { user, role: "ADMIN", postingBlockedReason: null } };
   }
 
   return { error: "Not authorized" };
+}
+
+/**
+ * Server-side messaging gate for a client-supplied client/job pair, for callers
+ * that have no session — today the Twilio inbound webhook, which appends an
+ * SMS reply as a CLIENT message. Without this, a blocked customer simply texts
+ * instead and the disable is decorative.
+ */
+export async function isJobChatOpenForClient(
+  jobId: string,
+  clientId: string
+): Promise<boolean> {
+  try {
+    const [job, client] = await Promise.all([
+      db.job.findUnique({ where: { id: jobId }, select: { chatDisabledAt: true } }),
+      db.client.findUnique({ where: { id: clientId }, select: { chatDisabledAt: true } }),
+    ]);
+    // Both rows must exist: a job or customer that vanished between the
+    // webhook's own lookup and this one is not a reason to let the write land.
+    return !!job && !job.chatDisabledAt && !!client && !client.chatDisabledAt;
+  } catch {
+    // Fail closed: a lookup failure must not become a way past the block.
+    return false;
+  }
 }
 
 function toDTO(
@@ -165,7 +228,7 @@ export async function getJobChatMessages(
 ): Promise<{ success: true; data: JobChatPayload } | { success: false; error: string }> {
   const r = await resolveParticipant(jobId);
   if ("error" in r) return { success: false, error: r.error };
-  const { user, role } = r.participant;
+  const { user, role, postingBlockedReason } = r.participant;
 
   // Mark incoming messages (from the other parties) as read for this role.
   const readField =
@@ -195,6 +258,8 @@ export async function getJobChatMessages(
       jobId,
       viewerRole: role,
       messages: messages.map((m) => toDTO(m, role, user.id)),
+      messagingDisabled: postingBlockedReason !== null,
+      messagingDisabledReason: postingBlockedReason,
     },
   };
 }
@@ -209,7 +274,12 @@ export async function sendJobChatMessage(
 ): Promise<{ success: true; data: JobChatMessageDTO } | { success: false; error: string }> {
   const r = await resolveParticipant(jobId);
   if ("error" in r) return { success: false, error: r.error };
-  const { user, role } = r.participant;
+  const { user, role, postingBlockedReason } = r.participant;
+  // CLN-P0-3-14 — server-side, ahead of every write. Hiding the composer is a
+  // convenience; this is the enforcement.
+  if (postingBlockedReason) {
+    return { success: false, error: postingBlockedReason };
+  }
 
   const trimmed = body.trim();
   if (!trimmed) return { success: false, error: "Message cannot be empty" };
@@ -315,7 +385,12 @@ export async function sendJobChatPhoto(
 
   const r = await resolveParticipant(jobId);
   if ("error" in r) return { success: false, error: r.error };
-  const { user, role } = r.participant;
+  const { user, role, postingBlockedReason } = r.participant;
+  // CLN-P0-3-14 — before the file is read, so a blocked participant can't even
+  // spend an upload.
+  if (postingBlockedReason) {
+    return { success: false, error: postingBlockedReason };
+  }
 
   const file = formData.get("file");
   if (!file || typeof file === "string") {
