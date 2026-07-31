@@ -1201,7 +1201,7 @@ export default function JobDetailView({
       <div className="dcard tab-panel-wide">
         <div className="dcard-head"><h3>Notes</h3></div>
         <p style={{ margin: 0, fontSize: 14.5, color: 'var(--ink-soft)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
-          {job.notes || <span style={{ color: 'var(--primary-50)', fontStyle: 'italic' }}>No notes for this job.</span>}
+          {job.notes || <span style={{ color: 'var(--primary-50)' }}>No notes for this job.</span>}
         </p>
       </div>
 

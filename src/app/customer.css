@@ -3,7 +3,12 @@
    Premium full-bleed design. Scoped to .cl-customer.
    Original design source: bundle jEqywD0ujDqmPZEZpueMVA
 ─────────────────────────────────────────────── */
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@200;300;400;500;600;700;800&family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500&family=JetBrains+Mono:wght@400;500&display=swap');
+/* Only the mono face is loaded here now. Manrope and Fraunces are gone: the
+   customer surface uses the one application font (Montserrat, loaded by
+   next/font in layout.tsx), and Manrope was being double-loaded — once through
+   next/font, whose variable was never attached to <html>, and again from this
+   CDN URL (CLN-P1-8-03). */
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap');
 
 .cl-customer {
   /* Brand palette (Cleano teal) */
@@ -66,8 +71,12 @@
   --shadow-card: 0 24px 60px -24px rgba(0, 60, 70, 0.12), 0 2px 8px rgba(0, 60, 70, 0.04);
   --shadow-pop:  0 30px 80px -30px rgba(0, 60, 70, 0.28), 0 4px 12px rgba(0, 60, 70, 0.06);
 
-  --font-cl: 'Manrope', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-cl-serif: 'Fraunces', 'Georgia', serif;
+  /* Both point at the one application font. `--font-cl-serif` is kept as an
+     alias rather than deleted because a dozen rules here and five inline styles
+     name it; repointing retires the serif everywhere in one move, and each call
+     site keeps its own size and weight so nothing re-flows. */
+  --font-cl: var(--font-app);
+  --font-cl-serif: var(--font-app);
   --font-cl-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 
   --sidebar-w: 256px;
@@ -97,18 +106,23 @@
 /* ─── Type scale ─── */
 .cl-display {
   font-family: var(--font-cl-serif);
-  font-weight: 300;
+  /* 300 was a serif display weight; at this size Montserrat needs the Dashboard
+     title's weight to read as a title rather than as thin body text
+     (CLN-P1-8-05). */
+  font-weight: 700;
   font-size: clamp(36px, 5.4vw, 64px);
   line-height: 1.02;
   letter-spacing: -0.025em;
   color: var(--ink);
   margin: 0;
 }
+/* Upright, like `.display em` on the admin side already was. The accent stays —
+   it is carried by colour, not by a serif italic (CLN-P1-8-01/04). */
 .cl-display em {
-  font-style: italic;
+  font-style: normal;
   font-family: var(--font-cl-serif);
   color: var(--primary);
-  font-weight: 400;
+  font-weight: 700;
 }
 .cl-title {
   font-family: var(--font-cl);
@@ -397,7 +411,7 @@
   margin: 0 0 24px;
   text-wrap: balance;
 }
-.cl-split-brand-quote em { font-style: italic; color: #b9e8ed; }
+.cl-split-brand-quote em { font-style: normal; color: #b9e8ed; }
 .cl-split-brand-sub {
   font-size: 15px;
   line-height: 1.55;

@@ -369,7 +369,7 @@ export default async function CleanerDashboard({ userId, userName }: Props) {
             <Link href="/cleaners/my-jobs" className="link">See all →</Link>
           </div>
           {upcomingJobs.slice(1, 6).length === 0 ? (
-            <p style={{ fontSize: 13, color: "var(--primary-50)", fontStyle: "italic", margin: 0 }}>No other jobs lined up.</p>
+            <p style={{ fontSize: 13, color: "var(--primary-50)", margin: 0 }}>No other jobs lined up.</p>
           ) : upcomingJobs.slice(1, 6).map((j) => (
             <Link key={j.id} href={`/cleaners/my-jobs/${j.id}`} className="cl-dash-upcoming-row">
               <div className="date-block">
@@ -423,7 +423,7 @@ export default async function CleanerDashboard({ userId, userName }: Props) {
             <Link href="/cleaners/my-jobs" className="link">All jobs →</Link>
           </div>
           {recentJobs.length === 0 ? (
-            <p style={{ fontSize: 13, color: "var(--primary-50)", fontStyle: "italic", margin: 0 }}>No completed jobs yet.</p>
+            <p style={{ fontSize: 13, color: "var(--primary-50)", margin: 0 }}>No completed jobs yet.</p>
           ) : recentJobs.map((j) => (
             <Link key={j.id} href={`/cleaners/my-jobs/${j.id}`} className="cl-dash-activity-row">
               <div className="check"><CheckCircle2 size={16} /></div>

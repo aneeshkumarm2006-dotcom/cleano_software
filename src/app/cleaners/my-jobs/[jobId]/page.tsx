@@ -501,7 +501,7 @@ export default async function JobDetailPage({ params }: PageProps) {
               </div>
               <div className="cl-jd-addons">
                 {addOnsArr.length === 0 ? (
-                  <span style={{ fontSize: 13, color: "var(--primary-50)", fontStyle: "italic" }}>No add-ons for this job.</span>
+                  <span style={{ fontSize: 13, color: "var(--primary-50)" }}>No add-ons for this job.</span>
                 ) : addOnsArr.map((a: any) => (
                   <div key={a.id} className="cl-jd-addon-chip">
                     <span className="dot" />

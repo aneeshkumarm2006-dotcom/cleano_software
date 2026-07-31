@@ -609,7 +609,7 @@ function ContactRow({ c, show, onClick, selected, onToggle }: {
               <Avatar name={c.ownerName} size={26} />
               <span style={{ fontSize: 13, color: "var(--ink-soft)" }}>{c.ownerName.split(" ")[0]}</span>
             </div>
-          ) : <span style={{ fontSize: 12.5, color: "var(--primary-40)", fontStyle: "italic" }}>Unassigned</span>}
+          ) : <span style={{ fontSize: 12.5, color: "var(--primary-40)" }}>Unassigned</span>}
         </td>
       ) : null}
       {show("score") ? (

@@ -334,7 +334,7 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
                     );
                   })}
                   {(!addon.services || addon.services.length === 0) && (
-                    <span className="text-xs text-[#008C9C]/50 italic">All services (none selected)</span>
+                    <span className="text-xs text-[#008C9C]/50">All services (none selected)</span>
                   )}
                 </div>
               </div>

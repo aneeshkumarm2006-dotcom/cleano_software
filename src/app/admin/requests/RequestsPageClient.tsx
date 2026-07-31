@@ -180,7 +180,7 @@ export default function RequestsPageClient({ jobs }: { jobs: JobRow[] }) {
                           ))}
                         </span>
                       ) : (
-                        <span style={{ color: "var(--primary-40)", fontStyle: "italic", fontWeight: 400 }}>Unassigned</span>
+                        <span style={{ color: "var(--primary-40)", fontWeight: 400 }}>Unassigned</span>
                       )}
                     </div>
                   </div>

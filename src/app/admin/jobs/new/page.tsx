@@ -550,11 +550,11 @@ export default async function JobFormPage({
           }}
         >
           {isEditing ? (
-            <>Edit <em style={{ fontStyle: "italic" }}>cleaning job.</em></>
+            <>Edit <em style={{ fontStyle: "normal" }}>cleaning job.</em></>
           ) : duplicateId ? (
-            <>Duplicate <em style={{ fontStyle: "italic" }}>cleaning job.</em></>
+            <>Duplicate <em style={{ fontStyle: "normal" }}>cleaning job.</em></>
           ) : (
-            <>New <em style={{ fontStyle: "italic" }}>cleaning job.</em></>
+            <>New <em style={{ fontStyle: "normal" }}>cleaning job.</em></>
           )}
         </h1>
         <p style={{ marginTop: 10, fontSize: 15, color: "var(--primary-60)" }}>

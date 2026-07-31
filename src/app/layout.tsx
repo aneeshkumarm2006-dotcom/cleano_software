@@ -1,24 +1,22 @@
 import type { Metadata, Viewport } from "next";
-import { Manrope, Fraunces, Montserrat } from "next/font/google";
+import { Montserrat } from "next/font/google";
 import "./globals.css";
 import "./customer.css";
 import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
 
-const manrope = Manrope({
-  subsets: ["latin"],
-  variable: "--font-manrope",
-  display: "swap",
-});
-
+/**
+ * The one family, everywhere (CLN-P1-8-02/03/09).
+ *
+ * Montserrat is the face the main Dashboard title already used, which the spec
+ * names as the target for the whole product. It replaces three parallel
+ * systems: TT Norms Pro (forced onto <body>), Manrope (customer + cleaner), and
+ * Fraunces (serif-italic accents — the "generic italicised AI-style font" the
+ * spec asks to remove). Everything reads it through `--font-app` in globals.css,
+ * so a new page inherits it without remembering an opt-in class.
+ */
 const montserrat = Montserrat({
   subsets: ["latin"],
   variable: "--font-montserrat",
-  display: "swap",
-});
-
-const fraunces = Fraunces({
-  subsets: ["latin"],
-  variable: "--font-fraunces",
   display: "swap",
 });
 
@@ -57,7 +55,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${fraunces.variable} ${montserrat.variable}`}>
+    <html lang="en" className={montserrat.variable}>
       <head>
         {/* Chrome fires `beforeinstallprompt` very early — often BEFORE React
             hydrates, so a listener attached in a component effect misses it
@@ -69,7 +67,11 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className={`!font-tt-norms-pro`} suppressHydrationWarning>
+      {/* No font class here: the family comes from `body { font-family }` in
+          globals.css. The old `!font-tt-norms-pro` was an !important override
+          that beat every other rule in the app, which is why three type systems
+          could coexist without anyone noticing. */}
+      <body suppressHydrationWarning>
         <ServiceWorkerRegistrar />
         {children}
       </body>

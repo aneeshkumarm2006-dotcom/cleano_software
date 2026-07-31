@@ -59,7 +59,38 @@ The small reusable building blocks (redesign targets):
 | **Animation** | `.fade-up`, `.fade-up-2`, `.equalizer-bar` | 1086 |
 
 ### Design tokens (CSS variables, `:root` in globals.css)
-`--primary: #005F6A`, `--primary-deep`, `--primary-5/10/15/30/50/60/70`, `--cream`, `--ink`, `--emerald-*`, `--amber-*`, `--blue-*`, `--error`, `--shadow-soft`, `--font-serif`.
+`--primary: #005F6A`, `--primary-deep`, `--primary-5/10/15/30/50/60/70`, `--cream`, `--ink`, `--emerald-*`, `--amber-*`, `--blue-*`, `--error`, `--shadow-soft`, `--font-app`, `--font-serif`.
+
+### Typography (CLN-P1-8-*)
+
+**One family, everywhere: `--font-app` (Montserrat).** It is set on `body` and inherited by admin, cleaner, customer, public booking and login. There is nothing to opt into — do **not** add a font-family to a new page or component.
+
+Retired, and why the aliases still exist:
+
+| Was | Where | Now |
+|---|---|---|
+| TT Norms Pro | `!font-tt-norms-pro` on `<body>` — an `!important` that beat every other rule | removed; the `@font-face` blocks and Tailwind tokens stay but nothing applies them |
+| Manrope | `--font-cl` (customer/cleaner), double-loaded via next/font **and** a CDN `@import` | `--font-cl` → `--font-app`; the CDN import now loads only JetBrains Mono |
+| Fraunces (serif italics) | `--font-serif`, `--font-cl-serif`, `.admin-page-title`, hardcoded in `join-waitlist` | all repointed to `--font-app`; the aliases remain so ~70 rules and a dozen inline styles didn't each need editing |
+
+**Roles** — pick one, don't invent a size. Tokens are `--type-<role>-size` / `--type-<role>-weight` in `:root`:
+
+| Role | Token prefix | Serving class |
+|---|---|---|
+| Main page title | `--type-page-title-*` | `.display`, `.admin-page-title`, `.cl-display` |
+| Section heading | `--type-section-*` | `.title-sm`, `.section-title` |
+| Subsection heading | `--type-subsection-*` | `.dcard-head h3` |
+| Body text | `--type-body-*` | inherited |
+| Labels | `--type-label-*` | `.label`, `.eyebrow`, `.cl-label` |
+| Input text | `--type-input-*` | `.input`, `.textarea`, `.select` |
+| Button text | `--type-button-*` | `.btn`, `.cl-btn` |
+| Table heading | `--type-table-head-*` | `.atable thead` |
+| Table content | `--type-table-cell-*` | `.atable tbody` |
+| Helper text | `--type-helper-*` | field hints |
+| Error / success | `--type-status-*` | `.banner-error`, `.banner-success` — colour distinguishes them, not size |
+| Navigation | `--type-nav-*` | `.anav-item`, `.cl-snav-item` |
+
+**Italics** are for intentional emphasis only. The decorative `<em>` accents in headings are upright and carry their accent through colour. Nothing renders below 12px.
 
 ---
 

@@ -229,7 +229,7 @@ export default function AdminChatClient({ initialList }: AdminChatClientProps) {
           <div className="stack-8">
             <p className="eyebrow">Communication</p>
             <h1 className="display" style={{ fontSize: "clamp(34px,4vw,48px)" }}>
-              Team <em style={{ fontStyle: "italic", color: "var(--primary)" }}>chat.</em>
+              Team <em style={{ fontStyle: "normal", color: "var(--primary)" }}>chat.</em>
             </h1>
             <p style={{ fontSize: 14, color: "var(--primary-60)", margin: 0 }}>
               Direct messages with cleaners. Coordinate jobs, share notes, and stay in touch.

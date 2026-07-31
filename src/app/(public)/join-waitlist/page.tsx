@@ -81,7 +81,7 @@ export default function JoinWaitlistPage() {
           </div>
 
           <h1 style={{
-            fontFamily: "'Fraunces', Georgia, serif", fontSize: 36, fontWeight: 300,
+            fontFamily: "var(--font-app)", fontSize: 36, fontWeight: 300,
             color: "#0a2e32", lineHeight: 1.1, margin: "0 0 12px", letterSpacing: "-0.02em",
           }}>
             {successData.name ? `You're on the list, ${successData.name.split(" ")[0]}!` : "You're on the list!"}
@@ -125,7 +125,7 @@ export default function JoinWaitlistPage() {
         display: "flex", alignItems: "center", justifyContent: "space-between",
         padding: "20px 32px", maxWidth: 760, margin: "0 auto",
       }}>
-        <a href="/" style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 20, fontWeight: 400, color: "#008C9C", textDecoration: "none", letterSpacing: "-0.01em" }}>
+        <a href="/" style={{ fontFamily: "var(--font-app)", fontSize: 20, fontWeight: 400, color: "#008C9C", textDecoration: "none", letterSpacing: "-0.01em" }}>
           Cleano
         </a>
         <a href="/book" style={{ fontSize: 13, color: "#008C9C", textDecoration: "none", fontWeight: 600, opacity: 0.7 }}>
@@ -143,12 +143,12 @@ export default function JoinWaitlistPage() {
             Waitlist
           </p>
           <h1 style={{
-            fontFamily: "'Fraunces', Georgia, serif", fontSize: "clamp(34px, 6vw, 52px)",
+            fontFamily: "var(--font-app)", fontSize: "clamp(34px, 6vw, 52px)",
             fontWeight: 300, color: "#0a2e32", lineHeight: 1.08,
             letterSpacing: "-0.025em", margin: "0 0 14px",
           }}>
             Booked up? Join the{" "}
-            <em style={{ fontStyle: "italic", color: "#008C9C" }}>waitlist.</em>
+            <em style={{ fontStyle: "normal", color: "#008C9C" }}>waitlist.</em>
           </h1>
           <p style={{ fontSize: 15, color: "rgba(0,140,156,0.6)", lineHeight: 1.6, margin: 0 }}>
             Leave your details and we&rsquo;ll reach out the moment a slot opens up on your preferred date.
