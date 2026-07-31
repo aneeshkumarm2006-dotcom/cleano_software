@@ -384,6 +384,167 @@ export async function setMyDefaultPaymentMethod(
   }
 }
 
+// ── Per-booking card selection (CLN-P1-7-07) ─────────────────────────────────
+
+export interface BookingPaymentMethodView {
+  /** The card this booking is pinned to, or null when it follows the default. */
+  pinnedPaymentMethodId: string | null;
+  /** What will actually be charged, resolved the same way the charge paths do. */
+  effectivePaymentMethodId: string | null;
+  methods: CustomerPaymentMethod[];
+}
+
+/**
+ * A booking whose card the customer may still choose: theirs, not archived,
+ * still ahead of us, not cancelled, and not already settled. Selecting a card
+ * for work that has been charged would change nothing and imply otherwise.
+ */
+async function loadEditableJob(clientId: string, jobId: unknown) {
+  if (typeof jobId !== "string" || !jobId) {
+    return { ok: false as const, error: "Booking not found" };
+  }
+  const job = await db.job.findUnique({
+    where: { id: jobId },
+    select: {
+      id: true,
+      clientId: true,
+      deletedAt: true,
+      status: true,
+      startTime: true,
+      paymentReceived: true,
+      stripePaymentMethodId: true,
+    },
+  });
+  // Same message for "doesn't exist" and "isn't yours" — the id comes from the
+  // browser and must not become a way to probe other clients' bookings.
+  if (!job || job.clientId !== clientId || job.deletedAt) {
+    return { ok: false as const, error: "Booking not found" };
+  }
+  if (
+    job.status === "CANCELLED" ||
+    job.status === "COMPLETED" ||
+    job.status === "PAID" ||
+    job.paymentReceived ||
+    job.startTime < new Date()
+  ) {
+    return {
+      ok: false as const,
+      error: "This booking can no longer change payment method.",
+    };
+  }
+  return { ok: true as const, job };
+}
+
+/** The card picker's data for one upcoming booking. */
+export async function getBookingPaymentMethod(
+  jobId: string
+): Promise<
+  { success: true; data: BookingPaymentMethodView } | { success: false; error: string }
+> {
+  const gate = await requireClient();
+  if (!gate.ok) return { success: false, error: gate.error };
+  const { client } = gate;
+
+  const jobGate = await loadEditableJob(client.id, jobId);
+  if (!jobGate.ok) return { success: false, error: jobGate.error };
+
+  const list = await listMyPaymentMethods();
+  if (!list.success) return { success: false, error: list.error };
+
+  const pinned = jobGate.job.stripePaymentMethodId;
+  // Mirrors resolveChargePaymentMethod: a pin that is no longer on file falls
+  // back to the default rather than failing the charge.
+  const pinnedStillOnFile =
+    !!pinned && list.methods.some((m) => m.paymentMethodId === pinned);
+
+  return {
+    success: true,
+    data: {
+      pinnedPaymentMethodId: pinned,
+      effectivePaymentMethodId: pinnedStillOnFile
+        ? pinned
+        : client.defaultPaymentMethodId,
+      methods: list.methods,
+    },
+  };
+}
+
+/**
+ * Pin one of the customer's own saved cards to one of their own upcoming
+ * bookings, or clear the pin so the booking follows their default card.
+ *
+ * The charge paths already read this column through resolveChargePaymentMethod,
+ * so nothing downstream changes. Both ids arrive from the browser and are
+ * therefore both re-proven server-side: the booking against this client, and
+ * the card against this client's Stripe customer (checked with Stripe, not just
+ * our mirror).
+ */
+export async function setBookingPaymentMethod(
+  jobId: string,
+  paymentMethodId: string | null
+): Promise<{ success: true } | { success: false; error: string }> {
+  const gate = await requireClient();
+  if (!gate.ok) return { success: false, error: gate.error };
+  const { client, userId } = gate;
+
+  const jobGate = await loadEditableJob(client.id, jobId);
+  if (!jobGate.ok) return { success: false, error: jobGate.error };
+  const job = jobGate.job;
+
+  let resolved: string | null = null;
+  let card: { brand: string | null; last4: string | null } | null = null;
+
+  if (paymentMethodId !== null) {
+    const owned = await assertOwnedCard(
+      client.id,
+      client.stripeCustomerId,
+      paymentMethodId
+    );
+    if (!owned.ok) return { success: false, error: owned.error };
+    resolved = owned.id;
+    card = await db.clientPaymentMethod.findFirst({
+      where: { clientId: client.id, stripePaymentMethodId: owned.id },
+      select: { brand: true, last4: true },
+    });
+  }
+
+  if (resolved === job.stripePaymentMethodId) return { success: true };
+
+  try {
+    await db.job.update({
+      where: { id: job.id },
+      data: { stripePaymentMethodId: resolved },
+    });
+
+    await logActivity({
+      category: "PAYMENT",
+      action: resolved ? "job.card_pinned" : "job.card_unpinned",
+      actorId: userId,
+      actorLabel: "CUSTOMER",
+      targetType: "Job",
+      targetId: job.id,
+      message: resolved
+        ? `${client.name} chose ${card?.brand ?? "a card"} •••• ${card?.last4 ?? "????"} for this booking.`
+        : `${client.name} set this booking to use their default payment method.`,
+      providerId: resolved ?? undefined,
+      metadata: {
+        clientName: client.name,
+        jobId: job.id,
+        paymentMethodId: resolved,
+        previousPaymentMethodId: job.stripePaymentMethodId,
+        source: "customer_booking",
+      },
+    });
+
+    revalidatePath(`/bookings/${job.id}`);
+    revalidatePath("/account");
+    return { success: true };
+  } catch (error) {
+    console.error("setBookingPaymentMethod failed", error);
+    return { success: false, error: "Could not update this booking's card" };
+  }
+}
+
 /**
  * Removes a saved card. Refuses when it is the customer's only card and they
  * still have bookings that need one — and says why, so the customer knows to

@@ -10,6 +10,7 @@ import { StatusBadge, DateBadge } from "@/components/customer/atoms";
 import { Banner } from "@/components/customer/Field";
 import RequestActions from "./RequestActions";
 import JobChatThread from "@/components/JobChatThread";
+import BookingPaymentMethod from "./BookingPaymentMethod";
 
 function formatPrice(n: number | null | undefined) {
   return `$${(n ?? 0).toFixed(2)}`;
@@ -262,6 +263,17 @@ export default async function BookingDetailPage({
               height={320}
             />
           </section>
+
+          {/* Which saved card this cleaning is charged on. Only while the
+              booking is still ahead of us and unsettled — after that the choice
+              would change nothing. The component's server action re-checks the
+              same conditions; this is the display half. */}
+          {isUpcoming &&
+          !isCompletedOrPaid &&
+          job.status !== "CANCELLED" &&
+          !job.paymentReceived ? (
+            <BookingPaymentMethod jobId={job.id} />
+          ) : null}
 
           {job.addOns.length ? (
             <section className="cl-tile cl-tile-pad-lg">

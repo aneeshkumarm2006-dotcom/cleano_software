@@ -659,6 +659,32 @@
   white-space: pre-wrap;
 }
 
+/* Per-booking card picker (CLN-P1-7-07). */
+.cl-card-choice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 13px 16px;
+  border: 1px solid var(--primary-10);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.cl-card-choice:hover:not(:disabled) { border-color: rgba(0,140,156,0.35); }
+.cl-card-choice:disabled { opacity: 0.55; cursor: not-allowed; }
+.cl-card-choice.selected {
+  border-color: var(--primary);
+  background: rgba(0,140,156,0.05);
+}
+.cl-card-choice-meta { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.cl-card-choice-meta strong { font-size: 14.5px; font-weight: 600; }
+.cl-card-choice-meta span { font-size: 12.5px; color: var(--primary-60); }
+
 /* Keyword search over the FAQ (CLN-P1-4-05). */
 .cl-faq-search {
   display: flex;
