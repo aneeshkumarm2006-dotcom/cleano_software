@@ -1,4 +1,5 @@
 import { getSetting } from "@/lib/settings";
+import FaqAccordion from "@/components/FaqAccordion";
 
 // Content is admin-editable, so render per request (not frozen at build).
 export const dynamic = "force-dynamic";
@@ -42,45 +43,9 @@ export default async function FaqPage() {
           </h1>
         </header>
 
-        {faqs.length === 0 ? (
-          <p style={{ textAlign: "center", color: "#3a5a62", fontSize: 15 }}>
-            No FAQs are available right now. Please contact our office for help.
-          </p>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {faqs.map((f, i) => (
-              <details
-                key={i}
-                style={{
-                  background: "#fff",
-                  border: "1px solid #e5e7eb",
-                  borderRadius: 14,
-                  padding: "16px 20px",
-                }}>
-                <summary
-                  style={{
-                    fontSize: 15,
-                    fontWeight: 600,
-                    color: "#0a1f24",
-                    cursor: "pointer",
-                    listStyle: "none",
-                  }}>
-                  {f.question}
-                </summary>
-                <p
-                  style={{
-                    marginTop: 10,
-                    fontSize: 14,
-                    lineHeight: 1.6,
-                    color: "#3a5a62",
-                    whiteSpace: "pre-wrap",
-                  }}>
-                  {f.answer}
-                </p>
-              </details>
-            ))}
-          </div>
-        )}
+        {/* Search + accordion are shared with the in-portal /help page so the
+            two surfaces can't drift. Filtering is client-side over this list. */}
+        <FaqAccordion faqs={faqs} />
       </div>
     </div>
   );

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getSetting, getSettings } from "@/lib/settings";
+import FaqAccordion from "@/components/FaqAccordion";
 
 // Same content the public /faq page renders, and the same reason for rendering
 // per request: an admin edit in Settings → Website & FAQ must show up here
@@ -35,26 +36,11 @@ export default async function PortalFaqPage() {
         </div>
       </header>
 
-      {faqs.length === 0 ? (
-        <div className="cl-tile cl-tile-pad-lg" style={{ textAlign: "center" }}>
-          <p className="cl-subtitle" style={{ margin: 0 }}>
-            No questions have been published yet. Contact us and we&apos;ll help
-            you directly.
-          </p>
-        </div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {faqs.map((f, i) => (
-            <details key={i} className="cl-faq-item">
-              <summary className="cl-faq-q">
-                <span>{f.question}</span>
-                <span className="cl-faq-chevron" aria-hidden="true" />
-              </summary>
-              <p className="cl-faq-a">{f.answer}</p>
-            </details>
-          ))}
-        </div>
-      )}
+      {/* Same component as the public /faq page — search included. */}
+      <FaqAccordion
+        faqs={faqs}
+        emptyMessage="No questions have been published yet. Contact us and we'll help you directly."
+      />
 
       <div className="cl-tile cl-tile-pad-lg" style={{ marginTop: 28 }}>
         <h2 className="cl-title-md" style={{ marginBottom: 6 }}>
