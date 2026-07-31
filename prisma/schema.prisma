@@ -2396,3 +2396,71 @@ model WebhookEvent {
 
   @@index([createdAt])
 }
+
+/**
+ * ─────────────────────────── FAQ (CLN-P1-4-06..11) ───────────────────────────
+ * Replaces the flat {question, answer}[] JSON blob in the `content.faqs`
+ * AppSetting, which had no categories, no draft state, no per-surface
+ * visibility and no French. That setting is deliberately LEFT IN PLACE: it is
+ * the fallback `getPublishedFaqs` reads when these tables are empty or absent,
+ * so the FAQ pages degrade to yesterday's content instead of 500ing if the code
+ * ever ships ahead of the migration.
+ */
+
+enum FaqStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum FaqVisibility {
+  /**
+   * Public marketing site only.
+   */
+  PUBLIC
+  /**
+   * Signed-in customer portal only.
+   */
+  PORTAL
+  /**
+   * Both surfaces — the default, and what a migrated JSON entry becomes.
+   */
+  BOTH
+}
+
+model FaqCategory {
+  id        String   @id @default(cuid())
+  name      String
+  // French label. Optional everywhere: an untranslated field falls back to the
+  // English one at render time rather than showing a blank.
+  nameFr    String?
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  faqs      Faq[]
+
+  @@index([sortOrder])
+}
+
+model Faq {
+  id         String        @id @default(cuid())
+  // Nullable with onDelete: SetNull — deleting a category must never destroy
+  // the questions inside it. They fall into an "Uncategorised" group that both
+  // surfaces render last.
+  categoryId String?
+  question   String        @db.Text
+  answer     String        @db.Text
+  questionFr String?       @db.Text
+  answerFr   String?       @db.Text
+  // Defaults chosen so a migrated JSON entry behaves exactly as it did before:
+  // published, on both surfaces, with no admin action required.
+  status     FaqStatus     @default(PUBLISHED)
+  visibility FaqVisibility @default(BOTH)
+  sortOrder  Int           @default(0)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+  category   FaqCategory?  @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@index([status, visibility])
+  @@index([categoryId, sortOrder])
+}

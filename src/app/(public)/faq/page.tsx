@@ -1,4 +1,4 @@
-import { getSetting } from "@/lib/settings";
+import { getPublishedFaqs, type FaqLang } from "@/lib/faq";
 import FaqAccordion from "@/components/FaqAccordion";
 
 // Content is admin-editable, so render per request (not frozen at build).
@@ -9,8 +9,20 @@ export const metadata = {
   description: "Frequently asked questions about Cleano cleaning services.",
 };
 
-export default async function FaqPage() {
-  const faqs = await getSetting("content.faqs");
+export default async function FaqPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ lang?: string }>;
+}) {
+  // The app has no locale routing, so French lives on a query parameter and a
+  // switch. Anything that isn't "fr" is English — an unknown value must not
+  // produce a third, empty language.
+  const { lang: rawLang } = await searchParams;
+  const lang: FaqLang = rawLang === "fr" ? "fr" : "en";
+
+  // PUBLIC + BOTH only — an entry marked "customer platform only" must not
+  // appear on the marketing site (CLN-P1-4-10).
+  const groups = await getPublishedFaqs("public", lang);
 
   return (
     <div
@@ -39,13 +51,25 @@ export default async function FaqPage() {
               color: "#0a1f24",
               fontWeight: 700,
             }}>
-            Frequently asked questions
+            {lang === "fr"
+              ? "Questions fréquemment posées"
+              : "Frequently asked questions"}
           </h1>
         </header>
 
-        {/* Search + accordion are shared with the in-portal /help page so the
-            two surfaces can't drift. Filtering is client-side over this list. */}
-        <FaqAccordion faqs={faqs} />
+        {/* Search, categories and the language switch are shared with the
+            in-portal /help page so the two surfaces can't drift. Filtering is
+            client-side over this list. */}
+        <FaqAccordion
+          groups={groups}
+          lang={lang}
+          langHref={(l) => (l === "fr" ? "/faq?lang=fr" : "/faq")}
+          emptyMessage={
+            lang === "fr"
+              ? "Aucune question n'est publiée pour le moment. Contactez-nous et nous vous répondrons directement."
+              : "No FAQs are available right now. Please contact our office for help."
+          }
+        />
       </div>
     </div>
   );

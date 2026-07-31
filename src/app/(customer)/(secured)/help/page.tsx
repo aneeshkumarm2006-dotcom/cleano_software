@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { getSetting, getSettings } from "@/lib/settings";
+import { getSettings } from "@/lib/settings";
+import { getPublishedFaqs, type FaqLang } from "@/lib/faq";
 import FaqAccordion from "@/components/FaqAccordion";
 
 // Same content the public /faq page renders, and the same reason for rendering
@@ -11,11 +12,19 @@ export const metadata = {
   title: "FAQ · My Cleano",
 };
 
-export default async function PortalFaqPage() {
-  // One source of truth: the `content.faqs` AppSetting, read through the same
-  // accessor as /faq. Forking the content would mean the admin editor silently
-  // only updates one of the two pages.
-  const faqs = await getSetting("content.faqs");
+export default async function PortalFaqPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ lang?: string }>;
+}) {
+  const { lang: rawLang } = await searchParams;
+  const lang: FaqLang = rawLang === "fr" ? "fr" : "en";
+
+  // One source of truth: the same accessor as /faq, asked for the portal
+  // surface. PORTAL + BOTH only, so an entry marked "public website only" stays
+  // off this page (CLN-P1-4-10). Forking the content would mean the admin
+  // editor silently only updated one of the two pages.
+  const groups = await getPublishedFaqs("portal", lang);
   const {
     "general.businessEmail": businessEmail,
     "general.businessPhone": businessPhone,
@@ -36,10 +45,17 @@ export default async function PortalFaqPage() {
         </div>
       </header>
 
-      {/* Same component as the public /faq page — search included. */}
+      {/* Same component as the public /faq page — search, categories and the
+          language switch included. */}
       <FaqAccordion
-        faqs={faqs}
-        emptyMessage="No questions have been published yet. Contact us and we'll help you directly."
+        groups={groups}
+        lang={lang}
+        langHref={(l) => (l === "fr" ? "/help?lang=fr" : "/help")}
+        emptyMessage={
+          lang === "fr"
+            ? "Aucune question n'a encore été publiée. Écrivez-nous et nous vous aiderons directement."
+            : "No questions have been published yet. Contact us and we'll help you directly."
+        }
       />
 
       <div className="cl-tile cl-tile-pad-lg" style={{ marginTop: 28 }}>

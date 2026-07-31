@@ -1,18 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { Globe2, Plus, Trash2 } from "lucide-react";
+import { Globe2 } from "lucide-react";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import { updateAppSetting } from "../../actions/updateAppSetting";
 import { AppSettingRecord, getSetting } from "../types";
 import { SectionCard, Field, Feedback, Msg } from "./_shared";
 import { SETTINGS } from "@/lib/settings/registry";
+import FaqManager from "./FaqManager";
 
 const DOMAIN = SETTINGS["website.customDomain"];
-const FAQS = SETTINGS["content.faqs"];
-
-type Faq = { question: string; answer: string };
 
 interface Props {
   settings: AppSettingRecord[];
@@ -22,46 +20,21 @@ export default function WebsiteTab({ settings }: Props) {
   const [domain, setDomain] = useState<string>(
     getSetting<string>(settings, DOMAIN.key, DOMAIN.default)
   );
-  const [faqs, setFaqs] = useState<Faq[]>(
-    getSetting<Faq[]>(settings, FAQS.key, FAQS.default)
-  );
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<Msg>(null);
-
-  function updateFaq(i: number, patch: Partial<Faq>) {
-    setFaqs((rows) => rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
-  }
-  function addFaq() {
-    setFaqs((rows) => [...rows, { question: "", answer: "" }]);
-  }
-  function removeFaq(i: number) {
-    setFaqs((rows) => rows.filter((_, idx) => idx !== i));
-  }
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
     setMsg(null);
 
-    const cleanFaqs = faqs
-      .map((f) => ({ question: f.question.trim(), answer: f.answer.trim() }))
-      .filter((f) => f.question && f.answer);
+    const res = await updateAppSetting({
+      key: DOMAIN.key,
+      category: DOMAIN.category,
+      value: domain.trim(),
+    });
 
-    const results = await Promise.all([
-      updateAppSetting({
-        key: DOMAIN.key,
-        category: DOMAIN.category,
-        value: domain.trim(),
-      }),
-      updateAppSetting({
-        key: FAQS.key,
-        category: FAQS.category,
-        value: cleanFaqs,
-      }),
-    ]);
-
-    const failed = results.find((r) => !r.success);
-    if (failed) setMsg({ type: "error", text: failed.error || "Failed to save." });
+    if (!res.success) setMsg({ type: "error", text: res.error || "Failed to save." });
     else setMsg({ type: "success", text: "Website settings saved." });
     setSaving(false);
   }
@@ -69,7 +42,7 @@ export default function WebsiteTab({ settings }: Props) {
   return (
     <SectionCard
       title="Website &amp; Content"
-      description="Public domain and the FAQ shown at /faq. Changes are audit-logged."
+      description="Public domain and the FAQ shown at /faq and in the customer portal. Changes are audit-logged."
       icon={Globe2}>
       <form onSubmit={handleSave} className="space-y-5">
         <Field label={DOMAIN.label}>
@@ -86,80 +59,22 @@ export default function WebsiteTab({ settings }: Props) {
           infrastructure step.
         </p>
 
-        <div>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              marginBottom: 8,
-            }}>
-            <span style={{ fontSize: 13, fontWeight: 600 }}>{FAQS.label}</span>
-            <Button type="button" variant="secondary" onClick={addFaq}>
-              <Plus size={14} /> Add
-            </Button>
-          </div>
-
-          <div className="space-y-3">
-            {faqs.length === 0 && (
-              <p style={{ fontSize: 13, color: "var(--primary-60)" }}>
-                No FAQs yet. Click &ldquo;Add&rdquo; to create one.
-              </p>
-            )}
-            {faqs.map((f, i) => (
-              <div
-                key={i}
-                style={{
-                  border: "1px solid var(--primary-10)",
-                  borderRadius: 12,
-                  padding: 12,
-                }}>
-                <div
-                  style={{
-                    display: "flex",
-                    gap: 8,
-                    alignItems: "center",
-                    marginBottom: 8,
-                  }}>
-                  <Input
-                    variant="form"
-                    type="text"
-                    value={f.question}
-                    onChange={(e) => updateFaq(i, { question: e.target.value })}
-                    placeholder="Question"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeFaq(i)}
-                    aria-label="Remove FAQ"
-                    style={{
-                      flexShrink: 0,
-                      background: "transparent",
-                      border: "none",
-                      color: "var(--primary-50)",
-                      cursor: "pointer",
-                      padding: 6,
-                    }}>
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-                <textarea
-                  value={f.answer}
-                  onChange={(e) => updateFaq(i, { answer: e.target.value })}
-                  rows={3}
-                  placeholder="Answer"
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#008C9C]"
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-
         {msg && <Feedback msg={msg} />}
         <Button type="submit" disabled={saving}>
           {saving ? "Saving…" : "Save"}
         </Button>
       </form>
+
+      {/* The FAQ moved off the `content.faqs` blob and onto real tables, so it
+          manages itself: each control is its own server action with its own
+          audit row, rather than one Save button over the whole list. */}
+      <div style={{ marginTop: 26, borderTop: "1px solid var(--primary-10)", paddingTop: 20 }}>
+        <p style={{ fontSize: 12, color: "var(--primary-60)", margin: "0 0 14px" }}>
+          Questions save as you leave each field. Drafts are invisible on both
+          FAQ pages until you publish them.
+        </p>
+        <FaqManager />
+      </div>
 
       <EmbedCodes domain={domain} />
     </SectionCard>
