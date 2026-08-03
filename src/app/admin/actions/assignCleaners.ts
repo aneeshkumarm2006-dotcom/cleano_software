@@ -57,6 +57,7 @@ export async function assignCleaners(input: {
         location: true,
         jobType: true,
         status: true,
+        deletedAt: true,
         // Per-booking notification controls — gate job-scoped sends below.
         notifyClient: true,
         notifyProvider: true,
@@ -65,6 +66,15 @@ export async function assignCleaners(input: {
       },
     });
     if (!job) return { success: false, error: "Job not found" };
+
+    // An archived booking does not get a crew. `createAssignmentInvites`
+    // already refuses to invite anyone for one, and respondToJobInvite refuses
+    // to answer — but neither stops an admin writing the assignment directly
+    // from the Team card, which then happened silently because the invite
+    // fan-out just returned []. Same wording the invite guard uses.
+    if (job.deletedAt) {
+      return { success: false, error: "This booking is no longer active." };
+    }
 
     const previousIds = new Set(job.cleaners.map((c) => c.id));
     const newlyAdded = input.cleanerIds.filter((id) => !previousIds.has(id));

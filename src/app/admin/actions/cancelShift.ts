@@ -115,10 +115,18 @@ export async function cancelShift(jobId: string): Promise<{ success: true; penal
           clientName: true,
           startTime: true,
           location: true,
+          deletedAt: true,
           cleaners: { select: { id: true } },
         },
       });
-      if (refreshed && refreshed.cleaners.length === 0) {
+      // `deletedAt` gates the WHOLE repost, not just the invite call.
+      // createAssignmentInvites already returns [] for an archived job, but the
+      // email loop below sits outside it and ran regardless — so every EMPLOYEE
+      // and FIELD_LEAD was emailed a paid last-minute opening, with a claim
+      // bonus, for a booking that had been archived. The invite was unclaimable
+      // (the my-jobs listing filters it out and respondToJobInvite refuses it),
+      // so the offer could only ever waste their time.
+      if (refreshed && !refreshed.deletedAt && refreshed.cleaners.length === 0) {
         const broadcast = (
           await db.user.findMany({
             where: {

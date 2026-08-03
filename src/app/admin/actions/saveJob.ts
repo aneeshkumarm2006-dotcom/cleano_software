@@ -380,6 +380,7 @@ export async function saveJob(formData: FormData) {
           location: true,
           jobType: true,
           totalTip: true,
+          deletedAt: true,
           // Per-booking notification controls — gate job-scoped sends below.
           notifyClient: true,
           notifyProvider: true,
@@ -387,6 +388,15 @@ export async function saveJob(formData: FormData) {
           cleaners: { select: { id: true, name: true, email: true } },
         },
       });
+
+      // Editing an archived booking is not a thing. Without this the job modal
+      // would happily rewrite the crew, price and schedule of a job that is out
+      // of every list, count and report — and syncJobAssignments below would
+      // mint JobAssignment rows for it. Restore it first if it is meant to be
+      // live. (assignCleaners carries the same guard.)
+      if (existingJob?.deletedAt) {
+        return { error: "This booking is no longer active." };
+      }
 
       // The team this job ends up with. When the submission didn't carry the
       // picker, that's the team it already had — the notification/lifecycle
