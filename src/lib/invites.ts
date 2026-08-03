@@ -26,9 +26,15 @@ export async function createAssignmentInvites(opts: CreateInviteOpts) {
   // directly assigned without being prompted.
   const job = await db.job.findUnique({
     where: { id: opts.jobId },
-    select: { notifyProvider: true },
+    select: { notifyProvider: true, deletedAt: true },
   });
   if (job && !job.notifyProvider) return [];
+  // Never ask a cleaner to accept an archived booking. `respondToJobInvite`
+  // refuses the answer, so an invite sent here could only ever be a dead end —
+  // and `cancelShift` would otherwise broadcast a paid last-minute claim for
+  // work that no longer exists. Guarded centrally because all five senders
+  // (assignCleaners, cancelShift, saveJob ×3) come through here.
+  if (job?.deletedAt) return [];
 
   const now = new Date();
   const timeoutMin = await getSetting("scheduling.acceptDeclineTimeoutMin");

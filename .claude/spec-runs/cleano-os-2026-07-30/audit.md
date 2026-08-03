@@ -607,3 +607,329 @@ should those two roles keep?
 `inventory/rag-wash`, `recurring`, `calendar`, `dashboard`, `kpi`, `jobs/new`.
 
 (Tracked as Q6 in the TODO's Stage 6 block. Answer goes here and there.)
+
+## 2026-07-31 — WP-7: archived jobs refuse cleaner assignment responses (no migration)
+
+**Uncommitted in the working tree** on `main`, at Prem's instruction — not committed and
+not pushed. The end-to-end check below still needs someone with database access.
+
+Verified: `npx tsc --noEmit` clean, `npm run build` exit 0, 66/66 assertions.
+
+No spec requirement ID maps to this — like the handoff's Task 3 it is a defect from the
+fix list, not one of the 208 requirements. Nothing to tick in the table above.
+
+### The defect
+
+`respondToJobInvite` never looked at the job at all beyond its id, job number and cleaner
+list — the word `deletedAt` did not appear in the file. A cleaner could accept an
+assignment for an archived booking and it landed on their schedule as work to do.
+Observed in production: job #1545 archived at 23:49:34, invite accepted at 23:53:22.
+
+The interesting part is that the *listing* side was already correct. The pending-invite
+query on `/my-jobs` (`page.tsx:343-346`) filters
+`job: { deletedAt: null, status: { notIn: ["COMPLETED","PAID","CANCELLED"] } }` under the
+comment "Closed / archived jobs never ask for an answer." But the panel it feeds is a
+snapshot: archive a job and the Accept/Decline buttons stay live on every page loaded
+beforehand. Four minutes is exactly the width of that window. The invariant existed, it
+just lived only in the query, where it could not be enforced.
+
+### What changed
+
+| File | Change |
+|---|---|
+| `src/app/admin/actions/respondToJobInvite.ts` | Selects `status` + `deletedAt` on the invite's job and refuses the response when the booking is closed. Placed immediately after the ownership check, ahead of every write. |
+| `src/lib/invites.ts` | `createAssignmentInvites` selects `deletedAt` on the job row it already loads for `notifyProvider`, and returns `[]` for an archived job. |
+
+### Design decisions
+
+- **The guard mirrors the listing query rather than only `deletedAt`.** The stage's
+  implement note asks for `deletedAt`, but the TODO's own description of the bug says
+  "archived/cancelled", and `my-jobs/page.tsx` already treats archived, CANCELLED,
+  COMPLETED and PAID as one class. Enforcing the same condition server-side means the
+  action agrees with the query that rendered the button, instead of the two drifting.
+  Two messages: "This booking is no longer active." (archived / CANCELLED, the wording
+  the handoff specifies) and "This booking is already closed." (COMPLETED / PAID).
+- **Declining is refused too.** Decline disconnects the cleaner from the job and deletes
+  their `JobAssignment` row, while `deleteJob.ts:61` deliberately keeps the team attached
+  so a restore brings them back with it. Letting a decline through on an archived job
+  would quietly strip the team the archive was preserving.
+- **The guard sits before the "mark EXPIRED" write** at the top of the expiry branch, so
+  answering an archived job's invite performs no database write at all. Asserted in the
+  verification, not just by reading.
+- **The sending side is guarded centrally in `createAssignmentInvites`.** All five
+  senders (`assignCleaners`, `cancelShift`, `saveJob` ×3) route through it, it already
+  loads the job row, and no caller reads its return value — so `[]` is a safe no-op. This
+  also closes a second path: `cancelShift.ts:133` would otherwise fan out a *paid*
+  last-minute claim bonus to every cleaner for a job that had been archived.
+- **`deletedAt` only on the sending side, not the status list.** Sending is minimal by
+  design; an admin correcting the crew on a finished job is a plausible flow and blocking
+  the invite there would be a behaviour change with no defect behind it.
+- **Earlier gates keep priority.** Not-authenticated / invite-not-found / not-your-invite
+  still win over the new refusal, so the guard leaks nothing about jobs the caller has no
+  claim to.
+- **`PendingInvitesPanel` untouched.** It already `alert()`s `result.error`, which is the
+  "clear message" the task asks for, and the stale row disappears on the next load
+  because the listing query has always filtered it out.
+
+### Verification
+
+66/66 assertions over the shipped gate order and the source wiring:
+
+- Archived job × {direct, direct-expired, last-minute, last-minute-expired} ×
+  {ACCEPT, DECLINE} — all 8 refused. Same 8 for a CANCELLED job.
+- COMPLETED and PAID refused on both decisions with the closed message.
+- A replay of the job #1545 timeline (archived 23:49:34, accepted 23:53:22) is refused.
+- **Regression guard:** a live job is unchanged — direct and last-minute accept and
+  decline all still succeed, an expired *direct* invite is still answerable (fix-list
+  item 2), an expired *last-minute* one still lapses, and CREATED / SCHEDULED /
+  IN_PROGRESS all still answer.
+- Gate order: unauthenticated, missing invite and someone-else's-invite still take
+  precedence; an archived job short-circuits before the already-answered branch.
+- Source: the guard precedes `$transaction`, `job.update`, `jobAssignment.upsert`,
+  `jobLog.create` and every `jobAssignmentInvite.update`; the action's status list is
+  the same three the listing query excludes; all three sender files import the guarded
+  helper and none creates a `JobAssignmentInvite` row directly.
+- Sender: live job sends, archived sends none, `notifyProvider: false` still
+  short-circuits first, empty cleaner list and a missing job row behave as before.
+
+**Still to be done by someone with database access:** archive a Prem Sai test job that
+has a pending invite, then answer it from a page loaded before the archive — expect the
+refusal and nothing on the cleaner's schedule, on both Accept and Decline. Then confirm a
+normal, non-archived invite still accepts and declines.
+
+### ⛔ Two adjacent gaps found while in here — NOT fixed, need Prem
+
+Both are outside the stage's scope (the stage says to note dangling invites rather than
+expand), and neither is required for the fix above to hold:
+
+1. **Archiving leaves pending invites PENDING.** `deleteJob.ts` and the bulk archive path
+   (`src/lib/bulk/actions.ts:65`) set `deletedAt` and deliberately leave assignments
+   intact so a restore brings the team back. The invites are now inert — they cannot be
+   answered and cannot be sent — but they stay `PENDING` in the table, and the cron sweep
+   will still flip them to `EXPIRED` on schedule (it already suppresses the *admin alert*
+   for archived jobs, `api/cron/notifications/route.ts:552`). Should archiving void them
+   explicitly, or is inert-but-present the behaviour you want given restore?
+2. **A cleaner can still be *assigned* to an archived job**, just not invited.
+   `assignCleaners` and `saveJob` never check `deletedAt`. The cleaner would not be
+   pinged and could not accept, but the assignment row would exist. Worth gating at the
+   assignment level too, or is editing an archived job's crew something you rely on
+   before restoring it?
+
+## 2026-07-31 — WP-8: Stage 4, the seven zero-migration features (no migration)
+
+Seven commits on `main`, one per sub-item, **committed and not pushed** — a push is a
+production deploy and the browser-level checks below are still outstanding.
+
+| Commit | Sub-item | Requirement |
+|---|---|---|
+| `bd7c123` | 4.1 job-chat unread badges, all three sides | `CLN-P0-3-08` |
+| `b4d626d` | 4.2 FAQ inside the customer portal | `CLN-P1-4-01` |
+| `3cae1e4` | 4.3 keyword search on the FAQ | `CLN-P1-4-05` |
+| `a36eedc` | 4.4 browser Back keeps the booking draft | `CLN-P1-6-09` |
+| `7e3a815` | 4.5 admin notified when a card is replaced | `CLN-P1-7-09` |
+| `7a8db5d` | 4.6 customer picks the card for one booking | `CLN-P1-7-07` |
+| `56f0be3` | 4.7 one font across the product | `CLN-P1-8-01..09` |
+
+Verified after every commit: `npx tsc --noEmit` clean, `npm run build` exit 0.
+Assertions: 53 + 27 + 49 + 82 + 43 + 63 + 74 = **391**, all passing.
+
+### Requirements moved
+
+| ID | Was | Now | Evidence |
+|---|---|---|---|
+| CLN-P0-3-08 | ⚠️ | ✅ | `getJobChatUnread(scope)` in `src/lib/jobChatUnread.ts`; counts on the admin Jobs nav, the cleaner My-jobs nav + tab, and the portal Bookings nav, plus a per-job pill on all three lists |
+| CLN-P1-4-01 | ❌ | ✅ | `src/app/(customer)/(secured)/help/page.tsx`, reading the same `content.faqs` setting as `/faq`; nav entry in `PortalShell` |
+| CLN-P1-4-05 | ❌ | ✅ | `src/components/FaqAccordion.tsx` — client-side filter over question **and** answer, used by both FAQ pages |
+| CLN-P1-6-09 | ⚠️ | ✅ | History entry per step + `popstate` → step, and the draft persisted in `sessionStorage` |
+| CLN-P1-7-09 | ⚠️ | ✅ | `admin.card.replaced` + `notifyCardReplaced()`, called from all seven paths that change a client's default card |
+| CLN-P1-7-07 | ❌ | ✅ | `setBookingPaymentMethod` / `getBookingPaymentMethod` + `BookingPaymentMethod.tsx` on the booking page |
+| CLN-P1-8-01 | ❌ | ✅ | Fraunces retired; the decorative `<em>` accents are upright and carry colour instead |
+| CLN-P1-8-02 | ❌ | ✅ | Montserrat — the Dashboard title's face — is the global font via `--font-app` |
+| CLN-P1-8-03 | ❌ | ✅ | Set on `body`; no surface declares its own family; Manrope's double load removed |
+| CLN-P1-8-04 | ❌ | ✅ | Decorative and empty-state italics removed; verbatim quotations keep theirs |
+| CLN-P1-8-05 | ⚠️ | ✅ | One main-title style — `.admin-page-title` now matches `.display` |
+| CLN-P1-8-06 | ⚠️ | ✅ | `--type-<role>-size/weight` for all thirteen roles + a DESIGN-SYSTEM.md section |
+| CLN-P1-8-07 | ⚠️ | ✅ | `.text-xs` leading fixed; `.text-xxs`/`.text-xxxs` raised from 8.96/6.72px to 10/9px |
+| CLN-P1-8-09 | ⚠️ | ✅ | One token on `:root`; a new page inherits it with no opt-in class |
+| CLN-P1-8-08 | 🔍 | 🔍 | Still a visual-QA gate — see the blocked check below |
+
+### Design decisions worth knowing
+
+- **4.1 — read state is per role, not per user.** Someone who is both a FIELD_LEAD and an
+  assigned cleaner therefore gets two independent counts, one per surface, and neither can
+  get stuck behind the other. Every consumer of a scope shares one SWR key, so a hundred-row
+  list plus the nav badge cost one request per poll, at the staff-chat badge's own 5s cadence.
+- **4.2 — the portal FAQ is at `/help`, not `/faq`.** Route groups add no path segment, so a
+  page under `(customer)/(secured)/faq` would have collided with the public one, and `/faq` is
+  whitelisted as public in `src/proxy.ts`. `/help` is not whitelisted, so it stays behind the
+  session gate.
+- **4.3 — one shared accordion** for both FAQ pages rather than a search box bolted onto the
+  public one. The shared classes read tokens declared on `:root`, not the `.cl-customer`-scoped
+  copies, which is why they resolve on the public page (asserted).
+- **4.4 — the same rule gates Continue, browser Forward and a restored session.** It moved into
+  one pure function; previously only Continue consulted it. Nothing payment-related is stored:
+  `stripeCardReady` and the Stripe customer id are stripped both ways and the terms checkbox is
+  never stored, so a restored review step cannot confirm. `popstate` is inert while a deposit
+  confirmation is in flight.
+- **4.5 — "replaced" means the default changing from one card to another.** Excludes a first
+  card, re-confirmation of the same card, and listing. Deduplicated on the card that becomes
+  the default, so the action and the Stripe webhook racing produce one email.
+- **4.6 — both ids are re-proven server-side.** The booking against the client, the card against
+  the client's Stripe customer, checked with Stripe rather than our mirror. Pinning feeds the
+  existing removal guard for free because it queries the same column.
+- **4.7 — the aliases are deliberate.** `--font-serif`, `--font-cl`, `--font-cl-serif` still
+  exist and point at `--font-app`; retiring the serif by repointing three tokens is safer than
+  ~80 individual edits.
+
+### Found while in here — NOT part of the spec, fixed because they were in the way
+
+1. `PortalNav.tsx` looks like the customer portal nav and is **unreferenced dead code**. The
+   live nav is `PortalShell`. Left in place, not deleted — outside scope.
+2. Two rules read `var(--font)`, which nothing defines, so the declaration was invalid and
+   dropped. Nine rules read `var(--font-mono)`, which resolved to an undefined
+   `--font-geist-mono`, so ids, codes and durations rendered in the body font. Both repointed.
+
+### ⛔ Blocked — the same environment gap as Stages 1–3
+
+`.env` in this working copy still has **no `DATABASE_URL` / `DIRECT_URL`**, so
+`npx prisma migrate status` cannot run and the app cannot be started. Everything below needs
+someone with database access:
+
+- **4.1** — send a message as each role and watch the counterpart's badge appear and clear on
+  read; confirm no N+1 on the job lists.
+- **4.2 / 4.3** — open `/help` as a signed-in customer and `/faq` signed out; search both.
+- **4.4** — walk the wizard, press browser Back, reload mid-flow, and confirm the deposit step
+  behaves exactly as before.
+- **4.5** — replace a card on the Prem Sai test client → exactly one admin email; adding a
+  first card sends none.
+- **4.6** — pin a card, confirm the charge uses it, and confirm removal of a pinned card is
+  refused.
+- **4.7** — ⚠️ **the before/after screenshot pass this stage asks for.** Playwright is in
+  devDependencies but needs the app running. This commit changes how *every page in the product*
+  looks. **Prem should look at admin, cleaner, customer and public booking before this is
+  pushed.**
+
+## 2026-07-31 — WP-9: Stage 5, the migration batch (chat features + FAQ system)
+
+**⛔ THE MIGRATIONS ARE WRITTEN AND NOT APPLIED.** This working copy still has no
+`DATABASE_URL` / `DIRECT_URL`, so `prisma migrate deploy` cannot reach the database. Unlike
+`20260730120000_booking_payment_binding`, which left the **database ahead of the code** (the
+safe direction), **this batch is the opposite: the code needs columns and tables production
+does not have yet.** Pushing before applying would 500 the job-chat thread, both FAQ pages
+and the Website settings tab.
+
+Required order, per the hard rule: `pg_dump` → `npx prisma migrate deploy` (never
+`migrate dev`) → run each file's post-apply verification → *then* push.
+
+Design note written first, before any migration: `stage5-schema-design.md` in this folder.
+
+| Commit | Sub-item | Migration | Requirement |
+|---|---|---|---|
+| `4384c3f` | 5.1a chat photo attachments | `20260731000000_job_chat_attachments` | `CLN-P0-3-05` |
+| `77f4dca` | 5.1b disable messaging per booking/person | `20260731001000_job_chat_disable` | `CLN-P0-3-14` |
+| `0426280` | 5.1c hide a message, original preserved | `20260731002000_job_chat_moderation` | `CLN-P0-3-17` |
+| `9b41755` | 5.2a real FAQ tables + data migration | `20260731020000_faq_tables` | `CLN-P1-4-06/08/09/10/11` |
+| `51da2e5` | 5.2b FAQ analytics | `20260731030000_faq_analytics` | `CLN-P1-4-17` |
+
+Five migrations rather than two, one per sub-item. `prisma migrate deploy` applies everything
+pending in timestamp order, so it is still **one** manual command; the split keeps each commit
+self-contained and each rollback independent. No migration in the batch declares an index
+Prisma cannot express in `schema.prisma` — a partial index was considered for 5.1c and dropped
+for that reason, since it would have reappeared as the drift `20260728010000_align_schema_drift`
+already had to clean up once.
+
+Verified after every commit: `npx tsc --noEmit` clean, `npm run build` exit 0.
+Assertions: 83 + 82 + 74 + 129 + 80 = **448**, all passing — and all five suites re-run
+against the final tree after the last commit, since 5.1b and 5.1c both edit files 5.1a
+asserts against.
+
+### Requirements moved
+
+| ID | Was | Now | Evidence |
+|---|---|---|---|
+| CLN-P0-3-05 | ⚠️ | ✅ | `attachmentUrl/Width/Height` on `JobChatMessage`; `sendJobChatPhoto` in `src/lib/jobChatActions.ts`; composer + rendering in `JobChatThread`, which all three sides share |
+| CLN-P0-3-14 | ❌ | ✅ | `chatDisabledAt` on `Job`/`User`/`Client`; enforced in `sendJobChatMessage`, `sendJobChatPhoto` **and** `api/twilio/inbound`; controls in `src/components/JobChatModeration.tsx` |
+| CLN-P0-3-17 | ❌ | ✅ | `hiddenAt`/`hiddenById`; role-filtered read in `getJobChatMessages`; `hideJobChatMessage`/`unhideJobChatMessage` in `src/app/admin/actions/jobChatModeration.ts` |
+| CLN-P1-4-06 | ❌ | ✅ | `FaqCategory`, with the ten spec categories seeded by the migration in spec order |
+| CLN-P1-4-08 | ⚠️ | ✅ | add/edit/delete/duplicate/reorder/draft/publish/unpublish in `src/app/admin/actions/faqActions.ts` + `FaqManager.tsx` |
+| CLN-P1-4-09 | ❌ | ✅ | create/rename/reorder/delete categories, same files |
+| CLN-P1-4-10 | ❌ | ✅ | `FaqVisibility` PUBLIC/PORTAL/BOTH, applied by `getPublishedFaqs(surface)` |
+| CLN-P1-4-11 | ❌ | ✅ | `questionFr`/`answerFr`/`nameFr` + an EN/FR switch on both surfaces, English as the fallback |
+| CLN-P1-4-17 | ❌ | ✅ | `FaqEvent` + `recordFaqEvent`/`getFaqAnalytics`; panel in the Website settings tab |
+| CLN-P1-4-18 | ✅ | ✅ | **held, not inherited** — see the note below |
+
+### Design decisions worth knowing
+
+- **5.1a — one attachment per message, `body` stays NOT NULL.** A photo-only message stores
+  `""`, which `JobChatThread` already rendered correctly (it guards `{m.body && …}`). A child
+  table would have added a second cascade edge to the job; widening `body` would have flipped
+  the generated type to `string | null` across every reader for nothing.
+- **5.1a — the upload does NOT reuse `uploadJobPhoto`'s authorization.** That action admits
+  admins and assigned cleaners only. The client is a first-class participant in job chat and
+  is absent from that list, so reusing it would have let cleaners send photos and silently
+  refused the customer. The gate is the chat's own `resolveParticipant`.
+- **5.1b — disabled is read-only, never invisible,** and admins are exempt. Hiding the history
+  would contradict 3-10 and 3-15, which are the reason the switch gets reached for.
+- **5.1b — the third write path is the one that mattered.** `api/twilio/inbound` appends a
+  client's SMS as a CLIENT message with no session, so without a check there a blocked
+  customer just texts instead. It answers with empty TwiML rather than an error, because a
+  non-2xx makes Twilio redeliver forever.
+- **5.1c — named `hiddenAt`, not `deletedAt`.** `GroupMessage.deletedAt` is the pattern this
+  copies, but the requirement is to preserve the original, and `deletedAt` is an invitation
+  for a future cleanup job to hard-delete the row it was supposed to keep.
+- **5.1c — the audit copy partly defuses the cascade landmine.** Hiding writes the original
+  body and attachment url into `ActivityLog`, which has no FK to `Job` and therefore survives
+  `permanentlyDeleteJobs`. That covers 3-17's "preserving the original in audit history"
+  without waiting for Prem's answer on the cascade itself.
+- **5.2a — the `content.faqs` blob is read and left in place.** `getPublishedFaqs` falls back
+  to it when the tables are empty **or when the query throws** — which is exactly what happens
+  if the code ships ahead of the migration. The pages degrade to yesterday's content instead
+  of 500ing.
+- **5.2a — the blank-FAQ trap.** An admin who never opened the editor has no `AppSetting` row
+  at all; `getSetting` was serving the registry defaults. Copying only the row would have
+  inserted nothing and blanked both pages, so the migration seeds those two defaults verbatim
+  when the row is absent. Migrated questions land **uncategorised** deliberately: guessing
+  which of the ten categories a free-text question belongs to would misfile the client's words.
+- **5.2a — `CLN-P1-4-18` would have regressed silently.** FAQ edits were audited only because
+  `content.faqs` carried `audit: true` and the settings spine wrote the row
+  (`settings/index.ts:144`). With edits on tables that spine is out of the path, so all nine
+  mutations call `logActivity` themselves; an edit records before **and** after, as the spine
+  did, and a delete keeps the deleted wording.
+- **5.2b — two of 4-17's four metrics are the same signal.** On an accordion a question is
+  only "viewed" by being expanded, so "most-viewed" and "opened most often" are both `OPEN`;
+  the panel prints one heading and says what is counted rather than the same numbers twice.
+  `VIEW` (one row per page load) is kept as the denominator.
+
+### Found while in here — needs Prem
+
+1. **The `JobChatMessage → Job` cascade** (`onDelete: Cascade` in `schema.prisma`) still means
+   `permanentlyDeleteJobs` destroys a whole conversation, contradicting `CLN-P0-3-15`. Three
+   options and a recommendation are in `stage5-schema-design.md` section 1; recorded as
+   **Stage 6 Q7**. Not changed here — it is the one non-additive option in the set.
+2. **`FaqEvent` adds an unauthenticated, unmetered write endpoint**, because the public `/faq`
+   page has to be able to log. Bounded on every axis (4-value enum, FK-checked id, 80-char
+   query, fire-and-forget), but not rate limited — the same gap as
+   `/api/stripe/charge-deposit` and lead/quote submission. Flagged rather than half-fixed,
+   per the appendix's "don't silently fix while in there".
+
+### ⛔ Blocked — the same environment gap as Stages 1–4
+
+`npx prisma migrate status` still fails with P1012 (no `DIRECT_URL`), so nothing DB-backed
+could be exercised. Everything below needs someone with database access, **and all of it
+should happen after the migrations are applied and before the code is pushed**:
+
+- **5.1a** — send a photo as the cleaner, the client and an admin; confirm it appears on the
+  other two surfaces, that a >10MB file and a PDF are refused, and that a photo-only message
+  renders without an empty text line.
+- **5.1b** — turn messaging off for a booking and confirm both parties keep the history and
+  lose the composer while an admin can still post; block a customer and confirm an inbound
+  SMS from them is dropped rather than appended.
+- **5.1c** — hide a message and confirm it disappears for the cleaner and the client, stays
+  marked for admin, clears no badge it shouldn't, and that `/admin/logs` shows the original
+  text on the `jobChat.hideMessage` row.
+- **5.2a** — ⚠️ **the data migration is the highest-risk item in the batch.** Run its
+  pre-flight query first and note the count, then confirm after apply that `Faq` holds the
+  same number of rows in the same order, that `content.faqs` is still present, and that
+  `/faq` and `/help` look unchanged before any admin edit.
+- **5.2b** — open both FAQ pages, expand a question, search for something that exists and
+  something that does not, then confirm all four figures appear in the settings panel.

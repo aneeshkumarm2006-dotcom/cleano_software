@@ -28,6 +28,8 @@ export async function respondToJobInvite(input: {
         select: {
           id: true,
           jobNumber: true,
+          status: true,
+          deletedAt: true,
           cleaners: { select: { id: true } },
         },
       },
@@ -36,6 +38,23 @@ export async function respondToJobInvite(input: {
   if (!invite) return { success: false, error: "Invite not found" };
   if (invite.cleanerId !== session.user.id) {
     return { success: false, error: "Not your invite" };
+  }
+  // The booking has to still be open for the answer to mean anything. The
+  // invite list on /my-jobs already refuses to show these (page.tsx: "Closed /
+  // archived jobs never ask for an answer"), but the panel it renders is a
+  // snapshot — archive a job and the buttons stay live on any page loaded
+  // beforehand. That is how job #1545 was archived at 23:49 and accepted at
+  // 23:53, putting cancelled work on a cleaner's schedule. This mirrors that
+  // query's condition on the server, where it is actually enforceable.
+  //
+  // Declining is refused too: it disconnects the cleaner from the job, and
+  // archiving deliberately keeps the team attached so a restore brings them
+  // back with it (deleteJob.ts).
+  if (invite.job.deletedAt || invite.job.status === "CANCELLED") {
+    return { success: false, error: "This booking is no longer active." };
+  }
+  if (invite.job.status === "COMPLETED" || invite.job.status === "PAID") {
+    return { success: false, error: "This booking is already closed." };
   }
   // A DIRECT assignment invite that ran out of time is still answerable: the
   // cleaner stays on the job when the invite expires (new fix list item 2), so
