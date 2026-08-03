@@ -8,7 +8,7 @@ import { getServicePricingConfig } from "@/lib/booking-pricing";
 import { isSqftJobType, moveInOutBasePrice } from "@/lib/service-pricing";
 import { tzWallClockToUtc, tzInputParts } from "@/lib/time";
 import { syncJobAssignments } from "@/lib/job-assignments";
-import { requireAdmin } from "@/lib/page-guards";
+import { requireOwnerAdmin } from "@/lib/page-guards";
 import { deleteJob as archiveJob } from "@/app/admin/actions/deleteJob";
 import { getServiceCatalog } from "@/lib/service-catalog.server";
 import { serviceOptions } from "@/lib/service-catalog";
@@ -43,7 +43,13 @@ export default async function JobFormPage({
   // wrong in both directions: one admin could not edit another admin's job, and
   // once employeeId holds the LEAD CLEANER (as it should) an assigned cleaner
   // would have been able to open the admin job form. Guard on role instead.
-  const session = await requireAdmin();
+  //
+  // requireOwnerAdmin, not requireAdmin: the comment above has always claimed
+  // ADMIN/OWNER, but requireAdmin admits all four staff roles. saveJob (the
+  // action behind this form) is now OWNER/ADMIN, so without this an
+  // OPS_MANAGER or FIELD_LEAD could fill the whole form and only discover the
+  // refusal on submit.
+  const session = await requireOwnerAdmin();
 
   // THE service list (item 20) — same source as the modal and the filters.
   const serviceOptionList = serviceOptions(await getServiceCatalog());

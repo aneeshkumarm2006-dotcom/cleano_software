@@ -28,6 +28,7 @@ import { applyToJobSeries, seriesRootId, type SeriesUpdateResult } from "@/lib/j
 import { AUTO_REASON, normalizeDiscountReason } from "@/lib/discount-reasons";
 import { createAssignmentInvites } from "@/lib/invites";
 import { getSetting } from "@/lib/settings";
+import { requireOwnerAdmin } from "@/lib/action-guards";
 import {
   resolveJobLead,
   syncJobAssignments,
@@ -70,6 +71,19 @@ function parseOptionalInt(value: FormDataEntryValue | null): number | null {
 }
 
 export async function saveJob(formData: FormData) {
+  // OWNER/ADMIN only. This used to check nothing but `if (!session)`, which is
+  // authentication, not authorization — and a server action is an
+  // independently callable POST endpoint, so the /admin layout guard never
+  // covered it. Any signed-in account could reach it, including the CLIENT and
+  // EMPLOYEE roles that the admin app bounces on sight. It writes job price,
+  // discount, tax exemption, cleaner pay and payment status, so the tier has to
+  // match the one on the money actions it sits beside (chargeJob,
+  // togglePaymentReceived, permanentlyDeleteJobs).
+  const actor = await requireOwnerAdmin();
+  if (!actor.ok) {
+    return { error: actor.error };
+  }
+
   const session = await auth.api.getSession({
     headers: await headers(),
   });
