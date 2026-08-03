@@ -933,3 +933,154 @@ should happen after the migrations are applied and before the code is pushed**:
   `/faq` and `/help` look unchanged before any admin edit.
 - **5.2b** — open both FAQ pages, expand a question, search for something that exists and
   something that does not, then confirm all four figures appear in the settings panel.
+
+---
+
+## WP-10 — 2026-08-03 · Blockers cleared, three P0s found that were not on the list
+
+**The environment blocker is gone.** `.env` now carries `DATABASE_URL` + `DIRECT_URL`.
+`npx prisma migrate status` runs, the production database is reachable, and every check
+Stages 0–5 recorded as "⛔ blocked — no `DATABASE_URL`" became runnable for the first time.
+
+State found on arrival: 58 migrations applied and the five Stage 5 migrations pending;
+`main` 17 commits ahead of `origin/main`; the Stage 3 invite guard uncommitted. 14 jobs,
+**all admin-created — zero web bookings**, zero chat messages, zero referral credit
+balances, and all nine promo codes still at `usesCount = 0`. Staff: 1 ADMIN, 1 FIELD_LEAD,
+no OWNER and no OPS_MANAGER, alongside 38 EMPLOYEE and 170 CLIENT. So the Stage 1 billing
+defects had produced no victims yet — they were latent, not realised.
+
+Exploring the code turned up **three defects that appear nowhere in `TODO.md` or the
+handoff**, two of which outrank everything that was on the list.
+
+### 🔴 The 1533-row hard delete was only ever half fixed — `701971e`
+
+`actions/deleteJob.ts` documents the July 2026 data loss and was rewritten to soft-delete.
+**Two other copies of `db.job.delete()` survived, and the visible Delete button used one of
+them**: an inline `"use server"` closure in `admin/jobs/[id]/page.tsx`, and a second in
+`admin/jobs/new/page.tsx`. Neither carried a role check — a server action is an
+independently callable endpoint, so the `/admin` layout guard never covered them.
+
+The job-detail one is the worse: its confirm modal is titled **"Archive Job"** and reads
+"It moves to Jobs → Archived… You can restore it from there", then permanently destroyed
+the row, cascading away `JobLog`, `JobAssignment`, `JobAssignmentInvite`, `JobChecklist`,
+`JobAddOn`, `JobPhoto`, `JobProductUsage` and the whole job chat thread. Both now route
+through the audited soft delete. No `db.job.delete`/`deleteMany` remains in `src/` outside
+`permanentlyDeleteJobs`.
+
+### 🔴 `saveJob` had no authorization at all — `5886176`
+
+It checked `if (!session)` and nothing else, while writing job price, discount, tax
+exemption, cleaner pay, payment type and payment status. Every authenticated account could
+reach it — on this database 170 CLIENT and 38 EMPLOYEE users. Now `requireOwnerAdmin`,
+matching `chargeJob` / `togglePaymentReceived` / `permanentlyDeleteJobs`. `admin/jobs/new`
+moved from `requireAdmin` to `requireOwnerAdmin` at the same time; its own comment had
+claimed ADMIN/OWNER since it was written, but `requireAdmin` admits all four staff roles.
+**Consequence flagged to Prem: the one FIELD_LEAD loses job create/edit.**
+
+### 🔴 GST/QST was never collected on admin jobs — `e1a97f7`
+
+`Job.price` means two different things: `saveJob` writes it pre-tax and pre-discount with
+the taxed figure in `totalAmount`; `submitBooking` writes it tax-inclusive and
+post-discount, and never wrote `totalAmount` at all. Every charge path computed
+`price - discountAmount`, which on an admin job is exactly `subtotalAmount` — the pre-tax
+figure — so GST (5%) + QST (9.975%) went uncollected despite real registration numbers in
+`tax.config`. Measured: $16.77 short per $112 job, $26.36 on #1540, $29.95 on #1542/#1543,
+$44.93 on #1538.
+
+The same line carried the two defects Stage 1 had already recorded: the referral credit
+subtracted twice (Stage 1 finding 1) and the $20 deposit never credited (finding 2). **All
+three are now fixed together** by `resolveAmountDue` in the new `lib/job-billing.ts`, which
+prefers `totalAmount` and then deducts the deposit once. `submitBooking` now writes
+`totalAmount` on the primary job and on recurring children, which is what stops the second
+subtraction. `price - discountAmount` survives only as the fallback for rows predating
+`totalAmount`, so the change cannot move an amount it does not also correct.
+
+Prem's call, recorded: bill the taxed total, credit the deposit, and **no cutoff date** —
+the 8 existing unpaid jobs pick up their stored taxed figure.
+
+Deliberately NOT routed through the helper: `toggleJobPaymentStatus`'s `Transaction` row
+and `metrics-shared`'s `jobRevenue`, which record pre-tax revenue with `taxAmount` held
+separately — the shape of the live `Transaction` rows.
+
+### 🟠 Archived-job gaps closed — `29a39a2`
+
+`assignCleaners` and `saveJob`'s edit path never loaded `deletedAt`, so an admin could
+still mint `JobAssignment` rows on an archived booking — silently, since the invite fan-out
+now returns `[]`. And `cancelShift` still **emailed** every EMPLOYEE/FIELD_LEAD a paid
+last-minute opening for an archived job: `createAssignmentInvites` declined to create the
+invite, but the email loop sits outside that call. Both guarded. (Answers the assignment
+half of Stage 3's two "found while in here" questions. Voiding pending invites on archive
+was left, per Prem.)
+
+### 🟠 Stage 6 Q7 answered — `9b6378a`
+
+**Option B.** A job with any `JobChatMessage` can no longer be permanently deleted; it stays
+archived. No schema change, nothing orphaned, and `CLN-P0-3-15` holds. A mixed selection
+deletes the rest and reports what stayed, in the UI and as `skippedForChatHistory` in the
+audit metadata. Free to adopt — `JobChatMessage` is empty.
+
+Same commit: **`/admin/settings` gets `requireOwnerAdmin`.** It had no role check at all,
+only a session, so despite `adminOnly: true` in the Sidebar an OPS_MANAGER or FIELD_LEAD
+opened pricing rules, the GST/QST config, the notification catalog and CSV import by typing
+the URL. Four other pages share that nav-flag/server disagreement — `analytics`, `chat`,
+`inventory`, `inventory/[id]` — and are recorded below, not changed.
+
+### ✅ The five Stage 5 migrations are APPLIED to production
+
+`pg_dump` is not installed on this machine; since all five are additive (nullable
+`ADD COLUMN` / `CREATE TABLE` / `CREATE TYPE`) and the only pre-existing data any of them
+reads is the `content.faqs` row, that row plus full row counts were snapshotted to JSON
+first. Then `npx prisma migrate deploy` — never `migrate dev`. **22/22 post-apply checks
+passed**, running each migration file's own verification query:
+
+- 3 nullable attachment columns; 3 `chatDisabledAt` columns (Job/User/Client), no defaults;
+  `hiddenAt` / `hiddenById` with 0 hidden messages.
+- `FaqCategory` = 10 in spec order; `Faq` = 2, **verbatim and in order** against the blob,
+  all `PUBLISHED`/`BOTH`, all uncategorised as designed; `content.faqs` still present.
+- `FaqEvent` = 0 with its 4 enum values.
+- Job/Client/User/JobAssignment/JobAssignmentInvite/AppSetting/Transaction/Invoice/PromoCode
+  counts all unchanged. `prisma migrate status` → "Database schema is up to date!"
+
+**That closes the 5.2a data-migration check, the highest-risk item in the batch.**
+
+### 🔴 …and starting the app immediately found a broken public page — `3be79ec`
+
+With the app runnable for the first time, `/faq` turned out to render **nothing but the
+loading spinner**. Both FAQ surfaces passed `langHref`, a *function*, to `FaqAccordion`, a
+Client Component; React cannot serialize a function across that boundary, so it threw while
+stringifying props and lost the subtree. The route still answered 200 and the question text
+was still in the flight payload, which is why nothing else had caught it — and neither
+`tsc` nor `next build` can, because the prop types are correct and the failure is at
+request-time serialization. Replaced with `langBasePath`, a plain string.
+
+**This is precisely the class of defect the blocked browser checks existed to catch, and it
+was sitting in committed code waiting to be pushed.**
+
+### Verification run
+
+`npx tsc --noEmit` clean and `npm run build` exit 0 after every commit, and again against
+the migrated schema. `scripts/verify-job-billing.mjs` **39/39** — admin tax, tax-exempt,
+discount-equals-price, referral once, promo not re-subtracted, promo+referral stacked,
+deposit credited/floored/absent, recurring child, legacy rows unchanged, gift-card
+draw-down, hold == capture, and each of the 9 live priced jobs billing its own stored
+`totalAmount`. Live server against production data: `/faq` and `/faq?lang=fr` render the
+search box and EN/FR switch with zero server errors, and `/`, `/book`, `/sign-in`,
+`/join-waitlist` plus the admin, cleaner and portal entry points all respond correctly.
+
+### Still open — needs Prem
+
+1. **Nothing is pushed.** `main` is now 24 commits ahead of `origin/main`. The database is
+   ahead of `origin/main`, which is the safe direction; pushing is Prem's call.
+2. Authenticated pages could not be exercised — that needs a real signed-in session, which
+   is not something to manufacture against production. The per-role Stage 5.1a/b/c and
+   5.2b checks remain outstanding.
+3. `generateInvoiceFromJob` double-counts add-ons on web bookings (`job.price` already
+   contains them and the tax).
+4. `metrics-shared:45` understates revenue on web rows (`price` is post-discount there, and
+   the discount is subtracted again).
+5. The cron sweep writes a misleading "cleaner remains assigned" JobLog note on archived
+   jobs; `bulkRestore` writes no `logActivity` at all, unlike archive.
+6. The four remaining nav-flag/server mismatches: `analytics`, `chat`, `inventory`,
+   `inventory/[id]`. Plus `/api/invoices/[id]/pdf` hands OPS_MANAGER invoice PDFs the page
+   denies, and `updateClockTimes` lets FIELD_LEAD edit payroll hours.
+7. Stage 6 Q1–Q5 still gate all of Stage 7. **Q6 remains open; Q7 is answered (option B).**
