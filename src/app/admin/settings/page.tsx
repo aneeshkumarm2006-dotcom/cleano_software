@@ -4,11 +4,20 @@ import { redirect } from "next/navigation";
 import { db } from "@/db";
 import SettingsClient from "./SettingsClient";
 import { seedNotificationCatalog } from "@/lib/notifications";
+import { requireOwnerAdmin } from "@/lib/page-guards";
 
 // Allow bulk CSV import (processed by the importCsv server action) enough time.
 export const maxDuration = 60;
 
 export default async function SettingsPage() {
+  // OWNER/ADMIN only. This page had NO role check at all — just a session — so
+  // although its Sidebar entry has always carried `adminOnly: true` and was
+  // correctly hidden, an OPS_MANAGER or FIELD_LEAD reached the whole thing by
+  // typing the URL: pricing rules, the GST/QST tax config, the notification
+  // catalog, service content, FAQ content and CSV import. The nav flag and the
+  // server now agree.
+  await requireOwnerAdmin();
+
   const session = await auth.api.getSession({
     headers: await headers(),
   });

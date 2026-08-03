@@ -631,6 +631,11 @@ export default function JobsView({
           onRun: async () => {
             const res = await permanentlyDeleteJobs(sel.selectedIds);
             if ('error' in res && res.error) { alert(res.error); return; }
+            // Jobs with chat history are kept, so say so — otherwise a
+            // selection of 5 silently deletes 3 and looks like it worked.
+            if ('skipped' in res && res.skipped > 0) {
+              alert(`Deleted ${res.count}. Job${res.skipped === 1 ? '' : 's'} #${res.skippedJobNumbers.join(', #')} ${res.skipped === 1 ? 'has' : 'have'} chat history and stayed archived.`);
+            }
             sel.clear();
             router.refresh();
           },
@@ -1057,6 +1062,8 @@ export default function JobsView({
                                 const res = await permanentlyDeleteJobs([job.id]);
                                 if ('error' in res && res.error) { alert(res.error); return; }
                                 router.refresh();
+                                // Single-job path: a chat-bearing job comes back
+                                // as the error above, so nothing to report here.
                               }}
                               style={{ width: 30, height: 30, color: 'var(--error)' }}
                             >
