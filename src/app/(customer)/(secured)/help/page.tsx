@@ -51,7 +51,7 @@ export default async function PortalFaqPage({
         groups={groups}
         lang={lang}
         surface="portal"
-        langHref={(l) => (l === "fr" ? "/help?lang=fr" : "/help")}
+        langBasePath="/help"
         emptyMessage={
           lang === "fr"
             ? "Aucune question n'a encore été publiée. Écrivez-nous et nous vous aiderons directement."

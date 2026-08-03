@@ -21,14 +21,24 @@ export default function FaqAccordion({
   groups,
   emptyMessage = "No FAQs are available right now. Please contact our office for help.",
   lang = "en",
-  langHref,
+  langBasePath,
   surface = "public",
 }: {
   groups: FaqGroup[];
   emptyMessage?: string;
   lang?: FaqLang;
-  /** Builds the href for the EN/FR switch. Omit to hide the switch. */
-  langHref?: (lang: FaqLang) => string;
+  /**
+   * Base path the EN/FR switch links to — "/faq" or "/help". Omit to hide the
+   * switch.
+   *
+   * A plain string, not a builder function: this is a Client Component, and a
+   * function prop cannot cross the server/client boundary. Passing one made
+   * React refuse to serialize the whole tree ("Functions cannot be passed
+   * directly to Client Components"), which took the entire public /faq page
+   * down to its loading fallback. Both surfaces only ever varied the base path,
+   * so the query string is built here instead.
+   */
+  langBasePath?: string;
   /** Which page this is, for analytics (CLN-P1-4-17). */
   surface?: "public" | "portal";
 }) {
@@ -130,16 +140,18 @@ export default function FaqAccordion({
           uncategorised: "More questions",
         };
 
-  const langSwitch = langHref ? (
+  // English is the default, so it needs no query parameter — keeping /faq and
+  // /help as the canonical URLs.
+  const langSwitch = langBasePath ? (
     <div className="cl-faq-lang" role="group" aria-label="Language">
       <Link
-        href={langHref("en")}
+        href={langBasePath}
         className={lang === "en" ? "active" : ""}
         aria-current={lang === "en" ? "true" : undefined}>
         EN
       </Link>
       <Link
-        href={langHref("fr")}
+        href={`${langBasePath}?lang=fr`}
         className={lang === "fr" ? "active" : ""}
         aria-current={lang === "fr" ? "true" : undefined}>
         FR

@@ -64,7 +64,7 @@ export default async function FaqPage({
           groups={groups}
           lang={lang}
           surface="public"
-          langHref={(l) => (l === "fr" ? "/faq?lang=fr" : "/faq")}
+          langBasePath="/faq"
           emptyMessage={
             lang === "fr"
               ? "Aucune question n'est publiée pour le moment. Contactez-nous et nous vous répondrons directement."
