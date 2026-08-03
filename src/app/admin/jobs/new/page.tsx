@@ -9,6 +9,7 @@ import { isSqftJobType, moveInOutBasePrice } from "@/lib/service-pricing";
 import { tzWallClockToUtc, tzInputParts } from "@/lib/time";
 import { syncJobAssignments } from "@/lib/job-assignments";
 import { requireAdmin } from "@/lib/page-guards";
+import { deleteJob as archiveJob } from "@/app/admin/actions/deleteJob";
 import { getServiceCatalog } from "@/lib/service-catalog.server";
 import { serviceOptions } from "@/lib/service-catalog";
 import CleanerSelector from "./CleanerSelector";
@@ -497,14 +498,20 @@ export default async function JobFormPage({
     }
   }
 
-  async function deleteJob(formData: FormData) {
+  // ARCHIVE (soft delete) — see the same note in `admin/jobs/[id]/page.tsx`.
+  // This was the second surviving copy of the `db.job.delete()` hard delete
+  // that `actions/deleteJob.ts` was written to replace, and it destroyed the
+  // row along with its logs, assignments, invites, checklists, photos and job
+  // chat. Route through the audited action instead.
+  async function archiveJobAction(formData: FormData) {
     "use server";
 
-    const jobId = formData.get("jobId") as string;
+    const targetId = formData.get("jobId") as string;
 
-    await db.job.delete({
-      where: { id: jobId },
-    });
+    const result = await archiveJob(targetId);
+    if ("error" in result && result.error) {
+      throw new Error(result.error);
+    }
 
     revalidatePath("/admin/jobs");
     redirect("/admin/jobs");
@@ -784,7 +791,7 @@ export default async function JobFormPage({
           }}
         >
           {isEditing && existingJob && (
-            <form action={deleteJob} style={{ marginRight: "auto" }}>
+            <form action={archiveJobAction} style={{ marginRight: "auto" }}>
               <input type="hidden" name="jobId" value={existingJob.id} />
               <DeleteButton />
             </form>

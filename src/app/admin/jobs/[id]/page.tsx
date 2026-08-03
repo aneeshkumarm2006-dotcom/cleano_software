@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { getTaxRates } from "@/lib/tax.server";
 import { getSetting } from "@/lib/settings";
 import { getCleanerRateInputs } from "@/lib/cleaner-rates";
+import { deleteJob as archiveJob } from "@/app/admin/actions/deleteJob";
 import { computeJobPayShares, type JobPayInput } from "@/lib/cleaner-earnings";
 import JobDetailView from "./JobDetailView";
 
@@ -166,13 +167,29 @@ export default async function JobPage({
     payOverrides[a.cleanerId] = a.payAmount ?? null;
   }
 
-  // Server action to delete job
-  async function deleteJob() {
+  // ARCHIVE the job (soft delete).
+  //
+  // This used to be an inline `db.job.delete()` — a hard delete that destroyed
+  // the row outright and took JobLog, JobAssignment, JobAssignmentInvite,
+  // JobChecklist, JobAddOn, JobPhoto, JobProductUsage and the entire job chat
+  // thread with it via cascade. That is the same bug documented atop
+  // `actions/deleteJob.ts` (1533 rows gone on 2026-07-28), but the fix there
+  // never reached this page because the Delete button used this local copy
+  // instead. The confirm modal it opens is titled "Archive Job" and promises
+  // "You can restore it from there" — so route through the audited action and
+  // make the code keep the promise the UI makes.
+  //
+  // Permanent removal stays where it belongs: the Archived view's
+  // `permanentlyDeleteJobs`, which is OWNER/ADMIN and archived-only.
+  async function archiveJobAction() {
     "use server";
 
-    await db.job.delete({
-      where: { id },
-    });
+    const result = await archiveJob(id);
+    // JobDetailView's handleDelete resets the modal in its catch; throwing is
+    // the only way to surface a refusal (not authorized, already archived).
+    if ("error" in result && result.error) {
+      throw new Error(result.error);
+    }
 
     revalidatePath("/admin/jobs");
     redirect("/admin/jobs");
@@ -332,7 +349,7 @@ export default async function JobPage({
       totalProductCost={totalProductCost}
       taxRates={taxRates}
       isAdmin={isAdmin}
-      onDeleteJob={deleteJob}
+      onDeleteJob={archiveJobAction}
       users={users}
       clients={clients}
       currentUserName={session.user.name ?? undefined}

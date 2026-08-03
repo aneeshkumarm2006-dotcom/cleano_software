@@ -27,10 +27,13 @@ export default function DeleteButton() {
               fill="currentColor"
               d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
           </svg>
-          Deleting...
+          Archiving...
         </span>
       ) : (
-        <>Delete Job</>
+        // Says "Archive" because that is now what it does. This form used to
+        // run a hard delete; it routes through the audited soft delete, so the
+        // job lands in Jobs → Archived and is restorable from there.
+        <>Archive Job</>
       )}
     </Button>
   );
