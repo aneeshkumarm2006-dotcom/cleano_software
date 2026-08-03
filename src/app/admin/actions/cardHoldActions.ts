@@ -2,6 +2,7 @@
 
 import { db } from "@/db";
 import { resolveChargePaymentMethod } from "@/lib/payment-methods";
+import { resolveAmountDue } from "@/lib/job-billing";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
@@ -66,7 +67,9 @@ export async function placeCardHold(jobId: string) {
     return { success: false, error: "No saved card on file for this client" };
   }
 
-  const amount = Math.max(0, (job.price ?? 0) - (job.discountAmount ?? 0));
+  // Same figure the eventual charge will use, so an authorization can never be
+  // for less than the capture. See lib/job-billing.ts.
+  const amount = resolveAmountDue(job);
   if (amount <= 0) return { success: false, error: "Invalid hold amount" };
   const amountCents = Math.round(amount * 100);
 
@@ -145,7 +148,9 @@ export async function captureCardHold(jobId: string) {
     return { success: false, error: "Hold was already released" };
   }
 
-  const amount = job.holdAmount ?? Math.max(0, (job.price ?? 0) - (job.discountAmount ?? 0));
+  // holdAmount is what Stripe actually authorized; only fall back to the
+  // booking's own figure when the hold predates that column.
+  const amount = job.holdAmount ?? resolveAmountDue(job);
   const amountCents = Math.round(amount * 100);
 
   try {

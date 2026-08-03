@@ -1,5 +1,6 @@
 import { requireOwnerAdmin } from "@/lib/page-guards";
 import { db } from "@/db";
+import { resolveAmountDue } from "@/lib/job-billing";
 import BulkChargeClient from "./BulkChargeClient";
 
 export default async function BulkChargePage() {
@@ -22,6 +23,10 @@ export default async function BulkChargePage() {
       clientName: true,
       price: true,
       discountAmount: true,
+      // Both feed resolveAmountDue, so this preview shows exactly what
+      // bulkChargeJobs -> chargeJob will put on the card.
+      totalAmount: true,
+      depositPaid: true,
       jobType: true,
       clockOutTime: true,
       client: { select: { defaultPaymentMethodId: true, stripeCustomerId: true } },
@@ -36,7 +41,7 @@ export default async function BulkChargePage() {
           jobNumber: j.jobNumber,
           clientName: j.clientName,
           jobType: j.jobType,
-          amount: Math.max(0, (j.price ?? 0) - (j.discountAmount ?? 0)),
+          amount: resolveAmountDue(j),
           completedAt: j.clockOutTime?.toISOString() ?? null,
           hasCardOnFile: Boolean(
             j.client?.defaultPaymentMethodId && j.client?.stripeCustomerId

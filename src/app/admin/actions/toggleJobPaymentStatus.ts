@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import type { Prisma } from "@prisma/client";
 import { queueAndSendReceipt, sendCustomerBookingCharged } from "@/lib/email";
 import { getTaxRates } from "@/lib/tax.server";
+import { resolveAmountDue } from "@/lib/job-billing";
 import { startOfDayTz } from "@/lib/time";
 
 export async function togglePaymentReceived(jobId: string) {
@@ -140,7 +141,10 @@ export async function togglePaymentReceived(jobId: string) {
         include: { client: { select: { name: true, email: true } } },
       });
       if (fullJob?.client?.email) {
-        const amount = (fullJob.price ?? 0) - (fullJob.discountAmount ?? 0);
+        // What the customer was actually charged, so the email matches the
+        // card statement. NOT the Transaction row above, which records pre-tax
+        // revenue with taxAmount held separately.
+        const amount = resolveAmountDue(fullJob);
         sendCustomerBookingCharged({
           to: fullJob.client.email,
           clientName: fullJob.client.name,

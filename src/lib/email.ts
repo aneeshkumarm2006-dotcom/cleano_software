@@ -2,6 +2,7 @@ import { Resend } from "resend";
 import { db } from "@/db";
 import { isNotificationEnabled } from "@/lib/notifications";
 import { coverFor } from "@/lib/gift-cards/covers";
+import { BOOKING_DEPOSIT_USD } from "@/lib/job-billing";
 
 /**
  * Identifies the catalog row that gates a given email send.
@@ -200,7 +201,15 @@ export async function sendBookingConfirmation(opts: {
     ["Total", fmt(opts.total)],
   ];
   if (opts.depositPaid) {
-    sectionRows.push(["Deposit paid today", fmt(20)]);
+    sectionRows.push(["Deposit paid today", fmt(BOOKING_DEPOSIT_USD)]);
+    // Spell out the figure rather than leaving the customer to subtract. This
+    // is the number resolveAmountDue will actually put on the card — until the
+    // deposit was credited at charge time, this row would have been a lie, so
+    // it is deliberately added alongside that fix.
+    sectionRows.push([
+      "Remaining balance (after cleaning)",
+      fmt(Math.max(0, (opts.total ?? 0) - BOOKING_DEPOSIT_USD)),
+    ]);
   }
 
   const chargeNote = opts.depositPaid

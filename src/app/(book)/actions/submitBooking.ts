@@ -635,8 +635,15 @@ export async function submitBooking(input: SubmitBookingInput) {
         subtotalAmount: primaryPricing.subtotal,
         gstAmount: primaryPricing.gstAmount,
         qstAmount: primaryPricing.qstAmount,
+        // THE amount this booking is worth, and what resolveAmountDue bills.
+        // Web bookings never wrote this column, so every charge path fell
+        // through to `price - discountAmount` — which subtracted the referral
+        // credit a SECOND time, since `price` is already net of it. Writing it
+        // here is what closes that: the credit now comes off exactly once.
+        totalAmount: primaryPricing.total,
         // Referral credit / spent balance only — the promo is already inside
-        // `price`, and this column is subtracted from it again at charge time.
+        // `price`. Kept for reporting and the discount column in exports; it is
+        // no longer subtracted at charge time now that totalAmount is set.
         discountAmount: discountAmount > 0 ? discountAmount : null,
         appliedPromoCode,
         promoDiscountAmount,
@@ -877,6 +884,10 @@ export async function submitBooking(input: SubmitBookingInput) {
             subtotalAmount: childPricing.subtotal,
             gstAmount: childPricing.gstAmount,
             qstAmount: childPricing.qstAmount,
+            // As on the primary job. Without it every visit in the series had
+            // its recurring frequency discount subtracted twice — and unlike
+            // the one-shot referral credit, that repeated on EVERY visit.
+            totalAmount: childPricing.total,
             discountAmount: childPricing.discountAmount > 0 ? childPricing.discountAmount : null,
             parentJob: { connect: { id: primaryJob.id } },
             bookingSource: "web",

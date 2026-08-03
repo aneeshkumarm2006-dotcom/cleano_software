@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { stripe } from "@/lib/stripe";
 import { logActivity } from "@/lib/activity-log";
 import { resolveChargePaymentMethod } from "@/lib/payment-methods";
+import { resolveAmountDue } from "@/lib/job-billing";
 import {
   queueAndSendReceipt,
   sendCustomerBookingCharged,
@@ -35,7 +36,11 @@ export async function chargeJob(jobId: string) {
   const client = job.client;
   if (!client) return { success: false, error: "No client on this job" };
 
-  const totalAmount = (job.price ?? 0) - (job.discountAmount ?? 0);
+  // Was `(job.price ?? 0) - (job.discountAmount ?? 0)`, which billed admin jobs
+  // pre-tax, subtracted a web booking's referral credit a second time, and
+  // ignored the $20 deposit the customer was told would come off. See
+  // lib/job-billing.ts for the full account.
+  const totalAmount = resolveAmountDue(job);
   if (totalAmount <= 0) {
     return { success: false, error: "Invalid charge amount" };
   }
