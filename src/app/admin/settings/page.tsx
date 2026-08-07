@@ -117,7 +117,11 @@ export default async function SettingsPage() {
             },
           },
         }),
+        // Feeds the Documents tab's "Specific users" assignment picker. Staff
+        // only — imported customers get a CLIENT-role User row and must never
+        // be offered as document signers.
         db.user.findMany({
+          where: { role: { not: "CLIENT" }, deletedAt: null },
           orderBy: { name: "asc" },
           select: { id: true, name: true, role: true },
         }),

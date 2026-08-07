@@ -30,7 +30,9 @@ import {
   themedSelectClass,
 } from "./_shared";
 
-type Role = "OWNER" | "ADMIN" | "EMPLOYEE";
+// Staff roles only. CLIENT is deliberately absent: documents are an internal
+// crew/office feature and imported customers share the same `user` table.
+type Role = "OWNER" | "ADMIN" | "OPS_MANAGER" | "FIELD_LEAD" | "EMPLOYEE";
 type DocStatus = "PENDING" | "SIGNED" | "EXPIRED" | "REVOKED";
 
 export interface DocumentSignatureRecord {
@@ -91,7 +93,21 @@ const EMPTY_DRAFT: DraftDocument = {
   assignUserIds: [],
 };
 
-const ROLES: Role[] = ["OWNER", "ADMIN", "EMPLOYEE"];
+const ROLES: Role[] = [
+  "OWNER",
+  "ADMIN",
+  "OPS_MANAGER",
+  "FIELD_LEAD",
+  "EMPLOYEE",
+];
+
+const ROLE_LABELS: Record<Role, string> = {
+  OWNER: "Owner",
+  ADMIN: "Admin",
+  OPS_MANAGER: "Ops manager",
+  FIELD_LEAD: "Field lead",
+  EMPLOYEE: "Cleaner",
+};
 
 function formatDate(value: string | null) {
   if (!value) return null;
@@ -504,7 +520,7 @@ export default function DocumentsTab({ documents, users }: DocumentsTabProps) {
                 }))
               }
               options={[
-                { value: "ALL", label: "All employees" },
+                { value: "ALL", label: "All staff (no clients)" },
                 { value: "ROLES", label: "Specific roles" },
                 { value: "USERS", label: "Specific users" },
               ]}
@@ -524,7 +540,7 @@ export default function DocumentsTab({ documents, users }: DocumentsTabProps) {
                     onChange={() => toggleRoleInDraft(role)}
                     className="accent-[#008C9C]"
                   />
-                  {role}
+                  {ROLE_LABELS[role]}
                 </label>
               ))}
             </div>
@@ -546,7 +562,9 @@ export default function DocumentsTab({ documents, users }: DocumentsTabProps) {
                       className="accent-[#008C9C]"
                     />
                     <span className="flex-1">{u.name}</span>
-                    <span className="text-xs text-[#008C9C]/50">{u.role}</span>
+                    <span className="text-xs text-[#008C9C]/50">
+                      {ROLE_LABELS[u.role] ?? u.role}
+                    </span>
                   </label>
                 ))
               )}
@@ -589,7 +607,7 @@ export default function DocumentsTab({ documents, users }: DocumentsTabProps) {
                 value={assignMode}
                 onChange={(v) => setAssignMode(v as AssignMode)}
                 options={[
-                  { value: "ALL", label: "All employees" },
+                  { value: "ALL", label: "All staff (no clients)" },
                   { value: "ROLES", label: "Specific roles" },
                   { value: "USERS", label: "Specific users" },
                 ]}
@@ -609,7 +627,7 @@ export default function DocumentsTab({ documents, users }: DocumentsTabProps) {
                       onChange={() => toggleAssignRole(role)}
                       className="accent-[#008C9C]"
                     />
-                    {role}
+                    {ROLE_LABELS[role]}
                   </label>
                 ))}
               </div>
@@ -629,7 +647,7 @@ export default function DocumentsTab({ documents, users }: DocumentsTabProps) {
                     />
                     <span className="flex-1">{u.name}</span>
                     <span className="text-xs text-[#008C9C]/50">
-                      {u.role}
+                      {ROLE_LABELS[u.role] ?? u.role}
                     </span>
                   </label>
                 ))}

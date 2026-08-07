@@ -5,6 +5,10 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { sendProviderDocumentUploaded } from "@/lib/email";
+import {
+  resolveDocumentAssignees,
+  type DocumentAssignInput,
+} from "@/lib/document-assignees";
 
 interface CreateDocumentInput {
   title: string;
@@ -13,11 +17,7 @@ interface CreateDocumentInput {
   fileUrl?: string | null;
   version?: string;
   dueDate?: string | null;
-  assignTo?: {
-    mode: "ALL" | "ROLES" | "USERS";
-    roles?: ("OWNER" | "ADMIN" | "EMPLOYEE")[];
-    userIds?: string[];
-  };
+  assignTo?: DocumentAssignInput;
 }
 
 export async function createDocument(input: CreateDocumentInput) {
@@ -56,7 +56,7 @@ export async function createDocument(input: CreateDocumentInput) {
     });
 
     if (input.assignTo) {
-      const targetUserIds = await resolveAssignees(input.assignTo);
+      const targetUserIds = await resolveDocumentAssignees(input.assignTo);
       if (targetUserIds.length > 0) {
         await db.documentSignature.createMany({
           data: targetUserIds.map((employeeId) => ({
@@ -67,13 +67,14 @@ export async function createDocument(input: CreateDocumentInput) {
           skipDuplicates: true,
         });
         // Notify each assigned provider that a new document is on their drive
-        // (gated by `prov.drive.doc_uploaded`).
+        // (gated by `prov.drive.doc_uploaded`). Assignees are staff-only by
+        // construction — resolveDocumentAssignees filters CLIENT out.
         const assignedUsers = await db.user.findMany({
           where: { id: { in: targetUserIds } },
-          select: { name: true, email: true, role: true },
+          select: { name: true, email: true },
         });
         for (const u of assignedUsers) {
-          if (!u.email || u.role === "CLIENT") continue;
+          if (!u.email) continue;
           sendProviderDocumentUploaded({
             to: u.email,
             providerName: u.name,
@@ -90,24 +91,4 @@ export async function createDocument(input: CreateDocumentInput) {
     console.error("Error creating document:", error);
     return { success: false, error: "Failed to create document" };
   }
-}
-
-async function resolveAssignees(
-  assignTo: NonNullable<CreateDocumentInput["assignTo"]>
-): Promise<string[]> {
-  if (assignTo.mode === "ALL") {
-    const users = await db.user.findMany({ select: { id: true } });
-    return users.map((u) => u.id);
-  }
-  if (assignTo.mode === "ROLES" && assignTo.roles?.length) {
-    const users = await db.user.findMany({
-      where: { role: { in: assignTo.roles } },
-      select: { id: true },
-    });
-    return users.map((u) => u.id);
-  }
-  if (assignTo.mode === "USERS" && assignTo.userIds?.length) {
-    return assignTo.userIds;
-  }
-  return [];
 }
