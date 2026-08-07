@@ -15,7 +15,6 @@ interface Initial {
   name: string;
   email: string;
   phone: string;
-  address: string;
   referralCode: string | null;
   referralCredit: number;
 }
@@ -24,18 +23,27 @@ function formatPrice(n: number) {
   return `$${n.toFixed(2)}`;
 }
 
+/** Reward amounts are whole dollars in practice, but the setting allows cents. */
+function formatReward(n: number) {
+  return Number.isInteger(n) ? `$${n}` : formatPrice(n);
+}
+
 export default function AccountForm({
   initial,
   businessEmail,
   businessPhone,
+  referralDiscount,
+  referrerCredit,
 }: {
   initial: Initial;
   businessEmail: string;
   businessPhone: string;
+  /** Settings → Customer, the same values submitBooking actually pays out. */
+  referralDiscount: number;
+  referrerCredit: number;
 }) {
   const [name, setName] = useState(initial.name);
   const [phone, setPhone] = useState(initial.phone);
-  const [address, setAddress] = useState(initial.address);
   const [saving, setSaving] = useState(false);
   const [flash, setFlash] = useState<{
     kind: "success" | "error";
@@ -63,17 +71,14 @@ export default function AccountForm({
     void unlockShareCoupon();
   }
 
-  const dirty =
-    name !== initial.name ||
-    phone !== initial.phone ||
-    address !== initial.address;
+  const dirty = name !== initial.name || phone !== initial.phone;
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     if (!dirty) return;
     setSaving(true);
     setFlash(null);
-    const res = await updateClientProfile({ name, phone, address });
+    const res = await updateClientProfile({ name, phone });
     setSaving(false);
     setFlash(
       res.success
@@ -146,14 +151,6 @@ export default function AccountForm({
               />
             </Field>
 
-            <Field label="Default address" htmlFor="acct-address">
-              <Input
-                id="acct-address"
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-              />
-            </Field>
-
             {flash ? <Banner kind={flash.kind}>{flash.text}</Banner> : null}
 
             <div>
@@ -217,8 +214,9 @@ export default function AccountForm({
                 margin: 0,
                 lineHeight: 1.55,
               }}>
-              They get <strong>$15 off</strong> their first booking, and you
-              get <strong>$10 credit</strong> when they book.
+              They get <strong>{formatReward(referralDiscount)} off</strong> their
+              first booking, and you get{" "}
+              <strong>{formatReward(referrerCredit)} credit</strong> when they book.
             </p>
             <div
               style={{

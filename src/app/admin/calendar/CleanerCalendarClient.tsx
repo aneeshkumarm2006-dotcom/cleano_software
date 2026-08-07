@@ -12,12 +12,14 @@ import {
   Check,
   X,
   MapPin,
+  KeyRound,
   CalendarClock,
   Sparkles,
   CreditCard,
   Briefcase,
   Eye,
 } from "lucide-react";
+import { formatAddressLine } from "@/lib/client-address";
 import { avatarColor, initials } from "@/lib/avatar";
 import { fmtDate as fmtDateTz, fmtTime as fmtTimeTz } from "@/lib/time";
 import { civilKey, tzDateKey, tzMinOfDay, tzToday } from "@/lib/tz-calendar";
@@ -33,6 +35,9 @@ interface CalJob {
   status: string;
   jobType: string | null;
   location: string | null;
+  aptNumber: string | null;
+  /** Door / gate codes from the job's saved address (item 2). */
+  accessNotes: string | null;
   employeePay: number | null;
   notes: string | null;
   cleaners: string[];
@@ -360,7 +365,12 @@ function JobModal({ job, onClose }: { job: CalJob; onClose: () => void }) {
               </span>
             </div>
             {job.location ? (
-              <div className="cjm-row"><span className="cjm-k"><MapPin size={15} /> Location</span><span className="cjm-v">{job.location}</span></div>
+              <div className="cjm-row"><span className="cjm-k"><MapPin size={15} /> Location</span><span className="cjm-v">{formatAddressLine({ address: job.location, aptNumber: job.aptNumber })}</span></div>
+            ) : null}
+            {/* Door / gate codes (item 2) — the cleaner opens this drawer from
+                their own calendar, so it's the same audience as my-jobs. */}
+            {job.accessNotes ? (
+              <div className="cjm-row"><span className="cjm-k"><KeyRound size={15} /> Access</span><span className="cjm-v">{job.accessNotes}</span></div>
             ) : null}
             <div className="cjm-row"><span className="cjm-k"><Sparkles size={15} /> Service</span><span className="cjm-v">{typeLabel(job.jobType)}</span></div>
             {job.employeePay != null ? (

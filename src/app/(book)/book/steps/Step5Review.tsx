@@ -6,7 +6,9 @@ import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-
 import { CreditCard, Loader2, ShieldCheck, Tag, CheckCircle2, Banknote } from "lucide-react";
 import { applyPromoCode } from "../../actions/applyPromoCode";
 import { BookingDraft, SERVICE_TYPES, FREQUENCIES } from "../types";
+import { formatAddressLine } from "@/lib/client-address";
 import { calculateTax } from "@/lib/tax";
+import { addOnLineTotal, sumAddOns } from "@/lib/job-money";
 import { normalizeJobType } from "@/lib/calendar-labels";
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
@@ -21,9 +23,7 @@ interface Props {
 
 export default function Step5Review({ draft, basePrice, onChange, freqDiscounts = {} }: Props) {
   const breakdown = useMemo(() => {
-    const addOnTotal = draft.addOns
-      .filter((a) => a.selected)
-      .reduce((s, a) => s + a.price, 0);
+    const addOnTotal = sumAddOns(draft.addOns.filter((a) => a.selected));
     // GROSS pre-tax subtotal. This is the figure a promo code is quoted
     // against, and the same one `submitBooking` re-resolves the code against
     // server-side, so the discount shown here is the discount that is applied.
@@ -169,7 +169,15 @@ export default function Step5Review({ draft, basePrice, onChange, freqDiscounts 
         <dl className="cl-dlist">
           <Row dt="Type" dd={service?.label ?? "—"} />
           <Row dt="Frequency" dd={freq?.label ?? "—"} />
-          <Row dt="Address" dd={draft.address || "—"} />
+          <Row
+            dt="Address"
+            dd={
+              formatAddressLine({
+                address: draft.address,
+                aptNumber: draft.aptNumber,
+              }) || "—"
+            }
+          />
           <Row dt="Property" dd={propertyLine} />
           <Row dt="Date" dd={dateLine} />
         </dl>
@@ -181,10 +189,21 @@ export default function Step5Review({ draft, basePrice, onChange, freqDiscounts 
         </span>
         <dl className="cl-dlist">
           <Row dt="Base service" dd={`$${basePrice.toFixed(2)}`} />
+          {/* Keyed on the catalog id, not the name: two catalog rows can share
+              a name (the settings editor seeds a blank one and never dedupes),
+              and a duplicate React key silently drops a row from the review. */}
           {draft.addOns
             .filter((a) => a.selected)
-            .map((a) => (
-              <Row key={a.name} dt={a.name} dd={`+$${a.price.toFixed(2)}`} />
+            .map((a, i) => (
+              <Row
+                key={a.id ?? `${a.name}-${i}`}
+                dt={
+                  a.quantity > 1
+                    ? `${a.name} ×${a.quantity} · $${a.price.toFixed(2)} each`
+                    : a.name
+                }
+                dd={`+$${addOnLineTotal(a).toFixed(2)}`}
+              />
             ))}
           {draft.travelFee > 0 ? (
             <Row dt="Travel fee" dd={`+$${draft.travelFee.toFixed(2)}`} />

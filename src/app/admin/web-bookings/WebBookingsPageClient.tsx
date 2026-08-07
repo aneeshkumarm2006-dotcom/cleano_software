@@ -33,7 +33,7 @@ interface WebJob {
     phone: string | null;
   } | null;
   cleaners: { id: string; name: string }[];
-  addOns: { name: string; price: number }[];
+  addOns: { name: string; price: number; quantity: number }[];
   createdAt: string;
 }
 

@@ -36,7 +36,7 @@ interface Booking {
   cancellationRequestedAt: string | null;
   rescheduleRequestedAt: string | null;
   cleaners: { id: string; name: string }[];
-  addOns: { name: string; price: number }[];
+  addOns: { name: string; price: number; quantity: number }[];
   parentJobId: string | null;
   seriesSize: number;
 }
@@ -411,7 +411,10 @@ function BookingCard({
 
       {b.addOns.length ? (
         <div style={{ fontSize: 12, color: "var(--primary-50)" }}>
-          Add-ons: {b.addOns.map((a) => a.name).join(", ")}
+          Add-ons:{" "}
+          {b.addOns
+            .map((a) => (a.quantity > 1 ? `${a.name} ×${a.quantity}` : a.name))
+            .join(", ")}
         </div>
       ) : null}
 

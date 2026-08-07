@@ -10,7 +10,7 @@ interface ForecastItem {
   productName: string;
   unit: string;
   currentQuantity: number;
-  usagePerJob: number;
+  averagePerJob: number;
   refillThreshold: number;
   projectedUsage: number;
   deficit: number;
@@ -44,7 +44,8 @@ export default function ForecastView({ employees }: ForecastViewProps) {
           No forecast data available
         </p>
         <p className="text-xs font-[350] text-[#008C9C]/60 mt-1">
-          Assign products to employees and set inventory rules to see forecasts
+          Assign products to employees to see forecasts. Projections come from
+          reported usage on completed jobs, so they build up as work is logged.
         </p>
       </div>
     );

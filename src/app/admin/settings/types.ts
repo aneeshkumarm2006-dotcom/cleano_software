@@ -35,14 +35,6 @@ export interface KitTemplateRecord {
   }[];
 }
 
-export interface InventoryRuleRecord {
-  id: string;
-  productId: string;
-  usagePerJob: number;
-  refillThreshold: number;
-  product: ProductRecord;
-}
-
 export interface SupplierPriceRecord {
   id: string;
   supplierId: string;

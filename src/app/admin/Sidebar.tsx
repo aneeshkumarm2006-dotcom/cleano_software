@@ -40,9 +40,9 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { getUnreadChatCount } from "./chat/actions";
-import { getPendingRequestCount } from "./actions/getPendingRequestCount";
 import ScrollReset from "@/components/ScrollReset";
 import { useJobChatUnread } from "@/components/JobChatUnread";
+import { useAdminAttentionCounts } from "@/components/AdminAttentionCounts";
 
 interface User {
   id: string;
@@ -58,7 +58,22 @@ interface SidebarProps {
   children: React.ReactNode;
 }
 
-type Badge = "chat" | "requests" | "jobChat";
+/**
+ * Which count feeds an item's pill. `chat` and `jobChat` are unread-message
+ * counts with their own read-tracking; the rest are STATUS-BASED queues served
+ * by `getAdminAttentionCounts` — they clear when an admin advances the row's
+ * status, so no read-marker infrastructure was needed (awerfixes.pdf item 11).
+ */
+type Badge =
+  | "chat"
+  | "requests"
+  | "jobChat"
+  | "applications"
+  | "quotes"
+  | "documents"
+  | "leads"
+  | "payouts"
+  | "inventory";
 interface NavItem {
   href: string;
   label: string;
@@ -122,7 +137,15 @@ const NAV: { label: string; items: NavItem[] }[] = [
         Icon: Clock,
         adminOnly: true,
       },
-      { href: "/admin/documents", label: "Documents", Icon: FileSignature },
+      {
+        href: "/admin/documents",
+        label: "Documents",
+        Icon: FileSignature,
+        // The VIEWER'S own unsigned documents. This page is a personal signing
+        // queue, not an org-wide view, so the badge counts what clicking it
+        // actually shows.
+        badge: "documents",
+      },
       {
         href: "/admin/clients",
         label: "Clients",
@@ -130,7 +153,13 @@ const NAV: { label: string; items: NavItem[] }[] = [
         adminOnly: true,
       },
       { href: "/admin/web-bookings", label: "Web Bookings", Icon: Globe },
-      { href: "/admin/leads", label: "Leads", Icon: Flame, adminOnly: true },
+      {
+        href: "/admin/leads",
+        label: "Leads",
+        Icon: Flame,
+        badge: "leads",
+        adminOnly: true,
+      },
       // Item 24: one communication entry — direct messages + group chat live
       // behind sub-tabs on the chat pages.
       {
@@ -157,6 +186,7 @@ const NAV: { label: string; items: NavItem[] }[] = [
         href: "/admin/job-applications",
         label: "Job Applications",
         Icon: UserPlus,
+        badge: "applications",
       },
       {
         href: "/admin/training-docs",
@@ -178,6 +208,9 @@ const NAV: { label: string; items: NavItem[] }[] = [
         href: "/admin/inventory",
         label: "Inventory",
         Icon: Package,
+        // Cleaner supply requests awaiting a resolve — the same PENDING count
+        // the page's own Requests tab shows.
+        badge: "inventory",
         adminOnly: true,
       },
       { href: "/admin/wash-payouts", label: "Wash Payouts", Icon: Droplets },
@@ -198,7 +231,12 @@ const NAV: { label: string; items: NavItem[] }[] = [
         Icon: LineChart,
         adminOnly: true,
       },
-      { href: "/admin/quotes", label: "Quotes", Icon: FileText },
+      {
+        href: "/admin/quotes",
+        label: "Quotes",
+        Icon: FileText,
+        badge: "quotes",
+      },
       { href: "/admin/gift-cards", label: "Gift Cards & Promos", Icon: Gift },
     ],
   },
@@ -209,6 +247,10 @@ const NAV: { label: string; items: NavItem[] }[] = [
         href: "/admin/payouts",
         label: "Payouts",
         Icon: Wallet,
+        // Pay periods sitting in PENDING_APPROVAL. Withdrawals have their own
+        // PENDING state on the same page; deliberately not folded in, so the
+        // number means one thing ("periods waiting on you") rather than two.
+        badge: "payouts",
         adminOnly: true,
       },
       {
@@ -295,9 +337,11 @@ export default function Sidebar({
   const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = usePathname();
   const [chatUnread, setChatUnread] = useState(0);
-  const [pendingRequests, setPendingRequests] = useState(0);
   // Job chat (cleaner ↔ client) unread, shared with any list on the page.
   const { total: jobChatUnread } = useJobChatUnread("admin");
+  // Every status-based queue count, one request every 30s (item 11). Replaces
+  // the 5s `getPendingRequestCount` poller that used to live below.
+  const attention = useAdminAttentionCounts();
   const [chatToast, setChatToast] = useState<{
     senderName: string;
     body: string;
@@ -333,9 +377,23 @@ export default function Sidebar({
     if (pathname.startsWith("/admin/chat")) setChatToast(null);
   }, [pathname]);
 
-  // Poll unread chat + toast on new messages
+  // Poll unread chat + toast on new messages.
+  //
+  // SELF-PACING, deliberately — the gap is measured from the END of one poll to
+  // the START of the next, not on a fixed clock. `setInterval(poll, 5000)` fired
+  // every five seconds whether or not the previous call had come back, and this
+  // poll is a SERVER ACTION: its response carries a re-render of whatever page
+  // the admin is on. On the job detail page that render is measured in seconds,
+  // so the poll took longer than its own interval and the queue grew without
+  // bound — the sidebar starved every action the admin actually initiated.
+  // That is what made the logs pager and the availability check look dead: they
+  // were not broken, they were stuck behind a backlog the sidebar created.
+  //
+  // A timer that cannot outrun its own work can never do that, on any
+  // connection.
   useEffect(() => {
     let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
     async function poll() {
       if (cancelled) return;
       try {
@@ -356,34 +414,17 @@ export default function Sidebar({
         prevLatestAtRef.current = latestAt;
       } catch {
         /* ignore */
+      } finally {
+        // Queue the next one only once this one is done, including on failure —
+        // an erroring poll must still keep the badge alive.
+        if (!cancelled) timer = setTimeout(poll, 5000);
       }
     }
     poll();
-    const id = setInterval(poll, 5000);
     return () => {
       cancelled = true;
-      clearInterval(id);
+      if (timer) clearTimeout(timer);
       if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    };
-  }, []);
-
-  // Poll pending portal requests for the badge
-  useEffect(() => {
-    let cancelled = false;
-    async function poll() {
-      if (cancelled) return;
-      try {
-        const { count } = await getPendingRequestCount();
-        if (!cancelled) setPendingRequests(count);
-      } catch {
-        /* ignore */
-      }
-    }
-    poll();
-    const id = setInterval(poll, 5000);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
     };
   }, []);
 
@@ -400,6 +441,22 @@ export default function Sidebar({
     }
     return pathname === item.href || pathname.startsWith(item.href + "/");
   }
+
+  // One lookup instead of a ternary chain, so the next badge is a NAV entry plus
+  // a line here rather than another rung. `Record<Badge, number>` is exhaustive —
+  // adding a key to the union without a count is a compile error, which is the
+  // point: a badge that silently renders 0 forever is worse than no badge.
+  const badgeCounts: Record<Badge, number> = {
+    chat: chatUnread,
+    jobChat: jobChatUnread,
+    requests: attention.requests,
+    applications: attention.applications,
+    quotes: attention.quotes,
+    documents: attention.documents,
+    leads: attention.leads,
+    payouts: attention.payouts,
+    inventory: attention.inventory,
+  };
 
   return (
     <div className="min-h-screen" style={{ background: "var(--cream)" }}>
@@ -460,14 +517,7 @@ export default function Sidebar({
               <div className="asidebar-section-label">{section.label}</div>
               {section.items.map((item) => {
                 const active = isActive(item);
-                const badgeCount =
-                  item.badge === "chat"
-                    ? chatUnread
-                    : item.badge === "requests"
-                      ? pendingRequests
-                      : item.badge === "jobChat"
-                        ? jobChatUnread
-                        : 0;
+                const badgeCount = item.badge ? badgeCounts[item.badge] : 0;
                 const Icon = item.Icon;
                 return (
                   <Link

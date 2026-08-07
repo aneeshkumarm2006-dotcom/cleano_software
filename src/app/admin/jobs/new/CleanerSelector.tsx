@@ -1,12 +1,18 @@
 "use client";
 
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import Input from "@/components/ui/Input";
-import { X, Search, Users, CheckCircle2, AlertTriangle } from "lucide-react";
+import { X, Search, Users } from "lucide-react";
 import Badge from "@/components/ui/Badge";
 import { checkAvailabilityBatch } from "../../actions/checkAvailability";
 import type { EmployeeAvailabilityStatus } from "../../actions/checkAvailability.types";
+import {
+  StatusIndicator,
+  CategoryIndicator,
+  AssignmentWarningPanel,
+} from "@/components/admin/AssignmentIndicators";
+import { categoryMismatchWarning } from "@/lib/service-permissions";
 
 interface User {
   id: string;
@@ -15,6 +21,8 @@ interface User {
   /** Legacy prop — availability is now evaluated server-side by the shared
    *  helper (which also knows about one-off blocked dates), so this is unused. */
   availability?: unknown;
+  /** Service categories this cleaner may work. Empty = all (item 3). */
+  allowedServiceCategories?: string[];
 }
 
 interface CleanerSelectorProps {
@@ -23,37 +31,6 @@ interface CleanerSelectorProps {
 }
 
 type StatusMap = Map<string, EmployeeAvailabilityStatus>;
-
-function StatusIndicator({
-  status,
-}: {
-  status: EmployeeAvailabilityStatus | undefined;
-}) {
-  if (!status || status.result === "NO_DATA") return null;
-  if (status.result === "AVAILABLE") {
-    return (
-      <span title="Available" className="inline-flex items-center text-green-600">
-        <CheckCircle2 className="w-3.5 h-3.5" />
-      </span>
-    );
-  }
-  if (status.result === "UNAVAILABLE") {
-    return (
-      <span
-        title={status.reason ?? "Marked unavailable"}
-        className="inline-flex items-center text-red-600">
-        <X className="w-3.5 h-3.5" />
-      </span>
-    );
-  }
-  return (
-    <span
-      title={status.reason ?? "Outside normal hours"}
-      className="inline-flex items-center text-yellow-600">
-      <AlertTriangle className="w-3.5 h-3.5" />
-    </span>
-  );
-}
 
 export default function CleanerSelector({
   users,
@@ -71,6 +48,15 @@ export default function CleanerSelector({
   });
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const [statuses, setStatuses] = useState<StatusMap>(() => new Map());
+  // Same three-state treatment as JobModal: an in-flight or failed lookup must
+  // not be silently indistinguishable from "everyone is free".
+  const [availabilityState, setAvailabilityState] = useState<
+    "idle" | "loading" | "loaded" | "error"
+  >("idle");
+  // The job type currently chosen on the form, polled the same way the date and
+  // time are (JobTypeSelector also writes into a hidden input). Drives the
+  // service-category advisory — awerfixes.pdf item 3.
+  const [jobType, setJobType] = useState("");
   const dropdownRef = useRef<HTMLDivElement>(null);
   const inputContainerRef = useRef<HTMLDivElement>(null);
 
@@ -98,33 +84,50 @@ export default function CleanerSelector({
       const startTime = read("startTime");
       const endDate = read("endDate");
       const endTime = read("endTime");
+      const nextJobType = read("jobType");
 
-      const key = [startDate, startTime, endDate, endTime].join("|");
+      const key = [startDate, startTime, endDate, endTime, nextJobType].join("|");
       if (key === lastKey) return;
       lastKey = key;
+
+      // Category matching is pure and local — no server round trip needed, and
+      // it must still update when only the job type changed.
+      setJobType(nextJobType);
 
       if (!startDate || !startTime || userIds.length === 0) {
         generation++;
         setStatuses(new Map());
+        setAvailabilityState("idle");
         return;
       }
 
       const run = ++generation;
+      setAvailabilityState("loading");
       checkAvailabilityBatch({
         employeeIds: userIds,
         startDate,
         startTime,
         endDate: endDate || null,
         endTime: endTime || null,
-      }).then((res) => {
-        // Ignore results from a superseded date/time edit.
-        if (run !== generation) return;
-        setStatuses(
-          res.success
-            ? new Map(res.statuses.map((s) => [s.employeeId, s]))
-            : new Map()
-        );
-      });
+      }).then(
+        (res) => {
+          // Ignore results from a superseded date/time edit.
+          if (run !== generation) return;
+          setStatuses(
+            res.success
+              ? new Map(res.statuses.map((s) => [s.employeeId, s]))
+              : new Map()
+          );
+          setAvailabilityState(res.success ? "loaded" : "error");
+        },
+        // The call itself can reject even though the action catches its own
+        // errors; without this the failure was completely silent.
+        () => {
+          if (run !== generation) return;
+          setStatuses(new Map());
+          setAvailabilityState("error");
+        }
+      );
     };
 
     tick();
@@ -193,6 +196,40 @@ export default function CleanerSelector({
           x.status.result !== "NO_DATA"
       );
   }, [selectedCleaners, statuses]);
+
+  /** Mismatch warning for one cleaner against the chosen job type, or null. */
+  const warnFor = useCallback(
+    (u: User) =>
+      categoryMismatchWarning(u.name, jobType, u.allowedServiceCategories),
+    [jobType]
+  );
+
+  const availabilityAdvisories = useMemo(
+    () =>
+      conflicts.map(({ cleaner, status }) => ({
+        cleanerId: cleaner.id,
+        cleanerName: cleaner.name,
+        detail:
+          status.reason ??
+          (status.result === "UNAVAILABLE"
+            ? "marked unavailable"
+            : "outside their availability"),
+      })),
+    [conflicts]
+  );
+
+  const categoryAdvisories = useMemo(
+    () =>
+      selectedCleaners
+        .map((c) => ({ cleaner: c, warning: warnFor(c) }))
+        .filter((x): x is { cleaner: User; warning: string } => !!x.warning)
+        .map(({ cleaner, warning }) => ({
+          cleanerId: cleaner.id,
+          cleanerName: cleaner.name,
+          detail: warning,
+        })),
+    [selectedCleaners, warnFor]
+  );
 
   useEffect(() => {
     if (isDropdownOpen) {
@@ -301,7 +338,10 @@ export default function CleanerSelector({
                   {user.email}
                 </div>
               </div>
-              <StatusIndicator status={statuses.get(user.id)} />
+              <span className="inline-flex items-center gap-1.5">
+                <CategoryIndicator warning={warnFor(user)} />
+                <StatusIndicator status={statuses.get(user.id)} />
+              </span>
             </button>
           ))}
         </div>
@@ -351,6 +391,7 @@ export default function CleanerSelector({
                 className="inline-flex items-center gap-2 !px-3 !py-1.5"
                 variant="cleano"
                 size="md">
+                <CategoryIndicator warning={warnFor(cleaner)} />
                 <StatusIndicator status={statuses.get(cleaner.id)} />
                 <span>{cleaner.name}</span>
                 <button
@@ -366,31 +407,18 @@ export default function CleanerSelector({
         </div>
       )}
 
-      {/* Availability conflicts, visible before the booking is saved. Advisory —
-          the admin can still create the job (nothing here blocks submit). */}
-      {conflicts.length > 0 && (
-        <div className="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3">
-          <div className="flex items-center gap-2 text-sm font-semibold text-amber-900">
-            <AlertTriangle className="w-4 h-4" />
-            Availability conflict
-          </div>
-          <ul className="mt-1.5 space-y-1">
-            {conflicts.map(({ cleaner, status }) => (
-              <li key={cleaner.id} className="text-xs text-amber-800">
-                <span className="font-medium">{cleaner.name}</span>
-                {" — "}
-                {status.reason ??
-                  (status.result === "UNAVAILABLE"
-                    ? "marked unavailable"
-                    : "outside their availability")}
-              </li>
-            ))}
-          </ul>
-          <p className="mt-1.5 text-xs text-amber-700">
-            You can still book them — this is only a warning.
-          </p>
-        </div>
-      )}
+      {/* Availability + service-category advisories, visible before the booking
+          is saved. Advisory only — the admin can still create the job (nothing
+          here blocks submit). */}
+      <AssignmentWarningPanel
+        availability={availabilityAdvisories}
+        categories={categoryAdvisories}
+        // Only speak up once there is somebody the answer could be about — the
+        // lookup starts as soon as a date and time exist.
+        availabilityState={
+          selectedCleaners.length > 0 ? availabilityState : "idle"
+        }
+      />
 
       {/* Optional manual payout per cleaner (fix 4). Overrides the automatic
           tier/flat calc for that cleaner on this job — for free, discounted,

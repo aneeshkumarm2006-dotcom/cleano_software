@@ -9,6 +9,7 @@ import { projectWashables } from "@/lib/wash";
 import { sendAdminClockedOut } from "@/lib/email";
 import { ensureRatingRequest } from "@/lib/rating";
 import { isCleanerLow } from "@/lib/inventory-thresholds";
+import { findOpenSession, syncClockMirrors } from "@/lib/work-sessions.server";
 
 const ML_PER_SPRAY = 1.25;
 
@@ -47,14 +48,19 @@ export async function clockOut(jobId: string, usage: PostJobUsage) {
     if (!isEmployee && !isCleaner) {
       return { success: false, error: "You are not assigned to this job" };
     }
-    if (!job.clockInTime) return { success: false, error: "Not clocked in" };
-    if (job.clockOutTime) return { success: false, error: "Already clocked out" };
+    // PER CLEANER, not per job (item 6). These two guards used to read the
+    // job-level pair, so a teammate's clock-out state decided whether YOU could
+    // clock out — and once anybody had, nobody could clock out again.
+    const openSession = await findOpenSession(jobId, session.user.id);
+    if (!openSession) {
+      return { success: false, error: "You're not clocked in on this job" };
+    }
 
     const now = new Date();
 
     const employeeProducts = await db.employeeProduct.findMany({
       where: { employeeId: session.user.id },
-      include: { product: { include: { inventoryRule: true } } },
+      include: { product: true },
     });
     const epByProductId = new Map(employeeProducts.map((ep) => [ep.productId, ep]));
 
@@ -172,7 +178,6 @@ export async function clockOut(jobId: string, usage: PostJobUsage) {
       if (
         isCleanerLow(inventoryAfter, {
           cleanerRestockThreshold: ep.product.cleanerRestockThreshold,
-          usagePerJob: ep.product.inventoryRule?.usagePerJob,
         })
       ) {
         restockNeeded.push({ name: ep.product.name, productId });
@@ -196,16 +201,23 @@ export async function clockOut(jobId: string, usage: PostJobUsage) {
       return Array.from(ids);
     })();
 
-    // Close the job + write projection fields.
+    // Close THIS cleaner's running session. The clock columns are recomputed
+    // from every session on the job after the transaction — including
+    // Job.clockOutTime, which stays NULL while a teammate is still working.
+    ops.push(
+      db.jobWorkSession.update({
+        where: { id: openSession.id },
+        data: { endedAt: now },
+      })
+    );
+
+    // Wash projection is recomputed on EVERY clock-out (Decision 4) — the
+    // inputs don't change, so it is idempotent. The credit AWARD flag is
+    // separately once-per-job and already guarded.
     ops.push(
       db.job.update({
         where: { id: jobId },
         data: {
-          clockOutTime: now,
-          // Paid stays Paid — clock-out must never downgrade a job whose
-          // payment was already received.
-          status:
-            job.status === "PAID" || job.paymentReceived ? "PAID" : "COMPLETED",
           washProjectedRags: projection.projectedRags,
           washProjectedPads: projection.projectedPads,
           washCappedRags: projection.cappedRags,
@@ -216,23 +228,6 @@ export async function clockOut(jobId: string, usage: PostJobUsage) {
           washCreditsAwarded: !job.washCreditsAwarded && cleanerIdsForCredit.length > 0
             ? true
             : job.washCreditsAwarded,
-        },
-      })
-    );
-
-    // Per-cleaner assignment status (item 9) — upsert so legacy jobs without
-    // rows still start tracking from this clock-out.
-    ops.push(
-      db.jobAssignment.upsert({
-        where: {
-          jobId_cleanerId: { jobId, cleanerId: session.user.id },
-        },
-        update: { status: "CLOCKED_OUT", clockOutTime: now },
-        create: {
-          jobId,
-          cleanerId: session.user.id,
-          status: "CLOCKED_OUT",
-          clockOutTime: now,
         },
       })
     );
@@ -262,19 +257,6 @@ export async function clockOut(jobId: string, usage: PostJobUsage) {
           userId: session.user.id,
           action: "CLOCKED_OUT",
           description: `${session.user.name} clocked out`,
-        },
-      })
-    );
-    ops.push(
-      db.jobLog.create({
-        data: {
-          jobId,
-          userId: session.user.id,
-          action: "STATUS_CHANGED",
-          field: "status",
-          oldValue: job.status,
-          newValue: "COMPLETED",
-          description: `Status changed from ${job.status} to COMPLETED`,
         },
       })
     );
@@ -326,11 +308,45 @@ export async function clockOut(jobId: string, usage: PostJobUsage) {
 
     await db.$transaction(ops);
 
-    // Admin email — gated by `admin.clock.clocked_out`.
-    const clockInTime = job.clockInTime ? new Date(job.clockInTime) : null;
-    const durationMinutes = clockInTime
-      ? Math.max(1, Math.round((now.getTime() - clockInTime.getTime()) / 60000))
-      : 0;
+    // Recompute the derived clock columns from the session rows. `anyOpen`
+    // answers the question the old code never asked: is anybody else still
+    // working on this job?
+    const mirrors = await syncClockMirrors(jobId);
+
+    // THE JOB ONLY FINISHES WHEN EVERYBODY HAS (item 6). Previously the first
+    // cleaner to clock out marked the job COMPLETED for the whole crew and set
+    // its clockOutTime, while their teammates were still on site.
+    const isFinalClockOut = !mirrors.anyOpen;
+    if (isFinalClockOut && job.status !== "CANCELLED") {
+      // Paid stays Paid — clock-out must never downgrade a job whose payment
+      // was already received.
+      const nextStatus =
+        job.status === "PAID" || job.paymentReceived ? "PAID" : "COMPLETED";
+      if (nextStatus !== job.status) {
+        await db.job.update({
+          where: { id: jobId },
+          data: { status: nextStatus },
+        });
+        await db.jobLog.create({
+          data: {
+            jobId,
+            userId: session.user.id,
+            action: "STATUS_CHANGED",
+            field: "status",
+            oldValue: job.status,
+            newValue: nextStatus,
+            description: `Status changed from ${job.status} to ${nextStatus}`,
+          },
+        });
+      }
+    }
+
+    // Admin email — gated by `admin.clock.clocked_out`. Reports THIS session's
+    // length, not the whole job's, so a resume reads as what it was.
+    const durationMinutes = Math.max(
+      1,
+      Math.round((now.getTime() - openSession.startedAt.getTime()) / 60000)
+    );
     sendAdminClockedOut({
       jobId,
       jobNumber: job.jobNumber,
@@ -339,20 +355,33 @@ export async function clockOut(jobId: string, usage: PostJobUsage) {
       durationMinutes,
     }).catch((e) => console.error("admin clocked-out email", e));
 
-    // The cleaner just finished the job — ask the customer to rate it.
-    await ensureRatingRequest(jobId).catch((e) =>
-      console.error("ensureRatingRequest", e)
-    );
+    // Customer-facing, and therefore ONCE PER JOB (Decision 4). Only fires when
+    // the job is genuinely finished — asking a customer to rate a job that a
+    // teammate is still working is wrong, and a second clock-out after a resume
+    // must not ask them twice. ensureRatingRequest is itself idempotent (it
+    // mints one JobRatingToken per job); the isFinalClockOut guard is the outer
+    // half of the same promise.
+    if (isFinalClockOut) {
+      await ensureRatingRequest(jobId).catch((e) =>
+        console.error("ensureRatingRequest", e)
+      );
+    }
 
     revalidatePath("/cleaners/my-jobs");
     revalidatePath(`/cleaners/my-jobs/${jobId}`);
+    revalidatePath(`/cleaners/my-jobs/${jobId}/clock`);
     revalidatePath(`/admin/jobs/${jobId}`);
     revalidatePath(`/admin/employees/${session.user.id}`);
+    revalidatePath("/admin/time-tracking");
     revalidatePath("/admin/finances");
     revalidatePath("/admin/analytics");
     revalidatePath("/cleaners/my-inventory");
 
-    return { success: true, restockNeeded: restockNeeded.length > 0 };
+    return {
+      success: true,
+      restockNeeded: restockNeeded.length > 0,
+      jobCompleted: isFinalClockOut,
+    };
   } catch (error) {
     console.error("Error clocking out:", error);
     return { success: false, error: "Failed to clock out" };

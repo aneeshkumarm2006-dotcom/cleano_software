@@ -12,17 +12,30 @@ import { generateJobChecklist } from "@/app/admin/actions/generateJobChecklist";
 import { getJobChecklist } from "@/app/admin/actions/getJobChecklist";
 import { updateChecklistItem } from "@/app/admin/actions/updateChecklistItem";
 import type { JobChecklistItemDTO } from "@/app/admin/actions/getJobChecklist.types";
+import {
+  CHECKLIST_GATE_HINT,
+  pendingRequiredItems,
+  requiredItemsSatisfied,
+} from "@/lib/job-checklist";
+import {
+  activeSessionMinutes,
+  breakMinutesWithin,
+  canResume,
+  sessionsFromLegacyPair,
+  sortSessionsDesc,
+  summariseSessions,
+  type WorkSession,
+} from "@/lib/work-sessions";
 import { markOnMyWay } from "../onMyWay";
 import { getCoords } from "../OnMyWayButton";
 
 type ProductCategory = "LIQUID_SPRAY" | "MOP_LIQUID" | "DISPOSABLE" | "OTHER";
 
-interface InventoryRule { usagePerJob: number; refillThreshold: number; }
 interface EmployeeProduct {
   id: string;
   productId: string;
   quantity: number;
-  product: { id: string; name: string; unit: string; category: ProductCategory; inventoryRule?: InventoryRule | null; };
+  product: { id: string; name: string; unit: string; category: ProductCategory };
 }
 
 const SPRAY_OPTIONS = [
@@ -54,6 +67,10 @@ interface ClockPageClientProps {
   employeeProducts?: EmployeeProduct[];
   /** Admin setting `tracking.gpsEnabled`; when false, never prompt for GPS. */
   gpsEnabled?: boolean;
+  /** This cleaner's work sessions on this job, oldest first (item 6). */
+  sessions?: { id: string; startedAt: string; endedAt: string | null }[];
+  /** This cleaner's breaks, for the per-session active-time deduction. */
+  breaks?: { startedAt: string; endedAt: string | null }[];
 }
 
 function pad(n: number) {
@@ -156,12 +173,15 @@ export default function ClockPageClient({
   jobId,
   clientName,
   startTime,
+  status,
   clockInTime,
   clockOutTime,
   initialOnBreak = false,
   onMyWayAt = null,
   employeeProducts = [],
   gpsEnabled = true,
+  sessions = [],
+  breaks = [],
 }: ClockPageClientProps) {
   const router = useRouter();
   const [now, setNow] = useState(() => new Date());
@@ -205,13 +225,20 @@ export default function ClockPageClient({
     setChecklistItems([]);
     setCoOpen(true);
 
-    // Generate (idempotent) and fetch the job checklist
+    // Generate (idempotent) and fetch the job checklist. Since item 12.a the
+    // job page already ensures this on open, so by the time a cleaner reaches
+    // the clock screen it is normally a no-op — but the clock screen is
+    // reachable directly by URL, so it still asks.
     setChecklistLoading(true);
     try {
-      await generateJobChecklist(jobId);
-      const res = await getJobChecklist(jobId);
-      if (res.success && res.checklist) {
-        setChecklistItems(res.checklist.items);
+      const gen = await generateJobChecklist(jobId);
+      if (gen.success && gen.checklist) {
+        setChecklistItems(gen.checklist.items);
+      } else {
+        const res = await getJobChecklist(jobId);
+        if (res.success && res.checklist) {
+          setChecklistItems(res.checklist.items);
+        }
       }
     } catch {
       // non-fatal — checklist is optional
@@ -278,18 +305,34 @@ export default function ClockPageClient({
     router.refresh();
   };
 
-  const isLive = !!clockInTime && !clockOutTime;
-  const isDone = !!clockInTime && !!clockOutTime;
+  // Sessions are the truth (item 6); the job-level clock pair is the fallback
+  // for jobs that predate JobWorkSession. `mySessions` is the one list the
+  // whole screen reads, so old and new jobs render identically.
+  const mySessions: WorkSession[] = useMemo(
+    () =>
+      sessions.length > 0
+        ? sessions.map((s) => ({ startedAt: s.startedAt, endedAt: s.endedAt }))
+        : sessionsFromLegacyPair(clockInTime, clockOutTime),
+    [sessions, clockInTime, clockOutTime]
+  );
+  const sessionSummary = useMemo(
+    () => summariseSessions(mySessions, breaks, now),
+    [mySessions, breaks, now]
+  );
 
-  const clockInDate = clockInTime ? new Date(clockInTime) : null;
-  const clockOutDate = clockOutTime ? new Date(clockOutTime) : null;
+  const isLive = sessionSummary.isOpen;
+  const isDone = !isLive && sessionSummary.count > 0;
+  // A finished job can be reopened; a paid or cancelled one cannot.
+  const canResumeJob = isDone && canResume(status);
+
+  const clockInDate = sessionSummary.firstStartedAt;
   const startDate = startTime ? new Date(startTime) : null;
 
-  const elapsedMs = isLive
-    ? now.getTime() - clockInDate!.getTime()
-    : isDone
-    ? clockOutDate!.getTime() - clockInDate!.getTime()
-    : 0;
+  // Total across EVERY session, not clockOut − clockIn: a cleaner who worked
+  // 9–11 and came back 3–4 worked three hours, and the old single-pair maths
+  // would have shown seven.
+  const elapsedMs = sessionSummary.totalMinutes * 60_000;
+  const activeMs = sessionSummary.activeMinutes * 60_000;
 
   const earlyByMs = startDate ? startDate.getTime() - now.getTime() : 0;
 
@@ -452,9 +495,27 @@ export default function ClockPageClient({
               </>
             )
           ) : (
-            <Link href={`/cleaners/my-jobs/${jobId}`} className="clk-action">
-              View job summary
-            </Link>
+            <>
+              {/* Clock back in (item 6). Before this, a clocked-out job offered
+                  nothing but a link away — a cleaner who had to go back had no
+                  way to record it, and their second stretch was unpaid and
+                  invisible. Hidden once the job is PAID or CANCELLED. */}
+              {canResumeJob && (
+                <button
+                  className="clk-action"
+                  onClick={handleClockIn}
+                  disabled={loading}>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="1 4 1 10 7 10" />
+                    <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+                  </svg>
+                  {loading ? "Clocking in…" : "Clock back in"}
+                </button>
+              )}
+              <Link href={`/cleaners/my-jobs/${jobId}`} className="clk-action ghost">
+                View job summary
+              </Link>
+            </>
           )}
           {error && <p className="clk-error">{error}</p>}
 
@@ -489,47 +550,59 @@ export default function ClockPageClient({
               </svg>
               Session log
             </h3>
-            <span className="total">TOTAL · {fmtDuration(elapsedMs)}</span>
+            <span className="total">
+              TOTAL · {fmtDuration(activeMs)}
+              {sessionSummary.count > 1 ? ` · ${sessionSummary.count} sessions` : ""}
+            </span>
           </div>
 
-          {isLive && clockInDate ? (
-            <div className="clk-session-row active">
-              <span className="clk-session-icon">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polygon points="5 3 19 12 5 21 5 3" />
-                </svg>
-              </span>
-              <div className="clk-session-meta">
-                <div className="clk-session-time">
-                  {fmtClock(clockInDate)} → now <span className="live-dot" />
-                </div>
-                <div className="clk-session-date">
-                  Live · started {fmtDate(clockInDate, { month: "short", day: "numeric" })}
-                </div>
-              </div>
-              <div className="clk-session-dur" style={{ color: "var(--emerald-600)" }}>
-                {fmtDuration(elapsedMs)}
-              </div>
-            </div>
-          ) : isDone && clockInDate && clockOutDate ? (
-            <div className="clk-session-row">
-              <span className="clk-session-icon">
-                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
-              </span>
-              <div className="clk-session-meta">
-                <div className="clk-session-time">
-                  {fmtClock(clockInDate)} → {fmtClock(clockOutDate)}
-                </div>
-                <div className="clk-session-date">
-                  {fmtDate(clockInDate, { weekday: "short", month: "short", day: "numeric" })}
-                </div>
-              </div>
-              <div className="clk-session-dur">{fmtDuration(elapsedMs)}</div>
-            </div>
-          ) : (
+          {/* One row per session (item 6). This was a three-way ternary over
+              the single job-level clock pair, so it could only ever show one
+              row however many times the cleaner had been on site. Newest
+              first, because the one you just finished is the one you look for. */}
+          {mySessions.length === 0 ? (
             <div className="clk-sessions-empty">No sessions logged yet. Tap Clock in to start.</div>
+          ) : (
+            sortSessionsDesc(mySessions).map((s, idx) => {
+              const start = new Date(s.startedAt as string | Date);
+              const end = s.endedAt ? new Date(s.endedAt as string | Date) : null;
+              const active = activeSessionMinutes(s, breaks, now);
+              const deducted = Math.round(breakMinutesWithin(s, breaks, now));
+              return (
+                <div
+                  key={`${s.startedAt}-${idx}`}
+                  className={`clk-session-row${end ? "" : " active"}`}>
+                  <span className="clk-session-icon">
+                    {end ? (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polygon points="5 3 19 12 5 21 5 3" />
+                      </svg>
+                    )}
+                  </span>
+                  <div className="clk-session-meta">
+                    <div className="clk-session-time">
+                      {fmtClock(start)} → {end ? fmtClock(end) : "now"}
+                      {!end && <span className="live-dot" />}
+                    </div>
+                    <div className="clk-session-date">
+                      {end
+                        ? fmtDate(start, { weekday: "short", month: "short", day: "numeric" })
+                        : `Live · started ${fmtDate(start, { month: "short", day: "numeric" })}`}
+                      {deducted > 0 ? ` · ${deducted}m break` : ""}
+                    </div>
+                  </div>
+                  <div
+                    className="clk-session-dur"
+                    style={end ? undefined : { color: "var(--emerald-600)" }}>
+                    {fmtDuration(active * 60_000)}
+                  </div>
+                </div>
+              );
+            })
           )}
         </section>
       </main>
@@ -568,7 +641,7 @@ export default function ClockPageClient({
                 const totalItems = checklistItems.length;
                 const doneItems = checklistItems.filter(it => it.status === "COMPLETED").length;
                 const pct = Math.round((doneItems / totalItems) * 100);
-                const pendingRequired = checklistItems.filter(it => it.isRequired && it.status !== "COMPLETED");
+                const pendingRequired = pendingRequiredItems(checklistItems);
                 return (
                   <div className="pju-section" style={{ borderBottom: "1px solid rgba(0,140,156,0.08)", paddingBottom: 16 }}>
                     <div className="pju-section-head">
@@ -767,7 +840,9 @@ export default function ClockPageClient({
               <button className="co-btn-ghost" onClick={() => !coLoading && setCoOpen(false)} disabled={coLoading}>Cancel</button>
               <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
                 {(() => {
-                  const allRequiredDone = checklistItems.length === 0 || checklistItems.filter(it => it.isRequired).every(it => it.status === "COMPLETED");
+                  // One shared predicate with the job page's clock-out button,
+                  // which had no gate at all until item 12.e.
+                  const allRequiredDone = requiredItemsSatisfied(checklistItems);
                   return (
                     <>
                       <button className="co-btn-confirm" onClick={handleClockOut} disabled={coLoading || !allRequiredDone}>
@@ -775,7 +850,7 @@ export default function ClockPageClient({
                       </button>
                       {!allRequiredDone && (
                         <span style={{ fontSize: 11, color: "#dc2626", textAlign: "right" }}>
-                          Complete all required checklist items first
+                          {CHECKLIST_GATE_HINT}
                         </span>
                       )}
                     </>

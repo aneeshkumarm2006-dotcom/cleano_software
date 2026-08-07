@@ -208,6 +208,43 @@ export default function TimeTrackingClient({ cleaners }: Props) {
                     })}
                     {e.isLegacy && " · job-level record"}
                   </div>
+
+                  {/* Session log (awerfixes.pdf item 6) — a cleaner can clock
+                      out and back in, so the In/Out columns to the right are
+                      the first and last of these, and the duration is their
+                      SUM. Only shown when there is more than one, otherwise
+                      it just repeats the columns. */}
+                  {e.sessions.length > 1 && (
+                    <div className="mt-1.5 flex flex-col gap-1">
+                      {e.sessions.map((s, i) => (
+                        <div
+                          key={s.id}
+                          className="text-[11px] text-[#008C9C]/70 tabular-nums flex items-center gap-2 flex-wrap">
+                          <span className="text-[#008C9C]/50">Session {i + 1}</span>
+                          <span className="font-[500]">
+                            {fmtTime(s.startedAt)} →{" "}
+                            {s.endedAt ? fmtTime(s.endedAt) : "now"}
+                          </span>
+                          <span>{formatWorkedDuration(s.activeMinutes)}</span>
+                          <ClockTimeEditor
+                            jobId={e.jobId}
+                            sessionId={s.id}
+                            cleanerId={e.cleanerId}
+                            cleanerName={e.cleanerName}
+                            clockInTime={s.startedAt}
+                            clockOutTime={s.endedAt}
+                            label="Edit"
+                            onSaved={() => {
+                              setEntries([]);
+                              setCursor(null);
+                              setHasMore(true);
+                              load({ reset: true });
+                            }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div className="text-xs text-[#008C9C]/70 flex-shrink-0 tabular-nums">
@@ -219,22 +256,33 @@ export default function TimeTrackingClient({ cleaners }: Props) {
                   </div>
                   {/* Item 4: correct a missed clock-in / wrong clock-out from
                       the time-tracking view as well as the job page. A legacy
-                      row has no assignment, so it edits the job-level fields. */}
+                      row has no assignment, so it edits the job-level fields.
+                      Item 6: with exactly one session, editing it IS editing
+                      the pair; with several, the per-session editors above are
+                      the only honest place to do it (the columns here are
+                      derived, and the server refuses to write them directly). */}
                   <div className="mt-1">
-                    <ClockTimeEditor
-                      jobId={e.jobId}
-                      cleanerId={e.isLegacy ? null : e.cleanerId}
-                      cleanerName={e.isLegacy ? null : e.cleanerName}
-                      clockInTime={e.clockInTime}
-                      clockOutTime={e.clockOutTime}
-                      label="Edit"
-                      onSaved={() => {
-                        setEntries([]);
-                        setCursor(null);
-                        setHasMore(true);
-                        load({ reset: true });
-                      }}
-                    />
+                    {e.sessions.length > 1 ? (
+                      <span className="text-[11px] text-[#008C9C]/50">
+                        Edit per session
+                      </span>
+                    ) : (
+                      <ClockTimeEditor
+                        jobId={e.jobId}
+                        sessionId={e.sessions[0]?.id ?? null}
+                        cleanerId={e.isLegacy ? null : e.cleanerId}
+                        cleanerName={e.isLegacy ? null : e.cleanerName}
+                        clockInTime={e.clockInTime}
+                        clockOutTime={e.clockOutTime}
+                        label="Edit"
+                        onSaved={() => {
+                          setEntries([]);
+                          setCursor(null);
+                          setHasMore(true);
+                          load({ reset: true });
+                        }}
+                      />
+                    )}
                   </div>
                 </div>
 

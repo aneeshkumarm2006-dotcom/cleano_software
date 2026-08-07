@@ -95,7 +95,7 @@ export default function Step4Contact({ draft, onChange }: Props) {
             onChange={(e) =>
               onChange({ referralCode: e.target.value.toUpperCase() })
             }
-            placeholder="FRIEND15"
+            placeholder="Enter your code"
             maxLength={16}
           />
         </Field>

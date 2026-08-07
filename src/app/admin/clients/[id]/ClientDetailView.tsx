@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   ArrowLeft, DollarSign, Briefcase, Star, CreditCard,
   AlertTriangle, Pencil, Mail, Phone, MapPin,
@@ -18,6 +19,9 @@ interface ClientAddressLite {
   label: string;
   address: string;
   aptNumber: string | null;
+  city: string | null;
+  postalCode: string | null;
+  accessNotes: string | null;
   isDefault: boolean;
 }
 
@@ -157,6 +161,7 @@ export default function ClientDetailView({
   totals: Totals;
   ratings?: RatingEntry[];
 }) {
+  const router = useRouter();
   const [tab, setTab] = useState<TabKey>("history");
   const [editOpen, setEditOpen] = useState(false);
 
@@ -342,7 +347,7 @@ export default function ClientDetailView({
                   {jobs.map(j => {
                     const d = j.jobDate || j.startTime;
                     return (
-                      <tr key={j.id} onClick={() => { window.location.href = `/admin/jobs/${j.id}`; }}>
+                      <tr key={j.id} onClick={() => router.push(`/admin/jobs/${j.id}`)}>
                         <td className="col-date" style={{ minWidth: 130 }}>
                           <div className="date-line">{dateStr(d)}</div>
                         </td>
@@ -412,7 +417,7 @@ export default function ClientDetailView({
                         {paid.map(j => {
                           const d = j.jobDate || j.startTime;
                           return (
-                            <tr key={j.id} onClick={() => { window.location.href = `/admin/jobs/${j.id}`; }}>
+                            <tr key={j.id} onClick={() => router.push(`/admin/jobs/${j.id}`)}>
                               <td className="col-date" style={{ minWidth: 130 }}>
                                 <div className="date-line">{dateStr(d)}</div>
                               </td>

@@ -10,6 +10,10 @@ import {
   sendCleanerImportWelcome,
 } from "@/lib/email";
 import { logActivity } from "@/lib/activity-log";
+import { notifyAdmins } from "@/lib/admin-alerts";
+import { resolveBkAddOns } from "@/lib/addon-catalog";
+import { upsertClientAddress } from "@/lib/client-address-store";
+import { getBookingConfig } from "@/app/(book)/actions/getBookingConfig";
 import { getTaxRates, computeJobTaxes } from "@/lib/tax.server";
 import { jobTypeLabel } from "@/lib/calendar-labels";
 import { startOfDayTz } from "@/lib/time";
@@ -66,6 +70,8 @@ export async function runBookingKoalaImport(
     addresses: 0,
     jobs: { created: 0, skipped: 0, failed: 0, duplicates: 0, sameDay: 0 },
     statusCounts: {},
+    addOns: { created: 0, matched: 0, unmatched: 0 },
+    addOnsNeedingReview: [],
     emails: { sent: 0, failed: 0 },
     sample: [],
     failures: [],
@@ -220,28 +226,39 @@ export async function runBookingKoalaImport(
         report.customers.created++;
       }
 
-      // Addresses (idempotent).
-      const existingAddrs = await db.clientAddress.findMany({
-        where: { clientId },
-        select: { address: true },
-      });
-      const have = new Set(
-        existingAddrs.map((a) => a.address.toLowerCase().replace(/\s+/g, " "))
+      // Addresses (idempotent) — via the shared upsert, which owns the
+      // normalised, unit-aware de-duplication and the "first one is the
+      // default" rule (src/lib/client-address-store.ts).
+      //
+      // Fixed here (awerfixes.pdf item 2, round 3, stage 4): this loop used to
+      // build `display = "Apt 12 – 4820 Sherbrooke"` and write it to `address`
+      // WHILE ALSO setting `aptNumber: "Apt 12"`, so every surface that prints
+      // the street then the unit showed the unit twice. The street now goes in
+      // clean and the unit lives only in `aptNumber`. Existing rows imported
+      // the old way are not rewritten — nothing backfills them — but
+      // stripDuplicatedApt() makes them render correctly anyway, and their
+      // normalised key still matches, so re-importing won't duplicate them.
+      const existingAddrIds = new Set(
+        (
+          await db.clientAddress.findMany({
+            where: { clientId },
+            select: { id: true },
+          })
+        ).map((a) => a.id)
       );
       for (let i = 0; i < agg.addresses.length; i++) {
         const a = agg.addresses[i];
-        const display = a.apt ? `${a.apt} – ${a.address}` : a.address;
-        if (have.has(display.toLowerCase().replace(/\s+/g, " "))) continue;
-        await db.clientAddress.create({
-          data: {
-            clientId,
-            label: i === 0 ? "Home" : `Address ${i + 1}`,
-            address: display,
-            aptNumber: a.apt,
-            isDefault: i === 0,
-          },
+        const id = await upsertClientAddress(clientId, {
+          label: i === 0 ? "Home" : `Address ${i + 1}`,
+          address: a.address,
+          aptNumber: a.apt,
+          city: a.city,
+          postalCode: a.zip,
         });
-        report.addresses++;
+        if (id && !existingAddrIds.has(id)) {
+          existingAddrIds.add(id);
+          report.addresses++;
+        }
       }
 
       // Customer login (forced reset on first login).
@@ -272,6 +289,10 @@ export async function runBookingKoalaImport(
   // opt-in guard is on) — so two same-day rows in one upload also collapse.
   const seenSameDay = new Set<string>();
   const taxRates = await getTaxRates();
+  // The add-on catalog, loaded ONCE for the whole run. Used to match imported
+  // add-on names so they carry the canonical Cleano spelling that checklist
+  // triggers and equipment kits key off.
+  const { addOns: addOnCatalog } = await getBookingConfig();
   for (const r of rows) {
     const dedupKey = r.job.bookingId
       ? `bk:${r.job.bookingId}`
@@ -308,6 +329,24 @@ export async function runBookingKoalaImport(
         price: r.job.price,
         status: r.job.status,
         cleaners: cleanerIds.length || r.providers.length,
+      });
+    }
+
+    // Resolved BEFORE the dry-run bail-out, so a dry run can show the admin
+    // which names need pricing — the whole point of running one first.
+    const resolvedAddOns = resolveBkAddOns(r.job.addOns, addOnCatalog);
+    report.addOns.created += resolvedAddOns.rows.length;
+    report.addOns.matched +=
+      resolvedAddOns.rows.length - resolvedAddOns.review.length;
+    report.addOns.unmatched += resolvedAddOns.review.length;
+    for (const a of resolvedAddOns.review) {
+      if (report.addOnsNeedingReview.length >= 50) break;
+      report.addOnsNeedingReview.push({
+        name: a.name,
+        quantity: a.quantity,
+        source: a.source,
+        rowNum: r.rowNum,
+        bookingId: r.job.bookingId,
       });
     }
 
@@ -426,6 +465,18 @@ export async function runBookingKoalaImport(
           // the payment traceable (and refundable) from the job detail page.
           stripePaymentIntentId: r.job.transactionId,
           notes: r.job.notes,
+          // Nested create, deliberately — NOT a separate createMany after the
+          // insert. The dedupe branch above `continue`s BEFORE this create and
+          // there is no update path, so rows land exactly once per created job.
+          // A second write after the insert could lose its response, leaving a
+          // job with no add-ons that every re-run then skips as a duplicate,
+          // with no backfill path.
+          //
+          // price: 0 on every row — see resolveBkAddOns. The CSV's "Service
+          // total" already includes these extras.
+          ...(resolvedAddOns.rows.length
+            ? { addOns: { create: resolvedAddOns.rows } }
+            : {}),
           ...(cleanerIds.length
             ? {
                 employee: { connect: { id: cleanerIds[0] } },
@@ -446,6 +497,28 @@ export async function runBookingKoalaImport(
       report.jobs.failed++;
       failures.push(`row ${r.rowNum}: ${(e as Error).message}`);
     }
+  }
+
+  // ── 3b. flag add-ons that need pricing (commit only) ────────────────────────
+  // ONE alert per run, with the names deduped — not one per row. A 205-row file
+  // with a mismatched name on every row would otherwise raise 205 alerts across
+  // four admin recipients.
+  //
+  // Known cost, stated so it isn't a surprise: the UI commits in batches of 50
+  // and each batch is its own action call, so a large file raises roughly one
+  // alert per batch, and the client's retry-once path can double one of them.
+  if (commit && report.addOnsNeedingReview.length > 0) {
+    const names = [...new Set(report.addOnsNeedingReview.map((a) => a.name))];
+    await notifyAdmins({
+      type: "GENERAL",
+      severity: "WARNING",
+      title: `${report.addOns.unmatched} imported add-on(s) need pricing`,
+      message:
+        `These BookingKoala add-on names had no match in Settings → Pricing → Add-Ons, ` +
+        `so they were imported at $0.00 rather than dropped: ${names.join(", ")}. ` +
+        `The imported job totals are unaffected — the CSV total already covered them.`,
+      relatedType: "job",
+    });
   }
 
   // ── 4. emails (commit only) ──────────────────────────────────────────────────

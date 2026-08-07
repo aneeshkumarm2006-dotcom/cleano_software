@@ -1,5 +1,6 @@
 import { db } from "@/db";
 import { calculateTax, TaxBreakdown } from "./tax";
+import { sumAddOns } from "./job-money";
 import { normalizeJobType } from "./calendar-labels";
 import {
   SERVICE_PRICING_KEY,
@@ -19,7 +20,8 @@ export interface PricingInput {
   squareFootage?: number;
   pcHours?: number;
   pcCleaners?: number;
-  addOns: { name: string; price: number }[];
+  /** `price` is the UNIT price; `quantity` defaults to 1 when absent. */
+  addOns: { name: string; price: number; quantity?: number }[];
   travelFee?: number;
   discountAmount?: number;
 }
@@ -48,7 +50,7 @@ export async function computeBookingPrice(
   // saveJob and are not subject to it.
   const cfg = await getServicePricingConfig();
   const basePrice = Math.max(rawBase, cfg.minJobPrice);
-  const addOnTotal = input.addOns.reduce((s, a) => s + a.price, 0);
+  const addOnTotal = sumAddOns(input.addOns);
   const travelFee = input.travelFee ?? 0;
   const discountAmount = input.discountAmount ?? 0;
 

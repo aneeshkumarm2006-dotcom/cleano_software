@@ -2,9 +2,15 @@ import React from "react";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { db } from "@/db";
+import {
+  SAVED_ADDRESS_ORDER,
+  SAVED_ADDRESS_SELECT,
+} from "@/lib/client-address-store";
 import CalendarPageClient from "./CalendarPageClient";
 import CleanerCalendarClient from "./CleanerCalendarClient";
 import { getBookingConfig } from "../../(book)/actions/getBookingConfig";
+import { getTaxRates } from "@/lib/tax.server";
+import { sanitizeCleanerNotes } from "@/lib/cleaner-notes";
 import { calendarJobsWhere } from "@/lib/cleaner-jobs";
 
 export default async function CalendarPage() {
@@ -32,6 +38,12 @@ export default async function CalendarPage() {
         status: true,
         jobType: true,
         location: true,
+        aptNumber: true,
+        // Access notes (door / gate codes) for the cleaner's job drawer —
+        // same need as the my-jobs page (item 2). This query is already
+        // scoped by calendarJobsWhere(userId), so a cleaner only ever sees
+        // codes for jobs they are actually on.
+        clientAddress: { select: { accessNotes: true } },
         employeePay: true,
         notes: true,
         cleaners: { select: { id: true, name: true } },
@@ -51,8 +63,15 @@ export default async function CalendarPage() {
         status: j.status,
         jobType: j.jobType,
         location: j.location ?? null,
+        aptNumber: j.aptNumber ?? null,
+        accessNotes: j.clientAddress?.accessNotes ?? null,
         employeePay: j.employeePay ?? null,
-        notes: j.notes ?? null,
+        // This branch is the CLEANER calendar (role === "EMPLOYEE" above, and
+        // /cleaners/calendar routes here too), and the card it feeds also shows
+        // "Cleaner pay" — so raw notes here leaked the booking's billing text to
+        // exactly the audience item 10 says must never see it. Sanitized
+        // SERVER-side so the raw string never reaches the client payload at all.
+        notes: sanitizeCleanerNotes(j.notes),
         cleaners: j.cleaners.map((c) => c.name),
       }));
 
@@ -62,14 +81,20 @@ export default async function CalendarPage() {
   // Admin/staff calendar — load the same lookups the Jobs page uses so the
   // New-job modal can search existing customers, assign cleaners, and offer
   // the add-on catalog.
-  const [users, clients, bookingConfig] = await Promise.all([
+  const [users, clients, bookingConfig, taxRates] = await Promise.all([
     db.user.findMany({
       // Staff only — exclude client-portal accounts (imported customers get a
       // CLIENT-role User row) and archived/deactivated users. This list feeds
       // the cleaner-assignment picker and the availability overlay picker.
       where: { role: { not: "CLIENT" }, deletedAt: null, isActive: true },
       orderBy: { name: "asc" },
-      select: { id: true, name: true, email: true },
+      // allowedServiceCategories drives JobModal's category advisory (item 3).
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        allowedServiceCategories: true,
+      },
     }),
     db.client.findMany({
       orderBy: { name: "asc" },
@@ -78,11 +103,18 @@ export default async function CalendarPage() {
         name: true,
         email: true,
         address: true,
+        aptNumber: true,
         discountPercent: true,
         defaultPaymentMethodId: true,
+        // The saved address book, so JobModal can offer the dropdown (item 2).
+        addresses: {
+          orderBy: SAVED_ADDRESS_ORDER,
+          select: SAVED_ADDRESS_SELECT,
+        },
       },
     }),
     getBookingConfig(),
+    getTaxRates(),
   ]);
 
   return (
@@ -91,6 +123,7 @@ export default async function CalendarPage() {
       users={users}
       clients={clients}
       addOnCatalog={bookingConfig.addOns}
+      taxRates={taxRates}
     />
   );
 }

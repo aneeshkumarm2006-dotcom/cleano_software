@@ -1,11 +1,24 @@
 /**
  * Accept / decline workflow helpers.
  *
- * When a cleaner is added to a job, we create a JobAssignmentInvite with
- * an expiry of the configured accept/decline timeout (admin setting
- * `scheduling.acceptDeclineTimeoutMin`) from now. The cleaner accepts or
- * declines from /my-jobs; if they don't respond in time the cron sweep marks
- * it EXPIRED and removes them from the job.
+ * TWO DIFFERENT THINGS SHARE THIS TABLE, and the difference is the whole of
+ * awerfixes.pdf item 4:
+ *
+ *   • DIRECT (`isLastMinute: false`) — an admin assigned this cleaner. They are
+ *     ALREADY ON THE JOB; the invite is a request to confirm, not a hold. It
+ *     does not lapse. Nothing unassigns them except an admin or their own
+ *     decline. `expiresAt` on these rows is now only the timer for the admin's
+ *     "assignment unconfirmed" nudge — the cleaner never sees it, and the cron
+ *     sweep no longer stamps them EXPIRED.
+ *
+ *   • LAST-MINUTE (`isLastMinute: true`) — a broadcast for an OPEN job after
+ *     somebody cancelled. This one is a genuine race: first to accept gets it,
+ *     the rest expire. Hard expiry is correct here and is kept.
+ *
+ * The old model (documented here until this change) was that a non-response
+ * released the job back to the unassigned pool. That stopped being true in
+ * AWER_NEW_FIXES item 2 — expiry became a flag plus an admin alert — but the
+ * cleaner-facing countdown kept threatening it.
  */
 
 import { db } from "@/db";
@@ -57,6 +70,10 @@ export async function createAssignmentInvites(opts: CreateInviteOpts) {
           declineReason: null,
           isLastMinute,
           bonusUsd,
+          // Re-assigning re-arms the invite, so it must re-arm the admin
+          // nudge too — otherwise a cleaner re-invited after an earlier
+          // unconfirmed round would never be chased again.
+          unconfirmedAlertAt: null,
         },
         create: {
           jobId: opts.jobId,

@@ -2,12 +2,15 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Clock, Loader, AlertTriangle } from "lucide-react";
+import { Clock, Loader, AlertTriangle, Trash2 } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 import DatePicker from "@/components/ui/DatePicker";
 import TimePicker from "@/components/ui/TimePicker";
 import { tzInputParts, tzWallClockToUtc } from "@/lib/time";
-import { updateClockTimes } from "../../actions/updateClockTimes";
+import {
+  deleteJobWorkSession,
+  updateClockTimes,
+} from "../../actions/updateClockTimes";
 
 /**
  * Admin editor for a job's (or one cleaner's) clock-in / clock-out times
@@ -20,6 +23,13 @@ import { updateClockTimes } from "../../actions/updateClockTimes";
 
 interface ClockTimeEditorProps {
   jobId: string;
+  /**
+   * Edit ONE work session (awerfixes.pdf item 6, round 3). When set, the modal
+   * also offers Delete — a session clocked onto the wrong job has to be
+   * removable, and squashing it into a neighbour to hide it is exactly what an
+   * audit trail is meant to prevent.
+   */
+  sessionId?: string | null;
   /** Null = edit the job-level clock fields (legacy jobs / whole job). */
   cleanerId?: string | null;
   cleanerName?: string | null;
@@ -43,6 +53,7 @@ function splitInstant(iso: string | null) {
 
 export default function ClockTimeEditor({
   jobId,
+  sessionId = null,
   cleanerId = null,
   cleanerName = null,
   clockInTime,
@@ -53,6 +64,7 @@ export default function ClockTimeEditor({
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
 
@@ -74,6 +86,7 @@ export default function ClockTimeEditor({
     setReason("");
     setError(null);
     setWarning(null);
+    setConfirmDelete(false);
     setOpen(true);
   };
 
@@ -98,6 +111,7 @@ export default function ClockTimeEditor({
     setSaving(true);
     const result = await updateClockTimes({
       jobId,
+      sessionId,
       cleanerId,
       clockInTime: clockIn,
       clockOutTime: clockOut,
@@ -113,6 +127,26 @@ export default function ClockTimeEditor({
     onSaved?.();
     if (result.warning) {
       // Keep the modal open so the payroll caveat is actually read.
+      setWarning(result.warning);
+      return;
+    }
+    setOpen(false);
+  };
+
+  const removeSession = async () => {
+    if (!sessionId) return;
+    setError(null);
+    setWarning(null);
+    setSaving(true);
+    const result = await deleteJobWorkSession({ jobId, sessionId, reason });
+    setSaving(false);
+    if (!result.success) {
+      setError(result.error);
+      return;
+    }
+    router.refresh();
+    onSaved?.();
+    if (result.warning) {
       setWarning(result.warning);
       return;
     }
@@ -149,8 +183,18 @@ export default function ClockTimeEditor({
       <Modal
         isOpen={open}
         onClose={() => !saving && setOpen(false)}
-        title={cleanerName ? `Edit ${cleanerName}'s times` : "Edit job clock times"}
-        subheader="Times are in the business timezone. Leave both blank to clear.">
+        title={
+          sessionId
+            ? `Edit ${cleanerName ? `${cleanerName}'s ` : ""}work session`
+            : cleanerName
+              ? `Edit ${cleanerName}'s times`
+              : "Edit job clock times"
+        }
+        subheader={
+          sessionId
+            ? "Times are in the business timezone. A session needs a start time — use Delete to remove one recorded in error."
+            : "Times are in the business timezone. Leave both blank to clear."
+        }>
         <div style={{ padding: 24, display: "grid", gap: 20 }}>
           <div>
             <label className="label">Clock in</label>
@@ -225,9 +269,21 @@ export default function ClockTimeEditor({
           )}
 
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-            <button type="button" className="btn btn-ghost" onClick={clearBoth} disabled={saving}>
-              Clear
-            </button>
+            {sessionId ? (
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => (confirmDelete ? removeSession() : setConfirmDelete(true))}
+                disabled={saving}
+                style={{ marginRight: "auto", color: "#b91c1c" }}>
+                <Trash2 size={13} style={{ marginRight: 5, verticalAlign: -2 }} />
+                {confirmDelete ? "Confirm delete" : "Delete session"}
+              </button>
+            ) : (
+              <button type="button" className="btn btn-ghost" onClick={clearBoth} disabled={saving}>
+                Clear
+              </button>
+            )}
             <button
               type="button"
               className="btn btn-ghost"

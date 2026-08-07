@@ -6,6 +6,7 @@ import { db } from "@/db";
 import { revalidatePath } from "next/cache";
 import { jobTypeLabel } from "@/lib/calendar-labels";
 import { isJobTaxExempt } from "@/lib/tax.server";
+import { computeJobMoney } from "@/lib/job-money";
 import { getServiceCatalogWithLabels } from "@/lib/service-catalog.server";
 
 async function requireAdmin() {
@@ -117,35 +118,50 @@ export async function generateInvoiceFromJob(jobId: string) {
       sortOrder: number;
     }> = [];
 
-    // Main service line
-    const basePrice = job.price ?? 0;
+    // ONE source of truth for where the add-ons sit (awerfixes item 10).
+    //
+    // The base line used to be `job.price`, which on a web booking is the
+    // tax-INCLUSIVE total that ALREADY contains the add-ons — so the invoice
+    // added them a second time and then charged tax on the lot. On an admin job
+    // the opposite held: the job's own total excluded the add-ons while the
+    // invoice line-itemed them, which is the "invoice != job total" defect this
+    // item exists to close. `money.basePrice` is the add-on-free service line
+    // under either convention.
+    const money = computeJobMoney(job, { gstRate, qstRate });
     lineItems.push({
       description: `Cleaning Service${job.jobType ? ` (${jobTypeLabel(job.jobType, serviceLabels)})` : ""}${job.bedCount || job.bathCount ? ` — ${job.bedCount ?? 0} bed / ${job.bathCount ?? 0} bath` : ""}`,
       quantity: 1,
-      unitPrice: basePrice,
-      amount: basePrice,
+      unitPrice: money.basePrice,
+      amount: money.basePrice,
       sortOrder: 0,
     });
 
-    // Add-ons
-    if (job.addOns.length > 0) {
-      job.addOns.forEach((addon, idx) => {
-        lineItems.push({
-          description: addon.name,
-          quantity: 1,
-          unitPrice: addon.price,
-          amount: addon.price,
-          sortOrder: idx + 1,
-        });
+    // Add-ons — real quantities. invoice-pdf.ts already renders a quantity
+    // column, so it needs no change to print these correctly.
+    money.addOnLines.forEach((addon, idx) => {
+      lineItems.push({
+        description: addon.name,
+        quantity: addon.quantity,
+        unitPrice: addon.unitPrice,
+        amount: addon.lineTotal,
+        sortOrder: idx + 1,
       });
-    }
+    });
 
     const subtotal = lineItems.reduce((sum, li) => sum + li.amount, 0);
 
     // Use job's explicit discount when set (including 0 = admin opted out).
     // If unset (null), fall back to the client's default discount %.
-    let discount = job.discountAmount ?? 0;
-    if (job.discountAmount === null || job.discountAmount === undefined) {
+    //
+    // `money.discountApplied` is 0 on a web/imported job because that job's
+    // stored subtotal is ALREADY net of its discount — subtracting
+    // `job.discountAmount` again here would take a referral credit off twice,
+    // the same defect lib/job-billing.ts records at charge time.
+    let discount = money.discountApplied;
+    if (
+      money.basis === "ADDITIVE" &&
+      (job.discountAmount === null || job.discountAmount === undefined)
+    ) {
       const clientForDiscount = await db.client.findUnique({
         where: { id: clientId },
         select: { discountPercent: true },

@@ -20,8 +20,10 @@ import {
 import { isNotificationEnabled } from "@/lib/notifications";
 import { smsBookingConfirmation, smsCancellation } from "@/lib/sms";
 import { getCleanerRateInputs } from "@/lib/cleaner-rates";
-import { computeJobPayout } from "@/lib/pay-tiers";
-import { getTaxRates, computeJobTaxes, isJobTaxExempt } from "@/lib/tax.server";
+import { computeJobPayout, fallbackRateInput } from "@/lib/pay-tiers";
+import { getTaxRates } from "@/lib/tax.server";
+import { addOnQuantity, computeJobMoney } from "@/lib/job-money";
+import { resolveJobAddressId } from "@/lib/client-address-store";
 import { getServicePricingConfig } from "@/lib/booking-pricing";
 import { isSqftJobType, moveInOutBasePrice } from "@/lib/service-pricing";
 import { applyToJobSeries, seriesRootId, type SeriesUpdateResult } from "@/lib/job-series";
@@ -118,7 +120,7 @@ export async function saveJob(formData: FormData) {
       ? (frequencyRaw as RecurringFrequency)
       : null;
     const addOnsRaw = formData.get("addOns") as string | null;
-    let addOns: Array<{ name: string; price: number }> = [];
+    let addOns: Array<{ name: string; price: number; quantity: number }> = [];
     if (addOnsRaw) {
       try {
         const parsed = JSON.parse(addOnsRaw);
@@ -128,6 +130,7 @@ export async function saveJob(formData: FormData) {
             .map((a) => ({
               name: String(a.name).trim(),
               price: Number(a.price) || 0,
+              quantity: addOnQuantity(a),
             }));
         }
       } catch {
@@ -163,6 +166,27 @@ export async function saveJob(formData: FormData) {
           existing.fixedPriceAllowFrequencyDiscount;
       }
     }
+
+    // ── Saved address (item 2) ────────────────────────────────────────────────
+    // Before this stage saveJob had no address-book logic at all: the modal's
+    // Location / Apt went onto the job and nowhere else, so an address typed
+    // here was never offered again. That behaviour existed only in the
+    // full-page form (admin/jobs/new/page.tsx); it is now shared.
+    const locationInput = ((formData.get("location") as string) || "").trim();
+    const aptInput = ((formData.get("aptNumber") as string) || "").trim();
+    const pickedAddressId =
+      ((formData.get("clientAddressId") as string) || "").trim() || null;
+
+    // A picked id is honoured only if it belongs to this client AND still
+    // describes what was typed — an admin who picks "Home" and then edits the
+    // Location field would otherwise link the job to Home's door codes while
+    // sending the cleaner somewhere else. Anything typed that isn't already in
+    // the book is added to it.
+    const clientAddressId = await resolveJobAddressId(clientId, {
+      addressId: pickedAddressId,
+      address: locationInput,
+      aptNumber: aptInput || null,
+    });
 
     let price = parseOptionalFloat(formData.get("price"));
 
@@ -271,13 +295,7 @@ export async function saveJob(formData: FormData) {
         // every solo job onto the 50% split-pool path (fix list item 3).
         const rateInputs = await getCleanerRateInputs(cleanerIds);
         const rateList = cleanerIds.map(
-          (id) =>
-            rateInputs.get(id) ?? {
-              id,
-              tier: "STANDARD" as const,
-              avgRating: null,
-              ratingCount: 0,
-            }
+          (id) => rateInputs.get(id) ?? fallbackRateInput(id)
         );
         estimatedEmployeePay = computeJobPayout(price, rateList).pool;
       }
@@ -287,27 +305,77 @@ export async function saveJob(formData: FormData) {
       }
     }
     // FLAT: estimatedEmployeePay stays as the manually entered payout.
+    //
+    // NOTE (AWER round 3, fix 1): for PERCENTAGE this is an ESTIMATE SNAPSHOT
+    // taken at save time. It goes stale the moment a rating lands or Settings →
+    // Pay Rate Multipliers is edited, so it is NOT the payout of record:
+    // payroll, My Pay, the pay modal and the Job Details Financials tab all
+    // recompute live via computeJobPayShares. It is kept because FLAT/HOURLY
+    // genuinely need the column (computeJobPayShares reads it back as the team
+    // total) and because the jobs list, invoices and metrics still read it. Job
+    // Details shows a "Stored value — not used" row whenever it drifts.
 
     // GST/QST on the discounted subtotal from the admin-configured rates. The
     // job modal doesn't expose the cash-job toggle, so keep the existing job's
     // isCashJob when editing (new modal jobs are non-cash).
+    //
+    // `bookingSource` and `subtotalAmount` come from the SAME lookup, and they
+    // are load-bearing: computeJobMoney decides from them whether this job's
+    // add-ons are already priced into its stored subtotal. Without them, an
+    // admin opening a WEB booking and pressing Save would be treated as an
+    // admin job — adding its add-ons on top of a subtotal that already contains
+    // them, and silently inflating a real customer's card.
     const editingJobId = (formData.get("jobId") as string | null) || null;
     let isCashJob = false;
+    let existingBookingSource: string | null = null;
+    let existingSubtotal: number | null = null;
+    let existingPrice: number | null = null;
     if (editingJobId) {
       const current = await db.job.findUnique({
         where: { id: editingJobId },
-        select: { isCashJob: true },
+        select: {
+          isCashJob: true,
+          bookingSource: true,
+          subtotalAmount: true,
+          price: true,
+        },
       });
       isCashJob = current?.isCashJob ?? false;
+      existingBookingSource = current?.bookingSource ?? null;
+      existingSubtotal = current?.subtotalAmount ?? null;
+      existingPrice = current?.price ?? null;
     }
+    // A web / imported job's stored subtotal ALREADY contains its add-ons and is
+    // ALREADY net of its discount, so it is preserved byte-for-byte — that is
+    // what keeps "saving an existing booking never changes its value" true
+    // rather than merely likely.
+    //
+    // Preserved only while the admin leaves the price alone. The moment they
+    // retype it they are taking authorship of the number, so the job is priced
+    // like any other admin job from then on; silently discarding a repriced web
+    // booking would be the worse failure.
+    const priceUnchanged =
+      existingPrice !== null &&
+      price !== null &&
+      Math.abs(existingPrice - price) < 0.005;
     // Per-job tax exemption (item 7) — the modal DOES expose this one, and it
     // applies to this job alone.
     const taxExempt = formData.get("taxExempt") === "on";
     const taxRates = await getTaxRates();
-    const taxes = computeJobTaxes(
-      (price ?? 0) - (discountAmount ?? 0),
-      taxRates,
-      isJobTaxExempt({ isCashJob, taxExempt })
+    // Add-ons and custom extra charges finally count (awerfixes item 10): on an
+    // admin job the subtotal is now `price + sum(unit x qty) - discount`, where
+    // it used to be `price - discount` and a $25 custom charge billed $0.
+    const taxes = computeJobMoney(
+      {
+        bookingSource: priceUnchanged ? existingBookingSource : null,
+        price,
+        discountAmount,
+        subtotalAmount: priceUnchanged ? existingSubtotal : null,
+        isCashJob,
+        taxExempt,
+        addOns,
+      },
+      taxRates
     );
 
     const jobData: any = {
@@ -323,6 +391,9 @@ export async function saveJob(formData: FormData) {
       jobType: (formData.get("jobType") as string) || null,
       location: (formData.get("location") as string) || null,
       aptNumber: (formData.get("aptNumber") as string) || null,
+      // Provenance only — `location`/`aptNumber` above stay the snapshot this
+      // job is actually served at (item 2).
+      clientAddressId,
       // Wall-clock form inputs are America/Toronto; jobDate mirrors startTime's
       // instant (same convention as the BookingKoala importer) so tz-aware
       // date formatting never shows the previous day.
@@ -355,8 +426,11 @@ export async function saveJob(formData: FormData) {
       bedCount: parseOptionalInt(formData.get("bedCount")),
       bathCount: parseOptionalInt(formData.get("bathCount")),
       halfBathCount: parseOptionalInt(formData.get("halfBathCount")),
-      payRateMultiplier:
-        parseOptionalFloat(formData.get("payRateMultiplier")) ?? 1.0,
+      // payRateMultiplier is deliberately NOT written (AWER round 3, fix 1).
+      // No form field ever existed, so this used to reset every saved job to
+      // 1.0 — and the column is now unread anyway. Do not substitute the
+      // cleaner's resolved multiplier here: that would recreate the stale
+      // save-time snapshot this fix exists to remove.
     };
 
     const statusRaw = (formData.get("status") as string) || null;
@@ -414,7 +488,11 @@ export async function saveJob(formData: FormData) {
         ...jobDataNoLead,
         addOns: {
           deleteMany: {},
-          create: addOns.map((a) => ({ name: a.name, price: a.price })),
+          create: addOns.map((a) => ({
+            name: a.name,
+            price: a.price,
+            quantity: a.quantity,
+          })),
         },
       };
 
@@ -805,7 +883,11 @@ export async function saveJob(formData: FormData) {
       }
       if (addOns.length > 0) {
         jobData.addOns = {
-          create: addOns.map((a) => ({ name: a.name, price: a.price })),
+          create: addOns.map((a) => ({
+            name: a.name,
+            price: a.price,
+            quantity: a.quantity,
+          })),
         };
       }
 
@@ -877,10 +959,20 @@ export async function saveJob(formData: FormData) {
         // The exemption is a property of the booking, so it carries to every
         // occurrence in the series (item 7). Each child can still be edited
         // individually afterwards.
-        const childTaxes = computeJobTaxes(
-          basePrice - (childDiscount ?? 0),
-          taxRates,
-          isJobTaxExempt({ isCashJob, taxExempt })
+        //
+        // Children carry the same add-ons as the parent and are always
+        // admin-authored (bookingSource "admin-recurring"), so they price
+        // ADDITIVE — every occurrence bills the add-ons, not just the first.
+        const childTaxes = computeJobMoney(
+          {
+            bookingSource: null,
+            price: basePrice,
+            discountAmount: childDiscount,
+            isCashJob,
+            taxExempt,
+            addOns,
+          },
+          taxRates
         );
 
         // Preserve the job's duration across occurrences.
@@ -916,7 +1008,11 @@ export async function saveJob(formData: FormData) {
           }
           if (addOns.length > 0) {
             childData.addOns = {
-              create: addOns.map((a) => ({ name: a.name, price: a.price })),
+              create: addOns.map((a) => ({
+            name: a.name,
+            price: a.price,
+            quantity: a.quantity,
+          })),
             };
           }
 

@@ -13,9 +13,11 @@ import { isNotificationEnabled } from "@/lib/notifications";
 import { createAssignmentInvites } from "@/lib/invites";
 import {
   findAvailabilityConflicts,
+  findCategoryConflicts,
   resolveJobLead,
   syncJobAssignments,
   validateTraineePairing,
+  type CategoryConflict,
 } from "@/lib/job-assignments";
 import { fmtDate, fmtTime } from "@/lib/time";
 import type { AvailabilityConflict } from "./checkAvailability.types";
@@ -30,7 +32,11 @@ export async function assignCleaners(input: {
   jobId: string;
   cleanerIds: string[];
 }): Promise<
-  | { success: true; conflicts: AvailabilityConflict[] }
+  | {
+      success: true;
+      conflicts: AvailabilityConflict[];
+      categoryConflicts: CategoryConflict[];
+    }
   | { success: false; error: string }
 > {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -91,6 +97,15 @@ export async function assignCleaners(input: {
       job.endTime
     );
 
+    // Service-category mismatches (awerfixes.pdf item 3) — same advisory
+    // contract. The cleaner side blocks; the admin side only warns, because an
+    // admin knowingly staffing someone outside their categories is a real and
+    // allowed decision.
+    const categoryConflicts = await findCategoryConflicts(
+      input.cleanerIds,
+      job.jobType
+    );
+
     await db.$transaction([
       db.job.update({
         where: { id: input.jobId },
@@ -131,6 +146,22 @@ export async function assignCleaners(input: {
             action: "UPDATED",
             field: "cleaners",
             description: `Availability conflict overridden — ${conflicts
+              .map((c) => c.warning)
+              .join("; ")}`,
+          },
+        })
+        .catch(() => {});
+    }
+
+    if (categoryConflicts.length > 0) {
+      await db.jobLog
+        .create({
+          data: {
+            jobId: input.jobId,
+            userId: session.user.id,
+            action: "UPDATED",
+            field: "cleaners",
+            description: `Service category mismatch overridden — ${categoryConflicts
               .map((c) => c.warning)
               .join("; ")}`,
           },
@@ -208,7 +239,7 @@ export async function assignCleaners(input: {
 
     revalidatePath(`/admin/jobs/${input.jobId}`);
     revalidatePath("/admin/jobs");
-    return { success: true, conflicts };
+    return { success: true, conflicts, categoryConflicts };
   } catch (error) {
     console.error("Error assigning cleaners:", error);
     return { success: false, error: "Failed to assign cleaners" };

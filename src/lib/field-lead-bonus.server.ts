@@ -46,10 +46,19 @@ export async function getFieldLeadWeeklyBonus(
   });
   const groupRevenue = jobs.reduce((sum, j) => sum + (j.price || 0), 0);
 
-  // Group average rating for the window.
+  // Group average rating for the window. `excludedAt: null` matches every other
+  // rating→money path (cleaner-rates.ts, getPerformanceData,
+  // recalculateMultiplier): an admin-excluded rating must never move pay
+  // (AwerNewFixes.pdf item 5). Without it, an unfair 1-star an admin had
+  // already thrown out still dragged the group average below the bonus
+  // threshold and cost the Field Lead real money.
+  //
+  // The WINDOW stays weekly on purpose — Decision 2's all-time rule governs the
+  // rating MULTIPLIER, not this weekly group bonus.
   const ratingAgg = await db.employeeRating.aggregate({
     where: {
       employeeId: { in: groupMemberIds },
+      excludedAt: null,
       createdAt: { gte: weekStart, lte: weekEnd },
     },
     _avg: { rating: true },

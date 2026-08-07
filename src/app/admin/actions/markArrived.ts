@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { setAssignmentProgress } from "@/lib/job-assignments";
+import { findOpenSession, syncClockMirrors } from "@/lib/work-sessions.server";
 
 export async function markArrived(jobId: string) {
   const session = await auth.api.getSession({
@@ -46,26 +46,26 @@ export async function markArrived(jobId: string) {
       };
     }
 
-    // Already clocked in
-    if (job.clockInTime) {
-      return { success: false, error: "Already clocked in for this job" };
+    // Already clocked in — PER CLEANER, not per job (item 6). This read
+    // `job.clockInTime`, so on a two-cleaner job the second to arrive was told
+    // they were already clocked in.
+    const openSession = await findOpenSession(jobId, session.user.id);
+    if (openSession) {
+      return { success: false, error: "You're already clocked in on this job" };
     }
 
     const now = new Date();
 
-    // Update job: clock in and set to IN_PROGRESS
+    // Sessions are the record of work; the job/assignment clock columns below
+    // are recomputed from them.
+    await db.jobWorkSession.create({
+      data: { jobId, cleanerId: session.user.id, startedAt: now },
+    });
+    await syncClockMirrors(jobId);
+
     await db.job.update({
       where: { id: jobId },
-      data: {
-        clockInTime: now,
-        status: "IN_PROGRESS",
-      },
-    });
-
-    // Per-cleaner assignment status (item 9).
-    await setAssignmentProgress(jobId, session.user.id, {
-      status: "CLOCKED_IN",
-      clockInTime: now,
+      data: { status: "IN_PROGRESS" },
     });
 
     // Create arrival log

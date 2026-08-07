@@ -2,8 +2,13 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
+import {
+  SAVED_ADDRESS_ORDER,
+  SAVED_ADDRESS_SELECT,
+} from "@/lib/client-address-store";
 import JobsPageClient from "./JobsPageClient";
 import { getBookingConfig } from "../../(book)/actions/getBookingConfig";
+import { getTaxRates } from "@/lib/tax.server";
 import { getServicePricingConfig } from "@/lib/booking-pricing";
 import { getServiceCatalog } from "@/lib/service-catalog.server";
 import { serviceOptions } from "@/lib/service-catalog";
@@ -69,6 +74,7 @@ export default async function JobsPage({
       clientId: true,
       location: true,
       aptNumber: true,
+      clientAddressId: true,
       description: true,
       jobType: true,
       jobDate: true,
@@ -89,12 +95,14 @@ export default async function JobsPage({
       discountAmount: true,
       refundedAmount: true,
       deletedAt: true,
+      // Feed the edit modal's money basis + live total preview.
+      bookingSource: true,
+      subtotalAmount: true,
       bedCount: true,
       bathCount: true,
       halfBathCount: true,
-      payRateMultiplier: true,
       cleaners: { select: { id: true, name: true } },
-      addOns: { select: { id: true, name: true, price: true } },
+      addOns: { select: { id: true, name: true, price: true, quantity: true } },
       productUsage: { select: { quantity: true, product: { select: { costPerUnit: true } } } },
     },
     // jobDate is nullable — push null-date jobs after dated ones instead of
@@ -108,7 +116,13 @@ export default async function JobsPage({
   const users = await db.user.findMany({
     where: { role: { not: "CLIENT" } },
     orderBy: { name: "asc" },
-    select: { id: true, name: true, email: true },
+    // allowedServiceCategories drives JobModal's category advisory (item 3).
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      allowedServiceCategories: true,
+    },
   });
 
   // Assignable cleaners for the bulk "Assign cleaner" picker.
@@ -125,14 +139,23 @@ export default async function JobsPage({
       name: true,
       email: true,
       address: true,
+      aptNumber: true,
       discountPercent: true,
       defaultPaymentMethodId: true,
+      // The saved address book, so JobModal can offer the dropdown (item 2).
+      addresses: {
+        orderBy: SAVED_ADDRESS_ORDER,
+        select: SAVED_ADDRESS_SELECT,
+      },
     },
   });
 
   // Add-ons configured in Settings → Pricing Rules, offered as quick-add chips
   // in the job form so staff don't have to retype them.
   const { addOns: addOnCatalog } = await getBookingConfig();
+
+  // The modal's live total preview must quote the SAME rates saveJob will use.
+  const taxRates = await getTaxRates();
 
   // Move-in/out per-sq-ft rates, so the job modal can show the derived price
   // for square-foot-priced services (item 8).
@@ -164,6 +187,7 @@ export default async function JobsPage({
       clientId: job.clientId,
       location: job.location,
       aptNumber: job.aptNumber,
+      clientAddressId: job.clientAddressId,
       description: job.description,
       jobType: job.jobType,
       jobDate: job.jobDate?.toISOString() || null,
@@ -189,7 +213,6 @@ export default async function JobsPage({
       bedCount: job.bedCount,
       bathCount: job.bathCount,
       halfBathCount: job.halfBathCount,
-      payRateMultiplier: job.payRateMultiplier,
       profit,
       profitPct,
       timeSpentMs,
@@ -198,7 +221,12 @@ export default async function JobsPage({
         id: a.id,
         name: a.name,
         price: a.price,
+        quantity: a.quantity,
       })),
+      // The edit modal needs these to know whether this job's add-ons are
+      // already priced into its subtotal (web / import) or add to it (admin).
+      bookingSource: job.bookingSource,
+      subtotalAmount: job.subtotalAmount,
     };
   });
 
@@ -216,6 +244,7 @@ export default async function JobsPage({
         cleaners={cleaners}
         clients={clients}
         addOnCatalog={addOnCatalog}
+        taxRates={taxRates}
         serviceOptions={serviceOptionList}
         sqftRates={sqftRates}
         isAdmin={isAdmin}

@@ -70,7 +70,6 @@ const REVALIDATE: Record<EntityKey, string[]> = {
   employees: ["/admin/employees"],
   products: ["/admin/inventory"],
   suppliers: ["/admin/settings"],
-  "inventory-rules": ["/admin/settings"],
   "inventory-locations": ["/admin/settings", "/admin/inventory", "/cleaners/my-inventory"],
   "inventory-requests": ["/admin/inventory", "/cleaners/my-inventory"],
   "kit-templates": ["/admin/settings"],
@@ -342,24 +341,6 @@ const suppliersHandler: Handler = async (v) => {
   return { status: "created", label: name };
 };
 
-const inventoryRulesHandler: Handler = async (v) => {
-  const productName = v.productName as string;
-  const product = await db.product.findFirst({ where: { name: { equals: productName, mode: "insensitive" } } });
-  if (!product) return { status: "failed", reason: `Product "${productName}" not found`, label: productName };
-
-  const existing = await db.inventoryRule.findUnique({ where: { productId: product.id } });
-  if (existing) return { status: "skipped", duplicate: true, reason: `Rule for "${productName}" already exists`, label: productName };
-
-  await db.inventoryRule.create({
-    data: {
-      productId: product.id,
-      usagePerJob: v.usagePerJob as number,
-      refillThreshold: v.refillThreshold as number,
-    },
-  });
-  return { status: "created", label: productName };
-};
-
 const inventoryLocationsHandler: Handler = async (v) => {
   const name = v.name as string;
   const existing = await db.inventoryLocation.findFirst({ where: { name: { equals: name, mode: "insensitive" } } });
@@ -454,7 +435,6 @@ const HANDLERS: Record<EntityKey, Handler> = {
   employees: employeesHandler,
   products: productsHandler,
   suppliers: suppliersHandler,
-  "inventory-rules": inventoryRulesHandler,
   "inventory-locations": inventoryLocationsHandler,
   "inventory-requests": inventoryRequestsHandler,
   "kit-templates": kitTemplatesHandler,

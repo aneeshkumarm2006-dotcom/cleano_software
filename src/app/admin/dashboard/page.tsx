@@ -204,28 +204,23 @@ export default async function DashboardPage() {
 
   // Refill alerts (employee inventory below threshold) — tracked per cleaner
   // so the tile can deep-link to /admin/employees/{id}.
-  const [inventoryRules, employeesWithProducts] = await Promise.all([
-    db.inventoryRule.findMany(),
-    db.employeeProduct.findMany({
-      select: {
-        productId: true,
-        quantity: true,
-        product: { select: { cleanerRestockThreshold: true } },
-        employee: { select: { id: true, name: true } },
-      },
-    }),
-  ]);
+  const employeesWithProducts = await db.employeeProduct.findMany({
+    select: {
+      productId: true,
+      quantity: true,
+      product: { select: { cleanerRestockThreshold: true } },
+      employee: { select: { id: true, name: true } },
+    },
+  });
   let refillAlertCount = 0;
   const refillCleanerMap = new Map<string, { id: string; name: string; lowCount: number }>();
   for (const ep of employeesWithProducts) {
-    const rule = inventoryRules.find((r) => r.productId === ep.productId);
-    // Uses the CLEANER restock threshold, and no longer requires an
-    // InventoryRule row to exist — products without one were previously
-    // incapable of ever raising a refill alert (fix list item 14).
+    // The CLEANER restock threshold, which every product has (fix list item
+    // 14). This once required an InventoryRule row to exist, so products
+    // without one could never raise a refill alert at all.
     if (
       isCleanerLow(ep.quantity, {
         cleanerRestockThreshold: ep.product.cleanerRestockThreshold,
-        usagePerJob: rule?.usagePerJob ?? 0,
       })
     ) {
       refillAlertCount++;

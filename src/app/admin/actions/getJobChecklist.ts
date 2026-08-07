@@ -40,8 +40,11 @@ export async function getJobChecklist(
       return { success: false, error: "Not authorized for this job" };
     }
 
+    // Ordered by createdAt so this and ensureJobChecklist agree on WHICH row is
+    // the real one, for any duplicate that predates the @@unique constraint.
     const checklist = await db.jobChecklist.findFirst({
       where: { jobId, employeeId: session.user.id },
+      orderBy: { createdAt: "asc" },
       include: {
         items: { orderBy: { sortOrder: "asc" } },
       },

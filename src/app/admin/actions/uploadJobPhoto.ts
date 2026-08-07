@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { cloudinary } from "@/lib/cloudinary";
+import { afterPhotosAllowed } from "@/lib/job-photos";
 import type { UploadApiResponse } from "cloudinary";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
@@ -120,9 +121,7 @@ export async function uploadJobPhoto(formData: FormData) {
 
     // After-photos are allowed by default (item 21); this gate only fires
     // when an admin explicitly disabled them for this job. Admins bypass.
-    const afterPhotosAllowed =
-      job.afterPhotoConsent || job.afterPhotoOverrideAt !== null;
-    if (!isAdmin && !afterPhotosAllowed) {
+    if (!isAdmin && !afterPhotosAllowed(job)) {
       return {
         success: false,
         error:

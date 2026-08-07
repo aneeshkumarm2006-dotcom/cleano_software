@@ -6,6 +6,7 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { evaluateEmployeeWindows } from "@/lib/job-assignments";
 import { availabilityWarning, windowFromInstants } from "@/lib/availability";
+import { categoryMismatchWarning } from "@/lib/service-permissions";
 
 async function requireStaff(): Promise<
   { ok: true; userId: string; userName: string } | { ok: false; error: string }
@@ -54,7 +55,12 @@ export async function bulkAssignCleaner(
         id: cleanerId,
         role: { in: ["EMPLOYEE", "FIELD_LEAD"] },
       },
-      select: { id: true, name: true, cleanerTier: true },
+      select: {
+        id: true,
+        name: true,
+        cleanerTier: true,
+        allowedServiceCategories: true,
+      },
     });
     if (!cleaner) return { success: false, error: "Cleaner not found" };
 
@@ -77,23 +83,37 @@ export async function bulkAssignCleaner(
         employeeId: true,
         startTime: true,
         endTime: true,
+        // Service-category advisory (awerfixes.pdf item 3).
+        jobType: true,
       },
     });
     if (jobs.length === 0) return { success: false, error: "Nothing selected" };
 
     // Availability check per job (recurring rule + one-off blocked dates), in
     // two queries for the whole batch. Non-blocking — collected as warnings for
-    // the admin to review after the assignment lands.
+    // the admin to review after the assignment lands. Service-category
+    // mismatches ride along the same way: warn, never block.
     const evaluations = await evaluateEmployeeWindows(
       cleanerId,
       jobs.map((j) => windowFromInstants(j.startTime, j.endTime))
     );
     const warnings: string[] = [];
-    jobs.forEach((j, i) => {
+    // Per-job override notes, computed once and reused by the JobLog writes
+    // below — the log used to recompute the same warning three times per row.
+    const overrideNotes = jobs.map((j, i) => {
       const ev = evaluations[i];
-      if (!ev) return;
-      const warning = availabilityWarning(cleaner.name, ev);
-      if (warning) warnings.push(`Job #${j.jobNumber}: ${warning}`);
+      const availability = ev ? availabilityWarning(cleaner.name, ev) : null;
+      const category = categoryMismatchWarning(
+        cleaner.name,
+        j.jobType,
+        cleaner.allowedServiceCategories
+      );
+      if (availability) warnings.push(`Job #${j.jobNumber}: ${availability}`);
+      if (category) warnings.push(`Job #${j.jobNumber}: ${category}`);
+      const parts: string[] = [];
+      if (availability) parts.push(`availability conflict overridden (${availability})`);
+      if (category) parts.push(`service category mismatch overridden (${category})`);
+      return parts.length ? ` — ${parts.join("; ")}` : "";
     });
 
     await db.$transaction([
@@ -121,11 +141,7 @@ export async function bulkAssignCleaner(
             userId: gate.userId,
             action: "UPDATED",
             field: "cleaners",
-            description: `Cleaner assigned via bulk action by ${gate.userName}${
-              evaluations[i] && availabilityWarning(cleaner.name, evaluations[i])
-                ? ` — availability conflict overridden (${availabilityWarning(cleaner.name, evaluations[i])})`
-                : ""
-            }`,
+            description: `Cleaner assigned via bulk action by ${gate.userName}${overrideNotes[i]}`,
           },
         })
       ),

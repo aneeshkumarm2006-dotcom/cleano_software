@@ -22,6 +22,7 @@ import createEmployee from "../actions/createEmployee";
 import { updateEmployee } from "../actions/updateEmployee";
 import { deleteEmployee } from "../actions/deleteEmployee";
 import { setEmployeePassword } from "../actions/setEmployeePassword";
+import { PERMISSION_CATEGORIES } from "@/lib/service-permissions";
 
 interface Employee {
   id: string;
@@ -30,6 +31,8 @@ interface Employee {
   phone: string | null;
   role: "OWNER" | "ADMIN" | "OPS_MANAGER" | "FIELD_LEAD" | "EMPLOYEE";
   isActive?: boolean;
+  /** Service categories this employee may work. Empty = all (item 3). */
+  allowedServiceCategories?: string[];
 }
 
 interface EmployeeModalProps {
@@ -98,6 +101,11 @@ export function EmployeeModal({
     "OWNER" | "ADMIN" | "OPS_MANAGER" | "FIELD_LEAD" | "EMPLOYEE"
   >(employee?.role || "EMPLOYEE");
   const [isActive, setIsActive] = useState(employee?.isActive ?? true);
+  // Service categories this employee may work (awerfixes.pdf item 3). Empty
+  // means no restriction, which is the default for every existing cleaner.
+  const [serviceCategories, setServiceCategories] = useState<string[]>(
+    employee?.allowedServiceCategories ?? []
+  );
   // Admin set/reset password (edit mode).
   const [pwInput, setPwInput] = useState("");
   const [pwBusy, setPwBusy] = useState(false);
@@ -166,6 +174,7 @@ export function EmployeeModal({
         });
         setSelectedRole(employee.role);
         setIsActive(employee.isActive ?? true);
+        setServiceCategories(employee.allowedServiceCategories ?? []);
       } else {
         createForm.reset({
           name: "",
@@ -175,6 +184,7 @@ export function EmployeeModal({
           role: "EMPLOYEE",
         });
         setSelectedRole("EMPLOYEE");
+        setServiceCategories([]);
       }
       setShowDeleteConfirm(false);
       setGlobalError(null);
@@ -188,6 +198,12 @@ export function EmployeeModal({
   }, [selectedRole, setValue]);
 
   const disableForm = submitting || isDeleting;
+
+  function toggleServiceCategory(key: string) {
+    setServiceCategories((prev) =>
+      prev.includes(key) ? prev.filter((c) => c !== key) : [...prev, key]
+    );
+  }
 
   const onSubmit = async (values: CreateFormValues | EditFormValues) => {
     setSubmitting(true);
@@ -207,6 +223,11 @@ export function EmployeeModal({
 
       if (mode === "edit") {
         formData.append("isActive", isActive ? "on" : "");
+        // The marker tells updateEmployee this submission owns the category
+        // picker, so an empty selection means "the admin removed every
+        // restriction" rather than "this form doesn't manage categories".
+        formData.append("categoriesSubmitted", "1");
+        serviceCategories.forEach((c) => formData.append("serviceCategories", c));
       }
 
       let result;
@@ -561,6 +582,37 @@ export function EmployeeModal({
                     When off, this cleaner is signed out of the app and sees the
                     deactivated notice (edit its wording in Settings &rarr;
                     Provider).
+                  </p>
+                </div>
+              )}
+
+              {/* Service categories (edit mode only). Empty = no restriction,
+                  which is how every existing cleaner starts. */}
+              {mode === "edit" && (
+                <div className="w-full">
+                  <label className="text-sm text-gray-700 flex items-center gap-2 mb-2">
+                    <Shield className="w-4 h-4 text-gray-400" />
+                    Service categories
+                  </label>
+                  <div className="max-h-44 overflow-y-auto space-y-1 p-2 rounded-xl bg-gray-50">
+                    {PERMISSION_CATEGORIES.map((cat) => (
+                      <label
+                        key={cat.key}
+                        className="flex items-center gap-2 text-sm text-gray-700 select-none px-2 py-1 rounded hover:bg-white cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={serviceCategories.includes(cat.key)}
+                          onChange={() => toggleServiceCategory(cat.key)}
+                          disabled={disableForm}
+                        />
+                        {cat.label}
+                      </label>
+                    ))}
+                  </div>
+                  <p className="text-xs text-gray-400 mt-1">
+                    {serviceCategories.length === 0
+                      ? "No restriction — this employee can work every service category."
+                      : "This employee only sees and can only claim jobs in the ticked categories. Admins can still assign them anything."}
                   </p>
                 </div>
               )}

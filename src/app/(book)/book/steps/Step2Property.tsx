@@ -1,10 +1,21 @@
 "use client";
 
-import { BookingDraft, SERVICE_TYPES, FREQUENCIES, AIRBNB_FREQUENCIES, RoomType } from "../types";
-import { Field, Input } from "@/components/customer/Field";
-import { NumberStepper, ChoiceButton } from "@/components/customer/atoms";
+import { useState } from "react";
+import { AddOnSelection, BookingDraft, SERVICE_TYPES, FREQUENCIES, AIRBNB_FREQUENCIES, RoomType, needsPopup } from "../types";
+import { Field, Input, Button } from "@/components/customer/Field";
+import CustomerModal from "@/components/customer/Modal";
+import { NumberStepper, QuantityStepper, ChoiceButton } from "@/components/customer/atoms";
 import { addonIcon } from "@/lib/addon-icons";
+import { MAX_ADDON_QUANTITY } from "@/lib/job-money";
 import { normalizeJobType } from "@/lib/calendar-labels";
+import PremiumSelect from "@/components/ui/PremiumSelect";
+import {
+  NEW_ADDRESS,
+  addressOptionLabel,
+  stripDuplicatedApt,
+  type SavedAddress,
+} from "@/lib/client-address";
+import { checkServiceArea } from "../../actions/checkServiceArea";
 
 const ROOM_LABELS: Record<RoomType, string> = {
   KITCHEN: "Kitchen",
@@ -29,6 +40,12 @@ const ROOM_ORDER: RoomType[] = [
 interface Props {
   draft: BookingDraft;
   onChange: (patch: Partial<BookingDraft>) => void;
+  /**
+   * The signed-in customer's saved addresses (item 2). Empty for a guest, or
+   * for a customer whose book is still empty — either way the free-text path
+   * below is unchanged, so booking without an account works exactly as before.
+   */
+  savedAddresses?: SavedAddress[];
   /** Server-computed base price (before add-ons/tax) for the current inputs. */
   basePrice?: number;
   /** Per-service-category recurring discount table (item 7). */
@@ -42,7 +59,61 @@ function addOnForService(a: { services?: string[] }, serviceType: string): boole
   return !a.services || a.services.length === 0 || a.services.includes(serviceType);
 }
 
-export default function Step2Property({ draft, onChange, basePrice = 0, freqDiscounts = {}, serviceContent = {} }: Props) {
+export default function Step2Property({ draft, onChange, savedAddresses = [], basePrice = 0, freqDiscounts = {}, serviceContent = {} }: Props) {
+  // Index into draft.addOns of the add-on whose pop-up is open (item 17). An
+  // INDEX rather than a copy, so the row read in the modal is the live one.
+  const [pendingIdx, setPendingIdx] = useState<number | null>(null);
+  const pending = pendingIdx === null ? null : draft.addOns[pendingIdx] ?? null;
+
+  // ── Saved addresses (item 2) ───────────────────────────────────────────────
+  // `postalNotice` reports a coverage re-check triggered by picking an address
+  // whose postal code differs from the one entered in step 1.
+  const [postalNotice, setPostalNotice] = useState<string | null>(null);
+  const [reChecking, setReChecking] = useState(false);
+
+  async function onAddressChoice(v: string) {
+    setPostalNotice(null);
+
+    if (v === NEW_ADDRESS) {
+      onChange({ addressId: null, address: "", aptNumber: "" });
+      return;
+    }
+
+    const addr = savedAddresses.find((a) => a.id === v);
+    if (!addr) return;
+
+    onChange({
+      addressId: addr.id,
+      address: stripDuplicatedApt(addr.address, addr.aptNumber),
+      aptNumber: addr.aptNumber ?? "",
+    });
+
+    // The quote is priced against step 1's postal code (coverage, zone, travel
+    // fee). Filling in an address from a DIFFERENT postal code and leaving that
+    // untouched would quote one place and clean another, so re-run the check
+    // and move the zone/fee with it rather than silently disagreeing.
+    const nextPostal = (addr.postalCode ?? "").trim();
+    if (!nextPostal || nextPostal.toUpperCase() === draft.postalCode.trim().toUpperCase()) {
+      return;
+    }
+
+    setReChecking(true);
+    const res = await checkServiceArea(nextPostal);
+    setReChecking(false);
+    if ("error" in res && res.error) return;
+
+    const covered = "covered" in res ? res.covered : false;
+    const zoneName = "zoneName" in res ? res.zoneName ?? null : null;
+    const travelFee = "travelFee" in res ? res.travelFee ?? 0 : 0;
+    onChange({ postalCode: nextPostal.toUpperCase(), postalCovered: covered, zoneName, travelFee });
+    setPostalNotice(
+      covered
+        ? `Postal code updated to ${nextPostal.toUpperCase()}${
+            zoneName ? ` · ${zoneName}` : ""
+          }${travelFee > 0 ? ` · travel fee $${travelFee.toFixed(2)}` : ""}.`
+        : `We don't currently service ${nextPostal.toUpperCase()}. Pick another address or get in touch.`
+    );
+  }
   const isPC = draft.serviceType === "POST_CONSTRUCTION";
   const isAirbnb = draft.serviceType === "AIRBNB";
   const isMoveInOut = draft.serviceType === "MOVE_IN_OUT";
@@ -89,12 +160,58 @@ export default function Step2Property({ draft, onChange, basePrice = 0, freqDisc
         </p>
       </header>
 
+      {/* Saved-address picker — signed-in customers with a book only. Guests
+          and first-time customers see the plain field below, unchanged. */}
+      {savedAddresses.length > 0 && (
+        <Field label="Address on file" htmlFor="prop-saved-addr">
+          <PremiumSelect
+            value={draft.addressId ?? NEW_ADDRESS}
+            onChange={onAddressChoice}
+            size="md"
+            disabled={reChecking}
+            options={[
+              ...savedAddresses.map((a) => ({
+                value: a.id,
+                label: addressOptionLabel(a),
+              })),
+              { value: NEW_ADDRESS, label: "+ Use a new address" },
+            ]}
+          />
+          {postalNotice && (
+            <p
+              style={{
+                marginTop: 6,
+                fontSize: 12.5,
+                color: draft.postalCovered === false ? "#dc2626" : "var(--primary-60)",
+              }}>
+              {postalNotice}
+            </p>
+          )}
+        </Field>
+      )}
+
       <Field label="Address" htmlFor="prop-addr">
         <Input
           id="prop-addr"
           value={draft.address}
-          onChange={(e) => onChange({ address: e.target.value })}
+          onChange={(e) =>
+            // Typing over a picked address detaches it, so submitBooking treats
+            // it as a new one rather than linking the job to the wrong row.
+            onChange({ address: e.target.value, addressId: null })
+          }
           placeholder="123 rue Sainte-Catherine, Montréal"
+        />
+      </Field>
+
+      <Field
+        label="Apartment / unit"
+        htmlFor="prop-apt"
+        hint="Optional — buzzer or unit number, so your cleaner can get in.">
+        <Input
+          id="prop-apt"
+          value={draft.aptNumber}
+          onChange={(e) => onChange({ aptNumber: e.target.value })}
+          placeholder="e.g. Apt 12B"
         />
       </Field>
 
@@ -318,28 +435,62 @@ export default function Step2Property({ draft, onChange, basePrice = 0, freqDisc
                   }}>
                   {ROOM_LABELS[room]}
                 </span>
-                {/* Icon cards (spec item 22) — tap the card to toggle. */}
+                {/* Icon cards (spec item 22) — tap the card to toggle.
+                    The card is a <button>, so the quantity stepper (which is
+                    itself buttons) has to be its SIBLING inside the shell, not
+                    its child: nested buttons are invalid HTML and React renders
+                    them without complaint. The shell carries the visual chrome
+                    so the card can stay a real button with aria-pressed. */}
                 <div className="cl-addon-grid">
                   {items.map(({ a, idx }) => {
-                    const Icon = addonIcon(a.name);
+                    const Icon = addonIcon(a);
+                    const patchAddOn = (patch: Partial<AddOnSelection>) => {
+                      const next = [...draft.addOns];
+                      next[idx] = { ...a, ...patch };
+                      onChange({ addOns: next });
+                    };
                     return (
-                      <button
-                        type="button"
+                      <div
                         key={a.id ?? `${a.name}-${idx}`}
-                        className={`cl-addon-card ${a.selected ? "active" : ""}`}
-                        aria-pressed={a.selected}
-                        onClick={() => {
-                          const next = [...draft.addOns];
-                          next[idx] = { ...a, selected: !a.selected };
-                          onChange({ addOns: next });
-                        }}>
-                        {a.selected && <span className="cl-addon-check">✓</span>}
-                        <span className="cl-addon-ic">
-                          <Icon size={20} />
-                        </span>
-                        <span className="cl-addon-card-name">{a.name}</span>
-                        <span className="cl-addon-card-price">+${a.price.toFixed(2)}</span>
-                      </button>
+                        className={`cl-addon-card-shell ${a.selected ? "active" : ""}`}>
+                        <button
+                          type="button"
+                          className="cl-addon-card"
+                          aria-pressed={a.selected}
+                          onClick={() => {
+                            // A configured add-on explains itself BEFORE it is
+                            // added; the selection commits from the modal.
+                            if (needsPopup(a)) {
+                              setPendingIdx(idx);
+                              return;
+                            }
+                            patchAddOn(
+                              a.selected
+                                ? { selected: false, quantity: 0 }
+                                : { selected: true, quantity: 1 }
+                            );
+                          }}>
+                          {a.selected && <span className="cl-addon-check">✓</span>}
+                          <span className="cl-addon-ic">
+                            <Icon size={20} />
+                          </span>
+                          <span className="cl-addon-card-name">{a.name}</span>
+                          <span className="cl-addon-card-price">
+                            +${a.price.toFixed(2)}
+                            {a.selected && a.quantity > 1 ? " each" : ""}
+                          </span>
+                        </button>
+                        {a.selected && (
+                          <QuantityStepper
+                            compact
+                            value={Math.max(1, a.quantity)}
+                            min={1}
+                            max={MAX_ADDON_QUANTITY}
+                            ariaLabel={`${a.name} quantity`}
+                            onChange={(q) => patchAddOn({ quantity: q })}
+                          />
+                        )}
+                      </div>
                     );
                   })}
                 </div>
@@ -348,6 +499,53 @@ export default function Step2Property({ draft, onChange, basePrice = 0, freqDisc
           });
         })()}
       </div>
+
+      {/* Add-on pop-up (item 17). Cancel — including Escape and a backdrop
+          click, both of which CustomerModal already treats as onClose — leaves
+          the add-on UNSELECTED, which is the right default for a message the
+          customer has just been asked to read. */}
+      <CustomerModal
+        open={pending !== null}
+        onClose={() => setPendingIdx(null)}
+        title={pending?.popupTitle?.trim() || pending?.name || "Add-on"}>
+        {pending && (
+          <div className="cl-stack-12">
+            {pending.popupMessage?.trim() && (
+              <p style={{ fontSize: 14, lineHeight: 1.55, whiteSpace: "pre-wrap", margin: 0 }}>
+                {pending.popupMessage}
+              </p>
+            )}
+            {pending.popupRequestPhoto && (
+              <p style={{ fontSize: 13, color: "var(--primary-70)", margin: 0 }}>
+                We&apos;ll email you to ask for a photo so we can confirm the
+                exact price before your visit.
+              </p>
+            )}
+            <p style={{ fontSize: 13, color: "var(--primary-70)", margin: 0 }}>
+              Adds <strong>${pending.price.toFixed(2)}</strong> to your booking.
+            </p>
+            <div className="cl-modal-actions">
+              <Button variant="ghost" onClick={() => setPendingIdx(null)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  if (pendingIdx === null) return;
+                  const next = [...draft.addOns];
+                  next[pendingIdx] = {
+                    ...next[pendingIdx],
+                    selected: true,
+                    quantity: 1,
+                  };
+                  onChange({ addOns: next });
+                  setPendingIdx(null);
+                }}>
+                Add to booking
+              </Button>
+            </div>
+          </div>
+        )}
+      </CustomerModal>
     </div>
   );
 }

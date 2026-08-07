@@ -60,7 +60,6 @@ export default async function SettingsPage() {
     appSettings,
     products,
     kitTemplates,
-    inventoryRules,
     suppliers,
     inventoryLocations,
     checklistTemplates,
@@ -80,7 +79,6 @@ export default async function SettingsPage() {
           },
           orderBy: { name: "asc" },
         }),
-        db.inventoryRule.findMany({ include: { product: true } }),
         db.supplier.findMany({
           include: {
             prices: { include: { product: true } },
@@ -130,7 +128,7 @@ export default async function SettingsPage() {
         }),
         db.budget.findMany({ orderBy: [{ period: "desc" }, { category: "asc" }] }),
       ])
-    : [[], [], [], [], [], [], [], [], [], [], [], [], []];
+    : [[], [], [], [], [], [], [], [], [], [], [], []];
 
   // Notification catalog — auto-seed on first admin visit, then load.
   let notificationSettings: Array<{
@@ -189,7 +187,6 @@ export default async function SettingsPage() {
         appSettings={appSettings as never}
         products={products as never}
         kitTemplates={kitTemplates as never}
-        inventoryRules={inventoryRules as never}
         suppliers={suppliers as never}
         inventoryLocations={inventoryLocations as never}
         checklistTemplates={checklistTemplates as never}

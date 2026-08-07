@@ -1,6 +1,7 @@
 import { db } from "@/db";
 import { requireCleaner } from "@/lib/page-guards";
 import { getServiceCatalog } from "@/lib/service-catalog.server";
+import { loadPerJobAverages } from "@/lib/inventory-forecast.server";
 import { serviceOptions } from "@/lib/service-catalog";
 import { Prisma } from "@prisma/client";
 import {
@@ -211,7 +212,7 @@ export default async function MyJobsPage({
   >();
 
   if (upcomingJobs.length > 0) {
-    const [employeeProducts, kitTemplates, inventoryRules] = await Promise.all([
+    const [employeeProducts, kitTemplates, avgPerJob] = await Promise.all([
       db.employeeProduct.findMany({
         where: { employeeId: session.user.id },
         include: { product: true },
@@ -220,11 +221,24 @@ export default async function MyJobsPage({
         where: { isActive: true },
         include: { items: { include: { product: true } } },
       }),
-      db.inventoryRule.findMany({
-        where: { usagePerJob: { gt: 0 } },
-        include: { product: true },
-      }),
+      // Measured per-job usage, replacing InventoryRule.usagePerJob (item 14).
+      loadPerJobAverages(),
     ]);
+    // Names for the products that have usage history, for the fallback below.
+    const typicalUsage = avgPerJob.size
+      ? (
+          await db.product.findMany({
+            where: { id: { in: [...avgPerJob.keys()] } },
+            select: { id: true, name: true },
+          })
+        )
+          .map((p) => ({
+            productId: p.id,
+            productName: p.name,
+            needed: Math.round((avgPerJob.get(p.id) ?? 0) * 100) / 100,
+          }))
+          .filter((n) => n.needed > 0)
+      : [];
 
     const employeeInventory = new Map<string, number>();
     for (const ep of employeeProducts) {
@@ -289,12 +303,12 @@ export default async function MyJobsPage({
         }
       }
 
-      // Fall back to inventory rules if no kit-derived requirements
+      // No kit-derived requirements: fall back to what jobs typically consume.
       if (required.size === 0) {
-        for (const rule of inventoryRules) {
-          required.set(rule.productId, {
-            needed: rule.usagePerJob,
-            productName: rule.product.name,
+        for (const need of typicalUsage) {
+          required.set(need.productId, {
+            needed: need.needed,
+            productName: need.productName,
           });
         }
       }
@@ -355,6 +369,10 @@ export default async function MyJobsPage({
         // cleaner is actually on the job. Invites that predate this fix were
         // expired by the old sweep, which detached the cleaner at the same
         // time; those must not resurface as something to accept.
+        //
+        // EXPIRED is still matched for the rows already stamped that way before
+        // awerfixes.pdf item 4 stopped the sweep from doing it. New direct
+        // invites simply stay PENDING until answered.
         {
           decision: { in: ["PENDING", "EXPIRED"] },
           isLastMinute: false,

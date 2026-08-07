@@ -1,0 +1,126 @@
+[
+  {
+    "id": "cmqjnvsr0000al504othh3m6k",
+    "key": "customer.newClientReferralDiscountUsd",
+    "category": "customer",
+    "value": 15,
+    "createdAt": "2026-06-18T15:35:22.956Z",
+    "updatedAt": "2026-08-02T02:27:37.371Z"
+  },
+  {
+    "id": "cmqjnvtee000cl504pyzvjeth",
+    "key": "customer.referrerCreditUsd",
+    "category": "customer",
+    "value": 15,
+    "createdAt": "2026-06-18T15:35:23.798Z",
+    "updatedAt": "2026-08-02T02:27:37.521Z"
+  },
+  {
+    "id": "cmpj6mqk40000k404i8uteskl",
+    "key": "pricing.addOns",
+    "category": "pricing",
+    "value": [
+      {
+        "id": "kwao5z0d",
+        "name": "Deep Oven And Stove Cleaning",
+        "price": 39,
+        "roomType": "KITCHEN"
+      },
+      {
+        "id": "7iai5990",
+        "name": "Inside Microwave",
+        "price": 15,
+        "roomType": "KITCHEN"
+      },
+      {
+        "id": "t2nv37fw",
+        "name": "Patio / Balcony Sweep",
+        "price": 19,
+        "roomType": "OUTDOOR",
+        "services": [
+          "STANDARD",
+          "DEEP",
+          "POST_CONSTRUCTION",
+          "AIRBNB",
+          "MOVE_IN_OUT"
+        ]
+      },
+      {
+        "id": "bdc4l4u7",
+        "name": "Interior Bathroom Cabinets (Empty)",
+        "price": 21,
+        "roomType": "BATHROOM",
+        "services": [
+          "STANDARD",
+          "DEEP"
+        ]
+      },
+      {
+        "id": "8n50nkj9",
+        "name": "Grout Cleaning (Per Room)",
+        "price": 29
+      },
+      {
+        "id": "ve3t4e8r",
+        "name": "Interior Fridge Cleaning",
+        "price": 29,
+        "roomType": "KITCHEN"
+      },
+      {
+        "id": "dzvk2u9s",
+        "name": "Dryer Lint Trap Cleaning",
+        "price": 10
+      },
+      {
+        "id": "ta8585wd",
+        "name": "Interior Kitchen Cabinets (Empty)",
+        "price": 29,
+        "roomType": "KITCHEN",
+        "services": [
+          "STANDARD",
+          "DEEP",
+          "AIRBNB"
+        ]
+      },
+      {
+        "id": "jw0dse52",
+        "name": "Folding / Hanging Clean Laundry",
+        "price": 39
+      },
+      {
+        "id": "zhuz9s7q",
+        "name": "Baseboards",
+        "price": 9,
+        "roomType": "WHOLE_HOME",
+        "services": [
+          "STANDARD",
+          "AIRBNB"
+        ]
+      },
+      {
+        "id": "lxx5gto2",
+        "name": "Interior Window + Tracks",
+        "price": 20,
+        "roomType": "WHOLE_HOME",
+        "services": [
+          "STANDARD",
+          "AIRBNB"
+        ]
+      },
+      {
+        "id": "ou5aey24",
+        "name": "Spot Cleaning Walls",
+        "price": 9,
+        "roomType": "WHOLE_HOME",
+        "services": [
+          "STANDARD",
+          "MOVE_IN_OUT",
+          "POST_CONSTRUCTION",
+          "AIRBNB"
+        ]
+      }
+    ],
+    "createdAt": "2026-05-24T02:52:44.403Z",
+    "updatedAt": "2026-08-06T00:21:36.557Z"
+  }
+]

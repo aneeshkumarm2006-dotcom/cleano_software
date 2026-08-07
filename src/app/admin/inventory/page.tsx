@@ -8,6 +8,8 @@ import {
   isCleanerLow,
   isCompanyLow,
 } from "@/lib/inventory-thresholds";
+import { projectUsage } from "@/lib/inventory-forecast";
+import { loadPerJobAverages } from "@/lib/inventory-forecast.server";
 import InventoryPageClient from "./InventoryPageClient";
 
 type SearchParams = Promise<{
@@ -179,10 +181,12 @@ export default async function InventoryPage({
     })),
   };
 
-  // Build forecast data
-  const inventoryRules = await db.inventoryRule.findMany({
-    include: { product: true },
-  });
+  // Forecast input: what cleaners ACTUALLY reported using, per job, over the
+  // trailing window (item 14). This replaces InventoryRule.usagePerJob — an
+  // admin-typed guess that went stale and left rule-less products projecting
+  // zero. Windowed on Job.jobDate rather than the row's createdAt, which dates
+  // only the first clock-out (see src/lib/inventory-forecast.ts).
+  const avgPerJob = await loadPerJobAverages();
 
   // Most recent audit row per (cleaner, product) — powers the "last updated by X"
   // line on each kit row, so admins can see cleaner-side edits (the cleaner app
@@ -221,12 +225,10 @@ export default async function InventoryPage({
   const cleanerInventory = employees
     .map((emp) => {
       const items = emp.assignedProducts.map((ep) => {
-        const rule = inventoryRules.find((r) => r.productId === ep.productId);
         // CLEANER restock threshold — the company reorder point (minStock) has
         // no bearing on how much one cleaner should carry (fix list item 14).
         const thresholdInput = {
           cleanerRestockThreshold: ep.product.cleanerRestockThreshold,
-          usagePerJob: rule?.usagePerJob ?? 0,
         };
         return {
           productId: ep.productId,
@@ -281,36 +283,32 @@ export default async function InventoryPage({
   const forecastData = employees
     .map((emp) => {
       const upcomingJobCount = emp.jobs.length;
-      const items = emp.assignedProducts
-        .map((ep) => {
-          const rule = inventoryRules.find(
-            (r) => r.productId === ep.productId
-          );
-          const usagePerJob = rule?.usagePerJob || 0;
-          const projectedUsage = usagePerJob * upcomingJobCount;
-          const deficit = Math.max(0, projectedUsage - ep.quantity);
-          return {
-            productId: ep.productId,
-            productName: ep.product.name,
-            unit: ep.product.unit,
-            currentQuantity: ep.quantity,
-            usagePerJob,
-            refillThreshold: cleanerRestockThreshold({
-              cleanerRestockThreshold: ep.product.cleanerRestockThreshold,
-              usagePerJob,
-            }),
-            projectedUsage,
-            deficit,
-            needsRefill:
-              deficit > 0 ||
-              isCleanerLow(ep.quantity, {
-                cleanerRestockThreshold: ep.product.cleanerRestockThreshold,
-                usagePerJob,
-              }),
-          };
-        })
-        .filter((f) => f.usagePerJob > 0);
-
+      const items = emp.assignedProducts.map((ep) => {
+        // Measured, not configured: the trailing-30-day average across the jobs
+        // that actually used this product (item 14).
+        const averagePerJob = avgPerJob.get(ep.productId) ?? 0;
+        const projectedUsage = projectUsage(averagePerJob, upcomingJobCount);
+        const deficit = Math.max(0, projectedUsage - ep.quantity);
+        const thresholdInput = {
+          cleanerRestockThreshold: ep.product.cleanerRestockThreshold,
+        };
+        return {
+          productId: ep.productId,
+          productName: ep.product.name,
+          unit: ep.product.unit,
+          currentQuantity: ep.quantity,
+          averagePerJob: Math.round(averagePerJob * 100) / 100,
+          refillThreshold: cleanerRestockThreshold(thresholdInput),
+          projectedUsage,
+          deficit,
+          needsRefill: deficit > 0 || isCleanerLow(ep.quantity, thresholdInput),
+        };
+      });
+      // NOTE: no `.filter(usagePerJob > 0)` here any more. That filter was the
+      // bug 20.b names — a product nobody had written a rule for vanished from
+      // the forecast entirely, and an employee whose whole kit was rule-less
+      // disappeared with it. Every assigned product is now listed; one with no
+      // usage history simply projects 0 and is judged on its threshold alone.
       return {
         employeeId: emp.id,
         employeeName: emp.name,

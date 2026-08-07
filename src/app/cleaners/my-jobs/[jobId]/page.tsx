@@ -16,7 +16,17 @@ import {
   CLOCK_IN_EARLY_WINDOW_MIN,
   clockInOpensAt,
 } from "@/lib/cleaner-jobs";
-import { Calendar, Users, Package, Zap, Camera, ListChecks, MapPin, DollarSign } from "lucide-react";
+import { Calendar, Users, Package, Zap, Camera, ClipboardList, ListChecks, MapPin, DollarSign, KeyRound } from "lucide-react";
+import { formatAddressLine } from "@/lib/client-address";
+import { addOnQuantity } from "@/lib/job-money";
+import { afterPhotosAllowed, photoExpectationLine } from "@/lib/job-photos";
+import { ensureJobChecklist, readJobChecklist } from "@/lib/job-checklist.server";
+import { CHECKLIST_NONE_CONFIGURED } from "@/lib/job-checklist";
+import {
+  canResume,
+  sessionsFromLegacyPair,
+  summariseSessions,
+} from "@/lib/work-sessions";
 import Link from "next/link";
 import BackButton from "../BackButton";
 import ClockInButton from "../ClockInButton";
@@ -70,6 +80,19 @@ export default async function JobDetailPage({ params }: PageProps) {
       addOns: true,
       productUsage: { include: { product: true } },
       client: { select: { phone: true, email: true } },
+      // The saved address this job was booked against (item 2). `accessNotes`
+      // is the point: door and gate codes live there, and without them a
+      // cleaner reaches the building and cannot get in. Only reachable here —
+      // the access guard below is fail-closed, so an unassigned cleaner never
+      // gets this far.
+      clientAddress: {
+        select: {
+          aptNumber: true,
+          city: true,
+          postalCode: true,
+          accessNotes: true,
+        },
+      },
     },
   });
 
@@ -92,7 +115,7 @@ export default async function JobDetailPage({ params }: PageProps) {
 
   const employeeProductsRaw = await db.employeeProduct.findMany({
     where: { employeeId: session.user.id },
-    include: { product: { include: { inventoryRule: true } } },
+    include: { product: true },
   });
   const employeeProducts = employeeProductsRaw.map((ep) => ({
     id: ep.id,
@@ -103,44 +126,84 @@ export default async function JobDetailPage({ params }: PageProps) {
       name: ep.product.name,
       unit: ep.product.unit,
       category: ep.product.category,
-      inventoryRule: ep.product.inventoryRule
-        ? {
-            usagePerJob: ep.product.inventoryRule.usagePerJob,
-            refillThreshold: ep.product.inventoryRule.refillThreshold,
-          }
-        : null,
     },
   }));
 
   const jobWithClock = job as any;
-  const duration =
-    jobWithClock.clockInTime && jobWithClock.clockOutTime
-      ? Math.round(
-          (new Date(jobWithClock.clockOutTime).getTime() -
-            new Date(jobWithClock.clockInTime).getTime()) /
-            1000 / 60
-        )
-      : null;
 
-  // Clock-in gate — mirrors the server guard in clockIn.ts. Cancelled/finished
-  // jobs can't be clocked into, and clock-in only opens a fixed window before
-  // the scheduled start (so nobody clocks in days early).
+  // THIS cleaner's own sessions (item 6). Every clock gate below asks about
+  // them, not about the job-level pair — that pair is shared, so it used to
+  // mean one teammate's clock-in decided what everyone else could do.
+  const [myWorkSessions, myBreaks] = await Promise.all([
+    db.jobWorkSession.findMany({
+      where: { jobId: job.id, cleanerId: session.user.id },
+      orderBy: { startedAt: "asc" },
+      select: { startedAt: true, endedAt: true },
+    }),
+    db.jobBreak.findMany({
+      where: { jobId: job.id, cleanerId: session.user.id },
+      select: { startedAt: true, endedAt: true },
+    }),
+  ]);
+  const mySessions =
+    myWorkSessions.length > 0
+      ? myWorkSessions
+      : // Legacy jobs have no session rows; their clock pair IS one session.
+        sessionsFromLegacyPair(
+          jobWithClock.clockInTime,
+          jobWithClock.clockOutTime
+        );
+  const sessionSummary = summariseSessions(mySessions, myBreaks);
+  /** Active minutes across every session, breaks removed. */
+  const duration = sessionSummary.count > 0 ? sessionSummary.activeMinutes : null;
+
+  // Clock gates — mirror the server guards in clockIn.ts / clockOut.ts.
   const now = new Date();
   const clockInOpens = clockInOpensAt(job.startTime);
-  const clockInTooEarly = now.getTime() < clockInOpens.getTime();
+  const hasWorkedBefore = sessionSummary.count > 0;
+  // A resume isn't bound by the early window: the job has already started.
+  const clockInTooEarly = !hasWorkedBefore && now.getTime() < clockInOpens.getTime();
   const canClockIn =
-    !jobWithClock.clockInTime &&
-    !(CLOCK_IN_BLOCKED_STATUSES as readonly string[]).includes(job.status);
-  const canClockOut = jobWithClock.clockInTime && !jobWithClock.clockOutTime;
+    !sessionSummary.isOpen &&
+    !(CLOCK_IN_BLOCKED_STATUSES as readonly string[]).includes(job.status) &&
+    canResume(job.status);
+  const canClockOut = sessionSummary.isOpen;
   const canCancelShift =
-    !jobWithClock.clockInTime &&
+    !hasWorkedBefore &&
     !["COMPLETED", "CANCELLED", "IN_PROGRESS", "PAID"].includes(job.status);
   const instantPayoutEligible =
     job.status === "COMPLETED" && job.paymentReceived === true && isEmployee;
 
   const statusSlug = job.status.toLowerCase().replace("_", "");
 
-  const addOnsArr = (job as any).addOns ?? [];
+  // Prisma types these from the `include` above; the old `(job as any).addOns`
+  // cast hid that, and the scope card added in item 12.c is a second consumer —
+  // two untyped readers of the same list is one too many.
+  const addOnsArr = job.addOns ?? [];
+
+  // Item 12.a — the checklist is generated HERE, on open, for the cleaner
+  // looking at the page. It used to require pressing "Generate Checklist", so a
+  // cleaner who never pressed it worked the job with no checklist at all.
+  //
+  // Idempotent, and a no-op once the stored items still match the job, so it is
+  // safe on every render. Statuses match the panel's own gate below; a job
+  // that's finished keeps whatever was generated while it ran rather than
+  // minting a fresh empty list. Never throws: the checklist is not worth
+  // 500-ing the page over.
+  const checklistState =
+    isEmployee || isCleaner
+      ? ["SCHEDULED", "IN_PROGRESS"].includes(job.status)
+        ? await ensureJobChecklist(job.id, session.user.id)
+        : await readJobChecklist(job.id, session.user.id)
+      : null;
+  const checklistItems = checklistState?.checklist?.items ?? [];
+  const requiredItemCount = checklistItems.filter((i) => i.isRequired).length;
+
+  // Notes are stripped of billing/price text so cleaners never see the total
+  // booking value (item 10). Computed once and shared by the scope card and the
+  // Notes section below.
+  const safeNotes = sanitizeCleanerNotes(job.notes);
+  const photosAllowed = afterPhotosAllowed(job);
 
   return (
     <div className="cl-jd-shell">
@@ -154,10 +217,26 @@ export default async function JobDetailPage({ params }: PageProps) {
           <>
             <div className="loc">
               <MapPin size={14} />
-              {job.location}
+              {/* Unit + city/postal now show alongside the street (item 2).
+                  The job's own snapshot wins over the saved address, because
+                  the snapshot is where this job is actually being served. */}
+              {formatAddressLine({
+                address: job.location,
+                aptNumber: job.aptNumber ?? job.clientAddress?.aptNumber ?? null,
+                city: job.clientAddress?.city ?? null,
+                postalCode: job.clientAddress?.postalCode ?? null,
+              })}
             </div>
+            {/* Map deep-links keep the raw street: adding a unit or postal code
+                to the query makes Google/Apple/Waze worse at finding it. */}
             <MapLinks address={job.location} />
           </>
+        )}
+        {job.clientAddress?.accessNotes && (
+          <div className="cl-jd-access">
+            <KeyRound size={13} />
+            <span>{job.clientAddress.accessNotes}</span>
+          </div>
         )}
         <h1>{job.clientName}</h1>
         {jobTypeLabel(job.jobType, serviceLabels) && (
@@ -208,6 +287,79 @@ export default async function JobDetailPage({ params }: PageProps) {
         </div>
       </header>
 
+      {/* Job scope (item 12.c) — everything that defines "what am I doing
+          here", in one card, above the fold and with nothing to press. The
+          detail was always on the page but scattered: service type in the hero,
+          add-ons two thirds of the way down, notes below that, and the checklist
+          not rendered at all until somebody generated it. */}
+      <div className="cl-jd-scope">
+        <div className="cl-jd-card-head">
+          <span className="icon-bubble">
+            <ClipboardList size={20} />
+          </span>
+          <h3>Job scope</h3>
+          <span className="head-extra">
+            {requiredItemCount > 0
+              ? `${requiredItemCount} required item${requiredItemCount === 1 ? "" : "s"}`
+              : "No required items"}
+          </span>
+        </div>
+
+        <dl className="cl-jd-dl">
+          <div className="cl-jd-dl-row featured">
+            <dt>Service</dt>
+            <dd>{jobTypeLabel(job.jobType, serviceLabels) || "Not specified"}</dd>
+          </div>
+          <div className="cl-jd-dl-row">
+            <dt>Checklist</dt>
+            <dd>
+              {checklistItems.length > 0
+                ? `${checklistItems.length} item${checklistItems.length === 1 ? "" : "s"}` +
+                  (requiredItemCount > 0 ? ` · ${requiredItemCount} required` : "")
+                : CHECKLIST_NONE_CONFIGURED}
+            </dd>
+          </div>
+          <div className="cl-jd-dl-row">
+            <dt>Photos</dt>
+            {/* The ONLY photo rule the system has is the per-job after-photo
+                permission — there is no required-photo count anywhere, and a
+                richer required-photos concept is deliberately NOT in scope. */}
+            <dd>{photoExpectationLine(job)}</dd>
+          </div>
+        </dl>
+
+        <div className="cl-jd-scope-block">
+          <span className="cl-jd-scope-label">
+            Add-ons{addOnsArr.length > 0 ? ` (${addOnsArr.length})` : ""}
+          </span>
+          <div className="cl-jd-addons">
+            {addOnsArr.length === 0 ? (
+              <span className="cl-jd-scope-empty">No add-ons for this job.</span>
+            ) : (
+              addOnsArr.map((a) => {
+                // addOnQuantity, not `a.quantity ?? 1` — it clamps the legacy
+                // and out-of-range rows the ?? cannot (src/lib/job-money.ts).
+                const qty = addOnQuantity(a);
+                return (
+                  <div key={a.id} className="cl-jd-addon-chip">
+                    <span className="dot" />
+                    {a.name}
+                    {qty > 1 ? ` ×${qty}` : ""}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        <div className="cl-jd-scope-block">
+          <span className="cl-jd-scope-label">Special instructions</span>
+          <p className={`cl-jd-scope-notes${safeNotes ? "" : " empty"}`}>
+            {safeNotes || "None from the client."}
+          </p>
+        </div>
+      </div>
+
       {/* Instant payout banner */}
       {instantPayoutEligible && (
         <div className="cl-jd-payout-banner">
@@ -241,15 +393,19 @@ export default async function JobDetailPage({ params }: PageProps) {
           <div className="cl-jd-track-meta">
             <h3>Time tracking</h3>
             <p>
-              {!canClockIn
+              {canClockOut
                 ? "Clock out when you finish the job."
                 : clockInTooEarly
                   ? `Clock-in opens ${CLOCK_IN_EARLY_WINDOW_MIN / 60}h before the start — from ${fmtDateTime(clockInOpens)}.`
-                  : "Clock in when you arrive on site to start your shift."}
+                  : hasWorkedBefore
+                    ? // Item 6 — a finished shift is no longer the end of it.
+                      `${sessionSummary.count} session${sessionSummary.count === 1 ? "" : "s"} logged. Clock back in if you need to return to this job.`
+                    : "Clock in when you arrive on site to start your shift."}
             </p>
           </div>
           <div className="cl-jd-track-action">
-            {canClockIn && (
+            {/* "On my way" only makes sense before the first arrival. */}
+            {canClockIn && !hasWorkedBefore && (
               <OnMyWayButton
                 jobId={job.id}
                 onMyWayAt={job.onMyWayAt?.toISOString() ?? null}
@@ -261,10 +417,15 @@ export default async function JobDetailPage({ params }: PageProps) {
                 jobId={job.id}
                 jobStartTime={job.startTime ?? null}
                 disabled={clockInTooEarly}
+                resume={hasWorkedBefore}
               />
             )}
             {canClockOut && (
-              <ClockOutButton jobId={job.id} employeeProducts={employeeProducts} />
+              <ClockOutButton
+                jobId={job.id}
+                employeeProducts={employeeProducts}
+                checklistItems={checklistItems}
+              />
             )}
           </div>
         </div>
@@ -286,24 +447,39 @@ export default async function JobDetailPage({ params }: PageProps) {
         </div>
       )}
 
-      {/* Clocked-in time summary */}
-      {jobWithClock.clockInTime && (
+      {/* Clocked-in time summary. Reads THIS cleaner's sessions, so a resumed
+          job shows the real total instead of first-in → last-out (item 6). */}
+      {sessionSummary.count > 0 && (
         <>
           <h2 className="cl-jd-section-title">Time <em>summary.</em></h2>
           <div className="cl-jd-time-summary">
             <div className="cl-jd-time-tile">
-              <div className="lbl">Clocked in</div>
-              <div className="val">{fmtDateTime(jobWithClock.clockInTime)}</div>
+              <div className="lbl">
+                {sessionSummary.count > 1 ? "First clock-in" : "Clocked in"}
+              </div>
+              <div className="val">
+                {sessionSummary.firstStartedAt
+                  ? fmtDateTime(sessionSummary.firstStartedAt)
+                  : "—"}
+              </div>
             </div>
-            {jobWithClock.clockOutTime && (
+            {sessionSummary.lastEndedAt && (
               <div className="cl-jd-time-tile">
-                <div className="lbl">Clocked out</div>
-                <div className="val">{fmtDateTime(jobWithClock.clockOutTime)}</div>
+                <div className="lbl">
+                  {sessionSummary.count > 1 ? "Last clock-out" : "Clocked out"}
+                </div>
+                <div className="val">{fmtDateTime(sessionSummary.lastEndedAt)}</div>
               </div>
             )}
-            {duration && (
+            {sessionSummary.count > 1 && (
               <div className="cl-jd-time-tile">
-                <div className="lbl">Total duration</div>
+                <div className="lbl">Sessions</div>
+                <div className="val">{sessionSummary.count}</div>
+              </div>
+            )}
+            {duration != null && duration > 0 && (
+              <div className="cl-jd-time-tile">
+                <div className="lbl">Total worked</div>
                 <div className="val">{Math.floor(duration / 60)}h {duration % 60}m</div>
               </div>
             )}
@@ -502,12 +678,19 @@ export default async function JobDetailPage({ params }: PageProps) {
               <div className="cl-jd-addons">
                 {addOnsArr.length === 0 ? (
                   <span style={{ fontSize: 13, color: "var(--primary-50)" }}>No add-ons for this job.</span>
-                ) : addOnsArr.map((a: any) => (
-                  <div key={a.id} className="cl-jd-addon-chip">
-                    <span className="dot" />
-                    {a.name}
-                  </div>
-                ))}
+                ) : addOnsArr.map((a) => {
+                  // addOnQuantity, not `a.quantity ?? 1`: this card and the
+                  // scope card above must not disagree about how many, and
+                  // only the helper clamps legacy/out-of-range rows.
+                  const qty = addOnQuantity(a);
+                  return (
+                    <div key={a.id} className="cl-jd-addon-chip">
+                      <span className="dot" />
+                      {a.name}
+                      {qty > 1 ? ` ×${qty}` : ""}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -528,21 +711,16 @@ export default async function JobDetailPage({ params }: PageProps) {
         </p>
       </div>
 
-      {/* Notes — stripped of any billing/price text so cleaners never see the
-          total booking value (item 10). */}
-      {(() => {
-        const safeNotes = sanitizeCleanerNotes(job.notes);
-        return (
-          <>
-            <h2 className="cl-jd-section-title">Notes</h2>
-            <div className={`cl-jd-notes${!safeNotes ? " empty" : ""}`}>
-              {safeNotes || "No special instructions from the client. The team will be in touch if anything changes."}
-            </div>
-          </>
-        );
-      })()}
+      {/* Notes — `safeNotes` is computed once above and shared with the scope
+          card; it is stripped of any billing/price text so cleaners never see
+          the total booking value (item 10). */}
+      <h2 className="cl-jd-section-title">Notes</h2>
+      <div className={`cl-jd-notes${!safeNotes ? " empty" : ""}`}>
+        {safeNotes || "No special instructions from the client. The team will be in touch if anything changes."}
+      </div>
 
-      {/* Checklist */}
+      {/* Checklist — already generated server-side, so it renders with zero
+          clicks (item 12.b: the "Generate Checklist" button is gone). */}
       {["SCHEDULED", "IN_PROGRESS", "COMPLETED", "PAID"].includes(job.status) && (
         <>
           <h2 className="cl-jd-section-title" id="checklist" style={{ scrollMarginTop: 80 }}>
@@ -550,7 +728,11 @@ export default async function JobDetailPage({ params }: PageProps) {
             Checklist
           </h2>
           <div className="cl-jd-checklist-wrap">
-            <JobChecklistPanel jobId={job.id} canEdit={job.status !== "PAID"} />
+            <JobChecklistPanel
+              items={checklistItems}
+              canEdit={job.status !== "PAID"}
+              stale={checklistState?.stale ?? false}
+            />
           </div>
         </>
       )}
@@ -564,7 +746,7 @@ export default async function JobDetailPage({ params }: PageProps) {
           </h2>
           {/* Item 21: after-photos are allowed by default — no banner in the
               normal case. Only an explicitly-disabled job shows a notice. */}
-          {!(job.afterPhotoConsent || job.afterPhotoOverrideAt !== null) && (
+          {!photosAllowed && (
             <div
               style={{
                 display: "flex",
@@ -592,9 +774,7 @@ export default async function JobDetailPage({ params }: PageProps) {
             <PhotoGallery
               jobId={job.id}
               canUpload={job.status !== "PAID"}
-              afterPhotosAllowed={
-                job.afterPhotoConsent || job.afterPhotoOverrideAt !== null
-              }
+              afterPhotosAllowed={photosAllowed}
             />
           </div>
         </>

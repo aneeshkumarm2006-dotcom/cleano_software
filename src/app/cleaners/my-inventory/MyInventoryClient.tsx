@@ -28,7 +28,6 @@ interface InventoryItem {
   quantity: number;
   refillThreshold: number;
   usesDefaultThreshold: boolean;
-  usagePerJob: number;
   assignedAt: string;
   updatedAt: string;
   isLow: boolean;

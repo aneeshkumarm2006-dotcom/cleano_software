@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import Button from "@/components/ui/Button";
 import JobModal from "../JobModal";
+import { formatAddressLine } from "@/lib/client-address";
 
 // Live "on the way" map (#10). Leaflet needs browser APIs, so load client-only.
 const LiveLocationMap = dynamic(() => import("./LiveLocationMap"), {
@@ -25,7 +26,7 @@ import { setJobPriorityLabel } from "../../actions/setJobPriorityLabel";
 import { submitRating } from "../../actions/submitRating";
 import { updateJobNotificationPrefs } from "../../actions/updateJobNotificationPrefs";
 import {
-  ArrowLeft, MapPin, Clock, DollarSign, Users,
+  ArrowLeft, MapPin, KeyRound, Clock, DollarSign, Users,
   CheckCircle2, Package, Pencil, History, Activity,
   AlertTriangle, Trash2, Loader, Briefcase, Receipt, Camera, X,
   ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, FileText,
@@ -42,6 +43,8 @@ import {
   summariseBreaks,
   activeMinutes,
 } from "@/lib/time-tracking";
+import { afterPhotosAllowed } from "@/lib/job-photos";
+import { activeSessionMinutes } from "@/lib/work-sessions";
 import { avatarColor, initials } from "@/lib/avatar";
 import { assignCleaners } from "../../actions/assignCleaners";
 import { ConfirmDeleteModal } from "@/components/common/ConfirmDeleteModal";
@@ -54,6 +57,8 @@ import { issueRefund } from "../../actions/issueRefund";
 import JobChatThread from "@/components/JobChatThread";
 import JobChatModeration from "@/components/JobChatModeration";
 import { normalizeJobType, jobTypeLabel } from "@/lib/calendar-labels";
+import { addOnLineTotal, computeJobMoney } from "@/lib/job-money";
+import { addOnKey } from "@/lib/checklist-triggers";
 
 type TabView = "details" | "financials" | "products" | "logs" | "requests";
 
@@ -70,6 +75,17 @@ interface Job {
   clientName: string;
   clientId?: string | null;
   location: string | null;
+  aptNumber: string | null;
+  /** Saved-address provenance (item 2), so an edit re-selects it. */
+  clientAddressId: string | null;
+  /** Details that live on the saved address, not on the job's snapshot. */
+  clientAddress: {
+    label: string;
+    aptNumber: string | null;
+    city: string | null;
+    postalCode: string | null;
+    accessNotes: string | null;
+  } | null;
   description: string | null;
   jobType: string | null;
   priorityLabel: string | null;
@@ -103,6 +119,17 @@ interface Job {
     startedAt: string;
     endedAt: string | null;
   }>;
+  /**
+   * Every clock-in → clock-out stretch, per cleaner (awerfixes.pdf item 6,
+   * round 3). Empty on jobs that predate JobWorkSession — those still report
+   * through the single clockInTime/clockOutTime pair.
+   */
+  workSessions?: Array<{
+    id: string;
+    cleanerId: string;
+    startedAt: string;
+    endedAt: string | null;
+  }>;
   usesFixedPrice?: boolean;
   notifyClient?: boolean;
   notifyProvider?: boolean;
@@ -113,12 +140,12 @@ interface Job {
   bedCount?: number | null;
   bathCount?: number | null;
   halfBathCount?: number | null;
-  payRateMultiplier?: number | null;
   depositPaid?: boolean;
   depositPaymentIntentId?: string | null;
   refundedAmount?: number | null;
   stripePaymentIntentId?: string | null;
-  addOns?: Array<{ id: string; name: string; price: number }>;
+  /** `price` is the UNIT price; the line total is `price * quantity`. */
+  addOns?: Array<{ id: string; name: string; price: number; quantity: number }>;
   employee: { id: string; name: string };
   cleaners: Array<{ id: string; name: string }>;
   cancellationRequestedAt?: string | null;
@@ -218,6 +245,8 @@ interface JobDetailViewProps {
   totalProductCost: number;
   /** Current admin-configured GST/QST rates (percent, e.g. 5 / 9.975). */
   taxRates: { gstRate: number; qstRate: number };
+  /** Catalog add-ons — feeds the edit modal's picker and the "custom" tag. */
+  addOnCatalog?: Array<{ id: string; name: string; price: number }>;
   isAdmin: boolean;
   onDeleteJob?: () => Promise<void>;
   users: User[];
@@ -228,6 +257,22 @@ interface JobDetailViewProps {
   payShares?: Record<string, number>;
   /** Manual per-cleaner pay overrides (JobAssignment.payAmount). */
   payOverrides?: Record<string, number | null>;
+  /**
+   * The job's LIVE labour cost from computeJobPayShares (pre-tip), computed in
+   * page.tsx. THE number the Financials tab prints — `job.employeePay` is a
+   * stale save-time snapshot and, on BookingKoala imports, the provider
+   * payment rather than the cleaner payout.
+   */
+  computedEmployeePay?: number;
+  /** Per-cleaner rows behind `computedEmployeePay`. */
+  payRows?: Array<{
+    cleanerId: string;
+    name: string;
+    amount: number;
+    isOverride: boolean;
+  }>;
+  /** False when nobody is payable yet — the cost is $0, not `job.employeePay`. */
+  hasPayableParticipants?: boolean;
   jobRatings?: JobRatingLite[];
   /** Admin setting `tracking.gpsEnabled` — gates the live on-the-way map. */
   gpsEnabled?: boolean;
@@ -242,7 +287,8 @@ function StatusPill({ status }: { status: string }) {
     SCHEDULED:   { label: 'Scheduled',   bg: '#dbeafe', color: '#1e40af', dot: '#3b82f6' },
     IN_PROGRESS: { label: 'In Progress', bg: '#fef3c7', color: '#92400e', dot: '#f59e0b' },
     COMPLETED:   { label: 'Completed',   bg: '#d1fae5', color: '#065f46', dot: '#10b981' },
-    PAID:        { label: 'Paid',        bg: '#059669', color: '#ffffff', dot: '#a7f3d0' },
+    // emerald-700, not 600: white on #059669 is 3.77:1 at 11px, below AA.
+    PAID:        { label: 'Paid',        bg: '#047857', color: '#ffffff', dot: '#a7f3d0' },
     CANCELLED:   { label: 'Cancelled',   bg: '#fee2e2', color: '#991b1b', dot: '#ef4444' },
   };
   const c = map[status] || { label: status, bg: '#f3f4f6', color: '#374151', dot: '#9ca3af' };
@@ -258,7 +304,8 @@ function StatusPill({ status }: { status: string }) {
 // manual ("Move-in / Move-out") jobTypes render the same pill; jobTypeLabel()
 // keeps raw enum text out of the UI.
 const TYPE_PILL_COLORS: Record<string, { bg: string; color: string }> = {
-  RESIDENTIAL:       { bg: 'var(--primary-10)', color: 'var(--primary)' },
+  // --primary-800, not --primary: teal on --primary-10 is 3.56:1, below AA.
+  RESIDENTIAL:       { bg: 'var(--primary-10)', color: 'var(--primary-800)' },
   DEEP:              { bg: '#ede9fe',           color: '#5b21b6' },
   MOVE_IN:           { bg: '#dcfce7',           color: '#166534' },
   MOVE_OUT:          { bg: '#dcfce7',           color: '#166534' },
@@ -367,6 +414,7 @@ export default function JobDetailView({
   logsPerPage,
   totalProductCost,
   taxRates,
+  addOnCatalog = [],
   isAdmin,
   onDeleteJob,
   users,
@@ -375,6 +423,9 @@ export default function JobDetailView({
   assignments = [],
   payShares = {},
   payOverrides = {},
+  computedEmployeePay = 0,
+  payRows = [],
+  hasPayableParticipants = false,
   jobRatings = [],
   gpsEnabled = true,
 }: JobDetailViewProps) {
@@ -390,7 +441,38 @@ export default function JobDetailView({
   );
   const [savingPriority, setSavingPriority] = useState(false);
 
-  const [activeView,       setActiveView]       = useState<TabView>("details");
+  // Seeded from the URL on the FIRST render, not corrected by an effect
+  // afterwards. The effect below still keeps the tab in sync with later
+  // searchParams changes, but it cannot be what opens the right tab on load:
+  // this page's server render is slow enough that its subtree is not
+  // interactive for several seconds, and until React hydrates it no effect has
+  // run — so `/admin/jobs/<id>?tab=logs` visibly landed on "Job details" and
+  // stayed there. A lazy initialiser is right before hydration, not after it.
+  const [activeView, setActiveView] = useState<TabView>(() => {
+    const p = searchParams.get("tab") as TabView | null;
+    return p && TABS.some(t => t.id === p) ? p : "details";
+  });
+
+  // ── Activity log paging (see `getJobLogsPage`) ──
+  //
+  // The rows are CLIENT state seeded from the server's first page. Paging used
+  // to re-render this whole route to swap ten rows; it now costs one query and
+  // never touches the router, so the controls respond in about a second instead
+  // of appearing to do nothing at all.
+  const [logRows, setLogRows] = useState<JobLog[]>(logs);
+  const [logPage, setLogPage] = useState<number>(logsPage);
+  const [logTotal, setLogTotal] = useState<number>(totalLogs);
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [logsError, setLogsError] = useState<string | null>(null);
+  const logsRun = useRef(0);
+
+  // A fresh server render (a save, a router.refresh) is authoritative — adopt
+  // its rows rather than leaving the admin looking at a stale page.
+  useEffect(() => {
+    setLogRows(logs);
+    setLogPage(logsPage);
+    setLogTotal(totalLogs);
+  }, [logs, logsPage, totalLogs]);
 
   // Requests tab — pending cancellation/reschedule action modal
   const [requestModal, setRequestModal] = useState<{
@@ -458,7 +540,12 @@ export default function JobDetailView({
       return;
     }
     // The assign succeeded; conflicts are advisory (admin override is allowed).
-    const conflicts = (res.conflicts ?? []).map((c) => c.warning);
+    // Availability and service-category mismatches (awerfixes.pdf item 3) are
+    // both non-blocking and both land in the same amber list.
+    const conflicts = [
+      ...(res.conflicts ?? []).map((c) => c.warning),
+      ...(res.categoryConflicts ?? []).map((c) => c.warning),
+    ];
     setAssignConflicts(conflicts);
     if (conflicts.length === 0) setAssignOpen(false);
     router.refresh();
@@ -605,6 +692,71 @@ export default function JobDetailView({
     if (view !== "logs") params.delete("logsPage");
     const query = params.toString();
     router.replace(query ? `/admin/jobs/${job.id}?${query}` : `/admin/jobs/${job.id}`, { scroll: false });
+  };
+
+  // Log pagination, third iteration.
+  //
+  //  1. Four <a href> full page loads — paged correctly, but jumped the admin
+  //     to the top of the job on every page turn.
+  //  2. `router.replace(…?logsPage=N, { scroll: false })` — kept the scroll
+  //     position, but re-rendered the ENTIRE route to swap ten rows. That
+  //     render costs seconds against a remote database, and the sidebar's
+  //     5-second poll kept queueing work behind the pending navigation, so the
+  //     page turn routinely never landed. Net effect: a dead pager.
+  //  3. This: a plain GET for the ten rows it needs. No route render, no scroll
+  //     change, and a visible pending state while it is in flight.
+  //
+  // Deliberately a route handler rather than a server action, which is this
+  // codebase's usual reflex: a server action's response carries a re-render of
+  // the current page, so it would have paid exactly the cost step 2 was trying
+  // to escape (measured at ~20s a page turn on a remote database, versus one
+  // query here).
+  //
+  // The URL is kept in step so a refresh or a shared link still opens the page
+  // the admin is looking at — but with `history.replaceState`, not the router,
+  // because the point of this fix is not to trigger a render. The existing
+  // `history.state` is passed straight back so Next's own navigation state
+  // survives and Back/Forward keep working.
+  const updateLogsPage = async (page: number) => {
+    const run = ++logsRun.current;
+    setLogsLoading(true);
+    setLogsError(null);
+    try {
+      const r = await fetch(
+        `/api/admin/jobs/${job.id}/logs?page=${encodeURIComponent(String(page))}`,
+        { cache: "no-store" }
+      );
+      if (run !== logsRun.current) return; // superseded by a later click
+      if (!r.ok) {
+        setLogsError(
+          r.status === 403 || r.status === 401
+            ? "You don't have access to this job's logs"
+            : "Failed to load logs"
+        );
+        return;
+      }
+      const res = (await r.json()) as {
+        logs: JobLog[];
+        page: number;
+        total: number;
+      };
+      if (run !== logsRun.current) return;
+      setLogRows(res.logs);
+      setLogPage(res.page);
+      setLogTotal(res.total);
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("tab", "logs");
+      params.set("logsPage", String(res.page));
+      window.history.replaceState(
+        window.history.state,
+        "",
+        `/admin/jobs/${job.id}?${params.toString()}`
+      );
+    } catch {
+      if (run === logsRun.current) setLogsError("Failed to load logs");
+    } finally {
+      if (run === logsRun.current) setLogsLoading(false);
+    }
   };
 
   const handleSubmit = async (formData: FormData) => {
@@ -758,30 +910,47 @@ export default function JobDetailView({
     ? Math.round((new Date(job.endTime).getTime() - new Date(job.startTime).getTime()) / 60000)
     : null;
 
-  const netProfit = (job.price || 0) - (job.employeePay || 0) - (job.parking || 0) - totalProductCost;
+  // Labour cost is the LIVE computed payout, not the stored column. See the
+  // comment in page.tsx: `job.employeePay` is a save-time snapshot and, on
+  // BookingKoala imports, the provider payment rather than the cleaner payout.
+  const netProfit = (job.price || 0) - computedEmployeePay - (job.parking || 0) - totalProductCost;
+  // Shown only when the stored column disagrees, so the discrepancy stays
+  // auditable instead of being silently swapped out from under the admin.
+  const storedPayDiffers =
+    job.employeePay !== null &&
+    Math.abs(job.employeePay - computedEmployeePay) >= 0.01;
   const grossRevenue = (job.price || 0) - (job.discountAmount || 0);
 
-  // Tax breakdown (Financials tab). Prefer the GST/QST stored on the job; when
-  // both are 0 on a NON-cash job (rows saved before taxes were persisted),
-  // compute display values from the current settings rates. Cash jobs are tax
-  // exempt. Net profit stays computed off pre-tax revenue — taxes are remitted,
-  // not profit.
-  const round2 = (n: number) => Math.round(n * 100) / 100;
-  const taxSubtotal = Math.max(0, grossRevenue);
-  const hasStoredTax = (job.gstAmount || 0) > 0 || (job.qstAmount || 0) > 0;
-  // Untaxed for either reason: cash payment, or an explicit per-job exemption
-  // (item 7). Without the taxExempt arm the detail page would keep imputing
-  // GST/QST onto an exempt job whose stored amounts are legitimately zero.
-  const untaxed = !!job.isCashJob || !!job.taxExempt;
-  const displayGst = untaxed
-    ? 0
-    : hasStoredTax ? (job.gstAmount || 0) : round2((taxSubtotal * taxRates.gstRate) / 100);
-  const displayQst = untaxed
-    ? 0
-    : hasStoredTax ? (job.qstAmount || 0) : round2((taxSubtotal * taxRates.qstRate) / 100);
-  const totalWithTax = round2(taxSubtotal + displayGst + displayQst);
+  // Tax breakdown (Financials tab) — one shared helper, so this page, the
+  // receipt, the invoice and what the card is actually charged cannot disagree.
+  // It also decides whether this job's add-ons sit INSIDE its subtotal (a web
+  // booking or an import) or ON TOP of it (an admin job), which is what the
+  // labels below key off. Net profit stays computed off pre-tax revenue —
+  // taxes are remitted, not profit.
+  const money = computeJobMoney(job, taxRates);
+  // "custom" is DERIVED, not stored: a row whose name isn't in the catalog is a
+  // one-off extra charge. Renaming a catalog entry re-labels historical rows,
+  // which is the accepted cost of not adding a column for it.
+  const catalogAddOnKeys = new Set(addOnCatalog.map((a) => addOnKey(a.name)));
+  const taxSubtotal = money.subtotalAmount;
+  const untaxed = money.exempt;
+  const displayGst = money.gstAmount;
+  const displayQst = money.qstAmount;
+  const totalWithTax = money.totalAmount;
+  // Add-ons are only their own breakdown row when they are ADDED to the base.
+  // On a web/imported job they are already inside the subtotal, so the row is
+  // shown as an itemisation with no "+" rather than as an addition.
+  const showAddOnRow = money.addOnLines.length > 0;
+  // The stored columns are what resolveAmountDue actually bills. When they
+  // disagree with the live figure the job needs a re-save; say so rather than
+  // rewriting history behind the admin's back.
+  const storedTotal = job.totalAmount ?? 0;
+  const storedTotalDiffers =
+    storedTotal > 0 && Math.abs(storedTotal - money.totalAmount) >= 0.01;
 
-  const totalLogsPages = Math.ceil(totalLogs / logsPerPage);
+  // Derived from the LIVE totals, not the props: paging is client state now,
+  // so a pager reading `totalLogs`/`logsPage` would freeze on page 1.
+  const totalLogsPages = Math.max(1, Math.ceil(logTotal / logsPerPage));
 
   const showPayWarning = job.status === "COMPLETED" && !paymentReceived;
 
@@ -823,7 +992,7 @@ export default function JobDetailView({
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {job.addOns.map(a => (
                 <span key={a.id} style={{ fontSize: 12, padding: '4px 10px', background: 'var(--cream)', borderRadius: 999, color: 'var(--primary-70)', fontWeight: 500 }}>
-                  {a.name} · ${a.price.toFixed(2)}
+                  {a.name}{(a.quantity ?? 1) > 1 ? ` ×${a.quantity}` : ''} · ${addOnLineTotal(a).toFixed(2)}
                 </span>
               ))}
             </div>
@@ -893,10 +1062,19 @@ export default function JobDetailView({
                         payroll review doesn't have to subtract by hand. An open
                         shift shows elapsed time, clearly labelled as not final. */}
                     {(() => {
-                      const entry = resolveClockEntry({ assignment: a });
-                      const brk = summariseBreaks(
-                        (job.breaks ?? []).filter((b: { cleanerId: string }) => b.cleanerId === c.id)
+                      const myBreaks = (job.breaks ?? []).filter(
+                        (b: { cleanerId: string }) => b.cleanerId === c.id
                       );
+                      const mySessions = (job.workSessions ?? []).filter(
+                        (s) => s.cleanerId === c.id
+                      );
+                      // Sessions win; the assignment pair is the fallback for
+                      // jobs that predate them (item 6).
+                      const entry = resolveClockEntry({
+                        sessions: mySessions,
+                        assignment: a,
+                      });
+                      const brk = summariseBreaks(myBreaks);
                       const active = activeMinutes(entry.minutesWorked, brk.minutes);
                       return (
                         <>
@@ -929,8 +1107,12 @@ export default function JobDetailView({
                           )}
                           {/* Item 4: admins correct a missed clock-in or a
                               wrong clock-out right here, where the times are
-                              read. Every edit is logged. */}
-                          {isAdmin && (
+                              read. Every edit is logged.
+                              Item 6: once sessions exist the in/out columns are
+                              DERIVED from them, so the editor moves to the
+                              session rows below and this one would only be
+                              refused by the server. */}
+                          {isAdmin && mySessions.length === 0 && (
                             <ClockTimeEditor
                               jobId={job.id}
                               cleanerId={c.id}
@@ -944,6 +1126,60 @@ export default function JobDetailView({
                       );
                     })()}
                   </div>
+
+                  {/* Session log (item 6). One row per stretch: a cleaner who
+                      left and came back used to collapse into a single
+                      first-in → last-out pair that overstated their hours. */}
+                  {(() => {
+                    const mySessions = (job.workSessions ?? []).filter(
+                      (s) => s.cleanerId === c.id
+                    );
+                    if (mySessions.length === 0) return null;
+                    const myBreaks = (job.breaks ?? []).filter(
+                      (b: { cleanerId: string }) => b.cleanerId === c.id
+                    );
+                    return (
+                      <div style={{ marginTop: 8, display: 'grid', gap: 4 }}>
+                        {mySessions.map((s, i) => {
+                          const active = Math.round(
+                            activeSessionMinutes(s, myBreaks)
+                          );
+                          return (
+                            <div
+                              key={s.id}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 8,
+                                flexWrap: 'wrap',
+                                fontSize: 12,
+                                color: 'var(--primary-70)',
+                              }}>
+                              <span style={{ color: 'var(--primary-50)', minWidth: 58 }}>
+                                Session {i + 1}
+                              </span>
+                              <span style={{ fontWeight: 600, color: 'var(--ink)' }}>
+                                {fmtTime(s.startedAt)} →{' '}
+                                {s.endedAt ? fmtTime(s.endedAt) : 'now'}
+                              </span>
+                              <span>{formatWorkedDuration(active)}</span>
+                              {isAdmin && (
+                                <ClockTimeEditor
+                                  jobId={job.id}
+                                  sessionId={s.id}
+                                  cleanerId={c.id}
+                                  cleanerName={c.name}
+                                  clockInTime={s.startedAt}
+                                  clockOutTime={s.endedAt}
+                                  label="Edit"
+                                />
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
                 </div>
                 <div style={{ textAlign: 'right', flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
                   {payEditFor === c.id ? (
@@ -1206,14 +1442,33 @@ export default function JobDetailView({
         </p>
       </div>
 
-      {/* Location */}
+      {/* Location — the job's own snapshot, enriched with whatever the saved
+          address knows that the snapshot doesn't (item 2). */}
       {job.location && (
         <div className="dcard tab-panel-wide">
-          <div className="dcard-head"><h3>Location</h3></div>
+          <div className="dcard-head">
+            <h3>Location</h3>
+            {job.clientAddress?.label && (
+              <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--primary)' }}>
+                {job.clientAddress.label}
+              </span>
+            )}
+          </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: 'var(--ink)' }}>
             <MapPin size={16} style={{ color: 'var(--primary-50)' }} />
-            {job.location}
+            {formatAddressLine({
+              address: job.location,
+              aptNumber: job.aptNumber ?? job.clientAddress?.aptNumber ?? null,
+              city: job.clientAddress?.city ?? null,
+              postalCode: job.clientAddress?.postalCode ?? null,
+            })}
           </div>
+          {job.clientAddress?.accessNotes && (
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 8, fontSize: 13, color: 'var(--ink-soft)' }}>
+              <KeyRound size={14} style={{ color: 'var(--primary-50)', flexShrink: 0, marginTop: 2 }} />
+              <span>{job.clientAddress.accessNotes}</span>
+            </div>
+          )}
         </div>
       )}
 
@@ -1255,8 +1510,12 @@ export default function JobDetailView({
         </div>
         <div className="astat">
           <div className="astat-head"><span>Employee pay</span></div>
-          <div className="astat-value">{job.employeePay !== null ? `$${job.employeePay.toFixed(2)}` : '—'}</div>
-          <div className="astat-delta">{job.cleaners.length} cleaner{job.cleaners.length === 1 ? '' : 's'}</div>
+          <div className="astat-value">{hasPayableParticipants ? `$${computedEmployeePay.toFixed(2)}` : '—'}</div>
+          <div className="astat-delta">
+            {hasPayableParticipants
+              ? `${payRows.length} cleaner${payRows.length === 1 ? '' : 's'} · live rate`
+              : 'No cleaners assigned'}
+          </div>
         </div>
         <div className="astat">
           <div className="astat-head"><span>Product cost</span></div>
@@ -1290,8 +1549,55 @@ export default function JobDetailView({
             {job.price !== null && (
               <div className="finrow">
                 <span className="finrow-label">Base price</span>
-                <span className="finrow-value">${job.price.toFixed(2)}</span>
+                <span className="finrow-value">${money.basePrice.toFixed(2)}</span>
               </div>
+            )}
+            {/* Add-ons & extra charges. On an ADDITIVE (admin) job these are
+                added to the base, so they carry a "+". On a web booking or an
+                import they are already inside the stored subtotal, so the row
+                itemises rather than adds — printing "+" there would read as if
+                the total were about to grow. */}
+            {showAddOnRow && (
+              <>
+                <div className="finrow">
+                  <span className="finrow-label">
+                    Add-ons &amp; extra charges
+                    {money.addOnsIncludedInSubtotal && (
+                      <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--ink-soft)' }}>
+                        included in the subtotal
+                      </span>
+                    )}
+                  </span>
+                  <span className="finrow-value">
+                    {money.addOnsIncludedInSubtotal ? '' : '+'}${money.addOnTotal.toFixed(2)}
+                  </span>
+                </div>
+                {money.addOnLines.map((line, i) => (
+                  <div className="finrow" key={`${line.name}-${i}`} style={{ paddingLeft: 18 }}>
+                    <span className="finrow-label" style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
+                      {line.name}
+                      {line.quantity > 1 ? ` ×${line.quantity} · $${line.unitPrice.toFixed(2)} each` : ''}
+                      {!catalogAddOnKeys.has(addOnKey(line.name)) && (
+                        <span
+                          style={{
+                            marginLeft: 6,
+                            fontSize: 10,
+                            fontWeight: 600,
+                            borderRadius: 999,
+                            padding: '1px 6px',
+                            background: 'var(--primary-5)',
+                            color: 'var(--primary-70)',
+                          }}>
+                          custom
+                        </span>
+                      )}
+                    </span>
+                    <span className="finrow-value" style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
+                      ${line.lineTotal.toFixed(2)}
+                    </span>
+                  </div>
+                ))}
+              </>
             )}
             {(job.discountAmount || 0) > 0 && (
               <div className="finrow negative">
@@ -1318,7 +1624,14 @@ export default function JobDetailView({
                     ) : null;
                   })()}
                 </span>
-                <span className="finrow-value">−${job.discountAmount!.toFixed(2)}</span>
+                <span className="finrow-value">
+                  {money.discountApplied === 0 && (
+                    <span style={{ fontSize: 11, color: 'var(--ink-soft)', marginRight: 6, fontWeight: 400 }}>
+                      already reflected in the subtotal
+                    </span>
+                  )}
+                  −${job.discountAmount!.toFixed(2)}
+                </span>
               </div>
             )}
             <div className="finrow">
@@ -1350,10 +1663,55 @@ export default function JobDetailView({
               <span className="finrow-label"><strong>Total with tax</strong></span>
               <span className="finrow-value">${totalWithTax.toFixed(2)}</span>
             </div>
-            {job.employeePay !== null && (
+            {/* The stored total is what the card is actually charged. It only
+                catches up on the next save, so when it disagrees, say so
+                instead of rewriting a settled figure behind the admin. */}
+            {storedTotalDiffers && (
+              <div className="finrow">
+                <span className="finrow-label" style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
+                  Totals out of date — re-save this job to apply
+                </span>
+                <span className="finrow-value" style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
+                  ${storedTotal.toFixed(2)} stored
+                </span>
+              </div>
+            )}
+            {hasPayableParticipants && (
               <div className="finrow negative">
-                <span className="finrow-label">Employee pay · {job.cleaners.length} cleaner{job.cleaners.length === 1 ? '' : 's'}</span>
-                <span className="finrow-value">−${job.employeePay.toFixed(2)}</span>
+                <span className="finrow-label">Employee pay · {payRows.length} cleaner{payRows.length === 1 ? '' : 's'}</span>
+                <span className="finrow-value">−${computedEmployeePay.toFixed(2)}</span>
+              </div>
+            )}
+            {/* Who is paid what, so the total above is never a black box. An
+                overridden cleaner is flagged: their amount is the admin's typed
+                figure and no rating multiplier touches it. */}
+            {payRows.map(r => (
+              <div key={r.cleanerId} className="finrow" style={{ paddingLeft: 18 }}>
+                <span className="finrow-label" style={{ fontSize: 12, color: 'var(--primary-60)' }}>
+                  {r.name}
+                  {r.isOverride && (
+                    <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 600, borderRadius: 999, padding: '1px 7px', background: '#fffbeb', color: '#92400e' }}>
+                      Manual amount
+                    </span>
+                  )}
+                </span>
+                <span className="finrow-value" style={{ fontSize: 12, color: 'var(--primary-60)' }}>
+                  ${r.amount.toFixed(2)}
+                </span>
+              </div>
+            ))}
+            {/* The stored Job.employeePay column, shown ONLY when it disagrees
+                with what the crew is actually paid. On BookingKoala imports it
+                is the PROVIDER payment from the CSV; on jobs saved before a
+                rating or a Settings change it is a stale snapshot. It feeds no
+                total on this page. */}
+            {storedPayDiffers && (
+              <div className="finrow">
+                <span className="finrow-label" style={{ fontSize: 12, color: 'var(--primary-50)' }}>
+                  Stored value ${job.employeePay!.toFixed(2)} — not used
+                  {hasPayableParticipants ? ' (snapshot / imported figure)' : ' (nobody assigned)'}
+                </span>
+                <span className="finrow-value" style={{ fontSize: 12, color: 'var(--primary-50)' }}>—</span>
               </div>
             )}
             {totalProductCost > 0 && (
@@ -1584,16 +1942,21 @@ export default function JobDetailView({
       {/* Activity */}
       <div className="dcard">
         <div className="dcard-head">
-          <h3>Activity · {totalLogs}</h3>
+          <h3>Activity · {logTotal}</h3>
         </div>
-        {logs.length === 0 ? (
+        {logsError && (
+          <div role="alert" style={{ padding: '8px 0', color: 'var(--red-600, #dc2626)', fontSize: 13 }}>
+            {logsError} — try that page again.
+          </div>
+        )}
+        {logRows.length === 0 ? (
           <div style={{ padding: '32px 0', textAlign: 'center', color: 'var(--primary-50)', fontSize: 14 }}>
             No activity logged yet.
           </div>
         ) : (
           <>
-            <div className="timeline">
-              {logs.map(log => (
+            <div className="timeline" style={{ opacity: logsLoading ? 0.5 : 1, transition: 'opacity 120ms' }} aria-busy={logsLoading}>
+              {logRows.map(log => (
                 <div key={log.id} className="tline-item">
                   <div className="tline-dot">{getActionIcon(log.action)}</div>
                   <div>
@@ -1613,22 +1976,37 @@ export default function JobDetailView({
                 </div>
               ))}
             </div>
-            {totalLogs > logsPerPage && (
+            {logTotal > logsPerPage && (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 12, borderTop: '1px solid var(--primary-10)', fontSize: 12, color: 'var(--primary-60)' }}>
-                <span>Page {logsPage} of {totalLogsPages}</span>
+                <span aria-live="polite">
+                  Page {logPage} of {totalLogsPages}
+                  {logsLoading && ' · loading…'}
+                </span>
                 <div style={{ display: 'flex', gap: 4 }}>
-                  <a href={`/admin/jobs/${job.id}?tab=logs&logsPage=1`} className="apager-btn" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 34, opacity: logsPage === 1 ? 0.35 : 1, pointerEvents: logsPage === 1 ? 'none' : 'auto' }}>
+                  {/* Buttons, not <a href>: a full page load here would reset
+                      the scroller and throw the admin back to the top of the
+                      job on every page turn. They call a server action for the
+                      rows rather than re-rendering the route — see
+                      updateLogsPage. Disabled while a page is in flight so a
+                      double-click cannot queue two requests.
+                      `.apager-btn:disabled` already supplies the dimmed state
+                      the old inline opacity faked. */}
+                  <button type="button" onClick={() => updateLogsPage(1)} disabled={logsLoading || logPage === 1}
+                    className="apager-btn" aria-label="First page of logs" style={{ width: 34, height: 34 }}>
                     <ChevronsLeft size={14} />
-                  </a>
-                  <a href={`/admin/jobs/${job.id}?tab=logs&logsPage=${logsPage - 1}`} className="apager-btn" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 34, opacity: logsPage === 1 ? 0.35 : 1, pointerEvents: logsPage === 1 ? 'none' : 'auto' }}>
+                  </button>
+                  <button type="button" onClick={() => updateLogsPage(logPage - 1)} disabled={logsLoading || logPage === 1}
+                    className="apager-btn" aria-label="Previous page of logs" style={{ width: 34, height: 34 }}>
                     <ChevronLeft size={14} />
-                  </a>
-                  <a href={`/admin/jobs/${job.id}?tab=logs&logsPage=${logsPage + 1}`} className="apager-btn" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 34, opacity: logsPage === totalLogsPages ? 0.35 : 1, pointerEvents: logsPage === totalLogsPages ? 'none' : 'auto' }}>
+                  </button>
+                  <button type="button" onClick={() => updateLogsPage(logPage + 1)} disabled={logsLoading || logPage === totalLogsPages}
+                    className="apager-btn" aria-label="Next page of logs" style={{ width: 34, height: 34 }}>
                     <ChevronRight size={14} />
-                  </a>
-                  <a href={`/admin/jobs/${job.id}?tab=logs&logsPage=${totalLogsPages}`} className="apager-btn" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 34, opacity: logsPage === totalLogsPages ? 0.35 : 1, pointerEvents: logsPage === totalLogsPages ? 'none' : 'auto' }}>
+                  </button>
+                  <button type="button" onClick={() => updateLogsPage(totalLogsPages)} disabled={logsLoading || logPage === totalLogsPages}
+                    className="apager-btn" aria-label="Last page of logs" style={{ width: 34, height: 34 }}>
                     <ChevronsRight size={14} />
-                  </a>
+                  </button>
                 </div>
               </div>
             )}
@@ -1897,7 +2275,10 @@ export default function JobDetailView({
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="admin-font relative h-full overflow-y-auto pb-8 px-4">
+    // data-scroll-reset: this div is the page's real scroller, and it sits a
+    // level too deep for <ScrollReset>, which stops at <main>'s direct children.
+    // Without the tag the job opened wherever the previous page was scrolled to.
+    <div data-scroll-reset className="admin-font relative h-full overflow-y-auto pb-8 px-4">
       <div className="relative z-10 max-w-[80rem] w-full mx-auto" style={{ paddingTop: 32 }}>
 
         {/* Back button */}
@@ -2111,7 +2492,13 @@ export default function JobDetailView({
             No banner in the default allowed state — only a quiet disable
             control; a banner appears only when photos are explicitly OFF. */}
         {(() => {
-          const allowed = photosEnabled || afterPhotoOverrideAt !== null;
+          // Same predicate the cleaner app and the upload action use — one
+          // helper, so the three surfaces can't disagree about whether a
+          // cleaner may upload (src/lib/job-photos.ts).
+          const allowed = afterPhotosAllowed({
+            afterPhotoConsent: photosEnabled,
+            afterPhotoOverrideAt,
+          });
           if (allowed) {
             if (!isAdmin) return null;
             return (
@@ -2468,10 +2855,11 @@ export default function JobDetailView({
 
             {assignConflicts.length > 0 && (
               <div style={{ margin: "0 28px 12px", fontSize: 13, color: "#92400e", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 10, padding: "8px 12px" }}>
-                <strong>Assigned — availability conflict:</strong>
+                <strong>Assigned — please review:</strong>
                 <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
                   {assignConflicts.map((m, i) => <li key={i}>{m}</li>)}
                 </ul>
+                <div style={{ marginTop: 6 }}>The assignment saved — this is only a warning.</div>
               </div>
             )}
 
@@ -2510,6 +2898,8 @@ export default function JobDetailView({
         mode="edit"
         users={users}
         clients={clients}
+        addOnCatalog={addOnCatalog}
+        taxRates={taxRates}
         onSubmit={handleSubmit}
         onDelete={handleModalDelete}
       />

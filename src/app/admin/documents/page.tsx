@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
 import DocumentsClient from "./DocumentsClient";
+import { getMyVoidCheque } from "../actions/getMyVoidCheque";
 
 export default async function DocumentsPage() {
   const session = await auth.api.getSession({
@@ -48,9 +49,16 @@ export default async function DocumentsPage() {
     },
   }));
 
+  // This page is shared: /cleaners/documents re-exports it. The void cheque is
+  // the VIEWER'S own file either way, so loading it here is safe for both
+  // routes — DocumentsClient decides whether the payroll section renders, off
+  // the same `isAdminView` path check it already used for the settings banner.
+  // Metadata only; the file itself is never reachable from this page.
+  const voidCheque = await getMyVoidCheque();
+
   return (
     <div className="h-full overflow-hidden overflow-y-auto p-8">
-      <DocumentsClient signatures={signatureData} />
+      <DocumentsClient signatures={signatureData} voidCheque={voidCheque} />
     </div>
   );
 }

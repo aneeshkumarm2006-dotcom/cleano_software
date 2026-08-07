@@ -11,12 +11,12 @@ import {
 } from "@/lib/email";
 import { computeLateArrivalPenalty } from "@/lib/policy";
 import { applyStrike } from "@/lib/strikes";
-import { setAssignmentProgress } from "@/lib/job-assignments";
 import {
   CLOCK_IN_BLOCKED_STATUSES,
   CLOCK_IN_EARLY_WINDOW_MIN,
   clockInOpensAt,
 } from "@/lib/cleaner-jobs";
+import { findOpenSession, syncClockMirrors } from "@/lib/work-sessions.server";
 import { fmtDateTime } from "@/lib/time";
 
 /** Minutes late that earns an accountability strike (subject to admin excuse). */
@@ -56,30 +56,48 @@ export async function clockIn(jobId: string) {
       return { success: false, error: "You are not assigned to this job" };
     }
 
-    // Check if already clocked in
-    if (job.clockInTime) {
-      return { success: false, error: "Already clocked in" };
+    // Already on the clock? PER CLEANER, not per job (item 6).
+    //
+    // This used to read `job.clockInTime`, which is a JOB-level column — so on
+    // any two-cleaner job the first person to clock in locked their teammate
+    // out with "Already clocked in", and nobody could ever start a second
+    // session. Sessions are keyed (jobId, cleanerId), so the question is now
+    // the right one: is THIS cleaner running on THIS job.
+    const openSession = await findOpenSession(jobId, session.user.id);
+    if (openSession) {
+      return { success: false, error: "You're already clocked in on this job" };
     }
 
-    // A cancelled / finished job can't be clocked into. This used to be
-    // unguarded, so a cleaner could clock in on a CANCELLED job.
+    // A cancelled or paid job can't be clocked into. COMPLETED is deliberately
+    // NOT blocked any more — reopening a finished job is exactly what "clock
+    // back in" means, and the status is restored to IN_PROGRESS below.
     if ((CLOCK_IN_BLOCKED_STATUSES as readonly string[]).includes(job.status)) {
       return {
         success: false,
         error:
           job.status === "CANCELLED"
             ? "This job was cancelled — you can't clock in."
-            : "This job is already finished.",
+            : "This job has already been paid out — ask an admin to reopen it.",
       };
     }
 
     const now = new Date();
 
+    // Is this a fresh start or a resume? Everything late-arrival-related hangs
+    // off this: coming back at 6pm to finish a job you started on time is not
+    // a late arrival, and must not raise a penalty, an email or a strike.
+    const priorSessions = await db.jobWorkSession.count({
+      where: { jobId, cleanerId: session.user.id },
+    });
+    const isResume = priorSessions > 0;
+
     // Date guard: clock-in opens a fixed window before the scheduled start.
     // Without this, a cleaner could clock in DAYS early and produce a
-    // clockInTime that predates the job date (and bogus hours/pay).
+    // clockInTime that predates the job date (and bogus hours/pay). A resume
+    // is exempt: the window has obviously already opened for work that has
+    // already started.
     const opensAt = clockInOpensAt(job.startTime);
-    if (now.getTime() < opensAt.getTime()) {
+    if (!isResume && now.getTime() < opensAt.getTime()) {
       return {
         success: false,
         error: `Too early to clock in. Clock-in opens ${CLOCK_IN_EARLY_WINDOW_MIN / 60} hours before the start — from ${fmtDateTime(opensAt)}.`,
@@ -87,29 +105,44 @@ export async function clockIn(jobId: string) {
     }
 
     // Late-arrival detection: minutes between scheduled start and clock-in.
-    const minutesLate = Math.max(
-      0,
-      Math.floor((now.getTime() - job.startTime.getTime()) / 60_000)
-    );
-    const penalty = computeLateArrivalPenalty(minutesLate);
+    // Only ever measured on the FIRST session (see isResume above).
+    const minutesLate = isResume
+      ? 0
+      : Math.max(
+          0,
+          Math.floor((now.getTime() - job.startTime.getTime()) / 60_000)
+        );
+    const penalty = isResume ? null : computeLateArrivalPenalty(minutesLate);
 
-    // Update the job with clock in time and the rating penalty when applicable.
-    await db.job.update({
-      where: { id: jobId },
-      data: {
-        clockInTime: now,
-        status: "IN_PROGRESS",
-        ...(penalty !== null
-          ? { lateArrivalAt: now, lateArrivalRatingPenalty: penalty }
-          : {}),
-      },
+    // Open the session. This is the record of work now; the columns below are
+    // derived mirrors of it.
+    await db.jobWorkSession.create({
+      data: { jobId, cleanerId: session.user.id, startedAt: now },
     });
 
-    // Per-cleaner assignment status (item 9).
-    await setAssignmentProgress(jobId, session.user.id, {
-      status: "CLOCKED_IN",
-      clockInTime: now,
-    });
+    // Job/assignment clock columns are recomputed from every session on the
+    // job — so a resume correctly re-opens clockOutTime rather than leaving a
+    // finished-looking job with somebody on site.
+    await syncClockMirrors(jobId);
+
+    // Status: back to IN_PROGRESS while anyone is working. PAID and CANCELLED
+    // were refused above and are never resurrected here.
+    if (job.status !== "IN_PROGRESS") {
+      await db.job.update({
+        where: { id: jobId },
+        data: {
+          status: "IN_PROGRESS",
+          ...(penalty !== null
+            ? { lateArrivalAt: now, lateArrivalRatingPenalty: penalty }
+            : {}),
+        },
+      });
+    } else if (penalty !== null) {
+      await db.job.update({
+        where: { id: jobId },
+        data: { lateArrivalAt: now, lateArrivalRatingPenalty: penalty },
+      });
+    }
 
     // Create a log entry
     await db.jobLog.create({
@@ -117,24 +150,30 @@ export async function clockIn(jobId: string) {
         jobId,
         userId: session.user.id,
         action: "CLOCKED_IN",
-        description: `${session.user.name} clocked in`,
+        description: isResume
+          ? `${session.user.name} clocked back in (session ${priorSessions + 1})`
+          : `${session.user.name} clocked in`,
       },
     });
 
     // Also log the status change
-    await db.jobLog.create({
-      data: {
-        jobId,
-        userId: session.user.id,
-        action: "STATUS_CHANGED",
-        field: "status",
-        oldValue: job.status,
-        newValue: "IN_PROGRESS",
-        description: `Status changed from ${job.status} to IN_PROGRESS`,
-      },
-    });
+    if (job.status !== "IN_PROGRESS") {
+      await db.jobLog.create({
+        data: {
+          jobId,
+          userId: session.user.id,
+          action: "STATUS_CHANGED",
+          field: "status",
+          oldValue: job.status,
+          newValue: "IN_PROGRESS",
+          description: `Status changed from ${job.status} to IN_PROGRESS`,
+        },
+      });
+    }
 
-    // Admin email — gated by `admin.clock.clocked_in`.
+    // Admin email — gated by `admin.clock.clocked_in`. Sent on a resume too:
+    // "they're back on site" is exactly as useful to dispatch as "they've
+    // arrived", and the log line above says which it was.
     sendAdminClockedIn({
       jobId,
       jobNumber: job.jobNumber,
@@ -188,9 +227,12 @@ export async function clockIn(jobId: string) {
     }
 
     revalidatePath("/cleaners/my-jobs");
+    revalidatePath(`/cleaners/my-jobs/${jobId}`);
+    revalidatePath(`/cleaners/my-jobs/${jobId}/clock`);
     revalidatePath(`/admin/jobs/${jobId}`);
+    revalidatePath("/admin/time-tracking");
 
-    return { success: true, minutesLate, penalty };
+    return { success: true, minutesLate, penalty, resumed: isResume };
   } catch (error) {
     console.error("Error clocking in:", error);
     return { success: false, error: "Failed to clock in" };

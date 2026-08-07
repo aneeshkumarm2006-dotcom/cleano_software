@@ -94,7 +94,7 @@ export default async function CleanerDashboard({ userId, userName }: Props) {
     // Inventory
     db.employeeProduct.findMany({
       where: { employeeId: userId },
-      include: { product: { include: { inventoryRule: true } } },
+      include: { product: true },
     }),
     // Employee ratings
     db.employeeRating.findMany({
@@ -151,7 +151,6 @@ export default async function CleanerDashboard({ userId, userName }: Props) {
   const lowItems = employeeProducts.filter((ep) =>
     isCleanerLow(ep.quantity, {
       cleanerRestockThreshold: ep.product.cleanerRestockThreshold,
-      usagePerJob: ep.product.inventoryRule?.usagePerJob ?? 0,
     })
   );
 

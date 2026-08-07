@@ -9,6 +9,7 @@ import type {
   AddOnCatalogItem,
 } from "@/app/admin/jobs/JobModal";
 import { CalendarRef, CalendarEvent } from "@/components/calendar/types";
+import type { TaxRates } from "@/lib/tax";
 import { CalendarProvider } from "@/components/calendar/CalendarContext";
 import { useCalendarData } from "@/hooks/useCalendarData";
 import { useCalendar } from "@/components/calendar/CalendarContext";
@@ -68,11 +69,13 @@ export default function CalendarPageClient({
   clients = [],
   users = [],
   addOnCatalog = [],
+  taxRates,
 }: {
   isEmployee?: boolean;
   clients?: ClientLite[];
   users?: JobModalUser[];
   addOnCatalog?: AddOnCatalogItem[];
+  taxRates?: TaxRates;
 }) {
   const calendarRef = useRef<CalendarRef>(null);
   const searchParams = useSearchParams();
@@ -146,6 +149,7 @@ export default function CalendarPageClient({
           clients={clients}
           users={users}
           addOnCatalog={addOnCatalog}
+          taxRates={taxRates}
         />
       </div>
       <CalendarJobActions isEmployee={isEmployee} />

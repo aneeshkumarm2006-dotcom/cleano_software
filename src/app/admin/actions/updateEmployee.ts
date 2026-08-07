@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { normalizeAllowedCategories } from "@/lib/service-permissions";
 
 type State = {
   message: string;
@@ -27,6 +28,15 @@ export async function updateEmployee(
   const role = formData.get("role") as string;
   // Checkbox: present ("on") = active, absent ("") = deactivated.
   const isActive = formData.get("isActive") === "on";
+  // Service categories (awerfixes.pdf item 3). The marker field says "this
+  // submission owns the category picker", so an empty selection means "the admin
+  // cleared every restriction" rather than "this form doesn't manage
+  // categories" — without it, the create form would wipe the column. Same
+  // contract saveJob uses for `cleanersSubmitted`.
+  const categoriesSubmitted = formData.get("categoriesSubmitted") === "1";
+  const allowedServiceCategories = categoriesSubmitted
+    ? normalizeAllowedCategories(formData.getAll("serviceCategories"))
+    : null;
 
   // Validate required fields
   if (!name || !email || !role) {
@@ -72,10 +82,13 @@ export async function updateEmployee(
         phone: phone || null,
         role: role as "OWNER" | "ADMIN" | "OPS_MANAGER" | "FIELD_LEAD" | "EMPLOYEE",
         isActive,
+        ...(allowedServiceCategories ? { allowedServiceCategories } : {}),
       },
     });
 
     revalidatePath("/admin/employees");
+    revalidatePath(`/admin/employees/${employeeId}`);
+    if (allowedServiceCategories) revalidatePath("/cleaners/available-jobs");
     return {
       message: "Employee updated successfully!",
       error: "",

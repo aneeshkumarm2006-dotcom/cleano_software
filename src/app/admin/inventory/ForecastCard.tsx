@@ -11,7 +11,8 @@ interface ForecastItem {
   productName: string;
   unit: string;
   currentQuantity: number;
-  usagePerJob: number;
+  /** Trailing-30-day average across jobs that used it (item 14). */
+  averagePerJob: number;
   refillThreshold: number;
   projectedUsage: number;
   deficit: number;

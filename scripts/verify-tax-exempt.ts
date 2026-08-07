@@ -43,7 +43,11 @@ check("a taxed job has no reason", taxExemptReason({}), null);
 
 // ── Cleaner pay must be unaffected (spec: pay is from the PRE-TAX price) ────
 const RATES = new Map<string, CleanerRateInput>([
-  ["asia", { id: "asia", tier: "STANDARD", avgRating: 5, ratingCount: 12, role: "EMPLOYEE" }],
+  // 5-star, past the 5-rating gate. 1.25 is the DEFAULT multiplier for a 5.0
+  // average, so the rate is 40% x 1.25 = 50% (awerfixes.pdf item 1). It was 45%
+  // under the retired standardRateForRating ladder; what this file actually
+  // asserts — that pay comes off the PRE-TAX price — is unaffected.
+  ["asia", { id: "asia", tier: "STANDARD", avgRating: 5, ratingCount: 12, multiplier: 1.25, role: "EMPLOYEE" }],
 ]);
 const baseJob: JobPayInput = {
   id: "j", employeeId: null, cleaners: [{ id: "asia" }], price: 200,
@@ -53,7 +57,7 @@ const baseJob: JobPayInput = {
 };
 const payTaxed = computeJobPayShares(baseJob, RATES).get("asia")?.total;
 const payExempt = computeJobPayShares({ ...baseJob }, RATES).get("asia")?.total;
-check("cleaner pay is 45% of the PRE-TAX price", payTaxed, 90);
+check("cleaner pay is 50% of the PRE-TAX price", payTaxed, 100);
 check("exempting a job does not change cleaner pay", payExempt, payTaxed);
 
 // ── Source sweep ───────────────────────────────────────────────────────────
@@ -69,12 +73,24 @@ ok("migration adds the column defaulting to false",
 const saveJob = read("src/app/admin/actions/saveJob.ts");
 ok("saveJob reads the flag from the form", saveJob.includes('formData.get("taxExempt")'));
 ok("saveJob persists the flag", /taxExempt,/.test(saveJob));
-ok("saveJob applies it to the tax math", saveJob.includes("isJobTaxExempt({ isCashJob, taxExempt })"));
+// AWER round 3, stage 3: the `isJobTaxExempt({ isCashJob, taxExempt })` call
+// these three checks used to grep for now lives INSIDE computeJobMoney
+// (src/lib/job-money.ts), which owns the whole subtotal→tax computation so
+// add-ons finally count. The property is unchanged — the exemption still
+// reaches the tax math — so these assert the same thing at its new boundary:
+// both flags are passed into the shared helper. That the helper honours them
+// is a BEHAVIOUR check in verify-awer-fixes-3.ts section 7.
+const EXEMPTION_PASSED_IN = /isCashJob,\s*[\r\n]+\s*taxExempt,/g;
+ok("saveJob applies it to the tax math",
+  saveJob.includes("computeJobMoney(") && EXEMPTION_PASSED_IN.test(saveJob));
 ok("recurring children inherit the exemption",
-  (saveJob.match(/isJobTaxExempt\(\{ isCashJob, taxExempt \}\)/g) || []).length >= 2);
+  (saveJob.match(EXEMPTION_PASSED_IN) || []).length >= 2 &&
+  (saveJob.match(/computeJobMoney\(/g) || []).length >= 2);
 
 const form = read("src/app/admin/jobs/new/page.tsx");
-ok("the full-page form also honours the flag", form.includes("isJobTaxExempt({ isCashJob, taxExempt })"));
+ok("the full-page form also honours the flag",
+  form.includes("computeJobMoney(") &&
+  new RegExp(EXEMPTION_PASSED_IN.source).test(form));
 
 const modal = read("src/app/admin/jobs/JobModal.tsx");
 ok("modal exposes the exemption control", modal.includes("Exempt this job from sales tax"));

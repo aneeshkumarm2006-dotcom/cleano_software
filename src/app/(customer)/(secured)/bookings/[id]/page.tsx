@@ -3,6 +3,9 @@ import { headers } from "next/headers";
 import { redirect, notFound } from "next/navigation";
 import { db } from "@/db";
 import { getSettings } from "@/lib/settings";
+import { addOnLineTotal } from "@/lib/job-money";
+import { sanitizeCleanerNotes } from "@/lib/cleaner-notes";
+import { formatAddressLine } from "@/lib/client-address";
 import { fmtDateTime } from "@/lib/time";
 import Link from "next/link";
 import { ArrowLeft, Download, MapPin, Users, CreditCard } from "lucide-react";
@@ -62,7 +65,7 @@ export default async function BookingDetailPage({
     where: { id },
     include: {
       cleaners: { select: { id: true, name: true } },
-      addOns: { select: { name: true, price: true } },
+      addOns: { select: { name: true, price: true, quantity: true } },
       logs: {
         // Customer-safe lifecycle events only. Internal free-text logs
         // (NOTE_ADDED, UPDATED, PRODUCT_USED, cleaner churn) are excluded so
@@ -213,7 +216,14 @@ export default async function BookingDetailPage({
               <DetailRow dt="Type" dd={job.jobType ?? "Standard cleaning"} />
               <DetailRow
                 dt="Address"
-                dd={job.location ?? "—"}
+                dd={
+                  job.location
+                    ? formatAddressLine({
+                        address: job.location,
+                        aptNumber: job.aptNumber,
+                      })
+                    : "—"
+                }
               />
               <DetailRow
                 dt="Property"
@@ -236,8 +246,11 @@ export default async function BookingDetailPage({
                     : "Being assigned…"
                 }
               />
-              {job.notes ? (
-                <DetailRow dt="Notes" dd={job.notes} />
+              {/* Customers are non-financial viewers too (item 15): a legacy
+                  imported job's notes still carry "Final amount CAD: …" and the
+                  cleaner's payout. Same sanitizer the cleaner app uses. */}
+              {sanitizeCleanerNotes(job.notes) ? (
+                <DetailRow dt="Notes" dd={sanitizeCleanerNotes(job.notes)!} />
               ) : null}
             </dl>
           </section>
@@ -291,13 +304,16 @@ export default async function BookingDetailPage({
                       borderTop: i === 0 ? "none" : "1px solid var(--primary-10)",
                       fontSize: 14,
                     }}>
-                    <span style={{ color: "var(--ink)" }}>{a.name}</span>
+                    <span style={{ color: "var(--ink)" }}>
+                      {a.name}
+                      {a.quantity > 1 ? ` ×${a.quantity}` : ""}
+                    </span>
                     <span
                       style={{
                         color: "var(--primary)",
                         fontWeight: 600,
                       }}>
-                      +{formatPrice(a.price)}
+                      +{formatPrice(addOnLineTotal(a))}
                     </span>
                   </div>
                 ))}

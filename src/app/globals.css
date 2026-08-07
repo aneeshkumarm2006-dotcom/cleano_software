@@ -668,8 +668,15 @@ body {
   --primary-70:    rgba(0,140,156,0.82);
   --primary-light: #33b1c0;
   --primary-hover: #00707d;
+  /* The one teal that passes WCAG AA as small text. The --primary-40..70 steps
+     above are alpha over #008C9C, which tops out at 4.01:1 on white even at
+     alpha 1.0 — no alpha value in that ramp can reach 4.5:1. Where teal text
+     MUST be readable (payment icons, the RESIDENTIAL type pill), use this
+     instead: 7.95:1 on white, 7.33:1 on --cream, 7.05:1 on --primary-10. */
+  --primary-800:   #005a63;
   --cream-deep:    #e7edf3;
   --emerald-600:   #059669;
+  --emerald-700:   #047857;
   --emerald-200:   #a7f3d0;
   --emerald-100:   #d1fae5;
   --emerald-50:    #ecfdf5;
@@ -900,6 +907,9 @@ body {
 .atable .col-date .date-line { font-weight: 600; }
 .atable .col-date .time-line { color: var(--primary-60); font-size: 11.5px; margin-top: 2px; }
 .atable .col-client { font-weight: 600; color: var(--ink); }
+/* Money is primary data, not a footnote — same emphasis as the client name.
+   Without this the price inherited 13px at default weight and default colour. */
+.atable .col-price { color: var(--ink); font-weight: 600; }
 .atable .col-client-sub { color: var(--primary-60); font-size: 11.5px; margin-top: 2px; font-weight: 400; }
 .atable .col-actions { width: 1%; }
 .atable .col-actions .row { justify-content: flex-end; gap: 6px; }
@@ -925,7 +935,7 @@ body {
 
 /* Profit % */
 .profit-pct { font-variant-numeric: tabular-nums; font-weight: 600; }
-.profit-pct.good { color: var(--emerald-600); }
+.profit-pct.good { color: var(--emerald-700); } /* 600 was 3.77:1 on white */
 .profit-pct.warn { color: var(--amber-700); }
 .profit-pct.bad  { color: var(--error); }
 
@@ -935,11 +945,17 @@ body {
   width: 26px; height: 26px; border-radius: 7px;
   display: inline-flex; align-items: center; justify-content: center;
   font-size: 11px; font-weight: 700;
+  /* Transparent by default so the bordered unpaid/unsent variants below stay
+     the same size as the filled ones. */
+  border: 1px solid transparent;
 }
 .pay-icon.paid   { background: var(--emerald-100); color: var(--emerald-800); }
-.pay-icon.unpaid { background: var(--cream); color: var(--primary-50); }
+/* Unpaid/unsent were --primary-50 on --cream = 2.46:1 at 11px bold — the
+   states that most need to be noticed were the hardest to read. Solid teal
+   (7.33:1) plus a border so they read as a state, not as a ghost. */
+.pay-icon.unpaid { background: var(--cream); color: var(--primary-800); border-color: var(--primary-20); }
 .pay-icon.sent   { background: var(--blue-100); color: var(--blue-800); }
-.pay-icon.unsent { background: var(--cream); color: var(--primary-50); }
+.pay-icon.unsent { background: var(--cream); color: var(--primary-800); border-color: var(--primary-20); }
 /* Interactive variant — the Jobs-table $ / ✉ actions (mark paid / invoice sent) */
 .pay-icon-btn {
   border: 1px solid transparent;
@@ -984,7 +1000,9 @@ body {
 .jcard-client { font-weight: 600; color: var(--ink); font-size: 15px; }
 .jcard-meta { font-size: 12px; color: var(--primary-60); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .jcard-row { display: flex; align-items: center; justify-content: space-between; font-size: 13px; }
-.jcard-price { font-family: var(--font-app); font-size: 18px; color: var(--primary); font-weight: 500; }
+/* Teal at 18px/500 is not "large text" by WCAG, so --primary was 4.01:1 here.
+   Matches .col-price, the desktop equivalent. */
+.jcard-price { font-family: var(--font-app); font-size: 18px; color: var(--ink); font-weight: 600; }
 
 /* Job detail page */
 .jdetail-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 24px; flex-wrap: wrap; }
@@ -1924,6 +1942,32 @@ body {
 .cl-claim-btn:active { transform: scale(0.985); }
 .cl-claim-btn:disabled { background: rgba(0,140,156,0.4); cursor: not-allowed; }
 
+/* Two actions per card (awerfixes.pdf item 8) — Preview sits beside Claim so a
+   cleaner can read the job before committing to it. Claim keeps the visual
+   weight; Preview is the quiet, reversible one. */
+.cl-job-card-actions {
+  display: flex; gap: 8px; align-items: stretch;
+  margin-top: 4px;
+}
+.cl-job-card-actions .cl-claim-btn { flex: 1 1 auto; margin-top: 0; }
+.cl-preview-btn {
+  flex: 0 0 auto;
+  padding: 0 16px;
+  height: 44px;
+  background: #fff;
+  color: var(--primary);
+  border: 1px solid var(--primary-20, rgba(0,140,156,0.25));
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background .15s, transform .08s;
+}
+.cl-preview-btn:hover { background: var(--primary-5, rgba(0,140,156,0.05)); }
+.cl-preview-btn:active { transform: scale(0.985); }
+.cl-preview-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
 /* Pay hero tiles */
 .cl-pay-hero {
   display: grid;
@@ -2762,6 +2806,21 @@ body {
   color: rgba(255, 255, 255, 0.85);
   margin-bottom: 8px;
 }
+/* Access notes (door / gate / buzzer codes) on the cleaner's job hero — item 2.
+   Boxed rather than run into the address line: it's the thing a cleaner is
+   hunting for while standing at a locked door. */
+.cl-jd-access {
+  display: flex; align-items: flex-start; gap: 8px;
+  font-size: 13.5px; line-height: 1.45;
+  color: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 10px;
+  padding: 8px 11px;
+  margin-bottom: 12px;
+  max-width: 460px;
+}
+.cl-jd-access svg { flex-shrink: 0; margin-top: 2px; }
 .cl-jd-hero .job-type {
   font-size: 15px;
   color: rgba(255, 255, 255, 0.75);
@@ -3053,6 +3112,40 @@ body {
   margin-bottom: 28px;
 }
 .cl-jd-notes.empty { color: var(--primary-50); }
+
+/* Job scope (awerfixes.pdf item 5, round 3) — the "what am I actually doing
+   here" card, sitting directly under the hero so it is readable without a
+   scroll or a tap. Reuses .cl-jd-card-head / .cl-jd-dl / .cl-jd-addon-chip so
+   it matches the cards further down the page. */
+.cl-jd-scope {
+  background: #fff;
+  border: 1px solid var(--primary-10);
+  border-radius: 18px;
+  padding: 24px 26px;
+  margin-bottom: 20px;
+  display: flex; flex-direction: column;
+  gap: 18px;
+}
+.cl-jd-scope-block { display: flex; flex-direction: column; gap: 8px; }
+.cl-jd-scope-label {
+  font-size: 11px;
+  color: var(--primary-50);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+}
+.cl-jd-scope-empty { font-size: 13px; color: var(--primary-50); }
+.cl-jd-scope-notes {
+  margin: 0;
+  background: var(--cream);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 13.5px;
+  color: var(--ink-soft);
+  line-height: 1.55;
+  white-space: pre-line;
+}
+.cl-jd-scope-notes.empty { color: var(--primary-50); }
 
 .cl-jd-checklist-wrap {
   background: #fff;
@@ -4539,6 +4632,19 @@ html, body { overscroll-behavior-y: contain; }
 }
 .clk-action.break:hover { background: #92400e; }
 .clk-action:disabled { opacity: 0.6; cursor: not-allowed; }
+/* Secondary action beside "Clock back in" (awerfixes.pdf item 6) — a
+   clocked-out job now offers a real action, so the link away from it must
+   stop looking like the primary one. */
+.clk-action.ghost {
+  background: #fff;
+  color: var(--primary);
+  border: 1px solid var(--primary-20, rgba(0,140,156,0.25));
+  box-shadow: none;
+}
+.clk-action.ghost:hover {
+  background: var(--primary-5, rgba(0,140,156,0.05));
+  box-shadow: none;
+}
 .clk-error { color: var(--error); font-size: 13px; margin: 0; }
 .clk-meta {
   display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;

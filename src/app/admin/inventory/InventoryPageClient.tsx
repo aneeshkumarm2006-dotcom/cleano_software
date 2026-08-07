@@ -73,7 +73,7 @@ interface ForecastEmployee {
     productName: string;
     unit: string;
     currentQuantity: number;
-    usagePerJob: number;
+    averagePerJob: number;
     refillThreshold: number;
     projectedUsage: number;
     deficit: number;

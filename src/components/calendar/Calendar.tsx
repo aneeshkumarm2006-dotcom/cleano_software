@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import { useCalendar } from "@/components/calendar/CalendarContext";
+import type { TaxRates } from "@/lib/tax";
 import { useCalendarConfig } from "@/contexts/CalendarConfigContext";
 import { MonthView } from "@/components/calendar/MonthView";
 import { WeekView } from "@/components/calendar/WeekView";
@@ -44,9 +45,10 @@ interface CalendarProps {
   clients?: ClientLite[];
   users?: JobModalUser[];
   addOnCatalog?: AddOnCatalogItem[];
+  taxRates?: TaxRates;
 }
 
-const Calendar = React.forwardRef<CalendarRef, CalendarProps>(({ hideNewJobButton = false, clients = [], users = [], addOnCatalog = [], ...props }, ref) => {
+const Calendar = React.forwardRef<CalendarRef, CalendarProps>(({ hideNewJobButton = false, clients = [], users = [], addOnCatalog = [], taxRates, ...props }, ref) => {
   const {
     view,
     setView,
@@ -664,6 +666,7 @@ const Calendar = React.forwardRef<CalendarRef, CalendarProps>(({ hideNewJobButto
         users={users}
         clients={clients}
         addOnCatalog={addOnCatalog}
+        taxRates={taxRates}
         onSubmit={async (formData) => {
           // Prefill times if provided by drag selection
           if (jobModalData?.date) {

@@ -5,13 +5,17 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { multiplierForRating } from "@/lib/pay-multiplier";
 import { getRatingMultiplierMap } from "@/lib/pay-multiplier-config";
+import { getCleanerRateInputs } from "@/lib/cleaner-rates";
+import { STANDARD_RATINGS_REQUIRED } from "@/lib/pay-tiers";
 import type {
   PerformanceData,
   RecentRating,
   TrendPoint,
 } from "./getPerformanceData.types";
 
-const RATING_EXPIRY_DAYS = 30;
+// Trend windows only. Ratings no longer EXPIRE: pay uses the all-time average
+// (Decision 2, 2026-08-06), so a 30-day cut is recent form, nothing more.
+const TREND_RECENT_DAYS = 30;
 
 interface GetInput {
   employeeId?: string;
@@ -39,15 +43,27 @@ export async function getPerformanceData(
 
     const employee = await db.user.findUnique({
       where: { id: targetEmployeeId },
-      select: { id: true, payMultiplier: true },
+      select: { id: true },
     });
     if (!employee) {
       return { success: false, error: "Employee not found" };
     }
 
+    // ONE window for anything that makes a pay claim (Decision 2): the ALL-TIME
+    // `excludedAt: null` average, read through the SAME loader payroll uses.
+    // Sourcing it here rather than from the User.payMultiplier cache means this
+    // screen can never show a multiplier payday disagrees with, and the cache
+    // being briefly stale between recalculations stops mattering for display.
+    const rateInputs = await getCleanerRateInputs([targetEmployeeId]);
+    const me = rateInputs.get(targetEmployeeId);
+    const ratingAllTime = me?.avgRating ?? null;
+    const ratingCountAllTime = me?.ratingCount ?? 0;
+    const currentMultiplier = me?.multiplier ?? 1;
+    const multiplierLocked = ratingCountAllTime < STANDARD_RATINGS_REQUIRED;
+
     const now = new Date();
     const thirtyDaysAgo = new Date(now);
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - RATING_EXPIRY_DAYS);
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - TREND_RECENT_DAYS);
     const ninetyDaysAgo = new Date(now);
     ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
 
@@ -67,19 +83,24 @@ export async function getPerformanceData(
 
     const ratingMap = await getRatingMultiplierMap();
 
-    let rating30Day: number | null = null;
-    let tierLabel = "Standard";
-    if (ratings30.length > 0) {
-      const sum = ratings30.reduce((acc, r) => acc + r.rating, 0);
-      rating30Day = sum / ratings30.length;
-      tierLabel = multiplierForRating(rating30Day, ratingMap).label;
-    }
+    // Recent form ONLY — displayed as a trend, never used as a pay input.
+    const rating30Day =
+      ratings30.length > 0
+        ? ratings30.reduce((acc, r) => acc + r.rating, 0) / ratings30.length
+        : null;
 
-    // Next 0.1 rating step (capped at 5.0).
+    // The 0.1 rating STEP the multiplier was priced at — all-time, matching pay.
+    const tierLabel =
+      ratingAllTime !== null
+        ? multiplierForRating(ratingAllTime, ratingMap).label
+        : null;
+
+    // The next 0.1 step and what it would pay. All-time, because that is the
+    // number the cleaner actually has to move.
     let nextTierAt: number | null = null;
     let nextTierMultiplier: number | null = null;
-    if (rating30Day !== null && rating30Day < 5.0) {
-      const current = Math.floor(Math.max(4, rating30Day) * 10) / 10;
+    if (ratingAllTime !== null && ratingAllTime < 5.0) {
+      const current = Math.floor(Math.max(4, ratingAllTime) * 10) / 10;
       const next = Math.min(5, Math.round((current + 0.1) * 10) / 10);
       nextTierAt = next;
       nextTierMultiplier = multiplierForRating(next, ratingMap).multiplier;
@@ -115,23 +136,19 @@ export async function getPerformanceData(
       clientName: r.job?.clientName ?? null,
     }));
 
-    const oldestRating30DayAt =
-      ratings30.length > 0
-        ? new Date(
-            Math.min(...ratings30.map((r) => r.createdAt.getTime()))
-          ).toISOString()
-        : null;
-
-    const expiryWindow = new Date(now);
-    expiryWindow.setDate(expiryWindow.getDate() - (RATING_EXPIRY_DAYS - 7));
-    const expiringSoon = ratings30.filter(
-      (r) => r.createdAt < expiryWindow
-    ).length;
-
+    // The two "oldest rating" / "expiring soon" fields are deliberately gone:
+    // both existed only to explain a 30-day rating EXPIRY that no longer
+    // exists. Telling a cleaner their ratings are about to lapse, beside a
+    // multiplier that will not move when they do, is worse than showing
+    // nothing.
     return {
       success: true,
       data: {
-        currentMultiplier: employee.payMultiplier,
+        currentMultiplier,
+        multiplierLocked,
+        ratingsRequired: STANDARD_RATINGS_REQUIRED,
+        ratingAllTime,
+        ratingCountAllTime,
         rating30Day,
         ratingCount30Day: ratings30.length,
         tierLabel,
@@ -139,8 +156,6 @@ export async function getPerformanceData(
         nextTierMultiplier,
         trend90Day,
         recentRatings,
-        oldestRating30DayAt,
-        expiringSoon,
       },
     };
   } catch (error) {

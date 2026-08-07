@@ -55,6 +55,9 @@ export default function PayBreakdownModal({
   // Both payload shapes carry the payout fields; nothing else is rendered here,
   // so an admin opening this view sees the same cleaner-safe summary.
   const hourlyRate = data?.payType === "HOURLY" ? data.hourlyRate : null;
+  // Only the CLEANER payload carries the rating-boost state — an admin opening
+  // this modal gets the ADMIN payload, which has no such field.
+  const boost = data?.audience === "CLEANER" ? data.ratingBoost : null;
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Your pay">
@@ -84,6 +87,33 @@ export default function PayBreakdownModal({
             <Row label="Hourly rate" value={`$${hourlyRate.toFixed(2)}/hr`} />
           )}
 
+          {/* The rating multiplier, in the cleaner's own terms (awerfixes.pdf
+              item 1). A cleaner never sees the job price or their base
+              percentage, so the copy states the EFFECT ("+13%") rather than the
+              mechanism ("1.13x") — a percentage bonus reads instantly and
+              cannot be reverse-engineered into the price. Conditional on
+              purpose: on FLAT, HOURLY and manually-set jobs the multiplier does
+              not apply, and rendering "1.00x" there would read as a penalty. */}
+          {boost?.state === "APPLIED" && (
+            <Row
+              label={
+                boost.averageRating != null
+                  ? `Rating bonus · ${boost.averageRating.toFixed(1)}★ average`
+                  : "Rating bonus"
+              }
+              value={`+${Math.round((boost.multiplier - 1) * 100)}%`}
+              valueClass="text-[#008C9C]"
+            />
+          )}
+
+          {boost?.state === "LOCKED" && (
+            <Row
+              label="Rating bonus"
+              value={`${boost.ratingsSoFar} of ${boost.ratingsRequired} ratings`}
+              valueClass="text-gray-500"
+            />
+          )}
+
           {data.tipShare > 0 && (
             <Row
               label="Includes your tip share"
@@ -94,11 +124,36 @@ export default function PayBreakdownModal({
 
           <div className="flex items-start gap-2 text-xs text-gray-500 bg-gray-50 rounded-xl p-3">
             <Info className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
-            <p>
-              Tips are divided equally among the lead and all assigned cleaners.
-              Final pay may adjust based on actual job completion and admin
-              review.
-            </p>
+            <div className="space-y-1.5">
+              {boost?.state === "APPLIED" && (
+                <p>
+                  Your customer rating adds{" "}
+                  {Math.round((boost.multiplier - 1) * 100)}% on top of your pay
+                  for this job. Keep your average up and it goes up with you.
+                </p>
+              )}
+              {boost?.state === "LOCKED" && (
+                <p>
+                  Once you have {boost.ratingsRequired} customer ratings, your
+                  average starts increasing your pay on percentage-paid jobs.
+                  You have {boost.ratingsSoFar} so far.
+                </p>
+              )}
+              {boost?.state === "NOT_APPLICABLE" && (
+                <p>
+                  {boost.reason === "FIXED_AMOUNT"
+                    ? "This job pays a set amount agreed with dispatch, so your rating bonus doesn't change it."
+                    : boost.reason === "HOURLY"
+                      ? "This job pays by the hour, so your rating bonus doesn't change it."
+                      : "This job pays a fixed amount, so your rating bonus doesn't change it."}
+                </p>
+              )}
+              <p>
+                Tips are divided equally among the lead and all assigned
+                cleaners. Final pay may adjust based on actual job completion
+                and admin review.
+              </p>
+            </div>
           </div>
         </div>
       )}

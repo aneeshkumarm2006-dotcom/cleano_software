@@ -129,6 +129,9 @@ export default async function ClientDetailPage({
             label: a.label,
             address: a.address,
             aptNumber: a.aptNumber,
+            city: a.city,
+            postalCode: a.postalCode,
+            accessNotes: a.accessNotes,
             isDefault: a.isDefault,
           })),
         }}

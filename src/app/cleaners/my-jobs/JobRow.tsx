@@ -42,6 +42,11 @@ export function JobRow({ job, isMainEmployee, missingEquipment = [], cleanerPay 
   const hasPay = cleanerPay != null || job.employeePay != null;
   const router = useRouter();
   const jobWithClock = job as any;
+  // The list reads the JOB-level clock columns, which since awerfixes.pdf item
+  // 6 are derived mirrors of the session rows: clockOutTime is null while
+  // ANYONE is still on the clock, so "in progress" here is now accurate on
+  // multi-cleaner jobs. It is still job-level, not per-cleaner — the card is a
+  // summary and the job page is where the per-cleaner truth lives.
   const canClockIn = !jobWithClock.clockInTime && !["COMPLETED", "CANCELLED", "PAID"].includes(job.status);
   const canClockOut = jobWithClock.clockInTime && !jobWithClock.clockOutTime;
   const isCompleted = job.status === "COMPLETED" || job.status === "PAID" || jobWithClock.clockOutTime;

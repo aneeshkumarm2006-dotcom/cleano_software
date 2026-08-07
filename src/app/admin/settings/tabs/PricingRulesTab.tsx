@@ -9,6 +9,14 @@ import { updateAppSetting } from "../../actions/updateAppSetting";
 import { AppSettingRecord, getSetting } from "../types";
 import { SectionCard, Field, Feedback, Msg } from "./_shared";
 import {
+  ADDON_POPUP_MESSAGE_MAX,
+  ADDON_POPUP_TITLE_MAX,
+  ROOM_TYPES,
+  type AddOnCatalogEntry,
+  type RoomType,
+} from "@/lib/addon-catalog";
+import { ADDON_ICONS, ADDON_ICON_KEYS } from "@/lib/addon-icons";
+import {
   SERVICE_PRICING_KEY,
   ServicePricingConfig,
   normalizeServicePricing,
@@ -45,33 +53,36 @@ interface PerUnitRates {
   perHalfBath: number;
 }
 
-export type RoomType =
-  | "KITCHEN"
-  | "BATHROOM"
-  | "BEDROOM"
-  | "LIVING_ROOM"
-  | "LAUNDRY"
-  | "OUTDOOR"
-  | "WHOLE_HOME";
+// The room enum and the add-on shape now live in @/lib/addon-catalog, which is
+// also what validates them on read. They used to be declared here AND in
+// getBookingConfig AND in book/types, and the three had already drifted on
+// which fields were optional.
+export type { RoomType };
 
-const ROOM_OPTIONS: { value: RoomType; label: string }[] = [
-  { value: "KITCHEN", label: "Kitchen" },
-  { value: "BATHROOM", label: "Bathroom" },
-  { value: "BEDROOM", label: "Bedroom" },
-  { value: "LIVING_ROOM", label: "Living room" },
-  { value: "LAUNDRY", label: "Laundry" },
-  { value: "OUTDOOR", label: "Outdoor / patio" },
-  { value: "WHOLE_HOME", label: "Whole home" },
-];
+const ROOM_LABELS: Record<RoomType, string> = {
+  KITCHEN: "Kitchen",
+  BATHROOM: "Bathroom",
+  BEDROOM: "Bedroom",
+  LIVING_ROOM: "Living room",
+  LAUNDRY: "Laundry",
+  OUTDOOR: "Outdoor / patio",
+  WHOLE_HOME: "Whole home",
+};
 
-interface AddOn {
-  id: string;
-  name: string;
-  price: number;
+const ROOM_OPTIONS: { value: RoomType; label: string }[] = ROOM_TYPES.map((value) => ({
+  value,
+  label: ROOM_LABELS[value],
+}));
+
+/**
+ * An add-on being EDITED. Looser than the stored shape: a half-filled row is
+ * legal in the editor and only has to satisfy `normalizeAddOn` on read.
+ */
+type AddOn = Omit<AddOnCatalogEntry, "roomType" | "services"> & {
   roomType?: RoomType;
   /** Service types this add-on shows for. Empty/undefined = all services. */
   services?: string[];
-}
+};
 
 // Service types must match the booking flow's SERVICE_TYPES values.
 const SERVICE_OPTIONS: { value: string; label: string }[] = [
@@ -307,6 +318,116 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
                   onClick={() => removeAddOn(addon.id)}
                   className="text-red-500"
                 />
+              </div>
+
+              {/* Icon (item 17). Without a stored key the icon is guessed from
+                  the name, which misfires — "Chair cleaning" resolves to a vent
+                  because of the "air" in it. Picking a key is the escape hatch;
+                  "Auto" clears it and restores the guess. */}
+              <div>
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-[#008C9C]/60">
+                  Icon
+                </span>
+                <div className="flex flex-wrap gap-1.5 mt-1.5 items-center">
+                  <button
+                    type="button"
+                    onClick={() => updateAddOn(addon.id, { icon: undefined })}
+                    className={`px-3 h-9 rounded-xl text-xs font-medium border transition-colors ${
+                      !addon.icon
+                        ? "bg-[#008C9C] text-white border-[#008C9C]"
+                        : "bg-white text-[#008C9C]/70 border-[#008C9C]/15 hover:border-[#008C9C]/40"
+                    }`}
+                    title="Guess the icon from the add-on's name">
+                    Auto
+                  </button>
+                  {ADDON_ICON_KEYS.map((key) => {
+                    const Ic = ADDON_ICONS[key];
+                    const on = addon.icon === key;
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        title={key}
+                        aria-label={`Use the ${key} icon`}
+                        aria-pressed={on}
+                        onClick={() => updateAddOn(addon.id, { icon: key })}
+                        className={`w-9 h-9 rounded-xl border flex items-center justify-center transition-colors ${
+                          on
+                            ? "bg-[#008C9C] text-white border-[#008C9C]"
+                            : "bg-white text-[#008C9C]/70 border-[#008C9C]/15 hover:border-[#008C9C]/40"
+                        }`}>
+                        <Ic className="w-4 h-4" />
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Customer pop-up (item 17) — shown when the customer SELECTS
+                  this add-on during booking. */}
+              <div className="rounded-xl bg-[#008C9C]/5 p-3 space-y-2">
+                <label className="flex items-center gap-2 text-sm text-[#003C46]">
+                  <input
+                    type="checkbox"
+                    checked={!!addon.popupEnabled}
+                    onChange={(e) =>
+                      updateAddOn(addon.id, { popupEnabled: e.target.checked || undefined })
+                    }
+                    className="accent-[#008C9C]"
+                  />
+                  Show a message when a customer selects this
+                </label>
+                {addon.popupEnabled && (
+                  <div className="space-y-2">
+                    <Field label="Title">
+                      <Input
+                        variant="form"
+                        value={addon.popupTitle ?? ""}
+                        maxLength={ADDON_POPUP_TITLE_MAX}
+                        onChange={(e) =>
+                          updateAddOn(addon.id, { popupTitle: e.target.value || undefined })
+                        }
+                        placeholder={addon.name || "Defaults to the add-on's name"}
+                      />
+                    </Field>
+                    <Field label="Message">
+                      <textarea
+                        rows={4}
+                        value={addon.popupMessage ?? ""}
+                        maxLength={ADDON_POPUP_MESSAGE_MAX}
+                        onChange={(e) =>
+                          updateAddOn(addon.id, { popupMessage: e.target.value || undefined })
+                        }
+                        placeholder="e.g. Couch cleaning is quoted per piece. We'll confirm the exact price before your visit."
+                        className="w-full px-3 py-2 rounded-xl border border-[#008C9C]/15 bg-white text-[#003C46] text-sm focus:outline-none focus:border-[#008C9C] focus:ring-2 focus:ring-[#008C9C]/10"
+                      />
+                    </Field>
+                    <div className="flex items-center justify-between gap-3">
+                      <label className="flex items-center gap-2 text-sm text-[#003C46]">
+                        <input
+                          type="checkbox"
+                          checked={!!addon.popupRequestPhoto}
+                          onChange={(e) =>
+                            updateAddOn(addon.id, {
+                              popupRequestPhoto: e.target.checked || undefined,
+                            })
+                          }
+                          className="accent-[#008C9C]"
+                        />
+                        Tell them we&apos;ll ask for a photo
+                      </label>
+                      <span className="text-[11px] text-[#008C9C]/50">
+                        {(addon.popupMessage ?? "").length}/{ADDON_POPUP_MESSAGE_MAX}
+                      </span>
+                    </div>
+                    {!(addon.popupMessage ?? "").trim() && (
+                      <p className="text-xs text-amber-700">
+                        The pop-up is on but has no message — customers will see
+                        just the title.
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
               <div>
                 <span className="text-[11px] font-semibold uppercase tracking-wide text-[#008C9C]/60">

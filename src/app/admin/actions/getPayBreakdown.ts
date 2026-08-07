@@ -10,8 +10,14 @@ import type {
   PayBreakdown,
 } from "./getPayBreakdown.types";
 import { getCleanerRateInputs } from "@/lib/cleaner-rates";
-import { computeJobPayout, type CleanerTier } from "@/lib/pay-tiers";
-import { cleanerJobPay, type JobPayInput } from "@/lib/cleaner-earnings";
+import {
+  STANDARD_RATINGS_REQUIRED,
+  tierBaseRate,
+  type CleanerTier,
+} from "@/lib/pay-tiers";
+import { computeJobPayShares, type JobPayInput } from "@/lib/cleaner-earnings";
+import { computeJobMoney } from "@/lib/job-money";
+import { getTaxRates } from "@/lib/tax.server";
 
 /**
  * Pay breakdown for one job.
@@ -86,12 +92,56 @@ export async function getPayBreakdown(
         ? session.user.id
         : job.employeeId ?? participantIds[0] ?? "";
 
-    // Same math as payroll (src/lib/cleaner-earnings.ts) so the number a cleaner
-    // sees here is the number they get paid.
-    const share = cleanerJobPay(job as unknown as JobPayInput, rateInputs, viewerId);
+    // ONE route. This file used to compute the payout TWICE — cleanerJobPay
+    // here AND computeJobPayout further down — and the two disagreed on every
+    // job with a manual override, every FLAT/HOURLY job, and every job still
+    // carrying an ADMIN on employeeId (computeJobPayout has no equivalent of
+    // the jobParticipantIds guard, so it paid the phantom and inflated
+    // poolTotal). Same math as payroll, so the number a cleaner sees here is
+    // the number they get paid.
+    const shares = computeJobPayShares(
+      job as unknown as JobPayInput,
+      rateInputs
+    );
+    const share = shares.get(viewerId) ?? {
+      base: 0,
+      afterMultiplier: 0,
+      tip: 0,
+      total: 0,
+      hours: 0,
+    };
+
+    const viewerRate = rateInputs.get(viewerId);
+    const hasOverride = job.assignments.some(
+      (a) => a.cleanerId === viewerId && a.payAmount != null
+    );
+    // The multiplier only shapes the PERCENTAGE-of-price path. A manual
+    // override, a FLAT total or an HOURLY amount is the figure the admin typed
+    // and is paid through untouched.
+    const multiplierApplies =
+      payType === "PERCENTAGE" && !hasOverride && (job.price ?? 0) > 0;
 
     // ── Cleaner (and any non-admin) payload: payout only. ────────────────────
     if (!isAdmin) {
+      const ratingBoost: CleanerPayBreakdown["ratingBoost"] = hasOverride
+        ? { state: "NOT_APPLICABLE", reason: "FIXED_AMOUNT" }
+        : !multiplierApplies
+          ? {
+              state: "NOT_APPLICABLE",
+              reason: payType === "HOURLY" ? "HOURLY" : "FLAT",
+            }
+          : (viewerRate?.ratingCount ?? 0) < STANDARD_RATINGS_REQUIRED
+            ? {
+                state: "LOCKED",
+                ratingsSoFar: viewerRate?.ratingCount ?? 0,
+                ratingsRequired: STANDARD_RATINGS_REQUIRED,
+              }
+            : {
+                state: "APPLIED",
+                multiplier: viewerRate?.multiplier ?? 1,
+                averageRating: viewerRate?.avgRating ?? null,
+              };
+
       const redacted: CleanerPayBreakdown = {
         audience: "CLEANER",
         jobId: job.id,
@@ -100,6 +150,7 @@ export async function getPayBreakdown(
         hourlyRate: payType === "HOURLY" ? job.hourlyRate ?? null : null,
         tipShare: share.tip,
         totalEmployeePay: share.total,
+        ratingBoost,
       };
       return { success: true, breakdown: redacted };
     }
@@ -123,32 +174,29 @@ export async function getPayBreakdown(
       }
     }
 
-    const addOnsTotal = job.addOns.reduce((sum, a) => sum + (a.price || 0), 0);
+    // Display figures only — cleaner pay comes from computeJobPayShares above,
+    // which reads `job.price` directly and is untouched by any of this.
+    // `job.price - addOnsTotal` was web-shaped and understated an admin job's
+    // base by the whole add-on total, since an admin `price` never contained
+    // them in the first place.
+    const money = computeJobMoney(job, await getTaxRates());
+    const addOnsTotal = money.addOnTotal;
 
     if (basePrice === null && job.price !== null) {
-      basePrice = Math.max(0, job.price - addOnsTotal);
+      basePrice = money.basePrice;
       basePriceSource = "JOB_PRICE";
     }
 
     const discount = job.discountAmount || 0;
     const parking = job.parking || 0;
-    const clientTotal =
-      job.price !== null
-        ? job.price
-        : (basePrice ?? 0) + addOnsTotal - discount;
+    const clientTotal = money.totalAmount;
 
-    const rateList = participantIds.map(
-      (id) =>
-        rateInputs.get(id) ?? {
-          id,
-          tier: "STANDARD" as const,
-          avgRating: null,
-          ratingCount: 0,
-        }
-    );
-    const payout = computeJobPayout(job.price, rateList);
-    const viewerShare = payout.shares.find((s) => s.id === viewerId);
-    const viewerRate = rateInputs.get(viewerId);
+    const viewerTier = (viewerRate?.tier as CleanerTier) ?? "STANDARD";
+    const resolvedMultiplier = viewerRate?.multiplier ?? 1.0;
+    const poolTotal =
+      Math.round(
+        [...shares.values()].reduce((sum, s) => sum + s.base, 0) * 100
+      ) / 100;
 
     const breakdown: AdminPayBreakdown = {
       audience: "ADMIN",
@@ -158,25 +206,47 @@ export async function getPayBreakdown(
       bathCount: job.bathCount,
       basePrice,
       basePriceSource,
-      addOns: job.addOns.map((a) => ({ name: a.name, price: a.price })),
+      addOns: money.addOnLines.map((a) => ({
+        name: a.name,
+        price: a.unitPrice,
+        quantity: a.quantity,
+        lineTotal: a.lineTotal,
+      })),
       addOnsTotal,
       discount,
       parking,
       clientTotal,
       payType,
       hourlyRate: job.hourlyRate ?? null,
-      employeeBasePay: share.base,
-      payMultiplier: job.payRateMultiplier ?? 1.0,
-      payAfterMultiplier: share.afterMultiplier,
+      // Pay at the bare TIER BASE rate, so the before/after below is a real
+      // comparison rather than the same number printed twice (the multiplier is
+      // folded into the rate now, not applied to the finished amount).
+      employeeBasePay: multiplierApplies
+        ? Math.round((job.price ?? 0) * tierBaseRate(viewerTier) * 100) / 100
+        : share.base,
+      // The RESOLVED cleaner multiplier. This used to read the deprecated
+      // per-job column, which both save paths hard-reset to 1.0 and nothing
+      // reads any more. The premium belongs to the CLEANER, not the job.
+      payMultiplier: resolvedMultiplier,
+      payMultiplierApplies: multiplierApplies,
+      payMultiplierSource: multiplierApplies
+        ? `${viewerRate?.avgRating?.toFixed(2) ?? "—"}★ all-time · ${viewerRate?.ratingCount ?? 0} ratings`
+        : hasOverride
+          ? "Manual per-cleaner amount — no multiplier"
+          : `${payType} pay — no multiplier`,
+      payAfterMultiplier: share.base,
       totalTip: job.totalTip || 0,
-      teamSize: participantIds.length,
+      teamSize: shares.size,
       tipShare: share.tip,
       totalEmployeePay: share.total,
       isLead,
-      tier: (viewerRate?.tier as CleanerTier) ?? "STANDARD",
-      individualRate: viewerShare?.rate ?? 0,
-      isSplit: payout.isSplit,
-      poolTotal: payout.pool,
+      tier: viewerTier,
+      individualRate: multiplierApplies
+        ? Math.round(tierBaseRate(viewerTier) * resolvedMultiplier * 10000) /
+          10000
+        : 0,
+      isSplit: shares.size > 1,
+      poolTotal,
     };
 
     return { success: true, breakdown };

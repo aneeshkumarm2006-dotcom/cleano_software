@@ -21,8 +21,6 @@ export interface CompanyThresholdInput {
 export interface CleanerThresholdInput {
   /** Product.cleanerRestockThreshold. */
   cleanerRestockThreshold: number;
-  /** InventoryRule.usagePerJob, when configured. Used only for the default. */
-  usagePerJob?: number | null;
   /**
    * Admin's global floor (`inventory.defaultRefillThreshold`) applied when the
    * product has no cleaner threshold of its own. Omit to use the built-in.
@@ -57,15 +55,20 @@ export function companyReorderThreshold(p: { minStock: number }): number {
  * NOTE: this deliberately does NOT fall back to `minStock`. That fallback was
  * the defect — the company reorder point has no bearing on how much one cleaner
  * should carry.
+ *
+ * It also no longer floors on `InventoryRule.usagePerJob` (awerfixes.pdf item
+ * 14). That term raised the threshold to whatever an admin had once typed into
+ * the Inventory Rules tab, so a stale guess silently decided when every cleaner
+ * was warned — and products with no rule got no floor at all. The configured
+ * product value and the admin's global default are the two knobs that remain,
+ * and both are things someone actually maintains.
  */
 export function cleanerRestockThreshold(p: CleanerThresholdInput): number {
   const configured = p.cleanerRestockThreshold ?? 0;
   if (configured > 0) return configured;
-  const floor =
-    p.defaultThreshold != null && p.defaultThreshold > 0
-      ? p.defaultThreshold
-      : DEFAULT_CLEANER_RESTOCK_THRESHOLD;
-  return Math.max(floor, p.usagePerJob ?? 0);
+  return p.defaultThreshold != null && p.defaultThreshold > 0
+    ? p.defaultThreshold
+    : DEFAULT_CLEANER_RESTOCK_THRESHOLD;
 }
 
 /** Is company/locker stock at or below the reorder point? */

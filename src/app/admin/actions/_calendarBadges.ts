@@ -8,6 +8,7 @@
 // cleaner assigned to each job so the operations manager sees the warning too.
 
 import { db } from "@/db";
+import { loadPerJobAverages } from "@/lib/inventory-forecast.server";
 import { getSetting } from "@/lib/settings";
 import { resolvePriorityLabel, type PriorityLabel } from "@/lib/calendar-labels";
 
@@ -42,9 +43,25 @@ export async function computeBadgeMaps(
   const missing: Record<string, MissingItem[]> = {};
   if (jobs.length === 0) return { priority, missing };
 
-  const rules = await db.inventoryRule.findMany({ include: { product: true } });
-  const activeRules = rules.filter((r) => r.usagePerJob > 0);
-  if (activeRules.length === 0) return { priority, missing };
+  // What a job actually consumes, measured from reported usage rather than the
+  // retired InventoryRule.usagePerJob (awerfixes.pdf item 14). Products with no
+  // usage history simply aren't checked — the badge only ever claimed to catch
+  // shortfalls it could quantify, and inventing a need for an unmeasured
+  // product would put a warning on every job on the calendar.
+  const avgPerJob = await loadPerJobAverages();
+  if (avgPerJob.size === 0) return { priority, missing };
+  const products = await db.product.findMany({
+    where: { id: { in: [...avgPerJob.keys()] } },
+    select: { id: true, name: true },
+  });
+  const activeNeeds = products
+    .map((p) => ({
+      productId: p.id,
+      productName: p.name,
+      needed: avgPerJob.get(p.id) ?? 0,
+    }))
+    .filter((n) => n.needed > 0);
+  if (activeNeeds.length === 0) return { priority, missing };
 
   // Which cleaner(s)' inventory matters for each job.
   const cleanerIdsFor = (job: JobForBadge): string[] =>
@@ -76,14 +93,14 @@ export async function computeBadgeMaps(
     const ids = cleanerIdsFor(job);
     if (ids.length === 0) continue;
     const items: MissingItem[] = [];
-    for (const rule of activeRules) {
+    for (const need of activeNeeds) {
       // Flag the product if ANY assigned cleaner is short of the per-job need.
-      const haves = ids.map((id) => inv[id]?.[rule.productId] ?? 0);
+      const haves = ids.map((id) => inv[id]?.[need.productId] ?? 0);
       const minHave = Math.min(...haves);
-      if (minHave < rule.usagePerJob) {
+      if (minHave < need.needed) {
         items.push({
-          productName: rule.product.name,
-          needed: rule.usagePerJob,
+          productName: need.productName,
+          needed: Math.round(need.needed * 100) / 100,
           have: minHave,
         });
       }

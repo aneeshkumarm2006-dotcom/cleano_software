@@ -56,7 +56,10 @@ has(
 for (const [label, path] of [
   ["bulk-charge queue", "src/app/admin/bulk-charge/page.tsx"],
   ["requests queue", "src/app/admin/requests/page.tsx"],
-  ["requests badge count", "src/app/admin/actions/getPendingRequestCount.ts"],
+  // Was getPendingRequestCount.ts. That action was folded into the consolidated
+  // sidebar counts (awerfixes.pdf item 11, round 3); the archived-jobs filter it
+  // guarded moved with the query, so this check follows it rather than lapsing.
+  ["requests badge count", "src/app/admin/actions/getAdminAttentionCounts.ts"],
   ["wash payout review", "src/app/admin/wash-payouts/page.tsx"],
   ["web bookings list", "src/app/admin/web-bookings/page.tsx"],
   ["finances job picker", "src/app/admin/finances/page.tsx"],
@@ -139,7 +142,16 @@ console.log("\n── Item 2 · jobs no longer unassign cleaners ──");
 
 // (a) The cron sweep must never detach a cleaner again.
 const cron = read("src/app/api/cron/notifications/route.ts");
-const sweep = cron.slice(cron.indexOf("Sweep expired job-assignment invites"));
+// The anchor moved: awerfixes.pdf round 3 item 4 split this region in two —
+// "Sweep lapsed LAST-MINUTE broadcast invites" (hard expiry, still correct) and
+// the direct-assignment nudge below it. The old anchor string no longer existed,
+// so indexOf returned -1 and slice(-1) handed the next two checks a single
+// character, which they "passed" against. Assert the anchor before slicing:
+// a check that cannot fail is worse than one that does.
+const SWEEP_ANCHOR = "── Sweep lapsed LAST-MINUTE broadcast invites";
+const sweepAt = cron.indexOf(SWEEP_ANCHOR);
+ok("the invite-sweep block is still findable", sweepAt >= 0);
+const sweep = cron.slice(Math.max(0, sweepAt));
 ok(
   "expired invite sweep no longer disconnects the cleaner",
   !sweep.includes("cleaners: { disconnect")
@@ -175,7 +187,13 @@ ok(
 );
 ok(
   "assignment sync is skipped when the team wasn't submitted",
-  saveJob.includes("if (teamSubmitted) {\n        const assignmentSync")
+  // Line endings normalised: the working tree is checked out CRLF, so a literal
+  // "\n" needle could never match and this check was failing for a reason that
+  // had nothing to do with the code it guards. Intent is unchanged — the
+  // assignmentSync call must sit directly inside `if (teamSubmitted) {`.
+  saveJob
+    .replace(/\r\n/g, "\n")
+    .includes("if (teamSubmitted) {\n        const assignmentSync")
 );
 ok(
   "a series edit doesn't propagate an empty team",

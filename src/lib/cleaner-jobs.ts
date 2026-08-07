@@ -152,5 +152,16 @@ export function clockInOpensAt(startTime: Date): Date {
   return new Date(startTime.getTime() - CLOCK_IN_EARLY_WINDOW_MIN * 60_000);
 }
 
-/** Statuses a job can never be clocked into. */
-export const CLOCK_IN_BLOCKED_STATUSES = ["CANCELLED", "COMPLETED", "PAID"] as const;
+/**
+ * Statuses a job can never be clocked into.
+ *
+ * COMPLETED was removed here in awerfixes.pdf item 6 (round 3): a cleaner who
+ * clocks out and then has to go back — a forgotten room, a supply run, a second
+ * visit the same day — needs to reopen a finished job, and that is precisely
+ * what "clock back in" is. Doing so restores the job to IN_PROGRESS.
+ *
+ * PAID and CANCELLED stay blocked: the money has moved, or the work is off.
+ * The same two statuses are RESUME_BLOCKED_STATUSES in src/lib/work-sessions.ts,
+ * which is the pure copy the UI reads.
+ */
+export const CLOCK_IN_BLOCKED_STATUSES = ["CANCELLED", "PAID"] as const;

@@ -1,10 +1,20 @@
 /**
  * Shared, dependency-light core for the BookingKoala import. Pure parsing +
- * field mapping only — NO database or email. Consumed by both the CLI script
- * (scripts/importBookingKoala.ts) and the server action behind the admin
- * "Import from BookingKoala" button, so the two can never drift.
+ * field mapping only — NO database or email.
+ *
+ * The ONLY consumer is the server action behind the admin "Import from
+ * BookingKoala" button (src/app/admin/actions/runBookingKoalaImport.ts).
+ *
+ * This docstring used to claim `scripts/importBookingKoala.ts` consumed it too,
+ * "so the two can never drift". That was never true — the CLI script imports
+ * nothing from here and copy-pasted every helper, and the claim is exactly what
+ * let it drift for so long (hardcoded 2026 date window, gstAmount/qstAmount
+ * pinned to 0, dedupe missing `deletedAt: null`, no Stripe intent id). The
+ * script is now stamped DEPRECATED and refuses to write; the admin button is
+ * the supported path.
  */
 import { randomBytes } from "crypto";
+import { addOnKey } from "../checklist-triggers";
 
 // Broad guard window — only rejects clearly-bogus dates, not real bookings.
 // Previously hardcoded to Jun 1–Sep 1 2026, which silently dropped every
@@ -124,6 +134,142 @@ export function makeTempPassword(): string {
   return out;
 }
 
+// ─── Add-ons (awerfixes item 9) ──────────────────────────────────────────────
+
+/**
+ * The five BookingKoala columns that carry add-on names.
+ *
+ * Read by HEADER NAME, never by position: `Extras` sits at index 53 in the
+ * export while the other four are 65-68, so a positional assumption breaks the
+ * moment BookingKoala reorders a column.
+ */
+export const BK_ADDON_COLUMNS = [
+  "Extras",
+  "Items",
+  "Packages",
+  "Package addons",
+  "Addons",
+] as const;
+
+export type BkAddOnSource = (typeof BK_ADDON_COLUMNS)[number];
+
+export interface BkAddOn {
+  /** BookingKoala's own name — whitespace-normalised, quantity marker removed. */
+  name: string;
+  /** >= 1. Defaults to 1 when the cell carries no marker. */
+  quantity: number;
+  /** Which column it came from, so an import review can say where to look. */
+  source: BkAddOnSource;
+}
+
+/**
+ * Split ONE cell into add-on fragments.
+ *
+ * Splits on `;` and newlines, then on commas that are NOT inside parentheses —
+ * done with a depth counter rather than a regex, because a regex cannot count
+ * nesting and `"Deep Clean (2 rooms), Windows"` is two add-ons, not three.
+ */
+export function splitBkAddOnList(raw: string): string[] {
+  const out: string[] = [];
+  let buf = "";
+  let depth = 0;
+  const flush = () => {
+    const v = buf.trim();
+    // Drop empties and bare numbers ("0.00" shows up in blank money columns).
+    if (v && !/^[\d.,\s$-]+$/.test(v)) out.push(v);
+    buf = "";
+  };
+  for (const ch of raw) {
+    if (ch === "(") depth++;
+    else if (ch === ")") depth = Math.max(0, depth - 1);
+    if (ch === ";" || ch === "\n" || ch === "\r" || (ch === "," && depth === 0)) {
+      flush();
+      continue;
+    }
+    buf += ch;
+  }
+  flush();
+  return out;
+}
+
+/** Hard ceiling on a parsed quantity — a 4-digit run is a mis-parse, not an order. */
+const BK_MAX_QUANTITY = 99;
+
+/**
+ * Pull a trailing quantity marker off one fragment.
+ *
+ * BookingKoala's own convention is a trailing `(N)` — the single populated
+ * fixture value is `"2 Day Post Construction(1)"`. Two traps that shape this:
+ *
+ *   * the NAME can start with a digit, so the pattern is anchored at the END
+ *     and never inspects the head of the string;
+ *   * `(...)` also appears in descriptive text (`"Windows (interior)"`) and in
+ *     Frequency values (`"Bi Weekly (2 Cleanings/Month -8%)"`), so the capture
+ *     is digits-only — those cannot match at all, structurally rather than by
+ *     luck.
+ *
+ * The `xN` form is tried only if `(N)` did not match, since it has never been
+ * observed in real data and must never override the form that has.
+ */
+function parseBkQuantity(fragment: string): { name: string; quantity: number } {
+  const paren = /^(.+?)\s*\((\d{1,3})\)$/.exec(fragment);
+  if (paren) {
+    return {
+      name: paren[1].trim(),
+      quantity: clampBkQuantity(parseInt(paren[2], 10)),
+    };
+  }
+  const xForm = /^(.{2,}?)\s*[x×]\s*(\d{1,3})$/i.exec(fragment);
+  if (xForm) {
+    return {
+      name: xForm[1].trim(),
+      quantity: clampBkQuantity(parseInt(xForm[2], 10)),
+    };
+  }
+  return { name: fragment.trim(), quantity: 1 };
+}
+
+function clampBkQuantity(n: number): number {
+  if (!Number.isFinite(n) || n < 1) return 1;
+  return Math.min(n, BK_MAX_QUANTITY);
+}
+
+/**
+ * Read all five add-on columns off one CSV row.
+ *
+ * Parses each column SEPARATELY rather than re-splitting the `"; "`-joined
+ * notes string: that join is an output format, and splitting it back would
+ * throw away the per-column provenance the import review needs.
+ *
+ * Duplicates across columns are merged by `addOnKey` — the canonical
+ * name normaliser used by the checklist triggers — with quantities summed, so
+ * "Inside Fridge" in Extras and "inside fridge(2)" in Addons is one row of 3.
+ */
+export function parseBkAddOns(get: (column: string) => string): BkAddOn[] {
+  const merged = new Map<string, BkAddOn>();
+  for (const column of BK_ADDON_COLUMNS) {
+    const cell = clean(get(column));
+    if (!cell) continue;
+    for (const fragment of splitBkAddOnList(cell)) {
+      const { name, quantity } = parseBkQuantity(fragment);
+      const tidy = name.replace(/\s+/g, " ").trim();
+      // An add-on name always contains a letter. This drops leftovers that
+      // survive the marker rules but name nothing — a bare "(3)" (which the
+      // `(N)` pattern deliberately refuses, since it has no name in front of
+      // it), stray punctuation, and separator debris.
+      if (!/\p{L}/u.test(tidy)) continue;
+      const key = addOnKey(tidy);
+      const existing = merged.get(key);
+      if (existing) {
+        existing.quantity = clampBkQuantity(existing.quantity + quantity);
+      } else {
+        merged.set(key, { name: tidy, quantity, source: column });
+      }
+    }
+  }
+  return [...merged.values()];
+}
+
 export interface ProviderInfo {
   email: string | null;
   name: string;
@@ -207,6 +353,14 @@ export interface NormalizedJob {
   requiredCleaners: number;
   /** Customer-/cleaner-facing note (add-ons only); null when none. */
   notes: string | null;
+  /**
+   * Structured add-ons parsed from the five CSV columns (item 9).
+   *
+   * NOTE ON MONEY: these carry names and quantities, never prices. The CSV's
+   * "Service total" already includes the extras, so pricing these rows would
+   * bill an imported job for them a second time. See runBookingKoalaImport.
+   */
+  addOns: BkAddOn[];
   /** Internal traceability (source + team payout) → admin-only job log. */
   importNote: string;
   /** Stripe PaymentIntent id from the CSV "Transaction id" column. */
@@ -330,15 +484,28 @@ export function parseAndNormalize(csvText: string): ParseResult {
       .filter(Boolean)
       .join("; ");
     // Customer-/cleaner-facing note: ONLY the add-ons they booked (or nothing).
+    // Deliberately KEPT verbatim alongside the structured rows below — it is the
+    // only record of the pre-parse BookingKoala text, so a mis-parse stays
+    // diagnosable and the notes cleanup (item 15) has something to preserve.
     const customerNote = addonText ? `Add-ons: ${addonText}` : null;
+    // Structured add-ons (item 9) — parsed from the same five columns, per
+    // column, with quantities. These become real JobAddOn rows.
+    const addOns = parseBkAddOns(get);
     // Internal traceability (source + team payout) — never shown to the customer
-    // or cleaner; persisted as an admin-only NOTE_ADDED job log instead.
+    // or cleaner; persisted as an admin-only NOTE_ADDED job log instead. The
+    // parsed interpretation goes here too, so an admin can see how the raw text
+    // was read without the customer-facing note growing.
     const importNote =
       `Imported from BookingKoala (booking ${clean(get("Booking id")) || "?"}, ${
         clean(get("Frequency")) || "?"
       }).` +
       (providers.length
         ? ` Team: ${providers.map((p) => `${p.name} ($${p.payment.toFixed(0)})`).join(", ")}.`
+        : "") +
+      (addOns.length
+        ? ` Add-ons parsed: ${addOns
+            .map((a) => (a.quantity > 1 ? `${a.name} ×${a.quantity}` : a.name))
+            .join(", ")}.`
         : "");
 
     const email = cleanOrNull(get("Email"))?.toLowerCase() ?? null;
@@ -392,6 +559,7 @@ export function parseAndNormalize(csvText: string): ParseResult {
         employeePay: teamPayout || null,
         requiredCleaners: Math.max(1, providers.length),
         notes: customerNote,
+        addOns,
         importNote,
         startTime: start,
         endTime: end,
@@ -518,6 +686,20 @@ export interface ImportReport {
     sameDay: number;
   };
   statusCounts: Record<string, number>;
+  /**
+   * Structured add-ons created from the CSV (item 9). `unmatched` counts rows
+   * whose BookingKoala name has no Cleano catalog entry — those are still
+   * created (nothing is lost) but need an admin to price them.
+   */
+  addOns: { created: number; matched: number; unmatched: number };
+  /** The unmatched names, for the "needs review" panel in the import summary. */
+  addOnsNeedingReview: {
+    name: string;
+    quantity: number;
+    source: string;
+    rowNum: number;
+    bookingId: string | null;
+  }[];
   emails: { sent: number; failed: number };
   sample: {
     row: number;

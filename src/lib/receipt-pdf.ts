@@ -1,4 +1,6 @@
 import { db } from "@/db";
+import { addOnLineLabel, computeJobMoney, type AddOnLine } from "@/lib/job-money";
+import { getTaxRates } from "@/lib/tax.server";
 
 const BRAND = "#008C9C";
 
@@ -13,7 +15,7 @@ export interface ReceiptData {
   bedCount: number | null;
   bathCount: number | null;
   basePrice: number;
-  addOns: { name: string; price: number }[];
+  addOns: AddOnLine[];
   subtotal: number;
   gstAmount: number;
   qstAmount: number;
@@ -27,13 +29,17 @@ export async function loadReceiptData(jobId: string): Promise<ReceiptData | null
     where: { id: jobId },
     include: {
       client: { select: { name: true, email: true } },
-      addOns: { select: { name: true, price: true } },
+      addOns: { select: { name: true, price: true, quantity: true } },
     },
   });
   if (!job) return null;
 
-  const addOnTotal = job.addOns.reduce((s, a) => s + a.price, 0);
-  const basePrice = Math.max(0, job.subtotalAmount - addOnTotal);
+  // One helper decides where this job's add-ons sit relative to its subtotal —
+  // inside it for a web booking or an import, on top of it for an admin job.
+  // Reading `job.price` as the total was correct under web semantics and wrong
+  // on every admin job, where `price` is the PRE-tax figure and the receipt
+  // therefore printed a total that excluded the tax the customer was charged.
+  const money = computeJobMoney(job, await getTaxRates());
 
   return {
     jobId: job.id,
@@ -45,12 +51,12 @@ export async function loadReceiptData(jobId: string): Promise<ReceiptData | null
     serviceType: job.jobType,
     bedCount: job.bedCount,
     bathCount: job.bathCount,
-    basePrice,
-    addOns: job.addOns,
-    subtotal: job.subtotalAmount,
-    gstAmount: job.gstAmount,
-    qstAmount: job.qstAmount,
-    totalAmount: job.price ?? job.subtotalAmount + job.gstAmount + job.qstAmount,
+    basePrice: money.basePrice,
+    addOns: money.addOnLines,
+    subtotal: money.subtotalAmount,
+    gstAmount: money.gstAmount,
+    qstAmount: money.qstAmount,
+    totalAmount: money.totalAmount,
     refundedAmount: job.refundedAmount,
     paidAt: job.paidAt?.toISOString() ?? null,
   };
@@ -250,8 +256,8 @@ export async function buildReceiptPdfBuffer(
         React.createElement(
           View,
           { key: `ao-${i}`, style: styles.lineItemRow },
-          React.createElement(Text, null, a.name),
-          React.createElement(Text, null, fmt(a.price))
+          React.createElement(Text, null, addOnLineLabel(a)),
+          React.createElement(Text, null, fmt(a.lineTotal))
         )
       ),
       React.createElement(

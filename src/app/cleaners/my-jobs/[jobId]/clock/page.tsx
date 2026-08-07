@@ -39,7 +39,6 @@ export default async function ClockPage({ params }: PageProps) {
       name: ep.product.name,
       unit: ep.product.unit,
       category: ep.product.category as any,
-      inventoryRule: null as null,
     },
   }));
 
@@ -55,6 +54,21 @@ export default async function ClockPage({ params }: PageProps) {
   });
   const onBreak = !!runningBreak;
 
+  // This cleaner's own work sessions and breaks (item 6). The session log used
+  // to be a three-way ternary over the single clock pair, so it could render at
+  // most one row no matter how many times the cleaner had been on site.
+  const [mySessions, myBreaks] = await Promise.all([
+    db.jobWorkSession.findMany({
+      where: { jobId: job.id, cleanerId: session.user.id },
+      orderBy: { startedAt: "asc" },
+      select: { id: true, startedAt: true, endedAt: true },
+    }),
+    db.jobBreak.findMany({
+      where: { jobId: job.id, cleanerId: session.user.id },
+      select: { startedAt: true, endedAt: true },
+    }),
+  ]);
+
   return (
     <ClockPageClient
       jobId={job.id}
@@ -68,6 +82,15 @@ export default async function ClockPage({ params }: PageProps) {
       onMyWayAt={j.onMyWayAt?.toISOString() ?? null}
       employeeProducts={employeeProducts}
       gpsEnabled={gpsEnabled}
+      sessions={mySessions.map((s) => ({
+        id: s.id,
+        startedAt: s.startedAt.toISOString(),
+        endedAt: s.endedAt?.toISOString() ?? null,
+      }))}
+      breaks={myBreaks.map((b) => ({
+        startedAt: b.startedAt.toISOString(),
+        endedAt: b.endedAt?.toISOString() ?? null,
+      }))}
     />
   );
 }

@@ -60,8 +60,11 @@ export default function PriceSummary() {
     >
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <DollarSign size={15} style={{ color: "var(--primary-60)" }} />
+        {/* Not the client total: this figure excludes add-ons AND tax. It
+            reads the form's inputs by DOM id, so it cannot see either. The job
+            detail page and the modal's preview both show the real total. */}
         <span style={{ fontSize: 13, color: "var(--primary-60)" }}>
-          Client total
+          Pre-tax (excl. add-ons &amp; tax)
         </span>
         <span style={{ fontSize: 15, fontWeight: 700, color: "var(--ink)", marginLeft: 4 }}>
           ${subtotal.toFixed(2)}

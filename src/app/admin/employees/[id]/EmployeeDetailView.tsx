@@ -15,6 +15,9 @@ import { resolveInventoryRequest } from "../../actions/resolveInventoryRequest";
 import { setCleanerTier } from "../../actions/setCleanerTier";
 import { setFieldLead } from "../../actions/setFieldLead";
 import { setCleanerProductQuantity } from "../../actions/setCleanerProductQuantity";
+import { setEmployeeServiceCategories } from "../../actions/setEmployeeServiceCategories";
+import { getEmployeeFileUrl } from "../../actions/getEmployeeFileUrl";
+import { PERMISSION_CATEGORIES } from "@/lib/service-permissions";
 import { TIER_LABEL, type CleanerTier } from "@/lib/pay-tiers";
 import { fmtDateTime, fmtDate, fmtTime } from "@/lib/time";
 import {
@@ -34,6 +37,7 @@ import {
   TrendingDown,
   Star,
   ShieldAlert,
+  Banknote,
   Loader,
   X,
 } from "lucide-react";
@@ -136,7 +140,8 @@ interface ForecastItem {
   productName: string;
   unit: string;
   currentQuantity: number;
-  usagePerJob: number;
+  /** Trailing-30-day average across jobs that used it (item 14). */
+  averagePerJob: number;
   refillThreshold: number;
   projectedUsage: number;
   deficit: number;
@@ -178,6 +183,8 @@ interface EmployeeDetailViewProps {
   };
   starRating?: number | null;
   cleanerTier?: CleanerTier;
+  /** Service categories this employee may work. Empty = all (item 3). */
+  allowedServiceCategories?: string[];
   ratingCount?: number;
   recentRatings?: RecentRatingDTO[];
   fieldLeadId?: string | null;
@@ -202,6 +209,17 @@ interface EmployeeDetailViewProps {
   strikes: StrikeDTO[];
   strikeSummary: { activeCount: number; level: StrikeLevel };
   strikeWindowDays: number;
+  /**
+   * The employee's current void cheque (awerfixes.pdf item 16), METADATA ONLY.
+   * No URL crosses this boundary — opening the file goes through
+   * `getEmployeeFileUrl`, which re-checks OWNER/ADMIN and logs the access.
+   */
+  voidCheque?: {
+    id: string;
+    fileName: string;
+    mimeType: string;
+    uploadedAt: string;
+  } | null;
 }
 
 interface RecentRatingDTO {
@@ -399,11 +417,99 @@ function AssignedProductRow({
   );
 }
 
+/**
+ * The employee's payroll paperwork (awerfixes.pdf item 16).
+ *
+ * Renders NO link. The signed URL is minted on click by `getEmployeeFileUrl`
+ * and thrown away after the tab opens, because a URL rendered into the page
+ * would sit in the HTML, the browser history and any screenshot of this screen
+ * — which is the leak decision 7 exists to prevent. The 5-minute expiry is what
+ * makes a copied link harmless rather than permanent.
+ *
+ * Module scope, like AssignedProductRow above: OverviewTab is re-created on
+ * every parent render, so state held there would remount this and drop the
+ * "opening…" feedback mid-click.
+ */
+function VoidChequeAdminCard({
+  file,
+}: {
+  file: { id: string; fileName: string; uploadedAt: string } | null;
+}) {
+  const [opening, setOpening] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function open() {
+    if (!file) return;
+    setOpening(true);
+    setErr(null);
+    try {
+      const res = await getEmployeeFileUrl(file.id);
+      if (res.success) window.open(res.url, "_blank", "noopener,noreferrer");
+      else setErr(res.error);
+    } catch {
+      setErr("Failed to open file");
+    } finally {
+      setOpening(false);
+    }
+  }
+
+  return (
+    <Card variant="default" className="p-5">
+      <div className="flex items-center gap-2 mb-3">
+        <Banknote className="w-4 h-4 text-[#008C9C]" />
+        <h3 className="text-sm font-[600] text-gray-800">Payroll Documents</h3>
+      </div>
+      {file ? (
+        <>
+          {/* Same row shape as OverviewTab's InfoRow, which is scoped inside
+              that closure and so isn't reachable from module scope. */}
+          <div className="flex items-center justify-between py-3 border-b border-gray-100">
+            <span className="text-sm text-gray-500">Void cheque</span>
+            <span className="text-sm font-[450] text-gray-800 text-right break-all">
+              {file.fileName}
+            </span>
+          </div>
+          <div className="flex items-center justify-between py-3">
+            <span className="text-sm text-gray-500">Uploaded</span>
+            <span className="text-sm font-[450] text-gray-800 text-right">
+              {new Date(file.uploadedAt).toLocaleDateString("en-US", {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+              })}
+            </span>
+          </div>
+          <Button
+            variant="default"
+            size="sm"
+            border={false}
+            disabled={opening}
+            onClick={open}
+            className="rounded-2xl px-4 py-2.5 mt-3">
+            {opening ? "Opening…" : "View / Download"}
+          </Button>
+          {err && <p className="text-xs mt-2 text-red-500">{err}</p>}
+          <p className="text-xs text-gray-400 mt-2">
+            Opens a link that expires in 5 minutes. Every view is recorded in the
+            activity log.
+          </p>
+        </>
+      ) : (
+        <p className="text-xs text-gray-500">
+          No void cheque on file. The employee uploads this themselves from their
+          Documents page.
+        </p>
+      )}
+    </Card>
+  );
+}
+
 export default function EmployeeDetailView({
   employee,
   stats,
   starRating,
   cleanerTier = "STANDARD",
+  allowedServiceCategories = [],
   ratingCount = 0,
   recentRatings = [],
   fieldLeadId = null,
@@ -422,6 +528,7 @@ export default function EmployeeDetailView({
   strikes,
   strikeSummary,
   strikeWindowDays,
+  voidCheque = null,
 }: EmployeeDetailViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -443,6 +550,36 @@ export default function EmployeeDetailView({
   const [tierMsg, setTierMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [leadId, setLeadId] = useState<string>(fieldLeadId ?? "");
   const [leadSaving, setLeadSaving] = useState(false);
+  // Service category permissions (awerfixes.pdf item 3). Empty = no restriction.
+  const [categories, setCategories] = useState<string[]>(allowedServiceCategories);
+  const [catSaving, setCatSaving] = useState(false);
+  const [catMsg, setCatMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  async function handleToggleCategory(key: string) {
+    const prev = categories;
+    const next = prev.includes(key)
+      ? prev.filter((c) => c !== key)
+      : [...prev, key];
+    setCategories(next);
+    setCatSaving(true);
+    setCatMsg(null);
+    const res = await setEmployeeServiceCategories(employee.id, next);
+    setCatSaving(false);
+    if (res.success) {
+      // The action normalises (validates keys, folds the move family), so trust
+      // what came back rather than the optimistic value.
+      setCategories(res.categories);
+      setCatMsg({
+        type: "success",
+        text: res.categories.length
+          ? "Service categories saved."
+          : "Restriction removed — all categories allowed.",
+      });
+    } else {
+      setCategories(prev);
+      setCatMsg({ type: "error", text: res.error ?? "Failed" });
+    }
+  }
 
   async function handleSetLead(next: string) {
     setLeadSaving(true);
@@ -781,6 +918,45 @@ export default function EmployeeDetailView({
             </p>
           </Card>
 
+          {/* Service categories (awerfixes.pdf item 3). Ticking nothing means no
+              restriction, which is where every cleaner starts. */}
+          <Card variant="default" className="p-5">
+            <div className="flex items-center gap-2 mb-3">
+              <ShieldAlert className="w-4 h-4 text-[#008C9C]" />
+              <h3 className="text-sm font-[600] text-gray-800">Service Categories</h3>
+            </div>
+            <div className="space-y-1 mb-3">
+              {PERMISSION_CATEGORIES.map((cat) => (
+                <label
+                  key={cat.key}
+                  className="flex items-center gap-2 text-sm text-gray-700 select-none px-2 py-1 rounded hover:bg-gray-50 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={categories.includes(cat.key)}
+                    onChange={() => handleToggleCategory(cat.key)}
+                    disabled={catSaving}
+                    className="accent-[#008C9C]"
+                  />
+                  {cat.label}
+                </label>
+              ))}
+            </div>
+            <p className="text-xs text-gray-500">
+              {categories.length === 0
+                ? "No restriction — this employee can work every service category."
+                : "Only jobs in the ticked categories appear on their Available jobs board, and only those can be claimed."}
+            </p>
+            {catMsg && (
+              <p className={`text-xs mt-2 ${catMsg.type === "success" ? "text-green-600" : "text-red-500"}`}>
+                {catMsg.text}
+              </p>
+            )}
+            <p className="text-xs text-gray-400 mt-2">
+              Admins can still assign this employee to any job — a mismatch only
+              shows a warning.
+            </p>
+          </Card>
+
           {/* Field Lead group + weekly bonus */}
           {tier === "FIELD_LEAD" ? (
             <Card variant="default" className="p-5">
@@ -889,6 +1065,10 @@ export default function EmployeeDetailView({
               />
             </div>
           </Card>
+
+          {/* Payroll documents (item 16) — metadata here, file behind a signed,
+              logged, OWNER/ADMIN-only action. */}
+          <VoidChequeAdminCard file={voidCheque} />
         </div>
 
         {/* Unpaid Jobs Warning */}
@@ -1513,11 +1693,13 @@ export default function EmployeeDetailView({
         </div>
       </div>
 
-      {/* Edit Modal */}
+      {/* Edit Modal. Seeded from the live category state, not the server prop —
+          the modal submits the picker, so handing it a stale (or empty) list
+          would silently clear a restriction set from the card above. */}
       <EmployeeModal
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
-        employee={employee}
+        employee={{ ...employee, allowedServiceCategories: categories }}
         mode="edit"
       />
 

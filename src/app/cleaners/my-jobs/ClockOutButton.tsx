@@ -3,13 +3,12 @@
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { clockOut } from "@/app/admin/actions/clockOut";
+import {
+  CHECKLIST_GATE_HINT,
+  pendingRequiredItems,
+} from "@/lib/job-checklist";
 
 type ProductCategory = "LIQUID_SPRAY" | "MOP_LIQUID" | "DISPOSABLE" | "OTHER";
-
-interface InventoryRule {
-  usagePerJob: number;
-  refillThreshold: number;
-}
 
 interface EmployeeProduct {
   id: string;
@@ -20,13 +19,21 @@ interface EmployeeProduct {
     name: string;
     unit: string;
     category: ProductCategory;
-    inventoryRule?: InventoryRule | null;
   };
 }
 
 interface ClockOutButtonProps {
   jobId: string;
   employeeProducts: EmployeeProduct[];
+  /**
+   * The job's checklist, already generated server-side (item 12.a).
+   *
+   * This button had NO checklist gate at all while the clock screen's button
+   * did — and this is the one rendered on the job detail page, so the "required
+   * items block clock-out" rule was bypassable by using the more obvious of the
+   * two buttons. Passed in rather than fetched: the page has already ensured it.
+   */
+  checklistItems?: { id: string; title: string; isRequired: boolean; status: string; notes: string | null }[];
 }
 
 // Per the Post-Job Inventory Usage spec.
@@ -45,7 +52,11 @@ const MOP_OPTIONS = [
 const DISPOSABLE_OPTIONS = [0, 1, 2, 3];
 const ML_PER_SPRAY = 1.25;
 
-export default function ClockOutButton({ jobId, employeeProducts }: ClockOutButtonProps) {
+export default function ClockOutButton({
+  jobId,
+  employeeProducts,
+  checklistItems = [],
+}: ClockOutButtonProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -123,6 +134,11 @@ export default function ClockOutButton({ jobId, employeeProducts }: ClockOutButt
 
   const hasAssignments =
     sprays.length + mops.length + disposables.length + others.length > 0;
+
+  // The gate, from the same predicate the clock screen uses. An empty checklist
+  // gates nothing, so jobs with no configured template are unaffected.
+  const outstandingRequired = pendingRequiredItems(checklistItems);
+  const gateBlocked = outstandingRequired.length > 0;
 
   const modal = open ? (
     <div className="co-overlay" onClick={() => !loading && setOpen(false)}>
@@ -367,12 +383,39 @@ export default function ClockOutButton({ jobId, employeeProducts }: ClockOutButt
           </div>
         )}
 
+        {/* Required checklist items still outstanding — the gate. Named, not
+            just counted, so the cleaner knows what to go and do. */}
+        {gateBlocked && (
+          <div style={{
+            margin: "0 0 12px",
+            fontSize: 12.5,
+            lineHeight: 1.5,
+            color: "#b45309",
+            background: "#fffbeb",
+            border: "1px solid #fde68a",
+            borderRadius: 10,
+            padding: "10px 12px",
+          }}>
+            <strong>
+              {outstandingRequired.length} required checklist item
+              {outstandingRequired.length === 1 ? "" : "s"} still pending.
+            </strong>{" "}
+            Tick {outstandingRequired.length === 1 ? "it" : "them"} off on the job
+            page before clocking out:{" "}
+            {outstandingRequired.map((i) => i.title).join(", ")}.
+          </div>
+        )}
+
         {/* Footer */}
         <div className="co-footer">
           <button className="co-btn-ghost" onClick={() => !loading && setOpen(false)} disabled={loading}>
             Cancel
           </button>
-          <button className="co-btn-confirm" onClick={handleConfirm} disabled={loading}>
+          <button
+            className="co-btn-confirm"
+            onClick={handleConfirm}
+            disabled={loading || gateBlocked}
+            title={gateBlocked ? CHECKLIST_GATE_HINT : undefined}>
             {loading ? (
               <>
                 <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: "co-spin 0.8s linear infinite" }}>

@@ -103,6 +103,8 @@ export default async function EmployeesPage({
       isActive: emp.isActive,
       cleanerTier: emp.cleanerTier as "TRAINEE" | "STANDARD" | "FIELD_LEAD",
       fieldLeadId: emp.fieldLeadId,
+      // Service categories the edit modal pre-fills (awerfixes.pdf item 3).
+      allowedServiceCategories: emp.allowedServiceCategories,
       completedJobsCount: completedJobs.length,
       activeJobsCount: activeJobs.length,
       totalRevenue,

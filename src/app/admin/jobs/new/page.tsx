@@ -3,7 +3,13 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { revalidatePath } from "next/cache";
-import { getTaxRates, computeJobTaxes, isJobTaxExempt } from "@/lib/tax.server";
+import { getTaxRates } from "@/lib/tax.server";
+import { computeJobMoney } from "@/lib/job-money";
+import {
+  SAVED_ADDRESS_ORDER,
+  SAVED_ADDRESS_SELECT,
+  resolveJobAddressId,
+} from "@/lib/client-address-store";
 import { getServicePricingConfig } from "@/lib/booking-pricing";
 import { isSqftJobType, moveInOutBasePrice } from "@/lib/service-pricing";
 import { tzWallClockToUtc, tzInputParts } from "@/lib/time";
@@ -84,6 +90,8 @@ export default async function JobFormPage({
       id: true,
       name: true,
       email: true,
+      // Drives the service-category advisory in CleanerSelector (item 3).
+      allowedServiceCategories: true,
       availabilities: {
         select: {
           day: true,
@@ -101,6 +109,7 @@ export default async function JobFormPage({
     id: u.id,
     name: u.name,
     email: u.email,
+    allowedServiceCategories: u.allowedServiceCategories,
     availability: u.availabilities.map((a) => ({
       day: a.day,
       startTime: a.startTime,
@@ -127,14 +136,8 @@ export default async function JobFormPage({
       fixedPrice: true,
       defaultPaymentMethodId: true,
       addresses: {
-        orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
-        select: {
-          id: true,
-          label: true,
-          address: true,
-          aptNumber: true,
-          isDefault: true,
-        },
+        orderBy: SAVED_ADDRESS_ORDER,
+        select: SAVED_ADDRESS_SELECT,
       },
     },
   });
@@ -145,6 +148,9 @@ export default async function JobFormPage({
       label: a.label,
       address: a.address,
       aptNumber: a.aptNumber,
+      city: a.city,
+      postalCode: a.postalCode,
+      accessNotes: a.accessNotes,
       isDefault: a.isDefault,
     })),
   }));
@@ -215,20 +221,6 @@ export default async function JobFormPage({
           select: { id: true },
         });
         clientId = createdClient.id;
-        // Seed the client's first saved address from the job's address.
-        if (locationInput) {
-          await db.clientAddress
-            .create({
-              data: {
-                clientId,
-                label: "Home",
-                address: locationInput,
-                aptNumber: aptInput || null,
-                isDefault: true,
-              },
-            })
-            .catch(() => {});
-        }
       }
     }
 
@@ -262,30 +254,26 @@ export default async function JobFormPage({
         })
       : null;
 
-    // For an existing linked client, persist a newly-typed address to their
-    // saved address book if it isn't there yet (so it's pickable next time).
-    if (rawClientId && locationInput) {
-      const already = await db.clientAddress.findFirst({
-        where: { clientId: rawClientId, address: locationInput },
-        select: { id: true },
-      });
-      if (!already) {
-        const hasAny = await db.clientAddress.count({
-          where: { clientId: rawClientId },
-        });
-        await db.clientAddress
-          .create({
-            data: {
-              clientId: rawClientId,
-              label: "Other",
-              address: locationInput,
-              aptNumber: aptInput || null,
-              isDefault: hasAny === 0,
-            },
-          })
-          .catch(() => {});
-      }
-    }
+    // Persist the job's address to the client's book so it's pickable next
+    // time, and record which saved row this job is served at.
+    //
+    // This used to be two hand-rolled blocks here (a "Home" seed for a brand
+    // new client, an "Other" create for a linked one). Both now go through the
+    // shared upsert, which fixes the de-duplication this file got wrong: it
+    // matched on an exact, case-sensitive `address` string and IGNORED
+    // aptNumber, so "123 Main St " forked a duplicate row and a second unit at
+    // the same street was silently dropped (item 2).
+    //
+    // An address picked from the dropdown is honoured only if it belongs to
+    // this client AND still matches what's in the Location field, so editing
+    // the address after picking one can't link the job to a different door.
+    const pickedAddressId =
+      ((formData.get("clientAddressId") as string) || "").trim() || null;
+    const clientAddressId = await resolveJobAddressId(clientId, {
+      addressId: pickedAddressId,
+      address: locationInput,
+      aptNumber: aptInput || null,
+    });
 
     // Customer-specific fixed pricing ("Change Total"). When the client has a
     // fixed price and the admin left the price blank (or typed the fixed price
@@ -322,12 +310,45 @@ export default async function JobFormPage({
     // GST/QST on the discounted subtotal from the admin-configured rates.
     // Cash jobs are untaxed as a payment method; `taxExempt` is the explicit
     // per-job tax status an admin can set independently (item 7).
+    //
+    // This page has no add-on UI, but it IS an editor (?edit=<id>), so it must
+    // still price a job's EXISTING add-ons the same way saveJob does. Taxing
+    // `price - discount` here would rewrite subtotalAmount/totalAmount without
+    // the add-ons while the JobAddOn rows survived — the job would display
+    // charges it no longer bills, and resolveAmountDue would undercharge the
+    // customer. See src/lib/job-money.ts.
     const isCashJob = formData.get("isCashJob") === "on";
     const taxExempt = formData.get("taxExempt") === "on";
-    const taxes = computeJobTaxes(
-      (price ?? 0) - (discountAmount ?? 0),
-      await getTaxRates(),
-      isJobTaxExempt({ isCashJob, taxExempt })
+    const editingIdForMoney = formData.get("jobId") as string | null;
+    const moneyJob = editingIdForMoney
+      ? await db.job.findUnique({
+          where: { id: editingIdForMoney },
+          select: {
+            bookingSource: true,
+            subtotalAmount: true,
+            price: true,
+            addOns: { select: { name: true, price: true, quantity: true } },
+          },
+        })
+      : null;
+    // Same authorship rule as saveJob: a web/imported job's stored subtotal is
+    // preserved while the admin leaves the price alone, and recomputed once
+    // they retype it.
+    const moneyPriceUnchanged =
+      moneyJob?.price != null &&
+      price !== null &&
+      Math.abs(moneyJob.price - price) < 0.005;
+    const taxes = computeJobMoney(
+      {
+        bookingSource: moneyPriceUnchanged ? moneyJob?.bookingSource : null,
+        subtotalAmount: moneyPriceUnchanged ? moneyJob?.subtotalAmount : null,
+        price,
+        discountAmount,
+        isCashJob,
+        taxExempt,
+        addOns: moneyJob?.addOns ?? [],
+      },
+      await getTaxRates()
     );
 
     // Cleaner pay model: PERCENTAGE (tier/split), FLAT (fixed payout as
@@ -366,6 +387,8 @@ export default async function JobFormPage({
       jobType: (formData.get("jobType") as string) || null,
       location: (formData.get("location") as string) || null,
       aptNumber: (formData.get("aptNumber") as string) || null,
+      // Provenance only; the two fields above stay the snapshot (item 2).
+      clientAddressId,
       // Wall-clock form inputs are America/Toronto; jobDate mirrors startTime's
       // instant (same convention as the BookingKoala importer).
       jobDate: startDate
@@ -405,9 +428,9 @@ export default async function JobFormPage({
       halfBathCount: formData.get("halfBathCount")
         ? parseInt(formData.get("halfBathCount") as string, 10)
         : null,
-      payRateMultiplier: formData.get("payRateMultiplier")
-        ? parseFloat(formData.get("payRateMultiplier") as string)
-        : 1.0,
+      // payRateMultiplier is deliberately NOT written (AWER round 3, fix 1) —
+      // the column is unread, and no form field ever fed it, so this only ever
+      // reset saved jobs to 1.0. The rating premium lives on the cleaner now.
       isCashJob,
     };
 

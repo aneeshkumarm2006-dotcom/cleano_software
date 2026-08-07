@@ -47,7 +47,8 @@ function PerformanceHeader({ employeeId }: { employeeId?: string }) {
       const res = await getPerformanceData({ employeeId });
       if (cancelled) return;
       if (res.success) {
-        setRating(res.data.rating30Day);
+        // All-time, matching pay (Decision 2) — not the 30-day trend figure.
+        setRating(res.data.ratingAllTime);
         setMultiplier(res.data.currentMultiplier);
         setTier(res.data.tierLabel);
       }
@@ -64,7 +65,7 @@ function PerformanceHeader({ employeeId }: { employeeId?: string }) {
   return (
     <div className="cl-perf-hero">
       <div className="cl-perf-hero-tile">
-        <div className="label">30-day rating</div>
+        <div className="label">All-time rating</div>
         <div className="val">{rating !== null ? rating.toFixed(2) : "—"}</div>
       </div>
       <div className="cl-perf-hero-tile">
@@ -72,7 +73,7 @@ function PerformanceHeader({ employeeId }: { employeeId?: string }) {
         <div className="val">{multiplier !== null ? `${multiplier.toFixed(2)}×` : "—"}</div>
       </div>
       <div className="cl-perf-hero-tile">
-        <div className="label">Tier</div>
+        <div className="label">Rating step</div>
         <div className="val">{tier ?? "—"}</div>
       </div>
     </div>

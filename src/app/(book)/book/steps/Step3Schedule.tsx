@@ -157,7 +157,7 @@ export default function Step3Schedule({ draft, onChange, minLeadDays = 1 }: Prop
           large
           active={draft.isFlexible}
           title="I'm flexible"
-          sub="Our team picks the best time for the day (9AM–7PM) — usually $10 less."
+          sub="Our team picks the best time for the day (9AM–7PM)."
           onClick={() => onChange({ isFlexible: true, timeSlot: "" })}
         />
         <ChoiceButton

@@ -51,3 +51,8 @@ next-env.d.ts
 scripts/shots/
 scripts/shots-all/
 scripts/shots-cleaner/
+
+# Browser-test harness: the scripts and FINDINGS.md are worth keeping, but
+# accounts.json holds a login password for the throwaway test users. Never
+# commit a credential file, even for accounts that have since been deleted.
+_bt/accounts.json

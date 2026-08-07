@@ -17,6 +17,7 @@ import {
   type AvailabilityEvaluation,
   type AvailabilityWindow,
 } from "@/lib/availability";
+import { categoryMismatchWarning } from "@/lib/service-permissions";
 import type { AvailabilityConflict } from "@/app/admin/actions/checkAvailability.types";
 
 /**
@@ -318,6 +319,55 @@ export async function findAvailabilityConflicts(
   } catch (e) {
     // Advisory only — never fail an assignment because the warning lookup broke.
     console.error("findAvailabilityConflicts failed", e);
+    return [];
+  }
+}
+
+/** One cleaner assigned outside their approved service categories. */
+export interface CategoryConflict {
+  cleanerId: string;
+  cleanerName: string;
+  /** Pre-formatted, non-blocking warning line. */
+  warning: string;
+}
+
+/**
+ * Service-category mismatches for a set of cleaners against a job's type
+ * (awerfixes.pdf item 3). The admin side WARNS and never blocks — the PDF is
+ * explicit about that — so this is shaped exactly like
+ * `findAvailabilityConflicts` and shares its fail-quiet contract: an empty array
+ * means "nothing to warn about", including when the lookup itself broke.
+ */
+export async function findCategoryConflicts(
+  cleanerIds: string[],
+  jobType: string | null | undefined
+): Promise<CategoryConflict[]> {
+  const ids = Array.from(new Set(cleanerIds.filter((id): id is string => !!id)));
+  if (ids.length === 0) return [];
+
+  try {
+    const cleaners = await db.user.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, name: true, allowedServiceCategories: true },
+    });
+
+    const conflicts: CategoryConflict[] = [];
+    for (const cleaner of cleaners) {
+      const warning = categoryMismatchWarning(
+        cleaner.name,
+        jobType,
+        cleaner.allowedServiceCategories
+      );
+      if (!warning) continue;
+      conflicts.push({
+        cleanerId: cleaner.id,
+        cleanerName: cleaner.name,
+        warning,
+      });
+    }
+    return conflicts;
+  } catch (e) {
+    console.error("findCategoryConflicts failed", e);
     return [];
   }
 }

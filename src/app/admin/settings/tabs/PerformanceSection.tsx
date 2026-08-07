@@ -155,37 +155,48 @@ export default function PerformanceSection({
   return (
     <div className="space-y-6">
       <SectionCard
-        title="Current Rating"
-        description="Average of ratings in the last 30 days."
+        title="Your rating"
+        description="All-time average of the ratings that count. This is the number that sets your pay."
         icon={Star}>
         <div className="cl-income-stats-grid" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
           <div className="cl-income-mini">
-            <div className="label">30-day rating</div>
+            <div className="label">All-time rating</div>
             <div className="val">
-              {data.rating30Day !== null ? data.rating30Day.toFixed(2) : "—"}
+              {data.ratingAllTime !== null ? data.ratingAllTime.toFixed(2) : "—"}
             </div>
-            {data.rating30Day !== null ? (
-              <div className="cl-form-hint">Based on {data.ratingCount30Day} rating{data.ratingCount30Day === 1 ? "" : "s"}</div>
+            {data.ratingAllTime !== null ? (
+              <div className="cl-form-hint">Based on {data.ratingCountAllTime} rating{data.ratingCountAllTime === 1 ? "" : "s"}</div>
             ) : (
-              <div className="cl-form-hint">No ratings in the last 30 days</div>
+              <div className="cl-form-hint">No ratings yet</div>
             )}
           </div>
           <div className="cl-income-mini">
             <div className="label">Pay multiplier</div>
             <div className="val">{data.currentMultiplier.toFixed(2)}×</div>
-            <div className="cl-form-hint">Tier: <strong style={{ color: "var(--ink)" }}>{data.tierLabel}</strong></div>
-            {data.nextTierAt !== null && data.nextTierMultiplier !== null && (
-              <div className="cl-form-hint">Reach {data.nextTierAt.toFixed(1)}★ for {data.nextTierMultiplier.toFixed(2)}×</div>
+            {data.multiplierLocked ? (
+              <div className="cl-form-hint">
+                Locked at 1.00× — {data.ratingCountAllTime} of {data.ratingsRequired} ratings
+              </div>
+            ) : (
+              <>
+                {/* "Rating step", not "Tier": tierLabel is a 0.1 rating step
+                    like "4.5", which collides head-on with the payroll tiers
+                    Trainee / Standard / Field Lead. */}
+                <div className="cl-form-hint">Rating step: <strong style={{ color: "var(--ink)" }}>{data.tierLabel ?? "—"}</strong></div>
+                {data.nextTierAt !== null && data.nextTierMultiplier !== null && (
+                  <div className="cl-form-hint">Reach {data.nextTierAt.toFixed(1)}★ for {data.nextTierMultiplier.toFixed(2)}×</div>
+                )}
+              </>
             )}
           </div>
           <div className="cl-income-mini">
-            <div className="label">Rating window</div>
-            <div className="val" style={{ fontSize: 15, fontFamily: "var(--font)", fontWeight: 500, lineHeight: 1.4 }}>
-              Ratings count toward your average for 30 days.
+            <div className="label">Last 30 days</div>
+            <div className="val">
+              {data.rating30Day !== null ? data.rating30Day.toFixed(2) : "—"}
             </div>
-            {data.expiringSoon > 0 && (
-              <div className="cl-form-hint" style={{ color: "var(--amber-700)" }}>{data.expiringSoon} rating{data.expiringSoon === 1 ? "" : "s"} expiring soon</div>
-            )}
+            <div className="cl-form-hint">
+              Recent form only — your pay uses the all-time average.
+            </div>
           </div>
         </div>
       </SectionCard>

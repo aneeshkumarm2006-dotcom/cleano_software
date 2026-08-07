@@ -20,8 +20,12 @@ interface ProductSeed {
   costPerUnit: number;
   stockLevel: number;
   minStock: number;
+  /**
+   * Seeded into Product.cleanerRestockThreshold. Was written to
+   * InventoryRule.refillThreshold until that model's editor was removed
+   * (awerfixes.pdf item 14); the product column is now the only home for it.
+   */
   refillThreshold: number;
-  usagePerJob: number;
 }
 
 // Twelve products straight from the Post-Job Inventory Usage spec (PDF §2 + §7),
@@ -37,7 +41,6 @@ const PRODUCTS: ProductSeed[] = [
     stockLevel: 3784, // 4 × 946ml bottles
     minStock: 946,
     refillThreshold: 150,
-    usagePerJob: 37.5,
   },
   {
     name: "Windex",
@@ -48,7 +51,6 @@ const PRODUCTS: ProductSeed[] = [
     stockLevel: 2838, // 3 × 946ml bottles
     minStock: 946,
     refillThreshold: 150,
-    usagePerJob: 30,
   },
   {
     name: "CLR",
@@ -59,7 +61,6 @@ const PRODUCTS: ProductSeed[] = [
     stockLevel: 1892, // 2 × 946ml bottles
     minStock: 946,
     refillThreshold: 150,
-    usagePerJob: 18.75,
   },
   {
     name: "Eco-friendly cleaner",
@@ -70,7 +71,6 @@ const PRODUCTS: ProductSeed[] = [
     stockLevel: 1892,
     minStock: 946,
     refillThreshold: 150,
-    usagePerJob: 30,
   },
 
   // ─── Mop-based liquids (PDF §3.2) ─────────────────────────────────
@@ -83,7 +83,6 @@ const PRODUCTS: ProductSeed[] = [
     stockLevel: 60,
     minStock: 10,
     refillThreshold: 1,
-    usagePerJob: 2,
   },
   {
     name: "Murphy Oil Soap",
@@ -94,7 +93,6 @@ const PRODUCTS: ProductSeed[] = [
     stockLevel: 40,
     minStock: 8,
     refillThreshold: 1,
-    usagePerJob: 1,
   },
 
   // ─── Disposables (PDF §3.3) ───────────────────────────────────────
@@ -107,7 +105,6 @@ const PRODUCTS: ProductSeed[] = [
     stockLevel: 80,
     minStock: 12,
     refillThreshold: 2,
-    usagePerJob: 1,
   },
   {
     name: "Garbage bags",
@@ -118,7 +115,6 @@ const PRODUCTS: ProductSeed[] = [
     stockLevel: 240,
     minStock: 24,
     refillThreshold: 2,
-    usagePerJob: 2,
   },
   {
     name: "Paper towels",
@@ -129,7 +125,6 @@ const PRODUCTS: ProductSeed[] = [
     stockLevel: 36,
     minStock: 6,
     refillThreshold: 1,
-    usagePerJob: 1,
   },
   {
     name: "Magic erasers",
@@ -140,7 +135,6 @@ const PRODUCTS: ProductSeed[] = [
     stockLevel: 48,
     minStock: 6,
     refillThreshold: 1,
-    usagePerJob: 1,
   },
   {
     name: "Gloves",
@@ -151,7 +145,6 @@ const PRODUCTS: ProductSeed[] = [
     stockLevel: 200,
     minStock: 20,
     refillThreshold: 2,
-    usagePerJob: 1,
   },
   {
     name: "Masks",
@@ -162,7 +155,6 @@ const PRODUCTS: ProductSeed[] = [
     stockLevel: 200,
     minStock: 20,
     refillThreshold: 2,
-    usagePerJob: 1,
   },
 
   // ─── Extras (not in PDF, but realistic kit items) ─────────────────
@@ -175,7 +167,6 @@ const PRODUCTS: ProductSeed[] = [
     stockLevel: 120,
     minStock: 30,
     refillThreshold: 6,
-    usagePerJob: 4,
   },
   {
     name: "Mop pads",
@@ -186,7 +177,6 @@ const PRODUCTS: ProductSeed[] = [
     stockLevel: 30,
     minStock: 6,
     refillThreshold: 2,
-    usagePerJob: 1,
   },
   {
     name: "Toilet brush",
@@ -197,7 +187,6 @@ const PRODUCTS: ProductSeed[] = [
     stockLevel: 12,
     minStock: 4,
     refillThreshold: 1,
-    usagePerJob: 0,
   },
   {
     name: "Vacuum bags",
@@ -208,7 +197,6 @@ const PRODUCTS: ProductSeed[] = [
     stockLevel: 36,
     minStock: 6,
     refillThreshold: 1,
-    usagePerJob: 0,
   },
   {
     name: "Bucket",
@@ -219,7 +207,6 @@ const PRODUCTS: ProductSeed[] = [
     stockLevel: 6,
     minStock: 2,
     refillThreshold: 1,
-    usagePerJob: 0,
   },
 ];
 
@@ -256,6 +243,10 @@ async function upsertProducts() {
           costPerUnit: p.costPerUnit,
           stockLevel: p.stockLevel,
           minStock: p.minStock,
+          // Deliberately set on CREATE only. The update branch above leaves it
+          // alone so re-running the seed cannot clobber a threshold an admin
+          // has since tuned in the product editor.
+          cleanerRestockThreshold: p.refillThreshold,
         },
       });
       results.push({ name: created.name, id: created.id });
@@ -263,26 +254,6 @@ async function upsertProducts() {
     }
   }
   return results;
-}
-
-async function upsertRules(products: Array<{ name: string; id: string }>) {
-  for (const p of PRODUCTS) {
-    const productId = products.find((x) => x.name === p.name)?.id;
-    if (!productId) continue;
-    await db.inventoryRule.upsert({
-      where: { productId },
-      create: {
-        productId,
-        usagePerJob: p.usagePerJob,
-        refillThreshold: p.refillThreshold,
-      },
-      update: {
-        usagePerJob: p.usagePerJob,
-        refillThreshold: p.refillThreshold,
-      },
-    });
-  }
-  console.log(`  ✓ Inventory rules synced for ${PRODUCTS.length} products`);
 }
 
 async function upsertLocations(products: Array<{ name: string; id: string }>) {
@@ -330,8 +301,6 @@ async function main() {
   console.log("\nSeeding inventory…\n");
   console.log("• Products");
   const products = await upsertProducts();
-  console.log("\n• Inventory rules");
-  await upsertRules(products);
   console.log("\n• Locations + stock");
   await upsertLocations(products);
   console.log("\n✅ Done. Seeded", PRODUCTS.length, "products into", LOCATIONS.length, "locations.\n");

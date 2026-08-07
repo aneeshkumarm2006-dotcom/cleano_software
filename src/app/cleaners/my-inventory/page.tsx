@@ -16,13 +16,7 @@ export default async function MyInventoryPage() {
     await Promise.all([
       db.employeeProduct.findMany({
         where: { employeeId: userId },
-        include: {
-          product: {
-            include: {
-              inventoryRule: true,
-            },
-          },
-        },
+        include: { product: true },
         orderBy: {
           product: { name: "asc" },
         },
@@ -60,15 +54,11 @@ export default async function MyInventoryPage() {
   );
 
   const items = employeeProducts.map((ep) => {
-    const rule = ep.product.inventoryRule;
-    const usagePerJob = rule?.usagePerJob ?? 0;
-
     // CLEANER restock threshold only — never the company reorder point
-    // (fix list item 14). A configured 0 falls back to covering one more job,
-    // so a cleaner is warned before they hit empty rather than after.
+    // (fix list item 14). A configured 0 falls back to the admin's global
+    // default, so a cleaner is warned before they hit empty rather than after.
     const thresholdInput = {
       cleanerRestockThreshold: ep.product.cleanerRestockThreshold,
-      usagePerJob,
       defaultThreshold,
     };
     const usesDefault = usesDefaultCleanerThreshold(thresholdInput);
@@ -87,7 +77,6 @@ export default async function MyInventoryPage() {
       quantity: ep.quantity,
       refillThreshold,
       usesDefaultThreshold: usesDefault,
-      usagePerJob,
       assignedAt: ep.assignedAt.toISOString(),
       updatedAt: ep.updatedAt.toISOString(),
       isLow,

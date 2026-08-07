@@ -1,0 +1,28 @@
+-- awerfixes.pdf item 7 (round 3, stage 3) — multiple quantities of the same add-on.
+--
+-- SEMANTICS: `price` stays the UNIT price. Every consumer computes
+-- `price * quantity`. That keeps existing rows correct at the default and
+-- means a catalog price change is still a single number, not a divided total.
+--
+-- Existing rows are safe by construction. The stage-0 probe (2026-08-06, live
+-- DB) found 6 JobAddOn rows across 4 jobs, 0 duplicated (jobId, name) pairs and
+-- 0 priced at $0 — every one of them means "one of this thing", which is
+-- exactly DEFAULT 1. No duplicate-row workaround exists that would need
+-- collapsing into a quantity, so there is no backfill.
+--
+-- NOT NULL DEFAULT <constant> is a catalog-only change on Postgres 11+ (the
+-- default lands in pg_attribute.attmissingval), so there is no table rewrite.
+--
+-- Two deliberate non-additions, so a later reader doesn't "fix" them:
+--
+--   * No CHECK (quantity >= 1). Prisma cannot model CHECK constraints, so it
+--     would read as permanent schema drift — and 20260728010000_align_schema_drift
+--     exists precisely because drift bit this project once already. The clamp
+--     lives in addOnQuantity() in src/lib/job-money.ts and is applied at every
+--     parse boundary instead.
+--   * No @@unique([jobId, name]). Two custom extra charges may legitimately
+--     share a label ("Extra hour", "Extra hour"), and saveJob's edit path is a
+--     deleteMany + create inside one nested write, so a unique index would turn
+--     a legitimate admin action into a P2002.
+
+ALTER TABLE "JobAddOn" ADD COLUMN "quantity" INTEGER NOT NULL DEFAULT 1;

@@ -7,6 +7,7 @@ import Modal from "@/components/ui/Modal";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
 import Textarea from "@/components/ui/Textarea";
+import { formatAddressLine } from "@/lib/client-address";
 import {
   MapPin,
   Clock,
@@ -188,7 +189,14 @@ export default function CalendarJobActions({
           {meta.location && (
             <div className="flex items-center gap-2 text-sm text-gray-600">
               <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0" />
-              <span>{meta.location}</span>
+              {/* Unit included (item 2) — dispatch needs it to tell two jobs in
+                  the same building apart. */}
+              <span>
+                {formatAddressLine({
+                  address: meta.location as string,
+                  aptNumber: (meta.aptNumber as string | null) ?? null,
+                })}
+              </span>
             </div>
           )}
           {event.start && (

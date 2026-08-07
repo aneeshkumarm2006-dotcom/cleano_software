@@ -5,6 +5,7 @@
  */
 
 import { db } from "@/db";
+import { formatAddressLine, normalizeAddressKey } from "@/lib/client-address";
 
 const BRAND = "#008C9C";
 
@@ -19,6 +20,20 @@ export interface InvoicePdfData {
     phone: string | null;
     address: string | null;
   };
+  /**
+   * Where the work was actually done (awerfixes.pdf item 2, round 3, stage 4).
+   *
+   * "Bill to" above stays the client's BILLING address — that is what it means,
+   * and changing it would have been a different fix. This is a separate block,
+   * because with several saved addresses per client the two genuinely differ:
+   * an invoice for the office was printing whatever address the customer's most
+   * recent home booking had last written to `Client.address`.
+   *
+   * Null when the invoice can't name ONE address — a consolidated invoice
+   * covering jobs at two properties would be lying with either of them, so it
+   * prints neither.
+   */
+  serviceAddress: string | null;
   lineItems: Array<{
     description: string;
     quantity: number;
@@ -46,10 +61,51 @@ export async function loadInvoiceData(
     where: { id: invoiceId },
     include: {
       client: true,
-      lineItems: { orderBy: { sortOrder: "asc" } },
+      // The job this invoice is for, plus the jobs its line items point at —
+      // a consolidated invoice has no `jobId` of its own (item 2).
+      job: {
+        select: {
+          location: true,
+          aptNumber: true,
+          clientAddress: { select: { city: true, postalCode: true } },
+        },
+      },
+      lineItems: {
+        orderBy: { sortOrder: "asc" },
+        include: {
+          jobLink: {
+            select: {
+              location: true,
+              aptNumber: true,
+              clientAddress: { select: { city: true, postalCode: true } },
+            },
+          },
+        },
+      },
     },
   });
   if (!invoice) return null;
+
+  // Resolve the ONE address this invoice serviced, or none. Line items are
+  // consulted because a consolidated invoice links its jobs there rather than
+  // at the top level; if they disagree, printing any single one would be wrong.
+  const addressCandidates = [
+    invoice.job,
+    ...invoice.lineItems.map((li) => li.jobLink),
+  ].filter((j): j is NonNullable<typeof j> => !!j?.location);
+
+  const distinctAddresses = new Map<string, string>();
+  for (const j of addressCandidates) {
+    const line = formatAddressLine({
+      address: j.location,
+      aptNumber: j.aptNumber,
+      city: j.clientAddress?.city ?? null,
+      postalCode: j.clientAddress?.postalCode ?? null,
+    });
+    if (line) distinctAddresses.set(normalizeAddressKey(j.location, j.aptNumber), line);
+  }
+  const serviceAddress =
+    distinctAddresses.size === 1 ? [...distinctAddresses.values()][0] : null;
 
   const gstSetting = await db.appSetting
     .findUnique({ where: { key: "gstNumber" } })
@@ -73,6 +129,7 @@ export async function loadInvoiceData(
       phone: invoice.client.phone,
       address: invoice.client.address,
     },
+    serviceAddress,
     lineItems: invoice.lineItems.map((li) => ({
       description: li.description,
       quantity: li.quantity,
@@ -249,6 +306,20 @@ export async function buildInvoicePdfBuffer(
           el(Text, { style: styles.value }, fmtDay(data.dueDate)),
         ),
       ),
+
+      // Service address (item 2) — separate from "Bill to" above, which is the
+      // billing address. Omitted entirely when the invoice covers jobs at more
+      // than one address, rather than printing one of them and implying both.
+      ...(data.serviceAddress
+        ? [
+            el(
+              View,
+              { style: styles.block },
+              el(Text, { style: styles.sectionTitle }, "Service address"),
+              el(Text, { style: [styles.value, { fontSize: 10 }] }, data.serviceAddress),
+            ),
+          ]
+        : []),
 
       el(
         View,

@@ -3,54 +3,20 @@
 import { db } from "@/db";
 import { getSetting } from "@/lib/settings";
 import { getServicePricingConfig } from "@/lib/booking-pricing";
+import { normalizeAddOnCatalog, type AddOnCatalogEntry } from "@/lib/addon-catalog";
+import { ADDON_ICON_KEY_SET } from "@/lib/addon-icons";
 import {
   SERVICE_CONTENT_KEY,
   ServiceContentConfig,
   normalizeServiceContent,
 } from "@/lib/service-content";
 
-export type RoomType =
-  | "KITCHEN"
-  | "BATHROOM"
-  | "BEDROOM"
-  | "LIVING_ROOM"
-  | "LAUNDRY"
-  | "OUTDOOR"
-  | "WHOLE_HOME";
-
-export interface BookingAddOn {
-  id: string;
-  name: string;
-  price: number;
-  roomType: RoomType;
-  /** Service types this add-on is offered for. Empty = all services. */
-  services: string[];
-}
-
-const VALID_ROOMS: ReadonlySet<RoomType> = new Set([
-  "KITCHEN",
-  "BATHROOM",
-  "BEDROOM",
-  "LIVING_ROOM",
-  "LAUNDRY",
-  "OUTDOOR",
-  "WHOLE_HOME",
-]);
-
-function normalizeAddOn(raw: unknown): BookingAddOn | null {
-  if (!raw || typeof raw !== "object") return null;
-  const r = raw as Record<string, unknown>;
-  const id = typeof r.id === "string" ? r.id : null;
-  const name = typeof r.name === "string" ? r.name : null;
-  const price = typeof r.price === "number" ? r.price : null;
-  if (!id || !name || price === null || price < 0) return null;
-  const roomCandidate = typeof r.roomType === "string" ? (r.roomType as RoomType) : "WHOLE_HOME";
-  const roomType = VALID_ROOMS.has(roomCandidate) ? roomCandidate : "WHOLE_HOME";
-  const services = Array.isArray(r.services)
-    ? r.services.filter((s): s is string => typeof s === "string")
-    : [];
-  return { id, name, price, roomType, services };
-}
+// The shape, its validation and the room enum all live in @/lib/addon-catalog.
+// They cannot live here: this file is `"use server"`, so it may only export
+// async functions. Re-exported as types (erased at runtime) so the existing
+// import sites keep working.
+export type { RoomType, AddOnCatalogEntry } from "@/lib/addon-catalog";
+export type BookingAddOn = AddOnCatalogEntry;
 
 export async function getBookingConfig(): Promise<{
   addOns: BookingAddOn[];
@@ -78,9 +44,7 @@ export async function getBookingConfig(): Promise<{
       return { addOns: [], minLeadDays, smsOptInDefault, frequencyDiscounts, serviceContent };
     }
 
-    const normalized = setting.value
-      .map(normalizeAddOn)
-      .filter((a): a is BookingAddOn => a !== null);
+    const normalized = normalizeAddOnCatalog(setting.value, ADDON_ICON_KEY_SET);
 
     return { addOns: normalized, minLeadDays, smsOptInDefault, frequencyDiscounts, serviceContent };
   } catch {

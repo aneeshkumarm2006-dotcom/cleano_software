@@ -9,7 +9,11 @@ import { syncContactFromClient } from "@/lib/crm";
 interface UpdateInput {
   name?: string;
   phone?: string;
-  address?: string;
+  // `address` was deliberately removed (awerfixes.pdf item 2, round 3, stage 4).
+  // The portal's single "Default address" textbox became the saved-address book
+  // in app/(customer)/actions/clientAddresses.ts. The flat `Client.address`
+  // scalar is now written only when a brand-new client is created, so nothing
+  // silently overwrites a customer's address again.
 }
 
 export async function updateClientProfile(input: UpdateInput) {
@@ -28,7 +32,6 @@ export async function updateClientProfile(input: UpdateInput) {
       data.name = input.name.trim();
     }
     if (input.phone !== undefined) data.phone = input.phone.trim();
-    if (input.address !== undefined) data.address = input.address.trim();
 
     await db.client.update({ where: { id: client.id }, data });
 

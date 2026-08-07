@@ -1,8 +1,13 @@
 import { requireCleaner } from "@/lib/page-guards";
 import { db } from "@/db";
 import { claimableJobsWhere } from "@/lib/cleaner-jobs";
+import { isCategoryAllowed } from "@/lib/service-permissions";
 import { getCleanerRateInputs } from "@/lib/cleaner-rates";
-import { computeJobPayout, type CleanerRateInput } from "@/lib/pay-tiers";
+import {
+  computeJobPayout,
+  fallbackRateInput,
+  type CleanerRateInput,
+} from "@/lib/pay-tiers";
 import AvailableJobsClient from "./AvailableJobsClient";
 
 /**
@@ -26,6 +31,14 @@ export default async function AvailableJobsPage() {
   const cleanerId = session.user.id;
 
   const now = new Date();
+
+  // Which service categories this cleaner is approved for (awerfixes.pdf item
+  // 3). An empty list means no restriction — see @/lib/service-permissions.
+  const me = await db.user.findUnique({
+    where: { id: cleanerId },
+    select: { allowedServiceCategories: true },
+  });
+  const allowedCategories = me?.allowedServiceCategories ?? [];
 
   // Genuinely open, claimable jobs only (see @/lib/cleaner-jobs): not deleted,
   // still ahead of us, CREATED/SCHEDULED only (IN_PROGRESS / PAID jobs are not
@@ -52,11 +65,24 @@ export default async function AvailableJobsPage() {
       cleaners: { select: { id: true } },
     },
     orderBy: { startTime: "asc" },
-    take: 100,
+    // Two filters run in JS below (capacity, which is a relation count the
+    // where-clause can't express, and service category, which needs the alias
+    // map because jobType is free text). Both narrow the page AFTER the fetch,
+    // so a tight limit here becomes a silently short board — a cleaner
+    // restricted to RESIDENTIAL could have all 100 rows eaten by commercial
+    // work. 300 covers the live job table several times over.
+    take: 300,
   });
 
-  // Filter to only jobs that still need cleaners
-  const openJobs = jobs.filter((j) => j.cleaners.length < j.requiredCleaners);
+  // Filter to jobs that still need cleaners AND that this cleaner is approved
+  // to work. Category gating cannot live in the Prisma where-clause: jobType is
+  // free text ("House", "Move In & Out", "R - Residential"), so it takes the
+  // alias map in normalizeJobType to decide.
+  const openJobs = jobs.filter(
+    (j) =>
+      j.cleaners.length < j.requiredCleaners &&
+      isCategoryAllowed(j.jobType, allowedCategories)
+  );
 
   // Estimated payout for THIS cleaner if they claimed the job. Computed
   // server-side from the real tier/split math — the card used to print
@@ -68,8 +94,10 @@ export default async function AvailableJobsPage() {
     for (const c of j.cleaners) participantIds.add(c.id);
   }
   const rateInputs = await getCleanerRateInputs([...participantIds]);
+  // The multiplier rides inside CleanerRateInput, so the estimate below picks up
+  // the cleaner's rating premium automatically (awerfixes.pdf item 1).
   const rateFor = (id: string): CleanerRateInput =>
-    rateInputs.get(id) ?? { id, tier: "STANDARD", avgRating: null, ratingCount: 0 };
+    rateInputs.get(id) ?? fallbackRateInput(id);
 
   const serialized = openJobs.map((j) => {
     let estPay: number | null = null;

@@ -22,6 +22,35 @@ import {
   Box,
 } from "lucide-react";
 
+/**
+ * The curated icon set an admin can pick from (item 17). Keys are stable
+ * strings stored in the `pricing.addOns` catalog — never the component name, so
+ * swapping the underlying lucide icon never invalidates saved catalogs.
+ */
+export const ADDON_ICONS = {
+  sparkles: Sparkles,
+  oven: CookingPot,
+  microwave: Microwave,
+  fridge: Refrigerator,
+  laundry: Shirt,
+  dryer: WashingMachine,
+  sofa: Sofa,
+  carpet: Layers,
+  window: Blinds,
+  patio: Trees,
+  grout: Grid3x3,
+  cabinet: Box,
+  baseboard: Footprints,
+  wall: PaintRoller,
+  vent: Wind,
+  brush: Brush,
+} as const satisfies Record<string, LucideIcon>;
+
+export type AddonIconKey = keyof typeof ADDON_ICONS;
+
+export const ADDON_ICON_KEYS = Object.keys(ADDON_ICONS) as AddonIconKey[];
+export const ADDON_ICON_KEY_SET: ReadonlySet<string> = new Set(ADDON_ICON_KEYS);
+
 const RULES: Array<{ pattern: RegExp; icon: LucideIcon }> = [
   { pattern: /oven|stove/i, icon: CookingPot },
   { pattern: /microwave/i, icon: Microwave },
@@ -40,7 +69,26 @@ const RULES: Array<{ pattern: RegExp; icon: LucideIcon }> = [
   { pattern: /brush|scrub/i, icon: Brush },
 ];
 
-export function addonIcon(name: string): LucideIcon {
+/**
+ * Resolve an add-on's icon.
+ *
+ * Accepts either a bare name (the original signature — every existing call site
+ * keeps compiling) or the whole add-on, in which case an admin-chosen `icon`
+ * key wins over the keyword guess.
+ *
+ * The keyword RULES are deliberately unchanged. They misfire in places —
+ * `/vent|duct|air/` claims "Chair cleaning", "Stairs" and "Repair" — but
+ * editing them would silently move icons on every existing catalog, and the
+ * explicit key is now the escape hatch for exactly those cases.
+ */
+export function addonIcon(
+  addOn: string | { name?: string | null; icon?: string | null }
+): LucideIcon {
+  const name = typeof addOn === "string" ? addOn : addOn?.name ?? "";
+  const key = typeof addOn === "string" ? null : addOn?.icon;
+  if (key && key in ADDON_ICONS) {
+    return ADDON_ICONS[key as AddonIconKey];
+  }
   for (const rule of RULES) {
     if (rule.pattern.test(name)) return rule.icon;
   }

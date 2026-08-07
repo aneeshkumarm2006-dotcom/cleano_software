@@ -2,13 +2,19 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
+import {
+  SAVED_ADDRESS_ORDER,
+  SAVED_ADDRESS_SELECT,
+} from "@/lib/client-address-store";
 import { revalidatePath } from "next/cache";
 import { getTaxRates } from "@/lib/tax.server";
+import { getBookingConfig } from "@/app/(book)/actions/getBookingConfig";
 import { getSetting } from "@/lib/settings";
 import { getCleanerRateInputs } from "@/lib/cleaner-rates";
 import { deleteJob as archiveJob } from "@/app/admin/actions/deleteJob";
 import { computeJobPayShares, type JobPayInput } from "@/lib/cleaner-earnings";
 import JobDetailView from "./JobDetailView";
+import ScrollToTop from "./ScrollToTop";
 
 export default async function JobPage({
   params,
@@ -22,20 +28,41 @@ export default async function JobPage({
   const logsPage = Number(search.logsPage) || 1;
   const logsPerPage = 10;
 
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
-
-  if (!session) {
-    redirect("/sign-in");
-  }
-
-  const job = await db.job.findUnique({
+  // Everything below is fetched in PARALLEL waves, not one await after another.
+  //
+  // This page used to issue eleven sequential round trips (session → job →
+  // users → clients → logs → photos → reviewPhotos → taxRates → bookingConfig →
+  // gpsEnabled → cleaner rates). None of the middle nine depend on each other,
+  // yet each waited for the one before it, so the page cost the SUM of eleven
+  // latencies instead of the slowest one. Against a remote Postgres pooler
+  // (~1.3s per round trip from outside the DB's region) that measured **33
+  // seconds per render** — and because a Next.js server action's response
+  // carries a re-render of the current page, every button on this page paid it
+  // too. That is what made the logs pager look dead: its navigation could not
+  // land before the sidebar's 5-second poll queued the next render behind it.
+  //
+  // Only two real dependencies exist, so there are only two waves:
+  //   1. the job itself must exist before its participants can be priced;
+  //   2. `getCleanerRateInputs` needs those participant ids.
+  const [session, job] = await Promise.all([
+    auth.api.getSession({ headers: await headers() }),
+    db.job.findUnique({
     where: { id },
     include: {
       employee: true,
       cleaners: true,
       client: true,
+      // The saved address behind this job (item 2) — city/postal/access notes
+      // live there, not on the job's denormalized snapshot.
+      clientAddress: {
+        select: {
+          label: true,
+          aptNumber: true,
+          city: true,
+          postalCode: true,
+          accessNotes: true,
+        },
+      },
       addOns: true,
       productUsage: {
         include: {
@@ -51,6 +78,9 @@ export default async function JobPage({
       // Breaks taken on this job (item 26) — the time summary shows active
       // working time, which is elapsed minus these.
       breaks: true,
+      // Work sessions (round 3, item 6) — a cleaner can clock out and back in,
+      // so the Team card lists every stretch rather than one pair.
+      workSessions: { orderBy: { startedAt: "asc" } },
       // Manual/customer star ratings attached to this job (item 13).
       ratings: {
         include: { employee: { select: { id: true, name: true } } },
@@ -60,7 +90,12 @@ export default async function JobPage({
         select: { logs: true },
       },
     },
-  });
+    }),
+  ]);
+
+  if (!session) {
+    redirect("/sign-in");
+  }
 
   if (!job) {
     redirect("/admin/jobs");
@@ -75,57 +110,107 @@ export default async function JobPage({
     redirect("/admin/jobs");
   }
 
-  // Fetch all users for the cleaner selector
-  const users = await db.user.findMany({
-    where: { role: { not: "CLIENT" } },
-    orderBy: { name: "asc" },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-    },
-  });
+  // Wave 2 — nine independent reads, issued together. `participantIds` is
+  // derived from the job we already have, so the cleaner rate lookup joins this
+  // wave rather than trailing it.
+  const participantIds = Array.from(
+    new Set(
+      [job.employeeId, ...job.cleaners.map((c) => c.id)].filter(
+        (uid): uid is string => !!uid
+      )
+    )
+  );
 
-  const clients = await db.client.findMany({
-    orderBy: { name: "asc" },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      address: true,
-      discountPercent: true,
-      defaultPaymentMethodId: true,
-    },
-  });
+  const [
+    users,
+    clients,
+    logs,
+    photos,
+    reviewPhotos,
+    taxRates,
+    { addOns: addOnCatalog },
+    gpsEnabled,
+    rateInputs,
+  ] = await Promise.all([
+    // All users for the cleaner selector
+    db.user.findMany({
+      where: { role: { not: "CLIENT" } },
+      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        // Drives the category advisory in JobModal and the Team card (item 3).
+        allowedServiceCategories: true,
+      },
+    }),
 
-  // Fetch paginated logs separately
+    db.client.findMany({
+      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        address: true,
+        aptNumber: true,
+        discountPercent: true,
+        defaultPaymentMethodId: true,
+        // The saved address book, so JobModal can offer the dropdown (item 2).
+        addresses: {
+          orderBy: SAVED_ADDRESS_ORDER,
+          select: SAVED_ADDRESS_SELECT,
+        },
+      },
+    }),
+
+    // Paginated logs. The same shape the `getJobLogsPage` action returns, so a
+    // page turn in the browser and a fresh load of `?logsPage=N` agree.
+    db.jobLog.findMany({
+      where: { jobId: id },
+      include: {
+        user: true,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+      skip: (logsPage - 1) * logsPerPage,
+      take: logsPerPage,
+    }),
+
+    // All photos uploaded for this job
+    db.jobPhoto.findMany({
+      where: { jobId: id },
+      include: {
+        employee: { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+
+    // Client-submitted review photos (attached to poor ratings)
+    db.reviewPhoto.findMany({
+      where: { jobId: id },
+      orderBy: { createdAt: "desc" },
+    }),
+
+    // Current admin-configured GST/QST rates — used to label the tax rows and
+    // to compute a display-only breakdown for older jobs saved without tax
+    // amounts.
+    getTaxRates(),
+
+    // The add-on catalog, for two things: the edit modal's picker grid (which
+    // had no catalog here at all, so editing a job from this page showed an
+    // empty grid), and telling a catalog add-on apart from a one-off custom
+    // charge.
+    getBookingConfig(),
+
+    // Live GPS tracking toggle (#10) — gates the on-the-way map below.
+    getSetting("tracking.gpsEnabled"),
+
+    // Per-cleaner pay inputs (see the pay comment below).
+    getCleanerRateInputs(participantIds),
+  ]);
+
   const totalLogs = job._count.logs;
-  const logs = await db.jobLog.findMany({
-    where: { jobId: id },
-    include: {
-      user: true,
-    },
-    orderBy: {
-      createdAt: "desc",
-    },
-    skip: (logsPage - 1) * logsPerPage,
-    take: logsPerPage,
-  });
-
-  // Fetch all photos uploaded for this job
-  const photos = await db.jobPhoto.findMany({
-    where: { jobId: id },
-    include: {
-      employee: { select: { id: true, name: true } },
-    },
-    orderBy: { createdAt: "desc" },
-  });
-
-  // Fetch client-submitted review photos (attached to poor ratings)
-  const reviewPhotos = await db.reviewPhoto.findMany({
-    where: { jobId: id },
-    orderBy: { createdAt: "desc" },
-  });
 
   // Calculate total cost of products used
   const totalProductCost = job.productUsage.reduce((sum, usage) => {
@@ -137,35 +222,52 @@ export default async function JobPage({
     (session.user as any).role === "OWNER" ||
     (session.user as any).role === "ADMIN";
 
-  // Current admin-configured GST/QST rates — used to label the tax rows and to
-  // compute a display-only breakdown for older jobs saved without tax amounts.
-  const taxRates = await getTaxRates();
-
-  // Live GPS tracking toggle (#10) — gates the on-the-way map below.
-  const gpsEnabled = await getSetting("tracking.gpsEnabled");
-
   // Per-cleaner pay — computed with the EXACT function payroll and My Pay use
   // (computeJobPayShares), so the Team card, the cleaner's app, and payday can
   // never disagree. It honours the pay type (PERCENTAGE tier split vs
   // FLAT/HOURLY team-total split) and any manual per-cleaner override.
-  const participantIds = Array.from(
-    new Set(
-      [job.employeeId, ...job.cleaners.map((c) => c.id)].filter(
-        (uid): uid is string => !!uid
-      )
-    )
-  );
-  const rateInputs = await getCleanerRateInputs(participantIds);
+  // `participantIds` and `rateInputs` are resolved in wave 2 above.
   const shares = computeJobPayShares(job as unknown as JobPayInput, rateInputs);
   const payShares: Record<string, number> = {};
+  // The job's LIVE labour cost: every participant's pay BEFORE tips. Tips are
+  // customer money passed through, and the Financials net-profit formula has
+  // always excluded them, so the cost figure must too.
+  //
+  // Deliberately NOT `job.employeePay`. On BookingKoala imports that column
+  // holds the PROVIDER payment from the CSV, not the cleaner payout (see
+  // src/lib/cleaner-pay-display.ts) — printing it made this page disagree with
+  // payroll, My Pay and the pay modal, all of which already run
+  // computeJobPayShares. It is also a save-time SNAPSHOT: it goes stale the
+  // moment a rating lands or Settings → Pay Rate Multipliers is edited.
+  let computedEmployeePay = 0;
   for (const [id, share] of shares) {
     payShares[id] = share.total;
+    computedEmployeePay += share.base;
   }
+  computedEmployeePay = Math.round(computedEmployeePay * 100) / 100;
+
   // Current manual overrides, so the Team card can show which cleaners have one.
   const payOverrides: Record<string, number | null> = {};
   for (const a of job.assignments) {
     payOverrides[a.cleanerId] = a.payAmount ?? null;
   }
+
+  // Per-cleaner rows for the Financials breakdown, so the total above is never
+  // a black box. `users` is already loaded for the cleaner selector — no extra
+  // query.
+  const payRowNameById = new Map(users.map((u) => [u.id, u.name]));
+  const payRows = Array.from(shares.entries()).map(([uid, share]) => ({
+    cleanerId: uid,
+    name: payRowNameById.get(uid) ?? "Unknown",
+    amount: share.base,
+    isOverride: payOverrides[uid] != null,
+  }));
+
+  // TRUE when nobody is payable yet (computeJobPayShares returns an empty map:
+  // no cleaners, or only an admin auto-stamped onto employeeId). The cost is
+  // genuinely $0 — but the stored column may still hold an imported figure, so
+  // the view surfaces it as non-authoritative rather than hiding it.
+  const hasPayableParticipants = shares.size > 0;
 
   // ARCHIVE the job (soft delete).
   //
@@ -201,6 +303,17 @@ export default async function JobPage({
     clientName: job.clientName,
     clientId: job.clientId,
     location: job.location,
+    aptNumber: job.aptNumber,
+    clientAddressId: job.clientAddressId,
+    clientAddress: job.clientAddress
+      ? {
+          label: job.clientAddress.label,
+          aptNumber: job.clientAddress.aptNumber,
+          city: job.clientAddress.city,
+          postalCode: job.clientAddress.postalCode,
+          accessNotes: job.clientAddress.accessNotes,
+        }
+      : null,
     description: job.description,
     jobType: job.jobType,
     priorityLabel: job.priorityLabel,
@@ -231,6 +344,14 @@ export default async function JobPage({
       startedAt: b.startedAt.toISOString(),
       endedAt: b.endedAt ? b.endedAt.toISOString() : null,
     })),
+    workSessions: (job.workSessions ?? []).map(
+      (s: { id: string; cleanerId: string; startedAt: Date; endedAt: Date | null }) => ({
+        id: s.id,
+        cleanerId: s.cleanerId,
+        startedAt: s.startedAt.toISOString(),
+        endedAt: s.endedAt ? s.endedAt.toISOString() : null,
+      })
+    ),
     usesFixedPrice: job.usesFixedPrice,
     notifyClient: job.notifyClient,
     notifyProvider: job.notifyProvider,
@@ -241,7 +362,6 @@ export default async function JobPage({
     bedCount: job.bedCount,
     bathCount: job.bathCount,
     halfBathCount: job.halfBathCount,
-    payRateMultiplier: job.payRateMultiplier,
     depositPaid: job.depositPaid,
     depositPaymentIntentId: job.depositPaymentIntentId,
     stripePaymentIntentId: job.stripePaymentIntentId,
@@ -249,6 +369,7 @@ export default async function JobPage({
       id: a.id,
       name: a.name,
       price: a.price,
+      quantity: a.quantity,
     })),
     employee: job.employee
       ? { id: job.employee.id, name: job.employee.name }
@@ -337,27 +458,36 @@ export default async function JobPage({
   }));
 
   return (
-    <JobDetailView
-      job={jobData}
-      productUsage={productUsageData}
-      logs={logsData}
-      photos={photosData}
-      reviewPhotos={reviewPhotosData}
-      totalLogs={totalLogs}
-      logsPage={logsPage}
-      logsPerPage={logsPerPage}
-      totalProductCost={totalProductCost}
-      taxRates={taxRates}
-      isAdmin={isAdmin}
-      onDeleteJob={archiveJobAction}
-      users={users}
-      clients={clients}
-      currentUserName={session.user.name ?? undefined}
-      assignments={assignmentsData}
-      payShares={payShares}
-      payOverrides={payOverrides}
-      jobRatings={jobRatingsData}
-      gpsEnabled={gpsEnabled}
-    />
+    <>
+      {/* Full page loads (a plain <a href>, a refresh) land wherever the
+          browser left the scroller; ScrollReset only covers SPA navigation. */}
+      <ScrollToTop jobId={id} />
+      <JobDetailView
+        job={jobData}
+        productUsage={productUsageData}
+        logs={logsData}
+        photos={photosData}
+        reviewPhotos={reviewPhotosData}
+        totalLogs={totalLogs}
+        logsPage={logsPage}
+        logsPerPage={logsPerPage}
+        totalProductCost={totalProductCost}
+        taxRates={taxRates}
+        addOnCatalog={addOnCatalog}
+        isAdmin={isAdmin}
+        onDeleteJob={archiveJobAction}
+        users={users}
+        clients={clients}
+        currentUserName={session.user.name ?? undefined}
+        assignments={assignmentsData}
+        payShares={payShares}
+        payOverrides={payOverrides}
+        computedEmployeePay={computedEmployeePay}
+        payRows={payRows}
+        hasPayableParticipants={hasPayableParticipants}
+        jobRatings={jobRatingsData}
+        gpsEnabled={gpsEnabled}
+      />
+    </>
   );
 }

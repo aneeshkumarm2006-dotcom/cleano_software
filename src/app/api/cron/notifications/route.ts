@@ -46,6 +46,12 @@ interface DispatchCounts {
   provider_one_day: number;
   provider_one_hour: number;
   provider_unassigned_pool: number;
+  /** Last-minute broadcast offers that lapsed (these genuinely expire). */
+  invite_broadcast_expired: number;
+  /** One-time "assignment unconfirmed" nudges raised to admins. */
+  invite_unconfirmed_alert: number;
+  /** Unconfirmed invites whose cleaner had since been taken off the job. */
+  invite_unconfirmed_skipped: number;
   skipped: number;
 }
 
@@ -101,6 +107,9 @@ export async function GET(req: NextRequest) {
     provider_one_day: 0,
     provider_one_hour: 0,
     provider_unassigned_pool: 0,
+    invite_broadcast_expired: 0,
+    invite_unconfirmed_alert: 0,
+    invite_unconfirmed_skipped: 0,
     skipped: 0,
   };
 
@@ -302,6 +311,14 @@ export async function GET(req: NextRequest) {
 
   // ─── Leave-tip follow-up (customer) ───────────────────────────────
   // Fires 24h after job completion if no tip yet.
+  //
+  // Item 6 (round 3) note: `clockOutTime` is now DERIVED from work sessions, so
+  // a cleaner who clocks back in and out again moves it — which would drop the
+  // job into this 24h window a second time. `ensureNotSent` already keys on
+  // (notificationKey, jobId, recipient), so the second pass finds the existing
+  // EmailLog row and skips: one tip nudge per job, per Decision 4. No extra
+  // dedupe was added; the existing one is the right shape and was verified to
+  // cover the resume case rather than assumed to.
   {
     const lo = new Date(now.getTime() - 24 * HOUR - 30 * MINUTE);
     const hi = new Date(now.getTime() - 24 * HOUR + 30 * MINUTE);
@@ -511,17 +528,13 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // ── Sweep expired job-assignment invites ─────────────────────────
-  // A cleaner who doesn't accept/decline within the configured window
-  // (default 10 min) leaves the invite UNCONFIRMED — they stay assigned.
-  //
-  // This used to disconnect them from the job and delete their JobAssignment
-  // row, which is how admins watched cleaners silently fall off jobs minutes
-  // after being assigned (new fix list item 2: nothing unassigns a cleaner
-  // except an admin or the cleaner's own decline). The expiry is now a
-  // flag + an admin alert, not a removal.
+  // ── Sweep lapsed LAST-MINUTE broadcast invites ───────────────────
+  // These are a race for an OPEN job after somebody cancelled: first to accept
+  // gets it, and a lapsed one really is dead. Hard expiry is correct here and
+  // is unchanged (awerfixes.pdf item 4 deliberately carves these out — the
+  // target is the hold on an ASSIGNED job, and a broadcast job is never held).
   const expiredInvites = await db.jobAssignmentInvite.findMany({
-    where: { decision: "PENDING", expiresAt: { lt: now } },
+    where: { decision: "PENDING", isLastMinute: true, expiresAt: { lt: now } },
     select: { id: true, jobId: true, cleanerId: true },
     take: 200,
   });
@@ -538,33 +551,97 @@ export async function GET(req: NextRequest) {
             userId: inv.cleanerId,
             action: "NOTE_ADDED",
             description:
-              "Assignment invite expired — no response within the configured window. The cleaner remains assigned; confirm manually or reassign.",
+              "Last-minute claim offer expired — no response within the configured window.",
           },
         }),
       ]);
-
-      // Surface it instead of acting on it: the admin decides whether to keep
-      // the cleaner, chase them, or reassign.
-      const job = await db.job.findUnique({
-        where: { id: inv.jobId },
-        select: { jobNumber: true, clientName: true, deletedAt: true },
-      });
-      const cleaner = await db.user.findUnique({
-        where: { id: inv.cleanerId },
-        select: { name: true },
-      });
-      if (job && !job.deletedAt) {
-        await notifyAdmins({
-          type: "GENERAL",
-          severity: "WARNING",
-          title: `Assignment unconfirmed — ${job.clientName}`,
-          message: `${cleaner?.name ?? "A cleaner"} hasn't responded to the invite for job #${job.jobNumber}. They are still assigned — confirm or reassign.`,
-          relatedId: inv.jobId,
-          relatedType: "Job",
-        });
-      }
+      counts.invite_broadcast_expired++;
     } catch (e) {
       console.error("expired invite sweep failed", inv.id, e);
+    }
+  }
+
+  // ── Nudge admins about UNCONFIRMED DIRECT assignments ────────────
+  // A direct assignment does NOT lapse. The cleaner is already on the job and
+  // stays there; only an admin or their own decline can change that. So this
+  // pass writes NO decision and NO respondedAt — stamping "EXPIRED" on a row
+  // that cannot expire is exactly what produced the 10-minute pending-hold
+  // experience the client reported.
+  //
+  // What survives is the useful half: a one-time WARNING so an admin knows the
+  // cleaner hasn't acknowledged the job yet. `unconfirmedAlertAt` is the dedupe
+  // (notifyAdmins has none of its own), and createAssignmentInvites clears it
+  // when a cleaner is re-invited.
+  const unconfirmed = await db.jobAssignmentInvite.findMany({
+    where: {
+      decision: "PENDING",
+      isLastMinute: false,
+      expiresAt: { lt: now },
+      unconfirmedAlertAt: null,
+      job: { deletedAt: null },
+    },
+    select: {
+      id: true,
+      jobId: true,
+      cleanerId: true,
+      job: {
+        select: {
+          jobNumber: true,
+          clientName: true,
+          employeeId: true,
+          cleaners: { select: { id: true } },
+        },
+      },
+      cleaner: { select: { name: true } },
+    },
+    take: 200,
+  });
+  for (const inv of unconfirmed) {
+    try {
+      // An admin may have taken this cleaner off the job since the invite went
+      // out; nothing cancels the invite when that happens. Alerting "they are
+      // still assigned — confirm or reassign" about somebody who is NOT on the
+      // job is worse than silence, so mark it handled and move on.
+      const stillOnJob =
+        inv.job.employeeId === inv.cleanerId ||
+        inv.job.cleaners.some((c) => c.id === inv.cleanerId);
+
+      await db.$transaction([
+        db.jobAssignmentInvite.update({
+          where: { id: inv.id },
+          data: { unconfirmedAlertAt: now },
+        }),
+        ...(stillOnJob
+          ? [
+              db.jobLog.create({
+                data: {
+                  jobId: inv.jobId,
+                  userId: inv.cleanerId,
+                  action: "NOTE_ADDED" as const,
+                  description:
+                    "Assignment not yet confirmed — no response within the configured window. The cleaner remains assigned; confirm manually or reassign.",
+                },
+              }),
+            ]
+          : []),
+      ]);
+
+      if (!stillOnJob) {
+        counts.invite_unconfirmed_skipped++;
+        continue;
+      }
+
+      await notifyAdmins({
+        type: "GENERAL",
+        severity: "WARNING",
+        title: `Assignment unconfirmed — ${inv.job.clientName}`,
+        message: `${inv.cleaner?.name ?? "A cleaner"} hasn't confirmed job #${inv.job.jobNumber} yet. They are still assigned — chase them or reassign.`,
+        relatedId: inv.jobId,
+        relatedType: "Job",
+      });
+      counts.invite_unconfirmed_alert++;
+    } catch (e) {
+      console.error("unconfirmed assignment nudge failed", inv.id, e);
     }
   }
 

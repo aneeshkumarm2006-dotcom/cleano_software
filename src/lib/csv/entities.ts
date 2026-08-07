@@ -11,7 +11,6 @@ export type EntityKey =
   | "employees"
   | "products"
   | "suppliers"
-  | "inventory-rules"
   | "inventory-locations"
   | "inventory-requests"
   | "kit-templates";
@@ -146,7 +145,8 @@ export const CSV_ENTITIES: Record<EntityKey, CsvEntityConfig> = {
       { key: "bedCount", type: "int", min: 0, example: "2" },
       { key: "bathCount", type: "int", min: 0, example: "1" },
       { key: "halfBathCount", type: "int", min: 0, example: "0" },
-      { key: "payRateMultiplier", type: "float", min: 0, example: "1.0" },
+      { key: "payRateMultiplier", type: "float", min: 0, example: "1.0",
+        help: "Deprecated — stored but ignored. Cleaner pay uses the cleaner's own rating multiplier (Settings → Pay Rate Multipliers), not a per-job factor." },
       { key: "requiredCleaners", type: "int", min: 1, example: "1" },
       { key: "employeeEmail", type: "string", example: "", help: "Assigned/owning employee by email" },
       { key: "cleanerEmails", type: "string", example: "", help: "Semicolon-separated cleaner emails" },
@@ -204,22 +204,6 @@ export const CSV_ENTITIES: Record<EntityKey, CsvEntityConfig> = {
       { key: "address", type: "string", example: "" },
       { key: "notes", type: "string", example: "" },
       { key: "isActive", type: "boolean", example: "true" },
-    ],
-  },
-
-  "inventory-rules": {
-    key: "inventory-rules",
-    title: "Inventory Rules",
-    fileName: "inventory-rules-template.csv",
-    description: "Import per-product usage/refill rules.",
-    guidance: [
-      "productName must match an existing product. Rows referencing an unknown product fail.",
-      "Rows are skipped when the product already has a rule.",
-    ],
-    columns: [
-      { key: "productName", type: "string", required: true, example: "Glass Cleaner", help: "Must match an existing product" },
-      { key: "usagePerJob", type: "float", required: true, min: 0, example: "1" },
-      { key: "refillThreshold", type: "float", required: true, min: 0, example: "5" },
     ],
   },
 

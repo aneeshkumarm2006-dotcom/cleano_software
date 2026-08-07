@@ -16,6 +16,7 @@ import {
   generateUniqueReferralCode,
 } from "@/lib/referral";
 import { getSetting } from "@/lib/settings";
+import { addOnQuantity, MAX_ADDON_QUANTITY } from "@/lib/job-money";
 import { advanceContactLifecycleForBooking, logContactEvent } from "@/lib/crm";
 import {
   sendBookingConfirmation,
@@ -31,6 +32,8 @@ import {
 } from "@/lib/stripe";
 import { logActivity } from "@/lib/activity-log";
 import { applyPromoCode } from "./applyPromoCode";
+import { formatAddressLine } from "@/lib/client-address";
+import { resolveJobAddressId } from "@/lib/client-address-store";
 
 type Frequency =
   | "ONE_TIME"
@@ -46,6 +49,15 @@ interface SubmitBookingInput {
   postalCode: string;
   // Step 2
   address: string;
+  /** Unit / buzzer number (item 2). Optional — /book never captured one before. */
+  aptNumber?: string;
+  /**
+   * A saved ClientAddress the customer picked. UNTRUSTED: this action is public
+   * and identity here comes from the verified deposit + email, never a session,
+   * so the id is re-checked against the resolved client before it is used —
+   * exactly the reasoning applied to the Stripe ids above.
+   */
+  addressId?: string | null;
   bedCount: number;
   bathCount: number;
   halfBathCount: number;
@@ -55,8 +67,9 @@ interface SubmitBookingInput {
   pcCleaners?: number; // post-construction crew size (× hourly)
   frequency: Frequency;
   // Client sends id (preferred) and/or name; the price is resolved server-side
-  // from the catalog and any client-supplied price is ignored.
-  addOns: { id?: string; name: string; price?: number }[];
+  // from the catalog and any client-supplied price is ignored. `quantity` IS
+  // taken from the client, so it is clamped and coalesced below.
+  addOns: { id?: string; name: string; price?: number; quantity?: number }[];
   // Step 3
   date: string; // YYYY-MM-DD
   isFlexible: boolean;
@@ -427,7 +440,16 @@ export async function submitBooking(input: SubmitBookingInput) {
           data: {
             name: input.name.trim(),
             phone: input.phone.trim(),
-            address: input.address.trim(),
+            // `address` is deliberately NOT written here any more (item 2).
+            //
+            // This line used to clobber the returning customer's stored address
+            // with whatever they typed for THIS booking, so booking a second
+            // property permanently rewrote the first — and the portal's
+            // "Default address" box with it. The address now goes to the
+            // customer's address book below, where several can coexist.
+            //
+            // The create branch still seeds the scalar, because a brand-new
+            // client has nothing to overwrite.
             serviceFrequency: storeFrequency,
             // Both ids come from the VERIFIED PaymentIntent, never from the
             // request body. Accepting them from the client let anyone repoint
@@ -454,6 +476,33 @@ export async function submitBooking(input: SubmitBookingInput) {
           },
         });
 
+    // ── Address book (item 2) ────────────────────────────────────────────────
+    // Every booking either links to a saved address the customer picked, or
+    // adds the one they typed so it's offered next time. Before this stage
+    // /book never touched ClientAddress at all — the admin side maintained a
+    // book the customer could neither see nor add to.
+    //
+    // A picked id is honoured ONLY after being confirmed to belong to this
+    // client: `client` is resolved from the verified deposit's email, while
+    // `addressId` came from the browser.
+    const bookingAddress = input.address.trim();
+    const bookingApt = (input.aptNumber ?? "").trim() || null;
+    // One rendering for every notification below, so the customer's
+    // confirmation and the admin alert name the same door the cleaner is sent
+    // to — the unit used to be missing from all of them.
+    const bookingAddressLine = formatAddressLine({
+      address: bookingAddress,
+      aptNumber: bookingApt,
+    });
+    const clientAddressId = await resolveJobAddressId(client.id, {
+      addressId: input.addressId ?? null,
+      address: bookingAddress,
+      aptNumber: bookingApt,
+      // Step 1's postal code is finally persisted here. It was previously used
+      // for the coverage check and then thrown away.
+      postalCode: input.postalCode?.trim() || null,
+    });
+
     // Backstop: make sure existing clients also have a code (for future shares).
     if (existingClient && !existingClient.referralCode) {
       await ensureClientReferralCode(client.id);
@@ -478,7 +527,10 @@ export async function submitBooking(input: SubmitBookingInput) {
     if (isNewClient && referrerEligibleForCredit) {
       discountAmount = await getSetting("customer.newClientReferralDiscountUsd");
     } else if (!isNewClient && client.referralCredit > 0) {
-      // Spend up to 50% of subtotal in credit (sanity cap), to be tuned later.
+      // Flat $50 absolute cap on credit spent per booking. NOTE: the comment
+      // here used to read "up to 50% of subtotal", which this code has never
+      // done — it never looks at the subtotal. Unlike the two amounts above,
+      // this cap has no Settings key; adding one is tracked separately.
       creditSpent = Math.min(client.referralCredit, 50);
       discountAmount = creditSpent;
     }
@@ -486,19 +538,39 @@ export async function submitBooking(input: SubmitBookingInput) {
     // 5a-bis. Resolve add-on prices server-side from the configured catalog.
     // Never trust prices from the client — they're tamperable (a negative price
     // could drag the whole booking to $0). Add-ons not in the catalog are dropped.
+    //
+    // The QUANTITY is the one number the client does supply, so it is clamped to
+    // [1, MAX_ADDON_QUANTITY] and repeated entries for the same catalog row are
+    // COALESCED rather than written as separate rows. Without the coalescing,
+    // sending the same id fifty times was already an unbounded client-controlled
+    // quantity — fifty rows at full price — which is the hole a real quantity
+    // field has to close, not inherit.
     const { addOns: addOnCatalog } = await getBookingConfig();
     const addOnById = new Map(addOnCatalog.map((a) => [a.id, a]));
     const addOnByName = new Map(
       addOnCatalog.map((a) => [a.name.trim().toLowerCase(), a])
     );
-    const resolvedAddOns = (input.addOns ?? [])
-      .map((a) => {
-        const hit =
-          (a.id && addOnById.get(a.id)) ||
-          addOnByName.get((a.name ?? "").trim().toLowerCase());
-        return hit ? { name: hit.name, price: hit.price } : null;
-      })
-      .filter((a): a is { name: string; price: number } => a !== null);
+    const addOnByKey = new Map<
+      string,
+      { name: string; price: number; quantity: number }
+    >();
+    for (const a of input.addOns ?? []) {
+      const hit =
+        (a.id && addOnById.get(a.id)) ||
+        addOnByName.get((a.name ?? "").trim().toLowerCase());
+      if (!hit) continue;
+      const existing = addOnByKey.get(hit.id);
+      const quantity = addOnQuantity(a);
+      if (existing) {
+        existing.quantity = Math.min(
+          MAX_ADDON_QUANTITY,
+          existing.quantity + quantity
+        );
+      } else {
+        addOnByKey.set(hit.id, { name: hit.name, price: hit.price, quantity });
+      }
+    }
+    const resolvedAddOns = [...addOnByKey.values()];
 
     // 5b. Server-authoritative pricing
     const pricing = await computeBookingPrice({
@@ -618,7 +690,11 @@ export async function submitBooking(input: SubmitBookingInput) {
       data: {
         clientName: client.name,
         client: { connect: { id: client.id } },
-        location: input.address.trim(),
+        location: bookingAddress,
+        aptNumber: bookingApt,
+        // Provenance to the saved address, so the cleaner page can read its
+        // access notes and "apply to series" carries the choice (item 2).
+        ...(clientAddressId ? { clientAddress: { connect: { id: clientAddressId } } } : {}),
         description: `${input.serviceType} cleaning`,
         jobType: input.serviceType,
         jobDate: startTime,
@@ -665,6 +741,7 @@ export async function submitBooking(input: SubmitBookingInput) {
           create: resolvedAddOns.map((a) => ({
             name: a.name,
             price: a.price,
+            quantity: a.quantity,
           })),
         },
       },
@@ -867,7 +944,13 @@ export async function submitBooking(input: SubmitBookingInput) {
           data: {
             clientName: client.name,
             client: { connect: { id: client.id } },
-            location: input.address.trim(),
+            location: bookingAddress,
+            aptNumber: bookingApt,
+            // Every occurrence carries its own copy of the address, so the
+            // provenance link has to be set per child too (item 2).
+            ...(clientAddressId
+              ? { clientAddress: { connect: { id: clientAddressId } } }
+              : {}),
             description: `${input.serviceType} cleaning`,
             jobType: input.serviceType,
             jobDate: cursor,
@@ -896,6 +979,7 @@ export async function submitBooking(input: SubmitBookingInput) {
               create: resolvedAddOns.map((a) => ({
                 name: a.name,
                 price: a.price,
+                quantity: a.quantity,
               })),
             },
           },
@@ -937,7 +1021,7 @@ export async function submitBooking(input: SubmitBookingInput) {
       jobNumber: primaryJob.jobNumber,
       startTime: startTime.toISOString(),
       isFlexible: input.isFlexible,
-      address: input.address.trim(),
+      address: bookingAddressLine,
       serviceType: input.serviceType,
       subtotal: primaryPricing.subtotal,
       gst: primaryPricing.gstAmount,
@@ -967,7 +1051,7 @@ export async function submitBooking(input: SubmitBookingInput) {
         clientPhone: input.phone ?? null,
         startTime: startTime.toISOString(),
         isFlexible: input.isFlexible,
-        address: input.address.trim(),
+        address: bookingAddressLine,
         serviceType: input.serviceType,
         price: primaryPricing.total,
         bookingSource: "web (referral)",
@@ -986,7 +1070,7 @@ export async function submitBooking(input: SubmitBookingInput) {
       clientPhone: input.phone ?? null,
       startTime: startTime.toISOString(),
       isFlexible: input.isFlexible,
-      address: input.address.trim(),
+      address: bookingAddressLine,
       serviceType: input.serviceType,
       price: primaryPricing.total,
       bookingSource: "web",

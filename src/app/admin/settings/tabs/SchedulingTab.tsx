@@ -129,11 +129,19 @@ export default function SchedulingTab({ settings }: Props) {
           </Field>
         </div>
 
+        {/* This used to say the job is "released back to the unassigned
+            folder" when the timeout passes. That stopped being true in
+            AWER_NEW_FIXES item 2 — nothing unassigns a cleaner except an admin
+            or the cleaner's own decline — and the stale promise is half of why
+            the timeout read as a 10-minute hold (awerfixes.pdf item 4). */}
         <p style={{ fontSize: 12, color: "var(--primary-60)" }}>
           The no-show fee is charged to the customer&rsquo;s saved card when an
           admin marks a booking as a no-show. The accept/decline timeout is how
-          long a newly assigned cleaner has to respond before the job is
-          released back to the unassigned folder.
+          long a newly assigned cleaner has to confirm before you get an
+          &ldquo;assignment unconfirmed&rdquo; alert. It never un-assigns them:
+          an assigned cleaner stays on the job until you or they change it. It
+          also sets how long a last-minute claim offer stays open, and those
+          <em> do</em> expire.
         </p>
 
         <label className="flex items-center gap-2 text-sm text-gray-700">

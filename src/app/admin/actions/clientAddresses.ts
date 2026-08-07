@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { db } from "@/db";
 import { revalidatePath } from "next/cache";
+import { logActivity } from "@/lib/activity-log";
 
 async function requireAdmin() {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -13,63 +14,144 @@ async function requireAdmin() {
   return session;
 }
 
+/**
+ * awerfixes.pdf item 2 (round 3, stage 4) — the address book grew city, postal
+ * code and access notes.
+ *
+ * `accessNotes` holds door codes, gate codes and buzzer numbers, and it is
+ * surfaced to the assigned cleaner on the job page. That is the reason these
+ * three actions now write to the activity log: before this stage the file had
+ * no audit trail at all (unlike its sibling clientPaymentMethods.ts), and
+ * "who changed the door code, and when" is a question someone will eventually
+ * need answered. The note text itself is never logged — only that it changed.
+ */
+const readAddressForm = (formData: FormData) => ({
+  label: (formData.get("label") as string)?.trim() || "Home",
+  address: (formData.get("address") as string)?.trim(),
+  aptNumber: (formData.get("aptNumber") as string)?.trim() || null,
+  city: (formData.get("city") as string)?.trim() || null,
+  postalCode: (formData.get("postalCode") as string)?.trim() || null,
+  accessNotes: (formData.get("accessNotes") as string)?.trim() || null,
+  makeDefault: formData.get("isDefault") === "on",
+});
+
+async function logAddressChange(
+  session: Awaited<ReturnType<typeof requireAdmin>>,
+  action: string,
+  clientId: string,
+  addressId: string,
+  hasAccessNotes: boolean
+) {
+  await logActivity({
+    category: "ADMIN",
+    action,
+    status: "SUCCESS",
+    actorId: session?.user?.id ?? null,
+    actorLabel: (session?.user as { role?: string } | undefined)?.role ?? null,
+    targetType: "Client",
+    targetId: clientId,
+    message: `Saved address ${action.replace("client_address.", "")}`,
+    // Deliberately records only WHETHER access notes are present, never the
+    // codes themselves — the audit log must not become a second copy of them.
+    metadata: { addressId, hasAccessNotes },
+  });
+}
+
 export async function addClientAddress(formData: FormData) {
-  if (!(await requireAdmin())) return { error: "Forbidden" };
+  const session = await requireAdmin();
+  if (!session) return { error: "Forbidden" };
 
   const clientId = formData.get("clientId") as string;
-  const label = (formData.get("label") as string)?.trim() || "Home";
-  const address = (formData.get("address") as string)?.trim();
-  const aptNumber = (formData.get("aptNumber") as string)?.trim() || null;
-  const makeDefault = formData.get("isDefault") === "on";
+  const f = readAddressForm(formData);
 
-  if (!clientId || !address) return { error: "Address is required" };
+  if (!clientId || !f.address) return { error: "Address is required" };
 
-  if (makeDefault) {
+  if (f.makeDefault) {
     await db.clientAddress.updateMany({ where: { clientId }, data: { isDefault: false } });
   }
 
-  await db.clientAddress.create({
-    data: { clientId, label, address, aptNumber, isDefault: makeDefault },
+  const created = await db.clientAddress.create({
+    data: {
+      clientId,
+      label: f.label,
+      address: f.address,
+      aptNumber: f.aptNumber,
+      city: f.city,
+      postalCode: f.postalCode,
+      accessNotes: f.accessNotes,
+      isDefault: f.makeDefault,
+    },
+    select: { id: true },
   });
+
+  await logAddressChange(session, "client_address.created", clientId, created.id, !!f.accessNotes);
 
   revalidatePath(`/admin/clients/${clientId}`);
   return { success: true };
 }
 
 export async function updateClientAddress(formData: FormData) {
-  if (!(await requireAdmin())) return { error: "Forbidden" };
+  const session = await requireAdmin();
+  if (!session) return { error: "Forbidden" };
 
   const id = formData.get("id") as string;
-  const label = (formData.get("label") as string)?.trim() || "Home";
-  const address = (formData.get("address") as string)?.trim();
-  const aptNumber = (formData.get("aptNumber") as string)?.trim() || null;
-  const makeDefault = formData.get("isDefault") === "on";
+  const f = readAddressForm(formData);
 
-  if (!id || !address) return { error: "Address is required" };
+  if (!id || !f.address) return { error: "Address is required" };
 
   const existing = await db.clientAddress.findUnique({ where: { id } });
   if (!existing) return { error: "Not found" };
 
-  if (makeDefault) {
+  if (f.makeDefault) {
     await db.clientAddress.updateMany({ where: { clientId: existing.clientId }, data: { isDefault: false } });
   }
 
   await db.clientAddress.update({
     where: { id },
-    data: { label, address, aptNumber, isDefault: makeDefault },
+    data: {
+      label: f.label,
+      address: f.address,
+      aptNumber: f.aptNumber,
+      city: f.city,
+      postalCode: f.postalCode,
+      accessNotes: f.accessNotes,
+      isDefault: f.makeDefault,
+    },
   });
+
+  await logAddressChange(
+    session,
+    "client_address.updated",
+    existing.clientId,
+    id,
+    !!f.accessNotes
+  );
 
   revalidatePath(`/admin/clients/${existing.clientId}`);
   return { success: true };
 }
 
 export async function deleteClientAddress(id: string) {
-  if (!(await requireAdmin())) return { error: "Forbidden" };
+  const session = await requireAdmin();
+  if (!session) return { error: "Forbidden" };
 
   const existing = await db.clientAddress.findUnique({ where: { id } });
   if (!existing) return { error: "Not found" };
 
+  // Job.clientAddressId is ON DELETE SET NULL, so jobs booked against this
+  // address keep their `location`/`aptNumber` snapshot and only lose the
+  // provenance pointer. Nothing scheduled or invoiced is damaged by a delete,
+  // which is why this stays a hard delete.
   await db.clientAddress.delete({ where: { id } });
+
+  await logAddressChange(
+    session,
+    "client_address.deleted",
+    existing.clientId,
+    id,
+    !!existing.accessNotes
+  );
+
   revalidatePath(`/admin/clients/${existing.clientId}`);
   return { success: true };
 }

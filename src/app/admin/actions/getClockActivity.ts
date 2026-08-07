@@ -9,6 +9,7 @@ import {
   resolveClockEntry,
   summariseBreaks,
 } from "@/lib/time-tracking";
+import { activeSessionMinutes, sessionMinutes } from "@/lib/work-sessions";
 import type {
   ClockActivityEntry,
   ClockActivityPage,
@@ -108,6 +109,13 @@ export async function getClockActivity(input?: {
         breaks: {
           select: { cleanerId: true, startedAt: true, endedAt: true },
         },
+        // Work sessions (round 3, item 6). A cleaner can clock out and back in,
+        // so "minutes worked" is the SUM of their sessions, not the span from
+        // first clock-in to last clock-out.
+        workSessions: {
+          select: { id: true, cleanerId: true, startedAt: true, endedAt: true },
+          orderBy: { startedAt: "asc" },
+        },
       },
     });
 
@@ -122,13 +130,37 @@ export async function getClockActivity(input?: {
         ? job.assignments.filter((a) => a.cleanerId === cleanerId)
         : job.assignments;
 
+      /** One cleaner's sessions, with their per-session break deduction. */
+      const sessionRowsFor = (cid: string) =>
+        job.workSessions
+          .filter((s) => s.cleanerId === cid)
+          .map((s) => ({
+            id: s.id,
+            startedAt: s.startedAt.toISOString(),
+            endedAt: s.endedAt?.toISOString() ?? null,
+            minutes: Math.round(sessionMinutes(s, now)),
+            activeMinutes: Math.round(
+              activeSessionMinutes(
+                s,
+                job.breaks.filter((b) => b.cleanerId === cid),
+                now
+              )
+            ),
+          }));
+
       if (relevant.length > 0) {
         for (const a of relevant) {
-          const entry = resolveClockEntry({ assignment: a });
-          const brk = summariseBreaks(
-            job.breaks.filter((b) => b.cleanerId === a.cleanerId),
+          const myBreaks = job.breaks.filter((b) => b.cleanerId === a.cleanerId);
+          const mySessions = job.workSessions.filter(
+            (s) => s.cleanerId === a.cleanerId
+          );
+          // Sessions win; the assignment pair is the fallback for rows that
+          // predate JobWorkSession.
+          const entry = resolveClockEntry(
+            { sessions: mySessions, assignment: a },
             now
           );
+          const brk = summariseBreaks(myBreaks, now);
           if (openOnly && !entry.isOpen) continue;
           // Skip rows where nothing has happened yet — "assigned" is not
           // clock activity.
@@ -152,15 +184,24 @@ export async function getClockActivity(input?: {
             openMinutes: openShiftMinutes(entry, now),
             isStale: isStaleOpenShift(entry, now),
             isLegacy: false,
+            sessions: sessionRowsFor(a.cleanerId),
           });
         }
       } else {
         // Legacy job: no per-cleaner rows, so report the job-level clock.
-        const entry = resolveClockEntry({
-          jobClockIn: job.clockInTime,
-          jobClockOut: job.clockOutTime,
-          jobOnMyWayAt: job.onMyWayAt,
-        });
+        const legacyCleanerId = job.employee?.id ?? job.employeeId;
+        const legacySessions = legacyCleanerId
+          ? job.workSessions.filter((s) => s.cleanerId === legacyCleanerId)
+          : [];
+        const entry = resolveClockEntry(
+          {
+            sessions: legacySessions,
+            jobClockIn: job.clockInTime,
+            jobClockOut: job.clockOutTime,
+            jobOnMyWayAt: job.onMyWayAt,
+          },
+          now
+        );
         const legacyBreaks = summariseBreaks(job.breaks, now);
         if (entry.status === "NOT_STARTED") continue;
         if (openOnly && !entry.isOpen) continue;
@@ -171,7 +212,7 @@ export async function getClockActivity(input?: {
           clientName: job.clientName,
           jobType: job.jobType,
           scheduledStart: job.startTime.toISOString(),
-          cleanerId: job.employee?.id ?? job.employeeId,
+          cleanerId: legacyCleanerId,
           cleanerName: job.employee?.name ?? "Unassigned",
           clockInTime: entry.clockInTime?.toISOString() ?? null,
           clockOutTime: entry.clockOutTime?.toISOString() ?? null,
@@ -183,6 +224,7 @@ export async function getClockActivity(input?: {
           openMinutes: openShiftMinutes(entry, now),
           isStale: isStaleOpenShift(entry, now),
           isLegacy: true,
+          sessions: legacyCleanerId ? sessionRowsFor(legacyCleanerId) : [],
         });
       }
     }
@@ -200,7 +242,7 @@ export async function getClockActivity(input?: {
     });
     let staleShifts = 0;
     for (const a of openAssignments) {
-      if (isStaleOpenShift(resolveClockEntry({ assignment: a }), now)) {
+      if (isStaleOpenShift(resolveClockEntry({ assignment: a }, now), now)) {
         staleShifts += 1;
       }
     }

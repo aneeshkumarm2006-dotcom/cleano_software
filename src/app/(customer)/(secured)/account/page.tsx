@@ -5,6 +5,11 @@ import { db } from "@/db";
 import { getSettings } from "@/lib/settings";
 import AccountForm from "./AccountForm";
 import PaymentMethods from "./PaymentMethods";
+import SavedAddresses from "./SavedAddresses";
+import {
+  SAVED_ADDRESS_ORDER,
+  SAVED_ADDRESS_SELECT,
+} from "@/lib/client-address-store";
 
 export default async function AccountPage() {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -23,10 +28,28 @@ export default async function AccountPage() {
     );
   }
 
+  // The referral amounts are read here rather than hardcoded in the card copy:
+  // these are the SAME keys submitBooking already pays out on, so what the
+  // customer is promised and what they actually get can no longer drift.
   const {
     "general.businessEmail": businessEmail,
     "general.businessPhone": businessPhone,
-  } = await getSettings(["general.businessEmail", "general.businessPhone"]);
+    "customer.newClientReferralDiscountUsd": referralDiscount,
+    "customer.referrerCreditUsd": referrerCredit,
+  } = await getSettings([
+    "general.businessEmail",
+    "general.businessPhone",
+    "customer.newClientReferralDiscountUsd",
+    "customer.referrerCreditUsd",
+  ]);
+
+  // The saved address book (item 2). Replaces the single "Default address"
+  // textbox that used to live in AccountForm.
+  const addresses = await db.clientAddress.findMany({
+    where: { clientId: client.id },
+    orderBy: SAVED_ADDRESS_ORDER,
+    select: SAVED_ADDRESS_SELECT,
+  });
 
   return (
     <>
@@ -35,13 +58,15 @@ export default async function AccountPage() {
           name: client.name,
           email: client.email ?? email ?? "",
           phone: client.phone ?? "",
-          address: client.address ?? "",
           referralCode: client.referralCode,
           referralCredit: client.referralCredit,
         }}
         businessEmail={businessEmail}
         businessPhone={businessPhone}
+        referralDiscount={referralDiscount}
+        referrerCredit={referrerCredit}
       />
+      <SavedAddresses addresses={addresses} />
       {/* Payment methods subsection. Loads its own data client-side so the
           profile form above keeps rendering if Stripe is unreachable. */}
       <PaymentMethods />

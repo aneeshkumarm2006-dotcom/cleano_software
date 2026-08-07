@@ -3,6 +3,7 @@
 import { db } from "@/db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
+import { loadPerJobAverages } from "@/lib/inventory-forecast.server";
 import type {
   MissingEquipmentItem,
   EquipmentCheckResult,
@@ -120,17 +121,27 @@ export async function checkEquipmentForJob(
       }
     }
 
+    // Fallback when the job's type and add-ons imply no kit at all: fall back to
+    // what jobs actually consume, measured over the trailing window. This used
+    // to read InventoryRule.usagePerJob (awerfixes.pdf item 14) — an
+    // admin-typed figure that went stale, and that covered only the products
+    // somebody had bothered to write a rule for.
     if (requiredMap.size === 0) {
-      const inventoryRules = await db.inventoryRule.findMany({
-        where: { usagePerJob: { gt: 0 } },
-        include: { product: true },
-      });
-      for (const rule of inventoryRules) {
-        requiredMap.set(rule.productId, {
-          needed: rule.usagePerJob,
-          product: { name: rule.product.name, unit: rule.product.unit },
-          source: "USAGE_RULE",
+      const avgPerJob = await loadPerJobAverages();
+      if (avgPerJob.size > 0) {
+        const products = await db.product.findMany({
+          where: { id: { in: [...avgPerJob.keys()] } },
+          select: { id: true, name: true, unit: true },
         });
+        for (const product of products) {
+          const needed = avgPerJob.get(product.id) ?? 0;
+          if (needed <= 0) continue;
+          requiredMap.set(product.id, {
+            needed: Math.round(needed * 100) / 100,
+            product: { name: product.name, unit: product.unit },
+            source: "TYPICAL_USAGE",
+          });
+        }
       }
     }
 

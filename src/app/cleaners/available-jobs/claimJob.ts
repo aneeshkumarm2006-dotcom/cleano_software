@@ -4,6 +4,10 @@ import { db } from "@/db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
+import {
+  isCategoryAllowed,
+  CATEGORY_BLOCKED_MESSAGE,
+} from "@/lib/service-permissions";
 
 export async function claimJob(jobId: string) {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -27,6 +31,7 @@ export async function claimJob(jobId: string) {
       startTime: true,
       employeeId: true,
       requiredCleaners: true,
+      jobType: true,
       cleaners: { select: { id: true } },
     },
   });
@@ -47,8 +52,17 @@ export async function claimJob(jobId: string) {
   // have a Field Lead or approved cleaner on the crew.
   const me = await db.user.findUnique({
     where: { id: userId },
-    select: { cleanerTier: true },
+    select: { cleanerTier: true, allowedServiceCategories: true },
   });
+
+  // Service category permission (awerfixes.pdf item 3). Defence in depth: the
+  // board already hides these jobs, but the board is a filtered list and this is
+  // the write — a stale page or a hand-made call must not get through. Empty
+  // list = unrestricted; an unrecognised jobType stays claimable by everyone.
+  if (!isCategoryAllowed(job.jobType, me?.allowedServiceCategories)) {
+    return { success: false, error: CATEGORY_BLOCKED_MESSAGE };
+  }
+
   if (me?.cleanerTier === "TRAINEE") {
     const crewIds = [
       ...job.cleaners.map((c) => c.id),

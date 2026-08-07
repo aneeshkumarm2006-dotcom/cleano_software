@@ -7,23 +7,43 @@ export type Frequency =
   | "TWICE_WEEKLY"
   | "HIGH_FREQUENCY";
 
-export type RoomType =
-  | "KITCHEN"
-  | "BATHROOM"
-  | "BEDROOM"
-  | "LIVING_ROOM"
-  | "LAUNDRY"
-  | "OUTDOOR"
-  | "WHOLE_HOME";
+// Single declaration in @/lib/addon-catalog, which also validates it on read.
+export type { RoomType } from "@/lib/addon-catalog";
+import type { RoomType } from "@/lib/addon-catalog";
 
 export interface AddOnSelection {
   id?: string;
   name: string;
+  /** UNIT price. The line total is `price * quantity` — see addOnLineTotal(). */
   price: number;
   roomType?: RoomType;
   /** Service types this add-on shows for. Empty = all services. */
   services?: string[];
   selected: boolean;
+  /**
+   * How many of this add-on (awerfixes item 7). Invariant: `selected` is the
+   * source of truth for visibility and `quantity` tracks it — selected rows are
+   * always >= 1, deselected rows are 0. Nothing downstream has to reason about
+   * a selected-but-zero row.
+   */
+  quantity: number;
+  /** Icon key from the catalog; absent = guess from the name (item 17). */
+  icon?: string;
+  /** Show a message before this add-on is added to the booking (item 17). */
+  popupEnabled?: boolean;
+  popupTitle?: string;
+  popupMessage?: string;
+  popupRequestPhoto?: boolean;
+}
+
+/**
+ * Should selecting this add-on open its pop-up first?
+ *
+ * DESELECTING never prompts — a customer removing something has nothing to be
+ * told, and a modal there would read as the app arguing with them.
+ */
+export function needsPopup(a: AddOnSelection): boolean {
+  return !a.selected && a.popupEnabled === true;
 }
 
 export interface BookingDraft {
@@ -34,6 +54,18 @@ export interface BookingDraft {
   travelFee: number;
   // Step 2
   address: string;
+  /**
+   * Unit / apartment number (item 2). New in stage 4: /book never captured one,
+   * so a web-booked job reached the cleaner with no way into the building.
+   */
+  aptNumber: string;
+  /**
+   * The saved ClientAddress this booking is for, when a signed-in customer
+   * picked one. Null = they typed a fresh address, which submitBooking adds to
+   * their book. Server-revalidated — submitBooking is public, so this id is
+   * untrusted input.
+   */
+  addressId: string | null;
   bedCount: number;
   bathCount: number;
   halfBathCount: number;
@@ -75,6 +107,8 @@ export const EMPTY_DRAFT: BookingDraft = {
   zoneName: null,
   travelFee: 0,
   address: "",
+  aptNumber: "",
+  addressId: null,
   bedCount: 2,
   bathCount: 1,
   halfBathCount: 0,

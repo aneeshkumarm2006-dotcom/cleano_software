@@ -8,7 +8,7 @@ import {
   type JobPayInput,
 } from "../src/lib/cleaner-earnings";
 import { resolveJobLead } from "../src/lib/job-assignments";
-import type { CleanerRateInput } from "../src/lib/pay-tiers";
+import { fallbackRateInput, type CleanerRateInput } from "../src/lib/pay-tiers";
 
 let pass = 0;
 let fail = 0;
@@ -22,13 +22,19 @@ function check(name: string, actual: unknown, expected: unknown) {
 const rate = (
   id: string,
   opts: Partial<CleanerRateInput> = {}
-): [string, CleanerRateInput] => [
-  id,
-  { id, tier: "STANDARD", avgRating: null, ratingCount: 0, ...opts },
-];
+): [string, CleanerRateInput] => [id, { ...fallbackRateInput(id), ...opts }];
 
-// A 45% cleaner: STANDARD, 5-star, past the 5-rating lock.
-const FIVE_STAR = { avgRating: 5.0, ratingCount: 12 };
+// A 5-star cleaner past the 5-rating gate. 1.25 is what the DEFAULT multiplier
+// map prices a 5.0 average at, so their rate is 40% x 1.25 = 50%.
+//
+// This used to be 45%, from the hardcoded standardRateForRating ladder. That
+// ladder was retired by awerfixes.pdf item 1 / Decision 1 (2026-08-06) — the
+// rate is now `tier base x the admin-configured multiplier`. The dollar figures
+// the client quoted in the previous round ($50.40 / $99.00) were computed at
+// 45% and necessarily move; what those assertions actually protect — no halved
+// pool, no dilution by teammates, admins never paid — is unchanged and still
+// asserted below.
+const FIVE_STAR = { avgRating: 5.0, ratingCount: 12, multiplier: 1.25 };
 
 const RATES = new Map<string, CleanerRateInput>([
   rate("admin", { role: "ADMIN" }),
@@ -56,13 +62,13 @@ const bugged = job({
   cleaners: [{ id: "asia" }], assignments: [{ cleanerId: "asia", payAmount: null }],
 });
 check("admin on employeeId is not a participant", jobParticipantIds(bugged, RATES), ["asia"]);
-check("$112 solo at 45% -> $50.40", paid(bugged, "asia"), 50.4);
+check("$112 solo at 50% (40% x 1.25) -> $56.00", paid(bugged, "asia"), 56);
 check("admin is paid nothing", paid(bugged, "admin"), 0);
 
-// Their other quoted figures.
-check("$220 at Tanya's 45% -> $99.00",
-  paid(job({ employeeId: "admin", price: 220, cleaners: [{ id: "tanya" }] }), "tanya"), 99);
-check("$112 at the 40% default -> $44.80",
+// Their other quoted figures, at the post-Decision-1 rate.
+check("$220 at Tanya's 50% -> $110.00",
+  paid(job({ employeeId: "admin", price: 220, cleaners: [{ id: "tanya" }] }), "tanya"), 110);
+check("$112 at the 40% base (no ratings, no multiplier) -> $44.80",
   paid(job({ employeeId: "admin", price: 112, cleaners: [{ id: "bob" }] }), "bob"), 44.8);
 
 // A job with NO cleaner must pay nobody (this was paying the admin $88/$141.20).
@@ -73,7 +79,7 @@ check("unassigned job produces no shares", computeJobPayShares(unassigned, RATES
 // ── The guard must not over-reach ──────────────────────────────────────────
 // A real employee lead with no cleaners row (legacy job) is still paid.
 check("legacy employee lead still paid",
-  paid(job({ employeeId: "tanya", price: 220 }), "tanya"), 99);
+  paid(job({ employeeId: "tanya", price: 220 }), "tanya"), 110);
 // An owner who is genuinely assigned IS paid.
 check("assigned owner is still a participant",
   jobParticipantIds(job({ employeeId: "owner", cleaners: [{ id: "owner" }] }), RATES), ["owner"]);
@@ -88,17 +94,17 @@ const paired = job({
   employeeId: "admin", price: 220,
   cleaners: [{ id: "asia" }, { id: "tanya" }],
 });
-check("paired job: 45% cleaner gets the full $99.00, not $55.00", paid(paired, "asia"), 99);
-check("paired job: the other 45% cleaner also gets $99.00", paid(paired, "tanya"), 99);
+check("paired job: 50% cleaner gets the full $110.00, not a half-pool share", paid(paired, "asia"), 110);
+check("paired job: the other 50% cleaner also gets $110.00", paid(paired, "tanya"), 110);
 
 // A mixed-rate pair: each is independent of the other's rate.
 const mixed = job({ price: 220, cleaners: [{ id: "asia" }, { id: "bob" }] });
-check("mixed pair: 45% cleaner unaffected by partner's rate", paid(mixed, "asia"), 99);
+check("mixed pair: 50% cleaner unaffected by partner's rate", paid(mixed, "asia"), 110);
 check("mixed pair: 40% cleaner gets 40% of the full price", paid(mixed, "bob"), 88);
 
 // Adding a third cleaner must not reduce anyone's pay.
 check("adding a cleaner does not dilute the others",
-  paid(job({ price: 220, cleaners: [{ id: "asia" }, { id: "bob" }, { id: "tanya" }] }), "asia"), 99);
+  paid(job({ price: 220, cleaners: [{ id: "asia" }, { id: "bob" }, { id: "tanya" }] }), "asia"), 110);
 
 // ── Lead resolution ────────────────────────────────────────────────────────
 check("lead: existing lead still on team is kept", resolveJobLead("tanya", ["asia", "tanya"]), "tanya");

@@ -8,7 +8,6 @@ import {
   DollarSign,
   Briefcase,
   CreditCard,
-  Boxes,
   Package,
   Star,
   Shield,
@@ -36,7 +35,6 @@ import TaxSettingsTab from "./tabs/TaxSettingsTab";
 import PricingRulesTab from "./tabs/PricingRulesTab";
 import JobTypesTab from "./tabs/JobTypesTab";
 import PaymentTypesTab from "./tabs/PaymentTypesTab";
-import InventoryRulesTab from "./tabs/InventoryRulesTab";
 import KitTemplatesTab from "./tabs/KitTemplatesTab";
 import MultipliersTab from "./tabs/MultipliersTab";
 import RolesTab from "./tabs/RolesTab";
@@ -69,7 +67,6 @@ import {
   AppSettingRecord,
   ProductRecord,
   KitTemplateRecord,
-  InventoryRuleRecord,
   SupplierRecord,
   InventoryLocationRecord,
   ChecklistTemplateRecord,
@@ -83,7 +80,6 @@ interface SettingsClientProps {
   appSettings: AppSettingRecord[];
   products: ProductRecord[];
   kitTemplates: KitTemplateRecord[];
-  inventoryRules: InventoryRuleRecord[];
   suppliers: SupplierRecord[];
   inventoryLocations: InventoryLocationRecord[];
   checklistTemplates: ChecklistTemplateRecord[];
@@ -105,7 +101,6 @@ type TabId =
   | "jobTypes"
   | "serviceContent"
   | "paymentTypes"
-  | "inventoryRules"
   | "kitTemplates"
   | "checklistTemplates"
   | "training"
@@ -143,7 +138,6 @@ const TAB_SUBTITLES: Record<TabId, string> = {
   jobTypes: "Define the kinds of jobs you offer.",
   serviceContent: "What's included text + graphic shown per service on booking.",
   paymentTypes: "Customer-facing labels for each payment method.",
-  inventoryRules: "Per-job usage and refill thresholds.",
   kitTemplates: "Bundled product sets for each visit type.",
   checklistTemplates: "Reusable checklists applied to matching jobs.",
   training: "Modules, videos and quizzes for your team.",
@@ -170,7 +164,7 @@ const TAB_GROUPS: { label: string; ids: TabId[] }[] = [
   { label: "You", ids: ["profile", "availability"] },
   { label: "Operations", ids: ["closures", "jobTypes", "serviceContent", "checklistTemplates", "serviceAreas"] },
   { label: "Money", ids: ["tax", "pricing", "paymentTypes", "multipliers", "budgets", "payments"] },
-  { label: "Inventory", ids: ["inventoryRules", "kitTemplates", "suppliers", "inventoryLocations"] },
+  { label: "Inventory", ids: ["kitTemplates", "suppliers", "inventoryLocations"] },
   { label: "Team", ids: ["training", "documents", "roles"] },
   {
     label: "Configuration",
@@ -195,12 +189,6 @@ const TABS: TabDef[] = [
     id: "paymentTypes",
     label: "Payment Types",
     icon: CreditCard,
-    adminOnly: true,
-  },
-  {
-    id: "inventoryRules",
-    label: "Inventory Rules",
-    icon: Boxes,
     adminOnly: true,
   },
   {
@@ -280,7 +268,6 @@ export default function SettingsClient({
   appSettings,
   products,
   kitTemplates,
-  inventoryRules,
   suppliers,
   inventoryLocations,
   checklistTemplates,
@@ -303,7 +290,6 @@ export default function SettingsClient({
   // so they show nothing rather than a fake number. Counts come straight from the
   // props the server page already passes, so they update whenever records change.
   const tabCounts: Partial<Record<TabId, number>> = {
-    inventoryRules: inventoryRules.length,
     kitTemplates: kitTemplates.length,
     checklistTemplates: checklistTemplates.length,
     training: trainingModules.length,
@@ -413,12 +399,6 @@ export default function SettingsClient({
           )}
           {activeTab === "paymentTypes" && isAdmin && (
             <PaymentTypesTab settings={appSettings} />
-          )}
-          {activeTab === "inventoryRules" && isAdmin && (
-            <InventoryRulesTab
-              products={products}
-              rules={inventoryRules}
-            />
           )}
           {activeTab === "kitTemplates" && isAdmin && (
             <KitTemplatesTab

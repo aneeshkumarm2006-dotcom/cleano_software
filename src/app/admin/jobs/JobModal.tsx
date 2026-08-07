@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -22,6 +22,20 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { addonIcon } from "@/lib/addon-icons";
+import { addOnKey } from "@/lib/checklist-triggers";
+import {
+  addOnLineTotal,
+  computeJobMoney,
+  MAX_ADDON_QUANTITY,
+} from "@/lib/job-money";
+import { DEFAULT_TAX_RATES, type TaxRates } from "@/lib/tax";
+import {
+  NEW_ADDRESS,
+  addressOptionLabel,
+  pickDefaultAddress,
+  stripDuplicatedApt,
+  type SavedAddress,
+} from "@/lib/client-address";
 import { tzInputParts } from "@/lib/time";
 import { isSqftJobType, moveInOutBasePrice } from "@/lib/service-pricing";
 import {
@@ -30,11 +44,20 @@ import {
   serviceOptions as catalogServiceOptions,
 } from "@/lib/service-catalog";
 import { getJobSeriesInfo } from "../actions/getJobSeriesInfo";
+import { checkAvailabilityBatch } from "../actions/checkAvailability";
+import type { EmployeeAvailabilityStatus } from "../actions/checkAvailability.types";
+import {
+  StatusIndicator,
+  CategoryIndicator,
+  AssignmentWarningPanel,
+} from "@/components/admin/AssignmentIndicators";
+import { categoryMismatchWarning } from "@/lib/service-permissions";
 import { DISCOUNT_REASONS, NO_REASON_LABEL } from "@/lib/discount-reasons";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import Textarea from "@/components/ui/Textarea";
 import CustomDropdown from "@/components/ui/custom-dropdown";
+import PremiumSelect from "@/components/ui/PremiumSelect";
 import SmartSearch from "@/components/SmartSearch";
 import SaveCardOnFile from "./SaveCardOnFile";
 import { parseTimeInput } from "@/components/ui/TimePicker";
@@ -43,12 +66,31 @@ export interface AddOnCatalogItem {
   id: string;
   name: string;
   price: number;
+  /** Admin-chosen icon key (item 17); absent = guessed from the name. */
+  icon?: string;
 }
+
+/** A row in the modal's chosen-add-on list. `price` is the UNIT price. */
+interface ChosenAddOn {
+  rowId: string;
+  name: string;
+  price: number;
+  quantity: number;
+}
+
+let addOnRowSeq = 0;
+const nextAddOnRowId = () => `ao-${++addOnRowSeq}`;
 
 export interface User {
   id: string;
   name: string;
   email: string;
+  /**
+   * Service categories this cleaner may work; empty = all (awerfixes.pdf item
+   * 3). Optional so a mount point that hasn't been plumbed yet degrades to "no
+   * restriction" — which is the correct default — instead of crashing.
+   */
+  allowedServiceCategories?: string[];
 }
 
 interface Job {
@@ -57,6 +99,8 @@ interface Job {
   clientId?: string | null;
   location: string | null;
   aptNumber?: string | null;
+  /** Which saved address this job was booked against (item 2, provenance). */
+  clientAddressId?: string | null;
   description: string | null;
   jobType: string | null;
   jobDate: string | null;
@@ -75,22 +119,33 @@ interface Job {
   bathCount?: number | null;
   halfBathCount?: number | null;
   squareFootage?: number | null;
-  payRateMultiplier?: number | null;
   /** Per-job sales-tax exemption (item 7). */
   taxExempt?: boolean | null;
   /** Why a discount was applied (item 29). */
   discountReason?: string | null;
   cleaners: Array<{ id: string; name: string }>;
-  addOns?: Array<{ id: string; name: string; price: number }>;
+  addOns?: Array<{ id: string; name: string; price: number; quantity?: number }>;
+  /** Decides whether add-ons are added to `price` or already inside it. */
+  bookingSource?: string | null;
+  isCashJob?: boolean | null;
+  subtotalAmount?: number | null;
 }
 
 export interface ClientLite {
   id: string;
   name: string;
   email?: string | null;
+  /** Legacy flat address — the fallback when the client has no address book. */
   address?: string | null;
+  aptNumber?: string | null;
   discountPercent?: number | null;
   defaultPaymentMethodId?: string | null;
+  /**
+   * The client's saved addresses, default first (item 2). Optional so a mount
+   * point that hasn't been plumbed yet degrades to the legacy scalar instead of
+   * crashing — which is exactly what every mount point did before this stage.
+   */
+  addresses?: SavedAddress[];
 }
 
 interface JobModalProps {
@@ -110,6 +165,12 @@ interface JobModalProps {
   onDelete?: (jobId: string) => Promise<{ success?: boolean; error?: string }>;
   /** Add-ons configured in Settings → Pricing Rules; offered as quick-add chips. */
   addOnCatalog?: AddOnCatalogItem[];
+  /**
+   * Admin-configured GST/QST, for the live total preview. Defaults to the
+   * standard rates so a mount point that hasn't been plumbed yet still shows a
+   * total rather than crashing.
+   */
+  taxRates?: TaxRates;
   /** Service list from Settings → Job Types (item 20). */
   serviceOptions?: { value: string; label: string }[];
   /**
@@ -594,6 +655,7 @@ export default function JobModal({
   onSubmit,
   onDelete,
   addOnCatalog = [],
+  taxRates = DEFAULT_TAX_RATES,
   serviceOptions = [],
   sqftRates = null,
 }: JobModalProps) {
@@ -608,15 +670,20 @@ export default function JobModal({
   const [selectedJobType, setSelectedJobType] = useState<string>("");
   const [selectedFrequency, setSelectedFrequency] = useState<string>("ONE_TIME");
   const [selectedClientId, setSelectedClientId] = useState<string>("");
+  // Which of the linked client's saved addresses this job uses (item 2).
+  // NEW_ADDRESS means "the admin is typing one into Location / Apt below", and
+  // saveJob adds it to the client's book on submit.
+  const [addressChoice, setAddressChoice] = useState<string>(NEW_ADDRESS);
   const [selectedPaymentType, setSelectedPaymentType] = useState<string>("");
   // Flips to true after admin saves a card via the inline SaveCardOnFile
   // panel. Keeps the success state visible until the modal closes /
   // re-opens (the parent server data still shows defaultPaymentMethodId
   // as null until the page revalidates).
   const [cardSavedNow, setCardSavedNow] = useState(false);
-  const [addOns, setAddOns] = useState<Array<{ name: string; price: number }>>(
-    []
-  );
+  // `rowId` is a stable client-side key. Keying these rows by array index broke
+  // the moment they became editable: delete row 1 and row 2's inputs inherit
+  // row 1's DOM state.
+  const [addOns, setAddOns] = useState<ChosenAddOn[]>([]);
   const [newAddOnName, setNewAddOnName] = useState("");
   const [newAddOnPrice, setNewAddOnPrice] = useState("");
   const [discountMode, setDiscountMode] = useState<"percent" | "amount">(
@@ -701,13 +768,21 @@ export default function JobModal({
         // re-spawns a series, so always start the picker at one-time.
         setSelectedFrequency("ONE_TIME");
         setSelectedClientId(job.clientId || "");
+        // Re-select the saved address this job was booked against, so an edit
+        // doesn't silently look like a newly typed one (item 2).
+        setAddressChoice(job.clientAddressId || NEW_ADDRESS);
         setSelectedPaymentType(job.paymentType || "");
         setTaxExempt(!!job.taxExempt);
         setDiscountReason(job.discountReason ?? "");
         setApplyToSeries(false);
         setCardSavedNow(false);
         setAddOns(
-          (job.addOns || []).map((a) => ({ name: a.name, price: a.price }))
+          (job.addOns || []).map((a) => ({
+            rowId: nextAddOnRowId(),
+            name: a.name,
+            price: a.price,
+            quantity: Math.max(1, a.quantity ?? 1),
+          }))
         );
         // Existing job: keep its stored amount as the source of truth
         setDiscountMode("amount");
@@ -743,6 +818,7 @@ export default function JobModal({
         setSelectedJobType("");
         setSelectedFrequency("ONE_TIME");
         setSelectedClientId("");
+        setAddressChoice(NEW_ADDRESS);
         setSelectedPaymentType("");
         setTaxExempt(false);
         setDiscountReason("");
@@ -768,6 +844,36 @@ export default function JobModal({
       setDiscountInput("");
     }
   }, [isOpen, selectedClientId, clients, discountTouched]);
+
+  // ── Saved addresses (item 2) ───────────────────────────────────────────────
+  // Before this stage the modal ignored the address book entirely: picking a
+  // client filled Location from the legacy `Client.address` scalar and never
+  // touched Apt at all, so a client with three properties always got whichever
+  // one was written last.
+  const linkedClient = clients.find((c) => c.id === selectedClientId) ?? null;
+  const savedAddresses = linkedClient?.addresses ?? [];
+
+  /**
+   * Fill Location / Apt from a saved address.
+   *
+   * ClientNameField does this by writing `input[name="location"]` through
+   * document.querySelector. That works there because the full-page form is
+   * uncontrolled — here it would be silently discarded, because react-hook-form
+   * owns these fields. Hence setValue.
+   */
+  const fillAddressFields = (addr: SavedAddress | null) => {
+    setValue("location", addr ? stripDuplicatedApt(addr.address, addr.aptNumber) : "", {
+      shouldDirty: true,
+    });
+    setValue("aptNumber", addr?.aptNumber ?? "", { shouldDirty: true });
+  };
+
+  const onAddressChoice = (v: string) => {
+    setAddressChoice(v);
+    // "+ Type a new address" clears both fields so the admin types into empty
+    // inputs; saveJob adds whatever they type to the client's book on submit.
+    fillAddressFields(v === NEW_ADDRESS ? null : savedAddresses.find((a) => a.id === v) ?? null);
+  };
 
   // Load recurring-series membership so the "apply to series" control only
   // appears for a job that actually has siblings, with a real count (item 9).
@@ -803,12 +909,82 @@ export default function JobModal({
 
   const disableForm = submitting || isDeleting;
 
+  // ── Add-ons & custom extra charges (awerfixes item 10) ───────────────────
+  const updateAddOn = (rowId: string, patch: Partial<ChosenAddOn>) =>
+    setAddOns((prev) =>
+      prev.map((r) => (r.rowId === rowId ? { ...r, ...patch } : r))
+    );
+
+  // "custom" is derived from the catalog rather than stored on the row, so it
+  // needs no column. A renamed catalog entry re-labels historical rows — the
+  // accepted cost.
+  const catalogAddOnKeys = useMemo(
+    () => new Set(addOnCatalog.map((c) => addOnKey(c.name))),
+    [addOnCatalog]
+  );
+
+  // The Add button used to gate on the NAME only, so a blank price silently
+  // became $0 — a charge the admin thought they had entered and that billed
+  // nothing.
+  const newAddOnPriceNum = parseFloat(newAddOnPrice);
+  const newAddOnValid =
+    !!newAddOnName.trim() &&
+    Number.isFinite(newAddOnPriceNum) &&
+    newAddOnPriceNum >= 0;
+
+  const addCustomCharge = () => {
+    if (!newAddOnValid) return;
+    setAddOns((prev) => [
+      ...prev,
+      {
+        rowId: nextAddOnRowId(),
+        name: newAddOnName.trim(),
+        price: newAddOnPriceNum,
+        quantity: 1,
+      },
+    ]);
+    setNewAddOnName("");
+    setNewAddOnPrice("");
+  };
+
+  // Enter must not submit the whole job — this block lives inside the form.
+  const handleNewAddOnKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    addCustomCharge();
+  };
+
   // Square-footage pricing feedback (item 8). `selectedJobType` is the admin
   // vocabulary ("MOVE_IN - Move-in Cleaning"); isSqftJobType folds both halves
   // of a move, matching what saveJob does on the server.
   const sqftPriced = isSqftJobType(selectedJobType);
   const watchedSqft = Number(watch("squareFootage")) || 0;
   const watchedPrice = Number(watch("price")) || 0;
+
+  // Live total preview. Mirrors exactly what saveJob will write: preserving a
+  // web/imported job's stored subtotal while the price is untouched, and
+  // pricing everything else as base + add-ons − discount.
+  const previewDiscount = (() => {
+    const n = parseFloat(discountInput);
+    if (!Number.isFinite(n) || n <= 0) return 0;
+    return discountMode === "percent"
+      ? Math.round(watchedPrice * (n / 100) * 100) / 100
+      : n;
+  })();
+  const previewPriceUnchanged =
+    job?.price != null && Math.abs(job.price - watchedPrice) < 0.005;
+  const previewMoney = computeJobMoney(
+    {
+      bookingSource: previewPriceUnchanged ? job?.bookingSource : null,
+      subtotalAmount: previewPriceUnchanged ? job?.subtotalAmount : null,
+      price: watchedPrice,
+      discountAmount: previewDiscount,
+      isCashJob: job?.isCashJob,
+      taxExempt,
+      addOns,
+    },
+    taxRates
+  );
   const sqftDerivedPrice =
     sqftPriced && sqftRates && watchedSqft > 0
       ? moveInOutBasePrice(watchedSqft, {
@@ -817,6 +993,148 @@ export default function JobModal({
           moveInOut: sqftRates,
         } as Parameters<typeof moveInOutBasePrice>[1])
       : null;
+
+  // ── Availability + service-category advisories (awerfixes.pdf items 19 & 3) ──
+  //
+  // The Jobs list and the Calendar both book through this modal, and it had no
+  // availability code at all — the warnings only existed on /admin/jobs/new. The
+  // evaluation itself is the same shared server helper (recurring weekly rules
+  // PLUS one-off blocked dates), so the two surfaces cannot disagree.
+  //
+  // Unlike CleanerSelector this does NOT poll the DOM. That form's pickers write
+  // into hidden inputs that emit no events, which is why it polls; these are
+  // react-hook-form Controllers, so watching the field values is both correct
+  // and cheaper. The generation counter is kept — it discards the response to a
+  // date the admin has already changed.
+  const watchedStartDate = watch("startDate");
+  const watchedStartTime = watch("startTime");
+  const [statuses, setStatuses] = useState<
+    Map<string, EmployeeAvailabilityStatus>
+  >(() => new Map());
+  // Three states, not two. "No warnings" and "we have not been told yet" look
+  // identical on screen unless the in-flight case says so out loud, and this
+  // check is slow enough that the difference matters: the panel renders nothing
+  // until the answer lands, so silence read as "everyone is free" when it
+  // actually meant "still asking". `checked` is what makes 17.b's no-coverage
+  // line safe to draw — it must never fire off an empty starting Map.
+  const [availabilityState, setAvailabilityState] = useState<
+    "idle" | "loading" | "loaded" | "error"
+  >("idle");
+  const availabilityRun = useRef(0);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const ids = users.map((u) => u.id);
+    if (!watchedStartDate || !watchedStartTime || ids.length === 0) {
+      availabilityRun.current++;
+      setStatuses(new Map());
+      setAvailabilityState("idle");
+      return;
+    }
+
+    const run = ++availabilityRun.current;
+    // Debounced: typing through a date shouldn't fire a request per keystroke.
+    const timer = setTimeout(() => {
+      setAvailabilityState("loading");
+      checkAvailabilityBatch({
+        employeeIds: ids,
+        startDate: watchedStartDate,
+        startTime: watchedStartTime,
+        // This modal collects no end date/time; the evaluator treats that as a
+        // zero-length window that still has to touch an available slot.
+        endDate: null,
+        endTime: null,
+      }).then(
+        (res) => {
+          if (run !== availabilityRun.current) return;
+          setStatuses(
+            res.success
+              ? new Map(res.statuses.map((s) => [s.employeeId, s]))
+              : new Map()
+          );
+          setAvailabilityState(res.success ? "loaded" : "error");
+        },
+        // There was no rejection handler here at all. `checkAvailabilityBatch`
+        // catches its own errors, but the CALL can still reject — a dropped
+        // connection, a stale deployment's "Failed to find Server Action" —
+        // and every one of those failed silently, leaving the panel blank and
+        // indistinguishable from "no conflicts".
+        () => {
+          if (run !== availabilityRun.current) return;
+          setStatuses(new Map());
+          setAvailabilityState("error");
+        }
+      );
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [isOpen, users, watchedStartDate, watchedStartTime]);
+
+  /** Category mismatch for one cleaner against the chosen job type, or null. */
+  const categoryWarnFor = useCallback(
+    (u: User) =>
+      categoryMismatchWarning(
+        u.name,
+        selectedJobType,
+        u.allowedServiceCategories
+      ),
+    [selectedJobType]
+  );
+
+  const selectedUsers = useMemo(
+    () => users.filter((u) => selectedCleaners.includes(u.id)),
+    [users, selectedCleaners]
+  );
+
+  const availabilityAdvisories = useMemo(
+    () =>
+      selectedUsers
+        .map((u) => ({ user: u, status: statuses.get(u.id) }))
+        .filter(
+          (x): x is { user: User; status: EmployeeAvailabilityStatus } =>
+            !!x.status &&
+            x.status.result !== "AVAILABLE" &&
+            x.status.result !== "NO_DATA"
+        )
+        .map(({ user, status }) => ({
+          cleanerId: user.id,
+          cleanerName: user.name,
+          detail:
+            status.reason ??
+            (status.result === "UNAVAILABLE"
+              ? "marked unavailable"
+              : "outside their availability"),
+        })),
+    [selectedUsers, statuses]
+  );
+
+  const categoryAdvisories = useMemo(
+    () =>
+      selectedUsers
+        .map((u) => ({ user: u, warning: categoryWarnFor(u) }))
+        .filter((x): x is { user: User; warning: string } => !!x.warning)
+        .map(({ user, warning }) => ({
+          cleanerId: user.id,
+          cleanerName: user.name,
+          detail: warning,
+        })),
+    [selectedUsers, categoryWarnFor]
+  );
+
+  // 17.b — every candidate is unavailable for this slot. NO_DATA cleaners are
+  // not counted as unavailable: they simply never filled the form in, and
+  // treating silence as "can't work" would cry wolf on a fresh install.
+  const noCoverage = useMemo(() => {
+    // Only ever claimed on a COMPLETE answer. Gating on `statuses.size` alone
+    // was nearly right but not quite: an errored lookup also clears the Map,
+    // and "we couldn't ask" must not be reported as "nobody is free".
+    if (availabilityState !== "loaded") return false;
+    if (statuses.size === 0 || users.length === 0) return false;
+    return users.every((u) => {
+      const s = statuses.get(u.id);
+      return s?.result === "UNAVAILABLE" || s?.result === "OUTSIDE_HOURS";
+    });
+  }, [users, statuses, availabilityState]);
 
   // Step validation
   const validateStep = async (step: number): Promise<boolean> => {
@@ -861,10 +1179,13 @@ export default function JobModal({
   };
 
   // Transform users to SmartSearch format
+  // allowedServiceCategories rides along so the row renderers can compute the
+  // category advisory without a second lookup back into `users`.
   const smartSearchUsers = users.map((user) => ({
     id: user.id,
     name: user.name,
     email: user.email,
+    allowedServiceCategories: user.allowedServiceCategories,
   }));
 
   const toggleCleaner = (userId: string) => {
@@ -887,6 +1208,13 @@ export default function JobModal({
       formData.append("clientId", selectedClientId);
       formData.append("location", values.location || "");
       formData.append("aptNumber", values.aptNumber || "");
+      // Which saved address was picked (item 2). NEW_ADDRESS is sent as empty
+      // — saveJob then adds the typed address to the client's book and links
+      // the job to the row it created.
+      formData.append(
+        "clientAddressId",
+        addressChoice === NEW_ADDRESS ? "" : addressChoice
+      );
       formData.append("description", values.description || "");
       formData.append("jobType", selectedJobType);
       formData.append("frequency", selectedFrequency);
@@ -1176,15 +1504,68 @@ export default function JobModal({
                           shouldValidate: true,
                           shouldDirty: true,
                         });
-                        setValue("location", c.address || "", {
-                          shouldDirty: true,
-                        });
+                        // Prefer the client's default saved address; fall back
+                        // to the legacy flat scalar for a client whose book is
+                        // still empty (item 2 — same rule as ClientNameField).
+                        const def = pickDefaultAddress(c.addresses);
+                        if (def) {
+                          setAddressChoice(def.id);
+                          setValue(
+                            "location",
+                            stripDuplicatedApt(def.address, def.aptNumber),
+                            { shouldDirty: true }
+                          );
+                          setValue("aptNumber", def.aptNumber ?? "", {
+                            shouldDirty: true,
+                          });
+                        } else {
+                          setAddressChoice(NEW_ADDRESS);
+                          setValue("location", c.address || "", {
+                            shouldDirty: true,
+                          });
+                          // Was never set before this stage, so picking a
+                          // client left a stale apt from the previous one.
+                          setValue("aptNumber", c.aptNumber || "", {
+                            shouldDirty: true,
+                          });
+                        }
                       }}
                       onClear={() => {
                         setSelectedClientId("");
+                        setAddressChoice(NEW_ADDRESS);
                         setDiscountTouched(false);
                       }}
                     />
+                  )}
+
+                  {/* Saved-address picker — only when the linked client has a
+                      book. Ported from ClientNameField: default first (the
+                      queries order isDefault desc), "+ Type a new address"
+                      last. */}
+                  {linkedClient && savedAddresses.length > 0 && (
+                    <div>
+                      <label className="input-label tracking-tight">
+                        Address on file
+                      </label>
+                      <PremiumSelect
+                        value={addressChoice}
+                        onChange={onAddressChoice}
+                        disabled={disableForm}
+                        size="md"
+                        options={[
+                          ...savedAddresses.map((a) => ({
+                            value: a.id,
+                            label: addressOptionLabel(a),
+                          })),
+                          { value: NEW_ADDRESS, label: "+ Type a new address" },
+                        ]}
+                      />
+                      <p className="mt-1.5 text-xs text-[#008C9C]/70">
+                        Pick a saved address, or choose “Type a new address” and
+                        fill Location below — it’s added to this client’s
+                        address book when you save.
+                      </p>
+                    </div>
                   )}
 
                   {/* Client Name */}
@@ -1462,6 +1843,11 @@ export default function JobModal({
                                 {(item as { email?: string }).email}
                               </p>
                             </div>
+                            {/* Advisory indicators — never a disabled row. */}
+                            <CategoryIndicator
+                              warning={categoryWarnFor(item as User)}
+                            />
+                            <StatusIndicator status={statuses.get(item.id)} />
                             {isSelected && (
                               <Check className="w-4 h-4 text-[#008C9C]" />
                             )}
@@ -1474,6 +1860,10 @@ export default function JobModal({
                                 {item.name.charAt(0).toUpperCase()}
                               </span>
                             </div>
+                            <CategoryIndicator
+                              warning={categoryWarnFor(item as User)}
+                            />
+                            <StatusIndicator status={statuses.get(item.id)} />
                             <span className="text-sm font-[350] text-[#008C9C]">
                               {item.name}
                             </span>
@@ -1481,6 +1871,22 @@ export default function JobModal({
                         )}
                       />
                     )}
+
+                    {/* Availability + service-category advisories (items 19 &
+                        3). Nothing here blocks the save — the admin can always
+                        override, which the panel's closing line says out loud. */}
+                    <AssignmentWarningPanel
+                      availability={availabilityAdvisories}
+                      categories={categoryAdvisories}
+                      noCoverage={noCoverage}
+                      // Only speak up once there is somebody the answer could
+                      // be about. The lookup starts as soon as a date and time
+                      // exist, so without this the panel would announce
+                      // "checking availability…" before any cleaner is picked.
+                      availabilityState={
+                        selectedUsers.length > 0 ? availabilityState : "idle"
+                      }
+                    />
                   </div>
                 </div>
               )}
@@ -1981,12 +2387,17 @@ export default function JobModal({
                         {/* Icon cards (spec item 22) — icon + name + price,
                             scannable grid instead of text pills. Click toggles. */}
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                          {/* Matched with addOnKey — the canonical normalizer,
+                              which also collapses inner whitespace, so
+                              "Inside  Fridge" stops reading as a second add-on
+                              that the picker can never un-toggle. */}
                           {addOnCatalog.map((cat) => {
-                            const already = addOns.some(
-                              (a) =>
-                                a.name.toLowerCase() === cat.name.toLowerCase()
+                            const catKey = addOnKey(cat.name);
+                            const chosen = addOns.find(
+                              (a) => addOnKey(a.name) === catKey
                             );
-                            const Icon = addonIcon(cat.name);
+                            const already = !!chosen;
+                            const Icon = addonIcon(cat);
                             return (
                               <button
                                 key={cat.id}
@@ -1996,11 +2407,17 @@ export default function JobModal({
                                   setAddOns((prev) =>
                                     already
                                       ? prev.filter(
-                                          (a) =>
-                                            a.name.toLowerCase() !==
-                                            cat.name.toLowerCase()
+                                          (a) => addOnKey(a.name) !== catKey
                                         )
-                                      : [...prev, { name: cat.name, price: cat.price }]
+                                      : [
+                                          ...prev,
+                                          {
+                                            rowId: nextAddOnRowId(),
+                                            name: cat.name,
+                                            price: cat.price,
+                                            quantity: 1,
+                                          },
+                                        ]
                                   )
                                 }
                                 className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border text-center transition-colors ${
@@ -2016,7 +2433,10 @@ export default function JobModal({
                                   ${cat.price.toFixed(2)}
                                 </span>
                                 {already && (
-                                  <span className="text-[10px] font-[600]">✓ Added</span>
+                                  <span className="text-[10px] font-[600]">
+                                    ✓ Added
+                                    {chosen!.quantity > 1 ? ` ×${chosen!.quantity}` : ""}
+                                  </span>
                                 )}
                               </button>
                             );
@@ -2026,79 +2446,212 @@ export default function JobModal({
                     )}
                     {addOns.length > 0 && (
                       <div className="space-y-2">
-                        {addOns.map((a, i) => (
-                          <div
-                            key={i}
-                            className="flex items-center justify-between p-3 rounded-xl bg-[#008C9C]/5">
-                            <span className="text-sm text-[#008C9C]">
-                              {a.name}
-                            </span>
-                            <div className="flex items-center gap-3">
-                              <span className="text-sm font-[400] text-[#008C9C]">
-                                ${a.price.toFixed(2)}
+                        {addOns.map((a) => {
+                          const isCustom = !catalogAddOnKeys.has(addOnKey(a.name));
+                          return (
+                            <div
+                              key={a.rowId}
+                              className="flex flex-wrap items-center gap-2 p-3 rounded-xl bg-[#008C9C]/5">
+                              <Input
+                                variant="form"
+                                size="md"
+                                value={a.name}
+                                onChange={(e) =>
+                                  updateAddOn(a.rowId, { name: e.target.value })
+                                }
+                                disabled={disableForm}
+                                aria-label="Add-on name"
+                                className="flex-1 min-w-[8rem] px-3 py-2"
+                                border={false}
+                              />
+                              {isCustom && (
+                                <span className="text-[10px] font-[600] uppercase tracking-wide px-2 py-0.5 rounded-full bg-[#008C9C]/10 text-[#008C9C]">
+                                  custom
+                                </span>
+                              )}
+                              <Input
+                                variant="form"
+                                type="number"
+                                size="md"
+                                step="0.01"
+                                min="0"
+                                value={String(a.price)}
+                                onChange={(e) =>
+                                  updateAddOn(a.rowId, {
+                                    price: Number(e.target.value) || 0,
+                                  })
+                                }
+                                disabled={disableForm}
+                                aria-label="Unit price"
+                                className="w-24 px-3 py-2"
+                                border={false}
+                              />
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  aria-label={`Decrease ${a.name || "add-on"} quantity`}
+                                  disabled={disableForm || a.quantity <= 1}
+                                  onClick={() =>
+                                    updateAddOn(a.rowId, {
+                                      quantity: Math.max(1, a.quantity - 1),
+                                    })
+                                  }
+                                  className="w-7 h-7 rounded-full bg-white text-[#008C9C] disabled:opacity-40">
+                                  −
+                                </button>
+                                <span className="w-6 text-center text-sm text-[#008C9C]">
+                                  {a.quantity}
+                                </span>
+                                <button
+                                  type="button"
+                                  aria-label={`Increase ${a.name || "add-on"} quantity`}
+                                  disabled={
+                                    disableForm || a.quantity >= MAX_ADDON_QUANTITY
+                                  }
+                                  onClick={() =>
+                                    updateAddOn(a.rowId, {
+                                      quantity: Math.min(
+                                        MAX_ADDON_QUANTITY,
+                                        a.quantity + 1
+                                      ),
+                                    })
+                                  }
+                                  className="w-7 h-7 rounded-full bg-white text-[#008C9C] disabled:opacity-40">
+                                  +
+                                </button>
+                              </div>
+                              <span className="text-sm font-[500] text-[#008C9C] w-20 text-right">
+                                ${addOnLineTotal(a).toFixed(2)}
                               </span>
                               <button
                                 type="button"
                                 className="text-xs text-red-600"
                                 onClick={() =>
                                   setAddOns((prev) =>
-                                    prev.filter((_, idx) => idx !== i)
+                                    prev.filter((r) => r.rowId !== a.rowId)
                                   )
                                 }>
                                 remove
                               </button>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
-                    <div className="flex gap-2">
-                      <Input
-                        variant="form"
-                        size="md"
-                        value={newAddOnName}
-                        onChange={(e) => setNewAddOnName(e.target.value)}
-                        disabled={disableForm}
-                        placeholder="Add-on name"
-                        className="flex-1 px-4 py-3"
-                        border={false}
-                      />
-                      <Input
-                        variant="form"
-                        type="number"
-                        size="md"
-                        step="0.01"
-                        min="0"
-                        value={newAddOnPrice}
-                        onChange={(e) => setNewAddOnPrice(e.target.value)}
-                        disabled={disableForm}
-                        placeholder="Price"
-                        className="w-28 px-4 py-3"
-                        border={false}
-                      />
-                      <Button
-                        type="button"
-                        variant="default"
-                        size="md"
-                        border={false}
-                        disabled={
-                          disableForm || !newAddOnName.trim()
-                        }
-                        onClick={() => {
-                          const price = parseFloat(newAddOnPrice);
-                          setAddOns((prev) => [
-                            ...prev,
-                            {
-                              name: newAddOnName.trim(),
-                              price: Number.isFinite(price) ? price : 0,
-                            },
-                          ]);
-                          setNewAddOnName("");
-                          setNewAddOnPrice("");
-                        }}
-                        className="px-4 py-3">
-                        Add
-                      </Button>
+                    <div className="space-y-2 pt-1">
+                      <p className="text-xs font-[600] text-[#008C9C]">
+                        Custom extra charge
+                      </p>
+                      <p className="text-xs text-[#008C9C]/60">
+                        Not in your catalog? Add a one-off charge to this job. It
+                        is billed and taxed like any other add-on.
+                      </p>
+                      <div className="flex gap-2">
+                        <Input
+                          variant="form"
+                          size="md"
+                          value={newAddOnName}
+                          onChange={(e) => setNewAddOnName(e.target.value)}
+                          onKeyDown={handleNewAddOnKeyDown}
+                          disabled={disableForm}
+                          aria-label="Custom charge name"
+                          placeholder="e.g. Balcony deep clean"
+                          className="flex-1 px-4 py-3"
+                          border={false}
+                        />
+                        <Input
+                          variant="form"
+                          type="number"
+                          size="md"
+                          step="0.01"
+                          min="0"
+                          value={newAddOnPrice}
+                          onChange={(e) => setNewAddOnPrice(e.target.value)}
+                          onKeyDown={handleNewAddOnKeyDown}
+                          disabled={disableForm}
+                          aria-label="Custom charge price"
+                          placeholder="0.00"
+                          className="w-28 px-4 py-3"
+                          border={false}
+                        />
+                        <Button
+                          type="button"
+                          variant="default"
+                          size="md"
+                          border={false}
+                          disabled={disableForm || !newAddOnValid}
+                          onClick={addCustomCharge}
+                          className="px-4 py-3">
+                          Add
+                        </Button>
+                      </div>
+                      {newAddOnName.trim() &&
+                        newAddOnPrice.trim() &&
+                        !Number.isFinite(parseFloat(newAddOnPrice)) && (
+                          <p className="text-xs text-red-600">
+                            Enter a price, e.g. 25 or 25.00.
+                          </p>
+                        )}
+                    </div>
+                  </div>
+
+                  {/* Live total — the modal had no total of any kind, so an
+                      admin could not see what a job would actually bill until
+                      after saving it. Driven by the same helper the job detail
+                      page, the receipt and the charge path use. */}
+                  <div className="space-y-2 p-4 rounded-xl bg-[#008C9C]/5">
+                    <h3 className="text-sm font-[400] text-[#008C9C] uppercase tracking-tight">
+                      Total
+                    </h3>
+                    {previewMoney.addOnsIncludedInSubtotal && (
+                      <p className="text-xs text-[#008C9C]/60">
+                        This booking&apos;s add-ons are already inside its
+                        subtotal, so they are itemised here rather than added.
+                      </p>
+                    )}
+                    <div className="flex justify-between text-sm text-[#008C9C]">
+                      <span>Base price</span>
+                      <span>${previewMoney.basePrice.toFixed(2)}</span>
+                    </div>
+                    {previewMoney.addOnTotal > 0 && (
+                      <div className="flex justify-between text-sm text-[#008C9C]">
+                        <span>Add-ons &amp; extra charges</span>
+                        <span>
+                          {previewMoney.addOnsIncludedInSubtotal ? "" : "+"}$
+                          {previewMoney.addOnTotal.toFixed(2)}
+                        </span>
+                      </div>
+                    )}
+                    {previewMoney.discountApplied > 0 && (
+                      <div className="flex justify-between text-sm text-[#008C9C]">
+                        <span>Discount</span>
+                        <span>−${previewMoney.discountApplied.toFixed(2)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-sm font-[600] text-[#008C9C] border-t border-[#008C9C]/15 pt-2">
+                      <span>Subtotal</span>
+                      <span>${previewMoney.subtotalAmount.toFixed(2)}</span>
+                    </div>
+                    {previewMoney.exempt ? (
+                      <div className="flex justify-between text-sm text-[#854d0e]">
+                        <span>Tax exempt</span>
+                        <span>$0.00</span>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex justify-between text-sm text-[#008C9C]">
+                          <span>GST ({taxRates.gstRate}%)</span>
+                          <span>+${previewMoney.gstAmount.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between text-sm text-[#008C9C]">
+                          <span>QST ({taxRates.qstRate}%)</span>
+                          <span>+${previewMoney.qstAmount.toFixed(2)}</span>
+                        </div>
+                      </>
+                    )}
+                    <div className="flex justify-between text-base font-[600] text-[#008C9C] border-t border-[#008C9C]/15 pt-2">
+                      <span>Total</span>
+                      <span>${previewMoney.totalAmount.toFixed(2)}</span>
                     </div>
                   </div>
 

@@ -37,7 +37,7 @@ export default async function BookingsPage() {
     take: 100,
     include: {
       cleaners: { select: { id: true, name: true } },
-      addOns: { select: { name: true, price: true } },
+      addOns: { select: { name: true, price: true, quantity: true } },
     },
   });
 

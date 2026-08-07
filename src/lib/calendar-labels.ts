@@ -54,11 +54,25 @@ export const DEFAULT_JOB_TYPE_LABELS: Record<string, PriorityLabel> = {
 };
 
 // All the raw stored codes we know how to fold into a canonical category.
-const CATEGORY_ALIASES: Record<string, string> = {
+//
+// Exported because service-category PERMISSIONS (awerfixes.pdf item 3) are only
+// as good as this map: a jobType that doesn't fold has no category to gate on.
+// The Stage-0 probe found 97 of 221 live jobs (44%) sitting on BookingKoala free
+// text that returned null here — "House", "Apartment", "Move In & Out",
+// "Deep Cleaning", "Detached Home (2000+ sqft)", "Post Construction Cleaning".
+// Those entries are now present, and the verify script asserts the live distinct
+// list against this map so the next import format that drifts is caught.
+export const CATEGORY_ALIASES: Record<string, string> = {
   R: "RESIDENTIAL",
   RESIDENTIAL: "RESIDENTIAL",
   STANDARD: "RESIDENTIAL",
   GENERAL: "RESIDENTIAL",
+  // BookingKoala property-type names — all ordinary homes, all residential.
+  HOUSE: "RESIDENTIAL",
+  APARTMENT: "RESIDENTIAL",
+  CONDO: "RESIDENTIAL",
+  TOWNHOUSE: "RESIDENTIAL",
+  DETACHED_HOME: "RESIDENTIAL",
   DEEP: "DEEP",
   MOVE_IN: "MOVE_IN",
   MOVEIN: "MOVE_IN",
@@ -66,6 +80,9 @@ const CATEGORY_ALIASES: Record<string, string> = {
   MOVEOUT: "MOVE_OUT",
   MOVE_IN_OUT: "MOVE_IN_OUT",
   MOVEINOUT: "MOVE_IN_OUT",
+  // "Move In & Out" — the ampersand survives the underscore rewrite below.
+  "MOVE_IN_&_OUT": "MOVE_IN_OUT",
+  MOVE_IN_AND_OUT: "MOVE_IN_OUT",
   PC: "POST_CONSTRUCTION",
   POST_CONSTRUCTION: "POST_CONSTRUCTION",
   POSTCONSTRUCTION: "POST_CONSTRUCTION",
@@ -85,7 +102,22 @@ export function normalizeJobType(raw: string | null | undefined): string | null 
     .trim()
     .toUpperCase()
     .replace(/[\s-]+/g, "_"); // "POST CONSTRUCTION" -> "POST_CONSTRUCTION"
-  return CATEGORY_ALIASES[code] ?? null;
+  const direct = CATEGORY_ALIASES[code];
+  if (direct) return direct;
+
+  // Second pass for the descriptive names imports carry. Strip a trailing
+  // size/qualifier parenthetical and a trailing "CLEANING", then look up again:
+  //   "Detached Home (2000+ sqft)"   -> DETACHED_HOME    -> RESIDENTIAL
+  //   "Deep Cleaning"                -> DEEP             -> DEEP
+  //   "Post Construction Cleaning"   -> POST_CONSTRUCTION-> POST_CONSTRUCTION
+  // Listing every such string as its own alias would mean chasing every new
+  // wording; trimming the decoration folds a whole family at once.
+  const trimmed = code
+    .replace(/_*\([^)]*\)\s*$/, "") // drop "(2000+ SQFT)"
+    .replace(/_CLEANING$/, "")
+    .replace(/_+$/, "");
+  if (trimmed && trimmed !== code) return CATEGORY_ALIASES[trimmed] ?? null;
+  return null;
 }
 
 /** Concise human labels for job-type pills / descriptions (the settings UI

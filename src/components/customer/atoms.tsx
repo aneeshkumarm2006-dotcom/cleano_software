@@ -3,6 +3,54 @@
 import { Minus, Plus } from "lucide-react";
 
 // ─── Number stepper ───
+/**
+ * The bare −/value/+ cluster, without a label.
+ *
+ * Split out of `NumberStepper` so the add-on cards can carry a quantity
+ * stepper: an add-on card is itself a `<button>`, and nesting these buttons
+ * inside it would be invalid HTML that React will happily render anyway.
+ * `compact` drops the outer padding so it fits a 120px card.
+ */
+export function QuantityStepper({
+  value,
+  onChange,
+  min = 0,
+  max = 99,
+  ariaLabel,
+  compact = false,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  min?: number;
+  max?: number;
+  /** What the −/+ buttons are adjusting, e.g. "Bedrooms" or "Inside Fridge quantity". */
+  ariaLabel: string;
+  compact?: boolean;
+}) {
+  return (
+    <div
+      className={`cl-stepper-controls${compact ? " cl-stepper-controls--compact" : ""}`}>
+      <button
+        type="button"
+        className="cl-stepper-btn"
+        aria-label={`Decrease ${ariaLabel}`}
+        onClick={() => onChange(Math.max(min, value - 1))}
+        disabled={value <= min}>
+        <Minus size={14} />
+      </button>
+      <span className="cl-stepper-value">{value}</span>
+      <button
+        type="button"
+        className="cl-stepper-btn"
+        aria-label={`Increase ${ariaLabel}`}
+        onClick={() => onChange(Math.min(max, value + 1))}
+        disabled={value >= max}>
+        <Plus size={14} />
+      </button>
+    </div>
+  );
+}
+
 export function NumberStepper({
   label,
   value,
@@ -19,25 +67,13 @@ export function NumberStepper({
   return (
     <div className="cl-stepper">
       <span className="cl-stepper-label">{label}</span>
-      <div className="cl-stepper-controls">
-        <button
-          type="button"
-          className="cl-stepper-btn"
-          aria-label={`Decrease ${label}`}
-          onClick={() => onChange(Math.max(min, value - 1))}
-          disabled={value <= min}>
-          <Minus size={14} />
-        </button>
-        <span className="cl-stepper-value">{value}</span>
-        <button
-          type="button"
-          className="cl-stepper-btn"
-          aria-label={`Increase ${label}`}
-          onClick={() => onChange(Math.min(max, value + 1))}
-          disabled={value >= max}>
-          <Plus size={14} />
-        </button>
-      </div>
+      <QuantityStepper
+        value={value}
+        onChange={onChange}
+        min={min}
+        max={max}
+        ariaLabel={label}
+      />
     </div>
   );
 }

@@ -18,20 +18,28 @@ import { db } from "@/db";
  *     per-occurrence facts, not series settings;
  *   • discountAmount — a child's discount carries its own recurring-frequency
  *     component, so copying the edited job's figure across would either wipe or
- *     duplicate that. Left alone on purpose.
+ *     duplicate that. Left alone on purpose;
+ *   • payRateMultiplier — deprecated (AWER round 3, fix 1). The rating premium
+ *     is a property of the CLEANER, not the job, so there is nothing to
+ *     propagate across a series.
  */
 export const SERIES_PROPAGATED_FIELDS = [
   "clientName",
   "clientId",
   "location",
   "aptNumber",
+  // Which saved address the series is served at (item 2). Safe in updateMany:
+  // it is a scalar FK column, not a relation, and every occurrence of a series
+  // is at the same address by definition — the snapshot fields above already
+  // propagate, so leaving this behind would make siblings disagree with their
+  // own location string about where they are.
+  "clientAddressId",
   "description",
   "jobType",
   "price",
   "employeePay",
   "payType",
   "hourlyRate",
-  "payRateMultiplier",
   "notes",
   "paymentType",
   "bedCount",

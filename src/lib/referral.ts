@@ -1,8 +1,10 @@
 import { db } from "@/db";
 
-// Configurable referral economics. These could live in AppSetting later.
-export const NEW_CLIENT_DISCOUNT = 15; // $ off first booking when used
-export const REFERRER_CREDIT = 10; // $ credited to the referring client
+// Referral economics used to live here as NEW_CLIENT_DISCOUNT / REFERRER_CREDIT.
+// They now live in Settings as `customer.newClientReferralDiscountUsd` and
+// `customer.referrerCreditUsd` (src/lib/settings/registry.ts), which is what
+// submitBooking pays out and what the account page displays. The constants were
+// removed rather than deprecated so nothing can read a stale number by accident.
 
 // Generates a short, friendly, unique referral code like "MAPLE4Q72".
 function randomCode(): string {

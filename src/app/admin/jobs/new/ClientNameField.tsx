@@ -11,14 +11,13 @@ import { useEffect, useRef, useState } from "react";
 import Input from "@/components/ui/Input";
 import PremiumSelect from "@/components/ui/PremiumSelect";
 import SaveCardOnFile from "../SaveCardOnFile";
-
-interface ClientAddressOption {
-  id: string;
-  label: string;
-  address: string;
-  aptNumber?: string | null;
-  isDefault: boolean;
-}
+import {
+  NEW_ADDRESS,
+  addressOptionLabel,
+  pickDefaultAddress,
+  stripDuplicatedApt,
+  type SavedAddress,
+} from "@/lib/client-address";
 
 interface ClientOption {
   id: string;
@@ -30,10 +29,8 @@ interface ClientOption {
   discountPercent?: number | null;
   fixedPrice?: number | null;
   defaultPaymentMethodId?: string | null;
-  addresses?: ClientAddressOption[];
+  addresses?: SavedAddress[];
 }
-
-const NEW_ADDRESS = "__new__";
 
 export default function ClientNameField({
   clients,
@@ -93,8 +90,8 @@ export default function ClientNameField({
           })
           .slice(0, 8);
 
-  function fillAddress(addr: ClientAddressOption) {
-    setField("location", addr.address || "");
+  function fillAddress(addr: SavedAddress) {
+    setField("location", stripDuplicatedApt(addr.address, addr.aptNumber));
     setField("aptNumber", addr.aptNumber || "");
   }
 
@@ -106,8 +103,7 @@ export default function ClientNameField({
     setCardSavedNow(false);
 
     // Prefer a saved default address; fall back to the legacy Client.address.
-    const list = c.addresses ?? [];
-    const def = list.find((a) => a.isDefault) ?? list[0] ?? null;
+    const def = pickDefaultAddress(c.addresses);
     if (def) {
       setAddressChoice(def.id);
       fillAddress(def);
@@ -145,6 +141,13 @@ export default function ClientNameField({
   return (
     <div ref={ref} style={{ position: "relative" }}>
       <input type="hidden" name="clientId" value={clientId} />
+      {/* Which saved address was picked (item 2). Empty means "the admin typed
+          a new one" — saveJob adds it to the book and links the job to it. */}
+      <input
+        type="hidden"
+        name="clientAddressId"
+        value={addressChoice === NEW_ADDRESS ? "" : addressChoice}
+      />
       <Input
         type="text"
         id="clientName"
@@ -231,9 +234,7 @@ export default function ClientNameField({
             options={[
               ...savedAddresses.map((a) => ({
                 value: a.id,
-                label: `${a.label} — ${a.address}${
-                  a.aptNumber ? ` (${a.aptNumber})` : ""
-                }${a.isDefault ? " · default" : ""}`,
+                label: addressOptionLabel(a),
               })),
               { value: NEW_ADDRESS, label: "+ Type a new address" },
             ]}

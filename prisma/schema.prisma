@@ -22,6 +22,12 @@ model User {
   // individual pay rate used by the split-job calculation (see src/lib/pay-tiers.ts):
   // Trainee = 30%, Standard = 40–45% (rating-based after 5 ratings), Field Lead = 46%.
   cleanerTier                  CleanerTier             @default(STANDARD)
+  // Service categories this employee is allowed to work (awerfixes.pdf item 3).
+  // EMPTY = ALL allowed, so existing cleaners are unaffected and admins opt IN
+  // to restricting someone. Enforced hard on the cleaner side (available jobs,
+  // preview, claim); ADVISORY only on the admin side, which can always override.
+  // Values are canonical category keys — see src/lib/service-permissions.ts.
+  allowedServiceCategories     String[]                @default([])
   // Group membership — the Field Lead this cleaner reports to. Used for the
   // Field Lead's weekly group-revenue bonus (see src/lib/field-lead-bonus.ts).
   fieldLeadId                  String?
@@ -56,6 +62,7 @@ model User {
   jobInvites                   JobAssignmentInvite[]
   jobAssignments               JobAssignment[]         @relation("CleanerAssignments")
   jobBreaks                    JobBreak[]
+  jobWorkSessions              JobWorkSession[]
   jobLogs                      JobLog[]                @relation("UserJobLogs")
   payouts                      Payout[]
   approvedPeriods              PayPeriod[]             @relation("PayPeriodApprover")
@@ -76,6 +83,7 @@ model User {
   resolvedComplaints           Complaint[]             @relation("ResolvedComplaints")
   receivedAlerts               Alert[]                 @relation("RecipientAlerts")
   strikes                      CleanerStrike[]         @relation("CleanerStrikes")
+  files                        EmployeeFile[]
 
   // Present in the database since an earlier migration but never declared here,
   // which showed up as schema drift. Field-lead grouping reads this column, so
@@ -360,15 +368,26 @@ model RecurringCancellation {
 }
 
 model ClientAddress {
-  id        String   @id @default(cuid())
-  clientId  String
-  label     String   @default("Home")
-  address   String
-  aptNumber String?
-  isDefault Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  id          String   @id @default(cuid())
+  clientId    String
+  label       String   @default("Home")
+  address     String
+  aptNumber   String?
+  /// awerfixes.pdf item 2 (round 3, stage 4). `postalCode`, not `zip`, even
+  /// though Client carries the legacy flat trio (address/city/state/zip): the
+  /// two are separate stores and are deliberately NOT merged. Client.* is the
+  /// customer's billing address; these rows are the service address book.
+  city        String?
+  postalCode  String?
+  /// Door codes, gate codes, buzzer numbers, parking instructions. Surfaced to
+  /// the ASSIGNED cleaner on the job page — cleaners cannot get in without it.
+  /// Never rendered on anything customer-facing or on an unclaimed job.
+  accessNotes String?
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  jobs        Job[]
 
   @@index([clientId])
 }
@@ -397,6 +416,13 @@ model Job {
   clientId                       String?
   location                       String?
   aptNumber                      String?
+  /// PROVENANCE, not the source of truth (awerfixes.pdf item 2, round 3).
+  /// `location`/`aptNumber` above stay the denormalized snapshot taken when the
+  /// job was booked, so history survives an address being edited or deleted;
+  /// this FK only records WHICH saved address it came from, which is what lets
+  /// the cleaner view read that address's accessNotes. Hence onDelete: SetNull
+  /// — removing an address must never blank a finished job or its invoice.
+  clientAddressId                String?
   description                    String?
   jobType                        String?
   jobDate                        DateTime?
@@ -421,6 +447,13 @@ model Job {
   discountReason                 String?
   bedCount                       Int?
   bathCount                      Int?
+  // DEPRECATED (AWER round 3, fix 1). The rating premium moved INTO the
+  // cleaner's rate: individualRate = tier base x the cleaner's multiplier,
+  // resolved per cleaner from Settings -> `multipliers.ratings` in
+  // src/lib/cleaner-rates.ts. Nothing in the money path reads this column any
+  // more (computeJobPayShares stopped multiplying by it). Kept rather than
+  // dropped because live rows carry it and the jobs CSV importer still accepts
+  // the column; writing it has NO effect on pay. Do not reintroduce a read.
   payRateMultiplier              Float?                @default(1.0)
   isFlexible                     Boolean               @default(false)
   requiredCleaners               Int                   @default(1)
@@ -553,6 +586,7 @@ model Job {
   updatedAt                      DateTime              @updatedAt
   employee                       User?                 @relation("EmployeeJobs", fields: [employeeId], references: [id], onDelete: SetNull)
   client                         Client?               @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  clientAddress                  ClientAddress?        @relation(fields: [clientAddressId], references: [id], onDelete: SetNull)
   parentJob                      Job?                  @relation("JobRecurrence", fields: [parentJobId], references: [id], onDelete: SetNull)
   childJobs                      Job[]                 @relation("JobRecurrence")
   productUsage                   JobProductUsage[]
@@ -568,6 +602,7 @@ model Job {
   chatMessages                   JobChatMessage[]
   assignments                    JobAssignment[]
   breaks                         JobBreak[]
+  workSessions                   JobWorkSession[]
   checklists                     JobChecklist[]
   ratings                        EmployeeRating[]
   complaints                     Complaint[]
@@ -582,6 +617,7 @@ model Job {
   @@index([clientId])
   @@index([status])
   @@index([parentJobId])
+  @@index([clientAddressId])
   @@index([isFlexible])
   @@index([externalBookingId])
   // Used to answer "which bookings is this card attached to?" — needed before
@@ -593,7 +629,14 @@ model JobAddOn {
   id        String   @id @default(cuid())
   jobId     String
   name      String
+  /// The UNIT price. Every consumer computes `price * quantity` — see
+  /// addOnLineTotal() in src/lib/job-money.ts, which is the only place that
+  /// multiplication should be written.
   price     Float    @default(0)
+  /// How many of this add-on the customer booked (awerfixes item 7, round 3).
+  /// Always >= 1; clamped by addOnQuantity() at every parse boundary rather
+  /// than by a CHECK constraint, which Prisma cannot model without drift.
+  quantity  Int      @default(1)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
@@ -1458,6 +1501,13 @@ model JobChecklist {
   template   ChecklistTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
   items      JobChecklistItem[]
 
+  // One checklist per cleaner per job. Generation now fires when the cleaner
+  // OPENS the job (awerfixes.pdf item 5) rather than from a button, which turns
+  // the old read-then-write race into a routine one — two concurrent renders
+  // both miss the lookup and both create. The constraint makes the loser fail
+  // loudly (P2002 → re-read the winner) instead of writing a second checklist.
+  // Verified safe: 0 duplicate pairs on live at the time of the migration.
+  @@unique([jobId, employeeId])
   @@index([jobId])
   @@index([employeeId])
 }
@@ -1525,6 +1575,39 @@ model DocumentSignature {
   @@unique([documentId, employeeId])
   @@index([documentId])
   @@index([employeeId])
+}
+
+/// A file the EMPLOYEE uploads about themselves, as opposed to a Document the
+/// company assigns them to sign (awerfixes.pdf item 16 — void cheque upload).
+/// Today `kind` only ever holds "VOID_CHEQUE"; it is a String rather than an
+/// enum so the next payroll artefact (T4, direct-deposit form) needs no
+/// migration.
+///
+/// APPEND-ONLY. Replacing a void cheque writes a NEW row and the newest row is
+/// the current one, so a cleaner cannot quietly swap their banking details with
+/// no trace of what was there before.
+///
+/// PRIVACY (decision 7). `fileUrl` is an `authenticated` Cloudinary URL and is
+/// USELESS on its own — fetching it unsigned is denied. Viewing goes through
+/// `getEmployeeFileUrl`, which is OWNER/ADMIN-gated, mints a short-lived signed
+/// URL and writes an ActivityLog row. `publicId` + `resourceType` are stored
+/// because signing needs both and the repo's only URL→public-id parser
+/// (deleteJobPhoto.ts) assumes an `/upload/` path it will never see here.
+model EmployeeFile {
+  id           String   @id @default(cuid())
+  employeeId   String
+  kind         String // VOID_CHEQUE
+  fileUrl      String
+  publicId     String
+  resourceType String   @default("image") // Cloudinary resource_type: image | raw
+  fileName     String
+  mimeType     String
+  uploadedAt   DateTime @default(now())
+  employee     User     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  // The only read this table serves: "newest file of this kind for this
+  // employee". One index covers it.
+  @@index([employeeId, kind, uploadedAt])
 }
 
 model TrainingModule {
@@ -2015,6 +2098,41 @@ model JobAssignment {
   @@index([cleanerId])
 }
 
+/// One clock-in → clock-out stretch for ONE cleaner on ONE job
+/// (awerfixes.pdf item 6, round 3 — "clock back into a job").
+///
+/// Modelled as ROWS for the same reason JobBreak is: a cleaner can legitimately
+/// leave and come back — supply run, a second visit the same day, a job that
+/// spills past a break in the schedule — and the single
+/// clockInTime/clockOutTime pair could only ever hold the last one. Worse, that
+/// pair lived on the JOB, so one cleaner clocking in blocked the whole crew and
+/// one cleaner clocking out completed the job for everybody.
+///
+/// `endedAt` null = this session is running right now.
+///
+/// Keyed on (jobId, cleanerId) rather than a JobAssignment FK on purpose:
+/// syncJobAssignments deletes non-CANCELLED assignment rows when an admin takes
+/// a cleaner off a job, which would cascade away the record of work they had
+/// actually done.
+///
+/// Job.clockInTime / Job.clockOutTime and the JobAssignment pair are still
+/// maintained as derived mirrors, so every legacy reader keeps working and jobs
+/// that predate this model still report correctly from the pair alone.
+model JobWorkSession {
+  id        String    @id @default(cuid())
+  jobId     String
+  cleanerId String
+  startedAt DateTime  @default(now())
+  endedAt   DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  job       Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  cleaner   User      @relation(fields: [cleanerId], references: [id], onDelete: Cascade)
+
+  @@index([jobId, cleanerId])
+  @@index([cleanerId])
+}
+
 /// A break/pause taken by ONE cleaner during ONE job (awer_fixes.pdf item 26).
 ///
 /// Modelled as ROWS rather than a start/end column pair on JobAssignment so a
@@ -2037,22 +2155,28 @@ model JobBreak {
 }
 
 model JobAssignmentInvite {
-  id            String            @id @default(cuid())
-  jobId         String
-  cleanerId     String
-  decision      JobInviteDecision @default(PENDING)
-  sentAt        DateTime          @default(now())
-  respondedAt   DateTime?
-  expiresAt     DateTime
-  declineReason String?
+  id                 String            @id @default(cuid())
+  jobId              String
+  cleanerId          String
+  decision           JobInviteDecision @default(PENDING)
+  sentAt             DateTime          @default(now())
+  respondedAt        DateTime?
+  expiresAt          DateTime
+  declineReason      String?
   // If true, this invite was created as part of a last-minute reposting
   // and the cleaner who accepts earns the configured bonus.
-  isLastMinute  Boolean           @default(false)
-  bonusUsd      Float             @default(0)
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
-  job           Job               @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  cleaner       User              @relation(fields: [cleanerId], references: [id], onDelete: Cascade)
+  isLastMinute       Boolean           @default(false)
+  bonusUsd           Float             @default(0)
+  /// When the admin was told this DIRECT assignment is still unconfirmed
+  /// (awerfixes.pdf item 4, round 3). Direct invites are no longer stamped
+  /// EXPIRED — they don't lapse — so the sweep needs its own once-only marker
+  /// or it would re-alert on every cron run. Null on last-minute broadcasts,
+  /// which still expire and are deduped by the decision change itself.
+  unconfirmedAlertAt DateTime?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  job                Job               @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  cleaner            User              @relation(fields: [cleanerId], references: [id], onDelete: Cascade)
 
   @@unique([jobId, cleanerId])
   @@index([cleanerId, decision])

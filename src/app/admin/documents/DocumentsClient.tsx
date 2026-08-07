@@ -11,6 +11,8 @@ import {
   FileText,
   Check,
 } from "lucide-react";
+import VoidChequeCard from "./VoidChequeCard";
+import type { MyVoidCheque } from "../actions/getMyVoidCheque";
 
 type DocStatus = "PENDING" | "SIGNED" | "EXPIRED" | "REVOKED";
 
@@ -31,6 +33,8 @@ interface SignatureRow {
 
 interface DocumentsClientProps {
   signatures: SignatureRow[];
+  /** The viewer's own void cheque, metadata only. Null when none is on file. */
+  voidCheque: MyVoidCheque | null;
 }
 
 const STATUS: Record<
@@ -66,7 +70,10 @@ function DocStatusPill({ status }: { status: DocStatus }) {
   );
 }
 
-export default function DocumentsClient({ signatures }: DocumentsClientProps) {
+export default function DocumentsClient({
+  signatures,
+  voidCheque,
+}: DocumentsClientProps) {
   const isAdminView = usePathname().startsWith("/admin");
   const pending = useMemo(() => signatures.filter((s) => s.status === "PENDING"), [signatures]);
   const signed = useMemo(() => signatures.filter((s) => s.status === "SIGNED"), [signatures]);
@@ -129,6 +136,22 @@ export default function DocumentsClient({ signatures }: DocumentsClientProps) {
         <Stat icon={<CheckCircle2 size={16} />} label="Signed" value={signed.length} hint="on file" />
         <Stat icon={<FileText size={16} />} label="Total" value={signatures.length} hint="documents" />
       </div>
+
+      {/*
+        Cleaner route only (awerfixes.pdf item 16). This page is shared with
+        /admin/documents via a re-export, and the same `isAdminView` path check
+        that hides the settings banner from cleaners hides this from admins —
+        an admin manages payroll paperwork from the employee's detail page, not
+        from their own personal signing view.
+      */}
+      {!isAdminView && (
+        <section style={{ marginBottom: 30 }}>
+          <div className="doc-sec-head">
+            <h2 className="doc-sec-title">Payroll documents</h2>
+          </div>
+          <VoidChequeCard current={voidCheque} />
+        </section>
+      )}
 
       {sections.map((sec) => (
         <section key={sec.title} style={{ marginBottom: 30 }}>

@@ -2,6 +2,7 @@
 // Pure rules + a source sweep proving the two thresholds can't be swapped.
 import fs from "node:fs";
 import {
+  DEFAULT_CLEANER_RESTOCK_THRESHOLD,
   cleanerRestockThreshold,
   companyReorderThreshold,
   isCleanerLow,
@@ -38,15 +39,21 @@ ok("a 0 company threshold never alerts",
   !isCompanyLow({ minStock: 0, stockLevel: 0 }));
 
 // ── Cleaner default when unset ─────────────────────────────────────────────
-const unset = { cleanerRestockThreshold: 0, usagePerJob: 0 };
+const unset = { cleanerRestockThreshold: 0 };
 ok("unset cleaner threshold falls back, not to zero", cleanerRestockThreshold(unset) > 0);
 ok("unset is reported as using the default", usesDefaultCleanerThreshold(unset));
-check("fallback covers one more job when usage is known",
-  cleanerRestockThreshold({ cleanerRestockThreshold: 0, usagePerJob: 4 }), 4);
+// The "fallback covers one more job when usage is known" case is GONE with the
+// InventoryRule.usagePerJob floor (awerfixes.pdf round 3, item 14). That term
+// raised every cleaner's threshold to a number an admin typed into Settings
+// once, so a stale guess decided when everyone was warned — and a product with
+// no rule got no floor at all. Two maintained knobs remain, asserted below.
 check("admin's global default is honoured",
-  cleanerRestockThreshold({ cleanerRestockThreshold: 0, usagePerJob: 0, defaultThreshold: 5 }), 5);
+  cleanerRestockThreshold({ cleanerRestockThreshold: 0, defaultThreshold: 5 }), 5);
 check("a configured product value beats the global default",
-  cleanerRestockThreshold({ cleanerRestockThreshold: 2, usagePerJob: 0, defaultThreshold: 5 }), 2);
+  cleanerRestockThreshold({ cleanerRestockThreshold: 2, defaultThreshold: 5 }), 2);
+check("with neither configured, the built-in default applies",
+  cleanerRestockThreshold({ cleanerRestockThreshold: 0 }),
+  DEFAULT_CLEANER_RESTOCK_THRESHOLD);
 ok("a configured value is not reported as default",
   !usesDefaultCleanerThreshold({ cleanerRestockThreshold: 2 }));
 
@@ -80,9 +87,13 @@ const modal = read("src/app/admin/inventory/ProductModal.tsx");
 ok("product editor exposes both thresholds by name",
   modal.includes("Company Reorder Threshold") && modal.includes("Cleaner Restock Threshold"));
 
-const rules = read("src/app/admin/actions/updateInventoryRule.ts");
-ok("legacy rule editor writes the authoritative field too",
-  rules.includes("cleanerRestockThreshold: refillThreshold"));
+// The legacy Inventory Rules editor used to co-write cleanerRestockThreshold,
+// and this asserted it stayed in step. Both actions are deleted (item 14), so
+// ProductModal above is now the only writer — which is the check that matters.
+// Assert the removal instead, so the tab cannot quietly come back.
+ok("the legacy rule editor is gone",
+  !fs.existsSync("src/app/admin/actions/updateInventoryRule.ts") &&
+  !fs.existsSync("src/app/admin/actions/createInventoryRule.ts"));
 
 const view = read("src/app/admin/inventory/InventoryView.tsx");
 ok("company badge says purchase", view.includes("Purchase needed"));

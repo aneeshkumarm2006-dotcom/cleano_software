@@ -12,7 +12,7 @@ export default async function WebBookingsPage() {
     include: {
       client: { select: { id: true, name: true, email: true, phone: true } },
       cleaners: { select: { id: true, name: true } },
-      addOns: { select: { name: true, price: true } },
+      addOns: { select: { name: true, price: true, quantity: true } },
     },
     take: 200,
   });

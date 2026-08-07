@@ -129,6 +129,10 @@ export async function getJobsForDay(dateStr: string) {
         jobId: job.id,
         jobType: job.jobType,
         location: job.location,
+        // Unit number on calendar cards + the job popover (item 2). `location`
+        // stays the bare street: shortLocation() comma-splits it for the card
+        // label, and folding the unit in would break that.
+        aptNumber: job.aptNumber,
         status: job.status,
         price: job.price,
         employeePay: job.employeePay,

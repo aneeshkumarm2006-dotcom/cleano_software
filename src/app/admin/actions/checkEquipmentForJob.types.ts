@@ -5,7 +5,12 @@ export type MissingEquipmentItem = {
   needed: number;
   have: number;
   shortBy: number;
-  source: "JOB_TYPE_KIT" | "ADD_ON" | "USAGE_RULE";
+  /**
+   * Where the requirement came from. TYPICAL_USAGE was USAGE_RULE until the
+   * Inventory Rules settings were removed (awerfixes.pdf item 14) — it is now
+   * the measured trailing-30-day average rather than a configured number.
+   */
+  source: "JOB_TYPE_KIT" | "ADD_ON" | "TYPICAL_USAGE";
 };
 
 export type EquipmentCheckResult = {

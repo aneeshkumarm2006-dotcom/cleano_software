@@ -7,6 +7,10 @@ import { jobRevenue } from "@/lib/metrics";
 import { getEmployeeAvgRating } from "../../actions/setEmployeeRating";
 import { getFieldLeadWeeklyBonus } from "@/lib/field-lead-bonus.server";
 import { getStrikeSummary, STRIKE_WINDOW_DAYS } from "@/lib/strikes";
+import { VOID_CHEQUE_KIND } from "@/lib/employee-files";
+import { cleanerRestockThreshold } from "@/lib/inventory-thresholds";
+import { projectUsage } from "@/lib/inventory-forecast";
+import { loadPerJobAverages } from "@/lib/inventory-forecast.server";
 
 export default async function EmployeePage({
   params,
@@ -175,7 +179,8 @@ export default async function EmployeePage({
     })),
   }));
 
-  // Forecast for this employee — upcoming jobs × usagePerJob vs currentQuantity
+  // Forecast for this employee — upcoming jobs × measured per-job usage, vs
+  // what is currently in their kit.
   const upcomingEmployeeJobs = await db.job.count({
     where: {
       deletedAt: null,
@@ -188,31 +193,32 @@ export default async function EmployeePage({
     },
   });
 
-  const inventoryRulesForForecast = await db.inventoryRule.findMany({
-    include: { product: true },
-  });
+  // Same source as the Inventory page's forecast, through the same helper, so
+  // the two cannot disagree about what a product costs per job (item 14).
+  const avgPerJob = await loadPerJobAverages();
 
-  const forecast = employee.assignedProducts
-    .map((ep) => {
-      const rule = inventoryRulesForForecast.find(
-        (r) => r.productId === ep.productId
-      );
-      const usagePerJob = rule?.usagePerJob || 0;
-      const projectedUsage = usagePerJob * upcomingEmployeeJobs;
-      const deficit = Math.max(0, projectedUsage - ep.quantity);
-      return {
-        productId: ep.productId,
-        productName: ep.product.name,
-        unit: ep.product.unit,
-        currentQuantity: ep.quantity,
-        usagePerJob,
-        refillThreshold: rule?.refillThreshold || 0,
-        projectedUsage,
-        deficit,
-        needsRefill: deficit > 0 || ep.quantity <= (rule?.refillThreshold || 0),
-      };
-    })
-    .filter((f) => f.usagePerJob > 0);
+  const forecast = employee.assignedProducts.map((ep) => {
+    const averagePerJob = avgPerJob.get(ep.productId) ?? 0;
+    const projectedUsage = projectUsage(averagePerJob, upcomingEmployeeJobs);
+    const deficit = Math.max(0, projectedUsage - ep.quantity);
+    // This block used to read `rule?.refillThreshold` directly, bypassing
+    // cleanerRestockThreshold() — so it disagreed with every other low-stock
+    // surface, and would have silently read 0 once rules went away.
+    const refillThreshold = cleanerRestockThreshold({
+      cleanerRestockThreshold: ep.product.cleanerRestockThreshold,
+    });
+    return {
+      productId: ep.productId,
+      productName: ep.product.name,
+      unit: ep.product.unit,
+      currentQuantity: ep.quantity,
+      averagePerJob: Math.round(averagePerJob * 100) / 100,
+      refillThreshold,
+      projectedUsage,
+      deficit,
+      needsRefill: deficit > 0 || ep.quantity <= refillThreshold,
+    };
+  });
 
   const DAY_BY_INDEX = [
     "SUNDAY",
@@ -371,6 +377,25 @@ export default async function EmployeePage({
     excusedAt: s.excusedAt?.toISOString() ?? null,
   }));
 
+  // Payroll paperwork this employee uploaded (awerfixes.pdf item 16). METADATA
+  // ONLY — the file is reachable exclusively through `getEmployeeFileUrl`,
+  // which re-checks OWNER/ADMIN and logs the access. Serialising a URL into
+  // this page's props would hand out an unlogged copy of exactly what decision
+  // 7 set out to control.
+  const voidChequeRow = await db.employeeFile.findFirst({
+    where: { employeeId: id, kind: VOID_CHEQUE_KIND },
+    orderBy: { uploadedAt: "desc" },
+    select: { id: true, fileName: true, mimeType: true, uploadedAt: true },
+  });
+  const voidCheque = voidChequeRow
+    ? {
+        id: voidChequeRow.id,
+        fileName: voidChequeRow.fileName,
+        mimeType: voidChequeRow.mimeType,
+        uploadedAt: voidChequeRow.uploadedAt.toISOString(),
+      }
+    : null;
+
   return (
     <EmployeeDetailView
       employee={{
@@ -383,6 +408,7 @@ export default async function EmployeePage({
       }}
       starRating={starRating}
       cleanerTier={employee.cleanerTier}
+      allowedServiceCategories={employee.allowedServiceCategories}
       ratingCount={ratingCount}
       recentRatings={recentRatings}
       fieldLeadId={employee.fieldLeadId}
@@ -408,6 +434,7 @@ export default async function EmployeePage({
       strikes={strikes}
       strikeSummary={strikeSummary}
       strikeWindowDays={STRIKE_WINDOW_DAYS}
+      voidCheque={voidCheque}
     />
   );
 }

@@ -61,12 +61,11 @@ interface Job {
   deletedAt?: string | null;
   bedCount?: number | null;
   bathCount?: number | null;
-  payRateMultiplier?: number | null;
   profit?: number;
   profitPct?: number;
   timeSpentMs?: number;
   cleaners: Array<{ id: string; name: string }>;
-  addOns?: Array<{ id: string; name: string; price: number }>;
+  addOns?: Array<{ id: string; name: string; price: number; quantity: number }>;
 }
 
 interface ClientLite { id: string; name: string; }
@@ -137,7 +136,8 @@ function StatusPill({ status }: { status: string }) {
     SCHEDULED:   { label: 'Scheduled',   bg: '#dbeafe', color: '#1e40af', dot: '#3b82f6' },
     IN_PROGRESS: { label: 'In Progress', bg: '#fef3c7', color: '#92400e', dot: '#f59e0b' },
     COMPLETED:   { label: 'Completed',   bg: '#d1fae5', color: '#065f46', dot: '#10b981' },
-    PAID:        { label: 'Paid',        bg: '#059669', color: '#ffffff', dot: '#a7f3d0' },
+    // emerald-700, not 600: white on #059669 is 3.77:1 at 11px, below AA.
+    PAID:        { label: 'Paid',        bg: '#047857', color: '#ffffff', dot: '#a7f3d0' },
     CANCELLED:   { label: 'Cancelled',   bg: '#fee2e2', color: '#991b1b', dot: '#ef4444' },
   };
   const c = map[status] || { label: status, bg: '#f3f4f6', color: '#374151', dot: '#9ca3af' };
@@ -153,7 +153,8 @@ function StatusPill({ status }: { status: string }) {
 // "Move-in / Move-out" (manual) render the same pill; jobTypeLabel() keeps raw
 // enum text out of the UI.
 const TYPE_PILL_COLORS: Record<string, { bg: string; color: string }> = {
-  RESIDENTIAL:       { bg: 'var(--primary-10)', color: 'var(--primary)' },
+  // --primary-800, not --primary: teal on --primary-10 is 3.56:1, below AA.
+  RESIDENTIAL:       { bg: 'var(--primary-10)', color: 'var(--primary-800)' },
   DEEP:              { bg: '#ede9fe',           color: '#5b21b6' },
   MOVE_IN:           { bg: '#dcfce7',           color: '#166534' },
   MOVE_OUT:          { bg: '#dcfce7',           color: '#166534' },
@@ -976,7 +977,7 @@ export default function JobsView({
                 </thead>
                 <tbody>
                   {paginatedJobs.map(job => (
-                    <tr key={job.id} onClick={() => { window.location.href = `/admin/jobs/${job.id}`; }}>
+                    <tr key={job.id} onClick={() => router.push(`/admin/jobs/${job.id}`)}>
                       <td className="col-select" style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
                         <input
                           type="checkbox"
@@ -1001,26 +1002,26 @@ export default function JobsView({
                       <td><TypePill type={job.jobType} /></td>
                       <td><AvatarStack cleaners={job.cleaners} /></td>
                       <td className="num">{formatTimeSpent(job.timeSpentMs)}</td>
-                      <td className="num">
+                      <td className="num col-price">
                         {job.price !== null ? `$${job.price.toFixed(2)}` : '—'}
                         {job.usesFixedPrice && <span style={{ marginLeft: 6 }}><FixedPricePill /></span>}
                       </td>
                       <td className="num">
                         {(job.discountAmount || 0) > 0
                           ? <span style={{ color: 'var(--amber-700)', fontWeight: 600 }}>−${job.discountAmount!.toFixed(2)}</span>
-                          : <span style={{ color: 'var(--primary-40)' }}>—</span>
+                          : <span style={{ color: 'var(--ink-soft)' }}>—</span>
                         }
                       </td>
                       <td className="num">
                         {typeof job.profitPct === 'number' && (job.price || 0) > 0
                           ? <span className={`profit-pct ${profitClass(job.profitPct)}`}>{job.profitPct.toFixed(0)}%</span>
-                          : <span style={{ color: 'var(--primary-40)' }}>—</span>
+                          : <span style={{ color: 'var(--ink-soft)' }}>—</span>
                         }
                       </td>
                       <td>
                         {job.isCashJob
                           ? <CashPill />
-                          : <span style={{ fontSize: 12, color: 'var(--primary-70)' }}>{payTypeLabel(job.paymentType)}</span>
+                          : <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{payTypeLabel(job.paymentType)}</span>
                         }
                       </td>
                       <td><StatusPill status={simpleJobStatus(job)} /></td>
@@ -1085,7 +1086,7 @@ export default function JobsView({
                             type="button"
                             className="icon-btn"
                             aria-label="View"
-                            onClick={(e) => { e.stopPropagation(); window.location.href = `/admin/jobs/${job.id}`; }}
+                            onClick={(e) => { e.stopPropagation(); router.push(`/admin/jobs/${job.id}`); }}
                             style={{ width: 30, height: 30 }}
                           >
                             <ChevronRightSvg size={14} />
@@ -1107,7 +1108,7 @@ export default function JobsView({
           {/* Mobile cards */}
           <div id="jlist-mobile" style={{ display: 'none', flexDirection: 'column', gap: 10 }}>
             {paginatedJobs.map(job => (
-              <article key={job.id} className="jcard" onClick={() => { window.location.href = `/admin/jobs/${job.id}`; }}>
+              <article key={job.id} className="jcard" onClick={() => router.push(`/admin/jobs/${job.id}`)}>
                 <div className="jcard-top">
                   <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                     <input

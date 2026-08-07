@@ -130,6 +130,8 @@ export default function BookingKoalaImportButton({
       addresses: report.addresses,
       jobs: { created: 0, skipped: 0, failed: 0, duplicates: 0, sameDay: 0 },
       statusCounts: {},
+      addOns: { created: 0, matched: 0, unmatched: 0 },
+      addOnsNeedingReview: [],
       emails: { sent: 0, failed: 0 },
       sample: report.sample,
       failures: [],
@@ -186,6 +188,10 @@ export default function BookingKoalaImportButton({
         acc.jobs.sameDay += res.jobs.sameDay;
         acc.emails.sent += res.emails.sent;
         acc.emails.failed += res.emails.failed;
+        acc.addOns.created += res.addOns.created;
+        acc.addOns.matched += res.addOns.matched;
+        acc.addOns.unmatched += res.addOns.unmatched;
+        acc.addOnsNeedingReview.push(...res.addOnsNeedingReview);
         for (const [k, v] of Object.entries(res.statusCounts)) {
           acc.statusCounts[k] = (acc.statusCounts[k] ?? 0) + v;
         }
@@ -199,6 +205,7 @@ export default function BookingKoalaImportButton({
         setReport({ ...acc });
       }
       acc.failures = acc.failures.slice(0, 50);
+      acc.addOnsNeedingReview = acc.addOnsNeedingReview.slice(0, 50);
       setReport({ ...acc });
       setCommitted(true);
       router.refresh();
@@ -283,7 +290,47 @@ export default function BookingKoalaImportButton({
                 <Row label="Customers" v={`${counts.customers.created} new, ${counts.customers.existing} existing${counts.customers.failed ? `, ${counts.customers.failed} failed` : ""}`} />
                 <Row label="Addresses" v={`${counts.addresses}`} />
                 <Row label="Jobs" v={jobsSummary(counts)} />
+                <Row
+                  label="Add-ons"
+                  v={`${counts.addOns.created} rows${
+                    counts.addOns.unmatched
+                      ? `, ${counts.addOns.unmatched} need pricing`
+                      : ""
+                  }`}
+                />
               </div>
+
+              {/* Amber, not red: nothing was lost. These add-ons ARE imported —
+                  with their quantities — they just have no catalog match, so an
+                  admin decides what they are worth. Imported job totals are
+                  unaffected either way; the CSV total already covered them. */}
+              {counts.addOnsNeedingReview.length > 0 && (
+                <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3">
+                  <p className="text-xs font-[600] text-amber-900">
+                    {counts.addOns.unmatched} add-on
+                    {counts.addOns.unmatched === 1 ? "" : "s"} need review
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-amber-800">
+                    Imported at $0.00 because the name has no match in Settings →
+                    Pricing → Add-Ons. Nothing was dropped, and no job total moved.
+                  </p>
+                  <ul className="mt-2 space-y-0.5 text-[11px] text-amber-900">
+                    {counts.addOnsNeedingReview.slice(0, 12).map((a, i) => (
+                      <li key={`${a.rowNum}-${a.name}-${i}`}>
+                        <span className="font-[600]">{a.name}</span>
+                        {a.quantity > 1 ? ` ×${a.quantity}` : ""} — row {a.rowNum}
+                        {a.bookingId ? ` · booking ${a.bookingId}` : ""} ·{" "}
+                        {a.source}
+                      </li>
+                    ))}
+                    {counts.addOnsNeedingReview.length > 12 && (
+                      <li className="text-amber-700">
+                        …and {counts.addOnsNeedingReview.length - 12} more
+                      </li>
+                    )}
+                  </ul>
+                </div>
+              )}
 
               <div className="mt-2 flex flex-wrap gap-3 text-xs">
                 {Object.entries(counts.statusCounts).map(([k, n]) => (

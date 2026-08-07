@@ -7,6 +7,18 @@
 //
 // PURE — no DB imports — so the page, the job modal and any future export
 // compute "time worked" identically.
+//
+// Since awerfixes.pdf item 6 (round 3) there is a THIRD, higher-priority
+// source: JobWorkSession rows. A cleaner can now clock out and back in, so the
+// single pair can only ever describe the last stretch. Sessions win when
+// present; the pair is read as the one session it represents when they aren't,
+// which is what keeps every legacy job reporting unchanged.
+
+import {
+  sessionsFromLegacyPair,
+  summariseSessions,
+  type WorkSession,
+} from "./work-sessions";
 
 export type ClockStatus =
   | "NOT_STARTED"
@@ -26,6 +38,13 @@ export const CLOCK_STATUS_LABEL: Record<ClockStatus, string> = {
 };
 
 export interface ClockSource {
+  /**
+   * This cleaner's JobWorkSession rows (awerfixes.pdf item 6, round 3). When
+   * present these WIN over both fallbacks below, because they are the record
+   * of work — the columns are derived mirrors of them and can only ever
+   * describe a single stretch.
+   */
+  sessions?: WorkSession[] | null;
   /** Per-cleaner assignment row, when one exists. */
   assignment?: {
     status?: string | null;
@@ -40,14 +59,24 @@ export interface ClockSource {
 }
 
 export interface ClockEntry {
+  /** First session start (or the legacy pair's clock-in). */
   clockInTime: Date | null;
+  /** Last session end; null while any session is open. */
   clockOutTime: Date | null;
   onMyWayAt: Date | null;
   status: ClockStatus;
-  /** Minutes between clock-in and clock-out; null while still on the clock. */
+  /**
+   * Minutes actually worked; null while still on the clock.
+   *
+   * With sessions this is the SUM of every closed session, not
+   * clockOut − clockIn — a cleaner who worked 9–11 and came back 3–4 worked
+   * three hours, not seven.
+   */
   minutesWorked: number | null;
   /** True when clocked in with no clock-out yet. */
   isOpen: boolean;
+  /** How many sessions this entry covers. 1 for a legacy pair, 0 for nothing. */
+  sessionCount: number;
 }
 
 function toDate(v: Date | string | null | undefined): Date | null {
@@ -63,44 +92,52 @@ function toDate(v: Date | string | null | undefined): Date | null {
  * so pre-JobAssignment jobs still report. Status is derived from the timestamps
  * rather than trusted blindly, because a legacy job has no status field at all.
  */
-export function resolveClockEntry(source: ClockSource): ClockEntry {
-  const clockInTime =
-    toDate(source.assignment?.clockInTime) ?? toDate(source.jobClockIn);
-  const clockOutTime =
-    toDate(source.assignment?.clockOutTime) ?? toDate(source.jobClockOut);
+export function resolveClockEntry(
+  source: ClockSource,
+  now: Date = new Date()
+): ClockEntry {
   const onMyWayAt =
     toDate(source.assignment?.onMyWayAt) ?? toDate(source.jobOnMyWayAt);
-
   const raw = source.assignment?.status ?? null;
+
+  // Sessions when we have them, otherwise the legacy pair read as the one
+  // session it always was. Everything below is identical for both, which is
+  // what keeps pre-JobWorkSession jobs reporting exactly as they used to.
+  const sessions =
+    source.sessions && source.sessions.length > 0
+      ? source.sessions
+      : sessionsFromLegacyPair(
+          source.assignment?.clockInTime ?? source.jobClockIn,
+          source.assignment?.clockOutTime ?? source.jobClockOut
+        );
+
+  const summary = summariseSessions(sessions, [], now);
+  const clockInTime = summary.firstStartedAt;
+  const clockOutTime = summary.lastEndedAt;
 
   let status: ClockStatus;
   if (raw === "CANCELLED") {
     status = "CANCELLED";
+  } else if (summary.isOpen) {
+    status = "CLOCKED_IN";
   } else if (clockOutTime) {
     status = raw === "COMPLETED" ? "COMPLETED" : "CLOCKED_OUT";
-  } else if (clockInTime) {
-    status = "CLOCKED_IN";
   } else if (onMyWayAt) {
     status = "ON_THE_WAY";
   } else {
     status = "NOT_STARTED";
   }
 
-  const minutesWorked =
-    clockInTime && clockOutTime
-      ? Math.max(
-          0,
-          Math.round((clockOutTime.getTime() - clockInTime.getTime()) / 60_000)
-        )
-      : null;
-
   return {
     clockInTime,
     clockOutTime,
     onMyWayAt,
     status,
-    minutesWorked,
-    isOpen: !!clockInTime && !clockOutTime,
+    // Null while open: an in-progress shift has no worked total, and inventing
+    // one would put a guess into payroll.
+    minutesWorked: summary.isOpen || !clockInTime ? null : summary.totalMinutes,
+    isOpen: summary.isOpen,
+    sessionCount: sessions.length,
   };
 }
 

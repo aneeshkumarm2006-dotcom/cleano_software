@@ -204,7 +204,8 @@ function def<T>(d: SettingDef<T>): SettingDef<T> {
 //   policy.ts → CANCELLATION_FEE_USD=20, CANCELLATION_FEE_WINDOW_HOURS=48,
 //               NO_SHOW_FEE_USD=25, ON_THE_WAY_ETA_MIN=15,
 //               ACCEPT_DECLINE_TIMEOUT_MIN=10, LATE_PENALTY_GRACE_MIN=10
-//   referral.ts → NEW_CLIENT_DISCOUNT=15, REFERRER_CREDIT=10
+//   referral.ts → NEW_CLIENT_DISCOUNT=15, REFERRER_CREDIT=10 (those constants
+//                 have since been deleted; these keys are now the only source)
 //
 // More settings (gift-card min/tiers, provider pay %, currency/timezone) are
 // added in their own PRs once each current value is verified at its source.
@@ -397,9 +398,14 @@ export const SETTINGS = {
     validate: text(500),
   }),
   // Fallback refill threshold for a cleaner's assigned stock when the product
-  // has no InventoryRule (InventoryRule.refillThreshold defaults to 0, which
-  // made "low" unreachable — a cleaner was only ever warned AT zero). With a
-  // non-zero floor, "Running low" fires BEFORE the item runs out.
+  // carries no `cleanerRestockThreshold` of its own. That column defaults to 0,
+  // which made "low" unreachable — a cleaner was only ever warned AT zero. With
+  // a non-zero floor, "Running low" fires BEFORE the item runs out.
+  //
+  // Since the Inventory Rules settings were removed (awerfixes.pdf item 14),
+  // this and the per-product column are the ONLY two inputs to
+  // `cleanerRestockThreshold()` — there is no longer a usage-derived floor
+  // quietly raising it behind the admin's back.
   "inventory.defaultRefillThreshold": def({
     key: "inventory.defaultRefillThreshold",
     category: "provider",

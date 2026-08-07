@@ -14,6 +14,8 @@ interface Employee {
   isActive?: boolean;
   cleanerTier?: "TRAINEE" | "STANDARD" | "FIELD_LEAD";
   fieldLeadId?: string | null;
+  /** Service categories this employee may work. Empty = all (item 3). */
+  allowedServiceCategories?: string[];
   completedJobsCount: number;
   activeJobsCount: number;
   totalRevenue: number;

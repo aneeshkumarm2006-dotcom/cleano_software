@@ -13,7 +13,10 @@ import { saveLead } from "../actions/saveLead";
 import { getQuote } from "../actions/getQuote";
 import { submitBooking } from "../actions/submitBooking";
 import { getBookingConfig } from "../actions/getBookingConfig";
+import { getMyAddresses } from "../../(customer)/actions/clientAddresses";
+import type { SavedAddress } from "@/lib/client-address";
 import { calculateTax } from "@/lib/tax";
+import { addOnLineTotal, sumAddOns } from "@/lib/job-money";
 import { isValidEmail, isValidPhone } from "@/lib/validation";
 import { AFTER_PHOTO_CONSENT_TEXT } from "@/lib/policy";
 import CustomerLogo from "@/components/customer/Logo";
@@ -153,14 +156,38 @@ export default function BookPage() {
   // True once the restore pass has run, so the save effect can't write an empty
   // draft over a stored one on the very first render.
   const hydratedRef = useRef(false);
-  // A restored draft's add-on selection, replayed once the live catalog loads
-  // (see below) so prices come from the server rather than from storage.
-  const restoredAddOnKeysRef = useRef<string[] | null>(null);
+  // A restored draft's add-on selection AND quantity, replayed once the live
+  // catalog loads (see below) so prices come from the server rather than from
+  // storage. Keyed by catalog id, falling back to name.
+  const restoredAddOnQtyRef = useRef<Map<string, number> | null>(null);
   // Suppresses the smsConsent default when the customer's own choice was
   // restored — a stored "unchecked" must not silently flip back to opted in.
   const restoredDraftRef = useRef(false);
   const stepRef = useRef(0);
   stepRef.current = step;
+
+  // The signed-in customer's saved addresses, for the Step 2 picker (item 2).
+  // Guests never fetch: the action returns [] without a session anyway, but not
+  // calling it keeps the public flow free of a pointless round trip.
+  const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
+  useEffect(() => {
+    if (!isLoggedInClient) {
+      setSavedAddresses([]);
+      return;
+    }
+    let cancelled = false;
+    getMyAddresses()
+      .then((rows) => {
+        if (!cancelled) setSavedAddresses(rows);
+      })
+      .catch(() => {
+        // A failed lookup must not block booking — the free-text path stands.
+        if (!cancelled) setSavedAddresses([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isLoggedInClient]);
 
   // Pre-fill contact info when the visitor is already signed in.
   useEffect(() => {
@@ -196,9 +223,13 @@ export default function BookPage() {
             stripeCardReady: false,
             stripeCustomerId: undefined,
           };
-          restoredAddOnKeysRef.current = (saved.draft.addOns ?? [])
-            .filter((a) => a.selected)
-            .map((a) => a.id ?? a.name);
+          // Key -> quantity, not just a list of keys: storing only "which were
+          // selected" silently reset every quantity to 1 on reload/back-nav.
+          restoredAddOnQtyRef.current = new Map(
+            (saved.draft.addOns ?? [])
+              .filter((a) => a.selected)
+              .map((a) => [a.id ?? a.name, Math.max(1, a.quantity ?? 1)] as const)
+          );
           restoredDraftRef.current = true;
           setDraft(restoredDraft);
           // The stored step is only a hint — it is checked against the stored
@@ -226,17 +257,19 @@ export default function BookPage() {
     hydratedRef.current = true;
   }, []);
 
-  // Replay a restored add-on selection onto the freshly loaded catalog.
+  // Replay a restored add-on selection (and its quantity) onto the freshly
+  // loaded catalog. Prices deliberately still come from the live catalog.
   useEffect(() => {
-    const keys = restoredAddOnKeysRef.current;
-    if (!keys || draft.addOns.length === 0) return;
-    restoredAddOnKeysRef.current = null;
-    if (keys.length === 0) return;
+    const qty = restoredAddOnQtyRef.current;
+    if (!qty || draft.addOns.length === 0) return;
+    restoredAddOnQtyRef.current = null;
+    if (qty.size === 0) return;
     setDraft((d) => ({
       ...d,
-      addOns: d.addOns.map((a) =>
-        keys.includes(a.id ?? a.name) ? { ...a, selected: true } : a
-      ),
+      addOns: d.addOns.map((a) => {
+        const q = qty.get(a.id ?? a.name);
+        return q ? { ...a, selected: true, quantity: q } : a;
+      }),
     }));
   }, [draft.addOns]);
 
@@ -293,6 +326,12 @@ export default function BookPage() {
                 roomType: a.roomType,
                 services: a.services,
                 selected: false,
+                quantity: 0,
+                icon: a.icon,
+                popupEnabled: a.popupEnabled,
+                popupTitle: a.popupTitle,
+                popupMessage: a.popupMessage,
+                popupRequestPhoto: a.popupRequestPhoto,
               })),
             }
       );
@@ -325,6 +364,8 @@ export default function BookPage() {
         payload: {
           frequency: draft.frequency,
           address: draft.address,
+      aptNumber: draft.aptNumber,
+      addressId: draft.addressId,
           addOns: draft.addOns.filter((a) => a.selected).map((a) => a.name),
           notes: draft.notes,
           referralCode: draft.referralCode,
@@ -521,7 +562,7 @@ export default function BookPage() {
       frequency: draft.frequency,
       addOns: draft.addOns
         .filter((a) => a.selected)
-        .map((a) => ({ id: a.id, name: a.name })),
+        .map((a) => ({ id: a.id, name: a.name, quantity: a.quantity })),
       date: draft.date,
       isFlexible: draft.isFlexible,
       timeSlot: draft.timeSlot,
@@ -572,9 +613,8 @@ export default function BookPage() {
         0)
     : 0;
 
-  const addOnTotal = draft.addOns
-    .filter((a) => a.selected)
-    .reduce((s, a) => s + a.price, 0);
+  const selectedAddOns = draft.addOns.filter((a) => a.selected);
+  const addOnTotal = sumAddOns(selectedAddOns);
   const discountedBase = airbnbDiscountPct > 0
     ? effectiveBase * (1 - airbnbDiscountPct / 100)
     : effectiveBase;
@@ -874,17 +914,18 @@ export default function BookPage() {
                   <strong>−${(effectiveBase * airbnbDiscountPct / 100).toFixed(2)}</strong>
                 </div>
               )}
-              {addOnTotal > 0 ? (
-                <div className="cl-summary-row">
+              {/* One row per add-on rather than a count: "2 add-ons" is
+                  ambiguous once quantities exist (2 windows at qty 3 is not
+                  "2 add-ons" worth of money). */}
+              {selectedAddOns.map((a, i) => (
+                <div className="cl-summary-row" key={a.id ?? `${a.name}-${i}`}>
                   <span>
-                    {draft.addOns.filter((a) => a.selected).length} add-on
-                    {draft.addOns.filter((a) => a.selected).length > 1
-                      ? "s"
-                      : ""}
+                    {a.name}
+                    {a.quantity > 1 ? ` ×${a.quantity}` : ""}
                   </span>
-                  <strong>${addOnTotal.toFixed(2)}</strong>
+                  <strong>${addOnLineTotal(a).toFixed(2)}</strong>
                 </div>
-              ) : null}
+              ))}
               {draft.travelFee > 0 ? (
                 <div className="cl-summary-row">
                   <span>Travel fee</span>
@@ -952,6 +993,7 @@ export default function BookPage() {
               <Step2Property
                 draft={draft}
                 onChange={patch}
+                savedAddresses={savedAddresses}
                 basePrice={basePrice}
                 freqDiscounts={freqDiscounts}
                 serviceContent={serviceContent}

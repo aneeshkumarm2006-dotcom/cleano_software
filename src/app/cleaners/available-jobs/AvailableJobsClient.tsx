@@ -9,6 +9,7 @@ import { sanitizeCleanerNotes } from "@/lib/cleaner-notes";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import CustomDropdown from "@/components/ui/custom-dropdown";
+import JobPreviewModal from "./JobPreviewModal";
 
 interface AvailableJob {
   id: string;
@@ -65,6 +66,8 @@ export default function AvailableJobsClient({ jobs }: { jobs: AvailableJob[] }) 
   const [busyId, setBusyId] = useState<string | null>(null);
   const [claimed, setClaimed] = useState<Set<string>>(new Set());
   const [errors, setErrors] = useState<Record<string, string>>({});
+  /** Job being previewed (item 8). Purely local — no server state is touched. */
+  const [previewId, setPreviewId] = useState<string | null>(null);
 
   // Filters (client-side — the board is capped at 100 open jobs).
   const [from, setFrom] = useState("");
@@ -318,17 +321,38 @@ export default function AvailableJobsClient({ jobs }: { jobs: AvailableJob[] }) 
                   <p style={{ fontSize: 12, color: "#dc2626", margin: 0 }}>{errors[job.id]}</p>
                 )}
 
-                <button
-                  onClick={() => handleClaim(job.id)}
-                  disabled={isBusy}
-                  className="cl-claim-btn">
-                  {isBusy ? "Claiming…" : "Claim this job"}
-                </button>
+                {/* Two actions (item 8): look before you leap. Preview is
+                    read-only — it never locks, assigns or hides the job, so
+                    another cleaner can still claim it while this one reads. */}
+                <div className="cl-job-card-actions">
+                  <button
+                    onClick={() => setPreviewId(job.id)}
+                    disabled={isBusy}
+                    className="cl-preview-btn">
+                    Preview
+                  </button>
+                  <button
+                    onClick={() => handleClaim(job.id)}
+                    disabled={isBusy}
+                    className="cl-claim-btn">
+                    {isBusy ? "Claiming…" : "Claim this job"}
+                  </button>
+                </div>
               </article>
             );
           })}
         </div>
       )}
+
+      <JobPreviewModal
+        jobId={previewId}
+        onClose={() => setPreviewId(null)}
+        onClaim={async (id) => {
+          await handleClaim(id);
+          setPreviewId(null);
+        }}
+        claiming={busyId === previewId && previewId !== null}
+      />
     </>
   );
 }

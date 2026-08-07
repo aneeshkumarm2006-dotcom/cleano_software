@@ -3,6 +3,7 @@
 // Before this module, three places computed cleaner pay three different ways:
 //   • payroll (createPayPeriod)  → computeJobPayout() tier split
 //   • My Pay                     → employeePay / participants * payRateMultiplier
+//                                  (both halves since retired — see fix 1, round 3)
 //   • My Income (getIncomeData)  → sum of Payout rows on PAID periods only
 // so a cleaner's "pending" never matched what they were actually paid, and
 // "Jobs completed" only counted jobs that already sat inside a PAID period.
@@ -15,9 +16,14 @@
 
 import { db } from "@/db";
 import { getCleanerRateInputs } from "./cleaner-rates";
-import { computeJobPayout, type CleanerRateInput } from "./pay-tiers";
+import {
+  computeJobPayout,
+  fallbackRateInput,
+  type CleanerRateInput,
+} from "./pay-tiers";
 import { computePayoutTotals } from "./payout-math";
 import { summariseBreaks } from "./time-tracking";
+import { summariseSessions } from "./work-sessions";
 import {
   currentPayPeriodRange,
   parseBusinessDate,
@@ -35,7 +41,13 @@ export interface JobPayInput {
   employeePay: number | null;
   payType: string | null;
   hourlyRate: number | null;
-  payRateMultiplier: number | null;
+  /**
+   * @deprecated AWER round 3, fix 1. `Job.payRateMultiplier` is no longer read
+   * by any pay calculation — the rating premium lives inside
+   * `CleanerRateInput.multiplier`. Retained (optional) only so pre-existing
+   * fixtures still typecheck; setting it has no effect on any payout.
+   */
+  payRateMultiplier?: number | null;
   totalTip: number | null;
   jobDate: Date | null;
   startTime: Date | null;
@@ -51,8 +63,25 @@ export interface JobPayInput {
   /**
    * Breaks taken on this job (item 26). Deducted from worked hours so paid
    * time reflects ACTIVE work.
+   *
+   * `cleanerId` was added in AWER round 3 item 6: with per-cleaner hours, one
+   * cleaner's lunch break must not be deducted from their teammate's time.
    */
-  breaks?: { startedAt: Date | string; endedAt?: Date | string | null }[];
+  breaks?: {
+    cleanerId?: string;
+    startedAt: Date | string;
+    endedAt?: Date | string | null;
+  }[];
+  /**
+   * Work sessions (AWER round 3, item 6). A cleaner can clock out and back in,
+   * so hours come from these when present; the clockInTime/clockOutTime pair
+   * above is the legacy fallback for jobs that predate the table.
+   */
+  workSessions?: {
+    cleanerId: string;
+    startedAt: Date | string;
+    endedAt?: Date | string | null;
+  }[];
 }
 
 /** Prisma select shared by payroll and the earnings aggregate. */
@@ -63,7 +92,9 @@ export const JOB_PAY_SELECT = {
   price: true,
   payType: true,
   hourlyRate: true,
-  payRateMultiplier: true,
+  // payRateMultiplier is deliberately NOT selected: the money path stopped
+  // reading it in AWER round 3, fix 1, and the SQL no longer asking for it is
+  // the clearest statement that nothing here depends on it.
   totalTip: true,
   jobDate: true,
   startTime: true,
@@ -72,7 +103,10 @@ export const JOB_PAY_SELECT = {
   clockOutTime: true,
   cleaners: { select: { id: true } },
   assignments: { select: { cleanerId: true, payAmount: true } },
-  breaks: { select: { startedAt: true, endedAt: true } },
+  breaks: { select: { cleanerId: true, startedAt: true, endedAt: true } },
+  workSessions: {
+    select: { cleanerId: true, startedAt: true, endedAt: true },
+  },
 } as const;
 
 /** Statuses payroll actually pays for. Estimates must use the same set. */
@@ -145,6 +179,46 @@ export function jobWorkedHours(job: JobPayInput): number {
   return Math.max(0, elapsedHours - breakHours);
 }
 
+/**
+ * ONE cleaner's hours on one job (AWER round 3, item 6).
+ *
+ * Sums THEIR sessions and deducts THEIR breaks, allocated by interval overlap.
+ * A cleaner who worked 9–11 and came back 3–4 gets three hours, which the
+ * single clockIn/clockOut pair could not express: it would have said seven.
+ *
+ * FALLBACK, and why it matters: a job with no session rows — every job that
+ * predates the JobWorkSession table, and any job whose backfill has not been
+ * committed — falls back to exactly the old calculation, the job-level span
+ * divided evenly. So nothing about historical payroll moves.
+ *
+ * NOTE ON MONEY: this feeds `JobPayShare.hours`, which is REPORTING ONLY.
+ * Payouts come from `base`, and HOURLY jobs take `employeePay` — computed at
+ * save time from hourlyRate x SCHEDULED hours (saveJob.ts). Changing this
+ * changes what payroll REPORTS, never what it pays. Verified against live data
+ * before the switch: 0 multi-cleaner jobs had clock pairs, so the delta was
+ * 8.4h → 8.4h (probe-stage5.ts).
+ */
+export function cleanerWorkedHours(
+  job: JobPayInput,
+  cleanerId: string,
+  participantCount: number
+): number {
+  const mine = (job.workSessions ?? []).filter((s) => s.cleanerId === cleanerId);
+
+  // No sessions for this cleaner → the legacy shape, unchanged.
+  if (mine.length === 0) {
+    return participantCount > 0 ? jobWorkedHours(job) / participantCount : 0;
+  }
+
+  // Breaks with no cleanerId are pre-item-26-era rows; treat them as this
+  // cleaner's rather than dropping the deduction entirely.
+  const myBreaks = (job.breaks ?? []).filter(
+    (b) => b.cleanerId == null || b.cleanerId === cleanerId
+  );
+  const summary = summariseSessions(mine, myBreaks);
+  return summary.activeMinutes / 60;
+}
+
 /** The instant a job counts against for period/year bucketing. */
 export function jobEffectiveDate(job: JobPayInput): Date | null {
   const d = job.jobDate ?? job.startTime;
@@ -152,9 +226,15 @@ export function jobEffectiveDate(job: JobPayInput): Date | null {
 }
 
 export interface JobPayShare {
-  /** Pay before the per-job multiplier and tips. */
+  /** What the cleaner earns for the work, before tips. */
   base: number;
-  /** Pay after the per-job multiplier (still without tips). */
+  /**
+   * @deprecated Always equal to `base`. The rating multiplier is now folded
+   * into the cleaner's RATE (src/lib/pay-tiers.ts) instead of being applied to
+   * the finished amount, and `Job.payRateMultiplier` is no longer read — so
+   * there is no "after multiplier" step left. Kept for one release so callers
+   * migrate to `base` deliberately. Do not use in new code.
+   */
   afterMultiplier: number;
   /** This cleaner's slice of the job's tips. */
   tip: number;
@@ -176,8 +256,12 @@ export interface JobPayShare {
  *   • HOURLY     — employeePay is hourlyRate x hours for the cleaner, same
  *     per-person semantics as FLAT.
  *
- * Tips are always split evenly across participants; payRateMultiplier applies
- * to base pay only (never to tips).
+ * Tips are always split evenly across participants and are NEVER multiplied.
+ *
+ * This function applies no multiplier of its own (awerfixes.pdf item 1). The
+ * rating premium is already baked into each cleaner's RATE by
+ * src/lib/cleaner-rates.ts, which is what lets manual overrides, FLAT totals
+ * and HOURLY amounts pass through exactly as the admin typed them.
  */
 export function computeJobPayShares(
   job: JobPayInput,
@@ -188,18 +272,10 @@ export function computeJobPayShares(
   if (participantIds.length === 0) return result;
 
   const payType = (job.payType as JobPayType) ?? "PERCENTAGE";
-  const multiplier = job.payRateMultiplier ?? 1;
   const tipShare = (job.totalTip || 0) / participantIds.length;
-  const perPersonHours = jobWorkedHours(job) / participantIds.length;
 
   const rateList: CleanerRateInput[] = participantIds.map(
-    (id) =>
-      rates.get(id) ?? {
-        id,
-        tier: "STANDARD" as const,
-        avgRating: null,
-        ratingCount: 0,
-      }
+    (id) => rates.get(id) ?? fallbackRateInput(id)
   );
 
   const usePriceModel = (job.price ?? 0) > 0;
@@ -239,21 +315,39 @@ export function computeJobPayShares(
     let base: number;
     const override = overrideById.get(id);
     if (override != null) {
+      // MANUAL OVERRIDE — exactly the amount the admin promised this cleaner,
+      // scaled by NOTHING (awerfixes.pdf item 1: "manual/custom payout should
+      // still override"). This used to be multiplied by Job.payRateMultiplier,
+      // which was invisible while that factor was pinned at 1.0 and wrong the
+      // day it wasn't.
       base = override;
     } else if (payType === "FLAT" || payType === "HOURLY") {
+      // employeePay is an agreed TEAM TOTAL — a manual amount too. Untouched.
       base = remainderPerPerson;
     } else if (usePriceModel) {
+      // PERCENTAGE — the rating multiplier is ALREADY inside the rate that
+      // computeJobPayout used (tier base x multiplier). Applying it again here
+      // would pay the rating premium twice.
       base = tierAmountById.get(id) ?? 0;
     } else {
+      // Legacy PERCENTAGE row with no price: employeePay is whatever the admin
+      // or the BookingKoala importer recorded — also a manual amount. Split
+      // evenly, unscaled; multiplying an imported provider payment by a rating
+      // premium would invent money no rate ever justified.
       base = teamTotal / participantIds.length;
     }
-    const afterMultiplier = base * multiplier;
     result.set(id, {
       base: round2(base),
-      afterMultiplier: round2(afterMultiplier),
+      // Deprecated alias — see JobPayShare. Equal to `base` by construction.
+      afterMultiplier: round2(base),
       tip: round2(tipShare),
-      total: round2(afterMultiplier + tipShare),
-      hours: perPersonHours,
+      // `base` unrounded here, exactly as before, so no double-rounding is
+      // introduced and FLAT thirds don't shift by a cent.
+      total: round2(base + tipShare),
+      // Each cleaner's OWN hours when sessions exist; the old even split of
+      // the job span otherwise (see cleanerWorkedHours). Reporting only —
+      // nothing above reads it.
+      hours: cleanerWorkedHours(job, id, participantIds.length),
     });
   }
   return result;
@@ -445,7 +539,7 @@ export async function getCleanerEarnings(
       date >= currentRange.start &&
       date <= currentRange.end
     ) {
-      liveBase += share.afterMultiplier;
+      liveBase += share.base;
       liveTips += share.tip;
       liveJobs += 1;
       liveHours += share.hours;

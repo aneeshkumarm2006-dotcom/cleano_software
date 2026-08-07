@@ -1,27 +1,39 @@
 /**
- * One-time BookingKoala CSV → Cleano importer.
+ * DEPRECATED — do not run. Use the admin UI: Jobs → "Import from BookingKoala".
  *
- *   npx tsx scripts/importBookingKoala.ts                 # DRY RUN (no writes, no emails)
- *   npx tsx scripts/importBookingKoala.ts --commit        # write to DB + send account/login emails
- *   npx tsx scripts/importBookingKoala.ts --commit --no-emails   # write, but suppress all emails
- *   npx tsx scripts/importBookingKoala.ts --file=/path/to/export.csv
+ * This was the one-time CLI importer. It is kept only as a record of the
+ * original import; every supported path now goes through
+ * `src/app/admin/actions/runBookingKoalaImport.ts`, which uses the shared pure
+ * core in `src/lib/bookingkoala/core.ts`.
  *
- * What it does (see the import checklist):
- *   1. Parses the BookingKoala export (RFC-4180 + embedded newlines), fixes
- *      encoding mojibake, strips Excel ="…" escapes, parses the pseudo-JSON
- *      "Provider details" column.
- *   2. Filters to bookings starting Jun 1 → Aug 1 2026 (drops Aug 27 / Sept 4).
- *   3. Find-or-creates the ~25 cleaners (by email) as EMPLOYEE accounts with a
- *      login + temp password, and emails them their welcome.
- *   4. Find-or-creates customers (by email; cash clients w/o email → name+phone),
- *      stores every address (most-recent = default), and emails each a temp
- *      password to log in at /portal/login.
- *   5. Creates one Job per row (recurring occurrences become standalone one-time
- *      jobs), maps fields/status/payment, and assigns the same cleaner(s).
+ * ## Why it is not simply "updated to use core.ts"
  *
- * Safety: dry-run by default; dedup guard on (customer + start time); never
- * touches Stripe; booking-confirmation emails are NEVER sent (only the
- * account/login emails go out, and only on --commit without --no-emails).
+ * The drift is in the WRITE half, not the parse half. Pointing its parsing at
+ * `core.ts` would fix the harmless part and leave all of this live — producing
+ * something that LOOKS consolidated and still writes wrong money to production:
+ *
+ *   1. Hard-coded 2026-06-01 → 2026-09-01 date window; every booking outside
+ *      those three months is silently dropped. (The docstring said Jun 1 → Aug 1;
+ *      even that disagreed with the code.)
+ *   2. `gstAmount: 0, qstAmount: 0` — no tax is ever computed or stored, so
+ *      every imported job's tax columns are wrong.
+ *   3. `totalAmount` taken raw from the CSV, without the server action's
+ *      "does the CSV total already include tax?" check.
+ *   4. Its dedupe omits `deletedAt: null`, so an ARCHIVED job blocks re-import
+ *      of that booking forever.
+ *   5. Cleaner accounts are created without `mustChangePassword`.
+ *   6. The Stripe PaymentIntent ("Transaction id") is never stored, so those
+ *      jobs cannot be refunded from the job detail page.
+ *   7. Its own copy of the Resend email code, with no ActivityLog audit rows.
+ *   8. No structured add-ons (awerfixes item 9) — it writes none.
+ *
+ * Real consolidation means extracting a third module out of a server action
+ * that depends on `auth`, `headers()` and `revalidatePath`, none of which exist
+ * under `tsx`. That is its own piece of work, not a footnote to this one.
+ *
+ * Deleting it is deliberately NOT done here: destructive changes go last.
+ * Instead `main()` refuses to run without an explicit acknowledgement flag, and
+ * refuses `--commit` outright.
  */
 
 import fs from "fs";
@@ -259,6 +271,28 @@ function note(s: string) {
 }
 
 async function main() {
+  // Deprecation guard. This script writes wrong tax, drops bookings outside a
+  // hard-coded 2026 window, and creates no add-on rows — see the file header.
+  // It stays in the tree as a record of the original import, but it must not be
+  // possible to run it against the live database by habit or by accident.
+  if (COMMIT) {
+    console.error(
+      "\n✗ DEPRECATED: this script can no longer write to the database.\n" +
+        "  It writes gstAmount/qstAmount as 0, drops any booking outside a\n" +
+        "  hard-coded 2026-06-01..2026-09-01 window, ignores archived jobs in its\n" +
+        "  dedupe, and creates no add-on rows.\n\n" +
+        "  Use the admin UI instead: Jobs → Import from BookingKoala.\n"
+    );
+    process.exit(1);
+  }
+  if (!argv.includes("--i-know-this-is-deprecated")) {
+    console.error(
+      "\n✗ DEPRECATED: use the admin UI (Jobs → Import from BookingKoala).\n" +
+        "  To run this read-only anyway, pass --i-know-this-is-deprecated.\n"
+    );
+    process.exit(1);
+  }
+
   note(`\n${"=".repeat(70)}`);
   note(`BookingKoala import — ${COMMIT ? "COMMIT (writes DB)" : "DRY RUN (no writes)"}`);
   note(`emails: ${SEND_EMAILS ? "ON (account/login only)" : "OFF"}`);

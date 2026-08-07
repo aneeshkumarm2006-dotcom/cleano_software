@@ -3,11 +3,12 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import JobsView from "./JobsView";
-import JobModal from "./JobModal";
+import JobModal, { type ClientLite } from "./JobModal";
 import ExportButton from "./ExportButton";
 import ImportCsvButton from "@/components/csv/ImportCsvButton";
 import { saveJob } from "../actions/saveJob";
 import { deleteJob } from "../actions/deleteJob";
+import type { TaxRates } from "@/lib/tax";
 
 interface User {
   id: string;
@@ -15,14 +16,9 @@ interface User {
   email: string;
 }
 
-interface ClientLite {
-  id: string;
-  name: string;
-  email?: string | null;
-  address?: string | null;
-  discountPercent?: number | null;
-  defaultPaymentMethodId?: string | null;
-}
+// ClientLite is imported from JobModal rather than re-declared: this copy had
+// already drifted (no addresses, no aptNumber) and silently widened whatever
+// the page passed down. One definition, one place to extend.
 
 export interface Job {
   id: string;
@@ -30,6 +26,8 @@ export interface Job {
   clientId: string | null;
   location: string | null;
   aptNumber?: string | null;
+  /** Saved-address provenance (item 2), so an edit re-selects it. */
+  clientAddressId?: string | null;
   description: string | null;
   jobType: string | null;
   jobDate: string | null;
@@ -54,12 +52,14 @@ export interface Job {
   bedCount: number | null;
   bathCount: number | null;
   halfBathCount: number | null;
-  payRateMultiplier: number | null;
   profit: number;
   profitPct: number;
   timeSpentMs: number;
   cleaners: Array<{ id: string; name: string }>;
-  addOns: Array<{ id: string; name: string; price: number }>;
+  addOns: Array<{ id: string; name: string; price: number; quantity: number }>;
+  /** Decides whether add-ons add to `price` or are already inside it. */
+  bookingSource: string | null;
+  subtotalAmount: number | null;
 }
 
 interface JobsPageClientProps {
@@ -74,6 +74,8 @@ interface JobsPageClientProps {
   cleaners?: User[];
   clients: ClientLite[];
   addOnCatalog?: Array<{ id: string; name: string; price: number }>;
+  /** Admin-configured GST/QST, for the modal's live total preview. */
+  taxRates?: TaxRates;
   /** Service list from Settings → Job Types (item 20). */
   serviceOptions?: { value: string; label: string }[];
   /** Move-in/out per-sq-ft rates for the modal's derived-price hint (item 8). */
@@ -93,6 +95,7 @@ export default function JobsPageClient({
   cleaners = [],
   clients,
   addOnCatalog = [],
+  taxRates,
   serviceOptions = [],
   sqftRates = null,
   isAdmin,
@@ -248,6 +251,7 @@ export default function JobsPageClient({
         users={users}
         clients={clients}
         addOnCatalog={addOnCatalog}
+        taxRates={taxRates}
         serviceOptions={serviceOptions}
         sqftRates={sqftRates}
         onSubmit={handleSubmit}

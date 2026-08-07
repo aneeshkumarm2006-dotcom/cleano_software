@@ -5,6 +5,8 @@ import { headers } from "next/headers";
 import {
   evaluateEmployeesAvailability,
   findAvailabilityConflicts,
+  findCategoryConflicts,
+  type CategoryConflict,
 } from "@/lib/job-assignments";
 import {
   windowFromFields,
@@ -154,7 +156,11 @@ export async function previewAssignmentConflicts(input: {
   jobId: string;
   cleanerIds: string[];
 }): Promise<
-  | { success: true; conflicts: AvailabilityConflict[] }
+  | {
+      success: true;
+      conflicts: AvailabilityConflict[];
+      categoryConflicts: CategoryConflict[];
+    }
   | { success: false; error: string }
 > {
   try {
@@ -168,7 +174,8 @@ export async function previewAssignmentConflicts(input: {
     const { db } = await import("@/db");
     const job = await db.job.findFirst({
       where: { id: input.jobId, deletedAt: null },
-      select: { startTime: true, endTime: true },
+      // jobType drives the service-category dimension (awerfixes.pdf item 3).
+      select: { startTime: true, endTime: true, jobType: true },
     });
     if (!job) return { success: false, error: "Job not found" };
 
@@ -178,12 +185,11 @@ export async function previewAssignmentConflicts(input: {
         )
       : [];
 
-    const conflicts = await findAvailabilityConflicts(
-      ids,
-      job.startTime,
-      job.endTime
-    );
-    return { success: true, conflicts };
+    const [conflicts, categoryConflicts] = await Promise.all([
+      findAvailabilityConflicts(ids, job.startTime, job.endTime),
+      findCategoryConflicts(ids, job.jobType),
+    ]);
+    return { success: true, conflicts, categoryConflicts };
   } catch (error) {
     console.error("Error previewing assignment conflicts:", error);
     return { success: false, error: "Failed to check availability" };
