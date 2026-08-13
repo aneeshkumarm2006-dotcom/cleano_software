@@ -239,6 +239,12 @@ export async function mergeContacts(
     await db.$transaction([
       db.contact.update({ where: { id: masterId }, data }),
       db.contact.updateMany({ where: { id: { in: loserIds } }, data: { archivedAt: new Date(), duplicateDismissed: true } }),
+      // The archived records can never be half of a live suggestion again, so
+      // their rejections are dead weight — clear them rather than leave rows
+      // pointing at contacts nobody can act on.
+      db.duplicateRejection.deleteMany({
+        where: { OR: [{ contactAId: { in: loserIds } }, { contactBId: { in: loserIds } }] },
+      }),
       db.contactActivity.create({
         data: {
           contactId: masterId,
@@ -259,18 +265,86 @@ export async function mergeContacts(
   }
 }
 
-/** Mark every record in a group as "not a duplicate" so the group disappears. */
-export async function dismissDuplicateGroup(memberIds: string[]): Promise<Result> {
+/** Canonical id ordering, mirroring `duplicatePairKey` in lib/crm.ts. */
+function orderedPair(x: string, y: string): [string, string] {
+  return x < y ? [x, y] : [y, x];
+}
+
+/**
+ * "These two are not the same person." Scoped to the pair and reversible —
+ * unlike the old `dismissDuplicateGroup`, which set `duplicateDismissed` on
+ * every member of the group and so suppressed those contacts against every
+ * future duplicate too, permanently and with no undo.
+ */
+export async function rejectDuplicatePair(aId: string, bId: string): Promise<Result> {
   const gate = await requireAdmin();
   if ("error" in gate) return gate;
+  if (!aId || !bId || aId === bId) return { error: "Invalid pair" };
+  const [contactAId, contactBId] = orderedPair(aId, bId);
   try {
-    await db.contact.updateMany({ where: { id: { in: memberIds } }, data: { duplicateDismissed: true } });
+    await db.duplicateRejection.upsert({
+      where: { contactAId_contactBId: { contactAId, contactBId } },
+      create: { contactAId, contactBId, rejectedBy: gate.name },
+      update: { rejectedAt: new Date(), rejectedBy: gate.name },
+    });
     revalidatePath("/admin/contacts");
     revalidatePath("/admin/contacts/duplicates");
     return { success: true };
   } catch (e) {
-    console.error("dismissDuplicateGroup", e);
-    return { error: "Failed to dismiss group" };
+    console.error("rejectDuplicatePair", e);
+    return { error: "Failed to reject pair" };
+  }
+}
+
+/** Bulk form of the above, for the table's multi-select. */
+export async function rejectDuplicatePairs(
+  pairs: { aId: string; bId: string }[]
+): Promise<Result> {
+  const gate = await requireAdmin();
+  if ("error" in gate) return gate;
+  const rows = pairs
+    .filter((p) => p.aId && p.bId && p.aId !== p.bId)
+    .map((p) => {
+      const [contactAId, contactBId] = orderedPair(p.aId, p.bId);
+      return { contactAId, contactBId, rejectedBy: gate.name };
+    });
+  if (!rows.length) return { error: "Nothing to reject" };
+  try {
+    await db.duplicateRejection.createMany({ data: rows, skipDuplicates: true });
+    revalidatePath("/admin/contacts");
+    revalidatePath("/admin/contacts/duplicates");
+    return { success: true };
+  } catch (e) {
+    console.error("rejectDuplicatePairs", e);
+    return { error: "Failed to reject pairs" };
+  }
+}
+
+/** Undo a rejection — the pair returns to the review queue on the next scan. */
+export async function restoreDuplicatePair(aId: string, bId: string): Promise<Result> {
+  const gate = await requireAdmin();
+  if ("error" in gate) return gate;
+  const [contactAId, contactBId] = orderedPair(aId, bId);
+  try {
+    // Both orderings, deliberately. Postgres can only enforce uniqueness on the
+    // tuple as written, so the canonical ordering is an application invariant
+    // (`orderedPair`, plus `duplicatePairKey` on the read side) rather than a
+    // constraint. Deleting both directions means an un-normalized row written
+    // by some future caller can still be undone from the UI.
+    await db.duplicateRejection.deleteMany({
+      where: {
+        OR: [
+          { contactAId, contactBId },
+          { contactAId: contactBId, contactBId: contactAId },
+        ],
+      },
+    });
+    revalidatePath("/admin/contacts");
+    revalidatePath("/admin/contacts/duplicates");
+    return { success: true };
+  } catch (e) {
+    console.error("restoreDuplicatePair", e);
+    return { error: "Failed to restore pair" };
   }
 }
 
@@ -280,6 +354,10 @@ export async function dismissContactDuplicates(id: string): Promise<Result> {
   try {
     await db.contact.update({ where: { id }, data: { duplicateDismissed: true } });
     revalidateContact(id);
+    // `duplicateDismissed` is the flag the duplicate index honours, so this
+    // changes what the review queue contains — the one write in this file that
+    // was not telling that page about it.
+    revalidatePath("/admin/contacts/duplicates");
     return { success: true };
   } catch (e) {
     console.error("dismissContactDuplicates", e);

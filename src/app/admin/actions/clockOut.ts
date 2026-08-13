@@ -10,6 +10,7 @@ import { sendAdminClockedOut } from "@/lib/email";
 import { ensureRatingRequest } from "@/lib/rating";
 import { isCleanerLow } from "@/lib/inventory-thresholds";
 import { findOpenSession, syncClockMirrors } from "@/lib/work-sessions.server";
+import { requireBudgetCategoryId } from "@/lib/budget-categories";
 
 const ML_PER_SPRAY = 1.25;
 
@@ -266,7 +267,7 @@ export async function clockOut(jobId: string, usage: PostJobUsage) {
         db.transaction.create({
           data: {
             date: now,
-            category: "SUPPLIES",
+            categoryId: await requireBudgetCategoryId("supplies"),
             amount: suppliesCost,
             description: `Supplies consumed for ${job.clientName}`,
             jobId,

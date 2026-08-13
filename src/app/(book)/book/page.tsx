@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Check, Sparkles } from "lucide-react";
-import { BookingDraft, EMPTY_DRAFT, AIRBNB_FREQUENCIES } from "./types";
+import { BookingDraft, EMPTY_DRAFT } from "./types";
 import Step1PostalCode from "./steps/Step1PostalCode";
 import Step2Property from "./steps/Step2Property";
 import Step3Schedule from "./steps/Step3Schedule";
@@ -19,6 +19,12 @@ import { calculateTax } from "@/lib/tax";
 import { addOnLineTotal, sumAddOns } from "@/lib/job-money";
 import { isValidEmail, isValidPhone } from "@/lib/validation";
 import { AFTER_PHOTO_CONSENT_TEXT } from "@/lib/policy";
+import {
+  BOOKING_PAGE_DEFAULTS,
+  frequencyEnabled,
+  isFieldRequired,
+  type BookingPageConfig,
+} from "@/lib/booking-page-config";
 import CustomerLogo from "@/components/customer/Logo";
 import { Button, Banner } from "@/components/customer/Field";
 import { authClient } from "@/lib/auth-client";
@@ -67,7 +73,8 @@ interface StoredDraft {
 function stepRequirementsMet(
   s: number,
   draft: BookingDraft,
-  agree: boolean
+  agree: boolean,
+  bookingPage: BookingPageConfig = BOOKING_PAGE_DEFAULTS
 ): boolean {
   switch (s) {
     case 0:
@@ -75,8 +82,13 @@ function stepRequirementsMet(
     case 1:
       if (!(draft.address.trim() && draft.serviceType && draft.frequency))
         return false;
-      // Move-in/out is priced per square foot — require it before continuing.
-      if (draft.serviceType === "MOVE_IN_OUT" && !(draft.squareFootage > 0))
+      // Square footage gates Continue when the admin config marks it required
+      // for this service. It is pinned required for Move-in/out, which is
+      // priced per square foot and cannot be quoted without it.
+      if (
+        isFieldRequired(bookingPage, "property", "squareFootage", draft.serviceType) &&
+        !(draft.squareFootage > 0)
+      )
         return false;
       return true;
     case 2:
@@ -102,9 +114,13 @@ function stepRequirementsMet(
  * own requirements aren't met. Step 4's requirements (terms ticked, card ready)
  * gate submission, not arrival, so they are deliberately not consulted here.
  */
-function maxReachableStep(draft: BookingDraft, agree: boolean): number {
+function maxReachableStep(
+  draft: BookingDraft,
+  agree: boolean,
+  bookingPage: BookingPageConfig = BOOKING_PAGE_DEFAULTS
+): number {
   for (let i = 0; i < LAST_STEP; i++) {
-    if (!stepRequirementsMet(i, draft, agree)) return i;
+    if (!stepRequirementsMet(i, draft, agree, bookingPage)) return i;
   }
   return LAST_STEP;
 }
@@ -146,6 +162,11 @@ export default function BookPage() {
   const [serviceContent, setServiceContent] = useState<
     Record<string, { text: string; imageUrl: string }>
   >({});
+  // Admin-editable booking-page layout (item 17). Starts on the shipped
+  // defaults so the first paint matches what the admin config says anyway.
+  const [bookingPage, setBookingPage] = useState<BookingPageConfig>(
+    BOOKING_PAGE_DEFAULTS
+  );
 
   // Hard guard against double-submit. The button is disabled while
   // `submitting` is true, but state updates are async so a fast double-click
@@ -304,11 +325,12 @@ export default function BookPage() {
   // Load admin-managed add-on catalog on first mount.
   useEffect(() => {
     let cancelled = false;
-    getBookingConfig().then(({ addOns, minLeadDays, smsOptInDefault, frequencyDiscounts, serviceContent }) => {
+    getBookingConfig().then(({ addOns, minLeadDays, smsOptInDefault, frequencyDiscounts, serviceContent, bookingPage }) => {
       if (cancelled) return;
       setMinLeadDays(minLeadDays);
       setFreqDiscounts(frequencyDiscounts);
       setServiceContent(serviceContent);
+      setBookingPage(bookingPage);
       // Only seed the default when this isn't a restored session — otherwise a
       // customer who deliberately opted out gets silently opted back in.
       if (!restoredDraftRef.current) {
@@ -425,8 +447,22 @@ export default function BookPage() {
     setDraft((d) => ({ ...d, ...p }));
   }
 
+  // Item 15: a service with no frequency choice is a one-off price with no
+  // recurring discount. Selecting the service already resets the frequency, but
+  // a restored draft — or an admin turning the field off after the fact — could
+  // still be carrying a recurring value, which would quote a discount the form
+  // never offered. `submitBooking` enforces the same rule server-side.
+  useEffect(() => {
+    if (
+      draft.frequency !== "ONE_TIME" &&
+      !frequencyEnabled(bookingPage, draft.serviceType)
+    ) {
+      setDraft((d) => ({ ...d, frequency: "ONE_TIME" }));
+    }
+  }, [bookingPage, draft.serviceType, draft.frequency]);
+
   function canProceedFrom(s: number): boolean {
-    return stepRequirementsMet(s, draft, agree);
+    return stepRequirementsMet(s, draft, agree, bookingPage);
   }
 
   function canProceed(): boolean {
@@ -436,7 +472,7 @@ export default function BookPage() {
   // Read by the popstate listener, which is registered once and would otherwise
   // close over a stale draft.
   const maxReachableRef = useRef(0);
-  maxReachableRef.current = maxReachableStep(draft, agree);
+  maxReachableRef.current = maxReachableStep(draft, agree, bookingPage);
 
   /** Forward one step: a new history entry, so Back returns here. */
   function advanceTo(n: number) {
@@ -605,12 +641,10 @@ export default function BookPage() {
   const effectiveBase = basePrice;
 
   // Airbnb turnover discounts apply to every visit and are admin-configurable
-  // (item 7). Read from the AIRBNB category of the config, falling back to the
-  // legacy hardcoded ladder if the config hasn't loaded yet.
+  // (item 7). Read from the AIRBNB category of the pricing config — the only
+  // source; the frequency LABELS are admin-editable copy and carry no money.
   const airbnbDiscountPct = isAirbnb
-    ? (freqDiscounts.AIRBNB?.[draft.frequency] ??
-        AIRBNB_FREQUENCIES.find((f) => f.value === draft.frequency)?.discount ??
-        0)
+    ? (freqDiscounts.AIRBNB?.[draft.frequency] ?? 0)
     : 0;
 
   const selectedAddOns = draft.addOns.filter((a) => a.selected);
@@ -987,6 +1021,7 @@ export default function BookPage() {
                 draft={draft}
                 onChange={patch}
                 onContinue={() => advanceTo(1)}
+                bookingPage={bookingPage}
               />
             )}
             {step === 1 && (
@@ -997,6 +1032,7 @@ export default function BookPage() {
                 basePrice={basePrice}
                 freqDiscounts={freqDiscounts}
                 serviceContent={serviceContent}
+                bookingPage={bookingPage}
               />
             )}
             {step === 2 && (
@@ -1004,9 +1040,16 @@ export default function BookPage() {
                 draft={draft}
                 onChange={patch}
                 minLeadDays={minLeadDays}
+                bookingPage={bookingPage}
               />
             )}
-            {step === 3 && <Step4Contact draft={draft} onChange={patch} />}
+            {step === 3 && (
+              <Step4Contact
+                draft={draft}
+                onChange={patch}
+                bookingPage={bookingPage}
+              />
+            )}
             {step === 4 && (
               <>
                 <Step5Review
@@ -1014,6 +1057,7 @@ export default function BookPage() {
                   basePrice={basePrice}
                   onChange={patch}
                   freqDiscounts={freqDiscounts}
+                  bookingPage={bookingPage}
                 />
                 <label
                   className="cl-check-row"

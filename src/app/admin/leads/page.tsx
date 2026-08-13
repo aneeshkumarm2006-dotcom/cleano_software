@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
+import { findContactsForLeads } from "@/lib/lead-contacts";
 import LeadsPageClient from "./LeadsPageClient";
 
 type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>;
@@ -30,6 +31,12 @@ export default async function LeadsPage({
     take: 200,
   });
 
+  // Which of these leads is already a CRM contact (item 19). Resolved live off
+  // email/phone rather than stored on the lead: one person owns several Lead
+  // rows and `Contact.leadId` can only point at one of them, and a stored flag
+  // would keep claiming "exported" after the contact was archived by a merge.
+  const contactByLead = await findContactsForLeads(leads);
+
   const serialized = leads.map((l) => ({
     id: l.id,
     email: l.email,
@@ -54,6 +61,7 @@ export default async function LeadsPage({
           jobDate: l.convertedJob.jobDate?.toISOString() ?? null,
         }
       : null,
+    contact: contactByLead.get(l.id) ?? null,
   }));
 
   return (

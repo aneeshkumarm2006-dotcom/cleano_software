@@ -102,6 +102,8 @@ export default async function CalendarPage() {
         id: true,
         name: true,
         email: true,
+        // Fills the job form's Phone field for a linked client (item 4).
+        phone: true,
         address: true,
         aptNumber: true,
         discountPercent: true,

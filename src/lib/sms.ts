@@ -20,9 +20,11 @@
 import { isNotificationEnabled } from "./notifications";
 import type { Recipient } from "./notifications/catalog";
 import { logActivity } from "./activity-log";
+import { STORE_TZ } from "./timezone";
 
-// Business timezone — customer-facing times must render here, not serverless UTC.
-const TZ = process.env.NEXT_PUBLIC_BUSINESS_TIMEZONE ?? "America/Toronto";
+// Store timezone — customer-facing times must render here, not serverless UTC.
+// Single source of truth: src/lib/timezone.ts.
+const TZ = STORE_TZ;
 
 export interface SmsGate {
   recipient: Recipient;

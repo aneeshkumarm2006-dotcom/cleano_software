@@ -1,11 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertCircle, Calendar, UserX, Users, Search, Archive, Trash2, RotateCcw, Tag } from "lucide-react";
+import { AlertCircle, Calendar, UserX, Users, Search, Archive, Trash2, RotateCcw, Tag, IdCard, ArrowUpRight } from "lucide-react";
 import { updateLeadStatus } from "../actions/updateLeadStatus";
 import { convertLeadToJob } from "../actions/convertLeadToJob";
 import { bulkSetLeadStatus } from "../actions/bulkSetLeadStatus";
+import { exportLeadsToContacts } from "../actions/exportLeadsToContacts";
 import { useRowSelection } from "@/components/common/useRowSelection";
 import BulkActionBar, { type BulkAction } from "@/components/common/BulkActionBar";
 import { bulkSoftDelete, bulkRestore } from "@/lib/bulk/actions";
@@ -31,6 +33,8 @@ interface Lead {
   lastActivityAt: string;
   createdAt: string;
   convertedJob: { id: string; jobNumber: number; jobDate: string | null } | null;
+  /** The CRM contact this lead already resolves to, if any (item 19). */
+  contact: { id: string; name: string; linked: boolean } | null;
 }
 
 const SERVICE_LABELS: Record<string, string> = {
@@ -100,23 +104,36 @@ export default function LeadsPageClient({ leads, archived = false }: { leads: Le
   const [updating, setUpdating] = useState<string | null>(null);
   const [converting, setConverting] = useState<string | null>(null);
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
+  const [exporting, setExporting] = useState<string | null>(null);
+  const [exportNote, setExportNote] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
+
+  // Held locally so an export repaints the rows it touched before
+  // `router.refresh()` lands. `revalidatePath` only marks the route dirty, and
+  // this page re-queries every lead and then resolves each one against the CRM
+  // (`findContactsForLeads`), so until the refresh arrives the row the admin
+  // just exported still offered "+ Add to contacts" and the header still
+  // counted it. The server payload replaces this wholesale the moment it
+  // arrives — props only get a new identity when a new payload does — so the
+  // local copy can be briefly ahead of the server, never divergent from it.
+  const [liveLeads, setLiveLeads] = useState<Lead[]>(leads);
+  useEffect(() => { setLiveLeads(leads); }, [leads]);
 
   const stats = useMemo(() => ({
-    total:       leads.length,
-    new:         leads.filter(l => l.status === "NEW").length,
-    contacted:   leads.filter(l => l.status === "CONTACTED").length,
-    converted:   leads.filter(l => l.status === "CONVERTED").length,
-    dead:        leads.filter(l => l.status === "DEAD").length,
-    out_of_area: leads.filter(l => l.status === "OUT_OF_AREA").length,
-  }), [leads]);
+    total:       liveLeads.length,
+    new:         liveLeads.filter(l => l.status === "NEW").length,
+    contacted:   liveLeads.filter(l => l.status === "CONTACTED").length,
+    converted:   liveLeads.filter(l => l.status === "CONVERTED").length,
+    dead:        liveLeads.filter(l => l.status === "DEAD").length,
+    out_of_area: liveLeads.filter(l => l.status === "OUT_OF_AREA").length,
+  }), [liveLeads]);
 
   const countFor = (id: TabId) =>
     id === "all" ? stats.total : (stats[id as keyof typeof stats] ?? 0);
 
   const filtered = useMemo(() => {
     let list = tab === "all"
-      ? leads
-      : leads.filter(l => l.status === tab.toUpperCase());
+      ? liveLeads
+      : liveLeads.filter(l => l.status === tab.toUpperCase());
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter(l =>
@@ -129,12 +146,56 @@ export default function LeadsPageClient({ leads, archived = false }: { leads: Le
     return [...list].sort((a, b) =>
       new Date(b.lastActivityAt).getTime() - new Date(a.lastActivityAt).getTime()
     );
-  }, [tab, search, leads]);
+  }, [tab, search, liveLeads]);
 
   const visibleIds = useMemo(() => filtered.map((l) => l.id), [filtered]);
   const selection = useRowSelection(visibleIds);
 
+  // Leads in the current view that aren't a contact yet — what "Export all"
+  // acts on. Exporting the ones already in the CRM would be a no-op, so the
+  // count on the button is the number of records it will actually add.
+  const exportable = useMemo(() => filtered.filter((l) => !l.contact), [filtered]);
+
   const afterBulk = () => { selection.clear(); setStatusMenuOpen(false); router.refresh(); };
+
+  /** Shared by the row button, the bulk action and "Export all to contacts". */
+  async function runExport(ids: string[], key: string) {
+    if (!ids.length) return;
+    setExporting(key);
+    setExportNote(null);
+    const result = await exportLeadsToContacts(ids);
+    setExporting(null);
+    if ("error" in result) {
+      setExportNote({ tone: "err", text: result.error });
+      return;
+    }
+    const parts = [
+      result.created ? `${result.created} contact${result.created === 1 ? "" : "s"} created` : null,
+      result.linked ? `${result.linked} matched to an existing contact` : null,
+      result.skipped ? `${result.skipped} already in contacts` : null,
+    ].filter(Boolean);
+    setExportNote({
+      tone: "ok",
+      text: parts.length ? parts.join(" · ") : "Nothing to export — these leads are already contacts.",
+    });
+    // Flip the rows the export resolved before the refresh: "+ Add to contacts"
+    // becomes the "In contacts" link, and the header's "Export N to contacts"
+    // drops by the same rows because it counts `!l.contact` over this list.
+    //
+    // Only the leads that were passed in are flipped. One export can also
+    // resolve that person's OTHER lead rows (one email owns several), but
+    // deciding that needs the email/phone matching in `lib/lead-contacts.ts`,
+    // which is deliberately server-only so the button and the row can never
+    // disagree. Those siblings flip when the refresh lands, so the count can be
+    // briefly higher than final — never lower, and never wrong about a row.
+    const resolved = result.contacts;
+    if (Object.keys(resolved).length) {
+      setLiveLeads((prev) =>
+        prev.map((l) => (resolved[l.id] ? { ...l, contact: resolved[l.id] } : l))
+      );
+    }
+    router.refresh();
+  }
 
   const bulkActions: BulkAction[] = archived
     ? [
@@ -146,6 +207,12 @@ export default function LeadsPageClient({ leads, archived = false }: { leads: Le
         },
       ]
     : [
+        {
+          key: "contacts",
+          label: "Add to contacts",
+          icon: <IdCard size={14} />,
+          onRun: async () => { await runExport(selection.selectedIds, "bulk"); afterBulk(); },
+        },
         {
           key: "status",
           label: "Change status",
@@ -193,6 +260,25 @@ export default function LeadsPageClient({ leads, archived = false }: { leads: Le
           </h1>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
+          {!archived && (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={exporting !== null || exportable.length === 0}
+              title={
+                exportable.length
+                  ? `Create contact records for the ${exportable.length} lead${exportable.length === 1 ? "" : "s"} in this view that aren't in the CRM yet`
+                  : "Every lead in this view is already a contact"
+              }
+              onClick={() => runExport(exportable.map((l) => l.id), "all")}>
+              <IdCard size={16} />
+              {exporting === "all"
+                ? "Exporting…"
+                : exportable.length
+                  ? `Export ${exportable.length} to contacts`
+                  : "All leads in contacts"}
+            </button>
+          )}
           <a
             href={archived ? "/admin/leads" : "/admin/leads?archived=1"}
             className={`btn ${archived ? "btn-primary" : "btn-secondary"}`}>
@@ -200,6 +286,18 @@ export default function LeadsPageClient({ leads, archived = false }: { leads: Le
           </a>
         </div>
       </header>
+
+      {exportNote && (
+        <div
+          className={`banner${exportNote.tone === "err" ? " banner-amber" : ""}`}
+          role="status"
+          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <span>{exportNote.text}</span>
+          <Link href="/admin/contacts" className="link" style={{ fontSize: 13, whiteSpace: "nowrap" }}>
+            Open Contacts <ArrowUpRight size={13} style={{ verticalAlign: "-2px" }} />
+          </Link>
+        </div>
+      )}
 
       <div className="astat-grid">
         <AStatCard icon={Users}       label="Total leads"   value={stats.total}     hint="all time" />
@@ -267,6 +365,7 @@ export default function LeadsPageClient({ leads, archived = false }: { leads: Le
                     <th>Property</th>
                     <th>Preferred</th>
                     <th>Status</th>
+                    <th>Contact record</th>
                     <th>Job</th>
                     <th>Activity</th>
                   </tr>
@@ -329,6 +428,32 @@ export default function LeadsPageClient({ leads, archived = false }: { leads: Le
                           options={Object.entries(STATUS_COLORS).map(([s, c]) => ({ value: s, label: c.label }))}
                           style={{ width: 130 }}
                         />
+                      </td>
+                      <td style={{ minWidth: 150 }}>
+                        {l.contact ? (
+                          <a
+                            href={`/admin/contacts/${l.contact.id}`}
+                            className="link"
+                            style={{ fontSize: 13, display: "inline-flex", alignItems: "center", gap: 4 }}
+                            title={
+                              l.contact.linked
+                                ? `Exported to ${l.contact.name}`
+                                : `${l.contact.name} — matched on email or phone`
+                            }>
+                            <IdCard size={13} /> In contacts
+                            <ArrowUpRight size={12} />
+                          </a>
+                        ) : archived ? (
+                          <span style={{ color: "var(--primary-40)" }}>—</span>
+                        ) : (
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-sm"
+                            disabled={exporting !== null}
+                            onClick={() => runExport([l.id], l.id)}>
+                            {exporting === l.id ? "Adding…" : "+ Add to contacts"}
+                          </button>
+                        )}
                       </td>
                       <td style={{ minWidth: 140 }}>
                         {l.convertedJob ? (
@@ -405,8 +530,8 @@ export default function LeadsPageClient({ leads, archived = false }: { leads: Le
                       </div>
                     </div>
                   </div>
-                  {(l.status === "NEW" || l.status === "CONTACTED") && !l.convertedJob && (
-                    <div style={{ paddingTop: 10, borderTop: "1px solid var(--primary-10)" }}>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, paddingTop: 10, borderTop: "1px solid var(--primary-10)", marginTop: 10 }}>
+                    {(l.status === "NEW" || l.status === "CONTACTED") && !l.convertedJob && (
                       <button
                         type="button"
                         className="btn btn-primary btn-sm"
@@ -414,15 +539,29 @@ export default function LeadsPageClient({ leads, archived = false }: { leads: Le
                         onClick={() => handleConvert(l.id)}>
                         {converting === l.id ? "Converting…" : "→ Convert to Job"}
                       </button>
-                    </div>
-                  )}
-                  {l.convertedJob && (
-                    <div style={{ paddingTop: 10, borderTop: "1px solid var(--primary-10)" }}>
-                      <a href={`/admin/jobs/${l.convertedJob.id}`} className="link" style={{ fontSize: 13 }}>
+                    )}
+                    {l.contact ? (
+                      <a
+                        href={`/admin/contacts/${l.contact.id}`}
+                        className="link"
+                        style={{ fontSize: 13, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                        <IdCard size={13} /> In contacts <ArrowUpRight size={12} />
+                      </a>
+                    ) : !archived ? (
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        disabled={exporting !== null}
+                        onClick={() => runExport([l.id], l.id)}>
+                        {exporting === l.id ? "Adding…" : "+ Add to contacts"}
+                      </button>
+                    ) : null}
+                    {l.convertedJob && (
+                      <a href={`/admin/jobs/${l.convertedJob.id}`} className="link" style={{ fontSize: 13, alignSelf: "center" }}>
                         Job #{l.convertedJob.jobNumber}
                       </a>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </article>
               );
             })}

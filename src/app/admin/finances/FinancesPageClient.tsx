@@ -14,6 +14,7 @@ import TaxCalculatorTab from "./tabs/TaxCalculatorTab";
 import PLStatementTab from "./tabs/PLStatementTab";
 import BudgetDashboardTab from "./tabs/BudgetDashboardTab";
 import {
+  BudgetCategoryOption,
   BudgetRow,
   JobOption,
   TaxConfig,
@@ -23,6 +24,7 @@ import {
 interface Props {
   transactions: TransactionRow[];
   budgets: BudgetRow[];
+  categories: BudgetCategoryOption[];
   taxConfig: TaxConfig;
   jobOptions: JobOption[];
 }
@@ -51,6 +53,7 @@ const TABS: TabDef[] = [
 export default function FinancesPageClient({
   transactions,
   budgets,
+  categories,
   taxConfig,
   jobOptions,
 }: Props) {
@@ -104,19 +107,34 @@ export default function FinancesPageClient({
 
         <div style={{ flex: 1, minWidth: 0 }}>
           {activeTab === "bookkeeping" && (
-            <BookkeepingTab transactions={transactions} jobOptions={jobOptions} />
+            <BookkeepingTab
+              transactions={transactions}
+              categories={categories}
+              jobOptions={jobOptions}
+            />
           )}
           {activeTab === "incomeStatement" && (
-            <IncomeStatementTab transactions={transactions} />
+            <IncomeStatementTab
+              transactions={transactions}
+              categories={categories}
+            />
           )}
           {activeTab === "taxCalculator" && (
-            <TaxCalculatorTab transactions={transactions} taxConfig={taxConfig} />
+            <TaxCalculatorTab
+              transactions={transactions}
+              categories={categories}
+              taxConfig={taxConfig}
+            />
           )}
           {activeTab === "plStatement" && (
-            <PLStatementTab transactions={transactions} />
+            <PLStatementTab transactions={transactions} categories={categories} />
           )}
           {activeTab === "budgetDashboard" && (
-            <BudgetDashboardTab transactions={transactions} budgets={budgets} />
+            <BudgetDashboardTab
+              transactions={transactions}
+              budgets={budgets}
+              categories={categories}
+            />
           )}
         </div>
       </div>

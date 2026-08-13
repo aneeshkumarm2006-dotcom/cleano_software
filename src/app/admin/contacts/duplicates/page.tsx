@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { listDuplicateGroups } from "@/lib/crm";
+import { listDuplicatePairs } from "@/lib/crm";
 import DuplicatesView from "./DuplicatesView";
 
 export const dynamic = "force-dynamic";
@@ -15,11 +15,11 @@ export default async function DuplicatesPage() {
     redirect("/admin/dashboard");
   }
 
-  const groups = await listDuplicateGroups();
+  const { pairs, rejected, checkedAt } = await listDuplicatePairs();
 
   return (
     <div className="h-full overflow-hidden overflow-y-auto p-8">
-      <DuplicatesView groups={groups} />
+      <DuplicatesView pairs={pairs} rejected={rejected} checkedAt={checkedAt} />
     </div>
   );
 }

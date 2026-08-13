@@ -21,19 +21,22 @@ import {
   sendProviderWeeklyPerformance,
   sendAdminWeeklyRagWashDashboard,
 } from "@/lib/email";
+import { addStoreDays, formatDate, startOfStoreDay, storeDateKey } from "@/lib/timezone";
 
-const DAY = 24 * 60 * 60 * 1000;
-
+// Store-timezone day boundaries — setHours(0) on the host gave UTC midnight,
+// which is 8 PM the previous evening in Montréal, so the digest window was
+// shifted by 4-5 hours in both directions (Q9).
 function weekRange(now: Date) {
-  const end = new Date(now);
-  end.setHours(0, 0, 0, 0);
-  const start = new Date(end.getTime() - 7 * DAY);
-  const label = `${start.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${end.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
-  return { start, end, label };
+  const end = startOfStoreDay(now);
+  const start = addStoreDays(end, -7);
+  const fmtDay = (d: Date) => formatDate(d, { month: "short", day: "numeric" });
+  return { start, end, label: `${fmtDay(start)} – ${fmtDay(end)}` };
 }
 
+// Dedupe key for "already sent this week" — must be the store civil day, or a
+// week starting at 04:00Z would key off the wrong date near DST changes.
 function isoDay(d: Date) {
-  return d.toISOString().slice(0, 10);
+  return storeDateKey(d);
 }
 
 async function ensureNotSent(notificationKey: string, recipient: string) {

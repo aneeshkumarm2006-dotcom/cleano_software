@@ -5,12 +5,13 @@ import { db } from "@/db";
 import Link from "next/link";
 import { CalendarClock, MapPin, Gift } from "lucide-react";
 import { StatusBadge, DateBadge } from "@/components/customer/atoms";
+import { STORE_TZ } from "@/lib/timezone";
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleString("en-US", {
     hour: "numeric",
     minute: "2-digit",
-    timeZone: "America/Toronto",
+    timeZone: STORE_TZ,
   });
 }
 
@@ -78,6 +79,7 @@ export default async function PortalHome() {
             <strong style={{ color: "var(--ink)" }}>
               {new Date(nextOne.startTime).toLocaleDateString("en-US", {
                 weekday: "long",
+                timeZone: STORE_TZ,
               })}{" "}
               at {formatTime(nextOne.startTime.toISOString())}
             </strong>

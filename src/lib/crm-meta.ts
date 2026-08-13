@@ -2,6 +2,7 @@
 // so this can be pulled into client components. Server queries live in crm.ts.
 
 import type { LifecycleStage, ContactActivityType } from "@prisma/client";
+import { formatDate, formatTime } from "./timezone";
 
 // ─── Lifecycle stages (each its own colour, mirrors the design handoff) ───
 export type StageMeta = { label: string; bg: string; fg: string; dot: string };
@@ -120,19 +121,45 @@ export type CrmStats = {
 };
 
 // ─── Manage Duplicates ───
-export type DuplicateGroup = {
+//
+// Presentation is PAIRS, never N-member groups: the client's whole complaint
+// ("I don't really know what's going on here") was a wall of wrapping member
+// tiles you couldn't read as "this one vs that one". Detection still finds
+// components of any size; a component of N is emitted as N−1 pairs, and
+// merging is transitive, so working the pairs lands in the same place.
+
+export type DuplicatePair = {
+  /** `DP-<smaller id>-<larger id>` — stable, so optimistic removal is safe. */
   id: string;
-  members: ContactListItem[];
-  matched: string[]; // subset of ["phone","email","address","name"]
+  /** The record kept by default (most bookings → highest LTV → oldest). */
+  a: ContactListItem;
+  b: ContactListItem;
+  /** 1–99, weighted field comparison. See lib/similarity.ts. */
   score: number;
-  suggestedMasterId: string;
+  /** Fields the two agree on exactly — subset of phone/email/address/name. */
+  matched: string[];
+};
+
+export type RejectedPair = {
+  id: string;
+  a: ContactListItem;
+  b: ContactListItem;
+  rejectedAt: string;
+  rejectedBy: string | null;
+};
+
+export type DuplicatesPayload = {
+  pairs: DuplicatePair[];
+  rejected: RejectedPair[];
+  /** When this scan ran (the page is force-dynamic, so: request time). */
+  checkedAt: string;
 };
 
 export const MATCH_LABELS: Record<string, string> = {
   phone: "Phone", email: "Email", address: "Address", name: "Name",
 };
 
-/** Fields the merge comparator lets the admin pick a winner for. */
+/** Fields the merge review lets the admin pick a winner for. */
 export const MERGE_FIELDS: { k: string; label: string; mergeable: boolean }[] = [
   { k: "name", label: "Name", mergeable: true },
   { k: "email", label: "Email", mergeable: true },
@@ -146,6 +173,42 @@ export const MERGE_FIELDS: { k: string; label: string; mergeable: boolean }[] = 
   { k: "ltv", label: "Lifetime value", mergeable: false },
   { k: "created", label: "Created", mergeable: false },
 ];
+
+/**
+ * Raw value of a merge field, or `null` when the record genuinely has none.
+ * Kept separate from the display string on purpose: the smart-default seeding
+ * needs to know "blank" from "the literal text —", and the old code couldn't
+ * tell, which is how the default merge quietly archived the only copy of a
+ * phone number.
+ */
+export function contactFieldRaw(c: ContactListItem, k: string): string | null {
+  switch (k) {
+    case "name": return c.name?.trim() || null;
+    case "email": return c.email?.trim() || null;
+    case "phone": return c.phone?.trim() || null;
+    case "address": return c.address?.trim() || null;
+    case "lifecycle": return c.lifecycle;
+    case "source": return c.source?.trim() || null;
+    case "owner": return c.ownerId || null;
+    case "leadScore": return c.leadScore != null ? String(c.leadScore) : null;
+    case "bookings": return c.bookings ? String(c.bookings) : null;
+    case "ltv": return c.lifetimeValue ? String(c.lifetimeValue) : null;
+    case "created": return c.createdAt;
+    default: return null;
+  }
+}
+
+/** Human-readable value of a merge field, for the comparison + result panel. */
+export function contactFieldDisplay(c: ContactListItem, k: string): string {
+  switch (k) {
+    case "lifecycle": return LIFECYCLE_META[c.lifecycle].label;
+    case "owner": return c.ownerName ?? "Unassigned";
+    case "ltv": return c.lifetimeValue ? money(c.lifetimeValue) : "—";
+    case "bookings": return String(c.bookings);
+    case "created": return dateStr(c.createdAt, { year: true });
+    default: return contactFieldRaw(c, k) ?? "—";
+  }
+}
 
 // ─── Formatters (UI) ───
 export function relativeTime(iso: string | null): string {
@@ -170,7 +233,7 @@ export function money(n: number | null | undefined): string {
 
 export function dateStr(iso: string | null, opts: { year?: boolean } = {}): string {
   if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("en-US", {
+  return formatDate(iso, {
     month: "short",
     day: "numeric",
     year: opts.year ? "numeric" : undefined,
@@ -179,11 +242,7 @@ export function dateStr(iso: string | null, opts: { year?: boolean } = {}): stri
 
 export function timeStr(iso: string | null): string {
   if (!iso) return "—";
-  return new Date(iso).toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone: "America/Toronto",
-  });
+  return formatTime(iso);
 }
 
 // ─── Property Engine → contact record binding ───

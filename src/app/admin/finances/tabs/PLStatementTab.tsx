@@ -6,13 +6,17 @@ import Card from "@/components/ui/Card";
 import PremiumSelect from "@/components/ui/PremiumSelect";
 import { CAreaChart } from "@/components/ui/Chart";
 import {
+  BudgetCategoryOption,
   TransactionRow,
   formatCurrency,
   formatMonth,
+  indexCategories,
+  isRevenueCategory,
 } from "../types";
 
 interface Props {
   transactions: TransactionRow[];
+  categories: BudgetCategoryOption[];
 }
 
 type Period = "month" | "quarter" | "year" | "all";
@@ -28,8 +32,9 @@ function periodStart(period: Period): Date | null {
   return new Date(now.getFullYear(), 0, 1);
 }
 
-export default function PLStatementTab({ transactions }: Props) {
+export default function PLStatementTab({ transactions, categories }: Props) {
   const [period, setPeriod] = useState<Period>("year");
+  const catIndex = useMemo(() => indexCategories(categories), [categories]);
 
   const { revenue, expenses, netProfit, grossMargin, netMargin, chartData } =
     useMemo(() => {
@@ -51,7 +56,7 @@ export default function PLStatementTab({ transactions }: Props) {
         if (!monthMap.has(m))
           monthMap.set(m, { name: m, revenue: 0, expenses: 0, net: 0 });
         const row = monthMap.get(m)!;
-        if (t.category === "REVENUE") {
+        if (isRevenueCategory(catIndex, t.categoryId)) {
           revenue += t.amount;
           row.revenue += t.amount;
         } else {
@@ -69,7 +74,7 @@ export default function PLStatementTab({ transactions }: Props) {
       const grossMargin = revenue > 0 ? ((revenue - expenses) / revenue) * 100 : 0;
       const netMargin = grossMargin;
       return { revenue, expenses, netProfit, grossMargin, netMargin, chartData };
-    }, [transactions, period]);
+    }, [transactions, catIndex, period]);
 
   const selectCls =
     "px-4 py-2 rounded-xl border border-transparent bg-[#008C9C]/5 text-sm text-[#008C9C] focus:outline-none focus:ring-2 focus:ring-[#008C9C]/20";

@@ -3,6 +3,8 @@
  * a running totals block. Uses @react-pdf/renderer (already a dep).
  */
 
+import { formatDate } from "@/lib/timezone";
+
 const BRAND = "#008C9C";
 
 export interface StatementBookingRow {
@@ -155,7 +157,7 @@ export async function buildStatementPdfBuffer(
           el(
             Text,
             { style: [styles.cell, { flex: 1.4 }] },
-            new Date(b.jobDate).toLocaleDateString("en-US", {
+            formatDate(b.jobDate, {
               month: "short",
               day: "numeric",
               year: "numeric",

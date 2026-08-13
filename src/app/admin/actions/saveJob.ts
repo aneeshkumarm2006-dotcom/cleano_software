@@ -24,6 +24,7 @@ import { computeJobPayout, fallbackRateInput } from "@/lib/pay-tiers";
 import { getTaxRates } from "@/lib/tax.server";
 import { addOnQuantity, computeJobMoney } from "@/lib/job-money";
 import { resolveJobAddressId } from "@/lib/client-address-store";
+import { resolveJobClient } from "@/lib/client-capture";
 import { getServicePricingConfig } from "@/lib/booking-pricing";
 import { isSqftJobType, moveInOutBasePrice } from "@/lib/service-pricing";
 import { applyToJobSeries, seriesRootId, type SeriesUpdateResult } from "@/lib/job-series";
@@ -37,6 +38,7 @@ import {
   validateTraineePairing,
 } from "@/lib/job-assignments";
 import { fmtDate, fmtTime, tzWallClockToUtc } from "@/lib/time";
+import { addStoreDays, storeDateKey, storeWallClockToUtc } from "@/lib/timezone";
 import {
   recurringDiscountPercent,
   recurrenceCount,
@@ -148,12 +150,57 @@ export async function saveJob(formData: FormData) {
       ? (paymentTypeRaw as (typeof VALID_PAYMENT_TYPES)[number])
       : null;
 
-    const clientId = (formData.get("clientId") as string) || null;
+    // ── Client capture (Stage 4.2, item 4) ────────────────────────────────────
+    // This action used to read `clientId` and, when it was blank, store the
+    // free-text name with `clientId: null` — there was no `db.client.create`
+    // anywhere in this file. Every booking made through JobModal (Jobs page
+    // "+ New job", the calendar create flow) therefore had no contact record,
+    // and every customer email in the admin silently no-ops without one. The
+    // dedupe-then-create lived only in admin/jobs/new/page.tsx's local action;
+    // it is now shared (src/lib/client-capture.ts) and both forms call it.
+    const rawClientId = (formData.get("clientId") as string) || null;
     let clientName = (formData.get("clientName") as string) || "";
+    const clientEmail = ((formData.get("clientEmail") as string) || "").trim();
+    const clientPhone = ((formData.get("clientPhone") as string) || "").trim();
     let clientDiscountPercent = 0;
     let clientFixedPrice: number | null = null;
     let clientFixedPriceRecurring = false;
     let clientFixedPriceAllowFreqDiscount = false;
+
+    // ── Saved address (item 2) ────────────────────────────────────────────────
+    // Before this stage saveJob had no address-book logic at all: the modal's
+    // Location / Apt went onto the job and nowhere else, so an address typed
+    // here was never offered again. That behaviour existed only in the
+    // full-page form (admin/jobs/new/page.tsx); it is now shared.
+    const locationInput = ((formData.get("location") as string) || "").trim();
+    const aptInput = ((formData.get("aptNumber") as string) || "").trim();
+    // Postal code (item 3). Part of the job's address snapshot, and pushed onto
+    // the client's saved address below so entering it once teaches the book.
+    const postalInput = ((formData.get("postalCode") as string) || "").trim();
+    const pickedAddressId =
+      ((formData.get("clientAddressId") as string) || "").trim() || null;
+
+    // Create the customer profile for a brand-new name (deduped by email or
+    // phone first). Restricted on the EDIT path to submissions that actually
+    // carry contact details: re-saving one of the legacy jobs that has no
+    // client must not mint an empty contact record as a side effect of an
+    // unrelated edit. Supplying an email or a phone on such a job is the
+    // deliberate act, and it retro-links the booking.
+    const savingExistingJob = !!((formData.get("jobId") as string | null) || "");
+    const clientId =
+      savingExistingJob && !clientEmail && !clientPhone
+        ? rawClientId
+        : (
+            await resolveJobClient({
+              clientId: rawClientId,
+              clientName,
+              clientEmail,
+              clientPhone,
+              address: locationInput,
+              aptNumber: aptInput,
+              postalCode: postalInput,
+            })
+          ).clientId;
 
     if (clientId) {
       const existing = await db.client.findUnique({ where: { id: clientId } });
@@ -167,16 +214,6 @@ export async function saveJob(formData: FormData) {
       }
     }
 
-    // ── Saved address (item 2) ────────────────────────────────────────────────
-    // Before this stage saveJob had no address-book logic at all: the modal's
-    // Location / Apt went onto the job and nowhere else, so an address typed
-    // here was never offered again. That behaviour existed only in the
-    // full-page form (admin/jobs/new/page.tsx); it is now shared.
-    const locationInput = ((formData.get("location") as string) || "").trim();
-    const aptInput = ((formData.get("aptNumber") as string) || "").trim();
-    const pickedAddressId =
-      ((formData.get("clientAddressId") as string) || "").trim() || null;
-
     // A picked id is honoured only if it belongs to this client AND still
     // describes what was typed — an admin who picks "Home" and then edits the
     // Location field would otherwise link the job to Home's door codes while
@@ -186,6 +223,7 @@ export async function saveJob(formData: FormData) {
       addressId: pickedAddressId,
       address: locationInput,
       aptNumber: aptInput || null,
+      postalCode: postalInput || null,
     });
 
     let price = parseOptionalFloat(formData.get("price"));
@@ -391,6 +429,7 @@ export async function saveJob(formData: FormData) {
       jobType: (formData.get("jobType") as string) || null,
       location: (formData.get("location") as string) || null,
       aptNumber: (formData.get("aptNumber") as string) || null,
+      postalCode: postalInput || null,
       // Provenance only — `location`/`aptNumber` above stay the snapshot this
       // job is actually served at (item 2).
       clientAddressId,
@@ -709,55 +748,16 @@ export async function saveJob(formData: FormData) {
         );
         if (!justGotFirstCleaner && stillAssigned.length > 0 && existingJob.notifyProvider) {
           // Evaluate the "modified after 5 pm the day before the job" window in
-          // America/Toronto (business tz), NOT server-local (UTC). setHours on a
-          // UTC server would put the cutoff at 5 pm UTC = ~1 pm Toronto. Here we
-          // build the 17:00-Toronto-the-day-before instant explicitly.
+          // the STORE timezone, NOT server-local (UTC) — setHours on a UTC
+          // server would put the cutoff at 5 pm UTC = ~1 pm Montréal. This was
+          // 48 lines of hand-rolled Intl offset maths with the zone hardcoded;
+          // @/lib/timezone does exactly the same thing (Stage 2 / Q9).
           const after5 = (() => {
-            const TZ = "America/Toronto";
             const now = new Date();
-            // DST-correct Toronto UTC offset (ms) at the job's time.
-            const tzOffsetMs = (d: Date) => {
-              const p = new Intl.DateTimeFormat("en-US", {
-                timeZone: TZ,
-                year: "numeric",
-                month: "2-digit",
-                day: "2-digit",
-                hour: "2-digit",
-                minute: "2-digit",
-                second: "2-digit",
-                hour12: false,
-              })
-                .formatToParts(d)
-                .reduce<Record<string, string>>((a, x) => {
-                  a[x.type] = x.value;
-                  return a;
-                }, {});
-              const asUTC = Date.UTC(
-                +p.year,
-                +p.month - 1,
-                +p.day,
-                +p.hour % 24,
-                +p.minute,
-                +p.second
-              );
-              return asUTC - d.getTime();
-            };
-            const offset = tzOffsetMs(existingJob.startTime);
-            // Toronto calendar date of the job.
-            const jp = new Intl.DateTimeFormat("en-US", {
-              timeZone: TZ,
-              year: "numeric",
-              month: "2-digit",
-              day: "2-digit",
-            })
-              .formatToParts(existingJob.startTime)
-              .reduce<Record<string, string>>((a, x) => {
-                a[x.type] = x.value;
-                return a;
-              }, {});
-            // 17:00 Toronto on the day BEFORE the job, as an absolute instant.
-            const cutoff = new Date(
-              Date.UTC(+jp.year, +jp.month - 1, +jp.day - 1, 17, 0, 0) - offset
+            // 17:00 store time on the day BEFORE the job, as an absolute instant.
+            const cutoff = storeWallClockToUtc(
+              storeDateKey(addStoreDays(existingJob.startTime, -1)),
+              "17:00:00"
             );
             return now >= cutoff && now < existingJob.startTime;
           })();

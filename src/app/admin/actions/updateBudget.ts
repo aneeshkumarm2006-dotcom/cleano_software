@@ -4,11 +4,10 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { db } from "@/db";
 import { revalidatePath } from "next/cache";
-import { TransactionCategory } from "@prisma/client";
 
 interface UpdateBudgetParams {
   id: string;
-  category: TransactionCategory;
+  categoryId: string;
   period: string;
   amount: number;
   notes?: string | null;
@@ -32,7 +31,7 @@ export async function updateBudget(params: UpdateBudgetParams) {
     if (!params.id) {
       return { success: false, error: "Budget id is required" };
     }
-    if (!params.category) {
+    if (!params.categoryId) {
       return { success: false, error: "Category is required" };
     }
     if (!params.period?.trim()) {
@@ -42,10 +41,22 @@ export async function updateBudget(params: UpdateBudgetParams) {
       return { success: false, error: "Amount must be a valid number" };
     }
 
+    const category = await db.budgetCategory.findUnique({
+      where: { id: params.categoryId },
+      select: { archivedAt: true, name: true },
+    });
+    if (!category) return { success: false, error: "Category not found" };
+    if (category.archivedAt) {
+      return {
+        success: false,
+        error: `"${category.name}" has been archived — pick another category`,
+      };
+    }
+
     await db.budget.update({
       where: { id: params.id },
       data: {
-        category: params.category,
+        categoryId: params.categoryId,
         period: params.period.trim(),
         amount: params.amount,
         notes: params.notes?.trim() || null,
@@ -53,6 +64,8 @@ export async function updateBudget(params: UpdateBudgetParams) {
     });
 
     revalidatePath("/admin/finances");
+    revalidatePath("/admin/settings");
+    revalidatePath("/admin/analytics");
     return { success: true };
   } catch (error) {
     console.error("Error updating budget:", error);

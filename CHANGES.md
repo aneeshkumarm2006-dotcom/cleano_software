@@ -809,3 +809,572 @@ About 110 catalog rows still don't yet have a real event firing them — mostly 
 - APP_PUSH channel for cleaners (web Push API not set up; the chat browser notification covers part of this)
 
 Each of these is a focused 30-60 minute add: define the catalog mapping, build the `sendXxx` helper, gate it with `notification: { recipient, key }`, call it from the right event handler.
+
+---
+---
+
+# Part 2 — Client-feedback build (Stages 0–14)
+
+Aug 12–13, 2026. Source: the Aug 10 client walkthroughs (28 numbered requests in
+`_ai_context/VIDEO-FEEDBACK-CONTEXT.md`), planned in `_ai_context/TODO.md`, diagnosed in
+`_ai_context/OPEN-QUESTIONS.md`. Current state summary: `_ai_context/STATUS.md`.
+
+**Scope:** 14 stages, all complete. 4 migrations. Closed with a full browser regression pass
+that found and fixed 17 further defects. `tsc --noEmit` clean; `npm run build` succeeds with
+the same single pre-existing Stripe-webhook warning; lint 320 vs a 318 baseline (+2, same
+pre-existing rule classes on files this pass edited — the new files are lint-clean).
+
+**Test on a production build, not `next dev`** — `npm run build && npx next start -p 3001`.
+Port 3001 matters: `.env.local` sets `BETTER_AUTH_URL=http://localhost:3001`. A QA round
+against the dev server produced four confident but completely false bug reports.
+
+---
+
+## Stage 0 — Baseline
+
+Recorded the pre-existing state so later failures are attributable: tsc zero errors, build
+succeeds with **one** Turbopack warning (`src/app/api/stripe/webhook/route.ts:16` exports a
+deprecated `config` object). Every stage below reports against this baseline.
+
+## Stage 1 — Calendar readability · chat composer · alerts
+
+### What was built
+- **Month chips printed `Sun Aug 02 2026` instead of a time.** `MonthView` called
+  `format(event.start, "h:mm a")` but the local helper had no such branch and fell through to
+  `toDateString()`. Added `"h:mm a"` and `"h a"` branches; audited every other `format(` caller.
+- One-line chips (`white-space: nowrap` on `.cal-chip-t`), `.cal-mcell` min-height 122→132px so
+  3 chips + "+N more" fit.
+- **De-duped the calendar CSS** — the whole month block was pasted twice with *different*
+  values; the first copy was shadowed and silently losing `.cal-mcell-head`'s `space-between`.
+- **Alerts couldn't be dismissed**: `dismissAlert` / `markAlertRead` had zero `revalidatePath`
+  calls, so the server-rendered page never re-rendered. Added revalidation + optimistic removal.
+  Optimistic state lives on `AnalyticsView`, not `AlertsTab` — the latter remounts on every
+  parent render and would discard it.
+- Unit number restored on the calendar modal (`getJobsForCalendar` never put `aptNumber` in
+  metadata).
+- `.chat-shell` `height: calc(100vh - 140px)` → `100%` — the DM composer was clipped off-screen.
+
+## Stage 2 — Store timezone (America/Montreal)
+
+### What was built
+- **`src/lib/timezone.ts` as the single source of truth** (`STORE_TZ`, `storeDayRange`,
+  `storeWallClockToUtc`, `getStoreHour`, `formatTime/Date/DateTime`, …). This became a
+  *consolidation*, not a greenfield build: the repo already had **6 copies** of
+  `const TZ = process.env… ?? "America/Toronto"` plus 12 hardcoded literals. All now point here.
+  `time.ts` keeps its `fmt*`/`tz*` names as thin aliases so ~50 call sites didn't churn.
+- Fixed the reported symptom: the dashboard said "Good morning" at 10:13 PM (host runs UTC).
+
+### Four bugs of the same root cause, found by the sweep and fixed
+- `getDayAvailability`/`getUnavailableSlots` read `startTime.getHours()` server-side, so a 9 AM
+  Montréal job marked the **13:00** slot full and left 09:00 bookable — **customer-facing**.
+- `/admin/recurring` prefilled a UTC *date* and a browser-local *time* in one form.
+- Analytics → Payments filtered off `toISOString()`, so the window was 4 h out from the dates
+  displayed.
+- Employee conflict detection compared instants against wall-clock slots — wrong weekday.
+
+### Deliberate exception — do not "fix"
+The calendar is fed by `getJobsForDay` → `toBusinessWallClock`, which emits *floating*
+wall-clock strings on purpose. `calendar-helpers.ts` / `utils.ts` / `EventCard.tsx` are
+therefore correctly browser-local; pinning them to STORE_TZ would convert twice. Comments left
+in place.
+
+## Stage 3 — Sidebar, dashboard tiles, alert data quality
+
+### What was built
+- **Collapsible sidebar groups** — 7 disclosure buttons, `aria-expanded`, localStorage
+  persistence, active section auto-expands, collapsed groups roll their badge counts up onto the
+  header. State stores CLOSED groups only, so a group added later defaults to open.
+- **Leads** moved from Operations to Sales & Marketing.
+- **Dashboard primary row** is now Total revenue collected · Scheduled value · Total jobs ·
+  Employees. Money switched from `Math.round()` to exact cents — rounding to whole dollars is
+  what let two pages quote visibly different figures for the same definition. Verified
+  byte-identical to the Jobs page: `$4,017.48` / `$35,398.65`.
+- **Completed-count mismatch (item 27) confirmed exactly**: the dashboard counted
+  `status: "COMPLETED"`, the Jobs page counts COMPLETED ∪ PAID. Both now route through
+  `jobStatusWhere("completed")`.
+
+### The duplicate-alerts cause was not the named one, and there was a bigger second one
+**1,359 of 1,536 undismissed alert rows were redundant copies** (177 distinct logical alerts).
+(a) `notifyAdmins()` wrote one row *per admin user* while the only reader queries with no
+recipient filter — so one logical alert rendered once per admin. Now one broadcast row.
+(b) `/admin/analytics` re-created OVERDUE_PAYMENT alerts on **every page load**, because its
+"already alerted?" test scanned only the `take: 50` most recent rows — up to 19 identical rows
+per job, and the overwhelming majority of the table. (c) Generic guard in
+`src/lib/alert-dedupe.ts`, applied by all three creation paths.
+
+### ⚠ Deviations
+- Did **not** create `src/lib/job-metrics.ts` — `metrics.ts` + `metrics-shared.ts` already is
+  that pattern; added the SQL twins there instead of introducing a third source of truth.
+- Dedupe key is `(type, relatedId, recipientUserId, title, message)`, not the specified triple:
+  `saveJob` writes two *different* alerts about the same job to the same cleaner, and the triple
+  would have swallowed one — trading a duplicate-row complaint for a missing-alert one.
+
+### ⛔ Owner action
+The code stops new duplicates but doesn't clear the 1,359 already in the table.
+`npx tsx scripts/dedupeAlerts.ts --apply` (dry-run by default; dismisses, never deletes).
+
+## Stage 4 — One job form: JobModal parity + `/admin/jobs/new` layout
+
+### The bug, measured
+`scripts/auditOrphanJobs.ts` (new, read-only) reported **173 of 267 active jobs — 64.8% — with
+`clientId: null`**, every one from the admin forms. "group mercer" ×74 and
+"mckierrnans rôtisserie" ×26: one customer with 74 bookings that no receipt, cancellation,
+rating request or card link can reach.
+
+### What was built
+- **`src/lib/client-capture.ts` (`resolveJobClient`)** — the dedupe-then-create-Client logic
+  lived only inside `admin/jobs/new/page.tsx`; `actions/saveJob.ts` (JobModal, calendar create,
+  every Edit button) had **no `db.client.create` at all**. Now shared by both paths. This is the
+  real fix; the email/phone inputs are cosmetic without it.
+- Added a **digits-only phone fallback** and case-insensitive email match — `"(514) 555-0199"`
+  vs `"5145550199"` slipped past the old exact match and forked the customer.
+- Email + Phone in JobModal step 1, prefill on client pick, name edit detaches the link.
+- **`Job.postalCode`** (migration `20260812000000_job_postal_code`), plus `parking` relabelled
+  **Transportation** on both forms and job detail. No auto-calculation (decided).
+- `/admin/jobs/new` wrapped in the standard `p-8` container (fixes both the 0px top gutter and
+  the full-bleed between 320–1088px); action bar gains `md:left-[240px]` to clear the sidebar.
+- 4.7: `linkJobToClient` + a "No customer record" card on the job detail page for retro-fixing.
+
+### ⚠ Deliberate asymmetry
+On the EDIT path, client capture runs only when an email or phone was actually submitted —
+otherwise re-saving any of the 173 legacy jobs would mint an empty contact row as a side effect
+of an unrelated edit.
+
+### ⛔ Owner action
+173 orphaned jobs remain; the code only stops new ones. `npx tsx scripts/auditOrphanJobs.ts`
+lists them; repair is per-job via the new card. Bulk-linking by name was deliberately not
+automated — matching on a name alone is how two different people get merged.
+
+## Stage 5 — Calendar job drawer + stacked-jobs fix
+
+### What was built
+- **`getJobSummary(jobId)`** fetch-on-open, returning preformatted STORE_TZ strings.
+- **Right-docked drawer** (`.cjd-*`) over a light, unblurred scrim, replacing the centred modal.
+  The old component gated every action behind `{isEmployee && …}` — so cleaners got actions and
+  **admins got none**. Admins now get Edit · Duplicate · Resend receipt · View media · Cancel ·
+  Open full job, plus a payment quick-glance with Charge card / Mark paid.
+- Lane budgeting: `resolveLaneCap(columnWidth)` with a 72px floor + a `+N` overflow chip,
+  replacing the n-equal-slivers split that produced 12px lanes at 10 overlapping jobs.
+- Shared `CALENDAR_JOB_SELECT` — `getJobsForDay` was pulling all ~90 Job columns to use 19.
+
+### The biggest finding this stage was not in the plan
+**134 of 267 live jobs (50%) store `endTime === startTime`.** Because that is a *present* end,
+the long-standing `?? +1h` fallback never fired. `eventOverlaps` computes `aEnd > bStart`, which
+is **false** when `aEnd === aStart` — so two 11 AM jobs were judged not to overlap, each was
+handed the full column, and they painted exactly on top of each other with only the last one
+clickable. Half the calendar was invisible slivers eating each other's clicks, and Stage 5.6
+would have fixed almost nothing on real data without this. Fixed display-only via `eventEnd()` /
+`hasRealEnd()` — **nothing here writes**, so stored `endTime`s are untouched and a drag still
+moves exactly what it moved before.
+
+### ⚠ Deviation
+5.5 named `getJobsForCalendar`, which is dead code — `/api/calendar/[date]` → `getJobsForDay`
+was the only live path. The select was added to both.
+
+## Stage 6 — Manage Duplicates rebuilt, HubSpot-style
+
+### The complaint, measured
+The old page rendered **14 group cards, the largest carrying 22 member tiles wrapping on one
+card**. There is no "this one vs that one" reading of 22 tiles. The same data is now **49 pairs**,
+every row exactly two records. Pairs > groups is the point: a 22-record component is 21
+decisions, and it was presented as one button.
+
+### What was built
+- **`src/lib/similarity.ts`** — the old score `58 + matched.length * 13` could only ever emit
+  four values (71/84/97/98): a sortable column with nothing to sort. Weighted comparison now
+  (email 40 · phone 30 · Jaro–Winkler name 20 · address 10) → **27 distinct scores over 45–99**
+  on live data. Colour scale fixed: `.match-score.high` was **red**, i.e. the duplicates we were
+  surest about were painted as errors.
+- Pair table with search / band filter / sortable similarity / pagination; the tautological
+  "Remain after merge" tile replaced with **High confidence (85%+)**.
+- HubSpot-shaped review modal: two upright record cards, one row per property with a radio each
+  side and a `›` push-across chevron, and a **live result panel**. Queue footer: Merge / Reject /
+  Review next, with "Pair 3 of 47" and a progress bar.
+- **`DuplicateRejection` model** (migration `20260812010000_duplicate_rejection`) + a Rejected
+  tab with undo. The old `dismissDuplicateGroup` set `duplicateDismissed` on *every* member —
+  measured on live data, rejecting one pair used to suppress **9 other live pairs**, permanently,
+  with no undo and no list to revisit.
+
+### The highest-risk bug in this area, confirmed on live data
+The old merge seeded **every** field from the suggested master, so a blank master phone
+overwrote a populated one and archived the only copy. Counted against the live queue: **4
+populated email/phone/address values would have been archived** just by accepting the default
+merge. Defaults are now per-property — prefer the populated value, then the more recent
+`lastActivityAt` — and **never blank over data**.
+
+### ⚠ Deviation
+Pairs are anchored per *match group* (the set sharing one phone or one email), not per connected
+component. A component can be a chain — a shares a phone with b, b shares an email with c — and a
+star on the component would put a and c side by side under a score neither earned, and rejecting
+(a,b) would strand (b,c) forever.
+
+## Stage 7 — Analytics filters, industry dimension, % recurring
+
+### What was built
+- `AnalyticsPage()` now takes `searchParams` (`?industry=&from=&to=&tab=`); parsing and the
+  predicate live in `analytics/filters.ts`, so there is exactly one definition of "is this job in
+  the current view" and it can be tested without rendering React. Ranges go through
+  `storeCivilDayRange` — a naive `new Date("2026-08-11")` would have put the window four hours
+  out from the dates on screen. A backwards range is swapped, not emptied.
+- **`INDUSTRY_BY_CATEGORY` + `jobIndustry()`** beside `CATEGORY_ALIASES` in `calendar-labels.ts`
+  — one source of truth. `jobIndustry` is deliberately **total**: anything unmapped returns
+  `UNSPECIFIED`, which is what makes ALL = Σ positions a structural property rather than
+  something to remember.
+- Filter scoped to job-derived tabs only; panels that can't honour it say so ("· not affected by
+  filters") rather than reading as broken. The filter bar carries a live count line and each
+  industry chip shows its own count, so ALL = Σ parts is visible, not asserted.
+- **% recurring** — rule is `parentJobId != null` **OR has children** (the series parent has no
+  parent; missing that under-counts every series by one). Headline = share of jobs, sub-value =
+  share of revenue. Both readings ship.
+
+### ⛔ Owner-facing: the % recurring tile reads 0%, and that is the data, not the code
+**0 of 267 jobs have a parent or a child** — not one recurring series has ever been created in
+this database. Checked all three places recurrence could hide: `bookingSource` null on all 267
+rows, no notes mention a frequency, `Client.serviceFrequency` has just 2 WEEKLY rows. The series
+machinery is real and reachable from both entry points; it has simply never been used. The tile
+prints "no series in 267 jobs" rather than a bare zero. **If a non-zero number is expected, the
+conversation is about how recurring bookings are being entered.**
+
+### ⚠ Latent inconsistency found, deliberately not fixed
+`monthlyData` buckets the 12-month revenue chart by **`createdAt`** while every revenue figure on
+the page — and this filter — uses **`startTime`**. Invisible today (0 of 101 completed jobs
+differ) but 46 of 267 jobs already do. Pre-existing; belongs to a charts pass.
+
+## Stage 8 — Custom budget categories
+
+### What was built
+- Migration `20260812020000_budget_categories`: new `BudgetCategory` table, the five enum values
+  seeded as defaults with literal ids (`bcat_revenue` …) so the backfill is a pure string map and
+  a fresh database reproduces identical ids; `Budget.category` → `categoryId` FK;
+  `TransactionCategory` dropped. Columns added nullable → backfilled → `SET NOT NULL`, so an
+  unmappable row aborts the transaction instead of landing as a silent orphan.
+- Settings → Budgets editor: add / rename / reorder / delete, plus an "Archived — history only"
+  block with Restore. A category carrying data (or any of the five defaults) is **archived**;
+  only an empty custom category is actually deleted, and the same predicate is imported by both
+  the server action and the confirm panel so they can't drift.
+- All 12 automatic writers (Stripe webhook, `chargeJob`, `issueRefund`, `clockOut`,
+  `completePayPeriod`, …) go through `requireBudgetCategoryId(slug)`, which self-heals by
+  upserting a missing seed — a Stripe payment webhook must not 500 over a bookkeeping detail.
+- The name is **never denormalized** onto a transaction or budget, which is what makes a rename
+  update all 34 transactions, both budgets, the chart labels and the statement at once. The
+  counterpart: `slug` is immutable, so the automatic writers keep resolving.
+
+### The migration went further than `Budget`, deliberately
+`TransactionCategory` was on **two** tables, and `Transaction.category` is where the ACTUALS
+live. Moving only `Budget` would have let an admin create "Marketing", budget it, and have
+nowhere to file the spend — Budget vs Actuals would show it pinned at $0.00 forever, i.e. the
+feature would look built and be useless.
+
+### ⚠ Deviation — added a `kind` column (`REVENUE | EXPENSE`) the field list didn't ask for
+Every P&L, income-statement and tax figure branches on `category === "REVENUE"`. With only name
++ slug that check becomes `slug === "revenue"`, silently making **every** category the client
+ever creates an expense — add "Tips" and it subtracts from profit with no way to say otherwise.
+
+**Verified identical across the migration:** 2 budget rows, 34 transactions, income statement
+revenue $5,150.44 / expenses $346.74 / net $4,803.70.
+
+## Stage 9 — Booking page settings layer
+
+### What was built
+- **`bookingPage.config`** registry setting + pure `src/lib/booking-page-config.ts` (field
+  catalog, per-service overrides, frequency labels, normalizer, resolvers); all five `/book`
+  steps now render from it; new Settings → Operations → **Booking Page** tab. Items 13–16 are
+  delivered *through* the settings layer, not hardcoded, so they can't come back as code
+  requests — the client's strongest ask was *"this should all be editable from the admin end."*
+- Sqft hidden for Standard + Airbnb, still required for Move-in/out. Airbnb frequency labels
+  become "Minimum N times per month". No frequency step for Move-in/out + Deep, and the
+  recurring-discount rows for those two default to all-zero. Email + phone lead the contact step.
+- Fixed a latent bug found on the way: Step 5 looked frequency labels up in the standard list
+  only, so every Airbnb-only frequency reviewed as "—".
+
+### ⚠ Flags
+Engine-critical fields (postal, address, service type, date, name/email/phone, move-in/out sqft)
+are **locked** visible+required — relabel/reorder only, because `submitBooking` rejects a booking
+without them. Deleted the now-dead `FREQUENCIES`/`AIRBNB_FREQUENCIES` in `book/types.ts` — the
+Airbnb one carried its own discount ladder, a second source of truth for money.
+
+## Stage 10 — Quote page: reachable, catalog-driven, editable
+
+### What was built
+- **The seven-string `SERVICE_OPTIONS` is gone** — the dropdown reads the same `jobTypes.list`
+  AppSetting fourteen other files already consume. Measured against the live catalog, the two
+  lists disagreed in four places: the quote form was advertising **"Recurring service"** (not a
+  service) and **"Other"** (no such entry), while **AirBnb** and the admin's own name for
+  residential work (**"General Cleaning"**) were offered by the business and missing from the
+  form. Switching a service off in Settings now removes it from `/quote`.
+- Stores the **category key**, not free text — which is what makes the prefill below possible at
+  all. The inbox renders through `jobTypeLabel()` so legacy label rows still resolve.
+- `View public page ↗` in the `/admin/quotes` header + `/quote` added to the Embed codes list.
+- **`quotePage.config`** + `src/lib/quote-page-config.ts`, deliberately the same shape as Stage
+  9's, so there is one pattern for "a public form the admin controls" rather than two. Editor is
+  a **Form** tab on `/admin/quotes` — where the client went looking.
+- **Server-side enforcement**: `submitQuote` re-reads the config and re-applies it — a hidden
+  field cannot be stored whatever is posted (otherwise hiding a question only hides it from
+  honest visitors), a required field is enforced with the admin's own label, and a service not in
+  the active catalog is refused rather than written.
+- **Convert to job** was a bare `router.push("/admin/jobs/new")` with no query string — name,
+  email, phone, address, service, beds, baths, sqft and preferred date all discarded, and the
+  admin retyped a form they were looking at. Now `?fromQuote=<id>` prefills all nine, and the
+  quote flips to CONVERTED in the *create* branch of the save action — after the job exists, so
+  opening the form and abandoning it doesn't mark a quote won.
+
+### Bug found on the way
+Preferred date went through `new Date("2026-09-01")`, read as UTC midnight = 8 PM the previous
+evening in Montréal, while the inbox formats in STORE_TZ — so the drawer displayed **the day
+before the one the customer picked**.
+
+### ⚠ Deviation
+The renderer lives in `src/components/quote/QuoteForm.tsx`, not beside the route, so the Form
+tab's live preview mounts the *same component* `/quote` renders and cannot drift from it. It
+carries a `preview` flag making submission inert.
+
+### Not built (10.5, deliberate)
+Custom questions (`QuoteRequest.customFields Json?`) and the **Send quote** action over the
+already-working, already-unused `getQuote.ts` engine. `TODO(client)` markers at both sites say
+what the right build is. The live preview *was* built.
+
+## Stage 11 — Leads export + sales commissions
+
+### The measurement that defined the feature
+A button creating one contact per lead would have been three lines and wrong: of the **20 leads
+not linked to a contact, 16 already exist in the CRM** under a record created some other way. The
+naive build would have filed 16 duplicates straight into the queue Stage 6 was built to drain.
+Only 4 of the 32 leads are genuinely new.
+
+### What was built
+- Export resolves identity first on email and phone-compared-as-digits, with three outcomes:
+  *created* / *linked* (fills the existing record's blanks only, never overwrites) / *skipped*.
+  In-batch dedupe included — two live leads share one email, and one click of "Export all" would
+  otherwise have created two contacts for one person.
+- "Is this lead in the CRM?" is **computed live**, not stored: `Contact.leadId` is `@unique`, and
+  on this database **one email address owns nine separate Lead rows**. A stored flag would also
+  keep claiming "exported" after a contact was merged or archived.
+- **CONVERTED leads are the largest group and had nothing** — 18 of 32. The `contacts_crm`
+  backfill skipped them assuming their Client row covered it, but `convertLeadToJob` created jobs
+  with `clientId: null` and no Client at all. Those are precisely the "lost leads" the request is
+  about.
+- `Commission` model + a Commissions tab on `/admin/sales` (migration
+  `20260813000000_sales_commissions`): per-rep totals (entries · pending · paid · total, most
+  owed first) above the entry list, with add / edit / mark-paid / unpay / delete.
+
+### Bug found and fixed on the way
+`convertLeadToJob` is a **third** job-creation path Stage 4.2 never reached, and it was still
+minting orphan jobs — so a lead that *converted* could never be sent a receipt, a cancellation or
+a rating request. It now runs the shared `resolveJobClient`.
+
+### ⚠ Flags
+- **Scope of 11.2 is a guess** — the client gave one sentence and no rules, so this is a ledger:
+  record what is owed, total it per rep, mark it paid. Confirm before building further on it.
+- `salesRepId` is a `User` (the app has no SALES_REP role, and the CRM already models a rep this
+  way). **If Cleano pays canvassers who have no login, this is the thing to change** — a small
+  `SalesRep` table and an FK swap. `TODO(client)` marker on `SALES_REP_ROLES`.
+- `paidAt` **is** the status (null = pending), so there is no enum to drift out of step with a
+  boolean, and editing an entry never touches it — fixing a typo can't silently unpay someone.
+- `ON DELETE RESTRICT` on the rep, where every other `User` relation cascades: these rows are
+  money owed to a person. `deleteEmployee` gained a matching guard that names the count.
+
+## Stage 12 — BookingKoala add-on backfill
+
+### What was built
+- **`scripts/backfill-bk-addons.ts`** — dry-run by default, `--commit` to apply. Reuses
+  `parseBkAddOns` + `resolveBkAddOns` unchanged, so there is no second copy of the column list,
+  the paren-depth split, the `(N)` quantity rule, the cross-column merge, the catalog naming or
+  the `price: 0` rule. The "only jobs with none" check is re-read **inside the same transaction
+  as the insert**, so a second `--commit` creates 0 rows. Four skip cases are handled and
+  reported rather than guessed at: archived matches, an `externalBookingId` shared by two live
+  jobs (the column is indexed, not unique), a job carrying that id from another source, and rows
+  with missing or repeated booking ids.
+- **The `$0` display fixed as one rule in one place**: `addOnAmountIsIncluded()` +
+  `ADDON_INCLUDED_LABEL` in `lib/job-money.ts`, applied to all five surfaces that print an add-on
+  amount (Details chips, Financials breakdown, calendar drawer, customer portal, receipt PDF). It
+  fires only when add-ons are already inside the subtotal *and* the line is zero — a free extra
+  on an admin job is a real decision and `$0.00` is the honest way to print it.
+  `generateInvoiceFromJob` is left alone: those are stored money on a financial document.
+
+### ⛔ Owner-facing: 12.1 is unanswerable on this database
+There are **no imported jobs here at all** — 471 jobs, every one `bookingSource: null`, **0**
+with an `externalBookingId`, 0 whose notes carry the importer's `Add-ons:` text. So "open an
+imported job and look for chips" is a question about the *client's* deployment and the *client's*
+data. The checkable half checks out: the nested create at `runBookingKoalaImport.ts:477-479` is
+present, and a 36-assertion test drives parse → resolve → persist end to end against the live
+database. **The owner still has to open one BookingKoala job created after Aug 6 and confirm the
+Details tab shows chips.** If it doesn't, the deploy is behind and a redeploy is the fix, not the
+backfill.
+
+## Stage 13 — Mobile chat + viewport polish
+
+### What was built
+- **Pane switch below 900px** on the admin DM: `.chat-shell` gets `data-pane="list" | "thread"`,
+  a media query hides the other pane and pins `grid-template-rows: minmax(0,1fr)` so the
+  surviving pane is handed the whole box and its own scroll engages. Above 900px the attribute is
+  inert and **no JS ever reads the viewport**, so there is no resize listener to get out of sync.
+  The Stage-1.5 interim `max-height` guard is gone.
+- `h-screen` → `h-[100dvh]` on the admin content wrapper — `100vh` hides the bottom 60–115px
+  behind iOS Safari's toolbars. (The line had drifted; the wrapper is at `Sidebar.tsx:702`, not
+  `:563`, which is the outer `min-h-screen`. Both converted, plus `admin/loading.tsx`.)
+- DM header padding `32px` → `clamp(20px,4vw,32px)`, matching group chat.
+- Composer goes to 16px below 900px (iOS zooms the page on focus below that, and the zoom is what
+  pushes the composer back off-screen) + `env(safe-area-inset-bottom)` padding.
+- The SWR-loading empty state can be the visible pane, and it rendered no header — so on a phone
+  you could land in a pane with no way back. It got its own back button.
+
+Measured at 390×664 with Safari toolbars expanded: composer 537→643 inside a 664px viewport, page
+`scrollHeight === clientHeight` in every state. The old `height:auto` stack measured ~2,800px into
+an `overflow:hidden` ancestor. Boundary checked at 902px and 899px; desktop re-checked at 1280×700.
+
+### ⚠ Deviation — group chat did NOT get a pane switch
+It doesn't share the layout (own inline grid and `.stack-mobile`, never touches `.chat-shell`).
+Measured rather than guessed: its two auto rows split the box near-evenly regardless of channel
+count, leaving the composer overhanging its own `overflow:hidden` panel by **10px**. It got a
+proportionate fix — a `.gchat-shell` class with `grid-template-rows: auto minmax(0,1fr)` and a
+30vh cap on the channel row below 767px. A full pane switch there is separate work and is not
+pretending to be done.
+
+## Stage 14 — Full browser regression pass
+
+Playwright, real browser, real admin session, production build. 3 test rounds + 5 fix rounds.
+**17 real defects found and fixed.**
+
+### Two blockers
+- **The calendar was in an infinite render loop** — `Maximum update depth exceeded` every ~1.4s,
+  escalating to a fatal client exception that replaced the page. `CalendarContext`'s SWR sync
+  effect stored `signatureFor(normalizedInitial)` instead of what it had actually applied, so the
+  moment SWR went empty while `initialEvents` wasn't, its guard could never match again and it
+  re-fired forever off its own `setLocalEvents`.
+- **The analytics industry filter never committed** — 3 of 4 clicks were still showing the old
+  filter after three minutes. The cause was not in analytics: the admin sidebar ran three
+  recurring polls implemented as **server actions** (staff-chat unread 5s, job-chat unread 5s,
+  attention counts 30s), and every server-action response carries an RSC re-render of the current
+  route — so a render restarted every few seconds and starved the pending navigation. Moved to
+  GET route handlers (`/api/chat/unread`, `/api/job-chat/unread`,
+  `/api/admin/attention-counts`) at 30s/30s/60s with visibility-pausing. Commit time went from
+  *never* to **1.5s**.
+
+### The rest
+| Area | What was wrong |
+|---|---|
+| Calendar | 31 requests per month at ~13s each → one `/api/calendar/range`. Both queries gained an `id` tiebreak; the per-day route's ordering had always been non-deterministic |
+| Calendar | URL didn't track the visible view; now writes `?view=`/`?date=`/`?list=1` and survives a reload |
+| Calendar | Month-cell header reversed (count left, day number right) |
+| Calendar | `+N more` clipped to a 2px hit strip — 7 of its 19px visible, centre hit-tested to the cell |
+| Calendar | `<button>` nested inside `.cal-chip`'s button; `CurrentTimeIndicator` hydration mismatch |
+| Sidebar | Collapse state never restored on reload, **and** the first click after a reload wiped the saved JSON |
+| Alerts | 1,492 undismissed `OVERDUE_PAYMENT` rows for 136 distinct jobs — and all 136 related ids pointed at hard-deleted jobs. Read-path dedupe on the write-side identity key, plus dropping alerts whose job is gone: 1,535 raw → 34 actionable |
+| Alerts | Tab badge read the raw prop while the tiles read the derived list |
+| Job forms | "Transportation" sat in Pricing instead of beside the address, on both forms |
+| Analytics | Budget vs Actuals listed only categories that already had a Budget row |
+| Analytics | Filter note read "268 of 268 jobs · Airbnb" when Airbnb had zero |
+| Invoices | **Overdue tile permanently 0** — nothing in the repo ever writes that status. Now derived from SENT + past due in STORE_TZ. One genuinely overdue invoice was invisible on the money screen |
+| Six screens | Duplicates reject/restore, budget categories, commissions, leads export, waitlist, invoices: writes persisted but nothing repainted until a manual reload |
+
+### Numbers reconcile (14.3)
+Dashboard 268 jobs / 110 completed / $4,017.48 collected / $35,498.65 scheduled == `/admin/jobs`
+to the cent. Analytics ALL 268 == Residential 139 + Commercial 128 + Airbnb 0 + Unspecified 1;
+revenue $4,017 == $3,732 + $285.
+
+### Four reports that were NOT defects — don't chase them
+Dev-server artifacts, all passing on a production build: `/icon/32` and `/icon/192` returning
+500; a hydration mismatch on `/admin/quotes`; the calendar not hydrating until you click
+something; the calendar URL never gaining `?view=`. A fifth — "`/quote` shows canonical labels
+instead of the admin's job-type names" — was a misread of the Job Types tab, where each row's
+category `<select>` was counted as nine separate rows.
+
+### Cleanup
+All QA fixtures removed (throwaway admin, quote fixture, commission, two exported contacts,
+scratch scripts). Two real alerts were dismissed during testing and one waitlist entry was
+toggled and restored.
+
+---
+
+## Migrations to apply
+
+```
+20260812000000_job_postal_code
+20260812010000_duplicate_rejection
+20260812020000_budget_categories
+20260813000000_sales_commissions
+```
+
+All four were applied to the live DB during the build; `prisma migrate status` clean at 74.
+
+## Scripts added
+
+| Script | Safe to run? | What it does |
+|---|---|---|
+| `scripts/auditOrphanJobs.ts` | read-only | Lists jobs with `clientId: null` (173 at last count) |
+| `scripts/dedupeAlerts.ts` | dry-run by default, `--apply` to write | Dismisses (never deletes) redundant alert rows — 1,536 → 177 |
+| `scripts/backfill-bk-addons.ts` | dry-run by default, `--commit` to write | Creates `JobAddOn` rows for pre-Aug-6 BookingKoala imports; re-runnable, cannot double up |
+
+## Owner actions still open
+
+1. **Clear the alert backlog** — `npx tsx scripts/dedupeAlerts.ts --apply`. Until then the Alerts
+   tab reads as a wall of repeats even though the generators are fixed.
+2. **Confirm the BookingKoala deploy** — open one imported job created after Aug 6 and check for
+   add-on chips (Stage 12). Then run the backfill dry, read the counts and the "needs pricing"
+   list, then `--commit`, then `--commit` again and confirm it reports 0.
+3. **Retro-link orphaned jobs** — per-job via the new card on the job detail page.
+4. **Answer the open client decisions** — D1 total-price override · D2 Give Tip · D3 job→lead ·
+   the duplicate matching-rules panel · custom quote questions + Send quote · the commissions
+   scope. `TODO(client)` markers sit at each site.
+
+## Deliberately not built
+
+Total-price override (D1) · Give Tip (D2) · job→lead funnel (D3) · duplicate matching-rules panel
+· custom quote/booking field **types** / form builder · transportation fee auto-calculation (a
+zone table is the upgrade path if it returns) · Google Calendar sync, Stripe Connect for cleaners,
+subscription limits (previously descoped — see `CLIENT_DECISIONS.md`).
+
+## Known backlog found along the way — never part of the plan
+
+- **~15 more admin screens with the "persists but doesn't repaint" shape** (a client component
+  calling a server action and relying solely on `router.refresh()`, with no optimistic update).
+  Ranked, with `JobsView` bulk actions at the top — a `rowOverrides` layer already exists there,
+  so it's cheap. Then `JobDetailView` (refund, rating, per-cleaner pay, crew list), job
+  applications, payouts withdrawals, contact detail inline edit. Six were fixed in Stage 14 as
+  samples.
+- **Six page-local chat polls still use server actions** (`AdminChatClient`,
+  `EmployeeChatClient`, `AdminGroupChatClient`, `JobChatThread`, `AnnouncementsClient`,
+  `LiveLocationMap`). None is mounted on analytics, so none causes the blocker that was fixed —
+  but they carry the same shape, and a user click can queue behind an in-flight poll because
+  server actions serialize per tab.
+- **Performance, in order of payoff:** (1) check the Supabase pooler region, connection mode and
+  Prisma `connection_limit` — 1.7–3.5s per trivial query dominates everything else and no
+  app-side change competes with it; (2) `prefetch={false}` on the ~32 sidebar links
+  (`Sidebar.tsx:706`) — `router.refresh()` marks the Router Cache stale and every in-viewport
+  Link re-prefetches, each running `getCachedSession()` against the same Prisma pool; (3) move
+  `/admin/analytics`'s Alerts-tab data behind Suspense — a 1,534-row fetch, a dedupe pass and an
+  alert-*writing* pass run on every render of every tab; (4) `getJobSummary` is a server action
+  used as a data reader, so opening the calendar drawer pays for the whole `/admin/calendar`
+  server component on top of the summary query (~12s observed).
+- **Data hygiene, needs a human decision:** 136 alerts reference hard-deleted jobs —
+  `scripts/clear-test-customers.ts:48` does `db.job.deleteMany` and never touches Alert, and
+  `Alert.relatedId` is a loose `String?` with no relation, so nothing cascaded. Surviving jobs are
+  `jobNumber` 1550–2024. The read path filters these out; the rows are still in the table. Also,
+  21 of 101 completed/paid jobs (21%) have a null or zero price, which is why some overdue alerts
+  read `($0.00)`.
+
+## Things that are true about this codebase and cost time to rediscover
+
+- `db.job` has **no** soft-delete extension. `src/db/index.ts` is a bare `new PrismaClient()` and
+  there is no `$extends` anywhere. A missing job is genuinely gone.
+- Job fields are `startTime` / `endTime` / `price` — not `start`, `end`, `total`, or
+  `paymentStatus`. Several of those names look right and aren't.
+- `/admin/calendar` renders `CleanerCalendarClient` only for `role === "EMPLOYEE"`; admins get
+  `CalendarPageClient` → `Calendar.tsx`. The two have different segment labels ("Agenda" vs
+  "List"), which is the quickest way to tell which one you're looking at.
+- `mutateDay` / `CalendarContext.invalidateDays` call `swrMutate` with a *string* key while the
+  hooks register *array* keys, so those calls have always been no-ops. The `mutateRangeCache()`
+  call beside them is what actually works.
+- `sendInvoice` returns `success: false` with "Invoice status updated, but the client has no email
+  on file — nothing was sent." The status **did** change; the caller treats it as a failure.
+- The overdue-payment generator tests `job.createdAt` while its message says "completed over 7
+  days ago", so an imported job is judged by its import date.
+- The analytics alert query has no recipient filter, so cleaner-addressed `PROVIDER_LOW_STOCK`
+  alerts appear in the admin list.
+
+## Do not regress
+
+The client praised these explicitly: dashboard layout and quick actions · analytics area
+attachment and KPIs tab · Requests · Waitlist · Documents · Clients · Web bookings · Employees ·
+Time tracking · Inventory and supplier links · Wash payouts · Lead source and CPA · Gift cards and
+promos · Payouts, finances, invoices, bulk charge · the entire cleaner-side app.

@@ -18,8 +18,9 @@
 // maths happens inside the evaluator itself.
 
 import type { AvailabilityDay } from "@prisma/client";
+import { STORE_TZ } from "./timezone";
 
-const TZ = process.env.NEXT_PUBLIC_BUSINESS_TIMEZONE ?? "America/Toronto";
+const TZ = STORE_TZ;
 
 export type AvailabilityResult =
   | "AVAILABLE"

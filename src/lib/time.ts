@@ -1,35 +1,39 @@
-const TZ = process.env.NEXT_PUBLIC_BUSINESS_TIMEZONE ?? "America/Toronto";
+// Established display aliases over @/lib/timezone.
+//
+// @/lib/timezone is the single source of truth for the store timezone and the
+// civil-date ⇄ instant boundary (read its header before touching date logic).
+// The `fmt*` / `tz*` names below have ~50 call sites across the admin, so they
+// stay as-is; only the constant and the implementations behind them moved.
+// New code should import from @/lib/timezone directly.
+
+import {
+  STORE_TZ,
+  STORE_LOCALE,
+  formatDate,
+  formatDateTime,
+  formatTime,
+  startOfStoreDay,
+  storeInputParts,
+  storeWallClockToUtc,
+} from "./timezone";
+
+const TZ = STORE_TZ;
 
 export function fmtTime(date: Date | string): string {
-  const d = typeof date === "string" ? new Date(date) : date;
-  return d.toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-    timeZone: TZ,
-  });
+  return formatTime(date);
 }
 
 export function fmtDate(date: Date | string, opts?: Intl.DateTimeFormatOptions): string {
-  const d = typeof date === "string" ? new Date(date) : date;
-  return d.toLocaleDateString("en-US", { timeZone: TZ, ...opts });
+  return formatDate(date, opts);
 }
 
 export function fmtDateTime(date: Date | string): string {
-  const d = typeof date === "string" ? new Date(date) : date;
-  return d.toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-    timeZone: TZ,
-  });
+  return formatDateTime(date);
 }
 
-// Returns HH:MM:SS AM/PM in business timezone — for live clocks
+// Returns HH:MM:SS AM/PM in the store timezone — for live clocks
 export function fmtClockTz(d: Date): string {
-  const parts = new Intl.DateTimeFormat("en-US", {
+  const parts = new Intl.DateTimeFormat(STORE_LOCALE, {
     hour: "numeric",
     minute: "2-digit",
     second: "2-digit",
@@ -41,92 +45,29 @@ export function fmtClockTz(d: Date): string {
   return `${get("hour")}:${get("minute")}:${get("second")} ${dayPeriod}`;
 }
 
-// UTC instant of midnight (start of day) in the business timezone for the
-// given moment — used to split "upcoming" vs "past" jobs without a date lib.
+// UTC instant of midnight (start of day) in the store timezone for the given
+// moment — used to split "upcoming" vs "past" jobs without a date lib.
 export function startOfDayTz(d: Date = new Date()): Date {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: TZ,
-    hour: "numeric",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  }).formatToParts(d);
-  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0);
-  const msIntoDay =
-    ((get("hour") % 24) * 3600 + get("minute") * 60 + get("second")) * 1000 +
-    d.getMilliseconds();
-  return new Date(d.getTime() - msIntoDay);
+  return startOfStoreDay(d);
 }
 
-// Offset of the business timezone from UTC at instant `d` (Toronto in July =
-// -4h). Derived via Intl so DST is handled without a date library.
-function tzOffsetMs(d: Date): number {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: TZ,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  }).formatToParts(d);
-  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0);
-  const wallAsUtc = Date.UTC(
-    get("year"),
-    get("month") - 1,
-    get("day"),
-    get("hour") % 24,
-    get("minute"),
-    get("second")
-  );
-  return wallAsUtc - (d.getTime() - d.getMilliseconds());
-}
-
-// UTC instant for a wall-clock date/time in the business timezone. Form inputs
-// ("2026-07-16" + "09:00") mean 9 AM in America/Toronto regardless of where
-// the server runs; `new Date("...T09:00")` would interpret them as server-local
-// (UTC on Vercel) and shift every manually created job by 4-5 hours.
+// UTC instant for a wall-clock date/time in the store timezone. Form inputs
+// ("2026-07-16" + "09:00") mean 9 AM in Montréal regardless of where the server
+// runs; `new Date("...T09:00")` would interpret them as server-local (UTC on
+// Vercel) and shift every manually created job by 4-5 hours.
 export function tzWallClockToUtc(dateStr: string, timeStr = "00:00:00"): Date {
-  const [y, mo, day] = dateStr.split("-").map(Number);
-  const [h = 0, mi = 0, s = 0] = timeStr.split(":").map(Number);
-  const wallAsUtc = Date.UTC(y, (mo ?? 1) - 1, day ?? 1, h, mi, s);
-  let offset = tzOffsetMs(new Date(wallAsUtc));
-  // Re-derive once in case the first guess crossed a DST boundary.
-  const refined = tzOffsetMs(new Date(wallAsUtc - offset));
-  if (refined !== offset) offset = refined;
-  return new Date(wallAsUtc - offset);
+  return storeWallClockToUtc(dateStr, timeStr);
 }
 
 // Inverse of tzWallClockToUtc: split a stored UTC instant into the date/time
-// input strings a form expects, in the BUSINESS timezone. Using
+// input strings a form expects, in the STORE timezone. Using
 // `new Date(x).toISOString().slice(...)` here (UTC) is what made the job edit
-// modal show a 6 PM Toronto job as 10 PM — the +4/5h offset — while the jobs
-// list (which formats in Toronto) showed it correctly.
+// modal show a 6 PM Montréal job as 10 PM — the +4/5h offset — while the jobs
+// list (which formats in the store zone) showed it correctly.
 export function tzInputParts(date: Date | string): { date: string; time: string } {
-  const d = typeof date === "string" ? new Date(date) : date;
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: TZ,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).formatToParts(d);
-  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
-  const hh = get("hour") === "24" ? "00" : get("hour");
-  return {
-    date: `${get("year")}-${get("month")}-${get("day")}`,
-    time: `${hh}:${get("minute")}`,
-  };
+  return storeInputParts(date);
 }
 
 export function fmtShortTz(d: Date): string {
-  return d.toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-    timeZone: TZ,
-  });
+  return formatTime(d);
 }

@@ -15,6 +15,11 @@ import {
   type DayAvailability,
 } from "../../actions/getDayAvailability";
 import { getDateClosures } from "../../actions/getDateClosures";
+import {
+  BOOKING_PAGE_DEFAULTS,
+  resolveField,
+  type BookingPageConfig,
+} from "@/lib/booking-page-config";
 
 /** "14:30" → "2:30 PM", "09:00" → "9 AM" */
 function formatTimeLabel(t: string): string {
@@ -33,6 +38,8 @@ interface Props {
   onChange: (patch: Partial<BookingDraft>) => void;
   /** Minimum days ahead a customer can book (admin setting; default 1). */
   minLeadDays?: number;
+  /** Admin-editable field layout (item 17). Defaults = today's rendering. */
+  bookingPage?: BookingPageConfig;
 }
 
 function earliestISO(leadDays: number) {
@@ -46,7 +53,16 @@ function maxISO() {
   return d.toISOString().slice(0, 10);
 }
 
-export default function Step3Schedule({ draft, onChange, minLeadDays = 1 }: Props) {
+export default function Step3Schedule({
+  draft,
+  onChange,
+  minLeadDays = 1,
+  bookingPage = BOOKING_PAGE_DEFAULTS,
+}: Props) {
+  // Labels and help text for this step come from the admin config (item 17).
+  const dateField = resolveField(bookingPage, "schedule", "date", draft.serviceType);
+  const timeField = resolveField(bookingPage, "schedule", "timeSlot", draft.serviceType);
+  const timeSlotVisible = timeField?.visible ?? true;
   const [availability, setAvailability] = useState<DayAvailability>({
     ranges: [],
     fullTimes: [],
@@ -115,6 +131,16 @@ export default function Step3Schedule({ draft, onChange, minLeadDays = 1 }: Prop
     [draft.timeSlot, availability]
   );
 
+  // With the time field hidden there is no way to pick a slot, so a draft left
+  // on "Pick a time" by an earlier config would strand the customer on a step
+  // whose Continue never enables. Fall back to flexible.
+  useEffect(() => {
+    if (!timeSlotVisible && (!draft.isFlexible || draft.timeSlot)) {
+      onChange({ isFlexible: true, timeSlot: "" });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeSlotVisible, draft.isFlexible, draft.timeSlot]);
+
   // Keep the draft's validity flag in sync so the wizard can gate "Next".
   const computedValid = draft.timeSlot ? selectedTimeError === null : undefined;
   useEffect(() => {
@@ -140,7 +166,7 @@ export default function Step3Schedule({ draft, onChange, minLeadDays = 1 }: Prop
         </p>
       </header>
 
-      <Field label="Preferred date">
+      <Field label={dateField?.label ?? "Preferred date"} hint={dateField?.helpText || undefined}>
         <DatePicker
           value={draft.date}
           onChange={(iso) => onChange({ date: iso })}
@@ -152,22 +178,26 @@ export default function Step3Schedule({ draft, onChange, minLeadDays = 1 }: Prop
         />
       </Field>
 
-      <div className="cl-grid-2">
-        <ChoiceButton
-          large
-          active={draft.isFlexible}
-          title="I'm flexible"
-          sub="Our team picks the best time for the day (9AM–7PM)."
-          onClick={() => onChange({ isFlexible: true, timeSlot: "" })}
-        />
-        <ChoiceButton
-          large
-          active={!draft.isFlexible}
-          title="Pick a time"
-          sub="Choose any time between 9 AM and 7 PM."
-          onClick={() => onChange({ isFlexible: false })}
-        />
-      </div>
+      {/* An admin who hides the time field leaves every booking flexible —
+          the team confirms the exact slot, which is what the banner says. */}
+      {timeSlotVisible && (
+        <div className="cl-grid-2">
+          <ChoiceButton
+            large
+            active={draft.isFlexible}
+            title="I'm flexible"
+            sub="Our team picks the best time for the day (9AM–7PM)."
+            onClick={() => onChange({ isFlexible: true, timeSlot: "" })}
+          />
+          <ChoiceButton
+            large
+            active={!draft.isFlexible}
+            title="Pick a time"
+            sub="Choose any time between 9 AM and 7 PM."
+            onClick={() => onChange({ isFlexible: false })}
+          />
+        </div>
+      )}
 
       {draft.isFlexible && (
         <div style={{
@@ -182,9 +212,14 @@ export default function Step3Schedule({ draft, onChange, minLeadDays = 1 }: Prop
         </div>
       )}
 
-      {!draft.isFlexible ? (
+      {timeSlotVisible && !draft.isFlexible ? (
         <div className="cl-stack-12">
-          <span className="cl-label">Choose a time</span>
+          <span className="cl-label">{timeField?.label ?? "Choose a time"}</span>
+          {timeField?.helpText ? (
+            <p style={{ fontSize: 12, color: "var(--primary-60)", margin: 0, lineHeight: 1.5 }}>
+              {timeField.helpText}
+            </p>
+          ) : null}
           <div
             style={{
               display: "grid",

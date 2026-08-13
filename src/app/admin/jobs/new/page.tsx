@@ -11,13 +11,15 @@ import {
   resolveJobAddressId,
 } from "@/lib/client-address-store";
 import { getServicePricingConfig } from "@/lib/booking-pricing";
+import { resolveJobClient } from "@/lib/client-capture";
 import { isSqftJobType, moveInOutBasePrice } from "@/lib/service-pricing";
 import { tzWallClockToUtc, tzInputParts } from "@/lib/time";
 import { syncJobAssignments } from "@/lib/job-assignments";
 import { requireOwnerAdmin } from "@/lib/page-guards";
 import { deleteJob as archiveJob } from "@/app/admin/actions/deleteJob";
 import { getServiceCatalog } from "@/lib/service-catalog.server";
-import { serviceOptions } from "@/lib/service-catalog";
+import { serviceOptions, resolveServiceValue } from "@/lib/service-catalog";
+import { storeInputParts } from "@/lib/timezone";
 import CleanerSelector from "./CleanerSelector";
 import JobTypeSelector from "./JobTypeSelector";
 import SubmitButton from "./SubmitButton";
@@ -37,9 +39,13 @@ import { ArrowLeft } from "lucide-react";
 export default async function JobFormPage({
   searchParams,
 }: {
-  searchParams: Promise<{ edit?: string; duplicate?: string }>;
+  searchParams: Promise<{ edit?: string; duplicate?: string; fromQuote?: string }>;
 }) {
-  const { edit: jobId, duplicate: duplicateId } = await searchParams;
+  const {
+    edit: jobId,
+    duplicate: duplicateId,
+    fromQuote: fromQuoteId,
+  } = await searchParams;
   const isEditing = !!jobId;
 
   // This form edits price, cleaner pay and payment status, so it is ADMIN/OWNER
@@ -58,7 +64,42 @@ export default async function JobFormPage({
   const session = await requireOwnerAdmin();
 
   // THE service list (item 20) — same source as the modal and the filters.
-  const serviceOptionList = serviceOptions(await getServiceCatalog());
+  const serviceCatalog = await getServiceCatalog();
+  const serviceOptionList = serviceOptions(serviceCatalog);
+
+  // Convert-to-job (10.4). `Convert to job` used to be a bare push to this
+  // route with no query string, so every field the customer had already typed
+  // was thrown away and the admin retyped a form they were looking at. The
+  // quote id now travels; the form fills from it, and the hidden `fromQuoteId`
+  // below flips the request to CONVERTED once the job actually saves — not on
+  // arrival, so abandoning the form doesn't mark a quote won.
+  const quoteSource = fromQuoteId
+    ? await db.quoteRequest.findFirst({
+        where: { id: fromQuoteId, deletedAt: null },
+      })
+    : null;
+  const quotePrefill = quoteSource
+    ? {
+        clientName: quoteSource.name,
+        clientEmail: quoteSource.email,
+        clientPhone: quoteSource.phone ?? "",
+        // The quote stores the canonical category key (10.1); map it onto an
+        // option this catalog still offers, so a service retired since the
+        // request came in leaves the picker blank instead of preselecting one
+        // that no longer exists.
+        jobType: resolveServiceValue(quoteSource.serviceType, serviceCatalog),
+        location: quoteSource.address ?? "",
+        bedCount: quoteSource.bedCount,
+        bathCount: quoteSource.bathCount,
+        squareFootage: quoteSource.squareFootage,
+        // Preferred date is the customer's ask, not a commitment — it fills the
+        // start date and the admin confirms or changes it before saving.
+        startDate: quoteSource.preferredDate
+          ? storeInputParts(quoteSource.preferredDate).date
+          : "",
+        notes: quoteSource.message ?? "",
+      }
+    : null;
 
   // Get existing job if editing
   let existingJob = null;
@@ -181,48 +222,46 @@ export default async function JobFormPage({
       ? rawPaymentType
       : null;
     const rawClientId = (formData.get("clientId") as string) || "";
-    let clientId: string | null = rawClientId || null;
 
     const clientName = ((formData.get("clientName") as string) || "").trim();
     const clientEmail = ((formData.get("clientEmail") as string) || "").trim();
     const clientPhone = ((formData.get("clientPhone") as string) || "").trim();
     const locationInput = ((formData.get("location") as string) || "").trim();
     const aptInput = ((formData.get("aptNumber") as string) || "").trim();
+    // Postal code (item 3) — part of the job's address snapshot, and pushed
+    // onto the client's saved address by the upsert below.
+    const postalInput = ((formData.get("postalCode") as string) || "").trim();
 
     // New-customer capture: a name typed with no linked clientId creates a
     // Client profile so the job is tied to a real customer record (not just a
-    // free-text name). Dedupe against an existing client by email/phone first so
-    // we don't fork a customer that already exists.
-    if (!clientId && clientName) {
-      let matched = null as { id: string } | null;
-      if (clientEmail || clientPhone) {
-        matched = await db.client.findFirst({
-          where: {
-            deletedAt: null,
-            OR: [
-              ...(clientEmail ? [{ email: clientEmail }] : []),
-              ...(clientPhone ? [{ phone: clientPhone }] : []),
-            ],
-          },
-          select: { id: true },
-        });
-      }
-      if (matched) {
-        clientId = matched.id;
-      } else {
-        const createdClient = await db.client.create({
-          data: {
-            name: clientName,
-            email: clientEmail || null,
-            phone: clientPhone || null,
-            address: locationInput || null,
-            aptNumber: aptInput || null,
-          },
-          select: { id: true },
-        });
-        clientId = createdClient.id;
-      }
-    }
+    // free-text name), deduped by email/phone first so we don't fork a customer
+    // that already exists.
+    //
+    // This block used to be 30 lines of page-local logic, and it was the ONLY
+    // copy — the shared `actions/saveJob` (JobModal, calendar, every Edit
+    // button) had no `db.client.create` at all. It now lives in
+    // src/lib/client-capture.ts and both save paths call it (Stage 4.2).
+    //
+    // On the EDIT path it only runs when contact details were actually
+    // supplied, so re-saving one of the legacy jobs that has no client can't
+    // mint an empty contact record as a side effect of an unrelated change —
+    // the same rule the shared action applies. Repairing those deliberately is
+    // the "Link to client" control on the job detail page.
+    const savingExistingJob = !!((formData.get("jobId") as string | null) || "");
+    const clientId =
+      savingExistingJob && !clientEmail && !clientPhone
+        ? rawClientId || null
+        : (
+            await resolveJobClient({
+              clientId: rawClientId,
+              clientName,
+              clientEmail,
+              clientPhone,
+              address: locationInput,
+              aptNumber: aptInput,
+              postalCode: postalInput,
+            })
+          ).clientId;
 
     let price = formData.get("price")
       ? parseFloat(formData.get("price") as string)
@@ -273,6 +312,7 @@ export default async function JobFormPage({
       addressId: pickedAddressId,
       address: locationInput,
       aptNumber: aptInput || null,
+      postalCode: postalInput || null,
     });
 
     // Customer-specific fixed pricing ("Change Total"). When the client has a
@@ -387,6 +427,7 @@ export default async function JobFormPage({
       jobType: (formData.get("jobType") as string) || null,
       location: (formData.get("location") as string) || null,
       aptNumber: (formData.get("aptNumber") as string) || null,
+      postalCode: postalInput || null,
       // Provenance only; the two fields above stay the snapshot (item 2).
       clientAddressId,
       // Wall-clock form inputs are America/Toronto; jobDate mirrors startTime's
@@ -497,8 +538,33 @@ export default async function JobFormPage({
         await applyManualPayouts(created.id, cleanerIds, formData);
       }
 
+      // Convert-to-job (10.4): the request becomes CONVERTED only now, when a
+      // job actually exists — opening the form and abandoning it must not move
+      // the pipeline counter. `updateMany` so a quote deleted mid-edit is a
+      // no-op rather than a thrown error that would strand a created job.
+      const convertedQuoteId = ((formData.get("fromQuoteId") as string) || "").trim();
+      if (convertedQuoteId) {
+        await db.quoteRequest
+          .updateMany({
+            where: { id: convertedQuoteId },
+            data: { status: "CONVERTED" },
+          })
+          .catch(() => {});
+        await db.jobLog
+          .create({
+            data: {
+              jobId: created.id,
+              userId: session!.user.id,
+              action: "UPDATED",
+              description: `Converted from quote request ${convertedQuoteId}`,
+            },
+          })
+          .catch(() => {});
+        revalidatePath("/admin/quotes");
+      }
+
       revalidatePath("/admin/jobs");
-      redirect("/admin/jobs");
+      redirect(convertedQuoteId ? "/admin/quotes" : "/admin/jobs");
     }
   }
 
@@ -551,56 +617,53 @@ export default async function JobFormPage({
   const selectedCleanerIds = prefill?.cleaners?.map((c) => c.id) || [];
 
   return (
-    <div className="max-w-[68rem] mx-auto text-black pb-24">
+    // Item 6 / Q1. This page used to return `max-w-[68rem] mx-auto pb-24` with
+    // NO padding at all, which produced both halves of the complaint: "Back to
+    // Jobs" sat flush against the top of the content area ("a bit close to the
+    // search bar"), and `max-w` does nothing until the viewport passes 68rem,
+    // so from 320px to 1088px the form ran edge to edge with zero side gutters
+    // ("the UI is just warped with the screen"). `p-8` is the container all 30
+    // other admin pages use.
+    <div className="h-full overflow-hidden overflow-y-auto p-8">
+      <div className="max-w-[68rem] mx-auto text-black pb-24">
       {/* Back button */}
       <Link
-        href="/admin/jobs"
+        href={quoteSource ? "/admin/quotes" : "/admin/jobs"}
         className="inline-flex items-center gap-1.5 text-sm mb-6 hover:opacity-70 transition-opacity"
         style={{ color: "var(--primary-60)" }}
       >
         <ArrowLeft size={14} />
-        Back to Jobs
+        {quoteSource ? "Back to Quotes" : "Back to Jobs"}
       </Link>
 
-      {/* Page header */}
+      {/* Page header — the shared admin typography (`.admin-eyebrow` /
+          `.admin-page-title`, used by ~37 admin files) instead of the
+          hand-rolled inline clamp at weight 300. The two-tone "New *cleaning
+          job.*" display style was retired elsewhere long ago. */}
       <header style={{ marginBottom: 36 }}>
-        <p
-          style={{
-            fontSize: 11,
-            fontWeight: 700,
-            textTransform: "uppercase",
-            letterSpacing: "0.08em",
-            color: "var(--primary-60)",
-            marginBottom: 6,
-          }}
-        >
-          {isEditing ? "Edit" : "Create"}
-        </p>
-        <h1
-          style={{
-            fontSize: "clamp(32px, 4vw, 46px)",
-            fontWeight: 300,
-            lineHeight: 1.1,
-            color: "var(--ink)",
-            margin: 0,
-          }}
-        >
-          {isEditing ? (
-            <>Edit <em style={{ fontStyle: "normal" }}>cleaning job.</em></>
-          ) : duplicateId ? (
-            <>Duplicate <em style={{ fontStyle: "normal" }}>cleaning job.</em></>
-          ) : (
-            <>New <em style={{ fontStyle: "normal" }}>cleaning job.</em></>
-          )}
+        <p className="admin-eyebrow">{isEditing ? "Edit" : "Create"}</p>
+        <h1 className="admin-page-title" style={{ margin: 0 }}>
+          {isEditing
+            ? "Edit job"
+            : duplicateId
+            ? "Duplicate job"
+            : quoteSource
+            ? "New job from quote"
+            : "New job"}
         </h1>
         <p style={{ marginTop: 10, fontSize: 15, color: "var(--primary-60)" }}>
-          Fill in the details below. You can update most fields later from the job detail page.
+          {quoteSource
+            ? `Pre-filled from ${quoteSource.name}'s quote request. Check the details, then save — the request is marked Converted once the job is created.`
+            : "Fill in the details below. You can update most fields later from the job detail page."}
         </p>
       </header>
 
       <form action={saveJob} className="space-y-5">
         {isEditing && existingJob && (
           <input type="hidden" name="jobId" value={existingJob.id} />
+        )}
+        {quoteSource && (
+          <input type="hidden" name="fromQuoteId" value={quoteSource.id} />
         )}
 
         {/* Basic Information */}
@@ -613,15 +676,17 @@ export default async function JobFormPage({
                 required>
                 <ClientNameField
                   clients={clients}
-                  defaultName={prefill?.clientName || ""}
+                  defaultName={prefill?.clientName || quotePrefill?.clientName || ""}
                   defaultClientId={prefill?.clientId || ""}
+                  defaultEmail={quotePrefill?.clientEmail}
+                  defaultPhone={quotePrefill?.clientPhone}
                 />
               </FieldWrap>
             </div>
 
             <FieldWrap label="Job type">
               <JobTypeSelector
-                initialValue={prefill?.jobType}
+                initialValue={prefill?.jobType ?? quotePrefill?.jobType}
                 options={serviceOptionList}
               />
             </FieldWrap>
@@ -631,8 +696,24 @@ export default async function JobFormPage({
                 type="text"
                 id="location"
                 name="location"
-                defaultValue={prefill?.location || ""}
+                defaultValue={prefill?.location || quotePrefill?.location || ""}
                 placeholder="123 rue Sainte-Catherine, Montréal"
+              />
+            </FieldWrap>
+
+            {/* Item 3 — "in every single one, there should be an area to enter
+                in your postal code". Saved on the job AND pushed onto the
+                client's saved address. Transportation sits directly below it
+                (stage 4.4: both belong NEAR THE ADDRESS — it is priced off how
+                far the crew has to travel, which is what the address and postal
+                code are telling you). */}
+            <FieldWrap label="Postal code">
+              <Input
+                type="text"
+                id="postalCode"
+                name="postalCode"
+                defaultValue={prefill?.postalCode || ""}
+                placeholder="H2X 1Y6"
               />
             </FieldWrap>
 
@@ -645,6 +726,21 @@ export default async function JobFormPage({
                 placeholder="e.g. Apt 4B, Unit 202"
               />
             </FieldWrap>
+
+            {/* Item 3 / stage 4.4 — the same `parking` column, relabelled and
+                moved up here from Pricing, where it sat between Total tip and
+                Discount with the address three sections above it. Unchanged
+                below the surface: still `name="parking"`, still id `parking`
+                (which is how PriceSummary picks it up), still what the
+                analytics Transportation tile sums
+                (getLabourCostMetric: `acc.transportation += j.parking`).
+                Manual entry: no zone table, no distance API (decided). */}
+            <MoneyFieldWrap
+              label="Transportation"
+              id="parking"
+              name="parking"
+              defaultValue={prefill?.parking}
+            />
 
             <div className="md:col-span-2">
               <FieldWrap label="Description">
@@ -669,7 +765,7 @@ export default async function JobFormPage({
                 defaultValue={
                   isEditing && existingJob?.startTime
                     ? tzInputParts(existingJob.startTime).date
-                    : ""
+                    : quotePrefill?.startDate || ""
                 }
                 size="md"
               />
@@ -701,6 +797,11 @@ export default async function JobFormPage({
         {/* Pricing & Payment */}
         <SectionCard title="Pricing & payment" subtitle="Charges, costs, and payment method">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+            {/* TODO(client): total override? This is the BASE SERVICE PRICE —
+                the customer-facing total is price − discount + tip +
+                transportation + add-ons + tax, and nothing overrides that
+                final figure. Deliberately not built (decision D1); revisit
+                only if the client means "type the tax-inclusive total". */}
             <MoneyFieldWrap label="Price" id="price" name="price" defaultValue={prefill?.price} />
             <MoneyFieldWrap label="Employee pay" id="employeePay" name="employeePay" defaultValue={prefill?.employeePay} />
 
@@ -712,7 +813,9 @@ export default async function JobFormPage({
             </div>
 
             <MoneyFieldWrap label="Total tip" id="totalTip" name="totalTip" defaultValue={prefill?.totalTip} />
-            <MoneyFieldWrap label="Parking" id="parking" name="parking" defaultValue={prefill?.parking} />
+            {/* Transportation used to sit here. It moved to Basic information,
+                immediately under Postal code (stage 4.4 — near the address).
+                It still feeds the Pre-tax line in PriceSummary below. */}
             <MoneyFieldWrap label="Discount amount" id="discountAmount" name="discountAmount" defaultValue={prefill?.discountAmount} />
 
             <FieldWrap label="Payment type">
@@ -740,7 +843,7 @@ export default async function JobFormPage({
                 max="10"
                 id="bedCount"
                 name="bedCount"
-                defaultValue={prefill?.bedCount ?? ""}
+                defaultValue={prefill?.bedCount ?? quotePrefill?.bedCount ?? ""}
                 placeholder="0"
               />
             </FieldWrap>
@@ -752,7 +855,7 @@ export default async function JobFormPage({
                 max="10"
                 id="bathCount"
                 name="bathCount"
-                defaultValue={prefill?.bathCount ?? ""}
+                defaultValue={prefill?.bathCount ?? quotePrefill?.bathCount ?? ""}
                 placeholder="0"
               />
             </FieldWrap>
@@ -779,7 +882,9 @@ export default async function JobFormPage({
                 min="0"
                 id="squareFootage"
                 name="squareFootage"
-                defaultValue={(prefill as any)?.squareFootage ?? ""}
+                defaultValue={
+                  (prefill as any)?.squareFootage ?? quotePrefill?.squareFootage ?? ""
+                }
                 placeholder="e.g. 1200"
               />
             </FieldWrap>
@@ -795,44 +900,60 @@ export default async function JobFormPage({
               id="notes"
               name="notes"
               rows={4}
-              defaultValue={prefill?.notes || ""}
+              defaultValue={prefill?.notes || quotePrefill?.notes || ""}
               placeholder="Pets, parking, door codes, sensitive surfaces, special requirements…"
             />
           </FieldWrap>
         </SectionCard>
 
-        {/* Sticky footer */}
+        {/* Sticky footer. `md:left-[240px]` clears the fixed 240px sidebar,
+            which is `z-50` and so painted over the bar's left end; the inner
+            wrapper repeats the form's 68rem column so Cancel / Create sit
+            under the form instead of drifting to the far edge of a wide
+            window (Q1 §4). */}
         <div
+          className="fixed bottom-0 left-0 right-0 md:left-[240px] z-40"
           style={{
-            position: "fixed",
-            bottom: 0,
-            left: 0,
-            right: 0,
             background: "rgba(250, 247, 242, 0.92)",
             backdropFilter: "blur(8px)",
             borderTop: "1px solid rgba(0,140,156,0.10)",
             padding: "14px 32px",
-            display: "flex",
-            justifyContent: "flex-end",
-            alignItems: "center",
-            gap: 12,
-            zIndex: 40,
           }}
         >
-          {isEditing && existingJob && (
-            <form action={archiveJobAction} style={{ marginRight: "auto" }}>
-              <input type="hidden" name="jobId" value={existingJob.id} />
-              <DeleteButton />
-            </form>
-          )}
-          <Link href={isEditing ? `/admin/jobs/${existingJob?.id}` : duplicateId ? `/admin/jobs/${duplicateId}` : "/admin/jobs"}>
-            <Button type="button" variant="outline">
-              Cancel
-            </Button>
-          </Link>
-          <SubmitButton isEditing={isEditing} />
+          <div
+            className="max-w-[68rem] mx-auto"
+            style={{
+              display: "flex",
+              justifyContent: "flex-end",
+              alignItems: "center",
+              gap: 12,
+            }}
+          >
+            {isEditing && existingJob && (
+              <form action={archiveJobAction} style={{ marginRight: "auto" }}>
+                <input type="hidden" name="jobId" value={existingJob.id} />
+                <DeleteButton />
+              </form>
+            )}
+            <Link
+              href={
+                isEditing
+                  ? `/admin/jobs/${existingJob?.id}`
+                  : duplicateId
+                  ? `/admin/jobs/${duplicateId}`
+                  : quoteSource
+                  ? "/admin/quotes"
+                  : "/admin/jobs"
+              }>
+              <Button type="button" variant="outline">
+                Cancel
+              </Button>
+            </Link>
+            <SubmitButton isEditing={isEditing} />
+          </div>
         </div>
       </form>
+      </div>
     </div>
   );
 }
@@ -847,17 +968,13 @@ function SectionCard({
   subtitle?: string;
   children: React.ReactNode;
 }) {
+  // `.dcard` is the system card (white / --primary-10 border / 16px radius),
+  // rather than the inline #fff + rgba(0,140,156,…) this file re-declared. It
+  // is a flex column with a 16px gap, so the head no longer carries its own
+  // bottom margin.
   return (
-    <section
-      style={{
-        background: "#fff",
-        border: "1px solid rgba(0,140,156,0.08)",
-        borderRadius: 16,
-        padding: "24px 28px",
-        boxShadow: "0 1px 6px rgba(0,140,156,0.05)",
-      }}
-    >
-      <div style={{ marginBottom: 20 }}>
+    <section className="dcard">
+      <div>
         <h2
           style={{
             margin: 0,

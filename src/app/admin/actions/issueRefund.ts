@@ -8,6 +8,7 @@ import { revalidatePath } from "next/cache";
 import { queueAndSendRefund } from "@/lib/email";
 import { applyStrike } from "@/lib/strikes";
 import { logActivity } from "@/lib/activity-log";
+import { requireBudgetCategoryId } from "@/lib/budget-categories";
 
 interface IssueRefundInput {
   jobId: string;
@@ -101,6 +102,10 @@ export async function issueRefund(input: IssueRefundInput) {
       ? `${refundLabel} — Job #${job.jobNumber} (refund: ${stripeRefundId})`
       : `Refund — Job #${job.jobNumber}`;
 
+    // A refund is negative revenue, not an expense — same bucket as the
+    // original charge, so the two net out on the P&L.
+    const revenueCategoryId = await requireBudgetCategoryId("revenue");
+
     await db.$transaction([
       db.job.update({
         where: { id: input.jobId },
@@ -109,7 +114,7 @@ export async function issueRefund(input: IssueRefundInput) {
       db.transaction.create({
         data: {
           date: new Date(),
-          category: "REVENUE",
+          categoryId: revenueCategoryId,
           amount: -input.amount,
           description,
           notes: input.reason?.trim() || null,

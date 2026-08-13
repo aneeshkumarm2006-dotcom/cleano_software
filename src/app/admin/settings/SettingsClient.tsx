@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import InstallAppCard from "@/components/InstallAppCard";
 import {
   User as UserIcon,
@@ -29,6 +29,7 @@ import {
   HardHat,
   Tags,
   FileText,
+  ClipboardList,
 } from "lucide-react";
 import ProfileTab from "./tabs/ProfileTab";
 import TaxSettingsTab from "./tabs/TaxSettingsTab";
@@ -62,6 +63,7 @@ import GeneralTab from "./tabs/GeneralTab";
 import ProviderTab from "./tabs/ProviderTab";
 import WebsiteTab from "./tabs/WebsiteTab";
 import ServiceContentTab from "./tabs/ServiceContentTab";
+import BookingPageTab from "./tabs/BookingPageTab";
 import {
   SettingsUser,
   AppSettingRecord,
@@ -72,7 +74,11 @@ import {
   ChecklistTemplateRecord,
   ServiceAreaRecord,
 } from "./types";
-import type { TransactionRow, BudgetRow } from "../finances/types";
+import type {
+  TransactionRow,
+  BudgetRow,
+  BudgetCategoryOption,
+} from "../finances/types";
 
 interface SettingsClientProps {
   user: SettingsUser;
@@ -90,6 +96,7 @@ interface SettingsClientProps {
   notificationSettings: NotificationSettingRow[];
   transactions: TransactionRow[];
   budgets: BudgetRow[];
+  budgetCategories: BudgetCategoryOption[];
 }
 
 type TabId =
@@ -100,6 +107,7 @@ type TabId =
   | "pricing"
   | "jobTypes"
   | "serviceContent"
+  | "bookingPage"
   | "paymentTypes"
   | "kitTemplates"
   | "checklistTemplates"
@@ -137,13 +145,16 @@ const TAB_SUBTITLES: Record<TabId, string> = {
   pricing: "Per-unit pricing, add-ons and specialty packages.",
   jobTypes: "Define the kinds of jobs you offer.",
   serviceContent: "What's included text + graphic shown per service on booking.",
+  bookingPage:
+    "Which fields the public booking page shows, in what order, per service.",
   paymentTypes: "Customer-facing labels for each payment method.",
   kitTemplates: "Bundled product sets for each visit type.",
   checklistTemplates: "Reusable checklists applied to matching jobs.",
   training: "Modules, videos and quizzes for your team.",
   documents: "Documents your team must read and sign.",
   multipliers: "Pay multiplier at each rating band.",
-  budgets: "Monthly budgets per category vs actual spend.",
+  budgets:
+    "Your budget categories, plus monthly budgets per category vs actual spend.",
   roles: "What each role can access.",
   suppliers: "Vendors and their product pricing.",
   inventoryLocations: "Where inventory is stored and stocked.",
@@ -162,7 +173,7 @@ const TAB_SUBTITLES: Record<TabId, string> = {
 // Sidebar groupings (label → ordered tab ids).
 const TAB_GROUPS: { label: string; ids: TabId[] }[] = [
   { label: "You", ids: ["profile", "availability"] },
-  { label: "Operations", ids: ["closures", "jobTypes", "serviceContent", "checklistTemplates", "serviceAreas"] },
+  { label: "Operations", ids: ["closures", "jobTypes", "serviceContent", "bookingPage", "checklistTemplates", "serviceAreas"] },
   { label: "Money", ids: ["tax", "pricing", "paymentTypes", "multipliers", "budgets", "payments"] },
   { label: "Inventory", ids: ["kitTemplates", "suppliers", "inventoryLocations"] },
   { label: "Team", ids: ["training", "documents", "roles"] },
@@ -183,6 +194,12 @@ const TABS: TabDef[] = [
     id: "serviceContent",
     label: "What's Included",
     icon: FileText,
+    adminOnly: true,
+  },
+  {
+    id: "bookingPage",
+    label: "Booking Page",
+    icon: ClipboardList,
     adminOnly: true,
   },
   {
@@ -278,8 +295,22 @@ export default function SettingsClient({
   notificationSettings,
   transactions,
   budgets,
+  budgetCategories,
 }: SettingsClientProps) {
   const [activeTab, setActiveTab] = useState<TabId>("profile");
+
+  // Budget categories are edited in-page (Settings → Budgets) and their count is
+  // rendered out here in the sidebar, so the list is held one level above the
+  // tab. `router.refresh()` alone left both stale: `revalidatePath` only marks
+  // the route dirty, and this page re-queries every settings section, so the
+  // repaint arrives long after the "added." message does. The tab applies each
+  // change here immediately and the server payload takes over the moment it
+  // lands (identity check: props only change when a new payload arrives).
+  const [categories, setCategories] =
+    useState<BudgetCategoryOption[]>(budgetCategories);
+  useEffect(() => {
+    setCategories(budgetCategories);
+  }, [budgetCategories]);
 
   // The number beside each sidebar item is a REAL record count for that section.
   // (It used to be the tab's zero-padded ORDINAL — "04", "05", "07" — which read
@@ -294,7 +325,11 @@ export default function SettingsClient({
     checklistTemplates: checklistTemplates.length,
     training: trainingModules.length,
     documents: documents.length,
-    budgets: budgets.length,
+    // The active CATEGORIES, which is what this tab's first table lists and what
+    // Add / Rename / Archive change. It counted `budgets.length` — the monthly
+    // Budget rows — so adding a category correctly-but-uselessly left it alone,
+    // and the admin read that as the add having failed.
+    budgets: categories.filter((c) => !c.archived).length,
     suppliers: suppliers.length,
     inventoryLocations: inventoryLocations.length,
     serviceAreas: serviceAreas.length,
@@ -397,6 +432,9 @@ export default function SettingsClient({
           {activeTab === "serviceContent" && isAdmin && (
             <ServiceContentTab settings={appSettings} />
           )}
+          {activeTab === "bookingPage" && isAdmin && (
+            <BookingPageTab settings={appSettings} />
+          )}
           {activeTab === "paymentTypes" && isAdmin && (
             <PaymentTypesTab settings={appSettings} />
           )}
@@ -422,7 +460,12 @@ export default function SettingsClient({
             <MultipliersTab settings={appSettings} />
           )}
           {activeTab === "budgets" && isAdmin && (
-            <BudgetsTab transactions={transactions} budgets={budgets} />
+            <BudgetsTab
+              transactions={transactions}
+              budgets={budgets}
+              categories={categories}
+              onCategoriesChange={setCategories}
+            />
           )}
           {activeTab === "roles" && isAdmin && <RolesTab />}
           {activeTab === "suppliers" && isAdmin && (

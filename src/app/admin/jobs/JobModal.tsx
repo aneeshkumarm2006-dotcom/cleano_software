@@ -99,6 +99,8 @@ interface Job {
   clientId?: string | null;
   location: string | null;
   aptNumber?: string | null;
+  /** Address snapshot, beside location/aptNumber (item 3). */
+  postalCode?: string | null;
   /** Which saved address this job was booked against (item 2, provenance). */
   clientAddressId?: string | null;
   description: string | null;
@@ -135,6 +137,8 @@ export interface ClientLite {
   id: string;
   name: string;
   email?: string | null;
+  /** Fills the modal's Phone field when this client is linked (item 4). */
+  phone?: string | null;
   /** Legacy flat address — the fallback when the client has no address book. */
   address?: string | null;
   aptNumber?: string | null;
@@ -186,7 +190,16 @@ interface JobModalProps {
 
 const formSchema = z.object({
   clientName: z.string().min(1, "Client name is required"),
+  // Contact details (item 4). Not required — an admin taking a booking over
+  // the counter may genuinely have neither — but entering either one is what
+  // lets saveJob find or create the customer's contact record, and without a
+  // record every receipt, cancellation and rating email silently no-ops.
+  // Loose e-mail validation on purpose: a rejected address must not block a
+  // booking, and the send path tolerates a bad one.
+  clientEmail: z.string().optional(),
+  clientPhone: z.string().optional(),
   location: z.string().optional(),
+  postalCode: z.string().optional(),
   aptNumber: z.string().optional(),
   description: z.string().optional(),
   jobType: z.string().optional(),
@@ -722,9 +735,17 @@ export default function JobModal({
     if (isOpen) {
       setCurrentStep(1);
       if (job) {
+        // Contact details come from the linked customer record, which is where
+        // they live — the Job row itself has never carried an email or a phone.
+        const jobClient = job.clientId
+          ? clients.find((c) => c.id === job.clientId) ?? null
+          : null;
         reset({
           clientName: job.clientName || "",
+          clientEmail: jobClient?.email || "",
+          clientPhone: jobClient?.phone || "",
           location: job.location || "",
+          postalCode: job.postalCode || "",
           aptNumber: job.aptNumber || "",
           description: job.description || "",
           jobType: job.jobType || "",
@@ -795,7 +816,10 @@ export default function JobModal({
       } else {
         reset({
           clientName: "",
+          clientEmail: "",
+          clientPhone: "",
           location: "",
+          postalCode: "",
           aptNumber: "",
           description: "",
           jobType: "",
@@ -866,7 +890,12 @@ export default function JobModal({
       shouldDirty: true,
     });
     setValue("aptNumber", addr?.aptNumber ?? "", { shouldDirty: true });
+    setValue("postalCode", addr?.postalCode ?? "", { shouldDirty: true });
   };
+
+  // Registered once so the Client Name input can run its own onChange (detach
+  // from the linked customer) after react-hook-form's.
+  const clientNameField = register("clientName");
 
   const onAddressChoice = (v: string) => {
     setAddressChoice(v);
@@ -1206,7 +1235,13 @@ export default function JobModal({
       if (job?.id) formData.append("jobId", job.id);
       formData.append("clientName", values.clientName);
       formData.append("clientId", selectedClientId);
+      // Item 4. With no linked client these are what saveJob dedupes on and
+      // then creates the customer record from — a job saved without them keeps
+      // the old behaviour (free-text name, no contact, no emails).
+      formData.append("clientEmail", values.clientEmail || "");
+      formData.append("clientPhone", values.clientPhone || "");
       formData.append("location", values.location || "");
+      formData.append("postalCode", values.postalCode || "");
       formData.append("aptNumber", values.aptNumber || "");
       // Which saved address was picked (item 2). NEW_ADDRESS is sent as empty
       // — saveJob then adds the typed address to the client's book and links
@@ -1507,6 +1542,15 @@ export default function JobModal({
                         // Prefer the client's default saved address; fall back
                         // to the legacy flat scalar for a client whose book is
                         // still empty (item 2 — same rule as ClientNameField).
+                        // Contact details follow the customer (item 4) — the
+                        // same thing ClientNameField.pick() does on the
+                        // full-page form.
+                        setValue("clientEmail", c.email || "", {
+                          shouldDirty: true,
+                        });
+                        setValue("clientPhone", c.phone || "", {
+                          shouldDirty: true,
+                        });
                         const def = pickDefaultAddress(c.addresses);
                         if (def) {
                           setAddressChoice(def.id);
@@ -1516,6 +1560,9 @@ export default function JobModal({
                             { shouldDirty: true }
                           );
                           setValue("aptNumber", def.aptNumber ?? "", {
+                            shouldDirty: true,
+                          });
+                          setValue("postalCode", def.postalCode ?? "", {
                             shouldDirty: true,
                           });
                         } else {
@@ -1528,6 +1575,7 @@ export default function JobModal({
                           setValue("aptNumber", c.aptNumber || "", {
                             shouldDirty: true,
                           });
+                          setValue("postalCode", "", { shouldDirty: true });
                         }
                       }}
                       onClear={() => {
@@ -1537,6 +1585,124 @@ export default function JobModal({
                       }}
                     />
                   )}
+
+                  {/* Client Name.
+                      Order (item 4, decision D8): name → email → phone → job
+                      type → location. He asked for email and phone as "the
+                      first two things"; taken literally that puts them above
+                      the name, which breaks the typeahead — the name search is
+                      what FILLS them. Same order as the full-page form. */}
+                  <div>
+                    <label className="input-label tracking-tight">
+                      Client Name <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/50" />
+                      <Input
+                        variant="form"
+                        type="text"
+                        size="md"
+                        {...clientNameField}
+                        onChange={(e) => {
+                          clientNameField.onChange(e);
+                          // Editing the name detaches from the saved customer,
+                          // so saveJob dedupes/creates from what's typed rather
+                          // than silently booking the previously picked client
+                          // under a different name (mirrors ClientNameField).
+                          if (selectedClientId) {
+                            setSelectedClientId("");
+                            setAddressChoice(NEW_ADDRESS);
+                            setDiscountTouched(false);
+                          }
+                        }}
+                        disabled={disableForm}
+                        error={!!errors.clientName}
+                        className="w-full pl-11 px-4 py-3 tracking-tight placeholder:tracking-tight"
+                        placeholder="e.g., Alexis Juarez"
+                        border={false}
+                      />
+                    </div>
+                    {errors.clientName && (
+                      <p className="mt-1.5 text-xs text-red-600">
+                        {errors.clientName.message}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Email + Phone (item 4) — filled from the linked customer,
+                      editable, and used to find-or-create the contact record
+                      for a brand-new one. Two-up, stacking below 640px, same
+                      as `.cnf-contact-grid` on the full-page form. */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="input-label tracking-tight">
+                        Email
+                      </label>
+                      <Input
+                        variant="form"
+                        type="email"
+                        size="md"
+                        autoComplete="off"
+                        {...register("clientEmail")}
+                        disabled={disableForm}
+                        className="w-full px-4 py-3 tracking-tight placeholder:tracking-tight"
+                        placeholder="name@example.com"
+                        border={false}
+                      />
+                    </div>
+                    <div>
+                      <label className="input-label tracking-tight">
+                        Phone
+                      </label>
+                      <Input
+                        variant="form"
+                        type="tel"
+                        size="md"
+                        autoComplete="off"
+                        {...register("clientPhone")}
+                        disabled={disableForm}
+                        className="w-full px-4 py-3 tracking-tight placeholder:tracking-tight"
+                        placeholder="(514) 555-0199"
+                        border={false}
+                      />
+                    </div>
+                  </div>
+                  {!selectedClientId && (
+                    <p className="-mt-2 text-xs text-[#008C9C]/70">
+                      No customer linked — an email or phone finds the existing
+                      contact, or creates one, so this booking can receive
+                      receipts and reminders.
+                    </p>
+                  )}
+
+                  {/* Job Type */}
+                  <div>
+                    <label className="input-label tracking-tight">
+                      Job Type
+                    </label>
+                    <CustomDropdown
+                      trigger={
+                        <Button
+                          variant="default"
+                          size="md"
+                          border={false}
+                          type="button"
+                          disabled={disableForm}
+                          className="w-full h-[44px] px-4 py-3 flex items-center !justify-between bg-[#008C9C]/5">
+                          <span className="text-sm font-[350] text-[#008C9C]">
+                            {serviceChoices.find((t) => t.value === selectedJobType)
+                              ?.label || "Select type"}
+                          </span>
+                          <ChevronDown className="w-4 h-4 text-[#008C9C]/50" />
+                        </Button>
+                      }
+                      options={serviceChoices.map((type) => ({
+                        label: type.label,
+                        onClick: () => setSelectedJobType(type.value),
+                      }))}
+                      maxHeight="12rem"
+                    />
+                  </div>
 
                   {/* Saved-address picker — only when the linked client has a
                       book. Ported from ClientNameField: default first (the
@@ -1568,32 +1734,6 @@ export default function JobModal({
                     </div>
                   )}
 
-                  {/* Client Name */}
-                  <div>
-                    <label className="input-label tracking-tight">
-                      Client Name <span className="text-red-500">*</span>
-                    </label>
-                    <div className="relative">
-                      <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/50" />
-                      <Input
-                        variant="form"
-                        type="text"
-                        size="md"
-                        {...register("clientName")}
-                        disabled={disableForm}
-                        error={!!errors.clientName}
-                        className="w-full pl-11 px-4 py-3 tracking-tight placeholder:tracking-tight"
-                        placeholder="e.g., Alexis Juarez"
-                        border={false}
-                      />
-                    </div>
-                    {errors.clientName && (
-                      <p className="mt-1.5 text-xs text-red-600">
-                        {errors.clientName.message}
-                      </p>
-                    )}
-                  </div>
-
                   {/* Location */}
                   <div>
                     <label className="input-label tracking-tight">
@@ -1614,50 +1754,69 @@ export default function JobModal({
                     </div>
                   </div>
 
-                  {/* Apartment / Unit # */}
-                  <div>
-                    <label className="input-label tracking-tight">
-                      Apartment / Unit #
-                    </label>
-                    <Input
-                      variant="form"
-                      type="text"
-                      size="md"
-                      {...register("aptNumber")}
-                      disabled={disableForm}
-                      className="w-full px-4 py-3 tracking-tight placeholder:tracking-tight"
-                      placeholder="e.g. Apt 4B"
-                      border={false}
-                    />
+                  {/* Postal code + Apartment (item 3). The postal code is
+                      saved on the job and pushed onto the client's saved
+                      address. */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="input-label tracking-tight">
+                        Postal code
+                      </label>
+                      <Input
+                        variant="form"
+                        type="text"
+                        size="md"
+                        {...register("postalCode")}
+                        disabled={disableForm}
+                        className="w-full px-4 py-3 tracking-tight placeholder:tracking-tight"
+                        placeholder="H2X 1Y6"
+                        border={false}
+                      />
+                    </div>
+                    <div>
+                      <label className="input-label tracking-tight">
+                        Apartment / Unit #
+                      </label>
+                      <Input
+                        variant="form"
+                        type="text"
+                        size="md"
+                        {...register("aptNumber")}
+                        disabled={disableForm}
+                        className="w-full px-4 py-3 tracking-tight placeholder:tracking-tight"
+                        placeholder="e.g. Apt 4B"
+                        border={false}
+                      />
+                    </div>
                   </div>
 
-                  {/* Job Type */}
+                  {/* Item 3 / stage 4.4 — the `parking` column, relabelled and
+                      moved here from step 3 "Pricing & Notes". It belongs NEAR
+                      THE ADDRESS: it is priced off how far the crew travels,
+                      and the address is on this step. Nothing changed under the
+                      surface — same `register("parking")`, same value appended
+                      to the form data, still what the analytics Transportation
+                      tile sums (getLabourCostMetric). Manual entry, no zone
+                      table. */}
                   <div>
                     <label className="input-label tracking-tight">
-                      Job Type
+                      Transportation
                     </label>
-                    <CustomDropdown
-                      trigger={
-                        <Button
-                          variant="default"
-                          size="md"
-                          border={false}
-                          type="button"
-                          disabled={disableForm}
-                          className="w-full h-[44px] px-4 py-3 flex items-center !justify-between bg-[#008C9C]/5">
-                          <span className="text-sm font-[350] text-[#008C9C]">
-                            {serviceChoices.find((t) => t.value === selectedJobType)
-                              ?.label || "Select type"}
-                          </span>
-                          <ChevronDown className="w-4 h-4 text-[#008C9C]/50" />
-                        </Button>
-                      }
-                      options={serviceChoices.map((type) => ({
-                        label: type.label,
-                        onClick: () => setSelectedJobType(type.value),
-                      }))}
-                      maxHeight="12rem"
-                    />
+                    <div className="relative">
+                      <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/50" />
+                      <Input
+                        variant="form"
+                        type="number"
+                        size="md"
+                        step="0.01"
+                        min="0"
+                        {...register("parking")}
+                        disabled={disableForm}
+                        className="w-full pl-11 px-4 py-3 tracking-tight placeholder:tracking-tight"
+                        placeholder="0.00"
+                        border={false}
+                      />
+                    </div>
                   </div>
 
                   {/* Description */}
@@ -1902,6 +2061,11 @@ export default function JobModal({
                     </h3>
 
                     <div className="grid grid-cols-2 gap-4">
+                      {/* TODO(client): total override? This is the BASE
+                          SERVICE PRICE — the customer-facing total is
+                          price − discount + tip + transportation + add-ons +
+                          tax, and nothing overrides that final figure.
+                          Deliberately not built (decision D1). */}
                       <div>
                         <label className="input-label tracking-tight">
                           Price
@@ -2003,26 +2167,9 @@ export default function JobModal({
                         </div>
                       </div>
 
-                      <div>
-                        <label className="input-label tracking-tight">
-                          Parking
-                        </label>
-                        <div className="relative">
-                          <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/50" />
-                          <Input
-                            variant="form"
-                            type="number"
-                            size="md"
-                            step="0.01"
-                            min="0"
-                            {...register("parking")}
-                            disabled={disableForm}
-                            className="w-full pl-11 px-4 py-3 tracking-tight placeholder:tracking-tight"
-                            placeholder="0.00"
-                            border={false}
-                          />
-                        </div>
-                      </div>
+                      {/* Transportation used to sit here, between Total Tip and
+                          Discount. It moved to step 1 "Basic Info", directly
+                          under Postal code (stage 4.4 — near the address). */}
 
                       <div>
                         <div className="flex items-center justify-between">
@@ -2810,7 +2957,10 @@ function ClientSearchPicker({
     if (!q) return clients.slice(0, 20);
     return clients
       .filter((c) => {
-        const haystack = `${c.name} ${c.email ?? ""} ${c.address ?? ""}`.toLowerCase();
+        // Phone included (item 4) — an admin who has the customer on the line
+        // usually has their number, not the spelling of their name.
+        const haystack =
+          `${c.name} ${c.email ?? ""} ${c.phone ?? ""} ${c.address ?? ""}`.toLowerCase();
         return haystack.includes(q);
       })
       .slice(0, 20);
@@ -2857,7 +3007,7 @@ function ClientSearchPicker({
               setOpen(true);
             }}
             onFocus={() => setOpen(true)}
-            placeholder="Search clients by name, email, or address…"
+            placeholder="Search clients by name, email, phone, or address…"
             className="w-full h-[44px] px-4 py-3 rounded-xl bg-[#008C9C]/5 text-sm text-[#008C9C] placeholder:text-[#008C9C]/50 outline-none focus:bg-[#008C9C]/10"
           />
           {open && (

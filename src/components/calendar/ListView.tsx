@@ -5,6 +5,7 @@ import { useCalendar } from "@/components/calendar/CalendarContext";
 import {
   addDays,
   eventOverlapsDay,
+  hasRealEnd,
   startOfMonth,
   endOfMonth,
   startOfWeek,
@@ -31,9 +32,17 @@ function timeStr(d: Date) {
     .replace(":00", "");
 }
 
-function durationLabel(event: CalendarEvent) {
-  const end = event.end ?? new Date(event.start.getTime() + 2 * 3600000);
-  const hrs = (end.getTime() - event.start.getTime()) / 3600000;
+/**
+ * Length of the booking, or null when it doesn't have one.
+ *
+ * Half the live jobs store `endTime === startTime` (see `eventEnd` in ./utils),
+ * which this printed as a flat **"0h"** under every one of their start times.
+ * The old `?? +2h` fallback never fired for them either — and inventing a
+ * duration is the wrong repair anyway, so an unknown length now prints nothing.
+ */
+function durationLabel(event: CalendarEvent): string | null {
+  if (!hasRealEnd(event)) return null;
+  const hrs = (event.end!.getTime() - event.start.getTime()) / 3600000;
   return `${Math.round(hrs * 10) / 10}h`;
 }
 
@@ -103,7 +112,9 @@ export const ListView: React.FC<ListViewProps> = ({ view }) => {
                   <span className="cal-list-bar" style={{ background: m.color }} />
                   <span className="cal-list-time">
                     {timeStr(event.start)}
-                    <span className="cal-list-dur">{durationLabel(event)}</span>
+                    {durationLabel(event) ? (
+                      <span className="cal-list-dur">{durationLabel(event)}</span>
+                    ) : null}
                   </span>
                   <span className="cal-list-main">
                     <span className="cal-list-client">

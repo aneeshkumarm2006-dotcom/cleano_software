@@ -1,4 +1,7 @@
-"use server";
+// NOT "use server" any more — see the note under "ROLE GATING" below and the
+// full write-up in src/lib/chatUnread.ts. This is now a plain server module
+// whose only caller is the GET handler at
+// src/app/api/admin/attention-counts/route.ts.
 
 import { db } from "@/db";
 import { auth } from "@/lib/auth";
@@ -14,10 +17,11 @@ import { headers } from "next/headers";
  * was added — resolving the thing IS marking it read.
  *
  * ROLE GATING LIVES HERE, not only in the nav. `Sidebar.tsx` hides `adminOnly`
- * entries from OPS_MANAGER / FIELD_LEAD, but a server action is an independently
- * callable RPC endpoint (see the note atop src/lib/action-guards.ts) — without
- * the branch below, those two roles could read a count for a page that would
- * bounce them. The split matches each destination page's own guard exactly:
+ * entries from OPS_MANAGER / FIELD_LEAD, but this is reached through an
+ * independently callable HTTP endpoint (it used to be an independently callable
+ * server action — same exposure, see the note atop src/lib/action-guards.ts) —
+ * without the branch below, those two roles could read a count for a page that
+ * would bounce them. The split matches each destination page's own guard exactly:
  *
  *   all four admin roles → /admin/requests, /admin/job-applications,
  *                          /admin/quotes, /admin/documents
@@ -43,9 +47,9 @@ export interface AdminAttentionCounts {
   inventory: number;
 }
 
-// Module-private: a "use server" file may only EXPORT async functions (types are
-// erased, so the interface above is fine). The client-side fallback lives beside
-// the hook in src/components/AdminAttentionCounts.tsx.
+// Module-private. The client-side fallback lives beside the hook in
+// src/components/AdminAttentionCounts.tsx, which imports the interface above
+// with `import type` so nothing in this file reaches the browser bundle.
 const ZERO: AdminAttentionCounts = {
   requests: 0,
   applications: 0,

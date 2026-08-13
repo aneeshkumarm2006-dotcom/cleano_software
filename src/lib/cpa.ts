@@ -4,6 +4,7 @@
 import "server-only";
 import { db } from "@/db";
 import { listContacts } from "@/lib/crm";
+import { addStoreMonths, formatDate, startOfStoreMonth } from "@/lib/timezone";
 import {
   CHANNELS,
   channelFromSource,
@@ -81,8 +82,11 @@ export async function getCpaReport(): Promise<CpaReport> {
   const trend: TrendPoint[] = [];
   const now = new Date();
   for (let i = 5; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const next = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
+    // Store-timezone month boundaries — this runs on the host (UTC), where
+    // `new Date(y, m, 1)` is 8 PM on the last day of the previous month in
+    // Montréal, so contacts created that evening fell in the wrong bucket.
+    const d = startOfStoreMonth(addStoreMonths(now, -i));
+    const next = startOfStoreMonth(addStoreMonths(now, -i + 1));
     const inMonth = (iso: string | Date) => {
       const t = new Date(iso);
       return t >= d && t < next;
@@ -91,7 +95,7 @@ export async function getCpaReport(): Promise<CpaReport> {
     const firstCleanM = contacts.filter((c) => c.lifetimeValue > 0 && inMonth(c.createdAt)).length;
     const spendM = spendRows.filter((s) => inMonth(s.date)).reduce((a, s) => a + s.amount, 0);
     trend.push({
-      name: d.toLocaleDateString("en-US", { month: "short" }),
+      name: formatDate(d, { month: "short" }),
       bookings,
       cpa: firstCleanM ? Math.round(spendM / firstCleanM) : 0,
     });

@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { isNotificationEnabled } from "@/lib/notifications";
 import { coverFor } from "@/lib/gift-cards/covers";
 import { BOOKING_DEPOSIT_USD } from "@/lib/job-billing";
+import { STORE_TZ } from "@/lib/timezone";
 
 /**
  * Identifies the catalog row that gates a given email send.
@@ -24,9 +25,9 @@ function getResend() {
   return new Resend(process.env.RESEND_API_KEY);
 }
 
-// Business timezone — all customer/provider-facing times must render here,
-// not in the serverless UTC timezone. Keep in sync with src/lib/time.ts.
-const TZ = process.env.NEXT_PUBLIC_BUSINESS_TIMEZONE ?? "America/Toronto";
+// Store timezone — all customer/provider-facing times must render here, not in
+// the serverless UTC timezone. Single source of truth: src/lib/timezone.ts.
+const TZ = STORE_TZ;
 
 function fmt(n: number | null | undefined) {
   return `$${(n ?? 0).toFixed(2)}`;
@@ -2540,7 +2541,7 @@ export async function sendGiftCardPurchaserReceipt(opts: {
   scheduledDeliveryDate: string | null;
 }) {
   const sentLine = opts.scheduledDeliveryDate
-    ? `We'll deliver it to <strong>${opts.recipientName}</strong> (${opts.recipientEmail}) on <strong>${new Date(opts.scheduledDeliveryDate).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</strong>.`
+    ? `We'll deliver it to <strong>${opts.recipientName}</strong> (${opts.recipientEmail}) on <strong>${new Date(opts.scheduledDeliveryDate).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric", timeZone: TZ })}</strong>.`
     : `We've sent it to <strong>${opts.recipientName}</strong> (${opts.recipientEmail}) just now.`;
   const html = layout(
     h1(`Thanks for your gift card purchase`) +
@@ -2592,7 +2593,7 @@ export async function sendAdminGiftCardPurchased(opts: {
         ["To", `${opts.recipientName} (${opts.recipientEmail})`],
         ["Amount", `$${opts.amount.toFixed(2)}`],
         ["Delivery", opts.scheduledDeliveryDate
-          ? `Scheduled for ${new Date(opts.scheduledDeliveryDate).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`
+          ? `Scheduled for ${new Date(opts.scheduledDeliveryDate).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: TZ })}`
           : "Immediate"],
       ])
   );

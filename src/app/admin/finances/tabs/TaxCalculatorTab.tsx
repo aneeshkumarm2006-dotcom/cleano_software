@@ -5,13 +5,17 @@ import { Calculator } from "lucide-react";
 import Card from "@/components/ui/Card";
 import PremiumSelect from "@/components/ui/PremiumSelect";
 import {
+  BudgetCategoryOption,
   TaxConfig,
   TransactionRow,
   formatCurrency,
+  indexCategories,
+  isRevenueCategory,
 } from "../types";
 
 interface Props {
   transactions: TransactionRow[];
+  categories: BudgetCategoryOption[];
   taxConfig: TaxConfig;
 }
 
@@ -28,8 +32,13 @@ function periodStart(period: Period): Date | null {
   return new Date(now.getFullYear(), 0, 1);
 }
 
-export default function TaxCalculatorTab({ transactions, taxConfig }: Props) {
+export default function TaxCalculatorTab({
+  transactions,
+  categories,
+  taxConfig,
+}: Props) {
   const [period, setPeriod] = useState<Period>("quarter");
+  const catIndex = useMemo(() => indexCategories(categories), [categories]);
 
   const {
     revenueTotal,
@@ -50,7 +59,7 @@ export default function TaxCalculatorTab({ transactions, taxConfig }: Props) {
     let taxPaidOnExpenses = 0;
 
     for (const t of rows) {
-      if (t.category === "REVENUE") {
+      if (isRevenueCategory(catIndex, t.categoryId)) {
         revenueTotal += t.amount;
         taxCollected += t.taxAmount || 0;
       } else {
@@ -66,7 +75,7 @@ export default function TaxCalculatorTab({ transactions, taxConfig }: Props) {
       taxPaidOnExpenses,
       netRemittance: taxCollected - taxPaidOnExpenses,
     };
-  }, [transactions, period]);
+  }, [transactions, catIndex, period]);
 
   const combinedRate = (taxConfig.gstRate || 0) + (taxConfig.qstRate || 0);
   const estimatedCollected = (revenueTotal * combinedRate) / 100;

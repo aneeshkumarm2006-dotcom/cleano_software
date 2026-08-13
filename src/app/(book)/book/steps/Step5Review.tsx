@@ -5,7 +5,12 @@ import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
 import { CreditCard, Loader2, ShieldCheck, Tag, CheckCircle2, Banknote } from "lucide-react";
 import { applyPromoCode } from "../../actions/applyPromoCode";
-import { BookingDraft, SERVICE_TYPES, FREQUENCIES } from "../types";
+import { BookingDraft, SERVICE_TYPES } from "../types";
+import {
+  BOOKING_PAGE_DEFAULTS,
+  frequencyLabel,
+  type BookingPageConfig,
+} from "@/lib/booking-page-config";
 import { formatAddressLine } from "@/lib/client-address";
 import { calculateTax } from "@/lib/tax";
 import { addOnLineTotal, sumAddOns } from "@/lib/job-money";
@@ -19,9 +24,17 @@ interface Props {
   onChange: (patch: Partial<BookingDraft>) => void;
   /** Per-service-category recurring discount table (item 7). */
   freqDiscounts?: Record<string, Record<string, number>>;
+  /** Admin-editable field layout (item 17) — source of frequency labels. */
+  bookingPage?: BookingPageConfig;
 }
 
-export default function Step5Review({ draft, basePrice, onChange, freqDiscounts = {} }: Props) {
+export default function Step5Review({
+  draft,
+  basePrice,
+  onChange,
+  freqDiscounts = {},
+  bookingPage = BOOKING_PAGE_DEFAULTS,
+}: Props) {
   const breakdown = useMemo(() => {
     const addOnTotal = sumAddOns(draft.addOns.filter((a) => a.selected));
     // GROSS pre-tax subtotal. This is the figure a promo code is quoted
@@ -122,7 +135,10 @@ export default function Step5Review({ draft, basePrice, onChange, freqDiscounts 
   }, [draft.email, draft.name]);
 
   const service = SERVICE_TYPES.find((s) => s.value === draft.serviceType);
-  const freq = FREQUENCIES.find((f) => f.value === draft.frequency);
+  // Per-service label from the admin config. The old lookup searched only the
+  // standard list, so every Airbnb-only frequency (twice-weekly, daily/20+)
+  // reviewed as "—" even though it priced correctly.
+  const freqText = frequencyLabel(bookingPage, draft.serviceType, draft.frequency);
 
   // Recurring discount for the 2nd+ cleaning, from the admin config (item 7).
   const isAirbnb = draft.serviceType === "AIRBNB";
@@ -168,7 +184,7 @@ export default function Step5Review({ draft, basePrice, onChange, freqDiscounts 
         </span>
         <dl className="cl-dlist">
           <Row dt="Type" dd={service?.label ?? "—"} />
-          <Row dt="Frequency" dd={freq?.label ?? "—"} />
+          <Row dt="Frequency" dd={freqText} />
           <Row
             dt="Address"
             dd={

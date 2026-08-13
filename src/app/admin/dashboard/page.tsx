@@ -7,6 +7,7 @@ import {
   Briefcase,
   Users,
   Package,
+  Wallet,
   CalendarDays,
   Clock,
   AlertTriangle,
@@ -16,8 +17,16 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { isAdminRole } from "@/lib/role-routing";
-import { fmtDate, fmtTime, startOfDayTz } from "@/lib/time";
-import { getTotalRevenue, getEmployeeCounts, productWhere, simpleJobStatus } from "@/lib/metrics";
+import { fmtDate, fmtTime } from "@/lib/time";
+import { getStoreHour, storeDayRange } from "@/lib/timezone";
+import {
+  getTotalRevenue,
+  getScheduledValue,
+  getCompletedJobCount,
+  getEmployeeCounts,
+  productWhere,
+  simpleJobStatus,
+} from "@/lib/metrics";
 import { isCleanerLow } from "@/lib/inventory-thresholds";
 import { avatarColor, initials } from "@/lib/avatar";
 import CleanerDashboard from "./CleanerDashboard";
@@ -27,6 +36,18 @@ export const dynamic = "force-dynamic";
 // ── helpers ───────────────────────────────────────────────
 function money(n: number): string {
   return `$${Math.round(n).toLocaleString("en-US")}`;
+}
+/**
+ * Exact-to-the-cent money, for the two tiles that must reconcile with the Jobs
+ * page card of the same name. Rounding to whole dollars here is what let the
+ * dashboard and /admin/jobs quote visibly different figures for the same
+ * definition (client feedback items 10 + 27).
+ */
+function money2(n: number): string {
+  return `$${n.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
 }
 
 // Derived-status pill map (matches the Jobs table — spec's three operational
@@ -154,20 +175,27 @@ export default async function DashboardPage() {
   }
 
   const now = new Date();
-  // Business-timezone day boundary — setHours() would be the server's midnight
-  // (UTC on Vercel), shifting the "Today's jobs" tile by 4-5 hours.
-  const startOfToday = startOfDayTz(now);
+  // Store-timezone day boundary — setHours() would be the server's midnight
+  // (UTC on Vercel), shifting the "Today's jobs" tile by 4-5 hours. Half-open
+  // [start, end) and derived per civil day, so DST days (23h/25h) still bucket
+  // exactly one day's jobs.
+  const { start: startOfToday, end: endOfToday } = storeDayRange(now);
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
   const [
     totalJobs, completedJobs, inProgressJobs, pendingPaymentJobs, todaysJobs, upcomingJobs, recentJobs,
   ] = await Promise.all([
     db.job.count({ where: { deletedAt: null } }),
-    db.job.count({ where: { deletedAt: null, status: "COMPLETED" } }),
+    // COMPLETED ∪ PAID, via the canonical bucket the Jobs page's Completed tab
+    // uses. Counting bare status:"COMPLETED" here is what made the dashboard
+    // read 62 while /admin/jobs read 84 (item 27): the 62 were simply the
+    // completed-but-unpaid ones — the same number as the Pending payment tile
+    // two rows down, which is what gave the bug away.
+    getCompletedJobCount(now),
     db.job.count({ where: { deletedAt: null, status: "IN_PROGRESS" } }),
     db.job.count({ where: { deletedAt: null, status: "COMPLETED", paymentReceived: false } }),
     db.job.count({
-      where: { deletedAt: null, jobDate: { gte: startOfToday, lt: new Date(startOfToday.getTime() + 86400000) } },
+      where: { deletedAt: null, jobDate: { gte: startOfToday, lt: endOfToday } },
     }),
     db.job.findMany({
       where: { deletedAt: null, jobDate: { gte: new Date() }, status: { in: ["CREATED", "SCHEDULED"] } },
@@ -183,13 +211,16 @@ export default async function DashboardPage() {
     }),
   ]);
 
-  const [totalRevenue, monthlyRevenue, employeeCounts, onSiteEmployees, products] = await Promise.all([
+  const [totalRevenue, monthlyRevenue, scheduledValue, employeeCounts, onSiteEmployees, products] = await Promise.all([
     // Canonical realized revenue (completed+paid, discount/refund applied, tax
     // excluded, startTime basis) — shared with Analytics/Clients/Employees.
     getTotalRevenue(),
     // Trailing-30-day slice of the same canonical rule (startTime basis) so a
     // bulk import doesn't dump all revenue into the current month.
     getTotalRevenue({ from: thirtyDaysAgo }),
+    // Booked but not yet collected — the SQL twin of the predicate the Jobs page
+    // applies to its filtered list, so the two cards agree to the cent (item 10).
+    getScheduledValue(),
     getEmployeeCounts(),
     db.user.count({ where: { cleaningJobs: { some: { status: "IN_PROGRESS" } } } }),
     // Same active-record rule as the Inventory page — soft-deleted products
@@ -231,7 +262,9 @@ export default async function DashboardPage() {
   }
   const refillCleaners = [...refillCleanerMap.values()].sort((a, b) => b.lowCount - a.lowCount);
 
-  const hours = now.getHours();
+  // Store-timezone hour, not the server's. This page renders on the host (UTC),
+  // so now.getHours() greeted the owner with "Good morning" at 10:13 PM (Q9).
+  const hours = getStoreHour(now);
   const greeting = hours < 12 ? "Good morning" : hours < 18 ? "Good afternoon" : "Good evening";
   const dateLabel = fmtDate(now, { weekday: "long", month: "long", day: "numeric" });
   const firstName = (session.user.name ?? "there").split(/\s+/)[0];
@@ -249,11 +282,18 @@ export default async function DashboardPage() {
       </header>
 
       {/* Primary metrics */}
+      {/*
+        The Products tile that used to close this row moved out (item 10) — the
+        client asked for the two money figures he works from on the Jobs page to
+        lead the dashboard instead. Product count and inventory value stay one
+        click away: the Inventory quick action below carries the count, and the
+        low-stock tiles surface anything that needs attention.
+      */}
       <div className="astat-grid" style={{ marginBottom: 18 }}>
-        <Stat icon={CreditCard} label="Total revenue" value={money(totalRevenue)} delta={money(monthlyRevenue)} deltaUp hint="this month" />
+        <Stat icon={CreditCard} label="Total revenue collected" value={money2(totalRevenue)} delta={money(monthlyRevenue)} deltaUp hint="this month" />
+        <Stat icon={Wallet} label="Scheduled value" value={money2(scheduledValue)} hint="booked · not yet earned" />
         <Stat icon={Briefcase} label="Total jobs" value={totalJobs} delta={String(completedJobs)} hint="completed" />
         <Stat icon={Users} label="Employees" value={employeeCount} delta={String(onSiteEmployees)} deltaUp hint={employeeCounts.inactive > 0 ? `active now · ${employeeCounts.inactive} inactive` : "active now"} />
-        <Stat icon={Package} label="Products" value={totalProducts} delta={money(totalInventoryValue)} hint="inventory value" />
       </div>
 
       {/* Secondary + conditional alerts */}
@@ -330,7 +370,9 @@ export default async function DashboardPage() {
           {[
             { Icon: Plus, label: "New job", sub: "Schedule a cleaning", href: "/admin/jobs/new" },
             { Icon: Users, label: "Employees", sub: `${employeeCount} on the team`, href: "/admin/employees" },
-            { Icon: Package, label: "Inventory", sub: `${totalProducts} products`, href: "/admin/inventory" },
+            // Carries what the retired Products tile used to say, so the count
+            // and inventory value stay on the dashboard without a tile.
+            { Icon: Package, label: "Inventory", sub: `${totalProducts} products · ${money(totalInventoryValue)}`, href: "/admin/inventory" },
             { Icon: Briefcase, label: "All jobs", sub: `${totalJobs} total`, href: "/admin/jobs" },
           ].map((q) => (
             <Link key={q.label} href={q.href} className="dash-qa">

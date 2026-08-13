@@ -140,23 +140,13 @@ export const SERVICE_TYPES: { value: string; label: string }[] = [
   { value: "AIRBNB", label: "Airbnb turnover" },
 ];
 
-export const FREQUENCIES: { value: Frequency; label: string; hint?: string }[] =
-  [
-    { value: "ONE_TIME", label: "One-time", hint: "Just this cleaning" },
-    { value: "WEEKLY", label: "Weekly", hint: "Auto-books the next 4 weekly visits" },
-    { value: "BIWEEKLY", label: "Every 2 weeks", hint: "Auto-books the next 4 visits" },
-    { value: "MONTHLY", label: "Monthly", hint: "Auto-books the next 3 monthly visits" },
-    { value: "QUARTERLY", label: "Quarterly", hint: "Auto-books the next 2 quarterly visits" },
-  ];
-
-export const AIRBNB_FREQUENCIES: { value: Frequency; label: string; hint?: string; discount: number }[] =
-  [
-    { value: "ONE_TIME", label: "One-time", hint: "Full price", discount: 0 },
-    { value: "BIWEEKLY", label: "Every 2 weeks", hint: "8% off every visit", discount: 8 },
-    { value: "WEEKLY", label: "Weekly", hint: "10% off every visit", discount: 10 },
-    { value: "TWICE_WEEKLY", label: "Twice a week (~8/mo)", hint: "15% off every visit", discount: 15 },
-    { value: "HIGH_FREQUENCY", label: "Daily / 20+ per month", hint: "20% off every visit", discount: 20 },
-  ];
+// Frequency CHOICES and their labels now live in @/lib/booking-page-config as
+// admin-editable config (item 17), per service type — that is what item 14's
+// "Minimum N times per month" Airbnb labels are expressed in. The discount
+// PERCENTAGES live in Settings → Pricing Rules (`pricing.serviceTypes`). The
+// two hardcoded lists that used to sit here were deleted rather than left
+// beside the config: the Airbnb one carried its own discount ladder, which was
+// a second source of truth for money.
 
 export const PC_HOURLY_RATE = 50; // $50/hr per cleaner for post-construction
 

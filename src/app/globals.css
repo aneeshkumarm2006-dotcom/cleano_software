@@ -1285,30 +1285,10 @@ body {
 
 .cal-body { flex: 1; min-height: 0; background: #fff; border-radius: 16px; box-shadow: var(--shadow-soft); border: 1px solid var(--primary-10); overflow: hidden; display: flex; flex-direction: column; }
 
-/* MONTH */
-.cal-month { display: flex; flex-direction: column; height: 100%; }
-.cal-month-dow { display: grid; grid-template-columns: repeat(7, 1fr); border-bottom: 1px solid var(--primary-10); }
-.cal-month-dow > div { padding: 13px; text-align: center; font-size: 12px; text-transform: uppercase; letter-spacing: 0.07em; font-weight: 700; color: var(--primary-50); }
-.cal-month-grid { flex: 1; display: grid; grid-template-columns: repeat(7, 1fr); grid-auto-rows: minmax(138px, 1fr); }
-.cal-mcell { border-right: 1px solid var(--primary-10); border-bottom: 1px solid var(--primary-10); padding: 9px; cursor: pointer; min-height: 0; display: flex; flex-direction: column; gap: 6px; transition: background .1s; overflow: hidden; }
-.cal-mcell:hover { background: var(--cream); }
-.cal-mcell.out { background: #fcfbf9; }
-.cal-mcell.out .cal-mdate { color: var(--primary-30); }
-.cal-mcell-head { display: flex; align-items: center; justify-content: space-between; }
-.cal-mcount { font-size: 10.5px; font-weight: 700; color: var(--primary-70); background: var(--primary-5); padding: 1px 8px; border-radius: 999px; }
-.cal-mdate { font-size: 14.5px; font-weight: 600; color: var(--ink-soft); width: 29px; height: 29px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; }
-.cal-mdate.today { background: var(--primary); color: #fff; }
-.cal-mcell-jobs { display: flex; flex-direction: column; gap: 3px; overflow: hidden; }
-.cal-chip { display: flex; align-items: center; gap: 5px; padding: 4px 7px; border-radius: 6px; border: 0; cursor: pointer; font-family: inherit; font-size: 12.5px; width: 100%; text-align: left; }
-.cal-chip.faded { opacity: 0.6; }
-.cal-chip-dot { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 auto; }
-.cal-chip-t { font-weight: 700; font-variant-numeric: tabular-nums; }
-.cal-chip-n { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1 1 auto; min-width: 0; }
-/* Item 28: assigned cleaner initials on a month card, so the grid can be
-   scanned by person. Pushed to the right so the client name keeps the space. */
-.cal-chip-who { flex: 0 0 auto; margin-left: auto; font-size: 9.5px; font-weight: 800; letter-spacing: .02em; opacity: .75; padding-left: 4px; }
-.cal-more { background: none; border: 0; cursor: pointer; font-family: inherit; font-size: 11px; font-weight: 600; color: var(--primary-60); text-align: left; padding: 1px 6px; }
-.cal-more:hover { color: var(--primary); }
+/* MONTH — the month-grid rules live in ONE place, in the admin calendar block
+   further down this file (search "── MONTH ──"). They used to be declared here
+   too, with different values, so the second copy silently won and edits made
+   here appeared to do nothing. Don't re-add them. */
 
 /* AGENDA */
 .cal-agenda { overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
@@ -1380,20 +1360,57 @@ body {
 .cjm-sub { font-size: 12.5px; color: var(--primary-50); margin-top: 4px; }
 
 /* ── Chat UI ─────────────────────────────────── */
+/* Sole consumer is AdminChatClient, whose parent is already `flex:1; minHeight:0`
+   — so `height:100%` resolves to exactly the space left after the tabs, header
+   and padding. It used to hardcode `calc(100vh - 140px)` against a chrome that
+   actually measures ~236px, which pushed ~96px of the composer outside an
+   `overflow:hidden` ancestor with no scroll path to it. `min-height:600px` made
+   short windows worse, not better. Group chat and the cleaner DM view have
+   always used this pattern. */
 .chat-shell {
   display: grid;
   grid-template-columns: 320px 1fr;
-  height: calc(100vh - 140px);
-  min-height: 600px;
+  height: 100%;
+  min-height: 0;
   background: #fff;
   border-radius: 18px;
   box-shadow: 0 2px 24px rgba(0,140,156,0.08), 0 1px 4px rgba(0,0,0,0.04);
   overflow: hidden;
   border: 1px solid rgba(0,140,156,0.08);
 }
+/* Back arrow lives in the DM thread head but only means anything on the phone
+   layout, where the list and the thread are never on screen together. Written
+   as a descendant selector so it outranks `.chat-icon-btn { display:inline-flex }`
+   further down the file. */
+.chat-thread .chat-back { display: none; }
+.chat-thread .chat-back.chat-back-solo { margin: 12px 0 0 12px; align-self: flex-start; }
+
 @media (max-width: 900px) {
-  .chat-shell { grid-template-columns: 1fr; height: auto; }
-  .chat-thread { min-height: 70vh; }
+  /* Phone layout is list-OR-thread, never both. The shell keeps `height:100%`
+     (it stays the flex child it is on desktop) and shows exactly one pane, so
+     that pane fills the box and its own `overflow-y:auto` engages. The previous
+     `height:auto` stack rendered all 44 conversation rows at full height above a
+     70vh thread inside an `overflow:hidden` ancestor — the composer was ~3
+     screens down with no scroll path to it. */
+  .chat-shell {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .chat-shell[data-pane="list"] > .chat-thread { display: none; }
+  .chat-shell[data-pane="thread"] > .chat-list { display: none; }
+  .chat-thread .chat-back { display: inline-flex; }
+}
+
+/* Group chat doesn't share `.chat-shell` (its own inline grid + `.stack-mobile`),
+   so it doesn't get the pane switch. Stacked, its two auto rows split the box
+   near-evenly whatever the channel count, which leaves the messages panel too
+   short: measured on a 390×664 phone, the composer overhung its own
+   `overflow:hidden` panel by 10px — the "⏎ to send" hint sliced off — and the
+   message area was 203px instead of 231px. Bounding the channel row lets its
+   `overflow-y:auto` engage and hands the remainder to the messages panel. */
+@media (max-width: 767px) {
+  .gchat-shell { grid-template-rows: auto minmax(0, 1fr); }
+  .gchat-shell > :first-child { max-height: 30vh; }
 }
 
 /* Conversation list */
@@ -1604,6 +1621,16 @@ body {
 .chat-send:disabled { background: rgba(0,140,156,0.15); cursor: not-allowed; }
 .chat-composer-hint {
   font-size: 11px; color: var(--primary-50); margin-top: 7px; text-align: right;
+}
+
+/* Phone composer. Must sit *after* the two rules it overrides — same
+   specificity, so source order is the only thing deciding it. */
+@media (max-width: 900px) {
+  /* iOS zooms the page whenever a focused field is under 16px, and that zoom is
+     exactly what shoves the composer back off the visible viewport. */
+  .chat-composer-row textarea { font-size: 16px; }
+  /* Clear the home indicator now that the shell really does reach the bottom. */
+  .chat-composer { padding-bottom: calc(18px + env(safe-area-inset-bottom)); }
 }
 
 .chat-icon-btn {
@@ -5072,6 +5099,34 @@ html, body { overscroll-behavior-y: contain; }
   font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em;
   color: rgba(255,255,255,0.4); font-weight: 700; padding: 0 12px 6px;
 }
+/* Group header as a disclosure button (client feedback item 1). Keeps the
+   label typography above and adds the affordance: full-width hit area, chevron,
+   and a visible focus ring for keyboard users. */
+.asidebar-section-toggle {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 5px 12px 6px; margin-bottom: 1px;
+  background: transparent; border: 0; border-radius: 8px;
+  font-family: inherit; text-align: left; cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.asidebar-section-toggle:hover { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.72); }
+.asidebar-section-toggle:focus-visible {
+  outline: 2px solid rgba(255,255,255,0.55); outline-offset: -2px;
+}
+.asidebar-section-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.asidebar-section-toggle .anav-count { margin-left: 0; letter-spacing: 0; }
+.asidebar-section-chev {
+  flex: 0 0 auto; opacity: 0.75;
+  transition: transform .18s ease;
+}
+.asidebar-section-toggle[aria-expanded="false"] .asidebar-section-chev { transform: rotate(-90deg); }
+.asidebar-section-items { display: flex; flex-direction: column; gap: 2px; }
+/* `display: flex` above outranks the UA's `[hidden] { display: none }`, so the
+   collapsed panel has to be hidden explicitly or it never closes. */
+.asidebar-section-items[hidden] { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .asidebar-section-chev { transition: none; }
+}
 .anav-item {
   width: 100%; display: flex; align-items: center; gap: 12px;
   padding: 9px 12px; background: transparent; border: 0; cursor: pointer;
@@ -5228,6 +5283,43 @@ html, body { overscroll-behavior-y: contain; }
 .an-chip { height: 38px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--primary-10); background: #fff; color: var(--primary-70); font-family: inherit; font-size: 13px; font-weight: 500; cursor: pointer; transition: all .12s; }
 .an-chip:hover { border-color: var(--primary-30); color: var(--primary); }
 .an-chip.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+.an-chip:disabled { opacity: .55; cursor: default; }
+.an-chip:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+/* ── Analytics page filter (industry + date range · item 11 · Q7) ──
+   Rendered only on the job-derived tabs; ./tabs.ts owns that rule. */
+.an-filterbar { gap: 14px; padding: 18px 20px; }
+/* Busy is a HINT, never a lock. `pointer-events: none` here (plus a `disabled`
+   on every control) turned one click into a bar nobody could touch again until
+   they reloaded, because the navigation it waits on takes ~15-20 s. Only the
+   counts — the stale part — are dimmed; the chips, the pickers and Clear stay
+   fully live so a second choice can supersede the first. */
+.an-filterbar[data-pending="1"] .an-chip-count,
+.an-filterbar[data-stalled="1"] .an-chip-count { opacity: .3; }
+.an-filterbar-busy { color: var(--primary); font-weight: 600; }
+/* The request has outlived even a slow render of this page. The counts stay
+   dimmed (they are still the previous filter's) and the note says so out loud
+   instead of going quiet — a busy marker that clears on a timer while the
+   figures are stale is a lie the admin cannot see. Controls remain live. */
+.an-filterbar-stalled { color: var(--error-text); font-weight: 600; }
+.an-filterbar-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.an-filterbar-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--primary-60); font-weight: 700; min-width: 78px; }
+.an-filterbar-clear { margin-left: auto; }
+.an-filterbar-note { margin: 0; font-size: 12px; color: var(--primary-60); line-height: 1.5; }
+.an-filterbar-note strong { color: var(--ink); font-weight: 600; }
+.an-chip .an-chip-count { margin-left: 7px; font-size: 11.5px; font-weight: 600; opacity: .62; font-variant-numeric: tabular-nums; }
+@media (max-width: 700px) {
+  .an-filterbar-row { align-items: flex-start; }
+  .an-filterbar-label { min-width: 0; flex-basis: 100%; }
+  .an-filterbar-clear { margin-left: 0; }
+}
+
+/* Overview's stat row carries a fifth reading (% recurring) once the industry
+   filter exists. Below 901px the shared .astat-grid rules take over (2-up, then
+   the ≤767px auto-fill rule), so there is no ragged in-between band. */
+@media (min-width: 901px) {
+  .astat-grid-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
 
 .k-period { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 22px; }
 .k-date { display: flex; flex-direction: column; gap: 4px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--primary-60); font-weight: 600; }
@@ -5657,24 +5749,41 @@ a.an-listrow:hover { background: var(--primary-10); }
 .cal-month-dow { display: grid; grid-template-columns: repeat(7, 1fr); border-bottom: 1px solid var(--primary-10); }
 .cal-month-dow > div { padding: 12px; text-align: center; font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em; font-weight: 700; color: var(--primary-50); }
 .cal-month-grid { flex: 1; display: grid; grid-template-columns: repeat(7, 1fr); grid-auto-rows: 1fr; overflow-y: auto; }
-.cal-mcell { border-right: 1px solid var(--primary-10); border-bottom: 1px solid var(--primary-10); padding: 7px; cursor: pointer; min-height: 122px; display: flex; flex-direction: column; gap: 5px; transition: background .1s; overflow: hidden; }
+/* 148px, not 132px: 132 was measured against bare chips, but a chip carrying a
+   corner badge is 22px, not 20px, and the "+N more" row renders at 19px. The
+   cell has to hold 14 padding + 26 date + 5 gap + (3 × 22 + 2 × 3) chips +
+   5 gap + 19 more = 141px, or `overflow:hidden` eats the bottom of the last
+   row — which it did: 7 of the button's 19px were visible and only its top
+   ~2px was hit-testable. */
+.cal-mcell { border-right: 1px solid var(--primary-10); border-bottom: 1px solid var(--primary-10); padding: 7px; cursor: pointer; min-height: 148px; display: flex; flex-direction: column; gap: 5px; transition: background .1s; overflow: hidden; }
 .cal-mcell:nth-child(7n) { border-right: 0; }
 .cal-mcell:hover { background: var(--cream); }
 .cal-mcell.out { background: #fcfbf9; }
 .cal-mcell.out .cal-mdate { color: var(--primary-30); }
-.cal-mcell-head { display: flex; justify-content: flex-end; }
+/* space-between: the day number (first in source) sits left, the job-count pill
+   (second) sits right. Order lives in the JSX, not here. */
+.cal-mcell-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.cal-mcount { font-size: 10.5px; font-weight: 700; color: var(--primary-70); background: var(--primary-5); padding: 1px 8px; border-radius: 999px; }
 .cal-mdate { font-size: 13px; font-weight: 600; color: var(--ink-soft); width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; }
 .cal-mdate.today { background: var(--primary); color: #fff; }
-.cal-mcell-jobs { display: flex; flex-direction: column; gap: 3px; overflow: hidden; }
+/* `min-height: 0` + `flex: 0 1 auto` so a short cell shrinks the CHIP LIST
+   (which can afford to clip — the "+N more" beneath it is the way through to
+   the rest) instead of squeezing the "+N more" button, which is a sibling and
+   flex: 0 0 auto below. */
+.cal-mcell-jobs { display: flex; flex-direction: column; gap: 3px; overflow: hidden; flex: 0 1 auto; min-height: 0; }
 .cal-chip { display: flex; align-items: center; gap: 5px; padding: 3px 6px; border-radius: 6px; border: 0; cursor: pointer; font-family: inherit; font-size: 11.5px; width: 100%; text-align: left; }
 .cal-chip.faded { opacity: 0.6; }
 .cal-chip-dot { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 auto; }
-.cal-chip-t { font-weight: 700; font-variant-numeric: tabular-nums; }
+/* nowrap: the time must never wrap to a second line — the chip is sized for one
+   line, and a wrapped time steals the room the client name needs. */
+.cal-chip-t { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; flex: 0 0 auto; }
 .cal-chip-n { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1 1 auto; min-width: 0; }
 /* Item 28: assigned cleaner initials on a month card, so the grid can be
    scanned by person. Pushed to the right so the client name keeps the space. */
 .cal-chip-who { flex: 0 0 auto; margin-left: auto; font-size: 9.5px; font-weight: 800; letter-spacing: .02em; opacity: .75; padding-left: 4px; }
-.cal-more { background: none; border: 0; cursor: pointer; font-family: inherit; font-size: 11px; font-weight: 600; color: var(--primary-60); text-align: left; padding: 1px 6px; }
+/* Never shrinks and never gets clipped: it is the only affordance for the jobs
+   the cell couldn't show, so it wins the last row of the cell outright. */
+.cal-more { background: none; border: 0; cursor: pointer; font-family: inherit; font-size: 11px; font-weight: 600; color: var(--primary-60); text-align: left; padding: 1px 6px; flex: 0 0 auto; }
 .cal-more:hover { color: var(--primary); }
 
 /* ── LIST ── */
@@ -5776,6 +5885,152 @@ a.an-listrow:hover { background: var(--primary-10); }
 .cal-ev-handle { position: absolute; left: 0; right: 0; height: 7px; cursor: ns-resize; z-index: 2; }
 .cal-ev-handle.top { top: 0; } .cal-ev-handle.bottom { bottom: 0; }
 
+/* ── Stacked-job overflow (Week/Day) ──────────────────────────────────────
+   When a column holds more overlapping jobs than fit at a readable lane width,
+   the surplus collapses into one of these, in the reserved last lane. Same
+   affordance as the month cell's "+N more", so there is one thing to learn.
+   See calendar-helpers.ts for how the lane budget is computed. */
+.cal-ev-more {
+  position: absolute; border-radius: 9px; cursor: pointer;
+  border: 1px dashed var(--primary-30); background: var(--primary-5);
+  color: var(--primary); font-family: inherit; font-size: 11px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; text-align: center;
+  padding: 2px 5px; min-width: 27px; line-height: 1.2; overflow: hidden;
+}
+.cal-ev-more:hover { background: var(--primary-10); border-style: solid; }
+/* Above a hovered card (26) so the affordance is never covered by the very
+   cards it is standing beside; below a dragged one (30) and the hour gutter. */
+.cal-col .cal-ev-more { z-index: 28; }
+.cal-col .cal-ev-more:hover { z-index: 29; }
+/* The list the chip opens. Fixed-positioned (measured from the chip) so it is
+   never clipped by the column's own bounds or the grid's overflow. */
+.cal-stack-pop {
+  position: fixed; z-index: 320; width: 262px; max-height: 320px; overflow-y: auto;
+  background: #fff; border: 1px solid var(--primary-15); border-radius: 14px;
+  box-shadow: var(--shadow-pop); padding: 6px;
+  animation: amPop .16s cubic-bezier(.2,.7,.3,1);
+}
+.cal-stack-pop-head {
+  font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--primary-50); padding: 7px 9px 6px;
+}
+.cal-stack-row {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  padding: 8px 9px; border: 0; background: none; border-radius: 9px;
+  font-family: inherit; text-align: left; cursor: pointer;
+}
+.cal-stack-row:hover { background: var(--cream); }
+.cal-stack-dot { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 auto; }
+.cal-stack-time {
+  font-size: 11.5px; font-weight: 700; color: var(--primary-60);
+  font-variant-numeric: tabular-nums; flex: 0 0 auto;
+}
+.cal-stack-name {
+  font-size: 12.5px; color: var(--ink); flex: 1 1 auto; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* ── Calendar booking drawer (`.cjd-`, client feedback item 8) ─────────────
+   Right-docked summary panel opened by clicking a job in any calendar view.
+   Deliberately NOT `.amodal-overlay`: that scrim is 45% ink + a 4px blur,
+   which hides the grid the panel is supposed to be read against. This one is
+   light and unblurred so the week stays legible behind it — the whole point of
+   a side panel over a centred dialog. */
+.cjd-scrim {
+  position: fixed; inset: 0; z-index: 300;
+  background: rgba(14,26,28,0.18);
+  display: flex; justify-content: flex-end;
+  animation: amOverlay .16s ease-out;
+}
+.cjd {
+  width: 460px; max-width: 92vw; height: 100%;
+  background: #fff; box-shadow: var(--shadow-pop);
+  display: flex; flex-direction: column;
+  animation: amDrawer .26s cubic-bezier(.2,.7,.3,1);
+}
+.cjd-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 18px 20px 12px; border-bottom: 1px solid var(--primary-10);
+}
+.cjd-head-pills { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; min-width: 0; }
+.cjd-jobno { font-size: 11.5px; font-weight: 600; color: var(--primary-50); font-variant-numeric: tabular-nums; }
+.cjd-body { flex: 1; min-height: 0; overflow-y: auto; padding: 18px 20px 8px; }
+.cjd-title { margin: 0 0 8px; font-size: 20px; font-weight: 600; color: var(--ink); letter-spacing: -0.01em; line-height: 1.25; }
+.cjd-contact { display: flex; flex-direction: column; gap: 5px; margin-bottom: 4px; }
+.cjd-contact-row {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; color: var(--primary-70); text-decoration: none; word-break: break-word;
+}
+a.cjd-contact-row:hover { color: var(--primary); text-decoration: underline; text-underline-offset: 3px; }
+.cjd-contact-row svg { flex: 0 0 auto; color: var(--primary-50); }
+.cjd-warn { color: var(--amber-800); }
+
+.cjd-sec { margin-top: 20px; }
+.cjd-sec-title {
+  margin: 0 0 2px; font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--primary-50);
+}
+.cjd-rows { display: flex; flex-direction: column; }
+.cjd-row { display: flex; gap: 14px; padding: 9px 0; border-bottom: 1px solid var(--primary-10); font-size: 13px; }
+.cjd-row:last-child { border-bottom: 0; }
+.cjd-k { width: 116px; flex: 0 0 auto; color: var(--primary-60); }
+.cjd-v { flex: 1 1 auto; min-width: 0; color: var(--ink); word-break: break-word; }
+.cjd-dim { color: var(--primary-50); }
+.cjd-crew { display: flex; flex-direction: column; gap: 6px; }
+.cjd-crew-item { display: flex; align-items: center; gap: 7px; }
+.cjd-crew-dot {
+  width: 20px; height: 20px; border-radius: 50%; flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 9px; font-weight: 800; letter-spacing: .02em;
+}
+.cjd-note { font-size: 13px; color: var(--primary-70); line-height: 1.55; margin: 0 0 14px; }
+.cjd-empty { font-size: 13px; color: var(--primary-50); padding: 20px 0; }
+.cjd-back {
+  background: none; border: 0; padding: 0 0 12px; cursor: pointer;
+  font-family: inherit; font-size: 12.5px; font-weight: 600; color: var(--primary-60);
+}
+.cjd-back:hover { color: var(--primary); }
+.cjd-check { display: flex; align-items: center; gap: 9px; font-size: 13px; color: var(--ink); margin-top: 14px; cursor: pointer; }
+.cjd-inline-link {
+  background: none; border: 0; padding: 0; cursor: pointer; font-family: inherit;
+  font-size: inherit; font-weight: 600; color: inherit; text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.cjd-msg {
+  display: flex; align-items: flex-start; gap: 8px;
+  margin-top: 16px; padding: 10px 13px; border-radius: 11px;
+  font-size: 12.5px; line-height: 1.5; border: 1px solid;
+}
+.cjd-msg svg { flex: 0 0 auto; margin-top: 1px; }
+.cjd-msg.ok { background: var(--emerald-50, #ecfdf5); border-color: #a7f3d0; color: var(--emerald-800, #065f46); }
+.cjd-msg.error { background: var(--error-bg, #fef2f2); border-color: var(--error-border, #fecaca); color: var(--error-text, #b91c1c); }
+.cjd-msg.warn { background: var(--amber-50, #fffbeb); border-color: #fde68a; color: var(--amber-800); }
+
+.cjd-photos { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.cjd-photo { border: 0; padding: 0; background: none; cursor: pointer; border-radius: 12px; overflow: hidden; aspect-ratio: 4 / 3; }
+.cjd-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cjd-photo:hover img { opacity: .88; }
+
+.cjd-foot {
+  flex: 0 0 auto; border-top: 1px solid var(--primary-10);
+  padding: 14px 20px 18px; display: flex; flex-direction: column; gap: 10px;
+  background: #fff;
+}
+.cjd-payline {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  flex-wrap: wrap; font-size: 13px; color: var(--primary-70);
+}
+.cjd-payline strong { color: var(--ink); font-size: 15px; }
+.cjd-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cjd-actions.grid { display: grid; grid-template-columns: 1fr 1fr; }
+.cjd-actions.grid > .btn { width: 100%; }
+.cjd-danger { background: var(--error, #dc2626); color: #fff; }
+.cjd-danger:hover:not(:disabled) { background: #b91c1c; }
+.cjd-danger-ghost { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+.cjd-danger-ghost:hover:not(:disabled) { background: #fee2e2; }
+.cjd-foot-note { margin: 0; font-size: 11.5px; color: var(--primary-50); line-height: 1.45; }
+
 /* ── Mobile: flex utility rows wrap instead of overflowing the viewport
    (page-header action rows, filter rows, etc.) ── */
 @media (max-width: 767px) {
@@ -5846,13 +6101,25 @@ a.an-listrow:hover { background: var(--primary-10); }
 
   /* Month view: tighter cells; chips show dot + name only */
   .cal-month-dow > div { padding: 8px 2px; font-size: 10px; }
-  .cal-mcell { min-height: 74px; padding: 5px 4px; }
+  /* 112px, not 74px: the "+N more" button is now a sibling of the chip list and
+     takes its row before the chips do, so 74px would have left the chips ~5px
+     to share. 112 = 10 padding + 26 date + 5 gap + two 20px chips + 5 gap +
+     19 more — two chips and a whole, tappable way through to the rest. */
+  .cal-mcell { min-height: 112px; padding: 5px 4px; }
   .cal-chip { padding: 3px 5px; gap: 4px; }
   .cal-chip-t { display: none; }
 
   /* List view: tighter row so the client name keeps room to truncate */
   .cal-list-row { gap: 10px; padding: 10px 8px; }
   .cal-list-time { width: 62px; }
+
+  /* Booking drawer: full-bleed sheet on a phone, and the key column narrows so
+     a value still gets more than half the row. */
+  .cjd { width: 100vw; max-width: 100vw; }
+  .cjd-k { width: 96px; }
+  .cjd-actions.grid { grid-template-columns: 1fr; }
+  .cjd-photos { grid-template-columns: 1fr; }
+  .cal-stack-pop { width: min(300px, calc(100vw - 24px)); }
 }
 
 /* ── Admin modal (AdminModal — centered dialog or right drawer) ── */
@@ -6277,41 +6544,49 @@ a.q-v.link:hover { text-decoration: underline; }
 /* ───────────────────────────────────────────────────────────────
    Manage Duplicates (/contacts/duplicates)
 ─────────────────────────────────────────────────────────────── */
-.dgroup {
-  background: #fff;
-  border: 1px solid var(--primary-10);
-  border-radius: 16px;
-  padding: 16px 18px;
-  box-shadow: var(--shadow-soft);
+/* Pair table. Replaces the old .dgroup / .dmember tile wall, which wrapped
+   N member cards onto two lines and left no "this one vs that one" reading. */
+.dup-error {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 16px; padding: 11px 14px; border-radius: 12px;
+  background: rgba(220,38,38,0.08); color: #b91c1c; font-size: 13px;
 }
-.dgroup-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
-.dgroup-matched { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.dgroup-matched .mlabel { font-size: 12px; color: var(--primary-60); }
-.dgroup-members { display: flex; gap: 12px; flex-wrap: wrap; }
-.dmember {
-  display: flex;
-  align-items: flex-start;
-  gap: 11px;
-  flex: 1 1 240px;
-  min-width: 0;
-  padding: 12px;
-  border: 1px solid var(--primary-10);
-  border-radius: 12px;
-  background: #fff;
-  transition: border-color .15s ease, background .15s ease;
+.dup-error-x { margin-left: auto; background: none; border: 0; color: inherit; cursor: pointer; display: inline-flex; padding: 2px; border-radius: 6px; }
+.dup-error-x:hover { background: rgba(220,38,38,0.12); }
+.dup-checked {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  margin: 0 0 14px; font-size: 12px; color: var(--primary-60);
 }
-.dmember:hover { border-color: var(--primary-30); }
-.dmember.is-master { border-color: var(--primary); background: var(--primary-5); }
-.dmember-name { font-size: 13.5px; font-weight: 600; color: var(--ink); }
-.dmember-sub { font-size: 11.5px; color: var(--primary-60); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dmember-badge {
-  margin-top: 6px;
-  font-size: 10.5px;
-  font-weight: 600;
-  color: var(--primary-50);
-  text-transform: uppercase;
-  letter-spacing: .04em;
+.dup-checked-note { color: var(--primary-40); }
+.dup-sort {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: none; border: 0; cursor: pointer; padding: 0;
+  font: inherit; color: inherit; letter-spacing: inherit; text-transform: inherit;
 }
+.dup-sort:hover { color: var(--primary); }
+
+/* A pair is two records stacked in one cell. Every stacked cell uses the same
+   line height so the Contact / Email / Phone columns read across as one band. */
+.dup-table tbody td { padding-top: 6px; padding-bottom: 6px; }
+.dup-stack { display: flex; flex-direction: column; }
+.dup-line { display: flex; align-items: center; min-height: 46px; min-width: 0; }
+.dup-line + .dup-line { border-top: 1px dashed var(--primary-15); }
+.dup-rec { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.dup-rec-name { font-size: 13.5px; font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; }
+.dup-rec-sub { font-size: 11.5px; color: var(--primary-60); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; }
+.dup-val { font-size: 13px; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; }
+
+/* Similarity sits centred between the two records, as one reading for the pair. */
+.dup-sim { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.dup-sim-bar { width: 92px; height: 4px; border-radius: 999px; background: var(--primary-10); overflow: hidden; }
+.dup-sim-fill { display: block; height: 100%; border-radius: 999px; }
+.dup-sim-fill.high { background: var(--emerald-600); }
+.dup-sim-fill.med { background: var(--amber-600, #d97706); }
+.dup-sim-fill.low { background: #94a3b8; }
+.dup-sim-matched { font-size: 10.5px; color: var(--primary-50); text-align: center; white-space: normal; max-width: 130px; }
+.dup-actions { display: flex; flex-direction: column; align-items: stretch; gap: 6px; min-width: 104px; }
+.dup-actions .btn { justify-content: center; }
+
 .match-score {
   display: inline-flex;
   align-items: center;
@@ -6321,72 +6596,67 @@ a.q-v.link:hover { text-decoration: underline; }
   padding: 3px 9px;
   border-radius: 999px;
 }
-.match-score.high { background: rgba(220,38,38,0.10); color: #b91c1c; }
+/* High confidence must read as CONFIDENT. The previous scale painted ≥90 red,
+   so the duplicates we were surest about looked like the ones that had failed. */
+.match-score.high { background: rgba(5,150,105,0.12); color: #065f46; }
 .match-score.med  { background: rgba(217,119,6,0.12); color: var(--amber-800); }
 .match-score.low  { background: rgba(100,116,139,0.12); color: #334155; }
 
-/* Merge comparator */
-.merge-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
-.merge-grid { display: grid; gap: 0; border: 1px solid var(--primary-10); border-radius: 12px; overflow: hidden; }
-.merge-row { display: grid; align-items: stretch; }
-.merge-corner { padding: 10px 12px; border-bottom: 1px solid var(--primary-10); display: flex; align-items: flex-end; }
-.merge-corner-label { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; font-weight: 700; color: var(--primary-50); }
-.merge-col-head {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px 12px;
-  border-left: 1px solid var(--primary-10);
-  border-bottom: 1px solid var(--primary-10);
+/* ── Merge review (HubSpot shape: two cards, per-property radios, live result) ── */
+.dup-dismiss {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; border-radius: 9px;
+  border: 1px solid var(--primary-15); background: #fff;
+  color: var(--primary-60); cursor: pointer;
 }
-.merge-master-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  align-self: flex-start;
-  font-size: 11px;
-  font-weight: 600;
-  padding: 4px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--primary-15);
-  background: #fff;
-  color: var(--primary-70);
-  cursor: pointer;
+.dup-dismiss:hover { background: var(--cream); color: var(--primary); }
+.mrg-modal { width: min(1180px, 96vw); }
+.mrg-body { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 22px; align-items: start; }
+.mrg-main { min-width: 0; }
+
+.mrg-queue { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; flex: 0 0 auto; margin-left: auto; }
+.mrg-queue-count { font-size: 12px; font-weight: 600; color: var(--primary-70); white-space: nowrap; }
+.mrg-queue-bar { width: 130px; height: 4px; border-radius: 999px; background: var(--primary-10); overflow: hidden; }
+.mrg-queue-fill { display: block; height: 100%; background: var(--primary); border-radius: 999px; transition: width .2s ease; }
+
+.mrg-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.mrg-card { border: 1px solid var(--primary-10); border-radius: 14px; padding: 13px 14px; background: #fff; min-width: 0; }
+.mrg-card.keep { border-color: var(--primary); background: var(--primary-5); }
+.mrg-card-top { display: flex; align-items: center; gap: 11px; min-width: 0; }
+.mrg-card-name { font-size: 14px; font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mrg-card-sub { font-size: 12px; color: var(--primary-60); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mrg-card-meta { margin-top: 10px; font-size: 11.5px; color: var(--primary-50); }
+.mrg-card-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+.mrg-link { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; color: var(--primary); text-decoration: none; }
+.mrg-link:hover { text-decoration: underline; }
+.mrg-kept { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; color: var(--primary); text-transform: uppercase; letter-spacing: .04em; }
+.mrg-keepbtn { background: none; border: 0; padding: 0; font-size: 12px; color: var(--primary-60); cursor: pointer; text-decoration: underline; }
+.mrg-keepbtn:hover { color: var(--primary); }
+
+.mrg-section { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; font-weight: 700; color: var(--primary-50); margin: 20px 0 10px; }
+.mrg-props { display: flex; flex-direction: column; gap: 10px; }
+.mrg-prop { min-width: 0; }
+.mrg-prop-label { font-size: 12px; color: var(--primary-60); margin-bottom: 4px; }
+.mrg-prop-row { display: grid; grid-template-columns: minmax(0, 1fr) 30px minmax(0, 1fr); align-items: center; gap: 6px; }
+.mrg-opt {
+  display: flex; align-items: center; gap: 9px; min-width: 0;
+  width: 100%; padding: 9px 11px;
+  border: 1px solid var(--primary-10); border-radius: 10px;
+  background: #fff; color: var(--ink); font-size: 13px; text-align: left; cursor: pointer;
 }
-.merge-master-btn.on { background: var(--primary); border-color: var(--primary); color: #fff; }
-.merge-flabel {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 12px;
-  font-size: 12.5px;
-  color: var(--primary-60);
-  border-bottom: 1px solid var(--primary-10);
+.mrg-opt:hover { background: var(--cream); }
+.mrg-opt.chosen { background: var(--primary-5); border-color: var(--primary); }
+.mrg-opt.blank .mrg-opt-val { color: var(--primary-40); }
+.mrg-opt.static { cursor: default; background: var(--cream); color: var(--primary-70); }
+.mrg-opt.static:hover { background: var(--cream); }
+.mrg-opt-val { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mrg-push {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; border-radius: 8px;
+  border: 1px solid var(--primary-15); background: #fff; color: var(--primary-60); cursor: pointer;
 }
-.merge-row:last-child .merge-flabel,
-.merge-row:last-child .merge-cell { border-bottom: 0; }
-.merge-flabel.conflict { color: var(--amber-800); font-weight: 600; }
-.merge-cell { padding: 7px 8px; border-left: 1px solid var(--primary-10); border-bottom: 1px solid var(--primary-10); display: flex; }
-.merge-pick {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 7px 9px;
-  border: 1px solid transparent;
-  border-radius: 9px;
-  background: transparent;
-  color: var(--ink);
-  font-size: 13px;
-  text-align: left;
-  cursor: pointer;
-  min-width: 0;
-}
-.merge-pick:hover { background: var(--cream); }
-.merge-pick.chosen { background: var(--primary-5); border-color: var(--primary-20); }
-.merge-pick.chosen.conflict { background: rgba(217,119,6,0.06); border-color: rgba(217,119,6,0.3); }
-.merge-pick.static { cursor: default; opacity: 0.7; }
-.merge-pick.static:hover { background: transparent; }
+.mrg-push:hover { background: var(--primary); border-color: var(--primary); color: #fff; }
 .merge-radio {
   flex: 0 0 auto;
   width: 15px;
@@ -6397,12 +6667,42 @@ a.q-v.link:hover { text-decoration: underline; }
   align-items: center;
   justify-content: center;
 }
-.merge-pick.chosen .merge-radio { border-color: var(--primary); }
-.merge-pick.chosen .merge-radio::after { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--primary); }
-.merge-preview { display: flex; align-items: center; gap: 12px; margin-top: 16px; padding: 12px 14px; border-radius: 12px; background: var(--primary-5); }
-.merge-preview .mp-icon { width: 34px; height: 34px; border-radius: 9px; background: var(--primary); color: #fff; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; }
-.merge-preview-label { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; font-weight: 700; color: var(--primary-50); }
-.merge-preview-val { font-size: 14px; color: var(--ink); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mrg-opt.chosen .merge-radio { border-color: var(--primary); }
+.mrg-opt.chosen .merge-radio::after { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--primary); }
+.mrg-opt.static .merge-radio { display: none; }
+
+.mrg-explainer { margin-top: 20px; border-top: 1px solid var(--primary-10); padding-top: 12px; }
+.mrg-explainer-head { display: inline-flex; align-items: center; gap: 6px; background: none; border: 0; padding: 0; cursor: pointer; font-size: 12.5px; font-weight: 600; color: var(--primary-70); }
+.mrg-explainer-head svg { transition: transform .15s ease; }
+.mrg-explainer-head svg.open { transform: rotate(90deg); }
+.mrg-explainer-body { margin-top: 8px; font-size: 12.5px; color: var(--primary-70); line-height: 1.6; }
+.mrg-explainer-body p { margin: 0 0 6px; }
+
+/* Live result panel — the merged record as it will exist. Replaces the old
+   single truncated preview line that cut off on any long email. */
+.mrg-result { position: sticky; top: 0; border: 1px solid var(--primary-10); border-radius: 14px; background: var(--primary-5); padding: 14px; min-width: 0; }
+.mrg-result-label { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; font-weight: 700; color: var(--primary-50); margin-bottom: 10px; }
+.mrg-result-head { display: flex; align-items: center; gap: 11px; min-width: 0; }
+.mrg-result-name { font-size: 14px; font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; }
+.mrg-result-sub { font-size: 12px; color: var(--primary-60); margin-top: 2px; overflow-wrap: anywhere; }
+.mrg-result-meta { margin-top: 10px; font-size: 11.5px; color: var(--primary-50); }
+.mrg-result-props { margin-top: 12px; border-top: 1px solid var(--primary-10); padding-top: 10px; display: flex; flex-direction: column; gap: 7px; }
+.mrg-result-row { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 8px; align-items: baseline; }
+.mrg-result-k { font-size: 11.5px; color: var(--primary-50); }
+.mrg-result-v { font-size: 12.5px; color: var(--ink); overflow-wrap: anywhere; }
+
+.mrg-foot { flex-wrap: wrap; }
+
+@media (max-width: 1000px) {
+  .mrg-body { grid-template-columns: minmax(0, 1fr); }
+  .mrg-result { position: static; order: -1; }
+  .mrg-cards { grid-template-columns: 1fr; }
+}
+@media (max-width: 620px) {
+  .mrg-prop-row { grid-template-columns: minmax(0, 1fr); }
+  .mrg-push { display: none; }
+  .mrg-queue { display: none; }
+}
 
 /* Lightweight CRM modal (merge comparator host) */
 .crm-overlay {
@@ -6487,7 +6787,7 @@ a.q-v.link:hover { text-decoration: underline; }
 .acheck-box { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 6px; border: 1.5px solid var(--primary-20); color: #fff; flex: 0 0 auto; margin-top: 1px; }
 .acheck.on .acheck-box { background: var(--primary); border-color: var(--primary); }
 
-/* Property-engine list row (compact, full-width — not the duplicates .dmember) */
+/* Property-engine list row (compact, full-width — not the duplicates .dup-rec) */
 .pdef-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px; background: #fff; border: 1px solid var(--primary-10); border-radius: 12px; cursor: pointer; transition: border-color .12s ease, box-shadow .12s ease; }
 .pdef-row:hover { border-color: var(--primary-30); box-shadow: var(--shadow-soft); }
 

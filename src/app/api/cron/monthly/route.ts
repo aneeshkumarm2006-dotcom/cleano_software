@@ -17,21 +17,19 @@ import {
   buildStatementPdfBuffer,
   type StatementBookingRow,
 } from "@/lib/statement-pdf";
+import { addStoreMonths, formatDate, startOfStoreMonth, storeMonthPeriod } from "@/lib/timezone";
 
+// Store-timezone month boundaries. Cron fires on the host (UTC), so
+// `new Date(y, m, 1)` was 8 PM on the last day of the previous month in
+// Montréal — the statement both started and ended a few hours early, pulling
+// one evening's jobs into the wrong month (Q9).
 function lastMonthRange(now: Date) {
-  const end = new Date(now.getFullYear(), now.getMonth(), 1);
-  const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const monthLabel = start.toLocaleDateString("en-US", {
-    month: "long",
-    year: "numeric",
-  });
-  const monthKey = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}`;
+  const end = startOfStoreMonth(now);
+  const start = startOfStoreMonth(addStoreMonths(now, -1));
+  const monthLabel = formatDate(start, { month: "long", year: "numeric" });
+  const monthKey = storeMonthPeriod(start);
   const fmtDay = (d: Date) =>
-    d.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
+    formatDate(d, { month: "short", day: "numeric", year: "numeric" });
   return {
     start,
     end,

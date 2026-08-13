@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Calendar, AlertCircle, MapPin, CheckCircle2, Archive, Trash2, RotateCcw, Tag } from "lucide-react";
 import { markWaitlistNotified } from "../actions/markWaitlistNotified";
@@ -104,32 +104,41 @@ export default function WaitlistPageClient({ entries, archived }: { entries: Ent
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Held locally so Notify and the status dropdown repaint the row they changed.
+  // They used to do neither: no local update AND no `router.refresh()`, so the
+  // pill stayed "Waiting", the stat cards and tab badges never moved, and the
+  // admin could click Notify again and again with nothing on screen answering.
+  // Replaced wholesale by the next server payload — props only get a new
+  // identity when a new payload arrives.
+  const [liveEntries, setLiveEntries] = useState<Entry[]>(entries);
+  useEffect(() => { setLiveEntries(entries); }, [entries]);
+
   const stats = useMemo(() => ({
-    total:     entries.length,
+    total:     liveEntries.length,
     // "Waiting"/"Notified" here mean *active* demand: open entries whose
     // preferred date has not yet passed. Past-dated entries are counted as
     // stale and excluded so they do not inflate active demand.
-    waiting:   entries.filter(e => e.status === "WAITING"  && !isPastDate(e.preferredDate)).length,
-    notified:  entries.filter(e => e.status === "NOTIFIED" && !isPastDate(e.preferredDate)).length,
-    converted: entries.filter(e => e.status === "CONVERTED").length,
-    expired:   entries.filter(e => e.status === "EXPIRED").length,
-    cancelled: entries.filter(e => e.status === "CANCELLED").length,
+    waiting:   liveEntries.filter(e => e.status === "WAITING"  && !isPastDate(e.preferredDate)).length,
+    notified:  liveEntries.filter(e => e.status === "NOTIFIED" && !isPastDate(e.preferredDate)).length,
+    converted: liveEntries.filter(e => e.status === "CONVERTED").length,
+    expired:   liveEntries.filter(e => e.status === "EXPIRED").length,
+    cancelled: liveEntries.filter(e => e.status === "CANCELLED").length,
     // Open entries whose preferred date is already in the past — need triage.
-    stale:     entries.filter(e => (e.status === "WAITING" || e.status === "NOTIFIED") && isPastDate(e.preferredDate)).length,
-  }), [entries]);
+    stale:     liveEntries.filter(e => (e.status === "WAITING" || e.status === "NOTIFIED") && isPastDate(e.preferredDate)).length,
+  }), [liveEntries]);
 
   // Tab badges reflect the number of rows actually listed under each tab
   // (raw status counts), independent of the active-demand stat cards above.
   const countFor = (id: TabId) =>
-    id === "all" ? entries.length
-      : entries.filter(e => e.status === id.toUpperCase()).length;
+    id === "all" ? liveEntries.length
+      : liveEntries.filter(e => e.status === id.toUpperCase()).length;
 
   const filtered = useMemo(() => {
-    const list = tab === "all" ? entries
-      : entries.filter(e => e.status === tab.toUpperCase());
+    const list = tab === "all" ? liveEntries
+      : liveEntries.filter(e => e.status === tab.toUpperCase());
     return [...list].sort((a, b) =>
       new Date(a.preferredDate).getTime() - new Date(b.preferredDate).getTime());
-  }, [tab, entries]);
+  }, [tab, liveEntries]);
 
   const visibleIds = useMemo(() => filtered.map((w) => w.id), [filtered]);
   const selection = useRowSelection(visibleIds);
@@ -173,17 +182,27 @@ export default function WaitlistPageClient({ entries, archived }: { entries: Ent
         },
       ];
 
+  /** Apply one entry's new state locally, then let the refresh confirm it. */
+  function applyEntry(id: string, patch: Partial<Entry>) {
+    setLiveEntries((prev) => prev.map((e) => (e.id === id ? { ...e, ...patch } : e)));
+    router.refresh();
+  }
+
   async function handleNotify(id: string) {
     setBusyId(id); setError(null);
     const res = await markWaitlistNotified(id);
     setBusyId(null);
-    if (!res.success) setError(res.error || "Failed to notify");
+    if (!res.success) { setError(res.error || "Failed to notify"); return; }
+    // The action writes both fields in one transaction, so the row moves both.
+    applyEntry(id, { status: "NOTIFIED", notifiedAt: new Date().toISOString() });
   }
 
   async function handleStatus(id: string, status: Status) {
     setBusyId(id); setError(null);
-    await updateWaitlistStatus({ id, status });
+    const res = await updateWaitlistStatus({ id, status });
     setBusyId(null);
+    if (!res.success) { setError(res.error || "Failed to update"); return; }
+    applyEntry(id, { status });
   }
 
   return (

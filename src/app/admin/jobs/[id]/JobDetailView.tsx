@@ -12,6 +12,7 @@ const LiveLocationMap = dynamic(() => import("./LiveLocationMap"), {
   ssr: false,
 });
 import { saveJob } from "../../actions/saveJob";
+import { linkJobToClient } from "../../actions/linkJobToClient";
 import { deleteJob as deleteJobAction } from "../../actions/deleteJob";
 import { togglePaymentReceived } from "../../actions/toggleJobPaymentStatus";
 import { chargeJob } from "../../actions/chargeJob";
@@ -57,7 +58,12 @@ import { issueRefund } from "../../actions/issueRefund";
 import JobChatThread from "@/components/JobChatThread";
 import JobChatModeration from "@/components/JobChatModeration";
 import { normalizeJobType, jobTypeLabel } from "@/lib/calendar-labels";
-import { addOnLineTotal, computeJobMoney } from "@/lib/job-money";
+import {
+  ADDON_INCLUDED_LABEL,
+  addOnAmountIsIncluded,
+  addOnLineTotal,
+  computeJobMoney,
+} from "@/lib/job-money";
 import { addOnKey } from "@/lib/checklist-triggers";
 
 type TabView = "details" | "financials" | "products" | "logs" | "requests";
@@ -76,6 +82,8 @@ interface Job {
   clientId?: string | null;
   location: string | null;
   aptNumber: string | null;
+  /** Address snapshot beside location/aptNumber (item 3). */
+  postalCode: string | null;
   /** Saved-address provenance (item 2), so an edit re-selects it. */
   clientAddressId: string | null;
   /** Details that live on the saved address, not on the job's snapshot. */
@@ -440,6 +448,26 @@ export default function JobDetailView({
     job.priorityLabel ?? "AUTO"
   );
   const [savingPriority, setSavingPriority] = useState(false);
+
+  // "Link to client" repair for a job with no customer record (Stage 4.7).
+  const [linkClientId, setLinkClientId] = useState("");
+  const [linkSaving, setLinkSaving] = useState(false);
+  const [linkError, setLinkError] = useState<string | null>(null);
+
+  const handleLinkClient = async () => {
+    if (!linkClientId) return;
+    setLinkSaving(true);
+    setLinkError(null);
+    const res = await linkJobToClient(job.id, linkClientId);
+    if (!res.success) {
+      setLinkError(res.error);
+      setLinkSaving(false);
+      return;
+    }
+    // The card disappears on the refreshed server data; keep the button busy
+    // until then so it can't be double-submitted.
+    router.refresh();
+  };
 
   // Seeded from the URL on the FIRST render, not corrected by an effect
   // afterwards. The effect below still keeps the tab in sync with later
@@ -992,7 +1020,11 @@ export default function JobDetailView({
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {job.addOns.map(a => (
                 <span key={a.id} style={{ fontSize: 12, padding: '4px 10px', background: 'var(--cream)', borderRadius: 999, color: 'var(--primary-70)', fontWeight: 500 }}>
-                  {a.name}{(a.quantity ?? 1) > 1 ? ` ×${a.quantity}` : ''} · ${addOnLineTotal(a).toFixed(2)}
+                  {a.name}{(a.quantity ?? 1) > 1 ? ` ×${a.quantity}` : ''}
+                  {' · '}
+                  {addOnAmountIsIncluded(addOnLineTotal(a), money.addOnsIncludedInSubtotal)
+                    ? ADDON_INCLUDED_LABEL
+                    : `$${addOnLineTotal(a).toFixed(2)}`}
                 </span>
               ))}
             </div>
@@ -1460,7 +1492,9 @@ export default function JobDetailView({
               address: job.location,
               aptNumber: job.aptNumber ?? job.clientAddress?.aptNumber ?? null,
               city: job.clientAddress?.city ?? null,
-              postalCode: job.clientAddress?.postalCode ?? null,
+              // The job's own snapshot wins: it is what the admin typed on
+              // this booking (item 3). The saved address is the fallback.
+              postalCode: job.postalCode ?? job.clientAddress?.postalCode ?? null,
             })}
           </div>
           {job.clientAddress?.accessNotes && (
@@ -1468,6 +1502,65 @@ export default function JobDetailView({
               <KeyRound size={14} style={{ color: 'var(--primary-50)', flexShrink: 0, marginTop: 2 }} />
               <span>{job.clientAddress.accessNotes}</span>
             </div>
+          )}
+        </div>
+      )}
+
+      {/* No customer record (item 4, Stage 4.7). Jobs booked through the old
+          modal were saved with a free-text name and `clientId: null`, and every
+          customer email in the admin is gated on `job.client?.email` — so this
+          booking cannot receive a receipt, a cancellation, a rating request or
+          a card link, and can't be charged off-session. New bookings now create
+          the profile; this repairs the ones that predate that. */}
+      {isAdmin && !job.clientId && (
+        <div className="dcard tab-panel-wide">
+          <div className="dcard-head">
+            <h3>No customer record</h3>
+            <span style={{ fontSize: 12, color: 'var(--error)' }}>
+              Emails can’t reach this booking
+            </span>
+          </div>
+          <p style={{ margin: 0, fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.6 }}>
+            This job stores “{job.clientName}” as text only. Link it to a saved
+            customer so receipts, cancellations and rating requests can be sent —
+            or create the customer on the Clients page first, then come back.
+          </p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+            <select
+              value={linkClientId}
+              onChange={(e) => { setLinkClientId(e.target.value); setLinkError(null); }}
+              disabled={linkSaving}
+              aria-label="Customer to link this job to"
+              style={{
+                flex: '1 1 260px', minWidth: 220, height: 40, padding: '0 12px',
+                borderRadius: 10, border: '1px solid var(--primary-10)',
+                background: '#fff', fontSize: 14, fontFamily: 'inherit',
+                color: 'var(--ink)',
+              }}>
+              <option value="">Select a customer…</option>
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                  {c.email ? ` — ${c.email}` : ''}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={handleLinkClient}
+              disabled={linkSaving || !linkClientId}
+              style={{
+                height: 40, padding: '0 18px', borderRadius: 10, border: 'none',
+                background: 'var(--primary)', color: '#fff', fontSize: 14,
+                fontWeight: 600, fontFamily: 'inherit',
+                cursor: linkSaving || !linkClientId ? 'not-allowed' : 'pointer',
+                opacity: linkSaving || !linkClientId ? 0.6 : 1,
+              }}>
+              {linkSaving ? 'Linking…' : 'Link to client'}
+            </button>
+          </div>
+          {linkError && (
+            <p style={{ margin: 0, fontSize: 13, color: 'var(--error)' }}>{linkError}</p>
           )}
         </div>
       )}
@@ -1569,14 +1662,20 @@ export default function JobDetailView({
                     )}
                   </span>
                   <span className="finrow-value">
-                    {money.addOnsIncludedInSubtotal ? '' : '+'}${money.addOnTotal.toFixed(2)}
+                    {addOnAmountIsIncluded(money.addOnTotal, money.addOnsIncludedInSubtotal)
+                      ? '—'
+                      : `${money.addOnsIncludedInSubtotal ? '' : '+'}$${money.addOnTotal.toFixed(2)}`}
                   </span>
                 </div>
                 {money.addOnLines.map((line, i) => (
                   <div className="finrow" key={`${line.name}-${i}`} style={{ paddingLeft: 18 }}>
                     <span className="finrow-label" style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
                       {line.name}
-                      {line.quantity > 1 ? ` ×${line.quantity} · $${line.unitPrice.toFixed(2)} each` : ''}
+                      {line.quantity > 1
+                        ? addOnAmountIsIncluded(line.lineTotal, money.addOnsIncludedInSubtotal)
+                          ? ` ×${line.quantity}`
+                          : ` ×${line.quantity} · $${line.unitPrice.toFixed(2)} each`
+                        : ''}
                       {!catalogAddOnKeys.has(addOnKey(line.name)) && (
                         <span
                           style={{
@@ -1593,7 +1692,13 @@ export default function JobDetailView({
                       )}
                     </span>
                     <span className="finrow-value" style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
-                      ${line.lineTotal.toFixed(2)}
+                      {/* An imported add-on carries no price of its own — the
+                          CSV's service total already billed it. Printing
+                          "$0.00" here is what made a correct import read as a
+                          broken one (item 22). */}
+                      {addOnAmountIsIncluded(line.lineTotal, money.addOnsIncludedInSubtotal)
+                        ? ADDON_INCLUDED_LABEL
+                        : `$${line.lineTotal.toFixed(2)}`}
                     </span>
                   </div>
                 ))}
@@ -1722,7 +1827,7 @@ export default function JobDetailView({
             )}
             {(job.parking || 0) > 0 && (
               <div className="finrow negative">
-                <span className="finrow-label">Parking</span>
+                <span className="finrow-label">Transportation</span>
                 <span className="finrow-value">−${job.parking!.toFixed(2)}</span>
               </div>
             )}

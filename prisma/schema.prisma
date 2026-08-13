@@ -84,6 +84,7 @@ model User {
   receivedAlerts               Alert[]                 @relation("RecipientAlerts")
   strikes                      CleanerStrike[]         @relation("CleanerStrikes")
   files                        EmployeeFile[]
+  salesCommissions             Commission[]            @relation("SalesRepCommissions")
 
   // Present in the database since an earlier migration but never declared here,
   // which showed up as schema drift. Field-lead grouping reads this column, so
@@ -416,6 +417,12 @@ model Job {
   clientId                       String?
   location                       String?
   aptNumber                      String?
+  /// Part of the denormalized address snapshot beside `location`/`aptNumber`
+  /// (client feedback item 3). Typed on the job forms; also pushed onto the
+  /// matching ClientAddress row by the shared upsert, blanks-only. No
+  /// transportation fee is derived from it — that stayed manual entry, on the
+  /// `parking` column below (labelled "Transportation" in the UI).
+  postalCode                     String?
   /// PROVENANCE, not the source of truth (awerfixes.pdf item 2, round 3).
   /// `location`/`aptNumber` above stay the denormalized snapshot taken when the
   /// job was booked, so history survives an address being edited or deleted;
@@ -611,6 +618,7 @@ model Job {
   strikes                        CleanerStrike[]
   convertedFromLeads             Lead[]
   convertedFromWaitlist          Waitlist[]
+  commissions                    Commission[]
 
   @@index([jobDate])
   @@index([clientName])
@@ -789,22 +797,23 @@ model Payout {
 }
 
 model Transaction {
-  id          String              @id @default(cuid())
-  date        DateTime            @default(now())
-  category    TransactionCategory
+  id          String         @id @default(cuid())
+  date        DateTime       @default(now())
+  categoryId  String
   amount      Float
   description String?
   notes       String?
   jobId       String?
   source      String?
-  taxAmount   Float               @default(0)
-  isAuto      Boolean             @default(false)
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
-  job         Job?                @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  taxAmount   Float          @default(0)
+  isAuto      Boolean        @default(false)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  job         Job?           @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  category    BudgetCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
 
   @@index([date])
-  @@index([category])
+  @@index([categoryId])
   @@index([jobId])
 }
 
@@ -849,16 +858,56 @@ enum WashPayoutStatus {
 }
 
 model Budget {
-  id        String              @id @default(cuid())
-  category  TransactionCategory
-  period    String
-  amount    Float
-  notes     String?
-  createdAt DateTime            @default(now())
-  updatedAt DateTime            @updatedAt
+  id         String         @id @default(cuid())
+  categoryId String
+  period     String
+  amount     Float
+  notes      String?
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  category   BudgetCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
 
-  @@unique([category, period])
+  @@unique([categoryId, period])
   @@index([period])
+  @@index([categoryId])
+}
+
+/// Budget / transaction categories. Was the hard `TransactionCategory` enum
+/// until Stage 8 (client item 12) — the five enum values are seeded as
+/// `isDefault` rows so existing budgets and bookkeeping history carry over
+/// unchanged, and admins can add their own on top from Settings → Budgets.
+///
+/// `slug` is the STABLE identity used by the automatic writers (Stripe
+/// receipts → `revenue`, clock-out supply costs → `supplies`, pay periods →
+/// `labour`). It is assigned once at creation and never changes, so renaming a
+/// category is purely cosmetic and every historical row follows the new name.
+///
+/// Deleting a category that has budgets or transactions sets `archivedAt`
+/// instead: it disappears from the pickers, history keeps rendering.
+model BudgetCategory {
+  id         String             @id @default(cuid())
+  name       String
+  slug       String             @unique
+  kind       BudgetCategoryKind @default(EXPENSE)
+  isDefault  Boolean            @default(false)
+  sortOrder  Int                @default(0)
+  archivedAt DateTime?
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+
+  budgets      Budget[]
+  transactions Transaction[]
+
+  @@index([archivedAt])
+  @@index([sortOrder])
+}
+
+/// Whether amounts filed under a category count as money in or money out.
+/// Every P&L, income-statement and tax figure branches on this — it is what
+/// used to be `category === "REVENUE"`.
+enum BudgetCategoryKind {
+  REVENUE
+  EXPENSE
 }
 
 enum Roles {
@@ -970,14 +1019,6 @@ enum PayPeriodStatus {
   REJECTED
   PAID
   CANCELLED
-}
-
-enum TransactionCategory {
-  REVENUE
-  SUPPLIES
-  LABOUR
-  OVERHEAD
-  OTHER
 }
 
 enum InvoiceStatus {
@@ -2245,10 +2286,56 @@ model Lead {
   updatedAt      DateTime   @updatedAt
   convertedJob   Job?       @relation(fields: [convertedJobId], references: [id], onDelete: SetNull)
   contact        Contact?
+  commissions    Commission[]
 
   @@index([email])
   @@index([status])
   @@index([lastActivityAt])
+}
+
+/// Sales-rep commission ledger (client feedback item 20, Stage 11.2 — "for
+/// sales leads, I wanted to add another section over here that is for
+/// commissions, for commissions on sales reps. If we're paying them any
+/// commissions, we could track it over here").
+///
+/// Entries are recorded by hand: nothing in the app knows which rep sourced a
+/// booking, so there is no rule to derive an amount from. `rate` is stored
+/// alongside `amount` when the admin worked the figure out as a percentage, so
+/// the arithmetic behind a number is visible a month later; `amount` is always
+/// the payable and is never recomputed from `rate`.
+///
+/// `salesRepId` is a `User`. That is the only person table in this app that
+/// isn't a customer, and it is already how the CRM models a rep
+/// (`Contact.ownerId`). If Cleano pays commission to canvassers who have no
+/// login, this becomes a small `SalesRep` table and an FK swap — see the
+/// TODO(client) note in the Commissions tab.
+///
+/// `paidAt` IS the status: null = pending, set = paid. A rep's totals are the
+/// two sums either side of that one column.
+model Commission {
+  id         String    @id @default(cuid())
+  salesRepId String
+  jobId      String?
+  leadId     String?
+  amount     Float
+  /// Percentage the amount was worked out at, when there was one (0–100).
+  rate       Float?
+  note       String?
+  /// Payout month bucket, "YYYY-MM". Same shape as `Budget.period`, produced by
+  /// `storeMonthPeriod()` so the month is the store's, not the server's.
+  period     String
+  paidAt     DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  salesRep   User      @relation("SalesRepCommissions", fields: [salesRepId], references: [id], onDelete: Restrict)
+  job        Job?      @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  lead       Lead?     @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
+  @@index([salesRepId])
+  @@index([period])
+  @@index([paidAt])
+  @@index([jobId])
+  @@index([leadId])
 }
 
 /// Unified CRM record. One Contact spans a person's whole lifecycle — lead,
@@ -2289,12 +2376,34 @@ model Contact {
   client             Client?           @relation(fields: [clientId], references: [id], onDelete: SetNull)
   lead               Lead?             @relation(fields: [leadId], references: [id], onDelete: SetNull)
   activities         ContactActivity[]
+  rejectedPairsAsA   DuplicateRejection[] @relation("DuplicateRejectionA")
+  rejectedPairsAsB   DuplicateRejection[] @relation("DuplicateRejectionB")
 
   @@index([lifecycle])
   @@index([ownerId])
   @@index([lastActivityAt])
   @@index([email])
   @@index([phone])
+}
+
+/// "These two are not the same person." Scoped to the PAIR, deliberately —
+/// the previous mechanism (`Contact.duplicateDismissed`) flagged whole records,
+/// so rejecting one bad suggestion suppressed that contact against every other
+/// record forever, including duplicates created months later, with no undo.
+/// `contactAId` always holds the lexicographically smaller id so the unique
+/// index catches the same pair submitted in either order.
+model DuplicateRejection {
+  id         String   @id @default(cuid())
+  contactAId String
+  contactBId String
+  rejectedAt DateTime @default(now())
+  rejectedBy String? // admin display name, snapshot (User rows may be removed)
+  contactA   Contact  @relation("DuplicateRejectionA", fields: [contactAId], references: [id], onDelete: Cascade)
+  contactB   Contact  @relation("DuplicateRejectionB", fields: [contactBId], references: [id], onDelete: Cascade)
+
+  @@unique([contactAId, contactBId])
+  @@index([contactBId])
+  @@index([rejectedAt])
 }
 
 /// Mixed-type timeline entry on a Contact (note, call, email, lifecycle change…).

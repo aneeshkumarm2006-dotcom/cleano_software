@@ -12,6 +12,7 @@ import {
   Clock,
 } from "lucide-react";
 import { jobTypeLabel } from "@/lib/calendar-labels";
+import { STORE_TZ } from "@/lib/timezone";
 
 interface WebJob {
   id: string;
@@ -194,7 +195,7 @@ function BookingRow({ job }: { job: WebJob }) {
   const hasRequest =
     !!job.cancellationRequestedAt || !!job.rescheduleRequestedAt;
 
-  const startStr = new Date(job.startTime).toLocaleString(undefined, {
+  const startStr = new Date(job.startTime).toLocaleString("en-US", {
     weekday: "short",
     month: "short",
     day: "numeric",
@@ -204,7 +205,7 @@ function BookingRow({ job }: { job: WebJob }) {
         : "numeric",
     hour: "numeric",
     minute: "2-digit",
-    timeZone: "America/Toronto",
+    timeZone: STORE_TZ,
   });
 
   return (

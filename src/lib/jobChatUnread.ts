@@ -1,4 +1,16 @@
-"use server";
+// NOT "use server" any more.
+//
+// This was a server action polled every 5 s by the admin sidebar, the cleaner
+// sidebar and the customer portal shell. A server action's response carries an
+// RSC re-render of whatever route the caller is standing on, and actions are
+// serialised per tab, so the badge was restarting the render of every page it
+// decorated — on /admin/analytics (15-20 s of server work per render) that made
+// user-initiated navigations unable to commit at all. The only caller now is
+// the GET handler at src/app/api/job-chat/unread/route.ts; the full write-up
+// lives in src/lib/chatUnread.ts.
+//
+// Client components may still `import type` the two types below — type imports
+// are erased, so none of this file reaches the browser bundle.
 
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";

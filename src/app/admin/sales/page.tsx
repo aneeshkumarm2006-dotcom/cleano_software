@@ -3,6 +3,8 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
 import SalesPageClient from "./SalesPageClient";
+import { SALES_REP_ROLES } from "./commissionTypes";
+import { storeMonthPeriod } from "@/lib/timezone";
 
 export default async function SalesPage() {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -13,7 +15,7 @@ export default async function SalesPage() {
     redirect("/admin/dashboard");
   }
 
-  const [salesAreas, landingPages, campaigns] = await Promise.all([
+  const [salesAreas, landingPages, campaigns, commissions, reps, recentLeads] = await Promise.all([
     db.salesArea.findMany({
       orderBy: { date: "desc" },
     }),
@@ -29,6 +31,35 @@ export default async function SalesPage() {
         _count: { select: { landingPages: true } },
       },
       orderBy: { createdAt: "desc" },
+    }),
+    // Commissions (item 20). Newest period first, then newest entry — the tab
+    // is worked from the top, and the top is what is owed right now.
+    db.commission.findMany({
+      orderBy: [{ period: "desc" }, { createdAt: "desc" }],
+      select: {
+        id: true,
+        salesRepId: true,
+        amount: true,
+        rate: true,
+        period: true,
+        note: true,
+        paidAt: true,
+        createdAt: true,
+        salesRep: { select: { name: true } },
+        job: { select: { id: true, jobNumber: true } },
+        lead: { select: { id: true, name: true, email: true } },
+      },
+    }),
+    db.user.findMany({
+      where: { deletedAt: null, isActive: true, role: { in: SALES_REP_ROLES } },
+      select: { id: true, name: true, role: true },
+      orderBy: { name: "asc" },
+    }),
+    db.lead.findMany({
+      where: { deletedAt: null },
+      select: { id: true, name: true, email: true },
+      orderBy: { lastActivityAt: "desc" },
+      take: 100,
     }),
   ]);
 
@@ -88,6 +119,27 @@ export default async function SalesPage() {
     createdAt: c.createdAt.toISOString(),
   }));
 
+  const serializedCommissions = commissions.map((c) => ({
+    id: c.id,
+    salesRepId: c.salesRepId,
+    salesRepName: c.salesRep.name,
+    amount: c.amount,
+    rate: c.rate,
+    period: c.period,
+    note: c.note,
+    paidAt: c.paidAt?.toISOString() ?? null,
+    createdAt: c.createdAt.toISOString(),
+    jobId: c.job?.id ?? null,
+    jobNumber: c.job?.jobNumber ?? null,
+    leadId: c.lead?.id ?? null,
+    leadLabel: c.lead ? c.lead.name || c.lead.email : null,
+  }));
+
+  const leadOptions = recentLeads.map((l) => ({
+    id: l.id,
+    label: l.name ? `${l.name} · ${l.email}` : l.email,
+  }));
+
   const stats = {
     totalAreas: salesAreas.length,
     totalPages: landingPages.length,
@@ -106,6 +158,10 @@ export default async function SalesPage() {
         landingPages={serializedLandingPages}
         campaigns={serializedCampaigns}
         stats={stats}
+        commissions={serializedCommissions}
+        reps={reps}
+        leadOptions={leadOptions}
+        currentPeriod={storeMonthPeriod()}
       />
     </div>
   );

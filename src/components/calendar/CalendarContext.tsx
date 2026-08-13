@@ -34,6 +34,20 @@ interface CalendarState {
   setCurrentDate: (date: Date) => void;
   view: CalendarView;
   setView: (view: CalendarView) => void;
+  /**
+   * List is a rendering MODE laid over `view`, not a fourth granularity — the
+   * toolbar's List segment keeps whatever month/week/day span was showing and
+   * renders it as rows (`<ListView view={view} />`).
+   *
+   * It lived as `useState` inside `Calendar.tsx` until now, which made the
+   * toolbar the only thing that knew List was on: the context — and therefore
+   * `CalendarUrlSync`, which mirrors the context into the URL — could not see
+   * it, so `?view=` said "month" while List was on screen and a reload always
+   * came back on the grid. Hoisted here so there is one source of truth for
+   * what the user is looking at.
+   */
+  listMode: boolean;
+  setListMode: (on: boolean) => void;
   zoomLevel: number;
   setZoomLevel: (level: number) => void;
   events: CalendarEvent[];
@@ -175,11 +189,13 @@ export const CalendarProvider = ({
   initialDate = new Date(),
   initialEvents = [],
   initialView = "month",
+  initialListMode = false,
 }: {
   children: ReactNode;
   initialDate?: Date;
   initialEvents?: CalendarEvent[];
   initialView?: CalendarView;
+  initialListMode?: boolean;
 }) => {
   const router = useRouter();
   const pathname = usePathname();
@@ -188,6 +204,7 @@ export const CalendarProvider = ({
 
   const [currentDate, setCurrentDate] = useState(initialDate);
   const [view, setView] = useState<CalendarView>(initialView);
+  const [listMode, setListMode] = useState<boolean>(initialListMode);
   const [localEvents, setLocalEvents] =
     useState<CalendarEvent[]>(initialEvents);
   const [zoomLevel, setZoomLevel] = useState<number>(100);
@@ -321,8 +338,35 @@ export const CalendarProvider = ({
   } = useCalendarData(visibleStart, visibleEnd);
 
   // Sync local events when server data changes (from SWR)
-  const lastSwrSignatureRef = useRef<string>("");
+  //
+  // `lastAppliedSignatureRef` records the signature of the payload this effect
+  // last WROTE into `localEvents`. The previous version stored two different
+  // things in it — the SWR signature on one branch and the *seed* signature on
+  // the other — while always comparing the SWR signature against it. Once the
+  // seed was non-empty and SWR was not (any range that legitimately has no
+  // jobs, and every range still in flight after one had already loaded) the
+  // guard could never match again, so the effect fell through, called
+  // `setLocalEvents` with a freshly built array, and — because `localEvents`
+  // was one of its own dependencies — immediately re-ran. That is the
+  // "Maximum update depth exceeded" loop: it never terminates on its own, and
+  // it starves `CalendarUrlSync` and `CalendarPageClient`'s
+  // `window.__calendarMutateRange` effect, which is why neither of those ever
+  // committed.
+  //
+  // Two changes make it convergent: the ref now always records what was
+  // actually applied, and `localEvents` is read through a ref instead of being
+  // a dependency, so writing state can no longer re-trigger the effect that
+  // wrote it.
+  const lastAppliedSignatureRef = useRef<string>("");
   const localDirtyRef = useRef<boolean>(false);
+  const localEventsRef = useRef<CalendarEvent[]>(localEvents);
+
+  // Declared BEFORE the sync effect on purpose: React runs a fiber's effects in
+  // declaration order, so by the time the sync effect below reads the ref in
+  // any given commit it already holds that commit's `localEvents`.
+  useEffect(() => {
+    localEventsRef.current = localEvents;
+  }, [localEvents]);
 
   // Mark local state as "dirty" during drag/resize so SWR won't clobber it until it matches.
   useEffect(() => {
@@ -362,33 +406,34 @@ export const CalendarProvider = ({
         }))
       );
 
-    const normalizedSwr = swrEvents.length ? normalize(swrEvents) : [];
-    const swrSignature = signatureFor(normalizedSwr);
+    // What we would apply: the SWR payload when it has anything, otherwise the
+    // seed the page handed down.
+    const next = swrEvents.length
+      ? normalize(swrEvents)
+      : normalize(initialEvents);
+    const nextSignature = signatureFor(next);
 
-    // If SWR data hasn't changed since last apply, skip.
-    if (swrSignature === lastSwrSignatureRef.current) return;
+    // Already applied — nothing to do. This is now a like-for-like comparison,
+    // so it always matches on the run immediately after an apply.
+    if (nextSignature === lastAppliedSignatureRef.current) return;
 
-    // If we have local dirty state and SWR does not match local yet, do not override.
-    const localSignature = signatureFor(localEvents);
-    if (localDirtyRef.current && swrSignature !== localSignature) {
+    const localSignature = signatureFor(localEventsRef.current);
+
+    // The server has caught up with the optimistic local state: record it and
+    // release the dirty hold without touching state (no re-render).
+    if (localSignature === nextSignature) {
+      lastAppliedSignatureRef.current = nextSignature;
+      localDirtyRef.current = false;
       return;
     }
 
-    // Apply SWR payload.
-    if (normalizedSwr.length) {
-      setLocalEvents(normalizedSwr);
-      lastSwrSignatureRef.current = swrSignature;
-      // If SWR now matches local, clear dirty flag.
-      if (swrSignature === localSignature) {
-        localDirtyRef.current = false;
-      }
-    } else {
-      const normalizedInitial = normalize(initialEvents);
-      setLocalEvents(normalizedInitial);
-      lastSwrSignatureRef.current = signatureFor(normalizedInitial);
-      localDirtyRef.current = false;
-    }
-  }, [initialEvents, swrEvents, localEvents, movingEvent, resizingEvent]);
+    // Local drag/resize result not yet reflected by the server — hold it, and
+    // deliberately do NOT record the signature so the next payload is retried.
+    if (localDirtyRef.current) return;
+
+    setLocalEvents(next);
+    lastAppliedSignatureRef.current = nextSignature;
+  }, [initialEvents, swrEvents, movingEvent, resizingEvent]);
 
   // Helper to format YYYY-MM-DD
   const toDateStr = useCallback((date: Date) => {
@@ -810,15 +855,34 @@ export const CalendarProvider = ({
     // UI-only: no-op
   }, []);
 
+  /**
+   * Re-read the visible range from the server.
+   *
+   * Was a no-op, which was survivable while nothing on the calendar mutated a
+   * job — drag/resize call `invalidateDays` directly. The booking drawer (item
+   * 8) cancels, charges and edits from inside the grid, so a stale chip would
+   * keep showing "Unpaid" on a job the admin had just marked paid.
+   *
+   * Both caches are poked: this provider's own range subscription, and the
+   * month-range one `CalendarPageClient` holds (it publishes its mutator on
+   * `window` for exactly this reason). Different SWR keys, so refreshing one
+   * leaves the other stale.
+   */
   const refreshEvents = useCallback(async () => {
-    // UI-only: no-op
-  }, []);
+    mutateRangeCache?.();
+    const external = (window as unknown as {
+      __calendarMutateRange?: () => void;
+    }).__calendarMutateRange;
+    if (typeof external === "function") external();
+  }, [mutateRangeCache]);
 
   const value: CalendarState = {
     currentDate,
     setCurrentDate,
     view,
     setView,
+    listMode,
+    setListMode,
     zoomLevel,
     setZoomLevel,
     events: filteredEvents,

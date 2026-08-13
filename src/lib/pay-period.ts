@@ -10,8 +10,10 @@
 // business-timezone wall-clock boundaries, so a job stored at 2026-07-13T03:00Z
 // (Sunday 11pm in Toronto) is correctly counted in the week that CONTAINS it.
 
-export const BUSINESS_TZ =
-  process.env.NEXT_PUBLIC_BUSINESS_TIMEZONE ?? "America/Toronto";
+import { STORE_TZ } from "./timezone";
+
+/** @deprecated Import `STORE_TZ` from `@/lib/timezone` instead. */
+export const BUSINESS_TZ = STORE_TZ;
 
 export interface PayPeriodRange {
   /** Monday 00:00:00.000, business timezone. */

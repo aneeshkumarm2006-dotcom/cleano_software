@@ -16,15 +16,20 @@ import {
   MIN_EVENT_HEIGHT,
   DRAG_THRESHOLD,
   OfficeHours,
+  EventLayout,
   getVisibleTimeBounds,
   calculateEventPosition,
   getBorderRadiusClasses,
   computeEventLayout,
+  overflowGroups,
+  resolveLaneCap,
   formatHour,
 } from "./calendar-helpers";
 import { CurrentTimeIndicator } from "./calendar-components";
 import { ScheduleBlocksConfig } from "@/types/calendar";
 import EventCard from "./EventCard";
+import EventOverflowChip from "./EventOverflow";
+import useColumnWidth from "./useColumnWidth";
 import ScheduleBlocks from "./ScheduleBlocks";
 import AvailabilityOverlay from "./AvailabilityOverlay";
 import { getCurrentTimeMeta } from "./time-utils";
@@ -129,15 +134,24 @@ export const DayView: React.FC = () => {
   // ---------------------------------------------------------------------------
   const dayGridRef = useRef<HTMLDivElement>(null);
   const roomColumnRefs = useRef<(HTMLDivElement | null)[]>([]);
+  // Room lanes are equal-width, so the first column's width budgets them all
+  // (item 8 · Q2 §7). A single-column day is the wide case — ten overlapping
+  // jobs all fit here, which is where the week's "+N more" chip sends you.
+  const [measureColumn, columnWidth] = useColumnWidth();
+  const laneCap = resolveLaneCap(columnWidth);
 
   // ---------------------------------------------------------------------------
   // State
   // ---------------------------------------------------------------------------
-  const [currentTime, setCurrentTime] = useState(new Date());
+  // Client-only clock — see the note in WeekView. Seeding from `new Date()`
+  // during SSR renders the now-line at the server's instant and mismatches on
+  // hydration; null renders no line at all until the browser has read its own.
+  const [currentTime, setCurrentTime] = useState<Date | null>(null);
   const [currentDragRoomIndex, setCurrentDragRoomIndex] = useState<number>(-1);
 
-  // Update current time every second
+  // Take the first reading after mount, then update every second
   useEffect(() => {
+    setCurrentTime(new Date());
     const interval = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(interval);
   }, []);
@@ -178,11 +192,12 @@ export const DayView: React.FC = () => {
   /** Total grid height in pixels */
   const gridHeight = visibleHours.length * zoomLevel;
 
-  /** Current time indicator meta */
-  const { show: showCurrentTimeIndicator, top: currentTimeTop } =
-    getCurrentTimeMeta(currentTime, officeHours, zoomLevel, {
-      day: currentDate,
-    });
+  /** Current time indicator meta — nothing to place until the clock exists */
+  const { show: showCurrentTimeIndicator, top: currentTimeTop } = currentTime
+    ? getCurrentTimeMeta(currentTime, officeHours, zoomLevel, {
+        day: currentDate,
+      })
+    : { show: false, top: 0 };
 
   /** Day events including preview */
   const dayEvents = useMemo(() => {
@@ -355,17 +370,15 @@ export const DayView: React.FC = () => {
 
   /** Render a single event card */
   const renderEventCard = useCallback(
-    (
-      event: CalendarEvent,
-      day: Date,
-      layout: { index: number; total: number }
-    ) => {
+    (event: CalendarEvent, day: Date, layout: EventLayout) => {
+      // Budgeted out of a lane — the column's "+N more" chip stands in for it.
+      if (layout.hidden) return null;
       const position = calculateEventPosition(
         event,
         day,
         officeHours,
         zoomLevel,
-        layout
+        { ...layout, columnWidth: columnWidth ?? undefined }
       );
       if (!position) return null;
 
@@ -422,7 +435,7 @@ export const DayView: React.FC = () => {
         />
       );
     },
-    [officeHours, zoomLevel, eventTypesConfig, handleEventClick]
+    [officeHours, zoomLevel, eventTypesConfig, handleEventClick, columnWidth]
   );
 
   // ---------------------------------------------------------------------------
@@ -431,7 +444,7 @@ export const DayView: React.FC = () => {
   const baseHour = visibleHours[0] ?? 0;
   const officeTop = (8 - baseHour) * zoomLevel;
   const officeHeight = 10 * zoomLevel; // 8 → 18
-  const isToday = isSameDay(currentDate, currentTime);
+  const isToday = currentTime ? isSameDay(currentDate, currentTime) : false;
   const singleLane = roomNames.length === 1 && roomNames[0] === "All Events";
 
   return (
@@ -501,13 +514,21 @@ export const DayView: React.FC = () => {
                   ? dayEvents.filter((ev) => isEventUnassigned(ev, existingRoomNames))
                   : dayEvents.filter((ev) => ev.label === roomName);
 
-              const layoutMap = computeEventLayout(columnEvents, null);
+              const layoutMap = computeEventLayout(columnEvents, null, laneCap);
+              const overflow = overflowGroups(
+                columnEvents,
+                layoutMap,
+                currentDate,
+                officeHours,
+                zoomLevel
+              );
 
               return (
                 <div
                   key={roomName}
                   ref={(el) => {
                     roomColumnRefs.current[roomIndex] = el;
+                    if (roomIndex === 0) measureColumn(el);
                   }}
                   data-room-column={roomIndex}
                   data-room-name={roomName}
@@ -546,6 +567,16 @@ export const DayView: React.FC = () => {
                     if (!layout) return null;
                     return renderEventCard(event, currentDate, layout);
                   })}
+
+                  {/* Jobs that ran out of lanes — one chip per stack (Q2 §7) */}
+                  {overflow.map((group) => (
+                    <EventOverflowChip
+                      key={group.key}
+                      events={group.events}
+                      top={group.top}
+                      onSelect={openEventDetailsModal}
+                    />
+                  ))}
 
                   {/* 15-Minute Tile Drag Handlers */}
                   {visibleHours.flatMap((hour, hourIndex) =>

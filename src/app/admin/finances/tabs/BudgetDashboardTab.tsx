@@ -11,24 +11,20 @@ import { ConfirmDeleteModal } from "@/components/common/ConfirmDeleteModal";
 import { createBudget, deleteBudget } from "../../actions/createBudget";
 import { updateBudget } from "../../actions/updateBudget";
 import {
+  BudgetCategoryOption,
   BudgetRow,
-  CATEGORY_LABELS,
-  EXPENSE_CATEGORIES,
   TransactionRow,
-  TxCategory,
+  categoryOptions,
   formatCurrency,
   formatMonth,
+  pickableCategories,
 } from "../types";
 
 interface Props {
   transactions: TransactionRow[];
   budgets: BudgetRow[];
+  categories: BudgetCategoryOption[];
 }
-
-const ALL_CATEGORIES: TxCategory[] = [
-  "REVENUE",
-  ...EXPENSE_CATEGORIES,
-];
 
 function currentPeriod(): string {
   const d = new Date();
@@ -37,27 +33,36 @@ function currentPeriod(): string {
 
 interface FormState {
   id: string | null;
-  category: TxCategory;
+  categoryId: string;
   period: string;
   amount: string;
   notes: string;
 }
 
-function emptyForm(): FormState {
+function emptyForm(defaultCategoryId: string): FormState {
   return {
     id: null,
-    category: "SUPPLIES",
+    categoryId: defaultCategoryId,
     period: currentPeriod(),
     amount: "",
     notes: "",
   };
 }
 
-export default function BudgetDashboardTab({ transactions, budgets }: Props) {
+export default function BudgetDashboardTab({
+  transactions,
+  budgets,
+  categories,
+}: Props) {
   const router = useRouter();
+  const selectable = useMemo(() => pickableCategories(categories), [categories]);
+  // First expense line. Budgets are set against spending far more often than
+  // against income, which is why this used to be hardcoded to Supplies.
+  const defaultCategoryId =
+    selectable.find((c) => c.kind === "EXPENSE")?.id ?? selectable[0]?.id ?? "";
   const [period, setPeriod] = useState(currentPeriod());
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState<FormState>(emptyForm());
+  const [form, setForm] = useState<FormState>(emptyForm(defaultCategoryId));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -70,46 +75,56 @@ export default function BudgetDashboardTab({ transactions, budgets }: Props) {
   }, [budgets, transactions]);
 
   const rows = useMemo(() => {
-    const actuals: Record<TxCategory, number> = {
-      REVENUE: 0,
-      SUPPLIES: 0,
-      LABOUR: 0,
-      OVERHEAD: 0,
-      OTHER: 0,
-    };
+    const actuals = new Map<string, number>();
     for (const t of transactions) {
-      if (formatMonth(t.date) === period) actuals[t.category] += t.amount;
+      if (formatMonth(t.date) === period) {
+        actuals.set(t.categoryId, (actuals.get(t.categoryId) ?? 0) + t.amount);
+      }
     }
-    return ALL_CATEGORIES.map((c) => {
-      const budget = budgets.find(
-        (b) => b.category === c && b.period === period
-      );
-      const actual = actuals[c];
-      const budgeted = budget?.amount ?? 0;
-      const variance = budgeted - actual;
-      const pct = budgeted > 0 ? (actual / budgeted) * 100 : 0;
-      return {
-        id: budget?.id ?? null,
-        category: c,
-        budgeted,
-        actual,
-        variance,
-        pct,
-        notes: budget?.notes ?? null,
-      };
-    });
-  }, [transactions, budgets, period]);
+    // Live categories always get a row, so an empty one still invites a budget.
+    // An archived category earns one only while it still has numbers in this
+    // period; otherwise retiring a category would quietly drop the months it
+    // was actually used from the comparison.
+    return categories
+      .filter(
+        (c) =>
+          !c.archived ||
+          (actuals.get(c.id) ?? 0) !== 0 ||
+          budgets.some((b) => b.categoryId === c.id && b.period === period)
+      )
+      .map((c) => {
+        const budget = budgets.find(
+          (b) => b.categoryId === c.id && b.period === period
+        );
+        const actual = actuals.get(c.id) ?? 0;
+        const budgeted = budget?.amount ?? 0;
+        const variance = budgeted - actual;
+        const pct = budgeted > 0 ? (actual / budgeted) * 100 : 0;
+        return {
+          id: budget?.id ?? null,
+          categoryId: c.id,
+          categoryName: c.name,
+          isRevenue: c.kind === "REVENUE",
+          archived: c.archived,
+          budgeted,
+          actual,
+          variance,
+          pct,
+          notes: budget?.notes ?? null,
+        };
+      });
+  }, [transactions, budgets, categories, period]);
 
   const chartData = rows
     .filter((r) => r.budgeted > 0 || r.actual > 0)
     .map((r) => ({
-      name: CATEGORY_LABELS[r.category],
+      name: r.categoryName,
       Budget: r.budgeted,
       Actual: r.actual,
     }));
 
   function openCreate() {
-    setForm({ ...emptyForm(), period });
+    setForm({ ...emptyForm(defaultCategoryId), period });
     setShowForm(true);
     setError(null);
   }
@@ -118,7 +133,7 @@ export default function BudgetDashboardTab({ transactions, budgets }: Props) {
     if (!row.id) return;
     setForm({
       id: row.id,
-      category: row.category,
+      categoryId: row.categoryId,
       period,
       amount: String(row.budgeted),
       notes: row.notes ?? "",
@@ -133,7 +148,7 @@ export default function BudgetDashboardTab({ transactions, budgets }: Props) {
     setError(null);
     const amount = parseFloat(form.amount);
     const payload = {
-      category: form.category,
+      categoryId: form.categoryId,
       period: form.period,
       amount,
       notes: form.notes || null,
@@ -147,7 +162,7 @@ export default function BudgetDashboardTab({ transactions, budgets }: Props) {
       return;
     }
     setShowForm(false);
-    setForm(emptyForm());
+    setForm(emptyForm(defaultCategoryId));
     router.refresh();
   }
 
@@ -167,8 +182,10 @@ export default function BudgetDashboardTab({ transactions, budgets }: Props) {
     router.refresh();
   }
 
-  function rowColor(pct: number, category: TxCategory) {
-    if (category === "REVENUE") {
+  // Revenue reads the opposite way to spending: 110% of a revenue budget is
+  // good news, 110% of a supplies budget is not.
+  function rowColor(pct: number, isRevenue: boolean) {
+    if (isRevenue) {
       if (pct >= 100) return "bg-green-50 text-green-700";
       if (pct >= 80) return "bg-yellow-50 text-yellow-700";
       return "bg-red-50 text-red-600";
@@ -235,11 +252,9 @@ export default function BudgetDashboardTab({ transactions, budgets }: Props) {
                 Category
               </label>
               <PremiumSelect
-                value={form.category}
-                onChange={(v) =>
-                  setForm({ ...form, category: v as TxCategory })
-                }
-                options={ALL_CATEGORIES.map((c) => ({ value: c, label: CATEGORY_LABELS[c] }))}
+                value={form.categoryId}
+                onChange={(v) => setForm({ ...form, categoryId: v })}
+                options={categoryOptions(categories)}
                 size="sm"
               />
             </div>
@@ -324,9 +339,14 @@ export default function BudgetDashboardTab({ transactions, budgets }: Props) {
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.category} className="border-t border-[#008C9C]/5">
+              <tr key={r.categoryId} className="border-t border-[#008C9C]/5">
                 <td className="px-4 py-3 text-[#008C9C]/80">
-                  {CATEGORY_LABELS[r.category]}
+                  {r.categoryName}
+                  {r.archived && (
+                    <span className="ml-2 text-[10px] uppercase tracking-wide text-[#008C9C]/40">
+                      Archived
+                    </span>
+                  )}
                 </td>
                 <td className="px-4 py-3 text-right text-[#008C9C]/80">
                   {formatCurrency(r.budgeted)}
@@ -346,7 +366,7 @@ export default function BudgetDashboardTab({ transactions, budgets }: Props) {
                       <div className="flex-1 h-2 rounded-full bg-[#008C9C]/10 overflow-hidden">
                         <div
                           className={`h-full ${
-                            rowColor(r.pct, r.category).split(" ")[0]
+                            rowColor(r.pct, r.isRevenue).split(" ")[0]
                           }`}
                           style={{ width: `${Math.min(100, r.pct)}%` }}
                         />
@@ -354,7 +374,7 @@ export default function BudgetDashboardTab({ transactions, budgets }: Props) {
                       <span
                         className={`text-[11px] px-2 py-0.5 rounded-full ${rowColor(
                           r.pct,
-                          r.category
+                          r.isRevenue
                         )}`}>
                         {r.pct.toFixed(0)}%
                       </span>

@@ -24,6 +24,8 @@ export async function deleteTransaction(id: string) {
 
     await db.transaction.delete({ where: { id } });
     revalidatePath("/admin/finances");
+    revalidatePath("/admin/settings");
+    revalidatePath("/admin/analytics");
     return { success: true };
   } catch (error) {
     console.error("Error deleting transaction:", error);

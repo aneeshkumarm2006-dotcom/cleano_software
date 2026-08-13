@@ -5,16 +5,17 @@ import { FileBarChart } from "lucide-react";
 import Card from "@/components/ui/Card";
 import PremiumSelect from "@/components/ui/PremiumSelect";
 import {
-  CATEGORY_LABELS,
-  EXPENSE_CATEGORIES,
+  BudgetCategoryOption,
   TransactionRow,
-  TxCategory,
   formatCurrency,
   formatMonth,
+  indexCategories,
+  isRevenueCategory,
 } from "../types";
 
 interface Props {
   transactions: TransactionRow[];
+  categories: BudgetCategoryOption[];
 }
 
 type Period = "month" | "quarter" | "year" | "all";
@@ -32,10 +33,14 @@ function periodStart(period: Period): Date | null {
   return new Date(now.getFullYear(), 0, 1);
 }
 
-export default function IncomeStatementTab({ transactions }: Props) {
+export default function IncomeStatementTab({
+  transactions,
+  categories,
+}: Props) {
   const [period, setPeriod] = useState<Period>("month");
+  const catIndex = useMemo(() => indexCategories(categories), [categories]);
 
-  const { revenueTotal, expenseByCategory, expenseTotal, netIncome, rows } =
+  const { revenueTotal, expenseLines, expenseTotal, netIncome, rows } =
     useMemo(() => {
       const start = periodStart(period);
       const filtered = transactions.filter((t) => {
@@ -44,21 +49,35 @@ export default function IncomeStatementTab({ transactions }: Props) {
       });
 
       let revenueTotal = 0;
-      const expenseByCategory: Record<TxCategory, number> = {
-        REVENUE: 0,
-        SUPPLIES: 0,
-        LABOUR: 0,
-        OVERHEAD: 0,
-        OTHER: 0,
-      };
+      const byCategory = new Map<string, number>();
 
       for (const t of filtered) {
-        if (t.category === "REVENUE") revenueTotal += t.amount;
-        else expenseByCategory[t.category] += t.amount;
+        if (isRevenueCategory(catIndex, t.categoryId)) revenueTotal += t.amount;
+        else {
+          byCategory.set(
+            t.categoryId,
+            (byCategory.get(t.categoryId) ?? 0) + t.amount
+          );
+        }
       }
 
+      // One line per live expense category, plus any archived one that still
+      // has spend in this period — a statement that silently omits a retired
+      // category stops adding up to its own total.
+      const expenseLines = categories
+        .filter(
+          (c) =>
+            c.kind === "EXPENSE" &&
+            (!c.archived || (byCategory.get(c.id) ?? 0) !== 0)
+        )
+        .map((c) => ({
+          id: c.id,
+          name: c.name,
+          amount: byCategory.get(c.id) ?? 0,
+        }));
+
       let expenseTotal = 0;
-      for (const c of EXPENSE_CATEGORIES) expenseTotal += expenseByCategory[c];
+      for (const amount of byCategory.values()) expenseTotal += amount;
 
       const monthlyMap = new Map<
         string,
@@ -69,7 +88,7 @@ export default function IncomeStatementTab({ transactions }: Props) {
         if (!monthlyMap.has(m))
           monthlyMap.set(m, { month: m, revenue: 0, expenses: 0 });
         const row = monthlyMap.get(m)!;
-        if (t.category === "REVENUE") row.revenue += t.amount;
+        if (isRevenueCategory(catIndex, t.categoryId)) row.revenue += t.amount;
         else row.expenses += t.amount;
       }
       const rows = Array.from(monthlyMap.values()).sort((a, b) =>
@@ -78,12 +97,12 @@ export default function IncomeStatementTab({ transactions }: Props) {
 
       return {
         revenueTotal,
-        expenseByCategory,
+        expenseLines,
         expenseTotal,
         netIncome: revenueTotal - expenseTotal,
         rows,
       };
-    }, [transactions, period]);
+    }, [transactions, categories, catIndex, period]);
 
   const selectCls =
     "px-4 py-2 rounded-xl border border-transparent bg-[#008C9C]/5 text-sm text-[#008C9C] focus:outline-none focus:ring-2 focus:ring-[#008C9C]/20";
@@ -138,13 +157,11 @@ export default function IncomeStatementTab({ transactions }: Props) {
               </td>
               <td className="px-5 py-3"></td>
             </tr>
-            {EXPENSE_CATEGORIES.map((c) => (
-              <tr key={c} className="border-t border-[#008C9C]/5">
-                <td className="px-5 py-3 text-[#008C9C]/80 pl-8">
-                  {CATEGORY_LABELS[c]}
-                </td>
+            {expenseLines.map((line) => (
+              <tr key={line.id} className="border-t border-[#008C9C]/5">
+                <td className="px-5 py-3 text-[#008C9C]/80 pl-8">{line.name}</td>
                 <td className="px-5 py-3 text-right text-[#008C9C]/80">
-                  {formatCurrency(expenseByCategory[c])}
+                  {formatCurrency(line.amount)}
                 </td>
               </tr>
             ))}

@@ -3,6 +3,8 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
 import FinancesPageClient from "./FinancesPageClient";
+import { formatDate } from "@/lib/timezone";
+import { getBudgetCategoryOptions } from "@/lib/budget-categories";
 
 export default async function FinancesPage() {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -13,14 +15,17 @@ export default async function FinancesPage() {
     redirect("/admin/dashboard");
   }
 
-  const [transactions, budgets, taxConfig, jobs] = await Promise.all([
+  const [transactions, budgets, categories, taxConfig, jobs] = await Promise.all([
     db.transaction.findMany({
       orderBy: { date: "desc" },
       include: {
         job: { select: { id: true, clientName: true } },
       },
     }),
-    db.budget.findMany({ orderBy: [{ period: "desc" }, { category: "asc" }] }),
+    db.budget.findMany({
+      orderBy: [{ period: "desc" }, { category: { sortOrder: "asc" } }],
+    }),
+    getBudgetCategoryOptions(),
     db.appSetting.findUnique({ where: { key: "tax.config" } }),
     db.job.findMany({
       // Job picker for linking a transaction — archived jobs aren't offered
@@ -48,7 +53,7 @@ export default async function FinancesPage() {
   const txRows = transactions.map((t) => ({
     id: t.id,
     date: t.date.toISOString(),
-    category: t.category,
+    categoryId: t.categoryId,
     amount: t.amount,
     description: t.description,
     notes: t.notes,
@@ -61,7 +66,7 @@ export default async function FinancesPage() {
 
   const budgetRows = budgets.map((b) => ({
     id: b.id,
-    category: b.category,
+    categoryId: b.categoryId,
     period: b.period,
     amount: b.amount,
     notes: b.notes,
@@ -69,7 +74,7 @@ export default async function FinancesPage() {
 
   const jobOptions = jobs.map((j) => ({
     id: j.id,
-    label: `${j.clientName}${j.jobDate ? ` — ${new Date(j.jobDate).toLocaleDateString("en-US")}` : ""}`,
+    label: `${j.clientName}${j.jobDate ? ` — ${formatDate(j.jobDate)}` : ""}`,
   }));
 
   return (
@@ -77,6 +82,7 @@ export default async function FinancesPage() {
       <FinancesPageClient
         transactions={txRows}
         budgets={budgetRows}
+        categories={categories}
         taxConfig={taxConfigValue}
         jobOptions={jobOptions}
       />

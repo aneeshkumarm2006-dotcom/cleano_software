@@ -17,7 +17,9 @@
 // So: jobs are keyed to a civil day with tzDateKey(), cells with civilKey(),
 // and the two keys are compared. Times shown for jobs go through @/lib/time.
 
-const TZ = process.env.NEXT_PUBLIC_BUSINESS_TIMEZONE ?? "America/Toronto";
+import { STORE_TZ } from "./timezone";
+
+const TZ = STORE_TZ;
 
 const PARTS = new Intl.DateTimeFormat("en-US", {
   timeZone: TZ,

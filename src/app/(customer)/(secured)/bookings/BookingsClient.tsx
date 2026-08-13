@@ -12,6 +12,7 @@ import DatePicker from "@/components/customer/DatePicker";
 import { requestCancellation } from "../../actions/requestCancellation";
 import { requestReschedule } from "../../actions/requestReschedule";
 import JobChatUnreadPill from "@/components/JobChatUnread";
+import { STORE_TZ } from "@/lib/timezone";
 
 function tomorrowISO() {
   const d = new Date();
@@ -48,7 +49,7 @@ function formatTime(iso: string) {
   return new Date(iso).toLocaleString("en-US", {
     hour: "numeric",
     minute: "2-digit",
-    timeZone: "America/Toronto",
+    timeZone: STORE_TZ,
   });
 }
 

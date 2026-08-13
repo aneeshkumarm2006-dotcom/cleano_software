@@ -183,6 +183,40 @@ export function addOnLineLabel(line: AddOnLine): string {
   return line.quantity > 1 ? `${line.name} ×${line.quantity}` : line.name;
 }
 
+/**
+ * What an add-on row prints where its amount would go, when it has no amount
+ * of its own. One string, so no two surfaces word it differently.
+ */
+export const ADDON_INCLUDED_LABEL = "included in service total";
+
+/**
+ * Does this add-on row have no separate money to show?
+ *
+ * True only when BOTH hold:
+ *
+ *   * the job's add-ons are already inside its stored subtotal (a web booking
+ *     or a BookingKoala import), and
+ *   * this row's line total is zero.
+ *
+ * That pair is exactly the BookingKoala case. `resolveBkAddOns` writes
+ * `price: 0` on every imported row on purpose — the CSV's "Service total"
+ * already billed the extras, so giving them a price would charge for them
+ * twice — and the consequence was a chip reading `Inside Fridge · $0.00`. A
+ * customer's own words for that are "the add-ons didn't import", which is the
+ * complaint behind item 22 even though the rows were there and correct.
+ *
+ * Deliberately NOT "line total is zero", full stop: on an ADDITIVE (admin) job
+ * a $0.00 add-on is a real decision — an extra thrown in at no charge — and
+ * `$0.00` is the honest way to print it. Nothing is "included in the service
+ * total" there, because that job's total does not contain it.
+ */
+export function addOnAmountIsIncluded(
+  lineTotal: number,
+  addOnsIncludedInSubtotal: boolean
+): boolean {
+  return addOnsIncludedInSubtotal && round2(Number(lineTotal) || 0) === 0;
+}
+
 export function computeJobMoney(job: JobMoneyJob, rates: TaxRates): JobMoney {
   const addOnLines: AddOnLine[] = (job.addOns ?? []).map((a) => {
     const unitPrice = Number.isFinite(Number(a?.price)) ? round2(Number(a.price)) : 0;

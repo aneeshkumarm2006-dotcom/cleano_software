@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
+import { storeDateKey } from "@/lib/timezone";
 import InvoicesPageClient from "./InvoicesPageClient";
 
 type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>;
@@ -100,6 +101,11 @@ export default async function InvoicesPage({
         clients={clients}
         taxConfig={taxConfigValue}
         archived={archived}
+        // "Overdue" is derived, not stored (nothing in the app ever writes that
+        // status). The comparison day is resolved here, once, in the STORE
+        // timezone — not from the browser's clock and not from the host's,
+        // which is UTC and would call a Montréal invoice late four hours early.
+        todayKey={storeDateKey()}
       />
     </div>
   );

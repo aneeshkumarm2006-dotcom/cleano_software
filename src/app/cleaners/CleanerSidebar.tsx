@@ -5,8 +5,15 @@ import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { LogOut, Download, Share, MessageCircle, X } from "lucide-react";
 import { useInstall } from "@/components/InstallContext";
-import { getUnreadChatCount } from "@/app/admin/chat/actions";
+import type { UnreadChatCount } from "@/lib/chatUnread";
 import { useJobChatUnread } from "@/components/JobChatUnread";
+
+/**
+ * Gap between staff-chat unread polls, measured from the END of one to the
+ * START of the next. 30s, up from a fixed 5s `setInterval` — see the effect
+ * below.
+ */
+const CHAT_UNREAD_POLL_MS = 30_000;
 
 interface Props {
   user: { name: string; email: string; role: string };
@@ -190,8 +197,21 @@ export default function CleanerSidebar({ user, signOutAction }: Props) {
   }, [pathname]);
 
   // Poll unread count + emit toast + browser notification on new messages.
+  //
+  // A PLAIN GET, not a server action, and self-paced rather than on a fixed
+  // clock. `getUnreadChatCount` was a server action, and an action's response
+  // carries an RSC re-render of whatever route the caller is standing on — so
+  // this sidebar poll was restarting the render of every cleaner page every five
+  // seconds, and `setInterval` kept firing whether or not the previous call had
+  // returned. Same defect the admin sidebar had (round 5 K1); the full write-up
+  // is in src/lib/chatUnread.ts.
+  //
+  // Deliberately NOT paused on a hidden tab, unlike the admin sidebar: the whole
+  // point of the `Notification` branch below is to reach a cleaner whose tab is
+  // backgrounded. Backing the interval off to 30s is what pays for that.
   useEffect(() => {
     let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
 
     // One-time, gentle permission request after a short delay so it doesn't
     // collide with the install prompt.
@@ -210,7 +230,12 @@ export default function CleanerSidebar({ user, signOutAction }: Props) {
     async function poll() {
       if (cancelled) return;
       try {
-        const { count, latest } = await getUnreadChatCount();
+        const res = await fetch("/api/chat/unread", {
+          credentials: "include",
+          cache: "no-store",
+        });
+        if (!res.ok) throw new Error(`chat unread ${res.status}`);
+        const { count, latest } = (await res.json()) as UnreadChatCount;
         if (cancelled) return;
 
         setChatUnread(count);
@@ -253,14 +278,18 @@ export default function CleanerSidebar({ user, signOutAction }: Props) {
         prevLatestAtRef.current = latestAt;
       } catch {
         // ignore transient errors
+      } finally {
+        // Queue the next one only once this one is done, including on failure —
+        // an erroring poll must still keep the badge alive, and a poll that
+        // cannot outrun its own work can never build a queue.
+        if (!cancelled) timer = setTimeout(poll, CHAT_UNREAD_POLL_MS);
       }
     }
 
     poll();
-    const id = setInterval(poll, 5000);
     return () => {
       cancelled = true;
-      clearInterval(id);
+      if (timer) clearTimeout(timer);
       clearTimeout(askPermission);
       if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     };

@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { isNotificationEnabled } from "@/lib/notifications";
 import type { NotificationGate } from "@/lib/email";
 import { computePayoutTotals, summarisePayouts } from "@/lib/payout-math";
+import { requireBudgetCategoryId } from "@/lib/budget-categories";
 import { Resend } from "resend";
 
 const FROM = process.env.EMAIL_FROM ?? "Cleano <no-reply@cleano.ca>";
@@ -69,6 +70,10 @@ export async function completePayPeriod(payPeriodId: string) {
     const totalLabour = summarisePayouts(period.payouts).totalFinal;
     const periodLabel = `${period.startDate.toISOString().slice(0, 10)} → ${period.endDate.toISOString().slice(0, 10)}`;
 
+    // Resolved outside the interactive transaction: it is a read the payroll
+    // posting depends on, and holding the tx open for it buys nothing.
+    const labourCategoryId = await requireBudgetCategoryId("labour");
+
     await db.$transaction(async (tx) => {
       await tx.payPeriod.update({
         where: { id: payPeriodId },
@@ -80,7 +85,7 @@ export async function completePayPeriod(payPeriodId: string) {
 
       await tx.transaction.deleteMany({
         where: {
-          category: "LABOUR",
+          categoryId: labourCategoryId,
           isAuto: true,
           source: `PAY_PERIOD:${payPeriodId}`,
         },
@@ -90,7 +95,7 @@ export async function completePayPeriod(payPeriodId: string) {
         await tx.transaction.create({
           data: {
             date: paidAt,
-            category: "LABOUR",
+            categoryId: labourCategoryId,
             amount: totalLabour,
             description: `Payroll for pay period ${periodLabel}`,
             source: `PAY_PERIOD:${payPeriodId}`,

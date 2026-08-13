@@ -7,6 +7,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { stripe } from "@/lib/stripe";
+import { requireBudgetCategoryId } from "@/lib/budget-categories";
 import {
   sendCustomerHoldPlaced,
   sendCustomerHoldReleased,
@@ -153,6 +154,8 @@ export async function captureCardHold(jobId: string) {
   const amount = job.holdAmount ?? resolveAmountDue(job);
   const amountCents = Math.round(amount * 100);
 
+  const revenueCategoryId = await requireBudgetCategoryId("revenue");
+
   try {
     const pi = await stripe.paymentIntents.capture(job.holdPaymentIntentId, {
       amount_to_capture: amountCents,
@@ -171,7 +174,7 @@ export async function captureCardHold(jobId: string) {
       db.transaction.create({
         data: {
           date: now,
-          category: "REVENUE",
+          categoryId: revenueCategoryId,
           amount,
           description: `Stripe hold captured — job #${job.jobNumber}`,
           jobId,

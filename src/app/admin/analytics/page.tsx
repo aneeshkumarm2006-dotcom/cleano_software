@@ -2,11 +2,50 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
-import { getTotalRevenue, getEmployeeCounts } from "@/lib/metrics";
-import { jobTypeLabel } from "@/lib/calendar-labels";
+import {
+  getTotalRevenue,
+  getEmployeeCounts,
+  totalRevenueOf,
+  isRevenueJob,
+  jobRevenue,
+} from "@/lib/metrics";
+import {
+  jobTypeLabel,
+  jobIndustry,
+  INDUSTRY_UNSPECIFIED,
+  type JobIndustry,
+} from "@/lib/calendar-labels";
+import {
+  addStoreDays,
+  addStoreMonths,
+  formatDate,
+  startOfStoreMonth,
+  startOfStoreWeek,
+  storeMonthKey,
+  storeMonthPeriod,
+} from "@/lib/timezone";
 import AnalyticsView from "./AnalyticsView";
+import {
+  dedupeAlertsByIdentity,
+  withoutDuplicateAlerts,
+} from "@/lib/alert-dedupe";
+import { ANALYTICS_TABS, type AnalyticsTab } from "./tabs";
+import {
+  jobInDateRange,
+  jobMatchesAnalyticsFilter,
+  oneParam,
+  parseAnalyticsFilters,
+} from "./filters";
 
-export default async function AnalyticsPage() {
+type SearchParams = Promise<{
+  [key: string]: string | string[] | undefined;
+}>;
+
+export default async function AnalyticsPage({
+  searchParams,
+}: {
+  searchParams?: SearchParams;
+}) {
   const session = await auth.api.getSession({
     headers: await headers(),
   });
@@ -23,22 +62,44 @@ export default async function AnalyticsPage() {
     redirect("/admin/dashboard");
   }
 
-  // Date calculations
+  // ── Page filters (item 11 · Q7) ────────────────────────────────────────────
+  // This page had no filter mechanism at all — not even a date range — so the
+  // plumbing lands here once and both controls ride on it. Parsing and the
+  // predicate live in ./filters so they are testable on their own and there is
+  // exactly one definition of "is this job in the current view".
+  const params = (await searchParams) ?? {};
+  const filters = parseAnalyticsFilters(params);
+  const { industry, from: fromKey, to: toKey, hasDateRange, isFiltered } =
+    filters;
+  const matchesFilter = (j: { jobType: string | null; startTime: Date }) =>
+    jobMatchesAnalyticsFilter(j, filters);
+
+  // The tab is carried in the URL purely so a filter change can't land the
+  // owner back on Overview; the tab itself stays client state (instant).
+  const tabParam = oneParam(params.tab);
+  const activeTab: AnalyticsTab = ANALYTICS_TABS.includes(
+    tabParam as AnalyticsTab
+  )
+    ? (tabParam as AnalyticsTab)
+    : "overview";
+
+  // Date calculations — store timezone, not the host's. This page renders on
+  // the server (UTC), so getFullYear()/getMonth()/setHours(0) computed UTC
+  // boundaries: "this month" started at 8 PM on the last day of the previous
+  // month, Montréal time (Q9).
   const now = new Date();
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const startOfWeek = new Date(now);
-  startOfWeek.setDate(now.getDate() - now.getDay());
-  startOfWeek.setHours(0, 0, 0, 0);
+  const startOfMonth = startOfStoreMonth(now);
+  const startOfWeek = startOfStoreWeek(now);
 
   // Fetch all data
   const [
-    jobs,
+    allJobs,
     products,
     employees,
     productUsages,
     budgets,
+    activeBudgetCategories,
     targets,
-    alerts,
     supplierPrices,
     transactions,
     employeeProducts,
@@ -46,6 +107,20 @@ export default async function AnalyticsPage() {
     landingPages,
     pageVisitCounts,
     employeeRatings,
+    // Canonical revenue + employee counts (shared helper) so Analytics agrees
+    // with Dashboard/Clients/Employees. Revenue = completed+paid, discount/
+    // refund applied, tax excluded, on a startTime date basis (not createdAt).
+    //
+    // These four used to run in a SECOND `await Promise.all` after this one.
+    // They depend on nothing in it — only on `startOfMonth` / `startOfWeek`,
+    // computed above — so the wait was pure serialization: a measured ~3.5 s
+    // added to a page that already costs ~15-20 s of server time per render,
+    // and every industry-chip click pays that bill in full (see the note in
+    // AnalyticsFilterBar). Folded into the one batch.
+    canonRevenue,
+    canonMonthlyRevenue,
+    canonWeeklyRevenue,
+    employeeCounts,
   ] = await Promise.all([
     db.job.findMany({
       // Exclude archived (soft-deleted) jobs so every Analytics metric — labour
@@ -86,16 +161,26 @@ export default async function AnalyticsPage() {
       },
     }),
     db.budget.findMany({
-      orderBy: [{ period: "desc" }, { category: "asc" }],
+      // The category name is joined rather than denormalized so a rename in
+      // Settings shows up here without a backfill (item 12 · Stage 8).
+      include: { category: { select: { name: true, sortOrder: true } } },
+      orderBy: [{ period: "desc" }, { category: { sortOrder: "asc" } }],
+    }),
+    // Stage 8.2: the Budget vs Actuals list is driven by the CATEGORY table, not
+    // by which categories happen to have a Budget row. Archived ones are left
+    // out of the list (their rows on Transaction/Budget are untouched — this is
+    // a display filter, nothing is deleted).
+    db.budgetCategory.findMany({
+      where: { archivedAt: null },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+      select: { id: true, name: true, sortOrder: true },
     }),
     db.target.findMany({
       orderBy: { periodStart: "desc" },
     }),
-    db.alert.findMany({
-      where: { isDismissed: false },
-      orderBy: { createdAt: "desc" },
-      take: 50,
-    }),
+    // (The alert list is fetched AFTER the overdue-payment pass below, not
+    // here — a pre-pass copy could only ever be stale, and the narrow
+    // "already alerted?" query that pass now runs doesn't need one.)
     db.supplierPrice.findMany({
       include: {
         supplier: { select: { id: true, name: true } },
@@ -134,18 +219,50 @@ export default async function AnalyticsPage() {
       },
       orderBy: { createdAt: "asc" },
     }),
+    getTotalRevenue(),
+    getTotalRevenue({ from: startOfMonth }),
+    getTotalRevenue({ from: startOfWeek }),
+    getEmployeeCounts(),
   ]);
 
-  // Canonical revenue + employee counts (shared helper) so Analytics agrees
-  // with Dashboard/Clients/Employees. Revenue = completed+paid, discount/refund
-  // applied, tax excluded, on a startTime date basis (not createdAt).
-  const [canonRevenue, canonMonthlyRevenue, canonWeeklyRevenue, employeeCounts] =
-    await Promise.all([
-      getTotalRevenue(),
-      getTotalRevenue({ from: startOfMonth }),
-      getTotalRevenue({ from: startOfWeek }),
-      getEmployeeCounts(),
-    ]);
+  // ── Apply the filter ───────────────────────────────────────────────────────
+  // Everything below that reads `jobs` now reads the FILTERED list. The two
+  // deliberate exceptions keep their own names: `allJobs` feeds the industry
+  // chip counts and the recurring lookup (recurrence is a property of the job,
+  // not of the current view), and it feeds the overdue-payment alert pass —
+  // that pass WRITES, and which alerts exist must never depend on what somebody
+  // happened to be looking at.
+  const jobs = allJobs.filter(matchesFilter);
+
+  // Chip counts are computed over the date-filtered (but not industry-filtered)
+  // set, so ALL always equals the sum of the positions currently on screen.
+  const industryScope = allJobs.filter((j) => jobInDateRange(j, filters));
+  const industryCounts = industryScope.reduce<
+    Partial<Record<JobIndustry, number>>
+  >((acc, j) => {
+    const key = jobIndustry(j.jobType);
+    acc[key] = (acc[key] ?? 0) + 1;
+    return acc;
+  }, {});
+
+  // ── Recurring (item 11 · Q7 §6) ────────────────────────────────────────────
+  // `Job` has no frequency column: saveJob reads `frequency` off the form,
+  // generates the series and links the children by `parentJobId`, then throws
+  // the frequency away. So a recurring job is one with a parent OR one with
+  // children — the first booking of a series has no parent, and counting only
+  // `parentJobId != null` under-counts every series by exactly one job.
+  // Derived from allJobs, never the filtered list: a job doesn't stop being
+  // part of a series because its siblings fall outside the date range.
+  const seriesParentIds = new Set(
+    allJobs.map((j) => j.parentJobId).filter((id): id is string => Boolean(id))
+  );
+  const isRecurringJob = (j: { id: string; parentJobId: string | null }) =>
+    j.parentJobId !== null || seriesParentIds.has(j.id);
+  const recurringJobs = jobs.filter(isRecurringJob);
+  const recurringRevenue = recurringJobs.reduce(
+    (sum, j) => (isRevenueJob(j) ? sum + jobRevenue(j) : sum),
+    0
+  );
 
   // === JOB STATS ===
   const completedJobs = jobs.filter(
@@ -183,9 +300,23 @@ export default async function AnalyticsPage() {
   // === REVENUE STATS ===
   // Revenue comes from the canonical helper (startTime basis, discount/refund
   // applied); the old createdAt-keyed price sums are gone.
-  const totalRevenue = canonRevenue;
-  const monthlyRevenue = canonMonthlyRevenue;
-  const weeklyRevenue = canonWeeklyRevenue;
+  //
+  // Under a filter the SQL helper can't answer the question — industry lives in
+  // free-text `Job.jobType`, and an `in` list of every stored spelling would be
+  // a second place for the fold rule to rot. So the filtered figure is summed
+  // in memory with `totalRevenueOf`, the PURE twin of `revenueWhere()` that
+  // metrics-shared exports for exactly this (7.5). The two are held in lockstep
+  // by design and verified equal on live data ($4,017.48 both ways), so ALL
+  // still reads byte-identical to the Dashboard — no jump when the filter is
+  // cleared. `canonRevenue` is still fetched unfiltered and travels to the view
+  // so a filtered tile can show what it is a share of.
+  const totalRevenue = isFiltered ? totalRevenueOf(jobs) : canonRevenue;
+  const monthlyRevenue = isFiltered
+    ? totalRevenueOf(jobs.filter((j) => j.startTime >= startOfMonth))
+    : canonMonthlyRevenue;
+  const weeklyRevenue = isFiltered
+    ? totalRevenueOf(jobs.filter((j) => j.startTime >= startOfWeek))
+    : canonWeeklyRevenue;
   const avgJobPrice =
     completedJobs.length > 0 ? totalRevenue / completedJobs.length : 0;
   const totalEmployeePay = completedJobs.reduce(
@@ -200,7 +331,15 @@ export default async function AnalyticsPage() {
     (sum, j) => sum + (j.parking || 0),
     0
   );
-  const totalProductCost = productUsages.reduce(
+  // Product cost follows the filter through the usage's own job. Applying the
+  // predicate (rather than intersecting with the `jobs` id set) is deliberate:
+  // with no filter it passes everything, so the unfiltered figure stays exactly
+  // what it was — including usages recorded against archived jobs, which this
+  // query has always counted.
+  const filteredUsages = isFiltered
+    ? productUsages.filter((u) => u.job && matchesFilter(u.job))
+    : productUsages;
+  const totalProductCost = filteredUsages.reduce(
     (sum, u) => sum + u.quantity * u.product.costPerUnit,
     0
   );
@@ -257,21 +396,31 @@ export default async function AnalyticsPage() {
   };
 
   // === EMPLOYEE STATS ===
+  // Each employee's job list is filtered by the same predicate, so every
+  // job-derived employee figure (average jobs, who's on site, the performance
+  // table) answers the same question the rest of the page is answering.
+  // Headcount is NOT job-derived and stays whole — an Airbnb filter must not
+  // make people disappear from the payroll.
+  const employeeJobs = new Map(
+    employees.map((e) => [e.id, e.cleaningJobs.filter(matchesFilter)])
+  );
+  const jobsOf = (id: string) => employeeJobs.get(id) ?? [];
+
   const admins = employees.filter(
     (e) => e.role === "ADMIN" || e.role === "OWNER"
   );
   const activeEmployees = employees.filter((e) =>
-    e.cleaningJobs.some((j) => j.status === "IN_PROGRESS")
+    jobsOf(e.id).some((j) => j.status === "IN_PROGRESS")
   );
   const avgJobsPerEmployee =
     employees.length > 0
-      ? employees.reduce((sum, e) => sum + e.cleaningJobs.length, 0) /
+      ? employees.reduce((sum, e) => sum + jobsOf(e.id).length, 0) /
         employees.length
       : 0;
   const topPerformer =
     employees.length > 0
       ? employees.reduce((top, e) =>
-          e.cleaningJobs.length > (top?.cleaningJobs.length || 0) ? e : top
+          jobsOf(e.id).length > jobsOf(top.id).length ? e : top
         )?.name || null
       : null;
 
@@ -348,7 +497,7 @@ export default async function AnalyticsPage() {
   const employeePerformance = employees
     .filter((e) => e.role === "EMPLOYEE")
     .map((e) => {
-      const empJobs = e.cleaningJobs;
+      const empJobs = jobsOf(e.id);
       const completedEmpJobs = empJobs.filter(
         (j) => j.status === "COMPLETED" || j.status === "PAID"
       );
@@ -409,21 +558,13 @@ export default async function AnalyticsPage() {
   const ratingTrendMap = new Map<string, Map<string, { sum: number; count: number }>>();
   const trendMonthKeys: string[] = [];
   for (let i = 11; i >= 0; i--) {
-    const date = new Date();
-    date.setMonth(date.getMonth() - i);
-    const monthKey = date.toLocaleString("default", {
-      month: "short",
-      year: "2-digit",
-    });
-    trendMonthKeys.push(monthKey);
+    trendMonthKeys.push(storeMonthKey(addStoreMonths(now, -i)));
   }
 
   employeeRatings.forEach((r) => {
-    const date = new Date(r.createdAt);
-    const monthKey = date.toLocaleString("default", {
-      month: "short",
-      year: "2-digit",
-    });
+    // Store-timezone month bucket: a rating left at 9 PM on Jul 31 in Montréal
+    // is 01:00 UTC on Aug 1, and was landing in the wrong month.
+    const monthKey = storeMonthKey(r.createdAt);
     if (!trendMonthKeys.includes(monthKey)) return;
     if (!ratingTrendMap.has(r.employeeId)) {
       ratingTrendMap.set(r.employeeId, new Map());
@@ -498,22 +639,17 @@ export default async function AnalyticsPage() {
   >();
 
   for (let i = 11; i >= 0; i--) {
-    const date = new Date();
-    date.setMonth(date.getMonth() - i);
-    const monthKey = date.toLocaleString("default", {
-      month: "short",
-      year: "2-digit",
+    const date = addStoreMonths(now, -i);
+    monthlyDataMap.set(storeMonthKey(date), {
+      revenue: 0,
+      jobs: 0,
+      costs: 0,
+      period: storeMonthPeriod(date),
     });
-    const period = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-    monthlyDataMap.set(monthKey, { revenue: 0, jobs: 0, costs: 0, period });
   }
 
   completedJobs.forEach((job) => {
-    const date = new Date(job.createdAt);
-    const monthKey = date.toLocaleString("default", {
-      month: "short",
-      year: "2-digit",
-    });
+    const monthKey = storeMonthKey(job.createdAt);
     if (monthlyDataMap.has(monthKey)) {
       const existing = monthlyDataMap.get(monthKey)!;
       const jobProductCost = job.productUsage.reduce(
@@ -551,7 +687,7 @@ export default async function AnalyticsPage() {
     clientName: job.clientName,
     status: job.status,
     price: job.price,
-    date: new Date(job.createdAt).toLocaleDateString("en-US"),
+    date: formatDate(job.createdAt),
     employeeName: job.employee?.name ?? "Unassigned",
   }));
 
@@ -579,25 +715,79 @@ export default async function AnalyticsPage() {
     });
 
   // === BUDGET VS ACTUALS ===
-  const budgetVsActuals = budgets.map((budget) => {
-    const periodTransactions = transactions.filter((t) => {
-      const txPeriod = `${t.date.getFullYear()}-${String(t.date.getMonth() + 1).padStart(2, "0")}`;
-      return t.category === budget.category && txPeriod === budget.period;
+  //
+  // Stage 8.2 requires the category list to come from `BudgetCategory`. Deriving
+  // it from `budgets` meant only the categories somebody had already budgeted
+  // showed up — Supplies and Labour on the live store — so Revenue, Overhead,
+  // Other and every category the admin adds in Settings were simply absent, with
+  // no way to tell "no spend" from "not tracked". Every ACTIVE category is
+  // listed now; one without a Budget row for the period gets a zero-budget row
+  // carrying its real actuals. Archived categories are not listed, and nothing
+  // about their stored rows changes.
+  const currentPeriod = storeMonthPeriod(now);
+
+  /** Actual spend for one category in one `YYYY-MM` store-month period. */
+  const actualFor = (categoryId: string, period: string) =>
+    transactions.reduce(
+      (sum, t) =>
+        // Must be the store-timezone month, or a transaction dated late on the
+        // last day of a month falls into the next one and misses its Budget row.
+        t.categoryId === categoryId && storeMonthPeriod(t.date) === period
+          ? sum + t.amount
+          : sum,
+      0
+    );
+
+  const activeCategoryIds = new Set(activeBudgetCategories.map((c) => c.id));
+  const budgetedCategoryIds = new Set(budgets.map((b) => b.categoryId));
+
+  const budgetRows = budgets
+    // An archived category keeps its Budget rows in the database; it just does
+    // not appear in this list any more.
+    .filter((budget) => activeCategoryIds.has(budget.categoryId))
+    .map((budget) => {
+      const actual = actualFor(budget.categoryId, budget.period);
+      return {
+        id: budget.id,
+        categoryId: budget.categoryId,
+        sortOrder: budget.category.sortOrder,
+        category: budget.category.name,
+        period: budget.period,
+        budgetAmount: budget.amount,
+        actualAmount: actual,
+        variance: budget.amount - actual,
+        percentUsed: budget.amount > 0 ? (actual / budget.amount) * 100 : 0,
+        hasBudget: true,
+      };
     });
-    const actual = periodTransactions.reduce((sum, t) => sum + t.amount, 0);
-    return {
-      id: budget.id,
-      category: budget.category,
-      period: budget.period,
-      budgetAmount: budget.amount,
-      actualAmount: actual,
-      variance: budget.amount - actual,
-      percentUsed: budget.amount > 0 ? (actual / budget.amount) * 100 : 0,
-    };
-  });
+
+  const unbudgetedRows = activeBudgetCategories
+    .filter((c) => !budgetedCategoryIds.has(c.id))
+    .map((c) => {
+      const actual = actualFor(c.id, currentPeriod);
+      return {
+        id: `nobudget-${c.id}`,
+        categoryId: c.id,
+        sortOrder: c.sortOrder,
+        category: c.name,
+        period: currentPeriod,
+        budgetAmount: 0,
+        actualAmount: actual,
+        variance: -actual,
+        percentUsed: 0,
+        hasBudget: false,
+      };
+    });
+
+  const budgetVsActuals = [...budgetRows, ...unbudgetedRows].sort(
+    (a, b) =>
+      b.period.localeCompare(a.period) ||
+      a.sortOrder - b.sortOrder ||
+      a.category.localeCompare(b.category)
+  );
 
   // === TARGETS VS ACTUALS ===
-  const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const currentMonth = startOfStoreMonth(now);
   const currentMonthClients = new Set(
     completedJobs
       .filter((j) => new Date(j.createdAt) >= currentMonth)
@@ -607,21 +797,26 @@ export default async function AnalyticsPage() {
   const targetsWithActuals = targets.map((target) => {
     let actual = 0;
     const periodStart = new Date(target.periodStart);
-    let periodEnd = new Date(periodStart);
+    // Civil-calendar arithmetic in the store timezone. setDate/setMonth here
+    // stepped the host's (UTC) calendar, so a period that spanned a DST change
+    // ended an hour early and dropped the last job of the window.
+    let periodEnd: Date;
 
     switch (target.period) {
       case "WEEKLY":
-        periodEnd.setDate(periodEnd.getDate() + 7);
+        periodEnd = addStoreDays(periodStart, 7);
         break;
       case "MONTHLY":
-        periodEnd.setMonth(periodEnd.getMonth() + 1);
+        periodEnd = addStoreMonths(periodStart, 1);
         break;
       case "QUARTERLY":
-        periodEnd.setMonth(periodEnd.getMonth() + 3);
+        periodEnd = addStoreMonths(periodStart, 3);
         break;
       case "YEARLY":
-        periodEnd.setFullYear(periodEnd.getFullYear() + 1);
+        periodEnd = addStoreMonths(periodStart, 12);
         break;
+      default:
+        periodEnd = new Date(periodStart);
     }
 
     const periodJobs = completedJobs.filter((j) => {
@@ -680,46 +875,154 @@ export default async function AnalyticsPage() {
   });
 
   // === OVERDUE PAYMENT ALERTS ===
-  const sevenDaysAgo = new Date(now);
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-  const overdueJobs = completedJobs.filter(
+  // Deliberately UNFILTERED. This pass writes rows; which alerts exist must not
+  // depend on whether somebody had Airbnb selected when the page rendered.
+  const sevenDaysAgo = addStoreDays(now, -7);
+  const overdueJobs = allJobs.filter(
     (j) =>
+      (j.status === "COMPLETED" || j.status === "PAID") &&
       !j.paymentReceived &&
       new Date(j.createdAt) < sevenDaysAgo
   );
 
-  // Create overdue payment alerts for jobs not already alerted
-  for (const job of overdueJobs) {
-    const existingAlert = alerts.find(
-      (a) =>
-        a.type === "OVERDUE_PAYMENT" &&
-        a.relatedId === job.id &&
-        !a.isDismissed
-    );
-    if (!existingAlert) {
-      try {
-        await db.alert.create({
-          data: {
+  // Create overdue payment alerts for jobs not already alerted.
+  //
+  // The "already alerted" test used to scan `alerts` — the 50 most recent
+  // undismissed rows fetched above. Once the table held more than 50 of those,
+  // an older job's alert fell outside the window, the lookup missed, and this
+  // loop minted a NEW row for it on EVERY page load. That is the runaway behind
+  // client feedback items 7 and 25: it had produced up to 19 identical
+  // "Overdue payment" rows per job and accounted for the overwhelming majority
+  // of the alert table. The check is now a real query over the exact job ids in
+  // hand, so it cannot age out of a window.
+  if (overdueJobs.length > 0) {
+    const alreadyAlerted = new Set(
+      (
+        await db.alert.findMany({
+          where: {
             type: "OVERDUE_PAYMENT",
-            severity: "WARNING",
+            isDismissed: false,
+            relatedId: { in: overdueJobs.map((j) => j.id) },
+          },
+          select: { relatedId: true },
+        })
+      ).map((a) => a.relatedId),
+    );
+    const missing = overdueJobs.filter((j) => !alreadyAlerted.has(j.id));
+    if (missing.length > 0) {
+      try {
+        // This generator used to write straight to `createMany`, bypassing the
+        // shared guard every other alert path goes through. Its own relatedId
+        // check above is narrower — it cannot see a row whose content already
+        // matches under a different relatedId, and it cannot dedupe within the
+        // batch — so the batch is routed through `withoutDuplicateAlerts` as
+        // well. Belt and braces on the path that produced the runaway.
+        const fresh = await withoutDuplicateAlerts(
+          missing.map((job) => ({
+            type: "OVERDUE_PAYMENT" as const,
+            severity: "WARNING" as const,
             title: `Overdue payment: ${job.clientName}`,
-            message: `Job for ${job.clientName} completed over 7 days ago and is still unpaid ($${(job.price || 0).toFixed(2)})`,
+            // Job number + date, because one client legitimately has several
+            // overdue jobs at once and the old wording named only the client:
+            // 35 undismissed rows read "Job for Leyad Montreal completed over 7
+            // days ago and is still unpaid", one per real unpaid job, with
+            // nothing on the card to tell them apart or to act on. Now each row
+            // is self-identifying and matches the "Job #N on <date>" wording the
+            // cancellation/bulk-charge alerts already use. Existing rows keep
+            // their old text — this page must not rewrite alert history.
+            message: `Job #${job.jobNumber} for ${job.clientName} (${formatDate(
+              job.startTime,
+              { month: "short", day: "numeric" },
+            )}) completed over 7 days ago and is still unpaid ($${(job.price || 0).toFixed(2)})`,
             relatedId: job.id,
             relatedType: "Job",
-          },
-        });
+          })),
+        );
+        if (fresh.length > 0) {
+          await db.alert.createMany({ data: fresh });
+        }
       } catch {
         // Ignore duplicate creation errors
       }
     }
   }
 
-  // Re-fetch alerts after potential new ones were created
-  const freshAlerts = await db.alert.findMany({
+  // Re-fetch alerts after potential new ones were created.
+  //
+  // Rows written before the creation-time guards existed are still in the table
+  // and we do not delete alert rows, so the list is deduped on the way out —
+  // 1492 undismissed OVERDUE_PAYMENT rows are only 136 real jobs, the rest is
+  // the pre-fix runaway re-minting the same job on every page load.
+  //
+  // No `take` on the query, and the cap is applied LAST. A `take: 250` window
+  // ahead of the dedupe was the bug in the previous attempt: with duplicates
+  // outnumbering originals 11:1, the newest 250 rows held only a couple of dozen
+  // distinct jobs, so the tab could never reach 50 real ones no matter how many
+  // were outstanding. ~1.5k narrow rows is a cheap read; the `select` keeps it
+  // to the columns the card actually renders rather than the whole table.
+  const alertRows = await db.alert.findMany({
     where: { isDismissed: false },
     orderBy: { createdAt: "desc" },
-    take: 50,
+    select: {
+      id: true,
+      type: true,
+      severity: true,
+      title: true,
+      message: true,
+      isRead: true,
+      relatedId: true,
+      relatedType: true,
+      recipientUserId: true,
+      employeeId: true,
+      createdAt: true,
+    },
   });
+  const dedupedAlerts = dedupeAlertsByIdentity(alertRows);
+
+  // Drop alerts whose Job is gone.
+  //
+  // Every one of the 136 distinct `relatedId`s on undismissed OVERDUE_PAYMENT
+  // rows resolves to zero rows in `Job` — not soft-deleted, absent. The jobs
+  // they point at were created between May and July; the earliest surviving job
+  // was created Aug 4 and jobNumber starts at 1550, so the Job table was
+  // replaced under the alerts. `Alert.relatedId` is a loose `String?` with no
+  // FK (schema.prisma:1089), so nothing cascaded and the alerts outlived their
+  // subjects. Showing an admin an overdue payment they can never open is worse
+  // than showing nothing, and it would make AnalyticsView's "View job" link a
+  // guaranteed 404.
+  //
+  // One extra query over the DEDUPED ids (136, not 1492), so no N+1. No
+  // `deletedAt` filter: /admin/jobs/[id] renders archived jobs fine, so an
+  // archived job is still openable and its alert still actionable.
+  const jobAlertIds = [
+    ...new Set(
+      dedupedAlerts
+        .filter((a) => a.relatedType === "Job" && a.relatedId)
+        .map((a) => a.relatedId as string),
+    ),
+  ];
+  const liveJobIds = new Set(
+    jobAlertIds.length > 0
+      ? (
+          await db.job.findMany({
+            where: { id: { in: jobAlertIds } },
+            select: { id: true },
+          })
+        ).map((j) => j.id)
+      : [],
+  );
+  const actionableAlerts = dedupedAlerts.filter(
+    (a) =>
+      a.relatedType !== "Job" ||
+      !a.relatedId ||
+      liveJobIds.has(a.relatedId),
+  );
+
+  // The cap is the last step, so the count beside it is the honest total and
+  // the view can say when it is showing a subset (the tiles and the tab badge
+  // derive from the list itself, so they already agree with what is rendered).
+  const alertTotalCount = actionableAlerts.length;
+  const freshAlerts = actionableAlerts.slice(0, 50);
 
   // === SUPPLIER COMPARISON DATA ===
   const supplierComparisonData: Array<Record<string, string | number>> = [];
@@ -783,6 +1086,21 @@ export default async function AnalyticsPage() {
     totalSpent: marketingCampaigns.reduce((sum, c) => sum + c.spent, 0),
   };
 
+  // === RECURRING SHARE (item 11 · Q7) ===
+  // Both readings ship (the Q7 recommendation): the headline is the share of
+  // JOBS — what "% recurring" means operationally and the more stable figure —
+  // and the sub-line is the share of REVENUE, which always reads lower because
+  // recurring bookings carry 8–20% frequency discounts. Nothing to rebuild if
+  // the client meant the other one.
+  const recurringStats = {
+    jobCount: recurringJobs.length,
+    totalJobs: jobs.length,
+    jobShare: jobs.length > 0 ? (recurringJobs.length / jobs.length) * 100 : 0,
+    revenue: recurringRevenue,
+    totalRevenue,
+    revenueShare: totalRevenue > 0 ? (recurringRevenue / totalRevenue) * 100 : 0,
+  };
+
   // === SERIALIZE ALERTS ===
   const serializedAlerts = freshAlerts.map((a) => ({
     id: a.id,
@@ -814,12 +1132,27 @@ export default async function AnalyticsPage() {
         budgetVsActuals={budgetVsActuals}
         targetsWithActuals={targetsWithActuals}
         alerts={serializedAlerts}
+        alertTotalCount={alertTotalCount}
         supplierComparisonData={supplierComparisonData}
         supplierNames={supplierNames}
         inventoryValueData={inventoryValueData}
         marketingData={marketingData}
         ratingTrendData={ratingTrendData}
         ratingTrendEmployeeNames={ratingTrendEmployeeNames}
+        recurringStats={recurringStats}
+        filters={{
+          industry,
+          from: fromKey,
+          to: toKey,
+          isFiltered,
+          hasDateRange,
+        }}
+        industryCounts={industryCounts}
+        unspecifiedCount={industryCounts[INDUSTRY_UNSPECIFIED] ?? 0}
+        scopedJobCount={industryScope.length}
+        unfilteredJobCount={allJobs.length}
+        unfilteredTotalRevenue={canonRevenue}
+        initialTab={activeTab}
       />
     </div>
   );

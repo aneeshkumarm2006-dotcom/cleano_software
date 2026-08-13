@@ -8,6 +8,7 @@ import { stripe } from "@/lib/stripe";
 import { logActivity } from "@/lib/activity-log";
 import { resolveChargePaymentMethod } from "@/lib/payment-methods";
 import { resolveAmountDue } from "@/lib/job-billing";
+import { requireBudgetCategoryId } from "@/lib/budget-categories";
 import {
   queueAndSendReceipt,
   sendCustomerBookingCharged,
@@ -84,6 +85,10 @@ export async function chargeJob(jobId: string) {
       .catch(() => {});
   };
 
+  // Resolved once for both branches below — every posting this action makes is
+  // revenue, and the id must be in hand before the $transaction array is built.
+  const revenueCategoryId = await requireBudgetCategoryId("revenue");
+
   // If gift card credit covers the booking entirely, skip Stripe.
   if (amountCents === 0) {
     try {
@@ -99,7 +104,7 @@ export async function chargeJob(jobId: string) {
       db.transaction.create({
         data: {
           date: new Date(),
-          category: "REVENUE",
+          categoryId: revenueCategoryId,
           amount: giftCardApplied,
           description: `Gift card credit applied — job #${job.jobNumber}`,
           jobId,
@@ -192,7 +197,7 @@ export async function chargeJob(jobId: string) {
             db.transaction.create({
               data: {
                 date: new Date(),
-                category: "REVENUE" as const,
+                categoryId: revenueCategoryId,
                 amount: giftCardApplied,
                 description: `Gift card credit applied — job #${job.jobNumber}`,
                 jobId,
@@ -205,7 +210,7 @@ export async function chargeJob(jobId: string) {
       db.transaction.create({
         data: {
           date: new Date(),
-          category: "REVENUE",
+          categoryId: revenueCategoryId,
           amount: stripeAmount,
           description: `Stripe charge — job #${job.jobNumber}`,
           jobId,

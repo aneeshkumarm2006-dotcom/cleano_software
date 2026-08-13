@@ -11,6 +11,8 @@ import {
   CalendarClock,
   Clock,
   ArrowRight,
+  ExternalLink,
+  SlidersHorizontal,
   X,
   Trash2,
   Tag,
@@ -21,8 +23,16 @@ import { bulkSetQuoteStatus } from "../actions/bulkSetQuoteStatus";
 import { useRowSelection } from "@/components/common/useRowSelection";
 import BulkActionBar, { BulkAction } from "@/components/common/BulkActionBar";
 import { bulkSoftDelete, bulkRestore } from "@/lib/bulk/actions";
+import { STORE_TZ } from "@/lib/timezone";
+import { jobTypeLabel } from "@/lib/calendar-labels";
+import type { QuotePageConfig } from "@/lib/quote-page-config";
+import QuoteFormTab from "./QuoteFormTab";
 
 type Status = "NEW" | "CONTACTED" | "CONVERTED" | "ARCHIVED";
+
+/** The public quote page. Relative on purpose: it always resolves, custom
+ *  domain or not — the domain only matters for the embed snippets. */
+const PUBLIC_QUOTE_PATH = "/quote";
 
 interface Quote {
   id: string;
@@ -44,6 +54,13 @@ interface Quote {
 interface Props {
   quotes: Quote[];
   archived?: boolean;
+  /** OWNER/ADMIN only — the Form tab writes an audited setting. */
+  canEditForm?: boolean;
+  /** Service category key -> the admin's own service name. */
+  serviceLabels?: Record<string, string>;
+  quoteConfig?: QuotePageConfig;
+  services?: { value: string; label: string }[];
+  brandName?: string;
 }
 
 const ORDER: Status[] = ["NEW", "CONTACTED", "CONVERTED", "ARCHIVED"];
@@ -66,15 +83,26 @@ function StatusPill({ status }: { status: Status }) {
 }
 
 function dateShort(iso: string) {
-  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: STORE_TZ });
 }
 function timeShort(iso: string) {
-  return new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/Toronto" });
+  return new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: STORE_TZ });
 }
 
-export default function QuotesInboxClient({ quotes, archived = false }: Props) {
+export default function QuotesInboxClient({
+  quotes,
+  archived = false,
+  canEditForm = false,
+  serviceLabels = {},
+  quoteConfig,
+  services = [],
+  brandName = "",
+}: Props) {
   const router = useRouter();
-  const [tab, setTab] = useState<Status | "all">("all");
+  // "form" is a VIEW, not a status filter — it swaps the table for the page
+  // editor. Kept in the same strip because that is where the client looked for
+  // it, and separated by a divider so it doesn't read as a sixth filter.
+  const [tab, setTab] = useState<Status | "all" | "form">("all");
   const [openId, setOpenId] = useState<string | null>(null);
   const [showStatus, setShowStatus] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -93,9 +121,19 @@ export default function QuotesInboxClient({ quotes, archived = false }: Props) {
   ];
 
   const visible = useMemo(
-    () => (tab === "all" ? quotes : quotes.filter((q) => q.status === tab)),
+    () =>
+      tab === "all" || tab === "form"
+        ? quotes
+        : quotes.filter((q) => q.status === tab),
     [quotes, tab]
   );
+  const editingForm = tab === "form";
+
+  /** Quotes store a category key now; older rows store the label they were
+   *  submitted with. `jobTypeLabel` resolves both, and prefers the admin's own
+   *  service name so renaming a service renames it here too. */
+  const serviceName = (raw: string | null) =>
+    raw ? jobTypeLabel(raw, serviceLabels) || raw : null;
   const open = quotes.find((q) => q.id === openId) ?? null;
 
   // ── Multi-select + bulk actions ────────────────────────────────────────────
@@ -154,18 +192,40 @@ export default function QuotesInboxClient({ quotes, archived = false }: Props) {
       ];
 
   return (
-    <div className="admin-font stack-24" style={{ maxWidth: 1200, margin: "0 auto" }}>
-      <header>
-        <p className="eyebrow">Operations</p>
-        <h1 className="display" style={{ fontSize: "clamp(32px, 4.2vw, 46px)", marginTop: 6 }}>
-          Quote requests{" "}
-          <span style={{ color: "var(--primary-40)", fontWeight: 300, fontFamily: "var(--font-serif)" }}>
-            · {quotes.length}
-          </span>
-        </h1>
-        <p className="subtitle" style={{ marginTop: 10, fontSize: 15.5 }}>
-          Inbound estimate requests from the website. Review, quote, and convert to jobs.
-        </p>
+    <div
+      className="admin-font stack-24"
+      style={{ maxWidth: editingForm ? 1500 : 1200, margin: "0 auto" }}>
+      <header
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: 16,
+          flexWrap: "wrap",
+        }}>
+        <div>
+          <p className="eyebrow">Operations</p>
+          <h1 className="display" style={{ fontSize: "clamp(32px, 4.2vw, 46px)", marginTop: 6 }}>
+            Quote requests{" "}
+            <span style={{ color: "var(--primary-40)", fontWeight: 300, fontFamily: "var(--font-serif)" }}>
+              · {quotes.length}
+            </span>
+          </h1>
+          <p className="subtitle" style={{ marginTop: 10, fontSize: 15.5 }}>
+            Inbound estimate requests from the website. Review, quote, and convert to jobs.
+          </p>
+        </div>
+        {/* 10.2 — "I'm not sure how to access it right now." `/quote` appeared
+            in exactly one file in src/ outside its own folder, and nowhere in
+            the admin UI at all. This is the link. */}
+        <a
+          className="btn btn-secondary"
+          href={PUBLIC_QUOTE_PATH}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ marginTop: 6, whiteSpace: "nowrap" }}>
+          View public page <ExternalLink size={14} />
+        </a>
       </header>
 
       <div className="atabs">
@@ -179,7 +239,37 @@ export default function QuotesInboxClient({ quotes, archived = false }: Props) {
             {counts[t.id] > 0 && <span className="atab-count">{counts[t.id]}</span>}
           </button>
         ))}
+        {canEditForm && quoteConfig && (
+          <>
+            <span
+              aria-hidden
+              style={{
+                width: 1,
+                alignSelf: "stretch",
+                margin: "4px 4px",
+                background: "var(--primary-10)",
+              }}
+            />
+            <button
+              type="button"
+              className={`atab ${editingForm ? "active" : ""}`}
+              onClick={() => setTab("form")}>
+              <SlidersHorizontal size={13} />
+              Form
+            </button>
+          </>
+        )}
       </div>
+
+      {editingForm && quoteConfig ? (
+        <QuoteFormTab
+          initialConfig={quoteConfig}
+          services={services}
+          brandName={brandName}
+          publicUrl={PUBLIC_QUOTE_PATH}
+        />
+      ) : (
+        <>
 
       <div className="atable-wrap">
         <div className="atable-scroll">
@@ -210,7 +300,8 @@ export default function QuotesInboxClient({ quotes, archived = false }: Props) {
               {visible.length === 0 ? (
                 <tr>
                   <td colSpan={7} style={{ textAlign: "center", padding: 56, color: "var(--primary-50)" }}>
-                    No {tab === "all" ? "" : STATUS[tab].label.toLowerCase() + " "}quote requests.
+                    No {tab === "all" || tab === "form" ? "" : STATUS[tab].label.toLowerCase() + " "}
+                    quote requests.
                   </td>
                 </tr>
               ) : (
@@ -240,7 +331,7 @@ export default function QuotesInboxClient({ quotes, archived = false }: Props) {
                       )}
                     </td>
                     <td style={{ whiteSpace: "normal", maxWidth: 200 }}>
-                      <div style={{ fontWeight: 500 }}>{q.serviceType ?? "—"}</div>
+                      <div style={{ fontWeight: 500 }}>{serviceName(q.serviceType) ?? "—"}</div>
                       {(q.bedCount != null || q.bathCount != null || q.squareFootage != null) && (
                         <div style={{ fontSize: 12, color: "var(--primary-60)", marginTop: 2 }}>
                           {[
@@ -338,12 +429,29 @@ export default function QuotesInboxClient({ quotes, archived = false }: Props) {
         onToggleAll={sel.toggleAll}
       />
 
-      {open && <QuoteDrawer key={open.id} quote={open} onClose={() => setOpenId(null)} />}
+      {open && (
+        <QuoteDrawer
+          key={open.id}
+          quote={open}
+          serviceName={serviceName(open.serviceType)}
+          onClose={() => setOpenId(null)}
+        />
+      )}
+        </>
+      )}
     </div>
   );
 }
 
-function QuoteDrawer({ quote, onClose }: { quote: Quote; onClose: () => void }) {
+function QuoteDrawer({
+  quote,
+  serviceName,
+  onClose,
+}: {
+  quote: Quote;
+  serviceName: string | null;
+  onClose: () => void;
+}) {
   const router = useRouter();
   const [noteDraft, setNoteDraft] = useState(quote.notes ?? "");
   const [pending, startTransition] = useTransition();
@@ -410,12 +518,12 @@ function QuoteDrawer({ quote, onClose }: { quote: Quote; onClose: () => void }) 
                   <span className="q-v">{quote.address}</span>
                 </div>
               )}
-              {quote.serviceType && (
+              {serviceName && (
                 <div className="q-row">
                   <span className="q-k">
                     <Sparkles size={15} /> Service
                   </span>
-                  <span className="q-v">{quote.serviceType}</span>
+                  <span className="q-v">{serviceName}</span>
                 </div>
               )}
               {(quote.bedCount != null || quote.bathCount != null || quote.squareFootage != null) && (
@@ -441,6 +549,7 @@ function QuoteDrawer({ quote, onClose }: { quote: Quote; onClose: () => void }) 
                   </span>
                   <span className="q-v">
                     {new Date(quote.preferredDate).toLocaleDateString("en-US", {
+                      timeZone: STORE_TZ,
                       weekday: "short",
                       month: "short",
                       day: "numeric",
@@ -485,6 +594,15 @@ function QuoteDrawer({ quote, onClose }: { quote: Quote; onClose: () => void }) 
               })}
             </div>
 
+            {/* TODO(client): phase 2 (10.5) — actually SEND a quote. The price
+                still lives in this free-text note and no email carries it:
+                `submitQuote` sends "we got it", and after that the customer
+                hears nothing until someone writes by hand. A working priced-
+                quote engine already exists, unused, at
+                src/app/(book)/actions/getQuote.ts — the build is a `Send quote`
+                action + an email template, not a pricing engine. Deliberately
+                not built this stage; it is a customer-facing money email and
+                wants its own review. */}
             <div className="q-section-label">Internal notes</div>
             <textarea
               className="textarea"
@@ -494,11 +612,19 @@ function QuoteDrawer({ quote, onClose }: { quote: Quote; onClose: () => void }) 
               onChange={(e) => setNoteDraft(e.target.value)}
             />
 
+            {/* 10.4 — this was a bare `router.push("/admin/jobs/new")` with no
+                query string, so name, email, phone, address, service, beds,
+                baths, sqft and preferred date were all discarded and the admin
+                retyped a form they were already looking at. The id travels;
+                the form prefills from it and flips the quote to CONVERTED when
+                the job saves. */}
             <button
               type="button"
               className="btn btn-secondary btn-block"
               style={{ marginTop: 12 }}
-              onClick={() => router.push("/admin/jobs/new")}>
+              onClick={() =>
+                router.push(`/admin/jobs/new?fromQuote=${encodeURIComponent(quote.id)}`)
+              }>
               <ArrowRight size={15} /> Convert to job
             </button>
           </div>

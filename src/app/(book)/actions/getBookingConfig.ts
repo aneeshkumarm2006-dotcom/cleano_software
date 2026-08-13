@@ -10,6 +10,10 @@ import {
   ServiceContentConfig,
   normalizeServiceContent,
 } from "@/lib/service-content";
+import {
+  BOOKING_PAGE_CONFIG_KEY,
+  type BookingPageConfig,
+} from "@/lib/booking-page-config";
 
 // The shape, its validation and the room enum all live in @/lib/addon-catalog.
 // They cannot live here: this file is `"use server"`, so it may only export
@@ -26,28 +30,33 @@ export async function getBookingConfig(): Promise<{
   frequencyDiscounts: Record<string, Record<string, number>>;
   /** "What's included" text + graphic per service type (item 3). */
   serviceContent: ServiceContentConfig;
+  /** Admin-editable field layout for the booking flow (item 17). */
+  bookingPage: BookingPageConfig;
 }> {
-  const [minLeadDays, smsOptInDefault, pricingCfg, contentSetting] = await Promise.all([
-    getSetting("scheduling.minLeadDays"),
-    getSetting("customer.smsOptInDefault"),
-    getServicePricingConfig(),
-    db.appSetting.findUnique({ where: { key: SERVICE_CONTENT_KEY } }),
-  ]);
+  const [minLeadDays, smsOptInDefault, pricingCfg, contentSetting, bookingPage] =
+    await Promise.all([
+      getSetting("scheduling.minLeadDays"),
+      getSetting("customer.smsOptInDefault"),
+      getServicePricingConfig(),
+      db.appSetting.findUnique({ where: { key: SERVICE_CONTENT_KEY } }),
+      getSetting(BOOKING_PAGE_CONFIG_KEY),
+    ]);
   const frequencyDiscounts = pricingCfg.frequencyDiscounts;
   const serviceContent = normalizeServiceContent(contentSetting?.value);
+  const rest = { minLeadDays, smsOptInDefault, frequencyDiscounts, serviceContent, bookingPage };
   try {
     const setting = await db.appSetting.findUnique({
       where: { key: "pricing.addOns" },
     });
 
     if (!setting || !Array.isArray(setting.value)) {
-      return { addOns: [], minLeadDays, smsOptInDefault, frequencyDiscounts, serviceContent };
+      return { addOns: [], ...rest };
     }
 
     const normalized = normalizeAddOnCatalog(setting.value, ADDON_ICON_KEY_SET);
 
-    return { addOns: normalized, minLeadDays, smsOptInDefault, frequencyDiscounts, serviceContent };
+    return { addOns: normalized, ...rest };
   } catch {
-    return { addOns: [], minLeadDays, smsOptInDefault, frequencyDiscounts, serviceContent };
+    return { addOns: [], ...rest };
   }
 }

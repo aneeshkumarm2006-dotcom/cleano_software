@@ -1,0 +1,21 @@
+-- Client feedback item 3 (Stage 4.4) — "on every single new job form […] there
+-- should be an area to enter in your postal code."
+--
+-- The column joins the DENORMALIZED ADDRESS SNAPSHOT that already lives on
+-- "Job" beside "location" and "aptNumber", and is deliberately NOT read from
+-- "ClientAddress" instead: those rows are the client's editable address book,
+-- and a job must still say where it was actually served after the customer
+-- edits or deletes the address it was booked against. Same reasoning as the
+-- clientAddressId comment in schema.prisma — that FK is provenance, these three
+-- columns are the record.
+--
+-- The postal code the admin types is ALSO pushed onto the matching
+-- ClientAddress row by the shared upsert (enrich-blanks-only), so entering it
+-- once on a job teaches the address book without overwriting anything a human
+-- typed on the client page.
+--
+-- No transportation-fee calculation rides on this (decided: manual entry — the
+-- existing "parking" column, relabelled "Transportation" in the UI, stays the
+-- amount field). Additive, nullable, no backfill: deploying it before the code
+-- is a no-op.
+ALTER TABLE "Job" ADD COLUMN "postalCode" TEXT;

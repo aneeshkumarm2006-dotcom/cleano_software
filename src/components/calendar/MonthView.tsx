@@ -87,17 +87,20 @@ export const MonthView = () => {
               key={i}
               className={`cal-mcell ${inMonth ? "" : "out"} ${today ? "today" : ""}`}
               onClick={() => goToDay(day)}>
+              {/* Day number first, job count second: `.cal-mcell-head` is
+                  space-between, so source order IS reading order — the date
+                  belongs on the left of the cell and the count pill on the
+                  right. With no jobs the date is the only child and lands at
+                  flex-start, which is where it belongs anyway. */}
               <div className="cal-mcell-head">
+                <span className={`cal-mdate ${today ? "today" : ""}`}>
+                  {format(day, "d")}
+                </span>
                 {list.length ? (
                   <span className="cal-mcount">
                     {list.length} {list.length === 1 ? "job" : "jobs"}
                   </span>
-                ) : (
-                  <span />
-                )}
-                <span className={`cal-mdate ${today ? "today" : ""}`}>
-                  {format(day, "d")}
-                </span>
+                ) : null}
               </div>
               <div className="cal-mcell-jobs">
                 {list.slice(0, MONTH_CARDS_PER_DAY).map((event) => {
@@ -142,17 +145,23 @@ export const MonthView = () => {
                     </button>
                   );
                 })}
-                {list.length > MONTH_CARDS_PER_DAY ? (
-                  <button
-                    className="cal-more"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      goToDay(day);
-                    }}>
-                    +{list.length - MONTH_CARDS_PER_DAY} more
-                  </button>
-                ) : null}
               </div>
+              {/* Sibling of the chip list, NOT a child of it: `.cal-mcell-jobs`
+                  is `overflow:hidden` and shrinks before the cell does, so a
+                  "+N more" inside it was clipped to a 2px hit-target on every
+                  busy day. Out here the chips are what give way when a cell
+                  runs short, and the only affordance for the rest of the day's
+                  jobs stays whole and clickable. */}
+              {list.length > MONTH_CARDS_PER_DAY ? (
+                <button
+                  className="cal-more"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    goToDay(day);
+                  }}>
+                  +{list.length - MONTH_CARDS_PER_DAY} more
+                </button>
+              ) : null}
             </div>
           );
         })}

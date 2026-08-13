@@ -17,6 +17,18 @@ import {
   normaliseLabelMap,
   type PriorityLabel,
 } from "@/lib/calendar-labels";
+import {
+  BOOKING_PAGE_CONFIG_KEY,
+  BOOKING_PAGE_DEFAULTS,
+  normalizeBookingPageConfig,
+  type BookingPageConfig,
+} from "@/lib/booking-page-config";
+import {
+  QUOTE_PAGE_CONFIG_KEY,
+  QUOTE_PAGE_DEFAULTS,
+  normalizeQuotePageConfig,
+  type QuotePageConfig,
+} from "@/lib/quote-page-config";
 
 export type SettingCategory =
   | "account"
@@ -181,6 +193,25 @@ function stringList(maxLen = 80) {
     if (items.some((s) => s.length > maxLen))
       return { ok: false, error: `Each option must be ${maxLen} characters or fewer` };
     return { ok: true, value: items };
+  };
+}
+
+/** Public booking-flow field config (show/hide, order, labels, help text). */
+function bookingPageConfig() {
+  return (v: unknown): ValidationResult<BookingPageConfig> => {
+    // The normalizer is total — unknown field keys are dropped, missing ones
+    // fall back to their default — so there is no invalid value to reject.
+    return { ok: true, value: normalizeBookingPageConfig(v) };
+  };
+}
+
+/** Public quote-page copy + field config (show/hide, order, labels, required). */
+function quotePageConfig() {
+  return (v: unknown): ValidationResult<QuotePageConfig> => {
+    // Total normalizer, same as the booking page: unknown field keys are
+    // dropped and missing ones fall back to their default, so there is no
+    // invalid value to reject.
+    return { ok: true, value: normalizeQuotePageConfig(v) };
   };
 }
 
@@ -505,6 +536,31 @@ export const SETTINGS = {
     label: "Calendar priority labels by service type",
     default: DEFAULT_JOB_TYPE_LABELS,
     validate: jobTypeLabelMap(),
+  }),
+  // Public booking flow (/book): which fields show, in what order, with what
+  // labels and help text — per service type. Item 17: the client wanted this
+  // class of change to stop being a code request. Defaults live in
+  // @/lib/booking-page-config and match what /book renders.
+  [BOOKING_PAGE_CONFIG_KEY]: def({
+    key: BOOKING_PAGE_CONFIG_KEY,
+    category: "bookings",
+    label: "Booking page fields",
+    default: BOOKING_PAGE_DEFAULTS,
+    validate: bookingPageConfig(),
+    audit: true,
+  }),
+  // Public quote page (/quote): page copy plus which of the ten QuoteRequest
+  // fields show, in what order, with what labels — per service type (item 18).
+  // Edited from the Form tab on /admin/quotes rather than Settings, because
+  // that is where the client went looking for it (Q6). Defaults live in
+  // @/lib/quote-page-config and match what /quote renders.
+  [QUOTE_PAGE_CONFIG_KEY]: def({
+    key: QUOTE_PAGE_CONFIG_KEY,
+    category: "website",
+    label: "Quote page form",
+    default: QUOTE_PAGE_DEFAULTS,
+    validate: quotePageConfig(),
+    audit: true,
   }),
   // Customer-facing website domain (display/links only until DNS is connected).
   "website.customDomain": def({

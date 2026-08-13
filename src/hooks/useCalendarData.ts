@@ -1,7 +1,7 @@
 "use client";
 
 import useSWR, { mutate as globalMutate } from "swr";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 
 export type CalendarEventDTO = {
   id: string;
@@ -23,14 +23,62 @@ type RangeResult = {
   mutateDay: (dateStr: string) => void;
 };
 
-const fetcher = async (_key: string, dates: string[]): Promise<CalendarEventDTO[]> => {
+/**
+ * One shared empty array for the "nothing loaded yet" case.
+ *
+ * `events` is a dependency of effects in `CalendarContext`, so returning a
+ * fresh `[]` literal here would hand those effects a new reference on every
+ * render. Module scope makes the identity constant for the lifetime of the tab.
+ */
+const NO_EVENTS: CalendarEventDTO[] = [];
+
+/**
+ * Range fetch.
+ *
+ * Prefers the single `/api/calendar/range` call (one session check, one job
+ * query, one badge pass for the whole span) and falls back to the historical
+ * per-day fan-out only if that endpoint is unavailable — see
+ * `src/app/api/calendar/range/route.ts`.
+ */
+const fetcher = async (dates: string[]): Promise<CalendarEventDTO[]> => {
+  if (!dates.length) return [];
+
+  const start = dates[0];
+  const end = dates[dates.length - 1];
+
+  const res = await fetch(
+    `/api/calendar/range?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`
+  );
+
+  if (res.ok) {
+    const json = await res.json();
+    if (json?.success) {
+      // `days` is keyed by YYYY-MM-DD. Flatten in the caller's date order so the
+      // array matches what the per-day fan-out used to produce.
+      const days = (json.data ?? {}) as Record<string, CalendarEventDTO[]>;
+      const out: CalendarEventDTO[] = [];
+      for (const date of dates) {
+        const dayEvents = days[date];
+        if (dayEvents?.length) out.push(...dayEvents);
+      }
+      return out;
+    }
+    throw new Error(json?.error || "Failed to load calendar");
+  }
+
+  // 404 only: an older build without the range route. Any other status is a
+  // real failure and must surface rather than trigger 31 more requests.
+  if (res.status !== 404) {
+    throw new Error(`Failed to load calendar (${res.status})`);
+  }
+
   const results = await Promise.all(
     dates.map(async (date) => {
-      const res = await fetch(`/api/calendar/${date}`);
-      if (!res.ok) {
+      const dayRes = await fetch(`/api/calendar/${date}`);
+      if (!dayRes.ok) {
         throw new Error(`Failed to load calendar for ${date}`);
       }
-      const json = await res.json();
+      const json = await dayRes.json();
       if (!json.success) {
         throw new Error(json.error || `Failed to load calendar for ${date}`);
       }
@@ -63,43 +111,56 @@ function enumerateDates(start: Date, end: Date) {
 }
 
 export function useCalendarData(start: Date, end: Date): RangeResult {
-  const dates = enumerateDates(start, end);
-  const key = dates.length ? `calendar-range:${dates[0]}:${dates[dates.length - 1]}` : null;
+  // Callers rebuild these Dates on every render (`startOfMonth(currentDate)`
+  // and friends), so memoise on the civil dates rather than on identity.
+  const startStr = toDateString(start);
+  const endStr = toDateString(end);
+
+  const dates = useMemo(
+    () => enumerateDates(new Date(`${startStr}T00:00:00`), new Date(`${endStr}T00:00:00`)),
+    [startStr, endStr]
+  );
+
+  const key = dates.length
+    ? `calendar-range:${dates[0]}:${dates[dates.length - 1]}`
+    : null;
 
   const { data, isLoading, error, mutate } = useSWR(
     key ? [key, dates] : null,
-    ([, datesArr]) => fetcher(key!, datesArr as string[]),
+    ([, datesArr]) => fetcher(datesArr as string[]),
     {
       revalidateOnFocus: false,
       dedupingInterval: 60_000,
     }
   );
 
-  // Preserve last successful data to avoid flicker/clearing on revalidate/error
-  const lastDataRef = useRef<CalendarEventDTO[]>([]);
-  const [stableData, setStableData] = useState<CalendarEventDTO[]>([]);
-
+  // Preserve last successful data to avoid flicker/clearing on revalidate/error.
+  const lastDataRef = useRef<CalendarEventDTO[]>(NO_EVENTS);
   useEffect(() => {
-    if (data) {
-      lastDataRef.current = data;
-      setStableData(data);
-    }
+    if (data) lastDataRef.current = data;
   }, [data]);
 
-  // On first render with no data yet, keep empty; on errors, retain last data
-  const events = data ?? lastDataRef.current ?? [];
+  // Stable identity in every branch: `data` is SWR's cached array, and both
+  // fallbacks are refs/module constants rather than fresh literals.
+  const events = data ?? lastDataRef.current;
 
-  const mutateDay = (dateStr: string) => {
+  // `mutate` is stable per SWR key, so these stay stable too. That matters:
+  // `CalendarPageClient` keys an effect on `mutateRange` to publish it on
+  // `window`, and `CalendarContext` keys `invalidateDays` on it.
+  const mutateRange = useCallback(() => {
+    void mutate();
+  }, [mutate]);
+
+  const mutateDay = useCallback((dateStr: string) => {
     const dayKey = `calendar-range:${dateStr}:${dateStr}`;
-    globalMutate(dayKey);
-  };
+    void globalMutate(dayKey);
+  }, []);
 
   return {
     events,
     isLoading,
     error,
-    mutateRange: () => mutate(),
+    mutateRange,
     mutateDay,
   };
 }
-

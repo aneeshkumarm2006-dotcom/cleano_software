@@ -6,14 +6,27 @@ import { BookingDraft } from "../types";
 import { Input, Button, Banner } from "@/components/customer/Field";
 import { checkServiceArea } from "../../actions/checkServiceArea";
 import { saveLead } from "../../actions/saveLead";
+import {
+  BOOKING_PAGE_DEFAULTS,
+  resolveField,
+  type BookingPageConfig,
+} from "@/lib/booking-page-config";
 
 interface Props {
   draft: BookingDraft;
   onChange: (patch: Partial<BookingDraft>) => void;
   onContinue: () => void;
+  /** Admin-editable field layout (item 17). Defaults = today's rendering. */
+  bookingPage?: BookingPageConfig;
 }
 
-export default function Step1PostalCode({ draft, onChange, onContinue }: Props) {
+export default function Step1PostalCode({
+  draft,
+  onChange,
+  onContinue,
+  bookingPage = BOOKING_PAGE_DEFAULTS,
+}: Props) {
+  const postalField = resolveField(bookingPage, "postal", "postalCode");
   const [checking, setChecking] = useState(false);
   const [leadEmail, setLeadEmail] = useState("");
   const [leadCaptured, setLeadCaptured] = useState(false);
@@ -59,7 +72,12 @@ export default function Step1PostalCode({ draft, onChange, onContinue }: Props) 
       </header>
 
       <div className="cl-stack-12">
-        <span className="cl-label">Postal code</span>
+        <span className="cl-label">{postalField?.label ?? "Postal code"}</span>
+        {postalField?.helpText ? (
+          <p style={{ fontSize: 12, color: "var(--primary-60)", margin: 0, lineHeight: 1.5 }}>
+            {postalField.helpText}
+          </p>
+        ) : null}
         <div style={{ display: "flex", gap: 10, alignItems: "stretch" }}>
           <Input
             className="mono"
@@ -79,7 +97,7 @@ export default function Step1PostalCode({ draft, onChange, onContinue }: Props) 
               }
             }}
             style={{ flex: 1, fontSize: 17 }}
-            aria-label="Postal code"
+            aria-label={postalField?.label ?? "Postal code"}
           />
           <Button
             size="lg"

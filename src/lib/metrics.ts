@@ -10,7 +10,12 @@
 import "server-only";
 import { db } from "@/db";
 import type { Prisma } from "@prisma/client";
-import { jobRevenue, EMPLOYEE_ROLES } from "./metrics-shared";
+import {
+  jobRevenue,
+  jobScheduledValue,
+  EMPLOYEE_ROLES,
+  REVENUE_STATUSES,
+} from "./metrics-shared";
 
 export * from "./metrics-shared";
 
@@ -46,6 +51,47 @@ export async function getTotalRevenue(range?: DateRange): Promise<number> {
     select: { price: true, discountAmount: true, refundedAmount: true },
   });
   return jobs.reduce((sum, j) => sum + jobRevenue(j), 0);
+}
+
+// ── Scheduled (booked, not yet realized) value ───────────────────────────────
+// The SQL form of isScheduledValueJob() in ./metrics-shared, which the Jobs page
+// applies client-side to its filtered list. KEEP THE TWO IN LOCKSTEP — the
+// Dashboard and the Jobs page must never quote different booked-value numbers
+// (client feedback item 10).
+//
+// Prisma's `NOT: { a, b }` negates the CONJUNCTION, so this reads exactly as the
+// predicate does: live, not cancelled, and not already counted as revenue.
+
+export function scheduledValueWhere(range?: DateRange): Prisma.JobWhereInput {
+  const where: Prisma.JobWhereInput = {
+    deletedAt: null,
+    status: { not: "CANCELLED" },
+    NOT: { paymentReceived: true, status: { in: [...REVENUE_STATUSES] } },
+  };
+  if (range?.from || range?.to) {
+    where.startTime = {
+      ...(range.from ? { gte: range.from } : {}),
+      ...(range.to ? { lt: range.to } : {}),
+    };
+  }
+  return where;
+}
+
+export async function getScheduledValue(range?: DateRange): Promise<number> {
+  const jobs = await db.job.findMany({
+    where: scheduledValueWhere(range),
+    select: { price: true, discountAmount: true },
+  });
+  return jobs.reduce((sum, j) => sum + jobScheduledValue(j), 0);
+}
+
+// ── Completed job count ─────────────────────────────────────────────────────
+// The Dashboard used to count `status: "COMPLETED"` while the Jobs page counted
+// COMPLETED ∪ PAID, so the same data read 62 on one page and 84 on the other
+// (client feedback item 27 — 62 was in fact the pending-payment count). Both now
+// route through jobStatusWhere("completed").
+export async function getCompletedJobCount(now: Date = new Date()): Promise<number> {
+  return db.job.count({ where: jobStatusWhere("completed", now) });
 }
 
 // ── Employee count ──────────────────────────────────────────────────────────

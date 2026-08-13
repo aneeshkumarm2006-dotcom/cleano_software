@@ -5,6 +5,7 @@
  */
 
 import { db } from "@/db";
+import { formatDate } from "@/lib/timezone";
 import { formatAddressLine, normalizeAddressKey } from "@/lib/client-address";
 
 const BRAND = "#008C9C";
@@ -241,13 +242,11 @@ export async function buildInvoicePdfBuffer(
   const fmt = (n: number) => `$${n.toFixed(2)} CAD`;
   const el = React.createElement;
 
+  // Invoices render on the host (UTC); without an explicit timezone a job dated
+  // late evening printed the following day's date (Q9).
   const fmtDay = (iso: string | null) =>
     iso
-      ? new Date(iso).toLocaleDateString("en-US", {
-          month: "long",
-          day: "numeric",
-          year: "numeric",
-        })
+      ? formatDate(iso, { month: "long", day: "numeric", year: "numeric" })
       : "—";
 
   const doc = el(

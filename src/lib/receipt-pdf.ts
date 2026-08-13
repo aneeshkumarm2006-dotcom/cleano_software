@@ -1,5 +1,12 @@
 import { db } from "@/db";
-import { addOnLineLabel, computeJobMoney, type AddOnLine } from "@/lib/job-money";
+import { formatDate } from "@/lib/timezone";
+import {
+  ADDON_INCLUDED_LABEL,
+  addOnAmountIsIncluded,
+  addOnLineLabel,
+  computeJobMoney,
+  type AddOnLine,
+} from "@/lib/job-money";
 import { getTaxRates } from "@/lib/tax.server";
 
 const BRAND = "#008C9C";
@@ -16,6 +23,13 @@ export interface ReceiptData {
   bathCount: number | null;
   basePrice: number;
   addOns: AddOnLine[];
+  /**
+   * Whether the add-on lines are an itemisation of a subtotal that already
+   * contains them (a web booking or a BookingKoala import). Imported rows carry
+   * no price of their own, so the receipt names them rather than printing
+   * "$0.00" beside each one.
+   */
+  addOnsIncluded: boolean;
   subtotal: number;
   gstAmount: number;
   qstAmount: number;
@@ -53,6 +67,7 @@ export async function loadReceiptData(jobId: string): Promise<ReceiptData | null
     bathCount: job.bathCount,
     basePrice: money.basePrice,
     addOns: money.addOnLines,
+    addOnsIncluded: money.addOnsIncludedInSubtotal,
     subtotal: money.subtotalAmount,
     gstAmount: money.gstAmount,
     qstAmount: money.qstAmount,
@@ -176,7 +191,7 @@ export async function buildReceiptPdfBuffer(
           React.createElement(
             Text,
             { style: styles.subtitle },
-            new Date(data.paidAt ?? data.jobDate).toLocaleDateString()
+            formatDate(data.paidAt ?? data.jobDate)
           )
         )
       ),
@@ -238,7 +253,7 @@ export async function buildReceiptPdfBuffer(
             React.createElement(
               Text,
               { style: styles.subtitle },
-              `Service date: ${new Date(data.jobDate).toLocaleDateString()}`
+              `Service date: ${formatDate(data.jobDate)}`
             )
           )
         )
@@ -257,7 +272,13 @@ export async function buildReceiptPdfBuffer(
           View,
           { key: `ao-${i}`, style: styles.lineItemRow },
           React.createElement(Text, null, addOnLineLabel(a)),
-          React.createElement(Text, null, fmt(a.lineTotal))
+          React.createElement(
+            Text,
+            null,
+            addOnAmountIsIncluded(a.lineTotal, data.addOnsIncluded)
+              ? ADDON_INCLUDED_LABEL
+              : fmt(a.lineTotal)
+          )
         )
       ),
       React.createElement(

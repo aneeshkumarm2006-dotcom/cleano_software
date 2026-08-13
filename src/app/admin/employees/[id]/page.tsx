@@ -11,6 +11,12 @@ import { VOID_CHEQUE_KIND } from "@/lib/employee-files";
 import { cleanerRestockThreshold } from "@/lib/inventory-thresholds";
 import { projectUsage } from "@/lib/inventory-forecast";
 import { loadPerJobAverages } from "@/lib/inventory-forecast.server";
+import {
+  addStoreDays,
+  getStoreMinuteOfDay,
+  startOfStoreDay,
+  storeWeekday,
+} from "@/lib/timezone";
 
 export default async function EmployeePage({
   params,
@@ -253,12 +259,16 @@ export default async function EmployeePage({
     .map((j) => {
       const start = new Date(j.startTime);
       const end = j.endTime ? new Date(j.endTime) : new Date(start.getTime() + 60 * 60 * 1000);
-      const dayKey = DAY_BY_INDEX[start.getDay()];
+      // Availability slots are store wall-clock ("09:00"–"17:00"), so the job
+      // must be projected into the store timezone before comparison. On the
+      // host (UTC) getDay()/getHours() read 4-5 hours late, which flagged
+      // evening jobs against the wrong weekday's availability (Q9).
+      const dayKey = DAY_BY_INDEX[storeWeekday(start)];
       const slotsForDay = availabilitySlots.filter((s) => s.day === dayKey);
       if (slotsForDay.length === 0) return null;
 
-      const startMin = start.getHours() * 60 + start.getMinutes();
-      const endMin = end.getHours() * 60 + end.getMinutes();
+      const startMin = getStoreMinuteOfDay(start);
+      const endMin = getStoreMinuteOfDay(end);
 
       const blocked = slotsForDay.some(
         (s) =>
@@ -318,9 +328,8 @@ export default async function EmployeePage({
     memberCount: number;
   } | null = null;
   if (employee.cleanerTier === "FIELD_LEAD") {
-    const weekStart = new Date(now);
-    weekStart.setDate(weekStart.getDate() - 6);
-    weekStart.setHours(0, 0, 0, 0);
+    // Store-timezone start of the 7-day window (today plus the 6 days before).
+    const weekStart = addStoreDays(startOfStoreDay(now), -6);
     const b = await getFieldLeadWeeklyBonus(id, weekStart, now);
     weeklyBonus = {
       groupRevenue: b.groupRevenue,

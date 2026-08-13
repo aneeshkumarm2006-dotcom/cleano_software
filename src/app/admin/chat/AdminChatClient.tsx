@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { fmtTime } from "@/lib/time";
-import { Send, Search, Phone, MoreHorizontal, Paperclip, Smile, User as UserIcon, MessageCircle } from "lucide-react";
+import { Send, Search, Phone, MoreHorizontal, Paperclip, Smile, User as UserIcon, MessageCircle, ArrowLeft } from "lucide-react";
 import useSWR from "swr";
 import imageCompression from "browser-image-compression";
 import { getAdminChat, getAdminChatList, sendChatMessage, uploadChatAttachment } from "./actions";
@@ -69,6 +69,10 @@ export default function AdminChatClient({ initialList }: AdminChatClientProps) {
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(
     initialList[0]?.employeeId ?? null
   );
+  // Which pane the phone layout is showing. Ignored above 900px, where the CSS
+  // grid puts the list and the thread side by side and neither is hidden — so
+  // this never has to be kept in sync with the viewport.
+  const [pane, setPane] = useState<"list" | "thread">("list");
   const [search, setSearch] = useState("");
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
@@ -123,7 +127,10 @@ export default function AdminChatClient({ initialList }: AdminChatClientProps) {
       scrollToBottom();
       requestAnimationFrame(scrollToBottom);
     });
-  }, [chat?.messages.length, selectedEmployeeId]);
+    // `pane` is a dependency because on a phone the thread is `display:none`
+    // until you open it: measuring scrollHeight while hidden gives 0, so the
+    // re-open (same conversation, unchanged message count) has to re-pin.
+  }, [chat?.messages.length, selectedEmployeeId, pane]);
 
   async function handleSend() {
     const body = draft.trim();
@@ -223,8 +230,9 @@ export default function AdminChatClient({ initialList }: AdminChatClientProps) {
 
   return (
     <div className="h-full flex flex-col admin-font">
-      {/* Page header */}
-      <div style={{ padding: "32px 32px 24px", flexShrink: 0 }}>
+      {/* Page header — same clamp the group chat and cleaner DM use, so a 390px
+          phone doesn't keep desktop's 32px gutters. */}
+      <div style={{ padding: "clamp(20px,4vw,32px) clamp(20px,4vw,32px) 24px", flexShrink: 0 }}>
         <div className="row-between" style={{ alignItems: "flex-end", gap: 16 }}>
           <div className="stack-8">
             <p className="eyebrow">Communication</p>
@@ -239,8 +247,8 @@ export default function AdminChatClient({ initialList }: AdminChatClientProps) {
       </div>
 
       {/* Chat shell */}
-      <div style={{ flex: 1, minHeight: 0, padding: "0 32px 32px" }}>
-        <div className="chat-shell">
+      <div style={{ flex: 1, minHeight: 0, padding: "0 clamp(20px,4vw,32px) clamp(20px,4vw,32px)" }}>
+        <div className="chat-shell" data-pane={pane}>
           {/* Conversation list */}
           <aside className="chat-list">
             <div className="chat-list-head">
@@ -274,7 +282,7 @@ export default function AdminChatClient({ initialList }: AdminChatClientProps) {
                   <div
                     key={s.conversationId}
                     className={`chat-row${active ? " active" : ""}`}
-                    onClick={() => setSelectedEmployeeId(s.employeeId)}>
+                    onClick={() => { setSelectedEmployeeId(s.employeeId); setPane("thread"); }}>
                     <div className="chat-avatar-wrap">
                       <span style={{
                         width: 40, height: 40, borderRadius: "50%",
@@ -309,23 +317,43 @@ export default function AdminChatClient({ initialList }: AdminChatClientProps) {
           {/* Thread */}
           <section className="chat-thread">
             {!chat || !selectedConv ? (
-              <div className="chat-thread-empty" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flex: 1 }}>
-                <div style={{
-                  width: 56, height: 56, borderRadius: "50%",
-                  background: "rgba(0,140,156,0.06)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  marginBottom: 14,
-                }}>
-                  <MessageCircle size={24} color="var(--primary-40)" />
+              <>
+                {/* The thread pane can be on screen with nothing loaded yet
+                    (SWR is still fetching the conversation you just tapped), so
+                    the way back has to exist here too. */}
+                <button
+                  type="button"
+                  className="chat-icon-btn chat-back chat-back-solo"
+                  aria-label="Back to conversations"
+                  onClick={() => setPane("list")}>
+                  <ArrowLeft size={18} />
+                </button>
+                <div className="chat-thread-empty" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flex: 1 }}>
+                  <div style={{
+                    width: 56, height: 56, borderRadius: "50%",
+                    background: "rgba(0,140,156,0.06)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    marginBottom: 14,
+                  }}>
+                    <MessageCircle size={24} color="var(--primary-40)" />
+                  </div>
+                  <p style={{ fontSize: 14, color: "var(--primary-60)", margin: 0, fontWeight: 500 }}>
+                    Select an employee to start chatting.
+                  </p>
                 </div>
-                <p style={{ fontSize: 14, color: "var(--primary-60)", margin: 0, fontWeight: 500 }}>
-                  Select an employee to start chatting.
-                </p>
-              </div>
+              </>
             ) : (
               <>
                 {/* Thread header */}
                 <div className="chat-thread-head">
+                  <button
+                    type="button"
+                    className="chat-icon-btn chat-back"
+                    aria-label="Back to conversations"
+                    style={{ marginLeft: -6 }}
+                    onClick={() => setPane("list")}>
+                    <ArrowLeft size={18} />
+                  </button>
                   <div className="chat-avatar-wrap">
                     <span style={{
                       width: 44, height: 44, borderRadius: "50%",

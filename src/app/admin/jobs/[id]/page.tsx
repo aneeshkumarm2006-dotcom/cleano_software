@@ -151,6 +151,8 @@ export default async function JobPage({
         id: true,
         name: true,
         email: true,
+        // Fills the job form's Phone field for a linked client (item 4).
+        phone: true,
         address: true,
         aptNumber: true,
         discountPercent: true,
@@ -304,6 +306,7 @@ export default async function JobPage({
     clientId: job.clientId,
     location: job.location,
     aptNumber: job.aptNumber,
+    postalCode: job.postalCode,
     clientAddressId: job.clientAddressId,
     clientAddress: job.clientAddress
       ? {

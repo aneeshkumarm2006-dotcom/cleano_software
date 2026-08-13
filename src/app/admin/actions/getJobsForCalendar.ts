@@ -4,7 +4,20 @@ import { db } from "@/db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { computeBadgeMaps } from "./_calendarBadges";
+import { CALENDAR_JOB_SELECT } from "./_calendarSelect";
 
+/**
+ * Range variant of the calendar feed.
+ *
+ * NOTE: still nothing calls this. The live path is now
+ * `/api/calendar/range` → `useCalendarData` → `getJobsForRange` (one request
+ * for the whole visible span); `/api/calendar/[date]` → `getJobsForDay` remains
+ * for single-day callers and as the hook's fallback. This function predates
+ * both and returns a FLAT list rather than a per-day grouping, which is why it
+ * was not the one wired up. It is kept only so the two column lists cannot
+ * drift — that is what `CALENDAR_JOB_SELECT` is for — and it must stay
+ * byte-identical in output to `getJobsForDay` if it is ever revived.
+ */
 export async function getJobsForCalendar(startDate?: Date, endDate?: Date) {
   const session = await auth.api.getSession({
     headers: await headers(),
@@ -72,21 +85,9 @@ export async function getJobsForCalendar(startDate?: Date, endDate?: Date) {
 
   const jobs = await db.job.findMany({
     where,
-    include: {
-      employee: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-        },
-      },
-      cleaners: {
-        select: {
-          id: true,
-          name: true,
-        },
-      },
-    },
+    // Explicit select (Stage 5 item 5) — see _calendarSelect.ts. This used to
+    // be an `include`, i.e. every column of every job in the month.
+    select: CALENDAR_JOB_SELECT,
     orderBy: [
       { jobDate: "asc" },
       { startTime: "asc" },
@@ -123,6 +124,9 @@ export async function getJobsForCalendar(startDate?: Date, endDate?: Date) {
         jobId: job.id,
         jobType: job.jobType,
         location: job.location,
+        // Read by CalendarJobActions' address line — without it the unit number
+        // silently drops off the calendar modal (item 2).
+        aptNumber: job.aptNumber,
         status: job.status,
         price: job.price,
         employeePay: job.employeePay,

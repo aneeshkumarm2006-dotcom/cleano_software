@@ -26,6 +26,8 @@ export interface Job {
   clientId: string | null;
   location: string | null;
   aptNumber?: string | null;
+  /** Address snapshot beside location/aptNumber (item 3). */
+  postalCode?: string | null;
   /** Saved-address provenance (item 2), so an edit re-selects it. */
   clientAddressId?: string | null;
   description: string | null;

@@ -1,12 +1,14 @@
 "use server";
 
 import { db } from "@/db";
+import { revalidatePath } from "next/cache";
 import type { AlertType, AlertSeverity, Prisma } from "@prisma/client";
 import {
   defaultPrefsForRole,
   type NotificationPrefs,
 } from "./notificationPrefsConstants";
 import { getActor, requireOwnerAdmin } from "@/lib/action-guards";
+import { alertAlreadyOpen, withoutDuplicateAlerts } from "@/lib/alert-dedupe";
 
 interface CreateAlertInput {
   type: AlertType;
@@ -22,6 +24,12 @@ export async function createAlert(input: CreateAlertInput) {
   try {
     const guard = await requireOwnerAdmin();
     if (!guard.ok) return { success: false, error: guard.error };
+
+    // An identical alert still sitting undismissed is the one the recipient is
+    // already looking at; a second copy adds nothing but a row (item 25).
+    if (await alertAlreadyOpen(input)) {
+      return { success: true, deduped: true as const };
+    }
 
     const alert = await db.alert.create({
       data: {
@@ -66,6 +74,10 @@ export async function dismissAlert(alertId: string) {
       where: { id: alertId },
       data: { isDismissed: true },
     });
+    // /admin/analytics is the only page that reads the Alert table, and it's a
+    // server component — without this the row stays on screen and the count
+    // never moves, which reads as "the button does nothing".
+    revalidatePath("/admin/analytics");
     return { success: true };
   } catch (error) {
     console.error("Error dismissing alert:", error);
@@ -81,6 +93,7 @@ export async function markAlertRead(alertId: string) {
       where: { id: alertId },
       data: { isRead: true },
     });
+    revalidatePath("/admin/analytics");
     return { success: true };
   } catch (error) {
     console.error("Error marking alert as read:", error);
@@ -223,7 +236,14 @@ export async function notifyByRule(
       return { success: true, created: 0 };
     }
 
-    const result = await db.alert.createMany({ data });
+    // Same rule as createAlert, applied across the fan-out: a recipient who is
+    // still looking at this exact alert doesn't get a second one (item 25).
+    const fresh = await withoutDuplicateAlerts(data);
+    if (fresh.length === 0) {
+      return { success: true, created: 0 };
+    }
+
+    const result = await db.alert.createMany({ data: fresh });
     return { success: true, created: result.count };
   } catch (error) {
     console.error("Error in notifyByRule:", error);

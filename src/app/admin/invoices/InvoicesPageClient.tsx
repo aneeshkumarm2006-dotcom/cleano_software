@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { jobTypeLabel } from "@/lib/calendar-labels";
 import {
@@ -17,6 +17,7 @@ import BulkActionBar, { type BulkAction } from "@/components/common/BulkActionBa
 import { bulkSoftDelete, bulkRestore } from "@/lib/bulk/actions";
 import { bulkSetInvoiceStatus } from "../actions/bulkSetInvoiceStatus";
 import { avatarColor, initials } from "@/lib/avatar";
+import { invoiceDisplayStatus } from "@/lib/invoice-status";
 
 interface LineItem {
   id: string;
@@ -62,11 +63,16 @@ interface ClientOption {
   discountPercent?: number | null;
 }
 
+/** An invoice plus the status the screen should show — see @/lib/invoice-status. */
+type InvoiceRow = Invoice & { displayStatus: string };
+
 interface InvoicesPageClientProps {
   invoices: Invoice[];
   clients: ClientOption[];
   taxConfig: { gstRate: number; qstRate: number; gstNumber: string; qstNumber: string };
   archived: boolean;
+  /** Today as a STORE-timezone civil day ("2026-08-13"), from the server render. */
+  todayKey: string;
 }
 
 const STATUS_CONFIG: Record<string, { label: string; bg: string; color: string }> = {
@@ -96,7 +102,7 @@ function StatusIcon({ status }: { status: string }) {
   }
 }
 
-export default function InvoicesPageClient({ invoices, clients, taxConfig, archived }: InvoicesPageClientProps) {
+export default function InvoicesPageClient({ invoices, clients, taxConfig, archived, todayKey }: InvoicesPageClientProps) {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -109,22 +115,42 @@ export default function InvoicesPageClient({ invoices, clients, taxConfig, archi
   const [markingPaidId, setMarkingPaidId] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
 
-  const stats = useMemo(() => ({
-    total: invoices.length,
-    collected: invoices.filter(i => i.status === "PAID").reduce((s, i) => s + i.totalAmount, 0),
-    pending: invoices.filter(i => i.status === "SENT" || i.status === "OVERDUE").reduce((s, i) => s + i.totalAmount, 0),
-    overdue: invoices.filter(i => i.status === "OVERDUE").length,
-  }), [invoices]);
+  // Held locally so Send and Mark paid move the row's status pill AND the
+  // Collected / Pending / Overdue tiles at once. `router.refresh()` alone left
+  // every one of them on the pre-action figure until the page re-queried, which
+  // on a money screen reads as the payment not having registered. Replaced
+  // wholesale by the next server payload.
+  const [liveInvoices, setLiveInvoices] = useState<Invoice[]>(invoices);
+  useEffect(() => { setLiveInvoices(invoices); }, [invoices]);
 
-  const filtered = useMemo(() => invoices.filter(inv => {
-    if (statusFilter && inv.status !== statusFilter) return false;
+  // One derived status per row, computed once, read by the tiles, the status
+  // filter, the pill, the icon, the due-date colour and the action guards — so
+  // none of them can disagree. Nothing writes `status = "OVERDUE"` anywhere in
+  // the app, which is why the tile below was permanently 0 while a 64-day-late
+  // invoice sat in the table; see @/lib/invoice-status for the rule.
+  const rows: InvoiceRow[] = useMemo(
+    () => liveInvoices.map((inv) => ({ ...inv, displayStatus: invoiceDisplayStatus(inv, todayKey) })),
+    [liveInvoices, todayKey]
+  );
+
+  const stats = useMemo(() => ({
+    total: rows.length,
+    collected: rows.filter(i => i.displayStatus === "PAID").reduce((s, i) => s + i.totalAmount, 0),
+    // Unchanged in substance: an overdue invoice is a SENT one whose due date
+    // has passed, so it was already inside this set and Pending does not move.
+    pending: rows.filter(i => i.displayStatus === "SENT" || i.displayStatus === "OVERDUE").reduce((s, i) => s + i.totalAmount, 0),
+    overdue: rows.filter(i => i.displayStatus === "OVERDUE").length,
+  }), [rows]);
+
+  const filtered = useMemo(() => rows.filter(inv => {
+    if (statusFilter && inv.displayStatus !== statusFilter) return false;
     if (clientFilter && inv.clientId !== clientFilter) return false;
     if (searchTerm) {
       const q = searchTerm.toLowerCase();
       return inv.invoiceNumber.toLowerCase().includes(q) || inv.clientName.toLowerCase().includes(q);
     }
     return true;
-  }), [invoices, searchTerm, statusFilter, clientFilter]);
+  }), [rows, searchTerm, statusFilter, clientFilter]);
 
   const total = filtered.length;
   const totalPages = Math.max(1, Math.ceil(total / rowsPerPage));
@@ -171,18 +197,31 @@ export default function InvoicesPageClient({ invoices, clients, taxConfig, archi
 
   const activeFilterCount = [statusFilter !== "", clientFilter !== ""].filter(Boolean).length;
 
+  /** Apply one invoice's new state locally, then let the refresh confirm it. */
+  const applyInvoice = (id: string, patch: Partial<Invoice>) => {
+    setLiveInvoices((prev) => prev.map((inv) => (inv.id === id ? { ...inv, ...patch } : inv)));
+    router.refresh();
+  };
+
   const handleSend = async (id: string) => {
     setSendingId(id);
     const r = await sendInvoice(id);
     setSendingId(null);
-    if (!r.success) setErrorMsg(r.error || "Failed to send"); else router.refresh();
+    if (!r.success) { setErrorMsg(r.error || "Failed to send"); return; }
+    // Mirrors the action: only a DRAFT becomes SENT — re-sending a SENT or
+    // OVERDUE invoice just restamps `sentAt` and must not un-overdue it.
+    applyInvoice(id, {
+      sentAt: new Date().toISOString(),
+      ...(liveInvoices.find((i) => i.id === id)?.status === "DRAFT" ? { status: "SENT" } : {}),
+    });
   };
 
   const handleMarkPaid = async (id: string) => {
     setMarkingPaidId(id);
     const r = await updateInvoice({ id, status: "PAID" });
     setMarkingPaidId(null);
-    if (!r.success) setErrorMsg(r.error || "Failed to mark paid"); else router.refresh();
+    if (!r.success) { setErrorMsg(r.error || "Failed to mark paid"); return; }
+    applyInvoice(id, { status: "PAID", paidAt: new Date().toISOString() });
   };
 
   return (
@@ -350,7 +389,7 @@ export default function InvoicesPageClient({ invoices, clients, taxConfig, archi
                       </td>
                       <td style={{ minWidth: 140 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                          <StatusIcon status={inv.status} />
+                          <StatusIcon status={inv.displayStatus} />
                           <span className="col-client">{inv.invoiceNumber}</span>
                         </div>
                         {inv.jobType && <div className="col-client-sub">{jobTypeLabel(inv.jobType)}</div>}
@@ -365,18 +404,18 @@ export default function InvoicesPageClient({ invoices, clients, taxConfig, archi
                       </td>
                       <td><span style={{ fontSize: 12, color: "var(--primary-70)" }}>{new Date(inv.createdAt).toLocaleDateString("en-US")}</span></td>
                       <td>
-                        <span style={{ fontSize: 12, color: inv.status === "OVERDUE" ? "#d97706" : "var(--primary-70)" }}>
+                        <span style={{ fontSize: 12, color: inv.displayStatus === "OVERDUE" ? "#d97706" : "var(--primary-70)" }}>
                           {inv.dueDate ? new Date(inv.dueDate).toLocaleDateString("en-US") : "—"}
                         </span>
                       </td>
                       <td className="num" style={{ fontWeight: 600, color: "var(--ink)" }}>${inv.totalAmount.toFixed(2)}</td>
-                      <td><StatusPill status={inv.status} /></td>
+                      <td><StatusPill status={inv.displayStatus} /></td>
                       <td className="col-actions" onClick={e => e.stopPropagation()}>
                         <div className="row" style={{ gap: 6 }}>
                           <a href={`/admin/invoices/${inv.id}`} className="btn btn-secondary btn-sm" style={{ display: "flex", alignItems: "center", gap: 4 }}>
                             <Eye size={12} /> View
                           </a>
-                          {inv.status === "DRAFT" && (
+                          {inv.displayStatus === "DRAFT" && (
                             <button
                               type="button"
                               className="btn btn-ghost btn-sm"
@@ -387,7 +426,7 @@ export default function InvoicesPageClient({ invoices, clients, taxConfig, archi
                               Send
                             </button>
                           )}
-                          {(inv.status === "SENT" || inv.status === "OVERDUE") && (
+                          {(inv.displayStatus === "SENT" || inv.displayStatus === "OVERDUE") && (
                             <button
                               type="button"
                               className="btn btn-ghost btn-sm"
@@ -422,7 +461,7 @@ export default function InvoicesPageClient({ invoices, clients, taxConfig, archi
                     />
                     <div>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
-                      <StatusIcon status={inv.status} />
+                      <StatusIcon status={inv.displayStatus} />
                       <div className="jcard-client">{inv.invoiceNumber}</div>
                     </div>
                     <div className="jcard-meta">{inv.clientName}</div>
@@ -431,17 +470,17 @@ export default function InvoicesPageClient({ invoices, clients, taxConfig, archi
                   </div>
                   <div style={{ textAlign: "right" }}>
                     <div className="jcard-price">${inv.totalAmount.toFixed(2)}</div>
-                    <div style={{ marginTop: 4 }}><StatusPill status={inv.status} /></div>
+                    <div style={{ marginTop: 4 }}><StatusPill status={inv.displayStatus} /></div>
                   </div>
                 </div>
                 <div className="jcard-row" style={{ paddingTop: 10, borderTop: "1px solid var(--primary-10)", marginTop: 10, gap: 8 }} onClick={e => e.stopPropagation()}>
                   <a href={`/admin/invoices/${inv.id}`} className="btn btn-secondary btn-sm" style={{ flex: 1, justifyContent: "center" }}>View</a>
-                  {inv.status === "DRAFT" && (
+                  {inv.displayStatus === "DRAFT" && (
                     <button type="button" className="btn btn-ghost btn-sm" disabled={sendingId === inv.id} onClick={() => handleSend(inv.id)} style={{ flex: 1 }}>
                       {sendingId === inv.id ? "Sending…" : "Send"}
                     </button>
                   )}
-                  {(inv.status === "SENT" || inv.status === "OVERDUE") && (
+                  {(inv.displayStatus === "SENT" || inv.displayStatus === "OVERDUE") && (
                     <button type="button" className="btn btn-ghost btn-sm" disabled={markingPaidId === inv.id} onClick={() => handleMarkPaid(inv.id)} style={{ flex: 1 }}>
                       {markingPaidId === inv.id ? "Processing…" : "Mark Paid"}
                     </button>

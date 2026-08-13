@@ -4,10 +4,9 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { db } from "@/db";
 import { revalidatePath } from "next/cache";
-import { TransactionCategory } from "@prisma/client";
 
 interface CreateBudgetParams {
-  category: TransactionCategory;
+  categoryId: string;
   period: string;
   amount: number;
   notes?: string | null;
@@ -28,7 +27,7 @@ export async function createBudget(params: CreateBudgetParams) {
     const guard = await requireAdmin();
     if ("error" in guard) return { success: false, error: guard.error };
 
-    if (!params.category) {
+    if (!params.categoryId) {
       return { success: false, error: "Category is required" };
     }
     if (!params.period?.trim()) {
@@ -38,15 +37,29 @@ export async function createBudget(params: CreateBudgetParams) {
       return { success: false, error: "Amount must be a valid number" };
     }
 
+    // The picker only offers live categories, but a stale tab could still
+    // submit one that was archived in between.
+    const category = await db.budgetCategory.findUnique({
+      where: { id: params.categoryId },
+      select: { archivedAt: true, name: true },
+    });
+    if (!category) return { success: false, error: "Category not found" };
+    if (category.archivedAt) {
+      return {
+        success: false,
+        error: `"${category.name}" has been archived — pick another category`,
+      };
+    }
+
     const budget = await db.budget.upsert({
       where: {
-        category_period: {
-          category: params.category,
+        categoryId_period: {
+          categoryId: params.categoryId,
           period: params.period.trim(),
         },
       },
       create: {
-        category: params.category,
+        categoryId: params.categoryId,
         period: params.period.trim(),
         amount: params.amount,
         notes: params.notes?.trim() || null,
@@ -58,6 +71,8 @@ export async function createBudget(params: CreateBudgetParams) {
     });
 
     revalidatePath("/admin/finances");
+    revalidatePath("/admin/settings");
+    revalidatePath("/admin/analytics");
     return { success: true, id: budget.id };
   } catch (error) {
     console.error("Error creating budget:", error);
@@ -74,6 +89,8 @@ export async function deleteBudget(id: string) {
 
     await db.budget.delete({ where: { id } });
     revalidatePath("/admin/finances");
+    revalidatePath("/admin/settings");
+    revalidatePath("/admin/analytics");
     return { success: true };
   } catch (error) {
     console.error("Error deleting budget:", error);

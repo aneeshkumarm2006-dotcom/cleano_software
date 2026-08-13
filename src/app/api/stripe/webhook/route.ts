@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { db } from "@/db";
+import { requireBudgetCategoryId } from "@/lib/budget-categories";
 import { logActivity } from "@/lib/activity-log";
 import { notifyCardReplaced } from "@/lib/payment-methods";
 import {
@@ -25,6 +26,8 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
   });
   if (!job || job.paymentReceived) return;
 
+  const revenueCategoryId = await requireBudgetCategoryId("revenue");
+
   await db.$transaction([
     db.job.update({
       where: { id: jobId },
@@ -39,7 +42,7 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
     db.transaction.create({
       data: {
         date: new Date(),
-        category: "REVENUE",
+        categoryId: revenueCategoryId,
         amount: pi.amount_received / 100,
         description: `Stripe payment confirmed — job #${job.jobNumber}`,
         jobId,
@@ -122,6 +125,8 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
   });
   if (!job) return;
 
+  const revenueCategoryId = await requireBudgetCategoryId("revenue");
+
   // Process each refund independently and idempotently. A refund is keyed by
   // its Stripe id (re_...) embedded in the transaction description, so a refund
   // already recorded — either by issueRefund or a prior webhook delivery — is
@@ -148,7 +153,7 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
       db.transaction.create({
         data: {
           date: new Date(),
-          category: "REVENUE",
+          categoryId: revenueCategoryId,
           amount: -refundAmount,
           description: `Stripe refund — Job #${job.jobNumber} (refund: ${refund.id})`,
           jobId: job.id,

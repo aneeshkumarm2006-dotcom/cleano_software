@@ -12,6 +12,7 @@ import {
 } from "@/lib/email";
 import { getSetting } from "@/lib/settings";
 import { logContactCancellation } from "@/lib/crm";
+import { requireBudgetCategoryId } from "@/lib/budget-categories";
 
 // Per spec: cancellation requests are flagged for admin review — never auto-cancel.
 // If the request lands inside the late-cancellation window, the configured fee
@@ -119,6 +120,8 @@ export async function requestCancellation(jobId: string, reason?: string) {
               ? ` Late-cancellation fee already charged for this booking.`
               : "";
 
+    const revenueCategoryId = await requireBudgetCategoryId("revenue");
+
     await db.$transaction([
       db.job.update({
         where: { id: jobId },
@@ -148,7 +151,7 @@ export async function requestCancellation(jobId: string, reason?: string) {
             db.transaction.create({
               data: {
                 date: now,
-                category: "REVENUE" as const,
+                categoryId: revenueCategoryId,
                 amount: feeUsd,
                 description: `Late-cancellation fee — job #${job.jobNumber}`,
                 jobId,

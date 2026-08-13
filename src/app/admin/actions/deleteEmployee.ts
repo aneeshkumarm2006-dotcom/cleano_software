@@ -38,6 +38,21 @@ export async function deleteEmployee(employeeId: string): Promise<{
       };
     }
 
+    // Commission rows are money owed to this person, so `Commission.salesRepId`
+    // is ON DELETE RESTRICT rather than the cascade most User relations use
+    // (Stage 11.2). Without this check the delete would fail down in Postgres
+    // and surface as the generic "Failed to delete employee", which tells the
+    // admin nothing about what is actually holding the record.
+    const commissionCount = await db.commission.count({
+      where: { salesRepId: employeeId },
+    });
+    if (commissionCount > 0) {
+      return {
+        success: false,
+        error: `Cannot delete: this person has ${commissionCount} commission record${commissionCount === 1 ? "" : "s"} under Sales → Commissions. Delete those first.`,
+      };
+    }
+
     // Delete the employee's account first
     await db.account.deleteMany({
       where: { userId: employeeId },

@@ -94,6 +94,100 @@ export const CATEGORY_ALIASES: Record<string, string> = {
   FOLLOWUP: "FOLLOW_UP",
 };
 
+// ── Industry (the Analytics filter dimension) ────────────────────────────────
+//
+// The client asked to "sort by industry (residential, commercial, airbnb and
+// ALL)" — three positions, but nine service categories exist above. Deep,
+// move-in/out, post-construction and follow-up are services *sold into* an
+// industry, not industries, so they fold onto Residential. This map is the ONE
+// source of truth for that fold; it lives here, beside CATEGORY_ALIASES, so the
+// category → industry rule can never drift from the raw → category rule.
+//
+// KEEP IN LOCKSTEP with SERVICE_CATEGORIES. A category missing from this map
+// deliberately falls through to "Unspecified" rather than disappearing: the
+// Analytics filter shows Unspecified as its own position, so ALL always equals
+// the sum of the parts and a newly added service shows up as un-mapped instead
+// of silently vanishing from every reading.
+
+export type IndustryKey = "RESIDENTIAL" | "COMMERCIAL" | "AIRBNB";
+
+/** Bucket for jobs whose stored jobType doesn't fold to a known category. */
+export const INDUSTRY_UNSPECIFIED = "UNSPECIFIED";
+
+/** A job always lands in exactly one of these — so ALL = Σ positions. */
+export type JobIndustry = IndustryKey | typeof INDUSTRY_UNSPECIFIED;
+
+/** The filter control's positions. */
+export type IndustryFilter = JobIndustry | "ALL";
+
+export const INDUSTRY_BY_CATEGORY: Record<string, IndustryKey> = {
+  RESIDENTIAL: "RESIDENTIAL",
+  DEEP: "RESIDENTIAL",
+  MOVE_IN: "RESIDENTIAL",
+  MOVE_OUT: "RESIDENTIAL",
+  MOVE_IN_OUT: "RESIDENTIAL",
+  POST_CONSTRUCTION: "RESIDENTIAL",
+  FOLLOW_UP: "RESIDENTIAL",
+  COMMERCIAL: "COMMERCIAL",
+  AIRBNB: "AIRBNB",
+};
+
+export const INDUSTRIES: Array<{ key: IndustryKey; label: string }> = [
+  { key: "RESIDENTIAL", label: "Residential" },
+  { key: "COMMERCIAL", label: "Commercial" },
+  { key: "AIRBNB", label: "Airbnb" },
+];
+
+export const INDUSTRY_LABELS: Record<IndustryFilter, string> = {
+  ALL: "All",
+  RESIDENTIAL: "Residential",
+  COMMERCIAL: "Commercial",
+  AIRBNB: "Airbnb",
+  UNSPECIFIED: "Unspecified",
+};
+
+/** Industry for a canonical category key, or null if the map doesn't cover it. */
+export function industryForCategory(
+  category: string | null | undefined
+): IndustryKey | null {
+  if (!category) return null;
+  return INDUSTRY_BY_CATEGORY[category] ?? null;
+}
+
+/**
+ * Total function: every job gets exactly one industry, "UNSPECIFIED" included.
+ * That totality is what makes ALL equal the sum of the filter positions.
+ */
+export function jobIndustry(raw: string | null | undefined): JobIndustry {
+  return industryForCategory(normalizeJobType(raw)) ?? INDUSTRY_UNSPECIFIED;
+}
+
+export function isIndustryFilter(v: unknown): v is IndustryFilter {
+  return (
+    v === "ALL" ||
+    v === "UNSPECIFIED" ||
+    v === "RESIDENTIAL" ||
+    v === "COMMERCIAL" ||
+    v === "AIRBNB"
+  );
+}
+
+/** Parse a URL value into a filter position; anything unrecognised → ALL. */
+export function parseIndustryFilter(v: unknown): IndustryFilter {
+  if (typeof v !== "string") return "ALL";
+  const up = v.trim().toUpperCase();
+  return isIndustryFilter(up) ? up : "ALL";
+}
+
+/** Does this job's stored jobType belong to the selected filter position? */
+export function jobMatchesIndustry(
+  raw: string | null | undefined,
+  filter: IndustryFilter
+): boolean {
+  if (filter === "ALL") return true;
+  return jobIndustry(raw) === filter;
+}
+
 /** Fold any stored jobType representation into a canonical category key. */
 export function normalizeJobType(raw: string | null | undefined): string | null {
   if (!raw) return null;

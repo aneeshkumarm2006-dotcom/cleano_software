@@ -8,6 +8,7 @@ import { revalidatePath } from "next/cache";
 import { stripe } from "@/lib/stripe";
 import { sendCustomerNoShowFee } from "@/lib/email";
 import { getSetting } from "@/lib/settings";
+import { requireBudgetCategoryId } from "@/lib/budget-categories";
 
 /**
  * Admin action: customer was a no-show for the booking. Charges the
@@ -81,6 +82,7 @@ export async function markNoShow(jobId: string) {
   }
 
   const now = new Date();
+  const revenueCategoryId = await requireBudgetCategoryId("revenue");
 
   await db.$transaction([
     db.job.update({
@@ -112,7 +114,7 @@ export async function markNoShow(jobId: string) {
           db.transaction.create({
             data: {
               date: now,
-              category: "REVENUE" as const,
+              categoryId: revenueCategoryId,
               amount: feeUsd,
               description: `No-show fee — job #${job.jobNumber}`,
               jobId,

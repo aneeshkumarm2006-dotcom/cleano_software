@@ -16,6 +16,10 @@ import {
   generateUniqueReferralCode,
 } from "@/lib/referral";
 import { getSetting } from "@/lib/settings";
+import {
+  BOOKING_PAGE_CONFIG_KEY,
+  frequencyEnabled,
+} from "@/lib/booking-page-config";
 import { addOnQuantity, MAX_ADDON_QUANTITY } from "@/lib/job-money";
 import { advanceContactLifecycleForBooking, logContactEvent } from "@/lib/crm";
 import {
@@ -310,6 +314,20 @@ export async function submitBooking(input: SubmitBookingInput) {
         success: false,
         error: "Square footage is required for move-in / move-out bookings.",
       };
+    }
+
+    // Item 15: services with no frequency choice are one-off prices with no
+    // recurring discount (Move-in/out and Deep by default, admin-editable in
+    // Settings → Booking Page). The form doesn't offer a frequency for them, so
+    // a recurring value here can only come from a stale draft or a crafted
+    // request — either way it would mint a whole unasked-for series at a
+    // discount. Coerced rather than rejected: the booking itself is valid.
+    const bookingPageCfg = await getSetting(BOOKING_PAGE_CONFIG_KEY);
+    if (
+      input.frequency !== "ONE_TIME" &&
+      !frequencyEnabled(bookingPageCfg, input.serviceType)
+    ) {
+      input.frequency = "ONE_TIME";
     }
 
     // 1b. Reject fully-closed days (admin-configured). Server-authoritative —

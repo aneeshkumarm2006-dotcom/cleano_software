@@ -21,6 +21,7 @@ import InvoicePreview from "../InvoicePreview";
 import { ConfirmActionModal } from "@/components/common/ConfirmActionModal";
 import { sendInvoice } from "../../actions/sendInvoice";
 import { updateInvoice } from "../../actions/updateInvoice";
+import { invoiceDisplayStatus } from "@/lib/invoice-status";
 
 interface LineItem {
   id: string;
@@ -162,7 +163,11 @@ export default function InvoiceDetailView({
             <h1 className="text-3xl !font-light tracking-tight text-[#008C9C]">
               {invoice.invoiceNumber}
             </h1>
-            {getStatusBadge(invoice.status)}
+            {/* Derived, so this badge says the same thing the list's pill does
+                (@/lib/invoice-status). The ACTION guards below deliberately
+                keep reading the stored status — what you may do to an invoice
+                is a function of what it is, not of how late it is. */}
+            {getStatusBadge(invoiceDisplayStatus(invoice))}
           </div>
           <p className="text-sm text-[#008C9C]/60 mt-1">
             Created {new Date(invoice.createdAt).toLocaleDateString("en-US", {

@@ -91,6 +91,11 @@ function EmbedCodes({ domain }: { domain: string }) {
   const base = domain.trim() ? `https://${domain.trim()}` : "https://your-domain.com";
   const embeds: { label: string; path: string }[] = [
     { label: "Booking form", path: "/book" },
+    // The client said "whatever quote request page you're going to embed" —
+    // and the one screen whose job is handing out embed codes didn't know the
+    // quote page existed (Q6 §1). Its fields and copy are editable from the
+    // Form tab on Quotes.
+    { label: "Quote request", path: "/quote" },
     { label: "Gift cards", path: "/gift-card" },
     { label: "FAQ", path: "/faq" },
     { label: "Reviews", path: "/reviews" },

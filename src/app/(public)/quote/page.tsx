@@ -1,12 +1,49 @@
+import type { Metadata } from "next";
+import { getSetting } from "@/lib/settings";
+import { getServiceCatalog } from "@/lib/service-catalog.server";
+import { serviceOptions } from "@/lib/service-catalog";
+import {
+  QUOTE_PAGE_CONFIG_KEY,
+  normalizeQuotePageConfig,
+} from "@/lib/quote-page-config";
 import QuoteFormClient from "./QuoteFormClient";
 
-export const metadata = {
-  title: "Request a Quote · Cleano",
-  description:
-    "Tell us about your space and we'll send you a tailored cleaning quote.",
-};
+/**
+ * Reads the admin-editable page config on every render rather than at build
+ * time — an admin who renames a field in the Form tab expects to reload /quote
+ * and see it, not to wait for a redeploy.
+ */
+export const dynamic = "force-dynamic";
 
-export default function QuotePage() {
+async function loadQuotePage() {
+  const [config, catalog, brandName] = await Promise.all([
+    getSetting(QUOTE_PAGE_CONFIG_KEY),
+    getServiceCatalog(),
+    getSetting("general.businessName"),
+  ]);
+  return {
+    // `getSetting` already validates through the registry; normalizing again is
+    // cheap and keeps this page total even if the setting is written by a path
+    // that bypasses the spine.
+    config: normalizeQuotePageConfig(config),
+    // THE service list (item 20): values are canonical category keys, so
+    // switching a service off in Settings → Job Types removes it from here.
+    services: serviceOptions(catalog),
+    brandName,
+  };
+}
+
+export async function generateMetadata(): Promise<Metadata> {
+  const { config, brandName } = await loadQuotePage();
+  return {
+    title: `${config.copy.title} · ${brandName}`,
+    description: config.copy.subhead,
+  };
+}
+
+export default async function QuotePage() {
+  const { config, services, brandName } = await loadQuotePage();
+
   return (
     <div
       style={{
@@ -15,40 +52,13 @@ export default function QuotePage() {
         padding: "48px 16px",
       }}>
       <div style={{ maxWidth: 640, margin: "0 auto" }}>
-        <header style={{ marginBottom: 32, textAlign: "center" }}>
-          <div
-            style={{
-              fontSize: 12,
-              letterSpacing: "0.12em",
-              textTransform: "uppercase",
-              color: "#008C9C",
-              fontWeight: 700,
-            }}>
-            Cleano
-          </div>
-          <h1
-            style={{
-              marginTop: 8,
-              fontSize: "clamp(32px, 5vw, 48px)",
-              lineHeight: 1.1,
-              color: "#0a1f24",
-              fontWeight: 700,
-            }}>
-            Request a quote
-          </h1>
-          <p
-            style={{
-              marginTop: 12,
-              fontSize: 16,
-              color: "#3a5a62",
-              lineHeight: 1.5,
-            }}>
-            Tell us a few details about your space and we'll get back to you
-            within one business day with a tailored estimate.
-          </p>
-        </header>
-
-        <QuoteFormClient />
+        {/* Header, fields and success copy all render inside QuoteForm, from
+            the config — there is no literal customer-facing string left here. */}
+        <QuoteFormClient
+          config={config}
+          services={services}
+          brandName={brandName}
+        />
       </div>
     </div>
   );

@@ -28,6 +28,7 @@ import {
   sendCustomerCardExpiring,
   sendAdminCardExpiring,
 } from "@/lib/email";
+import { STORE_TZ } from "@/lib/timezone";
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -631,11 +632,18 @@ export async function GET(req: NextRequest) {
         continue;
       }
 
+      // Title names the JOB, body names the CLEANER — matching the house style
+      // of the other job alerts (cf. "Trainee left unpaired — Job #N" in
+      // lib/job-assignments.ts). It used to title the alert with the CLIENT's
+      // name while the body named the cleaner, so a row read "Rami Chaaban /
+      // Divanshu hasn't responded" and looked like a data bug (item 26). The
+      // client's name stays in the body, where it reads as context rather than
+      // as the subject.
       await notifyAdmins({
         type: "GENERAL",
         severity: "WARNING",
-        title: `Assignment unconfirmed — ${inv.job.clientName}`,
-        message: `${inv.cleaner?.name ?? "A cleaner"} hasn't confirmed job #${inv.job.jobNumber} yet. They are still assigned — chase them or reassign.`,
+        title: `Assignment unconfirmed — Job #${inv.job.jobNumber}`,
+        message: `${inv.cleaner?.name ?? "A cleaner"} hasn't confirmed Job #${inv.job.jobNumber} for ${inv.job.clientName} yet. They are still assigned — chase them or reassign.`,
         relatedId: inv.jobId,
         relatedType: "Job",
       });
@@ -733,6 +741,7 @@ export async function GET(req: NextRequest) {
         weekday: "long",
         month: "long",
         day: "numeric",
+        timeZone: STORE_TZ,
       });
 
       if (client.email) {

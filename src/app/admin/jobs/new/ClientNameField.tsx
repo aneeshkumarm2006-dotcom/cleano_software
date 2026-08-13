@@ -36,17 +36,24 @@ export default function ClientNameField({
   clients,
   defaultName,
   defaultClientId,
+  defaultEmail,
+  defaultPhone,
 }: {
   clients: ClientOption[];
   defaultName?: string;
   defaultClientId?: string;
+  /** Contact details from a source with no Client row yet — a converted quote
+   *  (10.4). The linked client always wins, so this can't overwrite a real
+   *  customer record with stale form data. */
+  defaultEmail?: string;
+  defaultPhone?: string;
 }) {
   const initialClient = clients.find((c) => c.id === defaultClientId) ?? null;
 
   const [name, setName] = useState(defaultName ?? "");
   const [clientId, setClientId] = useState(defaultClientId ?? "");
-  const [email, setEmail] = useState(initialClient?.email ?? "");
-  const [phone, setPhone] = useState(initialClient?.phone ?? "");
+  const [email, setEmail] = useState(initialClient?.email ?? defaultEmail ?? "");
+  const [phone, setPhone] = useState(initialClient?.phone ?? defaultPhone ?? "");
   const [addressChoice, setAddressChoice] = useState<string>(NEW_ADDRESS);
   const [open, setOpen] = useState(false);
   const [cardSavedNow, setCardSavedNow] = useState(false);
@@ -93,6 +100,8 @@ export default function ClientNameField({
   function fillAddress(addr: SavedAddress) {
     setField("location", stripDuplicatedApt(addr.address, addr.aptNumber));
     setField("aptNumber", addr.aptNumber || "");
+    // Postal code (item 3) — travels with the address it belongs to.
+    setField("postalCode", addr.postalCode || "");
   }
 
   function pick(c: ClientOption) {
@@ -111,6 +120,7 @@ export default function ClientNameField({
       setAddressChoice(NEW_ADDRESS);
       setField("location", c.address || "");
       setField("aptNumber", c.aptNumber || "");
+      setField("postalCode", "");
     }
 
     // Fixed-price client: pre-fill the price with their agreed total, but
@@ -132,6 +142,7 @@ export default function ClientNameField({
       // Let the admin type a fresh address into the Location / Apt fields.
       setField("location", "");
       setField("aptNumber", "");
+      setField("postalCode", "");
       return;
     }
     const addr = savedAddresses.find((a) => a.id === v);

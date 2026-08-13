@@ -52,6 +52,8 @@ const Calendar = React.forwardRef<CalendarRef, CalendarProps>(({ hideNewJobButto
   const {
     view,
     setView,
+    listMode,
+    setListMode,
     handlePrev,
     handleNext,
     handleToday,
@@ -133,7 +135,9 @@ const Calendar = React.forwardRef<CalendarRef, CalendarProps>(({ hideNewJobButto
     };
   }, [finalizeEventMove, finalizeEventResize]);
 
-  const [listMode, setListMode] = useState(false);
+  // `listMode` now lives in CalendarContext (see the note on its declaration
+  // there): the URL sync has to be able to see it, and it could not while it
+  // was local state in here.
   const [overlays, setOverlays] = useState<CalendarOverlays>({
     availability: true,
     blocks: true,

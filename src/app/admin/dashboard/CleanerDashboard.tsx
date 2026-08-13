@@ -14,6 +14,7 @@ import {
   CLEANER_DONE_STATUSES,
 } from "@/lib/cleaner-jobs";
 import { tzMinOfDay } from "@/lib/tz-calendar";
+import { startOfStoreMonth, startOfStoreWeek } from "@/lib/timezone";
 
 interface Props {
   userId: string;
@@ -53,8 +54,11 @@ export default async function CleanerDashboard({ userId, userName }: Props) {
   // +36h then snap back to the day start: lands on tomorrow's midnight even
   // across a DST shift (where "+24h" would be an hour off).
   const startOfTomorrow = startOfDayTz(new Date(startOfToday.getTime() + 36 * 3_600_000));
-  const startOfWeek = new Date(now); startOfWeek.setDate(now.getDate() - now.getDay()); startOfWeek.setHours(0, 0, 0, 0);
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  // Store-timezone week/month starts. setHours(0)/new Date(y,m,1) resolved on
+  // the host (UTC), so "this week"/"this month" began at 8 PM the evening
+  // before, and a late job counted in the wrong bucket (Q9).
+  const startOfWeek = startOfStoreWeek(now);
+  const startOfMonth = startOfStoreMonth(now);
 
   // One shared definition of "upcoming" / "done" (see @/lib/cleaner-jobs), so a
   // job that shows on My Jobs also shows here — including IN_PROGRESS jobs and

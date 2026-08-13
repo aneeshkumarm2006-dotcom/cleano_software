@@ -3,7 +3,12 @@ import { headers } from "next/headers";
 import { redirect, notFound } from "next/navigation";
 import { db } from "@/db";
 import { getSettings } from "@/lib/settings";
-import { addOnLineTotal } from "@/lib/job-money";
+import {
+  ADDON_INCLUDED_LABEL,
+  addOnAmountIsIncluded,
+  addOnLineTotal,
+  addOnMoneyBasis,
+} from "@/lib/job-money";
 import { sanitizeCleanerNotes } from "@/lib/cleaner-notes";
 import { formatAddressLine } from "@/lib/client-address";
 import { fmtDateTime } from "@/lib/time";
@@ -14,6 +19,7 @@ import { Banner } from "@/components/customer/Field";
 import RequestActions from "./RequestActions";
 import JobChatThread from "@/components/JobChatThread";
 import BookingPaymentMethod from "./BookingPaymentMethod";
+import { STORE_TZ } from "@/lib/timezone";
 
 function formatPrice(n: number | null | undefined) {
   return `$${(n ?? 0).toFixed(2)}`;
@@ -33,7 +39,7 @@ function formatTime(iso: string) {
   return new Date(iso).toLocaleString("en-US", {
     hour: "numeric",
     minute: "2-digit",
-    timeZone: "America/Toronto",
+    timeZone: STORE_TZ,
   });
 }
 function formatLongDate(iso: string) {
@@ -42,7 +48,7 @@ function formatLongDate(iso: string) {
     month: "long",
     day: "numeric",
     year: "numeric",
-    timeZone: "America/Toronto",
+    timeZone: STORE_TZ,
   });
 }
 
@@ -94,6 +100,13 @@ export default async function BookingDetailPage({
   });
 
   if (!job || job.clientId !== client.id) notFound();
+
+  // Whether this booking's extras were already priced into what the customer
+  // paid. True for a web booking and for a BookingKoala import; the imported
+  // rows additionally carry no price at all, which is what the add-on list
+  // below has to say out loud instead of printing "+$0.00".
+  const addOnsIncludedInSubtotal =
+    addOnMoneyBasis(job.bookingSource) === "INCLUSIVE";
 
   const isUpcoming = new Date(job.startTime) >= new Date();
   const {
@@ -310,10 +323,20 @@ export default async function BookingDetailPage({
                     </span>
                     <span
                       style={{
-                        color: "var(--primary)",
+                        color: addOnAmountIsIncluded(
+                          addOnLineTotal(a),
+                          addOnsIncludedInSubtotal
+                        )
+                          ? "var(--ink-soft)"
+                          : "var(--primary)",
                         fontWeight: 600,
                       }}>
-                      +{formatPrice(addOnLineTotal(a))}
+                      {/* An imported booking's extras were already inside the
+                          price the customer paid, so they carry no price of
+                          their own. "+$0.00" reads as a broken line item. */}
+                      {addOnAmountIsIncluded(addOnLineTotal(a), addOnsIncludedInSubtotal)
+                        ? ADDON_INCLUDED_LABEL
+                        : `+${formatPrice(addOnLineTotal(a))}`}
                     </span>
                   </div>
                 ))}

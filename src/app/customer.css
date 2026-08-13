@@ -943,6 +943,14 @@
 .cl-grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 @media (max-width: 720px) { .cl-grid-3, .cl-grid-2 { grid-template-columns: 1fr; } }
 
+/* Two-up form grid where individual fields can claim the whole row. Used by the
+   quote page, whose field ORDER is admin-editable — `1 / -1` spans correctly in
+   both the two-column and the collapsed one-column layout, so any ordering the
+   admin picks still renders as a grid rather than an implicit third column. */
+.cl-formgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.cl-formgrid > .cl-formgrid-full { grid-column: 1 / -1; }
+@media (max-width: 720px) { .cl-formgrid { grid-template-columns: 1fr; } }
+
 .cl-divider { height: 1px; background: var(--primary-10); width: 100%; }
 .cl-divider-or {
   display: flex;

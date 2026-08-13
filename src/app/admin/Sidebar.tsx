@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Menu,
   X,
+  ChevronDown,
   MessageCircle,
   LayoutDashboard,
   BarChart3,
@@ -39,7 +40,7 @@ import {
   Megaphone,
   type LucideIcon,
 } from "lucide-react";
-import { getUnreadChatCount } from "./chat/actions";
+import type { UnreadChatCount } from "@/lib/chatUnread";
 import ScrollReset from "@/components/ScrollReset";
 import { useJobChatUnread } from "@/components/JobChatUnread";
 import { useAdminAttentionCounts } from "@/components/AdminAttentionCounts";
@@ -153,13 +154,8 @@ const NAV: { label: string; items: NavItem[] }[] = [
         adminOnly: true,
       },
       { href: "/admin/web-bookings", label: "Web Bookings", Icon: Globe },
-      {
-        href: "/admin/leads",
-        label: "Leads",
-        Icon: Flame,
-        badge: "leads",
-        adminOnly: true,
-      },
+      // Leads used to sit here. It belongs to the sales funnel, not to daily
+      // operations (client feedback item 2) — see the Sales & Marketing group.
       // Item 24: one communication entry — direct messages + group chat live
       // behind sub-tabs on the chat pages.
       {
@@ -219,6 +215,16 @@ const NAV: { label: string; items: NavItem[] }[] = [
   {
     label: "Sales & Marketing",
     items: [
+      // Moved out of Operations (item 2) — "putting the hot lead section under
+      // sales rather than under operations". Leads the group because it is the
+      // top of the funnel the rest of this section works through.
+      {
+        href: "/admin/leads",
+        label: "Leads",
+        Icon: Flame,
+        badge: "leads",
+        adminOnly: true,
+      },
       {
         href: "/admin/sales",
         label: "Sales Leads",
@@ -298,6 +304,72 @@ const NAV: { label: string; items: NavItem[] }[] = [
   },
 ];
 
+/**
+ * Collapse state for the seven nav groups (client feedback item 1 — "this
+ * should be a drop-down menu rather than a scroll-down"). Stored as
+ * `{ [sectionLabel]: true }` for the CLOSED ones only, so a group added later
+ * defaults to open rather than inheriting a stale key.
+ */
+const SIDEBAR_COLLAPSE_KEY = "cleano.admin.sidebar.collapsed";
+
+/**
+ * Gap between staff-chat unread polls, measured from the END of one to the
+ * START of the next. See the effect that uses it for why it is 30s and not the
+ * 5s it used to be.
+ */
+const CHAT_UNREAD_POLL_MS = 30_000;
+
+/** Every group label the preference may legitimately mention. */
+const SIDEBAR_SECTION_LABELS = NAV.map((s) => s.label);
+
+/**
+ * The restore has to happen in the COMMIT phase, not in a passive effect.
+ *
+ * The server has no localStorage, so the first client render must reproduce the
+ * server's markup (everything expanded) or hydration mismatches. A layout
+ * effect satisfies both halves: it runs after that hydration commit but
+ * synchronously *before the browser paints*, so the admin never sees a flash of
+ * the wrong state — and, more importantly, it has run before any click on a
+ * section header is physically possible. That is what lets the `loaded` flag go
+ * away entirely: there is no longer a window in which a toggle can fire against
+ * an un-restored placeholder and write it back over the saved preference.
+ * (Restoring from a passive effect is what QA measured never committing, which
+ * left every first click after a reload wiping the stored JSON.)
+ */
+const useIsomorphicLayoutEffect =
+  typeof window !== "undefined" ? useLayoutEffect : useEffect;
+
+function readCollapsedSections(validLabels: string[]): Record<string, boolean> {
+  try {
+    const raw = window.localStorage.getItem(SIDEBAR_COLLAPSE_KEY);
+    if (!raw) return {};
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    const out: Record<string, boolean> = {};
+    for (const label of validLabels) {
+      if ((parsed as Record<string, unknown>)[label] === true) out[label] = true;
+    }
+    return out;
+  } catch {
+    // Private mode, quota, or hand-edited junk — an unreadable preference must
+    // never cost the admin their navigation.
+    return {};
+  }
+}
+
+function writeCollapsedSections(sections: Record<string, boolean>): void {
+  try {
+    window.localStorage.setItem(SIDEBAR_COLLAPSE_KEY, JSON.stringify(sections));
+  } catch {
+    // Private mode or quota — collapsing still works for this session, the
+    // preference just doesn't survive the reload.
+  }
+}
+
+function sectionDomId(label: string): string {
+  return `anav-sect-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+}
+
 function initialsOf(name: string): string {
   return (
     name
@@ -335,6 +407,22 @@ export default function Sidebar({
   })).filter((section) => section.items.length > 0);
 
   const [mobileOpen, setMobileOpen] = useState(false);
+  // Starts empty — i.e. everything expanded, exactly what the server rendered —
+  // and is replaced from localStorage in the layout effect below. Reading
+  // storage in a lazy initializer would render different markup on the client
+  // and trip hydration.
+  //
+  // There is no `loaded` flag any more. It existed so that a toggle firing
+  // before the restore could take a different path, and that branch was the bug
+  // (QA: the first click after a reload wiped the saved preference). The
+  // restore now runs before paint, so `collapsedRef.current` is authoritative
+  // from the first frame and there is only one path.
+  const [collapsedSections, setCollapsedSections] = useState<
+    Record<string, boolean>
+  >({});
+  // Mirror of the above, so handlers and effects can read the CURRENT value
+  // without being re-created or re-subscribed when it changes.
+  const collapsedRef = useRef<Record<string, boolean>>(collapsedSections);
   const pathname = usePathname();
   const [chatUnread, setChatUnread] = useState(0);
   // Job chat (cleaner ↔ client) unread, shared with any list on the page.
@@ -379,52 +467,100 @@ export default function Sidebar({
 
   // Poll unread chat + toast on new messages.
   //
-  // SELF-PACING, deliberately — the gap is measured from the END of one poll to
-  // the START of the next, not on a fixed clock. `setInterval(poll, 5000)` fired
-  // every five seconds whether or not the previous call had come back, and this
-  // poll is a SERVER ACTION: its response carries a re-render of whatever page
-  // the admin is on. On the job detail page that render is measured in seconds,
-  // so the poll took longer than its own interval and the queue grew without
-  // bound — the sidebar starved every action the admin actually initiated.
-  // That is what made the logs pager and the availability check look dead: they
-  // were not broken, they were stuck behind a backlog the sidebar created.
+  // A PLAIN GET, not a server action. This is the whole of round 5's K1.
   //
-  // A timer that cannot outrun its own work can never do that, on any
-  // connection.
+  // Round 4 made this loop self-pacing, which stopped the queue growing without
+  // bound but did not stop the damage: `getUnreadChatCount` was a SERVER ACTION,
+  // and a Next.js server action's response carries an RSC re-render of whatever
+  // route the caller is standing on. This poll is mounted in the sidebar, so
+  // that route is EVERY admin page. QA measured 5 POSTs to /admin/analytics in a
+  // 30 s IDLE window, each costing ~6 s of remote database time, and clicking an
+  // industry chip on that page then failed to commit in 3 of 4 trials — the RSC
+  // payload for the new URL came back 200 every time, but a concurrent render
+  // restarted every few seconds and the pending `router.replace` transition
+  // never got to commit. Navigating to the same URL directly always worked.
+  //
+  // A GET route handler returns JSON and re-renders nothing, so the poll can no
+  // longer interfere with a navigation the admin actually asked for. It is still
+  // self-paced (the next call is queued when this one finishes, including on
+  // failure) so it can never outrun its own work on a slow connection.
+  //
+  // 30 s, not 5 s. One poll is two queries against a pooler with 1.7-3.5 s round
+  // trips; a 5 s beat spent most of every minute in flight. The cost is that the
+  // "new message" toast can be up to 30 s late — acceptable for a passive
+  // notification, and the chat page itself still polls its thread every 3 s.
+  //
+  // Hidden tabs don't poll at all, and coming back to the tab polls immediately
+  // rather than waiting out the remaining interval.
   useEffect(() => {
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
+    // Guards the visibility handler below from starting a SECOND self-pacing
+    // chain on top of one that is mid-flight.
+    let inFlight = false;
+
     async function poll() {
-      if (cancelled) return;
-      try {
-        const { count, latest } = await getUnreadChatCount();
-        if (cancelled) return;
-        setChatUnread(count);
-        const latestAt = latest?.at ?? "";
-        const isInitialized = prevLatestAtRef.current !== null;
-        const hasNew =
-          isInitialized &&
-          latestAt !== "" &&
-          latestAt !== prevLatestAtRef.current;
-        if (hasNew && !pathnameRef.current.startsWith("/admin/chat")) {
-          setChatToast({ senderName: latest!.senderName, body: latest!.body });
-          if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-          toastTimerRef.current = setTimeout(() => setChatToast(null), 5000);
+      if (cancelled || inFlight) return;
+      inFlight = true;
+      if (
+        typeof document === "undefined" ||
+        document.visibilityState === "visible"
+      ) {
+        try {
+          const res = await fetch("/api/chat/unread", {
+            credentials: "include",
+            cache: "no-store",
+          });
+          if (!res.ok) throw new Error(`chat unread ${res.status}`);
+          const { count, latest } = (await res.json()) as UnreadChatCount;
+          if (cancelled) {
+            inFlight = false;
+            return;
+          }
+          setChatUnread(count);
+          const latestAt = latest?.at ?? "";
+          const isInitialized = prevLatestAtRef.current !== null;
+          const hasNew =
+            isInitialized &&
+            latestAt !== "" &&
+            latestAt !== prevLatestAtRef.current;
+          if (hasNew && !pathnameRef.current.startsWith("/admin/chat")) {
+            setChatToast({
+              senderName: latest!.senderName,
+              body: latest!.body,
+            });
+            if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+            toastTimerRef.current = setTimeout(() => setChatToast(null), 5000);
+          }
+          prevLatestAtRef.current = latestAt;
+        } catch {
+          /* ignore — an erroring poll must still keep the badge alive */
         }
-        prevLatestAtRef.current = latestAt;
-      } catch {
-        /* ignore */
-      } finally {
-        // Queue the next one only once this one is done, including on failure —
-        // an erroring poll must still keep the badge alive.
-        if (!cancelled) timer = setTimeout(poll, 5000);
       }
+      inFlight = false;
+      if (!cancelled) timer = setTimeout(poll, CHAT_UNREAD_POLL_MS);
     }
+
+    function onVisibility() {
+      if (cancelled || document.visibilityState !== "visible") return;
+      // A poll already running will schedule the next one itself; cancelling the
+      // (non-existent) timer here and calling `poll()` into the `inFlight` guard
+      // would kill the chain.
+      if (inFlight) return;
+      // Otherwise refresh the badge the moment the admin comes back, instead of
+      // showing a count that could be a whole interval stale.
+      if (timer) clearTimeout(timer);
+      timer = null;
+      poll();
+    }
+
     poll();
+    document.addEventListener("visibilitychange", onVisibility);
     return () => {
       cancelled = true;
       if (timer) clearTimeout(timer);
       if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
   }, []);
 
@@ -440,6 +576,72 @@ export default function Sidebar({
       return true;
     }
     return pathname === item.href || pathname.startsWith(item.href + "/");
+  }
+
+  // ── Collapsible nav groups (item 1) ────────────────────────────────────────
+  // The group holding the current page. Recomputed every render because
+  // `isActive` reads `pathname`.
+  const activeSectionLabel = visibleNav.find((s) => s.items.some(isActive))
+    ?.label;
+
+  /** Single write path: ref first (so the next handler reads it), then state, then disk. */
+  function applyCollapsed(next: Record<string, boolean>, persist: boolean) {
+    collapsedRef.current = next;
+    setCollapsedSections(next);
+    if (persist) writeCollapsedSections(next);
+  }
+
+  // Restore the saved state BEFORE the first paint (see
+  // `useIsomorphicLayoutEffect` above), and open the group the admin has landed
+  // in while we are here — that is the same moment, and doing it in one place
+  // means the auto-expand no longer has to wait for a restore flag it might
+  // never see.
+  //
+  // `activeSectionLabel` is read from the first render's closure on purpose:
+  // this runs once, and the group being landed in is by definition the one that
+  // was active on that render. Later navigations are handled by the effect
+  // below.
+  useIsomorphicLayoutEffect(() => {
+    const sections = readCollapsedSections(SIDEBAR_SECTION_LABELS);
+    const landedCollapsed = !!activeSectionLabel && !!sections[activeSectionLabel];
+    if (landedCollapsed) delete sections[activeSectionLabel!];
+    applyCollapsed(sections, landedCollapsed);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Whatever was saved, the group you navigate INTO opens. Keyed on the section
+  // rather than the pathname so moving between pages inside one group can't
+  // re-open a group you just closed, and reading the ref rather than depending
+  // on the state so collapsing the group you are standing in doesn't
+  // immediately re-open it under your cursor.
+  useEffect(() => {
+    if (!activeSectionLabel) return;
+    const current = collapsedRef.current;
+    if (!current[activeSectionLabel]) return;
+    const sections = { ...current };
+    delete sections[activeSectionLabel];
+    applyCollapsed(sections, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSectionLabel]);
+
+  // Persist AT THE POINT OF CHANGE, not from an effect watching the state.
+  //
+  // An earlier version wrote from a `useEffect([collapse])` gated on a `loaded`
+  // flag, so every write was downstream of the restore having committed first,
+  // and a toggle that ran while that flag was still false was silently lost.
+  // The fix for that added a read-through branch for the same window, which QA
+  // then measured actively DESTROYING the preference: the restore was not
+  // committing at all, so the first click after every reload took the branch,
+  // toggled the stored `{"Finance":true}` back off, and wrote `{}`.
+  //
+  // Both were symptoms of the restore being racy. It no longer is — it runs in
+  // the commit phase, before any click is possible — so this has exactly one
+  // path and no flag to consult.
+  function toggleSection(label: string) {
+    const sections = { ...collapsedRef.current };
+    if (sections[label]) delete sections[label];
+    else sections[label] = true;
+    applyCollapsed(sections, true);
   }
 
   // One lookup instead of a ternary chain, so the next badge is a NAV entry plus
@@ -459,7 +661,7 @@ export default function Sidebar({
   };
 
   return (
-    <div className="min-h-screen" style={{ background: "var(--cream)" }}>
+    <div className="min-h-[100dvh]" style={{ background: "var(--cream)" }}>
       {/* Mobile hamburger */}
       <button
         type="button"
@@ -512,31 +714,69 @@ export default function Sidebar({
 
         {/* Nav */}
         <nav className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-[18px] pr-0.5">
-          {visibleNav.map((section) => (
-            <div className="asidebar-section" key={section.label}>
-              <div className="asidebar-section-label">{section.label}</div>
-              {section.items.map((item) => {
-                const active = isActive(item);
-                const badgeCount = item.badge ? badgeCounts[item.badge] : 0;
-                const Icon = item.Icon;
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={`anav-item ${active ? "active" : ""}`}
-                  >
-                    <Icon size={16} strokeWidth={1.7} />
-                    <span className="anav-label">{item.label}</span>
-                    {badgeCount > 0 && (
-                      <span className="anav-count alert">
-                        {badgeCount > 99 ? "99+" : badgeCount}
-                      </span>
-                    )}
-                  </Link>
+          {visibleNav.map((section) => {
+            const open = !collapsedSections[section.label];
+            const panelId = sectionDomId(section.label);
+            // A closed group must not swallow the thing a badge is shouting
+            // about, so its pills roll up onto the header.
+            const hiddenBadgeTotal = open
+              ? 0
+              : section.items.reduce(
+                  (sum, item) =>
+                    sum + (item.badge ? badgeCounts[item.badge] : 0),
+                  0,
                 );
-              })}
-            </div>
-          ))}
+            return (
+              <div className="asidebar-section" key={section.label}>
+                <button
+                  type="button"
+                  className="asidebar-section-label asidebar-section-toggle"
+                  aria-expanded={open}
+                  aria-controls={panelId}
+                  onClick={() => toggleSection(section.label)}
+                >
+                  <span className="asidebar-section-name">{section.label}</span>
+                  {hiddenBadgeTotal > 0 && (
+                    <span className="anav-count alert">
+                      {hiddenBadgeTotal > 99 ? "99+" : hiddenBadgeTotal}
+                    </span>
+                  )}
+                  <ChevronDown
+                    size={13}
+                    strokeWidth={2.5}
+                    className="asidebar-section-chev"
+                    aria-hidden="true"
+                  />
+                </button>
+                <div
+                  id={panelId}
+                  className="asidebar-section-items"
+                  hidden={!open}
+                >
+                  {section.items.map((item) => {
+                    const active = isActive(item);
+                    const badgeCount = item.badge ? badgeCounts[item.badge] : 0;
+                    const Icon = item.Icon;
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        className={`anav-item ${active ? "active" : ""}`}
+                      >
+                        <Icon size={16} strokeWidth={1.7} />
+                        <span className="anav-label">{item.label}</span>
+                        {badgeCount > 0 && (
+                          <span className="anav-count alert">
+                            {badgeCount > 99 ? "99+" : badgeCount}
+                          </span>
+                        )}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
         </nav>
 
         {/* User footer */}
@@ -557,10 +797,14 @@ export default function Sidebar({
         </div>
       </aside>
 
-      {/* Main content */}
+      {/* Main content.
+          100dvh, not 100vh: on iOS Safari `vh` measures the viewport *behind*
+          the address bar and toolbar, so every admin page reserved ~60–115px of
+          height under Safari's chrome. Pages that scroll hid it; the chat shell,
+          which fills its box exactly, clipped its composer instead. */}
       <div
         data-scroll-reset
-        className="md:ml-[240px] h-screen overflow-hidden overflow-y-auto print:!ml-0 print:!h-auto print:!overflow-visible"
+        className="md:ml-[240px] h-[100dvh] overflow-hidden overflow-y-auto print:!ml-0 print:!h-auto print:!overflow-visible"
         style={{ background: "var(--cream)" }}
       >
         <ScrollReset />

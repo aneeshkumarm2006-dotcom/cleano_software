@@ -411,7 +411,7 @@ export default function AdminGroupChatClient({
       )}
 
       <div
-        className="stack-mobile"
+        className="stack-mobile gchat-shell"
         style={{
           flex: 1,
           minHeight: 0,

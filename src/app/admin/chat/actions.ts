@@ -380,58 +380,11 @@ export async function sendChatMessage(
   return { success: true, data: toMessageDTO(message, isAdminRole(a.role)) };
 }
 
-export async function getUnreadChatCount(): Promise<{
-  count: number;
-  latest?: { senderName: string; body: string; at: string };
-}> {
-  try {
-    const a = await requireUser();
-    if ("error" in a) return { count: 0 };
-
-    if (isAdminRole(a.role)) {
-      const count = await db.chatMessage.count({
-        where: { senderRole: "EMPLOYEE", readByAdminAt: null },
-      });
-      const latest = count > 0
-        ? await db.chatMessage.findFirst({
-            where: { senderRole: "EMPLOYEE", readByAdminAt: null },
-            orderBy: { createdAt: "desc" },
-            include: { sender: { select: { name: true } } },
-          })
-        : null;
-      return {
-        count,
-        latest: latest
-          ? { senderName: latest.sender.name, body: latest.body, at: latest.createdAt.toISOString() }
-          : undefined,
-      };
-    } else {
-      const conversation = await db.chatConversation.findUnique({
-        where: { employeeId: a.user.id },
-      });
-      if (!conversation) return { count: 0 };
-
-      const count = await db.chatMessage.count({
-        where: { conversationId: conversation.id, senderRole: "ADMIN", readByEmployeeAt: null },
-      });
-      const latest = count > 0
-        ? await db.chatMessage.findFirst({
-            where: { conversationId: conversation.id, senderRole: "ADMIN", readByEmployeeAt: null },
-            orderBy: { createdAt: "desc" },
-            include: { sender: { select: { name: true } } },
-          })
-        : null;
-      return {
-        count,
-        latest: latest
-          ? { senderName: latest.sender.name, body: latest.body, at: latest.createdAt.toISOString() }
-          : undefined,
-      };
-    }
-  } catch {
-    return { count: 0 };
-  }
-}
+// getUnreadChatCount used to live here. It is now
+// `readUnreadChatCount` in src/lib/chatUnread.ts, served over GET at
+// /api/chat/unread — as a server action, the 5s sidebar poll that was its only
+// caller re-rendered whatever admin page the poll was mounted on, forever. That
+// file carries the full write-up.
 
 export async function markChatRead(
   conversationId: string

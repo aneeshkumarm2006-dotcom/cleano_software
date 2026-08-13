@@ -6,7 +6,7 @@ export default function Loading() {
   return (
     <div
       className="flex items-center justify-center"
-      style={{ minHeight: "calc(100vh - 120px)" }}
+      style={{ minHeight: "calc(100dvh - 120px)" }}
     >
       <CleanoLoader size={72} />
     </div>

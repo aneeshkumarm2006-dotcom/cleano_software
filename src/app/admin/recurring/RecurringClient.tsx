@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { initials } from "@/lib/avatar";
 import AdminModal from "@/components/ui/AdminModal";
+import { STORE_TZ, storeInputParts } from "@/lib/timezone";
 
 type Status = "scheduled" | "completed";
 
@@ -62,21 +63,23 @@ function buildSeries(): Series {
 }
 
 const fmtDate = (iso: string) =>
-  new Date(iso).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  new Date(iso).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: STORE_TZ });
 const fmtDateFull = (iso: string) =>
   new Date(iso).toLocaleDateString("en-US", {
     weekday: "long",
     month: "short",
     day: "numeric",
     year: "numeric",
+    timeZone: STORE_TZ,
   });
 const fmtTime = (iso: string) =>
-  new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/Toronto" });
-const inputDate = (iso: string) => new Date(iso).toISOString().slice(0, 10);
-const inputTime = (iso: string) => {
-  const d = new Date(iso);
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-};
+  new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: STORE_TZ });
+// Both halves must be STORE wall-clock, because that's how the form's values
+// are read back (tzWallClockToUtc). They disagreed before: the date came from
+// toISOString() (UTC) while the time came from getHours() (browser-local), so
+// an evening job could prefill tomorrow's date with tonight's time.
+const inputDate = (iso: string) => storeInputParts(iso).date;
+const inputTime = (iso: string) => storeInputParts(iso).time;
 
 function Avatar({ name, size }: { name: string; size: number }) {
   return (

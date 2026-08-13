@@ -12,9 +12,12 @@ import type {
   DuplicateCandidate,
   CrmStats,
   CrmProps,
-  DuplicateGroup,
+  DuplicatePair,
+  RejectedPair,
+  DuplicatesPayload,
 } from "@/lib/crm-meta";
 import { WON_STAGES } from "@/lib/crm-meta";
+import { scoreDuplicatePair } from "@/lib/similarity";
 
 const PAID_STATUSES = ["PAID"] as const;
 
@@ -40,6 +43,14 @@ async function ownerMap(ownerIds: (string | null)[]): Promise<Map<string, OwnerL
  * Build duplicate index across the whole contact set: contacts sharing a
  * normalized phone or exact email are flagged as candidates of one another.
  * Dismissed contacts are excluded.
+ *
+ * TODO(client): the matching rules are hardcoded here (normalized phone of ≥7
+ * digits, exact-match email). HubSpot exposes them as an editable rule list
+ * ("HubSpot model (default)" + "Add new rule"); that panel is deliberately
+ * phase 2 (Q3 item I) — the pair queue, the real similarity score and per-pair
+ * rejection are what remove the confusion, and none of them need it.
+ * Note the split: this is DETECTION (does a pair surface at all). Scoring, in
+ * lib/similarity.ts, is what ranks the pairs once they have.
  */
 function buildDuplicateIndex(
   contacts: { id: string; phone: string | null; email: string | null; duplicateDismissed: boolean }[]
@@ -430,83 +441,110 @@ export async function getContact(id: string): Promise<ContactDetail | null> {
   };
 }
 
-// ─── Manage Duplicates: group detected duplicates into merge candidates ───
-function normAddr(a: string | null): string {
-  return (a || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+// ─── Manage Duplicates: emit merge-ready PAIRS ───
+
+/** Canonical id ordering — the same pair submitted either way round is one key. */
+export function duplicatePairKey(x: string, y: string): [string, string] {
+  return x < y ? [x, y] : [y, x];
 }
 
 /**
- * Form duplicate groups (connected components) from contacts sharing a
- * normalized phone or exact email — the same signal used for the per-record
- * duplicate flag. Returns groups of 2+ with matched-field labels, a confidence
- * score and a suggested master (most bookings → highest LTV → oldest).
+ * Which of two records should survive a merge, by default. Unchanged heuristic
+ * (most bookings → highest LTV → oldest), but it is no longer surfaced as
+ * "master" jargon — the UI just shows Create date on both cards and lets the
+ * per-property radios decide the outcome.
  */
-export async function listDuplicateGroups(): Promise<DuplicateGroup[]> {
-  const items = await listContacts();
+function rankForKeep(a: ContactListItem, b: ContactListItem): number {
+  return (
+    b.bookings - a.bookings ||
+    b.lifetimeValue - a.lifetimeValue ||
+    +new Date(a.createdAt) - +new Date(b.createdAt) ||
+    a.id.localeCompare(b.id)
+  );
+}
+
+/**
+ * Detect duplicates and return them as pairs, plus the rejection backlog.
+ *
+ * Detection is unchanged in substance — contacts sharing a normalized phone
+ * (≥7 digits) or an exact email, with `duplicateDismissed` records still
+ * excluded so anything dismissed before Stage 6 stays hidden.
+ *
+ * PRESENTATION is what changed. Instead of one card per connected component
+ * (which rendered 3, 5, N wrapping member tiles), each *match group* — the set
+ * of contacts sharing one phone number or one email address — is anchored on
+ * its best-ranked member and emitted as N−1 pairs against it. Merging is
+ * transitive, so A+B then A+C lands where A+B+C would have, and the admin only
+ * ever compares two records.
+ *
+ * Anchoring per match group rather than per component is deliberate: a
+ * component can be a *chain* (a shares a phone with b, b shares an email with
+ * c) where a and c have nothing in common, and a star on the component would
+ * put those two side by side under a similarity score neither earned. Every
+ * pair emitted here shares at least one real signal.
+ */
+export async function listDuplicatePairs(): Promise<DuplicatesPayload> {
+  const checkedAt = new Date().toISOString();
+  const [items, rejections] = await Promise.all([
+    listContacts(),
+    db.duplicateRejection.findMany({ orderBy: { rejectedAt: "desc" } }),
+  ]);
   const byId = new Map(items.map((c) => [c.id, c]));
 
-  // Union-find over phone/email signals.
-  const parent = new Map<string, string>();
-  const find = (x: string): string => {
-    let r = x;
-    while (parent.get(r) !== r) r = parent.get(r)!;
-    let c = x;
-    while (parent.get(c) !== r) { const n = parent.get(c)!; parent.set(c, r); c = n; }
-    return r;
-  };
-  const union = (a: string, b: string) => { parent.set(find(a), find(b)); };
-  items.forEach((c) => parent.set(c.id, c.id));
+  const rejectedKeys = new Set(
+    rejections.map((r) => duplicatePairKey(r.contactAId, r.contactBId).join("|"))
+  );
 
-  const link = (key: (c: ContactListItem) => string) => {
-    const groups = new Map<string, string[]>();
-    for (const c of items) {
-      const k = key(c);
-      if (!k) continue;
-      (groups.get(k) ?? groups.set(k, []).get(k)!).push(c.id);
-    }
-    for (const ids of groups.values()) for (let i = 1; i < ids.length; i++) union(ids[0], ids[i]);
+  // Match groups: one bucket per shared phone, one per shared email. Only
+  // contacts the duplicate index already flagged take part (that filter is
+  // where `duplicateDismissed` is honoured).
+  const buckets = new Map<string, ContactListItem[]>();
+  const push = (key: string, c: ContactListItem) => {
+    (buckets.get(key) ?? buckets.set(key, []).get(key)!).push(c);
   };
-  link((c) => (c.duplicateIds.length ? normPhone(c.phone) : "")); // only contacts already flagged
-  link((c) => (c.duplicateIds.length ? normEmail(c.email) : ""));
-
-  // Collect components of size >= 2.
-  const comps = new Map<string, ContactListItem[]>();
   for (const c of items) {
     if (!c.duplicateIds.length) continue;
-    const root = find(c.id);
-    (comps.get(root) ?? comps.set(root, []).get(root)!).push(c);
+    const p = normPhone(c.phone);
+    if (p.length >= 7) push(`phone:${p}`, c);
+    const e = normEmail(c.email);
+    if (e) push(`email:${e}`, c);
   }
 
-  const groups: DuplicateGroup[] = [];
-  for (const members of comps.values()) {
+  const pairs = new Map<string, DuplicatePair>();
+  for (const members of buckets.values()) {
     if (members.length < 2) continue;
-    const sharesValue = (vals: string[]) => {
-      const seen = new Map<string, number>();
-      for (const v of vals) if (v) seen.set(v, (seen.get(v) ?? 0) + 1);
-      return [...seen.values()].some((n) => n >= 2);
-    };
-    const matched: string[] = [];
-    if (sharesValue(members.map((m) => normPhone(m.phone)))) matched.push("phone");
-    if (sharesValue(members.map((m) => normEmail(m.email)))) matched.push("email");
-    if (sharesValue(members.map((m) => normAddr(m.address)))) matched.push("address");
-    if (sharesValue(members.map((m) => m.name.toLowerCase().trim()))) matched.push("name");
-
-    const score = Math.min(98, 58 + matched.length * 13);
-    const master = [...members].sort(
-      (a, b) =>
-        b.bookings - a.bookings ||
-        b.lifetimeValue - a.lifetimeValue ||
-        +new Date(a.createdAt) - +new Date(b.createdAt)
-    )[0];
-    const sortedIds = members.map((m) => m.id).sort();
-    groups.push({
-      id: `DG-${sortedIds[0]}`,
-      members: members.sort((a, b) => (a.id === master.id ? -1 : b.id === master.id ? 1 : 0)),
-      matched,
-      score,
-      suggestedMasterId: master.id,
-    });
-    void byId;
+    const anchor = [...members].sort(rankForKeep)[0];
+    for (const other of members) {
+      if (other.id === anchor.id) continue;
+      const [x, y] = duplicatePairKey(anchor.id, other.id);
+      const key = `${x}|${y}`;
+      if (rejectedKeys.has(key) || pairs.has(key)) continue;
+      // Order within the pair by the keep heuristic, not by bucket anchoring,
+      // so the same two records always default to the same survivor.
+      const [keep, drop] = rankForKeep(anchor, other) <= 0 ? [anchor, other] : [other, anchor];
+      const { score, matched } = scoreDuplicatePair(keep, drop);
+      pairs.set(key, { id: `DP-${x}-${y}`, a: keep, b: drop, score, matched });
+    }
   }
-  return groups.sort((a, b) => b.score - a.score);
+
+  const rejected: RejectedPair[] = [];
+  for (const r of rejections) {
+    const a = byId.get(r.contactAId);
+    const b = byId.get(r.contactBId);
+    // One side merged away or archived → nothing left to restore.
+    if (!a || !b) continue;
+    const [x, y] = duplicatePairKey(a.id, b.id);
+    rejected.push({
+      id: `DP-${x}-${y}`,
+      ...(rankForKeep(a, b) <= 0 ? { a, b } : { a: b, b: a }),
+      rejectedAt: r.rejectedAt.toISOString(),
+      rejectedBy: r.rejectedBy,
+    });
+  }
+
+  return {
+    pairs: [...pairs.values()].sort((p, q) => q.score - p.score || p.a.name.localeCompare(q.a.name)),
+    rejected,
+    checkedAt,
+  };
 }

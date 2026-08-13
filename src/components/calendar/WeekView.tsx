@@ -16,16 +16,21 @@ import {
   MIN_EVENT_HEIGHT,
   DRAG_THRESHOLD,
   OfficeHours,
+  EventLayout,
   getVisibleTimeBounds,
   calculateEventPosition,
   getBorderRadiusClasses,
   computeEventLayout,
+  overflowGroups,
+  resolveLaneCap,
   formatHour,
 } from "./calendar-helpers";
 import { CurrentTimeIndicator } from "./calendar-components";
 import { ScheduleBlocksConfig } from "@/types/calendar";
 import { HiMapPin } from "react-icons/hi2";
 import EventCard from "./EventCard";
+import EventOverflowChip from "./EventOverflow";
+import useColumnWidth from "./useColumnWidth";
 import ScheduleBlocks from "./ScheduleBlocks";
 import AvailabilityOverlay from "./AvailabilityOverlay";
 import { getCurrentTimeMeta } from "./time-utils";
@@ -171,14 +176,26 @@ export const WeekView: React.FC = () => {
   // ---------------------------------------------------------------------------
   const weekGridRef = useRef<HTMLDivElement>(null);
   const dayColumnRefs = useRef<(HTMLDivElement | null)[]>([]);
+  // All seven columns are the same flex width, so measuring the first is
+  // enough to budget lanes for every day (item 8 · Q2 §7).
+  const [measureColumn, columnWidth] = useColumnWidth();
+  const laneCap = resolveLaneCap(columnWidth);
 
   // ---------------------------------------------------------------------------
   // State
   // ---------------------------------------------------------------------------
-  const [currentTime, setCurrentTime] = useState(new Date());
+  // "Now" is client state by definition. Seeding this with `new Date()` meant
+  // the server rendered the now-line at ITS instant and the browser hydrated at
+  // a different one — "A tree hydrated but some attributes of the server
+  // rendered HTML didn't match", server `top: "363.333px"` vs client
+  // `top: "366.6666666666667px"`. Starting null renders nothing on the server;
+  // the first reading is taken after mount, so both sides agree on "no line yet"
+  // and only the client ever draws one.
+  const [currentTime, setCurrentTime] = useState<Date | null>(null);
 
-  // Update current time every second
+  // Take the first reading after mount, then update every second
   useEffect(() => {
+    setCurrentTime(new Date());
     const interval = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(interval);
   }, []);
@@ -226,11 +243,12 @@ export const WeekView: React.FC = () => {
     [weekStart]
   );
 
-  /** Current time indicator meta */
-  const { show: showCurrentTimeIndicator, top: currentTimeTop } =
-    getCurrentTimeMeta(currentTime, officeHours, zoomLevel, {
-      days: weekDays,
-    });
+  /** Current time indicator meta — nothing to place until the clock exists */
+  const { show: showCurrentTimeIndicator, top: currentTimeTop } = currentTime
+    ? getCurrentTimeMeta(currentTime, officeHours, zoomLevel, {
+        days: weekDays,
+      })
+    : { show: false, top: 0 };
 
   // ---------------------------------------------------------------------------
   // Event Handlers
@@ -368,17 +386,15 @@ export const WeekView: React.FC = () => {
 
   /** Render a single event card */
   const renderEventCard = useCallback(
-    (
-      event: CalendarEvent,
-      day: Date,
-      layout: { index: number; total: number }
-    ) => {
+    (event: CalendarEvent, day: Date, layout: EventLayout) => {
+      // Budgeted out of a lane — the column's "+N more" chip stands in for it.
+      if (layout.hidden) return null;
       const position = calculateEventPosition(
         event,
         day,
         officeHours,
         zoomLevel,
-        layout
+        { ...layout, columnWidth: columnWidth ?? undefined }
       );
       if (!position) return null;
 
@@ -427,7 +443,7 @@ export const WeekView: React.FC = () => {
         />
       );
     },
-    [officeHours, zoomLevel, eventTypesConfig, handleEventClick]
+    [officeHours, zoomLevel, eventTypesConfig, handleEventClick, columnWidth]
   );
 
   // ---------------------------------------------------------------------------
@@ -444,7 +460,10 @@ export const WeekView: React.FC = () => {
         <div className="cal-grid-header">
           <div className="cal-gutter-head" />
           {weekDays.map((day) => {
-            const isToday = isSameDay(day, currentTime);
+            // Same reason as the now-line: the server's "today" and the
+            // browser's can differ across a timezone boundary, and that would
+            // be a className mismatch on hydration. No highlight until mount.
+            const isToday = currentTime ? isSameDay(day, currentTime) : false;
             const count = events.filter((e) => eventOverlapsDay(e, day)).length;
             return (
               <div key={day.toISOString()} className={`cal-dayhead ${isToday ? "today" : ""}`}>
@@ -501,13 +520,21 @@ export const WeekView: React.FC = () => {
                   : []),
               ].filter((event) => eventOverlapsDay(event, day));
 
-              const layoutMap = computeEventLayout(dayEvents, null);
+              const layoutMap = computeEventLayout(dayEvents, null, laneCap);
+              const overflow = overflowGroups(
+                dayEvents,
+                layoutMap,
+                day,
+                officeHours,
+                zoomLevel
+              );
 
               return (
                 <div
                   key={day.toISOString()}
                   ref={(el) => {
                     dayColumnRefs.current[index] = el;
+                    if (index === 0) measureColumn(el);
                   }}
                   data-day-column={index}
                   className="cal-col"
@@ -544,6 +571,16 @@ export const WeekView: React.FC = () => {
                     if (!layout) return null;
                     return renderEventCard(event, day, layout);
                   })}
+
+                  {/* Jobs that ran out of lanes — one chip per stack (Q2 §7) */}
+                  {overflow.map((group) => (
+                    <EventOverflowChip
+                      key={group.key}
+                      events={group.events}
+                      top={group.top}
+                      onSelect={openEventDetailsModal}
+                    />
+                  ))}
 
                   {/* 15-Minute Tile Drag Handlers */}
                   {visibleHours.flatMap((hour, hourIndex) =>

@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import SalesAreaModal from "./SalesAreaModal";
 import LandingPageManager from "./LandingPageManager";
 import CampaignManager from "./CampaignManager";
+import CommissionManager from "./CommissionManager";
 import {
   MapPin,
   Plus,
@@ -12,12 +13,18 @@ import {
   Megaphone,
   Eye,
   DollarSign,
+  BadgeDollarSign,
 } from "lucide-react";
 import {
   SALES_TYPE_LABELS,
   salesTypeColor,
   salesTypeLabel,
 } from "./salesTypes";
+import type {
+  CommissionLeadOption,
+  CommissionRow,
+  SalesRepOption,
+} from "./commissionTypes";
 
 // Dynamic import for map (SSR disabled — Leaflet requires browser APIs)
 const SalesMapView = dynamic(() => import("./SalesMapView"), {
@@ -29,12 +36,16 @@ const SalesMapView = dynamic(() => import("./SalesMapView"), {
   ),
 });
 
-type TabView = "map" | "landing-pages" | "campaigns";
+type TabView = "map" | "landing-pages" | "campaigns" | "commissions";
 
 const TABS: Array<{ id: TabView; label: string; icon: React.ReactNode }> = [
   { id: "map", label: "Sales Map", icon: <MapPin size={15} /> },
   { id: "landing-pages", label: "Landing Pages", icon: <Globe size={15} /> },
   { id: "campaigns", label: "Campaigns", icon: <Megaphone size={15} /> },
+  // Item 20 — "for sales leads, I wanted to add another section over here that
+  // is for commissions". This page is "Sales Leads" in the sidebar, so this is
+  // the "over here" he pointed at.
+  { id: "commissions", label: "Commissions", icon: <BadgeDollarSign size={15} /> },
 ];
 
 interface SalesArea {
@@ -95,6 +106,10 @@ interface SalesPageClientProps {
   landingPages: LandingPage[];
   campaigns: Campaign[];
   stats: Stats;
+  commissions: CommissionRow[];
+  reps: SalesRepOption[];
+  leadOptions: CommissionLeadOption[];
+  currentPeriod: string;
 }
 
 export default function SalesPageClient({
@@ -102,10 +117,28 @@ export default function SalesPageClient({
   landingPages,
   campaigns,
   stats,
+  commissions,
+  reps,
+  leadOptions,
+  currentPeriod,
 }: SalesPageClientProps) {
   const [activeTab, setActiveTab] = useState<TabView>("map");
   const [showAreaModal, setShowAreaModal] = useState(false);
   const [editingArea, setEditingArea] = useState<SalesArea | null>(null);
+
+  // The commission ledger is held here rather than read straight from the prop,
+  // for the same reason Settings holds its budget categories: `router.refresh()`
+  // alone left the whole tab stale. `revalidatePath` only marks the route dirty,
+  // and this page re-queries areas, landing pages, campaigns, visit counts and
+  // the ledger, so recording a commission showed "0 entries · $0.00 pending"
+  // under a closed modal until the admin reloaded. Every mutation applies here
+  // first and the server payload takes over the moment it lands — props only
+  // get a new identity when a new payload arrives, so the overlay can be briefly
+  // ahead of the server but never divergent from it.
+  const [liveCommissions, setLiveCommissions] = useState<CommissionRow[]>(commissions);
+  useEffect(() => {
+    setLiveCommissions(commissions);
+  }, [commissions]);
 
   return (
     <div className="admin-font stack-24">
@@ -224,6 +257,16 @@ export default function SalesPageClient({
 
       {activeTab === "campaigns" && (
         <CampaignManager campaigns={campaigns} />
+      )}
+
+      {activeTab === "commissions" && (
+        <CommissionManager
+          commissions={liveCommissions}
+          onCommissionsChange={setLiveCommissions}
+          reps={reps}
+          leadOptions={leadOptions}
+          currentPeriod={currentPeriod}
+        />
       )}
 
       <SalesAreaModal

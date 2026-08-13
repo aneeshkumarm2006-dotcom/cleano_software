@@ -10,6 +10,14 @@ import { cornerBadge, errorReason, hasMissingEquipment } from "./status-meta";
  *   • "R" (blue)     — Routine
  *   • "I" (yellow)   — Important
  * Error always wins. Renders nothing when there's no label.
+ *
+ * Never a `<button>`. In the month grid the whole chip IS a button
+ * (`button.cal-chip`), and a nested `<button>` is invalid HTML — React logged
+ * "In HTML, <button> cannot be a descendant of <button>. This will cause a
+ * hydration error." on every month render. The one interactive variant is a
+ * `role="button"` span with its own Enter/Space handling, which is valid inside
+ * a button and behaves identically everywhere the badge is used (the day/week
+ * `EventCard` host is a plain div).
  */
 export const CornerBadge: React.FC<{ event: CalendarEvent }> = ({ event }) => {
   const router = useRouter();
@@ -24,18 +32,27 @@ export const CornerBadge: React.FC<{ event: CalendarEvent }> = ({ event }) => {
       | undefined;
     const cleanerId = meta?.cleaners?.[0]?.id || meta?.employeeId;
     if (hasMissingEquipment(event) && cleanerId) {
+      const openInventory = () =>
+        router.push(`/admin/employees/${cleanerId}?tab=products`);
       return (
-        <button
-          type="button"
+        <span
+          role="button"
+          tabIndex={0}
           className="cal-badge cal-badge-error"
           title={`${errorReason(event)} — open cleaner inventory`}
           onClick={(e) => {
             e.stopPropagation(); // don't also open the job modal
-            router.push(`/admin/employees/${cleanerId}?tab=products`);
+            openInventory();
           }}
-          style={{ cursor: "pointer", border: "none" }}>
+          onKeyDown={(e) => {
+            if (e.key !== "Enter" && e.key !== " ") return;
+            e.preventDefault(); // Space must not scroll or re-fire the chip
+            e.stopPropagation();
+            openInventory();
+          }}
+          style={{ cursor: "pointer" }}>
           <AlertTriangle size={10} strokeWidth={2.6} />
-        </button>
+        </span>
       );
     }
     return (

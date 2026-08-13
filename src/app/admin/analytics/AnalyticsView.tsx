@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
@@ -29,6 +29,7 @@ import {
   Trash2,
   Star,
   MessageSquare,
+  Repeat,
 } from "lucide-react";
 import LabourCostCard from "./LabourCostCard";
 import RevenueTrendChart from "./charts/RevenueTrendChart";
@@ -42,18 +43,12 @@ import { createTarget } from "@/app/admin/actions/createTarget";
 import { updateTarget } from "@/app/admin/actions/updateTarget";
 import { deleteTarget } from "@/app/admin/actions/deleteTarget";
 import { fmtDate, fmtTime } from "@/lib/time";
+import { formatDate, storeCivilDayRange, storeDateKey } from "@/lib/timezone";
+import AnalyticsFilterBar, { type AnalyticsFilters } from "./AnalyticsFilterBar";
+import { isFilterableTab, type AnalyticsTab } from "./tabs";
+import { INDUSTRY_LABELS, type JobIndustry } from "@/lib/calendar-labels";
 
-type TabView =
-  | "overview"
-  | "kpis"
-  | "graphs"
-  | "budget"
-  | "targets"
-  | "inventory"
-  | "employees"
-  | "payments"
-  | "alerts"
-  | "marketing";
+type TabView = AnalyticsTab;
 
 const MENU_ITEMS: Array<{ id: TabView; label: string; icon: React.ReactNode }> =
   [
@@ -183,6 +178,13 @@ interface BudgetVsActual {
   actualAmount: number;
   variance: number;
   percentUsed: number;
+  /**
+   * False for an active category with no Budget row for the period. Stage 8.2
+   * wants the list driven by the `BudgetCategory` table, not by which
+   * categories happen to have been budgeted — otherwise a category the admin
+   * just created is invisible here until someone budgets it.
+   */
+  hasBudget: boolean;
 }
 
 interface TargetWithActual {
@@ -242,6 +244,16 @@ interface MarketingData {
   totalSpent: number;
 }
 
+interface RecurringStats {
+  /** Recurring jobs inside the current filter. */
+  jobCount: number;
+  totalJobs: number;
+  jobShare: number;
+  revenue: number;
+  totalRevenue: number;
+  revenueShare: number;
+}
+
 interface AnalyticsViewProps {
   jobStats: JobStats;
   revenueStats: RevenueStats;
@@ -264,12 +276,27 @@ interface AnalyticsViewProps {
   budgetVsActuals: BudgetVsActual[];
   targetsWithActuals: TargetWithActual[];
   alerts: AlertItem[];
+  /**
+   * Deduped, actionable undismissed alerts BEFORE the 50-row display cap, so
+   * the tab can say "showing 50 of N" instead of implying N is 50.
+   */
+  alertTotalCount: number;
   supplierComparisonData: Array<Record<string, string | number>>;
   supplierNames: string[];
   inventoryValueData: Array<{ name: string; warehouse: number; inCirculation: number }>;
   marketingData?: MarketingData;
   ratingTrendData: Array<Record<string, string | number>>;
   ratingTrendEmployeeNames: string[];
+  recurringStats: RecurringStats;
+  filters: AnalyticsFilters;
+  industryCounts: Partial<Record<JobIndustry, number>>;
+  unspecifiedCount: number;
+  /** Jobs inside the date range across all industries. */
+  scopedJobCount: number;
+  unfilteredJobCount: number;
+  /** Canonical all-time revenue — what a filtered figure is a share of (7.5). */
+  unfilteredTotalRevenue: number;
+  initialTab: TabView;
 }
 
 // ── Reusable Sub-components ──
@@ -496,22 +523,172 @@ export default function AnalyticsView({
   budgetVsActuals,
   targetsWithActuals,
   alerts,
+  alertTotalCount,
   supplierComparisonData,
   supplierNames,
   inventoryValueData,
   marketingData,
   ratingTrendData,
   ratingTrendEmployeeNames,
+  recurringStats,
+  filters,
+  industryCounts,
+  unspecifiedCount,
+  scopedJobCount,
+  unfilteredJobCount,
+  unfilteredTotalRevenue,
+  initialTab,
 }: AnalyticsViewProps) {
-  const [activeView, setActiveView] = useState<TabView>("overview");
+  // The tab stays client state so switching tabs is instant — only the FILTER
+  // costs a server round-trip. `initialTab` seeds it from `?tab=`, which the
+  // filter bar writes, so a filter change can't land the owner on Overview
+  // even if the navigation remounts this tree.
+  const [activeView, setActiveView] = useState<TabView>(initialTab);
+
+  // Keep `?tab=` honest without paying for a navigation. The native History
+  // API is the supported way to change search params in the App Router without
+  // re-running the server component — a `router.replace` here would refetch all
+  // 14 queries on every tab click, which is exactly the instant-feeling
+  // behaviour this page already had and must keep.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if ((params.get("tab") ?? "overview") === activeView) return;
+    if (activeView === "overview") params.delete("tab");
+    else params.set("tab", activeView);
+    const qs = params.toString();
+    window.history.replaceState(
+      null,
+      "",
+      qs ? `${window.location.pathname}?${qs}` : window.location.pathname
+    );
+  }, [activeView]);
+
+  // Whether a non-job-derived panel should say so. Only worth the noise once a
+  // filter is actually on — an unfiltered page has nothing to disclaim.
+  const showsFilter = isFilterableTab(activeView);
+  const unfilteredNote = filters.isFiltered ? " · not affected by filters" : "";
+  const industryNote =
+    filters.industry !== "ALL" ? INDUSTRY_LABELS[filters.industry] : null;
+  // With a date range on, "this month" is the intersection of the range and the
+  // current month — usually zero, and it reads as a broken tile. Say what the
+  // number actually is instead.
+  const revenueHint = filters.hasDateRange ? "in selected range" : "this month";
+
+  // Alerts render from a server component, so Dismiss / Mark read only take
+  // effect once the page revalidates. These overrides make the row respond
+  // immediately and roll back if the action fails — previously the result was
+  // discarded entirely, so a failed call was indistinguishable from a dead
+  // button (which is exactly how it read: "the count stays at 49"). Lives here
+  // rather than inside AlertsTab because that's a nested component and remounts
+  // on every parent render.
+  const [alertOverrides, setAlertOverrides] = useState<
+    Record<string, "read" | "dismissed">
+  >({});
+  const [alertError, setAlertError] = useState<string | null>(null);
+  const [pendingAlertId, setPendingAlertId] = useState<string | null>(null);
+
+  // The optimistic view of the server-rendered list: dismissed rows drop out,
+  // marked-read rows lose their NEW badge, both before the round-trip lands.
+  // Derived HERE and not inside AlertsTab so that everything counting alerts —
+  // the tiles, and the count on the Alerts tab itself — reads the same list.
+  // The tab badge used to count the raw `alerts` prop, so dismissing an unread
+  // alert moved the tiles (50→49, unread 49→48) and left the badge stuck on 49
+  // until the page revalidated.
+  const visibleAlerts = useMemo(
+    () =>
+      alerts
+        .filter((a) => alertOverrides[a.id] !== "dismissed")
+        .map((a) =>
+          alertOverrides[a.id] === "read" ? { ...a, isRead: true } : a
+        ),
+    [alerts, alertOverrides]
+  );
+  const unreadAlertCount = visibleAlerts.filter((a) => !a.isRead).length;
+
+  // The server dedupes the whole undismissed set and only then caps the list at
+  // 50, so `alertTotalCount` can exceed what is rendered. Say so rather than
+  // letting the tile read "50" as if that were the total. Optimistic dismissals
+  // come off the total too, or the tile would drift from the list.
+  const totalAlertCount = Math.max(
+    visibleAlerts.length,
+    alertTotalCount - (alerts.length - visibleAlerts.length)
+  );
+
+  const clearAlertOverride = (id: string) =>
+    setAlertOverrides((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+
+  const handleDismissAlert = async (id: string) => {
+    setAlertError(null);
+    setPendingAlertId(id);
+    setAlertOverrides((prev) => ({ ...prev, [id]: "dismissed" }));
+    const res = await dismissAlert(id);
+    setPendingAlertId(null);
+    if (!res.success) {
+      clearAlertOverride(id);
+      setAlertError(res.error ?? "Failed to dismiss alert");
+    }
+  };
+
+  const handleMarkAlertRead = async (id: string) => {
+    setAlertError(null);
+    setPendingAlertId(id);
+    setAlertOverrides((prev) => ({ ...prev, [id]: "read" }));
+    const res = await markAlertRead(id);
+    setPendingAlertId(null);
+    if (!res.success) {
+      clearAlertOverride(id);
+      setAlertError(res.error ?? "Failed to mark alert as read");
+    }
+  };
+
+  // ── % recurring (item 11 · Q7) ──
+  // A recurring job is one with a parent OR one with children — the frequency
+  // itself is never stored on Job. Both readings ship: the headline is the
+  // share of JOBS, the sub-line the share of REVENUE (always lower, because
+  // recurring bookings carry 8–20% frequency discounts). The tile answers to
+  // the industry filter, which is the "total and just residential" of the
+  // client's written note.
+  const RecurringStat = () => (
+    <AnStat
+      icon={Repeat}
+      label="% recurring"
+      value={`${recurringStats.jobShare.toFixed(0)}%`}
+      delta={`${recurringStats.revenueShare.toFixed(0)}% of revenue`}
+      hint={
+        recurringStats.jobCount > 0
+          ? `${recurringStats.jobCount} of ${recurringStats.totalJobs} jobs`
+          : `no series in ${recurringStats.totalJobs} jobs`
+      }
+    />
+  );
 
   // ── Tab 1: Overview ──
   const OverviewTab = () => (
     <div className="stack-18">
-      <div className="astat-grid">
-        <AnStat icon={DollarSign} label="Total revenue" value={`$${revenueStats.totalRevenue.toFixed(0)}`} delta={`$${revenueStats.monthlyRevenue.toFixed(0)}`} deltaUp hint="this month" />
+      <div className="astat-grid astat-grid-5">
+        {/* Unfiltered, this is `getTotalRevenue()` — the canonical helper that
+            keeps Analytics agreeing with the Dashboard to the cent. Filtered,
+            it is the same predicate applied in memory, and the hint names the
+            whole it is a share of so the two readings can't be confused (7.5). */}
+        <AnStat
+          icon={DollarSign}
+          label="Total revenue"
+          value={`$${revenueStats.totalRevenue.toFixed(0)}`}
+          delta={`$${revenueStats.monthlyRevenue.toFixed(0)}`}
+          deltaUp
+          hint={
+            filters.isFiltered
+              ? `${revenueHint} · $${unfilteredTotalRevenue.toFixed(0)} unfiltered`
+              : revenueHint
+          }
+        />
         <AnStat icon={TrendingUp} label="Net profit" value={`$${revenueStats.netProfit.toFixed(0)}`} delta={`${revenueStats.profitMargin.toFixed(0)}%`} hint="margin" />
         <AnStat icon={Briefcase} label="Total jobs" value={jobStats.total} delta={`${jobStats.completed}`} hint="completed" />
+        <RecurringStat />
         <AnStat icon={AlertTriangle} label="Pending payments" value={`$${revenueStats.pendingAmount.toFixed(0)}`} hint={`${revenueStats.pendingPayments} jobs outstanding`} />
       </div>
 
@@ -519,7 +696,9 @@ export default function AnalyticsView({
         <AnPanel title="Revenue trend" sub="Monthly service revenue (12 mo)">
           <RevenueTrendChart data={monthlyData} />
         </AnPanel>
-        <AnPanel title="Jobs by type" sub="All-time mix">
+        <AnPanel
+          title="Jobs by type"
+          sub={industryNote ? `${industryNote} mix` : "All-time mix"}>
           {jobTypeBreakdown.length > 0 ? (
             <SimpleBarChart
               data={jobTypeBreakdown.map((j) => ({ label: j.type || "Unspecified", value: j.count }))}
@@ -527,16 +706,25 @@ export default function AnalyticsView({
               label=""
             />
           ) : (
-            <div className="an-empty">No job data yet</div>
+            <div className="an-empty">No job data for this filter</div>
           )}
         </AnPanel>
       </div>
 
       <div className="astat-grid">
         <AnTile label="Employees" value={employeeStats.totalEmployees} hint={`${employeeStats.activeNow} active now`} />
-        <AnTile label="Products" value={inventoryStats.totalProducts} hint={`$${inventoryStats.totalValue.toFixed(0)} value`} />
+        <AnTile
+          label="Products"
+          value={inventoryStats.totalProducts}
+          hint={`$${inventoryStats.totalValue.toFixed(0)} value${unfilteredNote}`}
+        />
         <AnTile label="Avg job price" value={`$${revenueStats.avgJobPrice.toFixed(0)}`} hint="completed only" />
-        <AnTile label="Low stock" value={lowStockProducts.length} hint={lowStockProducts.length ? "needs refill" : "all stocked"} accent={lowStockProducts.length ? "var(--amber-700)" : undefined} />
+        <AnTile
+          label="Low stock"
+          value={lowStockProducts.length}
+          hint={`${lowStockProducts.length ? "needs refill" : "all stocked"}${unfilteredNote}`}
+          accent={lowStockProducts.length ? "var(--amber-700)" : undefined}
+        />
       </div>
     </div>
   );
@@ -544,12 +732,22 @@ export default function AnalyticsView({
   // ── Tab 2: KPIs ──
   const KPIsTab = () => {
     const kpis = [
-      {
-        label: "Revenue This Month",
-        value: `$${revenueStats.monthlyRevenue.toFixed(2)}`,
-        subValue: `$${revenueStats.weeklyRevenue.toFixed(2)} this week`,
-        icon: <DollarSign className="w-5 h-5" />,
-      },
+      // With a date range on, "this month" is the intersection of the range and
+      // the calendar month — normally $0.00, which reads as a dead tile. The
+      // honest reading under a range is the range total itself.
+      filters.hasDateRange
+        ? {
+            label: "Revenue in Range",
+            value: `$${revenueStats.totalRevenue.toFixed(2)}`,
+            subValue: "Selected date range",
+            icon: <DollarSign className="w-5 h-5" />,
+          }
+        : {
+            label: "Revenue This Month",
+            value: `$${revenueStats.monthlyRevenue.toFixed(2)}`,
+            subValue: `$${revenueStats.weeklyRevenue.toFixed(2)} this week`,
+            icon: <DollarSign className="w-5 h-5" />,
+          },
       {
         label: "Profit Margin",
         value: `${revenueStats.profitMargin.toFixed(1)}%`,
@@ -632,15 +830,24 @@ export default function AnalyticsView({
         <ProfitLossChart data={monthlyData} />
       </AnPanel>
       <div className="an-grid-2">
-        <AnPanel title="Inventory value" sub="Warehouse vs in-circulation">
+        {/* Inventory, suppliers and targets have no industry or job-date
+            dimension. They live on this tab, so they say so rather than
+            looking like a filter that didn't take. */}
+        <AnPanel
+          title="Inventory value"
+          sub={`Warehouse vs in-circulation${unfilteredNote}`}>
           <InventoryValueChart data={inventoryValueData} />
         </AnPanel>
-        <AnPanel title="Supplier price comparison" sub="Unit cost across suppliers">
+        <AnPanel
+          title="Supplier price comparison"
+          sub={`Unit cost across suppliers${unfilteredNote}`}>
           <SupplierComparisonChart data={supplierComparisonData} supplierNames={supplierNames} />
         </AnPanel>
       </div>
       {targetsWithActuals.length > 0 && (
-        <AnPanel title="Targets vs actuals">
+        <AnPanel
+          title="Targets vs actuals"
+          sub={filters.isFiltered ? "Not affected by filters" : undefined}>
           <TargetVsActualChart
             data={targetsWithActuals.map((t) => ({
               metric: t.metric.replace(/_/g, " "),
@@ -695,7 +902,9 @@ export default function AnalyticsView({
                       <div className="an-budrow-head">
                         <div>
                           <div className="an-budrow-name">{b.category}</div>
-                          <div className="an-budrow-sub">{b.period}</div>
+                          <div className="an-budrow-sub">
+                            {b.hasBudget ? b.period : `${b.period} · no budget set`}
+                          </div>
                         </div>
                         <div style={{ textAlign: "right", display: "flex", alignItems: "center", gap: 10 }}>
                           <span className="an-budrow-name">
@@ -891,7 +1100,7 @@ export default function AnalyticsView({
                           {metricLabels[target.metric] || target.metric}
                         </h3>
                         <div style={{ fontSize: 12, color: "var(--primary-60)", marginTop: 2 }}>
-                          {target.period} from {new Date(target.periodStart).toLocaleDateString("en-US")}
+                          {target.period} from {formatDate(target.periodStart)}
                         </div>
                       </div>
                       {!isEditing && !isConfirmingDelete && (
@@ -1131,8 +1340,16 @@ export default function AnalyticsView({
   const EmployeesTab = () => (
     <div className="stack-18">
       <div className="astat-grid">
-        <AnTile label="Total employees" value={String(employeeStats.totalEmployees)} />
-        <AnTile label="Admins" value={String(employeeStats.admins)} />
+        <AnTile
+          label="Total employees"
+          value={String(employeeStats.totalEmployees)}
+          hint={filters.isFiltered ? "headcount · unfiltered" : undefined}
+        />
+        <AnTile
+          label="Admins"
+          value={String(employeeStats.admins)}
+          hint={filters.isFiltered ? "headcount · unfiltered" : undefined}
+        />
         <AnTile label="Active now" value={String(employeeStats.activeNow)} />
         <AnTile label="Avg jobs / employee" value={employeeStats.avgJobsPerEmployee.toFixed(1)} />
       </div>
@@ -1284,23 +1501,27 @@ export default function AnalyticsView({
 
   // ── Tab 8: Payments ──
   const PaymentsTab = () => {
-    const getDefaultStartDate = () => {
-      const date = new Date();
-      date.setDate(1);
-      return date.toISOString().split("T")[0];
-    };
+    // `startDate` / `endDate` are civil dates ("2026-08-01") from the pickers.
+    // They must be defaulted, compared and displayed in the store timezone:
+    // toISOString() gave the UTC civil day (so the default "1st of the month"
+    // could be the previous month on the 1st before 8 PM), and `new Date(str)`
+    // is UTC midnight, which is 8 PM the evening BEFORE in Montréal — the
+    // window was 4 hours wide of the dates shown (Q9).
+    const getDefaultStartDate = () => storeDateKey().slice(0, 8) + "01";
 
-    const getDefaultEndDate = () => {
-      return new Date().toISOString().split("T")[0];
-    };
+    const getDefaultEndDate = () => storeDateKey();
 
     const [startDate, setStartDate] = React.useState(getDefaultStartDate());
     const [endDate, setEndDate] = React.useState(getDefaultEndDate());
 
     const calculateEmployeePayments = () => {
-      const startDateTime = startDate ? new Date(startDate).getTime() : 0;
+      const startDateTime = startDate
+        ? storeCivilDayRange(startDate).start.getTime()
+        : 0;
+      // End of the picked day, exclusive-safe: take the next store midnight
+      // minus 1 ms so the comparison below can stay inclusive.
       const endDateTime = endDate
-        ? new Date(endDate).setHours(23, 59, 59, 999)
+        ? storeCivilDayRange(endDate).end.getTime() - 1
         : Date.now();
 
       const filteredJobs = paymentJobs.filter((job) => {
@@ -1415,11 +1636,11 @@ export default function AnalyticsView({
               <h3 style={{ margin: 0 }}>Employee payment summary</h3>
               <p style={{ margin: "4px 0 0", fontSize: 12.5, color: "var(--primary-60)" }}>
                 {startDate && endDate
-                  ? `${new Date(startDate).toLocaleDateString("en-US")} – ${new Date(endDate).toLocaleDateString("en-US")}`
+                  ? `${formatDate(storeCivilDayRange(startDate).start)} – ${formatDate(storeCivilDayRange(endDate).start)}`
                   : startDate
-                  ? `From ${new Date(startDate).toLocaleDateString("en-US")}`
+                  ? `From ${formatDate(storeCivilDayRange(startDate).start)}`
                   : endDate
-                  ? `Until ${new Date(endDate).toLocaleDateString("en-US")}`
+                  ? `Until ${formatDate(storeCivilDayRange(endDate).start)}`
                   : "All completed jobs"}
               </p>
             </div>
@@ -1561,7 +1782,9 @@ export default function AnalyticsView({
 
   // ── Tab 9: Alerts ──
   const AlertsTab = () => {
-    const unreadCount = alerts.filter((a) => !a.isRead).length;
+    // `visibleAlerts` / `unreadAlertCount` are derived once at the top of the
+    // component — see the note there.
+    const unreadCount = unreadAlertCount;
 
     const typeIcons: Record<string, React.ReactNode> = {
       LOW_INVENTORY: <Package size={16} />,
@@ -1573,7 +1796,15 @@ export default function AnalyticsView({
     return (
       <div className="stack-18">
         <div className="astat-grid">
-          <AnTile label="Total alerts" value={String(alerts.length)} />
+          <AnTile
+            label="Total alerts"
+            value={String(totalAlertCount)}
+            hint={
+              totalAlertCount > visibleAlerts.length
+                ? `showing the ${visibleAlerts.length} most recent`
+                : undefined
+            }
+          />
           <AnTile
             label="Unread"
             value={String(unreadCount)}
@@ -1581,14 +1812,25 @@ export default function AnalyticsView({
           />
           <AnTile
             label="Critical"
-            value={String(alerts.filter((a) => a.severity === "CRITICAL").length)}
-            accent={alerts.some((a) => a.severity === "CRITICAL") ? "var(--error)" : undefined}
+            value={String(visibleAlerts.filter((a) => a.severity === "CRITICAL").length)}
+            accent={visibleAlerts.some((a) => a.severity === "CRITICAL") ? "var(--error)" : undefined}
           />
         </div>
 
-        {alerts.length > 0 ? (
+        {alertError && (
+          <div className="an-alert an-alert-crit" role="alert">
+            <span className="an-alert-icon">
+              <AlertTriangle size={16} />
+            </span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p className="an-alert-msg">{alertError}</p>
+            </div>
+          </div>
+        )}
+
+        {visibleAlerts.length > 0 ? (
           <div className="an-list">
-            {alerts.map((alert) => {
+            {visibleAlerts.map((alert) => {
               const tone =
                 alert.severity === "CRITICAL" ? "crit" : alert.severity === "WARNING" ? "warn" : "info";
               return (
@@ -1606,6 +1848,18 @@ export default function AnalyticsView({
                         {fmtDate(alert.createdAt)}{" "}
                         {fmtTime(alert.createdAt)}
                       </span>
+                      {/* An overdue-payment card is only actionable if the
+                          admin can get to the job it is about. The server drops
+                          Job-related alerts whose job no longer exists, so this
+                          link is never a 404. */}
+                      {alert.relatedType === "Job" && alert.relatedId && (
+                        <Link
+                          href={`/admin/jobs/${alert.relatedId}`}
+                          className="link"
+                          style={{ fontSize: 12, fontWeight: 600 }}>
+                          View job →
+                        </Link>
+                      )}
                       {alert.employeeId && (
                         <Link
                           href={`/admin/employees/${alert.employeeId}?tab=products`}
@@ -1621,18 +1875,16 @@ export default function AnalyticsView({
                       <button
                         type="button"
                         className="btn btn-ghost btn-sm"
-                        onClick={async () => {
-                          await markAlertRead(alert.id);
-                        }}>
+                        disabled={pendingAlertId === alert.id}
+                        onClick={() => handleMarkAlertRead(alert.id)}>
                         Mark read
                       </button>
                     )}
                     <button
                       type="button"
                       className="btn btn-ghost btn-sm"
-                      onClick={async () => {
-                        await dismissAlert(alert.id);
-                      }}>
+                      disabled={pendingAlertId === alert.id}
+                      onClick={() => handleDismissAlert(alert.id)}>
                       Dismiss
                     </button>
                   </div>
@@ -1768,8 +2020,7 @@ export default function AnalyticsView({
       <div className="atabs" style={{ overflowX: "auto", maxWidth: "100%" }}>
         {MENU_ITEMS.map((item) => {
           const isActive = activeView === item.id;
-          const alertCount =
-            item.id === "alerts" ? alerts.filter((a) => !a.isRead).length : 0;
+          const alertCount = item.id === "alerts" ? unreadAlertCount : 0;
           return (
             <button
               key={item.id}
@@ -1786,6 +2037,22 @@ export default function AnalyticsView({
           );
         })}
       </div>
+
+      {/* Page filters — job-derived tabs only (Q7 §5). Inventory, Budget,
+          Targets, Alerts and Marketing have no industry or job-date dimension,
+          so the control is hidden there rather than sitting inert. */}
+      {showsFilter && (
+        <AnalyticsFilterBar
+          filters={filters}
+          industryCounts={industryCounts}
+          showUnspecified={
+            unspecifiedCount > 0 || filters.industry === "UNSPECIFIED"
+          }
+          scopedJobCount={scopedJobCount}
+          unfilteredJobCount={unfilteredJobCount}
+          activeTab={activeView}
+        />
+      )}
 
       {/* Content Area */}
       <div className="flex-1">

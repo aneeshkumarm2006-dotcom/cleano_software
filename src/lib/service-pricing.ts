@@ -68,12 +68,32 @@ const DEFAULT_FREQ_ROW: Record<string, number> = {
   QUARTERLY: 0,
 };
 
+/** All-zero row — no recurring discount at any cadence. */
+const NO_DISCOUNT_ROW: Record<string, number> = Object.fromEntries(
+  FREQ_DISCOUNT_KEYS.map((f) => [f, 0])
+);
+
+/**
+ * Item 15: *"No one does frequencies for move-in, move-out, or deep cleanings.
+ * It's a one-off price for all of them. There's no discount when it comes to
+ * those."* The booking page hides the frequency choice for these two, and these
+ * defaults make sure an admin-created recurring job doesn't quietly discount
+ * one either. Still editable in Settings → Pricing Rules — a stored value wins.
+ */
+const NO_DISCOUNT_CATEGORIES = new Set<string>(["DEEP", "MOVE_IN_OUT"]);
+
+function defaultFreqRow(category: string): Record<string, number> {
+  return NO_DISCOUNT_CATEGORIES.has(category)
+    ? { ...NO_DISCOUNT_ROW }
+    : { ...DEFAULT_FREQ_ROW };
+}
+
 export const SERVICE_PRICING_DEFAULTS: ServicePricingConfig = {
   moveInOut: { thresholdSqft: 1000, rateAtOrAbove: 0.25, rateBelow: 0.28 },
   postConstruction: { hourlyRate: 50, minHours: 4 },
   minJobPrice: 119,
   frequencyDiscounts: Object.fromEntries(
-    DISCOUNTABLE_CATEGORIES.map((c) => [c, { ...DEFAULT_FREQ_ROW }])
+    DISCOUNTABLE_CATEGORIES.map((c) => [c, defaultFreqRow(c)])
   ),
 };
 
@@ -117,13 +137,14 @@ function normalizeFreqDiscounts(raw: unknown): Record<string, Record<string, num
     const row = (stored[cat] && typeof stored[cat] === "object"
       ? stored[cat]
       : {}) as Record<string, unknown>;
+    const fallback = defaultFreqRow(cat);
     out[cat] = {};
     for (const f of FREQ_DISCOUNT_KEYS) {
       const v = row[f];
       out[cat][f] =
         typeof v === "number" && Number.isFinite(v)
           ? Math.min(100, Math.max(0, v))
-          : DEFAULT_FREQ_ROW[f];
+          : fallback[f];
     }
   }
   return out;

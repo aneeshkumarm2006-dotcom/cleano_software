@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { formatDate } from "@/lib/timezone";
 
 export async function markWaitlistNotified(id: string) {
   try {
@@ -29,7 +30,7 @@ export async function markWaitlistNotified(id: string) {
         data: {
           kind: "WAITLIST_AVAILABLE",
           recipient: entry.email,
-          subject: `Slot opened up for ${entry.preferredDate.toDateString()}`,
+          subject: `Slot opened up for ${formatDate(entry.preferredDate, { weekday: "short", month: "short", day: "numeric", year: "numeric" })}`,
           status: "PENDING",
           waitlistId: id,
         },

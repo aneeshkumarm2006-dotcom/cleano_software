@@ -4,11 +4,10 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { db } from "@/db";
 import { revalidatePath } from "next/cache";
-import { TransactionCategory } from "@prisma/client";
 
 interface CreateTransactionParams {
   date: string;
-  category: TransactionCategory;
+  categoryId: string;
   amount: number;
   description?: string | null;
   notes?: string | null;
@@ -32,7 +31,7 @@ export async function createTransaction(params: CreateTransactionParams) {
     const guard = await requireAdmin();
     if ("error" in guard) return { success: false, error: guard.error };
 
-    if (!params.category) {
+    if (!params.categoryId) {
       return { success: false, error: "Category is required" };
     }
     if (!Number.isFinite(params.amount) || params.amount <= 0) {
@@ -43,10 +42,22 @@ export async function createTransaction(params: CreateTransactionParams) {
       return { success: false, error: "Invalid date" };
     }
 
+    const category = await db.budgetCategory.findUnique({
+      where: { id: params.categoryId },
+      select: { archivedAt: true, name: true },
+    });
+    if (!category) return { success: false, error: "Category not found" };
+    if (category.archivedAt) {
+      return {
+        success: false,
+        error: `"${category.name}" has been archived — pick another category`,
+      };
+    }
+
     const tx = await db.transaction.create({
       data: {
         date,
-        category: params.category,
+        categoryId: params.categoryId,
         amount: params.amount,
         description: params.description?.trim() || null,
         notes: params.notes?.trim() || null,
@@ -58,6 +69,8 @@ export async function createTransaction(params: CreateTransactionParams) {
     });
 
     revalidatePath("/admin/finances");
+    revalidatePath("/admin/settings");
+    revalidatePath("/admin/analytics");
     return { success: true, id: tx.id };
   } catch (error) {
     console.error("Error creating transaction:", error);

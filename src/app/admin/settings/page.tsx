@@ -5,6 +5,7 @@ import { db } from "@/db";
 import SettingsClient from "./SettingsClient";
 import { seedNotificationCatalog } from "@/lib/notifications";
 import { requireOwnerAdmin } from "@/lib/page-guards";
+import { getBudgetCategoryOptions } from "@/lib/budget-categories";
 
 // Allow bulk CSV import (processed by the importCsv server action) enough time.
 export const maxDuration = 60;
@@ -69,6 +70,7 @@ export default async function SettingsPage() {
     serviceAreas,
     transactions,
     budgets,
+    budgetCategories,
   ] = isAdmin
     ? await Promise.all([
         db.appSetting.findMany(),
@@ -130,9 +132,12 @@ export default async function SettingsPage() {
           orderBy: { date: "desc" },
           include: { job: { select: { id: true, clientName: true } } },
         }),
-        db.budget.findMany({ orderBy: [{ period: "desc" }, { category: "asc" }] }),
+        db.budget.findMany({
+          orderBy: [{ period: "desc" }, { category: { sortOrder: "asc" } }],
+        }),
+        getBudgetCategoryOptions(),
       ])
-    : [[], [], [], [], [], [], [], [], [], [], [], []];
+    : [[], [], [], [], [], [], [], [], [], [], [], [], []];
 
   // Notification catalog — auto-seed on first admin visit, then load.
   let notificationSettings: Array<{
@@ -165,7 +170,7 @@ export default async function SettingsPage() {
   const txRows = transactions.map((t) => ({
     id: t.id,
     date: t.date.toISOString(),
-    category: t.category,
+    categoryId: t.categoryId,
     amount: t.amount,
     description: t.description,
     notes: t.notes,
@@ -177,7 +182,7 @@ export default async function SettingsPage() {
   }));
   const budgetRows = budgets.map((b) => ({
     id: b.id,
-    category: b.category,
+    categoryId: b.categoryId,
     period: b.period,
     amount: b.amount,
     notes: b.notes,
@@ -201,6 +206,7 @@ export default async function SettingsPage() {
         notificationSettings={notificationSettings}
         transactions={txRows}
         budgets={budgetRows}
+        budgetCategories={budgetCategories}
       />
     </div>
   );

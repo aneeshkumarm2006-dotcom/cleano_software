@@ -9,6 +9,7 @@ import { queueAndSendReceipt, sendCustomerBookingCharged } from "@/lib/email";
 import { getTaxRates } from "@/lib/tax.server";
 import { resolveAmountDue } from "@/lib/job-billing";
 import { startOfDayTz } from "@/lib/time";
+import { requireBudgetCategoryId } from "@/lib/budget-categories";
 
 export async function togglePaymentReceived(jobId: string) {
   const session = await auth.api.getSession({
@@ -105,7 +106,7 @@ export async function togglePaymentReceived(jobId: string) {
         db.transaction.create({
           data: {
             date: new Date(),
-            category: "REVENUE",
+            categoryId: await requireBudgetCategoryId("revenue"),
             amount: netAmount,
             description: `Revenue from job for ${job.clientName}`,
             jobId: job.id,
@@ -120,7 +121,7 @@ export async function togglePaymentReceived(jobId: string) {
         db.transaction.deleteMany({
           where: {
             jobId: job.id,
-            category: "REVENUE",
+            categoryId: await requireBudgetCategoryId("revenue"),
             isAuto: true,
           },
         })

@@ -22,33 +22,29 @@ import { createTransaction } from "../../actions/createTransaction";
 import { updateTransaction } from "../../actions/updateTransaction";
 import { deleteTransaction } from "../../actions/deleteTransaction";
 import {
-  BudgetRow as _BudgetRow,
-  CATEGORY_LABELS,
+  BudgetCategoryOption,
   TransactionRow,
-  TxCategory,
+  categoryLabel,
+  categoryOptions,
   formatCurrency,
+  indexCategories,
+  isRevenueCategory,
+  pickableCategories,
   JobOption,
 } from "../types";
 
 interface Props {
   transactions: TransactionRow[];
+  categories: BudgetCategoryOption[];
   jobOptions: JobOption[];
 }
-
-const ALL_CATEGORIES: TxCategory[] = [
-  "REVENUE",
-  "SUPPLIES",
-  "LABOUR",
-  "OVERHEAD",
-  "OTHER",
-];
 
 const PAGE_SIZE = 20;
 
 interface FormState {
   id: string | null;
   date: string;
-  category: TxCategory;
+  categoryId: string;
   amount: string;
   description: string;
   notes: string;
@@ -57,11 +53,11 @@ interface FormState {
   taxAmount: string;
 }
 
-function emptyForm(): FormState {
+function emptyForm(defaultCategoryId: string): FormState {
   return {
     id: null,
     date: new Date().toISOString().slice(0, 10),
-    category: "REVENUE",
+    categoryId: defaultCategoryId,
     amount: "",
     description: "",
     notes: "",
@@ -71,24 +67,32 @@ function emptyForm(): FormState {
   };
 }
 
-export default function BookkeepingTab({ transactions, jobOptions }: Props) {
+export default function BookkeepingTab({
+  transactions,
+  categories,
+  jobOptions,
+}: Props) {
   const router = useRouter();
+  const catIndex = useMemo(() => indexCategories(categories), [categories]);
+  const selectable = useMemo(() => pickableCategories(categories), [categories]);
+  // A new entry defaults to the first income category, falling back to the
+  // first category of any kind if every income line has been archived.
+  const defaultCategoryId =
+    selectable.find((c) => c.kind === "REVENUE")?.id ?? selectable[0]?.id ?? "";
   const [search, setSearch] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState<TxCategory | "ALL">(
-    "ALL"
-  );
+  const [categoryFilter, setCategoryFilter] = useState<string>("ALL");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [page, setPage] = useState(1);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState<FormState>(emptyForm());
+  const [form, setForm] = useState<FormState>(emptyForm(defaultCategoryId));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return transactions.filter((t) => {
-      if (categoryFilter !== "ALL" && t.category !== categoryFilter)
+      if (categoryFilter !== "ALL" && t.categoryId !== categoryFilter)
         return false;
       if (fromDate && t.date < new Date(fromDate).toISOString()) return false;
       if (toDate) {
@@ -102,7 +106,7 @@ export default function BookkeepingTab({ transactions, jobOptions }: Props) {
           t.notes,
           t.jobClientName,
           t.source,
-          CATEGORY_LABELS[t.category],
+          categoryLabel(catIndex, t.categoryId),
         ]
           .filter(Boolean)
           .join(" ")
@@ -111,7 +115,7 @@ export default function BookkeepingTab({ transactions, jobOptions }: Props) {
       }
       return true;
     });
-  }, [transactions, search, categoryFilter, fromDate, toDate]);
+  }, [transactions, search, categoryFilter, fromDate, toDate, catIndex]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -124,14 +128,14 @@ export default function BookkeepingTab({ transactions, jobOptions }: Props) {
     let revenue = 0;
     let expenses = 0;
     for (const t of filtered) {
-      if (t.category === "REVENUE") revenue += t.amount;
+      if (isRevenueCategory(catIndex, t.categoryId)) revenue += t.amount;
       else expenses += t.amount;
     }
     return { revenue, expenses, net: revenue - expenses };
-  }, [filtered]);
+  }, [filtered, catIndex]);
 
   function openCreate() {
-    setForm(emptyForm());
+    setForm(emptyForm(defaultCategoryId));
     setShowForm(true);
     setError(null);
   }
@@ -140,7 +144,7 @@ export default function BookkeepingTab({ transactions, jobOptions }: Props) {
     setForm({
       id: t.id,
       date: t.date.slice(0, 10),
-      category: t.category,
+      categoryId: t.categoryId,
       amount: String(t.amount),
       description: t.description ?? "",
       notes: t.notes ?? "",
@@ -160,7 +164,7 @@ export default function BookkeepingTab({ transactions, jobOptions }: Props) {
     const taxAmount = parseFloat(form.taxAmount) || 0;
     const payload = {
       date: form.date,
-      category: form.category,
+      categoryId: form.categoryId,
       amount,
       description: form.description || null,
       notes: form.notes || null,
@@ -177,7 +181,7 @@ export default function BookkeepingTab({ transactions, jobOptions }: Props) {
       return;
     }
     setShowForm(false);
-    setForm(emptyForm());
+    setForm(emptyForm(defaultCategoryId));
     router.refresh();
   }
 
@@ -275,12 +279,12 @@ export default function BookkeepingTab({ transactions, jobOptions }: Props) {
         <PremiumSelect
           value={categoryFilter}
           onChange={(v) => {
-            setCategoryFilter(v as TxCategory | "ALL");
+            setCategoryFilter(v);
             setPage(1);
           }}
           options={[
             { value: "ALL", label: "All Categories" },
-            ...ALL_CATEGORIES.map((c) => ({ value: c, label: CATEGORY_LABELS[c] })),
+            ...categoryOptions(categories),
           ]}
           size="sm"
         />
@@ -332,11 +336,9 @@ export default function BookkeepingTab({ transactions, jobOptions }: Props) {
                 Category
               </label>
               <PremiumSelect
-                value={form.category}
-                onChange={(v) =>
-                  setForm({ ...form, category: v as TxCategory })
-                }
-                options={ALL_CATEGORIES.map((c) => ({ value: c, label: CATEGORY_LABELS[c] }))}
+                value={form.categoryId}
+                onChange={(v) => setForm({ ...form, categoryId: v })}
+                options={categoryOptions(categories)}
                 size="sm"
               />
             </div>
@@ -482,11 +484,11 @@ export default function BookkeepingTab({ transactions, jobOptions }: Props) {
                   <td className="px-4 py-3">
                     <span
                       className={`text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-[500] ${
-                        t.category === "REVENUE"
+                        isRevenueCategory(catIndex, t.categoryId)
                           ? "bg-green-50 text-green-700"
                           : "bg-[#008C9C]/10 text-[#008C9C]"
                       }`}>
-                      {CATEGORY_LABELS[t.category]}
+                      {categoryLabel(catIndex, t.categoryId)}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-[#008C9C]/80">
@@ -508,11 +510,11 @@ export default function BookkeepingTab({ transactions, jobOptions }: Props) {
                   </td>
                   <td
                     className={`px-4 py-3 text-right font-[500] ${
-                      t.category === "REVENUE"
+                      isRevenueCategory(catIndex, t.categoryId)
                         ? "text-green-700"
                         : "text-[#008C9C]"
                     }`}>
-                    {t.category === "REVENUE" ? "+" : "−"}
+                    {isRevenueCategory(catIndex, t.categoryId) ? "+" : "−"}
                     {formatCurrency(t.amount)}
                   </td>
                   <td className="px-4 py-3 text-right">
