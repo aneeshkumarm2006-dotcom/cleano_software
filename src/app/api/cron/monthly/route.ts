@@ -18,6 +18,8 @@ import {
   type StatementBookingRow,
 } from "@/lib/statement-pdf";
 import { addStoreMonths, formatDate, startOfStoreMonth, storeMonthPeriod } from "@/lib/timezone";
+import { ACTIVE_VALUE_SELECT } from "@/lib/metrics";
+import { activeSubtotal } from "@/lib/job-money";
 
 // Store-timezone month boundaries. Cron fires on the host (UTC), so
 // `new Date(y, m, 1)` was 8 PM on the last day of the previous month in
@@ -101,12 +103,14 @@ export async function GET(req: NextRequest) {
       },
       orderBy: { startTime: "asc" },
       select: {
+        // Fix 3: a customer statement lists what each booking was WORTH, so it
+        // reads the active subtotal — otherwise the statement disagrees with
+        // the invoice and the receipt for the same job.
+        ...ACTIVE_VALUE_SELECT,
         jobNumber: true,
         jobDate: true,
         startTime: true,
         jobType: true,
-        price: true,
-        discountAmount: true,
         paymentReceived: true,
       },
     });
@@ -122,7 +126,7 @@ export async function GET(req: NextRequest) {
       jobNumber: j.jobNumber,
       jobDate: (j.jobDate ?? j.startTime).toISOString(),
       serviceType: j.jobType,
-      amount: Math.max(0, (j.price ?? 0) - (j.discountAmount ?? 0)),
+      amount: activeSubtotal(j),
       paid: j.paymentReceived,
     }));
 

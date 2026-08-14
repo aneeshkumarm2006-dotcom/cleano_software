@@ -23,11 +23,15 @@ import {
   Trash2,
   RotateCcw,
   Archive,
+  Send,
+  ExternalLink,
 } from "lucide-react";
 import { initials } from "@/lib/avatar";
 import { updateApplicationStatus } from "../actions/updateApplicationStatus";
 import { bulkSetApplicationStatus } from "../actions/bulkSetApplicationStatus";
 import { hireApplicant } from "../actions/hireApplicant";
+import { inviteApplicantToPortal } from "../actions/inviteApplicantToPortal";
+import { postAdminMessageToApplicant } from "../actions/postAdminMessageToApplicant";
 import { useRowSelection } from "@/components/common/useRowSelection";
 import BulkActionBar, { type BulkAction } from "@/components/common/BulkActionBar";
 import { bulkSoftDelete, bulkRestore } from "@/lib/bulk/actions";
@@ -39,6 +43,13 @@ type Status =
   | "HIRED"
   | "REJECTED"
   | "ARCHIVED";
+
+interface PortalMessage {
+  id: string;
+  authorRole: string; // "ADMIN" | "APPLICANT"
+  body: string;
+  createdAt: string;
+}
 
 interface Application {
   id: string;
@@ -71,6 +82,11 @@ interface Application {
   status: Status;
   notes: string | null;
   createdAt: string;
+  // Applicant portal (decision D4).
+  userId: string | null;
+  portalRole: string | null;
+  portalActive: boolean | null;
+  messages: PortalMessage[];
 }
 
 const ORDER: Status[] = [
@@ -220,8 +236,16 @@ export default function ApplicationsInboxClient({
   const [savedFlash, setSavedFlash] = useState(false);
   const [hiring, setHiring] = useState(false);
   const [hireMsg, setHireMsg] = useState<
-    { kind: "password"; value: string } | { kind: "info" | "error"; value: string } | null
+    | { kind: "password"; value: string }
+    | { kind: "converted"; userId: string }
+    | { kind: "info" | "error"; value: string }
+    | null
   >(null);
+  const [inviting, setInviting] = useState(false);
+  const [inviteMsg, setInviteMsg] = useState<{ kind: "info" | "error"; value: string } | null>(null);
+  const [messageDraft, setMessageDraft] = useState<Record<string, string>>({});
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const [messageError, setMessageError] = useState<string | null>(null);
 
   const counts = useMemo(() => {
     const m: Record<string, number> = { ALL: applications.length };
@@ -333,11 +357,48 @@ export default function ApplicationsInboxClient({
       setHireMsg({ kind: "error", value: res.error });
       return;
     }
-    if (res.existing) {
+    if ("converted" in res) {
+      setHireMsg({ kind: "converted", userId: res.userId });
+    } else if (res.existing) {
       setHireMsg({ kind: "info", value: "Existing account reactivated and marked hired." });
     } else {
       setHireMsg({ kind: "password", value: res.tempPassword });
     }
+    router.refresh();
+  }
+
+  async function invite() {
+    if (!sel) return;
+    setInviting(true);
+    setInviteMsg(null);
+    const res = await inviteApplicantToPortal(sel.id);
+    setInviting(false);
+    if ("error" in res) {
+      setInviteMsg({ kind: "error", value: res.error });
+      return;
+    }
+    setInviteMsg({
+      kind: "info",
+      value: res.resent
+        ? "Invite re-sent — a fresh link was emailed."
+        : "Invite sent — they'll get an email to set their password.",
+    });
+    router.refresh();
+  }
+
+  async function sendMessage() {
+    if (!sel) return;
+    const body = (messageDraft[sel.id] ?? "").trim();
+    if (!body) return;
+    setSendingMessage(true);
+    setMessageError(null);
+    const res = await postAdminMessageToApplicant({ applicationId: sel.id, body });
+    setSendingMessage(false);
+    if (!res.success) {
+      setMessageError(res.error);
+      return;
+    }
+    setMessageDraft((d) => ({ ...d, [sel.id]: "" }));
     router.refresh();
   }
 
@@ -451,12 +512,19 @@ export default function ApplicationsInboxClient({
                   className={`apps-card ${a.id === selId ? "active" : ""}${
                     selection.isSelected(a.id) ? " row-selected" : ""
                   }`}
-                  onClick={() => { setSelId(a.id); setHireMsg(null); }}
+                  onClick={() => {
+                    setSelId(a.id);
+                    setHireMsg(null);
+                    setInviteMsg(null);
+                    setMessageError(null);
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
                       setSelId(a.id);
                       setHireMsg(null);
+                      setInviteMsg(null);
+                      setMessageError(null);
                     }
                   }}>
                   <input
@@ -534,7 +602,12 @@ export default function ApplicationsInboxClient({
                     <button
                       key={m.id}
                       className="btn btn-secondary btn-sm"
-                      onClick={() => { setSelId(m.id); setHireMsg(null); }}>
+                      onClick={() => {
+                        setSelId(m.id);
+                        setHireMsg(null);
+                        setInviteMsg(null);
+                        setMessageError(null);
+                      }}>
                       {m.name} · {STATUS[m.status].label}
                     </button>
                   ))}
@@ -616,14 +689,67 @@ export default function ApplicationsInboxClient({
               </button>
             )}
 
-            {/* Hire → provision cleaner account */}
+            {/* Applicant portal (decision D4) */}
+            <div className="apps-section-label">Applicant portal</div>
+            {sel.userId ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <span
+                  className="pill"
+                  style={
+                    sel.portalRole !== "APPLICANT"
+                      ? { background: "var(--emerald-100)", color: "var(--emerald-800)" }
+                      : sel.portalActive === false
+                        ? { background: "var(--error-bg)", color: "var(--error-text)" }
+                        : { background: "var(--blue-100)", color: "var(--blue-800)" }
+                  }>
+                  {sel.portalRole !== "APPLICANT"
+                    ? "Converted to employee"
+                    : sel.portalActive === false
+                      ? "Portal deactivated"
+                      : "Portal invited"}
+                </span>
+                {sel.portalRole === "APPLICANT" ? (
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    disabled={inviting}
+                    onClick={invite}>
+                    <Send size={14} /> Resend invite
+                  </button>
+                ) : null}
+              </div>
+            ) : (
+              <button className="btn btn-secondary btn-sm" disabled={inviting} onClick={invite}>
+                <Send size={14} /> Invite to portal
+              </button>
+            )}
+            {inviteMsg ? (
+              <p
+                style={{
+                  marginTop: 8,
+                  fontSize: 12.5,
+                  color: inviteMsg.kind === "error" ? "var(--error-text)" : "var(--primary)",
+                }}>
+                {inviteMsg.value}
+              </p>
+            ) : null}
+            <p style={{ marginTop: 6, marginBottom: 14, fontSize: 12, color: "var(--slate-700)" }}>
+              Gives the applicant a restricted portal to track status, upload documents and
+              message our team — before they&apos;re hired. Applications with no invite work
+              exactly as before.
+            </p>
+
+            {/* Hire → convert portal account, or provision a cleaner account */}
             <div className="apps-section-label">Onboarding</div>
             <button
               className="btn btn-primary btn-sm"
               disabled={hiring}
               onClick={hire}>
               <UserPlus size={14} />
-              {sel.status === "HIRED" ? "Re-provision cleaner account" : "Hire & create cleaner account"}
+              {sel.portalRole === "APPLICANT"
+                ? "Convert to employee"
+                : sel.status === "HIRED"
+                  ? "Re-provision cleaner account"
+                  : "Hire & create cleaner account"}
             </button>
             {hireMsg ? (
               <div
@@ -652,6 +778,19 @@ export default function ApplicationsInboxClient({
                       {hireMsg.value}
                     </div>
                   </>
+                ) : hireMsg.kind === "converted" ? (
+                  <>
+                    Converted to employee — they sign in with the password they already set.
+                    Now assign pay tier, service categories, availability and documents:
+                    <div style={{ marginTop: 8 }}>
+                      <a
+                        href={`/admin/employees/${hireMsg.userId}`}
+                        className="btn btn-secondary btn-sm"
+                        style={{ textDecoration: "none", width: "fit-content" }}>
+                        <ExternalLink size={14} /> Open employee profile
+                      </a>
+                    </div>
+                  </>
                 ) : (
                   hireMsg.value
                 )}
@@ -676,6 +815,75 @@ export default function ApplicationsInboxClient({
                   </button>
                 );
               })}
+            </div>
+
+            {/* Messages — visible to the applicant in their portal (decision D4).
+                Separate from the private notes below. */}
+            <div className="apps-section-label">Messages</div>
+            {sel.messages.length > 0 ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 10 }}>
+                {sel.messages.map((m) => {
+                  const fromAdmin = m.authorRole === "ADMIN";
+                  return (
+                    <div
+                      key={m.id}
+                      style={{ alignSelf: fromAdmin ? "flex-end" : "flex-start", maxWidth: "85%" }}>
+                      <div
+                        style={{
+                          background: fromAdmin ? "var(--primary)" : "var(--slate-100)",
+                          color: fromAdmin ? "#fff" : "var(--slate-700)",
+                          borderRadius: 10,
+                          padding: "8px 12px",
+                          fontSize: 13,
+                          lineHeight: 1.5,
+                          whiteSpace: "pre-wrap",
+                          wordBreak: "break-word",
+                        }}>
+                        {m.body}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 11,
+                          color: "var(--slate-700)",
+                          marginTop: 3,
+                          textAlign: fromAdmin ? "right" : "left",
+                        }}>
+                        {fromAdmin ? "Us" : "Applicant"} ·{" "}
+                        {new Date(m.createdAt).toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p style={{ fontSize: 12.5, color: "var(--slate-700)", marginBottom: 10 }}>
+                No messages yet. The applicant can only see this once they&apos;ve been invited to
+                the portal.
+              </p>
+            )}
+            <textarea
+              className="textarea"
+              rows={2}
+              placeholder="Message the applicant…"
+              value={messageDraft[sel.id] ?? ""}
+              onChange={(e) =>
+                setMessageDraft((d) => ({ ...d, [sel.id]: e.target.value }))
+              }
+            />
+            {messageError ? (
+              <p style={{ marginTop: 6, fontSize: 12, color: "var(--error-text)" }}>{messageError}</p>
+            ) : null}
+            <div className="apps-notes-foot">
+              <span />
+              <button
+                className="btn btn-primary btn-sm"
+                disabled={sendingMessage || !(messageDraft[sel.id] ?? "").trim()}
+                onClick={sendMessage}>
+                <Send size={14} /> {sendingMessage ? "Sending…" : "Send"}
+              </button>
             </div>
 
             {/* Notes */}

@@ -2917,3 +2917,28 @@ export async function sendAdminNewApplication(opts: {
     }
   }
 }
+
+/**
+ * Set-password invite link, sent when an admin clicks "Invite to portal" on a
+ * JobApplication (decision D4). Ungated like the two applicant senders above —
+ * applicants aren't part of the Settings → Notifications catalog, and this is
+ * the actual link the applicant needs, not an optional heads-up.
+ */
+export async function sendApplicantInvite(opts: {
+  to: string;
+  applicantName: string;
+  link: string;
+}) {
+  const html = layout(
+    h1("You're invited to your Cleano applicant portal") +
+      p(`Hi ${opts.applicantName.split(" ")[0]}, we'd like to invite you to your applicant portal — track your application status, upload documents, and hear from us, all in one place.`) +
+      p(`Set a password to get started:`) +
+      btn("Set my password", opts.link) +
+      p(`<small>If the button doesn't work, paste this link in your browser: ${opts.link}</small>`)
+  );
+  return deliver({
+    to: opts.to,
+    subject: "You're invited to your Cleano applicant portal",
+    html,
+  });
+}

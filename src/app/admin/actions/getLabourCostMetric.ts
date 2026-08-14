@@ -5,6 +5,8 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { isAdminRole } from "@/lib/role-routing";
 import { JOB_TYPE_VALUES } from "@/lib/job-types";
+import { ACTIVE_VALUE_SELECT } from "@/lib/metrics";
+import { activeSubtotal } from "@/lib/job-money";
 import type { Prisma } from "@prisma/client";
 
 export interface LabourFilters {
@@ -42,6 +44,11 @@ export interface LabourMetric {
  *                    and transportation are tracked but excluded from revenue.
  *   labourCost     = cleaner payout (employeePay).
  *   labourPercentage = labourCost / serviceRevenue × 100.
+ *
+ * `tipAmount` and `transportation` are already outside both terms, so decision
+ * D3 (tips and parking are customer-funded pass-throughs, never company revenue
+ * and never a company expense) changes no arithmetic here — the tiles simply
+ * name them as pass-throughs now rather than as company costs.
  */
 export async function getLabourCostMetric(
   filters: LabourFilters = {}
@@ -85,15 +92,17 @@ export async function getLabourCostMetric(
     db.job.findMany({
       where,
       select: {
-        subtotalAmount: true,
-        price: true,
+        // Fix 3 item 3.7 — the labour-% denominator has to be the SAME basis
+        // the revenue tiles use, or the percentage compares a cost against a
+        // revenue figure nothing else on the site quotes. `ACTIVE_VALUE_SELECT`
+        // is that basis's column list.
+        ...ACTIVE_VALUE_SELECT,
         employeePay: true,
         gstAmount: true,
         qstAmount: true,
         tipAmount: true,
         totalTip: true,
         parking: true,
-        discountAmount: true,
         refundedAmount: true,
       },
     }),
@@ -121,7 +130,12 @@ export async function getLabourCostMetric(
 
   const totals = jobs.reduce(
     (acc, j) => {
-      const gross = j.subtotalAmount && j.subtotalAmount > 0 ? j.subtotalAmount : j.price ?? 0;
+      // `subtotalAmount > 0 ? subtotalAmount : price` was a fallback chain, not
+      // a definition: only 7 of 472 live rows carry a stored subtotal, so in
+      // practice this read the bare base price and every add-on was missing
+      // from the denominator. `activeSubtotal` answers the same question
+      // properly — stored override total, or base + add-ons.
+      const gross = activeSubtotal(j);
       const refund = j.refundedAmount ?? 0;
       acc.serviceRevenue += Math.max(0, gross - refund);
       acc.labourCost += j.employeePay ?? 0;

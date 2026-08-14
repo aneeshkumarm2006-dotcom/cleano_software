@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { db } from "@/db";
 import { discountReasonLabel } from "@/lib/discount-reasons";
+import { activeSubtotal, sumAddOns } from "@/lib/job-money";
 import type { JobExportRow } from "./exportJobs.types";
 
 interface ExportFilters {
@@ -88,6 +89,11 @@ export async function exportJobs(filters: ExportFilters): Promise<
       include: {
         employee: { select: { name: true } },
         client: { select: { name: true } },
+        // Fix 3 item 3.6: the Price column is the ACTIVE value of the job, so
+        // the add-on rows have to be loaded. Without them an export of the
+        // $128/$186 grout job reconciled to neither the job page nor the
+        // invoice — and an export is exactly what gets handed to an accountant.
+        addOns: { select: { name: true, price: true, quantity: true } },
       },
     });
 
@@ -100,7 +106,12 @@ export async function exportJobs(filters: ExportFilters): Promise<
       Location: j.location || "",
       "Job Type": j.jobType || "",
       Status: j.status,
-      Price: j.price ?? "",
+      // The ACTIVE value: base + add-ons, or the override total. `Base Price`
+      // keeps the raw service line beside it so the two are reconcilable and
+      // no information is lost from the old column.
+      Price: activeSubtotal(j),
+      "Base Price": j.price ?? "",
+      "Add-ons": sumAddOns(j.addOns),
       Discount: j.discountAmount ?? "",
       // Item 29: the reason travels with the discount into reporting, so a
       // discounted-jobs export can be grouped by why.
@@ -124,6 +135,8 @@ export async function exportJobs(filters: ExportFilters): Promise<
         "Job Type": "",
         Status: "",
         Price: "",
+        "Base Price": "",
+        "Add-ons": "",
         Discount: "",
         "Discount Reason": "",
         "Employee Pay": "",

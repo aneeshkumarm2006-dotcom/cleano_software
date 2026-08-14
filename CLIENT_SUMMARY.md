@@ -1,12 +1,89 @@
 # Cleano: Work Summary for Client Review
 
-**Part A** covers the **20 fixes from your latest list** — the most recent round of work, and the one that needs your sign-off before it goes live.
+**Part A** covers the **six pricing-logic fixes from your newest list** — the most recent round of work.
 
-**Part B** (further down) is the earlier summary of **Notifications**, **Rag Wash credits** and **Inventory rules**, kept as-is for reference.
+**Part B** covers the **20 fixes from the list before that**.
+
+**Part C** (further down) is the earlier summary of **Notifications**, **Rag Wash credits** and **Inventory rules**, kept as-is for reference.
 
 ---
 
-# Part A — Your latest list of 20 fixes
+# Part A — Your newest list: six pricing & access fixes
+
+All six are built and tested. Five of them are the same problem seen from different chairs, so it's worth reading the diagnosis before the list.
+
+**The diagnosis in one paragraph.** The app has been treating the **base service price** as "the price" on screens that should show the **full job value** — base plus add-ons plus extra charges, or the override total on an imported job. The breakdown table on a job page has always been right; the big Price card above it, the Charge button, net profit, dashboard revenue and **all cleaner pay maths** were reading the bare base price. So a $128 job with $58 of grout on it displayed as $128, counted as $128 of revenue, and paid its cleaner a percentage of $128 — while the customer was correctly charged $213.85. On top of that, tips and parking collected from the customer were being booked as company income and company expense rather than passed through to the crew.
+
+**⚠️ Numbers on your dashboards will change.** Every figure that moves is listed, before and after, measured against your live data, in **`NUMBERS_THAT_MOVE.md`**. Read that one first if you only read one thing.
+
+**⚠️ Six decisions were made for you.** Your document left them open and waiting would have stalled all six fixes, so each was decided from evidence in your own code and data, with the reasoning written down. They're in **`CLIENT_DECISIONS.md` section 7** as D1–D6. Any one of them can be overruled as a contained change.
+
+### 1. The Settings page
+
+**What you reported:** the Settings page returns an error.
+
+**What we found:** the door was locked to the wrong people. The page requires Owner or Admin, but `/cleaners/settings` is the same page — so **39 live staff accounts (38 cleaners and 1 field lead) were silently bounced away from their own Settings**: no profile, no password change, no availability, no notification preferences. A cleaner tapping Settings was returned to My Jobs with no explanation.
+
+**What we did:** any staff member can now open Settings; customers still can't. Admin-only tabs stay admin-only. On top of that, the page can no longer fail as a whole — each of its 15 sections loads independently, so one bad section shows an inline message on its own tab instead of taking the screen down, and the route now has a proper error screen with a Retry button instead of the raw one. We also bounded the transaction query behind the Budgets tab to the last 12 months so the page keeps its speed as your data grows.
+
+**Honest caveat:** we could not capture a production error trace — that needs an admin login and the Vercel logs, neither of which we had. What we found and fixed is definitely broken and definitely matches the report. If you still see an error after this deploys, those two things are the immediate next step.
+
+### 2. Itemized pricing vs. a final price override — now a visible choice
+
+Both pricing models already existed, but invisibly: whether add-ons were added on top of the price or already included in it was inferred from where the booking came from. It was not something you could see, choose, or keep — retyping the price on a web or imported booking silently flipped it to the other model.
+
+It's now an explicit two-option control on both job forms: **Itemized pricing** or **Final price override**. In override mode the price field is labelled "Service total (override)", add-ons stay selectable and are clearly marked "included in the service total", and the job page shows both figures — "Calculated from items" and "Override total (active)" — when they differ, with the active one labelled. There's a **Recalculate from items** button to switch back deliberately. Imported and web bookings arrive on override; admin jobs default to itemized. Every mode change is written to the job log.
+
+### 3. One price on every screen
+
+Every surface that prints or totals "the price" now reads the same active value. That's the Price card, the Charge button, net profit, dashboard and analytics revenue, booked value, the jobs list, both calendar views, the exports, invoices, receipts, monthly statements, the refund cap and the labour-cost percentage.
+
+**The Charge button was lying in both directions** — it read $128 while Stripe took $213.85. It now shows exactly what the card will be charged, with gift-card credit and deposit already deducted.
+
+Two things found on the way: the **refund cap** on that same job was $128 of a $213.85 charge, so a full refund was impossible; and the jobs list's **"Free" tab** was bucketing any job with a $0 base line, so a job with $58 of add-ons on it showed up as free work.
+
+This is enforced rather than swept: the money columns are now required on the reporting shape, so a future screen that forgets to fetch them fails to build rather than quietly showing the old, wrong number.
+
+### 4 & 5. Cleaner pay
+
+**Add-ons are now in the pay basis.** Pay was a percentage of the base service line, so every add-on was work done for free. It's now a percentage of the same active value everything else uses.
+
+**Parking reaches the cleaners.** It used to be subtracted from your profit as a company cost and reach nobody. It's now split evenly across the crew, exactly like a tip, and stops reducing your profit.
+
+**A team payment you typed is honoured.** The Employee pay field now carries a Manual / Automatic flag. Marked Manual, the figure is the team total and is split evenly, cent-exact — so the $88.55 on job #1809 pays $44.28 and $44.27 rather than being shown as "Stored value — not used". **This is opt-in per job**: one click on the job page, recorded in the log. No cleaner's pay changes until somebody clicks it. (Why it isn't applied in bulk: decision D2.)
+
+### 6. Clock-out
+
+**What you reported:** cleaners get "Failed to clock out".
+
+**What we found:** every possible failure — a bad number, a database timeout, a product no longer in the cleaner's kit — was collapsed into that one sentence, and recorded nowhere an admin could reach. Worse, the work was saved in two halves: the first half committed, then the second half ran outside it. If the second half failed, the cleaner was told it failed while their session was already closed — and the retry hit "You're not clocked in on this job". Stuck, on site, with the work half-saved.
+
+**What we did:**
+
+- Every failure now has its own message that says what to do, and names the product when one product is to blame.
+- Every failure is written to the job's Activity timeline **and raises an alert for your team**, so a failed clock-out is something you find out about rather than something you're told about.
+- A retry within 15 minutes **resumes** the committed attempt instead of refusing it. Nothing is ever counted twice.
+- The transaction is about half the size it was, which is what made the intermittent timeouts intermittent. (Measured: the largest cleaner kit was pushing 86 statements into a single transaction against a database that takes 1.5–4.5 seconds per query.)
+
+### 7. Applicant portal
+
+Applicants can now be given a restricted account — status timeline, document upload, onboarding checklist, and a message thread with your team, and nothing else. It's created only when an admin clicks **"Invite to portal"**, never automatically at submit, because the careers form is public. "Hire" now converts an existing portal account rather than creating a second login for the same person. Rejecting or archiving an application switches the login off with a friendly message, and reversing the decision switches it back on. An applicant who was never invited behaves exactly as they do today.
+
+### Testing
+
+264 automated checks covering all six items, all passing. The whole app type-checks and builds clean.
+
+### Before this goes live
+
+1. **Read `NUMBERS_THAT_MOVE.md`** so nothing on your dashboards next week looks like a new bug.
+2. **Skim D1–D6 in `CLIENT_DECISIONS.md`** and tell us if any of them is wrong for your business.
+3. We run four database migrations, then deploy. All four are additive — nothing is dropped and no existing job's money changes.
+4. For the first week after deploy we watch failed clock-outs daily. That's the first time this system has ever been able to measure its own clock-out failure rate.
+
+---
+---
+
+# Part B — The earlier list of 20 fixes
 
 Everything below is built, tested and ready to deploy. Two things need a decision from you before we push: the **pay change in fix 1**, which moves real money, and the **two things we deliberately did not build**, both flagged in their own sections.
 
@@ -141,7 +218,7 @@ Cleaners upload their own void cheque from their Documents page; you see it on t
 
 ### 14. Inventory Rules settings removed
 
-Covered in Part B, section 3, along with the decision about the approval gate.
+Covered in Part C, section 3, along with the decision about the approval gate.
 
 ---
 
@@ -151,7 +228,7 @@ Both are contained pieces of work. Say the word and we'll add either.
 
 **1. No "required photos" on checklist items (fix 5).** Your scope note implies checklist items that can't be ticked without a photo. Clock-out is gated on required *items* being complete, not on photos being attached. Building the photo gate means a new field on checklist items, an upload on the cleaner's checklist, and a rule about what happens when the photo fails to upload on a bad connection — enough that it should be a decision, not an assumption.
 
-**2. No approval step before a cleaner's reported usage updates stock (fix 14).** Explained in Part B, section 3. Short version: your brief said stock should be reviewed "where needed", and we read that as a review **trail** rather than a **gate** — because a gate would hold a cleaner's clock-out until an admin was awake to approve it, usually late in the evening. Every deduction is recorded three ways and is fully correctable after the fact.
+**2. No approval step before a cleaner's reported usage updates stock (fix 14).** Explained in Part C, section 3. Short version: your brief said stock should be reviewed "where needed", and we read that as a review **trail** rather than a **gate** — because a gate would hold a cleaner's clock-out until an admin was awake to approve it, usually late in the evening. Every deduction is recorded three ways and is fully correctable after the fact.
 
 ---
 
@@ -166,7 +243,7 @@ Both are contained pieces of work. Say the word and we'll add either.
 ---
 ---
 
-# Part B — Earlier work: Notifications, Rag Wash credits, Inventory rules
+# Part C — Earlier work: Notifications, Rag Wash credits, Inventory rules
 
 This section summarises the earlier round of work, along with items that still need your confirmation before we can finish them.
 

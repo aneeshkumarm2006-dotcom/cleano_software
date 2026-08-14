@@ -38,6 +38,8 @@ export interface Job {
   status: string;
   price: number | null;
   employeePay: number | null;
+  /** D2 — is that figure an order or a save-time estimate? Feeds JobModal. */
+  employeePayIsManual?: boolean | null;
   totalTip: number | null;
   parking: number | null;
   notes: string | null;
@@ -59,8 +61,10 @@ export interface Job {
   timeSpentMs: number;
   cleaners: Array<{ id: string; name: string }>;
   addOns: Array<{ id: string; name: string; price: number; quantity: number }>;
-  /** Decides whether add-ons add to `price` or are already inside it. */
+  /** Historical fallback for `pricingMode` (see resolvePricingMode). */
   bookingSource: string | null;
+  /** Decides whether add-ons add to `price` or are already inside it (fix 2). */
+  pricingMode: string | null;
   subtotalAmount: number | null;
 }
 

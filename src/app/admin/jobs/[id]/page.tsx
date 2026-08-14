@@ -13,6 +13,7 @@ import { getSetting } from "@/lib/settings";
 import { getCleanerRateInputs } from "@/lib/cleaner-rates";
 import { deleteJob as archiveJob } from "@/app/admin/actions/deleteJob";
 import { computeJobPayShares, type JobPayInput } from "@/lib/cleaner-earnings";
+import { resolveAmountDue } from "@/lib/job-billing";
 import JobDetailView from "./JobDetailView";
 import ScrollToTop from "./ScrollToTop";
 
@@ -257,13 +258,38 @@ export default async function JobPage({
   // Per-cleaner rows for the Financials breakdown, so the total above is never
   // a black box. `users` is already loaded for the cleaner selector — no extra
   // query.
+  //
+  // Stage 4b.2 — each row now carries its three components separately, because
+  // the PDF asks for exactly that presentation: "base + tip share + parking
+  // share = total" per cleaner. `amount` stays the BASE (the company's labour
+  // cost) so the Employee-pay subtotal above it does not silently start
+  // including the customer's money.
   const payRowNameById = new Map(users.map((u) => [u.id, u.name]));
   const payRows = Array.from(shares.entries()).map(([uid, share]) => ({
     cleanerId: uid,
     name: payRowNameById.get(uid) ?? "Unknown",
     amount: share.base,
+    tip: share.tip,
+    parking: share.parking,
+    total: share.total,
     isOverride: payOverrides[uid] != null,
   }));
+
+  // What the card would actually be charged, resolved HERE with the exact
+  // function `chargeJob` calls (fix 3 item 3.2). The view used to compute its
+  // own `price − discountAmount` for the Charge button, which was never the
+  // billed figure in either direction: pre-tax on admin jobs (the $128/$186
+  // grout job is charged $213.85) and double-discounted on web bookings.
+  //
+  // `giftCardCredit` mirrors chargeJob's own first step — the balance is drawn
+  // down before Stripe is touched — so the button can name the card charge
+  // instead of quoting a number the customer's credit will partly cover. Both
+  // are display figures; chargeJob re-reads the live balance when it runs.
+  const amountDue = resolveAmountDue(job);
+  const giftCardCredit = Math.min(
+    Math.max(0, job.client?.giftCardBalance ?? 0),
+    amountDue
+  );
 
   // TRUE when nobody is payable yet (computeJobPayShares returns an empty map:
   // no cleaners, or only an admin auto-stamped onto employeeId). The cost is
@@ -331,11 +357,19 @@ export default async function JobPage({
     onMyWayLocationAt: job.onMyWayLocationAt?.toISOString() || null,
     status: job.status,
     price: job.price,
+    // Both feed computeJobMoney in the view. `bookingSource` was never passed,
+    // so an imported job's add-ons were rendered as if they added to its price;
+    // `pricingMode` is the explicit answer that supersedes it (fix 2).
+    bookingSource: job.bookingSource,
+    pricingMode: job.pricingMode,
     subtotalAmount: job.subtotalAmount,
     gstAmount: job.gstAmount,
     qstAmount: job.qstAmount,
     totalAmount: job.totalAmount,
     employeePay: job.employeePay,
+    // D2 — decides whether the Financials card labels the stored figure
+    // "Manual amount" (and pays it) or supersedes it silently.
+    employeePayIsManual: job.employeePayIsManual,
     totalTip: job.totalTip,
     parking: job.parking,
     paymentReceived: job.paymentReceived,
@@ -476,6 +510,8 @@ export default async function JobPage({
         logsPerPage={logsPerPage}
         totalProductCost={totalProductCost}
         taxRates={taxRates}
+        amountDue={amountDue}
+        giftCardCredit={giftCardCredit}
         addOnCatalog={addOnCatalog}
         isAdmin={isAdmin}
         onDeleteJob={archiveJobAction}

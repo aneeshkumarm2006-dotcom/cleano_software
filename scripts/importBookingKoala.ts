@@ -748,8 +748,17 @@ async function main() {
         paidAt: paid ? start : null,
         refundedAmount: refunded,
         employeePay: teamPayout || null,
+        // D2 — the CSV's provider/team payment is what BookingKoala actually
+        // paid this crew, so it is an ORDER, not an estimate: the pay math
+        // splits it evenly instead of running the tier calculation, and the job
+        // page labels it "Manual amount" rather than "not used".
+        employeePayIsManual: !!teamPayout,
         requiredCleaners: Math.max(1, providers.length),
         bookingSource: BOOKING_SOURCE,
+        // As in the in-app importer: the CSV's service total already includes
+        // the extras, so an imported job is FINAL_PRICE and its add-on rows
+        // itemise that total rather than adding to it (fix 2).
+        pricingMode: "FINAL_PRICE" as const,
         externalBookingId: bkBookingId || null,
         notes: customerNote,
         ...(cleanerIds.length

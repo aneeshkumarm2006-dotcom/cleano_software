@@ -36,7 +36,18 @@ export const CALENDAR_JOB_SELECT = {
   jobType: true,
   location: true,
   aptNumber: true,
+  // The card's price label is the ACTIVE value of the job — base + add-ons, or
+  // the override total (fix 3) — so these five travel with the row. This is the
+  // one deliberate exception to the "lean select" rule above: the grid PRINTS a
+  // dollar figure, and a calendar reading $128 beside a job page reading $186
+  // is exactly the mismatch the fix exists to close. `addOns` is a join, but
+  // only name/price/quantity, and only for the days on screen.
   price: true,
+  discountAmount: true,
+  subtotalAmount: true,
+  bookingSource: true,
+  pricingMode: true,
+  addOns: { select: { name: true, price: true, quantity: true } },
   employeePay: true,
   totalTip: true,
   parking: true,

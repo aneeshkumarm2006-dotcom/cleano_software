@@ -63,6 +63,11 @@ import {
   addOnAmountIsIncluded,
   addOnLineTotal,
   computeJobMoney,
+  passThroughTotal,
+  PRICING_MODE_HINT,
+  PRICING_MODE_LABEL,
+  resolvePassThroughBilling,
+  type JobPricingMode,
 } from "@/lib/job-money";
 import { addOnKey } from "@/lib/checklist-triggers";
 
@@ -108,11 +113,26 @@ interface Job {
   onMyWayLocationAt: string | null;
   status: string;
   price: number | null;
+  /**
+   * Historical fallback for `pricingMode` (see resolvePricingMode). Was missing
+   * from this DTO entirely, so `computeJobMoney` below read every job — imports
+   * included — as if its add-ons ADDED to its price.
+   */
+  bookingSource?: string | null;
+  /** Itemized vs final price override (cleano_new_fixes.pdf fix 2). */
+  pricingMode?: string | null;
   subtotalAmount?: number | null;
   gstAmount?: number | null;
   qstAmount?: number | null;
   totalAmount?: number | null;
   employeePay: number | null;
+  /**
+   * D2 — TRUE when `employeePay` is an authoritative MANUAL TEAM TOTAL the crew
+   * is actually paid, FALSE when it is a stale save-time estimate the live
+   * calculation supersedes. Before this column the page could not tell the two
+   * apart and dismissed both as unused, which is the PDF's complaint.
+   */
+  employeePayIsManual?: boolean | null;
   totalTip: number | null;
   parking: number | null;
   paymentReceived: boolean;
@@ -253,6 +273,19 @@ interface JobDetailViewProps {
   totalProductCost: number;
   /** Current admin-configured GST/QST rates (percent, e.g. 5 / 9.975). */
   taxRates: { gstRate: number; qstRate: number };
+  /**
+   * What this job's card would be charged right now — `resolveAmountDue(job)`,
+   * computed on the SERVER by the same function `chargeJob` calls (fix 3 item
+   * 3.2). Deliberately a prop rather than something this view derives: the view
+   * cannot see `depositPaid` semantics or the gift-card balance, and its own
+   * arithmetic (`price − discount`) is what made the button lie.
+   */
+  amountDue: number;
+  /**
+   * Gift-card balance `chargeJob` will draw down before touching the card,
+   * capped at `amountDue`. Zero for a client with no balance.
+   */
+  giftCardCredit?: number;
   /** Catalog add-ons — feeds the edit modal's picker and the "custom" tag. */
   addOnCatalog?: Array<{ id: string; name: string; price: number }>;
   isAdmin: boolean;
@@ -272,11 +305,19 @@ interface JobDetailViewProps {
    * payment rather than the cleaner payout.
    */
   computedEmployeePay?: number;
-  /** Per-cleaner rows behind `computedEmployeePay`. */
+  /**
+   * Per-cleaner rows behind `computedEmployeePay`, split into the three
+   * components the PDF asks to see: `amount` (the work — the only company cost),
+   * `tip` and `parking` (customer-funded pass-throughs), and `total`, what the
+   * cleaner is actually handed.
+   */
   payRows?: Array<{
     cleanerId: string;
     name: string;
     amount: number;
+    tip: number;
+    parking: number;
+    total: number;
     isOverride: boolean;
   }>;
   /** False when nobody is payable yet — the cost is $0, not `job.employeePay`. */
@@ -347,6 +388,33 @@ function FixedPricePill() {
   );
 }
 
+/**
+ * How this job is priced (cleano_new_fixes.pdf fix 2).
+ *
+ * Deliberately NOT folded into FixedPricePill above, which is a different and
+ * narrower concept: that one says the price came from THIS CLIENT's negotiated
+ * `Client.fixedPrice`. This one says how the job's parts relate to its total.
+ * A job can be both, or either, and conflating them would make the badge
+ * unreadable.
+ *
+ * `explicit` distinguishes a mode the admin (or the importer) actually chose
+ * from one inferred for a row written before the column existed — the second is
+ * a guess, and the tooltip says so rather than overstating it.
+ */
+function PricingModePill({ mode, explicit }: { mode: JobPricingMode; explicit: boolean }) {
+  const override = mode === 'FINAL_PRICE';
+  return (
+    <span
+      className="pill"
+      style={override ? { background: '#e0f2fe', color: '#075985' } : { background: '#f1f5f9', color: '#334155' }}
+      title={`${PRICING_MODE_HINT[mode]}${explicit ? '' : ' (inferred from this booking’s source — no mode has been set on it yet)'}`}
+    >
+      {PRICING_MODE_LABEL[mode]}
+      {!explicit && ' (inferred)'}
+    </span>
+  );
+}
+
 // Per-cleaner assignment status pill (item 9).
 const CLEANER_STATUS_STYLES: Record<string, { label: string; bg: string; color: string; dot: string }> = {
   ASSIGNED:    { label: 'Assigned',    bg: '#f3f4f6', color: '#374151', dot: '#9ca3af' },
@@ -401,6 +469,10 @@ function payTypeLabel(type: string | null | undefined): string {
 function getActionIcon(action: string) {
   switch (action) {
     case 'CLOCKED_IN': case 'CLOCKED_OUT': return <Clock size={14} />;
+    // A clock-out that failed (cleano_new_fixes.pdf fix 6). It has to look
+    // different from the clock rows around it — this is the entry an admin is
+    // scrolling the timeline to find when a cleaner says the button didn't work.
+    case 'CLOCK_OUT_FAILED': return <AlertTriangle size={14} />;
     case 'STATUS_CHANGED': return <Activity size={14} />;
     case 'PRODUCT_USED': return <Package size={14} />;
     case 'PAYMENT_RECEIVED': case 'INVOICE_SENT': return <DollarSign size={14} />;
@@ -422,6 +494,8 @@ export default function JobDetailView({
   logsPerPage,
   totalProductCost,
   taxRates,
+  amountDue,
+  giftCardCredit = 0,
   addOnCatalog = [],
   isAdmin,
   onDeleteJob,
@@ -637,8 +711,13 @@ export default function JobDetailView({
 
   const refundedSoFar = job.refundedAmount ?? 0;
   const depositRemaining = job.depositPaid ? Math.max(0, 20 - refundedSoFar) : 0;
+  // The ceiling is what was actually TAKEN, not the base service line (fix 3).
+  // `job.price` capped the $128/$186 grout job's refund at $128 on a $213.85
+  // charge, so the admin could not refund the customer in full from this modal.
+  // `amountDue` is `resolveAmountDue(job)` computed server-side — the same
+  // function that produced the charge.
   const refundCap = job.stripePaymentIntentId
-    ? Math.max(0, (job.price ?? 0) - refundedSoFar)
+    ? Math.max(0, amountDue - refundedSoFar)
     : depositRemaining;
 
   const [showRefundModal, setShowRefundModal] = useState(false);
@@ -938,24 +1017,104 @@ export default function JobDetailView({
     ? Math.round((new Date(job.endTime).getTime() - new Date(job.startTime).getTime()) / 60000)
     : null;
 
-  // Labour cost is the LIVE computed payout, not the stored column. See the
-  // comment in page.tsx: `job.employeePay` is a save-time snapshot and, on
-  // BookingKoala imports, the provider payment rather than the cleaner payout.
-  const netProfit = (job.price || 0) - computedEmployeePay - (job.parking || 0) - totalProductCost;
-  // Shown only when the stored column disagrees, so the discrepancy stays
-  // auditable instead of being silently swapped out from under the admin.
-  const storedPayDiffers =
-    job.employeePay !== null &&
-    Math.abs(job.employeePay - computedEmployeePay) >= 0.01;
-  const grossRevenue = (job.price || 0) - (job.discountAmount || 0);
-
   // Tax breakdown (Financials tab) — one shared helper, so this page, the
   // receipt, the invoice and what the card is actually charged cannot disagree.
   // It also decides whether this job's add-ons sit INSIDE its subtotal (a web
   // booking or an import) or ON TOP of it (an admin job), which is what the
   // labels below key off. Net profit stays computed off pre-tax revenue —
   // taxes are remitted, not profit.
+  //
+  // Declared BEFORE the derived money figures below, which all read it. Fix 3
+  // is precisely that they used not to.
   const money = computeJobMoney(job, taxRates);
+
+  // Labour cost is the LIVE computed payout, not the stored column. See the
+  // comment in page.tsx: `job.employeePay` is a save-time snapshot and, on
+  // BookingKoala imports, the provider payment rather than the cleaner payout.
+  //
+  // Fix 3 item 3.3 — the revenue term is the ACTIVE subtotal (base + add-ons,
+  // or the override total), not `job.price`. On the page-5 job that is $171,
+  // not $100, so a job whose cleaner earns $82 stops reading as a $34 loss.
+  //
+  // PARKING IS NO LONGER SUBTRACTED HERE. Decision D3: tips and parking are
+  // customer-funded pass-throughs collected on the customer's behalf and handed
+  // to the cleaner, so neither is company revenue nor a company expense — the
+  // PDF's invariant is that they "must not be treated as company revenue or
+  // incorrectly reduce company profit". Stage 4 finishes the other half of this
+  // (distributing the parking to the cleaners and labelling the row); removing
+  // the subtraction here is the profit half, and the two are independent.
+  const netProfit = money.subtotalAmount - computedEmployeePay - totalProductCost;
+
+  // ── Pass-throughs: the customer's money, in transit (D3 / Stage 4b) ────────
+  const jobTip = Math.max(0, job.totalTip || 0);
+  const jobParking = Math.max(0, job.parking || 0);
+  // The sum comes from the shared helper, not a local `tip + parking`, for the
+  // same reason the billing below does: saveJob folds THIS number into the
+  // card charge, so the two must be the same arithmetic.
+  const passThrough = passThroughTotal(job);
+
+  // D2 — is the stored Employee pay an ORDER the crew is paid, or a stale
+  // save-time estimate? Before this column the page could not tell, so it
+  // dismissed every stored figure as unused and paid the tier math regardless.
+  // That row is what the PDF names: do not show a stored value as unused.
+  const payIsManual = !!job.employeePayIsManual && job.employeePay !== null;
+  const paySourceLabel = payIsManual ? 'Manual amount' : 'Automatic (tier rates)';
+  // Only meaningful for an AUTOMATIC job now: a manual figure IS the payout, so
+  // it cannot disagree with itself.
+  const storedPayDiffers =
+    !payIsManual &&
+    job.employeePay !== null &&
+    Math.abs(job.employeePay - computedEmployeePay) >= 0.01;
+
+  /**
+   * How much of the tip + parking rides on the card, answered by THE helper
+   * saveJob bills from (D3) rather than re-derived here.
+   *
+   * This block used to write its own arithmetic, and the two drifted — which is
+   * the only way this page could report a shortfall on a job the card was about
+   * to cover in full. Both figures below now come out of one call, so a display
+   * that disagrees with what saveJob writes is no longer expressible.
+   *
+   * `settled` is saveJob's definition to the letter: `paymentReceived` is what
+   * chargeJob and the Paid toggle flip (the local state, so this tracks the
+   * toggle without a round trip), and the PaymentIntent covers a card charge
+   * that landed without the flag ever being set.
+   *
+   * The store-priced carve-out survives, expressed as a zero pass-through
+   * rather than as a special case on the result. On a web booking or a
+   * BookingKoala import the "Final amount" these totals were read back from
+   * ALREADY contains the tip and the parking (D3 says so explicitly), so there
+   * is nothing left to bill on top of `money.totalAmount`: the helper then
+   * reports nothing outstanding, and an expected stored total equal to the
+   * stored one. Charging the difference — in either direction — would be
+   * telling an admin about money the customer has already paid.
+   */
+  const settled = paymentReceived || job.stripePaymentIntentId != null;
+  const passThroughBilling = resolvePassThroughBilling({
+    taxedTotal: money.totalAmount,
+    passThrough: money.taxesFromStore ? 0 : passThrough,
+    settled,
+    storedTotal: job.totalAmount,
+  });
+
+  /**
+   * Pass-through the cleaners are owed that the card never took (D3).
+   *
+   * Non-zero only on a SETTLED job, and that check is the fix. Without it — the
+   * shortfall was `min(passThrough, storedTotal − money.totalAmount)`, no
+   * `settled` anywhere — every job whose stored total predates the D3 fold read
+   * as money gone missing, and the row below sent the admin to collect cash
+   * from a customer whose card had not been charged yet and WILL be charged for
+   * exactly that amount on the next save.
+   *
+   * The two states are genuinely different questions. Unsettled: saveJob folds
+   * the whole pass-through into `Job.totalAmount` and `resolveAmountDue` bills
+   * it, so nothing is outstanding by construction. Settled: the money already
+   * moved, so a tip typed afterwards rode on nothing — and since D3 forbids a
+   * retroactive second charge, flagging it for the admin to take separately is
+   * the only thing left to do with it.
+   */
+  const passThroughUncollected = passThroughBilling.uncollected;
   // "custom" is DERIVED, not stored: a row whose name isn't in the catalog is a
   // one-off extra charge. Renaming a catalog entry re-labels historical rows,
   // which is the accepted cost of not adding a column for it.
@@ -970,11 +1129,29 @@ export default function JobDetailView({
   // shown as an itemisation with no "+" rather than as an addition.
   const showAddOnRow = money.addOnLines.length > 0;
   // The stored columns are what resolveAmountDue actually bills. When they
-  // disagree with the live figure the job needs a re-save; say so rather than
-  // rewriting history behind the admin's back.
+  // disagree with what a save would write, the job needs a re-save; say so
+  // rather than rewriting history behind the admin's back.
+  //
+  // The figure to compare against is `passThroughBilling.totalAmount` — the
+  // number saveJob would store for this job today — NOT `money.totalAmount`.
+  // Under D3 saveJob writes `taxed service total + collected pass-through`,
+  // while `money.totalAmount` never contains the pass-through, so comparing the
+  // two made this banner PERMANENT on every job carrying a tip or parking: the
+  // difference it reported was precisely the pass-through, and "re-save this
+  // job to apply" could not clear it, because saving is what creates it.
   const storedTotal = job.totalAmount ?? 0;
   const storedTotalDiffers =
-    storedTotal > 0 && Math.abs(storedTotal - money.totalAmount) >= 0.01;
+    storedTotal > 0 &&
+    Math.abs(storedTotal - passThroughBilling.totalAmount) >= 0.01;
+  // Fix 2 — the mode this job's money was actually computed under, and whether
+  // the two candidate totals disagree. They only can under FINAL_PRICE: in
+  // itemized mode the parts ARE the subtotal, so the comparison is trivially
+  // equal and nothing extra is drawn.
+  const pricingMode: JobPricingMode = money.pricingMode;
+  const itemizedTotal = money.itemizedSubtotal;
+  const pricingTotalsDiffer =
+    pricingMode === 'FINAL_PRICE' &&
+    Math.abs(itemizedTotal - money.subtotalAmount) >= 0.01;
 
   // Derived from the LIVE totals, not the props: paging is client state now,
   // so a pager reading `totalLogs`/`logsPage` would freeze on page 1.
@@ -1597,16 +1774,65 @@ export default function JobDetailView({
     <div>
       <div className="astat-grid" style={{ marginBottom: 24 }}>
         <div className="astat">
-          <div className="astat-head"><span>Price</span></div>
-          <div className="astat-value">{job.price !== null ? `$${job.price.toFixed(2)}` : '—'}</div>
-          {(job.discountAmount || 0) > 0 && <div className="astat-delta">Discount −${job.discountAmount!.toFixed(2)}</div>}
+          {/* The mode sits with the price, because it is what tells the admin
+              whether the add-ons below are inside this figure or on top of it
+              (fix 2). The FIGURE is the ACTIVE subtotal (fix 3, item 3.1): this
+              card printed `job.price` — the base service line — so the $186
+              grout job read $128 here while the Breakdown card two sections
+              down, which already used computeJobMoney, read $186. That
+              disagreement between two cards on one screen is the complaint. */}
+          <div className="astat-head" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span>Price</span>
+            <PricingModePill mode={pricingMode} explicit={money.pricingModeIsExplicit} />
+          </div>
+          <div className="astat-value">{job.price !== null ? `$${money.subtotalAmount.toFixed(2)}` : '—'}</div>
+          {/* Kept: the discount delta line. Under FINAL_PRICE the discount is
+              already inside the override total, so it is labelled as recorded
+              rather than as something still to come off. */}
+          {money.discountRecorded > 0 && (
+            <div className="astat-delta">
+              {pricingMode === 'FINAL_PRICE'
+                ? `Discount −$${money.discountRecorded.toFixed(2)} (in override total)`
+                : `Discount −$${money.discountRecorded.toFixed(2)}`}
+            </div>
+          )}
+          {/* Says WHERE the figure came from when it is not simply the parts. */}
+          {pricingMode === 'FINAL_PRICE' && (
+            <div className="astat-delta">Override total{money.addOnLines.length > 0 ? ' · add-ons included' : ''}</div>
+          )}
+          {pricingMode === 'ITEMIZED' && money.addOnTotal > 0 && (
+            <div className="astat-delta">
+              Base ${money.basePrice.toFixed(2)} + add-ons ${money.addOnTotal.toFixed(2)}
+            </div>
+          )}
         </div>
         <div className="astat">
-          <div className="astat-head"><span>Employee pay</span></div>
+          <div className="astat-head">
+            <span>Employee pay</span>
+            {/* 4c.4 — say WHERE the number came from, at the job level. A manual
+                amount is used and labelled; an automatic one is recomputed live
+                from the tier rates and the job's active value. */}
+            {hasPayableParticipants && (
+              <span
+                className="pill"
+                style={
+                  payIsManual
+                    ? { background: '#fffbeb', color: '#92400e' }
+                    : { background: 'var(--primary-10)', color: 'var(--primary-800)' }
+                }
+                title={
+                  payIsManual
+                    ? 'A manual team total set by an admin (or imported from BookingKoala). Split evenly across the crew, minus any per-cleaner amount. Clear it on the job form to go back to the tier calculation.'
+                    : 'Computed live from each cleaner’s tier rate and the job’s active value (base + add-ons, or the override total).'
+                }>
+                {paySourceLabel}
+              </span>
+            )}
+          </div>
           <div className="astat-value">{hasPayableParticipants ? `$${computedEmployeePay.toFixed(2)}` : '—'}</div>
           <div className="astat-delta">
             {hasPayableParticipants
-              ? `${payRows.length} cleaner${payRows.length === 1 ? '' : 's'} · live rate`
+              ? `${payRows.length} cleaner${payRows.length === 1 ? '' : 's'} · ${payIsManual ? 'split evenly' : 'live rate'}`
               : 'No cleaners assigned'}
           </div>
         </div>
@@ -1739,8 +1965,53 @@ export default function JobDetailView({
                 </span>
               </div>
             )}
+            {/* Both candidate totals, labelled, whenever they disagree — the PDF
+                asks for exactly this. Without it an override job shows one
+                number and the admin has no way to tell whether it is the total
+                somebody typed or the one the parts add up to; with the two side
+                by side, the difference IS the answer to "why doesn't the price
+                match the add-ons". Drawn only when they differ, so an itemized
+                job (where they are equal by construction) gains no noise. */}
+            {pricingTotalsDiffer && (
+              <>
+                <div className="finrow">
+                  <span className="finrow-label" style={{ color: 'var(--ink-soft)' }}>
+                    Calculated itemized total
+                    <span style={{ marginLeft: 6, fontSize: 11 }}>base + add-ons − discount</span>
+                  </span>
+                  <span className="finrow-value" style={{ color: 'var(--ink-soft)' }}>
+                    ${itemizedTotal.toFixed(2)}
+                  </span>
+                </div>
+                <div className="finrow">
+                  <span className="finrow-label">
+                    Override total
+                    <span
+                      style={{
+                        marginLeft: 6,
+                        fontSize: 10,
+                        fontWeight: 600,
+                        borderRadius: 999,
+                        padding: '1px 7px',
+                        background: '#e0f2fe',
+                        color: '#075985',
+                      }}>
+                      active
+                    </span>
+                  </span>
+                  <span className="finrow-value">${money.subtotalAmount.toFixed(2)}</span>
+                </div>
+              </>
+            )}
             <div className="finrow">
-              <span className="finrow-label"><strong>Subtotal</strong></span>
+              <span className="finrow-label">
+                <strong>Subtotal</strong>
+                {pricingMode === 'FINAL_PRICE' && (
+                  <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--ink-soft)', fontWeight: 400 }}>
+                    from the override total
+                  </span>
+                )}
+              </span>
               <span className="finrow-value">${taxSubtotal.toFixed(2)}</span>
             </div>
             {untaxed ? (
@@ -1783,13 +2054,20 @@ export default function JobDetailView({
             )}
             {hasPayableParticipants && (
               <div className="finrow negative">
-                <span className="finrow-label">Employee pay · {payRows.length} cleaner{payRows.length === 1 ? '' : 's'}</span>
+                <span className="finrow-label">
+                  Employee pay · {payRows.length} cleaner{payRows.length === 1 ? '' : 's'} · {paySourceLabel.toLowerCase()}
+                </span>
                 <span className="finrow-value">−${computedEmployeePay.toFixed(2)}</span>
               </div>
             )}
-            {/* Who is paid what, so the total above is never a black box. An
-                overridden cleaner is flagged: their amount is the admin's typed
-                figure and no rating multiplier touches it. */}
+            {/* Who is paid what, and out of which pocket (PDF fix 4 asks for
+                exactly this presentation). The WORK figure is the company's
+                cost; the tip and parking shares beside it are the customer's
+                money passing through, so they are shown on the row but are not
+                part of the subtotal above and never reach net profit.
+
+                An overridden cleaner is flagged: their amount is the admin's
+                typed per-cleaner figure and no rating multiplier touches it. */}
             {payRows.map(r => (
               <div key={r.cleanerId} className="finrow" style={{ paddingLeft: 18 }}>
                 <span className="finrow-label" style={{ fontSize: 12, color: 'var(--primary-60)' }}>
@@ -1801,20 +2079,32 @@ export default function JobDetailView({
                   )}
                 </span>
                 <span className="finrow-value" style={{ fontSize: 12, color: 'var(--primary-60)' }}>
-                  ${r.amount.toFixed(2)}
+                  {r.tip > 0 || r.parking > 0 ? (
+                    <>
+                      ${r.amount.toFixed(2)}
+                      {r.tip > 0 && ` + $${r.tip.toFixed(2)} tip`}
+                      {r.parking > 0 && ` + $${r.parking.toFixed(2)} parking`}
+                      {' = '}
+                      <strong>${r.total.toFixed(2)}</strong>
+                    </>
+                  ) : (
+                    `$${r.amount.toFixed(2)}`
+                  )}
                 </span>
               </div>
             ))}
-            {/* The stored Job.employeePay column, shown ONLY when it disagrees
-                with what the crew is actually paid. On BookingKoala imports it
-                is the PROVIDER payment from the CSV; on jobs saved before a
-                rating or a Settings change it is a stale snapshot. It feeds no
-                total on this page. */}
+            {/* The stored Job.employeePay column when it is NOT the payout — a
+                save-time estimate superseded by the live calculation. The old
+                wording dismissed EVERY stored figure, including the imported
+                BookingKoala team payment, which is the PDF's complaint. An admin
+                who means that number marks it Manual on the job form and it is
+                paid (D2), so this row is now only ever the stale-snapshot case
+                and it says which button turns it into an order. */}
             {storedPayDiffers && (
               <div className="finrow">
                 <span className="finrow-label" style={{ fontSize: 12, color: 'var(--primary-50)' }}>
-                  Stored value ${job.employeePay!.toFixed(2)} — not used
-                  {hasPayableParticipants ? ' (snapshot / imported figure)' : ' (nobody assigned)'}
+                  Estimate at save time ${job.employeePay!.toFixed(2)} — superseded by the live calculation
+                  {hasPayableParticipants ? '' : ' (nobody assigned)'}. Mark it Manual on the job form to pay this figure instead.
                 </span>
                 <span className="finrow-value" style={{ fontSize: 12, color: 'var(--primary-50)' }}>—</span>
               </div>
@@ -1825,17 +2115,46 @@ export default function JobDetailView({
                 <span className="finrow-value">−${totalProductCost.toFixed(2)}</span>
               </div>
             )}
-            {(job.parking || 0) > 0 && (
-              <div className="finrow negative">
-                <span className="finrow-label">Transportation</span>
-                <span className="finrow-value">−${job.parking!.toFixed(2)}</span>
-              </div>
-            )}
-            {(job.totalTip || 0) > 0 && (
-              <div className="finrow">
-                <span className="finrow-label">Tips</span>
-                <span className="finrow-value" style={{ color: 'var(--emerald-600)' }}>+${job.totalTip!.toFixed(2)}</span>
-              </div>
+            {/* D3 — tips and parking are CUSTOMER-FUNDED and paid straight out
+                to the crew, so they are neither company revenue nor a company
+                expense. Parking used to render as "Transportation −$X" (a cost
+                that reduced profit and reached no cleaner) and tips as green
+                income. Both are now one labelled pass-through block that nets
+                to nothing. */}
+            {passThrough > 0 && (
+              <>
+                <div className="finrow">
+                  <span className="finrow-label" style={{ color: 'var(--primary-60)' }}>
+                    Passed to cleaners — customer-funded, not company money
+                  </span>
+                  <span className="finrow-value" style={{ color: 'var(--primary-60)' }}>
+                    ${passThrough.toFixed(2)}
+                  </span>
+                </div>
+                {jobTip > 0 && (
+                  <div className="finrow" style={{ paddingLeft: 18 }}>
+                    <span className="finrow-label" style={{ fontSize: 12, color: 'var(--primary-50)' }}>Tips</span>
+                    <span className="finrow-value" style={{ fontSize: 12, color: 'var(--primary-50)' }}>${jobTip.toFixed(2)}</span>
+                  </div>
+                )}
+                {jobParking > 0 && (
+                  <div className="finrow" style={{ paddingLeft: 18 }}>
+                    <span className="finrow-label" style={{ fontSize: 12, color: 'var(--primary-50)' }}>Parking / transportation</span>
+                    <span className="finrow-value" style={{ fontSize: 12, color: 'var(--primary-50)' }}>${jobParking.toFixed(2)}</span>
+                  </div>
+                )}
+                {/* Entered after the card was charged, so it rode on nothing —
+                    D3 forbids an automatic second charge, so the admin is told
+                    to collect it instead. */}
+                {passThroughUncollected > 0 && (
+                  <div className="finrow" style={{ paddingLeft: 18 }}>
+                    <span className="finrow-label" style={{ fontSize: 12, color: '#92400e' }}>
+                      ${passThroughUncollected.toFixed(2)} not collected on card — added after payment. Collect separately; the crew is still owed it.
+                    </span>
+                    <span className="finrow-value" style={{ fontSize: 12, color: '#92400e' }}>—</span>
+                  </div>
+                )}
+              </>
             )}
             <div className="finrow total">
               <span className="finrow-label">Net profit</span>
@@ -1887,7 +2206,10 @@ export default function JobDetailView({
               </div>
               <div className="label-stack">
                 <span className="top">Mark as paid</span>
-                <span className="bottom">{paymentReceived ? `Paid · $${grossRevenue.toFixed(2)}` : 'Not paid yet'}</span>
+                {/* What was collected, not the pre-tax base line. Same
+                    `resolveAmountDue` figure the Charge button quotes, so the
+                    row cannot say "Paid · $128" on a $213.85 charge (fix 3). */}
+                <span className="bottom">{paymentReceived ? `Paid · $${amountDue.toFixed(2)}` : 'Not paid yet'}</span>
               </div>
             </div>
             {isAdmin && (
@@ -1930,7 +2252,11 @@ export default function JobDetailView({
           </div>
 
           {!paymentReceived && isAdmin && !job.isCashJob && (
-            <ChargeButton jobId={job.id} amount={grossRevenue} />
+            <ChargeButton
+              jobId={job.id}
+              amountDue={amountDue}
+              giftCardCredit={giftCardCredit}
+            />
           )}
 
           {isAdmin && (
@@ -2061,11 +2387,18 @@ export default function JobDetailView({
         ) : (
           <>
             <div className="timeline" style={{ opacity: logsLoading ? 0.5 : 1, transition: 'opacity 120ms' }} aria-busy={logsLoading}>
-              {logRows.map(log => (
+              {logRows.map(log => {
+                // Failed clock-outs are the one row type an admin comes to this
+                // tab looking for, so they are coloured rather than left to read
+                // as one more grey line in a list of forty.
+                const failed = log.action === 'CLOCK_OUT_FAILED';
+                return (
                 <div key={log.id} className="tline-item">
-                  <div className="tline-dot">{getActionIcon(log.action)}</div>
+                  <div className="tline-dot" style={failed ? { color: '#b45309', background: '#fffbeb', borderColor: '#fde68a' } : undefined}>
+                    {getActionIcon(log.action)}
+                  </div>
                   <div>
-                    <div className="tline-text">{log.description}</div>
+                    <div className="tline-text" style={failed ? { color: '#b45309', fontWeight: 600 } : undefined}>{log.description}</div>
                     {log.user && <div className="tline-actor">by {log.user.name}</div>}
                     {log.field && log.oldValue && log.newValue && (
                       <div className="tline-actor">{log.field}: {log.oldValue} → {log.newValue}</div>
@@ -2079,7 +2412,8 @@ export default function JobDetailView({
                     </span>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
             {logTotal > logsPerPage && (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 12, borderTop: '1px solid var(--primary-10)', fontSize: 12, color: 'var(--primary-60)' }}>
@@ -2562,7 +2896,14 @@ export default function JobDetailView({
               <strong>Payment outstanding.</strong> This job was completed but hasn't been paid.
               {!job.isCashJob ? ' Card may be on file — charge anytime.' : ''}
             </div>
-            {isAdmin && !job.isCashJob && <ChargeButton jobId={job.id} amount={grossRevenue} compact />}
+            {isAdmin && !job.isCashJob && (
+              <ChargeButton
+                jobId={job.id}
+                amountDue={amountDue}
+                giftCardCredit={giftCardCredit}
+                compact
+              />
+            )}
           </div>
         )}
 
@@ -3207,10 +3548,40 @@ export default function JobDetailView({
 
 // ── Charge button ──────────────────────────────────────────────────────────────
 
-function ChargeButton({ jobId, amount, compact }: { jobId: string; amount: number; compact?: boolean }) {
+/**
+ * Fix 3 item 3.2 — the button that says what it will do.
+ *
+ * `amount` used to be `job.price − job.discountAmount`, computed in the view,
+ * while `chargeJob` actually bills `resolveAmountDue(job)`. The two disagreed in
+ * BOTH directions: on an admin job the label was PRE-tax (the $128/$186 grout
+ * job's card is charged $213.85), and on a web booking the referral credit had
+ * already been taken off `price` so subtracting it again understated the charge.
+ * Neither number was ever what Stripe took.
+ *
+ * `amountDue` is now computed on the server by `resolveAmountDue` — the exact
+ * function `chargeJob` calls, deposit credited — and `giftCardCredit` is the
+ * balance `chargeJob` will draw down first, so the label can name the split
+ * rather than quietly overstating the card charge.
+ */
+function ChargeButton({
+  jobId,
+  amountDue,
+  giftCardCredit = 0,
+  compact,
+}: {
+  jobId: string;
+  amountDue: number;
+  giftCardCredit?: number;
+  compact?: boolean;
+}) {
   const [busy,   setBusy]   = useState(false);
   const [open,   setOpen]   = useState(false);
   const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  // What the CARD is hit for. Gift-card balance is applied first by chargeJob,
+  // so a booking fully covered by credit charges the card nothing at all — and
+  // a button reading "Charge · $213.85" would be a lie about a $0 card charge.
+  const cardAmount = Math.max(0, Math.round((amountDue - giftCardCredit) * 100) / 100);
 
   async function handleCharge() {
     setBusy(true);
@@ -3238,7 +3609,7 @@ function ChargeButton({ jobId, amount, compact }: { jobId: string; amount: numbe
           disabled={busy}
           style={{ fontSize: compact ? 12 : 13, fontWeight: 600, background: '#d97706', color: '#fff', border: 0, borderRadius: 8, padding: compact ? '4px 12px' : '8px 16px', cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.6 : 1 }}
         >
-          {busy ? 'Charging…' : `Charge · $${amount.toFixed(2)}`}
+          {busy ? 'Charging…' : `Charge · $${cardAmount.toFixed(2)}`}
         </button>
       </div>
 
@@ -3247,9 +3618,23 @@ function ChargeButton({ jobId, amount, compact }: { jobId: string; amount: numbe
           <p className="text-sm text-[#008C9C]/70">
             This will charge the client&apos;s saved card via Stripe. The customer will receive a receipt email automatically.
           </p>
+          {giftCardCredit > 0 && (
+            <div className="rounded-xl bg-[#008C9C]/5 px-4 py-3 space-y-1">
+              <div className="flex items-center justify-between text-sm text-[#008C9C]/70">
+                <span>Amount due</span>
+                <span>${amountDue.toFixed(2)}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm text-[#008C9C]/70">
+                <span>Gift card credit applied</span>
+                <span>−${giftCardCredit.toFixed(2)}</span>
+              </div>
+            </div>
+          )}
           <div className="rounded-xl bg-[#008C9C]/5 px-4 py-3 flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wide text-[#008C9C]/70">Amount</span>
-            <span className="text-lg font-semibold text-[#008C9C]">${amount.toFixed(2)}</span>
+            <span className="text-xs font-semibold uppercase tracking-wide text-[#008C9C]/70">
+              {giftCardCredit > 0 ? "Charged to card" : "Amount"}
+            </span>
+            <span className="text-lg font-semibold text-[#008C9C]">${cardAmount.toFixed(2)}</span>
           </div>
           {result && !result.ok && (
             <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
@@ -3261,7 +3646,7 @@ function ChargeButton({ jobId, amount, compact }: { jobId: string; amount: numbe
               Cancel
             </Button>
             <Button variant="action" border={false} onClick={handleCharge} disabled={busy}>
-              {busy ? "Charging…" : `Charge · $${amount.toFixed(2)}`}
+              {busy ? "Charging…" : `Charge · $${cardAmount.toFixed(2)}`}
             </Button>
           </div>
         </div>

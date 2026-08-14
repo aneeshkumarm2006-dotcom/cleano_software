@@ -16,6 +16,7 @@
 
 import { db } from "@/db";
 import { getCleanerRateInputs } from "./cleaner-rates";
+import { jobPayBasis, type MoneyAddOn } from "./job-money";
 import {
   computeJobPayout,
   fallbackRateInput,
@@ -39,6 +40,20 @@ export interface JobPayInput {
   cleaners: { id: string }[];
   price: number | null;
   employeePay: number | null;
+  /**
+   * TRUE when `employeePay` is an AUTHORITATIVE MANUAL TEAM TOTAL rather than a
+   * save-time estimate snapshot (decision D2, `Job.employeePayIsManual`). Set by
+   * an admin typing into the Employee pay field and by the BookingKoala importer
+   * for a CSV that carries a provider/team payment.
+   *
+   * When set, `computeJobPayShares` pays that figure out instead of the tier
+   * math — which is what the PDF asks for ("if admin enters $88.50, use it";
+   * "do not show the stored value as not used").
+   *
+   * Optional so the hundreds of hand-built fixtures across the verify scripts
+   * still typecheck; absent reads as FALSE, i.e. exactly today's behaviour.
+   */
+  employeePayIsManual?: boolean | null;
   payType: string | null;
   hourlyRate: number | null;
   /**
@@ -49,6 +64,25 @@ export interface JobPayInput {
    */
   payRateMultiplier?: number | null;
   totalTip: number | null;
+  /**
+   * `Job.parking` ("Transportation" in the UI). A customer-funded pass-through
+   * split evenly across the crew exactly like tips (D3 / PDF fix 4: "split tips
+   * and parking evenly by default"). Optional for the same fixture reason as
+   * above; absent means no parking, not "unknown".
+   */
+  parking?: number | null;
+  /**
+   * The four columns `jobPayBasis()` needs to answer "what is this job worth?".
+   * Optional on the INPUT type but REQUIRED in `JOB_PAY_SELECT`, which is what
+   * every real caller uses — see the note there. A caller that supplies none of
+   * them gets `basis = price`, i.e. the pre-fix behaviour, so a hand-built
+   * fixture cannot silently produce a number no code path would.
+   */
+  bookingSource?: string | null;
+  pricingMode?: string | null;
+  subtotalAmount?: number | null;
+  discountAmount?: number | null;
+  addOns?: readonly MoneyAddOn[] | null;
   jobDate: Date | null;
   startTime: Date | null;
   endTime: Date | null;
@@ -84,18 +118,36 @@ export interface JobPayInput {
   }[];
 }
 
-/** Prisma select shared by payroll and the earnings aggregate. */
+/**
+ * Prisma select shared by payroll and the earnings aggregate.
+ *
+ * Stage 4a.2 added the five money columns and the add-on rows. Every pay caller
+ * — payroll (`pay-period.server.ts`), My Pay, the job detail page, the pay modal
+ * and `cleanerPayoutForJobs` — reads through this constant, so they all inherit
+ * the corrected basis at once and none of them can be left behind on `job.price`.
+ */
 export const JOB_PAY_SELECT = {
   id: true,
   employeeId: true,
   employeePay: true,
+  // D2 — is that column an authoritative manual team total, or a snapshot?
+  employeePayIsManual: true,
   price: true,
+  // The pay BASIS columns (fix 5). Without these `jobPayBasis` falls back to the
+  // bare price and every add-on stays invisible to payroll.
+  bookingSource: true,
+  pricingMode: true,
+  subtotalAmount: true,
+  discountAmount: true,
+  addOns: { select: { name: true, price: true, quantity: true } },
   payType: true,
   hourlyRate: true,
   // payRateMultiplier is deliberately NOT selected: the money path stopped
   // reading it in AWER round 3, fix 1, and the SQL no longer asking for it is
   // the clearest statement that nothing here depends on it.
   totalTip: true,
+  // D3 — the second customer-funded pass-through, split like tips.
+  parking: true,
   jobDate: true,
   startTime: true,
   endTime: true,
@@ -226,7 +278,11 @@ export function jobEffectiveDate(job: JobPayInput): Date | null {
 }
 
 export interface JobPayShare {
-  /** What the cleaner earns for the work, before tips. */
+  /**
+   * What the cleaner earns for the WORK, before pass-throughs. This is the only
+   * component that is a company labour cost — tips and parking below are the
+   * customer's money in transit.
+   */
   base: number;
   /**
    * @deprecated Always equal to `base`. The rating multiplier is now folded
@@ -236,27 +292,57 @@ export interface JobPayShare {
    * migrate to `base` deliberately. Do not use in new code.
    */
   afterMultiplier: number;
-  /** This cleaner's slice of the job's tips. */
+  /** This cleaner's slice of the job's tips. Never multiplied by any rate. */
   tip: number;
-  /** What the cleaner is actually paid for this job. */
+  /**
+   * This cleaner's slice of `Job.parking` ("Transportation"), split evenly
+   * exactly like tips (PDF fix 4: "split tips and parking evenly by default").
+   *
+   * Before Stage 4b this money was subtracted from company profit as a
+   * transportation EXPENSE and then paid to nobody. It is customer-funded, so
+   * it is neither company revenue nor a company cost — it passes through.
+   */
+  parking: number;
+  /** What the cleaner is actually paid for this job: `base + tip + parking`. */
   total: number;
   /** Per-person share of the worked hours. */
   hours: number;
 }
 
+/** The zero share, so the several "no participant" fallbacks cannot drift. */
+export const EMPTY_PAY_SHARE: JobPayShare = {
+  base: 0,
+  afterMultiplier: 0,
+  tip: 0,
+  parking: 0,
+  total: 0,
+  hours: 0,
+};
+
 /**
  * THE per-job pay calculation. Payroll and every estimate must call this.
  *
- *   • PERCENTAGE — each cleaner earns their own rating-based rate on the FULL
- *     job price (src/lib/pay-tiers.ts). Paired jobs no longer halve anything.
- *     Legacy jobs with no price fall back to an even split of employeePay.
- *   • FLAT       — employeePay is the fixed payout the admin promised the
- *     cleaner ("Cleaner is paid the fixed amount you enter in Employee pay"),
- *     so each participant gets it; it is NOT divided by the team.
- *   • HOURLY     — employeePay is hourlyRate x hours for the cleaner, same
- *     per-person semantics as FLAT.
+ *   • MANUAL     — `employeePayIsManual` (D2): `employeePay` is the TEAM TOTAL
+ *     the admin typed or BookingKoala paid, split evenly. Beats the tier math
+ *     until an admin clears the flag. This is the PDF's "if admin enters $88.50,
+ *     use it".
+ *   • PERCENTAGE — each cleaner earns their own rating-based rate on the job's
+ *     PAY BASIS (src/lib/pay-tiers.ts). Paired jobs no longer halve anything.
+ *     Legacy jobs with no basis fall back to an even split of employeePay.
+ *   • FLAT       — employeePay is the agreed TEAM TOTAL, split between the crew.
+ *   • HOURLY     — employeePay is hourlyRate x hours, same semantics as FLAT.
  *
- * Tips are always split evenly across participants and are NEVER multiplied.
+ * ## The basis moved (fix 5, Stage 4a.3)
+ *
+ * The PERCENTAGE path used to pay a fraction of `job.price` — the BASE service
+ * line. Every add-on and every custom extra charge was therefore work the crew
+ * did for nothing: the PDF's page-5 job billed $171 and paid off $100. It now
+ * pays off `jobPayBasis(job)`, the same active value every price surface prints
+ * (base + add-ons, or the stored override total), minus nothing for discounts
+ * per decision D5.
+ *
+ * Tips AND parking are always split evenly across participants and are NEVER
+ * multiplied by anyone's rate — they are the customer's money passing through.
  *
  * This function applies no multiplier of its own (awerfixes.pdf item 1). The
  * rating premium is already baked into each cleaner's RATE by
@@ -273,14 +359,26 @@ export function computeJobPayShares(
 
   const payType = (job.payType as JobPayType) ?? "PERCENTAGE";
   const tipShare = (job.totalTip || 0) / participantIds.length;
+  // Parking rides in the same lane as tips: even split, no rate applied. It used
+  // to be a company transportation expense that reached no cleaner at all.
+  const parkingShare = Math.max(0, job.parking || 0) / participantIds.length;
 
   const rateList: CleanerRateInput[] = participantIds.map(
     (id) => rates.get(id) ?? fallbackRateInput(id)
   );
 
-  const usePriceModel = (job.price ?? 0) > 0;
-  const payout = computeJobPayout(job.price, rateList);
+  // THE basis (fix 5). `job.price` is the base service line; this is what the
+  // job is actually worth — base + add-ons, or the stored override total.
+  const payBasis = jobPayBasis(job);
+  const usePriceModel = payBasis > 0;
+  const payout = computeJobPayout(payBasis, rateList);
   const tierAmountById = new Map(payout.shares.map((s) => [s.id, s.amount]));
+
+  // D2 — an authoritative manual TEAM TOTAL supersedes the tier math on a
+  // PERCENTAGE job. FLAT/HOURLY already treat `employeePay` this way, so the
+  // flag changes nothing for them; it is checked here only so the two paths
+  // share one branch below rather than two spellings of the same rule.
+  const manualTeamTotal = job.employeePayIsManual === true;
 
   // Manual per-cleaner overrides (JobAssignment.payAmount). An override always
   // wins for that cleaner.
@@ -291,11 +389,12 @@ export function computeJobPayShares(
     }
   }
 
-  // FLAT / HOURLY: `employeePay` is the TEAM TOTAL for the job, divided between
-  // the assigned cleaners — NOT paid to each of them (client decision). Anyone
-  // with a manual override takes their fixed amount off the top; whoever is left
-  // splits the remainder evenly, so the crew can never be paid more than the
-  // agreed total.
+  // FLAT / HOURLY / MANUAL: `employeePay` is the TEAM TOTAL for the job, divided
+  // between the assigned cleaners — NOT paid to each of them (client decision).
+  // Anyone with a manual override takes their fixed amount off the top; whoever
+  // is left splits the remainder evenly, so the crew can never be paid more than
+  // the agreed total. D2 reuses this remainder logic verbatim for a manual
+  // PERCENTAGE job, which is exactly the PDF's $88.55 → $44.28 / $44.27.
   const teamTotal = job.employeePay || 0;
   const overriddenParticipants = participantIds.filter((id) =>
     overrideById.has(id)
@@ -306,12 +405,29 @@ export function computeJobPayShares(
     (s, id) => s + (overrideById.get(id) ?? 0),
     0
   );
-  const remainderPerPerson =
-    unoverriddenCount > 0
-      ? Math.max(0, teamTotal - overriddenSum) / unoverriddenCount
-      : 0;
+  // Split the remainder to the CENT, not to the float.
+  //
+  // `teamTotal / n` rounded per person overpays an odd total: $88.55 across two
+  // cleaners is $44.275 each, which round2 turns into $44.28 + $44.28 = $88.56 —
+  // a cent the company never agreed to, on every such job, forever. The client's
+  // own screenshot names the right answer ($44.28 / $44.27), so the leftover
+  // cents go to the first cleaners in participant order and the crew total is
+  // the agreed figure exactly. Even splits ($100 / 2) are untouched.
+  const remainderCents = Math.max(
+    0,
+    Math.round((teamTotal - overriddenSum) * 100)
+  );
+  const perPersonCents =
+    unoverriddenCount > 0 ? Math.floor(remainderCents / unoverriddenCount) : 0;
+  const extraCents =
+    unoverriddenCount > 0 ? remainderCents % unoverriddenCount : 0;
+  // Same idea for the legacy no-basis path, which splits the WHOLE team total.
+  const legacyCents = Math.max(0, Math.round(teamTotal * 100));
+  const legacyPerPersonCents = Math.floor(legacyCents / participantIds.length);
+  const legacyExtraCents = legacyCents % participantIds.length;
 
-  for (const id of participantIds) {
+  let unoverriddenSeen = 0;
+  for (const [index, id] of participantIds.entries()) {
     let base: number;
     const override = overrideById.get(id);
     if (override != null) {
@@ -321,29 +437,39 @@ export function computeJobPayShares(
       // which was invisible while that factor was pinned at 1.0 and wrong the
       // day it wasn't.
       base = override;
-    } else if (payType === "FLAT" || payType === "HOURLY") {
-      // employeePay is an agreed TEAM TOTAL — a manual amount too. Untouched.
-      base = remainderPerPerson;
+    } else if (payType === "FLAT" || payType === "HOURLY" || manualTeamTotal) {
+      // employeePay is an agreed TEAM TOTAL — a manual amount too. Untouched by
+      // any rate. `manualTeamTotal` is decision D2: on a PERCENTAGE job an admin
+      // (or the BookingKoala CSV) has stated the crew's pay outright, and the
+      // PDF is explicit that it must be honoured rather than shown as unused.
+      base =
+        (perPersonCents + (unoverriddenSeen < extraCents ? 1 : 0)) / 100;
+      unoverriddenSeen += 1;
     } else if (usePriceModel) {
       // PERCENTAGE — the rating multiplier is ALREADY inside the rate that
       // computeJobPayout used (tier base x multiplier). Applying it again here
-      // would pay the rating premium twice.
+      // would pay the rating premium twice. The BASIS is the job's active value
+      // (base + add-ons, or the override total), not the bare price — fix 5.
       base = tierAmountById.get(id) ?? 0;
     } else {
-      // Legacy PERCENTAGE row with no price: employeePay is whatever the admin
-      // or the BookingKoala importer recorded — also a manual amount. Split
-      // evenly, unscaled; multiplying an imported provider payment by a rating
-      // premium would invent money no rate ever justified.
-      base = teamTotal / participantIds.length;
+      // Legacy PERCENTAGE row with no basis at all: employeePay is whatever the
+      // admin or the BookingKoala importer recorded — also a manual amount.
+      // Split evenly, unscaled; multiplying an imported provider payment by a
+      // rating premium would invent money no rate ever justified.
+      base =
+        (legacyPerPersonCents + (index < legacyExtraCents ? 1 : 0)) / 100;
     }
     result.set(id, {
       base: round2(base),
       // Deprecated alias — see JobPayShare. Equal to `base` by construction.
       afterMultiplier: round2(base),
       tip: round2(tipShare),
+      // D3 — the customer-funded parking share, split exactly like the tip and
+      // multiplied by nothing.
+      parking: round2(parkingShare),
       // `base` unrounded here, exactly as before, so no double-rounding is
       // introduced and FLAT thirds don't shift by a cent.
-      total: round2(base + tipShare),
+      total: round2(base + tipShare + parkingShare),
       // Each cleaner's OWN hours when sessions exist; the old even split of
       // the job span otherwise (see cleanerWorkedHours). Reporting only —
       // nothing above reads it.
@@ -359,15 +485,7 @@ export function cleanerJobPay(
   rates: Map<string, CleanerRateInput>,
   employeeId: string
 ): JobPayShare {
-  return (
-    computeJobPayShares(job, rates).get(employeeId) ?? {
-      base: 0,
-      afterMultiplier: 0,
-      tip: 0,
-      total: 0,
-      hours: 0,
-    }
-  );
+  return computeJobPayShares(job, rates).get(employeeId) ?? EMPTY_PAY_SHARE;
 }
 
 export type PeriodStatus = "OPEN" | "DRAFT" | "APPROVED" | "PAID" | "CANCELLED";
@@ -377,6 +495,13 @@ export interface CleanerPeriodSummary {
   endDate: Date;
   /** "OPEN" = the live current week; no PayPeriod row exists for it yet. */
   status: PeriodStatus;
+  /**
+   * Everything the period earned before adjustments: the WORK plus both
+   * customer-funded pass-throughs (tips and, since Stage 4b, parking). Same
+   * three components `JobPayShare.total` carries and the same figure
+   * `generatePayPeriodForWeek` writes into `Payout.baseAmount`, so the live week
+   * and the drafted week are the same number.
+   */
   baseAmount: number;
   adjustments: number;
   deductions: number;
@@ -517,6 +642,10 @@ export async function getCleanerEarnings(
   let totalHoursYTD = 0;
   let liveBase = 0;
   let liveTips = 0;
+  // D3 — the parking pass-through is money the cleaner is owed, so it belongs in
+  // the live current-week figure exactly like tips. Left out, My Pay would quote
+  // a smaller number than the payout row payroll then writes from `share.total`.
+  let liveParking = 0;
   let liveJobs = 0;
   let liveHours = 0;
 
@@ -541,6 +670,7 @@ export async function getCleanerEarnings(
     ) {
       liveBase += share.base;
       liveTips += share.tip;
+      liveParking += share.parking;
       liveJobs += 1;
       liveHours += share.hours;
     }
@@ -580,11 +710,14 @@ export async function getCleanerEarnings(
         startDate: currentRange.start,
         endDate: currentRange.end,
         status: "OPEN",
-        baseAmount: round2(liveBase + liveTips),
+        // base + tip + parking — the same three components `share.total` carries
+        // and the same figure `generatePayPeriodForWeek` will write into the
+        // payout row, so the live week and the drafted week agree to the cent.
+        baseAmount: round2(liveBase + liveTips + liveParking),
         adjustments: 0,
         deductions: 0,
         reimbursements: 0,
-        finalAmount: round2(liveBase + liveTips),
+        finalAmount: round2(liveBase + liveTips + liveParking),
         jobCount: liveJobs,
         totalHours: round2(liveHours),
         isLive: true,

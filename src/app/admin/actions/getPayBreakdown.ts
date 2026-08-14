@@ -15,8 +15,12 @@ import {
   tierBaseRate,
   type CleanerTier,
 } from "@/lib/pay-tiers";
-import { computeJobPayShares, type JobPayInput } from "@/lib/cleaner-earnings";
-import { computeJobMoney } from "@/lib/job-money";
+import {
+  EMPTY_PAY_SHARE,
+  computeJobPayShares,
+  type JobPayInput,
+} from "@/lib/cleaner-earnings";
+import { computeJobMoney, jobPayBasis } from "@/lib/job-money";
 import { getTaxRates } from "@/lib/tax.server";
 
 /**
@@ -103,27 +107,30 @@ export async function getPayBreakdown(
       job as unknown as JobPayInput,
       rateInputs
     );
-    const share = shares.get(viewerId) ?? {
-      base: 0,
-      afterMultiplier: 0,
-      tip: 0,
-      total: 0,
-      hours: 0,
-    };
+    const share = shares.get(viewerId) ?? EMPTY_PAY_SHARE;
+
+    // THE basis the percentage model is a fraction of (fix 5). Not `job.price`:
+    // that is the base service line, and every add-on and custom extra charge
+    // used to be invisible to this whole file.
+    const payBasis = jobPayBasis(job);
 
     const viewerRate = rateInputs.get(viewerId);
     const hasOverride = job.assignments.some(
       (a) => a.cleanerId === viewerId && a.payAmount != null
     );
-    // The multiplier only shapes the PERCENTAGE-of-price path. A manual
-    // override, a FLAT total or an HOURLY amount is the figure the admin typed
-    // and is paid through untouched.
+    // D2 — the admin (or the BookingKoala CSV) stated the crew's total outright,
+    // so no rate and no multiplier is involved for anyone on this job.
+    const payIsManual = job.employeePayIsManual === true;
+    // The multiplier only shapes the PERCENTAGE-of-basis path. A manual team
+    // total, a manual per-cleaner override, a FLAT total or an HOURLY amount is
+    // the figure the admin typed and is paid through untouched.
     const multiplierApplies =
-      payType === "PERCENTAGE" && !hasOverride && (job.price ?? 0) > 0;
+      payType === "PERCENTAGE" && !hasOverride && !payIsManual && payBasis > 0;
 
     // ── Cleaner (and any non-admin) payload: payout only. ────────────────────
     if (!isAdmin) {
-      const ratingBoost: CleanerPayBreakdown["ratingBoost"] = hasOverride
+      const ratingBoost: CleanerPayBreakdown["ratingBoost"] = hasOverride ||
+        payIsManual
         ? { state: "NOT_APPLICABLE", reason: "FIXED_AMOUNT" }
         : !multiplierApplies
           ? {
@@ -149,6 +156,7 @@ export async function getPayBreakdown(
         payType,
         hourlyRate: payType === "HOURLY" ? job.hourlyRate ?? null : null,
         tipShare: share.tip,
+        parkingShare: share.parking,
         totalEmployeePay: share.total,
         ratingBoost,
       };
@@ -221,8 +229,12 @@ export async function getPayBreakdown(
       // Pay at the bare TIER BASE rate, so the before/after below is a real
       // comparison rather than the same number printed twice (the multiplier is
       // folded into the rate now, not applied to the finished amount).
+      //
+      // Off the PAY BASIS, not `job.price` (fix 5): with the bare price this row
+      // understated the "before" figure by the whole add-on total, so the
+      // multiplier column appeared to be worth far more than it is.
       employeeBasePay: multiplierApplies
-        ? Math.round((job.price ?? 0) * tierBaseRate(viewerTier) * 100) / 100
+        ? Math.round(payBasis * tierBaseRate(viewerTier) * 100) / 100
         : share.base,
       // The RESOLVED cleaner multiplier. This used to read the deprecated
       // per-job column, which both save paths hard-reset to 1.0 and nothing
@@ -233,11 +245,16 @@ export async function getPayBreakdown(
         ? `${viewerRate?.avgRating?.toFixed(2) ?? "—"}★ all-time · ${viewerRate?.ratingCount ?? 0} ratings`
         : hasOverride
           ? "Manual per-cleaner amount — no multiplier"
-          : `${payType} pay — no multiplier`,
+          : payIsManual
+            ? "Manual team total — split evenly, no multiplier"
+            : `${payType} pay — no multiplier`,
       payAfterMultiplier: share.base,
       totalTip: job.totalTip || 0,
       teamSize: shares.size,
       tipShare: share.tip,
+      parkingShare: share.parking,
+      payBasis,
+      payIsManual,
       totalEmployeePay: share.total,
       isLead,
       tier: viewerTier,
@@ -245,6 +262,8 @@ export async function getPayBreakdown(
         ? Math.round(tierBaseRate(viewerTier) * resolvedMultiplier * 10000) /
           10000
         : 0,
+      // The company's labour cost for the job: every cleaner's BASE, excluding
+      // the tip and parking shares that are the customer's money in transit.
       isSplit: shares.size > 1,
       poolTotal,
     };

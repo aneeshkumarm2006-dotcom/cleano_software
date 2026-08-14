@@ -3,6 +3,7 @@
 import { db } from "@/db";
 import { getActor } from "@/lib/action-guards";
 import { computeJobMoney } from "@/lib/job-money";
+import { resolveAmountDue } from "@/lib/job-billing";
 import { getTaxRates } from "@/lib/tax.server";
 import { formatDate, formatTime } from "@/lib/timezone";
 import { formatAddressLine } from "@/lib/client-address";
@@ -80,6 +81,7 @@ export async function getJobSummary(jobId: string): Promise<JobSummaryResult> {
         isCashJob: true,
         taxExempt: true,
         bookingSource: true,
+        pricingMode: true,
         addOns: { select: { name: true, price: true, quantity: true } },
         paymentType: true,
         paymentReceived: true,
@@ -91,6 +93,7 @@ export async function getJobSummary(jobId: string): Promise<JobSummaryResult> {
         totalTip: true,
         parking: true,
         employeePay: true,
+        employeePayIsManual: true,
         payType: true,
         hourlyRate: true,
         stripePaymentMethodId: true,
@@ -200,6 +203,9 @@ export async function getJobSummary(jobId: string): Promise<JobSummaryResult> {
       leadEmployee: job.employee ?? null,
 
       money,
+      // The figure the drawer prints beside "Charge card" — what Stripe will
+      // take, not what the job is worth (fix 3 item 3.2).
+      amountDue: resolveAmountDue(job),
       price: job.price,
       discountAmount: job.discountAmount,
       discountReason: job.discountReason,
@@ -217,6 +223,7 @@ export async function getJobSummary(jobId: string): Promise<JobSummaryResult> {
       totalTip: job.totalTip,
       transportation: job.parking,
       employeePay: job.employeePay,
+      employeePayIsManual: job.employeePayIsManual,
       payType: job.payType,
       hourlyRate: job.hourlyRate,
       hasCardOnFile: !!job.stripePaymentMethodId,
@@ -225,6 +232,7 @@ export async function getJobSummary(jobId: string): Promise<JobSummaryResult> {
       cancellationReason: job.cancellationReason,
       photoCount: job._count.photos,
       bookingSource: job.bookingSource,
+      pricingMode: job.pricingMode,
     };
 
     return { success: true, job: dto };

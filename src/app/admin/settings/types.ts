@@ -3,7 +3,25 @@ export interface SettingsUser {
   name: string;
   email: string;
   phone?: string | null;
-  role: "OWNER" | "ADMIN" | "EMPLOYEE";
+  /**
+   * Every staff role, not just the three this used to name. The page is shared
+   * (decision D6) and an OPS_MANAGER or FIELD_LEAD opening their own settings
+   * used to be cast to "EMPLOYEE" here — a lie that made `user.role === "EMPLOYEE"`
+   * checks in ProfileTab read as true for people who are not cleaners.
+   */
+  role: "OWNER" | "ADMIN" | "OPS_MANAGER" | "FIELD_LEAD" | "EMPLOYEE";
+}
+
+/**
+ * A settings section whose query failed. The page degrades that section to its
+ * empty state and passes this through instead of throwing, so one unreachable
+ * table can no longer take down every other tab.
+ */
+export interface SettingsSectionFailure {
+  /** The data prop that could not be loaded, e.g. "trainingModules". */
+  key: string;
+  /** What the admin is shown, e.g. "Training modules". */
+  label: string;
 }
 
 export interface AppSettingRecord {

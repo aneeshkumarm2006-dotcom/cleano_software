@@ -22,7 +22,16 @@ import {
  * invoice for the same job line-itemed it — invoice != job total, which is the
  * defect awerfixes.pdf item 10 names.
  *
- * ## The rule: the basis comes from `bookingSource`
+ * ## The rule: the basis comes from `Job.pricingMode`, falling back to provenance
+ *
+ * Since cleano_new_fixes.pdf fix 2 the basis is an ADMIN CHOICE stored on the
+ * job — `ITEMIZED` (the parts are the price) or `FINAL_PRICE` (one typed service
+ * total wins and the add-on rows itemise it). `resolvePricingMode()` reads that
+ * column and only falls back to the `bookingSource` rule below when it is NULL,
+ * which is what lets rows written before the column price exactly as they did.
+ *
+ * The rest of this section describes that fallback — i.e. how a job with no
+ * stamped mode is read, and why the two modes existed implicitly first.
  *
  * `Job.price` genuinely means two different things (see lib/job-billing.ts for
  * the full account), and `Job.subtotalAmount` follows it:
@@ -86,6 +95,40 @@ function round2(n: number): number {
  */
 export type JobMoneyBasis = "ADDITIVE" | "INCLUSIVE" | "LEGACY_PRICE";
 
+/**
+ * The stored, admin-selectable pricing mode (`Job.pricingMode`).
+ *
+ * Spelled as a string union rather than imported from `@prisma/client` on
+ * purpose: this module is client-safe (see the header) and three client
+ * components render from it. The values are identical to the Prisma enum, and
+ * `isPricingMode()` is the one place that decides whether an arbitrary string
+ * from a form or a database row is one of them.
+ */
+export type JobPricingMode = "ITEMIZED" | "FINAL_PRICE";
+
+export const JOB_PRICING_MODES: readonly JobPricingMode[] = [
+  "ITEMIZED",
+  "FINAL_PRICE",
+] as const;
+
+/** Human labels for the mode. One definition, so no two surfaces word it differently. */
+export const PRICING_MODE_LABEL: Record<JobPricingMode, string> = {
+  ITEMIZED: "Itemized pricing",
+  FINAL_PRICE: "Final price override",
+};
+
+/** The one-line explanation each mode carries wherever it is offered as a choice. */
+export const PRICING_MODE_HINT: Record<JobPricingMode, string> = {
+  ITEMIZED:
+    "The parts are the price — add-ons and extra charges are added to the base price.",
+  FINAL_PRICE:
+    "One agreed service total wins. Add-ons are recorded for scope and the cleaner, and never change the total.",
+};
+
+export function isPricingMode(v: unknown): v is JobPricingMode {
+  return v === "ITEMIZED" || v === "FINAL_PRICE";
+}
+
 export interface MoneyAddOn {
   name?: string | null;
   price?: number | null;
@@ -94,6 +137,13 @@ export interface MoneyAddOn {
 
 export interface JobMoneyJob {
   bookingSource?: string | null;
+  /**
+   * The stamped mode. Typed loosely because it arrives from three places with
+   * three shapes — the Prisma enum, a form string, and a serialized DTO — and
+   * `resolvePricingMode` validates rather than trusts. NULL/absent/garbage all
+   * fall back to the `bookingSource` rule.
+   */
+  pricingMode?: JobPricingMode | string | null;
   price?: number | null;
   discountAmount?: number | null;
   subtotalAmount?: number | null;
@@ -114,6 +164,25 @@ export interface AddOnLine {
 
 export interface JobMoney {
   basis: JobMoneyBasis;
+  /**
+   * The mode this computation actually ran under, after the fallback. What the
+   * UIs label the job with — never re-derive it beside a `computeJobMoney` call.
+   */
+  pricingMode: JobPricingMode;
+  /**
+   * True when `pricingMode` was READ off the job rather than inferred from
+   * `bookingSource`. Drives nothing in the arithmetic; it exists so a surface
+   * can tell "the admin chose this" from "we guessed, as we always did".
+   */
+  pricingModeIsExplicit: boolean;
+  /**
+   * What the parts add up to: `base + sum(add-on line totals) − discount`,
+   * floored at zero. In ITEMIZED mode this IS `subtotalAmount`. In FINAL_PRICE
+   * mode it is the counterfactual the job detail page prints beside the active
+   * override ("Calculated from items: $X" vs "Active override total: $Y") and
+   * the figure "Recalculate from items" would switch the job to.
+   */
+  itemizedSubtotal: number;
   /**
    * Drives LABELS, not arithmetic. When true the add-on row is an itemisation
    * of a subtotal that already contains it, so it must not be rendered with a
@@ -178,6 +247,34 @@ export function addOnMoneyBasis(
   return "ADDITIVE";
 }
 
+/**
+ * THE mode question, answered in one place: is this job priced from its parts,
+ * or from one typed service total?
+ *
+ * Order matters and is the whole point of fix 2:
+ *
+ *   1. `Job.pricingMode`, when it is stamped. An admin's explicit choice beats
+ *      any inference, and — critically — it SURVIVES the admin retyping the
+ *      price. The bug this replaces was `priceUnchanged` in saveJob: editing the
+ *      price of a web/imported booking flipped it to itemized behind the admin's
+ *      back, and its add-ons started adding on top of a subtotal that already
+ *      contained them.
+ *   2. Otherwise the historical provenance rule, so every row written before the
+ *      column prices exactly as it did before.
+ *
+ * Callers that also need to know WHICH of the two answered should read
+ * `computeJobMoney(...).pricingModeIsExplicit` rather than re-deriving it.
+ */
+export function resolvePricingMode(job: {
+  pricingMode?: JobPricingMode | string | null;
+  bookingSource?: string | null;
+}): JobPricingMode {
+  if (isPricingMode(job?.pricingMode)) return job.pricingMode;
+  return addOnMoneyBasis(job?.bookingSource) === "INCLUSIVE"
+    ? "FINAL_PRICE"
+    : "ITEMIZED";
+}
+
 /** Human label for the add-on row, so the two renderers can't word it differently. */
 export function addOnLineLabel(line: AddOnLine): string {
   return line.quantity > 1 ? `${line.name} ×${line.quantity}` : line.name;
@@ -217,6 +314,193 @@ export function addOnAmountIsIncluded(
   return addOnsIncludedInSubtotal && round2(Number(lineTotal) || 0) === 0;
 }
 
+/**
+ * The columns the ACTIVE value of a job is computed from.
+ *
+ * Every field is REQUIRED here (nullable, but present) on purpose. This is the
+ * shape the reporting helpers take, and a Prisma `select` that forgets one of
+ * them would otherwise compile and silently fall back to the bare-price number
+ * fix 3 exists to remove — the failure would be a wrong dollar figure on a
+ * dashboard, which nobody notices. Making it a type error moves the failure to
+ * the build.
+ */
+export interface ActiveValueJob {
+  price: number | null;
+  discountAmount: number | null;
+  subtotalAmount: number | null;
+  bookingSource: string | null;
+  pricingMode: JobPricingMode | string | null;
+  addOns: readonly MoneyAddOn[];
+}
+
+/**
+ * Rates that cannot move the figure `activeSubtotal` reads.
+ *
+ * The pre-tax subtotal is rate-INDEPENDENT in all three branches of
+ * `computeJobMoney`: FINAL_PRICE reads the stored column back, and the other
+ * two take `computeJobTaxes(...).subtotalAmount`, which is
+ * `round2(max(0, subtotal))` — the rates only ever touch gst/qst/total. So a
+ * caller that has no tax rates in hand (a client component, a metrics reducer,
+ * a CSV export) can still ask for the active value without inventing rates or
+ * awaiting `getTaxRates()`.
+ */
+const SUBTOTAL_ONLY_RATES: TaxRates = { gstRate: 0, qstRate: 0 };
+
+/**
+ * THE active value of a job, pre-tax: what the parts come to under ITEMIZED, or
+ * the stored override total under FINAL_PRICE.
+ *
+ * This is the one number cleano_new_fixes.pdf fix 3 is about — "base price,
+ * add-ons, extra charges, and the active manual price override". Every surface
+ * that prints or aggregates "the price" reads it; none of them read `Job.price`,
+ * which is only ever the BASE service line (and, on a web booking, a tax-
+ * inclusive one — see lib/job-billing.ts).
+ *
+ * Deliberately NOT `price - discount + addOns` written out again: it delegates
+ * to `computeJobMoney` so the price card, the receipt, the invoice and the
+ * dashboard cannot drift from each other the way they did before this stage.
+ *
+ * On the discount: the returned figure is discount-NET (the ITEMIZED branch
+ * subtracts it; under FINAL_PRICE it is already inside the stored subtotal).
+ * That is right for revenue. It is deliberately NOT the cleaner pay basis —
+ * decision D5 keeps discounts out of that, so Stage 4 builds its basis from
+ * this module separately rather than reusing this function.
+ */
+export function activeSubtotal(job: JobMoneyJob): number {
+  return computeJobMoney(job, SUBTOTAL_ONLY_RATES).subtotalAmount;
+}
+
+/**
+ * THE basis every cleaner's PERCENTAGE pay is a fraction of (fix 5, Stage 4a.1).
+ *
+ * The PDF: "Active subtotal includes base price, add-ons, extra charges, and the
+ * active manual price override." Before this, `computeJobPayShares` paid a
+ * percentage of `Job.price` — the BASE service line — so the $100 + $71 job on
+ * page 5 paid its cleaner off $100 and every add-on and custom extra charge was
+ * work the crew did for free.
+ *
+ * Same two modes as everything else in this module:
+ *
+ *   FINAL_PRICE  the stored override total (what the job is agreed to be worth)
+ *   ITEMIZED     base + Σ add-on line totals
+ *
+ * ## The discount is deliberately NOT subtracted — decision D5
+ *
+ * This is the ONE place the pay basis and `jobRevenue` part company, and the
+ * asymmetry is intentional:
+ *
+ *   revenue    = activeSubtotal  →  discount-NET   (a discount is money the
+ *                                   company chose not to collect)
+ *   pay basis  = this function   →  discount-GROSS (a discount is marketing
+ *                                   spend, not a smaller job)
+ *
+ * Two reasons. First, today's basis (`job.price`) already ignores the discount,
+ * so honouring it here would land a cleaner pay CUT in the same release as the
+ * add-on increase — a change nobody asked for, arriving disguised as one they
+ * did. Second, the PDF's own definition of the basis lists "base price, add-ons,
+ * extra charges, and the active manual price override" and conspicuously omits
+ * discounts. See `jobRevenue` in metrics-shared.ts for the other half of this.
+ *
+ * Implemented by re-running `computeJobMoney` with the discount zeroed rather
+ * than by writing `price + addOns` out again, so the basis can never drift from
+ * the breakdown the admin is looking at. Under FINAL_PRICE the zeroing is a
+ * no-op: that branch reads the stored subtotal, which has the discount inside it
+ * already and IS the agreed total.
+ */
+export function jobPayBasis(job: JobMoneyJob): number {
+  return computeJobMoney(
+    { ...job, discountAmount: 0 },
+    SUBTOTAL_ONLY_RATES
+  ).subtotalAmount;
+}
+
+// ── Customer-funded pass-throughs: tips and parking (decision D3) ────────────
+
+/**
+ * The two columns that hold money the CUSTOMER funds and the CLEANER receives.
+ *
+ * `Job.parking` is labelled "Transportation" in the admin UI. It was booked as a
+ * company EXPENSE (it reduced net profit) while never being paid to anyone, and
+ * `Job.totalTip` was booked as company INCOME. The PDF's invariant is that
+ * neither "must be treated as company revenue or incorrectly reduce company
+ * profit" — they are collected on the customer's behalf and handed to the crew.
+ */
+export interface PassThroughFields {
+  totalTip?: number | null;
+  parking?: number | null;
+}
+
+/** Tip + parking, floored at zero. The one place this addition is written. */
+export function passThroughTotal(job: PassThroughFields): number {
+  const tip = Math.max(0, Number(job?.totalTip) || 0);
+  const parking = Math.max(0, Number(job?.parking) || 0);
+  return round2(tip + parking);
+}
+
+export interface PassThroughBilling {
+  /** What `Job.totalAmount` should be: taxed service total + `collected`. */
+  totalAmount: number;
+  /** The pass-through the customer's card is (or was) charged for. */
+  collected: number;
+  /**
+   * Pass-through the cleaners are owed that the card never took — money the
+   * admin has to collect separately. Non-zero only on an already-settled job.
+   */
+  uncollected: number;
+}
+
+/**
+ * D3, in one function: how much of a job's tip + parking rides along on the card.
+ *
+ * Tips and parking are customer-funded, which is the whole reason they can be
+ * paid out to cleaners without denting profit — if the company paid a tip it
+ * never collected, profit WOULD drop, contradicting the PDF's requirement. So
+ * they have to actually be billed:
+ *
+ *   NOT SETTLED  fold the whole pass-through into `totalAmount`. `resolveAmountDue`
+ *                already prefers that column, so the card takes it with the job.
+ *   SETTLED      fold in only what the stored total ALREADY contains. A tip typed
+ *                after the card was charged must not reappear as a new balance
+ *                owed — D3 is explicit: "no automatic second charge, and no
+ *                retroactive recharge of historical rows". It is flagged
+ *                `uncollected` instead, for the admin to take in cash.
+ *
+ * ## Why `collected` is derived rather than stored
+ *
+ * On a settled job the already-collected pass-through is recoverable without a
+ * new column, because saveJob is the only writer of `totalAmount` and what it
+ * wrote was `taxedTotal_then + passThrough_then`. If the service total has not
+ * moved since, `storedTotal − taxedTotal` IS `passThrough_then`. It is clamped
+ * to `[0, passThrough]` so the arithmetic can only ever be conservative when the
+ * service total HAS moved: it can under-credit (the surplus shows up as
+ * `uncollected`, which an admin can see and act on), never over-credit, and
+ * never invent a charge.
+ */
+export function resolvePassThroughBilling(args: {
+  taxedTotal: number;
+  passThrough: number;
+  settled: boolean;
+  storedTotal?: number | null;
+}): PassThroughBilling {
+  const taxedTotal = round2(Math.max(0, Number(args.taxedTotal) || 0));
+  const passThrough = round2(Math.max(0, Number(args.passThrough) || 0));
+
+  const collected = args.settled
+    ? round2(
+        Math.min(
+          passThrough,
+          Math.max(0, (Number(args.storedTotal) || 0) - taxedTotal)
+        )
+      )
+    : passThrough;
+
+  return {
+    totalAmount: round2(taxedTotal + collected),
+    collected,
+    uncollected: round2(Math.max(0, passThrough - collected)),
+  };
+}
+
 export function computeJobMoney(job: JobMoneyJob, rates: TaxRates): JobMoney {
   const addOnLines: AddOnLine[] = (job.addOns ?? []).map((a) => {
     const unitPrice = Number.isFinite(Number(a?.price)) ? round2(Number(a.price)) : 0;
@@ -236,10 +520,18 @@ export function computeJobMoney(job: JobMoneyJob, rates: TaxRates): JobMoney {
   const storedTotal = Number(job.totalAmount) || 0;
   const price = Number(job.price) || 0;
 
-  const source = addOnMoneyBasis(job.bookingSource);
+  // What the PARTS come to, in every mode. Under FINAL_PRICE this is not what
+  // the customer pays — it is the counterfactual the UI prints beside the
+  // override and the number "Recalculate from items" would adopt.
+  const itemizedSubtotal = round2(
+    Math.max(0, round2(price) + addOnTotal - discountRecorded)
+  );
 
-  // --- INCLUSIVE: read the stored subtotal back, unchanged. -----------------
-  if (source === "INCLUSIVE" && storedSubtotal > 0) {
+  const pricingMode = resolvePricingMode(job);
+  const pricingModeIsExplicit = isPricingMode(job.pricingMode);
+
+  // --- FINAL_PRICE: read the stored service total back, unchanged. ----------
+  if (pricingMode === "FINAL_PRICE" && storedSubtotal > 0) {
     const subtotalAmount = round2(storedSubtotal);
     // Prefer the stored tax figures. On a web booking they are what the
     // customer was quoted and what their card was authorised for; recomputing
@@ -254,6 +546,9 @@ export function computeJobMoney(job: JobMoneyJob, rates: TaxRates): JobMoney {
       : computeJobTaxes(subtotalAmount, rates, exempt);
     return {
       basis: "INCLUSIVE",
+      pricingMode,
+      pricingModeIsExplicit,
+      itemizedSubtotal,
       addOnsIncludedInSubtotal: true,
       basePrice: round2(Math.max(0, subtotalAmount - addOnTotal)),
       addOnLines,
@@ -269,13 +564,21 @@ export function computeJobMoney(job: JobMoneyJob, rates: TaxRates): JobMoney {
     };
   }
 
-  // --- LEGACY_PRICE: an inclusive source written before the tax columns. ----
-  // Mirrors resolveAmountDue's fallback so display and billing agree.
-  if (source === "INCLUSIVE" && price > 0) {
+  // --- LEGACY_PRICE: a FINAL_PRICE job with no stored subtotal to read. -----
+  // Two populations land here, and they want the same answer: an inclusive
+  // source written before the tax columns existed, and a job the admin has just
+  // switched INTO override mode in a live form preview, where `price` is the
+  // override they are typing and nothing is stored yet. Mirrors
+  // resolveAmountDue's own `price − discountAmount` fallback so display and
+  // billing agree.
+  if (pricingMode === "FINAL_PRICE" && price > 0) {
     const subtotalAmount = round2(Math.max(0, price - discountRecorded));
     const taxes = computeJobTaxes(subtotalAmount, rates, exempt);
     return {
       basis: "LEGACY_PRICE",
+      pricingMode,
+      pricingModeIsExplicit,
+      itemizedSubtotal,
       addOnsIncludedInSubtotal: true,
       basePrice: round2(Math.max(0, subtotalAmount - addOnTotal)),
       addOnLines,
@@ -291,7 +594,11 @@ export function computeJobMoney(job: JobMoneyJob, rates: TaxRates): JobMoney {
     };
   }
 
-  // --- ADDITIVE: every admin job. Add-ons finally count. --------------------
+  // --- ADDITIVE: the itemized mode. Add-ons count. --------------------------
+  // Also the floor for a FINAL_PRICE job with neither a stored subtotal nor a
+  // price: there is no override to honour, so the parts are all there is, and
+  // with no parts either every figure is zero — which is what an empty new-job
+  // form should preview.
   const basePrice = round2(price);
   const subtotalAmount = round2(
     Math.max(0, basePrice + addOnTotal - discountRecorded)
@@ -299,6 +606,9 @@ export function computeJobMoney(job: JobMoneyJob, rates: TaxRates): JobMoney {
   const taxes = computeJobTaxes(subtotalAmount, rates, exempt);
   return {
     basis: "ADDITIVE",
+    pricingMode,
+    pricingModeIsExplicit,
+    itemizedSubtotal,
     addOnsIncludedInSubtotal: false,
     basePrice,
     addOnLines,

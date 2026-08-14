@@ -98,6 +98,12 @@ export async function generatePayPeriodForWeek(
         payoutMap.set(pid, { base: 0, jobCount: 0, hours: 0 });
       }
       const entry = payoutMap.get(pid)!;
+      // `share.total` is base + tip + PARKING (Stage 4b.1/4b.4). Parking joined
+      // tips inside the total rather than becoming a fourth Payout column on
+      // purpose: `computePayoutTotals` and every statement, receipt and My Pay
+      // surface already treat `baseAmount` as "what the work plus the customer's
+      // pass-throughs came to", so tips set the precedent and parking follows it
+      // without a schema change or a payout-math change.
       entry.base += share.total;
       entry.jobCount += 1;
       entry.hours += share.hours;

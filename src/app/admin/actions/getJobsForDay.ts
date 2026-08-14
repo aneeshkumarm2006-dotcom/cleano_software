@@ -6,6 +6,7 @@ import { headers } from "next/headers";
 import { computeBadgeMaps, type MissingItem } from "./_calendarBadges";
 import { CALENDAR_JOB_SELECT, type CalendarJobRow } from "./_calendarSelect";
 import type { PriorityLabel } from "@/lib/calendar-labels";
+import { activeSubtotal } from "@/lib/job-money";
 import { storeCivilDayRange, storeDateKey, storeParts } from "@/lib/timezone";
 
 // Clamp a civil date ("2026-08-12") to its store-timezone day bounds. Half-open
@@ -73,7 +74,10 @@ function toCalendarEvent(
       // label, and folding the unit in would break that.
       aptNumber: job.aptNumber,
       status: job.status,
-      price: job.price,
+      // The card's price label — the ACTIVE value of the job (fix 3). Kept
+      // byte-identical to getJobsForCalendar's line so the live feed and the
+      // prefetched one can never quote different numbers for the same day.
+      price: activeSubtotal(job),
       employeePay: job.employeePay,
       totalTip: job.totalTip,
       parking: job.parking,

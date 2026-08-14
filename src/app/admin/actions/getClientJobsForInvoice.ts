@@ -3,13 +3,21 @@
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { db } from "@/db";
+import { ACTIVE_VALUE_SELECT } from "@/lib/metrics";
+import { activeSubtotal } from "@/lib/job-money";
 
 export interface InvoiceJobOption {
   id: string;
   jobNumber: number;
   jobType: string | null;
   startTime: string;
-  amount: number; // price − discount, what the invoice line will carry
+  /**
+   * The ACTIVE value of the job — base + add-ons, or the override total (fix
+   * 3). This is what the invoice line will carry, and `generateInvoiceFromJob`
+   * builds that line from `computeJobMoney`, so quoting `price − discount` in
+   * the picker meant the admin chose jobs by one number and invoiced another.
+   */
+  amount: number;
   invoiceSent: boolean;
   paymentReceived: boolean;
 }
@@ -34,12 +42,11 @@ export async function getClientJobsForInvoice(
       paymentReceived: false,
     },
     select: {
+      ...ACTIVE_VALUE_SELECT,
       id: true,
       jobNumber: true,
       jobType: true,
       startTime: true,
-      price: true,
-      discountAmount: true,
       invoiceSent: true,
       paymentReceived: true,
     },
@@ -54,7 +61,7 @@ export async function getClientJobsForInvoice(
       jobNumber: j.jobNumber,
       jobType: j.jobType,
       startTime: j.startTime.toISOString(),
-      amount: Math.max(0, (j.price ?? 0) - (j.discountAmount ?? 0)),
+      amount: activeSubtotal(j),
       invoiceSent: j.invoiceSent,
       paymentReceived: j.paymentReceived,
     })),

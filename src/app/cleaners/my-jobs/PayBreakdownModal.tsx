@@ -114,10 +114,33 @@ export default function PayBreakdownModal({
             />
           )}
 
+          {/* The three components of the figure above (Stage 4b/4c). Tips and
+              parking are the CUSTOMER's money passed straight through — the
+              company neither keeps them nor funds them — so a cleaner seeing
+              them itemised is seeing their own money, not internal pricing. */}
+          {(data.tipShare > 0 || data.parkingShare > 0) && (
+            <Row
+              label="For the work"
+              value={`$${(
+                Math.round(
+                  (data.totalEmployeePay - data.tipShare - data.parkingShare) * 100
+                ) / 100
+              ).toFixed(2)}`}
+            />
+          )}
+
           {data.tipShare > 0 && (
             <Row
-              label="Includes your tip share"
-              value={`$${data.tipShare.toFixed(2)}`}
+              label="Your tip share"
+              value={`+ $${data.tipShare.toFixed(2)}`}
+              valueClass="text-green-600"
+            />
+          )}
+
+          {data.parkingShare > 0 && (
+            <Row
+              label="Your parking share"
+              value={`+ $${data.parkingShare.toFixed(2)}`}
               valueClass="text-green-600"
             />
           )}
@@ -149,9 +172,10 @@ export default function PayBreakdownModal({
                 </p>
               )}
               <p>
-                Tips are divided equally among the lead and all assigned
-                cleaners. Final pay may adjust based on actual job completion
-                and admin review.
+                Tips and parking are divided equally among the lead and all
+                assigned cleaners, and are paid to you on top of the job — the
+                customer covers them. Final pay may adjust based on actual job
+                completion and admin review.
               </p>
             </div>
           </div>

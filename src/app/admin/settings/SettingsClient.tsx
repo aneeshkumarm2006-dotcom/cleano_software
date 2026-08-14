@@ -66,6 +66,7 @@ import ServiceContentTab from "./tabs/ServiceContentTab";
 import BookingPageTab from "./tabs/BookingPageTab";
 import {
   SettingsUser,
+  SettingsSectionFailure,
   AppSettingRecord,
   ProductRecord,
   KitTemplateRecord,
@@ -97,6 +98,12 @@ interface SettingsClientProps {
   transactions: TransactionRow[];
   budgets: BudgetRow[];
   budgetCategories: BudgetCategoryOption[];
+  /**
+   * Sections whose server-side query failed. Empty on a healthy page. The tab
+   * that depends on a failed section renders its empty state plus an inline
+   * notice, rather than the whole page rendering an error screen.
+   */
+  failedSections?: SettingsSectionFailure[];
 }
 
 type TabId =
@@ -169,6 +176,44 @@ const TAB_SUBTITLES: Record<TabId, string> = {
   retention: "Save offers in the check-in email.",
   notifications: "Per-channel notification preferences.",
 };
+
+// Which server-side section each tab's content comes from. Only used to point
+// a degraded section at the tabs it actually broke, so a failed
+// `trainingModule` query says so on Training and nowhere else. Tabs backed by
+// `appSettings` are omitted individually — that section feeds most config tabs,
+// so it is matched by key below rather than listed twenty times.
+const TAB_DATA_DEPS: Partial<Record<TabId, string[]>> = {
+  kitTemplates: ["kitTemplates", "products"],
+  suppliers: ["suppliers", "products"],
+  inventoryLocations: ["inventoryLocations", "products"],
+  checklistTemplates: ["checklistTemplates"],
+  training: ["trainingModules"],
+  documents: ["documents", "users"],
+  serviceAreas: ["serviceAreas"],
+  budgets: ["transactions", "budgets", "budgetCategories"],
+  notifications: ["notificationSettings"],
+};
+
+/** Tabs that render straight from the `appSettings` rows. */
+const APP_SETTING_TABS: TabId[] = [
+  "closures",
+  "tax",
+  "pricing",
+  "jobTypes",
+  "serviceContent",
+  "bookingPage",
+  "paymentTypes",
+  "checklistTemplates",
+  "multipliers",
+  "general",
+  "customer",
+  "provider",
+  "payments",
+  "scheduling",
+  "calendarLabels",
+  "website",
+  "retention",
+];
 
 // Sidebar groupings (label → ordered tab ids).
 const TAB_GROUPS: { label: string; ids: TabId[] }[] = [
@@ -296,6 +341,7 @@ export default function SettingsClient({
   transactions,
   budgets,
   budgetCategories,
+  failedSections = [],
 }: SettingsClientProps) {
   const [activeTab, setActiveTab] = useState<TabId>("profile");
 
@@ -346,6 +392,14 @@ export default function SettingsClient({
 
   const activeDef = TABS.find((t) => t.id === activeTab);
   const isReadOnly = activeTab === "roles";
+
+  // Sections the server could not load that this tab actually needs. Anything
+  // else that failed is somebody else's tab and is not the admin's problem
+  // while they're standing here.
+  const activeFailures = failedSections.filter((f) => {
+    if (f.key === "appSettings") return APP_SETTING_TABS.includes(activeTab);
+    return (TAB_DATA_DEPS[activeTab] ?? []).includes(f.key);
+  });
 
   return (
     <div className="admin-font stack-24">
@@ -413,6 +467,26 @@ export default function SettingsClient({
                   {isReadOnly ? "Read-only" : "Admin only"}
                 </span>
               )}
+            </div>
+          )}
+          {activeFailures.length > 0 && (
+            <div
+              role="alert"
+              style={{
+                padding: "12px 16px",
+                borderRadius: 12,
+                fontSize: 13,
+                marginBottom: 16,
+                background: "#fee2e2",
+                color: "#b91c1c",
+              }}>
+              <strong>
+                {activeFailures.map((f) => f.label).join(", ")} could not be
+                loaded.
+              </strong>{" "}
+              This section is showing empty. Everything else on this page still
+              works — reload to try again, and tell support if it keeps
+              happening.
             </div>
           )}
           {activeTab === "profile" && <ProfileTab user={user} />}

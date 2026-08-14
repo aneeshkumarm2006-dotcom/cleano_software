@@ -85,6 +85,10 @@ model User {
   strikes                      CleanerStrike[]         @relation("CleanerStrikes")
   files                        EmployeeFile[]
   salesCommissions             Commission[]            @relation("SalesRepCommissions")
+  // Applicant portal account (decision D4) — null unless this User was
+  // minted via "Invite to portal" from a JobApplication.
+  jobApplication                JobApplication?
+  applicantInviteTokens         ApplicantInviteToken[]
 
   // Present in the database since an earlier migration but never declared here,
   // which showed up as schema drift. Field-lead grouping reads this column, so
@@ -440,6 +444,19 @@ model Job {
   status                         JobStatus             @default(CREATED)
   price                          Float?
   employeePay                    Float?
+  /// Is `employeePay` an authoritative MANUAL TEAM TOTAL, or a save-time
+  /// estimate snapshot? (cleano_new_fixes.pdf fix 4, decision D2.)
+  ///
+  /// TRUE  — an admin typed it, or the BookingKoala CSV carried a provider/team
+  ///         payment. `computeJobPayShares` pays it out, split evenly across the
+  ///         crew, instead of running the tier math. The PDF: "if admin enters
+  ///         $88.50, use it" / "do not show the stored value as not used".
+  /// FALSE — a PERCENTAGE estimate written by saveJob at save time. It goes
+  ///         stale the moment a rating lands or the multipliers are edited, so
+  ///         it is superseded silently by the live calculation.
+  ///
+  /// Defaults FALSE, which is exactly today's behaviour for every existing row.
+  employeePayIsManual            Boolean               @default(false)
   totalTip                       Float?
   parking                        Float?
   paymentReceived                Boolean               @default(false)
@@ -505,6 +522,13 @@ model Job {
   // HOURLY = cleaner is shown an hourly rate. employeePay stays the payout.
   payType                        JobPayType            @default(PERCENTAGE)
   hourlyRate                     Float?
+  /// Itemized vs Final-price-override (cleano_new_fixes.pdf fix 2). Nullable on
+  /// purpose: NULL = "not stamped", and `resolvePricingMode()` falls back to the
+  /// old `bookingSource` rule for those rows, so the column can roll out without
+  /// repricing a single historical job. Everything written from the fix onward
+  /// stamps it explicitly — the admin picks it on the job form, the importer and
+  /// the web booking flow stamp FINAL_PRICE.
+  pricingMode                    JobPricingMode?
   // True when the price came from the client's customer-specific fixed price
   // (Client.fixedPrice) — shown as a badge on the job detail/list.
   usesFixedPrice                 Boolean               @default(false)
@@ -917,6 +941,10 @@ enum Roles {
   FIELD_LEAD
   EMPLOYEE
   CLIENT
+  // Restricted portal access for a job applicant (decision D4). Minted only
+  // when an admin clicks "Invite to portal" — never at public form submit.
+  // See src/lib/role-routing.ts and src/app/applicant/*.
+  APPLICANT
 }
 
 // Payroll tier for a cleaner. Distinct from Roles (access control): a Field Lead
@@ -996,6 +1024,13 @@ enum JobLogAction {
   NOTE_ADDED
   CLEANER_ADDED
   CLEANER_REMOVED
+  /// A clock-out that did NOT succeed (cleano_new_fixes.pdf fix 6). The PDF asks
+  /// for failed attempts to be logged; before this the only record was a
+  /// `console.error` nobody could read, so "why couldn't she clock out?" had no
+  /// answer. Written best-effort by `clockOut.ts` and shown on the job's
+  /// Activity timeline. Deliberately absent from the customer-facing log
+  /// allowlist in `(customer)/(secured)/bookings/[id]`.
+  CLOCK_OUT_FAILED
 }
 
 enum PaymentType {
@@ -1010,6 +1045,27 @@ enum JobPayType {
   PERCENTAGE
   FLAT
   HOURLY
+}
+
+/// How a job's money is assembled — an ADMIN CHOICE, not a guess from
+/// provenance (cleano_new_fixes.pdf fix 2). See `src/lib/job-money.ts`.
+///
+///   ITEMIZED     the parts ARE the price: `base + sum(add-on unit x qty)`,
+///                then the discount, then tax. Adding an add-on raises what the
+///                customer pays. Every admin-authored job starts here.
+///   FINAL_PRICE  the admin (or the source system) typed ONE service total and
+///                that total wins. Add-on rows are an ITEMISATION of it — they
+///                are recorded for scope and for the cleaner, and they never
+///                move the money. Every web booking and BookingKoala import is
+///                stamped this way, because their stored subtotal already
+///                contains the extras.
+///
+/// NULL means "never stamped" and falls back to `addOnMoneyBasis(bookingSource)`
+/// — the implicit rule this enum replaces — so a row that predates the column
+/// prices exactly as it did before.
+enum JobPricingMode {
+  ITEMIZED
+  FINAL_PRICE
 }
 
 enum PayPeriodStatus {
@@ -2033,9 +2089,56 @@ model JobApplication {
   source            String?
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt
+  // Applicant portal account (decision D4). Null until an admin sends a
+  // portal invite — an application with no invite behaves exactly as today.
+  // @unique: one portal account per application; a re-applying candidate is
+  // linked to the application the admin chose to invite, not every row that
+  // shares their email.
+  userId            String?              @unique
+  user              User?                @relation(fields: [userId], references: [id], onDelete: SetNull)
+  messages          ApplicantMessage[]
 
   @@index([status])
   @@index([createdAt])
+}
+
+/**
+ * Set-password invite token minted when an admin clicks "Invite to portal"
+ * on a JobApplication (decision D4). Same shape and lifecycle as
+ * ClientCardSetupToken / JobRatingToken: random token, expiry, single-use
+ * via `usedAt`. Consumed on the public /applicant-invite/[token] page, which
+ * lets the applicant set their own password — the click-through on an email
+ * only they received is what stands in for email verification.
+ */
+model ApplicantInviteToken {
+  id        String    @id @default(cuid())
+  userId    String
+  token     String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+/**
+ * Minimal two-way "respond to requests" channel between admin and an
+ * applicant, scoped to one JobApplication. Deliberately separate from
+ * JobApplication.notes, which the admin UI already frames as a private,
+ * admin-only note and must stay that way.
+ */
+model ApplicantMessage {
+  id               String         @id @default(cuid())
+  jobApplicationId String
+  authorRole       String // "ADMIN" | "APPLICANT"
+  authorUserId     String?
+  body             String
+  createdAt        DateTime       @default(now())
+  jobApplication   JobApplication @relation(fields: [jobApplicationId], references: [id], onDelete: Cascade)
+
+  @@index([jobApplicationId, createdAt])
 }
 
 enum JobInviteDecision {

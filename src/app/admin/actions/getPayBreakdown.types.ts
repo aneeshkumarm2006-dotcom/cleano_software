@@ -18,6 +18,12 @@ export type CleanerPayBreakdown = {
   hourlyRate: number | null;
   /** This cleaner's share of the job's tips (their own money — not internal). */
   tipShare: number;
+  /**
+   * This cleaner's share of the job's parking / transportation (D3). Customer-
+   * funded and split evenly exactly like the tip, so — like the tip — it is the
+   * cleaner's own money and safe to show them.
+   */
+  parkingShare: number;
   /** The bottom line: what this cleaner gets paid for this job. */
   totalEmployeePay: number;
   /**
@@ -74,6 +80,21 @@ export type AdminPayBreakdown = {
   totalTip: number;
   teamSize: number;
   tipShare: number;
+  /** This cleaner's even share of `parking` (D3 pass-through). */
+  parkingShare: number;
+  /**
+   * The job's PAY BASIS: base + add-ons, or the stored override total (fix 5).
+   * What the percentage model is a fraction of. Distinct from `basePrice`, which
+   * is the bare service line the add-ons sit on top of.
+   */
+  payBasis: number;
+  /**
+   * D2 — TRUE when `employeePay` is an authoritative manual TEAM TOTAL being
+   * paid out, FALSE when the tier calculation is in charge. Drives the
+   * "Manual amount" vs "Automatic (tier rates)" label.
+   */
+  payIsManual: boolean;
+  /** The bottom line for the viewed cleaner: base + tip share + parking share. */
   totalEmployeePay: number;
   isLead: boolean;
   // Tier-based pay context (src/lib/pay-tiers.ts)

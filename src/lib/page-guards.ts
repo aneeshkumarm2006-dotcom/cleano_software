@@ -3,6 +3,7 @@ import { getCachedSession } from "@/lib/auth";
 import {
   homeForRole,
   isAdminRole,
+  isApplicantRole,
   isCleanerRole,
   isClientRole,
 } from "@/lib/role-routing";
@@ -55,11 +56,22 @@ export async function requireClient() {
   return session;
 }
 
+// /applicant/* — restricted portal account (decision D4). Not staff, not the
+// cleaner app: isCleanerRole/isAdminRole both exclude APPLICANT already, and
+// this guard is the applicant-only mirror of requireCleaner/requireClient.
+export async function requireApplicant() {
+  const session = await requireSession();
+  const role = (session.user as { role?: string }).role;
+  if (!isApplicantRole(role)) redirect(homeForRole(role));
+  return session;
+}
+
 // For pages accessible to BOTH admins and cleaners (e.g. /calendar, /training,
-// /documents, /chat). Still bounces CLIENT users to the customer home.
+// /documents, /chat). Bounces CLIENT and APPLICANT users to their own home —
+// an applicant's restricted portal must not reach these staff-only pages.
 export async function requireStaff() {
   const session = await requireSession();
   const role = (session.user as { role?: string }).role;
-  if (isClientRole(role)) redirect("/");
+  if (isClientRole(role) || isApplicantRole(role)) redirect(homeForRole(role));
   return session;
 }

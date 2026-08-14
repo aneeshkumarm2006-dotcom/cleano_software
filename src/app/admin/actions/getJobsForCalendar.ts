@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { computeBadgeMaps } from "./_calendarBadges";
 import { CALENDAR_JOB_SELECT } from "./_calendarSelect";
+import { activeSubtotal } from "@/lib/job-money";
 
 /**
  * Range variant of the calendar feed.
@@ -128,7 +129,9 @@ export async function getJobsForCalendar(startDate?: Date, endDate?: Date) {
         // silently drops off the calendar modal (item 2).
         aptNumber: job.aptNumber,
         status: job.status,
-        price: job.price,
+        // `priceLabel` prints this on the card. It is the ACTIVE value of the
+        // job (fix 3), not the base line — one figure, same as the job page.
+        price: activeSubtotal(job),
         employeePay: job.employeePay,
         totalTip: job.totalTip,
         parking: job.parking,

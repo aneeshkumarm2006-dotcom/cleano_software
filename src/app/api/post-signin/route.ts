@@ -8,6 +8,7 @@ import {
   homeForRole,
   isClientRole,
   isCleanerRole,
+  isApplicantRole,
   isAdminRole,
 } from "@/lib/role-routing";
 
@@ -16,9 +17,10 @@ import {
 // login with an explanatory ?error.
 //
 // Query params:
-//   ?from=portal   → customer portal door — CLIENT accounts only.
-//   ?from=cleaner  → cleaner door — EMPLOYEE accounts only.
-//   (no from)      → staff door (/sign-in) — admin/staff roles only.
+//   ?from=portal    → customer portal door — CLIENT accounts only.
+//   ?from=cleaner   → cleaner door — EMPLOYEE accounts only.
+//   ?from=applicant → applicant portal door — APPLICANT accounts only (D4).
+//   (no from)       → staff door (/sign-in) — admin/staff roles only.
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const baseUrl = `${url.protocol}//${url.host}`;
@@ -31,7 +33,8 @@ export async function GET(req: Request) {
 
   const role = (session.user as { role?: string }).role;
   const email = (session.user as { email?: string }).email ?? null;
-  const doorLabel = from === "portal" ? "portal" : from === "cleaner" ? "cleaner" : "staff";
+  const doorLabel =
+    from === "portal" ? "portal" : from === "cleaner" ? "cleaner" : from === "applicant" ? "applicant" : "staff";
 
   // Credentials were valid (failed logins never reach this route), but the
   // account may still be the wrong audience for this door. Log the *outcome*
@@ -85,7 +88,13 @@ export async function GET(req: Request) {
     // Remember which login door this account belongs to (outlives the
     // session) so an expired session in the installed homescreen app is sent
     // back to the RIGHT login page instead of the customer one (item 14).
-    const door = isCleanerRole(role) ? "cleaner" : isAdminRole(role) ? "staff" : "portal";
+    const door = isCleanerRole(role)
+      ? "cleaner"
+      : isApplicantRole(role)
+        ? "applicant"
+        : isAdminRole(role)
+          ? "staff"
+          : "portal";
     res.cookies.set("cleano_door", door, {
       maxAge: 60 * 60 * 24 * 365,
       path: "/",
@@ -130,6 +139,14 @@ export async function GET(req: Request) {
     return granted(homeForRole(role));
   }
 
+  // Applicant portal door — restricted APPLICANT accounts only (D4).
+  if (from === "applicant") {
+    if (!isApplicantRole(role)) {
+      return bounce(`/applicant-login?error=not_applicant`, "not an applicant account");
+    }
+    return granted(homeForRole(role));
+  }
+
   // Staff door (default, /sign-in) — admin/staff roles only. Other roles are
   // sent to their own login.
   if (!isAdminRole(role)) {
@@ -138,6 +155,9 @@ export async function GET(req: Request) {
     }
     if (isClientRole(role)) {
       return bounce(`/login?error=staff_account`, "customer should use the portal login");
+    }
+    if (isApplicantRole(role)) {
+      return bounce(`/applicant-login?error=use_applicant_login`, "applicant should use the applicant login");
     }
     return bounce(`/sign-in?error=no_access`, "role has no staff access");
   }

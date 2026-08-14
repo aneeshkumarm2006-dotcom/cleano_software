@@ -9,6 +9,11 @@ export default function PriceSummary() {
   const [tip, setTip] = useState(0);
   const [parking, setParking] = useState(0);
   const [employeePay, setEmployeePay] = useState(0);
+  // Not money — the pricing mode (fix 2), mirrored into a hidden input by
+  // PricingModeField so this component can subscribe the same way it does to
+  // every other field. It changes what `price` MEANS, and therefore what this
+  // figure can honestly be called.
+  const [finalPriceMode, setFinalPriceMode] = useState(false);
 
   useEffect(() => {
     const fields = [
@@ -28,6 +33,16 @@ export default function PriceSummary() {
       fn();
       el.addEventListener("input", fn);
       handlers.push({ el, fn });
+    }
+
+    const modeEl = document.getElementById(
+      "pricingMode"
+    ) as HTMLInputElement | null;
+    if (modeEl) {
+      const fn = () => setFinalPriceMode(modeEl.value === "FINAL_PRICE");
+      fn();
+      modeEl.addEventListener("input", fn);
+      handlers.push({ el: modeEl, fn });
     }
 
     return () => {
@@ -60,11 +75,16 @@ export default function PriceSummary() {
     >
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <DollarSign size={15} style={{ color: "var(--primary-60)" }} />
-        {/* Not the client total: this figure excludes add-ons AND tax. It
-            reads the form's inputs by DOM id, so it cannot see either. The job
-            detail page and the modal's preview both show the real total. */}
+        {/* Not the client total: this figure excludes tax, and under itemized
+            pricing it also excludes the add-ons — it reads the form's inputs by
+            DOM id, so it cannot see either. Under a final price override there
+            are no add-ons to miss: the Price field IS the service total, so the
+            caveat would be a lie. The job detail page and the modal's preview
+            both show the real total either way. */}
         <span style={{ fontSize: 13, color: "var(--primary-60)" }}>
-          Pre-tax (excl. add-ons &amp; tax)
+          {finalPriceMode
+            ? "Pre-tax (service total override)"
+            : "Pre-tax (excl. add-ons & tax)"}
         </span>
         <span style={{ fontSize: 15, fontWeight: 700, color: "var(--ink)", marginLeft: 4 }}>
           ${subtotal.toFixed(2)}

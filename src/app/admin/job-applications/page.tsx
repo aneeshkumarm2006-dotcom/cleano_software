@@ -20,6 +20,10 @@ export default async function JobApplicationsPage({
     where: { deletedAt: archived ? { not: null } : null },
     orderBy: { createdAt: "desc" },
     take: 300,
+    include: {
+      user: { select: { role: true, isActive: true } },
+      messages: { orderBy: { createdAt: "asc" } },
+    },
   });
 
   return (
@@ -71,6 +75,16 @@ export default async function JobApplicationsPage({
           status: a.status,
           notes: a.notes,
           createdAt: a.createdAt.toISOString(),
+          // Applicant portal (decision D4).
+          userId: a.userId,
+          portalRole: a.user?.role ?? null,
+          portalActive: a.user?.isActive ?? null,
+          messages: a.messages.map((m) => ({
+            id: m.id,
+            authorRole: m.authorRole,
+            body: m.body,
+            createdAt: m.createdAt.toISOString(),
+          })),
         }))}
       />
     </div>

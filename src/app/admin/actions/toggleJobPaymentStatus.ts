@@ -8,6 +8,7 @@ import type { Prisma } from "@prisma/client";
 import { queueAndSendReceipt, sendCustomerBookingCharged } from "@/lib/email";
 import { getTaxRates } from "@/lib/tax.server";
 import { resolveAmountDue } from "@/lib/job-billing";
+import { activeSubtotal } from "@/lib/job-money";
 import { startOfDayTz } from "@/lib/time";
 import { requireBudgetCategoryId } from "@/lib/budget-categories";
 
@@ -29,11 +30,15 @@ export async function togglePaymentReceived(jobId: string) {
   try {
     const job = await db.job.findUnique({
       where: { id: jobId },
+      // `addOns` joins because the revenue Transaction row below is the ACTIVE
+      // subtotal now (fix 3), and the base column alone cannot produce it.
+      include: { addOns: { select: { name: true, price: true, quantity: true } } },
     });
 
     if (!job) {
       return { success: false, error: "Job not found" };
     }
+    const addOns = job.addOns;
 
     const newStatus = !job.paymentReceived;
 
@@ -84,9 +89,16 @@ export async function togglePaymentReceived(jobId: string) {
       }),
     ];
 
-    if (newStatus && job.price && job.price > 0) {
-      const discount = job.discountAmount ?? 0;
-      const netAmount = job.price - discount;
+    // Fix 3 item 3.4 — the revenue Transaction row is the ACTIVE subtotal, not
+    // `price − discount`. This row is what the Finances page and the budget
+    // actuals read, so an add-on job booked $128 of revenue against a $186 job.
+    // `activeSubtotal` is already discount-net in both pricing modes (see
+    // metrics-shared.jobRevenue), so the subtraction is not repeated here.
+    // Still PRE-TAX with `taxAmount` alongside — that is the shape of every
+    // live Transaction row and lib/job-billing.ts records why.
+    const revenueAmount = activeSubtotal({ ...job, addOns });
+    if (newStatus && revenueAmount > 0) {
+      const netAmount = revenueAmount;
       // Cash jobs are tax exempt. Otherwise prefer the GST/QST stored on the
       // job (set at save/booking/import time); only recompute from the current
       // tax.config rates for older rows saved before taxes were persisted —

@@ -72,9 +72,12 @@ export default function LabourCostCard() {
         <div className="an-labour-tiles">
           <Tile label="Service revenue" value={money(data.totals.serviceRevenue)} />
           <Tile label="Cleaner payout" value={money(data.totals.labourCost)} />
-          <Tile label="Tips" value={money(data.totals.tipAmount)} />
+          {/* Both are customer-funded pass-throughs handed to the crew (D3), not
+              company income and not a company cost. Neither has ever been inside
+              serviceRevenue or labourCost above; the labels say so now. */}
+          <Tile label="Tips (to cleaners)" value={money(data.totals.tipAmount)} />
           <Tile label="Taxes" value={money(data.totals.taxAmount)} />
-          <Tile label="Transportation" value={money(data.totals.transportation)} />
+          <Tile label="Parking (to cleaners)" value={money(data.totals.transportation)} />
           <Tile label="Discounts" value={money(data.totals.discountAmount)} accent="#fbbf24" />
           <Tile label="Refunds" value={money(data.totals.refundAmount)} accent="#fca5a5" />
         </div>

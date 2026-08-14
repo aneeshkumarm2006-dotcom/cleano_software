@@ -7,6 +7,7 @@ const PUBLIC_EXACT = new Set<string>([
   '/sign-in',
   '/sign-up',
   '/cleanos/login', // cleaner sign-in
+  '/applicant-login', // applicant portal sign-in (decision D4)
   '/login', // customer sign-in
   '/setup',
   '/forgot-password',
@@ -26,6 +27,7 @@ const PUBLIC_PREFIXES = [
   '/book/', // includes /book and any nested segments
   '/rate/', // /rate/[token]
   '/add-card/', // /add-card/[token] customer card setup link
+  '/applicant-invite/', // /applicant-invite/[token] set-password invite link (decision D4)
   '/p/', // existing landing pages
   '/gift-card/', // gift card purchase + redemption flow
   '/api/auth/', // Better Auth endpoints
@@ -51,20 +53,24 @@ export async function proxy(request: NextRequest) {
   const sessionCookie = getSessionCookie(request.headers)
 
   // If no session cookie exists, redirect to the login door for that area:
-  //   /admin/*    → staff sign-in (/sign-in)
-  //   /cleaners/* → cleaner sign-in (/cleanos/login)
+  //   /admin/*     → staff sign-in (/sign-in)
+  //   /cleaners/*  → cleaner sign-in (/cleanos/login)
+  //   /applicant/* → applicant portal sign-in (/applicant-login), decision D4
   //   everything else (customer area, incl. "/") → customer sign-in (/login)
   if (!sessionCookie) {
     const isAdminArea = pathname.startsWith('/admin')
     const isCleanerArea = pathname.startsWith('/cleaners')
+    const isApplicantArea = pathname.startsWith('/applicant')
     const target = isAdminArea
       ? '/sign-in'
       : isCleanerArea
         ? '/cleanos/login'
-        : '/login'
+        : isApplicantArea
+          ? '/applicant-login'
+          : '/login'
     const signInUrl = new URL(target, request.url)
     // Preserve the intended destination for redirect after login (staff areas).
-    if (isAdminArea || isCleanerArea) {
+    if (isAdminArea || isCleanerArea || isApplicantArea) {
       signInUrl.searchParams.set('callbackUrl', pathname)
     }
     return NextResponse.redirect(signInUrl)

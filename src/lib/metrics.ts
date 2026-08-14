@@ -30,6 +30,28 @@ export * from "./metrics-shared";
 
 export type DateRange = { from?: Date; to?: Date };
 
+/**
+ * The Job columns `jobRevenue` / `jobScheduledValue` read (fix 3).
+ *
+ * Spread into any `select` that feeds a revenue reducer:
+ *
+ *   select: { ...ACTIVE_VALUE_SELECT, id: true, startTime: true }
+ *
+ * `RevenueJobShape` requires every one of these, so forgetting the spread is a
+ * type error rather than a dashboard silently reverting to the bare
+ * `Job.price`. The `addOns` join is the only non-scalar in here and it is the
+ * whole point of the fix — without it an add-on job under-reports by exactly
+ * its add-ons.
+ */
+export const ACTIVE_VALUE_SELECT = {
+  price: true,
+  discountAmount: true,
+  subtotalAmount: true,
+  bookingSource: true,
+  pricingMode: true,
+  addOns: { select: { name: true, price: true, quantity: true } },
+} satisfies Prisma.JobSelect;
+
 export function revenueWhere(range?: DateRange): Prisma.JobWhereInput {
   const where: Prisma.JobWhereInput = {
     deletedAt: null,
@@ -48,7 +70,7 @@ export function revenueWhere(range?: DateRange): Prisma.JobWhereInput {
 export async function getTotalRevenue(range?: DateRange): Promise<number> {
   const jobs = await db.job.findMany({
     where: revenueWhere(range),
-    select: { price: true, discountAmount: true, refundedAmount: true },
+    select: { ...ACTIVE_VALUE_SELECT, refundedAmount: true },
   });
   return jobs.reduce((sum, j) => sum + jobRevenue(j), 0);
 }
@@ -80,7 +102,7 @@ export function scheduledValueWhere(range?: DateRange): Prisma.JobWhereInput {
 export async function getScheduledValue(range?: DateRange): Promise<number> {
   const jobs = await db.job.findMany({
     where: scheduledValueWhere(range),
-    select: { price: true, discountAmount: true },
+    select: ACTIVE_VALUE_SELECT,
   });
   return jobs.reduce((sum, j) => sum + jobScheduledValue(j), 0);
 }

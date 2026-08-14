@@ -65,6 +65,15 @@ export type JobSummaryDTO = {
   // ── Money ─────────────────────────────────────────────────────────────────
   money: JobMoney;
   /**
+   * What this job's card would actually be charged right now — `resolveAmountDue`,
+   * i.e. the stored taxed total less any deposit already collected (fix 3 item
+   * 3.2). Deliberately NOT `money.totalAmount`: the drawer prints this beside a
+   * "Charge card" button, and a booking with a $20 deposit paid owes $20 less
+   * than its total. Gift-card credit is applied by `chargeJob` at charge time
+   * against the client's live balance and is not reflected here.
+   */
+  amountDue: number;
+  /**
    * RAW `Job.price` / `Job.discountAmount` / `Job.taxExempt`, for the edit
    * modal's prefill — deliberately not read off `money`. `money.basePrice` is a
    * display residual on web/BookingKoala bookings (`subtotal − addOns`), and
@@ -88,6 +97,8 @@ export type JobSummaryDTO = {
   /** `Job.parking`, surfaced as "Transportation" (Stage 4 item 3). */
   transportation: number | null;
   employeePay: number | null;
+  /** D2 — TRUE when employeePay is a manual team total, not an estimate. */
+  employeePayIsManual: boolean;
   payType: string | null;
   hourlyRate: number | null;
   hasCardOnFile: boolean;
@@ -97,6 +108,8 @@ export type JobSummaryDTO = {
   cancellationReason: string | null;
   photoCount: number;
   bookingSource: string | null;
+  /** Itemized vs final-price override (fix 2). */
+  pricingMode: string | null;
 };
 
 export type JobSummaryResult =

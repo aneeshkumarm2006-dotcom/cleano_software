@@ -107,6 +107,12 @@ has(
     ["src/app/admin/actions/exportJobs.ts", "where built above"],
     ["src/app/admin/actions/getLabourCostMetric.ts", "where built above"],
     ["src/app/admin/jobs/page.tsx", "listWhere — this IS the archive toggle"],
+    // Both reads delegate to revenueWhere()/scheduledValueWhere(), defined a few
+    // lines above each of them in this same file, and both carry
+    // `deletedAt: null`. They were only ever passing because the 17-line window
+    // happened to reach the NEXT helper's literal; the pricing-fixes stage moved
+    // the lines and exposed the accident.
+    ["src/lib/metrics.ts", "revenueWhere()/scheduledValueWhere()"],
     // Targeted by explicit id, so the archive state isn't a filter question.
     ["src/lib/cleaner-pay-display.ts", "by-id lookup"],
     // Maintenance / audit paths that intentionally span the archive.
@@ -129,6 +135,13 @@ has(
       if (!/db\.job\.(findMany|count|aggregate|groupBy)/.test(line)) return;
       const window = lines.slice(i, i + 17).join("\n");
       if (window.includes("deletedAt")) return;
+      // A read pinned to explicit ids is not an archive-FILTER question — the
+      // caller already named the rows it wants, and some of these exist
+      // precisely to ask "is this id still live?". The allowlist above carries
+      // the same category by file (cleaner-pay-display); expressing it as a
+      // rule makes the guard more precise rather than silencing whole files
+      // that also contain reads which SHOULD be filtered.
+      if (/where:\s*\{\s*id:\s*\{\s*in:/.test(window)) return;
       if (ALLOWED.has(file)) return;
       offenders.push(`${file}:${i + 1}`);
     });

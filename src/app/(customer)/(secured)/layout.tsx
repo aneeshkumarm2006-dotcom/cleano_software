@@ -27,6 +27,7 @@ export default async function PortalLayout({
     const door = (await cookies()).get("cleano_door")?.value;
     if (door === "cleaner") redirect("/cleanos/login");
     if (door === "staff") redirect("/sign-in");
+    if (door === "applicant") redirect("/applicant-login");
     redirect("/login");
   }
 

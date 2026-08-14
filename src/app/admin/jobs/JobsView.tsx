@@ -34,6 +34,9 @@ import {
   jobScheduledValue,
   simpleJobStatus,
 } from "@/lib/metrics-shared";
+// Client-safe by design (see the header of job-money.ts) — the table can price
+// a row with exactly the function the job page and the invoice use.
+import { activeSubtotal } from "@/lib/job-money";
 
 interface Job {
   id: string;
@@ -48,6 +51,8 @@ interface Job {
   status: string;
   price: number | null;
   employeePay: number | null;
+  /** D2 — is that figure an order or a save-time estimate? Feeds JobModal. */
+  employeePayIsManual?: boolean | null;
   totalTip: number | null;
   parking: number | null;
   notes: string | null;
@@ -56,7 +61,9 @@ interface Job {
   paymentType?: string | null;
   isCashJob?: boolean;
   usesFixedPrice?: boolean;
-  discountAmount?: number | null;
+  // Required, not optional — see the ActiveValueJob note below: this row is fed
+  // to `activeSubtotal`, and an absent discount would price the job wrong.
+  discountAmount: number | null;
   refundedAmount?: number | null;
   deletedAt?: string | null;
   bedCount?: number | null;
@@ -65,7 +72,14 @@ interface Job {
   profitPct?: number;
   timeSpentMs?: number;
   cleaners: Array<{ id: string; name: string }>;
-  addOns?: Array<{ id: string; name: string; price: number; quantity: number }>;
+  // Fix 3 — the columns the ACTIVE value of the job is computed from. Required,
+  // not optional: the stat cards below feed these rows to `jobRevenue` /
+  // `jobScheduledValue`, and a row missing one of them would quietly revert to
+  // the bare base price this stage exists to stop printing.
+  addOns: Array<{ id: string; name: string; price: number; quantity: number }>;
+  subtotalAmount: number | null;
+  bookingSource: string | null;
+  pricingMode: string | null;
 }
 
 interface ClientLite { id: string; name: string; }
@@ -295,7 +309,7 @@ type TabId = (typeof TABS)[number]['id'];
 // (`discounted` is a jobs-list convenience bucket, not a metrics bucket.)
 function jobMatchesTab(
   tab: TabId,
-  job: { status: string; startTime: string; paymentReceived: boolean; price: number | null; discountAmount?: number | null },
+  job: Job,
   now: number
 ): boolean {
   const jobTime = new Date(job.startTime).getTime();
@@ -311,7 +325,9 @@ function jobMatchesTab(
     case 'discounted':
       return (job.discountAmount || 0) > 0;
     case 'free':
-      return !job.price || job.price === 0;
+      // Free means the job is worth nothing, not that its BASE line is zero
+      // (fix 3). A $0 base with $58 of grout on it was landing in this tab.
+      return activeSubtotal(job) === 0;
     default:
       return true;
   }
@@ -1002,8 +1018,12 @@ export default function JobsView({
                       <td><TypePill type={job.jobType} /></td>
                       <td><AvatarStack cleaners={job.cleaners} /></td>
                       <td className="num">{formatTimeSpent(job.timeSpentMs)}</td>
+                      {/* The ACTIVE value of the job (fix 3): base + add-ons,
+                          or the override total. `job.price` is only the base
+                          service line, so this column used to read $128 on a
+                          job the customer was billed $186 of work for. */}
                       <td className="num col-price">
-                        {job.price !== null ? `$${job.price.toFixed(2)}` : '—'}
+                        {job.price !== null ? `$${activeSubtotal(job).toFixed(2)}` : '—'}
                         {job.usesFixedPrice && <span style={{ marginLeft: 6 }}><FixedPricePill /></span>}
                       </td>
                       <td className="num">
@@ -1134,8 +1154,11 @@ export default function JobsView({
                   <AvatarStack cleaners={job.cleaners} max={2} />
                 </div>
                 <div className="jcard-row" style={{ paddingTop: 10, borderTop: '1px solid var(--primary-10)' }}>
+                  {/* Mobile card — same active figure as the table column
+                      above. `activeSubtotal` is already discount-net, so the
+                      old explicit subtraction would have applied it twice. */}
                   <div className="jcard-price">
-                    {job.price !== null ? `$${((job.price || 0) - (job.discountAmount || 0)).toFixed(2)}` : '—'}
+                    {job.price !== null ? `$${activeSubtotal(job).toFixed(2)}` : '—'}
                   </div>
                   <div className="row" style={{ gap: 10 }}>
                     <PayIcons

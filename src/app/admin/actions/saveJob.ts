@@ -22,7 +22,16 @@ import { smsBookingConfirmation, smsCancellation } from "@/lib/sms";
 import { getCleanerRateInputs } from "@/lib/cleaner-rates";
 import { computeJobPayout, fallbackRateInput } from "@/lib/pay-tiers";
 import { getTaxRates } from "@/lib/tax.server";
-import { addOnQuantity, computeJobMoney } from "@/lib/job-money";
+import {
+  addOnQuantity,
+  computeJobMoney,
+  isPricingMode,
+  jobPayBasis,
+  passThroughTotal,
+  resolvePassThroughBilling,
+  resolvePricingMode,
+  type JobPricingMode,
+} from "@/lib/job-money";
 import { resolveJobAddressId } from "@/lib/client-address-store";
 import { resolveJobClient } from "@/lib/client-capture";
 import { getServicePricingConfig } from "@/lib/booking-pricing";
@@ -320,12 +329,154 @@ export async function saveJob(formData: FormData) {
     })();
 
     const manualEmployeePay = parseOptionalFloat(formData.get("employeePay"));
+
+    // GST/QST on the discounted subtotal from the admin-configured rates. The
+    // job modal doesn't expose the cash-job toggle, so keep the existing job's
+    // isCashJob when editing (new modal jobs are non-cash).
+    //
+    // `pricingMode`, `bookingSource` and `subtotalAmount` come from the SAME
+    // lookup, and they are load-bearing: computeJobMoney decides from them
+    // whether this job's add-ons are already priced into its service total.
+    // Without them, an admin opening a WEB booking and pressing Save would be
+    // treated as an admin job — adding its add-ons on top of a subtotal that
+    // already contains them, and silently inflating a real customer's card.
+    const editingJobId = (formData.get("jobId") as string | null) || null;
+    let isCashJob = false;
+    let existingBookingSource: string | null = null;
+    let existingSubtotal: number | null = null;
+    let existingPrice: number | null = null;
+    let existingPricingMode: JobPricingMode | null = null;
+    // D2 / D3 state carried out of the same lookup — see `payIsManual` and the
+    // pass-through fold below. Both are about NOT clobbering something the admin
+    // or the customer's card has already settled.
+    let existingPayIsManual = false;
+    let existingTotalAmount: number | null = null;
+    let alreadySettled = false;
+    if (editingJobId) {
+      const current = await db.job.findUnique({
+        where: { id: editingJobId },
+        select: {
+          isCashJob: true,
+          bookingSource: true,
+          subtotalAmount: true,
+          price: true,
+          pricingMode: true,
+          employeePayIsManual: true,
+          totalAmount: true,
+          paymentReceived: true,
+          stripePaymentIntentId: true,
+        },
+      });
+      isCashJob = current?.isCashJob ?? false;
+      existingBookingSource = current?.bookingSource ?? null;
+      existingSubtotal = current?.subtotalAmount ?? null;
+      existingPrice = current?.price ?? null;
+      existingPricingMode = isPricingMode(current?.pricingMode)
+        ? current.pricingMode
+        : null;
+      existingPayIsManual = current?.employeePayIsManual ?? false;
+      existingTotalAmount = current?.totalAmount ?? null;
+      // "Settled" for D3 purposes: the customer's money has already moved.
+      // `paymentReceived` is what chargeJob and toggleJobPaymentStatus flip;
+      // the PaymentIntent covers a card charge that landed without the flag.
+      alreadySettled =
+        (current?.paymentReceived ?? false) ||
+        current?.stripePaymentIntentId != null;
+    }
+
+    // ── Pricing mode (cleano_new_fixes.pdf fix 2) ────────────────────────────
+    //
+    // The mode used to be INFERRED from provenance, and — worse — re-inferred on
+    // every save from whether the price field still matched the stored price
+    // (`priceUnchanged`). An admin who retyped the price of a web booking or a
+    // BookingKoala import silently flipped it to itemized, at which point its
+    // add-ons started ADDING to a total that already contained them. It is now
+    // an explicit, stored choice, resolved in this order:
+    //
+    //   1. "Recalculate from items" — the escape hatch. An explicit act, so it
+    //      wins over the mode the form is carrying.
+    //   2. The mode the form posted, when the form owns the control.
+    //   3. The job's stored mode (edit paths whose form has no control, e.g. the
+    //      jobs-list quick edit) — preserved, never reset.
+    //   4. The historical fallback for a job that predates the column, and
+    //      ITEMIZED for a brand-new admin job.
+    const recalculateFromItems = formData.get("recalculateFromItems") === "on";
+    const submittedPricingMode = formData.get("pricingMode");
+    const pricingMode: JobPricingMode = recalculateFromItems
+      ? "ITEMIZED"
+      : isPricingMode(submittedPricingMode)
+        ? submittedPricingMode
+        : (existingPricingMode ??
+          (editingJobId
+            ? resolvePricingMode({ bookingSource: existingBookingSource })
+            : "ITEMIZED"));
+
+    // Under FINAL_PRICE the ACTIVE service total is `subtotalAmount`, not
+    // `price` — on a web booking `price` is the tax-INCLUSIVE booking total
+    // while `subtotalAmount` is the pre-tax figure every money surface reads, so
+    // the two are not interchangeable. The stored override is therefore
+    // preserved byte-for-byte, which is what keeps "saving an existing booking
+    // never changes its value" true rather than merely likely — until the admin
+    // retypes the price, which is them authoring a new override total. That is
+    // the ONLY thing this comparison decides now: it no longer touches the mode,
+    // so a repriced FINAL_PRICE job stays FINAL_PRICE.
+    const priceRetyped =
+      existingPrice !== null &&
+      price !== null &&
+      Math.abs(existingPrice - price) >= 0.005;
+    const overrideSubtotal =
+      pricingMode === "FINAL_PRICE"
+        ? priceRetyped || existingSubtotal === null || existingSubtotal <= 0
+          ? price
+          : existingSubtotal
+        : null;
+
+    // Per-job tax exemption (item 7) — the modal DOES expose this one, and it
+    // applies to this job alone.
+    const taxExempt = formData.get("taxExempt") === "on";
+    const taxRates = await getTaxRates();
+    // ITEMIZED: add-ons and custom extra charges count (awerfixes item 10) — the
+    // subtotal is `price + sum(unit x qty) - discount`, where it used to be
+    // `price - discount` and a $25 custom charge billed $0.
+    // FINAL_PRICE: the override total is read back unchanged, taxed as-is, and
+    // the add-on rows persist as scope only (their unit prices are kept for
+    // display; the MODE, not the price, is what decides they don't add).
+    const taxes = computeJobMoney(
+      {
+        pricingMode,
+        bookingSource: existingBookingSource,
+        price,
+        discountAmount,
+        subtotalAmount: overrideSubtotal,
+        isCashJob,
+        taxExempt,
+        addOns,
+      },
+      taxRates
+    );
+
+    // ── Cleaner pay: the ESTIMATE and whether it is an ORDER ─────────────────
+    //
+    // Moved below `taxes` deliberately (Stage 4a.4). The estimate is a fraction
+    // of the job's PAY BASIS — the active value the crew is actually cleaning
+    // for — and the basis cannot be known until the pricing mode, the override
+    // total and the add-on rows have all been resolved above. Computing it
+    // earlier off `price` is exactly the defect fix 5 names: the $100 + $71 job
+    // on page 5 of the PDF snapshotted its pay off $100.
+    const payBasis = jobPayBasis({
+      pricingMode,
+      bookingSource: existingBookingSource,
+      price,
+      discountAmount,
+      subtotalAmount: overrideSubtotal,
+      addOns,
+    });
+
     let estimatedEmployeePay = manualEmployeePay;
     if (payType === "PERCENTAGE") {
       if (
         manualEmployeePay === null &&
-        price !== null &&
-        price > 0 &&
+        payBasis > 0 &&
         cleanerIds.length > 0
       ) {
         // Only the ASSIGNED CLEANERS form the payout pool. The acting admin used
@@ -335,7 +486,7 @@ export async function saveJob(formData: FormData) {
         const rateList = cleanerIds.map(
           (id) => rateInputs.get(id) ?? fallbackRateInput(id)
         );
-        estimatedEmployeePay = computeJobPayout(price, rateList).pool;
+        estimatedEmployeePay = computeJobPayout(payBasis, rateList).pool;
       }
     } else if (payType === "HOURLY") {
       if (manualEmployeePay === null && hourlyRate !== null && payHours !== null) {
@@ -350,71 +501,55 @@ export async function saveJob(formData: FormData) {
     // payroll, My Pay, the pay modal and the Job Details Financials tab all
     // recompute live via computeJobPayShares. It is kept because FLAT/HOURLY
     // genuinely need the column (computeJobPayShares reads it back as the team
-    // total) and because the jobs list, invoices and metrics still read it. Job
-    // Details shows a "Stored value — not used" row whenever it drifts.
+    // total) and because the jobs list, invoices and metrics still read it.
 
-    // GST/QST on the discounted subtotal from the admin-configured rates. The
-    // job modal doesn't expose the cash-job toggle, so keep the existing job's
-    // isCashJob when editing (new modal jobs are non-cash).
+    // Is that column an ORDER or a snapshot? (D2 / Stage 4c.2.)
     //
-    // `bookingSource` and `subtotalAmount` come from the SAME lookup, and they
-    // are load-bearing: computeJobMoney decides from them whether this job's
-    // add-ons are already priced into its stored subtotal. Without them, an
-    // admin opening a WEB booking and pressing Save would be treated as an
-    // admin job — adding its add-ons on top of a subtotal that already contains
-    // them, and silently inflating a real customer's card.
-    const editingJobId = (formData.get("jobId") as string | null) || null;
-    let isCashJob = false;
-    let existingBookingSource: string | null = null;
-    let existingSubtotal: number | null = null;
-    let existingPrice: number | null = null;
-    if (editingJobId) {
-      const current = await db.job.findUnique({
-        where: { id: editingJobId },
-        select: {
-          isCashJob: true,
-          bookingSource: true,
-          subtotalAmount: true,
-          price: true,
-        },
-      });
-      isCashJob = current?.isCashJob ?? false;
-      existingBookingSource = current?.bookingSource ?? null;
-      existingSubtotal = current?.subtotalAmount ?? null;
-      existingPrice = current?.price ?? null;
-    }
-    // A web / imported job's stored subtotal ALREADY contains its add-ons and is
-    // ALREADY net of its discount, so it is preserved byte-for-byte — that is
-    // what keeps "saving an existing booking never changes its value" true
-    // rather than merely likely.
+    // The form has to say so EXPLICITLY, and this is the whole subtlety of the
+    // fix: JobModal prefills Employee pay from the stored column, so on every
+    // re-save of every job `manualEmployeePay` is non-null. A naive "a value is
+    // present → the admin meant it" rule would flag the entire database manual
+    // on the next edit and freeze every job at a stale snapshot — the exact
+    // failure mode the narrow backfill in 20260814010000 refuses to cause.
     //
-    // Preserved only while the admin leaves the price alone. The moment they
-    // retype it they are taking authorship of the number, so the job is priced
-    // like any other admin job from then on; silently discarding a repriced web
-    // booking would be the worse failure.
-    const priceUnchanged =
-      existingPrice !== null &&
-      price !== null &&
-      Math.abs(existingPrice - price) < 0.005;
-    // Per-job tax exemption (item 7) — the modal DOES expose this one, and it
-    // applies to this job alone.
-    const taxExempt = formData.get("taxExempt") === "on";
-    const taxRates = await getTaxRates();
-    // Add-ons and custom extra charges finally count (awerfixes item 10): on an
-    // admin job the subtotal is now `price + sum(unit x qty) - discount`, where
-    // it used to be `price - discount` and a $25 custom charge billed $0.
-    const taxes = computeJobMoney(
-      {
-        bookingSource: priceUnchanged ? existingBookingSource : null,
-        price,
-        discountAmount,
-        subtotalAmount: priceUnchanged ? existingSubtotal : null,
-        isCashJob,
-        taxExempt,
-        addOns,
-      },
-      taxRates
-    );
+    // So the form posts a tri-state and this reads it:
+    //   "on"/"off"  the form owns the control (JobModal, jobs/new) — it knows
+    //               whether the field was actually touched, and "Clear — use
+    //               automatic calculation" posts "off".
+    //   absent      a form with no control (the jobs-list quick edit). PRESERVE
+    //               the stored flag; never reset it.
+    // A brand-new job with a typed figure and no control is the admin authoring
+    // an amount from scratch, so it counts as manual.
+    const submittedPayIsManual = formData.get("employeePayIsManual");
+    const employeePayIsManual =
+      submittedPayIsManual === "on"
+        ? true
+        : submittedPayIsManual === "off"
+          ? false
+          : editingJobId
+            ? existingPayIsManual
+            : manualEmployeePay !== null;
+
+    // ── D3: tips and parking ride along on the card ─────────────────────────
+    //
+    // They are paid OUT to the cleaners (4b.1), so they have to be collected IN
+    // — otherwise the company funds them and profit drops, which is precisely
+    // what the PDF forbids. `resolveAmountDue` already prefers `totalAmount`, so
+    // folding them in here is the whole customer-side change; no billing code
+    // moves. Untaxed on purpose: a tip is not a service, and parking is a
+    // disbursement.
+    //
+    // On an already-charged job nothing is folded — see resolvePassThroughBilling.
+    const passThrough = passThroughTotal({
+      totalTip: parseOptionalFloat(formData.get("totalTip")),
+      parking: parseOptionalFloat(formData.get("parking")),
+    });
+    const passThroughBilling = resolvePassThroughBilling({
+      taxedTotal: taxes.totalAmount,
+      passThrough,
+      settled: alreadySettled,
+      storedTotal: existingTotalAmount,
+    });
 
     const jobData: any = {
       // The job's LEAD CLEANER — the same meaning bulkAssignCleaner, claimJob
@@ -447,11 +582,20 @@ export async function saveJob(formData: FormData) {
       price,
       usesFixedPrice,
       taxExempt,
+      // Stamped on every save, so a job can never drift back to being priced by
+      // inference (fix 2). `taxes.subtotalAmount` below is the ACTIVE service
+      // total under whichever mode this is.
+      pricingMode,
       subtotalAmount: taxes.subtotalAmount,
       gstAmount: taxes.gstAmount,
       qstAmount: taxes.qstAmount,
-      totalAmount: taxes.totalAmount,
+      // Service total WITH tax, plus the untaxed customer-funded pass-throughs
+      // the card will actually take (D3). On a settled job this is byte-identical
+      // to `taxes.totalAmount` plus whatever was already inside the stored total,
+      // so adding a tip after payment never re-opens a balance.
+      totalAmount: passThroughBilling.totalAmount,
       employeePay: estimatedEmployeePay,
+      employeePayIsManual,
       payType,
       hourlyRate,
       totalTip: parseOptionalFloat(formData.get("totalTip")),
@@ -551,6 +695,47 @@ export async function saveJob(formData: FormData) {
         where: { id: editingJobId },
         data: updateData,
       });
+
+      // Pricing-mode changes are logged (fix 2). This is the one edit that can
+      // move every money surface on the job without any figure on the form
+      // visibly changing — flipping an override job to itemized re-prices it
+      // from its parts — so it must leave a trail with a name against it.
+      // Best-effort: a failed log must never fail the save.
+      if (existingPricingMode !== pricingMode) {
+        const from = existingPricingMode ?? "not set";
+        await db.jobLog
+          .create({
+            data: {
+              jobId: editingJobId,
+              userId: session.user.id,
+              action: "UPDATED",
+              description: recalculateFromItems
+                ? `Pricing recalculated from items by ${session.user.name ?? "an admin"} — mode ${from} → ITEMIZED, service total $${taxes.subtotalAmount.toFixed(2)}`
+                : `Pricing mode changed by ${session.user.name ?? "an admin"}: ${from} → ${pricingMode} (service total $${taxes.subtotalAmount.toFixed(2)})`,
+            },
+          })
+          .catch(() => {});
+      }
+
+      // Manual-pay flips are logged for the same reason (D2 / Stage 4c.2):
+      // turning the override on hands the crew a different amount than the tier
+      // math would, and turning it off hands them the tier amount again —
+      // neither of which is visible in any figure on the form. Best-effort.
+      if (existingPayIsManual !== employeePayIsManual) {
+        const who = session.user.name ?? "an admin";
+        await db.jobLog
+          .create({
+            data: {
+              jobId: editingJobId,
+              userId: session.user.id,
+              action: "UPDATED",
+              description: employeePayIsManual
+                ? `Cleaner pay set to MANUAL by ${who} — team total $${(estimatedEmployeePay ?? 0).toFixed(2)}, split evenly. Overrides the automatic tier calculation until cleared.`
+                : `Manual cleaner pay CLEARED by ${who} — back to the automatic tier calculation on a pay basis of $${payBasis.toFixed(2)}.`,
+            },
+          })
+          .catch(() => {});
+      }
 
       // Keep per-cleaner JobAssignment rows in sync with the assigned team.
       // A failure here is reported rather than swallowed — the admin must not
@@ -960,14 +1145,21 @@ export async function saveJob(formData: FormData) {
         // occurrence in the series (item 7). Each child can still be edited
         // individually afterwards.
         //
-        // Children carry the same add-ons as the parent and are always
-        // admin-authored (bookingSource "admin-recurring"), so they price
-        // ADDITIVE — every occurrence bills the add-ons, not just the first.
+        // Children carry the same add-ons AND the same pricing mode as the
+        // parent — a series is one agreement, so occurrence 4 must not be priced
+        // by a different rule than occurrence 1. Under ITEMIZED every occurrence
+        // bills the add-ons, not just the first. Under FINAL_PRICE each
+        // occurrence carries the parent's agreed service total; the frequency
+        // discount is still RECORDED on the child (reporting reads it) but not
+        // subtracted, which is the FINAL_PRICE convention everywhere else.
         const childTaxes = computeJobMoney(
           {
+            pricingMode,
             bookingSource: null,
             price: basePrice,
             discountAmount: childDiscount,
+            subtotalAmount:
+              pricingMode === "FINAL_PRICE" ? taxes.subtotalAmount : null,
             isCashJob,
             taxExempt,
             addOns,
@@ -999,7 +1191,12 @@ export async function saveJob(formData: FormData) {
             subtotalAmount: childTaxes.subtotalAmount,
             gstAmount: childTaxes.gstAmount,
             qstAmount: childTaxes.qstAmount,
-            totalAmount: childTaxes.totalAmount,
+            // A child inherits the parent's `totalTip`/`parking` through the
+            // spread above, so it has to bill them too (D3) — otherwise every
+            // occurrence after the first would pay the crew a pass-through the
+            // customer was never charged for. A child is brand new, so nothing
+            // is settled and the whole amount folds in.
+            totalAmount: Math.round((childTaxes.totalAmount + passThrough) * 100) / 100,
             bookingSource: "admin-recurring",
             parentJob: { connect: { id: newJob.id } },
           };

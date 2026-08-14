@@ -7,7 +7,7 @@ import {
   ADDON_INCLUDED_LABEL,
   addOnAmountIsIncluded,
   addOnLineTotal,
-  addOnMoneyBasis,
+  resolvePricingMode,
 } from "@/lib/job-money";
 import { sanitizeCleanerNotes } from "@/lib/cleaner-notes";
 import { formatAddressLine } from "@/lib/client-address";
@@ -102,11 +102,14 @@ export default async function BookingDetailPage({
   if (!job || job.clientId !== client.id) notFound();
 
   // Whether this booking's extras were already priced into what the customer
-  // paid. True for a web booking and for a BookingKoala import; the imported
-  // rows additionally carry no price at all, which is what the add-on list
-  // below has to say out loud instead of printing "+$0.00".
+  // paid. True on a final-price-override job — every web booking and every
+  // BookingKoala import — and the imported rows additionally carry no price at
+  // all, which is what the add-on list below has to say out loud instead of
+  // printing "+$0.00". Reads the stamped mode first and only falls back to the
+  // old provenance rule, so an admin who switched this booking to itemized
+  // pricing sees its add-ons priced here too (fix 2).
   const addOnsIncludedInSubtotal =
-    addOnMoneyBasis(job.bookingSource) === "INCLUSIVE";
+    resolvePricingMode(job) === "FINAL_PRICE";
 
   const isUpcoming = new Date(job.startTime) >= new Date();
   const {

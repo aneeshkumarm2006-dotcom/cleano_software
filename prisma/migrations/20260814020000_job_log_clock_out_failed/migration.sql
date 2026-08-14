@@ -1,0 +1,45 @@
+-- Fix 6 of cleano_new_fixes.pdf — "Log failed clock-out attempts" (Stage 5.3).
+--
+-- Until now a failed clock-out left no trace anywhere an admin could reach: the
+-- action caught every error, printed `console.error("Error clocking out:")` and
+-- returned the string "Failed to clock out". So when a cleaner phoned in to say
+-- the button didn't work, there was nothing to look at — not the time, not the
+-- cleaner, not which of a dozen possible causes it was.
+--
+-- `clockOut.ts` now writes a best-effort JobLog row on EVERY failure, carrying
+-- the error code in `field`, the error class in the description, and a sanitized
+-- summary of what was submitted (product names and quantities from our own
+-- catalogue — never free text the cleaner typed). It renders on the job's
+-- Activity timeline beside the successful clock-ins.
+--
+-- ── Why this is safe to run ────────────────────────────────────────────────
+-- Postgres refuses to USE a newly added enum value inside the transaction that
+-- added it, and Prisma wraps each migration file in one. This file only ADDs the
+-- value; the first row using it is written by application code long after the
+-- migration has committed, so there is nothing to split into a second migration.
+-- (PG 12+ is required for ALTER TYPE ... ADD VALUE inside a transaction at all;
+-- Supabase is well past that.)
+--
+-- ── Blast radius: none ─────────────────────────────────────────────────────
+-- Adding an enum value changes no existing row. The two places that read
+-- JobLogAction both cope already, checked rather than assumed:
+--   * `JobDetailView.getActionIcon` switches with a `default:` arm (it now has
+--     an explicit CLOCK_OUT_FAILED arm as well, so the row reads as a warning).
+--   * the customer booking timeline filters with an `action: { in: [...] }`
+--     ALLOWLIST, so an internal failure log can never leak to a client.
+
+ALTER TYPE "JobLogAction" ADD VALUE 'CLOCK_OUT_FAILED';
+
+-- ── Post-deploy sanity check (Stage 7.1) ────────────────────────────────────
+-- Same convention as 20260814000000_job_pricing_mode: no `RAISE NOTICE`, since
+-- Prisma's migration engine discards Postgres notices. Run this read-only query
+-- after `prisma migrate deploy` and again a week later — it is the first direct
+-- measurement of the clock-out failure rate this project has ever had:
+--
+--   SELECT "field" AS code, count(*), max("createdAt")
+--   FROM "JobLog" WHERE action = 'CLOCK_OUT_FAILED'
+--   GROUP BY 1 ORDER BY 2 DESC;
+--
+-- Expected immediately after deploy: zero rows. A run of DB_TIMEOUT rows points
+-- at the pooler; a run of INVALID_USAGE / PRODUCT_NOT_IN_KIT points at the kit
+-- data or the modal, and each of those names the exact product.

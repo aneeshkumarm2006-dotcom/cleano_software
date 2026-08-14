@@ -4,7 +4,15 @@ import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { revalidatePath } from "next/cache";
 import { getTaxRates } from "@/lib/tax.server";
-import { computeJobMoney } from "@/lib/job-money";
+import {
+  computeJobMoney,
+  isPricingMode,
+  passThroughTotal,
+  resolvePassThroughBilling,
+  resolvePricingMode,
+  sumAddOns,
+  type JobPricingMode,
+} from "@/lib/job-money";
 import {
   SAVED_ADDRESS_ORDER,
   SAVED_ADDRESS_SELECT,
@@ -28,6 +36,8 @@ import ClientNameField from "./ClientNameField";
 import { ControlledDatePicker, ControlledTimePicker } from "./DateTimePicker";
 import PaymentTypeSelect from "./PaymentTypeSelect";
 import PayTypeFields from "./PayTypeFields";
+import PricingModeField from "./PricingModeField";
+import EmployeePayModeField from "./EmployeePayModeField";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
@@ -35,6 +45,40 @@ import Textarea from "@/components/ui/Textarea";
 import PriceSummary from "./PriceSummary";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
+
+// Optional manual per-cleaner payout (fix 4). Reads the `payFor_<id>` fields
+// from the create/edit form and writes them onto JobAssignment.payAmount,
+// which always wins over the automatic tier/flat calc for that cleaner (and
+// is import-safe — imports never set it). A blank field clears any override.
+//
+// Module scope, and deliberately NOT a `"use server"` action. It used to be a
+// nested inline action declared inside JobFormPage BELOW both of its call
+// sites in saveJob, which threw `ReferenceError: applyManualPayouts is not
+// defined` on every save with a cleaner assigned: normal function declarations
+// hoist, but the `"use server"` transform rewrites an inline action into a
+// separate generated binding that does not. It is an internal helper only ever
+// called from inside other server actions in this file — never passed to a
+// client component, never a `<form action={…}>` — so marking it `"use server"`
+// also needlessly published it as a callable server endpoint.
+async function applyManualPayouts(
+  jobId: string,
+  cleanerIds: string[],
+  formData: FormData
+) {
+  for (const cleanerId of cleanerIds) {
+    const raw = formData.get(`payFor_${cleanerId}`);
+    const str = typeof raw === "string" ? raw.trim() : "";
+    // Blank = "leave as-is", so editing a job here never wipes an override
+    // set on the job detail page (which has its own Reset control). Only a
+    // real number applies a manual amount.
+    if (str === "") continue;
+    const amount = Number(str);
+    if (!Number.isFinite(amount) || amount < 0) continue;
+    await db.jobAssignment
+      .updateMany({ where: { jobId, cleanerId }, data: { payAmount: amount } })
+      .catch(() => {});
+  }
+}
 
 export default async function JobFormPage({
   searchParams,
@@ -106,7 +150,9 @@ export default async function JobFormPage({
   if (isEditing) {
     existingJob = await db.job.findUnique({
       where: { id: jobId },
-      include: { cleaners: true },
+      // `addOns` feeds the pricing-mode control's hint: this page has no add-on
+      // editor, but the rows it is about to re-price live here (fix 2).
+      include: { cleaners: true, addOns: true },
     });
 
     if (!existingJob) {
@@ -365,23 +411,53 @@ export default async function JobFormPage({
           where: { id: editingIdForMoney },
           select: {
             bookingSource: true,
+            pricingMode: true,
             subtotalAmount: true,
             price: true,
             addOns: { select: { name: true, price: true, quantity: true } },
+            // D2 / D3 — same two questions the shared saveJob asks: is the
+            // stored Employee pay an order, and has the card already been taken?
+            employeePayIsManual: true,
+            totalAmount: true,
+            paymentReceived: true,
+            stripePaymentIntentId: true,
           },
         })
       : null;
-    // Same authorship rule as saveJob: a web/imported job's stored subtotal is
-    // preserved while the admin leaves the price alone, and recomputed once
-    // they retype it.
-    const moneyPriceUnchanged =
+    // Same explicit pricing mode as the shared saveJob (fix 2): the form's
+    // selector wins, then "Recalculate from items", then the job's stored mode,
+    // then the historical provenance fallback. Retyping the price no longer
+    // flips the mode — it only re-authors a FINAL_PRICE job's override total.
+    const existingMoneyMode = isPricingMode(moneyJob?.pricingMode)
+      ? moneyJob.pricingMode
+      : null;
+    const recalculateFromItems = formData.get("recalculateFromItems") === "on";
+    const submittedMode = formData.get("pricingMode");
+    const pricingMode: JobPricingMode = recalculateFromItems
+      ? "ITEMIZED"
+      : isPricingMode(submittedMode)
+        ? submittedMode
+        : (existingMoneyMode ??
+          (moneyJob
+            ? resolvePricingMode({ bookingSource: moneyJob.bookingSource })
+            : "ITEMIZED"));
+    const moneyPriceRetyped =
       moneyJob?.price != null &&
       price !== null &&
-      Math.abs(moneyJob.price - price) < 0.005;
+      Math.abs(moneyJob.price - price) >= 0.005;
+    const overrideSubtotal =
+      pricingMode === "FINAL_PRICE"
+        ? moneyPriceRetyped ||
+          moneyJob?.subtotalAmount == null ||
+          moneyJob.subtotalAmount <= 0
+          ? price
+          : moneyJob.subtotalAmount
+        : null;
     const taxes = computeJobMoney(
       {
-        bookingSource: moneyPriceUnchanged ? moneyJob?.bookingSource : null,
-        subtotalAmount: moneyPriceUnchanged ? moneyJob?.subtotalAmount : null,
+        pricingMode,
+        bookingSource: moneyJob?.bookingSource ?? null,
+        subtotalAmount: overrideSubtotal,
         price,
         discountAmount,
         isCashJob,
@@ -416,6 +492,41 @@ export default async function JobFormPage({
       }
     }
 
+    // Is the Employee pay figure an ORDER or a snapshot? Same tri-state as the
+    // shared saveJob (D2 / Stage 4c.2) — this form posts "on"/"off" from its own
+    // control, and an absent field preserves the stored flag rather than
+    // resetting it. See the long note in saveJob.ts for why "a value is present"
+    // is NOT a safe rule.
+    const submittedPayIsManual = formData.get("employeePayIsManual");
+    const employeePayIsManual =
+      submittedPayIsManual === "on"
+        ? true
+        : submittedPayIsManual === "off"
+          ? false
+          : moneyJob
+            ? moneyJob.employeePayIsManual
+            : employeePay !== null;
+
+    // D3 — tips and parking are customer-funded pass-throughs, so they ride
+    // along on the card when it has not been charged yet, and are flagged for
+    // separate collection when it has. One helper, shared with saveJob.ts.
+    const passThrough = passThroughTotal({
+      totalTip: formData.get("totalTip")
+        ? parseFloat(formData.get("totalTip") as string)
+        : null,
+      parking: formData.get("parking")
+        ? parseFloat(formData.get("parking") as string)
+        : null,
+    });
+    const passThroughBilling = resolvePassThroughBilling({
+      taxedTotal: taxes.totalAmount,
+      passThrough,
+      settled:
+        (moneyJob?.paymentReceived ?? false) ||
+        moneyJob?.stripePaymentIntentId != null,
+      storedTotal: moneyJob?.totalAmount ?? null,
+    });
+
     const jobData: any = {
       // Lead cleaner, NOT the acting admin — see the matching comment in
       // saveJob.ts (fix list items 3 + 4).
@@ -441,11 +552,15 @@ export default async function JobFormPage({
         startDate && startTime ? tzWallClockToUtc(startDate, startTime) : new Date(),
       price,
       usesFixedPrice,
+      // Stamped on every save (fix 2) — see the shared saveJob action.
+      pricingMode,
       subtotalAmount: taxes.subtotalAmount,
       gstAmount: taxes.gstAmount,
       qstAmount: taxes.qstAmount,
-      totalAmount: taxes.totalAmount,
+      // Service total with tax + the untaxed pass-throughs the card takes (D3).
+      totalAmount: passThroughBilling.totalAmount,
       employeePay,
+      employeePayIsManual,
       payType,
       hourlyRate,
       totalTip: formData.get("totalTip")
@@ -532,10 +647,29 @@ export default async function JobFormPage({
         .catch(() => {});
 
       // Per-cleaner JobAssignment rows for the assigned team.
+      //
+      // Guarded here and NOT on the edit path above, because the two failures
+      // are not the same failure. The job row already exists by this line, so a
+      // throw would skip the redirect below and hand the admin a bare
+      // server-exception page for a job that WAS created — they reasonably
+      // conclude nothing saved, retry, and silently create a duplicate. Landing
+      // on the jobs list with the team unassigned is strictly better: the job is
+      // visible and the team can be fixed from the job detail page.
+      //
+      // On the EDIT path the job already existed, nothing is stranded by the
+      // error, and the admin must be told their assignment change did not
+      // stick — so `if (!sync.ok) throw new Error(sync.error)` stays as-is there.
       if (cleanerIds.length > 0) {
-        const sync = await syncJobAssignments(created.id, cleanerIds);
-        if (!sync.ok) throw new Error(sync.error);
-        await applyManualPayouts(created.id, cleanerIds, formData);
+        try {
+          const sync = await syncJobAssignments(created.id, cleanerIds);
+          if (!sync.ok) throw new Error(sync.error);
+          await applyManualPayouts(created.id, cleanerIds, formData);
+        } catch (err) {
+          console.error(
+            `[admin/jobs/new] job ${created.id} was created, but assigning its team failed:`,
+            err
+          );
+        }
       }
 
       // Convert-to-job (10.4): the request becomes CONVERTED only now, when a
@@ -565,31 +699,6 @@ export default async function JobFormPage({
 
       revalidatePath("/admin/jobs");
       redirect(convertedQuoteId ? "/admin/quotes" : "/admin/jobs");
-    }
-  }
-
-  // Optional manual per-cleaner payout (fix 4). Reads the `payFor_<id>` fields
-  // from the create/edit form and writes them onto JobAssignment.payAmount,
-  // which always wins over the automatic tier/flat calc for that cleaner (and
-  // is import-safe — imports never set it). A blank field clears any override.
-  async function applyManualPayouts(
-    jobId: string,
-    cleanerIds: string[],
-    formData: FormData
-  ) {
-    "use server";
-    for (const cleanerId of cleanerIds) {
-      const raw = formData.get(`payFor_${cleanerId}`);
-      const str = typeof raw === "string" ? raw.trim() : "";
-      // Blank = "leave as-is", so editing a job here never wipes an override
-      // set on the job detail page (which has its own Reset control). Only a
-      // real number applies a manual amount.
-      if (str === "") continue;
-      const amount = Number(str);
-      if (!Number.isFinite(amount) || amount < 0) continue;
-      await db.jobAssignment
-        .updateMany({ where: { jobId, cleanerId }, data: { payAmount: amount } })
-        .catch(() => {});
     }
   }
 
@@ -797,13 +906,24 @@ export default async function JobFormPage({
         {/* Pricing & Payment */}
         <SectionCard title="Pricing & payment" subtitle="Charges, costs, and payment method">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-            {/* TODO(client): total override? This is the BASE SERVICE PRICE —
-                the customer-facing total is price − discount + tip +
-                transportation + add-ons + tax, and nothing overrides that
-                final figure. Deliberately not built (decision D1); revisit
-                only if the client means "type the tax-inclusive total". */}
+            {/* Itemized vs final price override (fix 2). The mode decides what
+                the Price field below MEANS: the base service line, or this
+                job's whole agreed service total. */}
+            <PricingModeField
+              defaultValue={
+                existingJob
+                  ? resolvePricingMode(existingJob)
+                  : duplicateSource
+                    ? resolvePricingMode(duplicateSource)
+                    : "ITEMIZED"
+              }
+              addOnTotal={sumAddOns(existingJob?.addOns)}
+            />
             <MoneyFieldWrap label="Price" id="price" name="price" defaultValue={prefill?.price} />
             <MoneyFieldWrap label="Employee pay" id="employeePay" name="employeePay" defaultValue={prefill?.employeePay} />
+            {/* Is that figure an order or an estimate? (fix 4 / D2.) The modal
+                carries the same choice; both post `employeePayIsManual`. */}
+            <EmployeePayModeField defaultValue={!!prefill?.employeePayIsManual} />
 
             <div className="md:col-span-2">
               <PayTypeFields

@@ -28,6 +28,14 @@ import {
 } from "@/lib/work-sessions";
 import { markOnMyWay } from "../onMyWay";
 import { getCoords } from "../OnMyWayButton";
+import type { ClockOutUsage } from "@/lib/clock-out";
+import {
+  ClockOutErrorNotice,
+  ClockOutFieldNote,
+  clockOutFieldStyle,
+  isClockOutFieldError,
+  type ClockOutErrorState,
+} from "../../ClockOutError";
 
 type ProductCategory = "LIQUID_SPRAY" | "MOP_LIQUID" | "DISPOSABLE" | "OTHER";
 
@@ -193,7 +201,9 @@ export default function ClockPageClient({
   // Clock-out inventory modal state
   const [coOpen, setCoOpen] = useState(false);
   const [coLoading, setCoLoading] = useState(false);
-  const [coError, setCoError] = useState<string | null>(null);
+  const [coFailure, setCoFailure] = useState<ClockOutErrorState | null>(null);
+  /** The payload of the failed attempt, so Retry resends it unchanged (5.5). */
+  const [coLastPayload, setCoLastPayload] = useState<ClockOutUsage | null>(null);
   const [sprayPick, setSprayPick] = useState<Record<string, number>>({});
   const [mopPick, setMopPick] = useState<Record<string, number>>({});
   const [dispPick, setDispPick] = useState<Record<string, number>>({});
@@ -221,7 +231,8 @@ export default function ClockPageClient({
     disposables.forEach(ep => (dp[ep.productId] = 0));
     others.forEach(ep => (rem[ep.productId] = ep.quantity.toString()));
     setSprayPick(sp); setMopPick(mp); setDispPick(dp); setRemaining(rem);
-    setCoError(null);
+    setCoFailure(null);
+    setCoLastPayload(null);
     setChecklistItems([]);
     setCoOpen(true);
 
@@ -257,29 +268,46 @@ export default function ClockPageClient({
     setChecklistPending(null);
   }
 
-  async function handleClockOut() {
+  function buildUsage(): ClockOutUsage {
+    return {
+      sprays: sprays.map(ep => ({ productId: ep.productId, sprayCount: SPRAY_OPTIONS[sprayPick[ep.productId] ?? 0].sprays })),
+      mops: mops.map(ep => ({ productId: ep.productId, mopCount: MOP_OPTIONS[mopPick[ep.productId] ?? 0].mops })),
+      disposables: disposables.map(ep => ({ productId: ep.productId, quantity: DISPOSABLE_OPTIONS[dispPick[ep.productId] ?? 0] })),
+      // Blank stays blank. The old `?? "0"` read a MISSING key as "zero left",
+      // which would have deducted a cleaner's entire stock of that product.
+      remaining: others.map(ep => ({ productId: ep.productId, inventoryAfter: parseFloat(remaining[ep.productId] ?? "") })).filter(r => !isNaN(r.inventoryAfter)),
+    };
+  }
+
+  async function submitClockOut(usage: ClockOutUsage) {
+    // Re-entry guard — the confirm button is disabled in flight, but a double
+    // tap can beat the re-render on a slow phone.
+    if (coLoading) return;
     setCoLoading(true);
-    setCoError(null);
+    setCoFailure(null);
+    setCoLastPayload(usage);
     try {
-      const usage = {
-        sprays: sprays.map(ep => ({ productId: ep.productId, sprayCount: SPRAY_OPTIONS[sprayPick[ep.productId] ?? 0].sprays })),
-        mops: mops.map(ep => ({ productId: ep.productId, mopCount: MOP_OPTIONS[mopPick[ep.productId] ?? 0].mops })),
-        disposables: disposables.map(ep => ({ productId: ep.productId, quantity: DISPOSABLE_OPTIONS[dispPick[ep.productId] ?? 0] })),
-        remaining: others.map(ep => ({ productId: ep.productId, inventoryAfter: parseFloat(remaining[ep.productId] ?? "0") })).filter(r => !isNaN(r.inventoryAfter)),
-      };
       const result = await clockOut(jobId, usage);
       if (result.success) {
         setCoOpen(false);
         router.refresh();
       } else {
-        setCoError(result.error || "Failed to clock out");
+        setCoFailure(result);
       }
-    } catch {
-      setCoError("Failed to clock out");
+    } catch (e) {
+      console.error("clock-out", e);
+      setCoFailure({
+        code: "DB_UNAVAILABLE",
+        error: "We couldn't reach the server. Check your signal and tap Retry — your entries are still here.",
+        retryable: true,
+      });
     } finally {
       setCoLoading(false);
     }
   }
+
+  const handleClockOut = () => submitClockOut(buildUsage());
+  const handleClockOutRetry = () => submitClockOut(coLastPayload ?? buildUsage());
 
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
@@ -725,8 +753,9 @@ export default function ClockPageClient({
                       {sprays.map(ep => {
                         const pick = sprayPick[ep.productId] ?? 0;
                         const mlDeducted = SPRAY_OPTIONS[pick].sprays * ML_PER_SPRAY;
+                        const flagged = isClockOutFieldError(coFailure, ep.productId);
                         return (
-                          <div key={ep.productId} className="pju-card">
+                          <div key={ep.productId} className="pju-card" style={clockOutFieldStyle(flagged)}>
                             <div className="pju-card-head">
                               <span className="pju-card-name">{ep.product.name}</span>
                               <span className="pju-card-stock">{ep.quantity.toFixed(1)} {ep.product.unit}</span>
@@ -740,6 +769,7 @@ export default function ClockPageClient({
                               ))}
                             </div>
                             {mlDeducted > 0 && <div className="pju-card-foot">Deducts {mlDeducted.toFixed(2)} ml</div>}
+                            {flagged && coFailure && <ClockOutFieldNote state={coFailure} />}
                           </div>
                         );
                       })}
@@ -754,8 +784,9 @@ export default function ClockPageClient({
                       </div>
                       {mops.map(ep => {
                         const pick = mopPick[ep.productId] ?? 0;
+                        const flagged = isClockOutFieldError(coFailure, ep.productId);
                         return (
-                          <div key={ep.productId} className="pju-card">
+                          <div key={ep.productId} className="pju-card" style={clockOutFieldStyle(flagged)}>
                             <div className="pju-card-head">
                               <span className="pju-card-name">{ep.product.name}</span>
                               <span className="pju-card-stock">{ep.quantity.toFixed(1)} {ep.product.unit}</span>
@@ -767,6 +798,7 @@ export default function ClockPageClient({
                                 </button>
                               ))}
                             </div>
+                            {flagged && coFailure && <ClockOutFieldNote state={coFailure} />}
                           </div>
                         );
                       })}
@@ -782,8 +814,9 @@ export default function ClockPageClient({
                       <div className="pju-disp-grid">
                         {disposables.map(ep => {
                           const pick = dispPick[ep.productId] ?? 0;
+                          const flagged = isClockOutFieldError(coFailure, ep.productId);
                           return (
-                            <div key={ep.productId} className="pju-disp-card">
+                            <div key={ep.productId} className="pju-disp-card" style={clockOutFieldStyle(flagged)}>
                               <div className="pju-disp-name">{ep.product.name}</div>
                               <div className="pju-disp-stock">{ep.quantity.toFixed(0)} in stock</div>
                               <div className="pju-disp-pills">
@@ -793,6 +826,7 @@ export default function ClockPageClient({
                                   </button>
                                 ))}
                               </div>
+                              {flagged && coFailure && <ClockOutFieldNote state={coFailure} />}
                             </div>
                           );
                         })}
@@ -806,8 +840,10 @@ export default function ClockPageClient({
                         <span className="pju-section-icon">•••</span>
                         <div><h3>Other</h3><p>How much do you have remaining?</p></div>
                       </div>
-                      {others.map(ep => (
-                        <div key={ep.productId} className="pju-card">
+                      {others.map(ep => {
+                        const flagged = isClockOutFieldError(coFailure, ep.productId);
+                        return (
+                        <div key={ep.productId} className="pju-card" style={clockOutFieldStyle(flagged)}>
                           <div className="pju-card-head">
                             <span className="pju-card-name">{ep.product.name}</span>
                             <span className="pju-card-stock">Started with {ep.quantity} {ep.product.unit}</span>
@@ -821,19 +857,25 @@ export default function ClockPageClient({
                             value={remaining[ep.productId] ?? ""}
                             onChange={e => setRemaining(p => ({ ...p, [ep.productId]: e.target.value }))}
                             placeholder={`Remaining ${ep.product.unit}`}
+                            aria-invalid={flagged || undefined}
+                            style={flagged ? { borderColor: "#dc2626" } : undefined}
                           />
+                          {flagged && coFailure && <ClockOutFieldNote state={coFailure} />}
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </>
               )}
             </div>
 
-            {coError && (
-              <div style={{ margin: "0 16px 12px", fontSize: 13, color: "#dc2626", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 10, padding: "10px 12px" }}>
-                {coError}
-              </div>
+            {coFailure && (
+              <ClockOutErrorNotice
+                state={coFailure}
+                onRetry={handleClockOutRetry}
+                retrying={coLoading}
+              />
             )}
 
             <div className="co-footer">

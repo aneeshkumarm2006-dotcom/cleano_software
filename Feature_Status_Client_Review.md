@@ -1,8 +1,34 @@
 # Cleano Software — Feature Status & Build Plan
 
 **Prepared for:** Client Review
-**Date:** June 15, 2026
+**Date:** June 15, 2026 · **last updated August 14, 2026**
 **Purpose:** Compare what the platform already does today against the BookingKoala master settings spec, organized by who each feature serves, so we can agree on a build plan together.
+
+---
+
+## Update — August 14, 2026: the six pricing & access fixes
+
+The most recent round of work closed six P0 items from your pricing-logic
+document. They are defect fixes rather than new spec features, so they are
+summarised here and the rows they changed are marked **(Aug 2026)** in the
+tables below.
+
+| # | Item | Status |
+|---|---|:---:|
+| 1 | Settings page returns an error — 39 staff accounts were locked out of their own Settings; the page can also no longer fail as a whole | ✅ **Done** |
+| 2 | Itemized pricing vs. final price override — now a visible, admin-chosen setting on every job, not something inferred from where the booking came from | ✅ **Done** |
+| 3 | One active price on every screen — price card, Charge button, profit, revenue, exports, invoices and the refund cap all read base + add-ons (or the override) | ✅ **Done** |
+| 4 | Cleaner pay includes tips and parking as customer-funded pass-throughs, and honours a manual team payment | ✅ **Done** |
+| 5 | Cleaner pay includes add-ons in the basis | ✅ **Done** |
+| 6 | Clock-out reliability — named errors, a resumable retry, a record on the job, and an alert to the admin team | ✅ **Done** |
+| 7 | Applicant access model — a restricted applicant portal, minted by invitation | ✅ **Done** |
+
+Two companion documents go with this round:
+
+- **`NUMBERS_THAT_MOVE.md`** — every figure on your dashboards that changes,
+  before and after, measured against live data.
+- **`CLIENT_DECISIONS.md` section 7** — the six decisions (D1–D6) made from code
+  evidence, each with its reasoning, each independently overrulable.
 
 ---
 
@@ -28,11 +54,14 @@ Features are grouped by **who uses them**:
 
 | | Done ✅ | Partial 🟡 | To Build 🔴 | Total |
 |---|:---:|:---:|:---:|:---:|
-| 🧑‍💼 Admin | 8 | 8 | 12 | 28 |
+| 🧑‍💼 Admin | 12 | 8 | 12 | 32 |
 | 🛒 Customer | 8 | 11 | 9 | 28 |
-| 🧹 Cleaner | 8 | 7 | 4 | 19 |
+| 🧹 Cleaner | 9 | 7 | 3 | 19 |
 | ⚙️ System | 6 | 1 | 0 | 7 |
-| **Total** | **30** | **27** | **25** | **82** |
+| **Total** | **35** | **27** | **24** | **86** |
+
+*Counts updated August 14, 2026: four new Admin capabilities from the pricing
+round, and the cleaner contractor pay model moved from To Build to Done.*
 
 **In plain terms:** ~40% of features are fully built. Most of the rest already has the hard technical groundwork in place (payments, scheduling, time tracking) — what remains is largely **admin settings screens** and **customer-facing polish**, not core engineering.
 
@@ -51,6 +80,10 @@ Features are grouped by **who uses them**:
 | Card holds & capture | Place, capture, and release holds |
 | Charge / refund workflows | Full Stripe charge and refund flows |
 | Three-strike system | Automatic cleaner strike tracking |
+| Pricing mode per job **(Aug 2026)** | Itemized, or a final price override — chosen on the job form, shown on the job page |
+| One active price everywhere **(Aug 2026)** | Price card, Charge button, profit, revenue, exports, invoices and the refund cap all read base + add-ons (or the override) |
+| Shared Settings page **(Aug 2026)** | Every staff role reaches its own Settings; admin-only tabs stay admin-only; one failing section no longer takes the page down |
+| Applicant portal & invite **(Aug 2026)** | Invite an applicant to a restricted portal; "Hire" converts that account instead of creating a second login |
 
 ### Partial — Needs Finishing 🟡
 | Feature | What's left |
@@ -131,7 +164,8 @@ Features are grouped by **who uses them**:
 ### Already Working ✅
 | Feature | Notes |
 |---|---|
-| Clock in / out | Time tracking on jobs |
+| Clock in / out **(Aug 2026)** | Time tracking on jobs. Failures are now named, retryable without double-counting, recorded on the job, and alerted to admin |
+| Contractor pay model **(Aug 2026)** | Tier base rates (Trainee 30% / Standard 40% / Field Lead 46%) × the rating multiplier, applied to base + add-ons, with tips and parking passed through |
 | Schedule & availability | Cleaners set their own availability |
 | Booking notes | Job notes visible to cleaners |
 | Late-arrival message | Templated late-arrival notification |
@@ -154,7 +188,6 @@ Features are grouped by **who uses them**:
 ### To Build 🔴
 | Feature | Why it matters |
 |---|---|
-| Contractor type + 40% default pay | Standardize cleaner pay model |
 | Customer-data privacy gating | Cleaner sees phone, **not** email/price |
 | Auto booking-completion trigger | Auto-complete when job length elapses |
 | Distance unit setting (km) | Configurable GPS distance unit |
@@ -200,4 +233,4 @@ These are not bugs — they're places where the spec and the current build disag
 
 ---
 
-*This is a working document. Statuses reflect a code audit as of June 15, 2026 and may be refined as we verify edge cases together.*
+*This is a working document. Statuses reflect a code audit as of June 15, 2026, updated August 14, 2026 for the six pricing & access fixes, and may be refined as we verify edge cases together.*

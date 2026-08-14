@@ -1,10 +1,12 @@
 import { db } from "@/db";
 import { computeFieldLeadBonus, type FieldLeadBonus } from "./field-lead-bonus";
+import { ACTIVE_VALUE_SELECT } from "./metrics";
+import { activeSubtotal } from "./job-money";
 
 // The Field Lead's "group" = the Field Lead plus every cleaner whose
-// fieldLeadId points at them. Weekly revenue is the total price of the group's
-// COMPLETED/PAID jobs in the window; the group average rating is the mean of
-// EmployeeRating rows logged for group members in the window.
+// fieldLeadId points at them. Weekly revenue is the total ACTIVE value of the
+// group's COMPLETED/PAID jobs in the window; the group average rating is the
+// mean of EmployeeRating rows logged for group members in the window.
 export async function getFieldLeadWeeklyBonus(
   fieldLeadId: string,
   weekStart: Date,
@@ -42,9 +44,13 @@ export async function getFieldLeadWeeklyBonus(
         },
       ],
     },
-    select: { id: true, price: true },
+    select: { id: true, ...ACTIVE_VALUE_SELECT },
   });
-  const groupRevenue = jobs.reduce((sum, j) => sum + (j.price || 0), 0);
+  // Fix 3 item 3.7 — the bonus denominator is the same revenue basis every
+  // other report uses: base + add-ons, or the override total. On `price` alone
+  // a Field Lead's group was credited $128 for a job that billed $186 of work,
+  // which could put a genuinely qualifying week under the threshold.
+  const groupRevenue = jobs.reduce((sum, j) => sum + activeSubtotal(j), 0);
 
   // Group average rating for the window. `excludedAt: null` matches every other
   // rating→money path (cleaner-rates.ts, getPerformanceData,

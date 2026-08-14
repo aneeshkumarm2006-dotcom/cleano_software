@@ -25,8 +25,13 @@ import { addonIcon } from "@/lib/addon-icons";
 import { addOnKey } from "@/lib/checklist-triggers";
 import {
   addOnLineTotal,
+  ADDON_INCLUDED_LABEL,
   computeJobMoney,
   MAX_ADDON_QUANTITY,
+  PRICING_MODE_HINT,
+  PRICING_MODE_LABEL,
+  resolvePricingMode,
+  type JobPricingMode,
 } from "@/lib/job-money";
 import { DEFAULT_TAX_RATES, type TaxRates } from "@/lib/tax";
 import {
@@ -110,6 +115,12 @@ interface Job {
   endTime: string | null;
   price: number | null;
   employeePay: number | null;
+  /**
+   * TRUE when `employeePay` is an authoritative MANUAL TEAM TOTAL rather than a
+   * save-time estimate (decision D2). Drives the "Manual" state of the Employee
+   * pay field and the "Clear — use automatic calculation" control below.
+   */
+  employeePayIsManual?: boolean | null;
   payType?: string | null;
   hourlyRate?: number | null;
   totalTip: number | null;
@@ -127,8 +138,14 @@ interface Job {
   discountReason?: string | null;
   cleaners: Array<{ id: string; name: string }>;
   addOns?: Array<{ id: string; name: string; price: number; quantity?: number }>;
-  /** Decides whether add-ons are added to `price` or already inside it. */
+  /** Historical fallback for `pricingMode` — see resolvePricingMode. */
   bookingSource?: string | null;
+  /**
+   * The stored, admin-chosen pricing mode (fix 2). Decides whether add-ons are
+   * ADDED to the price or already inside the job's service total. NULL on jobs
+   * written before the column; `resolvePricingMode` covers those.
+   */
+  pricingMode?: string | null;
   isCashJob?: boolean | null;
   subtotalAmount?: number | null;
 }
@@ -706,6 +723,27 @@ export default function JobModal({
   const [discountTouched, setDiscountTouched] = useState(false);
   // Per-job sales-tax exemption (item 7).
   const [taxExempt, setTaxExempt] = useState(false);
+  // How this job is priced (cleano_new_fixes.pdf fix 2). Component state rather
+  // than a react-hook-form field because it changes what the Price INPUT MEANS —
+  // base service price under ITEMIZED, the whole agreed service total under
+  // FINAL_PRICE — so the label, the hint and the live preview all read it.
+  const [pricingMode, setPricingMode] = useState<JobPricingMode>("ITEMIZED");
+  // Set by the "Recalculate from items" button. Purely so the job log can say
+  // the admin pressed the button rather than merely flipped the selector; the
+  // money is identical either way. Cleared the moment the mode moves again.
+  const [recalcRequested, setRecalcRequested] = useState(false);
+  // Is the Employee pay figure an ORDER or a save-time estimate? (D2 / fix 4.)
+  //
+  // Component state, seeded from the job, for the same reason `pricingMode` is:
+  // it changes what the INPUT MEANS. Manual → the number in that box is the
+  // crew's total pay for the job, split evenly. Automatic → it is a snapshot the
+  // live tier math supersedes.
+  //
+  // Why the field's own dirty state is not enough: this modal PREFILLS Employee
+  // pay from the stored column, so "has a value" is true on every re-save of
+  // every job. Typing sets this flag; the Clear control unsets it; and the form
+  // posts the answer explicitly so the server never has to guess. See saveJob.ts.
+  const [payIsManual, setPayIsManual] = useState(false);
   // Why a discount was given (item 29). The reason field only appears once a
   // discount is actually entered.
   const [discountReason, setDiscountReason] = useState("");
@@ -794,6 +832,17 @@ export default function JobModal({
         setAddressChoice(job.clientAddressId || NEW_ADDRESS);
         setSelectedPaymentType(job.paymentType || "");
         setTaxExempt(!!job.taxExempt);
+        // The job's stamped mode, or the historical provenance rule for a row
+        // written before the column existed — the same answer the server will
+        // reach, so the preview and the save agree.
+        setPricingMode(
+          resolvePricingMode({
+            pricingMode: job.pricingMode,
+            bookingSource: job.bookingSource,
+          })
+        );
+        setRecalcRequested(false);
+        setPayIsManual(!!job.employeePayIsManual);
         setDiscountReason(job.discountReason ?? "");
         setApplyToSeries(false);
         setCardSavedNow(false);
@@ -845,6 +894,12 @@ export default function JobModal({
         setAddressChoice(NEW_ADDRESS);
         setSelectedPaymentType("");
         setTaxExempt(false);
+        // A brand-new admin job is itemized: its parts ARE its price.
+        setPricingMode("ITEMIZED");
+        setRecalcRequested(false);
+        // A new job's Employee pay box starts empty, so nothing is manual until
+        // the admin types into it.
+        setPayIsManual(false);
         setDiscountReason("");
         setApplyToSeries(false);
         setSeriesInfo(null);
@@ -990,9 +1045,10 @@ export default function JobModal({
   const watchedSqft = Number(watch("squareFootage")) || 0;
   const watchedPrice = Number(watch("price")) || 0;
 
-  // Live total preview. Mirrors exactly what saveJob will write: preserving a
-  // web/imported job's stored subtotal while the price is untouched, and
-  // pricing everything else as base + add-ons − discount.
+  // Live total preview. Mirrors exactly what saveJob will write: the same mode
+  // resolution, the same "a retyped price re-authors the override" rule, and the
+  // same helper doing the arithmetic. If these two ever disagree the admin is
+  // shown one number and the customer is charged another.
   const previewDiscount = (() => {
     const n = parseFloat(discountInput);
     if (!Number.isFinite(n) || n <= 0) return 0;
@@ -1000,12 +1056,19 @@ export default function JobModal({
       ? Math.round(watchedPrice * (n / 100) * 100) / 100
       : n;
   })();
-  const previewPriceUnchanged =
-    job?.price != null && Math.abs(job.price - watchedPrice) < 0.005;
+  const previewPriceRetyped =
+    job?.price != null && Math.abs(job.price - watchedPrice) >= 0.005;
+  const previewOverrideSubtotal =
+    pricingMode === "FINAL_PRICE"
+      ? previewPriceRetyped || !job?.subtotalAmount || job.subtotalAmount <= 0
+        ? watchedPrice
+        : job.subtotalAmount
+      : null;
   const previewMoney = computeJobMoney(
     {
-      bookingSource: previewPriceUnchanged ? job?.bookingSource : null,
-      subtotalAmount: previewPriceUnchanged ? job?.subtotalAmount : null,
+      pricingMode,
+      bookingSource: job?.bookingSource,
+      subtotalAmount: previewOverrideSubtotal,
       price: watchedPrice,
       discountAmount: previewDiscount,
       isCashJob: job?.isCashJob,
@@ -1014,6 +1077,19 @@ export default function JobModal({
     },
     taxRates
   );
+  // The counterfactual: what the parts come to. Under FINAL_PRICE this is the
+  // "Calculated from items" figure shown beside the active override, and the
+  // number the Recalculate button would adopt. Under ITEMIZED the two are equal
+  // by construction, so nothing extra is drawn.
+  const previewItemizedTotal = previewMoney.itemizedSubtotal;
+  const previewTotalsDiffer =
+    pricingMode === "FINAL_PRICE" &&
+    Math.abs(previewItemizedTotal - previewMoney.subtotalAmount) >= 0.01;
+
+  const changePricingMode = (next: JobPricingMode, viaRecalculate = false) => {
+    setPricingMode(next);
+    setRecalcRequested(viaRecalculate);
+  };
   const sqftDerivedPrice =
     sqftPriced && sqftRates && watchedSqft > 0
       ? moveInOutBasePrice(watchedSqft, {
@@ -1257,6 +1333,12 @@ export default function JobModal({
       formData.append("startTime", values.startTime || "");
       formData.append("price", String(values.price || ""));
       formData.append("employeePay", String(values.employeePay || ""));
+      // D2 — say explicitly whether that number is an order or an estimate. An
+      // empty box can never be a manual team total, so it always posts "off".
+      formData.append(
+        "employeePayIsManual",
+        payIsManual && String(values.employeePay || "") !== "" ? "on" : "off"
+      );
       formData.append("payType", values.payType || "PERCENTAGE");
       formData.append("hourlyRate", String(values.hourlyRate || ""));
       formData.append("totalTip", String(values.totalTip || ""));
@@ -1291,6 +1373,10 @@ export default function JobModal({
         discountReason === "Other" ? "" : discountReason
       );
       if (taxExempt) formData.append("taxExempt", "on");
+      // The mode is posted on every save, so it can never be re-inferred from
+      // whether the price field still matches what was stored (fix 2).
+      formData.append("pricingMode", pricingMode);
+      if (recalcRequested) formData.append("recalculateFromItems", "on");
       if (applyToSeries) formData.append("applyToSeries", "on");
       formData.append("paymentType", selectedPaymentType);
       formData.append("addOns", JSON.stringify(addOns));
@@ -2060,15 +2146,53 @@ export default function JobModal({
                       Pricing & Payment
                     </h3>
 
+                    {/* How this job is priced (cleano_new_fixes.pdf fix 2).
+                        The mode used to be invisible and inferred from where
+                        the booking came from, so an admin retyping the price of
+                        an imported job silently flipped it and its add-ons
+                        started adding to a total that already contained them.
+                        It is a choice now, and it is stored. */}
+                    <div className="space-y-2">
+                      <label className="input-label tracking-tight">
+                        Pricing mode
+                      </label>
+                      <div
+                        role="radiogroup"
+                        aria-label="Pricing mode"
+                        className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {(["ITEMIZED", "FINAL_PRICE"] as const).map((m) => {
+                          const active = pricingMode === m;
+                          return (
+                            <button
+                              key={m}
+                              type="button"
+                              role="radio"
+                              aria-checked={active}
+                              disabled={disableForm}
+                              onClick={() => changePricingMode(m)}
+                              className={`text-left px-4 py-3 rounded-xl transition-colors ${
+                                active
+                                  ? "bg-[#008C9C]/15 ring-1 ring-[#008C9C]/40"
+                                  : "bg-[#008C9C]/5 hover:bg-[#008C9C]/10"
+                              } disabled:opacity-60`}>
+                              <span className="block text-sm font-[600] text-[#008C9C] tracking-tight">
+                                {PRICING_MODE_LABEL[m]}
+                              </span>
+                              <span className="block text-xs text-[#008C9C]/60 tracking-tight mt-0.5">
+                                {PRICING_MODE_HINT[m]}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
                     <div className="grid grid-cols-2 gap-4">
-                      {/* TODO(client): total override? This is the BASE
-                          SERVICE PRICE — the customer-facing total is
-                          price − discount + tip + transportation + add-ons +
-                          tax, and nothing overrides that final figure.
-                          Deliberately not built (decision D1). */}
                       <div>
                         <label className="input-label tracking-tight">
-                          Price
+                          {pricingMode === "FINAL_PRICE"
+                            ? "Service total (override)"
+                            : "Price"}
                         </label>
                         <div className="relative">
                           <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/50" />
@@ -2087,6 +2211,15 @@ export default function JobModal({
                         </div>
                       </div>
 
+                      {/* Employee pay, and whether it is an ORDER or an estimate
+                          (cleano_new_fixes.pdf fix 4, decision D2).
+
+                          Typing here means "pay the crew this" — a team total
+                          split evenly — and it holds until an admin clears it.
+                          That is the PDF's "manual cleaner pay overrides the
+                          automatic calculation until admin clears it", and the
+                          reason the job page no longer prints a stored figure
+                          as "not used". */}
                       <div>
                         <label className="input-label tracking-tight">
                           Employee Pay
@@ -2099,13 +2232,42 @@ export default function JobModal({
                             size="md"
                             step="0.01"
                             min="0"
-                            {...register("employeePay")}
+                            {...register("employeePay", {
+                              // Editing the box IS the act of taking the override.
+                              // Registered through RHF's own onChange so the
+                              // field stays fully controlled by the resolver.
+                              onChange: () => setPayIsManual(true),
+                            })}
                             disabled={disableForm}
                             className="w-full pl-11 px-4 py-3 tracking-tight placeholder:tracking-tight"
                             placeholder="0.00"
                             border={false}
                           />
                         </div>
+                        {payIsManual && String(watch("employeePay") || "") !== "" ? (
+                          <div className="mt-1.5 flex items-center justify-between gap-2">
+                            <span className="text-[11px] font-[600] tracking-tight text-[#92400e] bg-[#fffbeb] rounded-full px-2 py-0.5">
+                              Manual — team total, split evenly
+                            </span>
+                            <button
+                              type="button"
+                              disabled={disableForm}
+                              onClick={() => {
+                                setPayIsManual(false);
+                                setValue("employeePay", "", {
+                                  shouldDirty: true,
+                                });
+                              }}
+                              className="text-[11px] tracking-tight text-[#008C9C] underline underline-offset-2 disabled:opacity-60">
+                              Clear — use automatic calculation
+                            </button>
+                          </div>
+                        ) : (
+                          <p className="mt-1.5 text-[11px] tracking-tight text-[#008C9C]/60">
+                            Leave blank for the automatic tier calculation on the
+                            job&apos;s active value (base + add-ons).
+                          </p>
+                        )}
                       </div>
 
                       <div>
@@ -2526,6 +2688,19 @@ export default function JobModal({
                       <Briefcase className="w-4 h-4" />
                       Add-Ons
                     </h3>
+                    {/* The pickers stay fully available in override mode — the
+                        add-ons still define the SCOPE of the job (what the
+                        cleaner does, what the checklist triggers) even when they
+                        do not move the money. Saying so out loud is the point:
+                        a silently inert picker is what made an admin think the
+                        add-on hadn't saved. */}
+                    {pricingMode === "FINAL_PRICE" && (
+                      <p className="text-xs text-[#854d0e] bg-[#fef3c7] rounded-lg px-3 py-2">
+                        This job is on a final price override, so add-ons are{" "}
+                        {ADDON_INCLUDED_LABEL} — pick them to record the scope;
+                        they will not change the total.
+                      </p>
+                    )}
                     {addOnCatalog.length > 0 && (
                       <div className="space-y-2">
                         <p className="text-xs text-[#008C9C]/60">
@@ -2753,8 +2928,39 @@ export default function JobModal({
                     {previewMoney.addOnsIncludedInSubtotal && (
                       <p className="text-xs text-[#008C9C]/60">
                         This booking&apos;s add-ons are already inside its
-                        subtotal, so they are itemised here rather than added.
+                        service total, so they are itemised here rather than
+                        added.
                       </p>
+                    )}
+                    {/* Both figures, labelled, whenever they disagree — the PDF
+                        asks for exactly this, because an override job showing a
+                        single number gives the admin no way to tell whether the
+                        total is the one they typed or the one the parts add up
+                        to. Plus the escape hatch back to itemized. */}
+                    {previewTotalsDiffer && (
+                      <div className="space-y-1 pb-2 mb-1 border-b border-[#008C9C]/15">
+                        <div className="flex justify-between text-xs text-[#008C9C]/60">
+                          <span>Calculated from items</span>
+                          <span>${previewItemizedTotal.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between text-xs font-[600] text-[#008C9C]">
+                          <span>Active override total</span>
+                          <span>${previewMoney.subtotalAmount.toFixed(2)}</span>
+                        </div>
+                        {/* Deliberately does NOT rewrite the Price field. The
+                            field already holds the base service line; itemized
+                            mode adds the add-ons to it, which is where
+                            ${previewItemizedTotal.toFixed(2)} comes from.
+                            Copying that figure INTO the price would add them a
+                            second time. */}
+                        <button
+                          type="button"
+                          disabled={disableForm}
+                          onClick={() => changePricingMode("ITEMIZED", true)}
+                          className="text-xs font-[600] text-[#008C9C] underline underline-offset-2 disabled:opacity-60">
+                          Recalculate from items (${previewItemizedTotal.toFixed(2)})
+                        </button>
+                      </div>
                     )}
                     <div className="flex justify-between text-sm text-[#008C9C]">
                       <span>Base price</span>
@@ -2776,7 +2982,14 @@ export default function JobModal({
                       </div>
                     )}
                     <div className="flex justify-between text-sm font-[600] text-[#008C9C] border-t border-[#008C9C]/15 pt-2">
-                      <span>Subtotal</span>
+                      <span>
+                        Subtotal
+                        {pricingMode === "FINAL_PRICE" && (
+                          <span className="ml-2 font-[400] text-xs text-[#008C9C]/60">
+                            override total — active
+                          </span>
+                        )}
+                      </span>
                       <span>${previewMoney.subtotalAmount.toFixed(2)}</span>
                     </div>
                     {previewMoney.exempt ? (

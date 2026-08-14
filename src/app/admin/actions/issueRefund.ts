@@ -9,6 +9,7 @@ import { queueAndSendRefund } from "@/lib/email";
 import { applyStrike } from "@/lib/strikes";
 import { logActivity } from "@/lib/activity-log";
 import { requireBudgetCategoryId } from "@/lib/budget-categories";
+import { resolveAmountDue } from "@/lib/job-billing";
 
 interface IssueRefundInput {
   jobId: string;
@@ -38,7 +39,12 @@ export async function issueRefund(input: IssueRefundInput) {
     });
     if (!job) return { success: false, error: "Job not found" };
 
-    const totalCharged = job.price ?? 0;
+    // What the customer was actually CHARGED, which is the ceiling a refund
+    // can reach — `resolveAmountDue`, the same function `chargeJob` billed with
+    // (fix 3). `job.price` is the pre-tax base line: on the $128/$186 grout job
+    // it capped refunds at $128 of a $213.85 charge, so a full refund was
+    // impossible from either this action or the modal that calls it.
+    const totalCharged = resolveAmountDue(job);
     const depositAmount = job.depositPaid ? 20 : 0;
     const alreadyRefunded = job.refundedAmount ?? 0;
 

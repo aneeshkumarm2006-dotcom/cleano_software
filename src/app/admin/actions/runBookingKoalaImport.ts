@@ -458,8 +458,21 @@ export async function runBookingKoalaImport(
           paidAt: r.job.paymentReceived ? r.job.startTime : null,
           refundedAmount: r.job.refundedAmount,
           employeePay: r.job.employeePay,
+          // D2 — the CSV's "Provider/team payment" is what BookingKoala actually
+          // paid this crew, so it is an authoritative TEAM TOTAL, not a
+          // save-time estimate: `computeJobPayShares` splits it evenly instead
+          // of running the tier math, and the job page labels it "Manual amount"
+          // instead of the "Stored value — not used" row the PDF complains about.
+          employeePayIsManual: r.job.employeePay != null,
           requiredCleaners: r.job.requiredCleaners,
           bookingSource: BOOKING_SOURCE,
+          // FINAL_PRICE on every imported job (cleano_new_fixes.pdf fix 2 names
+          // this default explicitly). The CSV's service total is what
+          // BookingKoala actually billed — extras included — so the add-on rows
+          // created below are an ITEMISATION of it and must never add to it.
+          // Stamping it makes that survive an admin retyping the price, which
+          // is exactly what the old provenance-inference lost.
+          pricingMode: "FINAL_PRICE",
           externalBookingId: r.job.bookingId,
           // Stripe PaymentIntent from the CSV "Transaction id" column — keeps
           // the payment traceable (and refundable) from the job detail page.

@@ -16,6 +16,26 @@ interface UpdateAppSettingParams {
   value: unknown;
 }
 
+/**
+ * What the admin is told when a save fails for a reason the registry did not
+ * already describe.
+ *
+ * Every settings tab renders `res.error` inline and none of them throw, so this
+ * string is the whole of what the admin gets to act on — and "Failed to update
+ * setting" told them nothing: not which of the nine settings a multi-write tab
+ * had just posted, not whether to retry, not what to quote to support. Naming
+ * the key costs nothing (it is already on screen as a field) and turns a dead
+ * end into a report anyone can follow up.
+ */
+function saveFailureMessage(key: string, error: unknown): string {
+  const code = (error as { code?: string } | null)?.code;
+  // Prisma's connection/timeout family. Retrying genuinely is the right advice.
+  if (code === "P1001" || code === "P1002" || code === "P1008") {
+    return `Couldn't reach the database while saving "${key}". Nothing was changed — try again in a moment.`;
+  }
+  return `Couldn't save "${key}". Nothing was changed. If this keeps happening, quote the setting name to support.`;
+}
+
 async function requireAdmin() {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) return { error: "Not authenticated" as const };
@@ -70,8 +90,8 @@ export async function updateAppSetting(params: UpdateAppSettingParams) {
     revalidatePath("/admin/settings");
     return { success: true };
   } catch (error) {
-    console.error("Error updating app setting:", error);
-    return { success: false, error: "Failed to update setting" };
+    console.error(`Error updating app setting "${params.key}":`, error);
+    return { success: false, error: saveFailureMessage(params.key, error) };
   }
 }
 
@@ -84,7 +104,17 @@ export async function deleteAppSetting(key: string) {
     revalidatePath("/admin/settings");
     return { success: true };
   } catch (error) {
-    console.error("Error deleting app setting:", error);
-    return { success: false, error: "Failed to delete setting" };
+    // P2025 = "record to delete does not exist". The setting is already gone,
+    // which is the state the caller wanted; reporting it as a failure sends an
+    // admin chasing a problem that isn't there.
+    if ((error as { code?: string } | null)?.code === "P2025") {
+      revalidatePath("/admin/settings");
+      return { success: true };
+    }
+    console.error(`Error deleting app setting "${key}":`, error);
+    return {
+      success: false,
+      error: `Couldn't remove "${key}". Nothing was changed.`,
+    };
   }
 }

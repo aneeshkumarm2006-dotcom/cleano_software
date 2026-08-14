@@ -66,3 +66,40 @@ export function validateVoidCheque(file: {
   }
   return null;
 }
+
+// ── Applicant portal documents (decision D4) ────────────────────────────────
+// Same shape as the void-cheque rules above, kept as a separate `kind` so an
+// applicant's uploads and an employee's payroll file never mix, and reusing
+// the same limits/types since a résumé, ID or certification wants the same
+// "opens anywhere" formats a void cheque does.
+
+/** Documents an invited applicant uploads from their portal. */
+export const APPLICANT_DOCUMENT_KIND = "APPLICANT_DOCUMENT";
+
+export const MAX_APPLICANT_DOCUMENT_BYTES = 8 * 1024 * 1024;
+
+export const APPLICANT_DOCUMENT_TYPES = [
+  "application/pdf",
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+] as const;
+
+export const APPLICANT_DOCUMENT_ACCEPT = ".pdf,.jpg,.jpeg,.png";
+
+export const APPLICANT_DOCUMENT_LABEL = "Supporting documents";
+
+export function validateApplicantDocument(file: {
+  size: number;
+  type: string;
+}): string | null {
+  if (file.size === 0) return "That file is empty.";
+  if (file.size > MAX_APPLICANT_DOCUMENT_BYTES) {
+    return "File exceeds the 8MB limit.";
+  }
+  const type = file.type.trim().toLowerCase();
+  if (!(APPLICANT_DOCUMENT_TYPES as readonly string[]).includes(type)) {
+    return "Use a PDF, JPG or PNG.";
+  }
+  return null;
+}

@@ -2,7 +2,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
-import { jobRevenue } from "@/lib/metrics";
+import { jobRevenue, ACTIVE_VALUE_SELECT } from "@/lib/metrics";
 import ClientsPageClient from "./ClientsPageClient";
 
 type SearchParams = Promise<{
@@ -37,9 +37,11 @@ export default async function ClientsPage({
     include: {
       jobs: {
         select: {
+          // Fix 3: revenue is the ACTIVE subtotal, so every column that decides
+          // it — including the add-on rows — travels with the job. The spread
+          // is the shared fragment; forgetting it is a type error.
+          ...ACTIVE_VALUE_SELECT,
           id: true,
-          price: true,
-          discountAmount: true,
           refundedAmount: true,
           paymentReceived: true,
           status: true,

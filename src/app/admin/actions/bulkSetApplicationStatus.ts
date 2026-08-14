@@ -36,7 +36,27 @@ export async function bulkSetApplicationStatus(
       where: { id: { in: cleanIds } },
       data: { status },
     });
+
+    // Rejected/archived applicants lose portal access (decision D4); moving
+    // back off either status restores it. `role: "APPLICANT"` in the update's
+    // where clause means a converted EMPLOYEE is never toggled by this.
+    const blocked = status === "REJECTED" || status === "ARCHIVED";
+    const linked = await db.jobApplication.findMany({
+      where: { id: { in: cleanIds }, userId: { not: null } },
+      select: { userId: true },
+    });
+    const userIds = linked
+      .map((a) => a.userId)
+      .filter((id): id is string => !!id);
+    if (userIds.length > 0) {
+      await db.user.updateMany({
+        where: { id: { in: userIds }, role: "APPLICANT" },
+        data: { isActive: !blocked },
+      });
+    }
+
     revalidatePath("/admin/job-applications");
+    revalidatePath("/applicant");
     return { success: true, count: res.count };
   } catch (e) {
     console.error("bulkSetApplicationStatus", e);

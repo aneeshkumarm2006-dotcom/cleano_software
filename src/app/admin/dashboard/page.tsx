@@ -26,7 +26,9 @@ import {
   getEmployeeCounts,
   productWhere,
   simpleJobStatus,
+  ACTIVE_VALUE_SELECT,
 } from "@/lib/metrics";
+import { activeSubtotal, type ActiveValueJob } from "@/lib/job-money";
 import { isCleanerLow } from "@/lib/inventory-thresholds";
 import { avatarColor, initials } from "@/lib/avatar";
 import CleanerDashboard from "./CleanerDashboard";
@@ -114,13 +116,14 @@ function AlertTile({
   );
 }
 
-type JobRow = {
+// Extends ActiveValueJob (fix 3) so these two lists price a job the same way
+// the job page, the invoice and the revenue tiles do — base + add-ons, or the
+// override total. `price − discount` printed $128 for the $186 grout job.
+type JobRow = ActiveValueJob & {
   id: string;
   clientName: string;
   jobDate: Date | null;
   startTime: Date;
-  price: number | null;
-  discountAmount: number | null;
   status: string;
 };
 
@@ -153,7 +156,7 @@ function ListCard({
                   <div className="dash-listrow-sub">{fmtDate(when, { weekday: "short", month: "short", day: "numeric" })} · {fmtTime(when)}</div>
                 </div>
                 <div className="dash-listrow-right">
-                  <div className="dash-listrow-price">{money((j.price || 0) - (j.discountAmount || 0))}</div>
+                  <div className="dash-listrow-price">{money(activeSubtotal(j))}</div>
                   <StatusPill status={simpleJobStatus(j)} />
                 </div>
               </Link>
@@ -201,13 +204,13 @@ export default async function DashboardPage() {
       where: { deletedAt: null, jobDate: { gte: new Date() }, status: { in: ["CREATED", "SCHEDULED"] } },
       orderBy: { jobDate: "asc" },
       take: 5,
-      select: { id: true, clientName: true, jobDate: true, startTime: true, price: true, discountAmount: true, status: true },
+      select: { ...ACTIVE_VALUE_SELECT, id: true, clientName: true, jobDate: true, startTime: true, status: true },
     }),
     db.job.findMany({
       where: { deletedAt: null, status: "COMPLETED" },
       orderBy: { updatedAt: "desc" },
       take: 5,
-      select: { id: true, clientName: true, jobDate: true, startTime: true, price: true, discountAmount: true, status: true },
+      select: { ...ACTIVE_VALUE_SELECT, id: true, clientName: true, jobDate: true, startTime: true, status: true },
     }),
   ]);
 

@@ -50,6 +50,17 @@ This is the consolidated record of everything you confirmed and everything we ha
     - Adding an item to a cleaner's kit does NOT reduce master stock.
     - Marking an item as damaged or broken on a cleaner's kit reduces BOTH the cleaner's kit and master stock, and creates an admin alert.
 
+### Hiring & applicant access
+
+*(This one is ours, not yours — it is decision **D4** in section 7 below, made
+from the recommendation in your own fixes document. The shape is described here;
+the reasoning and the sign-off request are in section 7.)*
+
+1. **Applicant portal**: a new restricted account type for job applicants. It is NOT created automatically when someone applies — only when an admin clicks "Invite to portal" on their application. An application with no invite behaves exactly as before: a row in the applications inbox, nothing more.
+2. **What an applicant can see**: their own application status, a document upload area, an onboarding checklist, and a message thread with our team. Nothing else — no jobs, no schedules, no pay, no client info, no other staff's data.
+3. **"Hire" is now "Convert"**: if an applicant already has a portal account, clicking Hire flips it straight to a cleaner account — no temporary password to hand over, since they already set their own when they accepted the invite. If they were never invited, Hire still works exactly as it always has: creates a fresh cleaner login with a temporary password.
+4. **Rejected or archived applicants**: their portal login is switched off, with a friendly message instead of an error. It's recoverable — moving the application back off Rejected/Archived restores access automatically.
+
 ---
 
 ## 2. Features implemented and live
@@ -155,6 +166,15 @@ Every new row is in the Notification Catalog and toggleable from Settings → No
 - PWA banner re-shows after 14 days.
 - `/icon/*` and `/apple-icon` exposed publicly so Chrome can install the app.
 
+### L. Applicant portal
+
+- **"Invite to portal" action** on any job application: sends a set-password link by email, following the same one-time-link pattern already used for the customer card-setup and rating links.
+- **Applicant-only sign-in** at `/applicant-login`, separate from the staff, cleaner, and customer sign-in pages.
+- **Restricted portal** at `/applicant`: application status timeline, document upload, an onboarding checklist, and a message thread with our team.
+- **Convert flow**: "Hire" on an invited applicant flips their account straight to a cleaner login instead of creating a second one, then hands the admin off to that person's employee profile to finish setup (pay tier, service categories, availability, documents).
+- **Access is scoped everywhere**: an applicant account cannot reach jobs, payroll, schedules, chat, training, or any other staff or customer surface — checked with an automated access matrix, not just by eye.
+- **Rejected/archived applicants** lose portal access automatically (with a friendly message, not an error) and get it back automatically if the decision is reversed.
+
 ---
 
 ## 3. Database migrations applied
@@ -173,6 +193,27 @@ All four migrations have been applied to your Supabase production database. Sche
 10. `20260530160000_gift_cards` — GiftCard table + Client.giftCardBalance.
 
 All are additive (no destructive changes).
+
+**This release adds four more, and they are written but NOT yet applied.** They
+go out with the deploy, in this order, and all four are additive in the same
+sense — a new optional column, a new true/false flag that defaults to today's
+behaviour, and two new empty tables. Nothing is dropped, and no existing row's
+money changes:
+
+11. `20260814000000_job_pricing_mode` — records whether a job is priced from its
+    parts or from a final override total. Every existing job is stamped with the
+    mode it was **already** being priced under, so the stamp cannot move a price.
+12. `20260814010000_job_employee_pay_is_manual` — the Manual / Automatic flag on
+    Employee pay (decision D2). Defaults to Automatic, i.e. exactly today's
+    behaviour, for every existing job.
+13. `20260814020000_job_log_clock_out_failed` — lets a failed clock-out be
+    recorded on the job's activity timeline. Adding it changes no existing row.
+14. `20260814030000_applicant_access_model` — the applicant account type, the
+    invite link table and the applicant message thread (decision D4). Every
+    existing application gets "no portal account", which is today's behaviour.
+
+Immediately after they run, `npx tsx scripts/post-deploy-check.ts` reports which
+landed and prints the row counts each one produced.
 
 ---
 
@@ -216,3 +257,168 @@ All authorized with `Bearer ${CRON_SECRET}`.
 3. **Gift card cover images**: the gift card system is fully built, but the cover photos currently render gradient placeholders. Drop your final cover images into `public/gift-cards/<key>.jpg` (or `.png` / `.webp` — keep extensions consistent) for keys: `default`, `birthday`, `thankyou`, `holiday`, `spring`, `summer`, `fall`, `winter`. They will appear automatically in both the purchase page and the recipient email. Recommended size 600 x 400 px.
 
 Everything else from your decision list is implemented and running.
+
+---
+
+## 7. Decisions we made for you — please confirm
+
+Your **pricing logic fixes** document (six P0 items plus one product question)
+left six choices open. Waiting on answers would have stalled every one of the
+six fixes, so we made each call from evidence already in your code, your data,
+or a decision you had made previously — and wrote down the reasoning so you can
+overrule any of them.
+
+**How to read this section:** each decision is independent. Vetoing one is a
+contained change, not a re-plan. If you agree with all six, you don't need to
+reply to this section at all.
+
+The money consequences of D1, D2, D3 and D5 are quantified against your live
+data in **`NUMBERS_THAT_MOVE.md`** — read that alongside this.
+
+---
+
+### D1 — On automatic pay, each cleaner keeps earning their own full rate
+
+**The decision.** On a percentage-paid job with no stored or manually entered
+team payment, every assigned cleaner earns their own rate (tier base ×
+rating multiplier) on the full job value. No pool, no halving.
+
+**Why.** You retired the pooled split earlier this year — the code that computes
+pay tiers still carries the note recording that you rejected the pooled $55.00
+figure by name, and the pooled constant is kept only as a tripwire so nobody
+reintroduces it by accident. The consequence, that a two-cleaner job can cost
+80–90% of its price in labour, is documented there as something you accepted
+deliberately. Reinstating a pool now would silently reverse a decision you had
+already made.
+
+**What about the $88.50 / $44.25 example in your document?** That job is #1809,
+and it carries a stored BookingKoala team payment of $88.55. Under D2 below,
+that figure is treated as the team total and split evenly — $44.28 / $44.27,
+which is the number you circled. So your screenshot is satisfied without
+touching the automatic model at all.
+
+**Tell us if:** you find a job with no stored or manual team payment where you
+still expect a pooled number.
+
+---
+
+### D2 — A team payment you (or BookingKoala) typed is an instruction, not an estimate
+
+**The decision.** `Employee pay` now carries a Manual / Automatic flag. When it
+is Manual, the figure is treated as the **team total** and split evenly across
+the crew (minus any per-cleaner override), with a visible
+"Manual — clear to recalculate" control. BookingKoala imports that carry a
+provider payment arrive flagged Manual. An admin typing a value into the field
+flags it Manual.
+
+**Why.** That column has always carried two incompatible meanings: an automatic
+snapshot saved at booking time, which goes stale the moment a rating lands or a
+pay multiplier is edited, and a real amount somebody decided. Because the app
+could not tell them apart, it treated both as stale and printed
+"Stored value $88.55 — not used" — the exact complaint in your document.
+
+**What this means in practice — it is opt-in, per job.** Your existing jobs are
+**not** bulk-flagged. 471 of 472 carry an `employeePay` value and most of those
+are automatic snapshots; flagging them all Manual would have frozen your entire
+database at stale numbers and called it your intent. Instead the job page offers
+"Use this amount" on any stored figure that is being overridden — one click,
+recorded in the job log. **No cleaner's pay changes until somebody clicks it.**
+
+**Worth knowing:** an odd team total cannot split evenly, so the split is
+cent-exact — $88.55 across two cleaners pays $44.28 and $44.27, not $44.28
+twice. One-cent differences between crew members are expected.
+
+---
+
+### D3 — Tips and parking are the customer's money, passed through
+
+**The decision.** Both are customer-funded and handed to the crew. Neither is
+company revenue and neither is a company expense. Concretely:
+
+- **BookingKoala imports:** unchanged. The CSV's final amount already includes
+  tip and parking, and that is what gets charged.
+- **Admin jobs, going forward:** a tip or parking entered **before** the job is
+  charged is folded into the card charge as untaxed lines, so the money you hand
+  the crew is money you collected. Invoices and receipts show them as separate
+  line items.
+- **Entered after a job is already paid:** booked as owed to the cleaners and
+  flagged on the Financials card as "not collected on card", so you can take it
+  in cash or charge it separately. **We never run a second charge on a
+  customer's card automatically, and no historical job is recharged.**
+- **Cash jobs:** collected in cash; the bookkeeping is identical.
+
+**Why.** Your document's requirement is that tips and parking "must not be
+treated as company revenue or incorrectly reduce company profit". That only
+holds if the customer funds them. If the company paid cleaners a tip and parking
+it had never collected, profit genuinely would fall — which is the opposite of
+what you asked for. This also makes admin-created jobs behave the way your
+BookingKoala jobs already do.
+
+---
+
+### D4 — Applicants get a restricted portal, minted by invitation only
+
+**The decision.** Adopted as your document recommended: a new `APPLICANT` account
+type with its own small portal (status timeline, document upload, onboarding
+checklist, message thread). The user-facing detail is in section 1 above.
+
+**Why invitation, not automatic.** The careers form is public, so creating an
+account at submit would mint a login for every spam submission. The account is
+created when an admin clicks **"Invite to portal"**, using a set-password link —
+the same one-time-link pattern already used for customer card setup and rating
+links. That also side-steps a real limitation noted in the hiring code: there is
+no password-reset flow for cleaners yet, so handing out temporary passwords was
+the only option before this.
+
+**Why "Hire" became "Convert".** If someone already has a portal account,
+creating a second login for the same person at hire time is a bug waiting to
+happen. Hire now flips the existing account to a cleaner account. An applicant
+who was never invited is completely untouched — the simple path stays available
+per application.
+
+---
+
+### D5 — Discounts do not reduce cleaner pay
+
+**The decision.** A cleaner's pay basis is base + add-ons, **before** any
+discount. Revenue, separately, is still counted **after** the discount.
+
+**Why.** Today's basis (the bare job price) already ignores discounts, so this
+changes nothing about how discounts are treated — it just avoids landing a
+cleaner-pay *reduction* in the same release as the add-on *increase*. A discount
+is your marketing spend, not a smaller job. Your document's own definition of the
+pay basis ("base price, add-ons, extra charges, and the active manual price
+override") conspicuously omits discounts.
+
+The asymmetry between pay and revenue is deliberate and is commented in the code
+so nobody "fixes" it later.
+
+---
+
+### D6 — Settings stays one shared page
+
+**The decision.** `/admin/settings` is guarded so that any staff member can open
+it and customers cannot. Cleaners and field leads see Profile and Availability;
+admin-only tabs stay admin-only, as they already were.
+
+**Why.** The page was **built** to be shared — it already renders
+role-appropriate tabs and its own header comment says so. What had broken was
+the door: the guard required Owner or Admin, so **39 live staff accounts (38
+cleaners and 1 field lead) were silently bounced away from their own Settings**
+— no profile, no password change, no availability, no notification preferences.
+That is very plausibly the whole of the "Settings page returns an error" report.
+Splitting the page in two would have been a larger change that fixed the same
+thing.
+
+We also checked, rather than assumed, that the newly reachable tabs expose
+nothing extra: every action they call is scoped to the signed-in user for
+non-admins.
+
+---
+
+### Sign-off
+
+If any of D1–D6 is wrong for your business, reply with the number and we will
+change that one. Otherwise no action is needed — the release ships as described,
+and `NUMBERS_THAT_MOVE.md` tells you which figures on your dashboards will look
+different the morning after.

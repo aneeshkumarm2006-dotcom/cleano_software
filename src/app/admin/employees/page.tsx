@@ -58,7 +58,10 @@ export default async function EmployeesPage({
       deletedAt: archived ? { not: null } : null,
     },
     include: {
-      jobs: true,
+      // `addOns` joins because revenue is the ACTIVE subtotal now, not the bare
+      // `Job.price` (fix 3) — without the rows an add-on job under-reports this
+      // cleaner's attributed revenue by exactly its add-ons.
+      jobs: { include: { addOns: { select: { name: true, price: true, quantity: true } } } },
     },
     orderBy: {
       name: "asc",

@@ -39,6 +39,39 @@ export async function findOpenSession(jobId: string, cleanerId: string) {
   });
 }
 
+/**
+ * The session this cleaner most recently CLOSED on this job, if it closed inside
+ * `windowMs` (cleano_new_fixes.pdf fix 6 · Stage 5.4).
+ *
+ * This is how a retry is told apart from a mistake. `clockOut` commits its
+ * writes in one transaction and then runs several steps that are not in it; if
+ * one of those throws — or the response simply never reaches the phone — the
+ * cleaner is shown a failure while their session is already closed. Every retry
+ * then hit `findOpenSession` → null → "You're not clocked in on this job", with
+ * the work half-saved and no way forward.
+ *
+ * A session closed seconds ago by the very cleaner now resubmitting is not an
+ * unclocked-in cleaner; it is the previous attempt. The caller finishes the
+ * post-transaction steps (all idempotent) and returns success, WITHOUT touching
+ * inventory again — the closed session is itself the proof those writes
+ * committed, since they shared a transaction with it.
+ */
+export async function findRecentlyClosedSession(
+  jobId: string,
+  cleanerId: string,
+  windowMs: number
+) {
+  return db.jobWorkSession.findFirst({
+    where: {
+      jobId,
+      cleanerId,
+      endedAt: { not: null, gte: new Date(Date.now() - windowMs) },
+    },
+    orderBy: { endedAt: "desc" },
+    select: { id: true, startedAt: true, endedAt: true },
+  });
+}
+
 /** Every session on a job, oldest first. */
 export async function listJobSessions(jobId: string) {
   return db.jobWorkSession.findMany({

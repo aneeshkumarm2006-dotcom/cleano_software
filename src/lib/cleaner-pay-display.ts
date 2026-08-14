@@ -10,15 +10,17 @@ import {
 /**
  * The one correct cleaner payout for a set of jobs, keyed by job id.
  *
- * Cleaner-facing screens must NEVER print the raw `Job.employeePay` column: for
- * BookingKoala imports that column holds the provider payment from the CSV (an
- * arbitrary number, ~26% of price), so a $112 job showed $29.65 instead of the
- * $44.80 the tier math (base price × rating rate) actually pays. Payroll, My
- * Pay and the pay modal already compute it correctly via cleanerJobPay(); this
- * gives the remaining display surfaces (My Jobs list, Job Detail, Home
- * earnings) the same number.
+ * Cleaner-facing screens must NEVER print the raw `Job.employeePay` column
+ * directly: it means two different things (a save-time estimate, or an
+ * authoritative manual team total — see `Job.employeePayIsManual`), and reading
+ * it raw showed a $112 job as $29.65 instead of the $44.80 the crew is paid.
+ * `cleanerJobPay()` resolves which meaning applies and divides it correctly, so
+ * payroll, My Pay, the pay modal and these display surfaces (My Jobs list, Job
+ * Detail, Home earnings) all quote one number.
  *
- * Returns a Map<jobId, payout> — the tip-inclusive total this cleaner earns.
+ * Returns a Map<jobId, payout> — this cleaner's TOTAL for the job: the work, at
+ * their tier rate on the job's active value (base + add-ons, or the override
+ * total), plus their even share of the customer-funded tip and parking.
  */
 export async function cleanerPayoutForJobs(
   jobIds: string[],

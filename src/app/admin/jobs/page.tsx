@@ -12,6 +12,7 @@ import { getTaxRates } from "@/lib/tax.server";
 import { getServicePricingConfig } from "@/lib/booking-pricing";
 import { getServiceCatalog } from "@/lib/service-catalog.server";
 import { serviceOptions } from "@/lib/service-catalog";
+import { activeSubtotal } from "@/lib/job-money";
 
 type SearchParams = Promise<{
   [key: string]: string | string[] | undefined;
@@ -84,6 +85,7 @@ export default async function JobsPage({
       status: true,
       price: true,
       employeePay: true,
+      employeePayIsManual: true,
       totalTip: true,
       parking: true,
       notes: true,
@@ -98,6 +100,7 @@ export default async function JobsPage({
       deletedAt: true,
       // Feed the edit modal's money basis + live total preview.
       bookingSource: true,
+      pricingMode: true,
       subtotalAmount: true,
       bedCount: true,
       bathCount: true,
@@ -174,8 +177,16 @@ export default async function JobsPage({
       (sum, u) => sum + u.quantity * u.product.costPerUnit,
       0
     );
-    const revenue = job.price || 0;
-    const costs = (job.employeePay || 0) + (job.parking || 0) + productCost;
+    // Fix 3: the profit % column is a share of what the job is actually worth
+    // — base + add-ons, or the override total — not of the base line alone.
+    // On the $128/$186 grout job the old denominator made a 46%-labour job
+    // look like a loss.
+    const revenue = activeSubtotal(job);
+    // Stage 4b.3 / decision D3 — parking is NOT a company cost. It is money the
+    // customer funds and the crew is handed (see JobPayShare.parking), so
+    // subtracting it here charged the company for a disbursement it never made
+    // and dragged the profit % on every job that had one.
+    const costs = (job.employeePay || 0) + productCost;
     const profit = revenue - costs;
     const profitPct = revenue > 0 ? (profit / revenue) * 100 : 0;
 
@@ -200,6 +211,7 @@ export default async function JobsPage({
       status: job.status,
       price: job.price,
       employeePay: job.employeePay,
+      employeePayIsManual: job.employeePayIsManual,
       totalTip: job.totalTip,
       parking: job.parking,
       notes: job.notes,
@@ -228,8 +240,10 @@ export default async function JobsPage({
         quantity: a.quantity,
       })),
       // The edit modal needs these to know whether this job's add-ons are
-      // already priced into its subtotal (web / import) or add to it (admin).
+      // already inside its service total (FINAL_PRICE) or add to it (ITEMIZED),
+      // and to preselect the mode control.
       bookingSource: job.bookingSource,
+      pricingMode: job.pricingMode,
       subtotalAmount: job.subtotalAmount,
     };
   });

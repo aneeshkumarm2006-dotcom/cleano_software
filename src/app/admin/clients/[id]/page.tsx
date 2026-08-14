@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { jobRevenue } from "@/lib/metrics";
+import { activeSubtotal } from "@/lib/job-money";
 import ClientDetailView from "./ClientDetailView";
 
 export default async function ClientDetailPage({
@@ -24,7 +25,12 @@ export default async function ClientDetailPage({
     include: {
       jobs: {
         orderBy: { startTime: "desc" },
-        include: { cleaners: { select: { id: true, name: true } } },
+        include: {
+          cleaners: { select: { id: true, name: true } },
+          // This client's lifetime revenue is the sum of ACTIVE subtotals
+          // (fix 3), which needs the add-on rows.
+          addOns: { select: { name: true, price: true, quantity: true } },
+        },
       },
       addresses: { orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }] },
     },
@@ -54,7 +60,10 @@ export default async function ClientDetailPage({
     startTime: j.startTime.toISOString(),
     endTime: j.endTime?.toISOString() || null,
     status: j.status,
-    price: j.price,
+    // The ACTIVE value of the job, not the bare base line (fix 3). This list
+    // and the totals under it are what a client's history is worth, so an
+    // add-on job has to read $186 here exactly as it does on the job page.
+    price: activeSubtotal(j),
     employeePay: j.employeePay,
     totalTip: j.totalTip,
     parking: j.parking,

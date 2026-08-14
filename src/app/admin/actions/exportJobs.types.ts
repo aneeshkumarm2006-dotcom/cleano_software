@@ -5,7 +5,11 @@ export interface JobExportRow {
   Location: string;
   "Job Type": string;
   Status: string;
+  /** The ACTIVE value of the job — base + add-ons, or the override total. */
   Price: number | string;
+  /** The raw service line, kept beside Price so the two reconcile (fix 3). */
+  "Base Price": number | string;
+  "Add-ons": number | string;
   Discount: number | string;
   "Employee Pay": number | string;
   Tip: number | string;

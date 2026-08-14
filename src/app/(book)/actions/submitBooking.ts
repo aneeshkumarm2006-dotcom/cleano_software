@@ -742,6 +742,14 @@ export async function submitBooking(input: SubmitBookingInput) {
         appliedPromoCode,
         promoDiscountAmount,
         bookingSource: "web",
+        // A web booking's stored subtotal is authoritative: it already contains
+        // the add-ons AND is already net of the referral credit and the promo,
+        // and it is the figure the customer's card was authorised against. So
+        // the job is FINAL_PRICE (cleano_new_fixes.pdf fix 2) and its add-on
+        // rows itemise that total rather than adding to it. Stamping it is what
+        // makes an admin later editing this booking safe: the mode no longer
+        // hangs on whether the price field still matches what we stored.
+        pricingMode: "FINAL_PRICE",
         ...afterPhotoConsentData,
         notes: input.notes?.trim() || null,
         // Unconditional: a booking cannot reach this point without a verified
@@ -992,6 +1000,9 @@ export async function submitBooking(input: SubmitBookingInput) {
             discountAmount: childPricing.discountAmount > 0 ? childPricing.discountAmount : null,
             parentJob: { connect: { id: primaryJob.id } },
             bookingSource: "web",
+            // As on the primary job — a series is one agreement, so every
+            // occurrence is priced by the same rule (fix 2).
+            pricingMode: "FINAL_PRICE",
             ...afterPhotoConsentData,
             addOns: {
               create: resolvedAddOns.map((a) => ({

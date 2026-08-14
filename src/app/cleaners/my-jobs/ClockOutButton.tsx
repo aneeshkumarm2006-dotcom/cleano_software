@@ -7,6 +7,14 @@ import {
   CHECKLIST_GATE_HINT,
   pendingRequiredItems,
 } from "@/lib/job-checklist";
+import type { ClockOutUsage } from "@/lib/clock-out";
+import {
+  ClockOutErrorNotice,
+  ClockOutFieldNote,
+  clockOutFieldStyle,
+  isClockOutFieldError,
+  type ClockOutErrorState,
+} from "./ClockOutError";
 
 type ProductCategory = "LIQUID_SPRAY" | "MOP_LIQUID" | "DISPOSABLE" | "OTHER";
 
@@ -59,7 +67,15 @@ export default function ClockOutButton({
 }: ClockOutButtonProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [failure, setFailure] = useState<ClockOutErrorState | null>(null);
+  /**
+   * The payload of the attempt that failed, kept so Retry resubmits exactly what
+   * was sent rather than re-reading state the cleaner might have nudged in the
+   * meantime (PDF: "retry after an API failure without re-entering the
+   * submission"). The modal never resets its pickers on failure, so the numbers
+   * are still on screen either way — this is about sending the SAME ones.
+   */
+  const [lastPayload, setLastPayload] = useState<ClockOutUsage | null>(null);
 
   // category-keyed selections: productId → option index
   const [sprayPick, setSprayPick] = useState<Record<string, number>>({});
@@ -90,47 +106,68 @@ export default function ClockOutButton({
     setMopPick(mp);
     setDispPick(dp);
     setRemaining(rem);
-    setError(null);
+    setFailure(null);
+    setLastPayload(null);
     setOpen(true);
   }
 
-  async function handleConfirm() {
-    setLoading(true);
-    setError(null);
-    try {
-      const usage = {
-        sprays: sprays.map((ep) => ({
+  function buildUsage(): ClockOutUsage {
+    return {
+      sprays: sprays.map((ep) => ({
+        productId: ep.productId,
+        sprayCount: SPRAY_OPTIONS[sprayPick[ep.productId] ?? 0].sprays,
+      })),
+      mops: mops.map((ep) => ({
+        productId: ep.productId,
+        mopCount: MOP_OPTIONS[mopPick[ep.productId] ?? 0].mops,
+      })),
+      disposables: disposables.map((ep) => ({
+        productId: ep.productId,
+        quantity: DISPOSABLE_OPTIONS[dispPick[ep.productId] ?? 0],
+      })),
+      // A cleared box is "I didn't touch it", not zero remaining — the same
+      // tolerance the server now mirrors, and the page-6 all-blank case.
+      remaining: others
+        .map((ep) => ({
           productId: ep.productId,
-          sprayCount: SPRAY_OPTIONS[sprayPick[ep.productId] ?? 0].sprays,
-        })),
-        mops: mops.map((ep) => ({
-          productId: ep.productId,
-          mopCount: MOP_OPTIONS[mopPick[ep.productId] ?? 0].mops,
-        })),
-        disposables: disposables.map((ep) => ({
-          productId: ep.productId,
-          quantity: DISPOSABLE_OPTIONS[dispPick[ep.productId] ?? 0],
-        })),
-        remaining: others
-          .map((ep) => ({
-            productId: ep.productId,
-            inventoryAfter: parseFloat(remaining[ep.productId] ?? "0"),
-          }))
-          .filter((r) => !isNaN(r.inventoryAfter)),
-      };
+          inventoryAfter: parseFloat(remaining[ep.productId] ?? ""),
+        }))
+        .filter((r) => !isNaN(r.inventoryAfter)),
+    };
+  }
 
+  async function submit(usage: ClockOutUsage) {
+    // Re-entry guard. The button is disabled while in flight, but a double tap
+    // on a laggy phone can land two events before React re-renders it, and two
+    // clock-outs of one session is not something to leave to CSS.
+    if (loading) return;
+    setLoading(true);
+    setFailure(null);
+    setLastPayload(usage);
+    try {
       const result = await clockOut(jobId, usage);
       if (result.success) {
         setOpen(false);
       } else {
-        setError(result.error || "Failed to clock out");
+        setFailure(result);
       }
-    } catch {
-      setError("Failed to clock out");
+    } catch (e) {
+      // The action itself no longer throws; this is the network dying between
+      // the phone and the server, which is exactly a Retry case.
+      console.error("clock-out", e);
+      setFailure({
+        code: "DB_UNAVAILABLE",
+        error:
+          "We couldn't reach the server. Check your signal and tap Retry — your entries are still here.",
+        retryable: true,
+      });
     } finally {
       setLoading(false);
     }
   }
+
+  const handleConfirm = () => submit(buildUsage());
+  const handleRetry = () => submit(lastPayload ?? buildUsage());
 
   const hasAssignments =
     sprays.length + mops.length + disposables.length + others.length > 0;
@@ -190,8 +227,9 @@ export default function ClockOutButton({
                     const pick = sprayPick[ep.productId] ?? 0;
                     const sprayCount = SPRAY_OPTIONS[pick].sprays;
                     const mlDeducted = sprayCount * ML_PER_SPRAY;
+                    const flagged = isClockOutFieldError(failure, ep.productId);
                     return (
-                      <div key={ep.productId} className="pju-card">
+                      <div key={ep.productId} className="pju-card" style={clockOutFieldStyle(flagged)}>
                         <div className="pju-card-head">
                           <span className="pju-card-name">{ep.product.name}</span>
                           <span className="pju-card-stock">
@@ -217,6 +255,7 @@ export default function ClockOutButton({
                             Deducts {mlDeducted.toFixed(2)} ml ({sprayCount} sprays)
                           </div>
                         )}
+                        {flagged && failure && <ClockOutFieldNote state={failure} />}
                       </div>
                     );
                   })}
@@ -241,8 +280,9 @@ export default function ClockOutButton({
                   {mops.map((ep) => {
                     const pick = mopPick[ep.productId] ?? 0;
                     const mopCount = MOP_OPTIONS[pick].mops;
+                    const flagged = isClockOutFieldError(failure, ep.productId);
                     return (
-                      <div key={ep.productId} className="pju-card">
+                      <div key={ep.productId} className="pju-card" style={clockOutFieldStyle(flagged)}>
                         <div className="pju-card-head">
                           <span className="pju-card-name">{ep.product.name}</span>
                           <span className="pju-card-stock">
@@ -267,6 +307,7 @@ export default function ClockOutButton({
                             Deducts {mopCount} mop use{mopCount === 1 ? "" : "s"}
                           </div>
                         )}
+                        {flagged && failure && <ClockOutFieldNote state={failure} />}
                       </div>
                     );
                   })}
@@ -291,8 +332,9 @@ export default function ClockOutButton({
                     {disposables.map((ep) => {
                       const pick = dispPick[ep.productId] ?? 0;
                       const used = DISPOSABLE_OPTIONS[pick];
+                      const flagged = isClockOutFieldError(failure, ep.productId);
                       return (
-                        <div key={ep.productId} className="pju-disp-card">
+                        <div key={ep.productId} className="pju-disp-card" style={clockOutFieldStyle(flagged)}>
                           <div className="pju-disp-icon">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
                               <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
@@ -318,6 +360,7 @@ export default function ClockOutButton({
                           {used > 0 && (
                             <div className="pju-disp-foot">−{used}</div>
                           )}
+                          {flagged && failure && <ClockOutFieldNote state={failure} />}
                         </div>
                       );
                     })}
@@ -341,8 +384,10 @@ export default function ClockOutButton({
                       <p>How much do you have remaining?</p>
                     </div>
                   </div>
-                  {others.map((ep) => (
-                    <div key={ep.productId} className="pju-card">
+                  {others.map((ep) => {
+                    const flagged = isClockOutFieldError(failure, ep.productId);
+                    return (
+                    <div key={ep.productId} className="pju-card" style={clockOutFieldStyle(flagged)}>
                       <div className="pju-card-head">
                         <span className="pju-card-name">{ep.product.name}</span>
                         <span className="pju-card-stock">
@@ -360,27 +405,25 @@ export default function ClockOutButton({
                           setRemaining((p) => ({ ...p, [ep.productId]: e.target.value }))
                         }
                         placeholder={`Remaining ${ep.product.unit}`}
+                        aria-invalid={flagged || undefined}
+                        style={flagged ? { borderColor: "#dc2626" } : undefined}
                       />
+                      {flagged && failure && <ClockOutFieldNote state={failure} />}
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </>
           )}
         </div>
 
-        {error && (
-          <div style={{
-            margin: "0 16px 12px",
-            fontSize: 13,
-            color: "#dc2626",
-            background: "#fef2f2",
-            border: "1px solid #fecaca",
-            borderRadius: 10,
-            padding: "10px 12px",
-          }}>
-            {error}
-          </div>
+        {failure && (
+          <ClockOutErrorNotice
+            state={failure}
+            onRetry={handleRetry}
+            retrying={loading}
+          />
         )}
 
         {/* Required checklist items still outstanding — the gate. Named, not

@@ -912,7 +912,10 @@ export default function CalendarJobActions({
               {!paid && !cancelled && summary ? (
                 <div className="cjd-payline">
                   <span>
-                    <strong>{money(summary.money.totalAmount)}</strong> due
+                    {/* What the Charge card button beside this will actually
+                        take (fix 3 item 3.2) — the total less any deposit
+                        already collected, not the gross booking value. */}
+                    <strong>{money(summary.amountDue)}</strong> due
                   </span>
                   <span className="cjd-actions">
                     {showChargeButton ? (
@@ -1052,6 +1055,7 @@ export default function CalendarJobActions({
             endTime: summary.endTimeIso,
             price: summary.price,
             employeePay: summary.employeePay,
+            employeePayIsManual: summary.employeePayIsManual,
             payType: summary.payType,
             hourlyRate: summary.hourlyRate,
             totalTip: summary.totalTip,
@@ -1073,6 +1077,10 @@ export default function CalendarJobActions({
               quantity: l.quantity,
             })),
             bookingSource: summary.bookingSource,
+            // Without this the modal would re-derive the mode from provenance
+            // and an override job edited from the calendar would open on the
+            // wrong one (fix 2).
+            pricingMode: summary.pricingMode,
             isCashJob: summary.isCashJob,
             subtotalAmount: summary.money.subtotalAmount,
           }}

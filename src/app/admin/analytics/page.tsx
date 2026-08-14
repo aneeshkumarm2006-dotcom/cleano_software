@@ -9,6 +9,12 @@ import {
   isRevenueJob,
   jobRevenue,
 } from "@/lib/metrics";
+// Fix 3 — every figure on this page that means "what this job is worth" reads
+// the ACTIVE subtotal (base + add-ons, or the override total), never the bare
+// `Job.price`; every figure that means "what is still owed" reads
+// `resolveAmountDue`, which is what the card is actually charged.
+import { activeSubtotal } from "@/lib/job-money";
+import { resolveAmountDue } from "@/lib/job-billing";
 import {
   jobTypeLabel,
   jobIndustry,
@@ -137,6 +143,11 @@ export default async function AnalyticsPage({
             product: true,
           },
         },
+        // Fix 3: every revenue figure below is the sum of ACTIVE subtotals, so
+        // the add-on rows must come with the job. `include` already brings
+        // every scalar (subtotalAmount / bookingSource / pricingMode); this
+        // relation is the one piece it does not.
+        addOns: { select: { name: true, price: true, quantity: true } },
       },
       orderBy: { createdAt: "desc" },
     }),
@@ -343,16 +354,23 @@ export default async function AnalyticsPage({
     (sum, u) => sum + u.quantity * u.product.costPerUnit,
     0
   );
-  const netProfit =
-    totalRevenue +
-    totalTips -
-    totalEmployeePay -
-    totalParking -
-    totalProductCost;
+  // Stage 4b.3 / decision D3. Tips and parking are CUSTOMER-FUNDED pass-throughs
+  // handed to the crew, so neither belongs in this formula: adding tips booked
+  // the customer's gratuity as company profit, and subtracting parking charged
+  // the company for a disbursement the customer paid for. The PDF's invariant is
+  // that they "must not be treated as company revenue or incorrectly reduce
+  // company profit". `totalTips` / `totalParking` are still computed above and
+  // still surfaced as their own pass-through figures — they just stop moving
+  // the profit line.
+  const netProfit = totalRevenue - totalEmployeePay - totalProductCost;
   const profitMargin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
   const pendingPaymentJobs = completedJobs.filter((j) => !j.paymentReceived);
+  // What is genuinely OUTSTANDING, i.e. what these cards would take if charged
+  // — the same figure chargeJob uses, deposit credited. `price` understated it
+  // on every admin job (no tax) and overstated it on every web booking (the
+  // referral credit came off twice).
   const pendingAmount = pendingPaymentJobs.reduce(
-    (sum, j) => sum + (j.price || 0),
+    (sum, j) => sum + resolveAmountDue(j),
     0
   );
 
@@ -502,7 +520,7 @@ export default async function AnalyticsPage({
         (j) => j.status === "COMPLETED" || j.status === "PAID"
       );
       const totalRevenue = completedEmpJobs.reduce(
-        (sum, j) => sum + (j.price || 0),
+        (sum, j) => sum + activeSubtotal(j),
         0
       );
       const totalPaid = completedEmpJobs.reduce(
@@ -620,7 +638,7 @@ export default async function AnalyticsPage({
     const existing = jobTypeMap.get(type) || { count: 0, revenue: 0 };
     jobTypeMap.set(type, {
       count: existing.count + 1,
-      revenue: existing.revenue + (job.price || 0),
+      revenue: existing.revenue + activeSubtotal(job),
     });
   });
 
@@ -658,13 +676,12 @@ export default async function AnalyticsPage({
       );
       monthlyDataMap.set(monthKey, {
         ...existing,
-        revenue: existing.revenue + (job.price || 0),
+        revenue: existing.revenue + activeSubtotal(job),
         jobs: existing.jobs + 1,
-        costs:
-          existing.costs +
-          (job.employeePay || 0) +
-          (job.parking || 0) +
-          jobProductCost,
+        // Parking dropped per D3 — a customer-funded pass-through, not a cost.
+        // Left in, the monthly expense line and the net figure beside it
+        // disagreed with the job page's own net profit for the same jobs.
+        costs: existing.costs + (job.employeePay || 0) + jobProductCost,
       });
     }
   });
@@ -686,7 +703,7 @@ export default async function AnalyticsPage({
     id: job.id,
     clientName: job.clientName,
     status: job.status,
-    price: job.price,
+    price: activeSubtotal(job),
     date: formatDate(job.createdAt),
     employeeName: job.employee?.name ?? "Unassigned",
   }));
@@ -826,7 +843,7 @@ export default async function AnalyticsPage({
 
     switch (target.metric) {
       case "REVENUE":
-        actual = periodJobs.reduce((sum, j) => sum + (j.price || 0), 0);
+        actual = periodJobs.reduce((sum, j) => sum + activeSubtotal(j), 0);
         break;
       case "JOBS_COMPLETED":
         actual = periodJobs.length;
@@ -835,12 +852,14 @@ export default async function AnalyticsPage({
         actual = new Set(periodJobs.map((j) => j.clientId || j.clientName)).size;
         break;
       case "PROFIT_MARGIN": {
-        const rev = periodJobs.reduce((sum, j) => sum + (j.price || 0), 0);
+        const rev = periodJobs.reduce((sum, j) => sum + activeSubtotal(j), 0);
+        // Parking dropped per D3 — see the netProfit note above. A PROFIT_MARGIN
+        // target that counted a pass-through as a cost was measuring the company
+        // against a number it never spent.
         const costs = periodJobs.reduce(
           (sum, j) =>
             sum +
             (j.employeePay || 0) +
-            (j.parking || 0) +
             j.productUsage.reduce((s, u) => s + u.quantity * u.product.costPerUnit, 0),
           0
         );
@@ -850,7 +869,7 @@ export default async function AnalyticsPage({
       case "AVG_JOB_PRICE":
         actual =
           periodJobs.length > 0
-            ? periodJobs.reduce((sum, j) => sum + (j.price || 0), 0) / periodJobs.length
+            ? periodJobs.reduce((sum, j) => sum + activeSubtotal(j), 0) / periodJobs.length
             : 0;
         break;
       case "EMPLOYEE_RETENTION":
@@ -933,7 +952,7 @@ export default async function AnalyticsPage({
             message: `Job #${job.jobNumber} for ${job.clientName} (${formatDate(
               job.startTime,
               { month: "short", day: "numeric" },
-            )}) completed over 7 days ago and is still unpaid ($${(job.price || 0).toFixed(2)})`,
+            )}) completed over 7 days ago and is still unpaid ($${resolveAmountDue(job).toFixed(2)})`,
             relatedId: job.id,
             relatedType: "Job",
           })),

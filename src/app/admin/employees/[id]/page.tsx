@@ -51,6 +51,9 @@ export default async function EmployeePage({
               product: true,
             },
           },
+          // Attributed revenue is the ACTIVE subtotal (fix 3), so the add-on
+          // rows have to travel with the job.
+          addOns: { select: { name: true, price: true, quantity: true } },
         },
         orderBy: {
           startTime: "desc",

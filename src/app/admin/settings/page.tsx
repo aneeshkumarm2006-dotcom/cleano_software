@@ -1,35 +1,75 @@
-import { auth } from "@/lib/auth";
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
 import SettingsClient from "./SettingsClient";
 import { seedNotificationCatalog } from "@/lib/notifications";
-import { requireOwnerAdmin } from "@/lib/page-guards";
+import { requireStaff } from "@/lib/page-guards";
 import { getBudgetCategoryOptions } from "@/lib/budget-categories";
+import type { SettingsSectionFailure, SettingsUser } from "./types";
 
 // Allow bulk CSV import (processed by the importCsv server action) enough time.
 export const maxDuration = 60;
 
-export default async function SettingsPage() {
-  // OWNER/ADMIN only. This page had NO role check at all — just a session — so
-  // although its Sidebar entry has always carried `adminOnly: true` and was
-  // correctly hidden, an OPS_MANAGER or FIELD_LEAD reached the whole thing by
-  // typing the URL: pricing rules, the GST/QST tax config, the notification
-  // catalog, service content, FAQ content and CSV import. The nav flag and the
-  // server now agree.
-  await requireOwnerAdmin();
+/**
+ * How far back the Budgets tab's transaction feed reaches, and how many rows it
+ * will carry at most.
+ *
+ * This read used to be unbounded — every Transaction row ever written, with its
+ * job joined on — on a page that already runs a dozen other queries against a
+ * pooler measured at 1.5–4.5 s each (scripts/probe-pricing-fixes.ts). It is the
+ * one query here whose cost grows without limit as the business runs, so it is
+ * the one that eventually pushes the page past `maxDuration` or past the
+ * response size limit. Bounding it now costs nothing: the tab groups by month
+ * and its period picker only ever offered months it could see.
+ *
+ * CONSEQUENCE, deliberate: Settings → Budgets shows the last 12 months.
+ * /admin/finances keeps the full history — its own read is still unbounded and
+ * is out of scope for this change, but it carries the same latent problem.
+ */
+const BUDGET_TX_MONTHS = 12;
+const BUDGET_TX_MAX_ROWS = 2000;
 
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
-
-  if (!session) {
-    redirect("/sign-in");
+/**
+ * One section's data, loaded so that its failure cannot take the page with it.
+ *
+ * The thirteen reads below used to sit in a bare `Promise.all`, where a single
+ * rejection threw the whole render — one unreachable table and the admin got
+ * Next's bare error screen for the ENTIRE settings area, which is exactly what
+ * a client reports as "the settings page returns an error". Now a failed
+ * section degrades to its empty state, names itself in `failures`, and every
+ * other tab still works.
+ *
+ * Still parallel: each call starts before any is awaited, so this costs no
+ * extra latency over the `Promise.all` it replaces.
+ */
+async function settledSection<T>(
+  key: string,
+  label: string,
+  run: () => Promise<T>,
+  fallback: T,
+  failures: SettingsSectionFailure[]
+): Promise<T> {
+  try {
+    return await run();
+  } catch (error) {
+    console.error(`[settings] section "${key}" failed to load`, error);
+    failures.push({ key, label });
+    return fallback;
   }
+}
 
-  const sessionUser = session.user as typeof session.user & {
-    role: "OWNER" | "ADMIN" | "EMPLOYEE";
-  };
+export default async function SettingsPage() {
+  // ONE shared page for every staff role (decision D6). `SettingsClient` has
+  // always rendered role-appropriate tabs — `adminOnly: true` tab defs plus the
+  // `isAdmin` prop — and the cleaner route re-exports this file, so the guard
+  // has to be the staff guard. It was `requireOwnerAdmin()`, which redirected
+  // every EMPLOYEE, OPS_MANAGER and FIELD_LEAD away from their own profile,
+  // password, availability and notification preferences: 39 live staff accounts
+  // at the time of writing (scripts/probe-pricing-fixes.ts). CLIENTs are still
+  // bounced, and every admin-only section stays behind `isAdmin` below — the
+  // non-admin payload is empty arrays, so nothing privileged is even fetched.
+  const session = await requireStaff();
+
+  const sessionUser = session.user as typeof session.user & { role?: string };
 
   const dbUser = await db.user.findUnique({
     where: { id: sessionUser.id },
@@ -46,17 +86,27 @@ export default async function SettingsPage() {
     redirect("/sign-in");
   }
 
-  const userWithRole = {
+  const userWithRole: SettingsUser = {
     ...sessionUser,
+    id: dbUser.id,
     name: dbUser.name,
     email: dbUser.email,
     phone: dbUser.phone,
-    role: dbUser.role as "OWNER" | "ADMIN" | "EMPLOYEE",
+    role: dbUser.role as SettingsUser["role"],
   };
+  // ADMIN CONFIGURATION, not "can open the page". OPS_MANAGER and FIELD_LEAD
+  // reach Settings for their own account and see Profile + Availability only.
   const isAdmin =
     userWithRole.role === "OWNER" || userWithRole.role === "ADMIN";
 
-  // Fetch all settings data in parallel (admin only)
+  // Sections that could not be loaded. Rendered as an inline error on the tabs
+  // that depend on them instead of throwing the page.
+  const failures: SettingsSectionFailure[] = [];
+
+  const budgetTxSince = new Date();
+  budgetTxSince.setMonth(budgetTxSince.getMonth() - BUDGET_TX_MONTHS);
+
+  // Fetch all settings data in parallel (admin only).
   const [
     appSettings,
     products,
@@ -73,73 +123,164 @@ export default async function SettingsPage() {
     budgetCategories,
   ] = isAdmin
     ? await Promise.all([
-        db.appSetting.findMany(),
-        db.product.findMany({ orderBy: { name: "asc" } }),
-        db.kitTemplate.findMany({
-          include: {
-            items: { include: { product: true } },
-          },
-          orderBy: { name: "asc" },
-        }),
-        db.supplier.findMany({
-          include: {
-            prices: { include: { product: true } },
-          },
-          orderBy: { name: "asc" },
-        }),
-        db.inventoryLocation.findMany({
-          include: { stock: true },
-          orderBy: { name: "asc" },
-        }),
-        db.checklistTemplate.findMany({
-          include: {
-            items: { orderBy: { sortOrder: "asc" } },
-          },
-          orderBy: { name: "asc" },
-        }),
-        db.trainingModule.findMany({
-          orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
-          include: {
-            quizzes: { orderBy: { sortOrder: "asc" } },
-            progress: {
+        settledSection("appSettings", "Application settings", () => db.appSetting.findMany(), [], failures),
+        settledSection(
+          "products",
+          "Products",
+          () => db.product.findMany({ orderBy: { name: "asc" } }),
+          [],
+          failures
+        ),
+        settledSection(
+          "kitTemplates",
+          "Kit templates",
+          () =>
+            db.kitTemplate.findMany({
               include: {
-                employee: { select: { id: true, name: true } },
+                items: { include: { product: true } },
               },
-            },
-          },
-        }),
-        db.document.findMany({
-          orderBy: { createdAt: "desc" },
-          include: {
-            signatures: {
+              orderBy: { name: "asc" },
+            }),
+          [],
+          failures
+        ),
+        settledSection(
+          "suppliers",
+          "Suppliers",
+          () =>
+            db.supplier.findMany({
               include: {
-                employee: { select: { id: true, name: true } },
+                prices: { include: { product: true } },
               },
-              orderBy: { createdAt: "asc" },
-            },
-          },
-        }),
+              orderBy: { name: "asc" },
+            }),
+          [],
+          failures
+        ),
+        settledSection(
+          "inventoryLocations",
+          "Inventory locations",
+          () =>
+            db.inventoryLocation.findMany({
+              include: { stock: true },
+              orderBy: { name: "asc" },
+            }),
+          [],
+          failures
+        ),
+        settledSection(
+          "checklistTemplates",
+          "Checklist templates",
+          () =>
+            db.checklistTemplate.findMany({
+              include: {
+                items: { orderBy: { sortOrder: "asc" } },
+              },
+              orderBy: { name: "asc" },
+            }),
+          [],
+          failures
+        ),
+        settledSection(
+          "trainingModules",
+          "Training modules",
+          () =>
+            db.trainingModule.findMany({
+              orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+              include: {
+                quizzes: { orderBy: { sortOrder: "asc" } },
+                progress: {
+                  include: {
+                    employee: { select: { id: true, name: true } },
+                  },
+                },
+              },
+            }),
+          [],
+          failures
+        ),
+        settledSection(
+          "documents",
+          "Documents",
+          () =>
+            db.document.findMany({
+              orderBy: { createdAt: "desc" },
+              include: {
+                signatures: {
+                  include: {
+                    employee: { select: { id: true, name: true } },
+                  },
+                  orderBy: { createdAt: "asc" },
+                },
+              },
+            }),
+          [],
+          failures
+        ),
         // Feeds the Documents tab's "Specific users" assignment picker. Staff
         // only — imported customers get a CLIENT-role User row and must never
         // be offered as document signers.
-        db.user.findMany({
-          where: { role: { not: "CLIENT" }, deletedAt: null },
-          orderBy: { name: "asc" },
-          select: { id: true, name: true, role: true },
-        }),
-        db.serviceArea.findMany({ orderBy: { prefix: "asc" } }),
-        db.transaction.findMany({
-          orderBy: { date: "desc" },
-          include: { job: { select: { id: true, clientName: true } } },
-        }),
-        db.budget.findMany({
-          orderBy: [{ period: "desc" }, { category: { sortOrder: "asc" } }],
-        }),
-        getBudgetCategoryOptions(),
+        settledSection(
+          "users",
+          "Staff list",
+          () =>
+            db.user.findMany({
+              where: { role: { not: "CLIENT" }, deletedAt: null },
+              orderBy: { name: "asc" },
+              select: { id: true, name: true, role: true },
+            }),
+          [],
+          failures
+        ),
+        settledSection(
+          "serviceAreas",
+          "Service areas",
+          () => db.serviceArea.findMany({ orderBy: { prefix: "asc" } }),
+          [],
+          failures
+        ),
+        settledSection(
+          "transactions",
+          "Recent transactions",
+          () =>
+            db.transaction.findMany({
+              // Bounded — see BUDGET_TX_MONTHS above.
+              where: { date: { gte: budgetTxSince } },
+              orderBy: { date: "desc" },
+              take: BUDGET_TX_MAX_ROWS,
+              include: { job: { select: { id: true, clientName: true } } },
+            }),
+          [],
+          failures
+        ),
+        settledSection(
+          "budgets",
+          "Budgets",
+          () =>
+            db.budget.findMany({
+              orderBy: [{ period: "desc" }, { category: { sortOrder: "asc" } }],
+            }),
+          [],
+          failures
+        ),
+        settledSection(
+          "budgetCategories",
+          "Budget categories",
+          () => getBudgetCategoryOptions(),
+          [],
+          failures
+        ),
       ])
     : [[], [], [], [], [], [], [], [], [], [], [], [], []];
 
   // Notification catalog — auto-seed on first admin visit, then load.
+  //
+  // The seed already had its own try/catch and its own `count === 0` gate; what
+  // it did not have was protection for the count and the load AROUND it. Those
+  // two ran bare, so an unreachable `notification_setting` table threw the page
+  // rather than emptying one tab. Both are now inside the same degrade path as
+  // everything above, and a seed failure leaves the catalog empty instead of
+  // half-written.
   let notificationSettings: Array<{
     id: string;
     recipient: "ADMIN" | "CUSTOMER" | "PROVIDER";
@@ -153,17 +294,25 @@ export default async function SettingsPage() {
     sortOrder: number;
   }> = [];
   if (isAdmin) {
-    const existingCount = await db.notificationSetting.count();
-    if (existingCount === 0) {
-      try {
-        await seedNotificationCatalog();
-      } catch (e) {
-        console.error("Failed to seed notification catalog", e);
-      }
-    }
-    notificationSettings = await db.notificationSetting.findMany({
-      orderBy: [{ recipient: "asc" }, { sortOrder: "asc" }],
-    });
+    notificationSettings = await settledSection(
+      "notificationSettings",
+      "Notification catalog",
+      async () => {
+        const existingCount = await db.notificationSetting.count();
+        if (existingCount === 0) {
+          try {
+            await seedNotificationCatalog();
+          } catch (e) {
+            console.error("Failed to seed notification catalog", e);
+          }
+        }
+        return db.notificationSetting.findMany({
+          orderBy: [{ recipient: "asc" }, { sortOrder: "asc" }],
+        });
+      },
+      [],
+      failures
+    );
   }
 
   // Budget editor data (mirrors the finances page serialization).
@@ -207,6 +356,7 @@ export default async function SettingsPage() {
         transactions={txRows}
         budgets={budgetRows}
         budgetCategories={budgetCategories}
+        failedSections={failures}
       />
     </div>
   );

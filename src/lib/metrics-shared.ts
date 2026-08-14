@@ -8,19 +8,25 @@
 // code keeps importing from "@/lib/metrics" and the two can never drift.
 
 import { startOfDayTz } from "./time";
+import { activeSubtotal, type ActiveValueJob } from "./job-money";
 
 // ── Total Revenue ───────────────────────────────────────────────────────────
 // Spec: completed AND paid jobs only; excludes taxes; applies discounts;
 // subtracts refunds; includes paid cash jobs; excludes cancelled + unpaid.
 export const REVENUE_STATUSES = ["COMPLETED", "PAID"] as const;
 
-/** Fields any revenue predicate needs. Both Prisma rows and job DTOs satisfy it. */
-export interface RevenueJobShape {
+/**
+ * Fields any revenue predicate needs. Both Prisma rows and job DTOs satisfy it.
+ *
+ * It EXTENDS `ActiveValueJob` (fix 3), so the money columns — `subtotalAmount`,
+ * `bookingSource`, `pricingMode` and the `addOns` rows — are required, not
+ * optional. A `select` that omits one is a compile error rather than a
+ * dashboard quietly reverting to the bare `Job.price` this stage removed.
+ */
+export interface RevenueJobShape extends ActiveValueJob {
   deletedAt?: Date | string | null;
   status: string;
   paymentReceived: boolean;
-  price: number | null;
-  discountAmount?: number | null;
   refundedAmount?: number | null;
 }
 
@@ -34,16 +40,30 @@ export function isRevenueJob(j: RevenueJobShape): boolean {
   return (REVENUE_STATUSES as readonly string[]).includes(j.status);
 }
 
-/** Per-job realized revenue: pre-tax price, less discount, less refunds. */
-export function jobRevenue(j: {
-  price: number | null;
-  discountAmount?: number | null;
-  refundedAmount?: number | null;
-}): number {
-  return Math.max(
-    0,
-    (j.price ?? 0) - (j.discountAmount ?? 0) - (j.refundedAmount ?? 0)
-  );
+/**
+ * Per-job realized revenue: the ACTIVE pre-tax subtotal, less refunds.
+ *
+ * Fix 3. This used to be `price − discount − refunds`, which read the BASE
+ * service line and so hid every add-on and extra charge from every revenue
+ * figure in the app: the grout job on page 2 of the PDF counted $128 toward
+ * revenue while the customer was billed for $186 of work.
+ *
+ * **The discount is NOT subtracted here any more, and that is not a change in
+ * meaning — it is where the subtraction moved to.** `activeSubtotal` is already
+ * discount-net in both modes: ITEMIZED computes `base + Σ add-ons − discount`,
+ * and under FINAL_PRICE the stored subtotal has the discount inside it
+ * (subtracting again is the double-application lib/job-billing.ts records as
+ * having taken ~$54 off a $25 referral credit). A literal
+ * `activeSubtotal − discount − refunds` would reintroduce exactly that bug.
+ *
+ * Deliberate asymmetry with the CLEANER PAY basis (decision D5, Stage 4):
+ * revenue is discount-net, the pay basis is not. A discount is company
+ * marketing spend, not a smaller job, so it must not quietly cut what a cleaner
+ * earns. The two therefore build on `activeSubtotal` separately rather than
+ * sharing one number — if you are here to make them agree, read D5 first.
+ */
+export function jobRevenue(j: ActiveValueJob & { refundedAmount?: number | null }): number {
+  return Math.max(0, activeSubtotal(j) - (j.refundedAmount ?? 0));
 }
 
 /** Sum of realized revenue over a list, applying the canonical predicate. */
@@ -63,12 +83,19 @@ export function isScheduledValueJob(j: RevenueJobShape): boolean {
   return !isRevenueJob(j);
 }
 
-/** Per-job booked value: price less discount (no refunds — nothing paid yet). */
-export function jobScheduledValue(j: {
-  price: number | null;
-  discountAmount?: number | null;
-}): number {
-  return Math.max(0, (j.price ?? 0) - (j.discountAmount ?? 0));
+/**
+ * Per-job booked value: the ACTIVE pre-tax subtotal (no refunds — nothing has
+ * been paid yet).
+ *
+ * Moved onto the same basis as `jobRevenue` in fix 3, and it had to be: these
+ * two cards sit side by side on the Jobs page and the Dashboard, and a job
+ * crosses from one to the other the moment it is marked paid. Leaving booked
+ * value on the bare price would have made an add-on job appear to GAIN $58 on
+ * payday, which reads as a bug in the very report meant to prove the fix.
+ * Discount handling is `activeSubtotal`'s, exactly as above.
+ */
+export function jobScheduledValue(j: ActiveValueJob): number {
+  return Math.max(0, activeSubtotal(j));
 }
 
 /** Sum of booked-but-unrealized value over a list. */
