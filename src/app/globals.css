@@ -414,38 +414,40 @@ body {
     line-height: 1.15rem;
   }
 
-  /* Thin Scrollbar Utility */
-  .scrollbar-thin {
-    /* For Firefox */
-    scrollbar-width: thin;
-    scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
-  }
+  /* Thin Scrollbar Utility — same brand thumb as the app-wide scrollbar
+     (see the SCROLLBARS block at the end of this file), just a narrower track.
+     Deliberately NO scrollbar-width/scrollbar-color here: in Chrome and Edge
+     either one switches the element to native scrollbar rendering, which voids
+     every ::-webkit-scrollbar rule below and brings back the OS arrow buttons.
+     Firefox, which has no ::-webkit-scrollbar, is covered by the global `*`
+     rule in that same SCROLLBARS block. */
 
   /* Safari-specific webkit scrollbar styling */
   .scrollbar-thin::-webkit-scrollbar {
-    width: 4px;
-    height: 4px;
+    width: 6px;
+    height: 6px;
     -webkit-appearance: none;
   }
 
   .scrollbar-thin::-webkit-scrollbar-track {
     background: transparent;
-    border-radius: 2px;
+    border-radius: 999px;
   }
 
   .scrollbar-thin::-webkit-scrollbar-thumb {
-    background-color: rgba(156, 163, 175, 0.4);
-    border-radius: 2px;
+    background-color: var(--scrollbar-thumb);
+    border-radius: 999px;
     border: none;
+    background-clip: border-box;
     -webkit-appearance: none;
   }
 
   .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-    background-color: rgba(156, 163, 175, 0.6);
+    background-color: var(--scrollbar-thumb-hover);
   }
 
   .scrollbar-thin::-webkit-scrollbar-thumb:active {
-    background-color: rgba(156, 163, 175, 0.8);
+    background-color: var(--scrollbar-thumb-active);
   }
 
   .scrollbar-thin::-webkit-scrollbar-corner {
@@ -5391,8 +5393,8 @@ html, body { overscroll-behavior-y: contain; }
 /* bounded, scrollable list (e.g. long low-stock lists) */
 .an-scroll { max-height: 460px; overflow-y: auto; padding-right: 4px; }
 .an-scroll::-webkit-scrollbar { width: 8px; }
-.an-scroll::-webkit-scrollbar-thumb { background: var(--primary-10); border-radius: 999px; }
-.an-scroll::-webkit-scrollbar-thumb:hover { background: var(--primary-20); }
+.an-scroll::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 999px; }
+.an-scroll::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
 /* shared list rows (inventory / employees / payments) */
 .an-list { display: flex; flex-direction: column; gap: 8px; }
 .an-listrow { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 13px; border-radius: 13px; background: var(--primary-5); transition: background 0.15s ease; }
@@ -7178,4 +7180,85 @@ a.q-v.link:hover { text-decoration: underline; }
 .cal-search-clear:hover { background: var(--primary-15); }
 @media (max-width: 640px) {
   .cal-search { min-width: 0; width: 100%; max-width: none; }
+}
+
+/* ═══════════════════════════════════════════════
+   SCROLLBARS — brand-themed, app-wide
+   The default OS scrollbar (chunky grey chrome) read as foreign next to the
+   teal/navy surfaces, so every scroll surface uses the same slim teal thumb.
+   Tokens rather than literals so a dark surface can flip the thumb to white
+   by redefining three custom properties on itself — the rules below read the
+   vars off whatever element is scrolling.
+═══════════════════════════════════════════════ */
+:root {
+  --scrollbar-size:         10px;
+  --scrollbar-track:        transparent;
+  --scrollbar-thumb:        rgba(0, 140, 156, 0.32);
+  --scrollbar-thumb-hover:  rgba(0, 140, 156, 0.55);
+  --scrollbar-thumb-active: rgba(0, 140, 156, 0.75);
+  /* Inset that makes the 10px track render a ~6px thumb: a transparent border
+     plus padding-box clipping, since -webkit-scrollbar-thumb has no margin. */
+  --scrollbar-inset:        2px;
+}
+
+/* Dark navy rails and split-screen brand panels. Teal on #19356D is nearly
+   invisible, so these opt into a white thumb by overriding the tokens. */
+.asidebar-rail,
+.cl-sidebar-dark,
+.cl-psidebar,
+.cl-split-brand,
+.cl-book-aside,
+.scrollbar-dark {
+  --scrollbar-thumb:        rgba(255, 255, 255, 0.22);
+  --scrollbar-thumb-hover:  rgba(255, 255, 255, 0.38);
+  --scrollbar-thumb-active: rgba(255, 255, 255, 0.52);
+}
+
+/* Layered so the existing opt-outs keep winning: `.scrollbar-thin`/`.scrollbar-none`
+   sit in this same layer and beat `*` on specificity, while the unlayered
+   `.dtabs`/`.cal-viewseg`/`.cal-overlays` hide-the-scrollbar rules beat the layer
+   outright. */
+@layer utilities {
+  /* Firefox has no ::-webkit-scrollbar, so the standard properties are the only
+     lever there. Guarded, because Chrome/Edge treat `scrollbar-color` as an opt-in
+     to NATIVE scrollbar rendering and then ignore every ::-webkit-scrollbar rule
+     on that element — which drags the OS arrow buttons back in. */
+  @supports not selector(::-webkit-scrollbar) {
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+    }
+  }
+
+  *::-webkit-scrollbar {
+    width: var(--scrollbar-size);
+    height: var(--scrollbar-size);
+  }
+
+  *::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+    border-radius: 999px;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 999px;
+    border: var(--scrollbar-inset) solid transparent;
+    background-clip: padding-box;
+    transition: background-color var(--dur-fast, .16s) var(--ease-standard, ease);
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
+    background-clip: padding-box;
+  }
+
+  *::-webkit-scrollbar-thumb:active {
+    background: var(--scrollbar-thumb-active);
+    background-clip: padding-box;
+  }
+
+  /* Kill the stepper arrows Windows Chrome would otherwise draw. */
+  *::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+  *::-webkit-scrollbar-corner { background: transparent; }
 }
