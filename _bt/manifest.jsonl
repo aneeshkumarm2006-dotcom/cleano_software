@@ -27,3 +27,7 @@
 {"model":"EmployeeRating","id":"cmsj1fnd00009tvfolus7stwo","by":"test-fix1","at":"2026-08-07T14:26:23.926Z"}
 {"model":"User","id":"u68mzfXpsT00LtR2uGwBVHmbK8ElJSg3","by":"setup-admin-only","at":"2026-08-07T14:55:59.469Z"}
 {"model":"EmployeeAvailability","id":"cmsj4m3j00001tvh0i5wp9tk5","by":"setup-avail","at":"2026-08-07T15:55:23.814Z"}
+{"model":"User","id":"6YULwvj86DT7QtnUWotmWFREXOkyY5em","by":"setup","at":"2026-08-18T14:42:08.758Z"}
+{"model":"User","id":"zvJCyAwNkp8gZL9quk29qGbeowFxLiEI","by":"setup","at":"2026-08-18T14:42:22.911Z"}
+{"model":"User","id":"5yrer1oIE6at5w7ATciS9g8y8FzjfdI6","by":"setup","at":"2026-08-18T14:42:35.259Z"}
+{"model":"Client","id":"cmsyruxf90000tvisuxp5tvnj","by":"setup","at":"2026-08-18T14:42:39.451Z"}
