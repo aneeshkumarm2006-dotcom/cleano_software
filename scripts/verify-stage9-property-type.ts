@@ -313,11 +313,18 @@ has(
 );
 
 // ── Every surface PDF #11 names (step 9.4). ────────────────────────────────
+//
+// UPDATED by the new photo/address fixes (item 3): the admin job detail now
+// prints the property type through `formatPropertySize`, which renders the type
+// AND the room counts as one line — the type is still there, and it is still
+// the only thing rendered when the counts are blank (asserted directly in
+// scripts/verify-photo-address-fixes.ts: "type alone is a complete answer").
+// The needle moved because the call did; the surface did not lose the field.
 const SURFACES: Array<[string, string, string]> = [
   [
     "job details",
     "src/app/admin/jobs/[id]/JobDetailView.tsx",
-    "propertyTypeLabel(job.propertyType)",
+    "formatPropertySize(job)",
   ],
   [
     "the cleaner job view",

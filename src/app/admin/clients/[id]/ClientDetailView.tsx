@@ -11,9 +11,18 @@ import ClientAddressManager from "../ClientAddressManager";
 import ClientPaymentMethods from "./ClientPaymentMethods";
 import { jobTypeLabel } from "@/lib/calendar-labels";
 import { avatarColor, initials } from "@/lib/avatar";
+import type { PropertyType } from "@/lib/property-type";
 
 type TabKey = "history" | "payments" | "ratings";
 
+/**
+ * The saved-address shape this page hands to `SavedAddressManager`.
+ *
+ * It is `SavedAddress` (@/lib/client-address) — re-declared here only to keep
+ * the page's prop block readable. Adding a column to the address book means
+ * adding it in BOTH, which is exactly what item 3's five property-size fields
+ * are doing below; TypeScript catches the half-done version.
+ */
 interface ClientAddressLite {
   id: string;
   label: string;
@@ -22,6 +31,11 @@ interface ClientAddressLite {
   city: string | null;
   postalCode: string | null;
   accessNotes: string | null;
+  propertyType: PropertyType | null;
+  bedCount: number | null;
+  bathCount: number | null;
+  halfBathCount: number | null;
+  squareFootage: number | null;
   isDefault: boolean;
 }
 

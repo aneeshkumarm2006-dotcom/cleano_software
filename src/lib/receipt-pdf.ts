@@ -9,6 +9,7 @@ import {
 } from "@/lib/job-money";
 import { getTaxRates } from "@/lib/tax.server";
 import { resolveDepositCredit } from "@/lib/booking-deposit";
+import { formatAddressLine } from "@/lib/client-address";
 
 const BRAND = "#008C9C";
 
@@ -51,6 +52,11 @@ export async function loadReceiptData(jobId: string): Promise<ReceiptData | null
     include: {
       client: { select: { name: true, email: true } },
       addOns: { select: { name: true, price: true, quantity: true } },
+      // The saved address is read only for the CITY (item 2). The postal code
+      // comes off the job's own snapshot first — that is what was true when the
+      // work was done, and a receipt must not silently restate itself because
+      // somebody edited the address book afterwards.
+      clientAddress: { select: { city: true, postalCode: true } },
     },
   });
   if (!job) return null;
@@ -68,7 +74,16 @@ export async function loadReceiptData(jobId: string): Promise<ReceiptData | null
     jobDate: (job.jobDate ?? job.startTime).toISOString(),
     clientName: job.client?.name ?? job.clientName,
     clientEmail: job.client?.email ?? null,
-    address: job.location,
+    // One formatter, the same one the invoice, the address book and the cleaner
+    // page use — so a unit can never print twice here and once there, and the
+    // postal code shows up on the receipt the customer keeps (item 2).
+    address:
+      formatAddressLine({
+        address: job.location,
+        aptNumber: job.aptNumber,
+        city: job.clientAddress?.city ?? null,
+        postalCode: job.postalCode ?? job.clientAddress?.postalCode ?? null,
+      }) || null,
     serviceType: job.jobType,
     bedCount: job.bedCount,
     bathCount: job.bathCount,

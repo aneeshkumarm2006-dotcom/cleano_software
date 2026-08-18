@@ -245,7 +245,12 @@ export default async function JobDetailPage({ params }: PageProps) {
                 address: job.location,
                 aptNumber: job.aptNumber ?? job.clientAddress?.aptNumber ?? null,
                 city: job.clientAddress?.city ?? null,
-                postalCode: job.clientAddress?.postalCode ?? null,
+                // The job's own postal code first (item 2). It is the snapshot
+                // taken when the job was booked, and it is the ONLY one an
+                // imported or hand-typed job with no saved-address link has —
+                // reading the address alone left those cleaners with a street
+                // and no postal code at all.
+                postalCode: job.postalCode ?? job.clientAddress?.postalCode ?? null,
               })}
             </div>
             {/* Map deep-links keep the raw street: adding a unit or postal code

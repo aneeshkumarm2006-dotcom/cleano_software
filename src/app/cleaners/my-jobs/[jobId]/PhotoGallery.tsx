@@ -1,12 +1,20 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { Trash2, X, Loader, ChevronLeft, ChevronRight } from "lucide-react";
 import { getJobPhotos } from "@/app/admin/actions/getJobPhotos";
 import type { JobPhotoDTO } from "@/app/admin/actions/getJobPhotos.types";
 import { deleteJobPhoto } from "@/app/admin/actions/deleteJobPhoto";
 import { ConfirmDeleteModal } from "@/components/common/ConfirmDeleteModal";
 import PhotoUpload from "./PhotoUpload";
+import {
+  JOB_PHOTO_KINDS,
+  JOB_PHOTO_KIND_LABEL,
+  type JobPhotoKind,
+} from "@/lib/job-photos";
+
+/** "All" plus the four types — the filter row above the grid (item 1). */
+type KindFilter = JobPhotoKind | "ALL";
 
 interface PhotoGalleryProps {
   jobId: string;
@@ -24,6 +32,7 @@ export default function PhotoGallery({
   const [error, setError] = useState<string | null>(null);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<KindFilter>("ALL");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -66,17 +75,33 @@ export default function PhotoGallery({
     }
   }, [photoToDelete]);
 
+  /**
+   * The photos actually on screen. Everything below indexes into THIS list, not
+   * the unfiltered one — the lightbox's next/previous must walk what the viewer
+   * can see, or arrowing through "Before" would silently wander into "After".
+   */
+  const visible = useMemo(
+    () => (filter === "ALL" ? photos : photos.filter((p) => p.kind === filter)),
+    [photos, filter]
+  );
+
+  const counts = useMemo(() => {
+    const map = new Map<JobPhotoKind, number>();
+    for (const p of photos) map.set(p.kind, (map.get(p.kind) ?? 0) + 1);
+    return map;
+  }, [photos]);
+
   const closeLightbox = useCallback(() => setLightboxIndex(null), []);
   const showPrev = useCallback(() => {
     setLightboxIndex((i) =>
-      i === null ? null : (i - 1 + photos.length) % photos.length
+      i === null ? null : (i - 1 + visible.length) % visible.length
     );
-  }, [photos.length]);
+  }, [visible.length]);
   const showNext = useCallback(() => {
     setLightboxIndex((i) =>
-      i === null ? null : (i + 1) % photos.length
+      i === null ? null : (i + 1) % visible.length
     );
-  }, [photos.length]);
+  }, [visible.length]);
 
   useEffect(() => {
     if (lightboxIndex === null) return;
@@ -90,7 +115,7 @@ export default function PhotoGallery({
   }, [lightboxIndex, closeLightbox, showPrev, showNext]);
 
   const activePhoto =
-    lightboxIndex !== null ? photos[lightboxIndex] : null;
+    lightboxIndex !== null ? visible[lightboxIndex] ?? null : null;
 
   return (
     <div className="space-y-6">
@@ -118,8 +143,40 @@ export default function PhotoGallery({
           No photos uploaded yet.
         </div>
       ) : (
-        <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 md:grid-cols-4">
-          {photos.map((photo, idx) => (
+        <>
+          {/* Filed by type (item 1). Only types that actually have photos get a
+              chip — an empty "Issue" tab reads as a broken filter, not as good
+              news. */}
+          <div className="flex flex-wrap gap-2">
+            {(["ALL", ...JOB_PHOTO_KINDS] as KindFilter[])
+              .filter((k) => k === "ALL" || (counts.get(k as JobPhotoKind) ?? 0) > 0)
+              .map((k) => {
+                const active = filter === k;
+                const n =
+                  k === "ALL" ? photos.length : counts.get(k as JobPhotoKind) ?? 0;
+                return (
+                  <button
+                    key={k}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => {
+                      setFilter(k);
+                      setLightboxIndex(null);
+                    }}
+                    className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
+                      active
+                        ? "bg-[#008C9C] text-white border-[#008C9C]"
+                        : "bg-white text-neutral-950/70 border-neutral-950/15 hover:border-[#008C9C]/40"
+                    }`}>
+                    {k === "ALL" ? "All" : JOB_PHOTO_KIND_LABEL[k as JobPhotoKind]}
+                    <span className="ml-1.5 opacity-70">{n}</span>
+                  </button>
+                );
+              })}
+          </div>
+
+          <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 md:grid-cols-4">
+          {visible.map((photo, idx) => (
             <div
               key={photo.id}
               className="group relative rounded-2xl overflow-hidden border border-neutral-950/10 bg-neutral-100 aspect-square">
@@ -136,6 +193,10 @@ export default function PhotoGallery({
                   loading="lazy"
                 />
               </button>
+
+              <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full text-[10px] bg-black/60 text-white pointer-events-none">
+                {JOB_PHOTO_KIND_LABEL[photo.kind]}
+              </span>
 
               {photo.canDelete && (
                 <button
@@ -173,7 +234,8 @@ export default function PhotoGallery({
               )}
             </div>
           ))}
-        </div>
+          </div>
+        </>
       )}
 
       {activePhoto && (
@@ -191,7 +253,7 @@ export default function PhotoGallery({
             <X className="w-5 h-5" />
           </button>
 
-          {photos.length > 1 && (
+          {visible.length > 1 && (
             <>
               <button
                 type="button"
@@ -226,6 +288,9 @@ export default function PhotoGallery({
               className="max-h-[80vh] max-w-full rounded-xl object-contain"
             />
             <div className="text-center text-white/90 max-w-2xl">
+              <p className="text-xs uppercase tracking-wide text-white/70">
+                {JOB_PHOTO_KIND_LABEL[activePhoto.kind]}
+              </p>
               {activePhoto.caption && (
                 <p className="text-sm font-[400]">{activePhoto.caption}</p>
               )}

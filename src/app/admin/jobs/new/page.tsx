@@ -27,6 +27,7 @@ import {
   type JobBillingType,
 } from "@/lib/hourly-billing";
 import { parsePropertyType, type PropertyType } from "@/lib/property-type";
+import { formatPropertySize, parsePropertyCount } from "@/lib/property-size";
 import { isSqftJobType, moveInOutBasePrice } from "@/lib/service-pricing";
 import { tzWallClockToUtc, tzInputParts } from "@/lib/time";
 import { syncJobAssignments } from "@/lib/job-assignments";
@@ -245,19 +246,11 @@ export default async function JobFormPage({
       },
     },
   });
-  const clients = clientsRaw.map((c) => ({
-    ...c,
-    addresses: c.addresses.map((a) => ({
-      id: a.id,
-      label: a.label,
-      address: a.address,
-      aptNumber: a.aptNumber,
-      city: a.city,
-      postalCode: a.postalCode,
-      accessNotes: a.accessNotes,
-      isDefault: a.isDefault,
-    })),
-  }));
+  // `SAVED_ADDRESS_SELECT` already returns exactly the `SavedAddress` shape, so
+  // the rows pass straight through. This used to re-list the eight columns by
+  // hand, which silently dropped item 3's five property-size fields the moment
+  // they were added to the select — the copy is the bug, not the fix.
+  const clients = clientsRaw;
 
   async function saveJob(formData: FormData) {
     "use server";
@@ -482,6 +475,15 @@ export default async function JobFormPage({
       address: locationInput,
       aptNumber: aptInput || null,
       postalCode: postalInput || null,
+      // Property size (item 3) — the address book learns it from this save,
+      // blanks-only inside `upsertClientAddress`. Kept identical to
+      // `actions/saveJob.ts`: this page is the second job-save implementation
+      // and every job-form change has to land in both (TODO §4's ⚠️, D15).
+      propertyType,
+      bedCount: parsePropertyCount(formData.get("bedCount")),
+      bathCount: parsePropertyCount(formData.get("bathCount")),
+      halfBathCount: parsePropertyCount(formData.get("halfBathCount")),
+      squareFootage,
     });
 
     // Customer-specific fixed pricing ("Change Total"). When the client has a

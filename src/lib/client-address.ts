@@ -23,18 +23,30 @@
  * NOTHING HERE IMPORTS PRISMA — deliberately. scripts/verify-awer-fixes-3.ts
  * may never touch the database, and its house doctrine prefers BEHAVIOUR checks
  * (import the logic and exercise it) over grepping source. Keeping the rules
- * pure is what makes that possible.
+ * pure is what makes that possible. The two imports below are TYPE-ONLY and
+ * reach only other pure modules, so that still holds.
  */
 
+import type { PropertySizeParts } from "./property-size";
+import type { PropertyType } from "./property-type";
+
 /** The address fields shared by a saved row, a job snapshot, and a form. */
-export interface AddressParts {
+export interface AddressParts extends PropertySizeParts {
   address?: string | null;
   aptNumber?: string | null;
   city?: string | null;
   postalCode?: string | null;
 }
 
-/** A saved row as every picker and manager consumes it. */
+/**
+ * A saved row as every picker and manager consumes it.
+ *
+ * Carries the PROPERTY SIZE as well as the address since the new photo/address
+ * fixes (item 3): the size belongs to the door, not to each booking at it, so a
+ * picker that hands back an address hands back how big it is in the same object.
+ * All five are nullable — "not recorded" is the state of every row saved before
+ * the columns existed, and of any address nobody has been to yet.
+ */
 export interface SavedAddress extends AddressParts {
   id: string;
   label: string;
@@ -43,6 +55,11 @@ export interface SavedAddress extends AddressParts {
   city: string | null;
   postalCode: string | null;
   accessNotes: string | null;
+  propertyType: PropertyType | null;
+  bedCount: number | null;
+  bathCount: number | null;
+  halfBathCount: number | null;
+  squareFootage: number | null;
   isDefault: boolean;
 }
 

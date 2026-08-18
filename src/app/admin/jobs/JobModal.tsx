@@ -48,6 +48,7 @@ import {
   isPropertyType,
   type PropertyType,
 } from "@/lib/property-type";
+import { formatPropertySize } from "@/lib/property-size";
 import { DEFAULT_TAX_RATES, type TaxRates } from "@/lib/tax";
 import {
   NEW_ADDRESS,
@@ -1083,6 +1084,25 @@ export default function JobModal({
     });
     setValue("aptNumber", addr?.aptNumber ?? "", { shouldDirty: true });
     setValue("postalCode", addr?.postalCode ?? "", { shouldDirty: true });
+    // ── Property size (item 3) ──────────────────────────────────────────────
+    //
+    // The address carries how big the place is, so picking it fills the room
+    // counts too — which is the fix in one line: "prevent admin from
+    // re-entering the same apartment/house size every time that customer
+    // books."
+    //
+    // Every field is written on every call, blanks included: moving from an
+    // address recorded as 3-bed to one that records nothing must CLEAR the box,
+    // not leave the previous address's number sitting in it.
+    //
+    // `?? ""` not `|| ""` — 0 is a real answer (a studio, 0 half baths).
+    setValue("bedCount", addr?.bedCount ?? "", { shouldDirty: true });
+    setValue("bathCount", addr?.bathCount ?? "", { shouldDirty: true });
+    setValue("halfBathCount", addr?.halfBathCount ?? "", { shouldDirty: true });
+    setValue("squareFootage", addr?.squareFootage ?? "", { shouldDirty: true });
+    // `propertyType` is React state here rather than a react-hook-form field
+    // (it drives a segmented control), so it is set directly.
+    setPropertyType(isPropertyType(addr?.propertyType) ? addr.propertyType : "");
   };
 
   // Registered once so the Client Name input can run its own onChange (detach
@@ -1877,19 +1897,17 @@ export default function JobModal({
                         const def = pickDefaultAddress(c.addresses);
                         if (def) {
                           setAddressChoice(def.id);
-                          setValue(
-                            "location",
-                            stripDuplicatedApt(def.address, def.aptNumber),
-                            { shouldDirty: true }
-                          );
-                          setValue("aptNumber", def.aptNumber ?? "", {
-                            shouldDirty: true,
-                          });
-                          setValue("postalCode", def.postalCode ?? "", {
-                            shouldDirty: true,
-                          });
+                          // One filler, so picking a CLIENT pre-fills exactly
+                          // what picking their ADDRESS does — postal code and
+                          // property size included. These five lines used to be
+                          // a hand-written copy of `fillAddressFields` that
+                          // covered three of the eight fields.
+                          fillAddressFields(def);
                         } else {
                           setAddressChoice(NEW_ADDRESS);
+                          // No address book: clear the block, then drop in the
+                          // legacy flat `Client.address` the profile holds.
+                          fillAddressFields(null);
                           setValue("location", c.address || "", {
                             shouldDirty: true,
                           });
@@ -1898,7 +1916,6 @@ export default function JobModal({
                           setValue("aptNumber", c.aptNumber || "", {
                             shouldDirty: true,
                           });
-                          setValue("postalCode", "", { shouldDirty: true });
                         }
                       }}
                       onClear={() => {
@@ -2054,6 +2071,23 @@ export default function JobModal({
                         fill Location below — it’s added to this client’s
                         address book when you save.
                       </p>
+                      {/* Name what the pick just filled in, so the room counts
+                          below read as "from the customer's file", not as
+                          something the admin has to double-check (item 3). */}
+                      {(() => {
+                        const picked =
+                          addressChoice === NEW_ADDRESS
+                            ? null
+                            : savedAddresses.find((a) => a.id === addressChoice) ??
+                              null;
+                        const size = picked ? formatPropertySize(picked) : null;
+                        return size ? (
+                          <p className="mt-1 text-xs text-[#008C9C]">
+                            Property on file: {size} — pre-filled below, edit if
+                            it has changed.
+                          </p>
+                        ) : null;
+                      })()}
                     </div>
                   )}
 

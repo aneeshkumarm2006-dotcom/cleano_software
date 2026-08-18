@@ -5,6 +5,8 @@ import { headers } from "next/headers";
 import { db } from "@/db";
 import { revalidatePath } from "next/cache";
 import { logActivity } from "@/lib/activity-log";
+import { parsePropertyCount, readPropertySize } from "@/lib/property-size";
+import { parsePropertyType } from "@/lib/property-type";
 
 async function requireAdmin() {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -32,6 +34,17 @@ const readAddressForm = (formData: FormData) => ({
   city: (formData.get("city") as string)?.trim() || null,
   postalCode: (formData.get("postalCode") as string)?.trim() || null,
   accessNotes: (formData.get("accessNotes") as string)?.trim() || null,
+  // Property size (item 3). This is the EDITOR, so unlike the blanks-only
+  // enrichment `upsertClientAddress` does, a blank here is an instruction:
+  // clearing the bedrooms field means "we no longer know", and it saves as
+  // NULL. `parsePropertyCount` keeps 0 (a studio) distinct from blank.
+  ...readPropertySize({
+    propertyType: parsePropertyType(formData.get("propertyType")),
+    bedCount: parsePropertyCount(formData.get("bedCount")),
+    bathCount: parsePropertyCount(formData.get("bathCount")),
+    halfBathCount: parsePropertyCount(formData.get("halfBathCount")),
+    squareFootage: parsePropertyCount(formData.get("squareFootage")),
+  }),
   makeDefault: formData.get("isDefault") === "on",
 });
 
@@ -79,6 +92,11 @@ export async function addClientAddress(formData: FormData) {
       city: f.city,
       postalCode: f.postalCode,
       accessNotes: f.accessNotes,
+      propertyType: f.propertyType,
+      bedCount: f.bedCount,
+      bathCount: f.bathCount,
+      halfBathCount: f.halfBathCount,
+      squareFootage: f.squareFootage,
       isDefault: f.makeDefault,
     },
     select: { id: true },
@@ -115,6 +133,11 @@ export async function updateClientAddress(formData: FormData) {
       city: f.city,
       postalCode: f.postalCode,
       accessNotes: f.accessNotes,
+      propertyType: f.propertyType,
+      bedCount: f.bedCount,
+      bathCount: f.bathCount,
+      halfBathCount: f.halfBathCount,
+      squareFootage: f.squareFootage,
       isDefault: f.makeDefault,
     },
   });

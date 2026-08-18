@@ -48,6 +48,7 @@ import { togglePaymentReceived } from "@/app/admin/actions/toggleJobPaymentStatu
 import { chargeJob } from "@/app/admin/actions/chargeJob";
 import { getJobPhotos } from "@/app/admin/actions/getJobPhotos";
 import type { JobPhotoDTO } from "@/app/admin/actions/getJobPhotos.types";
+import { jobPhotoKindLabel } from "@/lib/job-photos";
 import { saveJob } from "@/app/admin/actions/saveJob";
 
 const money = (n: number | null | undefined) =>
@@ -509,7 +510,12 @@ export default function CalendarJobActions({
                       type="button"
                       className="cjd-photo"
                       onClick={() => setLightboxIdx(idx)}
-                      title={p.caption || `Uploaded by ${p.employeeName}`}>
+                      /* The type is in the tooltip rather than in a badge: these
+                         thumbnails are ~56px in the drawer, and a label over one
+                         hides more of the photo than it explains (item 1). */
+                      title={`${jobPhotoKindLabel(p.kind)} · ${
+                        p.caption || `Uploaded by ${p.employeeName}`
+                      }`}>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={p.url} alt={p.caption || "Job photo"} />
                     </button>

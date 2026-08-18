@@ -23,6 +23,8 @@ import {
   SAVED_ADDRESS_SELECT,
 } from "@/lib/client-address-store";
 import type { SavedAddress } from "@/lib/client-address";
+import { parsePropertyCount, readPropertySize } from "@/lib/property-size";
+import { parsePropertyType } from "@/lib/property-type";
 
 /** The signed-in customer's Client row, by the lowercased-email join key the
  *  whole portal uses. Null when there is no session or no linked record. */
@@ -53,6 +55,16 @@ const readForm = (formData: FormData) => ({
   city: (formData.get("city") as string)?.trim() || null,
   postalCode: (formData.get("postalCode") as string)?.trim() || null,
   accessNotes: (formData.get("accessNotes") as string)?.trim() || null,
+  // Property size (item 3) — the customer edits their own, same contract as the
+  // admin action: this is the EDITOR, so a cleared field saves as NULL, and 0
+  // (a studio) is kept distinct from blank.
+  ...readPropertySize({
+    propertyType: parsePropertyType(formData.get("propertyType")),
+    bedCount: parsePropertyCount(formData.get("bedCount")),
+    bathCount: parsePropertyCount(formData.get("bathCount")),
+    halfBathCount: parsePropertyCount(formData.get("halfBathCount")),
+    squareFootage: parsePropertyCount(formData.get("squareFootage")),
+  }),
   makeDefault: formData.get("isDefault") === "on",
 });
 
@@ -101,6 +113,11 @@ export async function addMyAddress(formData: FormData) {
       city: f.city,
       postalCode: f.postalCode,
       accessNotes: f.accessNotes,
+      propertyType: f.propertyType,
+      bedCount: f.bedCount,
+      bathCount: f.bathCount,
+      halfBathCount: f.halfBathCount,
+      squareFootage: f.squareFootage,
       isDefault: makeDefault,
     },
   });
@@ -131,6 +148,11 @@ export async function updateMyAddress(formData: FormData) {
       city: f.city,
       postalCode: f.postalCode,
       accessNotes: f.accessNotes,
+      propertyType: f.propertyType,
+      bedCount: f.bedCount,
+      bathCount: f.bathCount,
+      halfBathCount: f.halfBathCount,
+      squareFootage: f.squareFootage,
       isDefault: f.makeDefault,
     },
   });

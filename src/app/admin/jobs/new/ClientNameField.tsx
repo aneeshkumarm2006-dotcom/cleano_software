@@ -18,6 +18,9 @@ import {
   stripDuplicatedApt,
   type SavedAddress,
 } from "@/lib/client-address";
+import { formatPropertySize } from "@/lib/property-size";
+import { isPropertyType } from "@/lib/property-type";
+import { announceAddressPrefill } from "./address-prefill";
 
 interface ClientOption {
   id: string;
@@ -97,11 +100,35 @@ export default function ClientNameField({
           })
           .slice(0, 8);
 
-  function fillAddress(addr: SavedAddress) {
-    setField("location", stripDuplicatedApt(addr.address, addr.aptNumber));
-    setField("aptNumber", addr.aptNumber || "");
-    // Postal code (item 3) — travels with the address it belongs to.
-    setField("postalCode", addr.postalCode || "");
+  /**
+   * Push a saved address into the form's sibling fields.
+   *
+   * Every field is written on EVERY call, blanks included: switching from an
+   * address that records 3 bedrooms to one that records nothing must clear the
+   * box, or the second address silently inherits the first's numbers and the
+   * job saves a property size nobody entered about it.
+   *
+   * `String(x ?? "")` and not `x || ""` — 0 is a real answer here (a studio has
+   * 0 bedrooms) and `||` would erase it.
+   */
+  function fillAddress(addr: SavedAddress | null) {
+    setField("location", addr ? stripDuplicatedApt(addr.address, addr.aptNumber) : "");
+    setField("aptNumber", addr?.aptNumber || "");
+    // Postal code (item 2) — travels with the address it belongs to.
+    setField("postalCode", addr?.postalCode || "");
+    // Property size (item 3) — the whole point of storing it on the address:
+    // the admin stops retyping the same apartment size on every booking.
+    setField("bedCount", String(addr?.bedCount ?? ""));
+    setField("bathCount", String(addr?.bathCount ?? ""));
+    setField("halfBathCount", String(addr?.halfBathCount ?? ""));
+    setField("squareFootage", String(addr?.squareFootage ?? ""));
+    // Property type keeps its value in React state, so it cannot be poked —
+    // see ./address-prefill.ts for why this one field is announced instead.
+    announceAddressPrefill({
+      propertyType: isPropertyType(addr?.propertyType)
+        ? addr.propertyType
+        : null,
+    });
   }
 
   function pick(c: ClientOption) {
@@ -118,9 +145,12 @@ export default function ClientNameField({
       fillAddress(def);
     } else {
       setAddressChoice(NEW_ADDRESS);
+      // No saved address: clear the whole block first (so nothing carries over
+      // from the previously linked customer), then drop in the legacy flat
+      // `Client.address` the profile still holds.
+      fillAddress(null);
       setField("location", c.address || "");
       setField("aptNumber", c.aptNumber || "");
-      setField("postalCode", "");
     }
 
     // Fixed-price client: pre-fill the price with their agreed total, but
@@ -140,9 +170,7 @@ export default function ClientNameField({
     setAddressChoice(v);
     if (v === NEW_ADDRESS) {
       // Let the admin type a fresh address into the Location / Apt fields.
-      setField("location", "");
-      setField("aptNumber", "");
-      setField("postalCode", "");
+      fillAddress(null);
       return;
     }
     const addr = savedAddresses.find((a) => a.id === v);
@@ -254,6 +282,22 @@ export default function ClientNameField({
             Pick a saved address, or choose “Type a new address” and fill the
             Location field below.
           </p>
+          {/* Say out loud what picking the address just filled in, so an admin
+              can see the property size came from the customer's file rather
+              than wondering whether they typed it (item 3). */}
+          {(() => {
+            const picked =
+              addressChoice === NEW_ADDRESS
+                ? null
+                : savedAddresses.find((a) => a.id === addressChoice) ?? null;
+            const size = picked ? formatPropertySize(picked) : null;
+            return size ? (
+              <p style={{ marginTop: 4, fontSize: 11.5, color: "var(--primary-60)" }}>
+                Property on file: {size} — pre-filled below, edit if it has
+                changed.
+              </p>
+            ) : null;
+          })()}
         </div>
       )}
 

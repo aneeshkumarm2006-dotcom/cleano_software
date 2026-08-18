@@ -30,6 +30,13 @@ export const SERIES_PROPAGATED_FIELDS = [
   "clientId",
   "location",
   "aptNumber",
+  // The postal code half of the same address snapshot (new photo/address
+  // fixes, item 2). `location`, `aptNumber` and `clientAddressId` all propagate
+  // already, so leaving this behind was the one way a recurring series could
+  // end up with occurrence 4 carrying a different postal code from occurrence 1
+  // at the identical address — which then reached the invoice, since the PDF
+  // prints whichever the job it is billing happens to hold.
+  "postalCode",
   // Which saved address the series is served at (item 2). Safe in updateMany:
   // it is a scalar FK column, not a relation, and every occurrence of a series
   // is at the same address by definition — the snapshot fields above already

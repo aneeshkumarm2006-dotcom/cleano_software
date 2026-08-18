@@ -15,7 +15,7 @@
 // state for the many jobs booked before this field existed and for an admin
 // taking a call who does not know yet, and a pre-selected guess on every new
 // job would be worse than a blank.
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import PremiumSelect from "@/components/ui/PremiumSelect";
 import {
   PROPERTY_TYPE_HINT,
@@ -23,6 +23,7 @@ import {
   isPropertyType,
   type PropertyType,
 } from "@/lib/property-type";
+import { onAddressPrefill } from "./address-prefill";
 
 const UNSET = "";
 
@@ -49,6 +50,21 @@ export default function PropertyTypeField({
 }: PropertyTypeFieldProps) {
   const [value, setValue] = useState<PropertyType | "">(
     isPropertyType(defaultValue) ? defaultValue : UNSET
+  );
+
+  // Picking a saved address pre-fills this field (item 3). It cannot be poked
+  // through the DOM like the neighbouring number inputs — React owns the hidden
+  // input `PremiumSelect` submits, so a poke would show one value and submit
+  // another. See ./address-prefill.ts.
+  //
+  // A null in the payload CLEARS the selection deliberately: an address with no
+  // recorded property type must not inherit the previous address's answer.
+  useEffect(
+    () =>
+      onAddressPrefill(({ propertyType }) =>
+        setValue(isPropertyType(propertyType) ? propertyType : UNSET)
+      ),
+    []
   );
 
   return (

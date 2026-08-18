@@ -1,16 +1,54 @@
 "use client";
 
-import React, { useCallback, useRef, useState } from "react";
-import { useDropzone } from "react-dropzone";
+/**
+ * The cleaner's job-photo uploader (new photo/address fixes, item 1).
+ *
+ * Three things changed here, all from the handoff:
+ *
+ *   1. The 20-photo cap is gone. `MAX_PHOTOS_PER_JOB` (200) is the ceiling now,
+ *      it lives in @/lib/job-photos beside the server's copy of the same rule
+ *      rather than being retyped here, and it is printed on the dropzone BEFORE
+ *      any file is picked — "clearly shown before upload".
+ *   2. Every photo is FILED: before / after / issue / general. The picker above
+ *      the dropzone sets the type for the batch you are about to add; each
+ *      queued card can override it, because a cleaner photographing a room they
+ *      just finished and the broken blind in it is doing both at once.
+ *   3. A failed upload no longer loses the batch. Failures stay in the queue
+ *      with their error, the banner says exactly how many failed, and "Retry
+ *      failed" re-sends only those — the photos that landed are already saved
+ *      and are never re-uploaded.
+ */
+
+import React, { useCallback, useMemo, useRef, useState } from "react";
+import { useDropzone, type FileRejection } from "react-dropzone";
 import imageCompression from "browser-image-compression";
-import { Camera, Upload, X, Loader, ImagePlus } from "lucide-react";
+import { Camera, Upload, X, Loader, ImagePlus, RotateCw } from "lucide-react";
 import Button from "@/components/ui/Button";
 import { uploadJobPhoto } from "@/app/admin/actions/uploadJobPhoto";
+import {
+  DEFAULT_JOB_PHOTO_KIND,
+  JOB_PHOTO_KINDS,
+  JOB_PHOTO_KIND_HINT,
+  JOB_PHOTO_KIND_LABEL,
+  MAX_PHOTOS_PER_JOB,
+  type JobPhotoKind,
+} from "@/lib/job-photos";
 
 const TARGET_MAX_SIZE_MB = 1;
 const HARD_MAX_SIZE = 10 * 1024 * 1024;
 const COMPRESSION_THRESHOLD = 1 * 1024 * 1024;
-const MAX_PHOTOS_PER_JOB = 20;
+
+/**
+ * How many uploads are in flight at once.
+ *
+ * This used to be 1 — a strict `for … await` — which was fine for a 20-photo
+ * ceiling and is not fine for a 60-photo post-construction job on hotel wifi.
+ * It is not unbounded either: each request carries a whole image, and a phone
+ * that opens 60 sockets at once gets slower, not faster, and is likelier to
+ * have the OS kill the tab. Three is enough to hide per-request latency.
+ */
+const UPLOAD_CONCURRENCY = 3;
+
 const ACCEPTED_TYPES: Record<string, string[]> = {
   "image/jpeg": [".jpg", ".jpeg"],
   "image/png": [".png"],
@@ -26,6 +64,7 @@ type PendingPhoto = {
   compressed: boolean;
   preview: string;
   caption: string;
+  kind: JobPhotoKind;
   status: "preparing" | "pending" | "uploading" | "success" | "error";
   error?: string;
 };
@@ -72,6 +111,31 @@ async function compressIfNeeded(file: File): Promise<{
   }
 }
 
+/**
+ * Run `worker` over every item with at most `limit` in flight.
+ *
+ * Deliberately not `Promise.all(files.map(...))`: that is unbounded, and
+ * deliberately not a plain sequential loop, which is what this replaced. Each
+ * worker reports its own result through `setPending`, so a rejection cannot
+ * take the batch down — there is nothing to settle here.
+ */
+async function runPool<T>(
+  items: readonly T[],
+  limit: number,
+  worker: (item: T) => Promise<void>
+): Promise<void> {
+  let cursor = 0;
+  const runners = Array.from({ length: Math.min(limit, items.length) }, () =>
+    (async () => {
+      while (cursor < items.length) {
+        const item = items[cursor++];
+        await worker(item);
+      }
+    })()
+  );
+  await Promise.all(runners);
+}
+
 export default function PhotoUpload({
   jobId,
   currentPhotoCount,
@@ -80,6 +144,11 @@ export default function PhotoUpload({
   const [pending, setPending] = useState<PendingPhoto[]>([]);
   const [uploading, setUploading] = useState(false);
   const [globalError, setGlobalError] = useState<string | null>(null);
+  /** How many of the last run failed — drives the retry banner. */
+  const [failedCount, setFailedCount] = useState(0);
+  /** The type new photos are filed under. Sticky across batches on purpose:
+   *  a cleaner shooting ten "before" photos sets it once. */
+  const [kind, setKind] = useState<JobPhotoKind>(DEFAULT_JOB_PHOTO_KIND);
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
 
   const remainingSlots = Math.max(0, MAX_PHOTOS_PER_JOB - currentPhotoCount);
@@ -92,7 +161,7 @@ export default function PhotoUpload({
       const availableSlots = remainingSlots - pending.length;
       if (availableSlots <= 0) {
         setGlobalError(
-          `Photo limit reached (${MAX_PHOTOS_PER_JOB} per job). Remove pending photos to add more.`
+          `This job is at the ${MAX_PHOTOS_PER_JOB}-photo maximum. Upload or remove what is queued before adding more.`
         );
         return;
       }
@@ -100,7 +169,7 @@ export default function PhotoUpload({
       const accepted = incoming.slice(0, availableSlots);
       if (accepted.length < incoming.length) {
         setGlobalError(
-          `Only added ${accepted.length} of ${incoming.length} photos (limit reached).`
+          `Added ${accepted.length} of ${incoming.length} — that reaches the ${MAX_PHOTOS_PER_JOB}-photo maximum for this job.`
         );
       }
 
@@ -111,11 +180,14 @@ export default function PhotoUpload({
         compressed: false,
         preview: URL.createObjectURL(file),
         caption: "",
+        kind,
         status: "preparing",
       }));
 
       setPending((prev) => [...prev, ...placeholders]);
 
+      // Compression is CPU-bound and already runs in a worker; keeping it
+      // sequential stops a 40-photo drop from freezing the phone.
       for (const placeholder of placeholders) {
         try {
           const { file: processed, compressed } = await compressIfNeeded(
@@ -167,7 +239,7 @@ export default function PhotoUpload({
         }
       }
     },
-    [pending.length, remainingSlots]
+    [pending.length, remainingSlots, kind]
   );
 
   const onDrop = useCallback(
@@ -177,8 +249,35 @@ export default function PhotoUpload({
     [acceptFiles]
   );
 
+  /**
+   * Say so when the picker throws a file away.
+   *
+   * `useDropzone`'s `accept` filter runs BEFORE `onDrop`, so a file of the
+   * wrong type never becomes a queue row — it simply is not there. Without this
+   * handler a cleaner who selects ten photos and gets nine sees no error, no
+   * failed card and no explanation: the tenth is gone, and the batch looks like
+   * it succeeded. That is the one failure the handoff's "show which photos
+   * failed" bullet cannot cover by itself, because there is nothing left to
+   * show — which is exactly why it has to be reported here instead.
+   *
+   * Named, not counted: "1 photo was skipped" sends someone hunting through a
+   * camera roll. The filename and the reason let them convert the file or pick
+   * a different one.
+   */
+  const onDropRejected = useCallback((rejections: FileRejection[]) => {
+    if (rejections.length === 0) return;
+    const names = rejections.map((r) => r.file.name);
+    const shown = names.slice(0, 3).join(", ");
+    const more = names.length > 3 ? ` and ${names.length - 3} more` : "";
+    setGlobalError(
+      `Skipped ${names.length} file${names.length === 1 ? "" : "s"} (${shown}${more}) — ` +
+        `not a supported photo. Use JPG, PNG, HEIC or WebP. Everything else was added.`
+    );
+  }, []);
+
   const { getRootProps, getInputProps, isDragActive, open } = useDropzone({
     onDrop,
+    onDropRejected,
     accept: ACCEPTED_TYPES,
     multiple: true,
     noClick: true,
@@ -197,6 +296,12 @@ export default function PhotoUpload({
     );
   };
 
+  const handleKindChange = (id: string, value: JobPhotoKind) => {
+    setPending((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, kind: value } : p))
+    );
+  };
+
   const handleRemove = (id: string) => {
     setPending((prev) => {
       const target = prev.find((p) => p.id === id);
@@ -205,83 +310,118 @@ export default function PhotoUpload({
     });
   };
 
-  const handleUploadAll = async () => {
-    if (pending.length === 0 || uploading) return;
-    if (pending.some((p) => p.status === "preparing")) {
-      setGlobalError("Please wait for image preparation to finish.");
-      return;
-    }
+  /**
+   * Upload `queue`, then drop only what succeeded.
+   *
+   * `onlyFailed` is the retry path. It re-sends the error rows and nothing
+   * else — the successes are already rows in the database, and re-posting them
+   * would duplicate the photo, which is the failure mode "retry" usually
+   * introduces.
+   */
+  const runUpload = useCallback(
+    async (onlyFailed: boolean) => {
+      if (uploading) return;
 
-    setUploading(true);
-    setGlobalError(null);
+      const snapshot = pending;
+      if (snapshot.some((p) => p.status === "preparing")) {
+        setGlobalError("Please wait for image preparation to finish.");
+        return;
+      }
 
-    const queue = pending.filter(
-      (p) => p.status === "pending" || p.status === "error"
-    );
+      const queue = snapshot.filter((p) =>
+        onlyFailed ? p.status === "error" : p.status === "pending" || p.status === "error"
+      );
+      if (queue.length === 0) return;
 
-    for (const item of queue) {
+      setUploading(true);
+      setGlobalError(null);
+      setFailedCount(0);
       setPending((prev) =>
         prev.map((p) =>
-          p.id === item.id
+          queue.some((q) => q.id === p.id)
             ? { ...p, status: "uploading", error: undefined }
             : p
         )
       );
 
-      const formData = new FormData();
-      formData.append("jobId", jobId);
-      formData.append("file", item.file);
-      if (item.caption.trim()) {
-        formData.append("caption", item.caption.trim());
-      }
+      let failures = 0;
 
-      try {
-        const result = await uploadJobPhoto(formData);
-        if (result.success) {
-          setPending((prev) =>
-            prev.map((p) =>
-              p.id === item.id ? { ...p, status: "success" } : p
-            )
-          );
-        } else {
+      await runPool(queue, UPLOAD_CONCURRENCY, async (item) => {
+        const formData = new FormData();
+        formData.append("jobId", jobId);
+        formData.append("file", item.file);
+        formData.append("kind", item.kind);
+        if (item.caption.trim()) {
+          formData.append("caption", item.caption.trim());
+        }
+
+        try {
+          const result = await uploadJobPhoto(formData);
+          if (result.success) {
+            setPending((prev) =>
+              prev.map((p) =>
+                p.id === item.id ? { ...p, status: "success" } : p
+              )
+            );
+          } else {
+            failures++;
+            setPending((prev) =>
+              prev.map((p) =>
+                p.id === item.id
+                  ? {
+                      ...p,
+                      status: "error",
+                      error: result.error || "Upload failed",
+                    }
+                  : p
+              )
+            );
+          }
+        } catch {
+          failures++;
           setPending((prev) =>
             prev.map((p) =>
               p.id === item.id
                 ? {
                     ...p,
                     status: "error",
-                    error: result.error || "Upload failed",
+                    error: "Upload failed — check your connection and retry.",
                   }
                 : p
             )
           );
         }
-      } catch {
-        setPending((prev) =>
-          prev.map((p) =>
-            p.id === item.id
-              ? { ...p, status: "error", error: "Upload failed" }
-              : p
-          )
-        );
-      }
-    }
+      });
 
-    setUploading(false);
+      setUploading(false);
+      setFailedCount(failures);
 
-    setPending((prev) => {
-      const remaining = prev.filter((p) => p.status !== "success");
-      prev
-        .filter((p) => p.status === "success")
-        .forEach((p) => URL.revokeObjectURL(p.preview));
-      return remaining;
-    });
+      // Only successes leave the queue. Failures stay exactly where they are,
+      // with their preview, caption and type intact, so "Retry failed" costs
+      // the cleaner nothing but a tap.
+      setPending((prev) => {
+        prev
+          .filter((p) => p.status === "success")
+          .forEach((p) => URL.revokeObjectURL(p.preview));
+        return prev.filter((p) => p.status !== "success");
+      });
 
-    onUploaded?.();
-  };
+      onUploaded?.();
+    },
+    [jobId, onUploaded, pending, uploading]
+  );
 
   const totalAfterUpload = currentPhotoCount + pending.length;
   const isPreparing = pending.some((p) => p.status === "preparing");
+  const readyCount = pending.filter(
+    (p) => p.status === "pending" || p.status === "error"
+  ).length;
+  const queuedFailures = pending.filter((p) => p.status === "error").length;
+  const kindCounts = useMemo(() => {
+    const counts = new Map<JobPhotoKind, number>();
+    for (const p of pending) counts.set(p.kind, (counts.get(p.kind) ?? 0) + 1);
+    return counts;
+  }, [pending]);
 
   return (
     <div className="space-y-4">
@@ -300,6 +440,38 @@ export default function PhotoUpload({
           }
         }}
       />
+
+      {/* Photo type — set before adding, so the batch lands filed correctly. */}
+      <div className="space-y-2">
+        <p className="text-sm font-[400] text-neutral-950">
+          What are you adding?
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {JOB_PHOTO_KINDS.map((k) => {
+            const active = kind === k;
+            return (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setKind(k)}
+                aria-pressed={active}
+                className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
+                  active
+                    ? "bg-[#008C9C] text-white border-[#008C9C]"
+                    : "bg-white text-neutral-950/70 border-neutral-950/15 hover:border-[#008C9C]/40"
+                }`}>
+                {JOB_PHOTO_KIND_LABEL[k]}
+                {kindCounts.get(k) ? (
+                  <span className={active ? "ml-1.5 opacity-80" : "ml-1.5 opacity-60"}>
+                    ({kindCounts.get(k)})
+                  </span>
+                ) : null}
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-xs text-neutral-950/60">{JOB_PHOTO_KIND_HINT[kind]}</p>
+      </div>
 
       <div
         {...getRootProps()}
@@ -322,9 +494,10 @@ export default function PhotoUpload({
               ? "Drop photos here"
               : "Drag & drop photos here, or use the buttons below"}
           </p>
+          {/* The limit, stated up front rather than after a failed upload. */}
           <p className="text-xs text-neutral-950/60">
-            Photos are auto-compressed if needed &middot;{" "}
-            {remainingSlots} of {MAX_PHOTOS_PER_JOB} slots left
+            Select as many photos as you need &middot; auto-compressed if large
+            &middot; {currentPhotoCount} of {MAX_PHOTOS_PER_JOB} used on this job
           </p>
           <div className="flex gap-2 mt-2">
             <Button
@@ -361,6 +534,27 @@ export default function PhotoUpload({
         </div>
       )}
 
+      {/* Which photos failed, and a retry that leaves the saved ones alone. */}
+      {!uploading && queuedFailures > 0 && (
+        <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm">
+            {queuedFailures} photo{queuedFailures === 1 ? "" : "s"} did not
+            upload
+            {failedCount > 0 ? " — everything else was saved." : "."} They are
+            still here; nothing was lost.
+          </p>
+          <Button
+            type="button"
+            variant="default"
+            size="sm"
+            onClick={() => void runUpload(true)}
+            disabled={uploading}>
+            <RotateCw className="w-4 h-4 mr-1.5" />
+            Retry {queuedFailures} failed
+          </Button>
+        </div>
+      )}
+
       {pending.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
@@ -385,6 +579,9 @@ export default function PhotoUpload({
                     alt="Pending upload preview"
                     className="w-full h-full object-cover"
                   />
+                  <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full text-[11px] bg-black/60 text-white">
+                    {JOB_PHOTO_KIND_LABEL[p.kind]}
+                  </span>
                   {(p.status === "uploading" || p.status === "preparing") && (
                     <div className="absolute inset-0 bg-black/40 flex items-center justify-center gap-2 text-white text-xs">
                       <Loader className="w-5 h-5 animate-spin" />
@@ -403,6 +600,23 @@ export default function PhotoUpload({
                   )}
                 </div>
                 <div className="p-3 space-y-2">
+                  <label className="sr-only" htmlFor={`kind-${p.id}`}>
+                    Photo type
+                  </label>
+                  <select
+                    id={`kind-${p.id}`}
+                    value={p.kind}
+                    onChange={(e) =>
+                      handleKindChange(p.id, e.target.value as JobPhotoKind)
+                    }
+                    disabled={uploading || p.status === "uploading"}
+                    className="w-full text-sm rounded-lg border border-neutral-950/10 px-2 py-1.5 bg-white focus:outline-none focus:border-[#008C9C]/40">
+                    {JOB_PHOTO_KINDS.map((k) => (
+                      <option key={k} value={k}>
+                        {JOB_PHOTO_KIND_LABEL[k]}
+                      </option>
+                    ))}
+                  </select>
                   <input
                     type="text"
                     value={p.caption}
@@ -439,15 +653,13 @@ export default function PhotoUpload({
               type="button"
               variant="action"
               size="md"
-              onClick={handleUploadAll}
+              onClick={() => void runUpload(false)}
               loading={uploading}
-              disabled={uploading || pending.length === 0 || isPreparing}>
+              disabled={uploading || readyCount === 0 || isPreparing}>
               <Upload className="w-4 h-4 mr-1.5" />
               {isPreparing
                 ? "Preparing..."
-                : `Upload ${pending.length} Photo${
-                    pending.length === 1 ? "" : "s"
-                  }`}
+                : `Upload ${readyCount} Photo${readyCount === 1 ? "" : "s"}`}
             </Button>
           </div>
         </div>

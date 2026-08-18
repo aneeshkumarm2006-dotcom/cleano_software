@@ -5,11 +5,15 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { cloudinary } from "@/lib/cloudinary";
-import { afterPhotosAllowed } from "@/lib/job-photos";
+import {
+  afterPhotosAllowed,
+  jobPhotoKindLabel,
+  MAX_PHOTOS_PER_JOB,
+  parseJobPhotoKind,
+} from "@/lib/job-photos";
 import type { UploadApiResponse } from "cloudinary";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
-const MAX_PHOTOS_PER_JOB = 20;
 const ALLOWED_TYPES = [
   "image/jpeg",
   "image/jpg",
@@ -63,6 +67,11 @@ export async function uploadJobPhoto(formData: FormData) {
     typeof captionRaw === "string" && captionRaw.trim().length > 0
       ? captionRaw.trim()
       : null;
+  // What this photo documents (item 1). Never rejected for being absent or
+  // unrecognised — `parseJobPhotoKind` folds both to GENERAL, because an upload
+  // must not fail over its filing. The photo is the evidence; the label is
+  // metadata an admin can correct afterwards.
+  const kind = parseJobPhotoKind(formData.get("kind"));
 
   if (!jobId) {
     return { success: false, error: "Missing job ID" };
@@ -129,11 +138,16 @@ export async function uploadJobPhoto(formData: FormData) {
       };
     }
 
+    // The cap is now `MAX_PHOTOS_PER_JOB` (200), up from a hardcoded 20 that
+    // lived in two files at once — see src/lib/job-photos.ts for why a ceiling
+    // still exists at all. The widget prints the same number before a cleaner
+    // picks a file, so reaching this branch should mean a genuinely enormous
+    // job, not a surprise.
     const existingCount = await db.jobPhoto.count({ where: { jobId } });
     if (existingCount >= MAX_PHOTOS_PER_JOB) {
       return {
         success: false,
-        error: `Maximum of ${MAX_PHOTOS_PER_JOB} photos per job reached`,
+        error: `This job already has ${existingCount} photos (${MAX_PHOTOS_PER_JOB} is the maximum). Ask an admin before adding more.`,
       };
     }
 
@@ -151,12 +165,16 @@ export async function uploadJobPhoto(formData: FormData) {
         employeeId: session.user.id,
         url: result.secure_url,
         caption,
+        kind,
       },
     });
 
     revalidatePath(`/cleaners/my-jobs/${jobId}`);
+    // The admin job page renders the same rows server-side, so without this an
+    // admin watching a cleaner work sees a stale grid until a hard reload.
+    revalidatePath(`/admin/jobs/${jobId}`);
 
-    return { success: true, photo };
+    return { success: true, photo, kindLabel: jobPhotoKindLabel(kind) };
   } catch (error) {
     console.error("Error uploading job photo:", error);
     return { success: false, error: "Failed to upload photo" };

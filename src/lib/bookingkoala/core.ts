@@ -610,6 +610,25 @@ export interface CustomerAggregate {
     city: string | null;
     state: string | null;
     zip: string | null;
+    /**
+     * The property size the MOST RECENT booking at this door recorded (new
+     * photo/address fixes, item 3). BookingKoala files bedrooms / bathrooms /
+     * sq ft per booking, and the importer already copies them onto each job;
+     * this is the same numbers travelling one step further, onto the saved
+     * address, so the first Cleano booking at an imported address arrives
+     * pre-filled instead of asking the admin to retype what the CSV said.
+     *
+     * Most-recent wins for the same reason the rest of this aggregate is
+     * most-recent-wins: a customer who finished their basement in 2024 should
+     * not be described by their 2021 booking. All nullable — plenty of CSV rows
+     * leave these columns empty, and `upsertClientAddress` writes blanks only,
+     * so an empty one can never erase a value already on the row.
+     */
+    propertyType: PropertyType | null;
+    bedCount: number | null;
+    bathCount: number | null;
+    halfBathCount: number | null;
+    squareFootage: number | null;
     lastSeen: number;
   }[];
 }
@@ -644,7 +663,17 @@ export function aggregateCustomers(rows: NormalizedRow[]): CustomerAggregate[] {
       const norm = r.address.address.toLowerCase().replace(/\s+/g, " ");
       const prev = agg.addrMap.get(norm);
       if (!prev || ts > prev.lastSeen) {
-        agg.addrMap.set(norm, { ...r.address, lastSeen: ts });
+        agg.addrMap.set(norm, {
+          ...r.address,
+          // The size comes off the same row as the address, so the two always
+          // describe the same booking (item 3).
+          propertyType: r.job.propertyType,
+          bedCount: r.job.bedCount,
+          bathCount: r.job.bathCount,
+          halfBathCount: r.job.halfBathCount,
+          squareFootage: r.job.squareFootage,
+          lastSeen: ts,
+        });
       }
     }
   }

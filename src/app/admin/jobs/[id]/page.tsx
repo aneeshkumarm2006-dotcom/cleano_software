@@ -15,6 +15,7 @@ import { deleteJob as archiveJob } from "@/app/admin/actions/deleteJob";
 import { computeJobPayShares, type JobPayInput } from "@/lib/cleaner-earnings";
 import { resolveAmountDue } from "@/lib/job-billing";
 import { summarizeJobChecklist } from "@/lib/job-checklist.server";
+import { parseJobPhotoKind } from "@/lib/job-photos";
 import JobDetailView from "./JobDetailView";
 import ScrollToTop from "./ScrollToTop";
 
@@ -415,6 +416,9 @@ export default async function JobPage({
     bedCount: job.bedCount,
     bathCount: job.bathCount,
     halfBathCount: job.halfBathCount,
+    // Was never passed through, so the Location card could print the property
+    // TYPE but not the SIZE beside it (item 3).
+    squareFootage: job.squareFootage,
     // Apartment/condo vs house (Stage 9 / PDF #11) — rendered in the Location
     // card, since it describes the place rather than the schedule or the money.
     propertyType: job.propertyType,
@@ -482,6 +486,10 @@ export default async function JobPage({
     id: photo.id,
     url: photo.url,
     caption: photo.caption,
+    // How the photo is filed (item 1). Through the parser, not straight off the
+    // row, so a payload rendered against a pre-migration cache still yields one
+    // of the four values the view's union declares.
+    kind: parseJobPhotoKind(photo.kind),
     createdAt: photo.createdAt.toISOString(),
     // Null for a customer-uploaded booking photo (Stage 11) — the view labels
     // it rather than assuming a member of staff took it.

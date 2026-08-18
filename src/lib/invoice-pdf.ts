@@ -81,6 +81,11 @@ export async function loadInvoiceData(
         select: {
           location: true,
           aptNumber: true,
+          // The job's OWN postal-code snapshot (item 2). Read first, below,
+          // because an invoice must print the address as it was when the work
+          // was booked — and because an imported or hand-typed job can carry a
+          // postal code without ever having been linked to a saved address.
+          postalCode: true,
           // Stage 11 — the deposit credit line below.
           depositPaid: true,
           depositAmount: true,
@@ -94,6 +99,7 @@ export async function loadInvoiceData(
             select: {
               location: true,
               aptNumber: true,
+              postalCode: true,
               clientAddress: { select: { city: true, postalCode: true } },
             },
           },
@@ -117,7 +123,7 @@ export async function loadInvoiceData(
       address: j.location,
       aptNumber: j.aptNumber,
       city: j.clientAddress?.city ?? null,
-      postalCode: j.clientAddress?.postalCode ?? null,
+      postalCode: j.postalCode ?? j.clientAddress?.postalCode ?? null,
     });
     if (line) distinctAddresses.set(normalizeAddressKey(j.location, j.aptNumber), line);
   }

@@ -44,7 +44,12 @@ import {
   summariseBreaks,
   activeMinutes,
 } from "@/lib/time-tracking";
-import { afterPhotosAllowed } from "@/lib/job-photos";
+import {
+  afterPhotosAllowed,
+  groupPhotosByKind,
+  JOB_PHOTO_KIND_LABEL,
+  type JobPhotoKind,
+} from "@/lib/job-photos";
 import { formatDeposit, resolveDepositCredit } from "@/lib/booking-deposit";
 import { isQuoteStatus, type QuoteStatus } from "@/lib/quote-status";
 import QuoteReviewPanel from "./QuoteReviewPanel";
@@ -73,7 +78,7 @@ import {
   type JobPricingMode,
 } from "@/lib/job-money";
 import { formatHours, hourlyLineLabel } from "@/lib/hourly-billing";
-import { propertyTypeLabel } from "@/lib/property-type";
+import { formatPropertySize } from "@/lib/property-size";
 import {
   addOnKey,
   CHECKLIST_TIER_HINT,
@@ -187,6 +192,7 @@ interface Job {
   bedCount?: number | null;
   bathCount?: number | null;
   halfBathCount?: number | null;
+  squareFootage?: number | null;
   /** Apartment/condo vs house (Stage 9 / PDF #11); null when unrecorded. */
   propertyType?: string | null;
   /** Pinned checklist template (Stage 10). Null = resolve automatically. */
@@ -254,6 +260,9 @@ interface JobPhoto {
   id: string;
   url: string;
   caption: string | null;
+  /** Before / after / issue / general (item 1). Always set — the column is
+   *  NOT NULL with a GENERAL default, which is what every legacy row reads as. */
+  kind: JobPhotoKind;
   createdAt: string;
   /**
    * Who uploaded it. NULL = the CUSTOMER did, from the booking flow (Stage 11 /
@@ -1900,7 +1909,7 @@ export default function JobDetailView({
           belongs with the address rather than with the schedule or the money.
           The gate includes it so an address-less booking that DOES know it is a
           house still shows that — the job forms don't require a location. */}
-      {(job.location || propertyTypeLabel(job.propertyType)) && (
+      {(job.location || formatPropertySize(job)) && (
         <div className="dcard tab-panel-wide">
           <div className="dcard-head">
             <h3>Location</h3>
@@ -1923,13 +1932,16 @@ export default function JobDetailView({
               })}
             </div>
           )}
-          {/* Property type (Stage 9 / PDF #11). Rendered only when recorded —
-              every job booked before this column is null, and a "Property type:
-              unknown" row on all of them would be noise that says nothing. */}
-          {propertyTypeLabel(job.propertyType) && (
+          {/* Property type AND size (Stage 9 / PDF #11, extended by item 3).
+              Rendered only when something is recorded — every job booked before
+              these columns is blank, and a "Property: unknown" row on all of
+              them would be noise that says nothing. One formatter, shared with
+              the address book and both job forms, so the same property cannot
+              read "3 bedrooms" here and "3 bd" there. */}
+          {formatPropertySize(job) && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, fontSize: 13, color: 'var(--ink-soft)' }}>
               <Home size={14} style={{ color: 'var(--primary-50)', flexShrink: 0 }} />
-              <span>{propertyTypeLabel(job.propertyType)}</span>
+              <span>{formatPropertySize(job)}</span>
             </div>
           )}
           {job.clientAddress?.accessNotes && (
@@ -2638,20 +2650,45 @@ export default function JobDetailView({
             No photos for this job yet.
           </div>
         ) : (
-          <div className="photo-grid">
-            {photos.map((photo, idx) => (
-              <button
-                key={photo.id}
-                type="button"
-                className="photo-cell"
-                onClick={() => setLightboxIdx(idx)}
-                aria-label={photo.caption || `Job photo ${idx + 1}`}
+          /* Grouped by type (item 1), in JOB_PHOTO_KINDS order, empty buckets
+             dropped. `idx` is still the index into the FLAT `photos` array —
+             the lightbox walks that, so grouping must not renumber it. */
+          groupPhotosByKind(photos).map((group) => (
+            <div key={group.kind} style={{ marginBottom: 16 }}>
+              <p
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.06em',
+                  color: 'var(--primary-60)',
+                  margin: '0 0 8px',
+                }}
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={photo.url} alt={photo.caption || 'Job photo'} loading="lazy" />
-              </button>
-            ))}
-          </div>
+                {group.label} · {group.photos.length}
+              </p>
+              <div className="photo-grid">
+                {group.photos.map((photo) => {
+                  const idx = photos.findIndex((p) => p.id === photo.id);
+                  return (
+                    <button
+                      key={photo.id}
+                      type="button"
+                      className="photo-cell"
+                      onClick={() => setLightboxIdx(idx)}
+                      aria-label={
+                        photo.caption ||
+                        `${JOB_PHOTO_KIND_LABEL[photo.kind]} photo ${idx + 1}`
+                      }
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={photo.url} alt={photo.caption || 'Job photo'} loading="lazy" />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))
         )}
       </div>
 

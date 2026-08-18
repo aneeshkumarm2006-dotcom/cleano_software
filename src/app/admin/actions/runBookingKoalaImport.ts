@@ -13,6 +13,7 @@ import { logActivity } from "@/lib/activity-log";
 import { notifyAdmins } from "@/lib/admin-alerts";
 import { resolveBkAddOns } from "@/lib/addon-catalog";
 import { upsertClientAddress } from "@/lib/client-address-store";
+import { normalizeAddressKey } from "@/lib/client-address";
 import { getBookingConfig } from "@/app/(book)/actions/getBookingConfig";
 import { getTaxRates, computeJobTaxes } from "@/lib/tax.server";
 import { jobTypeLabel } from "@/lib/calendar-labels";
@@ -26,6 +27,21 @@ import {
   BOOKING_SOURCE,
   type ImportReport,
 } from "@/lib/bookingkoala/core";
+
+/**
+ * The key `addressIdByDoor` is keyed on: one client's one door.
+ *
+ * Scoped by `clientId` because `normalizeAddressKey` is not globally unique —
+ * two different customers at the same street address are two rows, and a
+ * cross-client hit would link one customer's job to another's saved address.
+ */
+function addressDoorKey(
+  clientId: string,
+  address: string | null | undefined,
+  apt: string | null | undefined
+): string {
+  return `${clientId}|${normalizeAddressKey(address, apt)}`;
+}
 
 /**
  * Server-side BookingKoala import behind the admin "Import from BookingKoala"
@@ -174,6 +190,16 @@ export async function runBookingKoalaImport(
 
   // ── 2. customers + addresses + logins ───────────────────────────────────────
   const clientIdByKey = new Map<string, string | null>();
+  /**
+   * `clientId + normalised door` → the `ClientAddress` row it resolved to.
+   *
+   * Filled while the customers' address books are written, read when the jobs
+   * are created. Keyed by the SAME normalised key the address book de-duplicates
+   * on (`normalizeAddressKey`, unit-aware and case/whitespace insensitive), so a
+   * job row and the aggregated address it came from cannot miss each other over
+   * a capital letter.
+   */
+  const addressIdByDoor = new Map<string, string>();
   const custCreds: { name: string; email: string; tempPassword: string }[] = [];
   for (const agg of aggregateCustomers(rows)) {
     try {
@@ -238,14 +264,27 @@ export async function runBookingKoalaImport(
       // the old way are not rewritten — nothing backfills them — but
       // stripDuplicatedApt() makes them render correctly anyway, and their
       // normalised key still matches, so re-importing won't duplicate them.
-      const existingAddrIds = new Set(
-        (
-          await db.clientAddress.findMany({
-            where: { clientId },
-            select: { id: true },
-          })
-        ).map((a) => a.id)
-      );
+      // Read the book BEFORE writing to it: the ids tell `report.addresses`
+      // which rows are genuinely new, and the doors seed `addressIdByDoor`.
+      //
+      // Seeding from EVERY existing row, not just the ones this file upserts,
+      // is what makes the job link below correct for a second unit at the same
+      // street. `aggregateCustomers` keys its address list on the STREET only
+      // (most-recent wins), so a CSV containing both Apt 2 and Apt 5 at one
+      // building yields a single aggregate entry — and the other unit's jobs
+      // would find no map entry. The address book itself de-duplicates
+      // unit-aware, so its rows are the complete set of doors.
+      const existingAddrs = await db.clientAddress.findMany({
+        where: { clientId },
+        select: { id: true, address: true, aptNumber: true },
+      });
+      const existingAddrIds = new Set(existingAddrs.map((a) => a.id));
+      for (const a of existingAddrs) {
+        addressIdByDoor.set(
+          addressDoorKey(clientId, a.address, a.aptNumber),
+          a.id
+        );
+      }
       for (let i = 0; i < agg.addresses.length; i++) {
         const a = agg.addresses[i];
         const id = await upsertClientAddress(clientId, {
@@ -254,10 +293,29 @@ export async function runBookingKoalaImport(
           aptNumber: a.apt,
           city: a.city,
           postalCode: a.zip,
+          // Property size off the customer's most recent booking at this door
+          // (item 3). Blanks-only inside the upsert, so re-importing a file
+          // cannot overwrite a size an admin has since corrected by hand.
+          propertyType: a.propertyType,
+          bedCount: a.bedCount,
+          bathCount: a.bathCount,
+          halfBathCount: a.halfBathCount,
+          squareFootage: a.squareFootage,
         });
-        if (id && !existingAddrIds.has(id)) {
-          existingAddrIds.add(id);
-          report.addresses++;
+        if (id) {
+          // Remember which saved address this door resolved to, so the job loop
+          // below can LINK each imported booking to it (item 2). Without this
+          // map every imported job had `clientAddressId = null`, which is why
+          // an imported job showed no postal code and no access notes on the
+          // cleaner's page even though the address book had both.
+          addressIdByDoor.set(
+            addressDoorKey(clientId, a.address, a.apt),
+            id
+          );
+          if (!existingAddrIds.has(id)) {
+            existingAddrIds.add(id);
+            report.addresses++;
+          }
         }
       }
 
@@ -315,6 +373,20 @@ export async function runBookingKoalaImport(
     }
 
     const clientId = clientIdByKey.get(r.customerKey) ?? null;
+    // Which saved address this booking is at, and its postal code (item 2).
+    //
+    // Both come from the address book that was just written for this customer,
+    // not from a second guess: the link is what lets the cleaner's job page show
+    // the door's access notes, and what makes the invoice print a postal code
+    // for an imported job. `r.address.zip` is normalised by `cleanZip` at parse
+    // time, so it is already in "H3P 2E3" shape.
+    const rowAddressId =
+      clientId && r.address
+        ? addressIdByDoor.get(
+            addressDoorKey(clientId, r.address.address, r.address.apt)
+          ) ?? null
+        : null;
+    const rowPostalCode = r.address?.zip ?? null;
     const cleanerIds = r.providers
       .map((p) => cleanerUserId.get(cleanerKey(p)))
       .filter((id): id is string => !!id);
@@ -433,6 +505,14 @@ export async function runBookingKoalaImport(
           ...(clientId ? { client: { connect: { id: clientId } } } : {}),
           location: r.job.location,
           aptNumber: r.job.aptNumber,
+          // The postal code the CSV carried, on the job's own address snapshot
+          // — and the FK to the saved address it belongs to (item 2). Both were
+          // silently dropped before: the importer wrote the zip into the address
+          // book and then created jobs that pointed at neither.
+          postalCode: rowPostalCode,
+          ...(rowAddressId
+            ? { clientAddress: { connect: { id: rowAddressId } } }
+            : {}),
           description: `${jobTypeLabel(r.job.jobType)} cleaning`,
           jobType: r.job.jobType,
           jobDate: r.job.startTime,

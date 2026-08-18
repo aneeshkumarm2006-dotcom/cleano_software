@@ -27,6 +27,7 @@ import {
   stripDuplicatedApt,
   type SavedAddress,
 } from "@/lib/client-address";
+import { formatPropertySize, readPropertySize } from "@/lib/property-size";
 import { checkServiceArea } from "../../actions/checkServiceArea";
 import BookingPhotoUpload from "./BookingPhotoUpload";
 
@@ -121,9 +122,12 @@ export default function Step2Property({
   // whose postal code differs from the one entered in step 1.
   const [postalNotice, setPostalNotice] = useState<string | null>(null);
   const [reChecking, setReChecking] = useState(false);
+  /** Says which property details were filled in from the saved address (item 3). */
+  const [sizeNotice, setSizeNotice] = useState<string | null>(null);
 
   async function onAddressChoice(v: string) {
     setPostalNotice(null);
+    setSizeNotice(null);
 
     if (v === NEW_ADDRESS) {
       onChange({ addressId: null, address: "", aptNumber: "" });
@@ -133,11 +137,40 @@ export default function Step2Property({
     const addr = savedAddresses.find((a) => a.id === v);
     if (!addr) return;
 
+    // ── Property size from the saved address (item 3) ────────────────────────
+    //
+    // Only fields the address ACTUALLY records are copied. The draft starts at
+    // sensible defaults (2 bed / 1 bath) and the customer may already have
+    // adjusted them, so an address that knows nothing about its bathrooms must
+    // leave the bathroom count alone rather than reset it — hence a patch built
+    // from non-null values instead of a blanket overwrite.
+    //
+    // This can move the price, because the quote is priced off these numbers.
+    // That is correct — it is the customer's own saved property — but it must
+    // never be silent, which is what `sizeNotice` below is for.
+    const size = readPropertySize(addr);
+    const sizePatch: Partial<BookingDraft> = {};
+    if (size.propertyType !== null) sizePatch.propertyType = size.propertyType;
+    if (size.bedCount !== null) sizePatch.bedCount = size.bedCount;
+    if (size.bathCount !== null) sizePatch.bathCount = size.bathCount;
+    if (size.halfBathCount !== null) {
+      sizePatch.halfBathCount = size.halfBathCount;
+    }
+    if (size.squareFootage !== null) {
+      sizePatch.squareFootage = size.squareFootage;
+    }
+
     onChange({
       addressId: addr.id,
       address: stripDuplicatedApt(addr.address, addr.aptNumber),
       aptNumber: addr.aptNumber ?? "",
+      ...sizePatch,
     });
+
+    const sizeLine = formatPropertySize(addr);
+    if (sizeLine && Object.keys(sizePatch).length > 0) {
+      setSizeNotice(`Filled in from your saved address: ${sizeLine}.`);
+    }
 
     // The quote is priced against step 1's postal code (coverage, zone, travel
     // fee). Filling in an address from a DIFFERENT postal code and leaving that
@@ -228,6 +261,19 @@ export default function Step2Property({
                   color: draft.postalCovered === false ? "#dc2626" : "var(--primary-60)",
                 }}>
                 {postalNotice}
+              </p>
+            )}
+            {/* Picking a saved address can change the quote, because the price
+                is built from the room counts it just filled in. Say so (item 3)
+                — a price that moves without explanation reads as a bug. */}
+            {sizeNotice && (
+              <p
+                style={{
+                  marginTop: 6,
+                  fontSize: 12.5,
+                  color: "var(--primary-60)",
+                }}>
+                {sizeNotice} You can change anything below.
               </p>
             )}
           </Field>

@@ -628,6 +628,21 @@ export async function submitBooking(input: SubmitBookingInput) {
       // Step 1's postal code is finally persisted here. It was previously used
       // for the coverage check and then thrown away.
       postalCode: input.postalCode?.trim() || null,
+      // Property size from step 2 (item 3), so the customer's own booking
+      // teaches their address book what is at that door — the next booking, and
+      // any admin booking on their behalf, arrives pre-filled. Blanks-only
+      // inside `upsertClientAddress`: a customer under-stating their place on
+      // one booking cannot overwrite what the address already records.
+      //
+      // `parsePropertyType` and not the raw string: `input.propertyType` is
+      // untrusted browser input on a PUBLIC action, exactly like `addressId`
+      // above, and anything unrecognised has to resolve to "not recorded"
+      // rather than reach a column.
+      propertyType: parsePropertyType(input.propertyType),
+      bedCount: input.bedCount,
+      bathCount: input.bathCount,
+      halfBathCount: input.halfBathCount,
+      squareFootage: input.squareFootage > 0 ? input.squareFootage : null,
     });
 
     // Backstop: make sure existing clients also have a code (for future shares).

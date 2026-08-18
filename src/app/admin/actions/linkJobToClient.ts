@@ -51,6 +51,13 @@ export async function linkJobToClient(
           location: true,
           aptNumber: true,
           postalCode: true,
+          // Property size (item 3) — carried into the address book below, the
+          // same way saving a job does it.
+          propertyType: true,
+          bedCount: true,
+          bathCount: true,
+          halfBathCount: true,
+          squareFootage: true,
           deletedAt: true,
         },
       }),
@@ -79,6 +86,11 @@ export async function linkJobToClient(
           address: job.location,
           aptNumber: job.aptNumber,
           postalCode: job.postalCode,
+          propertyType: job.propertyType,
+          bedCount: job.bedCount,
+          bathCount: job.bathCount,
+          halfBathCount: job.halfBathCount,
+          squareFootage: job.squareFootage,
         })
       : null;
 

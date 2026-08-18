@@ -395,6 +395,29 @@ model ClientAddress {
   /// the ASSIGNED cleaner on the job page — cleaners cannot get in without it.
   /// Never rendered on anything customer-facing or on an unclaimed job.
   accessNotes        String?
+  /// ── PROPERTY SIZE (new photo/address fixes, item 3) ──────────────────────
+  ///
+  /// How big the place at THIS door is. The same five facts `Job` already
+  /// carries — and that is the point: they were only ever stored per JOB, so an
+  /// admin re-typed the customer's bedroom count on every single booking, and a
+  /// customer with two properties had no way to say the condo is not the house.
+  ///
+  /// The job columns stay exactly where they are and stay authoritative FOR
+  /// THAT JOB: they are the snapshot the visit was priced and staffed from, and
+  /// a property that gains a bedroom next year must not rewrite last year's
+  /// invoice. These columns are the DEFAULT that pre-fills a new booking at
+  /// this address, and the value learned back from a booking when the row is
+  /// still blank (see `upsertClientAddress`, which enriches blanks only).
+  ///
+  /// All nullable, with no defaults and no backfill: "not recorded" is the
+  /// honest state for every row that predates this, and 0 bedrooms is a real
+  /// answer that a DEFAULT would forge. `src/lib/property-size.ts` holds the
+  /// rules; nothing here prices anything.
+  propertyType       PropertyType?
+  bedCount           Int?
+  bathCount          Int?
+  halfBathCount      Int?
+  squareFootage      Int?
   isDefault          Boolean             @default(false)
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
@@ -1646,7 +1669,7 @@ model AvailabilityException {
 }
 
 model JobPhoto {
-  id         String   @id @default(cuid())
+  id         String       @id @default(cuid())
   jobId      String
   /// WHO uploaded it. NULL = the CUSTOMER did, from the public booking flow
   /// (PDF #9, Stage 11) — there is no `User` row for a guest booker and no crew
@@ -1660,15 +1683,48 @@ model JobPhoto {
   employeeId String?
   url        String
   caption    String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  job        Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  /// WHAT this photo documents (new photo/address fixes, item 1).
+  ///
+  /// Before this column the only discriminator was the free-text `caption`, so
+  /// "before", "after" and "the fridge door is broken" were indistinguishable
+  /// to anything but a human reading them one at a time. The handoff asks for
+  /// photos that "stay organized by upload type", which needs a column.
+  ///
+  /// NOT NULL with a `GENERAL` default on purpose: every pre-existing row is
+  /// genuinely un-classified, and GENERAL is the honest name for that — it is
+  /// the bucket the galleries show without a badge. A nullable column would
+  /// have meant the same thing while forcing every reader to handle a fourth
+  /// state that is really the fifth value of a four-value enum.
+  kind       JobPhotoKind @default(GENERAL)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+  job        Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
   /// Cascade is kept from before: deleting a cleaner still removes the photos
   /// they took. It can never fire for a booking photo, whose employeeId is NULL.
-  employee   User?    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employee   User?        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
   @@index([jobId])
   @@index([employeeId])
+  /// The galleries group and filter by type within one job, which is exactly
+  /// this pair — and the per-job photo cap counts rows the same way.
+  @@index([jobId, kind])
+}
+
+/// How a job photo is filed (new photo/address fixes, item 1).
+///
+///   BEFORE   the state of the space on arrival
+///   AFTER    the state of the space at hand-off
+///   ISSUE    damage, a blocked room, something the office must see
+///   GENERAL  everything else, and every row that predates this enum
+///
+/// Deliberately NOT derived from `caption`: a caption is prose a cleaner types
+/// on a phone, and pattern-matching it would silently misfile the ones that
+/// most need to be found later.
+enum JobPhotoKind {
+  BEFORE
+  AFTER
+  ISSUE
+  GENERAL
 }
 
 enum JobChatSenderRole {

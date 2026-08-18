@@ -13,8 +13,14 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Pencil, Trash2, Star, Check, X, KeyRound } from "lucide-react";
+import { Plus, Pencil, Trash2, Star, Check, X, KeyRound, Home } from "lucide-react";
 import { formatAddressLine, type SavedAddress } from "@/lib/client-address";
+import { formatPropertySize } from "@/lib/property-size";
+import {
+  PROPERTY_TYPES,
+  PROPERTY_TYPE_LABEL,
+  type PropertyType,
+} from "@/lib/property-type";
 
 type ActionResult = { success?: boolean; error?: string };
 
@@ -41,6 +47,14 @@ const BLANK_FORM = {
   city: "",
   postalCode: "",
   accessNotes: "",
+  // Property size (item 3). Held as STRINGS, like every other field here: ""
+  // is "leave it unrecorded" and "0" is a real answer (a studio), and the two
+  // are indistinguishable once a number type gets involved.
+  propertyType: "" as PropertyType | "",
+  bedCount: "",
+  bathCount: "",
+  halfBathCount: "",
+  squareFootage: "",
   isDefault: false,
 };
 
@@ -93,6 +107,13 @@ export default function SavedAddressManager({
       city: addr.city || "",
       postalCode: addr.postalCode || "",
       accessNotes: addr.accessNotes || "",
+      // `?? ""` and not `|| ""`: a stored 0 must survive into the field, or
+      // editing a studio's access notes would quietly erase its "0 bedrooms".
+      propertyType: addr.propertyType ?? "",
+      bedCount: addr.bedCount?.toString() ?? "",
+      bathCount: addr.bathCount?.toString() ?? "",
+      halfBathCount: addr.halfBathCount?.toString() ?? "",
+      squareFootage: addr.squareFootage?.toString() ?? "",
       isDefault: addr.isDefault,
     });
     setEditId(addr.id);
@@ -125,6 +146,13 @@ export default function SavedAddressManager({
     fd.append("city", form.city);
     fd.append("postalCode", form.postalCode);
     fd.append("accessNotes", form.accessNotes);
+    // Always posted, blank included — a cleared field is an admin deliberately
+    // saying "we don't know", and the actions read an empty string as null.
+    fd.append("propertyType", form.propertyType);
+    fd.append("bedCount", String(form.bedCount));
+    fd.append("bathCount", String(form.bathCount));
+    fd.append("halfBathCount", String(form.halfBathCount));
+    fd.append("squareFootage", String(form.squareFootage));
     if (form.isDefault) fd.append("isDefault", "on");
     if (editId) fd.append("id", editId);
 
@@ -204,6 +232,23 @@ export default function SavedAddressManager({
               <p style={{ fontSize: 13, color: "var(--ink)", margin: 0 }}>
                 {formatAddressLine(addr)}
               </p>
+              {/* What is AT this address (item 3) — so an admin can see at a
+                  glance that the condo is already recorded as 2 bed / 1 bath
+                  and stop retyping it on every booking. */}
+              {formatPropertySize(addr) && (
+                <p
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 5,
+                    fontSize: 12,
+                    color: "var(--primary-60)",
+                    margin: "4px 0 0",
+                  }}>
+                  <Home size={11} style={{ flexShrink: 0 }} />
+                  {formatPropertySize(addr)}
+                </p>
+              )}
               {addr.accessNotes && (
                 <p
                   style={{
@@ -324,6 +369,108 @@ export default function SavedAddressManager({
                 style={inputStyle}
               />
             </div>
+          </div>
+
+          {/* ── Property size (item 3) ───────────────────────────────────
+              Saved against the DOOR, not the booking, so admin stops
+              re-entering the same apartment/house size every time this
+              customer books. Every field is optional: "not recorded" is a
+              legitimate state, and a blank here never overwrites a size the
+              job forms have already learned. */}
+          <div
+            style={{
+              padding: 12,
+              borderRadius: 10,
+              background: "rgba(0,140,156,0.03)",
+              border: "1px solid rgba(0,140,156,0.08)",
+              marginBottom: 10,
+            }}>
+            <p
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: "0.06em",
+                color: "var(--primary)",
+                margin: "0 0 8px",
+              }}>
+              Property size
+            </p>
+
+            <div style={{ marginBottom: 10 }}>
+              <label style={labelStyle}>Property type</label>
+              <select
+                value={form.propertyType}
+                onChange={(e) => set("propertyType", e.target.value)}
+                style={{ ...inputStyle, background: "#fff" }}>
+                <option value="">Not recorded</option>
+                {PROPERTY_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {PROPERTY_TYPE_LABEL[t]}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))",
+                gap: 10,
+              }}>
+              <div>
+                <label style={labelStyle}>Bedrooms</label>
+                <input
+                  type="number"
+                  min={0}
+                  inputMode="numeric"
+                  value={form.bedCount}
+                  onChange={(e) => set("bedCount", e.target.value)}
+                  placeholder="—"
+                  style={inputStyle}
+                />
+              </div>
+              <div>
+                <label style={labelStyle}>Bathrooms</label>
+                <input
+                  type="number"
+                  min={0}
+                  inputMode="numeric"
+                  value={form.bathCount}
+                  onChange={(e) => set("bathCount", e.target.value)}
+                  placeholder="—"
+                  style={inputStyle}
+                />
+              </div>
+              <div>
+                <label style={labelStyle}>Half baths</label>
+                <input
+                  type="number"
+                  min={0}
+                  inputMode="numeric"
+                  value={form.halfBathCount}
+                  onChange={(e) => set("halfBathCount", e.target.value)}
+                  placeholder="—"
+                  style={inputStyle}
+                />
+              </div>
+              <div>
+                <label style={labelStyle}>Square feet</label>
+                <input
+                  type="number"
+                  min={0}
+                  inputMode="numeric"
+                  value={form.squareFootage}
+                  onChange={(e) => set("squareFootage", e.target.value)}
+                  placeholder="—"
+                  style={inputStyle}
+                />
+              </div>
+            </div>
+            <p style={{ margin: "8px 0 0", fontSize: 11, color: "var(--primary-50)" }}>
+              Pre-fills every new booking at this address. Leave blank if you
+              don&apos;t know — a booking that records it will fill it in.
+            </p>
           </div>
 
           <div style={{ marginBottom: 10 }}>

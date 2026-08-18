@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import type { JobPhotoDTO } from "./getJobPhotos.types";
 import { BOOKING_PHOTO_UPLOADER_LABEL } from "@/lib/booking-deposit";
+import { parseJobPhotoKind } from "@/lib/job-photos";
 
 export async function getJobPhotos(
   jobId: string
@@ -58,6 +59,10 @@ export async function getJobPhotos(
       employeeName: p.employee?.name ?? BOOKING_PHOTO_UPLOADER_LABEL,
       url: p.url,
       caption: p.caption,
+      // Through the parser rather than straight off the row: the column is new,
+      // and a client reading this DTO from a cached payload written before the
+      // migration would otherwise get `undefined` where a union is declared.
+      kind: parseJobPhotoKind(p.kind),
       createdAt: p.createdAt,
       // A customer-uploaded photo (employeeId NULL) is admin-only to delete: it
       // is evidence the quote was priced from, and no cleaner owns it.

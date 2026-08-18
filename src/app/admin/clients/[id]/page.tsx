@@ -141,6 +141,13 @@ export default async function ClientDetailPage({
             city: a.city,
             postalCode: a.postalCode,
             accessNotes: a.accessNotes,
+            // Property size lives on the address since item 3 — the manager
+            // edits it here, and the job forms read it back from the same row.
+            propertyType: a.propertyType,
+            bedCount: a.bedCount,
+            bathCount: a.bathCount,
+            halfBathCount: a.halfBathCount,
+            squareFootage: a.squareFootage,
             isDefault: a.isDefault,
           })),
         }}

@@ -67,6 +67,8 @@ export async function getAvailableJobPreview(
         isFlexible: true,
         location: true,
         aptNumber: true,
+        // The job's own postal-code snapshot (item 2) — the fallback below.
+        postalCode: true,
         jobType: true,
         price: true,
         payType: true,
@@ -175,7 +177,10 @@ export async function getAvailableJobPreview(
             address: job.location,
             aptNumber: job.aptNumber ?? job.clientAddress?.aptNumber ?? null,
             city: job.clientAddress?.city ?? null,
-            postalCode: job.clientAddress?.postalCode ?? null,
+            // Snapshot first, saved address second: a job with no address link
+            // (an import, or a one-off address typed on the form) still shows a
+            // postal code on the board instead of a bare street.
+            postalCode: job.postalCode ?? job.clientAddress?.postalCode ?? null,
           })
         : null,
       propertyType: job.propertyType,

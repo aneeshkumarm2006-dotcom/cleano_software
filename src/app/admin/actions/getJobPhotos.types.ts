@@ -1,4 +1,5 @@
 import { BOOKING_PHOTO_UPLOADER_LABEL } from "@/lib/booking-deposit";
+import type { JobPhotoKind } from "@/lib/job-photos";
 
 export type JobPhotoDTO = {
   id: string;
@@ -16,6 +17,12 @@ export type JobPhotoDTO = {
   employeeName: string;
   url: string;
   caption: string | null;
+  /**
+   * What this photo documents (item 1). NOT NULL in the database with a
+   * GENERAL default, so this is always one of the four — a gallery never has to
+   * handle "unfiled" as a fifth case.
+   */
+  kind: JobPhotoKind;
   createdAt: Date;
   canDelete: boolean;
 };

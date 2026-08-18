@@ -230,18 +230,6 @@ export async function saveJob(formData: FormData) {
       }
     }
 
-    // A picked id is honoured only if it belongs to this client AND still
-    // describes what was typed — an admin who picks "Home" and then edits the
-    // Location field would otherwise link the job to Home's door codes while
-    // sending the cleaner somewhere else. Anything typed that isn't already in
-    // the book is added to it.
-    const clientAddressId = await resolveJobAddressId(clientId, {
-      addressId: pickedAddressId,
-      address: locationInput,
-      aptNumber: aptInput || null,
-      postalCode: postalInput || null,
-    });
-
     let price = parseOptionalFloat(formData.get("price"));
 
     // Square footage (item 8). Stored on EVERY job as property information; it
@@ -315,6 +303,36 @@ export async function saveJob(formData: FormData) {
           })
         : null;
     if (!propertySubmitted) propertyType = preservedFields?.propertyType ?? null;
+
+    // ── Saved address, resolved (items 2 + 3) ────────────────────────────────
+    //
+    // A picked id is honoured only if it belongs to this client AND still
+    // describes what was typed — an admin who picks "Home" and then edits the
+    // Location field would otherwise link the job to Home's door codes while
+    // sending the cleaner somewhere else. Anything typed that isn't already in
+    // the book is added to it.
+    //
+    // Resolved HERE, after the property fields, rather than up beside the other
+    // address inputs: the address book learns the postal code AND the property
+    // size from this save, and the size is only known once `propertyType`'s
+    // tri-state has settled. Nothing between here and `jobData` reads
+    // `clientAddressId`, so the move is order-of-work only.
+    //
+    // Everything below is BLANKS-ONLY inside `upsertClientAddress`: saving a job
+    // with the bedrooms box empty can never erase what an admin recorded on the
+    // customer's address, and a booking that says 2 can never overwrite a 3
+    // somebody entered after actually going there.
+    const clientAddressId = await resolveJobAddressId(clientId, {
+      addressId: pickedAddressId,
+      address: locationInput,
+      aptNumber: aptInput || null,
+      postalCode: postalInput || null,
+      propertyType,
+      bedCount: parseOptionalInt(formData.get("bedCount")),
+      bathCount: parseOptionalInt(formData.get("bathCount")),
+      halfBathCount: parseOptionalInt(formData.get("halfBathCount")),
+      squareFootage,
+    });
     if (!checklistSubmitted) {
       checklistTemplateId = preservedFields?.checklistTemplateId ?? null;
     }
