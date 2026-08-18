@@ -12,6 +12,9 @@ import JobModal, {
 } from "@/app/admin/jobs/JobModal";
 import type { TaxRates } from "@/lib/tax";
 import { ADDON_INCLUDED_LABEL, addOnAmountIsIncluded } from "@/lib/job-money";
+import { formatDeposit, resolveDepositCredit } from "@/lib/booking-deposit";
+import { formatHours } from "@/lib/hourly-billing";
+import { propertyTypeLabel } from "@/lib/property-type";
 import { formatAddressLine } from "@/lib/client-address";
 import { storeInputParts, storeWallClockToUtc } from "@/lib/timezone";
 import { avatarColor, initials } from "@/lib/avatar";
@@ -549,7 +552,14 @@ export default function CalendarJobActions({
                     checked={refundDeposit}
                     onChange={(e) => setRefundDeposit(e.target.checked)}
                   />
-                  Refund the $20 deposit
+                  Refund the{" "}
+                  {formatDeposit(
+                    resolveDepositCredit({
+                      depositPaid: true,
+                      depositAmount: summary.depositAmount,
+                    })
+                  )}{" "}
+                  deposit
                 </label>
               ) : null}
             </>
@@ -617,9 +627,13 @@ export default function CalendarJobActions({
                 {summary &&
                 (summary.bedCount != null ||
                   summary.bathCount != null ||
-                  summary.squareFootage != null) ? (
+                  summary.squareFootage != null ||
+                  // Stage 9 — a job whose only recorded property fact is that
+                  // it's a house still deserves the row.
+                  propertyTypeLabel(summary.propertyType) != null) ? (
                   <Row k="Property">
                     {[
+                      propertyTypeLabel(summary.propertyType),
                       summary.bedCount != null ? `${summary.bedCount} bed` : null,
                       summary.bathCount != null ? `${summary.bathCount} bath` : null,
                       summary.halfBathCount
@@ -686,6 +700,25 @@ export default function CalendarJobActions({
                 </Row>
                 {summary ? (
                   <>
+                    {/* Hourly jobs say so, and say what they were worked out
+                        from — otherwise the Service figure is a number with no
+                        visible origin (Stage 8 / PDF #8, step 8.7). */}
+                    {summary.billingType === "HOURLY" ? (
+                      <Row k="Billing">
+                        Hourly · {money(summary.billedHourlyRate)}/h ×{" "}
+                        {formatHours(
+                          summary.billedActualHours ??
+                            summary.billedEstimatedHours ??
+                            0
+                        )}
+                        <span className="cjd-dim">
+                          {" "}
+                          {summary.billedActualHours != null
+                            ? "(actual)"
+                            : "(estimate)"}
+                        </span>
+                      </Row>
+                    ) : null}
                     <Row k="Service">{money(summary.money.basePrice)}</Row>
                     {summary.money.addOnLines.map((line, i) => (
                       <Row
@@ -1058,6 +1091,13 @@ export default function CalendarJobActions({
             employeePayIsManual: summary.employeePayIsManual,
             payType: summary.payType,
             hourlyRate: summary.hourlyRate,
+            // Without these four the modal would open an hourly-BILLED job on
+            // Flat and reset it on save — the same trap `pricingMode` below
+            // documents for the pricing mode (Stage 8).
+            billingType: summary.billingType,
+            billedHourlyRate: summary.billedHourlyRate,
+            billedEstimatedHours: summary.billedEstimatedHours,
+            billedActualHours: summary.billedActualHours,
             totalTip: summary.totalTip,
             parking: summary.transportation,
             notes: summary.notes,
@@ -1068,6 +1108,13 @@ export default function CalendarJobActions({
             bathCount: summary.bathCount,
             halfBathCount: summary.halfBathCount,
             squareFootage: summary.squareFootage,
+            // Without this the modal would open every job on "Not specified"
+            // and clear the column on save — the same trap the four billing
+            // fields above document (Stage 9).
+            propertyType: summary.propertyType,
+            // Same trap again (Stage 10): without this the modal opens every
+            // job on "Auto" and un-pins a deliberately pinned checklist on save.
+            checklistTemplateId: summary.checklistTemplateId,
             taxExempt: summary.taxExempt,
             cleaners: summary.cleaners.map((c) => ({ id: c.id, name: c.name })),
             addOns: summary.money.addOnLines.map((l, i) => ({

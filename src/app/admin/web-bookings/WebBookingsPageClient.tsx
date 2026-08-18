@@ -10,9 +10,18 @@ import {
   AlertTriangle,
   RotateCw,
   Clock,
+  HardHat,
+  Camera,
 } from "lucide-react";
 import { jobTypeLabel } from "@/lib/calendar-labels";
 import { STORE_TZ } from "@/lib/timezone";
+import {
+  QUOTE_STATUS_LABEL,
+  QUOTE_STATUS_TONE,
+  isQuoteStatus,
+  needsQuoteReview,
+  type QuoteStatus,
+} from "@/lib/quote-status";
 
 interface WebJob {
   id: string;
@@ -36,9 +45,18 @@ interface WebJob {
   cleaners: { id: string; name: string }[];
   addOns: { name: string; price: number; quantity: number }[];
   createdAt: string;
+  /** Quote lifecycle (Stage 11 / PDF #9). Null = an ordinary booking. */
+  quoteStatus: string | null;
+  /** How many photos the customer attached — what the quote gets priced from. */
+  bookingPhotoCount: number;
 }
 
-type Filter = "all" | "unassigned" | "flexible" | "needs_attention";
+type Filter =
+  | "all"
+  | "unassigned"
+  | "flexible"
+  | "needs_attention"
+  | "quotes";
 
 export default function WebBookingsPageClient({ jobs }: { jobs: WebJob[] }) {
   const [filter, setFilter] = useState<Filter>("unassigned");
@@ -59,6 +77,13 @@ export default function WebBookingsPageClient({ jobs }: { jobs: WebJob[] }) {
         return jobs.filter(
           (j) => j.cancellationRequestedAt || j.rescheduleRequestedAt
         );
+      // The quote queue (Stage 11 / PDF #9). Every LIVE quote, not just the
+      // unreviewed ones: a QUOTED job is waiting on the customer, and the admin
+      // chasing it needs it in the same list as the ones waiting on them.
+      case "quotes":
+        return jobs.filter(
+          (j) => j.quoteStatus === "PENDING_REVIEW" || j.quoteStatus === "QUOTED"
+        );
       default:
         return jobs;
     }
@@ -78,6 +103,13 @@ export default function WebBookingsPageClient({ jobs }: { jobs: WebJob[] }) {
     needs_attention: jobs.filter(
       (j) => j.cancellationRequestedAt || j.rescheduleRequestedAt
     ).length,
+    quotes: jobs.filter(
+      (j) => j.quoteStatus === "PENDING_REVIEW" || j.quoteStatus === "QUOTED"
+    ).length,
+    // Counted separately for the tile's warn state: an UNREVIEWED quote is a
+    // customer whose deposit we have taken and who is waiting on us, which is a
+    // different urgency from one that is waiting on them.
+    awaitingReview: jobs.filter((j) => needsQuoteReview(j.quoteStatus)).length,
   };
 
   return (
@@ -124,11 +156,28 @@ export default function WebBookingsPageClient({ jobs }: { jobs: WebJob[] }) {
           active={filter === "needs_attention"}
           onClick={() => setFilter("needs_attention")}
         />
+        {/* Post-construction quote queue (Stage 11 / PDF #9). Rendered only when
+            there is one, so a business that doesn't sell post-construction never
+            gets a permanent zero tile. */}
+        {counts.quotes > 0 ? (
+          <FilterStat
+            icon={<HardHat size={15} />}
+            label="Quotes"
+            value={counts.quotes}
+            warn={counts.awaitingReview > 0}
+            active={filter === "quotes"}
+            onClick={() => setFilter("quotes")}
+          />
+        ) : null}
       </div>
 
       {filtered.length === 0 ? (
         <div className="atable-wrap" style={{ padding: "60px 40px", textAlign: "center", color: "var(--primary-50)", fontSize: 13 }}>
-          {filter === "unassigned" ? "Every web booking has a cleaner assigned." : "No web bookings match this filter."}
+          {filter === "unassigned"
+            ? "Every web booking has a cleaner assigned."
+            : filter === "quotes"
+              ? "No post-construction quotes are open."
+              : "No web bookings match this filter."}
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -187,11 +236,21 @@ function FilterStat({
 }
 
 function BookingRow({ job }: { job: WebJob }) {
+  const isQuote = isQuoteStatus(job.quoteStatus);
+  const quoteStatus = isQuote ? (job.quoteStatus as QuoteStatus) : null;
+  const quoteTone = quoteStatus ? QUOTE_STATUS_TONE[quoteStatus] : null;
+
+  // An unsettled quote is deliberately excluded here: it has no crew because it
+  // isn't confirmed work yet, and flagging it "Needs assignment" would send an
+  // admin off to staff a job the customer has not agreed to (Stage 11 / PDF #9).
   const needsCleaner =
     job.cleaners.length < job.requiredCleaners &&
     job.status !== "CANCELLED" &&
     job.status !== "COMPLETED" &&
-    job.status !== "PAID";
+    job.status !== "PAID" &&
+    job.quoteStatus !== "PENDING_REVIEW" &&
+    job.quoteStatus !== "QUOTED" &&
+    job.quoteStatus !== "DECLINED";
   const hasRequest =
     !!job.cancellationRequestedAt || !!job.rescheduleRequestedAt;
 
@@ -224,6 +283,34 @@ function BookingRow({ job }: { job: WebJob }) {
                 Flexible
               </span>
             ) : null}
+            {/* Stage 11 / PDF #9 — the quote state, right next to the job number,
+                so a provisional price is never read as a final one. */}
+            {quoteStatus ? (
+              <span
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full normal-case"
+                style={{
+                  background:
+                    quoteTone === "critical"
+                      ? "#fef2f2"
+                      : quoteTone === "ok"
+                      ? "#ecfdf5"
+                      : "#fffbeb",
+                  color:
+                    quoteTone === "critical"
+                      ? "#b91c1c"
+                      : quoteTone === "ok"
+                      ? "#047857"
+                      : "#b45309",
+                }}>
+                <HardHat className="w-3 h-3" />
+                {QUOTE_STATUS_LABEL[quoteStatus]}
+              </span>
+            ) : null}
+            {quoteStatus && job.bookingPhotoCount > 0 ? (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-[#008C9C]/5 text-[#008C9C] normal-case">
+                <Camera className="w-3 h-3" /> {job.bookingPhotoCount}
+              </span>
+            ) : null}
           </div>
           <div className="text-lg font-medium text-[#008C9C] mt-0.5">
             {startStr}
@@ -239,6 +326,14 @@ function BookingRow({ job }: { job: WebJob }) {
           {job.price !== null ? (
             <div className="text-lg font-medium text-[#008C9C]">
               ${job.price.toFixed(2)}
+              {/* An unreviewed quote's price is the CUSTOMER'S own estimate, not
+                  ours. Labelling it is the difference between an admin reading
+                  this list as prices and reading it as requests. */}
+              {job.quoteStatus === "PENDING_REVIEW" ? (
+                <span className="block text-[10px] font-normal text-[#008C9C]/60 text-right">
+                  estimate
+                </span>
+              ) : null}
             </div>
           ) : null}
           <span
@@ -298,7 +393,14 @@ function BookingRow({ job }: { job: WebJob }) {
         <Link
           href={`/admin/jobs/${job.id}`}
           className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs bg-[#008C9C] text-white hover:bg-[#00707D]">
-          <ExternalLink className="w-3.5 h-3.5" /> Open & assign
+          <ExternalLink className="w-3.5 h-3.5" />{" "}
+          {/* A quote can't be assigned yet, so the CTA names what the admin is
+              actually here to do: price it. */}
+          {needsQuoteReview(job.quoteStatus)
+            ? "Review & quote"
+            : job.quoteStatus === "QUOTED"
+              ? "Open quote"
+              : "Open & assign"}
         </Link>
       </div>
     </article>

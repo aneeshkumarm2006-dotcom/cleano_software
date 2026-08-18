@@ -18,7 +18,9 @@ import {
   CreditCard,
   Briefcase,
   Eye,
+  Home,
 } from "lucide-react";
+import { propertyTypeLabel } from "@/lib/property-type";
 import { formatAddressLine } from "@/lib/client-address";
 import { avatarColor, initials } from "@/lib/avatar";
 import { fmtDate as fmtDateTz, fmtTime as fmtTimeTz } from "@/lib/time";
@@ -38,6 +40,8 @@ interface CalJob {
   aptNumber: string | null;
   /** Door / gate codes from the job's saved address (item 2). */
   accessNotes: string | null;
+  /** Apartment/condo vs house (Stage 9 / PDF #11); null when unrecorded. */
+  propertyType: string | null;
   employeePay: number | null;
   notes: string | null;
   cleaners: string[];
@@ -371,6 +375,12 @@ function JobModal({ job, onClose }: { job: CalJob; onClose: () => void }) {
                 their own calendar, so it's the same audience as my-jobs. */}
             {job.accessNotes ? (
               <div className="cjm-row"><span className="cjm-k"><KeyRound size={15} /> Access</span><span className="cjm-v">{job.accessNotes}</span></div>
+            ) : null}
+            {/* PDF #11 — "helps cleaners understand the job setup before
+                arriving". Sits with Location and Access for that reason, and
+                drops out on the jobs where it was never recorded. */}
+            {propertyTypeLabel(job.propertyType) ? (
+              <div className="cjm-row"><span className="cjm-k"><Home size={15} /> Property</span><span className="cjm-v">{propertyTypeLabel(job.propertyType)}</span></div>
             ) : null}
             <div className="cjm-row"><span className="cjm-k"><Sparkles size={15} /> Service</span><span className="cjm-v">{typeLabel(job.jobType)}</span></div>
             {job.employeePay != null ? (

@@ -56,12 +56,29 @@ ok("tooltip names the assignee for scanning",
 ok("more than two cards per day are shown", view.includes("MONTH_CARDS_PER_DAY = 3"));
 
 const css = fs.readFileSync("src/app/globals.css", "utf8");
-ok("initials badge is styled in BOTH calendar stylesheets",
-  (css.match(/\.cal-chip-who/g) || []).length === 2);
+// The calendar CSS used to be duplicated across two stylesheets, so this pair
+// of checks pinned literal declarations to keep the copies in step. It lives in
+// one block in globals.css now (customer.css carries no `.cal-*` rule at all),
+// so what's worth asserting is that the class MonthView renders is actually
+// styled — not how many times.
+ok("the initials badge MonthView renders is styled, not an orphan class",
+  view.includes('className="cal-chip-who"') && /^\.cal-chip-who \{/m.test(css));
+ok("...and it is pushed right so the client name keeps the space",
+  /\.cal-chip-who \{[^}]*margin-left: auto/.test(css));
 ok("client name flexes so the badge can't squeeze it out",
   css.includes(".cal-chip-n { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1 1 auto; min-width: 0; }"));
-ok("day cells were given room for the extra card",
-  css.includes("minmax(138px, 1fr)") && css.includes("min-height: 122px"));
+// Was `minmax(138px, 1fr)` + `min-height: 122px`. Both literals are gone: the
+// grid rows are uniform (`grid-auto-rows: 1fr`) and the cell was raised to
+// 148px, because a chip carrying a corner badge is 22px rather than 20px and
+// the "+N more" row renders at 19px. globals.css does that arithmetic in a
+// comment beside the rule and lands on 141px as the floor, so assert the floor
+// rather than the exact number — raising it further must not fail this.
+const cellMinHeight = Number(
+  (css.match(/\.cal-mcell \{[^}]*min-height: (\d+)px/) || [])[1] ?? 0);
+ok("day cells have room for every card plus the '+N more' row",
+  cellMinHeight >= 141);
+ok("...and every week row is sized the same, so no row clips earlier than another",
+  /\.cal-month-grid \{[^}]*grid-auto-rows: 1fr/.test(css));
 
 console.log(`\n${pass}/${pass + fail} passed`);
 process.exit(fail === 0 ? 0 : 1);

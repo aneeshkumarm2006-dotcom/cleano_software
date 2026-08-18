@@ -7,6 +7,7 @@ import {
   removeFromCleanerKit,
 } from "../../actions/assignToCleanerKit";
 import { avatarColor, initials } from "@/lib/avatar";
+import { parseQuantityInput } from "@/lib/quantity-input";
 
 interface KitItem {
   employeeProductId: string;
@@ -44,7 +45,10 @@ export default function KitsAdminClient({ cleaners, products }: Props) {
   );
   const [search, setSearch] = useState("");
   const [addProductId, setAddProductId] = useState("");
-  const [addQty, setAddQty] = useState(1);
+  // String state, validated on submit (Stage 6 · PDF #3). The old handler
+  // clamped to a minimum of 1 on every keystroke, so the box could never be
+  // cleared: deleting the digits wrote a 1 straight back under the cursor.
+  const [addQty, setAddQty] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
@@ -60,14 +64,20 @@ export default function KitsAdminClient({ cleaners, products }: Props) {
   const selected = cleaners.find((c) => c.id === selectedId) ?? null;
 
   function add() {
-    if (!selected || !addProductId || addQty <= 0) return;
+    if (!selected || !addProductId) return;
+    const parsed = parseQuantityInput(addQty, { min: 1 });
+    if (!parsed.ok) {
+      setError(parsed.error);
+      return;
+    }
+    const quantity = parsed.value;
     setBusy(true);
     setError(null);
     startTransition(async () => {
       const result = await assignToCleanerKit({
         cleanerId: selected.id,
         productId: addProductId,
-        quantity: addQty,
+        quantity,
       });
       setBusy(false);
       if (!result.success) {
@@ -75,7 +85,7 @@ export default function KitsAdminClient({ cleaners, products }: Props) {
         return;
       }
       setAddProductId("");
-      setAddQty(1);
+      setAddQty("");
     });
   }
 
@@ -188,7 +198,7 @@ export default function KitsAdminClient({ cleaners, products }: Props) {
               </div>
 
               <div style={{ background: "var(--primary-5)", borderRadius: 10, padding: 16, marginBottom: 16 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--primary-60)", marginBottom: 10 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--primary-800)", marginBottom: 10 }}>
                   Add to kit
                 </div>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
@@ -205,12 +215,18 @@ export default function KitsAdminClient({ cleaners, products }: Props) {
                     ))}
                   </select>
                   <input
-                    type="number"
-                    min={1}
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    autoComplete="off"
+                    aria-label="Quantity to add to kit"
+                    aria-invalid={error ? true : undefined}
+                    placeholder="Qty"
                     value={addQty}
-                    onChange={(e) => setAddQty(Math.max(1, Number(e.target.value)))}
+                    onChange={(e) => setAddQty(e.target.value)}
+                    onFocus={(e) => e.currentTarget.select()}
                     className="input"
-                    style={{ width: 90, fontSize: 13 }}
+                    style={{ width: 90, fontSize: 14 }}
                   />
                   <button
                     type="button"
@@ -221,11 +237,13 @@ export default function KitsAdminClient({ cleaners, products }: Props) {
                     {busy ? "…" : "Add"}
                   </button>
                 </div>
-                {error && <p style={{ marginTop: 8, fontSize: 12, color: "#dc2626" }}>{error}</p>}
+                {/* Always mounted so it is a live region before the message
+                    arrives; `.cl-field-error:empty` keeps it out of the layout. */}
+                <p className="cl-field-error" aria-live="polite">{error ?? ""}</p>
               </div>
 
               {selected.kit.length === 0 ? (
-                <p style={{ fontSize: 13, color: "var(--primary-50)", textAlign: "center", padding: "32px 0" }}>
+                <p style={{ fontSize: 13, color: "var(--ink-soft)", textAlign: "center", padding: "32px 0" }}>
                   No items in this cleaner's kit yet.
                 </p>
               ) : (

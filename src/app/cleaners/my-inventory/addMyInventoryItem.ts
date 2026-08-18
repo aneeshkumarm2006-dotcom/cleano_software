@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { isCleanerRole } from "@/lib/role-routing";
+import { findAssignableProduct } from "@/lib/kit-product.server";
 
 /**
  * Cleaner self-service starting inventory (spec item 15).
@@ -46,11 +47,12 @@ export async function addMyInventoryItem(input: {
     return { success: false, error: "Enter a whole number" };
   }
 
-  const product = await db.product.findFirst({
-    where: { id: input.productId, deletedAt: null },
-    select: { id: true, unit: true },
-  });
-  if (!product) return { success: false, error: "Product not found" };
+  // Adding an item creates a NEW kit row, so the catalogue rules apply
+  // (Stage 5's shared lookup). Same answer as before for an active product;
+  // an archived one now says which product and how to bring it back.
+  const lookup = await findAssignableProduct(input.productId);
+  if (!lookup.ok) return { success: false, error: lookup.error };
+  const product = lookup.product;
 
   const existing = await db.employeeProduct.findUnique({
     where: {
@@ -77,6 +79,7 @@ export async function addMyInventoryItem(input: {
         quantityChange: qty,
         newQuantity: qty,
         unit: product.unit,
+        action: "RECOUNT",
         reason: "Starting inventory set by cleaner",
         changedById: actor.id,
         changedByName: actor.name ?? null,

@@ -6,7 +6,7 @@
  * Run: npx tsx prisma/seed-inventory.ts
  */
 
-import { PrismaClient, type ProductCategory } from "@prisma/client";
+import { PrismaClient, type ItemType, type ProductCategory } from "@prisma/client";
 
 const db = new PrismaClient();
 
@@ -16,6 +16,14 @@ interface ProductSeed {
   name: string;
   description: string;
   category: ProductCategory;
+  /**
+   * What KIND of thing this is (inventory fixes PDF #1 + #4). Seeded explicitly
+   * rather than left to the default, because the durable goods below —
+   * buckets, brushes, mop pads, rags — are exactly the items that used to be
+   * dumped into category OTHER and then wrongly told a cleaner they were
+   * "running low" with one of them in hand.
+   */
+  itemType: ItemType;
   unit: Unit;
   costPerUnit: number;
   stockLevel: number;
@@ -36,6 +44,7 @@ const PRODUCTS: ProductSeed[] = [
     name: "All-purpose cleaner",
     description: "General surface spray for kitchens, baths, and high-traffic areas.",
     category: "LIQUID_SPRAY",
+    itemType: "LIQUID",
     unit: "ml",
     costPerUnit: 0.012,
     stockLevel: 3784, // 4 × 946ml bottles
@@ -46,6 +55,7 @@ const PRODUCTS: ProductSeed[] = [
     name: "Windex",
     description: "Streak-free glass and mirror cleaner.",
     category: "LIQUID_SPRAY",
+    itemType: "LIQUID",
     unit: "ml",
     costPerUnit: 0.014,
     stockLevel: 2838, // 3 × 946ml bottles
@@ -56,6 +66,7 @@ const PRODUCTS: ProductSeed[] = [
     name: "CLR",
     description: "Calcium, lime, and rust remover for hard water buildup.",
     category: "LIQUID_SPRAY",
+    itemType: "LIQUID",
     unit: "ml",
     costPerUnit: 0.018,
     stockLevel: 1892, // 2 × 946ml bottles
@@ -66,6 +77,7 @@ const PRODUCTS: ProductSeed[] = [
     name: "Eco-friendly cleaner",
     description: "Plant-based, biodegradable all-purpose spray.",
     category: "LIQUID_SPRAY",
+    itemType: "LIQUID",
     unit: "ml",
     costPerUnit: 0.016,
     stockLevel: 1892,
@@ -78,6 +90,7 @@ const PRODUCTS: ProductSeed[] = [
     name: "Floor cleaner",
     description: "Neutral pH floor solution for tile, vinyl, and laminate.",
     category: "MOP_LIQUID",
+    itemType: "LIQUID",
     unit: "mop use",
     costPerUnit: 0.45,
     stockLevel: 60,
@@ -88,6 +101,7 @@ const PRODUCTS: ProductSeed[] = [
     name: "Murphy Oil Soap",
     description: "Wood floor cleaner — dilute as directed.",
     category: "MOP_LIQUID",
+    itemType: "LIQUID",
     unit: "mop use",
     costPerUnit: 0.55,
     stockLevel: 40,
@@ -100,6 +114,7 @@ const PRODUCTS: ProductSeed[] = [
     name: "Sponges",
     description: "Dual-sided scrub sponges (2-pack).",
     category: "DISPOSABLE",
+    itemType: "COUNTABLE_CONSUMABLE",
     unit: "ea",
     costPerUnit: 0.95,
     stockLevel: 80,
@@ -110,6 +125,7 @@ const PRODUCTS: ProductSeed[] = [
     name: "Garbage bags",
     description: "13-gallon kitchen tall bags.",
     category: "DISPOSABLE",
+    itemType: "COUNTABLE_CONSUMABLE",
     unit: "ea",
     costPerUnit: 0.22,
     stockLevel: 240,
@@ -120,6 +136,7 @@ const PRODUCTS: ProductSeed[] = [
     name: "Paper towels",
     description: "Two-ply, full-size rolls.",
     category: "DISPOSABLE",
+    itemType: "COUNTABLE_CONSUMABLE",
     unit: "roll",
     costPerUnit: 1.20,
     stockLevel: 36,
@@ -130,6 +147,7 @@ const PRODUCTS: ProductSeed[] = [
     name: "Magic erasers",
     description: "Melamine foam scrub pads for marks and scuffs.",
     category: "DISPOSABLE",
+    itemType: "COUNTABLE_CONSUMABLE",
     unit: "ea",
     costPerUnit: 1.10,
     stockLevel: 48,
@@ -140,6 +158,7 @@ const PRODUCTS: ProductSeed[] = [
     name: "Gloves",
     description: "Nitrile disposable gloves (one pair = 1 unit).",
     category: "DISPOSABLE",
+    itemType: "COUNTABLE_CONSUMABLE",
     unit: "pair",
     costPerUnit: 0.18,
     stockLevel: 200,
@@ -150,6 +169,7 @@ const PRODUCTS: ProductSeed[] = [
     name: "Masks",
     description: "Disposable 3-ply masks for dusty / chemical work.",
     category: "DISPOSABLE",
+    itemType: "COUNTABLE_CONSUMABLE",
     unit: "ea",
     costPerUnit: 0.15,
     stockLevel: 200,
@@ -162,6 +182,7 @@ const PRODUCTS: ProductSeed[] = [
     name: "Microfiber rags",
     description: "Reusable microfiber cleaning cloths — laundered by cleaner.",
     category: "OTHER",
+    itemType: "REUSABLE_EQUIPMENT",
     unit: "ea",
     costPerUnit: 1.50,
     stockLevel: 120,
@@ -172,6 +193,7 @@ const PRODUCTS: ProductSeed[] = [
     name: "Mop pads",
     description: "Replacement mop pads (washable).",
     category: "OTHER",
+    itemType: "REUSABLE_EQUIPMENT",
     unit: "ea",
     costPerUnit: 4.00,
     stockLevel: 30,
@@ -182,6 +204,7 @@ const PRODUCTS: ProductSeed[] = [
     name: "Toilet brush",
     description: "Standard-handle toilet brush — replaced quarterly.",
     category: "OTHER",
+    itemType: "REUSABLE_EQUIPMENT",
     unit: "ea",
     costPerUnit: 4.50,
     stockLevel: 12,
@@ -192,6 +215,7 @@ const PRODUCTS: ProductSeed[] = [
     name: "Vacuum bags",
     description: "Standard upright vacuum bags.",
     category: "DISPOSABLE",
+    itemType: "COUNTABLE_CONSUMABLE",
     unit: "ea",
     costPerUnit: 2.75,
     stockLevel: 36,
@@ -202,6 +226,7 @@ const PRODUCTS: ProductSeed[] = [
     name: "Bucket",
     description: "8-litre mop bucket with wringer (durable).",
     category: "OTHER",
+    itemType: "REUSABLE_EQUIPMENT",
     unit: "ea",
     costPerUnit: 18.00,
     stockLevel: 6,
@@ -225,6 +250,10 @@ async function upsertProducts() {
         data: {
           description: p.description,
           category: p.category,
+          // Re-seeded like `category` (and unlike cleanerRestockThreshold):
+          // these 18 rows have one correct classification, so a re-run is the
+          // cheapest way to repair a bucket that drifted back to "consumable".
+          itemType: p.itemType,
           unit: p.unit,
           costPerUnit: p.costPerUnit,
           stockLevel: p.stockLevel,
@@ -239,6 +268,7 @@ async function upsertProducts() {
           name: p.name,
           description: p.description,
           category: p.category,
+          itemType: p.itemType,
           unit: p.unit,
           costPerUnit: p.costPerUnit,
           stockLevel: p.stockLevel,

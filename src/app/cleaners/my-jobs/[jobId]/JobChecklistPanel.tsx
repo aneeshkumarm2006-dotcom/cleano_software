@@ -57,6 +57,7 @@ export default function JobChecklistPanel({
   async function handleToggle(itemId: string, nextStatus: ChecklistItemStatus) {
     if (!canEdit || pendingItemId) return;
     setPendingItemId(itemId);
+    setError(null);
     setRows((prev) =>
       prev.map((it) =>
         it.id === itemId
@@ -68,13 +69,31 @@ export default function JobChecklistPanel({
           : it
       )
     );
-    const res = await updateChecklistItem({ itemId, status: nextStatus });
-    if (!res.success) {
-      setError(res.error);
-      // The optimistic flip was wrong — pull the truth back from the server.
+    try {
+      const res = await updateChecklistItem({ itemId, status: nextStatus });
+      if (!res.success) setError(res.error);
+      // BOTH outcomes refresh, and the success case is the one that was missing.
+      // On failure the optimistic flip was a lie and the server has the truth.
+      // On SUCCESS the clock-out gate needs it: `ClockOutButton` decides whether
+      // to unlock from its `checklistItems` PROP, computed in the page's server
+      // render — it cannot see a tick that only happened in this component's
+      // local state. Without this, a cleaner finished the checklist, watched
+      // every box go green, and was still told "N required checklist item(s)
+      // still pending" until they reloaded the page.
       router.refresh();
+    } catch (e) {
+      // `updateChecklistItem` reads the session BEFORE its own try block, so a
+      // slow pooler can reject the whole action rather than returning a result.
+      // Without this catch the `finally` below never ran, `pendingItemId` stayed
+      // set, and — because the guard above is panel-wide — every later tick on
+      // every item was silently discarded until the page was reloaded. That is
+      // the "frozen until refresh, data correct afterwards" report.
+      console.error("checklist toggle", e);
+      setError("We couldn't save that. Check your signal and tap it again.");
+      router.refresh();
+    } finally {
+      setPendingItemId(null);
     }
-    setPendingItemId(null);
   }
 
   function startEditNotes(itemId: string, current: string | null) {
@@ -83,21 +102,30 @@ export default function JobChecklistPanel({
   }
 
   async function saveNotes(itemId: string) {
+    if (pendingItemId) return;
     setPendingItemId(itemId);
-    const res = await updateChecklistItem({ itemId, notes: noteDraft });
-    if (res.success) {
-      setRows((prev) =>
-        prev.map((it) =>
-          it.id === itemId
-            ? { ...it, notes: noteDraft.trim() ? noteDraft.trim() : null }
-            : it
-        )
-      );
-      setEditingNotesItemId(null);
-    } else {
-      setError(res.error);
+    setError(null);
+    try {
+      const res = await updateChecklistItem({ itemId, notes: noteDraft });
+      if (res.success) {
+        setRows((prev) =>
+          prev.map((it) =>
+            it.id === itemId
+              ? { ...it, notes: noteDraft.trim() ? noteDraft.trim() : null }
+              : it
+          )
+        );
+        setEditingNotesItemId(null);
+      } else {
+        setError(res.error);
+      }
+    } catch (e) {
+      // Same latch as handleToggle — see the note there.
+      console.error("checklist notes", e);
+      setError("We couldn't save that note. Check your signal and try again.");
+    } finally {
+      setPendingItemId(null);
     }
-    setPendingItemId(null);
   }
 
   if (rows.length === 0) {
@@ -110,6 +138,13 @@ export default function JobChecklistPanel({
   const completed = rows.filter((it) => it.status === "COMPLETED").length;
   const skipped = rows.filter((it) => it.status === "SKIPPED").length;
   const pct = total === 0 ? 0 : Math.round((completed / total) * 100);
+  // The in-flight guard is panel-wide (one write at a time), so the whole list
+  // has to LOOK unavailable while one is running. It used to disable only the
+  // row being saved, leaving the others fully live — and `handleToggle` then
+  // dropped their clicks on the floor with no error and no visual change. A
+  // cleaner working quickly down the list persisted the first tick and nothing
+  // else, which is also why the automated run needed reload-and-retry cycles.
+  const busy = pendingItemId !== null;
 
   return (
     <div className="space-y-4">
@@ -165,7 +200,7 @@ export default function JobChecklistPanel({
                   onClick={() =>
                     handleToggle(item.id, isCompleted ? "PENDING" : "COMPLETED")
                   }
-                  disabled={!canEdit || isPending}
+                  disabled={!canEdit || busy}
                   className={`mt-0.5 flex-shrink-0 w-6 h-6 rounded-md flex items-center justify-center border transition-colors disabled:opacity-50 ${
                     isCompleted
                       ? "bg-[#008C9C] border-[#008C9C] text-white"

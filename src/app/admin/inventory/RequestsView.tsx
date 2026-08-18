@@ -161,12 +161,6 @@ export default function RequestsView({ requests }: Props) {
         </Badge>
       </div>
 
-      {error && (
-        <div className="bg-red-50 rounded-2xl p-3">
-          <p className="text-xs text-red-600">{error}</p>
-        </div>
-      )}
-
       {/* Pending */}
       <Card variant="default" className="p-6">
         <div className="flex items-center gap-2 mb-4">
@@ -177,6 +171,15 @@ export default function RequestsView({ requests }: Props) {
             Pending requests
           </h3>
         </div>
+        {/* Inside the card, immediately above the rows — the only buttons that
+            can produce this are in that list, and from the top of the tab (where
+            this used to sit) the message was easy to approve straight past.
+            Same placement the employee page uses for the same action. */}
+        {error && (
+          <div className="bg-red-50 rounded-2xl p-3 mb-3">
+            <p className="text-xs text-red-600">{error}</p>
+          </div>
+        )}
         {pending.length === 0 ? (
           <p className="text-sm text-[#008C9C]/60 py-4 text-center">
             No pending requests

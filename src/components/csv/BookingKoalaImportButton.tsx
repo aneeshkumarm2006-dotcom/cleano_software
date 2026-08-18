@@ -14,6 +14,7 @@ import {
 import Modal from "@/components/ui/Modal";
 import { runBookingKoalaImport } from "@/app/admin/actions/runBookingKoalaImport";
 import type { ImportReport } from "@/lib/bookingkoala/core";
+import { propertyTypeLabel } from "@/lib/property-type";
 import { parseCsv } from "@/lib/csv/parse";
 
 const STATUS_COLOR: Record<string, string> = {
@@ -364,6 +365,7 @@ export default function BookingKoalaImportButton({
                       <tr>
                         <th className="px-2 py-1">Customer</th>
                         <th className="px-2 py-1">Service</th>
+                        <th className="px-2 py-1">Property</th>
                         <th className="px-2 py-1">Start</th>
                         <th className="px-2 py-1">Price</th>
                         <th className="px-2 py-1">Status</th>
@@ -375,6 +377,12 @@ export default function BookingKoalaImportButton({
                         <tr key={s.row} className="border-t border-gray-50">
                           <td className="px-2 py-1 text-gray-800">{s.client}</td>
                           <td className="px-2 py-1">{s.jobType}</td>
+                          {/* Stage 9 — an em dash, not a blank, so "the CSV
+                              said nothing recognisable" is visibly different
+                              from a column that failed to render. */}
+                          <td className="px-2 py-1 text-gray-500">
+                            {propertyTypeLabel(s.propertyType) ?? "—"}
+                          </td>
                           <td className="px-2 py-1 text-gray-500">{s.start.replace("T", " ")}</td>
                           <td className="px-2 py-1">${s.price}</td>
                           <td className={`px-2 py-1 ${STATUS_COLOR[s.status] ?? ""}`}>{s.status}</td>

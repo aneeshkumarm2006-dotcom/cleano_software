@@ -61,6 +61,19 @@ export type AdminPayBreakdown = {
   discount: number;
   parking: number;
   clientTotal: number;
+  /**
+   * How the CUSTOMER is billed (Stage 8 / PDF #8), and — on an hourly job — the
+   * `rate × hours` line the pay basis is a percentage of. ADMIN-ONLY on
+   * purpose: `billedHourlyRate` is a client charge, which is exactly the class
+   * of number the cleaner payload above exists to withhold. Nothing here is
+   * `payType`/`hourlyRate` two lines below, which is the cleaner's pay.
+   */
+  billingType: "FLAT" | "HOURLY";
+  billedHourlyRate: number | null;
+  billedEstimatedHours: number | null;
+  billedActualHours: number | null;
+  /** "4h × $60.00/hr = $240.00", or null when not billed hourly. */
+  billedHourlyLine: string | null;
   payType: JobPayType;
   hourlyRate: number | null;
   /** Pay at the bare TIER BASE rate, before the rating multiplier. */

@@ -29,6 +29,12 @@ import {
   normalizeQuotePageConfig,
   type QuotePageConfig,
 } from "@/lib/quote-page-config";
+import {
+  PC_DEPOSIT_DEFAULT_USD,
+  PC_DEPOSIT_MAX_USD,
+  PC_DEPOSIT_MIN_USD,
+  PC_DEPOSIT_SETTING_KEY,
+} from "@/lib/booking-deposit";
 
 export type SettingCategory =
   | "account"
@@ -548,6 +554,24 @@ export const SETTINGS = {
     default: BOOKING_PAGE_DEFAULTS,
     validate: bookingPageConfig(),
     audit: true,
+  }),
+  // Post-construction deposit (PDF #9, Stage 11). The ONE deposit amount that is
+  // configurable: PDF #9 asks for an upfront deposit on post-construction
+  // ("example: $200") and says regular bookings keep their $20, so the standard
+  // deposit deliberately stays the constant in @/lib/booking-deposit rather than
+  // becoming a second money setting nobody asked for.
+  //
+  // `sensitive` because this is charged to a customer's card before anyone has
+  // seen the space. The upper bound in the validator is a fat-finger guard, not a
+  // policy: a mistyped 20000 must be refused here rather than by a chargeback.
+  [PC_DEPOSIT_SETTING_KEY]: def({
+    key: PC_DEPOSIT_SETTING_KEY,
+    category: "bookings",
+    label: "Post-construction deposit ($)",
+    default: PC_DEPOSIT_DEFAULT_USD,
+    validate: moneyRange(PC_DEPOSIT_MIN_USD, PC_DEPOSIT_MAX_USD),
+    audit: true,
+    sensitive: true,
   }),
   // Public quote page (/quote): page copy plus which of the ten QuoteRequest
   // fields show, in what order, with what labels — per service type (item 18).

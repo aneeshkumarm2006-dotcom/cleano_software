@@ -44,7 +44,11 @@ export async function deleteJobPhoto(photoId: string) {
 
     const role = (session.user as { role?: string }).role;
     const isAdmin = role === "OWNER" || role === "ADMIN";
-    const isOwner = photo.employeeId === session.user.id;
+    // `employeeId` is nullable from Stage 11: NULL means the CUSTOMER uploaded it
+    // at booking. Nobody on staff "owns" such a photo, and it is the evidence the
+    // quote was priced from — so this stays admin-only. The comparison already
+    // yields false for NULL; the `!!` makes that intentional rather than incidental.
+    const isOwner = !!photo.employeeId && photo.employeeId === session.user.id;
 
     if (!isAdmin && !isOwner) {
       return {

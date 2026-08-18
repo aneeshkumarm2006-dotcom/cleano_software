@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/db";
-import { syncDefaultLocationStock } from "@/lib/inventory";
+import { adjustWarehouseStock, reconcileProductStock } from "@/lib/stock.server";
 import { revalidatePath } from "next/cache";
 import type { ProductCategory, Prisma } from "@prisma/client";
 import { requireOwnerAdmin } from "@/lib/action-guards";
@@ -9,6 +9,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { sanitizeHttpUrl } from "@/lib/safe-url";
 import { parseProductLinks } from "@/lib/product-links";
+import { isItemType } from "@/lib/item-type";
 
 const ALLOWED_CATEGORIES: readonly ProductCategory[] = [
   "LIQUID_SPRAY",
@@ -54,6 +55,11 @@ export async function updateProduct(
   const category: ProductCategory = ALLOWED_CATEGORIES.includes(categoryRaw as ProductCategory)
     ? (categoryRaw as ProductCategory)
     : "OTHER";
+  // Item type (inventory fixes PDF #1). Unlike create, a missing or invalid
+  // value here means "leave it alone": an admin's deliberate classification must
+  // not be silently re-guessed by a form that didn't send the field.
+  const itemTypeRaw = formData.get("itemType");
+  const itemType = isItemType(itemTypeRaw) ? itemTypeRaw : null;
 
   // Purchase links. The primary "buy it again" link plus any number of extras.
   // Only absolute http(s) URLs are stored (sanitizeHttpUrl) — a javascript:/data:
@@ -82,8 +88,9 @@ export async function updateProduct(
     };
   }
 
-  // Validate numeric values
-  if (costPerUnit < 0 || stockLevel < 0 || minStock < 0) {
+  // Validate numeric values. `stockLevel` is checked separately below, against
+  // the count this product already carries — see there.
+  if (costPerUnit < 0 || minStock < 0) {
     return {
       message: "",
       error: "Numeric values cannot be negative.",
@@ -108,41 +115,65 @@ export async function updateProduct(
       };
     }
 
-    // Capture the previous stock so we can apply the change as a delta to the
-    // default location (preserves stock manually distributed to other locations).
-    const previous = await db.product.findUnique({
+    // Warehouse stock is allowed to be negative, deliberately — supplies move
+    // outside the app, so a short count is recorded and reconciled later rather
+    // than blocked (see the header of `src/lib/stock.server.ts`). A flat
+    // `stockLevel < 0` here therefore made a product that had gone short
+    // impossible to save at ALL: not renamed, not reclassified, not corrected.
+    // The floor is the count already on record when that is below zero, and 0
+    // otherwise — the same rule ProductModal applies, so the form and the
+    // server agree about what is refusable.
+    const current = await db.product.findUnique({
       where: { id: productId },
       select: { stockLevel: true },
     });
+    const stockFloor = Math.min(0, current?.stockLevel ?? 0);
+    if (stockLevel < stockFloor) {
+      return {
+        message: "",
+        error:
+          stockFloor < 0
+            ? `Warehouse stock is already at ${stockFloor} for this product — leave it there or type a higher count. It can't be pushed further negative here.`
+            : "Warehouse stock cannot be negative.",
+      };
+    }
 
+    // `stockLevel` is deliberately absent from this payload: per-location rows
+    // are the truth and `Product.stockLevel` is a cache recomputed from them by
+    // `adjustWarehouseStock` (Stage 4 / decision D5). Writing it here as well
+    // would be the second, competing writer this stage exists to remove.
     const data: Prisma.ProductUpdateInput = {
       name,
       description: description || null,
       unit,
       costPerUnit,
-      stockLevel,
       minStock,
       cleanerRestockThreshold,
       category,
+      ...(itemType ? { itemType } : {}),
       purchaseUrl,
     };
 
-    const previousStock = previous?.stockLevel ?? 0;
-    const stockMoved = !!previous && previous.stockLevel !== stockLevel;
+    // The stock stamp needs an actor, and we don't yet know whether the count
+    // moved (that answer comes from inside the transaction, below). Read the
+    // session once here rather than conditionally — it is a cached call, and
+    // the alternative is an await in the middle of a transaction.
+    const session = await auth.api.getSession({ headers: await headers() });
+    const actor = session?.user as { id?: string; name?: string } | undefined;
 
-    // Only stamp who/when the count changed when the stock level actually moved.
-    let actor: { id?: string; name?: string } | undefined;
-    if (stockMoved) {
-      const session = await auth.api.getSession({ headers: await headers() });
-      actor = session?.user as { id?: string; name?: string } | undefined;
-      data.stockUpdatedAt = new Date();
-      data.stockUpdatedById = actor?.id ?? null;
-      data.stockUpdatedByName = actor?.name ?? null;
-    }
-
-    // Update the product and write the audit row atomically so the count and
-    // its history can never drift apart.
+    // One transaction: the product, its links, the stock movement and the audit
+    // row, so a count and its history can never drift apart.
     await db.$transaction(async (tx) => {
+      // Work the delta out from the TRUTH, not from the cached number. On a
+      // database that predates `scripts/reconcileWarehouseStock.ts` the two can
+      // still disagree, and starting from the reconciled figure means this save
+      // repairs the drift instead of carrying it forward. Nothing physically
+      // moved, so this writes no history of its own.
+      const { stockLevel: previousStock } = await reconcileProductStock(
+        tx,
+        productId
+      );
+
       await tx.product.update({ where: { id: productId }, data });
 
       // The form submits the full list, so replace it wholesale (add/edit/remove
@@ -158,28 +189,42 @@ export async function updateProduct(
         });
       }
 
-      if (stockMoved) {
-        await tx.inventoryChange.create({
+      // "Warehouse Stock" is an ABSOLUTE total. Applying it as a delta to one
+      // location preserves stock manually distributed to the others and still
+      // lands the total on exactly the number the admin typed.
+      if (previousStock !== stockLevel) {
+        await adjustWarehouseStock(tx, {
+          productId,
+          delta: stockLevel - previousStock,
+          action: "ADMIN_SET",
+          unit,
+          reason: stockReason,
+          actor,
+        });
+
+        // Only stamp who/when the count changed when it actually changed.
+        await tx.product.update({
+          where: { id: productId },
           data: {
-            productId,
-            employeeId: null,
-            employeeName: null,
-            quantityChange: stockLevel - previousStock,
-            newQuantity: stockLevel,
-            unit,
-            reason: stockReason,
-            changedById: actor?.id ?? null,
-            changedByName: actor?.name ?? null,
+            stockUpdatedAt: new Date(),
+            stockUpdatedById: actor?.id ?? null,
+            stockUpdatedByName: actor?.name ?? null,
           },
         });
       }
+    }, {
+      // Reconcile, product update, link replace, then `adjustWarehouseStock`'s
+      // four queries and the stock stamp. Supabase round-trips take that past
+      // Prisma's default 5s window, and a P2028 halfway through would roll the
+      // whole save back while still answering 200.
+      maxWait: 10_000,
+      timeout: 30_000,
     });
-
-    // Keep the cleaner-facing per-location stock in sync with the admin edit.
-    await syncDefaultLocationStock(productId, stockLevel - previousStock);
 
     revalidatePath("/admin/inventory");
     revalidatePath(`/admin/inventory/${productId}`);
+    // Settings → Manage Stock reads the location rows this may have moved.
+    revalidatePath("/admin/settings");
     return {
       message: "Product updated successfully!",
       error: "",

@@ -90,6 +90,13 @@ export async function updateChecklistItem(input: UpdateChecklistItemInput) {
     }
 
     revalidatePath(`/cleaners/my-jobs/${item.checklist.jobId}`);
+    // The clock screen ticks the same checklist through the same action, and it
+    // is a route of its own — without this it kept serving the payload it was
+    // rendered with, so its progress bar and its clock-out gate disagreed with
+    // the boxes the cleaner had just ticked. Every other action on these two
+    // screens (clockIn, clockOut, markOnMyWay, jobBreak) already revalidates
+    // both paths; this one only ever did the first.
+    revalidatePath(`/cleaners/my-jobs/${item.checklist.jobId}/clock`);
     return { success: true as const };
   } catch (error) {
     console.error("Error updating checklist item:", error);

@@ -7,9 +7,13 @@ import {
   cleanerRestockThreshold,
   isCleanerLow,
   isCompanyLow,
+  itemAttentionState,
 } from "@/lib/inventory-thresholds";
+import { loadCleanerThresholdDefault } from "@/lib/inventory-thresholds.server";
 import { projectUsage } from "@/lib/inventory-forecast";
+import { INVENTORY_FORECAST_ENABLED } from "@/lib/inventory-forecast.flag";
 import { loadPerJobAverages } from "@/lib/inventory-forecast.server";
+import { ASSIGNABLE_PRODUCT_WHERE } from "@/lib/kit-product.server";
 import InventoryPageClient from "./InventoryPageClient";
 
 type SearchParams = Promise<{
@@ -33,8 +37,13 @@ export default async function InventoryPage({
   }
 
   // Admin only - OWNER or ADMIN
+  // The comment above has always said OWNER/ADMIN; the code only ever excluded
+  // EMPLOYEE, which the admin layout already does — so this was a no-op and the
+  // page (cost per unit, total inventory value, supplier price comparisons) was
+  // open to OPS_MANAGER and FIELD_LEAD. The nav entry is `adminOnly: true`,
+  // which hid it without protecting it.
   const userRole = (session.user as any).role;
-  if (userRole === "EMPLOYEE") {
+  if (userRole !== "OWNER" && userRole !== "ADMIN") {
     redirect("/admin/dashboard");
   }
   // Editing a cleaner's kit count is OWNER/ADMIN only (setCleanerProductQuantity
@@ -56,7 +65,7 @@ export default async function InventoryPage({
   const archived = params.archived === "1";
 
   // Fetch all products with their employee assignments
-  const [allProducts, supplierPrices, activeSuppliers, employees] =
+  const [allProducts, supplierPrices, activeSuppliers, employees, defaultThreshold] =
     await Promise.all([
       db.product.findMany({
         where: productWhere(archived),
@@ -98,6 +107,10 @@ export default async function InventoryPage({
         },
         orderBy: { name: "asc" },
       }),
+      // The admin's global refill floor. This page used to omit it, so the
+      // Cleaner Inventory tab judged kits against the built-in 1 while the
+      // cleaner's own app used the configured 2 — same product, two answers.
+      loadCleanerThresholdDefault(),
     ]);
 
   // Calculate stats for each product
@@ -119,6 +132,7 @@ export default async function InventoryPage({
       minStock: product.minStock,
       cleanerRestockThreshold: product.cleanerRestockThreshold,
       category: product.category,
+      itemType: product.itemType,
       stockUpdatedAt: product.stockUpdatedAt
         ? product.stockUpdatedAt.toISOString()
         : null,
@@ -181,12 +195,15 @@ export default async function InventoryPage({
     })),
   };
 
-  // Forecast input: what cleaners ACTUALLY reported using, per job, over the
-  // trailing window (item 14). This replaces InventoryRule.usagePerJob — an
-  // admin-typed guess that went stale and left rule-less products projecting
-  // zero. Windowed on Job.jobDate rather than the row's createdAt, which dates
-  // only the first clock-out (see src/lib/inventory-forecast.ts).
-  const avgPerJob = await loadPerJobAverages();
+  // Forecast input: what cleaners reported using, per job, over the trailing
+  // window (item 14). HIDDEN since Stage 3 (decision D3) — clock-out no longer
+  // records per-job usage, so this window empties out and every product would
+  // project 0 while claiming everyone is fully stocked. The loader is only
+  // called when the forecast is actually rendered; see
+  // `src/lib/inventory-forecast.flag.ts` for how to bring it back.
+  const avgPerJob = INVENTORY_FORECAST_ENABLED
+    ? await loadPerJobAverages()
+    : new Map<string, number>();
 
   // Most recent audit row per (cleaner, product) — powers the "last updated by X"
   // line on each kit row, so admins can see cleaner-side edits (the cleaner app
@@ -202,22 +219,90 @@ export default async function InventoryPage({
       changedByName: true,
       quantityChange: true,
       reason: true,
+      // Stage 3: the status half of the row, so the Cleaner Inventory tab can
+      // answer PDF #2's "admin should see each cleaner's LATEST REPORTED status
+      // and history" without a second query per kit line.
+      action: true,
+      previousStatus: true,
+      newStatus: true,
     },
   });
   const lastChangeByKey = new Map<
     string,
     { at: string; by: string | null; delta: number; reason: string | null }
   >();
+  const lastReportByKey = new Map<
+    string,
+    { at: string; previousStatus: string | null; newStatus: string; reason: string | null }
+  >();
   for (const c of recentKitChanges) {
     const key = `${c.employeeId}|${c.productId}`;
     // findMany is already newest-first, so the first hit for a key wins.
-    if (lastChangeByKey.has(key)) continue;
-    lastChangeByKey.set(key, {
-      at: c.createdAt.toISOString(),
-      by: c.changedByName,
-      delta: c.quantityChange,
-      reason: c.reason,
-    });
+    if (!lastChangeByKey.has(key)) {
+      lastChangeByKey.set(key, {
+        at: c.createdAt.toISOString(),
+        by: c.changedByName,
+        delta: c.quantityChange,
+        reason: c.reason,
+      });
+    }
+    // The most recent row that carried a STATUS, which is not necessarily the
+    // most recent row at all — an admin correcting a count afterwards must not
+    // bury the cleaner's "damaged" report underneath it.
+    if (c.newStatus && !lastReportByKey.has(key)) {
+      lastReportByKey.set(key, {
+        at: c.createdAt.toISOString(),
+        previousStatus: c.previousStatus,
+        newStatus: c.newStatus,
+        reason: c.reason,
+      });
+    }
+  }
+
+  // Open flags, both for the Attention tab and for the per-item chips on the
+  // Cleaner Inventory tab. A countable reported "missing" has no status column
+  // of its own — the count is its state of record — so its flag IS the way an
+  // admin sees what was said about it.
+  const openFlagRows = await db.inventoryFlag.findMany({
+    where: { status: "OPEN" },
+    orderBy: { createdAt: "desc" },
+    take: 200,
+    include: {
+      product: { select: { id: true, name: true, unit: true } },
+      employee: { select: { id: true, name: true } },
+      job: { select: { id: true, jobNumber: true } },
+    },
+  });
+
+  const heldByKey = new Map<string, number>();
+  for (const emp of employees) {
+    for (const ep of emp.assignedProducts) {
+      heldByKey.set(`${emp.id}|${ep.productId}`, ep.quantity);
+    }
+  }
+
+  const attentionFlags = openFlagRows.map((f) => ({
+    id: f.id,
+    type: f.type,
+    source: f.source,
+    notes: f.notes,
+    createdAt: f.createdAt.toISOString(),
+    employeeId: f.employeeId,
+    employeeName: f.employee?.name ?? "Unknown",
+    productId: f.productId,
+    productName: f.product?.name ?? "Deleted product",
+    unit: f.product?.unit ?? "",
+    quantity: heldByKey.get(`${f.employeeId}|${f.productId}`) ?? 0,
+    jobId: f.job?.id ?? null,
+    jobNumber: f.job?.jobNumber ?? null,
+  }));
+
+  const openFlagTypesByKey = new Map<string, string[]>();
+  for (const f of openFlagRows) {
+    const key = `${f.employeeId}|${f.productId}`;
+    const existing = openFlagTypesByKey.get(key) ?? [];
+    if (!existing.includes(f.type)) existing.push(f.type);
+    openFlagTypesByKey.set(key, existing);
   }
 
   // Per-cleaner assigned-stock overview (aggregate EmployeeProduct). Only
@@ -226,19 +311,43 @@ export default async function InventoryPage({
     .map((emp) => {
       const items = emp.assignedProducts.map((ep) => {
         // CLEANER restock threshold — the company reorder point (minStock) has
-        // no bearing on how much one cleaner should carry (fix list item 14).
+        // no bearing on how much one cleaner should carry (fix list item 14) —
+        // and the product's item type, which decides whether a threshold
+        // applies at all (PDF #4).
         const thresholdInput = {
           cleanerRestockThreshold: ep.product.cleanerRestockThreshold,
+          defaultThreshold,
+          itemType: ep.product.itemType,
         };
+        // The SAME call the cleaner's own app makes, with the same inputs, so
+        // the two screens cannot disagree about a row.
+        const attention = itemAttentionState({
+          ...thresholdInput,
+          quantity: ep.quantity,
+          condition: ep.condition,
+          levelStatus: ep.levelStatus,
+        });
         return {
           productId: ep.productId,
           productName: ep.product.name,
           unit: ep.product.unit,
           quantity: ep.quantity,
           costPerUnit: ep.product.costPerUnit,
+          itemType: ep.product.itemType,
           refillThreshold: cleanerRestockThreshold(thresholdInput),
+          attention,
+          statusUpdatedAt: ep.statusUpdatedAt
+            ? ep.statusUpdatedAt.toISOString()
+            : null,
+          statusNotes: ep.statusNotes,
           isLow: isCleanerLow(ep.quantity, thresholdInput),
           lastChange: lastChangeByKey.get(`${emp.id}|${ep.productId}`) ?? null,
+          // PDF #2: "admin should see each cleaner's latest reported inventory
+          // status and history". `lastReport` is the status transition itself
+          // (previous → new, with the job it came off in its reason); the open
+          // flag types are what is still outstanding about it.
+          lastReport: lastReportByKey.get(`${emp.id}|${ep.productId}`) ?? null,
+          openFlagTypes: openFlagTypesByKey.get(`${emp.id}|${ep.productId}`) ?? [],
         };
       });
       return {
@@ -248,7 +357,11 @@ export default async function InventoryPage({
         itemCount: items.length,
         totalUnits: items.reduce((s, i) => s + i.quantity, 0),
         totalValue: items.reduce((s, i) => s + i.quantity * i.costPerUnit, 0),
-        lowCount: items.filter((i) => i.isLow).length,
+        // Consumables below threshold PLUS tools in a bad condition. Renamed
+        // from `lowCount` deliberately: "low" is the wrong word for a scraper
+        // that needs replacing, and a same-named field would have carried the
+        // old meaning into every consumer unnoticed.
+        attentionCount: items.filter((i) => i.attention.needsAttention).length,
         items,
       };
     })
@@ -280,7 +393,7 @@ export default async function InventoryPage({
     createdAt: r.createdAt.toISOString(),
   }));
 
-  const forecastData = employees
+  const forecastData = (INVENTORY_FORECAST_ENABLED ? employees : [])
     .map((emp) => {
       const upcomingJobCount = emp.jobs.length;
       const items = emp.assignedProducts.map((ep) => {
@@ -291,7 +404,12 @@ export default async function InventoryPage({
         const deficit = Math.max(0, projectedUsage - ep.quantity);
         const thresholdInput = {
           cleanerRestockThreshold: ep.product.cleanerRestockThreshold,
+          defaultThreshold,
+          itemType: ep.product.itemType,
         };
+        // Equipment is not consumed by doing jobs, so it can never be short of
+        // a projected usage either — `isEquipment` short-circuits both terms.
+        const isEquipment = ep.product.itemType === "REUSABLE_EQUIPMENT";
         return {
           productId: ep.productId,
           productName: ep.product.name,
@@ -300,8 +418,10 @@ export default async function InventoryPage({
           averagePerJob: Math.round(averagePerJob * 100) / 100,
           refillThreshold: cleanerRestockThreshold(thresholdInput),
           projectedUsage,
-          deficit,
-          needsRefill: deficit > 0 || isCleanerLow(ep.quantity, thresholdInput),
+          deficit: isEquipment ? 0 : deficit,
+          needsRefill:
+            !isEquipment &&
+            (deficit > 0 || isCleanerLow(ep.quantity, thresholdInput)),
         };
       });
       // NOTE: no `.filter(usagePerJob > 0)` here any more. That filter was the
@@ -341,7 +461,20 @@ export default async function InventoryPage({
     stockByProductLocation.set(row.productId, existing);
   }
 
-  const assignProducts = productsWithStats.map((p) => ({
+  // Quick Assign must never offer an ARCHIVED product, even while the admin is
+  // looking at the Archived tab — assigning one is how a kit row gets orphaned
+  // from the catalogue, which is what produced the p.6 "Product not found."
+  // (Stage 5). On the normal tab `productsWithStats` is already active-only, so
+  // this costs an extra query only on the Archived view.
+  const assignableRows = archived
+    ? await db.product.findMany({
+        where: ASSIGNABLE_PRODUCT_WHERE,
+        orderBy: { name: "asc" },
+        select: { id: true, name: true, unit: true },
+      })
+    : productsWithStats;
+
+  const assignProducts = assignableRows.map((p) => ({
     id: p.id,
     name: p.name,
     unit: p.unit,
@@ -371,6 +504,7 @@ export default async function InventoryPage({
         initialRowsPerPage={rowsPerPage}
         supplierData={supplierData}
         forecastData={forecastData}
+        attentionFlags={attentionFlags}
         cleanerInventory={cleanerInventory}
         canEditCleanerInventory={canEditCleanerInventory}
         assignProducts={assignProducts}

@@ -24,22 +24,23 @@ export default async function ClockPage({ params }: PageProps) {
   const isCleaner = (job as any).cleaners?.some((c: any) => c.id === session.user.id);
   if (!isEmployee && !isCleaner) redirect("/cleaners/my-jobs");
 
-  // Fetch employee products for clock-out inventory modal
+  // This cleaner's kit, for the closing inventory report (Stage 3). `itemType`
+  // decides which vocabulary each row is reported in, and the stored
+  // level/condition is shown as "what we already believe" beside it — the rows
+  // themselves start blank so only what the cleaner touches is submitted.
   const rawProducts = await db.employeeProduct.findMany({
     where: { employeeId: session.user.id },
     include: { product: true },
   });
 
   const employeeProducts = rawProducts.map((ep) => ({
-    id: ep.id,
     productId: ep.productId,
+    name: ep.product.name,
+    unit: ep.product.unit,
     quantity: ep.quantity,
-    product: {
-      id: ep.product.id,
-      name: ep.product.name,
-      unit: ep.product.unit,
-      category: ep.product.category as any,
-    },
+    itemType: ep.product.itemType,
+    levelStatus: ep.levelStatus,
+    condition: ep.condition,
   }));
 
   const j = job as any;

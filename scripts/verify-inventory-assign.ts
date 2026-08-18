@@ -45,11 +45,18 @@ ok("action is admin-guarded", action.includes("requireOwnerAdmin"));
 ok("action rejects non-staff kit targets", action.includes('role: { in: ["EMPLOYEE"'));
 ok("action rejects duplicate product lines", action.includes("listed twice"));
 ok("action requires a location for FROM_LOCKER", action.includes("Choose the location"));
+// Stage 4: the locker row, `Product.stockLevel` and the warehouse audit row
+// are one call now (`src/lib/stock.server.ts`), so these three assertions moved
+// from "this file does it by hand" to "this file delegates it". The rule they
+// protect is unchanged: company stock moves in FROM_LOCKER mode and nowhere else.
 ok("company stock is only touched in FROM_LOCKER",
-  /if \(mode === "FROM_LOCKER"\) \{[\s\S]*?product\.update/.test(action));
-ok("kit + warehouse audit rows are written", (action.match(/inventoryChange\.create/g) || []).length >= 2);
+  /if \(mode === "FROM_LOCKER"\) \{[\s\S]*?adjustWarehouseStock/.test(action));
+ok("kit audit row is written here", action.includes("inventoryChange.create"));
+ok("...and the warehouse one by the shared writer",
+  action.includes("adjustWarehouseStock(tx, {"));
 ok("bulk save runs in one transaction", action.includes("db.$transaction"));
-ok("locker may go negative rather than blocking", action.includes("inventoryLocationStock.upsert"));
+ok("locker may go negative rather than blocking",
+  action.includes("moved.locationQuantity < 0"));
 
 const modal = fs.readFileSync("src/app/admin/inventory/QuickAssignModal.tsx", "utf8");
 ok("UI offers both modes", modal.includes("From locker") && modal.includes("Manual adjust"));

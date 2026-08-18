@@ -105,6 +105,33 @@ This bundle covers five features. Each section lists **what was built**, **what 
 
 ## 4. Post-Job Inventory Usage Feature
 
+> ### ⚠️ SUPERSEDED — August 17, 2026
+>
+> **This entire feature has been removed.** The inventory fixes document (#2)
+> called the estimated Light / Medium / Heavy survey below exactly what it was:
+> a guess the app invented on the cleaner's behalf (Light = 15 sprays × 1.25 ml)
+> and then treated as a measurement — deducting it from kit stock, pricing it
+> into a per-job supplies expense, and feeding it to the low-stock alerts and
+> the forecast.
+>
+> **What replaced it:** the *closing inventory report*. At clock-out a cleaner is
+> asked "Any product levels changed?" and either taps **No changes** (one tap,
+> job completed) or reports only the items that actually changed — a level for
+> liquids, a count for consumables, a condition for tools. **Nothing is deducted
+> automatically.** Reports raise flags in **Inventory → Needs Attention**, and
+> every one writes previous status → new status to the activity history.
+>
+> - Where the flow lives now: `src/app/cleaners/my-jobs/ClosingInventoryReport.tsx`
+>   (ONE component, used by both clock-out screens — the survey below shipped
+>   twice, with its constants duplicated).
+> - What the owner needs to know about the numbers: **`INVENTORY_REPORTING_CHANGE.md`**
+>   (per-job supplies cost removed, forecast hidden, legacy rows labelled).
+> - The work itself: `_ai_context/TODO.md` § Stage 3.
+>
+> Everything below is kept as the record of what was there before. `ProductCategory`
+> still exists on `Product`; it no longer decides how anything is reported —
+> `ItemType` does (Stage 1).
+
 ### What was built
 - **`ProductCategory` enum** (`LIQUID_SPRAY | MOP_LIQUID | DISPOSABLE | OTHER`) on the `Product` model.
 - **Brand-new clock-out survey UI** matching the Inventory Rules spec exactly:

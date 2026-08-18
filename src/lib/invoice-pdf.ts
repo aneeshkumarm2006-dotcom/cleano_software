@@ -7,6 +7,7 @@
 import { db } from "@/db";
 import { formatDate } from "@/lib/timezone";
 import { formatAddressLine, normalizeAddressKey } from "@/lib/client-address";
+import { resolveDepositCredit } from "@/lib/booking-deposit";
 
 const BRAND = "#008C9C";
 
@@ -46,6 +47,18 @@ export interface InvoicePdfData {
   gstAmount: number;
   qstAmount: number;
   totalAmount: number;
+  /**
+   * Deposit already collected on the job this invoice bills, credited below the
+   * total (Stage 11 / PDF #9: *"the final invoice applies the deposit toward the
+   * confirmed total"*).
+   *
+   * Only ever set for a SINGLE-job invoice. A consolidated invoice covering
+   * several bookings could carry several deposits, and crediting one of them
+   * against a combined total would be arithmetic nobody could reconcile — so it
+   * prints none, exactly as `serviceAddress` above prints no address when the
+   * invoice cannot name one.
+   */
+  depositApplied: number;
   notes: string | null;
   brand: {
     name: string;
@@ -68,6 +81,9 @@ export async function loadInvoiceData(
         select: {
           location: true,
           aptNumber: true,
+          // Stage 11 — the deposit credit line below.
+          depositPaid: true,
+          depositAmount: true,
           clientAddress: { select: { city: true, postalCode: true } },
         },
       },
@@ -142,6 +158,9 @@ export async function loadInvoiceData(
     gstAmount: invoice.gstAmount,
     qstAmount: invoice.qstAmount,
     totalAmount: invoice.totalAmount,
+    // `invoice.job` is set only on a single-job invoice; a consolidated one links
+    // its jobs through the line items instead and deliberately credits nothing.
+    depositApplied: invoice.job ? resolveDepositCredit(invoice.job) : 0,
     notes: invoice.notes,
     brand: {
       name: "Cleano",
@@ -384,6 +403,30 @@ export async function buildInvoicePdfBuffer(
           el(Text, { style: styles.totalLabel }, "Total"),
           el(Text, { style: styles.totalValue }, fmt(data.totalAmount)),
         ),
+        // Deposit credit (Stage 11 / PDF #9). Below the total, like the receipt:
+        // the invoice states what the work is worth, then what has been collected
+        // against it. Rolling it into the subtotal would understate the sale and
+        // the tax charged on it.
+        ...(data.depositApplied > 0
+          ? [
+              el(
+                View,
+                { style: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 3 } },
+                el(Text, { style: styles.value }, "Deposit applied"),
+                el(Text, { style: styles.value }, `-${fmt(data.depositApplied)}`),
+              ),
+              el(
+                View,
+                { style: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 3 } },
+                el(Text, { style: styles.value }, "Balance due"),
+                el(
+                  Text,
+                  { style: styles.value },
+                  fmt(Math.max(0, data.totalAmount - data.depositApplied)),
+                ),
+              ),
+            ]
+          : []),
       ),
 
       ...(data.notes

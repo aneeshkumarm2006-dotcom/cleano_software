@@ -91,6 +91,12 @@ export interface ChecklistTemplateRecord {
   description: string | null;
   jobType: string | null;
   addOnName: string | null;
+  /** Customer scope (Stage 10 / PDF #10). Null = not customer-specific. */
+  clientId: string | null;
+  clientAddressId: string | null;
+  /** Joined for the scope chip, so the list needs no second lookup. */
+  client: { id: string; name: string } | null;
+  clientAddress: { id: string; label: string; address: string } | null;
   isActive: boolean;
   items: ChecklistTemplateItemRecord[];
 }

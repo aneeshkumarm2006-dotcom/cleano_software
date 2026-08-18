@@ -2,6 +2,7 @@
 
 import { db } from "@/db";
 import { requireOwnerAdmin } from "@/lib/action-guards";
+import { activityActionLabel, isInventoryAction } from "@/lib/inventory-action";
 import type {
   InventoryActivityEntry,
   InventoryActivityPage,
@@ -12,8 +13,13 @@ import type {
  *
  * Reads the InventoryChange audit trail that every stock-moving path writes:
  * quick assign, kit assignment, warehouse pickups, manual adjustments, reported
- * damage/loss, cleaner self-counts, request fulfilment and job usage at
- * clock-out.
+ * damage/loss, cleaner self-counts, request fulfilment and the closing
+ * inventory report at clock-out.
+ *
+ * The verb on each row is now STORED (`InventoryChange.action`) rather than
+ * pattern-matched out of its `reason` sentence — see
+ * `src/lib/inventory-action.ts` for why, and for how rows written before that
+ * column existed are still labelled.
  *
  * CURSOR pagination, not offset: the log grows constantly, and `skip` would
  * duplicate or drop rows as new activity lands mid-scroll. The cursor is the
@@ -24,30 +30,6 @@ import type {
 
 const PAGE_SIZE = 25;
 const MAX_PAGE_SIZE = 100;
-
-/**
- * Turn an audit `reason` into a short action label. Reasons are written as
- * sentences by each action; the log wants a scannable verb.
- */
-function deriveAction(reason: string | null, isCompanyStock: boolean): string {
-  const r = (reason ?? "").toLowerCase();
-  if (r.startsWith("warehouse pickup")) return "Pickup";
-  if (r.includes("handed to")) return "Handed out";
-  if (r.startsWith("assigned from")) return "Assigned";
-  if (r.startsWith("assigned via kit") || r.startsWith("kit \"")) return "Kit assigned";
-  if (r.startsWith("manual adjustment")) return "Manual adjust";
-  // Cleaner-reported issues (item 15). "damaged" is the legacy wording that
-  // pre-dates the four typed issues, kept so old rows still label correctly.
-  if (r.startsWith("broken")) return "Reported broken";
-  if (r.startsWith("damaged")) return "Reported damaged";
-  if (r.startsWith("lost")) return "Reported lost";
-  if (r.startsWith("ran out")) return "Ran out";
-  if (r.startsWith("other —") || r.startsWith("other -")) return "Issue reported";
-  if (r.startsWith("used on job")) return "Used on job";
-  if (r.includes("request")) return "Request fulfilled";
-  if (r.includes("stock count") || r.includes("count")) return "Stock count";
-  return isCompanyStock ? "Company stock" : "Adjusted";
-}
 
 export async function getInventoryActivity(input?: {
   cursor?: string | null;
@@ -102,6 +84,13 @@ export async function getInventoryActivity(input?: {
         newQuantity: true,
         unit: true,
         reason: true,
+        // Stage 3: the stored verb and the status transition. `action` retires
+        // the reason-string pattern matching this file used to do; it is null
+        // on every row written before that migration, which is exactly why the
+        // derived reading still exists.
+        action: true,
+        previousStatus: true,
+        newStatus: true,
         changedByName: true,
         product: { select: { name: true } },
       },
@@ -117,7 +106,10 @@ export async function getInventoryActivity(input?: {
       cleanerName: r.employeeName,
       productId: r.productId,
       productName: r.product?.name ?? "Deleted product",
-      action: deriveAction(r.reason, r.employeeId === null),
+      action: activityActionLabel(r.action, r.reason, r.employeeId === null),
+      actionDerived: !isInventoryAction(r.action),
+      previousStatus: r.previousStatus,
+      newStatus: r.newStatus,
       quantityChange: r.quantityChange,
       newQuantity: r.newQuantity,
       unit: r.unit,

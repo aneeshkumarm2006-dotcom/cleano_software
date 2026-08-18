@@ -21,7 +21,9 @@ import { db } from "@/db";
  *     duplicate that. Left alone on purpose;
  *   • payRateMultiplier — deprecated (AWER round 3, fix 1). The rating premium
  *     is a property of the CLEANER, not the job, so there is nothing to
- *     propagate across a series.
+ *     propagate across a series;
+ *   • billedActualHours — measured from each occurrence's own clock (Stage 8).
+ *     Propagating it would bill next month's visit for hours worked this month.
  */
 export const SERIES_PROPAGATED_FIELDS = [
   "clientName",
@@ -40,12 +42,37 @@ export const SERIES_PROPAGATED_FIELDS = [
   "employeePay",
   "payType",
   "hourlyRate",
+  // How the CUSTOMER is billed (Stage 8). A series is one agreement, so
+  // occurrence 4 must not be billed by a different rule than occurrence 1 —
+  // the same reasoning that already propagates `price` and `pricingMode`'s
+  // effect. `billedActualHours` is deliberately EXCLUDED below: it is measured
+  // per occurrence from that occurrence's own clock, so copying one visit's
+  // worked hours across the series would bill every future visit for work that
+  // has not happened.
+  "billingType",
+  "billedHourlyRate",
+  "billedEstimatedHours",
   "notes",
   "paymentType",
   "bedCount",
   "bathCount",
   "halfBathCount",
   "squareFootage",
+  // What kind of building the series is served at (Stage 9). It describes the
+  // ADDRESS, and `location`/`clientAddressId` already propagate above — so
+  // leaving this behind would let occurrence 4 disagree with its own address
+  // about whether it is a house. Same reasoning as the room counts.
+  "propertyType",
+  // Which checklist the series uses (Stage 10 / PDF #10). The PDF asks for it
+  // in as many words — "checklist assignment should stay consistent when
+  // recurring jobs are generated" — and a series is one agreement, so
+  // occurrence 4 must not be worked to a different list than occurrence 1.
+  //
+  // Note this only propagates the PIN. A client- or address-scoped template
+  // needs nothing here: every occurrence shares the same clientId and
+  // clientAddressId (both propagate above), so the resolver picks the same
+  // customer checklist for each of them on its own.
+  "checklistTemplateId",
   "taxExempt",
   "isFlexible",
   "requiredCleaners",

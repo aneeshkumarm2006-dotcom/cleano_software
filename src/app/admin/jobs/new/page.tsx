@@ -20,6 +20,13 @@ import {
 } from "@/lib/client-address-store";
 import { getServicePricingConfig } from "@/lib/booking-pricing";
 import { resolveJobClient } from "@/lib/client-capture";
+import {
+  hourlyServiceAmount,
+  isBillingType,
+  roundBilledHours,
+  type JobBillingType,
+} from "@/lib/hourly-billing";
+import { parsePropertyType, type PropertyType } from "@/lib/property-type";
 import { isSqftJobType, moveInOutBasePrice } from "@/lib/service-pricing";
 import { tzWallClockToUtc, tzInputParts } from "@/lib/time";
 import { syncJobAssignments } from "@/lib/job-assignments";
@@ -36,6 +43,10 @@ import ClientNameField from "./ClientNameField";
 import { ControlledDatePicker, ControlledTimePicker } from "./DateTimePicker";
 import PaymentTypeSelect from "./PaymentTypeSelect";
 import PayTypeFields from "./PayTypeFields";
+import BillingTypeFields from "./BillingTypeFields";
+import PropertyTypeField from "./PropertyTypeField";
+import ChecklistTemplateField from "./ChecklistTemplateField";
+import { listChecklistTemplateOptions } from "@/lib/checklist-options.server";
 import PricingModeField from "./PricingModeField";
 import EmployeePayModeField from "./EmployeePayModeField";
 import Card from "@/components/ui/Card";
@@ -159,6 +170,12 @@ export default async function JobFormPage({
       redirect("/admin/jobs");
     }
   }
+
+  // Checklist templates offered by the "Checklist" picker (Stage 10 / PDF #10).
+  // The same list the modal loads through `getJobChecklistOptions`, from the
+  // same function — the two job forms must not be able to offer different
+  // choices for the same field.
+  const checklistTemplateOptions = await listChecklistTemplateOptions();
 
   // Pre-fill from duplicate source (all fields except date/time, payment & clock data)
   let duplicateSource = null;
@@ -319,7 +336,113 @@ export default async function JobFormPage({
       ? parseInt(formData.get("squareFootage") as string, 10)
       : null;
     const jobTypeRaw = (formData.get("jobType") as string) || null;
+
+    // ── Property type (Stage 9 / PDF #11) ────────────────────────────────────
+    //
+    // The SAME rules as `actions/saveJob.ts`, for the same reason the billing
+    // block below states: this page is the second job-save implementation and
+    // every job-form change has to land in both (TODO §4's ⚠️). Property
+    // information, not a service category — it prices nothing.
+    const propertySubmitted = formData.has("propertyType");
+    let propertyType: PropertyType | null = propertySubmitted
+      ? parsePropertyType(formData.get("propertyType"))
+      : null;
+
+    // ── Checklist template pin (Stage 10 / PDF #10) ──────────────────────────
+    //
+    // Same tri-state, same reason, same rules as `actions/saveJob.ts` — blank
+    // means "Auto (resolve from the customer / service scoping)", a value pins
+    // this job to one template.
+    const checklistSubmitted = formData.has("checklistTemplateId");
+    let checklistTemplateId: string | null = checklistSubmitted
+      ? ((formData.get("checklistTemplateId") as string) || "").trim() || null
+      : null;
+
+    // ── Customer-side hourly billing (Stage 8 / PDF #8) ──────────────────────
+    //
+    // Deliberately the SAME rules as `actions/saveJob.ts`, because this page is
+    // the second job-save implementation and every pricing change has to land
+    // in both (see the ⚠️ note at the top of _ai_context/TODO.md §4). The
+    // tri-state below is the same one payType uses: this form OWNS the control,
+    // so it always posts `billingType`; a caller that doesn't preserves what is
+    // stored rather than resetting it.
+    const editingIdForBilling = (formData.get("jobId") as string | null) || null;
+    const billingSubmitted = formData.has("billingType");
+    let billingType: JobBillingType = "FLAT";
+    let billedHourlyRate: number | null = null;
+    let billedEstimatedHours: number | null = null;
+    let billedActualHours: number | null = null;
+    const numOrNull = (key: string): number | null => {
+      const raw = formData.get(key);
+      if (raw === null || raw === "") return null;
+      const n = parseFloat(raw as string);
+      return Number.isFinite(n) ? n : null;
+    };
+    // One read for all three preservation cases — see the shared action's note.
+    const preservedFields =
+      (!billingSubmitted || !propertySubmitted || !checklistSubmitted) &&
+      editingIdForBilling
+        ? await db.job.findUnique({
+            where: { id: editingIdForBilling },
+            select: {
+              billingType: true,
+              billedHourlyRate: true,
+              billedEstimatedHours: true,
+              billedActualHours: true,
+              propertyType: true,
+              checklistTemplateId: true,
+            },
+          })
+        : null;
+    if (!propertySubmitted) propertyType = preservedFields?.propertyType ?? null;
+    if (!checklistSubmitted) {
+      checklistTemplateId = preservedFields?.checklistTemplateId ?? null;
+    }
+    // A deleted template must not turn a valid save into a foreign-key 500 —
+    // fall back to Auto, which is what ON DELETE SET NULL would have done.
+    if (checklistSubmitted && checklistTemplateId) {
+      const templateExists = await db.checklistTemplate.findUnique({
+        where: { id: checklistTemplateId },
+        select: { id: true },
+      });
+      if (!templateExists) checklistTemplateId = null;
+    }
+    if (billingSubmitted) {
+      const raw = formData.get("billingType");
+      billingType = isBillingType(raw) ? raw : "FLAT";
+      if (billingType === "HOURLY") {
+        billedHourlyRate = numOrNull("billedHourlyRate");
+        const est = numOrNull("billedEstimatedHours");
+        const act = numOrNull("billedActualHours");
+        billedEstimatedHours = est !== null && est > 0 ? roundBilledHours(est) : null;
+        billedActualHours = act !== null && act > 0 ? roundBilledHours(act) : null;
+        // Step 8.4. Thrown rather than returned: this action redirects on
+        // success and has no error channel back to the form, so a broken save
+        // must stop loudly instead of writing a $0 job.
+        if (billedHourlyRate === null || billedHourlyRate <= 0) {
+          throw new Error("Enter the customer's hourly rate for an hourly job.");
+        }
+        if (billedEstimatedHours === null && billedActualHours === null) {
+          throw new Error("Enter the estimated hours for an hourly job.");
+        }
+      }
+    } else if (editingIdForBilling) {
+      billingType = (preservedFields?.billingType as JobBillingType) ?? "FLAT";
+      billedHourlyRate = preservedFields?.billedHourlyRate ?? null;
+      billedEstimatedHours = preservedFields?.billedEstimatedHours ?? null;
+      billedActualHours = preservedFields?.billedActualHours ?? null;
+    }
+    const hourlyBase = hourlyServiceAmount({
+      billingType,
+      billedHourlyRate,
+      billedEstimatedHours,
+      billedActualHours,
+    });
+
+    // Step 8.8: square-foot pricing is a flat-rate assumption and never fires
+    // on an hourly job — same guard as the shared action.
     if (
+      billingType !== "HOURLY" &&
       price === null &&
       squareFootage !== null &&
       squareFootage > 0 &&
@@ -365,9 +488,16 @@ export default async function JobFormPage({
     // fixed price and the admin left the price blank (or typed the fixed price
     // itself), the job charges the fixed total. An explicitly different price
     // wins and clears the flag.
+    //
+    // Step 8.8: a fixed total is a flat-rate agreement, so it does not apply to
+    // a job the customer agreed to pay by the hour.
     let usesFixedPrice = false;
     const clientFixedPrice = savedClient?.fixedPrice ?? null;
-    if (clientFixedPrice !== null && clientFixedPrice > 0) {
+    if (
+      billingType !== "HOURLY" &&
+      clientFixedPrice !== null &&
+      clientFixedPrice > 0
+    ) {
       if (price === null || price === clientFixedPrice) {
         price = clientFixedPrice;
         usesFixedPrice = true;
@@ -377,21 +507,6 @@ export default async function JobFormPage({
     let discountAmount = formData.get("discountAmount")
       ? parseFloat(formData.get("discountAmount") as string)
       : null;
-
-    // Auto-apply client default discount if admin didn't enter one.
-    // Fixed-price jobs skip it — the fixed price IS the agreed total.
-    if (
-      (discountAmount === null || discountAmount === 0) &&
-      !usesFixedPrice &&
-      clientId &&
-      price !== null &&
-      price > 0
-    ) {
-      const pct = savedClient?.discountPercent ?? 0;
-      if (pct > 0) {
-        discountAmount = +(price * (pct / 100)).toFixed(2);
-      }
-    }
 
     // GST/QST on the discounted subtotal from the admin-configured rates.
     // Cash jobs are untaxed as a payment method; `taxExempt` is the explicit
@@ -420,10 +535,18 @@ export default async function JobFormPage({
             employeePayIsManual: true,
             totalAmount: true,
             paymentReceived: true,
+            // Not used for pricing — carried so the edit path can PRESERVE the
+            // two settlement flags this form renders no control for. See the
+            // note beside `jobData.paymentReceived` below.
+            invoiceSent: true,
             stripePaymentIntentId: true,
           },
         })
       : null;
+    // "This save is editing an existing job", asked once. `moneyJob` alone is
+    // not the same question — a findUnique can miss — and a miss must not be
+    // read as "new job", which would clear the settlement flags below.
+    const isEditingMoneyJob = editingIdForMoney != null;
     // Same explicit pricing mode as the shared saveJob (fix 2): the form's
     // selector wins, then "Recalculate from items", then the job's stored mode,
     // then the historical provenance fallback. Retyping the price no longer
@@ -441,6 +564,33 @@ export default async function JobFormPage({
           (moneyJob
             ? resolvePricingMode({ bookingSource: moneyJob.bookingSource })
             : "ITEMIZED"));
+
+    // The hourly mirror (step 8.2) — identical rule and identical reason to the
+    // shared action: `computeJobMoney` derives the service line either way, but
+    // the stored column has to agree with it for the reporting queries that
+    // still read `Job.price` directly. Never under FINAL_PRICE, where `price`
+    // IS the admin's override.
+    if (hourlyBase !== null && pricingMode !== "FINAL_PRICE") {
+      price = hourlyBase;
+    }
+
+    // Auto-apply the client's default discount if the admin didn't enter one.
+    // Fixed-price jobs skip it — the fixed price IS the agreed total. Sits
+    // below the mirror so an hourly job (whose Price field is blank) still gets
+    // a standing client discount, computed off `rate × hours`.
+    if (
+      (discountAmount === null || discountAmount === 0) &&
+      !usesFixedPrice &&
+      clientId &&
+      price !== null &&
+      price > 0
+    ) {
+      const pct = savedClient?.discountPercent ?? 0;
+      if (pct > 0) {
+        discountAmount = +(price * (pct / 100)).toFixed(2);
+      }
+    }
+
     const moneyPriceRetyped =
       moneyJob?.price != null &&
       price !== null &&
@@ -463,6 +613,11 @@ export default async function JobFormPage({
         isCashJob,
         taxExempt,
         addOns: moneyJob?.addOns ?? [],
+        // HOURLY: the base service line is rate × hours (step 8.2).
+        billingType,
+        billedHourlyRate,
+        billedEstimatedHours,
+        billedActualHours,
       },
       await getTaxRates()
     );
@@ -563,14 +718,34 @@ export default async function JobFormPage({
       employeePayIsManual,
       payType,
       hourlyRate,
+      // How the CUSTOMER is billed (Stage 8) — never the same money as the two
+      // fields above, which are how the CLEANER is paid.
+      billingType,
+      billedHourlyRate,
+      billedEstimatedHours,
+      billedActualHours,
       totalTip: formData.get("totalTip")
         ? parseFloat(formData.get("totalTip") as string)
         : null,
       parking: formData.get("parking")
         ? parseFloat(formData.get("parking") as string)
         : null,
-      paymentReceived: formData.get("paymentReceived") === "on",
-      invoiceSent: formData.get("invoiceSent") === "on",
+      // This form renders NO control for either flag, so `=== "on"` was always
+      // false — and on the ?edit=<id> path `jobData` is spread straight into
+      // db.job.update, so editing an unrelated field marked a paid job unpaid
+      // and an invoiced job un-invoiced. The file already contradicted itself
+      // about this: `resolvePassThroughBilling` above reads the STORED
+      // `paymentReceived` to decide whether the card was taken, then this line
+      // overwrote it. An unchecked checkbox and an absent control look
+      // identical in FormData, so "did the form submit it?" cannot be asked of
+      // the value — the form's own shape is the answer, and the shape is "not
+      // managed here". Preserve on edit; a brand-new job is correctly false.
+      // (Stage 14.3. Same class as `taxExempt`, which was fixed the other way —
+      // there the modal owns a control, so the full page grew a matching one.)
+      paymentReceived: isEditingMoneyJob
+        ? (moneyJob?.paymentReceived ?? false)
+        : false,
+      invoiceSent: isEditingMoneyJob ? (moneyJob?.invoiceSent ?? false) : false,
       notes: (formData.get("notes") as string) || null,
       paymentType,
       discountAmount,
@@ -584,6 +759,11 @@ export default async function JobFormPage({
       halfBathCount: formData.get("halfBathCount")
         ? parseInt(formData.get("halfBathCount") as string, 10)
         : null,
+      // Apartment/condo vs house (Stage 9), beside the other property facts.
+      propertyType,
+      // Which checklist this job uses (Stage 10). Null = resolve automatically
+      // from the customer / service scoping.
+      checklistTemplateId,
       // payRateMultiplier is deliberately NOT written (AWER round 3, fix 1) —
       // the column is unread, and no form field ever fed it, so this only ever
       // reset saved jobs to 1.0. The rating premium lives on the cleaner now.
@@ -919,6 +1099,23 @@ export default async function JobFormPage({
               }
               addOnTotal={sumAddOns(existingJob?.addOns)}
             />
+            {/* How the CUSTOMER is billed (Stage 8 / PDF #8). Sits directly
+                above Price because on an hourly job it is what SETS Price;
+                the cleaner's pay model is a separate control further down, and
+                the two never share a label (decision D6). */}
+            <BillingTypeFields
+              defaultValue={(prefill as any)?.billingType || "FLAT"}
+              defaultHourlyRate={(prefill as any)?.billedHourlyRate ?? null}
+              defaultEstimatedHours={(prefill as any)?.billedEstimatedHours ?? null}
+              // Never carried onto a duplicate: a copied job has not been
+              // worked, so its actual hours are nobody's measurement.
+              defaultActualHours={
+                isEditing ? existingJob?.billedActualHours ?? null : null
+              }
+              actualHoursEditable={
+                isEditing && existingJob?.billedActualHours != null
+              }
+            />
             <MoneyFieldWrap label="Price" id="price" name="price" defaultValue={prefill?.price} />
             <MoneyFieldWrap label="Employee pay" id="employeePay" name="employeePay" defaultValue={prefill?.employeePay} />
             {/* Is that figure an order or an estimate? (fix 4 / D2.) The modal
@@ -955,6 +1152,35 @@ export default async function JobFormPage({
                 </span>
               </label>
             </div>
+
+            {/* This page's action has ALWAYS read `taxExempt` (it is spread into
+                the update on the ?edit=<id> path), but no control ever posted
+                it — so an unchecked read of `false` overwrote the stored value
+                and put GST/QST back on an exempt job whenever it was edited
+                here. The server side was already complete and correct; only the
+                input was missing, so rendering it is the whole fix. Wording is
+                kept identical to the modal's so the two forms can't describe the
+                same flag differently (Stage 14.3). */}
+            <div className="md:col-span-2">
+              <label className="flex items-center gap-3 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  name="taxExempt"
+                  defaultChecked={(prefill as any)?.taxExempt === true}
+                  className="w-4 h-4 rounded accent-[#008C9C]"
+                />
+                <span style={{ fontSize: 14, color: "var(--ink)" }}>
+                  Exempt this job from sales tax <span style={{ color: "var(--primary-50)", fontWeight: 400 }}>— no GST/QST on this job. Cleaner pay is unaffected (always calculated before tax).</span>
+                </span>
+              </label>
+            </div>
+
+            {/* PDF #11 / Stage 9 — apartment/condo vs house. Leads the property
+                block because it is the coarsest fact about the place; the room
+                counts refine it. Prices nothing. */}
+            <PropertyTypeField
+              defaultValue={(prefill as any)?.propertyType ?? null}
+            />
 
             <FieldWrap label="Bedrooms">
               <Input
@@ -1024,6 +1250,18 @@ export default async function JobFormPage({
               placeholder="Pets, parking, door codes, sensitive surfaces, special requirements…"
             />
           </FieldWrap>
+
+          {/* PDF #10 / Stage 10 — pin this job to one checklist. Sits with the
+              notes, not with the service picker: it is an instruction to the
+              crew about how to work the job, and unlike `jobType` it changes no
+              price, no permission and no trigger. Auto is the default and is
+              where it should stay unless this job is the exception. */}
+          <div style={{ marginTop: 16 }}>
+            <ChecklistTemplateField
+              templates={checklistTemplateOptions}
+              defaultValue={(prefill as any)?.checklistTemplateId ?? null}
+            />
+          </div>
         </SectionCard>
 
         {/* Sticky footer. `md:left-[240px]` clears the fixed 240px sidebar,
@@ -1049,11 +1287,13 @@ export default async function JobFormPage({
               gap: 12,
             }}
           >
+            {/* No nested <form> here — see DeleteButton. It submits THIS form
+                to `archiveJobAction` via `formAction`, and the hidden `jobId`
+                at the top of the form is the id it archives. */}
             {isEditing && existingJob && (
-              <form action={archiveJobAction} style={{ marginRight: "auto" }}>
-                <input type="hidden" name="jobId" value={existingJob.id} />
-                <DeleteButton />
-              </form>
+              <div style={{ marginRight: "auto" }}>
+                <DeleteButton action={archiveJobAction} />
+              </div>
             )}
             <Link
               href={

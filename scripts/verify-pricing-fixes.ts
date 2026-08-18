@@ -62,12 +62,12 @@ import {
   CLOCK_OUT_RESUME_WINDOW_MS,
   classifyClockOutError,
   clockOutErrorClass,
-  describeUsageForLog,
-  validateClockOutUsage,
+  describeReportForLog,
+  validateClosingReport,
   type ClockOutKit,
-  type ClockOutUsage,
+  type ClosingReport,
+  type ClosingReportValidation,
   type KitItem,
-  type UsageValidation,
 } from "../src/lib/clock-out";
 import { jobRevenue, jobScheduledValue } from "../src/lib/metrics-shared";
 import { DEFAULT_TAX_RATES } from "../src/lib/tax";
@@ -132,6 +132,25 @@ const has = (name: string, path: string, needle: string) =>
   ok(name, read(path).includes(needle));
 const lacks = (name: string, path: string, needle: string) =>
   ok(name, fs.existsSync(path) && !read(path).includes(needle));
+/**
+ * A file with its comment lines stripped.
+ *
+ * Needed by every "X is gone" assertion whose replacement explains what it
+ * replaced — `clockOut.ts` says in prose that it no longer writes
+ * `jobProductUsage`, and a bare `lacks` would read that sentence as the thing
+ * itself. Same helper, same reasoning, as verify-awer-fixes-3.ts's `codeOf`.
+ */
+const codeOf = (path: string) =>
+  read(path)
+    .split("\n")
+    .filter((l) => {
+      const t = l.trim();
+      return !t.startsWith("//") && !t.startsWith("*") && !t.startsWith("/*");
+    })
+    .join("\n");
+/** Assert a snippet is absent from a file's CODE, ignoring its comments. */
+const lacksInCode = (name: string, path: string, needle: string) =>
+  ok(name, fs.existsSync(path) && !codeOf(path).includes(needle));
 
 const RATES = DEFAULT_TAX_RATES;
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -1379,7 +1398,7 @@ const CLOCK_SCREEN = "src/app/cleaners/my-jobs/[jobId]/clock/ClockPageClient.tsx
 const CLOCK_BUTTON = "src/app/cleaners/my-jobs/ClockOutButton.tsx";
 
 // A kit line as the validator sees it. `quantity` is what the cleaner is
-// recorded as HOLDING, which is what the OTHER-category maths subtracts from.
+// recorded as HOLDING; `itemType` decides which vocabulary the line reports in.
 const kitItem = (
   productId: string,
   quantity: number,
@@ -1389,147 +1408,249 @@ const kitItem = (
   name: productId.toUpperCase(),
   unit: "ml",
   quantity,
+  itemType: "COUNTABLE_CONSUMABLE",
   ...over,
 });
 const kitOf = (...items: KitItem[]): ClockOutKit =>
   new Map(items.map((i) => [i.productId, i]));
 
-/** Deductions as a stable, comparable shape — a Map JSON-stringifies to `{}`. */
-const deductionsOf = (v: UsageValidation) =>
-  v.ok ? [...v.deductions.entries()].sort((a, b) => a[0].localeCompare(b[0])) : null;
-const failureOf = (v: UsageValidation) =>
+/** Validated entries as a stable, comparable shape. */
+const entriesOf = (v: ClosingReportValidation) =>
+  v.ok
+    ? v.entries
+        .map((e) => ({
+          productId: e.productId,
+          kind: e.kind,
+          quantity: e.quantity,
+          level: e.levelStatus,
+          status: e.status,
+          condition: e.condition,
+        }))
+        .sort((a, b) => a.productId.localeCompare(b.productId))
+    : null;
+const failureOf = (v: ClosingReportValidation) =>
   v.ok ? null : { code: v.failure.code, field: v.failure.field?.productId ?? null };
 
-const usage = (over: Partial<ClockOutUsage> = {}): ClockOutUsage => ({
-  sprays: [],
-  mops: [],
-  disposables: [],
-  remaining: [],
-  ...over,
-});
+const report = (...items: ClosingReport["items"]): ClosingReport => ({ items });
 
-// ── 5.2 · the payload the page-6 screenshot submits ────────────────────────
-// The reported failure is an all-blank submit on a kit full of OTHER-category
-// items. Stage 0.3 measured why that shape SHOULD be the cheapest clock-out
-// there is (unchanged quantity → used 0 → no statements at all); these assert
-// the server agrees rather than trusting the client to have filtered.
+// ── 5.2 · the payload the page-6 screenshot submits ───────────────────────
+// The reported failure was an all-blank submit on a kit full of items nobody
+// had touched. Since Stage 3 that IS the design — "No changes" submits an empty
+// list — so these assert the cheapest clock-out there is stays the cheapest, and
+// that an untouched kit can never block a cleaner going home.
 {
-  const kit = kitOf(kitItem("spray", 500), kitItem("rags", 12), kitItem("other", 4));
+  const kit = kitOf(
+    kitItem("spray", 500, { itemType: "LIQUID" }),
+    kitItem("rags", 12, { itemType: "REUSABLE_EQUIPMENT", unit: "ea" }),
+    kitItem("gloves", 4, { unit: "ea" })
+  );
 
   check(
-    "5.2a all-blank submit with unchanged quantities deducts nothing",
-    deductionsOf(
-      validateClockOutUsage(
-        usage({
-          sprays: [{ productId: "spray", sprayCount: 0 }],
-          remaining: [{ productId: "other", inventoryAfter: 4 }],
-        }),
-        kit
-      )
-    ),
+    "5.2a the No-changes fast path validates and writes nothing",
+    entriesOf(validateClosingReport(report(), kit)),
     []
   );
   check(
-    "…and an entirely empty payload is accepted, not a TypeError",
-    deductionsOf(validateClockOutUsage({}, kit)),
+    "…as does a payload with no items list at all",
+    entriesOf(validateClosingReport({}, kit)),
     []
   );
   check(
-    "…as is a cleared remaining box (NaN = untouched, never “all used”)",
-    deductionsOf(
-      validateClockOutUsage(
-        usage({ remaining: [{ productId: "other", inventoryAfter: NaN }] }),
-        kit
-      )
-    ),
+    "…and a null payload, rather than throwing on `.items`",
+    entriesOf(validateClosingReport(null, kit)),
     []
   );
 
-  // The arithmetic itself, unchanged from before this stage — 1.25 ml a spray,
-  // mops and disposables by the unit, OTHER by what is left.
+  // Each vocabulary lands on its own kind, and NOTHING is deducted: a level and
+  // a condition both leave `quantity` exactly where the kit had it. That is the
+  // property the whole stage exists for.
   check(
-    "5.2b sprays still convert at 1.25 ml, and sections accumulate per product",
-    deductionsOf(
-      validateClockOutUsage(
-        usage({
-          sprays: [{ productId: "spray", sprayCount: 30 }],
-          mops: [{ productId: "rags", mopCount: 2 }],
-          disposables: [{ productId: "rags", quantity: 1 }],
-          remaining: [{ productId: "other", inventoryAfter: 1.5 }],
-        }),
+    "5.2b a level report moves no quantity",
+    entriesOf(
+      validateClosingReport(
+        report({ productId: "spray", kind: "LEVEL", levelStatus: "EMPTY" }),
         kit
       )
     ),
     [
-      ["other", 2.5],
-      ["rags", 3],
-      ["spray", 37.5],
+      {
+        productId: "spray",
+        kind: "LEVEL",
+        quantity: 500,
+        level: "EMPTY",
+        status: null,
+        condition: null,
+      },
+    ]
+  );
+  check(
+    "…a condition report moves no quantity either",
+    entriesOf(
+      validateClosingReport(
+        report({ productId: "rags", kind: "CONDITION", condition: "DAMAGED" }),
+        kit
+      )
+    ),
+    [
+      {
+        productId: "rags",
+        kind: "CONDITION",
+        quantity: 12,
+        level: null,
+        status: null,
+        condition: "DAMAGED",
+      },
+    ]
+  );
+  check(
+    "…and a count SETS what is left rather than subtracting from it",
+    entriesOf(
+      validateClosingReport(
+        report({ productId: "gloves", kind: "COUNT", quantity: 1, status: "LOW" }),
+        kit
+      )
+    ),
+    [
+      {
+        productId: "gloves",
+        kind: "COUNT",
+        quantity: 1,
+        level: null,
+        status: "LOW",
+        condition: null,
+      },
+    ]
+  );
+  // A status with no number is a legitimate report ("I can't find them").
+  check(
+    "…a status with no count keeps the count the kit already had",
+    entriesOf(
+      validateClosingReport(
+        report({ productId: "gloves", kind: "COUNT", status: "MISSING" }),
+        kit
+      )
+    ),
+    [
+      {
+        productId: "gloves",
+        kind: "COUNT",
+        quantity: 4,
+        level: null,
+        status: "MISSING",
+        condition: null,
+      },
     ]
   );
 
   // "Identify the exact field or inventory item" — each of these names one.
   check(
-    "5.2c a negative spray count is rejected AND names the product",
+    "5.2c a negative count is rejected AND names the product",
     failureOf(
-      validateClockOutUsage(
-        usage({ sprays: [{ productId: "spray", sprayCount: -5 }] }),
+      validateClosingReport(
+        report({ productId: "gloves", kind: "COUNT", quantity: -5 }),
         kit
       )
     ),
-    { code: "INVALID_USAGE", field: "spray" }
+    { code: "INVALID_USAGE", field: "gloves" }
   );
   check(
-    "…so is more remaining than the cleaner started with",
+    "…so is a fractional one",
     failureOf(
-      validateClockOutUsage(
-        usage({ remaining: [{ productId: "other", inventoryAfter: 9 }] }),
+      validateClosingReport(
+        report({ productId: "gloves", kind: "COUNT", quantity: 1.5 }),
         kit
       )
     ),
-    { code: "INVALID_USAGE", field: "other" }
+    { code: "INVALID_USAGE", field: "gloves" }
   );
   check(
-    "…and reported usage of a product that has left the kit is its own code",
+    "…and a blank COUNT row with nothing else on it",
     failureOf(
-      validateClockOutUsage(
-        usage({ disposables: [{ productId: "gone", quantity: 2 }] }),
+      validateClosingReport(report({ productId: "gloves", kind: "COUNT" }), kit)
+    ),
+    { code: "INVALID_USAGE", field: "gloves" }
+  );
+  check(
+    "…a report on a product that has left the kit is its own code",
+    failureOf(
+      validateClosingReport(
+        report({ productId: "gone", kind: "COUNT", quantity: 2 }),
         kit
       )
     ),
     { code: "PRODUCT_NOT_IN_KIT", field: "gone" }
   );
 
-  // The other half of that rule, and the more important one: a stale kit line
-  // the cleaner never touched must NEVER block a clock-out. Both of these were
-  // silently skipped before and must stay silently skipped.
+  // THE type rule. A liquid has a level, a tool has a condition, and a client
+  // sending the wrong one is refused rather than writing "Damaged" onto a bottle
+  // of Windex — a status an admin cannot act on, in a column that does not mean
+  // that for this product.
   check(
-    "5.2d a ZERO-usage row for a product no longer in the kit does not block",
-    deductionsOf(
-      validateClockOutUsage(
-        usage({ disposables: [{ productId: "gone", quantity: 0 }] }),
+    "5.2d a condition reported against a liquid is refused",
+    failureOf(
+      validateClosingReport(
+        report({ productId: "spray", kind: "CONDITION", condition: "DAMAGED" }),
         kit
       )
     ),
-    []
+    { code: "INVALID_USAGE", field: "spray" }
   );
   check(
-    "…nor does a prefilled remaining box for one (it is indistinguishable from untouched)",
-    deductionsOf(
-      validateClockOutUsage(
-        usage({ remaining: [{ productId: "gone", inventoryAfter: 7 }] }),
+    "…and a level reported against a tool",
+    failureOf(
+      validateClosingReport(
+        report({ productId: "rags", kind: "LEVEL", levelStatus: "HALF" }),
         kit
       )
     ),
-    []
+    { code: "INVALID_USAGE", field: "rags" }
+  );
+  check(
+    "…as is a level the enum doesn't have",
+    failureOf(
+      validateClosingReport(
+        report({
+          productId: "spray",
+          kind: "LEVEL",
+          levelStatus: "MOSTLY" as never,
+        }),
+        kit
+      )
+    ),
+    { code: "INVALID_USAGE", field: "spray" }
   );
 
-  // A malformed section used to reach `for (const s of usage.sprays)` and throw
+  // A re-rendered row must not be able to fail a clock-out with a duplicate.
+  check(
+    "5.2e the same product twice is a correction, not a conflict",
+    entriesOf(
+      validateClosingReport(
+        report(
+          { productId: "spray", kind: "LEVEL", levelStatus: "FULL" },
+          { productId: "spray", kind: "LEVEL", levelStatus: "LOW" }
+        ),
+        kit
+      )
+    ),
+    [
+      {
+        productId: "spray",
+        kind: "LEVEL",
+        quantity: 500,
+        level: "LOW",
+        status: null,
+        condition: null,
+      },
+    ]
+  );
+
+  // A malformed payload used to reach `for (const s of usage.sprays)` and throw
   // a TypeError, which the catch-all printed as "Failed to clock out".
   check(
-    "5.2e a section that is not a list is a named failure, not a TypeError",
+    "5.2f a payload that is not a list is a named failure, not a TypeError",
     failureOf(
-      validateClockOutUsage(
-        { sprays: "heavy" as unknown as ClockOutUsage["sprays"] },
+      validateClosingReport(
+        { items: "everything" as unknown as ClosingReport["items"] },
         kit
       )
     ),
@@ -1538,10 +1659,12 @@ const usage = (over: Partial<ClockOutUsage> = {}): ClockOutUsage => ({
   ok(
     "…and its message tells the cleaner what to do, not what threw",
     /reopen the clock-out form/i.test(
-      (validateClockOutUsage(
-        { mops: 3 as unknown as ClockOutUsage["mops"] },
-        kit
-      ) as { failure: { error: string } }).failure.error
+      (
+        validateClosingReport(
+          { items: 3 as unknown as ClosingReport["items"] },
+          kit
+        ) as { failure: { error: string } }
+      ).failure.error
     )
   );
 }
@@ -1604,34 +1727,45 @@ const usage = (over: Partial<ClockOutUsage> = {}): ClockOutUsage => ({
 
 // ── 5.3 · the failure log an admin actually reads ──────────────────────────
 {
-  const kit = kitOf(kitItem("spray", 500, { name: "All-Purpose Spray" }));
+  const kit = kitOf(
+    kitItem("spray", 500, { name: "All-Purpose Spray", itemType: "LIQUID" })
+  );
 
   ok(
-    "5.3b the log summary names products and amounts",
-    /All-Purpose Spray −37\.5 ml/.test(
-      describeUsageForLog(
-        usage({ sprays: [{ productId: "spray", sprayCount: 30 }] }),
+    "5.3b the log summary names products and what was reported",
+    /All-Purpose Spray → EMPTY/.test(
+      describeReportForLog(
+        report({ productId: "spray", kind: "LEVEL", levelStatus: "EMPTY" }),
         kit
       )
     )
   );
   ok(
     "…and says so plainly when nothing was reported",
-    /none reporting usage/.test(
-      describeUsageForLog(
-        usage({ sprays: [{ productId: "spray", sprayCount: 0 }] }),
-        kit
-      )
-    )
+    /no inventory changes reported/.test(describeReportForLog(report(), kit))
   );
   ok(
     "…and records the rejection code when the payload was the problem",
     /PRODUCT_NOT_IN_KIT/.test(
-      describeUsageForLog(
-        usage({ disposables: [{ productId: "gone", quantity: 1 }] }),
+      describeReportForLog(
+        report({ productId: "gone", kind: "COUNT", quantity: 1 }),
         kit
       )
     )
+  );
+  // A log row is read by an admin, so nothing the cleaner typed reaches it —
+  // only our own product names and our own enum values.
+  ok(
+    "…and never echoes the cleaner's free text",
+    !describeReportForLog(
+      report({
+        productId: "spray",
+        kind: "LEVEL",
+        levelStatus: "LOW",
+        note: "<script>alert(1)</script>",
+      }),
+      kit
+    ).includes("script")
   );
 }
 
@@ -1677,9 +1811,19 @@ has(
   "case 'CLOCK_OUT_FAILED'"
 );
 
-ok(
-  "5.4 the supplies category is resolved before the ops array is built",
-  !/ops\.push\([\s\S]{0,400}await requireBudgetCategoryId/.test(read(CLOCK_OUT_ACTION))
+// Stage 3 removed the supplies transaction outright (decision D2) — it was
+// priced from the estimated usage, so there is no longer a budget category to
+// resolve at all. Asserting its ABSENCE is strictly stronger than the old
+// "resolve it before the ops array" ordering check it replaces.
+lacksInCode(
+  "5.4/3.3 no supplies budget category is resolved during clock-out any more",
+  CLOCK_OUT_ACTION,
+  "requireBudgetCategoryId"
+);
+lacksInCode(
+  "…and no per-job supplies Transaction is created",
+  CLOCK_OUT_ACTION,
+  "db.transaction.create("
 );
 has(
   "5.4 a retry after a post-transaction failure resumes instead of refusing",
@@ -1725,15 +1869,17 @@ has(
   CLOCK_OUT_ACTION,
   "db.jobLog.createMany"
 );
-has(
-  "…and the usage row is an upsert with increment, so two cleaners can't collide",
+// Stage 3: the estimated-usage row is not written at all any more. The table
+// stays readable (decision D4); nothing adds to it.
+lacksInCode(
+  "3.3 clock-out no longer writes JobProductUsage",
   CLOCK_OUT_ACTION,
-  "quantity: { increment:"
+  "jobProductUsage"
 );
-lacks(
-  "…with the read-then-write merge gone",
+lacksInCode(
+  "…and never converts sprays to millilitres",
   CLOCK_OUT_ACTION,
-  "job.productUsage.find("
+  "ML_PER_SPRAY"
 );
 
 // 5.5 — both modals, because the checklist gate shipped on one of them first
@@ -1744,7 +1890,7 @@ for (const [label, path] of [
 ] as const) {
   has(`5.5 the ${label} offers Retry on a retryable failure`, path, "onRetry");
   has(
-    `…and resubmits the SAME payload rather than re-reading the pickers`,
+    `…and resubmits the SAME payload rather than re-reading the inputs`,
     path,
     "?? buildUsage()"
   );
@@ -1763,6 +1909,18 @@ for (const [label, path] of [
     `…and a missing remaining value is untouched, not the whole stock`,
     !/parseFloat\([^)]*\?\? "0"\)/.test(read(path))
   );
+  // Stage 3: ONE report component, imported by both screens. The estimated
+  // survey shipped twice, and that is how the two drifted apart.
+  has(
+    `…and the ${label} renders the shared closing report`,
+    path,
+    "<ClosingInventoryReport"
+  );
+  lacksInCode(
+    `…rather than its own copy of the usage pickers`,
+    path,
+    "SPRAY_OPTIONS"
+  );
 }
 has(
   "5.5 the failure notice is one shared component across both modals",
@@ -1777,9 +1935,26 @@ ok(
 // The pure rules have to stay pure or the checks above stop being runnable
 // without a database — which is the whole reason they live in their own module.
 {
-  const lib = read(CLOCK_OUT_LIB);
+  const lib = codeOf(CLOCK_OUT_LIB);
   const imports = [...lib.matchAll(/from "([^"]+)"/g)].map((m) => m[1]);
-  check("the clock-out rules module imports nothing at all", imports, []);
+  // It may import the two PURE vocabulary modules it validates against — and
+  // nothing else. Asserted transitively: each of those must itself import
+  // nothing, so no `db`, `auth` or `@prisma/client` can arrive one hop away and
+  // make these checks un-runnable without a database.
+  const PURE = ["./inventory-status", "./item-type"];
+  check(
+    "the clock-out rules module imports only pure local vocabularies",
+    imports.filter((i) => !PURE.includes(i)),
+    []
+  );
+  for (const dep of imports) {
+    const depSrc = codeOf(`src/lib/${dep.replace("./", "")}.ts`);
+    check(
+      `…and ${dep} imports nothing at all`,
+      [...depSrc.matchAll(/from "([^"]+)"/g)].map((m) => m[1]),
+      []
+    );
+  }
 }
 
 // ───────────────────────────────────────────────────────────────────────────

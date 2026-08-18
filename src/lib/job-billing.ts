@@ -1,4 +1,5 @@
 import { BOOKING_DEPOSIT_CENTS } from "@/lib/stripe";
+import { resolveDepositCredit } from "@/lib/booking-deposit";
 
 /**
  * THE amount a job's card gets charged. One function, so the five paths that
@@ -41,7 +42,10 @@ import { BOOKING_DEPOSIT_CENTS } from "@/lib/stripe";
  * were never computed. Those behave exactly as they do today, so this change
  * cannot move an amount it does not also correct.
  *
- * Then the deposit comes off, once, if one was actually collected.
+ * Then the deposit comes off, once, if one was actually collected — and since
+ * Stage 11 it is the amount THAT job collected (`Job.depositAmount`), not a
+ * constant. A post-construction booking takes $200; crediting it $20 would
+ * overcharge the customer by $180 at completion.
  *
  * ## What deliberately does NOT use this
  *
@@ -51,7 +55,16 @@ import { BOOKING_DEPOSIT_CENTS } from "@/lib/stripe";
  * double-count tax in every report.
  */
 
-/** The booking deposit in dollars. Sourced from the cents constant so the two cannot drift. */
+/**
+ * The STANDARD booking deposit in dollars. Sourced from the cents constant so
+ * the two cannot drift.
+ *
+ * ⚠️ Not "the deposit for a job" since Stage 11 — post-construction charges a
+ * configurable amount. Use `resolveDepositCredit(job)` for that. This stays
+ * exported because it is the right default in the two places that have no job to
+ * read: the booking-confirmation email's fallback, and the historical value for
+ * rows written before `Job.depositAmount` existed.
+ */
 export const BOOKING_DEPOSIT_USD = BOOKING_DEPOSIT_CENTS / 100;
 
 export interface JobBillingFields {
@@ -59,6 +72,17 @@ export interface JobBillingFields {
   discountAmount: number | null;
   totalAmount: number | null;
   depositPaid: boolean;
+  /**
+   * What the deposit actually was (Stage 11). OPTIONAL on purpose: a `select`
+   * that predates the column omits it and lands on the $20 fallback inside
+   * `resolveDepositCredit`, which is the figure every such row really charged —
+   * so an un-threaded caller degrades to today's answer, not to a free job.
+   *
+   * ⚠️ A caller reading a POST-CONSTRUCTION job must include it. Without it a
+   * $200 deposit would credit $20 and the customer would be charged $180 too
+   * much. Every reader in the repo is threaded; the verify script asserts it.
+   */
+  depositAmount?: number | null;
 }
 
 function round2(n: number): number {
@@ -77,10 +101,13 @@ export function resolveAmountDue(job: JobBillingFields): number {
       ? job.totalAmount
       : Math.max(0, (job.price ?? 0) - (job.discountAmount ?? 0));
 
-  // Only when a deposit was actually taken. `depositPaid` is stamped by
-  // submitBooking after `verifyBookingDeposit` confirms the PaymentIntent with
-  // Stripe, so it cannot be set by a booking that never paid one.
-  const deposit = job.depositPaid ? BOOKING_DEPOSIT_USD : 0;
+  // Only when a deposit was actually taken, and only ever the amount that was
+  // actually taken. `depositPaid` is stamped by submitBooking after
+  // `verifyBookingDeposit` confirms the PaymentIntent with Stripe, so it cannot
+  // be set by a booking that never paid one; `depositAmount` is written in the
+  // same statement from the server-resolved figure, so it cannot claim a credit
+  // larger than the charge.
+  const deposit = resolveDepositCredit(job);
 
   return round2(Math.max(0, gross - deposit));
 }

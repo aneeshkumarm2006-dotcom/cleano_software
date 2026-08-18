@@ -14,6 +14,7 @@ import { getCleanerRateInputs } from "@/lib/cleaner-rates";
 import { deleteJob as archiveJob } from "@/app/admin/actions/deleteJob";
 import { computeJobPayShares, type JobPayInput } from "@/lib/cleaner-earnings";
 import { resolveAmountDue } from "@/lib/job-billing";
+import { summarizeJobChecklist } from "@/lib/job-checklist.server";
 import JobDetailView from "./JobDetailView";
 import ScrollToTop from "./ScrollToTop";
 
@@ -132,6 +133,7 @@ export default async function JobPage({
     { addOns: addOnCatalog },
     gpsEnabled,
     rateInputs,
+    checklistSummary,
   ] = await Promise.all([
     // All users for the cleaner selector
     db.user.findMany({
@@ -211,6 +213,12 @@ export default async function JobPage({
 
     // Per-cleaner pay inputs (see the pay comment below).
     getCleanerRateInputs(participantIds),
+
+    // Which checklist this job resolves to, and what has been generated from it
+    // (Stage 10 / PDF #10). READ-ONLY — it never creates a JobChecklist row;
+    // generation stays where it has always been, on the cleaner opening the
+    // job. Joins wave 2 rather than trailing it: it needs only the job id.
+    summarizeJobChecklist(id),
   ]);
 
   const totalLogs = job._count.logs;
@@ -362,6 +370,14 @@ export default async function JobPage({
     // `pricingMode` is the explicit answer that supersedes it (fix 2).
     bookingSource: job.bookingSource,
     pricingMode: job.pricingMode,
+    // Customer-side hourly billing (Stage 8 / PDF #8). Feeds the same
+    // `computeJobMoney` call as the two above — without them the Financials tab
+    // would price an hourly job off the `price` mirror and stop agreeing with
+    // itself the moment the crew's hours were snapshotted.
+    billingType: job.billingType,
+    billedHourlyRate: job.billedHourlyRate,
+    billedEstimatedHours: job.billedEstimatedHours,
+    billedActualHours: job.billedActualHours,
     subtotalAmount: job.subtotalAmount,
     gstAmount: job.gstAmount,
     qstAmount: job.qstAmount,
@@ -399,7 +415,19 @@ export default async function JobPage({
     bedCount: job.bedCount,
     bathCount: job.bathCount,
     halfBathCount: job.halfBathCount,
+    // Apartment/condo vs house (Stage 9 / PDF #11) — rendered in the Location
+    // card, since it describes the place rather than the schedule or the money.
+    propertyType: job.propertyType,
+    checklistTemplateId: job.checklistTemplateId,
     depositPaid: job.depositPaid,
+    // Stage 11 / PDF #9. `depositAmount` feeds the refund cap and the Payment
+    // card; the four quote columns feed the Quote review panel and the guard that
+    // decides whether this job is a quote at all.
+    depositAmount: job.depositAmount,
+    quoteStatus: job.quoteStatus,
+    quotedAt: job.quotedAt?.toISOString() ?? null,
+    pcHours: job.pcHours,
+    pcCleaners: job.pcCleaners,
     depositPaymentIntentId: job.depositPaymentIntentId,
     stripePaymentIntentId: job.stripePaymentIntentId,
     addOns: job.addOns.map((a) => ({
@@ -455,7 +483,11 @@ export default async function JobPage({
     url: photo.url,
     caption: photo.caption,
     createdAt: photo.createdAt.toISOString(),
-    employee: { id: photo.employee.id, name: photo.employee.name },
+    // Null for a customer-uploaded booking photo (Stage 11) — the view labels
+    // it rather than assuming a member of staff took it.
+    employee: photo.employee
+      ? { id: photo.employee.id, name: photo.employee.name }
+      : null,
   }));
 
   const reviewPhotosData = reviewPhotos.map((photo) => ({
@@ -526,6 +558,7 @@ export default async function JobPage({
         hasPayableParticipants={hasPayableParticipants}
         jobRatings={jobRatingsData}
         gpsEnabled={gpsEnabled}
+        checklistSummary={checklistSummary}
       />
     </>
   );

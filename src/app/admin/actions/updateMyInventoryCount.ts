@@ -101,6 +101,7 @@ export async function updateMyInventoryCount(input: {
         quantityChange: delta,
         newQuantity: qty,
         unit: kit.product.unit,
+        action: "RECOUNT",
         reason: `Cleaner recount: ${reason}`,
         changedById: actor.id,
         changedByName: actor.name ?? null,

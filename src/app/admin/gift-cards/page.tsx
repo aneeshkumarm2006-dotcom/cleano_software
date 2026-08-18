@@ -1,4 +1,4 @@
-import { requireAdmin } from "@/lib/page-guards";
+import { requireOwnerAdmin } from "@/lib/page-guards";
 import { db } from "@/db";
 import GiftCardsAdminClient from "./GiftCardsAdminClient";
 
@@ -9,7 +9,14 @@ export default async function GiftCardsAdminPage({
 }: {
   searchParams: SearchParams;
 }) {
-  await requireAdmin();
+  // requireOwnerAdmin, NOT requireAdmin: `isAdminRole` admits OWNER, ADMIN,
+  // OPS_MANAGER **and FIELD_LEAD** — it answers "may you reach /admin/*",
+  // which is not the same question as "may you see money". This page prints
+  // real balances/totals, and both of those roles are denied money everywhere
+  // else (calendar price labels, dashboard revenue tiles, analytics). The page
+  // was reachable by direct URL and its nav entry carried no `adminOnly`, so it
+  // was not even hidden.
+  await requireOwnerAdmin();
 
   const params = await searchParams;
   const archived = params.archived === "1";

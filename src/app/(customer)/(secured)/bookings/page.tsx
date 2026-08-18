@@ -71,6 +71,8 @@ export default async function BookingsPage() {
       paymentReceived: j.paymentReceived,
       refundedAmount: j.refundedAmount,
       depositPaid: j.depositPaid,
+      // Stage 11: the pill has to name the amount that was really charged.
+      depositAmount: j.depositAmount,
       depositPaidAt: j.depositPaidAt?.toISOString() ?? null,
       cancellationRequestedAt:
         j.cancellationRequestedAt?.toISOString() ?? null,

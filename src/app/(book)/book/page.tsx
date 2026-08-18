@@ -20,6 +20,11 @@ import { addOnLineTotal, sumAddOns } from "@/lib/job-money";
 import { isValidEmail, isValidPhone } from "@/lib/validation";
 import { AFTER_PHOTO_CONSENT_TEXT } from "@/lib/policy";
 import {
+  BOOKING_PHOTO_MIN,
+  formatDeposit,
+  isQuotedService,
+} from "@/lib/booking-deposit";
+import {
   BOOKING_PAGE_DEFAULTS,
   frequencyEnabled,
   isFieldRequired,
@@ -90,6 +95,15 @@ function stepRequirementsMet(
         !(draft.squareFootage > 0)
       )
         return false;
+      // Photos gate Continue the same way (PDF #9, Stage 11). Pinned required for
+      // post-construction, which is quoted FROM the photos — a deposit taken with
+      // none is a payment for a quote nobody can produce. Counted against
+      // `draft.photos`, which only ever holds URLs that finished uploading.
+      if (
+        isFieldRequired(bookingPage, "property", "photos", draft.serviceType) &&
+        draft.photos.length < BOOKING_PHOTO_MIN
+      )
+        return false;
       return true;
     case 2:
       return !!(
@@ -145,6 +159,12 @@ export default function BookPage() {
   const [submitted, setSubmitted] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [confirmedTotal, setConfirmedTotal] = useState<number | null>(null);
+  // What the server actually took, and whether it created a quote request rather
+  // than a booked job (PDF #9, Stage 11). Read off the response instead of
+  // re-derived, so the confirmation screen can never promise a cleaning on a
+  // booking that is still waiting for its quote.
+  const [confirmedDeposit, setConfirmedDeposit] = useState<number | null>(null);
+  const [confirmedQuotePending, setConfirmedQuotePending] = useState(false);
   // Whether step 1 can offer "Back" to wherever the customer came from. Only
   // true when there IS somewhere to return to — a visitor who opened /book
   // directly gets no dead Back control, and we can't send them to "/" because
@@ -588,6 +608,10 @@ export default function BookPage() {
     const res = await submitBooking({
       postalCode: draft.postalCode,
       address: draft.address,
+      // PDF #11: the customer's choice has to reach the admin job by itself.
+      // Re-validated server-side like every other field here — this action is
+      // public, so nothing it receives is trusted as an enum value.
+      propertyType: draft.propertyType,
       bedCount: draft.bedCount,
       bathCount: draft.bathCount,
       halfBathCount: draft.halfBathCount,
@@ -595,6 +619,10 @@ export default function BookPage() {
       serviceType: draft.serviceType,
       pcHours: draft.pcHours,
       pcCleaners: draft.pcCleaners,
+      // Photos of the space (PDF #9, Stage 11) — already uploaded, so these are
+      // URLs. Re-validated server-side against our own upload folder, because
+      // this action is public and a URL from the browser is untrusted input.
+      photoUrls: draft.photos.map((p) => p.url),
       frequency: draft.frequency,
       addOns: draft.addOns
         .filter((a) => a.selected)
@@ -630,13 +658,17 @@ export default function BookPage() {
       return;
     }
     setConfirmedTotal(res.total ?? null);
+    setConfirmedDeposit(res.depositAmount ?? null);
+    setConfirmedQuotePending(res.quotePending === true);
     setSubmitted(true);
     // Keep submittingRef true after success — page transitions to confirmation
     // screen so further submits are impossible anyway.
   }
 
   // Live price for sidebar. basePrice is server-computed for every service type.
-  const isPC = draft.serviceType === "POST_CONSTRUCTION";
+  // `isQuotedService` rather than a local string test, so this page, Step 5, the
+  // deposit route and `submitBooking` all agree on which services are quoted.
+  const isPC = isQuotedService(draft.serviceType);
   const isAirbnb = draft.serviceType === "AIRBNB";
   const effectiveBase = basePrice;
 
@@ -711,27 +743,50 @@ export default function BookPage() {
                 <Check size={42} strokeWidth={2.5} />
               </div>
               <p className="cl-eyebrow" style={{ marginBottom: 12 }}>
-                Confirmed
+                {confirmedQuotePending ? "Request received" : "Confirmed"}
               </p>
               <h1 className="cl-display" style={{ marginBottom: 18 }}>
                 Thanks,
                 <br />
                 <em>{draft.name.split(/\s+/)[0]}!</em>
               </h1>
+              {/* PDF #9: a quote request is NOT a scheduled cleaning, and saying
+                  it is would be the same misleading promise the estimate line on
+                  step 2 used to make. The date the customer picked is their
+                  preference; nothing is booked until they approve the quote. */}
               <p
                 className="cl-subtitle"
                 style={{ maxWidth: 520, margin: "0 auto", fontSize: 16 }}>
-                Your cleaning is scheduled for{" "}
-                <strong style={{ color: "var(--ink)" }}>
-                  {new Date(draft.date).toLocaleDateString("en-US", {
-                    weekday: "long",
-                  })}
-                </strong>
-                {draft.isFlexible
-                  ? " (flexible — we'll confirm a time the day before)"
-                  : ""}
-                . We sent a confirmation to{" "}
-                <strong style={{ color: "var(--ink)" }}>{draft.email}</strong>.
+                {confirmedQuotePending ? (
+                  <>
+                    We have your photos and your preferred date of{" "}
+                    <strong style={{ color: "var(--ink)" }}>
+                      {new Date(draft.date).toLocaleDateString("en-US", {
+                        weekday: "long",
+                        month: "long",
+                        day: "numeric",
+                      })}
+                    </strong>
+                    . Our team will review the space and email your final quote to{" "}
+                    <strong style={{ color: "var(--ink)" }}>{draft.email}</strong>{" "}
+                    — usually within one business day. Nothing else is charged
+                    until you approve it.
+                  </>
+                ) : (
+                  <>
+                    Your cleaning is scheduled for{" "}
+                    <strong style={{ color: "var(--ink)" }}>
+                      {new Date(draft.date).toLocaleDateString("en-US", {
+                        weekday: "long",
+                      })}
+                    </strong>
+                    {draft.isFlexible
+                      ? " (flexible — we'll confirm a time the day before)"
+                      : ""}
+                    . We sent a confirmation to{" "}
+                    <strong style={{ color: "var(--ink)" }}>{draft.email}</strong>.
+                  </>
+                )}
               </p>
               {confirmedTotal !== null ? (
                 <p
@@ -741,7 +796,7 @@ export default function BookPage() {
                     maxWidth: 480,
                     margin: "24px auto 40px",
                   }}>
-                  Total:{" "}
+                  {confirmedQuotePending ? "Estimate" : "Total"}:{" "}
                   <strong
                     style={{
                       color: "var(--primary)",
@@ -750,7 +805,13 @@ export default function BookPage() {
                     }}>
                     ${confirmedTotal.toFixed(2)} CAD
                   </strong>{" "}
-                  — $20 deposit charged, remaining balance after cleaning.
+                  {confirmedQuotePending
+                    ? `— ${formatDeposit(
+                        confirmedDeposit ?? 0
+                      )} deposit charged and credited against your final quote.`
+                    : `— ${formatDeposit(
+                        confirmedDeposit ?? 0
+                      )} deposit charged, remaining balance after cleaning.`}
                 </p>
               ) : null}
 
@@ -977,11 +1038,20 @@ export default function BookPage() {
                 <strong>${(tax.gstAmount + tax.qstAmount).toFixed(2)}</strong>
               </div>
               <div className="cl-summary-total">
-                <span className="cl-summary-total-label">Total</span>
+                <span className="cl-summary-total-label">
+                  {isPC ? "Estimated total" : "Total"}
+                </span>
                 <span className="cl-summary-total-value">
                   ${tax.total.toFixed(2)}
                 </span>
               </div>
+              {isPC ? (
+                <div
+                  className="cl-summary-row"
+                  style={{ fontSize: 11, color: "rgba(255,255,255,0.55)" }}>
+                  <span>Final quote sent after we review your photos</span>
+                </div>
+              ) : null}
             </div>
           ) : null}
 
@@ -992,7 +1062,11 @@ export default function BookPage() {
               lineHeight: 1.55,
               marginTop: "auto",
             }}>
-            A $20 deposit is charged at booking. The remaining balance is due after your cleaning.
+            {/* The exact deposit is resolved server-side on step 5; here we only
+                need to name which of the two flows the customer is in. */}
+            {isPC
+              ? "A deposit is charged when you submit your request, and it comes off your final quote."
+              : "A $20 deposit is charged at booking. The remaining balance is due after your cleaning."}
           </p>
         </aside>
 

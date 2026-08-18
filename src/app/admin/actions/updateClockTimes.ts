@@ -12,6 +12,7 @@ import {
   validateClockEdit,
 } from "@/lib/clock-edit";
 import { syncClockMirrors } from "@/lib/work-sessions.server";
+import { snapshotBilledActualHours } from "@/lib/hourly-billing.server";
 
 /**
  * Admin correction of clock-in / clock-out times (new fix list item 4).
@@ -138,6 +139,12 @@ export async function updateClockTimes(
     // Job + assignment columns are derived, so they are rebuilt rather than
     // edited — an admin fixing a session must not leave the mirrors stale.
     await syncClockMirrors(job.id);
+    // An hourly job bills the hours these sessions record, so correcting a
+    // session has to correct the bill (Stage 8). No-op on a flat job, and it
+    // refuses to re-price a job that has already been paid.
+    await snapshotBilledActualHours(job.id).catch((e) =>
+      console.error("billed-hours snapshot", e)
+    );
   } else if (cleanerId) {
     // Only someone actually on the job can have times recorded against them.
     // Without this, the upsert below would MINT a JobAssignment row for an
@@ -333,6 +340,10 @@ export async function deleteJobWorkSession(input: {
   // that were just removed. Every reader falls back to those columns, so the
   // deleted work would go on being reported in hours, payroll and time tracking.
   await syncClockMirrors(job.id, { reconcile: [row.cleanerId] });
+  // Deleted work is work the customer is no longer billed for (Stage 8).
+  await snapshotBilledActualHours(job.id).catch((e) =>
+    console.error("billed-hours snapshot", e)
+  );
 
   const fmt = (d: Date | null) => (d ? fmtDateTime(d) : "—");
   await db.jobLog

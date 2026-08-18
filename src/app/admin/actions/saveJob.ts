@@ -32,6 +32,13 @@ import {
   resolvePricingMode,
   type JobPricingMode,
 } from "@/lib/job-money";
+import {
+  hourlyServiceAmount,
+  isBillingType,
+  roundBilledHours,
+  type JobBillingType,
+} from "@/lib/hourly-billing";
+import { parsePropertyType, type PropertyType } from "@/lib/property-type";
 import { resolveJobAddressId } from "@/lib/client-address-store";
 import { resolveJobClient } from "@/lib/client-capture";
 import { getServicePricingConfig } from "@/lib/booking-pricing";
@@ -242,11 +249,145 @@ export async function saveJob(formData: FormData) {
     const squareFootage = parseOptionalInt(formData.get("squareFootage"));
     const jobTypeRaw = (formData.get("jobType") as string) || null;
 
+    // ── Property type (Stage 9 / PDF #11) ────────────────────────────────────
+    //
+    // Property INFORMATION, in the same family as `squareFootage` above. It is
+    // NOT `jobTypeRaw`: that decides the service, the pricing rule and the
+    // checklist triggers, and folding a building type into it would move all
+    // three. Nothing below reads this — it prices nothing and pays nothing.
+    //
+    // Tri-state, the same discipline `billingType` uses just below: a form that
+    // OWNS the control posts the key — blank included, which is an admin
+    // deliberately clearing it — and a form that never rendered the control
+    // posts nothing and must preserve what is stored rather than blanking it.
+    const propertySubmitted = formData.has("propertyType");
+    let propertyType: PropertyType | null = propertySubmitted
+      ? parsePropertyType(formData.get("propertyType"))
+      : null;
+
+    // ── Checklist template pin (Stage 10 / PDF #10) ──────────────────────────
+    //
+    // "Auto" — the blank option, and every existing row — leaves resolution to
+    // the shared precedence (address-scoped → client-scoped → service default).
+    // A value PINS this job to one template and beats all three.
+    //
+    // Same tri-state as `propertyType` above and `billingType` below: a form
+    // that owns the control posts the key (blank included, which is an admin
+    // deliberately going back to Auto); a form that never rendered it posts
+    // nothing and must preserve what is stored.
+    const checklistSubmitted = formData.has("checklistTemplateId");
+    let checklistTemplateId: string | null = checklistSubmitted
+      ? ((formData.get("checklistTemplateId") as string) || "").trim() || null
+      : null;
+
+    // ── Customer-side hourly billing (Stage 8 / PDF #8) ──────────────────────
+    //
+    // Same tri-state discipline `payType` uses below, and for the same reason:
+    // the jobs-list quick-edit modal does not render this control, and a form
+    // that never showed a field must not reset it. A submission that OWNS the
+    // control posts `billingType`; anything else preserves what is stored.
+    //
+    // These are the CUSTOMER's rate and hours. `hourlyRate` further down is the
+    // CLEANER's, and the two are never read together (decision D6).
+    const billingSubmitted = formData.has("billingType");
+    let billingType: JobBillingType = "FLAT";
+    let billedHourlyRate: number | null = null;
+    let billedEstimatedHours: number | null = null;
+    let billedActualHours: number | null = null;
+    const existingBillingJobId = (formData.get("jobId") as string | null) || null;
+    // ONE read serves all three preservation cases. Billing, property type and
+    // the checklist pin carry independent tri-states, so any of them can be the
+    // missing one; a second round-trip per field would be pure waste on the
+    // common path where the job modal posts all three.
+    const preservedFields =
+      (!billingSubmitted || !propertySubmitted || !checklistSubmitted) &&
+      existingBillingJobId
+        ? await db.job.findUnique({
+            where: { id: existingBillingJobId },
+            select: {
+              billingType: true,
+              billedHourlyRate: true,
+              billedEstimatedHours: true,
+              billedActualHours: true,
+              propertyType: true,
+              checklistTemplateId: true,
+            },
+          })
+        : null;
+    if (!propertySubmitted) propertyType = preservedFields?.propertyType ?? null;
+    if (!checklistSubmitted) {
+      checklistTemplateId = preservedFields?.checklistTemplateId ?? null;
+    }
+    // A stale id from a form left open while the template was deleted would
+    // otherwise surface as a raw foreign-key violation — a 500 on a save that
+    // is otherwise perfectly valid. Falling back to Auto is the same outcome
+    // the FK's ON DELETE SET NULL would have produced anyway.
+    if (checklistSubmitted && checklistTemplateId) {
+      const exists = await db.checklistTemplate.findUnique({
+        where: { id: checklistTemplateId },
+        select: { id: true },
+      });
+      if (!exists) checklistTemplateId = null;
+    }
+    if (billingSubmitted) {
+      const raw = formData.get("billingType");
+      billingType = isBillingType(raw) ? raw : "FLAT";
+      if (billingType === "HOURLY") {
+        billedHourlyRate = parseOptionalFloat(formData.get("billedHourlyRate"));
+        const est = parseOptionalFloat(formData.get("billedEstimatedHours"));
+        const act = parseOptionalFloat(formData.get("billedActualHours"));
+        // Rounded on the way IN as well as at clock-out, so a typed 2.6 and a
+        // measured 2.6 land on the same 2.5 and the two can never disagree by
+        // a rounding rule (decision D7).
+        billedEstimatedHours = est !== null && est > 0 ? roundBilledHours(est) : null;
+        billedActualHours = act !== null && act > 0 ? roundBilledHours(act) : null;
+
+        // Step 8.4. An hourly job with no rate cannot be priced at all, and an
+        // hourly job with no hours would bill $0 — both are the admin having
+        // filled in half a form, so say so rather than saving a broken job.
+        if (billedHourlyRate === null || billedHourlyRate <= 0) {
+          return { error: "Enter the customer's hourly rate for an hourly job." };
+        }
+        if (billedEstimatedHours === null && billedActualHours === null) {
+          return { error: "Enter the estimated hours for an hourly job." };
+        }
+      }
+      // FLAT: the three figures are cleared. Switching back to a flat price is
+      // the admin saying the hourly terms no longer apply, and leaving a stale
+      // rate behind would silently re-derive the price the next time anything
+      // flipped the type back.
+    } else if (existingBillingJobId) {
+      billingType = (preservedFields?.billingType as JobBillingType) ?? "FLAT";
+      billedHourlyRate = preservedFields?.billedHourlyRate ?? null;
+      billedEstimatedHours = preservedFields?.billedEstimatedHours ?? null;
+      billedActualHours = preservedFields?.billedActualHours ?? null;
+    }
+
+    // THE derived service line. Null on every flat job, which is why nothing
+    // below changes for them.
+    const hourlyBase = hourlyServiceAmount({
+      billingType,
+      billedHourlyRate,
+      billedEstimatedHours,
+      billedActualHours,
+    });
+
     // Derive the price from square footage when the service is sqft-priced and
     // the admin left the price blank. An explicitly entered price always wins —
     // admins price jobs manually (courtesy jobs, negotiated totals), so this
     // must never overwrite a number a human typed.
-    if (price === null && squareFootage !== null && squareFootage > 0 && isSqftJobType(jobTypeRaw)) {
+    //
+    // Step 8.8: skipped outright on an hourly job. Square-foot pricing is a
+    // flat-rate residential assumption, and an hourly move-out would otherwise
+    // have its price silently set from its floor area and then immediately
+    // contradicted by `rate × hours` in the totals.
+    if (
+      billingType !== "HOURLY" &&
+      price === null &&
+      squareFootage !== null &&
+      squareFootage > 0 &&
+      isSqftJobType(jobTypeRaw)
+    ) {
       const pricingCfg = await getServicePricingConfig();
       const derived = moveInOutBasePrice(squareFootage, pricingCfg);
       if (derived > 0) price = derived;
@@ -256,38 +397,28 @@ export async function saveJob(formData: FormData) {
     // fixed price and the admin left the price blank (or typed the fixed price
     // itself), the job charges the fixed total. An explicitly different price
     // wins and clears the flag.
+    //
+    // Step 8.8, second half: a customer-specific fixed price is a flat total by
+    // definition, so it does not apply to a job the customer agreed to pay by
+    // the hour. Without this guard an hourly job for a fixed-price client would
+    // carry the "Fixed price" badge while being billed rate × hours.
     let usesFixedPrice = false;
-    if (clientFixedPrice !== null && clientFixedPrice > 0) {
+    if (
+      billingType !== "HOURLY" &&
+      clientFixedPrice !== null &&
+      clientFixedPrice > 0
+    ) {
       if (price === null || price === clientFixedPrice) {
         price = clientFixedPrice;
         usesFixedPrice = true;
       }
     }
 
-    let discountAmount = parseOptionalFloat(formData.get("discountAmount"));
+    const discountSubmitted = parseOptionalFloat(formData.get("discountAmount"));
+    let discountAmount = discountSubmitted;
     // Why the discount was given (item 29). Free-form so an admin can type a
     // reason the presets don't cover.
     let discountReason = normalizeDiscountReason(formData.get("discountReason"));
-
-    // Auto-apply client default discount when admin hasn't entered one.
-    // Treat null/empty as "not entered"; admin can pass "0" to opt out.
-    // Fixed-price jobs skip it — the fixed price IS the agreed total.
-    if (
-      discountAmount === null &&
-      !usesFixedPrice &&
-      clientDiscountPercent > 0 &&
-      price !== null &&
-      price > 0
-    ) {
-      discountAmount = +(price * (clientDiscountPercent / 100)).toFixed(2);
-    }
-
-    // A discount with no reason is what item 29 exists to stop. Where the
-    // SYSTEM applied it we know why, so label it rather than leaving a blank
-    // that reporting can't explain. An admin-entered reason always wins.
-    if (!discountReason && (discountAmount ?? 0) > 0 && recurringFrequency) {
-      discountReason = AUTO_REASON.RECURRING;
-    }
 
     // Cleaner pay model for this job.
     //  • PERCENTAGE (default): tier/split math — auto-estimate the pool when the
@@ -352,6 +483,10 @@ export async function saveJob(formData: FormData) {
     let existingPayIsManual = false;
     let existingTotalAmount: number | null = null;
     let alreadySettled = false;
+    // The two SETTLEMENT flags, carried out of the same lookup for the same
+    // reason — see the note beside `jobData.paymentReceived` below.
+    let existingPaymentReceived = false;
+    let existingInvoiceSent = false;
     if (editingJobId) {
       const current = await db.job.findUnique({
         where: { id: editingJobId },
@@ -364,6 +499,9 @@ export async function saveJob(formData: FormData) {
           employeePayIsManual: true,
           totalAmount: true,
           paymentReceived: true,
+          // Not used for pricing — carried so the edit path can PRESERVE the
+          // two settlement flags no form posting to this action renders.
+          invoiceSent: true,
           stripePaymentIntentId: true,
         },
       });
@@ -376,6 +514,8 @@ export async function saveJob(formData: FormData) {
         : null;
       existingPayIsManual = current?.employeePayIsManual ?? false;
       existingTotalAmount = current?.totalAmount ?? null;
+      existingPaymentReceived = current?.paymentReceived ?? false;
+      existingInvoiceSent = current?.invoiceSent ?? false;
       // "Settled" for D3 purposes: the customer's money has already moved.
       // `paymentReceived` is what chargeJob and toggleJobPaymentStatus flip;
       // the PaymentIntent covers a card charge that landed without the flag.
@@ -411,6 +551,47 @@ export async function saveJob(formData: FormData) {
             ? resolvePricingMode({ bookingSource: existingBookingSource })
             : "ITEMIZED"));
 
+    // ── The hourly mirror (Stage 8, step 8.2) ────────────────────────────────
+    //
+    // `computeJobMoney` derives the service line from rate × hours on its own,
+    // so this assignment does not change a single figure it returns. It exists
+    // so the STORED `Job.price` says the same thing: about fifteen reporting
+    // queries (analytics, exports, the dashboard, invoices) call
+    // `activeSubtotal` through a `select` written before Stage 8 and therefore
+    // fall back to that column. Keeping it equal to the derived amount is what
+    // makes all of them print $240 instead of $0 without being rewritten.
+    //
+    // NOT applied under FINAL_PRICE: there `price` is the override the admin
+    // typed, and overwriting it would both destroy the override and make
+    // `priceRetyped` below fire on a save that changed nothing.
+    if (hourlyBase !== null && pricingMode !== "FINAL_PRICE") {
+      price = hourlyBase;
+    }
+
+    // Auto-apply the client's default discount when the admin hasn't entered
+    // one. Treat null/empty as "not entered"; admin can pass "0" to opt out.
+    // Fixed-price jobs skip it — the fixed price IS the agreed total.
+    //
+    // Moved below the hourly mirror (Stage 8): on an hourly job the price field
+    // is blank, so computing a percentage of it up here gave a $0 discount on
+    // every hourly booking for a client who has a standing discount.
+    if (
+      discountAmount === null &&
+      !usesFixedPrice &&
+      clientDiscountPercent > 0 &&
+      price !== null &&
+      price > 0
+    ) {
+      discountAmount = +(price * (clientDiscountPercent / 100)).toFixed(2);
+    }
+
+    // A discount with no reason is what item 29 exists to stop. Where the
+    // SYSTEM applied it we know why, so label it rather than leaving a blank
+    // that reporting can't explain. An admin-entered reason always wins.
+    if (!discountReason && (discountAmount ?? 0) > 0 && recurringFrequency) {
+      discountReason = AUTO_REASON.RECURRING;
+    }
+
     // Under FINAL_PRICE the ACTIVE service total is `subtotalAmount`, not
     // `price` — on a web booking `price` is the tax-INCLUSIVE booking total
     // while `subtotalAmount` is the pre-tax figure every money surface reads, so
@@ -441,6 +622,9 @@ export async function saveJob(formData: FormData) {
     // FINAL_PRICE: the override total is read back unchanged, taxed as-is, and
     // the add-on rows persist as scope only (their unit prices are kept for
     // display; the MODE, not the price, is what decides they don't add).
+    // HOURLY: the base service line is `billedHourlyRate × hours` — computed
+    // inside the helper, not here, so the modal's live preview and this write
+    // cannot disagree (step 8.2).
     const taxes = computeJobMoney(
       {
         pricingMode,
@@ -451,6 +635,10 @@ export async function saveJob(formData: FormData) {
         isCashJob,
         taxExempt,
         addOns,
+        billingType,
+        billedHourlyRate,
+        billedEstimatedHours,
+        billedActualHours,
       },
       taxRates
     );
@@ -470,6 +658,13 @@ export async function saveJob(formData: FormData) {
       discountAmount,
       subtotalAmount: overrideSubtotal,
       addOns,
+      // Step 8.6 — an hourly job's crew is paid a percentage of `rate × hours`,
+      // the same figure the customer is billed. No branch is needed here; the
+      // basis follows the money because both go through `computeJobMoney`.
+      billingType,
+      billedHourlyRate,
+      billedEstimatedHours,
+      billedActualHours,
     });
 
     let estimatedEmployeePay = manualEmployeePay;
@@ -598,17 +793,61 @@ export async function saveJob(formData: FormData) {
       employeePayIsManual,
       payType,
       hourlyRate,
+      // How the CUSTOMER is billed (Stage 8) — kept two lines below the two
+      // fields that decide how the CLEANER is paid, and never confused with
+      // them. `price` above is already the mirror of `billedHourlyRate ×
+      // hours` when this is HOURLY and the job is not on an override.
+      billingType,
+      billedHourlyRate,
+      billedEstimatedHours,
+      billedActualHours,
       totalTip: parseOptionalFloat(formData.get("totalTip")),
       parking: parseOptionalFloat(formData.get("parking")),
-      paymentReceived: formData.get("paymentReceived") === "on",
-      invoiceSent: formData.get("invoiceSent") === "on",
+      // NOT `formData.get(...) === "on"`. No form that posts to this action —
+      // JobModal, the job detail editor, and both calendar editors — renders a
+      // control for either flag, so that expression was a permanent `false`
+      // that got spread straight into `db.job.update`: editing a description on
+      // a PAID, invoiced job marked it unpaid and un-invoiced, silently and
+      // with no audit row (no save path logs an EDIT).
+      //
+      // An unchecked checkbox and an absent control are identical in FormData,
+      // so the value cannot answer "did the form submit this?" — the form's
+      // SHAPE is the answer, and the shape is "not managed here". These are
+      // payment state, not job setup; they are moved by chargeJob,
+      // toggleJobPaymentStatus, sendInvoice and the invoice sync, and a job
+      // editor must leave them exactly as it found them.
+      //
+      // This is the identical fix `/admin/jobs/new/page.tsx` already carries
+      // (Stage 14.3.c). It never reached this file because §14.3's sweep only
+      // ever read `src/app/admin/jobs/new/` — which is why the guard stayed
+      // green while the bug was live on all four surfaces that post here.
+      paymentReceived: editingJobId ? existingPaymentReceived : false,
+      invoiceSent: editingJobId ? existingInvoiceSent : false,
       notes: (formData.get("notes") as string) || null,
       paymentType,
       discountAmount,
+      // Parsed at the top of this action since discounts grew a reason (item
+      // 29) — and, until now, never written. `jobData` carried the AMOUNT and
+      // dropped the REASON on the floor, so "Courtesy" survived exactly as long
+      // as the modal stayed open: every save stored the money and forgot why.
+      // The children a few hundred lines below already read
+      // `jobData.discountReason`, which was reading `undefined`.
+      discountReason,
       squareFootage,
       bedCount: parseOptionalInt(formData.get("bedCount")),
       bathCount: parseOptionalInt(formData.get("bathCount")),
       halfBathCount: parseOptionalInt(formData.get("halfBathCount")),
+      // Apartment/condo vs house (Stage 9). Sits with the other property
+      // information, and carries across a recurring series through the
+      // `...jobData` spread below — a series is one address, so every
+      // occurrence is at the same kind of building by definition.
+      propertyType,
+      // Which checklist this job uses (Stage 10). Null = resolve automatically.
+      // Rides the same `...jobData` spread into every recurring child, which is
+      // the PDF's "checklist assignment should stay consistent when recurring
+      // jobs are generated" — and is in SERIES_PROPAGATED_FIELDS so an edit to
+      // one occurrence can be applied to the rest.
+      checklistTemplateId,
       // payRateMultiplier is deliberately NOT written (AWER round 3, fix 1).
       // No form field ever existed, so this used to reset every saved job to
       // 1.0 — and the column is now unread anyway. Do not substitute the
@@ -1152,6 +1391,15 @@ export async function saveJob(formData: FormData) {
         // occurrence carries the parent's agreed service total; the frequency
         // discount is still RECORDED on the child (reporting reads it) but not
         // subtracted, which is the FINAL_PRICE convention everywhere else.
+        //
+        // Stage 8: the billing TERMS carry to every occurrence (a series is one
+        // agreement), so the children inherit `billingType`, the rate and the
+        // ESTIMATE through the `...jobData` spread below. `billedActualHours`
+        // is cleared per child — see the childData block — because occurrence 4
+        // has not been worked yet, and inheriting visit 1's measured hours
+        // would bill the customer for work that has not happened. Here that
+        // means the child's hourly line is `rate × estimate`, which is exactly
+        // what an unstarted occurrence is worth.
         const childTaxes = computeJobMoney(
           {
             pricingMode,
@@ -1163,6 +1411,10 @@ export async function saveJob(formData: FormData) {
             isCashJob,
             taxExempt,
             addOns,
+            billingType,
+            billedHourlyRate,
+            billedEstimatedHours,
+            billedActualHours: null,
           },
           taxRates
         );
@@ -1188,6 +1440,21 @@ export async function saveJob(formData: FormData) {
             discountReason:
               recurringDiscount > 0 ? AUTO_REASON.RECURRING : jobData.discountReason,
             usesFixedPrice: childUsesFixedPrice,
+            // A future occurrence has been worked for zero hours (Stage 8). The
+            // spread above would otherwise hand every visit in the series the
+            // first visit's measured hours.
+            billedActualHours: null,
+            // Stage 10 needs NOTHING here, and that is deliberate: the checklist
+            // pin rides the `...jobData` spread above unchanged, which is
+            // exactly the PDF's "checklist assignment should stay consistent
+            // when recurring jobs are generated". Unlike `billedActualHours` it
+            // is a term of the agreement, not a measurement of one visit, so
+            // clearing it per child would be the bug rather than the fix.
+            // Its price is the hourly line for the ESTIMATE, so the mirror on
+            // the child agrees with its own `computeJobMoney` answer.
+            ...(billingType === "HOURLY" && pricingMode !== "FINAL_PRICE"
+              ? { price: childTaxes.basePrice }
+              : {}),
             subtotalAmount: childTaxes.subtotalAmount,
             gstAmount: childTaxes.gstAmount,
             qstAmount: childTaxes.qstAmount,
@@ -1198,7 +1465,20 @@ export async function saveJob(formData: FormData) {
             // is settled and the whole amount folds in.
             totalAmount: Math.round((childTaxes.totalAmount + passThrough) * 100) / 100,
             bookingSource: "admin-recurring",
-            parentJob: { connect: { id: newJob.id } },
+            // `parentJobId`, NOT `parentJob: { connect }`. Prisma's create input
+            // is a union: the CHECKED variant takes relation objects
+            // (`parentJob`) and forbids scalar foreign keys, the UNCHECKED one
+            // takes scalar FKs (`employeeId`, `clientId`, `clientAddressId` —
+            // all of which arrive here through the `...jobData` spread) and
+            // forbids relation objects. Mixing the two matched NEITHER variant,
+            // so every child create threw an Unknown-argument validation error for employeeId, and
+            // the outer catch turned it into "Failed to save job" — after the
+            // parent had already been committed. That is why a recurring job
+            // appeared to save while producing zero occurrences, on every
+            // recurring job ever created. `cleaners` and `addOns` below are
+            // safe as relations: implicit m2m and 1-n nested writes exist in
+            // both variants; only an FK-backed to-one relation is variant-only.
+            parentJobId: newJob.id,
           };
           if (cleanerIds.length > 0) {
             childData.cleaners = { connect: cleanerIds.map((id) => ({ id })) };

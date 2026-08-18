@@ -33,6 +33,21 @@ import {
   resolvePricingMode,
   type JobPricingMode,
 } from "@/lib/job-money";
+import {
+  BILLED_HOURS_INCREMENT,
+  BILLING_TYPE_HINT,
+  BILLING_TYPE_LABEL,
+  formatHours,
+  hourlyServiceAmount,
+  type JobBillingType,
+} from "@/lib/hourly-billing";
+import {
+  PROPERTY_TYPE_HINT,
+  PROPERTY_TYPE_LABEL,
+  PROPERTY_TYPES,
+  isPropertyType,
+  type PropertyType,
+} from "@/lib/property-type";
 import { DEFAULT_TAX_RATES, type TaxRates } from "@/lib/tax";
 import {
   NEW_ADDRESS,
@@ -48,13 +63,21 @@ import {
   resolveServiceValue,
   serviceOptions as catalogServiceOptions,
 } from "@/lib/service-catalog";
+import {
+  CHECKLIST_AUTO_LABEL,
+  checklistFieldHint,
+  checklistFieldOptions,
+  type ChecklistTemplateOption,
+} from "@/lib/checklist-options";
 import { getJobSeriesInfo } from "../actions/getJobSeriesInfo";
+import { getJobChecklistOptions } from "../actions/getJobChecklistOptions";
 import { checkAvailabilityBatch } from "../actions/checkAvailability";
 import type { EmployeeAvailabilityStatus } from "../actions/checkAvailability.types";
 import {
   StatusIndicator,
   CategoryIndicator,
   AssignmentWarningPanel,
+  AvailabilityLink,
 } from "@/components/admin/AssignmentIndicators";
 import { categoryMismatchWarning } from "@/lib/service-permissions";
 import { DISCOUNT_REASONS, NO_REASON_LABEL } from "@/lib/discount-reasons";
@@ -123,6 +146,16 @@ interface Job {
   employeePayIsManual?: boolean | null;
   payType?: string | null;
   hourlyRate?: number | null;
+  /**
+   * Customer-side hourly billing (Stage 8 / PDF #8). NOT `payType`/`hourlyRate`
+   * above, which are the CLEANER's pay model — these four are what the customer
+   * is charged, and the modal keeps them in a separate section for exactly that
+   * reason (decision D6).
+   */
+  billingType?: string | null;
+  billedHourlyRate?: number | null;
+  billedEstimatedHours?: number | null;
+  billedActualHours?: number | null;
   totalTip: number | null;
   parking: number | null;
   notes: string | null;
@@ -132,6 +165,16 @@ interface Job {
   bathCount?: number | null;
   halfBathCount?: number | null;
   squareFootage?: number | null;
+  /**
+   * Apartment/condo vs house (Stage 9 / PDF #11). Property information beside
+   * the room counts above — NOT `jobType`, which is the service. Prefilled for
+   * the same reason `payType` and `billingType` are: this modal renders the
+   * control, so a mount point that arrives without the value would post a blank
+   * and quietly erase the job's property type on the next quick edit.
+   */
+  propertyType?: string | null;
+  /** Pinned checklist template (Stage 10). Null/absent = resolve automatically. */
+  checklistTemplateId?: string | null;
   /** Per-job sales-tax exemption (item 7). */
   taxExempt?: boolean | null;
   /** Why a discount was applied (item 29). */
@@ -226,6 +269,15 @@ const formSchema = z.object({
   employeePay: z.union([z.coerce.number().min(0), z.literal("")]).optional(),
   payType: z.enum(["PERCENTAGE", "FLAT", "HOURLY"]).optional(),
   hourlyRate: z.union([z.coerce.number().min(0), z.literal("")]).optional(),
+  // Customer-side hourly billing (Stage 8). Kept beside the cleaner-pay fields
+  // in the schema, but rendered in a separate section — see the Pricing step.
+  billedHourlyRate: z.union([z.coerce.number().min(0), z.literal("")]).optional(),
+  billedEstimatedHours: z
+    .union([z.coerce.number().min(0), z.literal("")])
+    .optional(),
+  billedActualHours: z
+    .union([z.coerce.number().min(0), z.literal("")])
+    .optional(),
   totalTip: z.union([z.coerce.number().min(0), z.literal("")]).optional(),
   parking: z.union([z.coerce.number().min(0), z.literal("")]).optional(),
   notes: z.string().optional(),
@@ -268,6 +320,10 @@ type CustomDatePickerProps = {
   placeholder?: string;
   disabled?: boolean;
 };
+
+/** Sun–Sat column headers for the inline calendar. Two "S" and two "T" — see
+ *  the keying note at the render site. */
+const WEEKDAY_INITIALS = ["S", "M", "T", "W", "T", "F", "S"] as const;
 
 const toISODate = (year: number, month: number, day: number) =>
   `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(
@@ -432,8 +488,14 @@ function CustomDatePicker({
           </div>
 
           <div className="grid grid-cols-7 text-[11px] text-[#008C9C]/60 mb-2 tracking-tight">
-            {["S", "M", "T", "W", "T", "F", "S"].map((day) => (
-              <div key={day} className="text-center py-1">
+            {/* Keyed by POSITION, not by the label. Sunday and Saturday are both
+                "S" and Tuesday and Thursday are both "T", so keying on the
+                letter gave React two pairs of colliding keys and it logged
+                "Encountered two children with the same key" every time this
+                calendar opened. The row is a fixed literal that is never
+                reordered or filtered, so the index IS the stable identity. */}
+            {WEEKDAY_INITIALS.map((day, index) => (
+              <div key={index} className="text-center py-1">
                 {day}
               </div>
             ))}
@@ -721,6 +783,25 @@ export default function JobModal({
   );
   const [discountInput, setDiscountInput] = useState<string>("");
   const [discountTouched, setDiscountTouched] = useState(false);
+  /**
+   * The same value as a REF, read by the client auto-prefill effect below.
+   *
+   * React runs sibling effects in declaration order within ONE commit, and a
+   * `setState` from the first is not visible to the second. The populate
+   * effect sets `discountInput` to the job's stored discount and marks it
+   * touched; the auto-prefill effect then ran in the same commit still
+   * reading `discountTouched === false` and `selectedClientId === ""`, found
+   * no linked client, and cleared the box it had just been given. That is why
+   * a job holding a real discount opened with an EMPTY Discount field — and,
+   * because the reason <select> only renders when the amount is non-empty, why
+   * the reason control disappeared with it. A ref is written synchronously, so
+   * the guard sees the truth in the same commit.
+   */
+  const discountTouchedRef = useRef(false);
+  const markDiscountTouched = useCallback((v: boolean) => {
+    discountTouchedRef.current = v;
+    setDiscountTouched(v);
+  }, []);
   // Per-job sales-tax exemption (item 7).
   const [taxExempt, setTaxExempt] = useState(false);
   // How this job is priced (cleano_new_fixes.pdf fix 2). Component state rather
@@ -728,6 +809,35 @@ export default function JobModal({
   // base service price under ITEMIZED, the whole agreed service total under
   // FINAL_PRICE — so the label, the hint and the live preview all read it.
   const [pricingMode, setPricingMode] = useState<JobPricingMode>("ITEMIZED");
+  // How the CUSTOMER is billed (Stage 8 / PDF #8). Component state rather than
+  // a react-hook-form field for the same reason `pricingMode` is: it changes
+  // what the Price INPUT MEANS. Under HOURLY the price is DERIVED from the rate
+  // and hours below, so the field becomes a read-only preview instead of
+  // something the admin types into.
+  const [billingType, setBillingType] = useState<JobBillingType>("FLAT");
+  // What KIND OF BUILDING the job is at (Stage 9 / PDF #11). Component state
+  // rather than a react-hook-form field because the empty string is a real
+  // value here — "not recorded" — and the control is a set of buttons, not an
+  // input. It changes nothing about the money; it is shown to the crew.
+  const [propertyType, setPropertyType] = useState<PropertyType | "">("");
+  // Which checklist this job uses (Stage 10 / PDF #10). "" = Auto: let the
+  // shared resolver pick (customer/location template → service-type default).
+  // A value PINS the job to one template. Component state for the same reason
+  // as propertyType above — the empty string is a real, meaningful value.
+  const [checklistTemplateId, setChecklistTemplateId] = useState<string>("");
+  const [checklistOptions, setChecklistOptions] = useState<
+    ChecklistTemplateOption[]
+  >([]);
+  // A REF, not state. This guard used to be `useState` AND a dependency of
+  // the effect below, so setting it re-ran the effect — which tore down the
+  // first run, set its `cancelled` flag, and made the in-flight response
+  // discard itself. The picker was empty on every mount, for everyone, no
+  // matter how many templates existed. A ref does not re-render, so the
+  // request that is running is the one whose result lands.
+  const checklistOptionsRequested = useRef(false);
+  const [checklistOptionsError, setChecklistOptionsError] = useState<string | null>(
+    null
+  );
   // Set by the "Recalculate from items" button. Purely so the job log can say
   // the admin pressed the button rather than merely flipped the selector; the
   // money is identical either way. Cleared the moment the mode moves again.
@@ -796,6 +906,9 @@ export default function JobModal({
           employeePay: job.employeePay || "",
           payType: (job.payType as "PERCENTAGE" | "FLAT" | "HOURLY") || "PERCENTAGE",
           hourlyRate: job.hourlyRate || "",
+          billedHourlyRate: job.billedHourlyRate ?? "",
+          billedEstimatedHours: job.billedEstimatedHours ?? "",
+          billedActualHours: job.billedActualHours ?? "",
           totalTip: job.totalTip || "",
           parking: job.parking || "",
           notes: job.notes || "",
@@ -842,6 +955,19 @@ export default function JobModal({
           })
         );
         setRecalcRequested(false);
+        // Anything that isn't the stored "HOURLY" is FLAT — which is every row
+        // written before Stage 8 and every mount point that hasn't been
+        // threaded, i.e. exactly today's behaviour.
+        setBillingType(job.billingType === "HOURLY" ? "HOURLY" : "FLAT");
+        // Anything that isn't one of the two enum values reads as "not
+        // recorded" — every row written before Stage 9, and every mount point
+        // whose select hasn't been threaded. Blank is a real state here, so
+        // this never falls back to a guess.
+        setPropertyType(isPropertyType(job.propertyType) ? job.propertyType : "");
+        // Stage 10. Null (every pre-Stage-10 row, and every mount point that
+        // hasn't been threaded) reads as Auto, which is the behaviour that
+        // already existed.
+        setChecklistTemplateId(job.checklistTemplateId ?? "");
         setPayIsManual(!!job.employeePayIsManual);
         setDiscountReason(job.discountReason ?? "");
         setApplyToSeries(false);
@@ -861,7 +987,7 @@ export default function JobModal({
             ? String(job.discountAmount)
             : ""
         );
-        setDiscountTouched(true);
+        markDiscountTouched(true);
       } else {
         reset({
           clientName: "",
@@ -878,6 +1004,9 @@ export default function JobModal({
           employeePay: "",
           payType: "PERCENTAGE",
           hourlyRate: "",
+          billedHourlyRate: "",
+          billedEstimatedHours: "",
+          billedActualHours: "",
           totalTip: "",
           parking: "",
           notes: "",
@@ -896,6 +1025,14 @@ export default function JobModal({
         setTaxExempt(false);
         // A brand-new admin job is itemized: its parts ARE its price.
         setPricingMode("ITEMIZED");
+        // ...and billed at a flat price until the admin says otherwise.
+        setBillingType("FLAT");
+        // ...and its property type is unknown until someone says. No default:
+        // a pre-selected "House" would stamp a guess on every job created here.
+        setPropertyType("");
+        // ...and its checklist resolves automatically (Stage 10). Pinning is
+        // for the exception, so a new job never starts pinned.
+        setChecklistTemplateId("");
         setRecalcRequested(false);
         // A new job's Employee pay box starts empty, so nothing is manual until
         // the admin types into it.
@@ -907,14 +1044,14 @@ export default function JobModal({
         setAddOns([]);
         setDiscountMode("percent");
         setDiscountInput("");
-        setDiscountTouched(false);
+        markDiscountTouched(false);
       }
     }
   }, [isOpen, job, reset]);
 
   // Auto-prefill discount from selected client's default percent
   useEffect(() => {
-    if (!isOpen || discountTouched) return;
+    if (!isOpen || discountTouchedRef.current) return;
     const linked = clients.find((c) => c.id === selectedClientId);
     if (linked && (linked.discountPercent ?? 0) > 0) {
       setDiscountMode("percent");
@@ -979,6 +1116,41 @@ export default function JobModal({
       cancelled = true;
     };
   }, [isOpen, mode, job?.id]);
+
+  // Checklist templates for the "Checklist" picker (Stage 10 / PDF #10).
+  //
+  // Loaded on first open rather than passed as a prop: this modal has five
+  // mount points and a required prop would have to be plumbed through all five
+  // plus their pages' queries. Loaded ONCE per mount, not per open — the list
+  // is small, changes only in Settings, and refetching it on every open would
+  // cost a round trip for a control most saves never touch.
+  useEffect(() => {
+    if (!isOpen || checklistOptionsRequested.current) return;
+    checklistOptionsRequested.current = true;
+    let cancelled = false;
+    setChecklistOptionsError(null);
+    getJobChecklistOptions()
+      .then((res) => {
+        if (cancelled) return;
+        // A refusal used to `return` into silence, leaving an empty picker that
+        // is indistinguishable from "no templates are configured". Say it.
+        if (!res.success) {
+          checklistOptionsRequested.current = false;
+          setChecklistOptionsError(res.error);
+          return;
+        }
+        setChecklistOptions(res.templates);
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        console.error("checklist options", e);
+        checklistOptionsRequested.current = false;
+        setChecklistOptionsError("Could not load checklist templates.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen]);
 
   // The Settings catalog plus a blank "Select type" row. Falls back to the
   // shipped defaults if a page hasn't passed the catalog through yet.
@@ -1045,6 +1217,32 @@ export default function JobModal({
   const watchedSqft = Number(watch("squareFootage")) || 0;
   const watchedPrice = Number(watch("price")) || 0;
 
+  // ── Customer-side hourly billing (Stage 8 / PDF #8) ────────────────────────
+  //
+  // `hourlyServiceAmount` is the same helper both save paths call, so the
+  // figure previewed here IS the figure that gets written. Null on a flat job.
+  const watchedBilledRate = watch("billedHourlyRate");
+  const watchedBilledEstimated = watch("billedEstimatedHours");
+  const watchedBilledActual = watch("billedActualHours");
+  const billingFields = {
+    billingType,
+    billedHourlyRate: Number(watchedBilledRate) || null,
+    billedEstimatedHours: Number(watchedBilledEstimated) || null,
+    billedActualHours: Number(watchedBilledActual) || null,
+  };
+  const hourlyDerivedPrice = hourlyServiceAmount(billingFields);
+  const hourlyUsesActual = (Number(watchedBilledActual) || 0) > 0;
+  // Actual hours are the crew's clock, not something an admin types up front.
+  // The input unlocks once a measurement exists so a bad clock can be
+  // corrected — which is exactly what step 8.5 asks for.
+  const actualHoursEditable = job?.billedActualHours != null;
+  // What the Price field is worth right now. Under HOURLY it is derived, so the
+  // input is read-only and this drives every figure below it.
+  const effectivePrice =
+    billingType === "HOURLY" && pricingMode !== "FINAL_PRICE" && hourlyDerivedPrice !== null
+      ? hourlyDerivedPrice
+      : watchedPrice;
+
   // Live total preview. Mirrors exactly what saveJob will write: the same mode
   // resolution, the same "a retyped price re-authors the override" rule, and the
   // same helper doing the arithmetic. If these two ever disagree the admin is
@@ -1052,8 +1250,10 @@ export default function JobModal({
   const previewDiscount = (() => {
     const n = parseFloat(discountInput);
     if (!Number.isFinite(n) || n <= 0) return 0;
+    // A percentage discount is taken off the ACTIVE service line, which on an
+    // hourly job is rate × hours rather than the (blank) Price box.
     return discountMode === "percent"
-      ? Math.round(watchedPrice * (n / 100) * 100) / 100
+      ? Math.round(effectivePrice * (n / 100) * 100) / 100
       : n;
   })();
   const previewPriceRetyped =
@@ -1074,6 +1274,10 @@ export default function JobModal({
       isCashJob: job?.isCashJob,
       taxExempt,
       addOns,
+      // The helper derives the hourly service line itself — passing the four
+      // columns rather than a precomputed price is what keeps this preview and
+      // saveJob's write on the same code path (step 8.2).
+      ...billingFields,
     },
     taxRates
   );
@@ -1090,8 +1294,11 @@ export default function JobModal({
     setPricingMode(next);
     setRecalcRequested(viaRecalculate);
   };
+  // Step 8.8: square-foot pricing never fires on an hourly job — the guard
+  // mirrors the one in both save paths, so the hint cannot promise a derived
+  // price the server will refuse to apply.
   const sqftDerivedPrice =
-    sqftPriced && sqftRates && watchedSqft > 0
+    sqftPriced && sqftRates && watchedSqft > 0 && billingType !== "HOURLY"
       ? moveInOutBasePrice(watchedSqft, {
           // Only the move-in/out block is used by this helper; the rest of the
           // config is irrelevant here.
@@ -1341,6 +1548,23 @@ export default function JobModal({
       );
       formData.append("payType", values.payType || "PERCENTAGE");
       formData.append("hourlyRate", String(values.hourlyRate || ""));
+      // Customer-side hourly billing (Stage 8). Posted on every save — this
+      // form OWNS the control, so saveJob treats an absent field as "a form
+      // that doesn't manage billing" and preserves the stored value instead.
+      // The three figures go up only under HOURLY; on a flat job they are
+      // deliberately blank, which is what clears them server-side.
+      formData.append("billingType", billingType);
+      if (billingType === "HOURLY") {
+        formData.append("billedHourlyRate", String(values.billedHourlyRate || ""));
+        formData.append(
+          "billedEstimatedHours",
+          String(values.billedEstimatedHours || "")
+        );
+        formData.append(
+          "billedActualHours",
+          String(values.billedActualHours || "")
+        );
+      }
       formData.append("totalTip", String(values.totalTip || ""));
       formData.append("parking", String(values.parking || ""));
       formData.append("notes", values.notes || "");
@@ -1348,6 +1572,16 @@ export default function JobModal({
       formData.append("bathCount", String(values.bathCount || ""));
       formData.append("halfBathCount", String(values.halfBathCount || ""));
       formData.append("squareFootage", String(values.squareFootage || ""));
+      // Property type (Stage 9). Posted on EVERY save, blank included — this
+      // form owns the control, so an empty string is the admin choosing "not
+      // recorded" and clears the column. A form that doesn't render the control
+      // omits the key entirely, and saveJob preserves what is stored.
+      formData.append("propertyType", propertyType);
+      // Checklist pin (Stage 10). Same tri-state discipline: posted on EVERY
+      // save, blank included — blank is the admin choosing "Auto" and clears
+      // the column. A form that doesn't render the control omits the key, and
+      // saveJob preserves what is stored.
+      formData.append("checklistTemplateId", checklistTemplateId);
 
       // Resolve discount: convert percent to amount if needed.
       // If admin has touched the field, send an explicit value (including "0")
@@ -1356,7 +1590,10 @@ export default function JobModal({
       let resolvedDiscount = "";
       if (Number.isFinite(discountValueNum) && discountValueNum > 0) {
         if (discountMode === "percent") {
-          const priceNum = Number(values.price) || 0;
+          // The ACTIVE service line, not the raw Price box: on an hourly job
+          // that box is blank and a percentage of it would send a $0 discount
+          // while the preview showed a real one (Stage 8).
+          const priceNum = effectivePrice;
           resolvedDiscount =
             priceNum > 0
               ? (priceNum * (discountValueNum / 100)).toFixed(2)
@@ -1620,7 +1857,7 @@ export default function JobModal({
                       disabled={disableForm}
                       onSelect={(c) => {
                         setSelectedClientId(c.id);
-                        setDiscountTouched(false);
+                        markDiscountTouched(false);
                         setValue("clientName", c.name, {
                           shouldValidate: true,
                           shouldDirty: true,
@@ -1667,7 +1904,7 @@ export default function JobModal({
                       onClear={() => {
                         setSelectedClientId("");
                         setAddressChoice(NEW_ADDRESS);
-                        setDiscountTouched(false);
+                        markDiscountTouched(false);
                       }}
                     />
                   )}
@@ -1698,7 +1935,7 @@ export default function JobModal({
                           if (selectedClientId) {
                             setSelectedClientId("");
                             setAddressChoice(NEW_ADDRESS);
-                            setDiscountTouched(false);
+                            markDiscountTouched(false);
                           }
                         }}
                         disabled={disableForm}
@@ -2117,6 +2354,16 @@ export default function JobModal({
                       />
                     )}
 
+                    {/* Stage 12.5 — a way into the all-cleaner availability
+                        view on THIS job's date and time. Above the panel, not
+                        inside it, so it is there while the panel is still
+                        silent — which is exactly when an admin is hunting for
+                        somebody to assign. */}
+                    <AvailabilityLink
+                      date={watchedStartDate}
+                      startTime={watchedStartTime}
+                    />
+
                     {/* Availability + service-category advisories (items 19 &
                         3). Nothing here blocks the save — the admin can always
                         override, which the panel's closing line says out loud. */}
@@ -2187,27 +2434,204 @@ export default function JobModal({
                       </div>
                     </div>
 
+                    {/* How the CUSTOMER is billed (Stage 8 / PDF #8).
+
+                        Sits directly above Price because on an hourly job it is
+                        what SETS Price. Decision D6 is enforced by position and
+                        wording: this is the "Pricing" half of the step and every
+                        label says *customer*; the cleaner's Pay type and Hourly
+                        Rate live in the "Cleaner pay" block below, and no label
+                        is shared between them. */}
+                    <div className="space-y-2">
+                      <label className="input-label tracking-tight">
+                        Customer billing
+                      </label>
+                      <div
+                        role="radiogroup"
+                        aria-label="Customer billing"
+                        className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {(["FLAT", "HOURLY"] as const).map((b) => {
+                          const active = billingType === b;
+                          return (
+                            <button
+                              key={b}
+                              type="button"
+                              role="radio"
+                              aria-checked={active}
+                              disabled={disableForm}
+                              onClick={() => setBillingType(b)}
+                              className={`text-left px-4 py-3 rounded-xl transition-colors ${
+                                active
+                                  ? "bg-[#008C9C]/15 ring-1 ring-[#008C9C]/40"
+                                  : "bg-[#008C9C]/5 hover:bg-[#008C9C]/10"
+                              } disabled:opacity-60`}>
+                              <span className="block text-sm font-[600] text-[#008C9C] tracking-tight">
+                                {BILLING_TYPE_LABEL[b]}
+                              </span>
+                              <span className="block text-xs text-[#008C9C]/60 tracking-tight mt-0.5">
+                                {BILLING_TYPE_HINT[b]}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {billingType === "HOURLY" && (
+                      <div className="grid grid-cols-2 gap-4 p-4 rounded-2xl bg-[#008C9C]/5">
+                        <div className="col-span-2">
+                          <p className="text-xs text-[#008C9C]/70 tracking-tight">
+                            The customer&apos;s rate and hours. What the cleaner
+                            is paid is set separately, under{" "}
+                            <strong>Pay type</strong> below.
+                          </p>
+                        </div>
+
+                        <div>
+                          <label className="input-label tracking-tight">
+                            Customer hourly rate
+                          </label>
+                          <div className="relative">
+                            <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/50" />
+                            <Input
+                              variant="form"
+                              type="number"
+                              size="md"
+                              step="0.01"
+                              min="0"
+                              {...register("billedHourlyRate")}
+                              disabled={disableForm}
+                              className="w-full pl-11 px-4 py-3 tracking-tight placeholder:tracking-tight"
+                              placeholder="0.00"
+                              border={false}
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="input-label tracking-tight">
+                            Estimated hours
+                          </label>
+                          <Input
+                            variant="form"
+                            type="number"
+                            size="md"
+                            step={BILLED_HOURS_INCREMENT}
+                            min="0"
+                            {...register("billedEstimatedHours")}
+                            disabled={disableForm}
+                            className="w-full px-4 py-3 tracking-tight placeholder:tracking-tight"
+                            placeholder="0"
+                            border={false}
+                          />
+                          <p className="mt-1.5 text-[11px] tracking-tight text-[#008C9C]/60">
+                            Hours on site, not per cleaner — two cleaners for
+                            three hours is 3.
+                          </p>
+                        </div>
+
+                        <div>
+                          <label className="input-label tracking-tight">
+                            Actual hours
+                          </label>
+                          {/* `readOnly`, never `disabled`: a disabled input
+                              posts nothing, so locking this box would make
+                              every save null out the figure clock-out just
+                              measured. */}
+                          <Input
+                            variant="form"
+                            type="number"
+                            size="md"
+                            step={BILLED_HOURS_INCREMENT}
+                            min="0"
+                            {...register("billedActualHours")}
+                            disabled={disableForm}
+                            readOnly={!actualHoursEditable}
+                            className={`w-full px-4 py-3 tracking-tight placeholder:tracking-tight ${
+                              actualHoursEditable ? "" : "opacity-60"
+                            }`}
+                            placeholder="0"
+                            border={false}
+                          />
+                          <p className="mt-1.5 text-[11px] tracking-tight text-[#008C9C]/60">
+                            {actualHoursEditable
+                              ? `From the crew's clock, to the nearest ${BILLED_HOURS_INCREMENT}h. Edit to correct it.`
+                              : "Filled in automatically when the crew clocks out."}
+                          </p>
+                        </div>
+
+                        <div className="flex items-end">
+                          <div className="w-full px-4 py-3 rounded-xl bg-white">
+                            <div className="text-[11px] text-[#008C9C]/60 tracking-tight">
+                              Service total{" "}
+                              {hourlyUsesActual ? "(actual hours)" : "(estimate)"}
+                            </div>
+                            <div className="text-lg font-[600] text-[#008C9C] tracking-tight">
+                              {hourlyDerivedPrice === null
+                                ? "—"
+                                : `$${hourlyDerivedPrice.toFixed(2)}`}
+                            </div>
+                            {hourlyDerivedPrice !== null && (
+                              <div className="text-[11px] text-[#008C9C]/60 tracking-tight">
+                                {formatHours(
+                                  hourlyUsesActual
+                                    ? Number(watchedBilledActual) || 0
+                                    : Number(watchedBilledEstimated) || 0
+                                )}{" "}
+                                × $
+                                {(Number(watchedBilledRate) || 0).toFixed(2)}/hr
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {pricingMode === "FINAL_PRICE" && (
+                          <p className="col-span-2 text-xs text-[#854d0e] bg-[#fef3c7] rounded-lg px-3 py-2">
+                            This job is on a final price override, so the
+                            override total below wins over the hourly
+                            calculation. Switch to itemized pricing to bill
+                            rate × hours again.
+                          </p>
+                        )}
+                      </div>
+                    )}
+
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="input-label tracking-tight">
                           {pricingMode === "FINAL_PRICE"
                             ? "Service total (override)"
-                            : "Price"}
+                            : billingType === "HOURLY"
+                              ? "Price (from rate × hours)"
+                              : "Price"}
                         </label>
                         <div className="relative">
                           <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/50" />
-                          <Input
-                            variant="form"
-                            type="number"
-                            size="md"
-                            step="0.01"
-                            min="0"
-                            {...register("price")}
-                            disabled={disableForm}
-                            className="w-full pl-11 px-4 py-3 tracking-tight placeholder:tracking-tight"
-                            placeholder="0.00"
-                            border={false}
-                          />
+                          {/* On an hourly job the price is DERIVED, so the box
+                              shows the calculation rather than accepting a
+                              number that the save would immediately overwrite.
+                              An override is the escape hatch, and it keeps its
+                              own editable field. */}
+                          {billingType === "HOURLY" && pricingMode !== "FINAL_PRICE" ? (
+                            <div className="w-full pl-11 px-4 py-3 rounded-2xl bg-[#008C9C]/5 text-sm text-[#005a63] tracking-tight">
+                              {hourlyDerivedPrice === null
+                                ? "Enter a rate and hours above"
+                                : hourlyDerivedPrice.toFixed(2)}
+                            </div>
+                          ) : (
+                            <Input
+                              variant="form"
+                              type="number"
+                              size="md"
+                              step="0.01"
+                              min="0"
+                              {...register("price")}
+                              disabled={disableForm}
+                              className="w-full pl-11 px-4 py-3 tracking-tight placeholder:tracking-tight"
+                              placeholder="0.00"
+                              border={false}
+                            />
+                          )}
                         </div>
                       </div>
 
@@ -2270,9 +2694,13 @@ export default function JobModal({
                         )}
                       </div>
 
+                      {/* Cleaner pay from here down. "Pay type" and the rate
+                          below are what the CREW is paid — never the customer's
+                          rate above, which is why both are named for the
+                          cleaner (decision D6). */}
                       <div>
                         <label className="input-label tracking-tight">
-                          Pay type
+                          Pay type <span className="font-[400] text-[#008C9C]/60">(cleaner)</span>
                         </label>
                         <select
                           {...register("payType")}
@@ -2288,7 +2716,7 @@ export default function JobModal({
                       {watch("payType") === "HOURLY" && (
                         <div>
                           <label className="input-label tracking-tight">
-                            Hourly Rate
+                            Cleaner hourly rate
                           </label>
                           <div className="relative">
                             <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/50" />
@@ -2343,7 +2771,7 @@ export default function JobModal({
                               type="button"
                               onClick={() => {
                                 setDiscountMode("percent");
-                                setDiscountTouched(true);
+                                markDiscountTouched(true);
                               }}
                               disabled={disableForm}
                               className={`px-2 py-0.5 text-[11px] rounded-md transition-colors ${
@@ -2357,7 +2785,7 @@ export default function JobModal({
                               type="button"
                               onClick={() => {
                                 setDiscountMode("amount");
-                                setDiscountTouched(true);
+                                markDiscountTouched(true);
                               }}
                               disabled={disableForm}
                               className={`px-2 py-0.5 text-[11px] rounded-md transition-colors ${
@@ -2380,7 +2808,7 @@ export default function JobModal({
                             value={discountInput}
                             onChange={(e) => {
                               setDiscountInput(e.target.value);
-                              setDiscountTouched(true);
+                              markDiscountTouched(true);
                             }}
                             disabled={disableForm}
                             className="w-full pl-11 px-4 py-3"
@@ -2489,6 +2917,53 @@ export default function JobModal({
                         </label>
                       </div>
 
+                      {/* Property type (Stage 9 / PDF #11). Leads the property
+                          block: the coarsest fact about the place, with the
+                          room counts refining it. Deliberately NOT beside the
+                          service picker — `jobType` decides the service, the
+                          pricing rule and the checklist triggers, and this
+                          decides none of them. Blank is a real, keepable state:
+                          most jobs predate the field. */}
+                      <div className="sm:col-span-2">
+                        <label className="input-label tracking-tight">
+                          Property Type
+                        </label>
+                        {/* `flex-wrap` + `basis-28` + `min-w-0`, all three load
+                            bearing. `flex-1` alone is `flex: 1 1 0%`, and a flex
+                            item still floors at its CONTENT width unless told
+                            otherwise — so at 320px the three labels held this row
+                            wider than its grid cell, and it spilled over the
+                            Bed/Bath fields below and swallowed their clicks.
+                            Same `min-width: auto` trap as the crew toolbar and
+                            the List|Calendar toggle. Wrapping rather than
+                            shrinking, because "Not specified" squeezed to 60px
+                            is unreadable; two-up then one is not. */}
+                        <div className="flex flex-wrap gap-2">
+                          {([...PROPERTY_TYPES, ""] as const).map((p) => {
+                            const active = propertyType === p;
+                            return (
+                              <button
+                                key={p || "UNSET"}
+                                type="button"
+                                disabled={disableForm}
+                                onClick={() => setPropertyType(p)}
+                                className={`flex-1 basis-28 min-w-0 h-[44px] px-3 rounded-xl text-sm font-[500] border transition-colors disabled:opacity-50 ${
+                                  active
+                                    ? "bg-[#008C9C] text-white border-[#008C9C]"
+                                    : "bg-[#008C9C]/5 text-[#008C9C] border-transparent hover:bg-[#008C9C]/10"
+                                }`}>
+                                {p ? PROPERTY_TYPE_LABEL[p] : "Not specified"}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <p className="text-[11px] text-[#008C9C]/60 mt-1">
+                          {propertyType
+                            ? PROPERTY_TYPE_HINT[propertyType]
+                            : "Saved as job information and shown to the crew before they arrive. It doesn't change the price."}
+                        </p>
+                      </div>
+
                       <div>
                         <label className="input-label tracking-tight">
                           Bed Count
@@ -2559,7 +3034,9 @@ export default function JobModal({
                           border={false}
                         />
                         <p className="text-[11px] text-[#008C9C]/60 mt-1">
-                          {sqftPriced ? (
+                          {billingType === "HOURLY" ? (
+                            "Saved as job information. This job is billed by the hour, so square footage doesn't set its price."
+                          ) : sqftPriced ? (
                             sqftDerivedPrice !== null ? (
                               <>
                                 This service is priced per square foot —{" "}
@@ -2963,7 +3440,23 @@ export default function JobModal({
                       </div>
                     )}
                     <div className="flex justify-between text-sm text-[#008C9C]">
-                      <span>Base price</span>
+                      <span>
+                        Base price
+                        {/* Says WHERE the base came from on an hourly job, so
+                            the figure is never a number with no origin. */}
+                        {previewMoney.hourlyServiceAmount !== null &&
+                          pricingMode !== "FINAL_PRICE" && (
+                            <span className="ml-2 font-[400] text-xs text-[#008C9C]/60">
+                              {formatHours(
+                                hourlyUsesActual
+                                  ? Number(watchedBilledActual) || 0
+                                  : Number(watchedBilledEstimated) || 0
+                              )}{" "}
+                              × ${(Number(watchedBilledRate) || 0).toFixed(2)}/hr
+                              {hourlyUsesActual ? " · actual" : " · estimate"}
+                            </span>
+                          )}
+                      </span>
                       <span>${previewMoney.basePrice.toFixed(2)}</span>
                     </div>
                     {previewMoney.addOnTotal > 0 && (
@@ -3030,6 +3523,61 @@ export default function JobModal({
                       placeholder="Any additional notes or special requirements..."
                       rows={4}
                     />
+                  </div>
+
+                  {/* Checklist (Stage 10 / PDF #10). With the notes, not with
+                      the service picker: this is an instruction to the crew
+                      about how to work the job, and unlike `jobType` it changes
+                      no price, no permission and no trigger.
+
+                      Auto is the default and where almost every job should
+                      stay — the resolver already prefers a customer's own
+                      checklist over the service-type default, so pinning is
+                      for the one-off exception. */}
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-[400] text-[#008C9C] uppercase tracking-tight flex items-center gap-2">
+                      <Check className="w-4 h-4" />
+                      Checklist
+                    </h3>
+                    <PremiumSelect
+                      value={checklistTemplateId}
+                      onChange={setChecklistTemplateId}
+                      options={checklistFieldOptions(checklistOptions)}
+                      placeholder={CHECKLIST_AUTO_LABEL}
+                      disabled={disableForm}
+                      searchable={checklistOptions.length > 8}
+                      size="md"
+                    />
+                    <p className="text-[11px] text-[#008C9C]/60">
+                      {checklistFieldHint(checklistOptions, checklistTemplateId)}
+                    </p>
+                    {/* An empty picker has two very different causes and the
+                        admin cannot tell them apart from the control alone. */}
+                    {checklistOptionsError ? (
+                      <p className="text-[11px] text-red-600">
+                        {checklistOptionsError} The job will fall back to
+                        automatic resolution — reopen the modal to try again.
+                      </p>
+                    ) : (
+                      checklistOptions.length === 0 && (
+                        <p className="text-[11px] text-[#008C9C]/60">
+                          No active checklist templates yet — add one in Settings
+                          &rarr; Checklists.
+                        </p>
+                      )
+                    )}
+                    {/* The pinned template was retired while this modal was
+                        open (or the job was pinned from elsewhere and the list
+                        hasn't arrived). Either way, saving would silently
+                        return the job to Auto — so say so first. */}
+                    {checklistTemplateId &&
+                      checklistOptions.length > 0 &&
+                      !checklistOptions.some((t) => t.id === checklistTemplateId) && (
+                        <p className="text-[11px] text-amber-700">
+                          The checklist this job was pinned to is no longer
+                          active. Saving returns it to automatic resolution.
+                        </p>
+                      )}
                   </div>
                 </div>
               )}

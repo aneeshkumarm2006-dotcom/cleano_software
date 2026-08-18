@@ -6,6 +6,13 @@
 // Missing equipment drives the top-left "error" badge. For cleaners we check the
 // viewer's own inventory (legacy behaviour); for admins/owners we check every
 // cleaner assigned to each job so the operations manager sees the warning too.
+//
+// The option that picks between those two was called `isAdmin`, which had grown
+// into a three-way overload (job scope / kit scope / money visibility) by the
+// time Stage 7 gave FIELD_LEAD a group calendar. A field lead needs the
+// crew-wide kit warning and must NOT see money, so the flag is named for what it
+// actually decides. Money visibility is a separate flag on the resolved viewer —
+// see `./_calendarScope.ts`.
 
 import { db } from "@/db";
 import { loadPerJobAverages } from "@/lib/inventory-forecast.server";
@@ -27,7 +34,15 @@ const DONE_STATUSES = new Set(["COMPLETED", "PAID", "CANCELLED"]);
 
 export async function computeBadgeMaps(
   jobs: JobForBadge[],
-  opts: { isAdmin: boolean; viewerId: string }
+  opts: {
+    /**
+     * Check EVERY cleaner assigned to each job (true) or only the viewer's own
+     * kit (false). The caller has already scoped `jobs` to what the viewer may
+     * see, so true never widens visibility beyond that set.
+     */
+    allAssignedCleaners: boolean;
+    viewerId: string;
+  }
 ): Promise<{
   priority: Record<string, PriorityLabel>;
   missing: Record<string, MissingItem[]>;
@@ -65,7 +80,7 @@ export async function computeBadgeMaps(
 
   // Which cleaner(s)' inventory matters for each job.
   const cleanerIdsFor = (job: JobForBadge): string[] =>
-    opts.isAdmin
+    opts.allAssignedCleaners
       ? [
           ...job.cleaners.map((c) => c.id),
           ...(job.employeeId ? [job.employeeId] : []),

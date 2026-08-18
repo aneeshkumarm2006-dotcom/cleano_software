@@ -44,6 +44,12 @@ export async function retryEmail(logId: string) {
       qst: job.qstAmount,
       total: job.price,
       depositPaid: job.depositPaid,
+      // Stage 11 — the retry has to reproduce the original email, and that means
+      // the deposit it actually charged and the quote wording it was sent with.
+      // Passing neither would resend a post-construction quote request as a
+      // "booking confirmed" with a $20 deposit line.
+      depositAmount: job.depositAmount ?? undefined,
+      quotePending: job.quoteStatus === "PENDING_REVIEW",
       logId: log.id,
     });
     const fresh = await db.emailLog.findUnique({

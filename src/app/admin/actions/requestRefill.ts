@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { findAssignableProduct } from "@/lib/kit-product.server";
 
 interface RequestRefillInput {
   productId: string;
@@ -25,13 +26,14 @@ export async function requestRefill(input: RequestRefillInput) {
   }
 
   try {
-    const product = await db.product.findUnique({
-      where: { id: input.productId },
-    });
-
-    if (!product) {
-      return { success: false, error: "Product not found" };
+    // A refill puts NEW stock into a kit, so the catalogue rules apply: an
+    // archived product cannot be refilled, and says so by name rather than
+    // returning the "Product not found" that Stage 5 exists to remove.
+    const lookup = await findAssignableProduct(input.productId);
+    if (!lookup.ok) {
+      return { success: false, error: lookup.error };
     }
+    const product = lookup.product;
 
     const request = await db.inventoryRequest.create({
       data: {

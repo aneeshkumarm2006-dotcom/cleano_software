@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Plus, Trash2, Pencil, MapPin, X } from "lucide-react";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
@@ -43,6 +44,7 @@ export default function InventoryLocationsTab({
   products,
   locations,
 }: InventoryLocationsTabProps) {
+  const router = useRouter();
   const [modalOpen, setModalOpen] = useState(false);
   const [draft, setDraft] = useState<DraftLocation>(EMPTY_LOC);
   const [saving, setSaving] = useState(false);
@@ -72,6 +74,9 @@ export default function InventoryLocationsTab({
 
   function openStockEditor(loc: InventoryLocationRecord) {
     setStockLocation(loc);
+    // Opening the panel starts a fresh conversation — a "Stock updated." from
+    // the previous location would otherwise still be sitting there.
+    setMsg(null);
     const initial: Record<string, number> = {};
     for (const p of products) {
       const s = loc.stock.find((s) => s.productId === p.id);
@@ -127,6 +132,7 @@ export default function InventoryLocationsTab({
   async function handleStockSave(productId: string) {
     if (!stockLocation) return;
     setStockSavingId(productId);
+    setMsg(null);
     const res = await setLocationStock({
       locationId: stockLocation.id,
       productId,
@@ -134,6 +140,11 @@ export default function InventoryLocationsTab({
     });
     if (res.success) {
       setMsg({ type: "success", text: "Stock updated." });
+      // Stage 4.5: this save now also moves `Product.stockLevel`, which the
+      // "N stocked" summary on every location row is derived from. Without a
+      // refresh the tab keeps the number it was rendered with and the admin
+      // has to reload to believe their own edit.
+      router.refresh();
     } else {
       setMsg({ type: "error", text: res.error || "Failed to update stock." });
     }
@@ -304,6 +315,16 @@ export default function InventoryLocationsTab({
         isOpen={stockModalOpen}
         onClose={() => setStockModalOpen(false)}
         title={stockLocation ? `Stock at ${stockLocation.name}` : "Stock"}>
+        {/* `msg` also has a home on the tab behind this panel, but the panel
+            covers it — so a failed save (the action returns `{ success: false,
+            error }` for a short stock write, a lost session, a transaction that
+            timed out) used to be invisible and the row simply snapped back to
+            the stored number. Same <Feedback> the Edit Location modal uses. */}
+        {msg && (
+          <div className="mb-3">
+            <Feedback msg={msg} />
+          </div>
+        )}
         <div className="space-y-3 max-h-[60vh] overflow-y-auto">
           {products.length === 0 ? (
             <p className="text-sm text-[#008C9C]/60">

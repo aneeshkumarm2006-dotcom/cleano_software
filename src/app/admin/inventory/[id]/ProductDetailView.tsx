@@ -31,6 +31,15 @@ import {
 } from "lucide-react";
 import { fmtDateTime } from "@/lib/time";
 import { sanitizeHttpUrl, urlHost } from "@/lib/safe-url";
+import {
+  ITEM_TYPE_DESCRIPTION,
+  ITEM_TYPE_NAME,
+  type ItemType,
+} from "@/lib/item-type";
+import type {
+  AttentionTone,
+  ItemAttentionState,
+} from "@/lib/inventory-thresholds";
 
 type TabView = "overview" | "usage" | "assignments" | "history";
 
@@ -72,6 +81,7 @@ interface Product {
   costPerUnit: number;
   stockLevel: number;
   minStock: number;
+  itemType?: ItemType;
   stockUpdatedAt: string | null;
   stockUpdatedByName: string | null;
   purchaseUrl: string | null;
@@ -107,12 +117,25 @@ interface EmployeeAssignment {
   quantity: number;
   assignedAt: string;
   notes: string | null;
+  /** Server-computed by itemAttentionState() — never re-derived here. */
+  attention: ItemAttentionState;
+  statusUpdatedAt: string | null;
   employee: {
     id: string;
     name: string;
     email: string;
   };
 }
+
+/** Badge variant per attention tone — see `itemAttentionState()`. */
+const ATTENTION_VARIANT: Record<
+  AttentionTone,
+  "success" | "warning" | "error"
+> = {
+  ok: "success",
+  warn: "warning",
+  critical: "error",
+};
 
 interface ProductDetailViewProps {
   product: Product;
@@ -283,6 +306,26 @@ export default function ProductDetailView({
             </h3>
           </div>
           <div className="grid grid-cols-2 gap-4">
+            {/* What kind of thing this is — decides whether the thresholds
+                beside it apply at all (inventory fixes PDF #1 + #4). */}
+            {product.itemType && (
+              <div className="col-span-2 flex justify-between items-center gap-3 p-3 rounded-xl bg-[#008C9C]/2">
+                <span className="input-label !text-[#008C9C]/70">Item Type</span>
+                <div className="text-right">
+                  <Badge
+                    variant={
+                      product.itemType === "REUSABLE_EQUIPMENT" ? "tdo" : "cleano"
+                    }
+                    size="sm"
+                    className="px-2 py-1">
+                    {ITEM_TYPE_NAME[product.itemType]}
+                  </Badge>
+                  <p className="text-xs text-[#008C9C]/50 mt-1">
+                    {ITEM_TYPE_DESCRIPTION[product.itemType]}
+                  </p>
+                </div>
+              </div>
+            )}
             <div className="flex justify-between items-center p-3 rounded-xl bg-[#008C9C]/2">
               <span className="input-label !text-[#008C9C]/70">
                 Warehouse Stock
@@ -685,6 +728,9 @@ export default function ProductDetailView({
                     { label: "Employee", className: "w-[200px] text-left" },
                     { label: "Email", className: "w-[250px] text-left" },
                     { label: "Quantity", className: "w-[120px] text-left" },
+                    // Stage 2: for equipment this is the reported CONDITION,
+                    // for consumables Low/Empty/OK — one column, one rule.
+                    { label: "Status", className: "w-[150px] text-left" },
                     { label: "Value", className: "w-[120px] text-left" },
                     {
                       label: "Assigned Date",
@@ -725,6 +771,18 @@ export default function ProductDetailView({
                         <div className="w-[120px] p-4">
                           <Badge variant="cleano" size="sm">
                             {assignment.quantity} {product.unit}
+                          </Badge>
+                        </div>
+                        <div className="w-[150px] p-4">
+                          <Badge
+                            variant={ATTENTION_VARIANT[assignment.attention.tone]}
+                            size="sm"
+                            title={
+                              assignment.statusUpdatedAt
+                                ? `Reported ${fmtDateTime(assignment.statusUpdatedAt)}`
+                                : undefined
+                            }>
+                            {assignment.attention.label}
                           </Badge>
                         </div>
                         <div className="w-[120px] p-4">
@@ -774,6 +832,8 @@ export default function ProductDetailView({
                         {totalAssigned} {product.unit}
                       </p>
                     </div>
+                    {/* Spacer under the Status column — totals don't sum a status. */}
+                    <div className="w-[150px] p-4"></div>
                     <div className="w-[120px] p-4">
                       <p className="app-title-small">
                         ${(totalAssigned * product.costPerUnit).toFixed(2)}
@@ -802,9 +862,16 @@ export default function ProductDetailView({
                           {assignment.employee.email}
                         </p>
                       </div>
-                      <Badge variant="cleano" size="sm">
-                        {assignment.quantity} {product.unit}
-                      </Badge>
+                      <div className="flex flex-col items-end gap-1">
+                        <Badge variant="cleano" size="sm">
+                          {assignment.quantity} {product.unit}
+                        </Badge>
+                        <Badge
+                          variant={ATTENTION_VARIANT[assignment.attention.tone]}
+                          size="sm">
+                          {assignment.attention.label}
+                        </Badge>
+                      </div>
                     </div>
                     <div className="flex items-center justify-between text-xs text-[#008C9C]/60">
                       <span>

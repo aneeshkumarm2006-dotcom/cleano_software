@@ -41,6 +41,13 @@ export interface AvailableJobPreview {
   /** Full street + unit, formatted by formatAddressLine. */
   address: string | null;
 
+  /**
+   * Apartment/condo vs house (Stage 9 / PDF #11), or null when unrecorded.
+   * Property information a cleaner weighs before claiming — it is not money and
+   * not a way in, so it belongs on this side of the line above.
+   */
+  propertyType: string | null;
+
   bedCount: number | null;
   bathCount: number | null;
   halfBathCount: number | null;

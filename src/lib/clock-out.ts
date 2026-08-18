@@ -1,6 +1,7 @@
 /**
  * Clock-out rules that need no database — cleano_new_fixes.pdf fix 6
- * (`_ai_context/TODO.md` § Stage 5).
+ * (`_ai_context/TODO.md` § Stage 5) and the closing inventory report
+ * (cleano_inventory_operations_fixes.pdf #2, § Stage 3).
  *
  * WHY THIS FILE EXISTS. `clockOut.ts` is a `"use server"` module, so every one
  * of its exports has to be an async server action. That makes the three pieces
@@ -15,21 +16,66 @@
  * cleaner standing in someone's kitchen can act on, and — where one product is
  * to blame — the `field` that names it so the client can mark that input.
  *
- * THE RULE THE SCREENSHOT ASKS FOR: an all-blank submit must succeed. Optional
- * quantities are already tolerated client-side (NaN filtered out, an unchanged
- * remaining-quantity yields used = 0); this file mirrors that server-side
- * instead of trusting it, because the action is a public entry point and the
- * page-6 failure is exactly the blank case.
+ * ── WHAT STAGE 3 CHANGED ───────────────────────────────────────────────────
+ * This module used to validate an ESTIMATED USAGE payload: sprays at 1.25 ml a
+ * pull, mop counts, disposable counts, and a "how much is left" box, all of
+ * which the server converted into a deduction from the cleaner's kit. Every one
+ * of those numbers was invented — nobody counts trigger pulls — and they were
+ * driving real stock levels, real supplies costs and real restock alerts.
+ *
+ * PDF #2 replaces the whole idea: at clock-out a cleaner REPORTS the state of
+ * the things that changed, and nothing is deducted from anything. So the
+ * payload is now a list of reports, one per item the cleaner actually touched,
+ * in the vocabulary that fits the product's item type:
+ *
+ *   LIQUID                → LEVEL     (Full / Good / Half / Low / Empty)
+ *   COUNTABLE_CONSUMABLE  → COUNT     (a quantity, plus an optional status chip)
+ *   REUSABLE_EQUIPMENT    → CONDITION (Available / Missing / Damaged / …)
+ *
+ * The all-blank case the page-6 screenshot reported is now the DEFAULT rather
+ * than an edge case: "No changes" submits an empty list, which is valid, cheap
+ * and writes nothing at all.
  */
 
-/** The post-job inventory payload both clock-out modals submit. */
-export interface ClockOutUsage {
-  sprays: Array<{ productId: string; sprayCount: number }>;
-  mops: Array<{ productId: string; mopCount: number }>;
-  disposables: Array<{ productId: string; quantity: number }>;
-  /** Products in category OTHER — the legacy remaining-quantity input. */
-  remaining: Array<{ productId: string; inventoryAfter: number }>;
+import type { ItemType } from "./item-type";
+import {
+  isCountableStatus,
+  isEquipmentCondition,
+  isLiquidLevel,
+  type CountableStatus,
+  type EquipmentCondition,
+  type LiquidLevel,
+} from "./inventory-status";
+
+/** Which vocabulary one reported line is written in. */
+export type ClosingReportKind = "LEVEL" | "COUNT" | "CONDITION";
+
+/** One item the cleaner touched. Untouched items are simply absent. */
+export interface ClosingReportEntry {
+  productId: string;
+  kind: ClosingReportKind;
+  /** LEVEL only. */
+  levelStatus?: LiquidLevel | null;
+  /** COUNT only — what is left, as a whole number. */
+  quantity?: number | null;
+  /** COUNT only — the optional chip beside the number. */
+  status?: CountableStatus | null;
+  /** CONDITION only. */
+  condition?: EquipmentCondition | null;
+  /** Optional free text, per item. */
+  note?: string | null;
 }
+
+/** The closing inventory report both clock-out screens submit. */
+export interface ClosingReport {
+  items: ClosingReportEntry[];
+}
+
+/** The maximum length of a per-item note. Anything longer is truncated. */
+export const CLOSING_NOTE_MAX = 300;
+
+/** Guardrail: a reported kit count above this is a typo, not a recount. */
+export const MAX_KIT_QUANTITY = 1000;
 
 export type ClockOutErrorCode =
   | "NOT_AUTHENTICATED"
@@ -38,7 +84,7 @@ export type ClockOutErrorCode =
   | "NOT_CLOCKED_IN"
   /**
    * This cleaner's clock-out already went through, tail and all, and this
-   * submission reports product usage that would be thrown away. Distinct from a
+   * submission reports inventory that would be thrown away. Distinct from a
    * retry — a retry resends the payload the committed attempt already recorded,
    * so dropping it is correct and the answer is success. Here the entries are
    * new, and answering "done" would be a lie about where they went.
@@ -48,7 +94,7 @@ export type ClockOutErrorCode =
    * The writes committed and the shift IS saved, but a step after the
    * transaction did not finish. Its own code because it is the one failure the
    * cleaner must NOT read as "nothing happened" — the message says the shift is
-   * safe, and Retry resumes rather than re-deducts.
+   * safe, and Retry resumes rather than re-reporting.
    */
   | "SYNC_INCOMPLETE"
   | "INVALID_USAGE"
@@ -71,8 +117,8 @@ export interface ClockOutFailure {
   field?: ClockOutField;
   /**
    * True when resubmitting the SAME payload is expected to work — i.e. the
-   * failure was transport or timing, not the numbers the cleaner typed. The
-   * client shows a Retry button on these and asks for a correction on the rest.
+   * failure was transport or timing, not what the cleaner reported. The client
+   * shows a Retry button on these and asks for a correction on the rest.
    */
   retryable: boolean;
 }
@@ -84,6 +130,13 @@ export interface KitItem {
   unit: string;
   /** What the cleaner is recorded as holding right now. */
   quantity: number;
+  /**
+   * Which vocabulary this product reports in. Optional so a caller that
+   * predates Stage 1 still compiles; when it is absent the kind check is
+   * skipped rather than guessed at, because refusing a cleaner's report over a
+   * classification WE failed to load is the page-6 failure with a new hat on.
+   */
+  itemType?: ItemType | null;
 }
 
 export type ClockOutKit = Map<string, KitItem>;
@@ -96,15 +149,12 @@ export type ClockOutKit = Map<string, KitItem>;
  * it are not one atomic act: once the transaction commits, the cleaner's session
  * IS closed even if the response never made it back to their phone. Every retry
  * inside this window re-runs only the steps after the transaction — all of which
- * are idempotent — and never re-applies a deduction. Fifteen minutes is long
+ * are idempotent — and never re-applies a report. Fifteen minutes is long
  * enough for a cleaner to notice an error, walk somewhere with signal and tap
  * Retry, and short enough that it can't be confused with genuinely clocking out
  * of a second stretch of work.
  */
 export const CLOCK_OUT_RESUME_WINDOW_MS = 15 * 60_000;
-
-/** ml of product per trigger pull. Mirrored by both clock-out modals. */
-export const ML_PER_SPRAY = 1.25;
 
 const failure = (
   code: ClockOutErrorCode,
@@ -118,232 +168,297 @@ const failure = (
   retryable: opts.retryable ?? false,
 });
 
-export type UsageValidation =
-  | { ok: true; deductions: Map<string, number> }
+/** One validated line, with everything the server needs already resolved. */
+export interface ValidatedReportEntry {
+  productId: string;
+  name: string;
+  unit: string;
+  kind: ClosingReportKind;
+  /** What the kit holds now — unchanged by LEVEL and CONDITION reports. */
+  previousQuantity: number;
+  /** What the kit should hold after this report. Only COUNT can move it. */
+  quantity: number;
+  levelStatus: LiquidLevel | null;
+  status: CountableStatus | null;
+  condition: EquipmentCondition | null;
+  note: string | null;
+}
+
+export type ClosingReportValidation =
+  | { ok: true; entries: ValidatedReportEntry[] }
   | { ok: false; failure: ClockOutFailure };
 
 const isFiniteNumber = (v: unknown): v is number =>
   typeof v === "number" && Number.isFinite(v);
 
-/**
- * Blank means blank. `parseFloat("")` is NaN and both modals already drop those
- * rows before posting; a NaN that arrives anyway is read the same way — the
- * cleaner left the box alone — and never as an error.
- */
-const isBlank = (v: unknown): boolean =>
-  v === null || v === undefined || v === "" || (typeof v === "number" && Number.isNaN(v));
+const CLOSING_REPORT_KINDS: readonly ClosingReportKind[] = [
+  "LEVEL",
+  "COUNT",
+  "CONDITION",
+];
 
-const SECTION_LABEL: Record<keyof ClockOutUsage, string> = {
-  sprays: "liquid sprays",
-  mops: "mop-based liquids",
-  disposables: "disposables",
-  remaining: "other products",
+export function isClosingReportKind(v: unknown): v is ClosingReportKind {
+  return typeof v === "string" && (CLOSING_REPORT_KINDS as readonly string[]).includes(v);
+}
+
+/** Which kind a product's type expects. */
+export function kindForItemType(itemType: ItemType): ClosingReportKind {
+  switch (itemType) {
+    case "LIQUID":
+      return "LEVEL";
+    case "REUSABLE_EQUIPMENT":
+      return "CONDITION";
+    case "COUNTABLE_CONSUMABLE":
+      return "COUNT";
+  }
+}
+
+const KIND_NOUN: Record<ClosingReportKind, string> = {
+  LEVEL: "a level (Full / Good / Half / Low / Empty)",
+  COUNT: "a count",
+  CONDITION: "a condition (Available / Missing / Damaged …)",
+};
+
+const trimNote = (note: unknown): string | null => {
+  if (typeof note !== "string") return null;
+  const trimmed = note.trim().slice(0, CLOSING_NOTE_MAX);
+  return trimmed.length > 0 ? trimmed : null;
 };
 
 /**
- * Turn a submitted usage payload into the per-product amounts to deduct, or the
- * one specific complaint that stops the clock-out.
+ * Turn a submitted closing report into the lines the server should write, or
+ * the one specific complaint that stops the clock-out.
  *
  * Deliberately NOT a Zod schema: the interesting rules here are not "is this a
- * number" but "which of these numbers is the cleaner going to have to change",
- * and a schema error (`remaining.2.inventoryAfter: Expected number`) is the
- * blanket string this stage exists to delete, wearing a different hat.
+ * number" but "which of these does the cleaner have to go and fix", and a schema
+ * error (`items.2.quantity: Expected number`) is the blanket string this work
+ * exists to delete, wearing a different hat.
+ *
+ * WHAT IS REFUSED
+ *   • a product that is not in this cleaner's kit          → PRODUCT_NOT_IN_KIT
+ *   • a report in the wrong vocabulary for the item type   → INVALID_USAGE
+ *   • a missing / unrecognised level, status or condition  → INVALID_USAGE
+ *   • a negative, fractional or absurd count               → INVALID_USAGE
+ *
+ * WHAT IS NOT
+ *   • an empty list. "No changes" is the fast path and the commonest answer.
+ *   • the same product twice — the last line wins, because a client that
+ *     re-renders a row must not be able to fail a clock-out with a duplicate.
  */
-export function validateClockOutUsage(
-  usage: Partial<ClockOutUsage> | null | undefined,
+export function validateClosingReport(
+  report: Partial<ClosingReport> | null | undefined,
   kit: ClockOutKit
-): UsageValidation {
-  const payload = usage ?? {};
+): ClosingReportValidation {
+  const items = report?.items;
 
-  // A missing section is fine (a cleaner with no mops posts no mops). A section
-  // that arrived as something other than a list is a broken submission, and
-  // saying so beats iterating `undefined` and reporting a TypeError as "Failed
-  // to clock out" — which is what happened before this stage.
-  for (const key of Object.keys(SECTION_LABEL) as (keyof ClockOutUsage)[]) {
-    const section = payload[key];
-    if (section !== undefined && section !== null && !Array.isArray(section)) {
+  // A missing list is fine ("No changes"). A list that arrived as something
+  // else is a broken submission, and saying so beats iterating `undefined` and
+  // reporting a TypeError as "Failed to clock out" — which is what happened
+  // before Stage 5.
+  if (items !== undefined && items !== null && !Array.isArray(items)) {
+    return {
+      ok: false,
+      failure: failure(
+        "INVALID_USAGE",
+        "Your inventory report didn't arrive correctly. Close this and reopen the clock-out form, then try again.",
+        { retryable: false }
+      ),
+    };
+  }
+
+  // Keyed by product so a duplicated row is a correction, not a conflict.
+  const byProduct = new Map<string, ValidatedReportEntry>();
+
+  for (const row of items ?? []) {
+    const productId = row?.productId;
+    if (typeof productId !== "string" || productId.length === 0) {
       return {
         ok: false,
         failure: failure(
           "INVALID_USAGE",
-          `Your ${SECTION_LABEL[key]} entries didn't arrive correctly. Close this and reopen the clock-out form, then try again.`,
+          "One of the items you reported is missing its identifier. Close this and reopen the clock-out form, then try again.",
           { retryable: false }
         ),
       };
     }
-  }
 
-  const deductions = new Map<string, number>();
-  const add = (productId: string, amount: number) => {
-    if (amount > 0) {
-      deductions.set(productId, (deductions.get(productId) ?? 0) + amount);
-    }
-  };
-
-  /**
-   * A row is only worth complaining about once it claims real usage. A stale
-   * kit line the cleaner never touched must never block a clock-out — that is
-   * the all-blank page-6 case, and the whole point of the fix.
-   */
-  const resolve = (
-    productId: unknown,
-    reportsUsage: boolean
-  ): { item: KitItem } | { skip: true } | { failure: ClockOutFailure } => {
-    if (typeof productId !== "string" || productId.length === 0) {
-      if (!reportsUsage) return { skip: true };
-      return {
-        failure: failure(
-          "INVALID_USAGE",
-          "One of the products you logged is missing its identifier. Close this and reopen the clock-out form, then try again.",
-          { retryable: false }
-        ),
-      };
-    }
     const item = kit.get(productId);
     if (!item) {
-      if (!reportsUsage) return { skip: true };
-      return {
-        failure: failure(
-          "PRODUCT_NOT_IN_KIT",
-          "You logged usage for a product that is no longer assigned to you. Set it back to “None”, or refresh the page to pick up your current kit, then clock out again.",
-          { field: { productId, name: "this product" }, retryable: false }
-        ),
-      };
-    }
-    return { item };
-  };
-
-  const numberProblem = (
-    item: KitItem,
-    label: string
-  ): { ok: false; failure: ClockOutFailure } => ({
-    ok: false,
-    failure: failure(
-      "INVALID_USAGE",
-      `“${item.name}” has an invalid ${label}. Enter a number that is zero or more, then clock out again.`,
-      { field: { productId: item.productId, name: item.name }, retryable: false }
-    ),
-  });
-
-  for (const row of payload.sprays ?? []) {
-    const count = row?.sprayCount;
-    if (isBlank(count)) continue;
-    const resolved = resolve(row?.productId, !isFiniteNumber(count) || count > 0);
-    if ("failure" in resolved) return { ok: false, failure: resolved.failure };
-    if ("skip" in resolved) continue;
-    if (!isFiniteNumber(count) || count < 0) {
-      return numberProblem(resolved.item, "spray count");
-    }
-    add(resolved.item.productId, count * ML_PER_SPRAY);
-  }
-
-  for (const row of payload.mops ?? []) {
-    const count = row?.mopCount;
-    if (isBlank(count)) continue;
-    const resolved = resolve(row?.productId, !isFiniteNumber(count) || count > 0);
-    if ("failure" in resolved) return { ok: false, failure: resolved.failure };
-    if ("skip" in resolved) continue;
-    if (!isFiniteNumber(count) || count < 0) {
-      return numberProblem(resolved.item, "mop count");
-    }
-    add(resolved.item.productId, count);
-  }
-
-  for (const row of payload.disposables ?? []) {
-    const count = row?.quantity;
-    if (isBlank(count)) continue;
-    const resolved = resolve(row?.productId, !isFiniteNumber(count) || count > 0);
-    if ("failure" in resolved) return { ok: false, failure: resolved.failure };
-    if ("skip" in resolved) continue;
-    if (!isFiniteNumber(count) || count < 0) {
-      return numberProblem(resolved.item, "quantity");
-    }
-    add(resolved.item.productId, count);
-  }
-
-  // OTHER products post what is LEFT, not what was used. An untouched box comes
-  // back equal to the starting quantity → used = 0 → nothing to deduct, which is
-  // why the screenshot's all-blank submit should be the cheapest clock-out there
-  // is rather than the one that fails.
-  for (const row of payload.remaining ?? []) {
-    const left = row?.inventoryAfter;
-    if (isBlank(left)) continue;
-    // `reportsUsage: false` on purpose. The other three sections post what was
-    // USED, so a non-zero row is unambiguously a claim and a missing kit line is
-    // worth stopping for. This one posts what is LEFT, and both modals prefill it
-    // with the starting quantity — so a kit line removed between page load and
-    // submit arrives looking identical to one the cleaner never touched. There is
-    // no way to tell them apart, and refusing the clock-out over a box nobody
-    // typed in is the page-6 failure with a nicer message on it.
-    const resolved = resolve(row?.productId, false);
-    if ("failure" in resolved) return { ok: false, failure: resolved.failure };
-    if ("skip" in resolved) continue;
-    const item = resolved.item;
-    if (!isFiniteNumber(left) || left < 0) {
-      return numberProblem(item, "remaining quantity");
-    }
-    if (left > item.quantity) {
       return {
         ok: false,
         failure: failure(
-          "INVALID_USAGE",
-          `You entered ${left} ${item.unit} remaining for “${item.name}”, but you only started with ${item.quantity}. Enter what you have left, not what you used.`,
-          { field: { productId: item.productId, name: item.name }, retryable: false }
+          "PRODUCT_NOT_IN_KIT",
+          "You reported on an item that is no longer assigned to you. Refresh the page to pick up your current kit, then clock out again.",
+          { field: { productId, name: "this item" }, retryable: false }
         ),
       };
     }
-    add(item.productId, item.quantity - left);
+
+    const field = { productId: item.productId, name: item.name };
+    const invalid = (message: string): ClosingReportValidation => ({
+      ok: false,
+      failure: failure("INVALID_USAGE", message, { field, retryable: false }),
+    });
+
+    // The kind has to be one of the three, and it has to match what the product
+    // IS. A liquid reported as a condition would put "Damaged" on a bottle of
+    // Windex and raise a flag an admin cannot act on; the kit column it would be
+    // written to does not even exist for that type.
+    if (!isClosingReportKind(row?.kind)) {
+      return invalid(
+        `“${item.name}” was reported in a way we don't recognise. Refresh the page to pick up your current kit, then clock out again.`
+      );
+    }
+    // `itemType` absent means the caller predates Stage 1 and could not tell us.
+    // Refusing a cleaner's report over a classification WE failed to load is the
+    // page-6 failure with a new hat on, so the kind is taken at face value.
+    const expected = item.itemType ? kindForItemType(item.itemType) : row.kind;
+    if (row.kind !== expected) {
+      return invalid(
+        `“${item.name}” reports ${KIND_NOUN[expected]}, and this form sent something else. Refresh the page to pick up your current kit, then clock out again.`
+      );
+    }
+
+    const note = trimNote(row?.note);
+
+    if (row.kind === "LEVEL") {
+      if (!isLiquidLevel(row.levelStatus)) {
+        return invalid(
+          `Pick how much “${item.name}” you have left — Full, Good, Half, Low or Empty.`
+        );
+      }
+      byProduct.set(productId, {
+        productId,
+        name: item.name,
+        unit: item.unit,
+        kind: "LEVEL",
+        previousQuantity: item.quantity,
+        // A level report says nothing about the count, so the count is left
+        // exactly where it was. This is the line that makes "no automatic
+        // deduction of anything" true (PDF #2).
+        quantity: item.quantity,
+        levelStatus: row.levelStatus,
+        status: null,
+        condition: null,
+        note,
+      });
+      continue;
+    }
+
+    if (row.kind === "CONDITION") {
+      if (!isEquipmentCondition(row.condition)) {
+        return invalid(
+          `Pick the condition of “${item.name}” — Available, Missing, Damaged, Needs replacement or Needs maintenance.`
+        );
+      }
+      byProduct.set(productId, {
+        productId,
+        name: item.name,
+        unit: item.unit,
+        kind: "CONDITION",
+        previousQuantity: item.quantity,
+        quantity: item.quantity,
+        levelStatus: null,
+        status: null,
+        condition: row.condition,
+        note,
+      });
+      continue;
+    }
+
+    // COUNT. The number is what the cleaner has LEFT — it replaces the kit
+    // count outright rather than being subtracted from it, because a recount is
+    // a measurement and the old number was the estimate.
+    const quantity = row.quantity;
+    const statusGiven = row.status != null && row.status !== undefined;
+    if (!isFiniteNumber(quantity)) {
+      // A status on its own is a legitimate report ("I can't find them"), so
+      // only insist on a number when there is nothing else to go on.
+      if (!statusGiven) {
+        return invalid(
+          `Enter how many “${item.name}” you have left, or pick a status for it.`
+        );
+      }
+    } else {
+      if (quantity < 0) {
+        return invalid(
+          `“${item.name}” can't be a negative number. Enter how many you have left.`
+        );
+      }
+      if (!Number.isInteger(quantity)) {
+        return invalid(
+          `Enter a whole number of “${item.name}” — you can't have part of one.`
+        );
+      }
+      if (quantity > MAX_KIT_QUANTITY) {
+        return invalid(
+          `${quantity} “${item.name}” looks like a typo. Enter how many you have left.`
+        );
+      }
+    }
+    if (statusGiven && !isCountableStatus(row.status)) {
+      return invalid(
+        `“${item.name}” has a status we don't recognise. Refresh the page, then clock out again.`
+      );
+    }
+
+    byProduct.set(productId, {
+      productId,
+      name: item.name,
+      unit: item.unit,
+      kind: "COUNT",
+      previousQuantity: item.quantity,
+      quantity: isFiniteNumber(quantity) ? quantity : item.quantity,
+      levelStatus: null,
+      status: isCountableStatus(row.status) ? row.status : null,
+      condition: null,
+      note,
+    });
   }
 
-  return { ok: true, deductions };
+  return { ok: true, entries: [...byProduct.values()] };
 }
 
 /**
  * A one-line, PII-free summary of what was submitted, for the failure JobLog
- * row (5.3). Names and units come from our own product catalogue and the counts
- * are numbers we computed — nothing the cleaner typed as free text reaches the
- * log, because an admin reads these rows and a log is not a place to put
- * unescaped input.
+ * row (5.3). Names and units come from our own product catalogue and the
+ * statuses are values from our own enums — nothing the cleaner typed as free
+ * text reaches the log, because an admin reads these rows and a log is not a
+ * place to put unescaped input.
  */
-export function describeUsageForLog(
-  usage: Partial<ClockOutUsage> | null | undefined,
+export function describeReportForLog(
+  report: Partial<ClosingReport> | null | undefined,
   kit: ClockOutKit,
   maxItems = 6
 ): string {
-  const payload = usage ?? {};
-  const counts = {
-    sprays: Array.isArray(payload.sprays) ? payload.sprays.length : 0,
-    mops: Array.isArray(payload.mops) ? payload.mops.length : 0,
-    disposables: Array.isArray(payload.disposables) ? payload.disposables.length : 0,
-    remaining: Array.isArray(payload.remaining) ? payload.remaining.length : 0,
-  };
-  const rows = counts.sprays + counts.mops + counts.disposables + counts.remaining;
+  const items = Array.isArray(report?.items) ? report.items : [];
+  const rows = items.length;
+  const plural = `${rows} item${rows === 1 ? "" : "s"}`;
 
-  const validated = validateClockOutUsage(payload, kit);
+  const validated = validateClosingReport(report, kit);
   if (!validated.ok) {
-    return `${rows} product row${rows === 1 ? "" : "s"} submitted; payload rejected (${validated.failure.code})`;
+    return `${plural} reported; payload rejected (${validated.failure.code})`;
+  }
+  if (validated.entries.length === 0) {
+    return "no inventory changes reported";
   }
 
-  const named = [...validated.deductions.entries()]
-    .map(([productId, amount]) => {
-      const item = kit.get(productId);
-      return item
-        ? `${item.name} −${round2(amount)} ${item.unit}`
-        : `${productId} −${round2(amount)}`;
+  const named = validated.entries
+    .map((e) => {
+      const value =
+        e.kind === "LEVEL"
+          ? e.levelStatus
+          : e.kind === "CONDITION"
+            ? e.condition
+            : `${e.quantity} ${e.unit}${e.status ? ` (${e.status})` : ""}`;
+      return `${e.name} → ${value}`;
     })
     .sort();
 
-  if (named.length === 0) {
-    return `${rows} product row${rows === 1 ? "" : "s"} submitted, none reporting usage`;
-  }
   const shown = named.slice(0, maxItems).join(", ");
   const extra = named.length - maxItems;
-  return `${rows} product row${rows === 1 ? "" : "s"} submitted; ${shown}${
-    extra > 0 ? ` (+${extra} more)` : ""
-  }`;
+  return `${plural} reported; ${shown}${extra > 0 ? ` (+${extra} more)` : ""}`;
 }
-
-const round2 = (n: number) => Math.round(n * 100) / 100;
 
 /** Prisma codes that mean "we ran out of time", not "your data is wrong". */
 const TIMEOUT_CODES = new Set(["P1008", "P2024", "P2028", "P2034"]);
@@ -374,7 +489,7 @@ export function clockOutErrorClass(error: unknown): string {
  *
  * Retry is safe for every code below precisely BECAUSE the writes are one
  * transaction: either it committed (in which case the resume path finishes the
- * job without re-deducting anything) or it did not (in which case nothing
+ * job without re-reporting anything) or it did not (in which case nothing
  * happened at all). There is no third state in which a second submit
  * double-counts, which is what makes offering the button honest.
  */

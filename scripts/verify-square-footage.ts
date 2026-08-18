@@ -57,8 +57,15 @@ const saveJob = read("src/app/admin/actions/saveJob.ts");
 ok("saveJob reads square footage", saveJob.includes('formData.get("squareFootage")'));
 ok("saveJob persists it to the job record", /squareFootage,/.test(saveJob));
 ok("saveJob derives the price for sqft services", saveJob.includes("isSqftJobType(jobTypeRaw)"));
+// Both conditions, not the one-line spelling of them. This used to match the
+// literal `price === null && squareFootage !== null`, which Stage 8 broke
+// WITHOUT breaking the rule: it inserted `billingType !== "HOURLY" &&` ahead of
+// them and split the guard across lines. The invariant is that a typed price
+// and a missing area each veto the derivation, so assert that.
 ok("derivation only when the admin left price blank",
-  saveJob.includes("price === null && squareFootage !== null"));
+  /if \([\s\S]{0,200}?price === null &&[\s\S]{0,200}?isSqftJobType\(jobTypeRaw\)/.test(saveJob));
+ok("...and only when an area was actually entered",
+  /if \([\s\S]{0,200}?squareFootage !== null &&[\s\S]{0,200}?isSqftJobType\(jobTypeRaw\)/.test(saveJob));
 
 const form = read("src/app/admin/jobs/new/page.tsx");
 ok("full-page form has the field", form.includes('name="squareFootage"'));

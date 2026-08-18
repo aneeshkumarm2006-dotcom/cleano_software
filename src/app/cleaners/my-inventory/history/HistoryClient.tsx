@@ -99,7 +99,7 @@ export default function HistoryClient({
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card variant="default" className="p-5">
-          <p className="text-xs uppercase tracking-wide text-[#008C9C]/60">
+          <p className="text-xs uppercase tracking-wide text-[#005a63]">
             Pickups
           </p>
           <p className="text-2xl font-[400] text-[#008C9C] mt-1">
@@ -107,7 +107,7 @@ export default function HistoryClient({
           </p>
         </Card>
         <Card variant="default" className="p-5">
-          <p className="text-xs uppercase tracking-wide text-[#008C9C]/60">
+          <p className="text-xs uppercase tracking-wide text-[#005a63]">
             Items Picked Up
           </p>
           <p className="text-2xl font-[400] text-[#008C9C] mt-1">
@@ -181,7 +181,7 @@ export default function HistoryClient({
 
       {sorted.length === 0 ? (
         <Card variant="default" className="p-12 text-center">
-          <History className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+          <History className="w-12 h-12 text-gray-500 mx-auto mb-3" />
           <p className="font-[400] text-gray-900 mb-1">No pickups yet</p>
           <p className="text-sm text-gray-600 mb-4">
             Pickups you make from storage will appear here.
@@ -226,7 +226,7 @@ export default function HistoryClient({
                         {c.items.length === 1 ? "" : "s"} ·{" "}
                         {totalUnits.toFixed(2)} units
                       </div>
-                      <div className="text-xs text-[#008C9C]/60 mt-0.5">
+                      <div className="text-xs text-[#005a63] mt-0.5">
                         {isOpen ? "Hide details" : "Show details"}
                       </div>
                     </div>
@@ -246,7 +246,7 @@ export default function HistoryClient({
                           key={i.productId}
                           className="flex items-center justify-between px-4 py-2.5 text-sm">
                           <div className="flex items-center gap-2">
-                            <Package className="w-4 h-4 text-gray-400" />
+                            <Package className="w-4 h-4 text-gray-500" />
                             <span className="text-gray-900">
                               {i.productName}
                             </span>

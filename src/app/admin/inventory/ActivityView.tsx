@@ -5,6 +5,7 @@ import { Activity, Loader, Package, User } from "lucide-react";
 import Badge from "@/components/ui/Badge";
 import Select from "@/components/ui/Select";
 import { fmtDateTime } from "@/lib/time";
+import { statusLabel } from "@/lib/inventory-status";
 import { getInventoryActivity } from "../actions/getInventoryActivity";
 import type { InventoryActivityEntry } from "../actions/getInventoryActivity.types";
 
@@ -130,13 +131,29 @@ export default function ActivityView({ cleaners, products }: Props) {
                 className="flex items-start gap-3 px-4 py-3 flex-wrap sm:flex-nowrap">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <Badge variant="cleano" size="sm">
+                    <Badge
+                      variant="cleano"
+                      size="sm"
+                      title={
+                        e.actionDerived
+                          ? "Read from this row's wording — it predates the stored action column"
+                          : undefined
+                      }>
                       {e.action}
+                      {e.actionDerived ? " ·" : ""}
                     </Badge>
                     <span className="text-sm text-[#008C9C] truncate inline-flex items-center gap-1">
                       <Package className="w-3.5 h-3.5 flex-shrink-0" />
                       {e.productName}
                     </span>
+                    {/* PDF #1: history carries previous status → new status. */}
+                    {e.newStatus && (
+                      <span className="text-xs font-[500] text-[#008C9C]/80 whitespace-nowrap">
+                        {e.previousStatus
+                          ? `${statusLabel(e.previousStatus)} → ${statusLabel(e.newStatus)}`
+                          : statusLabel(e.newStatus)}
+                      </span>
+                    )}
                   </div>
                   <div className="text-xs text-[#008C9C]/60 mt-1 inline-flex items-center gap-1 flex-wrap">
                     <User className="w-3 h-3" />
@@ -160,8 +177,13 @@ export default function ActivityView({ cleaners, products }: Props) {
                     {up ? "+" : ""}
                     {e.quantityChange} {e.unit ?? ""}
                   </div>
+                  {/* PDF #6's history list wants the OLD count as well as the
+                      new one. `previous` is derived (new − change) so it can
+                      never disagree with the delta above it — the same reading
+                      the product's Stock History already shows. */}
                   <div className="text-[11px] text-[#008C9C]/50 tabular-nums">
-                    now {e.newQuantity} {e.unit ?? ""}
+                    {e.newQuantity - e.quantityChange} → {e.newQuantity}{" "}
+                    {e.unit ?? ""}
                   </div>
                 </div>
               </div>

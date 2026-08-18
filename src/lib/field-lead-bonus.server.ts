@@ -1,5 +1,6 @@
 import { db } from "@/db";
 import { computeFieldLeadBonus, type FieldLeadBonus } from "./field-lead-bonus";
+import { fieldLeadGroupIds } from "./field-lead-group.server";
 import { ACTIVE_VALUE_SELECT } from "./metrics";
 import { activeSubtotal } from "./job-money";
 
@@ -12,11 +13,19 @@ export async function getFieldLeadWeeklyBonus(
   weekStart: Date,
   weekEnd: Date
 ): Promise<FieldLeadBonus & { groupMemberIds: string[] }> {
-  const members = await db.user.findMany({
-    where: { fieldLeadId },
-    select: { id: true },
+  // Stage 7 moved this resolution into a shared helper so the bonus, the My Team
+  // page, the calendar scope and the availability read cannot disagree about who
+  // is in a group.
+  //
+  // `includeArchived: true` reproduces the pre-refactor set EXACTLY — this query
+  // never filtered `deletedAt`, and it must not start now: the window is
+  // historical, so a cleaner archived mid-week still worked the jobs they worked,
+  // and excluding them would silently shrink a Field Lead's group revenue for a
+  // week they had already earned. The My Team surfaces use the default (active
+  // only), because an archived cleaner has no upcoming schedule to coordinate.
+  const groupMemberIds = await fieldLeadGroupIds(fieldLeadId, {
+    includeArchived: true,
   });
-  const groupMemberIds = [fieldLeadId, ...members.map((m) => m.id)];
 
   // Revenue: jobs the group worked (as lead employee or assigned cleaner) that
   // completed in the window. Distinct jobs so a shared job isn't double-counted.

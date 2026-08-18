@@ -18,7 +18,18 @@ import {
   PackagePlus,
 } from "lucide-react";
 import { fmtDateTime } from "@/lib/time";
-import { LOW_STOCK_LABEL } from "@/lib/inventory-thresholds";
+import {
+  LOW_STOCK_LABEL,
+  type AttentionTone,
+  type ItemAttentionState,
+} from "@/lib/inventory-thresholds";
+import {
+  INVENTORY_FLAG_LABEL,
+  isInventoryFlagType,
+  statusLabel,
+} from "@/lib/inventory-status";
+import { ITEM_TYPE_LABEL, type ItemType } from "@/lib/item-type";
+import { unitsRemovedFromKit } from "@/lib/kit-edit";
 import { setCleanerProductQuantity } from "../actions/setCleanerProductQuantity";
 
 interface LastChange {
@@ -34,7 +45,34 @@ interface CleanerItem {
   unit: string;
   quantity: number;
   costPerUnit: number;
+  itemType: ItemType;
   refillThreshold: number;
+  /**
+   * Computed server-side by `itemAttentionState()` — the identical call the
+   * cleaner's own app makes. Nothing in this file re-derives it, which is what
+   * keeps admin and cleaner from disagreeing about a row (PDF #4).
+   */
+  attention: ItemAttentionState;
+  statusUpdatedAt?: string | null;
+  statusNotes?: string | null;
+  /**
+   * The latest status transition recorded against this (cleaner, product) —
+   * PDF #2's "admin should see each cleaner's latest reported inventory status".
+   * Comes from `InventoryChange`, so it carries the job the report came off in
+   * its reason, and survives an admin count edit landing on top of it.
+   */
+  lastReport?: {
+    at: string;
+    previousStatus: string | null;
+    newStatus: string;
+    reason: string | null;
+  } | null;
+  /**
+   * Open flag types against this row. The only "latest status" a COUNTABLE has:
+   * its count is its state of record, so "missing" or "damaged" lives on the
+   * flag rather than on a status column that could disagree with the number.
+   */
+  openFlagTypes?: string[];
   isLow: boolean;
   /** Most recent InventoryChange for this (cleaner, product) — admin OR cleaner. */
   lastChange?: LastChange | null;
@@ -47,8 +85,28 @@ interface Cleaner {
   itemCount: number;
   totalUnits: number;
   totalValue: number;
-  lowCount: number;
+  /** Consumables below threshold + tools whose condition isn't Available. */
+  attentionCount: number;
   items: CleanerItem[];
+}
+
+/** Badge variant per tone. `warning` is amber, `error` red, `success` green. */
+const TONE_VARIANT: Record<AttentionTone, "success" | "warning" | "error"> = {
+  ok: "success",
+  warn: "warning",
+  critical: "error",
+};
+
+/**
+ * "· job #1826" when the audit row says which job the report came off.
+ *
+ * Read from the reason rather than stored twice: `clockOut` writes "Reported at
+ * clock-out on job #N", and a second column carrying the same number is one
+ * more thing that can drift out of step with it.
+ */
+function jobRef(reason: string | null | undefined): string {
+  const match = /job #(\d+)/i.exec(reason ?? "");
+  return match ? ` · job #${match[1]}` : "";
 }
 
 interface Props {
@@ -72,13 +130,17 @@ export default function CleanerInventoryView({
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [qty, setQty] = useState("");
   const [reason, setReason] = useState("");
+  // PDF #6: warehouse stock stays untouched unless the admin says otherwise.
+  // Always starts OFF, including on the next row edited.
+  const [returnToWarehouse, setReturnToWarehouse] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return cleaners.filter((c) => {
-      if (lowOnly && c.lowCount === 0) return false;
+      if (lowOnly && c.attentionCount === 0) return false;
       if (!q) return true;
       return (
         c.employeeName.toLowerCase().includes(q) ||
@@ -87,23 +149,33 @@ export default function CleanerInventoryView({
     });
   }, [cleaners, search, lowOnly]);
 
-  const totalLow = cleaners.reduce((s, c) => s + c.lowCount, 0);
+  const totalAttention = cleaners.reduce((s, c) => s + c.attentionCount, 0);
 
   const openEditor = (cleanerId: string, item: CleanerItem) => {
     setEditingKey(`${cleanerId}|${item.productId}`);
     setQty(String(item.quantity));
     setReason("");
+    setReturnToWarehouse(false);
     setError(null);
+    setNotice(null);
   };
 
   const closeEditor = () => {
     setEditingKey(null);
     setQty("");
     setReason("");
+    setReturnToWarehouse(false);
     setError(null);
   };
 
   async function save(cleanerId: string, item: CleanerItem) {
+    // An EMPTY box is not zero. Without this, clearing the field and hitting
+    // Save silently removed the item from the kit — the one edit here that
+    // can't be undone with another number.
+    if (qty.trim() === "") {
+      setError("Enter a quantity — type 0 to remove the item.");
+      return;
+    }
     const value = Number(qty);
     if (!Number.isFinite(value) || value < 0) {
       setError("Enter a quantity of 0 or more.");
@@ -116,12 +188,20 @@ export default function CleanerInventoryView({
       productId: item.productId,
       quantity: value,
       reason: reason.trim() || undefined,
+      returnToWarehouse:
+        returnToWarehouse && unitsRemovedFromKit(qty, item.quantity) > 0,
     });
     setSaving(false);
     if (!res.success) {
       setError(res.error);
       return;
     }
+    // Say what moved where, since the number that changed is on another tab.
+    setNotice(
+      res.returned
+        ? `${res.returned.quantity} ${res.returned.unit} returned to ${res.returned.locationName} — warehouse now ${res.returned.stockLevel}.`
+        : null
+    );
     closeEditor();
     router.refresh();
   }
@@ -167,9 +247,10 @@ export default function CleanerInventoryView({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {totalLow > 0 && (
+          {totalAttention > 0 && (
             <Badge variant="error" size="sm">
-              {totalLow} low item{totalLow !== 1 ? "s" : ""}
+              {totalAttention} item{totalAttention !== 1 ? "s" : ""} need
+              {totalAttention === 1 ? "s" : ""} attention
             </Badge>
           )}
           <Badge variant="cleano" size="sm">
@@ -186,6 +267,21 @@ export default function CleanerInventoryView({
           )}
         </div>
       </div>
+
+      {/* A warehouse return moves a number on a different tab, so it gets said
+          out loud here rather than being left for the admin to go and find. */}
+      {notice && (
+        <div className="flex items-start justify-between gap-3 rounded-xl border border-[#008C9C]/20 bg-[#008C9C]/5 px-4 py-3">
+          <p className="text-xs text-[#008C9C]">{notice}</p>
+          <button
+            type="button"
+            aria-label="Dismiss"
+            onClick={() => setNotice(null)}
+            className="text-[#008C9C]/50 hover:text-[#008C9C]">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-col lg:flex-row gap-2">
@@ -213,7 +309,7 @@ export default function CleanerInventoryView({
               : undefined
           }>
           <AlertTriangle className="w-4 h-4 mr-2" />
-          Low only
+          Needs attention only
         </button>
       </div>
 
@@ -234,9 +330,9 @@ export default function CleanerInventoryView({
                 </p>
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
-                {c.lowCount > 0 && (
+                {c.attentionCount > 0 && (
                   <Badge variant="error" size="sm">
-                    {c.lowCount} low
+                    {c.attentionCount} to review
                   </Badge>
                 )}
                 {/* Item 17: open inventory assignment for THIS cleaner. */}
@@ -302,6 +398,29 @@ export default function CleanerInventoryView({
                         placeholder="Reason (optional) — e.g. cycle count, restocked van"
                         className="w-full px-2 py-1.5 rounded-lg border border-[#008C9C]/20 text-sm text-[#003C46] placeholder:text-[#008C9C]/40 focus:outline-none focus:border-[#008C9C]"
                       />
+                      {/* PDF #6: "warehouse stock should not be affected unless
+                          admin specifically chooses to return the item". Only
+                          offered when the count is going DOWN — a checkbox that
+                          does nothing is worse than no checkbox. */}
+                      {unitsRemovedFromKit(qty, i.quantity) > 0 && (
+                        <label className="flex items-start gap-2 text-xs text-[#008C9C] cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={returnToWarehouse}
+                            disabled={saving}
+                            onChange={(e) => setReturnToWarehouse(e.target.checked)}
+                            className="mt-0.5 w-4 h-4 accent-[#008C9C]"
+                          />
+                          <span>
+                            Return the {unitsRemovedFromKit(qty, i.quantity)} {i.unit}{" "}
+                            removed to warehouse stock
+                            <span className="block text-[11px] text-[#008C9C]/50">
+                              Off by default — tick only if the units physically
+                              came back.
+                            </span>
+                          </span>
+                        </label>
+                      )}
                       {error && <p className="text-xs text-red-600">{error}</p>}
                       <div className="flex items-center gap-2">
                         <Button
@@ -332,17 +451,23 @@ export default function CleanerInventoryView({
                       </div>
                       <p className="text-[11px] text-[#008C9C]/50">
                         Recorded in the product&rsquo;s stock history with your name
-                        and the change amount. Warehouse stock is not affected.
+                        and the change amount.{" "}
+                        {returnToWarehouse && unitsRemovedFromKit(qty, i.quantity) > 0
+                          ? "The removed units will be added back to warehouse stock."
+                          : "Warehouse stock is not affected."}
                       </p>
                     </div>
                   );
                 }
 
+                const equipment = i.itemType === "REUSABLE_EQUIPMENT";
+                const alert = i.attention.tone === "critical";
+
                 return (
                   <div
                     key={i.productId}
                     className={`flex items-center justify-between gap-2 p-3 rounded-xl transition-colors ${
-                      i.isLow
+                      alert
                         ? "bg-red-50 border border-red-200"
                         : "bg-[#008C9C]/5"
                     }`}>
@@ -350,10 +475,36 @@ export default function CleanerInventoryView({
                       <Link
                         href={`/admin/inventory/${i.productId}`}
                         className={`text-sm font-[400] hover:underline ${
-                          i.isLow ? "text-red-700" : "text-[#008C9C]"
+                          alert ? "text-red-700" : "text-[#008C9C]"
                         }`}>
                         {i.productName}
                       </Link>
+                      {/* WHAT was reported, and WHEN. An admin working this tab
+                          needs to know a scraper was reported damaged three
+                          weeks ago, not just that it is damaged — and after
+                          Stage 3 the same is true of a bottle reported empty,
+                          whose count no longer moves at all. */}
+                      {i.lastReport && (
+                        <p className="text-[11px] text-[#008C9C]/50 truncate mt-0.5">
+                          Reported{" "}
+                          {i.lastReport.previousStatus
+                            ? `${statusLabel(i.lastReport.previousStatus)} → `
+                            : ""}
+                          {statusLabel(i.lastReport.newStatus)} ·{" "}
+                          {fmtDateTime(i.lastReport.at)}
+                          {jobRef(i.lastReport.reason)}
+                        </p>
+                      )}
+                      {!i.lastReport && equipment && i.statusUpdatedAt && (
+                        <p className="text-[11px] text-[#008C9C]/50 truncate mt-0.5">
+                          Condition reported {fmtDateTime(i.statusUpdatedAt)}
+                        </p>
+                      )}
+                      {i.statusNotes && (
+                        <p className="text-[11px] text-[#008C9C]/50 truncate mt-0.5">
+                          “{i.statusNotes}”
+                        </p>
+                      )}
                       {i.lastChange && (
                         <p className="text-[11px] text-[#008C9C]/50 truncate mt-0.5">
                           {i.lastChange.delta >= 0 ? "+" : ""}
@@ -364,19 +515,40 @@ export default function CleanerInventoryView({
                       )}
                     </div>
                     <span className="flex items-center gap-2 shrink-0">
-                      {/* Item 14: name the action. This is the CLEANER restock
-                          threshold, not the company reorder point. */}
-                      {i.isLow && (
+                      {/* Still open in the Attention queue. For a countable this
+                          is the ONLY place "missing" or "damaged" shows up — the
+                          count is that item's state of record. */}
+                      {(i.openFlagTypes ?? [])
+                        .filter(isInventoryFlagType)
+                        .map((t) => (
+                          <Badge key={t} variant="error" size="sm" title="Open in Needs Attention">
+                            {INVENTORY_FLAG_LABEL[t]}
+                          </Badge>
+                        ))}
+                      {/* Equipment: the condition, always — "Available" is
+                          information too, and it is the badge that proves a
+                          tool is NOT being reported as low (PDF #4).
+                          Consumables: item 14's named action, only when low. */}
+                      {equipment ? (
                         <Badge
-                          variant="warning"
+                          variant={TONE_VARIANT[i.attention.tone]}
                           size="sm"
-                          title={`${LOW_STOCK_LABEL.CLEANER_RESTOCK} — at or below the cleaner restock threshold of ${i.refillThreshold} ${i.unit}`}>
-                          Restock needed
+                          title={`${ITEM_TYPE_LABEL[i.itemType]} — reusable tools report a condition, not a refill level`}>
+                          {i.attention.label}
                         </Badge>
+                      ) : (
+                        i.isLow && (
+                          <Badge
+                            variant="warning"
+                            size="sm"
+                            title={`${LOW_STOCK_LABEL.CLEANER_RESTOCK} — at or below the cleaner restock threshold of ${i.refillThreshold} ${i.unit}`}>
+                            Restock needed
+                          </Badge>
+                        )
                       )}
                       <span
                         className={`text-sm ${
-                          i.isLow ? "text-red-700 font-[500]" : "text-[#008C9C]/70"
+                          alert ? "text-red-700 font-[500]" : "text-[#008C9C]/70"
                         }`}>
                         {i.quantity} {i.unit}
                       </span>

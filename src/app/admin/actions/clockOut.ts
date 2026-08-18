@@ -10,28 +10,39 @@ import { notifyAdmins } from "@/lib/admin-alerts";
 import { sendAdminClockedOut } from "@/lib/email";
 import { ensureRatingRequest } from "@/lib/rating";
 import { isCleanerLow } from "@/lib/inventory-thresholds";
+import { loadCleanerThresholdDefault } from "@/lib/inventory-thresholds.server";
+import {
+  conditionFlagType,
+  countableStatusFlagType,
+  levelFlagType,
+  statusLabel,
+  type InventoryFlagType,
+} from "@/lib/inventory-status";
+import { snapshotBilledActualHours } from "@/lib/hourly-billing.server";
 import {
   findOpenSession,
   findRecentlyClosedSession,
   syncClockMirrors,
 } from "@/lib/work-sessions.server";
-import { requireBudgetCategoryId } from "@/lib/budget-categories";
 import {
   CLOCK_OUT_RESUME_WINDOW_MS,
   classifyClockOutError,
   clockOutErrorClass,
-  describeUsageForLog,
-  validateClockOutUsage,
+  describeReportForLog,
+  validateClosingReport,
   type ClockOutErrorCode,
   type ClockOutFailure,
   type ClockOutKit,
-  type ClockOutUsage,
+  type ClosingReport,
+  type ValidatedReportEntry,
 } from "@/lib/clock-out";
 
 /**
- * Cleaner clock-out — cleano_new_fixes.pdf fix 6 (`_ai_context/TODO.md` Stage 5).
+ * Cleaner clock-out — cleano_new_fixes.pdf fix 6 (`_ai_context/TODO.md` Stage 5)
+ * and the closing inventory report (cleano_inventory_operations_fixes.pdf #2,
+ * Stage 3).
  *
- * ## What was wrong
+ * ## What was wrong (Stage 5 — failure handling)
  *
  * One catch-all mapped every failure — a bad number, a pooler blip, a product
  * that had left the cleaner's kit — to the string “Failed to clock out”, with no
@@ -43,8 +54,6 @@ import {
  * it. A failure in that tail told the cleaner it had failed while their session
  * was already closed — and the retry hit `findOpenSession` → null → "You're not
  * clocked in on this job". Stuck, on site, with the work half-saved.
- *
- * ## What it is now
  *
  *   NAMED       every failure carries a `code`, a sentence worth reading, and
  *               — when one product is to blame — the `field` that names it, so
@@ -59,7 +68,32 @@ import {
  *               closed, re-runs ONLY the idempotent tail, and returns success.
  *               No inventory is touched twice — the closed session is itself the
  *               proof those writes committed.
- *   SMALLER     per-product statements halved (see the transaction note below).
+ *
+ * ## What was wrong (Stage 3 — the inventory half)
+ *
+ * Clock-out used to ASK A CLEANER TO ESTIMATE and then treat the estimate as
+ * fact. "Light use" meant 15 trigger pulls, a pull meant 1.25 ml, and the
+ * product of two invented numbers was deducted from that cleaner's kit, priced
+ * at `costPerUnit`, and posted as a supplies expense against the job. Nobody
+ * counts trigger pulls, so every one of those figures was fiction that looked
+ * like measurement — and it accumulated, silently, into the stock levels the
+ * refill alerts and the forecast were computed from.
+ *
+ * PDF #2 deletes the idea outright. Clock-out now asks the ONE question a
+ * cleaner can answer accurately — "did anything change?" — and records what they
+ * say, in the vocabulary that fits the item:
+ *
+ *   NOTHING IS DEDUCTED. Not a millilitre, not a unit. A LEVEL or CONDITION
+ *   report moves no quantity at all; a COUNT report SETS the number to what the
+ *   cleaner says is left, which is a recount rather than a subtraction.
+ *   NO SUPPLIES TRANSACTION. Per-job supplies cost was priced off the estimate,
+ *   so it went with it (TODO decision D2 — see INVENTORY_REPORTING_CHANGE.md).
+ *   FLAGS, NOT SILENCE. Low / empty / missing / damaged / needs-maintenance
+ *   raises an `InventoryFlag` an admin works through, de-duped per (cleaner,
+ *   product, type) so a queue like the 48-row one in the PDF cannot re-form.
+ *   HISTORY. Every reported line writes an `InventoryChange` carrying previous
+ *   status → new status, the job, the cleaner and the note — exactly the list
+ *   PDF #1 asks history to keep.
  *
  * Pure rules — payload validation, error classification, the log summary — live
  * in `src/lib/clock-out.ts` so they can be tested without a database. This file
@@ -81,23 +115,30 @@ interface RestockItem {
   productId: string;
 }
 
-/** One product's worth of work, decided before a single statement is built. */
-interface PlannedDeduction {
-  employeeProductId: string;
-  productId: string;
-  name: string;
-  unit: string;
-  inventoryBefore: number;
-  inventoryAfter: number;
-  used: number;
-  cost: number;
-}
-
 const fail = (
   code: ClockOutErrorCode,
   error: string,
   retryable = false
 ): ClockOutFailure => ({ success: false, code, error, retryable });
+
+/**
+ * The surfaces that render clock state, revalidated on a FAILURE.
+ *
+ * `finishClockOut` covers the happy path (plus the admin/finance screens). This
+ * exists for the two failures that mean "the database has already moved past
+ * what your screen is showing": ALREADY_CLOCKED_OUT and NOT_CLOCKED_IN both
+ * hand back an error for a job that is, in fact, already finished. Returning
+ * without a revalidation left the page serving the payload it was rendered
+ * with — so the hero pill stayed on IN PROGRESS while the row said COMPLETED,
+ * and the only way out was the manual reload the error text had been reduced to
+ * recommending ("refresh the page if you think this is wrong").
+ */
+function revalidateClockSurfaces(jobId: string): void {
+  revalidatePath("/cleaners/my-jobs");
+  revalidatePath(`/cleaners/my-jobs/${jobId}`);
+  revalidatePath(`/cleaners/my-jobs/${jobId}/clock`);
+  revalidatePath(`/admin/jobs/${jobId}`);
+}
 
 /**
  * Record a failed clock-out where an admin will see it (5.3), and tell them it
@@ -195,6 +236,24 @@ async function finishClockOut(args: {
   // cleaner to clock out marked the job COMPLETED for the whole crew and set
   // its clockOutTime, while their teammates were still on site.
   const isFinalClockOut = !mirrors.anyOpen;
+
+  // ── Hourly billing: stamp the hours that were actually worked (step 8.5) ───
+  //
+  // Only on the FINAL clock-out, for the same reason the status flip is: while
+  // a teammate is still on site the job's hours are not finished, and billing
+  // the customer for a partial figure would be wrong every time a two-person
+  // crew clocked out a minute apart.
+  //
+  // Idempotent and self-guarding: `snapshotBilledActualHours` returns
+  // immediately unless `billingType = HOURLY`, and it will not re-price a job
+  // whose customer has already paid. Best-effort — a billing snapshot must
+  // never be the reason a cleaner cannot clock out.
+  if (isFinalClockOut) {
+    await snapshotBilledActualHours(args.jobId).catch((e) =>
+      console.error("billed-hours snapshot", e)
+    );
+  }
+
   if (isFinalClockOut && args.jobStatus !== "CANCELLED") {
     // Paid stays Paid — clock-out must never downgrade a job whose payment
     // was already received.
@@ -262,9 +321,34 @@ async function finishClockOut(args: {
   return { jobCompleted: isFinalClockOut };
 }
 
+/**
+ * The admin review flag one reported line raises, or null when it is fine.
+ *
+ * One switch over the three vocabularies, each delegating to the SAME mapping
+ * every other writer uses (`src/lib/inventory-status.ts`), so a scraper
+ * reported damaged at clock-out and one reported damaged from My Inventory land
+ * on an identically-typed flag.
+ */
+function flagTypeFor(entry: ValidatedReportEntry): InventoryFlagType | null {
+  if (entry.kind === "LEVEL") {
+    return entry.levelStatus ? levelFlagType(entry.levelStatus) : null;
+  }
+  if (entry.kind === "CONDITION") {
+    return entry.condition ? conditionFlagType(entry.condition) : null;
+  }
+  return entry.status ? countableStatusFlagType(entry.status) : null;
+}
+
+/** The status string written to the history row for one reported line. */
+function reportedStatusOf(entry: ValidatedReportEntry): string | null {
+  if (entry.kind === "LEVEL") return entry.levelStatus;
+  if (entry.kind === "CONDITION") return entry.condition;
+  return entry.status;
+}
+
 export async function clockOut(
   jobId: string,
-  usage: ClockOutUsage
+  report: ClosingReport
 ): Promise<ClockOutResult> {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) {
@@ -306,15 +390,22 @@ export async function clockOut(
         userId,
         userName,
         code: failure.code,
-        summary: describeUsageForLog(usage, kit),
+        summary: describeReportForLog(report, kit),
       });
       return failure;
     }
 
-    const employeeProducts = await db.employeeProduct.findMany({
-      where: { employeeId: userId },
-      include: { product: true },
-    });
+    // Loaded alongside the kit so a counted-down consumable is judged against
+    // the admin's configured floor — the same number the cleaner's My Inventory
+    // page uses. This action used to omit it and silently judge kits against
+    // the built-in 1.
+    const [employeeProducts, kitThresholdDefault] = await Promise.all([
+      db.employeeProduct.findMany({
+        where: { employeeId: userId },
+        include: { product: true },
+      }),
+      loadCleanerThresholdDefault(),
+    ]);
     const epByProductId = new Map(employeeProducts.map((ep) => [ep.productId, ep]));
     kit = new Map(
       employeeProducts.map((ep) => [
@@ -324,6 +415,10 @@ export async function clockOut(
           name: ep.product.name,
           unit: ep.product.unit,
           quantity: ep.quantity,
+          // The validator refuses a report written in the wrong vocabulary for
+          // the product — a level on a scraper, a condition on a bottle — so it
+          // has to know what each kit line IS (Stage 1's classification).
+          itemType: ep.product.itemType,
         },
       ])
     );
@@ -338,7 +433,7 @@ export async function clockOut(
     // cleaner closed one moments ago, this is the retry after a tail failure:
     // the transaction committed, the steps after it did not. Finish those and
     // report success. Nothing here writes inventory, so a cleaner mashing Retry
-    // cannot deduct their kit twice.
+    // cannot record their report twice.
     if (!openSession) {
       const justClosed = await findRecentlyClosedSession(
         jobId,
@@ -355,8 +450,10 @@ export async function clockOut(
           userId,
           userName,
           code: failure.code,
-          summary: describeUsageForLog(usage, kit),
+          summary: describeReportForLog(report, kit),
         });
+        // The screen is out of date with the database — that IS the error.
+        revalidateClockSurfaces(jobId);
         return failure;
       }
 
@@ -375,22 +472,25 @@ export async function clockOut(
       // A retry resends the payload the committed attempt already recorded, so
       // skipping it is right and the honest answer is success. But if the tail
       // ALSO ran, that attempt fully succeeded — this is a stale tab submitting
-      // again, and if it carries usage, returning success would quietly bin it.
-      // Rare, and worth a sentence rather than a lie.
+      // again, and if it carries a report, returning success would quietly bin
+      // it. Rare, and worth a sentence rather than a lie.
       if (tailAlreadyRan) {
-        const resubmitted = validateClockOutUsage(usage, kit);
-        if (resubmitted.ok && resubmitted.deductions.size > 0) {
+        const resubmitted = validateClosingReport(report, kit);
+        if (resubmitted.ok && resubmitted.entries.length > 0) {
           const failure = fail(
             "ALREADY_CLOCKED_OUT",
-            "You've already clocked out of this job, so this product usage was NOT added a second time. If it still needs logging, record it from My Inventory."
+            "You've already clocked out of this job, so this inventory report was NOT saved a second time. If it still needs recording, update it from My Inventory."
           );
           await logClockOutFailure({
             jobId,
             userId,
             userName,
             code: failure.code,
-            summary: describeUsageForLog(usage, kit),
+            summary: describeReportForLog(report, kit),
           });
+          // This job IS clocked out — the refusal is only about the duplicate
+          // report. Without this the badge kept saying IN PROGRESS.
+          revalidateClockSurfaces(jobId);
           return failure;
         }
       }
@@ -408,17 +508,14 @@ export async function clockOut(
         notifyAdmin: !tailAlreadyRan,
       });
 
-      // Deductions already happened; report restock from what the kit holds NOW
-      // so a resumed clock-out still tells the cleaner to refill.
-      const stillLow = employeeProducts.some((ep) =>
-        isCleanerLow(ep.quantity, {
-          cleanerRestockThreshold: ep.product.cleanerRestockThreshold,
-        })
-      );
-
+      // The committed attempt already raised whatever flags its report called
+      // for, and this call reports nothing new, so there is nothing left to
+      // tell the cleaner to restock. Saying `false` here is not a claim that
+      // their kit is full — it is the honest answer to "did THIS submission
+      // find something low", which is what the banner is for.
       return {
         success: true,
-        restockNeeded: stillLow,
+        restockNeeded: false,
         jobCompleted: done.jobCompleted,
         resumed: true,
       };
@@ -427,7 +524,7 @@ export async function clockOut(
     // ── Validate before touching anything (5.2) ──────────────────────────────
     // Up front, so a bad row is named rather than surfacing as a TypeError three
     // steps later wearing the blanket string.
-    const validated = validateClockOutUsage(usage, kit);
+    const validated = validateClosingReport(report, kit);
     if (!validated.ok) {
       let failure = validated.failure;
       // The validator can't name a product it was never given; the catalogue can.
@@ -440,7 +537,7 @@ export async function clockOut(
           failure = {
             ...failure,
             field: { productId: failure.field.productId, name: product.name },
-            error: `“${product.name}” is no longer assigned to you. Set it back to “None”, or refresh the page to pick up your current kit, then clock out again.`,
+            error: `“${product.name}” is no longer assigned to you. Refresh the page to pick up your current kit, then clock out again.`,
           };
         }
       }
@@ -449,63 +546,106 @@ export async function clockOut(
         userId,
         userName,
         code: failure.code,
-        summary: describeUsageForLog(usage, kit),
+        summary: describeReportForLog(report, kit),
       });
       return failure;
     }
 
     const now = new Date();
+    const entries = validated.entries;
 
-    // Plan every deduction BEFORE building a single statement, so the supplies
-    // cost — and therefore whether the budget category is needed at all — is
-    // known before the transaction is assembled.
-    const plan: PlannedDeduction[] = [];
+    // ── What each reported line means, decided before a statement is built ────
+    //
+    // NOTE WHAT IS NOT HERE ANY MORE: there is no deduction plan, no ml
+    // conversion, no `costPerUnit` multiplication and no supplies budget
+    // category. A LEVEL or CONDITION line moves nothing; a COUNT line sets the
+    // kit to the number the cleaner reported. Estimated usage is gone (PDF #2),
+    // and with it the per-job supplies expense it was priced into (decision D2).
     const restockNeeded: RestockItem[] = [];
-    let suppliesCost = 0;
+    const flagsWanted: Array<{ productId: string; type: InventoryFlagType; note: string | null }> = [];
 
-    for (const [productId, requested] of validated.deductions) {
-      const ep = epByProductId.get(productId);
-      // Unreachable: the validator only ever emits kit products. Kept because a
-      // non-null assertion here would be a promise the type system can't hold.
-      if (!ep) continue;
+    for (const entry of entries) {
+      const ep = epByProductId.get(entry.productId);
+      let flagType = flagTypeFor(entry);
 
-      const inventoryBefore = ep.quantity;
-      const inventoryAfter = Math.max(0, inventoryBefore - requested);
-      const used = inventoryBefore - inventoryAfter;
-      if (used <= 0) continue;
-
-      const cost = used * ep.product.costPerUnit;
-      suppliesCost += cost;
-      plan.push({
-        employeeProductId: ep.id,
-        productId,
-        name: ep.product.name,
-        unit: ep.product.unit,
-        inventoryBefore,
-        inventoryAfter,
-        used,
-        cost,
-      });
-
-      // Restock alert fires when the CLEANER's kit hits THEIR threshold.
-      // This used to fall back to `minStock` — the company reorder point — so a
-      // cleaner was judged against a warehouse number (fix list item 14).
+      // A COUNT with no chip on it is still judged against the admin's refill
+      // threshold — the cleaner counting three gloves left is exactly the case
+      // the old "You are low on X" alert existed for, and it would be a poor
+      // trade to lose it because they didn't also tap "Low". The cleaner's own
+      // word wins where they gave one; silence gets the arithmetic.
+      //
+      // `isCleanerLow` is type-aware (Stage 2), so a tool can never reach this
+      // however it is counted, and the threshold default is the admin's
+      // configured floor rather than the built-in 1.
       if (
-        isCleanerLow(inventoryAfter, {
+        !flagType &&
+        entry.kind === "COUNT" &&
+        entry.status === null &&
+        ep &&
+        isCleanerLow(entry.quantity, {
           cleanerRestockThreshold: ep.product.cleanerRestockThreshold,
+          defaultThreshold: kitThresholdDefault,
+          itemType: ep.product.itemType,
         })
       ) {
-        restockNeeded.push({ name: ep.product.name, productId });
+        flagType = "LOW";
+      }
+
+      if (flagType) {
+        flagsWanted.push({ productId: entry.productId, type: flagType, note: entry.note });
+      }
+
+      // The cleaner-facing "refill before your next job" nudge. Consumables
+      // only, since a tool is never restocked (PDF #4) — and LOW/EMPTY are the
+      // only two flag types a consumable can raise that mean "go and get more".
+      if (
+        entry.kind !== "CONDITION" &&
+        (flagType === "LOW" || flagType === "EMPTY")
+      ) {
+        restockNeeded.push({ name: entry.name, productId: entry.productId });
       }
     }
 
-    // Resolved here, deliberately, and not inline in the ops array (5.4).
-    // `requireBudgetCategoryId` self-heals a missing row, i.e. it can WRITE —
-    // and a write sitting in the middle of transaction assembly is one more
-    // thing that can throw after some decisions have been made and none of them
-    // recorded. Zero-cost clock-outs never call it at all.
-    const suppliesCategoryId =
-      suppliesCost > 0 ? await requireBudgetCategoryId("supplies") : null;
+    // De-dupe against what is ALREADY open for this cleaner. Read outside the
+    // transaction on purpose: the array form of `$transaction` takes prepared
+    // promises, not a callback. Two clock-outs landing in the same millisecond
+    // could still produce a duplicate flag — an admin resolving one twice is a
+    // far smaller problem than a report that silently never reaches the queue.
+    // (Same trade-off, and the same wording, as `reportDamagedItem`.)
+    const openFlags =
+      entries.length > 0
+        ? await db.inventoryFlag.findMany({
+            where: {
+              employeeId: userId,
+              status: "OPEN",
+              productId: { in: entries.map((e) => e.productId) },
+            },
+            select: { id: true, productId: true, type: true, notes: true },
+          })
+        : [];
+
+    const wantedByProduct = new Map(flagsWanted.map((f) => [f.productId, f]));
+    const flagsToCreate = flagsWanted.filter(
+      (want) =>
+        !openFlags.some(
+          (open) => open.productId === want.productId && open.type === want.type
+        )
+    );
+    // Everything else open against a product this report touched is stale: the
+    // cleaner has just told us the current state, and it is not that. Without
+    // this the queue only ever grows and an admin cannot tell a live problem
+    // from one that was fixed three jobs ago.
+    const staleFlagIds = openFlags
+      .filter((open) => wantedByProduct.get(open.productId)?.type !== open.type)
+      .map((open) => open.id);
+    // A repeat report of the SAME problem refreshes the note rather than
+    // stacking a second identical row in front of an admin. Only when the new
+    // report actually carries one: re-reporting a damaged scraper with no note
+    // must not erase the note that explained what happened to it.
+    const flagsToRenote = openFlags.filter((open) => {
+      const want = wantedByProduct.get(open.productId);
+      return want?.type === open.type && !!want.note && want.note !== open.notes;
+    });
 
     // Rag-wash projection per the Self-Wash spec. Capped credits are awarded
     // once per job (washCreditsAwarded flag) and divided across assigned
@@ -525,60 +665,69 @@ export async function clockOut(
     })();
 
     // ── The transaction (5.6) ────────────────────────────────────────────────
-    // Was FOUR statements per product — usage upsert, stock update,
-    // inventoryChange, jobLog — plus a tail, so a 20-product kit assembled 86
-    // statements. The two append-only audit writes are now single `createMany`
-    // calls covering every product at once (and the CLOCKED_OUT entry rides
-    // along in the same one), taking the worst case to ~47 and the median to 9.
+    // The two append-only audit writes are single `createMany` calls covering
+    // every reported item at once (and the CLOCKED_OUT entry rides along in the
+    // same one). What used to be four statements per product is now at most one
+    // — the kit update, and only for a COUNT line whose number actually moved.
     //
-    // `jobProductUsage` moved from find-then-create/update to an upsert with
-    // `increment`. JobProductUsage is unique on (jobId, productId), so the old
-    // read-then-write lost that race between two cleaners clocking out of the
-    // same job at once — and losing it meant a unique-constraint violation that
-    // failed the whole transaction and printed “Failed to clock out”.
+    // GONE, and deliberately: `jobProductUsage.upsert` (the estimated-usage row)
+    // and the supplies `Transaction` it was priced into. The tables are left in
+    // place and readable — old rows are labelled "Legacy estimated usage" in the
+    // activity log (decision D4) — nothing writes them any more.
     const ops: Prisma.PrismaPromise<unknown>[] = [];
     const inventoryChanges: Prisma.InventoryChangeCreateManyInput[] = [];
     const jobLogs: Prisma.JobLogCreateManyInput[] = [];
 
-    for (const d of plan) {
-      ops.push(
-        db.jobProductUsage.upsert({
-          where: { jobId_productId: { jobId, productId: d.productId } },
-          create: {
-            jobId,
-            productId: d.productId,
-            quantity: d.used,
-            inventoryBefore: d.inventoryBefore,
-            inventoryAfter: d.inventoryAfter,
-          },
-          update: {
-            quantity: { increment: d.used },
-            inventoryBefore: d.inventoryBefore,
-            inventoryAfter: d.inventoryAfter,
-          },
-        })
-      );
+    for (const entry of entries) {
+      const ep = epByProductId.get(entry.productId);
+      // Unreachable: the validator only ever emits kit products. Kept because a
+      // non-null assertion here would be a promise the type system can't hold.
+      if (!ep) continue;
 
-      // Deduct from employee stock.
+      const reportedStatus = reportedStatusOf(entry);
+      const quantityMoved = entry.kind === "COUNT" && entry.quantity !== entry.previousQuantity;
+      const previousStatus =
+        entry.kind === "LEVEL"
+          ? ep.levelStatus
+          : entry.kind === "CONDITION"
+            ? ep.condition
+            : null;
+
+      // The kit row. `statusUpdatedAt` is stamped for every reported line —
+      // including a COUNT with no chip — because "when did anyone last look at
+      // this" is a question the admin surfaces ask of all three types.
       ops.push(
         db.employeeProduct.update({
-          where: { id: d.employeeProductId },
-          data: { quantity: d.inventoryAfter },
+          where: { id: ep.id },
+          data: {
+            ...(entry.kind === "COUNT" ? { quantity: entry.quantity } : {}),
+            ...(entry.kind === "LEVEL" ? { levelStatus: entry.levelStatus } : {}),
+            ...(entry.kind === "CONDITION" ? { condition: entry.condition } : {}),
+            statusUpdatedAt: now,
+            statusNotes: entry.note,
+          },
         })
       );
 
-      // Audit row — job usage must appear in the inventory activity log
-      // alongside assignments, pickups and adjustments (fix list item 18).
-      // Without this the log silently omitted the single biggest source of
-      // stock movement: product actually consumed on jobs.
+      // History — the exact list PDF #1 asks for: cleaner, job, item, previous
+      // status, new status, timestamp, note. `quantityChange` is 0 for a level
+      // or condition report because nothing moved, and saying "nothing moved"
+      // is the honest value for a non-null column.
       inventoryChanges.push({
-        productId: d.productId,
+        productId: entry.productId,
         employeeId: userId,
         employeeName: userName,
-        quantityChange: -d.used,
-        newQuantity: d.inventoryAfter,
-        unit: d.unit,
-        reason: `Used on job #${job.jobNumber}`,
+        quantityChange: quantityMoved ? entry.quantity - entry.previousQuantity : 0,
+        newQuantity: entry.quantity,
+        unit: entry.unit,
+        action: "JOB_REPORT",
+        previousStatus,
+        newStatus: reportedStatus,
+        reason:
+          `Reported at clock-out on job #${job.jobNumber}` +
+          (reportedStatus ? `: ${statusLabel(reportedStatus)}` : "") +
+          (entry.kind === "COUNT" ? ` — ${entry.quantity} ${entry.unit} left` : "") +
+          (entry.note ? ` — ${entry.note}` : ""),
         changedById: userId,
         changedByName: userName,
       });
@@ -586,8 +735,16 @@ export async function clockOut(
       jobLogs.push({
         jobId,
         userId,
+        // PRODUCT_USED is the closest existing verb and the one the job's
+        // Activity timeline already renders. It no longer means "this much was
+        // consumed" — the description says what was reported, which is all
+        // anybody ever actually knew.
         action: "PRODUCT_USED",
-        description: `Used ${d.used.toFixed(2)} ${d.unit} of ${d.name}`,
+        description:
+          `Reported ${entry.name}: ` +
+          (entry.kind === "COUNT"
+            ? `${entry.quantity} ${entry.unit} left${entry.status ? ` (${statusLabel(entry.status)})` : ""}`
+            : `${statusLabel(reportedStatus)}`),
       });
     }
 
@@ -602,6 +759,40 @@ export async function clockOut(
       ops.push(db.inventoryChange.createMany({ data: inventoryChanges }));
     }
     ops.push(db.jobLog.createMany({ data: jobLogs }));
+
+    // ── The admin review queue (PDF #1/#2) ───────────────────────────────────
+    // One create for everything new, one update closing everything stale, and a
+    // note refresh for anything already open on the same problem.
+    if (flagsToCreate.length > 0) {
+      ops.push(
+        db.inventoryFlag.createMany({
+          data: flagsToCreate.map((f) => ({
+            type: f.type,
+            employeeId: userId,
+            productId: f.productId,
+            jobId,
+            source: "CLOCK_OUT",
+            notes: f.note,
+          })),
+        })
+      );
+    }
+    if (staleFlagIds.length > 0) {
+      ops.push(
+        db.inventoryFlag.updateMany({
+          where: { id: { in: staleFlagIds } },
+          data: { status: "RESOLVED", resolvedAt: now, resolvedById: userId },
+        })
+      );
+    }
+    for (const open of flagsToRenote) {
+      ops.push(
+        db.inventoryFlag.update({
+          where: { id: open.id },
+          data: { notes: wantedByProduct.get(open.productId)?.note ?? null },
+        })
+      );
+    }
 
     // Close THIS cleaner's running session. The clock columns are recomputed
     // from every session on the job after the transaction — including
@@ -653,21 +844,13 @@ export async function clockOut(
     // (Previously: awarded ragShare/padShare to each assigned cleaner here.)
     void cleanerIdsForCredit;
 
-    if (suppliesCategoryId) {
-      ops.push(
-        db.transaction.create({
-          data: {
-            date: now,
-            categoryId: suppliesCategoryId,
-            amount: suppliesCost,
-            description: `Supplies consumed for ${job.clientName}`,
-            jobId,
-            source: "AUTO_CLOCK_OUT",
-            isAuto: true,
-          },
-        })
-      );
-    }
+    // NOTE: the per-job supplies `Transaction` used to be created here. Its
+    // amount was `used × costPerUnit`, where `used` came from the estimated
+    // Light/Medium/Heavy conversion — so it priced a guess and posted it to the
+    // job's P&L as a measured cost. Removed with the estimate itself (decision
+    // D2): supplies are a warehouse-level cost, tracked when stock is bought
+    // and restocked, not apportioned per job from a number nobody counted.
+    // The owner-facing note is INVENTORY_REPORTING_CHANGE.md.
 
     // Per spec: one combined cleaner-facing restock alert when ≥1 item is low.
     if (restockNeeded.length > 0) {
@@ -680,8 +863,8 @@ export async function clockOut(
           : `${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]}`;
       const message =
         names.length === 1
-          ? `You are low on ${list}. Please refill it from the storage locker before your next job.`
-          : `You are low on ${list}. Please refill these items from the storage locker before your next job.`;
+          ? `You reported ${list} as low or empty. Please refill it from the storage locker before your next job.`
+          : `You reported ${list} as low or empty. Please refill these items from the storage locker before your next job.`;
 
       ops.push(
         db.alert.create({
@@ -702,7 +885,7 @@ export async function clockOut(
 
     // From here the shift IS saved. A failure below must never be reported as
     // "nothing happened" — it gets its own code, and Retry lands on the resume
-    // path above rather than deducting anything a second time.
+    // path above rather than re-recording anything a second time.
     try {
       const done = await finishClockOut({
         jobId,
@@ -731,7 +914,7 @@ export async function clockOut(
         userName,
         code: "SYNC_INCOMPLETE",
         errorClass: clockOutErrorClass(error),
-        summary: describeUsageForLog(usage, kit),
+        summary: describeReportForLog(report, kit),
       });
       return fail(
         "SYNC_INCOMPLETE",
@@ -748,7 +931,7 @@ export async function clockOut(
       userName,
       code: classified.code,
       errorClass: clockOutErrorClass(error),
-      summary: describeUsageForLog(usage, kit),
+      summary: describeReportForLog(report, kit),
     });
     return classified;
   }

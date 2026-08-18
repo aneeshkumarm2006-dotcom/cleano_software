@@ -1,6 +1,4 @@
-import { auth } from "@/lib/auth";
-import { headers } from "next/headers";
-import { redirect } from "next/navigation";
+import { requireOwnerAdmin } from "@/lib/page-guards";
 import { db } from "@/db";
 import {
   getTotalRevenue,
@@ -52,21 +50,16 @@ export default async function AnalyticsPage({
 }: {
   searchParams?: SearchParams;
 }) {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
-
-  if (!session) {
-    redirect("/sign-in");
-  }
-
-  const userWithRole = session.user as typeof session.user & {
-    role: "OWNER" | "ADMIN" | "EMPLOYEE";
-  };
-
-  if (userWithRole.role === "EMPLOYEE") {
-    redirect("/admin/dashboard");
-  }
+  // OWNER/ADMIN only (Stage 7.6).
+  //
+  // This guard used to bounce ONLY `role === "EMPLOYEE"`, which is a role that
+  // cannot reach /admin/* at all — the layout redirects it first. So the check
+  // was unreachable, and OPS_MANAGER and FIELD_LEAD could open this page and read
+  // total revenue, profit, per-cleaner revenue and lead-source CPA, even though
+  // its nav entry has always carried `adminOnly: true`. Stage 7 gives FIELD_LEAD
+  // a legitimate group view whose whole premise is "no money", so the door it
+  // could already walk through had to close with it.
+  await requireOwnerAdmin();
 
   // ── Page filters (item 11 · Q7) ────────────────────────────────────────────
   // This page had no filter mechanism at all — not even a date range — so the

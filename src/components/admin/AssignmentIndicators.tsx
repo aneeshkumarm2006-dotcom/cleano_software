@@ -12,8 +12,9 @@
 // may use these to block a save — an admin knowingly booking a cleaner outside
 // their hours or their approved categories is an allowed decision.
 
-import { CheckCircle2, AlertTriangle, X, ShieldAlert } from "lucide-react";
+import { CheckCircle2, AlertTriangle, X, ShieldAlert, CalendarClock } from "lucide-react";
 import type { EmployeeAvailabilityStatus } from "@/app/admin/actions/checkAvailability.types";
+import { assignmentAvailabilityHref } from "@/lib/availability-view";
 
 /**
  * Availability at a glance: green = inside their hours, red = marked
@@ -63,6 +64,44 @@ export function CategoryIndicator({ warning }: { warning: string | null }) {
     <span title={warning} className="inline-flex items-center text-amber-600">
       <ShieldAlert className="w-3.5 h-3.5" />
     </span>
+  );
+}
+
+/**
+ * "See all availability →" — the job form's way into /admin/availability, on the
+ * job's own date and pre-filled with its time window (Stage 12.5, PDF #12's
+ * last acceptance criterion: "the job-form scheduling flow links into the view
+ * so admins can pick times with coverage").
+ *
+ * Rendered by BOTH crew pickers, and deliberately NOT inside
+ * `AssignmentWarningPanel`: that panel exists only when something is wrong, and
+ * the moment an admin most needs to go looking for coverage is *before* they
+ * have picked anybody — when the panel is silent. It renders nothing until a
+ * date exists, because without one there is nothing to pre-filter.
+ *
+ * A new tab, always: the admin is mid-way through a job form they must not lose.
+ */
+export function AvailabilityLink({
+  date,
+  startTime,
+  endTime,
+}: {
+  /** The job's start date, "YYYY-MM-DD". */
+  date: string | null | undefined;
+  startTime?: string | null;
+  endTime?: string | null;
+}) {
+  const href = assignmentAvailabilityHref(date, startTime, endTime);
+  if (!href) return null;
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      className="inline-flex items-center gap-1.5 text-xs text-[#008C9C] hover:underline">
+      <CalendarClock className="w-3.5 h-3.5" aria-hidden="true" />
+      See all availability →
+    </a>
   );
 }
 

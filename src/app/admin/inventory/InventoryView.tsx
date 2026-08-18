@@ -23,9 +23,16 @@ import {
   Gauge,
   RotateCcw,
   ExternalLink,
+  Layers,
 } from "lucide-react";
 import Link from "next/link";
 import { LOW_STOCK_LABEL } from "@/lib/inventory-thresholds";
+import {
+  ITEM_TYPES,
+  ITEM_TYPE_LABEL,
+  ITEM_TYPE_NAME,
+  type ItemType,
+} from "@/lib/item-type";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import Input from "@/components/ui/Input";
@@ -38,6 +45,7 @@ import { useRowSelection } from "@/components/common/useRowSelection";
 import BulkActionBar, { BulkAction } from "@/components/common/BulkActionBar";
 import { bulkSoftDelete, bulkRestore } from "@/lib/bulk/actions";
 import { bulkSetProductCategory } from "../actions/bulkSetProductCategory";
+import { bulkSetProductItemType } from "../actions/bulkSetProductItemType";
 import { bulkSetProductMinStock } from "../actions/bulkSetProductMinStock";
 
 const CATEGORY_OPTIONS: Array<{ value: ProductCategory; label: string }> = [
@@ -48,6 +56,24 @@ const CATEGORY_OPTIONS: Array<{ value: ProductCategory; label: string }> = [
 ];
 
 type ProductCategory = "LIQUID_SPRAY" | "MOP_LIQUID" | "DISPOSABLE" | "OTHER";
+
+/**
+ * Item-type chip. Says at a glance whether a row is a liquid, a countable
+ * consumable, or a tool — i.e. whether the refill thresholds on the same row
+ * mean anything at all (inventory fixes PDF #1 + #4).
+ */
+function ItemTypeChip({ itemType }: { itemType?: ItemType }) {
+  if (!itemType) return null;
+  return (
+    <Badge
+      variant={itemType === "REUSABLE_EQUIPMENT" ? "tdo" : "cleano"}
+      size="xs"
+      className="shrink-0"
+      title={ITEM_TYPE_NAME[itemType]}>
+      {ITEM_TYPE_LABEL[itemType]}
+    </Badge>
+  );
+}
 
 /**
  * Outbound "buy again" icon. Renders the primary purchase link, falling back to
@@ -88,6 +114,7 @@ interface Product {
   stockLevel: number;
   minStock: number;
   category?: ProductCategory;
+  itemType?: ItemType;
   stockUpdatedAt: string | null;
   stockUpdatedByName: string | null;
   purchaseUrl: string | null;
@@ -238,12 +265,14 @@ export default function InventoryView({
   );
   const sel = useRowSelection(visibleIds);
   const [showCategory, setShowCategory] = useState(false);
+  const [showItemType, setShowItemType] = useState(false);
   const [showMinStock, setShowMinStock] = useState(false);
   const [minStockValue, setMinStockValue] = useState("");
   const [bulkBusy, setBulkBusy] = useState(false);
 
   const closePanels = () => {
     setShowCategory(false);
+    setShowItemType(false);
     setShowMinStock(false);
   };
 
@@ -252,6 +281,25 @@ export default function InventoryView({
     setBulkBusy(true);
     try {
       const res = await bulkSetProductCategory(sel.selectedIds, category);
+      if (!res.success) {
+        alert(res.error);
+        return;
+      }
+      closePanels();
+      sel.clear();
+      router.refresh();
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  // Fix a whole column of misclassifications in one pass — the escape hatch for
+  // whatever the backfill's name heuristic got wrong (PDF #1).
+  async function runSetItemType(itemType: ItemType) {
+    if (sel.count === 0) return;
+    setBulkBusy(true);
+    try {
+      const res = await bulkSetProductItemType(sel.selectedIds, itemType);
       if (!res.success) {
         alert(res.error);
         return;
@@ -287,6 +335,26 @@ export default function InventoryView({
     }
   }
 
+  // How much of the current selection is still out in the field. Read off the
+  // rows already rendered, so it costs nothing and can never disagree with the
+  // "Assigned" column the admin is looking at.
+  const archiveWarning = (() => {
+    const selectedIds = new Set(sel.selectedIds);
+    const held = products.filter(
+      (p) => selectedIds.has(p.id) && p.employeeCount > 0
+    );
+    if (held.length === 0) return "";
+    const units = held.reduce((s, p) => s + p.totalAssigned, 0);
+    const names = held
+      .slice(0, 3)
+      .map((p) => p.name)
+      .join(", ");
+    const more = held.length > 3 ? `, +${held.length - 3} more` : "";
+    return `\n\n${held.length} of them ${
+      held.length === 1 ? "is" : "are"
+    } still in cleaner kits (${names}${more} — ${units} units). Those kit items stay where they are; they can still be counted and removed, but the product can no longer be assigned to anyone new.`;
+  })();
+
   const bulkActions: BulkAction[] = archived
     ? [
         {
@@ -302,10 +370,21 @@ export default function InventoryView({
       ]
     : [
         {
+          key: "itemType",
+          label: "Set item type",
+          icon: <Layers size={14} />,
+          onRun: () => {
+            setShowCategory(false);
+            setShowMinStock(false);
+            setShowItemType(true);
+          },
+        },
+        {
           key: "category",
           label: "Set category",
           icon: <Tag size={14} />,
           onRun: () => {
+            setShowItemType(false);
             setShowMinStock(false);
             setShowCategory(true);
           },
@@ -316,6 +395,7 @@ export default function InventoryView({
           icon: <Gauge size={14} />,
           onRun: () => {
             setShowCategory(false);
+            setShowItemType(false);
             setShowMinStock(true);
           },
         },
@@ -324,9 +404,15 @@ export default function InventoryView({
           label: "Delete",
           icon: <Trash2 size={14} />,
           variant: "danger",
+          // Archiving a product a cleaner still holds is legitimate (you
+          // archive it precisely because it is being phased out) but it must
+          // not be SILENT — an archived product stays in every kit that has
+          // one, and the p.6 "Product not found." bug was the downstream cost
+          // of nobody being told (Stage 5). The counts are already on screen,
+          // so this is honesty for free.
           confirm: `Delete ${sel.count} selected product${
             sel.count === 1 ? "" : "s"
-          }? They can be restored from Archived.`,
+          }?${archiveWarning}\n\nThey can be restored from Archived.`,
           onRun: async () => {
             await bulkSoftDelete("product", sel.selectedIds);
             sel.clear();
@@ -664,9 +750,12 @@ export default function InventoryView({
                             </p>
                             <BuyLink product={product} />
                           </div>
-                          <p className="text-xs text-[#008C9C]/50 font-[350] truncate mt-0.5">
-                            ${product.costPerUnit.toFixed(2)} / {product.unit}
-                          </p>
+                          <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
+                            <ItemTypeChip itemType={product.itemType} />
+                            <p className="text-xs text-[#008C9C]/50 font-[350] truncate">
+                              ${product.costPerUnit.toFixed(2)} / {product.unit}
+                            </p>
+                          </div>
                         </div>
 
                         {/* Description */}
@@ -771,11 +860,12 @@ export default function InventoryView({
                           style={{ cursor: "pointer", marginTop: 2 }}
                         />
                         <div>
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             <p className="text-sm font-[400] text-[#008C9C]">
                               {product.name}
                             </p>
                             <BuyLink product={product} />
+                            <ItemTypeChip itemType={product.itemType} />
                           </div>
                           <p className="text-xs text-[#008C9C]/70 mt-1">
                             {product.description || "No description"}
@@ -918,7 +1008,7 @@ export default function InventoryView({
       )}
 
       {/* Bulk-action pickers (shown above the floating bar) */}
-      {sel.count > 0 && (showCategory || showMinStock) && (
+      {sel.count > 0 && (showCategory || showItemType || showMinStock) && (
         <div
           style={{
             position: "sticky",
@@ -928,6 +1018,43 @@ export default function InventoryView({
             justifyContent: "center",
             marginTop: 12,
           }}>
+          {showItemType && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                flexWrap: "wrap",
+                justifyContent: "center",
+                gap: 8,
+                maxWidth: "calc(100vw - 32px)",
+                background: "#fff",
+                border: "1px solid var(--primary-10)",
+                borderRadius: 12,
+                padding: "10px 14px",
+                boxShadow: "0 8px 30px rgba(0,0,0,0.15)",
+              }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>
+                Set item type to
+              </span>
+              {ITEM_TYPES.map((t) => (
+                <Button
+                  key={t}
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => runSetItemType(t)}
+                  disabled={bulkBusy}
+                  className="rounded-lg px-3">
+                  {ITEM_TYPE_NAME[t]}
+                </Button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setShowItemType(false)}
+                style={{ background: "none", border: 0, cursor: "pointer", fontSize: 13, color: "var(--primary-60)" }}>
+                Cancel
+              </button>
+            </div>
+          )}
           {showCategory && (
             <div
               style={{

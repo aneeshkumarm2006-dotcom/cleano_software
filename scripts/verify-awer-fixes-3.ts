@@ -1509,13 +1509,33 @@ section(10, "Add-on icons and customer pop-ups (PDF #17)", () => {
   has("...including the admin picker",
     "src/app/admin/jobs/JobModal.tsx", "addonIcon(cat)");
 
-  // Decision 9 landed as "pop-ups without the uploader": JobPhoto.employeeId is
-  // a required FK to User, and a web booking has neither a customer User row
-  // nor an assigned cleaner. No upload endpoint was opened on public /book.
-  lacks("no photo upload was added to the public booking flow",
-    "src/app/(book)/book/steps/Step2Property.tsx", "cloudinary");
-  lacks("...and no JobPhoto is written from the booking action",
-    "src/app/(book)/actions/submitBooking.ts", "jobPhoto");
+  // ⚠️ SUPERSEDED BY STAGE 11 (PDF #9) — deliberately inverted, not deleted.
+  //
+  // Decision 9 originally landed as "pop-ups without the uploader", and these two
+  // assertions recorded WHY: `JobPhoto.employeeId` was a required FK to User, and
+  // a web booking has neither a customer User row nor an assigned cleaner, so
+  // there was nowhere to attribute a photo. They asserted the absence of an
+  // upload on /book.
+  //
+  // Stage 11 removes that blocker — the migration makes `employeeId` nullable,
+  // and NULL now means "the customer uploaded this at booking" — because PDF #9
+  // requires the upload outright: *"the client uploads pictures of the space"*.
+  // The pop-up prompt still exists for add-ons that want a photo later; what
+  // changed is that post-construction no longer has to settle for a promise to
+  // email.
+  //
+  // So the assertions now check the OPPOSITE, which keeps the file a live record
+  // of the constraint rather than a stale claim about it.
+  has("the booking flow now collects photos (Stage 11 / PDF #9)",
+    "src/app/(book)/book/steps/Step2Property.tsx", "BookingPhotoUpload");
+  has("...uploaded through the public booking action, not the admin one",
+    "src/app/(book)/book/steps/BookingPhotoUpload.tsx", "uploadBookingPhoto");
+  has("...and attached to the job the booking creates",
+    "src/app/(book)/actions/submitBooking.ts", "photos: {");
+  has("...only for URLs that came from our own upload folder",
+    "src/app/(book)/actions/submitBooking.ts", "isBookingPhotoUrl(u, cloudName)");
+  has("the nullable uploader is what made that possible",
+    "prisma/schema.prisma", "employeeId String?");
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1876,7 +1896,11 @@ section(13, "Preview an available job before claiming (PDF #8)", () => {
   );
   lacksInCode("...and never opens a transaction", ACTION, "$transaction");
   // In particular it matches checklist TEMPLATES without creating a checklist.
-  has("checklist matching is template-only", ACTION, "templateMatchesJob(");
+  // Stage 10 (PDF #10) swapped the flat `templateMatchesJob` filter for the
+  // precedence resolver — same read-only property, and now the same answer the
+  // cleaner gets after claiming, instead of the service default on a job whose
+  // customer has a bespoke list.
+  has("checklist matching is template-only", ACTION, "resolveChecklistTemplates(");
   lacksInCode("...no JobChecklist row is minted", ACTION, "jobChecklist");
 
   // 13.a — authorisation reuses the claimable rule rather than restating it,
@@ -1961,7 +1985,10 @@ section(14, 'Kill the 10-minute "pending assignment" experience (PDF #4)', () =>
     ok("...never stamps EXPIRED", !pass.includes('"EXPIRED"'));
     ok("...nor fakes a response that never happened", !pass.includes("respondedAt:"));
   }
-  has("the admin WARNING survives on the same timer", CRON, '`Assignment unconfirmed — ${inv.job.clientName}`');
+  // The card is titled by JOB NUMBER, not client name: an admin acts on it by
+  // opening the job, and a name they have to look up first is a worse handle.
+  has("the admin WARNING survives on the same timer", CRON,
+    '`Assignment unconfirmed — Job #${inv.job.jobNumber}`');
   has("...deduped so it fires once", CRON, "data: { unconfirmedAlertAt: now },");
   has("a cleaner taken off the job is not chased", CRON, "const stillOnJob =");
   has("the sweep is visible in the cron response", CRON, "invite_unconfirmed_alert: number;");
@@ -2167,7 +2194,11 @@ section(15, "Clock back into a job (PDF #6)", () => {
 
   // The job only finishes when everybody has.
   has("completion waits for the last open session", CLOCK_OUT, "const isFinalClockOut = !mirrors.anyOpen");
-  has("...and PAID is never downgraded", CLOCK_OUT, 'job.status === "PAID" || job.paymentReceived ? "PAID" : "COMPLETED"');
+  // The tail lives in `finishClockOut(args)` now, so these read `args.*`. Same
+  // rule, one function further out — which is what makes the resume path able
+  // to re-run it without re-running the transaction.
+  has("...and PAID is never downgraded", CLOCK_OUT,
+    'args.jobStatus === "PAID" || args.paymentReceived ? "PAID" : "COMPLETED"');
 
   // Resuming at 6pm is not a late arrival.
   has("lateness is measured on the first session only", CLOCK_IN, "const minutesLate = isResume");
@@ -2178,7 +2209,7 @@ section(15, "Clock back into a job (PDF #6)", () => {
   has("mirrors are recomputed from the sessions", MIRRORS, "summariseSessions(sessions)");
   has("...and a cancelled assignment is left as history", MIRRORS, 'existing?.status === "CANCELLED"');
   has("clock-in syncs them", CLOCK_IN, "await syncClockMirrors(jobId)");
-  has("clock-out syncs them", CLOCK_OUT, "await syncClockMirrors(jobId)");
+  has("clock-out syncs them", CLOCK_OUT, "await syncClockMirrors(args.jobId)");
   // Deleting a session has to CLEAR the mirrors it left behind. The rebuild is
   // driven by the sessions that survive, so a cleaner with none left is never
   // visited — and every reader falls back to the pair, which would go on
@@ -2236,11 +2267,17 @@ section(15, "Clock back into a job (PDF #6)", () => {
     );
     check(
       "...and it is the only place it fires",
-      lines.filter((l) => /ensureRatingRequest\(jobId\)/.test(l)).length,
+      lines.filter((l) => /ensureRatingRequest\(args\.jobId\)/.test(l)).length,
       1
     );
   }
-  has("inventory usage still merges rather than duplicating", CLOCK_OUT, "jobProductUsage.update");
+  // WAS: "inventory usage still merges rather than duplicating", asserting the
+  // JobProductUsage upsert. Stage 3 deleted estimated usage outright — nothing
+  // is deducted at clock-out and nothing is written to that table — so the
+  // property worth pinning is its ABSENCE, plus the report that replaced it.
+  lacksInCode("clock-out records no estimated usage at all", CLOCK_OUT, "jobProductUsage");
+  has("...it records what the cleaner reported instead", CLOCK_OUT,
+    'action: "JOB_REPORT",');
   has("wash projection still recomputes every time", CLOCK_OUT, "washProjectedRags: projection.projectedRags");
   has("the tip nudge's existing per-job dedupe is documented as covering resume",
     "src/app/api/cron/notifications/route.ts",
@@ -2507,8 +2544,17 @@ section(17, "Cleaner availability in the booking flow (PDF #19)", () => {
     "src/app/admin/employees/[id]/EmployeeDetailView.tsx", 'searchParams.get("tab")');
   has("...rendering the availability tab", "src/app/admin/employees/[id]/EmployeeDetailView.tsx",
     'activeView === "availability"');
-  has("the employees overview grid is still mounted", "src/app/admin/employees/page.tsx",
-    "<AvailabilityOverview rows={availabilityRows} />");
+  // SUPERSEDED BY STAGE 12 (PDF #12), not deleted. This asserted the collapsed
+  // all-cleaner grid on the Employees page. Step 12.6 retired that card — it
+  // could only speak about weekly hours, never about a specific date — and
+  // replaced it with a link to /admin/availability, which answers both. What
+  // item 17.c actually needs is unchanged: an all-cleaner availability surface
+  // exists and the Employees page still reaches it. Both are checked here, and
+  // the new page is verified in full by scripts/verify-stage12-availability-view.ts.
+  has("the employees page still reaches the all-cleaner grid",
+    "src/app/admin/employees/page.tsx", "AVAILABILITY_VIEW_PATH");
+  has("...and that grid is mounted on its own page",
+    "src/app/admin/availability/AvailabilityBoardClient.tsx", "<AvailabilityWeekGrid");
 
   // ── The lookup must never fail SILENTLY ──────────────────────────────────
   //
@@ -2559,7 +2605,10 @@ section(18, "Sidebar attention badges (PDF #11)", () => {
     (read(ACTION).match(/db\.\$transaction\(\[/g) ?? []).length,
     2
   );
-  has("the hook polls at 30s", HOOK, "refreshInterval: 30_000");
+  // The interval is a knob, not a contract: what matters is that ONE key covers
+  // every badge and that the beat is slow enough not to starve the pooler. It
+  // was tuned 30s → 60s after this was written.
+  has("the hook polls on a slow, fixed beat", HOOK, "refreshInterval: 60_000");
   // One SWR key for the whole set, so seven badges cost one request per poll.
   has("...behind one shared key", HOOK, '["admin-attention-counts"]');
   // The 5s requests poller is gone — action and caller both.
@@ -2580,9 +2629,13 @@ section(18, "Sidebar attention badges (PDF #11)", () => {
   // browser-tested as the amplifier behind both the dead logs pager and the
   // availability check that never appeared. A timer that cannot outrun its own
   // work cannot do that on any connection.
+  // The cadence moved to a named constant (and 5s → 30s) after this was
+  // written. Asserted through the constant, so the next tuning pass changes one
+  // number rather than a check.
+  has("the poll's cadence is one named constant", SIDEBAR, "const CHAT_UNREAD_POLL_MS =");
   check(
-    "only the chat/toast poll remains, at 5s",
-    (codeOf(SIDEBAR).match(/setTimeout\(poll, 5000\)/g) ?? []).length,
+    "only the chat/toast poll remains",
+    (codeOf(SIDEBAR).match(/setTimeout\(poll, CHAT_UNREAD_POLL_MS\)/g) ?? []).length,
     1
   );
   lacksInCode(
@@ -2591,7 +2644,7 @@ section(18, "Sidebar attention badges (PDF #11)", () => {
     "setInterval("
   );
   has("...it schedules the next run only once this one settles", SIDEBAR,
-    "if (!cancelled) timer = setTimeout(poll, 5000);");
+    "if (!cancelled) timer = setTimeout(poll, CHAT_UNREAD_POLL_MS);");
   has("...and it is still the toast's source", SIDEBAR, "setChatToast({");
 
   // ── 18.b — status semantics, and the role split that goes with them ───────
@@ -2661,8 +2714,20 @@ section(18, "Sidebar attention badges (PDF #11)", () => {
   has("...and still caps at 99+", SIDEBAR, 'badgeCount > 99 ? "99+" : badgeCount');
   // Role-gating: the three OWNER/ADMIN badges hang off adminOnly entries, so the
   // nav hides them for OPS_MANAGER / FIELD_LEAD as well.
+  //
+  // Asserted as the PREDICATE plus the absence of a bypass, not as one exact
+  // source line. Stage 7 added a second visibility flag (`fieldLeadOnly`, for
+  // /admin/my-team) which reformatted this filter across several lines; pinning
+  // the formatting made the check fail while the rule it protects was intact.
+  // The rule is: adminOnly items are visible only to OWNER/ADMIN, and there is
+  // exactly one filter doing it.
   has("the nav still filters adminOnly entries by role", SIDEBAR,
-    "items: section.items.filter((item) => !item.adminOnly || isOwnerAdmin),");
+    "!item.adminOnly || isOwnerAdmin");
+  has("...through the section-items filter", SIDEBAR, "items: section.items.filter(");
+  check("...and there is exactly one nav visibility filter, so no entry can slip past",
+    (read(SIDEBAR).match(/section\.items\.filter\(/g) ?? []).length, 1);
+  check("...and adminOnly is consulted exactly once, in that filter",
+    (read(SIDEBAR).match(/item\.adminOnly/g) ?? []).length, 1);
 });
 
 section(19, "Void cheque upload in cleaner Documents (PDF #16)", () => {
@@ -2905,7 +2970,17 @@ section(20, "Remove Inventory Rules auto-deduction settings (PDF #14)", () => {
   ] as const) {
     has(`${label} uses the shared loader`, path, "await loadPerJobAverages()");
     has(`...and the shared projection`, path, "projectUsage(averagePerJob");
+    // Stage 3 / decision D3: with per-job usage no longer recorded, the window
+    // empties out and every product projects 0 — which would read as "everyone
+    // is fully stocked" rather than "we stopped measuring". Both surfaces are
+    // hidden behind ONE switch, and neither may hide independently of the other.
+    has(`...and ${label} is gated on the shared switch`, path,
+      "INVENTORY_FORECAST_ENABLED");
   }
+  ok(
+    "the forecast switch is off while nothing measures usage",
+    /INVENTORY_FORECAST_ENABLED = false/.test(read("src/lib/inventory-forecast.flag.ts"))
+  );
   // THE bug 20.b names: products with no rule vanished from the forecast, and
   // an employee whose whole kit was rule-less vanished with them.
   lacksInCode("no product is filtered out of the forecast", INV_PAGE, ".filter((f) => f.usagePerJob > 0)");
@@ -2928,29 +3003,41 @@ section(20, "Remove Inventory Rules auto-deduction settings (PDF #14)", () => {
   has("the unrelated analytics metric survives", "src/app/admin/analytics/page.tsx",
     "const avgUsagePerJob =");
 
-  // 20.d — the cleaner-reported flow is untouched: it already IS the spec.
+  // 20.d — SUPERSEDED by Stage 3 of the inventory-fixes TODO. This round left
+  // the cleaner-reported flow alone because it "already IS the spec"; the
+  // inventory PDF then established that what it recorded was an ESTIMATE the
+  // app invented (Light use = 15 sprays × 1.25 ml) and deducted as if measured.
+  // The checks below are the same four properties, restated against what the
+  // flow does now: it records a REPORT, and deducts nothing.
   const CLOCK_OUT = "src/app/admin/actions/clockOut.ts";
-  has("clock-out still records reported usage", CLOCK_OUT, "db.jobProductUsage.create({");
-  has("...merging repeat clock-outs", CLOCK_OUT, "db.jobProductUsage.update({");
-  has("...still deducts from the cleaner's kit", CLOCK_OUT, "db.employeeProduct.update({");
-  has("...still writes the audit row", CLOCK_OUT, "db.inventoryChange.create({");
-  has("...and still raises the restock alert", CLOCK_OUT, "isCleanerLow(inventoryAfter, {");
+  lacksInCode("clock-out no longer records estimated usage", CLOCK_OUT, "jobProductUsage");
+  has("...it writes the cleaner's report to their kit", CLOCK_OUT, "db.employeeProduct.update({");
+  has("...still writes the audit row, now with the status transition", CLOCK_OUT,
+    "newStatus: reportedStatus,");
+  has("...and raises an admin flag rather than deducting stock", CLOCK_OUT,
+    "db.inventoryFlag.createMany({");
+  has("...restock alerts fire from what was REPORTED low or empty", CLOCK_OUT,
+    'flagType === "LOW" || flagType === "EMPTY"');
   // Admin review surfaces named in 20.d.
   has("the job detail lists products used",
     "src/app/admin/jobs/[id]/JobDetailView.tsx", "Products used ·");
   has("...and Inventory keeps its Activity tab",
     "src/app/admin/inventory/InventoryPageClient.tsx", 'id: "activity", label: "Activity"');
 
-  // 20.e — DEFERRED, not forgotten. The model must still be present: dropping
-  // it is a separate, destructive deploy that needs a backup point first.
-  has("the InventoryRule model is still in the schema", "prisma/schema.prisma",
+  // 20.e — DONE in Stage 3.6. It was deferred here because dropping a table is
+  // a destructive deploy that needs a backup point behind it; the inventory
+  // batch is that deploy, so the model is gone and the migration is written.
+  lacksInCode("the InventoryRule model is gone from the schema", "prisma/schema.prisma",
     "model InventoryRule {");
   ok(
-    "...and its drop migration has NOT been staged",
-    !fs
+    "...and its drop migration is staged",
+    fs
       .readdirSync("prisma/migrations")
-      .some((d) => d.toLowerCase().includes("inventory_rule") && d.includes("drop"))
+      .some((d) => d.toLowerCase().includes("drop_inventory_rule"))
   );
+  has("...as a plain DROP TABLE, touching nothing else",
+    "prisma/migrations/20260817020000_drop_inventory_rule/migration.sql",
+    'DROP TABLE IF EXISTS "InventoryRule";');
 });
 
 // ═══ Stage 9 — the two defects the browser round found, and their shared cause ═══
@@ -2994,11 +3081,15 @@ section(23, "the sidebar poll cannot outrun its own work", () => {
   const SIDEBAR = "src/app/admin/Sidebar.tsx";
   // Covered in full by section 18's poll checks; this section exists so the
   // TODO item is registered against the property it introduced.
-  has("the chat poll is self-pacing", SIDEBAR, "if (!cancelled) timer = setTimeout(poll, 5000);");
+  has("the chat poll is self-pacing", SIDEBAR,
+    "if (!cancelled) timer = setTimeout(poll, CHAT_UNREAD_POLL_MS);");
   lacksInCode("...never a fixed-rate interval", SIDEBAR, "setInterval(");
-  // Scheduled in `finally`, so an erroring poll still keeps the badge alive
-  // instead of stopping the loop dead.
-  has("...and a failed poll still reschedules", SIDEBAR, "} finally {");
+  // The fetch's own catch SWALLOWS, so the reschedule below it is reached on
+  // every path — an erroring poll keeps the badge alive instead of stopping the
+  // loop dead. (This was a `finally` when the check was written; the swallow
+  // gives the same guarantee without the block.)
+  has("...and a failed poll still reschedules", SIDEBAR,
+    "/* ignore — an erroring poll must still keep the badge alive */");
   has("the cleanup clears the pending timer", SIDEBAR, "if (timer) clearTimeout(timer);");
 });
 
@@ -3066,30 +3157,56 @@ section(25, "the availability lookup cannot fail, or wait, in silence", () => {
 
 // ── Completeness guard: no item is ticked off without a check ───────────────
 //
-// The house rule is "tick the box only after verification". This enforces it:
-// every item heading marked `### [x] N.` in the TODO must have registered a
-// `section(N, …)` above. Ticking a box without writing a check fails the run.
+// The house rule is "tick the box only after verification". This enforced it by
+// reading THIS ROUND's `_ai_context/TODO.md`: every item heading marked
+// `### [x] N.` had to have registered a `section(N, …)` above.
+//
+// That document has since been replaced — `_ai_context/TODO.md` now holds the
+// inventory-and-operations work (stages, not `### [x] N.` items), and this
+// round's execution map is gone with it. The guard is kept, and keeps working
+// the moment such a document is present again, but it cannot be allowed to pass
+// VACUOUSLY: a file with no matching headings would silently satisfy "every
+// ticked item has checks" while checking nothing, which is worse than not
+// running at all. So it says which of the two it did.
 {
   const todo = "../_ai_context/TODO.md";
-  if (!fs.existsSync(todo)) {
-    console.log("\nSKIP  completeness guard — TODO.md not reachable from here");
-  } else {
-    const done = [...read(todo).matchAll(/^###\s*\[x\]\s*(\d+)\./gim)].map((m) =>
-      Number(m[1])
+  const round = fs.existsSync(todo) ? read(todo) : "";
+  const done = [...round.matchAll(/^###\s*\[x\]\s*(\d+)\./gim)].map((m) =>
+    Number(m[1])
+  );
+  const known = new Set(
+    [...round.matchAll(/^###\s*\[[ x~!]\]\s*(\d+)\./gim)].map((m) => Number(m[1]))
+  );
+
+  console.log("");
+  if (known.size > 0) {
+    check(
+      "every item marked done in TODO.md has checks here",
+      done.filter((n) => !covered.has(n)),
+      []
     );
-    const unverified = done.filter((n) => !covered.has(n));
-    console.log("");
-    check("every item marked done in TODO.md has checks here", unverified, []);
-    // And the reverse, as a typo catcher: a section for an item that doesn't
-    // exist in the execution map means a wrong number was passed to section().
-    const known = new Set(
-      [...read(todo).matchAll(/^###\s*\[[ x~!]\]\s*(\d+)\./gim)].map((m) => Number(m[1]))
-    );
+    // The reverse, as a typo catcher: a section for an item that doesn't exist
+    // in the execution map means a wrong number was passed to section().
     check(
       "every section() here names a real TODO item",
       [...covered].filter((n) => !known.has(n)),
       []
     );
+  } else {
+    // No execution map to check against. Assert what still holds without one:
+    // this round covered 25 numbered items, so every section() must name one of
+    // them exactly once. A typo'd number — the failure the reverse check above
+    // existed to catch — is still caught.
+    console.log(
+      "NOTE  this round's item-by-item TODO has been superseded; checking section numbering instead"
+    );
+    const numbers = [...covered];
+    check(
+      "every section() names one of this round's 25 items",
+      numbers.filter((n) => !Number.isInteger(n) || n < 1 || n > 25),
+      []
+    );
+    check("...and no item is registered twice", numbers.length, new Set(numbers).size);
   }
 }
 

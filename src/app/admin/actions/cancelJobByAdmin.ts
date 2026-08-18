@@ -13,6 +13,7 @@ import {
 import { isNotificationEnabled } from "@/lib/notifications";
 import { smsCancellation } from "@/lib/sms";
 import { fmtDate } from "@/lib/time";
+import { resolveDepositCredit } from "@/lib/booking-deposit";
 
 interface CancelJobInput {
   jobId: string;
@@ -36,6 +37,8 @@ export async function cancelJobByAdmin(input: CancelJobInput) {
         status: true,
         jobNumber: true,
         depositPaid: true,
+        // Stage 11: the refund cap comes from the job, not a constant.
+        depositAmount: true,
         refundedAmount: true,
         clientName: true,
         startTime: true,
@@ -79,10 +82,14 @@ export async function cancelJobByAdmin(input: CancelJobInput) {
       }),
     ]);
 
-    // Optionally refund the $20 deposit (capped at remaining deposit balance).
+    // Optionally refund the deposit (capped at the remaining deposit balance).
+    //
+    // The cap was a hardcoded `20` (Stage 11 / PDF #9): cancelling a
+    // post-construction booking sent back $20 of the customer's $200 and reported
+    // success. `resolveDepositCredit` reads what the job actually charged.
     let refund: { success: boolean; error?: string } | null = null;
     if (input.refundDeposit && job.depositPaid) {
-      const remaining = 20 - (job.refundedAmount ?? 0);
+      const remaining = resolveDepositCredit(job) - (job.refundedAmount ?? 0);
       if (remaining > 0.001) {
         refund = await issueRefund({
           jobId: input.jobId,

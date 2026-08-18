@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Plus,
   Trash2,
@@ -20,6 +20,10 @@ import { createChecklistTemplate } from "../../actions/createChecklistTemplate";
 import { updateChecklistTemplate } from "../../actions/updateChecklistTemplate";
 import { deleteChecklistTemplate } from "../../actions/deleteChecklistTemplate";
 import {
+  getChecklistScopeOptions,
+  type ChecklistScopeClient,
+} from "../../actions/getChecklistScopeOptions";
+import {
   ChecklistTemplateRecord,
   AppSettingRecord,
   getSetting,
@@ -36,7 +40,7 @@ import {
   DEFAULT_SERVICE_CATALOG,
   serviceOptions as catalogServiceOptions,
 } from "@/lib/service-catalog";
-import { addOnKey } from "@/lib/checklist-triggers";
+import { addOnKey, describeScope } from "@/lib/checklist-triggers";
 
 interface ChecklistTemplatesTabProps {
   templates: ChecklistTemplateRecord[];
@@ -55,6 +59,9 @@ interface DraftTemplate {
   description: string;
   jobType: string;
   addOnName: string;
+  /** Customer scope (Stage 10 / PDF #10). "" = not customer-specific. */
+  clientId: string;
+  clientAddressId: string;
   isActive: boolean;
   items: DraftItem[];
 }
@@ -70,9 +77,14 @@ const EMPTY_TEMPLATE: DraftTemplate = {
   description: "",
   jobType: "",
   addOnName: "",
+  clientId: "",
+  clientAddressId: "",
   isActive: true,
   items: [],
 };
+
+/** Chip colours per scope tier, narrowest first. */
+const SCOPE_CHIP_STYLE = "text-xs bg-violet-100 text-violet-800 px-2 py-0.5 rounded-full";
 
 export default function ChecklistTemplatesTab({
   templates,
@@ -111,6 +123,38 @@ export default function ChecklistTemplatesTab({
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<Msg>(null);
 
+  // Customer scope pickers (Stage 10 / PDF #10). Loaded the first time the
+  // modal opens, not with the page — see getChecklistScopeOptions for why.
+  const [scopeClients, setScopeClients] = useState<ChecklistScopeClient[] | null>(
+    null
+  );
+  const [scopeLoading, setScopeLoading] = useState(false);
+  const [scopeError, setScopeError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!modalOpen || scopeClients || scopeLoading) return;
+    setScopeLoading(true);
+    getChecklistScopeOptions()
+      .then((res) => {
+        if (res.success) {
+          setScopeClients(res.clients);
+          setScopeError(null);
+        } else {
+          setScopeError(res.error);
+        }
+      })
+      .catch(() => setScopeError("Could not load customers"))
+      .finally(() => setScopeLoading(false));
+  }, [modalOpen, scopeClients, scopeLoading]);
+
+  // Addresses belong to the chosen customer only — an address-scoped template
+  // pointing at somebody else's door is rejected server-side, so the picker
+  // must not be able to produce one in the first place.
+  const addressChoices = useMemo(() => {
+    if (!draft.clientId) return [];
+    return scopeClients?.find((c) => c.id === draft.clientId)?.addresses ?? [];
+  }, [scopeClients, draft.clientId]);
+
   function openCreate() {
     setDraft(EMPTY_TEMPLATE);
     setMsg(null);
@@ -124,6 +168,8 @@ export default function ChecklistTemplatesTab({
       description: tpl.description ?? "",
       jobType: tpl.jobType ?? "",
       addOnName: tpl.addOnName ?? "",
+      clientId: tpl.clientId ?? "",
+      clientAddressId: tpl.clientAddressId ?? "",
       isActive: tpl.isActive,
       items: [...tpl.items]
         .sort((a, b) => a.sortOrder - b.sortOrder)
@@ -186,6 +232,10 @@ export default function ChecklistTemplatesTab({
       description: draft.description,
       jobType: draft.jobType || null,
       addOnName: draft.addOnName || null,
+      clientId: draft.clientId || null,
+      // Never sent without its client — the server rejects that pairing, and
+      // the state below already clears it whenever the customer changes.
+      clientAddressId: draft.clientId ? draft.clientAddressId || null : null,
       isActive: draft.isActive,
       items: draft.items
         .filter((it) => it.title.trim())
@@ -228,7 +278,7 @@ export default function ChecklistTemplatesTab({
   return (
     <SectionCard
       title="Checklist Templates"
-      description="Define reusable checklists generated for jobs based on job type or add-on."
+      description="Reusable checklists generated for jobs automatically. Scope one to a job type or add-on, or to a specific customer or location — a customer checklist replaces the service-type default for their jobs."
       icon={ListChecks}
       actions={
         <Button
@@ -247,7 +297,16 @@ export default function ChecklistTemplatesTab({
         </p>
       ) : (
         <div className="space-y-2">
-          {templates.map((tpl) => (
+          {templates.map((tpl) => {
+            // Prefer the STREET over the address label: two locations both
+            // labelled "Other" would otherwise render as the same chip.
+            const scopeLabel = describeScope({
+              clientId: tpl.clientId,
+              clientAddressId: tpl.clientAddressId,
+              clientName: tpl.client?.name,
+              addressLabel: tpl.clientAddress?.address ?? tpl.clientAddress?.label,
+            });
+            return (
             <div
               key={tpl.id}
               className="flex items-start justify-between gap-3 p-4 border border-[#008C9C]/10 rounded-xl bg-white hover:bg-[#008C9C]/3 transition-colors">
@@ -260,6 +319,12 @@ export default function ChecklistTemplatesTab({
                     <span className="text-xs text-[#008C9C]/40">
                       (inactive)
                     </span>
+                  )}
+                  {/* Stage 10 — the customer scope, first because it is the
+                      strongest: a customer-scoped list REPLACES the service
+                      default rather than adding to it. */}
+                  {scopeLabel && (
+                    <span className={SCOPE_CHIP_STYLE}>{scopeLabel}</span>
                   )}
                   {tpl.jobType && (
                     <span className="text-xs bg-[#008C9C]/10 text-[#008C9C] px-2 py-0.5 rounded-full">
@@ -279,9 +344,21 @@ export default function ChecklistTemplatesTab({
                       Both must match
                     </span>
                   )}
-                  {!tpl.jobType && !tpl.addOnName && (
-                    <span className="text-xs bg-neutral-200 text-neutral-600 px-2 py-0.5 rounded-full">
-                      Standard (all jobs)
+                  {/* "Standard (all jobs)" is only true when the template is
+                      unscoped in EVERY dimension. A customer-scoped template
+                      with no job type applies to all of THAT customer's jobs,
+                      which is a very different promise. */}
+                  {!tpl.jobType &&
+                    !tpl.addOnName &&
+                    !tpl.clientId &&
+                    !tpl.clientAddressId && (
+                      <span className="text-xs bg-neutral-200 text-neutral-600 px-2 py-0.5 rounded-full">
+                        Standard (all jobs)
+                      </span>
+                    )}
+                  {(tpl.clientId || tpl.clientAddressId) && (
+                    <span className="text-xs bg-violet-50 text-violet-700 px-2 py-0.5 rounded-full">
+                      Overrides the service default
                     </span>
                   )}
                 </div>
@@ -310,7 +387,8 @@ export default function ChecklistTemplatesTab({
                 />
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -350,10 +428,117 @@ export default function ChecklistTemplatesTab({
             />
           </Field>
 
+          {/* ── Customer scope (Stage 10 / PDF #10) ────────────────────────
+              Above the service triggers, because it is the stronger rule: a
+              template scoped to a customer REPLACES the service-type default
+              for that customer's jobs. The PDF's example is exactly this —
+              "every Mckiernan job should automatically use the strict
+              Mckiernan restaurant checklist" — and it only reads correctly if
+              the generic commercial list does not also come along. */}
+          <div className="rounded-xl border border-violet-200 bg-violet-50/40 p-3 space-y-3">
+            <div>
+              <p className="text-xs font-[500] text-violet-900">
+                Customer / contract checklist
+              </p>
+              <p className="text-xs text-violet-800/70 mt-0.5">
+                Leave blank for a normal template. Pick a customer and this list
+                is used for their jobs automatically — <strong>instead of</strong>{" "}
+                the service-type default, not on top of it.
+              </p>
+            </div>
+
+            {scopeError && (
+              <p className="text-xs text-red-600">
+                {scopeError} — the customer scope can&apos;t be changed right now.
+              </p>
+            )}
+
+            <div className="grid grid-cols-2 gap-3">
+              <Field
+                label="Customer"
+                hint="Every job for this customer uses this checklist.">
+                <PremiumSelect
+                  value={draft.clientId}
+                  onChange={(v) =>
+                    setDraft((prev) => ({
+                      ...prev,
+                      clientId: v,
+                      // Switching customer invalidates the location — an
+                      // address belongs to exactly one client.
+                      clientAddressId: "",
+                    }))
+                  }
+                  options={[
+                    { value: "", label: "— Not customer-specific —" },
+                    ...(scopeClients ?? []).map((c) => ({
+                      value: c.id,
+                      label: c.name,
+                    })),
+                  ]}
+                  disabled={scopeLoading || !scopeClients}
+                  placeholder={
+                    scopeLoading ? "Loading customers…" : "— Not customer-specific —"
+                  }
+                  searchable
+                  size="sm"
+                />
+              </Field>
+
+              <Field
+                label="Location"
+                hint={
+                  draft.clientId
+                    ? "Optional. Narrow it to one of their addresses."
+                    : "Pick a customer first."
+                }>
+                <PremiumSelect
+                  value={draft.clientAddressId}
+                  onChange={(v) =>
+                    setDraft((prev) => ({ ...prev, clientAddressId: v }))
+                  }
+                  options={[
+                    { value: "", label: "— All of their locations —" },
+                    ...addressChoices.map((a) => ({
+                      value: a.id,
+                      label: a.address,
+                      description: a.label,
+                    })),
+                  ]}
+                  disabled={!draft.clientId || addressChoices.length === 0}
+                  placeholder="— All of their locations —"
+                  size="sm"
+                />
+              </Field>
+            </div>
+
+            {/* An edited template whose customer link exists but whose picker
+                list hasn't arrived yet would otherwise look unscoped, and
+                saving would silently clear the link. Say so instead. */}
+            {draft.clientId &&
+              scopeClients &&
+              !scopeClients.some((c) => c.id === draft.clientId) && (
+                <p className="text-xs text-amber-700">
+                  This template is linked to a customer who is no longer in the
+                  active list (archived or deleted). Saving now will clear the
+                  link and turn it back into a normal template.
+                </p>
+              )}
+            {draft.clientId && addressChoices.length === 0 && scopeClients && (
+              <p className="text-xs text-violet-800/70">
+                This customer has no saved addresses, so the checklist applies to
+                all of their jobs.
+              </p>
+            )}
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <Field
               label="Job Type"
-              hint="Restrict template to a specific job type, or leave blank for all.">
+              hint={
+                draft.clientId
+                  ? "Optional. Narrows this customer checklist to one service."
+                  : "Restrict template to a specific job type, or leave blank for all."
+              }>
               <PremiumSelect
                 value={draft.jobType}
                 onChange={(v) =>

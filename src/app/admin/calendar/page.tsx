@@ -44,6 +44,9 @@ export default async function CalendarPage() {
         // scoped by calendarJobsWhere(userId), so a cleaner only ever sees
         // codes for jobs they are actually on.
         clientAddress: { select: { accessNotes: true } },
+        // Apartment/condo vs house (Stage 9 / PDF #11) — a "before arriving"
+        // fact, so it belongs beside the address and the access notes above.
+        propertyType: true,
         employeePay: true,
         notes: true,
         cleaners: { select: { id: true, name: true } },
@@ -65,6 +68,7 @@ export default async function CalendarPage() {
         location: j.location ?? null,
         aptNumber: j.aptNumber ?? null,
         accessNotes: j.clientAddress?.accessNotes ?? null,
+        propertyType: j.propertyType ?? null,
         employeePay: j.employeePay ?? null,
         // This branch is the CLEANER calendar (role === "EMPLOYEE" above, and
         // /cleaners/calendar routes here too), and the card it feeds also shows

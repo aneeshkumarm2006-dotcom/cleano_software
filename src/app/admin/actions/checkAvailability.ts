@@ -8,6 +8,7 @@ import {
   findCategoryConflicts,
   type CategoryConflict,
 } from "@/lib/job-assignments";
+import { fieldLeadGroupIds } from "@/lib/field-lead-group.server";
 import {
   windowFromFields,
   windowFromInstants,
@@ -22,21 +23,62 @@ import type {
 
 const STAFF_ROLES = ["OWNER", "ADMIN", "OPS_MANAGER"];
 
+interface Gate {
+  ok: true;
+  userId: string;
+  /**
+   * May look ANYONE up, and may run the assignment-conflict preview. FIELD_LEAD
+   * is NOT staff here: a lead coordinates a crew, they do not assign it, and
+   * `previewAssignmentConflicts` is part of the assign flow.
+   */
+  isStaff: boolean;
+  /**
+   * The exact set of employee ids this caller may ask about, or null for "any"
+   * (staff). Non-staff callers get a set containing at least themselves; a
+   * FIELD_LEAD's set is their group (Stage 7 / PDF #7).
+   */
+  allowedIds: Set<string> | null;
+}
+
 /**
- * Availability data is schedule PII. Staff may look up anyone; an employee may
- * only look up themselves. Fails closed when the session is missing.
+ * Availability data is schedule PII. Staff may look up anyone; a Field Lead may
+ * look up their own group; everyone else may look up only themselves. Fails
+ * closed when the session is missing.
+ *
+ * The allow-list is returned as a SET rather than as a boolean, because the two
+ * callers below both need to answer "may I ask about these N ids?" and a boolean
+ * forced each of them to re-derive the rule. Group membership is resolved from
+ * the database, never from the request.
  */
-async function gate(): Promise<
-  { ok: true; userId: string; isStaff: boolean } | { ok: false; error: string }
-> {
+async function gate(): Promise<Gate | { ok: false; error: string }> {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) return { ok: false, error: "Not authenticated" };
   const role = (session.user as { role?: string }).role;
-  return {
-    ok: true,
-    userId: session.user.id,
-    isStaff: !!role && STAFF_ROLES.includes(role),
-  };
+  const userId = session.user.id;
+
+  if (!!role && STAFF_ROLES.includes(role)) {
+    return { ok: true, userId, isStaff: true, allowedIds: null };
+  }
+
+  if (role === "FIELD_LEAD") {
+    const groupIds = await fieldLeadGroupIds(userId);
+    // `fieldLeadGroupIds` always includes the lead, but be explicit: a lead must
+    // never lose the ability to check themselves because of a data oddity.
+    return {
+      ok: true,
+      userId,
+      isStaff: false,
+      allowedIds: new Set([userId, ...groupIds]),
+    };
+  }
+
+  return { ok: true, userId, isStaff: false, allowedIds: new Set([userId]) };
+}
+
+/** Every id in `ids` is one this caller may ask about. */
+function mayQuery(g: Gate, ids: string[]): boolean {
+  if (g.allowedIds === null) return true;
+  return ids.every((id) => g.allowedIds!.has(id));
 }
 
 /**
@@ -64,7 +106,7 @@ export async function checkAvailability(
     if (!input?.employeeId || typeof input.employeeId !== "string") {
       return { success: false, error: "Invalid employee" };
     }
-    if (!g.isStaff && input.employeeId !== g.userId) {
+    if (!mayQuery(g, [input.employeeId])) {
       return { success: false, error: "Not authorized" };
     }
 
@@ -115,8 +157,10 @@ export async function checkAvailabilityBatch(
     if (ids.length === 0) return { success: true, statuses: [] };
     // Cheap DoS guard — the picker never legitimately sends more than this.
     if (ids.length > 200) return { success: false, error: "Too many employees" };
-    // A non-staff caller may only ask about themselves.
-    if (!g.isStaff && ids.some((id) => id !== g.userId)) {
+    // A non-staff caller may only ask about themselves — or, for a Field Lead,
+    // about their own group. One id outside the allow-list rejects the whole
+    // batch rather than silently returning a partial answer.
+    if (!mayQuery(g, ids)) {
       return { success: false, error: "Not authorized" };
     }
 

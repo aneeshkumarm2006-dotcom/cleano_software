@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, type FieldErrors } from "react-hook-form";
 import {
   X,
   Package,
@@ -24,6 +25,13 @@ import { updateProduct } from "../actions/updateProduct";
 import { deleteProduct } from "../actions/deleteProduct";
 import { isHttpUrl } from "@/lib/safe-url";
 import { MAX_PRODUCT_LINKS, MAX_LINK_LABEL_LENGTH } from "@/lib/product-links";
+import {
+  DEFAULT_ITEM_TYPE,
+  ITEM_TYPES,
+  ITEM_TYPE_DESCRIPTION,
+  ITEM_TYPE_NAME,
+  type ItemType,
+} from "@/lib/item-type";
 
 type ProductCategory = "LIQUID_SPRAY" | "MOP_LIQUID" | "DISPOSABLE" | "OTHER";
 
@@ -47,6 +55,7 @@ interface Product {
   minStock: number;
   cleanerRestockThreshold?: number;
   category?: ProductCategory;
+  itemType?: ItemType;
   /** The one exact re-order link. */
   purchaseUrl?: string | null;
   /** Any number of additional labelled links. */
@@ -60,30 +69,59 @@ interface ProductModalProps {
   mode: "create" | "edit";
 }
 
-const formSchema = z.object({
-  name: z.string().min(1, "Product name is required"),
-  description: z.string().optional(),
-  unit: z.string().min(1, "Unit is required"),
-  costPerUnit: z.coerce.number().min(0, "Cost must be 0 or greater"),
-  stockLevel: z.coerce.number().min(0, "Stock level must be 0 or greater"),
-  minStock: z.coerce.number().min(0, "Minimum stock must be 0 or greater"),
-  cleanerRestockThreshold: z.coerce
-    .number()
-    .min(0, "Cleaner restock threshold must be 0 or greater"),
-  category: z.enum(["LIQUID_SPRAY", "MOP_LIQUID", "DISPOSABLE", "OTHER"]).default("OTHER"),
-  stockReason: z.string().optional(),
-  // Same allow-list the server enforces (http/https only) — this is UX, not the
-  // security boundary: createProduct/updateProduct re-validate every URL.
-  purchaseUrl: z
-    .string()
-    .optional()
-    .refine((v) => !v || !v.trim() || isHttpUrl(v), {
-      message: "Enter a full http:// or https:// URL",
-    }),
-});
+/**
+ * `stockFloor` is the lowest Warehouse Stock this particular product may be
+ * saved with — 0 for everything normal, and the product's CURRENT count when
+ * that is already negative.
+ *
+ * Negative warehouse stock is legitimate and deliberate: supplies leave and
+ * arrive outside the app, so a short count is recorded and reconciled later
+ * rather than blocked (see the header of `src/lib/stock.server.ts`; the hub
+ * itself surfaces "N negative — reconcile"). But this form floored the field at
+ * 0 unconditionally, in the schema AND in the input's `min` attribute, so a
+ * product sitting at -1 could not be saved at all — not renamed, not
+ * reclassified, not corrected. The `min` attribute was the worse half: the
+ * browser's own constraint validation rejected the submit before React ever
+ * ran, so "Update Product" did nothing and said nothing.
+ *
+ * Floor-at-the-current-value keeps both halves honest: an existing shortfall
+ * rides through a save untouched (or gets typed upward out of it), while a
+ * brand-new negative count still can't be entered.
+ */
+const buildFormSchema = (stockFloor: number) =>
+  z.object({
+    name: z.string().min(1, "Product name is required"),
+    description: z.string().optional(),
+    unit: z.string().min(1, "Unit is required"),
+    costPerUnit: z.coerce.number().min(0, "Cost must be 0 or greater"),
+    stockLevel: z.coerce
+      .number()
+      .min(
+        stockFloor,
+        stockFloor < 0
+          ? `This product is short by ${-stockFloor}. Leave it at ${stockFloor} or type a higher count — it can't be pushed further negative from here.`
+          : "Stock level must be 0 or greater"
+      ),
+    minStock: z.coerce.number().min(0, "Minimum stock must be 0 or greater"),
+    cleanerRestockThreshold: z.coerce
+      .number()
+      .min(0, "Cleaner restock threshold must be 0 or greater"),
+    category: z.enum(["LIQUID_SPRAY", "MOP_LIQUID", "DISPOSABLE", "OTHER"]).default("OTHER"),
+    itemType: z.enum(ITEM_TYPES).default(DEFAULT_ITEM_TYPE),
+    stockReason: z.string().optional(),
+    // Same allow-list the server enforces (http/https only) — this is UX, not
+    // the security boundary: createProduct/updateProduct re-validate every URL.
+    purchaseUrl: z
+      .string()
+      .optional()
+      .refine((v) => !v || !v.trim() || isHttpUrl(v), {
+        message: "Enter a full http:// or https:// URL",
+      }),
+  });
 
-type FormInput = z.input<typeof formSchema>;
-type FormValues = z.output<typeof formSchema>;
+type FormSchema = ReturnType<typeof buildFormSchema>;
+type FormInput = z.input<FormSchema>;
+type FormValues = z.output<FormSchema>;
 
 export function ProductModal({
   isOpen,
@@ -91,6 +129,7 @@ export function ProductModal({
   product,
   mode,
 }: ProductModalProps) {
+  const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
   const [globalError, setGlobalError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -105,6 +144,12 @@ export function ProductModal({
   // it's a repeatable list; serialized to JSON on submit.
   const [links, setLinks] = useState<ProductLinkRow[]>([]);
   const [linkError, setLinkError] = useState<string | null>(null);
+
+  // An ALREADY-negative count is allowed through; a new one is not. See
+  // `buildFormSchema`. Recomputed per product, so opening a healthy product
+  // straight after a negative one floors at 0 again.
+  const stockFloor = Math.min(0, product?.stockLevel ?? 0);
+  const formSchema = useMemo(() => buildFormSchema(stockFloor), [stockFloor]);
 
   const {
     register,
@@ -125,6 +170,7 @@ export function ProductModal({
       minStock: 0,
       cleanerRestockThreshold: 0,
       category: "OTHER",
+      itemType: DEFAULT_ITEM_TYPE,
       stockReason: "",
       purchaseUrl: "",
     },
@@ -143,6 +189,7 @@ export function ProductModal({
         minStock: product?.minStock || 0,
         cleanerRestockThreshold: product?.cleanerRestockThreshold || 0,
         category: product?.category || "OTHER",
+        itemType: product?.itemType || DEFAULT_ITEM_TYPE,
         stockReason: "",
         purchaseUrl: product?.purchaseUrl || "",
       });
@@ -181,6 +228,12 @@ export function ProductModal({
 
   const disableForm = submitting || isDeleting;
 
+  // Reusable tools are never "low" — a cleaner needs exactly one scraper — so
+  // the per-cleaner restock threshold is hidden for them (PDF #4). The COMPANY
+  // reorder threshold stays: the warehouse still has to buy replacements.
+  const itemType = watch("itemType") ?? DEFAULT_ITEM_TYPE;
+  const isEquipment = itemType === "REUSABLE_EQUIPMENT";
+
   const onSubmit = async (values: FormValues) => {
     // Drop rows the user added but never filled in; anything left must be a real
     // http(s) URL. (The server re-validates — this is just a friendlier error.)
@@ -213,6 +266,7 @@ export function ProductModal({
         String(values.cleanerRestockThreshold)
       );
       formData.append("category", values.category);
+      formData.append("itemType", values.itemType);
       formData.append("stockReason", values.stockReason || "");
       formData.append("purchaseUrl", (values.purchaseUrl || "").trim());
       formData.append("links", JSON.stringify(cleanedLinks));
@@ -242,7 +296,14 @@ export function ProductModal({
       setTimeout(() => {
         reset();
         handleClose();
-        window.location.reload();
+        // Stage 4.5: `router.refresh()`, NOT `window.location.reload()`.
+        // A full reload threw away the hub's tab, filters and pagination, and
+        // — because it was the only inventory surface that reloaded — it also
+        // hid the real problem: the Requests tab beside it kept its stale
+        // numbers. Refreshing re-runs the server component, so every tab in
+        // the hub redraws from the same fresh read. `revalidatePath` in the
+        // create/update actions is what makes that read fresh.
+        router.refresh();
       }, 1000);
     } catch (error) {
       console.error("Submit error:", error);
@@ -254,6 +315,24 @@ export function ProductModal({
     } finally {
       setSubmitting(false);
     }
+  };
+
+  /**
+   * The other half of dropping native validation: a submit that gets REFUSED
+   * has to say so where the admin is looking. Field messages render beside
+   * their inputs, and this modal is tall enough that the offending box is
+   * routinely scrolled out of view — leaving "Update Product" looking like a
+   * button that does nothing. The banner sits directly above it.
+   */
+  const onInvalid = (formErrors: FieldErrors<FormInput>) => {
+    const first = Object.values(formErrors).find(
+      (e) => typeof e?.message === "string"
+    );
+    setSuccessMessage(null);
+    setGlobalError(
+      (first?.message as string | undefined) ??
+        "Some fields still need fixing — check the boxes marked in red above."
+    );
   };
 
   const handleDelete = async () => {
@@ -270,7 +349,7 @@ export function ProductModal({
       }
 
       handleClose();
-      window.location.reload();
+      router.refresh();
     } catch (error) {
       setGlobalError(
         error instanceof Error ? error.message : "Failed to delete product"
@@ -388,7 +467,17 @@ export function ProductModal({
               </div>
             )}
 
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+            {/* noValidate: the schema above is the only validator. The browser's
+                own constraint check runs BEFORE React's submit handler and, when
+                it rejects a field, cancels the submit and shows a tooltip
+                anchored to that field — which inside a scrolled modal is often
+                nowhere the admin is looking. That is how "Update Product"
+                became a button that did nothing at all on a negative-stock
+                product. Every rule here now reports itself inline instead. */}
+            <form
+              noValidate
+              onSubmit={handleSubmit(onSubmit, onInvalid)}
+              className="space-y-6">
               {/* Product Name */}
               <div>
                 <label className="input-label">
@@ -430,6 +519,30 @@ export function ProductModal({
                 </div>
                 <p className="text-xs text-[#008C9C]/60 mt-1">
                   Optional description for internal reference
+                </p>
+              </div>
+
+              {/* Item Type — what KIND of thing this is. Drives how the cleaner
+                  reports on it and whether refill thresholds apply at all
+                  (inventory fixes PDF #1 + #4). Distinct from Category below,
+                  which only describes how usage was logged at clock-out. */}
+              <div>
+                <label className="input-label" htmlFor="product-item-type">
+                  Item Type <span className="text-red-500 ml-1">*</span>
+                </label>
+                <select
+                  id="product-item-type"
+                  {...register("itemType")}
+                  disabled={disableForm}
+                  className="w-full px-4 py-3 rounded-xl border border-[#008C9C]/15 bg-white text-[#003C46] text-sm focus:outline-none focus:border-[#008C9C] focus:ring-2 focus:ring-[#008C9C]/10">
+                  {ITEM_TYPES.map((t) => (
+                    <option key={t} value={t}>
+                      {ITEM_TYPE_NAME[t]}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-[#008C9C]/60 mt-1">
+                  {ITEM_TYPE_DESCRIPTION[itemType]}
                 </p>
               </div>
 
@@ -541,7 +654,9 @@ export function ProductModal({
                     type="number"
                     size="md"
                     step="0.01"
-                    min="0"
+                    /* Not a flat 0 — a product already short stays editable.
+                       See `buildFormSchema`, which enforces the same floor. */
+                    min={stockFloor}
                     {...register("stockLevel")}
                     disabled={disableForm}
                     error={!!errors.stockLevel}
@@ -555,7 +670,9 @@ export function ProductModal({
                     </p>
                   )}
                   <p className="text-xs text-[#008C9C]/60 mt-1">
-                    Current quantity in warehouse
+                    {stockFloor < 0
+                      ? `Currently ${stockFloor} — more has been handed out than the warehouse had on record. Save the rest of your edits and it stays as it is, or type the count you actually have.`
+                      : "Current quantity in warehouse"}
                   </p>
                 </div>
 
@@ -592,27 +709,48 @@ export function ProductModal({
 
                 <div>
                   <label className="input-label">Cleaner Restock Threshold</label>
-                  <Input
-                    variant="form"
-                    type="number"
-                    size="md"
-                    step="0.01"
-                    min="0"
-                    {...register("cleanerRestockThreshold")}
-                    disabled={disableForm}
-                    error={!!errors.cleanerRestockThreshold}
-                    className="w-full px-4 py-3"
-                    placeholder="0"
-                    border={false}
-                  />
-                  {errors.cleanerRestockThreshold && (
-                    <p className="my-1 text-xs text-red-600">
-                      {errors.cleanerRestockThreshold.message}
-                    </p>
+                  {isEquipment ? (
+                    /* Deliberately not zeroed on save — the stored value is left
+                       alone so switching the type back restores what was there. */
+                    <div className="w-full px-4 py-3 rounded-xl border border-dashed border-[#008C9C]/20 bg-[#008C9C]/3">
+                      <p className="text-sm text-[#003C46]/70">
+                        Not used for reusable equipment
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      <Input
+                        variant="form"
+                        type="number"
+                        size="md"
+                        step="0.01"
+                        min="0"
+                        {...register("cleanerRestockThreshold")}
+                        disabled={disableForm}
+                        error={!!errors.cleanerRestockThreshold}
+                        className="w-full px-4 py-3"
+                        placeholder="0"
+                        border={false}
+                      />
+                      {errors.cleanerRestockThreshold && (
+                        <p className="my-1 text-xs text-red-600">
+                          {errors.cleanerRestockThreshold.message}
+                        </p>
+                      )}
+                    </>
                   )}
                   <p className="text-xs text-[#008C9C]/60 mt-1">
-                    Each cleaner&apos;s own kit. Below this, <strong>that cleaner
-                    needs a restock</strong>. Leave 0 for the default.
+                    {isEquipment ? (
+                      <>
+                        A cleaner needs one scraper, not two — tools report a{" "}
+                        <strong>condition</strong> instead of running low.
+                      </>
+                    ) : (
+                      <>
+                        Each cleaner&apos;s own kit. Below this, <strong>that
+                        cleaner needs a restock</strong>. Leave 0 for the default.
+                      </>
+                    )}
                   </p>
                 </div>
               </div>

@@ -89,6 +89,24 @@ export interface AvailabilityEvaluation {
   blockedDate: boolean;
 }
 
+/**
+ * A whole DAY's answer rather than a window's — what Stage 12's day view asks
+ * ("is this cleaner working next Tuesday at all, and between which hours?").
+ *
+ * Deliberately a separate shape from `AvailabilityEvaluation`: that one answers
+ * "does this job fit?", which needs a job. Asking it with a made-up 00:00–23:59
+ * window would report OUTSIDE_HOURS for a cleaner who works 09:00–17:00 — a
+ * false negative on the exact question the view exists to answer.
+ */
+export interface DayAvailabilitySummary {
+  result: AvailabilityResult;
+  /** Short human explanation. Null when AVAILABLE or NO_DATA. */
+  reason: string | null;
+  blockedDate: boolean;
+  /** The open windows on that date. Empty unless `result` is AVAILABLE. */
+  windows: Array<{ startTime: string; endTime: string }>;
+}
+
 export function toMinutes(hhmm: string): number {
   const [h, m] = hhmm.split(":").map((p) => parseInt(p, 10));
   if (Number.isNaN(h) || Number.isNaN(m)) return 0;
@@ -162,6 +180,49 @@ export function dayLabel(day: AvailabilityDay): string {
 }
 
 /**
+ * Add `n` civil days to a date key. Pure calendar arithmetic on a UTC proxy —
+ * no timezone is involved, because a date key is a civil date and not an
+ * instant (see the boundary rules at the top of `src/lib/timezone.ts`).
+ *
+ * Returns null for a malformed key rather than a plausible-looking wrong date.
+ */
+export function addDateKeyDays(dateKey: string, n: number): string | null {
+  if (!DATE_KEY_RE.test(dateKey)) return null;
+  const [y, m, d] = dateKey.split("-").map(Number);
+  return dateKeyFromStoredDate(new Date(Date.UTC(y, m - 1, d + n)));
+}
+
+/**
+ * The MONDAY of the week containing `dateKey`.
+ *
+ * Monday-start because that is the order the availability grid has always shown
+ * (`DAYS` runs Mon…Sun, and `AvailabilityDay` is entered that way in the
+ * editor). Not to be confused with `startOfStoreWeek` in `timezone.ts`, which
+ * answers a different question — the *instant* a Sunday-start reporting week
+ * begins at — and is used for pay periods, not for this table.
+ */
+export function startOfWeekDateKey(dateKey: string): string | null {
+  if (!DATE_KEY_RE.test(dateKey)) return null;
+  const [y, m, d] = dateKey.split("-").map(Number);
+  // getUTCDay: 0 = Sunday … 6 = Saturday. With a Monday start, Sunday sits six
+  // days INTO the week, which is what the +6 rotation expresses.
+  const back = (new Date(Date.UTC(y, m - 1, d)).getUTCDay() + 6) % 7;
+  return addDateKeyDays(dateKey, -back);
+}
+
+/** Mon…Sun date keys of the week containing `dateKey`. Empty on a bad key. */
+export function weekDateKeys(dateKey: string): string[] {
+  const start = startOfWeekDateKey(dateKey);
+  if (!start) return [];
+  const out: string[] = [];
+  for (let i = 0; i < 7; i++) {
+    const key = addDateKeyDays(start, i);
+    if (key) out.push(key);
+  }
+  return out;
+}
+
+/**
  * Project a job's start/end instants onto a business-timezone wall-clock window.
  * Jobs that run past midnight are clamped to the end of the start day — the
  * weekly rule is per-weekday, so the start day is what we can meaningfully test.
@@ -203,6 +264,45 @@ function effectiveKey(v: string | Date | null | undefined): string | null {
 }
 
 /**
+ * The weekly rules that actually apply on a given calendar date: the right
+ * weekday, and inside the rule's effective range.
+ *
+ * Extracted so `evaluateAvailability` and `summarizeDayAvailability` cannot
+ * disagree about which rules a date sees. A grid that showed 09:00–17:00 while
+ * the assignment check said "no availability set" — because one of them forgot
+ * `effectiveFrom` — is precisely the drift Stage 12 exists to prevent.
+ */
+export function rulesForDate(
+  dateKey: string,
+  rules: AvailabilityRuleLite[]
+): AvailabilityRuleLite[] {
+  const day = dayFromDateKey(dateKey);
+  if (!day) return [];
+  return rules.filter((r) => {
+    if (r.day !== day) return false;
+    const from = effectiveKey(r.effectiveFrom);
+    if (from && dateKey < from) return false;
+    const to = effectiveKey(r.effectiveTo);
+    if (to && dateKey > to) return false;
+    return true;
+  });
+}
+
+/** The one-off block covering `dateKey`, or null. Blocked always beats weekly. */
+function blockedOn(
+  dateKey: string,
+  exceptions: AvailabilityExceptionLite[]
+): AvailabilityExceptionLite | null {
+  return exceptions.find((e) => exceptionDateKey(e.date) === dateKey) ?? null;
+}
+
+/** The single wording every surface uses for a blocked date. */
+function blockedReason(blocked: AvailabilityExceptionLite): string {
+  const why = blocked.reason?.trim();
+  return why ? `${BLOCKED_PREFIX}${why}` : "Blocked date (time off)";
+}
+
+/**
  * Evaluate one window against one employee's rules + blocked dates.
  *
  *   AVAILABLE     – window sits fully inside an available slot
@@ -217,14 +317,11 @@ export function evaluateAvailability(
   exceptions: AvailabilityExceptionLite[] = []
 ): AvailabilityEvaluation {
   // 1. One-off blocked date beats the weekly rule, always.
-  const blocked = exceptions.find(
-    (e) => exceptionDateKey(e.date) === window.dateKey
-  );
+  const blocked = blockedOn(window.dateKey, exceptions);
   if (blocked) {
-    const why = blocked.reason?.trim();
     return {
       result: "UNAVAILABLE",
-      reason: why ? `${BLOCKED_PREFIX}${why}` : "Blocked date (time off)",
+      reason: blockedReason(blocked),
       blockedDate: true,
     };
   }
@@ -237,14 +334,7 @@ export function evaluateAvailability(
   if (!day) return { result: "NO_DATA", reason: null, blockedDate: false };
   const label = DAY_LABEL[day];
 
-  const dayRules = rules.filter((r) => {
-    if (r.day !== day) return false;
-    const from = effectiveKey(r.effectiveFrom);
-    if (from && window.dateKey < from) return false;
-    const to = effectiveKey(r.effectiveTo);
-    if (to && window.dateKey > to) return false;
-    return true;
-  });
+  const dayRules = rulesForDate(window.dateKey, rules);
 
   if (dayRules.length === 0) {
     return {
@@ -292,6 +382,77 @@ export function evaluateAvailability(
     result: "OUTSIDE_HOURS",
     reason: `Outside ${label} hours (${hours})`,
     blockedDate: false,
+  };
+}
+
+/**
+ * Evaluate a whole DAY for one employee — the day view of /admin/availability.
+ *
+ * Same four results and the same precedence as `evaluateAvailability`, and it
+ * reads the rules through the same `rulesForDate`, so the two can never disagree
+ * about which weekly rule a date sees. What differs is only the QUESTION:
+ *
+ *   AVAILABLE     – the employee works that day; `windows` are the open hours
+ *   UNAVAILABLE   – the date is blocked, or the day is explicitly marked off
+ *   OUTSIDE_HOURS – rules exist, but none of them covers this weekday
+ *   NO_DATA       – the employee has not entered any availability at all
+ *
+ * `UNAVAILABLE` for a day marked unavailable is deliberate. `evaluateAvailability`
+ * can answer OUTSIDE_HOURS in that case, because it is asking whether a specific
+ * window *touches* the blocked slot; a day-level question has no window to miss.
+ */
+export function summarizeDayAvailability(
+  dateKey: string,
+  rules: AvailabilityRuleLite[],
+  exceptions: AvailabilityExceptionLite[] = []
+): DayAvailabilitySummary {
+  const blocked = blockedOn(dateKey, exceptions);
+  if (blocked) {
+    return {
+      result: "UNAVAILABLE",
+      reason: blockedReason(blocked),
+      blockedDate: true,
+      windows: [],
+    };
+  }
+
+  if (!rules || rules.length === 0) {
+    return { result: "NO_DATA", reason: null, blockedDate: false, windows: [] };
+  }
+
+  const day = dayFromDateKey(dateKey);
+  if (!day) {
+    return { result: "NO_DATA", reason: null, blockedDate: false, windows: [] };
+  }
+  const label = DAY_LABEL[day];
+
+  const dayRules = rulesForDate(dateKey, rules);
+  if (dayRules.length === 0) {
+    return {
+      result: "OUTSIDE_HOURS",
+      reason: `No availability set for ${label}`,
+      blockedDate: false,
+      windows: [],
+    };
+  }
+
+  const open = dayRules.filter((r) => r.isAvailable);
+  if (open.length === 0) {
+    return {
+      result: "UNAVAILABLE",
+      reason: `Marked unavailable on ${label}`,
+      blockedDate: false,
+      windows: [],
+    };
+  }
+
+  return {
+    result: "AVAILABLE",
+    reason: null,
+    blockedDate: false,
+    windows: open
+      .map((r) => ({ startTime: r.startTime, endTime: r.endTime }))
+      .sort((a, b) => toMinutes(a.startTime) - toMinutes(b.startTime)),
   };
 }
 

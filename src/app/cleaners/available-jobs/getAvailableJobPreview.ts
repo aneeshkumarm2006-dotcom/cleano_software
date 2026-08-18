@@ -15,7 +15,7 @@ import { jobTypeLabel } from "@/lib/calendar-labels";
 import { sanitizeCleanerNotes } from "@/lib/cleaner-notes";
 import { formatAddressLine } from "@/lib/client-address";
 import { addOnQuantity } from "@/lib/job-money";
-import { templateMatchesJob } from "@/lib/checklist-triggers";
+import { resolveChecklistTemplates } from "@/lib/checklist-triggers";
 import type {
   AvailableJobPreview,
   AvailableJobPreviewResult,
@@ -75,6 +75,14 @@ export async function getAvailableJobPreview(
         bathCount: true,
         halfBathCount: true,
         squareFootage: true,
+        propertyType: true,
+        // Stage 10 — inputs to the shared checklist resolution. Scalars only:
+        // this action deliberately never selects the `client` relation (the
+        // preview withholds customer contact details, asserted by
+        // verify-awer-fixes-3), and the resolver only needs the ids.
+        clientId: true,
+        clientAddressId: true,
+        checklistTemplateId: true,
         requiredCleaners: true,
         notes: true,
         addOns: { select: { name: true, quantity: true } },
@@ -112,9 +120,14 @@ export async function getAvailableJobPreview(
       db.checklistTemplate.findMany({
         where: { isActive: true },
         select: {
+          id: true,
           name: true,
           jobType: true,
           addOnName: true,
+          // Stage 10 scope columns — the resolver needs them to answer with the
+          // SAME list the cleaner will get after claiming.
+          clientId: true,
+          clientAddressId: true,
           items: { select: { isRequired: true } },
         },
       }),
@@ -134,18 +147,21 @@ export async function getAvailableJobPreview(
     // FLAT jobs are set per assignment by dispatch — no honest estimate exists.
 
     const addOnNames = job.addOns.map((a) => a.name);
-    const checklistTemplates = templates
-      .filter((t) =>
-        templateMatchesJob(
-          { jobType: t.jobType, addOnName: t.addOnName },
-          { jobType: job.jobType, addOnNames }
-        )
-      )
-      .map((t) => ({
-        name: t.name,
-        itemCount: t.items.length,
-        requiredCount: t.items.filter((i) => i.isRequired).length,
-      }));
+    // Step 10.7 — the SAME resolver `ensureJobChecklist` runs after the claim,
+    // so the preview can never advertise the service-type default on a job that
+    // will actually generate the customer's bespoke list. Still read-only: this
+    // resolves templates, it does not create a JobChecklist.
+    const checklistTemplates = resolveChecklistTemplates(templates, {
+      jobType: job.jobType,
+      addOnNames,
+      clientId: job.clientId,
+      clientAddressId: job.clientAddressId,
+      checklistTemplateId: job.checklistTemplateId,
+    }).templates.map((t) => ({
+      name: t.name,
+      itemCount: t.items.length,
+      requiredCount: t.items.filter((i) => i.isRequired).length,
+    }));
 
     const preview: AvailableJobPreview = {
       id: job.id,
@@ -162,6 +178,7 @@ export async function getAvailableJobPreview(
             postalCode: job.clientAddress?.postalCode ?? null,
           })
         : null,
+      propertyType: job.propertyType,
       bedCount: job.bedCount,
       bathCount: job.bathCount,
       halfBathCount: job.halfBathCount,

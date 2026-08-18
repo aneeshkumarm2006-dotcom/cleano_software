@@ -2,6 +2,7 @@
 // Maps a job's DB status (with paid derived from paymentReceived) to a
 // label + accent color + tint, shared across Month / Week / Day / List views.
 import { CalendarEvent } from "./types";
+import { propertyTypeShortLabel } from "@/lib/property-type";
 
 export interface StatusMeta {
   key: string;
@@ -112,6 +113,37 @@ export function priceLabel(event: CalendarEvent): string | null {
   const p = event.metadata?.price;
   if (p == null) return null;
   return `$${Number(p).toFixed(0)}`;
+}
+
+/**
+ * "Hourly · 4h" for a job billed by the hour, else null (Stage 8 / PDF #8).
+ *
+ * Deliberately carries no rate. `billedHourlyRate` is a price and is redacted
+ * from viewers who may not see money; the TYPE and the HOURS are scheduling
+ * facts a field lead needs, so this label is safe for every calendar audience.
+ */
+export function hourlyLabel(event: CalendarEvent): string | null {
+  if (event.metadata?.billingType !== "HOURLY") return null;
+  const h = event.metadata?.billedHours;
+  const hours = Number(h);
+  return Number.isFinite(hours) && hours > 0
+    ? `Hourly · ${Math.round(hours * 100) / 100}h`
+    : "Hourly";
+}
+
+/**
+ * "Apt" / "House" for a job whose property type is recorded, else null
+ * (Stage 9 / PDF #11).
+ *
+ * Null — not "Unknown" — for the unrecorded case, which is every job booked
+ * before the column existed. A calendar full of "Unknown" tags would be noise
+ * that says nothing; a missing tag already says the same thing quietly.
+ *
+ * Carries no money, so like `hourlyLabel` above it is safe for every calendar
+ * audience including a field lead's group view.
+ */
+export function propertyLabel(event: CalendarEvent): string | null {
+  return propertyTypeShortLabel(event.metadata?.propertyType);
 }
 
 // First name(s) of the assigned crew for compact card display.

@@ -4,6 +4,10 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { jobTypeLabel } from "@/lib/calendar-labels";
+import {
+  STANDARD_BOOKING_DEPOSIT_USD,
+  formatDeposit,
+} from "@/lib/booking-deposit";
 import { Download, X } from "lucide-react";
 import { Banner, Button, Field, Textarea } from "@/components/customer/Field";
 import { StatusBadge, DateBadge } from "@/components/customer/atoms";
@@ -33,6 +37,12 @@ interface Booking {
   paymentReceived: boolean;
   refundedAmount: number;
   depositPaid: boolean;
+  /**
+   * What the deposit actually was (Stage 11 / PDF #9). Null on bookings written
+   * before the column, which all charged the standard $20 — hence the fallback
+   * rather than hiding the pill.
+   */
+  depositAmount: number | null;
   depositPaidAt: string | null;
   cancellationRequestedAt: string | null;
   rescheduleRequestedAt: string | null;
@@ -404,8 +414,11 @@ function BookingCard({
               color: "#047857",
               letterSpacing: "0.04em",
             }}
-            title="A $20 deposit was charged at booking.">
-            $20 deposit collected
+            title={`A ${formatDeposit(
+              b.depositAmount ?? STANDARD_BOOKING_DEPOSIT_USD
+            )} deposit was charged at booking.`}>
+            {formatDeposit(b.depositAmount ?? STANDARD_BOOKING_DEPOSIT_USD)}{" "}
+            deposit collected
           </span>
         ) : null}
       </div>

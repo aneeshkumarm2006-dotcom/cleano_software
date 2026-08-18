@@ -1,11 +1,11 @@
 import { db } from "@/db";
 import { requireCleaner } from "@/lib/page-guards";
-import { getSetting } from "@/lib/settings";
 import {
   cleanerRestockThreshold,
-  isCleanerLow,
+  itemAttentionState,
   usesDefaultCleanerThreshold,
 } from "@/lib/inventory-thresholds";
+import { loadCleanerThresholdDefault } from "@/lib/inventory-thresholds.server";
 import MyInventoryClient from "./MyInventoryClient";
 
 export default async function MyInventoryPage() {
@@ -35,7 +35,7 @@ export default async function MyInventoryPage() {
         },
         select: { productId: true, quantity: true, createdAt: true },
       }),
-      getSetting("inventory.defaultRefillThreshold"),
+      loadCleanerThresholdDefault(),
       // Product catalog for the "Add item" (starting inventory) picker.
       db.product.findMany({
         where: { deletedAt: null },
@@ -57,15 +57,36 @@ export default async function MyInventoryPage() {
     // CLEANER restock threshold only — never the company reorder point
     // (fix list item 14). A configured 0 falls back to the admin's global
     // default, so a cleaner is warned before they hit empty rather than after.
+    //
+    // `itemType` is the Stage 2 addition: it is what stops a reusable tool from
+    // being judged against a refill threshold at all (PDF #4).
     const thresholdInput = {
       cleanerRestockThreshold: ep.product.cleanerRestockThreshold,
       defaultThreshold,
+      itemType: ep.product.itemType,
     };
     const usesDefault = usesDefaultCleanerThreshold(thresholdInput);
     const refillThreshold = cleanerRestockThreshold(thresholdInput);
 
-    const isOutOfStock = ep.quantity <= 0;
-    const isLow = !isOutOfStock && isCleanerLow(ep.quantity, thresholdInput);
+    // ONE classification, shared by the pill, the copy, the CTA and the hero
+    // count. Everything else on this screen reads `attention` — nothing
+    // re-derives "is this a problem?" for itself.
+    const attention = itemAttentionState({
+      ...thresholdInput,
+      quantity: ep.quantity,
+      condition: ep.condition,
+      // Stage 3: for a liquid, the level reported at clock-out is the only
+      // honest signal there is — nothing deducts millilitres any more, so the
+      // count on this row does not move on its own.
+      levelStatus: ep.levelStatus,
+    });
+
+    const isOutOfStock =
+      attention.kind === "EMPTY" ||
+      (attention.kind === "LEVEL" && attention.level === "EMPTY");
+    const isLow =
+      attention.kind === "LOW" ||
+      (attention.kind === "LEVEL" && attention.level === "LOW");
     const pending = pendingByProductId.get(ep.productId) ?? null;
 
     return {
@@ -75,10 +96,18 @@ export default async function MyInventoryPage() {
       productDescription: ep.product.description,
       unit: ep.product.unit,
       quantity: ep.quantity,
+      itemType: ep.product.itemType,
       refillThreshold,
       usesDefaultThreshold: usesDefault,
       assignedAt: ep.assignedAt.toISOString(),
       updatedAt: ep.updatedAt.toISOString(),
+      attention,
+      condition: ep.condition,
+      levelStatus: ep.levelStatus,
+      statusNotes: ep.statusNotes,
+      statusUpdatedAt: ep.statusUpdatedAt
+        ? ep.statusUpdatedAt.toISOString()
+        : null,
       isLow,
       isOutOfStock,
       pendingRequest: pending,

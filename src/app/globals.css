@@ -1800,6 +1800,19 @@ body {
 }
 .cl-toolbar .label { margin-bottom: 6px; }
 .cl-toolbar .input { background: #fff; }
+/* A readable floor for a dropdown/date wrapper on a WIDE screen only.
+   These used to be inline `style={{ minWidth: 170 }}` on the elements
+   themselves, which beat every stylesheet rule — including the
+   `.cl-toolbar > * { min-width: 0 }` further down that exists precisely so the
+   ≤900px two-column grid can reach a 320px viewport. Two 180px floors plus the
+   gap is 372px of grid on a 284px phone, which is why the toolbar overflowed at
+   every tested width by the same fixed amount. As a class it can be overridden. */
+.cl-toolbar-field { min-width: 170px; }
+/* Every control in this toolbar is a thumb target on a phone (the crew shell is
+   the only user of `.cl-toolbar`). The shared Button's `size="md"` is
+   `px-2 py-1.5`, which lands at ~30px — under the 44px floor the rest of this
+   screen already meets. */
+.cl-toolbar button { min-height: 44px; }
 
 /* Table */
 .cl-table-wrap {
@@ -1857,6 +1870,12 @@ body {
 .cl-pill.low        { background: rgba(217,119,6,0.12); color: var(--amber-800); }
 .cl-pill.empty      { background: rgba(220,38,38,0.10); color: var(--error-text); }
 .cl-pill.ok         { background: rgba(5,150,105,0.10); color: var(--emerald-800); }
+/* Reusable-equipment CONDITION pills (PDF #4). Separate classes from
+   .low/.empty/.ok on purpose: a tool that needs a service is not "low", and
+   sharing a class is how the two ideas would drift back into one. */
+.cl-pill.cond-ok    { background: rgba(5,150,105,0.10); color: var(--emerald-800); }
+.cl-pill.cond-warn  { background: rgba(217,119,6,0.12); color: var(--amber-800); }
+.cl-pill.cond-alert { background: rgba(220,38,38,0.10); color: var(--error-text); }
 .cl-pill.flex       { background: rgba(217,119,6,0.12); color: var(--amber-800); }
 .cl-pill.required   { background: var(--primary-5); color: var(--primary); }
 .cl-pill.quiz       { background: rgba(124,58,237,0.10); color: #6d28d9; }
@@ -1996,6 +2015,220 @@ body {
 .cl-preview-btn:hover { background: var(--primary-5, rgba(0,140,156,0.05)); }
 .cl-preview-btn:active { transform: scale(0.985); }
 .cl-preview-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ═══════════════════════════════════════════
+   AVAILABLE JOBS — List | Calendar (Stage 13 / PDF #13, p.8-9)
+
+   Mobile-first: this is the one screen a cleaner opens standing in a hallway
+   with one hand. Every control below is >= 44px on its short axis, and the text
+   colours are the Stage 6 AA set (--ink 17.8:1, --ink-soft 5.52:1,
+   --primary-800 7.95:1) — never a low-alpha teal, which tops out at 4.01:1.
+═══════════════════════════════════════════ */
+
+/* The toggle sits at the far end of the filter toolbar on a wide screen and
+   goes full-width beneath the filters on a phone. */
+.cl-toolbar-end { margin-left: auto; align-self: flex-end; }
+.cl-viewtoggle {
+  display: inline-flex;
+  gap: 3px;
+  padding: 3px;
+  background: var(--cream);
+  border: 1px solid var(--primary-10);
+  border-radius: 12px;
+  /* Flex and grid items floor at their CONTENT width unless told otherwise, so
+     "List | Calendar" (~200px of unbreakable label) became a hard minimum on
+     whatever track this landed in — and a track that cannot shrink is a page
+     that scrolls sideways. The toggle is given a full row below 900px (see the
+     grid block further down), so shrinking here costs it nothing. */
+  min-width: 0;
+}
+.cl-viewtoggle-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  min-height: 44px;
+  /* Pairs with `flex: 1 1 0` on a phone: without it the basis of 0 is ignored
+     and each button still reserves its label's width. */
+  min-width: 0;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--primary-800);
+  font-family: inherit; font-size: 13.5px; font-weight: 600;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-standard),
+              color var(--dur-fast) var(--ease-standard);
+}
+.cl-viewtoggle-btn:hover { background: var(--primary-5); }
+/* --primary-hover, not --primary, and the same everywhere white sits on teal
+   below. White on #008C9C measures 4.01:1 — the ceiling Stage 6 found for this
+   teal, and below AA for label-sized text. #00707d is 5.81:1 and is otherwise
+   indistinguishable at a glance. */
+.cl-viewtoggle-btn.active {
+  background: var(--primary-hover);
+  color: #fff;
+  box-shadow: var(--elev-1);
+}
+
+/* Month grid */
+.cl-avc {
+  background: #fff;
+  border: 1px solid var(--primary-10);
+  border-radius: 18px;
+  padding: 14px 12px 16px;
+  margin-bottom: 22px;
+}
+.cl-avc-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  margin-bottom: 12px;
+}
+.cl-avc-month {
+  flex: 1 1 auto;
+  margin: 0;
+  text-align: center;
+  font-family: var(--font-app);
+  font-size: clamp(19px, 4.6vw, 24px);
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.cl-avc-navbtn {
+  flex: 0 0 auto;
+  width: 44px; height: 44px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--primary-10);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--primary-800);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-standard),
+              border-color var(--dur-fast) var(--ease-standard);
+}
+.cl-avc-navbtn:hover:not(:disabled) { background: var(--cream); border-color: var(--primary-30); }
+.cl-avc-navbtn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.cl-avc-todayrow { display: flex; justify-content: center; margin-bottom: 10px; }
+.cl-avc-today {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--primary-20);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--primary-800);
+  font-family: inherit; font-size: 12.5px; font-weight: 600;
+  cursor: pointer;
+}
+.cl-avc-today:hover { background: var(--primary-5); }
+
+.cl-avc-dow {
+  display: grid; grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 2px;
+  margin-bottom: 4px;
+}
+.cl-avc-dow span {
+  padding: 4px 0;
+  text-align: center;
+  font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--primary-800);
+}
+.cl-avc-grid {
+  display: grid; grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 2px;
+}
+.cl-avc-day {
+  /* 52px tall, >= 44px wide down to a 360px viewport — the PDF's tap-target
+     floor. `overflow: hidden` is the containment guarantee: whatever a day's
+     count turns out to be, one cell can never paint over the day beside it. */
+  min-height: 52px;
+  overflow: hidden;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 5px;
+  padding: 4px 0 6px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-standard);
+}
+.cl-avc-day:hover { background: var(--cream); }
+.cl-avc-daynum { font-size: 15px; font-weight: 600; line-height: 1; color: var(--ink); }
+/* Neighbouring months stay legible (AA) rather than the near-invisible grey the
+   reference screenshot uses — they are still tappable, so they are still text. */
+.cl-avc-day.out .cl-avc-daynum { color: var(--ink-soft); font-weight: 500; }
+/* Solid --primary (4.01:1), not the --primary-30 tint (1.59:1): a ring is a
+   non-text indicator, so it needs 3:1 — and the tint is nowhere near it. */
+.cl-avc-day.today { box-shadow: inset 0 0 0 2px var(--primary); }
+.cl-avc-day.today .cl-avc-daynum { color: var(--primary-800); }
+.cl-avc-day.sel { background: var(--primary-hover); }
+.cl-avc-day.sel:hover { background: var(--primary-800); }
+.cl-avc-day.sel .cl-avc-daynum,
+.cl-avc-day.sel .cl-avc-more { color: #fff; }
+.cl-avc-day.sel .cl-avc-dot { background: #fff; }
+/* Height is reserved whether or not there are dots, so a row of days doesn't
+   shift by 8px the moment one of them gains a job. */
+.cl-avc-dots {
+  display: flex; align-items: center; justify-content: center;
+  gap: 3px;
+  height: 8px;
+}
+.cl-avc-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--primary); }
+.cl-avc-more { font-size: 9.5px; font-weight: 700; line-height: 1; color: var(--primary-800); }
+
+/* The tapped day's jobs, below the grid — same cards as the list board. */
+.cl-avc-daylist-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap;
+  margin: 0 0 12px;
+  font-size: 15.5px; font-weight: 700; color: var(--ink);
+}
+.cl-avc-daylist-head .count {
+  font-size: 11.5px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--primary-800);
+}
+.cl-avc-empty {
+  display: flex; flex-direction: column; align-items: center; gap: 14px;
+  padding: 26px 20px;
+  background: #fff;
+  border: 1px dashed var(--primary-20);
+  border-radius: 16px;
+  text-align: center;
+}
+.cl-avc-empty p { margin: 0; font-size: 13.5px; color: var(--ink-soft); }
+/* `.cl-action-btn` is a 30px pill by default, which is right where it is a
+   dense row action. Here it is the ONLY thing on an empty day and the whole
+   point of the empty state, so it gets the 44px thumb target. Scoped rather
+   than raised globally — the row-action and sheet-footer variants already have
+   their own 44px rules, and widening the base would move surfaces this stage
+   has nothing to do with. */
+.cl-avc-empty .cl-action-btn { min-height: 44px; }
+
+@media (max-width: 640px) {
+  .cl-toolbar-end { width: 100%; margin-left: 0; }
+  .cl-viewtoggle { width: 100%; }
+  .cl-viewtoggle-btn { flex: 1 1 0; }
+  .cl-avc { padding: 12px 8px 14px; }
+}
+/* Narrow phones: claw back the horizontal room the gaps and card padding take,
+   so seven columns clear 44px.
+   The arithmetic, because it is tight and easy to undo by accident — the crew
+   shell contributes 18px of page padding each side below 900px:
+     360 − 36 (page) − 2 (border) − 6 (padding) − 6 (gaps) = 310 ⇒ 44.3px/cell.
+   Below ~358px seven 44px columns cannot fit in the viewport at all, whatever
+   the padding; the cell stays 52px TALL there, so the target is narrower in one
+   axis rather than small in both. */
+@media (max-width: 400px) {
+  .cl-avc { padding: 12px 3px 14px; }
+  .cl-avc-dow, .cl-avc-grid { gap: 1px; }
+  .cl-avc-daynum { font-size: 14px; }
+  /* Three dots AND a "+12" badge measured wider than a 320px cell and spilled
+     over its neighbour. The row is tightened rather than clipped — clipping
+     would hide the count, which is the one thing the badge exists to say. */
+  .cl-avc-dots { gap: 2px; }
+  .cl-avc-dot { width: 5px; height: 5px; }
+  .cl-avc-more { font-size: 9px; letter-spacing: -0.03em; }
+}
 
 /* Pay hero tiles */
 .cl-pay-hero {
@@ -3677,7 +3910,10 @@ body {
   }
   .cl-mobile-burger {
     display: inline-flex; align-items: center; justify-content: center;
-    width: 38px; height: 38px; border-radius: 9px; border: 0; flex-shrink: 0;
+    /* 44px is the tap-target floor, and this is the first control on every
+       crew screen. The icon inside stays 20px, so the chip grows 6px and the
+       header's weight barely moves. */
+    width: 44px; height: 44px; border-radius: 11px; border: 0; flex-shrink: 0;
     background: rgba(255,255,255,0.10); color: #fff; cursor: pointer;
   }
   .cl-mobile-burger:active { background: rgba(255,255,255,0.18); }
@@ -4340,6 +4576,9 @@ html, body { overscroll-behavior-y: contain; }
   background: rgba(255,255,255,0.15); color: #fff; border: 1px solid rgba(255,255,255,0.2);
   border-radius: 10px; padding: 10px 16px; font-size: 13px; font-weight: 600;
   font-family: inherit; cursor: pointer; display: inline-flex; align-items: center; gap: 7px;
+  /* Padding alone left these at 41px — under the 44px tap-target floor the row
+     actions and sheet buttons already meet. */
+  min-height: 44px;
   transition: background .12s;
 }
 .cl-inv-hero-btn:hover { background: rgba(255,255,255,0.22); }
@@ -4425,18 +4664,37 @@ html, body { overscroll-behavior-y: contain; }
   display: flex; align-items: center; gap: 8px; margin-bottom: 3px;
 }
 .ir-name { font-size: 14px; font-weight: 600; color: var(--ink); }
-.ir-desc { font-size: 12.5px; color: var(--primary-60); margin: 0; }
+/* Stage 6 / PDF #3: was --primary-60 (2.91:1 on white — fails AA). --primary-800
+   is the one teal in the ramp that passes as small text (7.95:1), so the row
+   keeps its brand tint and becomes readable on a phone in daylight. */
+.ir-desc { font-size: 12.5px; color: var(--primary-800); margin: 0; }
 
 .cl-inv-row .ir-meter { min-width: 160px; }
-@media (max-width: 900px) { .cl-inv-row .ir-meter { display: none; } }
+/* Stage 6 / PDF #3. This column used to be `display: none` below 900px, which
+   meant the one number a cleaner opens this page to read — how many they have —
+   was invisible on the phone the PDF is about. It is not duplicated into a
+   mobile-only line (that would be two renderings of the same state, free to
+   disagree); the existing column is reflowed underneath the name instead, so
+   quantity, reported level and "condition reported <date>" all follow the same
+   item-type branches they already do on a desktop. */
+@media (max-width: 900px) { .cl-inv-row .ir-meter { min-width: 0; } }
+@media (max-width: 640px) {
+  /* Column 2 of the 2-column phone grid: aligned under the name, not under the
+     icon, where it reads as part of the item rather than a new one. */
+  .cl-inv-row .ir-meter { grid-column: 2 / -1; margin-top: 8px; }
+  .cl-inv-meter-head { margin-bottom: 4px; }
+}
 
 .cl-inv-meter-head {
   display: flex; align-items: baseline; justify-content: space-between;
   font-size: 12px; margin-bottom: 6px;
 }
 .cl-inv-meter-qty { font-size: 16px; font-weight: 700; color: var(--ink); }
-.cl-inv-meter-qty .unit { font-size: 11px; font-weight: 500; color: var(--primary-50); margin-left: 2px; }
-.cl-inv-meter-thresh { font-size: 11px; color: var(--primary-50); }
+/* Stage 6 / PDF #3: --primary-50 measured 2.59:1 on white. The unit and the
+   "Refill at N" caption are the two bits of a row a cleaner actually reads to
+   decide whether to act, so they get --ink-soft (5.52:1). */
+.cl-inv-meter-qty .unit { font-size: 11.5px; font-weight: 500; color: var(--ink-soft); margin-left: 2px; }
+.cl-inv-meter-thresh { font-size: 11.5px; color: var(--ink-soft); }
 .cl-inv-meter-bar {
   height: 6px; background: var(--primary-10); border-radius: 100px;
   position: relative; overflow: visible;
@@ -4451,7 +4709,9 @@ html, body { overscroll-behavior-y: contain; }
   position: absolute; top: -2px; width: 2px; height: 10px;
   background: rgba(0,0,0,0.2); border-radius: 1px;
 }
-.ir-updated { font-size: 11px; color: var(--primary-40); margin-top: 6px; }
+/* --primary-40 is 0.62-alpha teal — roughly 2.2:1 on white, the single faintest
+   piece of text on the page. Stage 6 / PDF #3. */
+.ir-updated { font-size: 11.5px; color: var(--ink-soft); margin-top: 6px; }
 
 .cl-inv-row .ir-actions { display: flex; gap: 8px; flex-shrink: 0; }
 .cl-inv-replenish {
@@ -4467,6 +4727,153 @@ html, body { overscroll-behavior-y: contain; }
   border: 1px solid var(--primary-20);
 }
 .cl-inv-replenish.ghost:hover { background: var(--cream); }
+
+/* ═══════════════════════════════════════════════
+   CLEANER INVENTORY SHEET + FIELDS (Stage 6 · PDF #3)
+   ───────────────────────────────────────────────
+   The p.3 screenshot ("Update count: 2-Sided Scraper") failed in three ways at
+   once, and all three are fixed here rather than per-modal:
+
+   1. READABILITY. Labels were --primary-70 (3.09:1 on white) and the inputs set
+      no colour at all, so typed text inherited whatever the page gave it. Every
+      alpha step of the teal ramp fails AA as small text — even solid #008C9C
+      only reaches 4.01:1 — so values and labels are --ink (17.8:1), helper copy
+      is --primary-800 (7.95:1) and placeholders are --ink-soft (5.52:1).
+
+   2. TAP + ZOOM. Inputs are 16px and ≥44px tall. Below 16px iOS Safari zooms the
+      page on focus, which is what pushed the buttons off-screen in the first
+      place; 44px is the minimum comfortable target one-handed mid-shift.
+
+   3. THE KEYBOARD. The sheet is a flex column with a scrolling body between a
+      fixed head and a fixed footer, capped at --cl-sheet-max (set from
+      window.visualViewport by the Modal component, falling back to 88dvh). The
+      action row therefore stays on screen with the keyboard open instead of
+      being pushed under it.
+═══════════════════════════════════════════════ */
+.cl-sheet-overlay {
+  position: fixed; inset: 0;
+  /* Above every piece of crew-app chrome: bottom tab bar (55), pull-to-refresh
+     ring (58), mobile top bar (60), install prompt (75), nav drawer (80).
+     At 60 the sheet was BELOW the drawer and — more visibly — its footer was
+     painted over by the fixed tab bar, which then swallowed the taps meant for
+     Save and Cancel. The z-index alone is not the whole fix: `.cl-page-wrap`
+     runs a filling fade-in on `opacity` and so forms its own stacking context,
+     inside which no value here could out-rank a tab bar painted by the root
+     context. That is why the Modal component portals this overlay to <body>. */
+  z-index: 90;
+  display: flex; align-items: flex-end; justify-content: center;
+  background: rgba(10, 30, 32, 0.45);
+  /* --cl-kb-inset is the on-screen keyboard's height, written by the Modal
+     component from window.visualViewport. A fixed overlay is positioned against
+     the LAYOUT viewport, which the keyboard does not shrink, so without this
+     lift a bottom-anchored sheet sits behind the keyboard however short it is. */
+  padding: 0 0 var(--cl-kb-inset, 0px);
+}
+@media (min-width: 640px) {
+  .cl-sheet-overlay {
+    align-items: center;
+    padding: 24px 24px calc(24px + var(--cl-kb-inset, 0px));
+  }
+}
+.cl-sheet {
+  position: relative; width: 100%; max-width: 440px;
+  background: #fff;
+  border-radius: 18px 18px 0 0;
+  border: 1px solid var(--primary-10);
+  box-shadow: 0 -20px 60px -10px rgba(0, 60, 70, 0.22);
+  display: flex; flex-direction: column;
+  /* dvh, not vh: on iOS `vh` measures the viewport behind the browser chrome,
+     so a 92vh sheet is taller than the space it actually has. */
+  max-height: var(--cl-sheet-max, 88dvh);
+  overflow: hidden;
+}
+@media (min-width: 640px) {
+  .cl-sheet { border-radius: 16px; box-shadow: 0 28px 70px -16px rgba(0, 60, 70, 0.28); }
+}
+.cl-sheet-head {
+  flex-shrink: 0; padding: 18px 20px 12px;
+  border-bottom: 1px solid var(--primary-10);
+}
+.cl-sheet-title {
+  margin: 0; font-size: 17px; font-weight: 700; color: var(--ink);
+  line-height: 1.3;
+}
+.cl-sheet-body {
+  flex: 1 1 auto; min-height: 0;
+  /* Y only. Left implicit, `overflow-x` computes to `auto` and a desktop
+     scrollbar makes `width: 100%` fields a few pixels too wide, which shows up
+     as a stray horizontal bar across the sheet. */
+  overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch;
+  padding: 4px 20px 20px;
+  /* Keyboard room: keeps a focused field clear of the on-screen keyboard when
+     the browser (or scrollIntoView) scrolls it into view. */
+  scroll-padding-bottom: 120px;
+}
+.cl-sheet-foot {
+  flex-shrink: 0; display: flex; gap: 8px; justify-content: flex-end;
+  flex-wrap: wrap;
+  padding: 12px 20px calc(12px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--primary-10); background: #fff;
+}
+.cl-sheet-foot .cl-action-btn { min-height: 44px; padding: 0 18px; font-size: 13.5px; }
+/* `.cl-action-btn` types in --primary (#008C9C, ~3.9:1 on its own tinted
+   background). Scoped to the inventory surfaces PDF #3 is about rather than
+   changed globally, and :not(.solid) so the white-on-teal confirm is untouched. */
+.cl-sheet-foot .cl-action-btn:not(.solid),
+.cl-inv-row .ir-actions .cl-action-btn:not(.solid) { color: var(--primary-800); }
+/* Row actions are the main tap targets on a phone — 44px there, compact on a
+   desktop where three of them side by side would just be bulky. */
+.cl-inv-row .ir-actions .cl-action-btn { min-height: 34px; }
+@media (max-width: 640px) {
+  .cl-inv-row .ir-actions .cl-action-btn { min-height: 44px; padding: 0 14px; font-size: 13px; }
+}
+/* Intro paragraph under the title — neutral secondary, not tinted teal. */
+.cl-sheet-intro { margin: 10px 0 0; font-size: 13.5px; line-height: 1.5; color: var(--ink-soft); }
+
+.cl-field-label {
+  display: block; margin-top: 18px; margin-bottom: 6px;
+  font-size: 13px; font-weight: 600; color: var(--ink);
+}
+.cl-field-input {
+  width: 100%; box-sizing: border-box; padding: 11px 12px; min-height: 44px;
+  font-size: 16px; font-family: inherit; font-weight: 500;
+  color: var(--ink); background: #fff;
+  border: 1px solid var(--primary-20); border-radius: 10px;
+  outline: none; transition: border-color .15s, box-shadow .15s;
+  -webkit-appearance: none; appearance: none;
+}
+.cl-field-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-15); }
+/* opacity: 1 — Firefox dims placeholders by default, which would undo the
+   contrast fix. */
+.cl-field-input::placeholder { color: var(--ink-soft); opacity: 1; }
+.cl-field-input[aria-invalid="true"] { border-color: var(--error); background: var(--error-bg); }
+.cl-field-input:disabled { opacity: 0.6; }
+textarea.cl-field-input { resize: vertical; min-height: 78px; line-height: 1.45; font-weight: 400; }
+select.cl-field-input { background: #fff; }
+/* A quantity box is short on purpose — a full-width field invites a phone number. */
+.cl-field-input.qty { max-width: 140px; text-align: center; font-variant-numeric: tabular-nums; }
+.cl-field-help { margin: 8px 0 0; font-size: 12.5px; line-height: 1.45; color: var(--primary-800); }
+/* Rendered even when empty so it is a live region the screen reader is already
+   watching when the message arrives — :empty keeps it out of the layout. */
+.cl-field-error { margin: 8px 0 0; font-size: 13px; font-weight: 600; color: var(--error-text); }
+.cl-field-error:empty { display: none; }
+
+/* Stacked choice buttons (equipment condition, issue type). */
+.cl-choice-grid { margin-top: 16px; display: grid; gap: 8px; }
+.cl-choice-grid.two { grid-template-columns: 1fr; }
+@media (min-width: 420px) { .cl-choice-grid.two { grid-template-columns: 1fr 1fr; } }
+.cl-choice {
+  min-height: 44px; padding: 10px 12px; border-radius: 10px;
+  text-align: left; font-family: inherit; cursor: pointer;
+  background: #fff; border: 1px solid var(--primary-20);
+  transition: background .12s, border-color .12s;
+}
+.cl-choice:hover { background: var(--primary-5); }
+.cl-choice .lbl { display: block; font-size: 13.5px; font-weight: 600; color: var(--ink); }
+.cl-choice .hint { display: block; margin-top: 2px; font-size: 12px; font-weight: 400; color: var(--primary-800); }
+.cl-choice[aria-pressed="true"] { background: var(--primary); border-color: var(--primary); }
+.cl-choice[aria-pressed="true"] .lbl { color: #fff; }
+.cl-choice[aria-pressed="true"] .hint { color: rgba(255,255,255,0.88); }
 
 /* ═══════════════════════════════════════════════
    AVAILABLE JOBS redesigned header
@@ -4746,7 +5153,10 @@ html, body { overscroll-behavior-y: contain; }
   border: 1px solid var(--primary-10);
   box-shadow: 0 -20px 60px -10px rgba(0, 60, 70, 0.18), 0 0 0 1px rgba(0,140,156, 0.06);
   display: flex; flex-direction: column;
-  max-height: 92vh; overflow: hidden;
+  /* dvh, not vh (Stage 6): `vh` measures the viewport behind the iOS browser
+     chrome, so a 92vh sheet claims more room than it has and pushes .co-footer
+     off-screen — the same failure the p.3 screenshot shows. */
+  max-height: 92dvh; overflow: hidden;
 }
 @media (min-width: 640px) {
   .co-sheet { border-radius: 24px; box-shadow: 0 32px 80px -16px rgba(0, 60, 70, 0.22), 0 0 0 1px rgba(0,140,156, 0.06); }
@@ -4766,7 +5176,8 @@ html, body { overscroll-behavior-y: contain; }
   font-family: var(--font-app); font-size: 20px; font-weight: 400;
   letter-spacing: -0.02em; color: var(--ink); margin: 0 0 3px;
 }
-.co-subtitle { font-size: 13px; color: var(--primary-60); margin: 0; line-height: 1.45; }
+/* Stage 6: --primary-60 is 2.91:1 on white. Neutral secondary reads at 5.52:1. */
+.co-subtitle { font-size: 13px; color: var(--ink-soft); margin: 0; line-height: 1.45; }
 .co-close {
   width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
   background: var(--primary-5); border: 0; cursor: pointer;
@@ -4804,7 +5215,7 @@ html, body { overscroll-behavior-y: contain; }
 .co-badge.warn { background: rgba(234, 88, 12, 0.12); color: #c2410c; }
 .co-badge.danger { background: rgba(220, 38, 38, 0.12); color: #b91c1c; }
 .co-input-row { display: flex; flex-direction: column; gap: 6px; }
-.co-input-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--primary-60); }
+.co-input-label { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--primary-800); }
 .co-input {
   width: 100%; padding: 11px 14px; border-radius: 10px; font-size: 15px;
   border: 1px solid var(--primary-10); background: var(--cream);
@@ -4813,7 +5224,7 @@ html, body { overscroll-behavior-y: contain; }
   -webkit-appearance: none; appearance: none;
 }
 .co-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(0,140,156, 0.1); }
-.co-input-hint { font-size: 11.5px; color: var(--primary-50); }
+.co-input-hint { font-size: 12px; color: var(--ink-soft); }
 .co-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .co-stat {
   background: var(--primary-5); border-radius: 10px; padding: 10px 12px;
@@ -4853,7 +5264,7 @@ html, body { overscroll-behavior-y: contain; }
   margin: 0; font-size: 14px; font-weight: 700; color: var(--primary-deep); letter-spacing: -0.005em;
 }
 .pju-section-head p {
-  margin: 1px 0 0; font-size: 12px; color: var(--primary-50);
+  margin: 1px 0 0; font-size: 12.5px; color: var(--ink-soft);
 }
 
 .pju-card {
@@ -4864,7 +5275,7 @@ html, body { overscroll-behavior-y: contain; }
 .pju-card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .pju-card-name { font-size: 13.5px; font-weight: 600; color: var(--ink); }
 .pju-card-stock {
-  font-size: 11.5px; font-weight: 600; color: var(--primary-50);
+  font-size: 12px; font-weight: 600; color: var(--ink-soft);
   font-variant-numeric: tabular-nums;
 }
 .pju-card-foot {
@@ -4884,7 +5295,7 @@ html, body { overscroll-behavior-y: contain; }
 }
 .pju-pill:active { transform: scale(0.985); }
 .pju-pill .lbl { font-size: 12.5px; font-weight: 600; color: var(--ink); line-height: 1.2; }
-.pju-pill .hint { font-size: 10.5px; color: var(--primary-50); }
+.pju-pill .hint { font-size: 11px; color: var(--ink-soft); }
 .pju-pill.selected {
   background: var(--primary); border-color: var(--primary); color: #fff;
 }
@@ -4947,6 +5358,70 @@ html, body { overscroll-behavior-y: contain; }
 .co-btn-confirm:active { transform: scale(0.985); }
 .co-btn-confirm:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
 @keyframes co-spin { to { transform: rotate(360deg); } }
+
+/* ── Closing inventory report (PDF #2 · Stage 3) ──────────────────────────────
+   Replaces the Light/Medium/Heavy usage survey. Text colours here are `--ink`
+   rather than a tinted primary, and every control is ≥44px tall with a 16px
+   font: the p.3 screenshot's complaint was that the old sheet was unreadable
+   and un-tappable on a phone, and none of it was the layout's fault — it was
+   0.5-alpha teal on cream at 12px. */
+.cir-gate { display: flex; flex-direction: column; gap: 10px; padding: 8px 0 4px; }
+.cir-gate-q {
+  font-family: var(--font-app); font-size: 18px; font-weight: 400;
+  letter-spacing: -0.01em; color: var(--ink); margin: 0;
+}
+.cir-gate-sub { font-size: 13.5px; line-height: 1.5; color: var(--ink-soft); margin: 0; }
+.cir-gate-btn {
+  margin-top: 4px; width: 100%; padding: 14px 16px; border-radius: 14px;
+  background: #fff; border: 1.5px solid var(--primary); color: var(--primary);
+  font-family: inherit; font-size: 15px; font-weight: 600; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  transition: background .12s, transform .08s;
+}
+.cir-gate-btn:hover { background: var(--primary-5); }
+.cir-gate-btn:active { transform: scale(0.99); }
+.cir-gate-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.cir-gate-btn-sub { font-size: 12px; font-weight: 400; color: var(--primary-800); }
+.cir-banner {
+  font-size: 12.5px; line-height: 1.45; color: var(--primary-800);
+  background: var(--primary-5); border-radius: 10px; padding: 10px 12px;
+}
+/* An answered row is visibly different from one nobody touched — that
+   distinction IS the feature. */
+.pju-card.cir-answered { border-color: var(--primary); background: rgba(0, 140, 156, 0.04); }
+.cir-pills-5 { grid-template-columns: repeat(2, 1fr); }
+@media (min-width: 420px) { .cir-pills-5 { grid-template-columns: repeat(5, 1fr); } }
+.cir-pills-2 { grid-template-columns: 1fr; }
+@media (min-width: 420px) { .cir-pills-2 { grid-template-columns: repeat(2, 1fr); } }
+.pju-pill { min-height: 44px; }
+.pju-pill:disabled { opacity: 0.55; cursor: not-allowed; }
+.cir-count-row { display: flex; align-items: center; gap: 8px; }
+.cir-step {
+  width: 46px; height: 46px; flex-shrink: 0; border-radius: 12px;
+  background: var(--cream); border: 1px solid var(--primary-15);
+  color: var(--primary); font-size: 22px; line-height: 1; font-family: inherit;
+  cursor: pointer; transition: background .12s;
+}
+.cir-step:hover { background: var(--primary-5); }
+.cir-step:disabled { opacity: 0.5; cursor: not-allowed; }
+/* 16px minimum: anything smaller makes iOS Safari zoom the whole sheet on
+   focus, which is how the keyboard ended up covering the buttons. */
+.cir-count-input { flex: 1; min-height: 46px; font-size: 16px; text-align: center; }
+/* Stage 6: placeholders must clear AA too — this is the "barely readable"
+   placeholder the p.3 screenshot circles. */
+.cir-count-input::placeholder { color: var(--ink-soft); opacity: 1; font-family: var(--font-body, inherit); }
+.cir-note { min-height: 44px; font-size: 15px; font-family: inherit; font-weight: 400; }
+.cir-note::placeholder { color: var(--ink-soft); opacity: 1; }
+.cir-clear {
+  align-self: flex-start; background: none; border: 0; padding: 2px 0;
+  font-family: inherit; font-size: 12.5px; font-weight: 600; color: var(--primary-800);
+  text-decoration: underline; cursor: pointer;
+}
+.cir-clear:disabled { opacity: 0.5; cursor: not-allowed; }
+/* Keyboard room. The sheet scrolls inside `.co-body`, and on iOS the on-screen
+   keyboard overlays the bottom of the viewport — without this the last note
+   field sits under it and the footer buttons are unreachable. */
+.co-body { padding-bottom: 24px; scroll-padding-bottom: 96px; }
 
 /* ── Employee calendar wrapper (cleaner design overrides) ── */
 .cl-emp-cal {
@@ -6980,6 +7455,11 @@ a.q-v.link:hover { text-decoration: underline; }
   }
   .cl-toolbar > * { min-width: 0; }
   .cl-toolbar > *:first-child { grid-column: 1 / -1; }
+  /* The List | Calendar toggle takes a ROW, not half of one. Sharing a row with
+     a filter dropdown gave it ~136px to hold a ~200px label pair, so it either
+     forced the grid wider than the phone or clipped "Calendar" to "Calend".
+     A full row is 284px at 320px — comfortable for both buttons at 44px. */
+  .cl-toolbar-end { grid-column: 1 / -1; }
   /* Controls fill their cell rather than sizing to content. Deliberately NOT
      `button` — the search field's submit icon is absolutely positioned inside
      the input, and stretching it to 100% threw the magnifier out to the far
@@ -6987,6 +7467,18 @@ a.q-v.link:hover { text-decoration: underline; }
   .cl-toolbar .input,
   .cl-toolbar select,
   .cl-toolbar .cl-action-btn { width: 100%; }
+  /* A dropdown trigger's LABEL is a flex child, so it floors at its own text
+     width and shoves the button past its 136px cell — the same `min-width:auto`
+     trap the filter wrappers and the view toggle fell into. Ellipsize instead:
+     a truncated "Post-Constructi…" the admin can still open beats a button
+     spilling over its neighbour. The chevron beside it is a fixed `w-4`, so it
+     is never what gets squeezed. */
+  .cl-toolbar button > span:first-child {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 
   /* Empty states were 64px of padding plus a large icon — roughly 700px tall
      on a phone, which pushed real content off the fold and made the screen
@@ -7092,7 +7584,8 @@ a.q-v.link:hover { text-decoration: underline; }
 /* Top-bar refresh button */
 .cl-mobile-refresh {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 40px; height: 40px;
+  /* 44px tap-target floor — the 19px glyph is unchanged. */
+  width: 44px; height: 44px;
   border: 0; border-radius: 11px;
   background: rgba(255,255,255,0.12);
   color: #fff;

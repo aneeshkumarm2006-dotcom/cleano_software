@@ -4,12 +4,19 @@ import { redirect } from "next/navigation";
 import { db } from "@/db";
 import EmployeeDetailView from "./EmployeeDetailView";
 import { jobRevenue } from "@/lib/metrics";
+import { computeJobPayShares, type JobPayInput } from "@/lib/cleaner-earnings";
+import { getCleanerRateInputs } from "@/lib/cleaner-rates";
 import { getEmployeeAvgRating } from "../../actions/setEmployeeRating";
 import { getFieldLeadWeeklyBonus } from "@/lib/field-lead-bonus.server";
 import { getStrikeSummary, STRIKE_WINDOW_DAYS } from "@/lib/strikes";
 import { VOID_CHEQUE_KIND } from "@/lib/employee-files";
-import { cleanerRestockThreshold } from "@/lib/inventory-thresholds";
+import {
+  cleanerRestockThreshold,
+  itemAttentionState,
+} from "@/lib/inventory-thresholds";
+import { loadCleanerThresholdDefault } from "@/lib/inventory-thresholds.server";
 import { projectUsage } from "@/lib/inventory-forecast";
+import { INVENTORY_FORECAST_ENABLED } from "@/lib/inventory-forecast.flag";
 import { loadPerJobAverages } from "@/lib/inventory-forecast.server";
 import {
   addStoreDays,
@@ -51,6 +58,11 @@ export default async function EmployeePage({
               product: true,
             },
           },
+          // The crew and the manual per-cleaner overrides, so this cleaner's
+          // PAY can be computed with the same function payroll uses rather
+          // than read off the stale `employeePay` column — see `totalPaid`.
+          cleaners: { select: { id: true } },
+          assignments: { select: { cleanerId: true, payAmount: true } },
           // Attributed revenue is the ACTIVE subtotal (fix 3), so the add-on
           // rows have to travel with the job.
           addOns: { select: { name: true, price: true, quantity: true } },
@@ -90,14 +102,33 @@ export default async function EmployeePage({
         (j.status === "COMPLETED" || j.status === "PAID")
     )
     .reduce((sum, j) => sum + jobRevenue(j), 0);
-  const totalPaid = completedJobs.reduce(
-    (sum, j) => sum + (j.employeePay || 0),
-    0
-  );
-  const totalTips = completedJobs.reduce(
-    (sum, j) => sum + (j.totalTip || 0),
-    0
-  );
+  // THIS CLEANER's pay, from the function payroll and the job Financials tab
+  // use. Two separate defects lived in the one-line reduce this replaces:
+  //
+  //   1. `Job.employeePay` is a SAVE-TIME ESTIMATE unless `employeePayIsManual`
+  //      is set (see the column's own note in schema.prisma). Nothing rewrites
+  //      it afterwards — not clock-out, not the hourly recompute — so on an
+  //      hourly job whose price was recomputed from the hours actually worked
+  //      it stayed frozen at the pre-clock-out figure. `computeJobPayShares`
+  //      ignores it on the percentage path for exactly that reason.
+  //   2. Even when fresh it is the TEAM TOTAL. Summing it as one cleaner's pay
+  //      over-reported every job worked by more than one person.
+  //
+  // Tips come from the same shares for the same reason: `Job.totalTip` is the
+  // whole job's tip, split evenly across the crew (D3), not this cleaner's.
+  const payRateInputs = await getCleanerRateInputs([employee.id]);
+  let totalPaid = 0;
+  let totalTips = 0;
+  for (const j of completedJobs) {
+    const share = computeJobPayShares(
+      j as unknown as JobPayInput,
+      payRateInputs
+    ).get(employee.id);
+    totalPaid += share?.base ?? 0;
+    totalTips += share?.tip ?? 0;
+  }
+  totalPaid = Math.round(totalPaid * 100) / 100;
+  totalTips = Math.round(totalTips * 100) / 100;
   const unpaidJobs = completedJobs.filter((j) => !j.paymentReceived).length;
 
   // Upcoming jobs (in progress, future start time)
@@ -154,14 +185,31 @@ export default async function EmployeePage({
     .sort((a, b) => b.quantity - a.quantity)
     .slice(0, 5);
 
-  // Assigned products
+  // Assigned products. The attention state comes from the same shared rule the
+  // cleaner's app and the Inventory tab use, threshold default included (PDF
+  // #4) — this page used to omit that default and quietly judge kits against 1.
+  const kitThresholdDefault = await loadCleanerThresholdDefault();
+
   const assignedProducts = employee.assignedProducts.map((p) => ({
-    id: p.id,
+    // Named, not `id` — the row id and the product id sat side by side here and
+    // the actions all key off the product (Stage 5, PDF #6).
+    employeeProductId: p.id,
     productId: p.product.id,
     productName: p.product.name,
     quantity: p.quantity,
     unit: p.product.unit,
     costPerUnit: p.product.costPerUnit,
+    itemType: p.product.itemType,
+    attention: itemAttentionState({
+      quantity: p.quantity,
+      condition: p.condition,
+      levelStatus: p.levelStatus,
+      itemType: p.product.itemType,
+      cleanerRestockThreshold: p.product.cleanerRestockThreshold,
+      defaultThreshold: kitThresholdDefault,
+    }),
+    statusUpdatedAt: p.statusUpdatedAt ? p.statusUpdatedAt.toISOString() : null,
+    statusNotes: p.statusNotes,
   }));
 
   // Active kit templates for starter kit assignment
@@ -204,18 +252,33 @@ export default async function EmployeePage({
 
   // Same source as the Inventory page's forecast, through the same helper, so
   // the two cannot disagree about what a product costs per job (item 14).
-  const avgPerJob = await loadPerJobAverages();
+  // HIDDEN since Stage 3 (decision D3): clock-out no longer records per-job
+  // usage, so this projects 0 for everything and reads as "fully stocked".
+  // Hidden on BOTH surfaces or neither — a forecast that survives on one page
+  // is a forecast somebody will still trust.
+  const avgPerJob = INVENTORY_FORECAST_ENABLED
+    ? await loadPerJobAverages()
+    : new Map<string, number>();
 
-  const forecast = employee.assignedProducts.map((ep) => {
+  const forecast = (INVENTORY_FORECAST_ENABLED
+    ? employee.assignedProducts
+    : []
+  ).map((ep) => {
     const averagePerJob = avgPerJob.get(ep.productId) ?? 0;
     const projectedUsage = projectUsage(averagePerJob, upcomingEmployeeJobs);
     const deficit = Math.max(0, projectedUsage - ep.quantity);
     // This block used to read `rule?.refillThreshold` directly, bypassing
     // cleanerRestockThreshold() — so it disagreed with every other low-stock
-    // surface, and would have silently read 0 once rules went away.
+    // surface, and would have silently read 0 once rules went away. It also
+    // omitted the admin's global default until Stage 2, which reintroduced the
+    // same disagreement one layer down.
     const refillThreshold = cleanerRestockThreshold({
       cleanerRestockThreshold: ep.product.cleanerRestockThreshold,
+      defaultThreshold: kitThresholdDefault,
     });
+    // A vacuum is not consumed by doing jobs, so it can never be forecast
+    // short of one (PDF #4).
+    const isEquipment = ep.product.itemType === "REUSABLE_EQUIPMENT";
     return {
       productId: ep.productId,
       productName: ep.product.name,
@@ -224,8 +287,9 @@ export default async function EmployeePage({
       averagePerJob: Math.round(averagePerJob * 100) / 100,
       refillThreshold,
       projectedUsage,
-      deficit,
-      needsRefill: deficit > 0 || ep.quantity <= refillThreshold,
+      deficit: isEquipment ? 0 : deficit,
+      needsRefill:
+        !isEquipment && (deficit > 0 || ep.quantity <= refillThreshold),
     };
   });
 

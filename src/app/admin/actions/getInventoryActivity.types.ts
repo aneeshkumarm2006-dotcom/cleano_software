@@ -8,8 +8,17 @@ export interface InventoryActivityEntry {
   cleanerName: string | null;
   productId: string;
   productName: string;
-  /** Human-readable action derived from the audit row's reason. */
+  /**
+   * Human-readable verb. Comes from the row's stored `InventoryAction` when it
+   * has one; rows written before Stage 3 fall back to reading their prose (see
+   * `src/lib/inventory-action.ts`).
+   */
   action: string;
+  /** True when the label was derived from prose rather than stored. */
+  actionDerived: boolean;
+  /** Status transition, when the row records one (PDF #1's history list). */
+  previousStatus: string | null;
+  newStatus: string | null;
   /** Signed change. Negative = stock left this holder. */
   quantityChange: number;
   /** The holder's resulting quantity. */

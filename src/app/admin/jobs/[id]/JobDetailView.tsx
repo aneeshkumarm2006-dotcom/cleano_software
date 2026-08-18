@@ -31,7 +31,7 @@ import {
   CheckCircle2, Package, Pencil, History, Activity,
   AlertTriangle, Trash2, Loader, Briefcase, Receipt, Camera, X,
   ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, FileText,
-  Star, Copy, Check, Inbox, RotateCcw, XCircle, Navigation, Bell,
+  Star, Copy, Check, Inbox, RotateCcw, XCircle, Navigation, Bell, Home,
 } from "lucide-react";
 import { resolveJobRequest } from "../../actions/resolveJobRequest";
 import { fmtDate, fmtDateTime, fmtTime } from "@/lib/time";
@@ -45,6 +45,9 @@ import {
   activeMinutes,
 } from "@/lib/time-tracking";
 import { afterPhotosAllowed } from "@/lib/job-photos";
+import { formatDeposit, resolveDepositCredit } from "@/lib/booking-deposit";
+import { isQuoteStatus, type QuoteStatus } from "@/lib/quote-status";
+import QuoteReviewPanel from "./QuoteReviewPanel";
 import { activeSessionMinutes } from "@/lib/work-sessions";
 import { avatarColor, initials } from "@/lib/avatar";
 import { assignCleaners } from "../../actions/assignCleaners";
@@ -69,7 +72,14 @@ import {
   resolvePassThroughBilling,
   type JobPricingMode,
 } from "@/lib/job-money";
-import { addOnKey } from "@/lib/checklist-triggers";
+import { formatHours, hourlyLineLabel } from "@/lib/hourly-billing";
+import { propertyTypeLabel } from "@/lib/property-type";
+import {
+  addOnKey,
+  CHECKLIST_TIER_HINT,
+  CHECKLIST_TIER_LABEL,
+} from "@/lib/checklist-triggers";
+import type { JobChecklistSummary } from "@/lib/job-checklist.server";
 
 type TabView = "details" | "financials" | "products" | "logs" | "requests";
 
@@ -121,6 +131,15 @@ interface Job {
   bookingSource?: string | null;
   /** Itemized vs final price override (cleano_new_fixes.pdf fix 2). */
   pricingMode?: string | null;
+  /**
+   * Customer-side hourly billing (Stage 8 / PDF #8). Read only through
+   * `computeJobMoney` and the hourly rows in the Financials tab. NOT the
+   * cleaner's hourly pay, which lives on `payType`/`hourlyRate`.
+   */
+  billingType?: string | null;
+  billedHourlyRate?: number | null;
+  billedEstimatedHours?: number | null;
+  billedActualHours?: number | null;
   subtotalAmount?: number | null;
   gstAmount?: number | null;
   qstAmount?: number | null;
@@ -168,7 +187,20 @@ interface Job {
   bedCount?: number | null;
   bathCount?: number | null;
   halfBathCount?: number | null;
+  /** Apartment/condo vs house (Stage 9 / PDF #11); null when unrecorded. */
+  propertyType?: string | null;
+  /** Pinned checklist template (Stage 10). Null = resolve automatically. */
+  checklistTemplateId?: string | null;
   depositPaid?: boolean;
+  /** What the deposit actually was (Stage 11). Null on pre-column rows = $20. */
+  depositAmount?: number | null;
+  /** Quote lifecycle (Stage 11 / PDF #9). Null = not a quote request. */
+  quoteStatus?: string | null;
+  /** When the final quote was emailed. Null while it is still under review. */
+  quotedAt?: string | null;
+  /** The customer's own post-construction estimate, as booked. */
+  pcHours?: number | null;
+  pcCleaners?: number | null;
   depositPaymentIntentId?: string | null;
   refundedAmount?: number | null;
   stripePaymentIntentId?: string | null;
@@ -223,7 +255,12 @@ interface JobPhoto {
   url: string;
   caption: string | null;
   createdAt: string;
-  employee: { id: string; name: string; };
+  /**
+   * Who uploaded it. NULL = the CUSTOMER did, from the booking flow (Stage 11 /
+   * PDF #9) — there is no staff `User` behind a guest booking. Every renderer
+   * labels the null case rather than assuming an uploader.
+   */
+  employee: { id: string; name: string } | null;
 }
 
 interface ReviewPhoto {
@@ -325,9 +362,139 @@ interface JobDetailViewProps {
   jobRatings?: JobRatingLite[];
   /** Admin setting `tracking.gpsEnabled` — gates the live on-the-way map. */
   gpsEnabled?: boolean;
+  /**
+   * Which checklist this job resolves to and what has been generated from it
+   * (Stage 10 / PDF #10). Read-only — resolved server-side by
+   * `summarizeJobChecklist`, which creates nothing. Null when the summary
+   * failed to load, which renders the card in an explicit unknown state rather
+   * than as "no checklist".
+   */
+  checklistSummary?: JobChecklistSummary | null;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+/**
+ * The job's resolved checklist (Stage 10 / PDF #10). Read-only: it reports what
+ * the shared resolver picks and what has already been generated, and offers no
+ * control that writes — the pin is edited on the job form, the items in
+ * Settings → Checklist Templates.
+ */
+function ChecklistCard({ summary }: { summary: JobChecklistSummary | null }) {
+  const TIER_TONE: Record<string, { bg: string; color: string }> = {
+    JOB:     { bg: '#ede9fe', color: '#5b21b6' },
+    ADDRESS: { bg: '#ede9fe', color: '#5b21b6' },
+    CLIENT:  { bg: '#ede9fe', color: '#5b21b6' },
+    DEFAULT: { bg: 'rgba(0,140,156,0.10)', color: 'var(--primary)' },
+    NONE:    { bg: '#f3f4f6', color: '#6b7280' },
+  };
+
+  if (!summary) {
+    return (
+      <div className="dcard tab-panel-wide">
+        <div className="dcard-head"><h3>Checklist</h3></div>
+        <p style={{ margin: 0, fontSize: 13.5, color: 'var(--primary-50)' }}>
+          Could not resolve this job&apos;s checklist. Refresh the page — nothing
+          about the job or its existing checklists has changed.
+        </p>
+      </div>
+    );
+  }
+
+  const tone = TIER_TONE[summary.tier] ?? TIER_TONE.NONE;
+
+  return (
+    <div className="dcard tab-panel-wide">
+      <div className="dcard-head">
+        <h3>Checklist</h3>
+        <span
+          className="pill"
+          style={{ background: tone.bg, color: tone.color }}
+          title={CHECKLIST_TIER_HINT[summary.tier]}>
+          {CHECKLIST_TIER_LABEL[summary.tier]}
+        </span>
+      </div>
+
+      {summary.pinnedUnavailable && (
+        <p style={{ margin: '0 0 10px', fontSize: 13, color: '#b45309' }}>
+          This job is pinned to a checklist template that has been deleted or
+          deactivated. It is resolving automatically instead — re-pin it from the
+          job form, or reactivate the template in Settings.
+        </p>
+      )}
+
+      {summary.tier === 'NONE' ? (
+        <p style={{ margin: 0, fontSize: 13.5, color: 'var(--primary-50)', lineHeight: 1.6 }}>
+          No checklist template matches this job, so the cleaner sees no
+          checklist. Add one in Settings → Checklist Templates, or pin one to
+          this job from the job form.
+        </p>
+      ) : (
+        <>
+          <p style={{ margin: '0 0 10px', fontSize: 13, color: 'var(--primary-60)', lineHeight: 1.6 }}>
+            {CHECKLIST_TIER_HINT[summary.tier]}
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {summary.templates.map(t => (
+              <div
+                key={t.id}
+                style={{
+                  display: 'flex', justifyContent: 'space-between', gap: 12,
+                  padding: '8px 12px', borderRadius: 10,
+                  background: 'rgba(0,140,156,0.05)', fontSize: 13.5,
+                }}>
+                <span style={{ color: 'var(--ink-soft)' }}>{t.name}</span>
+              </div>
+            ))}
+          </div>
+          <p style={{ margin: '10px 0 0', fontSize: 12.5, color: 'var(--primary-50)' }}>
+            {summary.itemCount} item{summary.itemCount === 1 ? '' : 's'}
+            {summary.requiredCount > 0 && ` · ${summary.requiredCount} required`}
+            {summary.pinned && ' · pinned to this job'}
+          </p>
+        </>
+      )}
+
+      {/* What actually exists. A checklist is created when the CLEANER opens the
+          job, so "nothing generated yet" is the normal state for a future
+          booking and must not read as a fault. */}
+      <div style={{ marginTop: 14, borderTop: '1px solid rgba(0,140,156,0.10)', paddingTop: 12 }}>
+        <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--primary-60)', fontWeight: 700, marginBottom: 8 }}>
+          Generated
+        </div>
+        {summary.generated.length === 0 ? (
+          <p style={{ margin: 0, fontSize: 13, color: 'var(--primary-50)', lineHeight: 1.6 }}>
+            Not generated yet — it is created automatically the first time an
+            assigned cleaner opens this job.
+          </p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {summary.generated.map(g => (
+              <div
+                key={g.employeeId}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, fontSize: 13.5 }}>
+                <span style={{ color: 'var(--ink-soft)' }}>{g.employeeName}</span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {g.drifted && (
+                    <span
+                      className="pill"
+                      style={{ background: '#fef3c7', color: '#92400e' }}
+                      title="The job changed after this checklist was created. The cleaner keeps their progress and is warned; it rebuilds by itself once nothing has been ticked.">
+                      Out of date
+                    </span>
+                  )}
+                  <span style={{ color: 'var(--primary-60)', fontVariantNumeric: 'tabular-nums' }}>
+                    {g.completed}/{g.total}
+                  </span>
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 // Same derived-status pill as the Jobs table (spec's three operational
 // statuses) — the detail page must never disagree with the list row.
@@ -510,6 +677,7 @@ export default function JobDetailView({
   hasPayableParticipants = false,
   jobRatings = [],
   gpsEnabled = true,
+  checklistSummary = null,
 }: JobDetailViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -710,7 +878,19 @@ export default function JobDetailView({
   const [cancelError, setCancelError] = useState<string | null>(null);
 
   const refundedSoFar = job.refundedAmount ?? 0;
-  const depositRemaining = job.depositPaid ? Math.max(0, 20 - refundedSoFar) : 0;
+  // The deposit this job actually charged (Stage 11 / PDF #9). Was a literal 20,
+  // which capped the refund modal at $20 on a $200 post-construction deposit — so
+  // a declined quote could not be refunded from this page at all.
+  const depositCollected = resolveDepositCredit({
+    depositPaid: job.depositPaid ?? false,
+    depositAmount: job.depositAmount ?? null,
+  });
+  const depositRemaining = job.depositPaid
+    ? Math.max(0, depositCollected - refundedSoFar)
+    : 0;
+  // Is this job a QUOTE at all (Stage 11)? `isQuoteStatus` rather than a truthy
+  // test, so a stale or garbage value renders nothing instead of an empty panel.
+  const isQuoteJob = isQuoteStatus(job.quoteStatus);
   // The ceiling is what was actually TAKEN, not the base service line (fix 3).
   // `job.price` capped the $128/$186 grout job's refund at $128 on a $213.85
   // charge, so the admin could not refund the customer in full from this modal.
@@ -1171,6 +1351,30 @@ export default function JobDetailView({
 
   const DetailsTab = () => (
     <div className="tab-panel">
+      {/* Quote review (Stage 11 / PDF #9). FIRST in the tab, because on a
+          PENDING_REVIEW job it is the only thing an admin is here to do — the
+          customer has paid a deposit and is waiting on a price. Renders for a
+          quote and for nothing else: `quoteStatus` is NULL on every other job. */}
+      {isQuoteJob && (
+        <QuoteReviewPanel
+          jobId={job.id}
+          quoteStatus={job.quoteStatus as QuoteStatus}
+          quotedAt={job.quotedAt ?? null}
+          pcHours={job.pcHours ?? null}
+          pcCleaners={job.pcCleaners ?? null}
+          depositAmount={depositCollected}
+          depositRemaining={depositRemaining}
+          currentPrice={job.price ?? null}
+          currentTotal={job.totalAmount ?? null}
+          billingType={job.billingType ?? null}
+          billedHourlyRate={job.billedHourlyRate ?? null}
+          billedEstimatedHours={job.billedEstimatedHours ?? null}
+          photos={photos}
+          addOnCount={job.addOns?.length ?? 0}
+          onOpenPhoto={setLightboxIdx}
+        />
+      )}
+
       {/* Date & Time */}
       <div className="dcard">
         <div className="dcard-head">
@@ -1191,6 +1395,33 @@ export default function JobDetailView({
             )}
           </div>
         </div>
+        {/* Billed hours (Stage 8 / PDF #8). Sits with the schedule, not with
+            the money, because on an hourly job "how long is this booked for"
+            and "how long is the customer paying for" are two different
+            questions and the admin has to be able to see both at once. */}
+        {job.billingType === 'HOURLY' && (
+          <div style={{ paddingTop: 12, borderTop: '1px solid var(--primary-10)' }}>
+            <div className="label" style={{ marginBottom: 6 }}>Billed hours</div>
+            <div style={{ fontSize: 13, color: 'var(--primary-70)' }}>
+              {job.billedActualHours != null ? (
+                <>
+                  <strong>{formatHours(job.billedActualHours)}</strong> actual,
+                  from the crew&apos;s clock
+                  {job.billedEstimatedHours != null
+                    ? ` · ${formatHours(job.billedEstimatedHours)} estimated`
+                    : ''}
+                </>
+              ) : job.billedEstimatedHours != null ? (
+                <>
+                  <strong>{formatHours(job.billedEstimatedHours)}</strong>{' '}
+                  estimated · actual hours are recorded at clock-out
+                </>
+              ) : (
+                'No hours entered yet'
+              )}
+            </div>
+          </div>
+        )}
         {job.addOns && job.addOns.length > 0 && (
           <div style={{ paddingTop: 12, borderTop: '1px solid var(--primary-10)' }}>
             <div className="label" style={{ marginBottom: 8 }}>Add-ons</div>
@@ -1651,9 +1882,25 @@ export default function JobDetailView({
         </p>
       </div>
 
+      {/* Checklist (Stage 10 / PDF #10, step 10.5).
+
+          Before this there was NO admin-facing checklist surface anywhere:
+          templates lived in Settings, checklists were generated on the
+          cleaner's phone, and nothing in between could answer "which list will
+          this crew actually get". This card is that answer, and it is
+          READ-ONLY on purpose — generating from here would push items into a
+          cleaner's app that nobody asked for, and would freeze the snapshot
+          before the admin has finished editing the job. Change what is
+          generated by changing the job's Checklist field or the template. */}
+      <ChecklistCard summary={checklistSummary} />
+
       {/* Location — the job's own snapshot, enriched with whatever the saved
-          address knows that the snapshot doesn't (item 2). */}
-      {job.location && (
+          address knows that the snapshot doesn't (item 2). Also carries the
+          property type (Stage 9 / PDF #11): it describes the place, so it
+          belongs with the address rather than with the schedule or the money.
+          The gate includes it so an address-less booking that DOES know it is a
+          house still shows that — the job forms don't require a location. */}
+      {(job.location || propertyTypeLabel(job.propertyType)) && (
         <div className="dcard tab-panel-wide">
           <div className="dcard-head">
             <h3>Location</h3>
@@ -1663,17 +1910,28 @@ export default function JobDetailView({
               </span>
             )}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: 'var(--ink)' }}>
-            <MapPin size={16} style={{ color: 'var(--primary-50)' }} />
-            {formatAddressLine({
-              address: job.location,
-              aptNumber: job.aptNumber ?? job.clientAddress?.aptNumber ?? null,
-              city: job.clientAddress?.city ?? null,
-              // The job's own snapshot wins: it is what the admin typed on
-              // this booking (item 3). The saved address is the fallback.
-              postalCode: job.postalCode ?? job.clientAddress?.postalCode ?? null,
-            })}
-          </div>
+          {job.location && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: 'var(--ink)' }}>
+              <MapPin size={16} style={{ color: 'var(--primary-50)' }} />
+              {formatAddressLine({
+                address: job.location,
+                aptNumber: job.aptNumber ?? job.clientAddress?.aptNumber ?? null,
+                city: job.clientAddress?.city ?? null,
+                // The job's own snapshot wins: it is what the admin typed on
+                // this booking (item 3). The saved address is the fallback.
+                postalCode: job.postalCode ?? job.clientAddress?.postalCode ?? null,
+              })}
+            </div>
+          )}
+          {/* Property type (Stage 9 / PDF #11). Rendered only when recorded —
+              every job booked before this column is null, and a "Property type:
+              unknown" row on all of them would be noise that says nothing. */}
+          {propertyTypeLabel(job.propertyType) && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, fontSize: 13, color: 'var(--ink-soft)' }}>
+              <Home size={14} style={{ color: 'var(--primary-50)', flexShrink: 0 }} />
+              <span>{propertyTypeLabel(job.propertyType)}</span>
+            </div>
+          )}
           {job.clientAddress?.accessNotes && (
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 8, fontSize: 13, color: 'var(--ink-soft)' }}>
               <KeyRound size={14} style={{ color: 'var(--primary-50)', flexShrink: 0, marginTop: 2 }} />
@@ -1805,6 +2063,17 @@ export default function JobDetailView({
               Base ${money.basePrice.toFixed(2)} + add-ons ${money.addOnTotal.toFixed(2)}
             </div>
           )}
+          {/* Hourly jobs say where the base came from (Stage 8, step 8.7).
+              Under an override the line still prints, labelled as the figure
+              the override replaced — an admin comparing the two is exactly who
+              needs to see both. */}
+          {money.hourlyServiceAmount !== null && (
+            <div className="astat-delta">
+              {pricingMode === 'FINAL_PRICE' ? 'Hourly (overridden): ' : 'Hourly: '}
+              {hourlyLineLabel(job)}
+              {job.billedActualHours != null ? ' · actual' : ' · estimate'}
+            </div>
+          )}
         </div>
         <div className="astat">
           <div className="astat-head">
@@ -1835,6 +2104,21 @@ export default function JobDetailView({
               ? `${payRows.length} cleaner${payRows.length === 1 ? '' : 's'} · ${payIsManual ? 'split evenly' : 'live rate'}`
               : 'No cleaners assigned'}
           </div>
+          {/* PDF #8: "cleaner pay should calculate correctly for hourly jobs
+              based on the assigned pay logic". Nothing branches on billing type
+              in the pay math — a PERCENTAGE crew simply takes their tier cut of
+              a basis that IS rate × hours — so this line exists to make that
+              visible rather than leave an admin wondering which number moved. */}
+          {money.hourlyServiceAmount !== null &&
+            hasPayableParticipants &&
+            !payIsManual && (
+              <div className="astat-delta">
+                Basis: the hourly service total
+                {job.billedActualHours != null
+                  ? ` (${formatHours(job.billedActualHours)} actual)`
+                  : ''}
+              </div>
+            )}
         </div>
         <div className="astat">
           <div className="astat-head"><span>Product cost</span></div>
@@ -1865,6 +2149,22 @@ export default function JobDetailView({
             </Button>
           </div>
           <div>
+            {/* On an hourly job the base price is DERIVED, so the breakdown
+                shows the derivation above it rather than a bare figure
+                (Stage 8, step 8.7). */}
+            {money.hourlyServiceAmount !== null && (
+              <div className="finrow">
+                <span className="finrow-label">
+                  Hourly billing
+                  <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--ink-soft)' }}>
+                    {job.billedActualHours != null
+                      ? 'actual hours, from the crew’s clock'
+                      : 'estimated hours'}
+                  </span>
+                </span>
+                <span className="finrow-value">{hourlyLineLabel(job)}</span>
+              </div>
+            )}
             {job.price !== null && (
               <div className="finrow">
                 <span className="finrow-label">Base price</span>
@@ -2184,7 +2484,7 @@ export default function JobDetailView({
                 </div>
                 <div className="label-stack">
                   <span className="top">Deposit paid</span>
-                  <span className="bottom">$20.00 collected at booking{job.depositPaymentIntentId ? ` · ${job.depositPaymentIntentId}` : ''}</span>
+                  <span className="bottom">{formatDeposit(depositCollected)} collected at booking{job.depositPaymentIntentId ? ` · ${job.depositPaymentIntentId}` : ''}</span>
                 </div>
               </div>
             </div>
@@ -2274,6 +2574,10 @@ export default function JobDetailView({
     <div className="tab-panel" style={{ gridTemplateColumns: '1fr' }}>
       <div className="dcard">
         <div className="dcard-head">
+          {/* Decision D4. These rows are the ESTIMATED usage clock-out used to
+              record (Light/Medium/Heavy → millilitres). Stage 3 stopped writing
+              them, so this tab is history: kept readable, labelled for what it
+              always was, and empty on every job worked since. */}
           <h3>Products used · {productUsage.length}</h3>
           {totalProductCost > 0 && (
             <span style={{ fontSize: 13, color: 'var(--primary-60)', fontWeight: 600 }}>
@@ -2282,11 +2586,19 @@ export default function JobDetailView({
           )}
         </div>
         {productUsage.length === 0 ? (
-          <div style={{ padding: '32px 0', textAlign: 'center', color: 'var(--primary-50)', fontSize: 14 }}>
-            No products logged for this job.
+          <div style={{ padding: '32px 0', textAlign: 'center', color: 'var(--primary-50)', fontSize: 14, lineHeight: 1.6 }}>
+            No estimated product usage recorded for this job.
+            <br />
+            Cleaners now report what changed at clock-out — see Inventory →
+            Activity, and Inventory → Needs Attention for anything they flagged.
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ padding: '0 16px 4px', fontSize: 12, color: 'var(--primary-60)', lineHeight: 1.5 }}>
+              Legacy estimated usage — recorded by the old Light / Medium / Heavy
+              clock-out survey, which converted a picked option into millilitres.
+              No longer recorded, and never a measurement.
+            </div>
             <div className="prow" style={{ background: 'transparent', border: 0, padding: '8px 16px', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--primary-60)', fontWeight: 700 }}>
               <span>Product</span>
               <span className="pnum">Qty</span>

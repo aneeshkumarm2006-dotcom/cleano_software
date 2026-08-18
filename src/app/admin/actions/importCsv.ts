@@ -7,7 +7,8 @@ import { revalidatePath } from "next/cache";
 import { hashPassword } from "better-auth/crypto";
 import { randomBytes } from "crypto";
 import { sendAccountEmail } from "@/lib/email";
-import { syncDefaultLocationStock } from "@/lib/inventory";
+import { adjustWarehouseStock } from "@/lib/stock.server";
+import { inferItemType, isItemType } from "@/lib/item-type";
 import { startOfDayTz, tzWallClockToUtc } from "@/lib/time";
 import {
   CSV_ENTITIES,
@@ -307,18 +308,44 @@ const productsHandler: Handler = async (v) => {
   if (existing) return { status: "skipped", duplicate: true, reason: `Product "${name}" already exists`, label: name };
 
   const stockLevel = (v.stockLevel as number) ?? 0;
-  const product = await db.product.create({
-    data: {
-      name,
-      description: str(v.description),
-      unit: v.unit as string,
-      costPerUnit: v.costPerUnit as number,
-      stockLevel,
-      minStock: (v.minStock as number) ?? 0,
-      category: (v.category as never) ?? undefined,
-    },
+  const category = (v.category as string) ?? null;
+  // Optional column. Blank falls back to the same category+name heuristic the
+  // backfill script uses, so an import can't quietly put every bucket back on
+  // cleaner refill thresholds (inventory fixes PDF #1 + #4).
+  const itemType = isItemType(v.itemType)
+    ? v.itemType
+    : inferItemType({ name, category });
+  await db.$transaction(async (tx) => {
+    const product = await tx.product.create({
+      data: {
+        name,
+        description: str(v.description),
+        unit: v.unit as string,
+        costPerUnit: v.costPerUnit as number,
+        // Set from the location rows by `adjustWarehouseStock` below — per
+        // location stock is the truth, `stockLevel` its cache (Stage 4).
+        stockLevel: 0,
+        minStock: (v.minStock as number) ?? 0,
+        category: (v.category as never) ?? undefined,
+        itemType,
+      },
+      select: { id: true, unit: true },
+    });
+    await adjustWarehouseStock(tx, {
+      productId: product.id,
+      delta: stockLevel,
+      action: "IMPORT",
+      unit: product.unit,
+      reason: `Imported from CSV — opening stock`,
+    });
+  }, {
+    // Per row: the create plus `adjustWarehouseStock`'s four queries. An import
+    // runs these back to back against the same pooled connection, so the
+    // default 5s window is the first thing to give out — and a P2028 here would
+    // report the row as failed after the product had already been rolled back.
+    maxWait: 10_000,
+    timeout: 30_000,
   });
-  await syncDefaultLocationStock(product.id, stockLevel);
   return { status: "created", label: name };
 };
 

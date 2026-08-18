@@ -106,6 +106,15 @@ interface JobsViewProps {
   clients?: ClientLite[];
   users?: UserLite[];
   cleaners?: UserLite[];
+  /**
+   * Is this viewer seeing the WHOLE company's jobs, or only the ones they are
+   * assigned to? The page narrows the query to `employeeId = me` for anyone who
+   * is not OWNER/ADMIN (decision D13), and only the empty state reads this —
+   * so that "there are none" and "you are not assigned to any" stop looking
+   * like the same broken query. Defaults true: a caller that doesn't say is
+   * assumed unscoped, which is the claim-nothing option.
+   */
+  isAdmin?: boolean;
   archived?: boolean;
   startDate?: string;
   endDate?: string;
@@ -396,6 +405,7 @@ export default function JobsView({
   clients = [],
   users = [],
   cleaners = [],
+  isAdmin = true,
   archived = false,
   startDate = '',
   endDate = '',
@@ -952,7 +962,24 @@ export default function JobsView({
           <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'var(--primary-5)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
             <Briefcase size={24} style={{ color: 'var(--primary-40)' }} />
           </div>
-          <p style={{ fontSize: 14, color: 'var(--primary-60)', marginBottom: 8 }}>No jobs match these filters.</p>
+          {/* An empty list has three different causes and used to have one
+              sentence. "No jobs match these filters" printed even with NO
+              filters set, which makes a genuinely empty list and a query that
+              returned nothing look identical — and a viewer whose list is
+              scoped to their own jobs (decision D13: anyone who is not
+              OWNER/ADMIN) has no way at all to tell that from a broken page. */}
+          <p style={{ fontSize: 14, color: 'var(--primary-60)', marginBottom: 8 }}>
+            {hasActiveFilters || searchTerm
+              ? 'No jobs match your search or filters.'
+              : !isAdmin
+                ? 'No jobs are assigned to you. This list shows only jobs you are assigned to — ask an owner or admin for the full schedule.'
+                : archived
+                  ? 'Nothing has been archived yet.'
+                  : 'No jobs yet.'}
+          </p>
+          {/* Still gated on the FILTERS alone: `clearAllFilters` deliberately
+              leaves the search box alone, so offering it for a search-only miss
+              would be a button that changes nothing. */}
           {hasActiveFilters && (
             <button type="button" onClick={clearAllFilters} style={{ background: 'none', border: 0, cursor: 'pointer', color: 'var(--primary)', fontSize: 13, fontFamily: 'inherit' }}>
               Reset filters

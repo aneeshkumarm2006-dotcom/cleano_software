@@ -181,6 +181,19 @@ export async function sendBookingConfirmation(opts: {
   qst: number | null;
   total: number | null;
   depositPaid?: boolean;
+  /**
+   * What the deposit actually was (Stage 11 / PDF #9). Defaults to the standard
+   * $20 so a caller that predates the variable deposit is unchanged — but a
+   * post-construction booking MUST pass it, or the rows below quote a remaining
+   * balance $180 short of what the card will be charged.
+   */
+  depositAmount?: number;
+  /**
+   * True when this is a post-construction QUOTE REQUEST rather than a booked
+   * cleaning. Changes the wording only: the date is a preference, the total is an
+   * estimate, and nothing is scheduled until the customer approves the quote.
+   */
+  quotePending?: boolean;
   logId?: string;
   /** When true, gate by `cust.booking.receipt_rec` instead of `_ot`. */
   recurring?: boolean;
@@ -190,45 +203,60 @@ export async function sendBookingConfirmation(opts: {
     : fmtTime(opts.startTime);
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const deposit = opts.depositAmount ?? BOOKING_DEPOSIT_USD;
+  const quote = opts.quotePending === true;
 
   const sectionRows: [string, string][] = [
-    ["Booking #", String(opts.jobNumber)],
-    ["Date", fmtDate(opts.startTime)],
+    [quote ? "Request #" : "Booking #", String(opts.jobNumber)],
+    [quote ? "Preferred date" : "Date", fmtDate(opts.startTime)],
     ["Time", timeLine],
     ["Address", opts.address],
     ["Subtotal", fmt(opts.subtotal)],
     ["GST (5%)", fmt(opts.gst)],
     ["QST (9.975%)", fmt(opts.qst)],
-    ["Total", fmt(opts.total)],
+    [quote ? "Estimated total" : "Total", fmt(opts.total)],
   ];
   if (opts.depositPaid) {
-    sectionRows.push(["Deposit paid today", fmt(BOOKING_DEPOSIT_USD)]);
+    sectionRows.push(["Deposit paid today", fmt(deposit)]);
     // Spell out the figure rather than leaving the customer to subtract. This
     // is the number resolveAmountDue will actually put on the card — until the
     // deposit was credited at charge time, this row would have been a lie, so
     // it is deliberately added alongside that fix.
     sectionRows.push([
-      "Remaining balance (after cleaning)",
-      fmt(Math.max(0, (opts.total ?? 0) - BOOKING_DEPOSIT_USD)),
+      quote
+        ? "Balance after your quote is approved"
+        : "Remaining balance (after cleaning)",
+      fmt(Math.max(0, (opts.total ?? 0) - deposit)),
     ]);
   }
 
-  const chargeNote = opts.depositPaid
-    ? "A $20 deposit was collected at booking. The remaining balance is charged only after your cleaning is complete."
-    : "Your card will be charged only after your cleaning is complete. You'll receive a receipt by email.";
+  const chargeNote = quote
+    ? `A ${fmt(deposit)} deposit was collected with your request and comes off your final quote. Nothing further is charged until you've approved the quote and the work is complete.`
+    : opts.depositPaid
+      ? `A ${fmt(deposit)} deposit was collected at booking. The remaining balance is charged only after your cleaning is complete.`
+      : "Your card will be charged only after your cleaning is complete. You'll receive a receipt by email.";
 
   const html = layout(
-    h1(`Booking confirmed, ${opts.clientName.split(" ")[0]}!`) +
-      p(`We've got you down for a ${opts.serviceType ?? "cleaning"} on <strong>${fmtDate(opts.startTime)}</strong>.`) +
+    (quote
+      ? h1(`Request received, ${opts.clientName.split(" ")[0]}!`) +
+        p(
+          `We've got your ${opts.serviceType ? "post-construction" : ""} request and your photos. Our team will review the space and email your <strong>final quote</strong> — usually within one business day. The figures below are an <strong>estimate</strong>, not your final price.`
+        )
+      : h1(`Booking confirmed, ${opts.clientName.split(" ")[0]}!`) +
+        p(
+          `We've got you down for a ${opts.serviceType ?? "cleaning"} on <strong>${fmtDate(opts.startTime)}</strong>.`
+        )) +
       section(sectionRows) +
       p(chargeNote) +
-      btn("View this booking", `${appUrl}/bookings/${opts.jobId}`) +
+      btn(quote ? "View this request" : "View this booking", `${appUrl}/bookings/${opts.jobId}`) +
       btn("Manage all my bookings", `${appUrl}/bookings`)
   );
 
   return deliver({
     to: opts.to,
-    subject: `Cleano booking confirmed — ${fmtDate(opts.startTime)}`,
+    subject: quote
+      ? `Cleano quote request received — ${fmtDate(opts.startTime)}`
+      : `Cleano booking confirmed — ${fmtDate(opts.startTime)}`,
     html,
     logId: opts.logId,
     notification: {
@@ -2685,6 +2713,86 @@ export async function sendCustomerQuoteReceived(opts: {
     subject: `Cleano quote request received`,
     html,
     notification: { recipient: "CUSTOMER", key: "cust.quote.received" },
+  });
+}
+
+/**
+ * THE FINAL QUOTE for a post-construction booking (PDF #9, Stage 11).
+ *
+ * Sent by `sendJobQuote` when an admin has reviewed the photos and set a price.
+ * Distinct from `sendCustomerQuoteReceived` above, which acknowledges a
+ * `QuoteRequest` from the public /quote landing page and carries no money.
+ *
+ * ## Deliberately NOT gated by Settings → Notifications
+ *
+ * Every automated email here passes a `notification` gate so an admin can switch
+ * a whole class of message off. This one is not automated: it is the payload of a
+ * button an admin just pressed, and the action reports "quote sent" on the
+ * strength of it. A default-off toggle (the shipped default for
+ * `cust.quote.send`, and the stored value on any database seeded before this
+ * shipped) would make that button silently do nothing while claiming success —
+ * with the customer left waiting on a price and their deposit already taken.
+ * Same reasoning as `sendCustomerImportWelcome`, which is ungated for the same
+ * reason. The admin's click IS the consent.
+ */
+export async function sendCustomerFinalQuote(opts: {
+  to: string;
+  clientName: string;
+  jobId: string;
+  jobNumber: number;
+  startTime: string;
+  address: string;
+  /** Taxed, discount-net total the customer would pay — what they're deciding on. */
+  total: number;
+  subtotal: number;
+  gst: number;
+  qst: number;
+  /** Already collected, and credited against the total below. */
+  depositAmount: number;
+  /** Optional admin note — scope, assumptions, what the crew will do. */
+  message?: string | null;
+  /** Set when the job is billed hourly, so the quote can show the rate it derives from. */
+  hourlyLine?: string | null;
+  logId?: string;
+}) {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const balance = Math.max(0, opts.total - opts.depositAmount);
+
+  const rows: [string, string][] = [
+    ["Request #", String(opts.jobNumber)],
+    ["Preferred date", fmtDate(opts.startTime)],
+    ["Address", opts.address],
+  ];
+  if (opts.hourlyLine) rows.push(["Hourly", opts.hourlyLine]);
+  rows.push(
+    ["Subtotal", fmt(opts.subtotal)],
+    ["GST (5%)", fmt(opts.gst)],
+    ["QST (9.975%)", fmt(opts.qst)],
+    ["Quoted total", fmt(opts.total)],
+    ["Deposit already paid", `-${fmt(opts.depositAmount)}`],
+    ["Balance due after the work", fmt(balance)]
+  );
+
+  const html = layout(
+    h1(`Your quote is ready, ${opts.clientName.split(" ")[0]}`) +
+      p(
+        `Thanks for the photos — we've reviewed the space and priced the job. Here is your final quote.`
+      ) +
+      section(rows) +
+      (opts.message?.trim() ? p(opts.message.trim()) : "") +
+      p(
+        `Happy with it? Reply to this email or give us a call and we'll lock in your date. Your ${fmt(
+          opts.depositAmount
+        )} deposit is already applied, so only the balance above is charged once the work is done.`
+      ) +
+      btn("View this request", `${appUrl}/bookings/${opts.jobId}`)
+  );
+
+  return deliver({
+    to: opts.to,
+    subject: `Your Cleano quote — ${fmt(opts.total)}`,
+    html,
+    logId: opts.logId,
   });
 }
 

@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { resolveTemplateScope } from "@/lib/checklist-scope.server";
 
 interface ChecklistItemInput {
   title: string;
@@ -17,6 +18,10 @@ interface CreateChecklistTemplateInput {
   description?: string | null;
   jobType?: string | null;
   addOnName?: string | null;
+  /** Customer scope (Stage 10 / PDF #10). Null = not customer-specific. */
+  clientId?: string | null;
+  /** One location of that customer. Requires `clientId`. */
+  clientAddressId?: string | null;
   isActive?: boolean;
   items: ChecklistItemInput[];
 }
@@ -36,6 +41,9 @@ export async function createChecklistTemplate(
       return { success: false, error: "Template name is required" };
     }
 
+    const scope = await resolveTemplateScope(input);
+    if ("error" in scope) return { success: false, error: scope.error };
+
     const filtered = (input.items || []).filter((it) => it.title?.trim());
 
     const tpl = await db.checklistTemplate.create({
@@ -44,6 +52,8 @@ export async function createChecklistTemplate(
         description: input.description?.trim() || null,
         jobType: input.jobType?.trim() || null,
         addOnName: input.addOnName?.trim() || null,
+        clientId: scope.clientId,
+        clientAddressId: scope.clientAddressId,
         isActive: input.isActive ?? true,
         items: {
           create: filtered.map((it, idx) => ({

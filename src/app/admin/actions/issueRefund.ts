@@ -10,6 +10,7 @@ import { applyStrike } from "@/lib/strikes";
 import { logActivity } from "@/lib/activity-log";
 import { requireBudgetCategoryId } from "@/lib/budget-categories";
 import { resolveAmountDue } from "@/lib/job-billing";
+import { resolveDepositCredit } from "@/lib/booking-deposit";
 
 interface IssueRefundInput {
   jobId: string;
@@ -45,7 +46,13 @@ export async function issueRefund(input: IssueRefundInput) {
     // it capped refunds at $128 of a $213.85 charge, so a full refund was
     // impossible from either this action or the modal that calls it.
     const totalCharged = resolveAmountDue(job);
-    const depositAmount = job.depositPaid ? 20 : 0;
+    // The deposit that was ACTUALLY charged (Stage 11 / PDF #9). This was a
+    // hardcoded `20`, which capped a post-construction refund at $20 of a $200
+    // deposit — a declined quote could not be refunded from any surface in the
+    // app. `resolveDepositCredit` reads the stored figure and falls back to $20
+    // only for rows written before the column existed, which is what those rows
+    // really charged.
+    const depositAmount = resolveDepositCredit(job);
     const alreadyRefunded = job.refundedAmount ?? 0;
 
     // Pick the Stripe PI to refund against and the matching ceiling.

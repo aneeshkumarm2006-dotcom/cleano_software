@@ -72,6 +72,7 @@ const JOB_STATUS = ["CREATED", "SCHEDULED", "IN_PROGRESS", "COMPLETED", "PAID", 
 const PAYMENT_TYPES = ["CASH", "CHEQUE", "E_TRANSFER", "CREDIT_CARD", "OTHER"] as const;
 const ROLES = ["OWNER", "ADMIN", "OPS_MANAGER", "FIELD_LEAD", "EMPLOYEE", "CLIENT"] as const;
 const PRODUCT_CATEGORIES = ["LIQUID_SPRAY", "MOP_LIQUID", "DISPOSABLE", "OTHER"] as const;
+const PRODUCT_ITEM_TYPES = ["LIQUID", "COUNTABLE_CONSUMABLE", "REUSABLE_EQUIPMENT"] as const;
 const REQUEST_STATUS = ["PENDING", "APPROVED", "REJECTED", "FULFILLED"] as const;
 
 export const CSV_ENTITIES: Record<EntityKey, CsvEntityConfig> = {
@@ -178,7 +179,11 @@ export const CSV_ENTITIES: Record<EntityKey, CsvEntityConfig> = {
     title: "Products",
     fileName: "products-template.csv",
     description: "Import inventory products.",
-    guidance: ["Rows are skipped as duplicates when their name matches an existing product (case-insensitive)."],
+    guidance: [
+      "Rows are skipped as duplicates when their name matches an existing product (case-insensitive).",
+      "itemType is optional. Left blank, it is guessed from the category and the product name — LIQUID_SPRAY/MOP_LIQUID become LIQUID, DISPOSABLE becomes COUNTABLE_CONSUMABLE, and names that read like tools (scraper, broom, vacuum, bucket, brush…) become REUSABLE_EQUIPMENT. Check the guesses afterwards with Products → select rows → \"Set item type\".",
+      "Item type decides how a cleaner reports on the item: LIQUID = level (Full…Empty), COUNTABLE_CONSUMABLE = a count, REUSABLE_EQUIPMENT = a condition. Refill thresholds never apply to reusable equipment.",
+    ],
     columns: [
       { key: "name", type: "string", required: true, example: "Glass Cleaner" },
       { key: "unit", type: "string", required: true, example: "bottles" },
@@ -187,6 +192,13 @@ export const CSV_ENTITIES: Record<EntityKey, CsvEntityConfig> = {
       { key: "stockLevel", type: "float", min: 0, example: "0" },
       { key: "minStock", type: "float", min: 0, example: "0" },
       { key: "category", type: "enum", enumValues: PRODUCT_CATEGORIES, example: "OTHER" },
+      {
+        key: "itemType",
+        type: "enum",
+        enumValues: PRODUCT_ITEM_TYPES,
+        example: "COUNTABLE_CONSUMABLE",
+        help: "Optional — guessed from category + name when blank.",
+      },
     ],
   },
 

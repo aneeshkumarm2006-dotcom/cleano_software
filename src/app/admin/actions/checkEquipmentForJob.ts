@@ -4,10 +4,14 @@ import { db } from "@/db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { loadPerJobAverages } from "@/lib/inventory-forecast.server";
+import { ASSIGNABLE_PRODUCT_WHERE } from "@/lib/kit-product.server";
 import type {
   MissingEquipmentItem,
   EquipmentCheckResult,
 } from "./checkEquipmentForJob.types";
+
+/** Kit-template lines whose product is still in the active catalogue. */
+const ASSIGNABLE_KIT_ITEM = { product: ASSIGNABLE_PRODUCT_WHERE };
 
 export async function checkEquipmentForJob(
   jobId: string,
@@ -77,7 +81,11 @@ export async function checkEquipmentForJob(
           isActive: true,
           name: { equals: job.jobType, mode: "insensitive" },
         },
-        include: { items: { include: { product: true } } },
+        // Archived products are dropped from the requirement list (Stage 5):
+        // whatever this returns becomes "missing", and every route out of that
+        // screen asks to be GIVEN the item — which an archived product refuses.
+        // Listing one would be a dead end with an error at the end of it.
+        include: { items: { where: ASSIGNABLE_KIT_ITEM, include: { product: true } } },
       });
 
       for (const kit of kitTemplates) {
@@ -103,7 +111,7 @@ export async function checkEquipmentForJob(
           isActive: true,
           name: { in: addOnNames, mode: "insensitive" },
         },
-        include: { items: { include: { product: true } } },
+        include: { items: { where: ASSIGNABLE_KIT_ITEM, include: { product: true } } },
       });
       for (const kit of addOnKits) {
         for (const item of kit.items) {
@@ -130,7 +138,7 @@ export async function checkEquipmentForJob(
       const avgPerJob = await loadPerJobAverages();
       if (avgPerJob.size > 0) {
         const products = await db.product.findMany({
-          where: { id: { in: [...avgPerJob.keys()] } },
+          where: { id: { in: [...avgPerJob.keys()] }, ...ASSIGNABLE_PRODUCT_WHERE },
           select: { id: true, name: true, unit: true },
         });
         for (const product of products) {

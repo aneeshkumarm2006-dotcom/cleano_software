@@ -46,6 +46,14 @@ export function needsPopup(a: AddOnSelection): boolean {
   return !a.selected && a.popupEnabled === true;
 }
 
+/** One photo the customer uploaded at booking time (PDF #9 / Stage 11). */
+export interface BookingPhoto {
+  /** Cloudinary secure URL. The only field `submitBooking` trusts, after re-validation. */
+  url: string;
+  /** Cloudinary public id — kept so the UI can key the thumbnail list stably. */
+  publicId: string;
+}
+
 export interface BookingDraft {
   // Step 1
   postalCode: string;
@@ -66,6 +74,14 @@ export interface BookingDraft {
    * untrusted input.
    */
   addressId: string | null;
+  /**
+   * Apartment/condo vs house (Stage 9 / PDF #11). "" = not answered, which is
+   * a legitimate outcome: the field is optional and an admin can hide it
+   * entirely from Settings, so nothing here may assume a value. Typed as a
+   * plain string like `serviceType`; `parsePropertyType` is what turns it into
+   * a column value, server-side, in submitBooking.
+   */
+  propertyType: string;
   bedCount: number;
   bathCount: number;
   halfBathCount: number;
@@ -76,6 +92,19 @@ export interface BookingDraft {
   // Post-construction specific
   pcHours: number;
   pcCleaners: number;
+  /**
+   * Photos of the space, uploaded during step 2 (PDF #9 / Stage 11).
+   *
+   * Already IN STORAGE by the time they land here — `uploadBookingPhoto` puts
+   * each file on Cloudinary and returns its URL, because the job these attach to
+   * does not exist until the booking is submitted. Carrying URLs rather than
+   * `File` objects is also what lets a restored draft keep its photos: a File
+   * cannot survive sessionStorage, a URL can.
+   *
+   * Required for post-construction and hidden for everything else, per the
+   * booking-page config. `submitBooking` re-validates every URL server-side.
+   */
+  photos: BookingPhoto[];
   // Step 3
   date: string;
   isFlexible: boolean;
@@ -109,6 +138,7 @@ export const EMPTY_DRAFT: BookingDraft = {
   address: "",
   aptNumber: "",
   addressId: null,
+  propertyType: "",
   bedCount: 2,
   bathCount: 1,
   halfBathCount: 0,
@@ -118,6 +148,7 @@ export const EMPTY_DRAFT: BookingDraft = {
   addOns: [],
   pcHours: 4,
   pcCleaners: 2,
+  photos: [],
   date: "",
   isFlexible: true,
   timeSlot: "",

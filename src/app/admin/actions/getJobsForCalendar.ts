@@ -1,10 +1,13 @@
 "use server";
 
 import { db } from "@/db";
-import { auth } from "@/lib/auth";
-import { headers } from "next/headers";
 import { computeBadgeMaps } from "./_calendarBadges";
 import { CALENDAR_JOB_SELECT } from "./_calendarSelect";
+import {
+  calendarScopeFilter,
+  projectCalendarMetadata,
+  resolveCalendarViewer,
+} from "./_calendarScope";
 import { activeSubtotal } from "@/lib/job-money";
 
 /**
@@ -20,34 +23,23 @@ import { activeSubtotal } from "@/lib/job-money";
  * byte-identical in output to `getJobsForDay` if it is ever revived.
  */
 export async function getJobsForCalendar(startDate?: Date, endDate?: Date) {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
-
-  if (!session) {
-    throw new Error("Unauthorized");
-  }
-
-  // Check user role - admins/owners can see all jobs
-  const isAdmin =
-    (session.user as any).role === "ADMIN" ||
-    (session.user as any).role === "OWNER";
+  // Same resolved viewer the live feed uses (Stage 7): scope AND money
+  // visibility come from one object, so this dormant twin cannot drift back into
+  // handing a field lead their group's prices if it is ever revived.
+  const viewer = await resolveCalendarViewer();
 
   // Build where clause — never show soft-deleted jobs on the calendar.
   const where: any = { deletedAt: null };
 
-  if (!isAdmin) {
-    // Regular employees see jobs where they are either the primary employee or a cleaner
-    where.OR = [
-      { employeeId: session.user.id },
-      { cleaners: { some: { id: session.user.id } } }
-    ];
+  const scoped = calendarScopeFilter(viewer);
+  if (scoped) {
+    where.AND = [scoped];
   }
 
   // Add date range filter if provided
   if (startDate || endDate) {
     where.AND = where.AND || [];
-    
+
     if (startDate && endDate) {
       where.AND.push({
         OR: [
@@ -95,10 +87,14 @@ export async function getJobsForCalendar(startDate?: Date, endDate?: Date) {
     ],
   });
 
-  // Resolve priority labels (R/I) + missing-equipment warnings. Admins see the
-  // warning for every assigned cleaner; cleaners see it for their own kit.
+  // Resolve priority labels (R/I) + missing-equipment warnings. Admins and field
+  // leads see the warning for every assigned cleaner on the jobs already in
+  // scope; a cleaner sees it for their own kit.
   const { priority: priorityMap, missing: missingEquipmentMap } =
-    await computeBadgeMaps(jobs, { isAdmin, viewerId: session.user.id });
+    await computeBadgeMaps(jobs, {
+      allAssignedCleaners: viewer.allAssignedCleaners,
+      viewerId: viewer.viewerId,
+    });
 
   // Transform jobs to calendar event format
   return jobs.map((job) => {
@@ -121,7 +117,8 @@ export async function getJobsForCalendar(startDate?: Date, endDate?: Date) {
       end: end?.toISOString(),
       confirmed: job.status !== "CREATED" && job.status !== "CANCELLED",
       importance: job.status === "IN_PROGRESS" ? 5 : job.status === "SCHEDULED" ? 3 : 1,
-      metadata: {
+      // Money nulled + notes sanitized for viewers who aren't OWNER/ADMIN.
+      metadata: projectCalendarMetadata({
         jobId: job.id,
         jobType: job.jobType,
         location: job.location,
@@ -132,6 +129,17 @@ export async function getJobsForCalendar(startDate?: Date, endDate?: Date) {
         // `priceLabel` prints this on the card. It is the ACTIVE value of the
         // job (fix 3), not the base line — one figure, same as the job page.
         price: activeSubtotal(job),
+        // Stage 8 — kept byte-identical to getJobsForDay's block. `price` above
+        // is already the hourly total, because `activeSubtotal` derives it;
+        // these two exist so the card can SAY it is hourly. The rate is not
+        // here: it is a price, and `projectCalendarMetadata` redacts it.
+        billingType: job.billingType,
+        billedHourlyRate: job.billedHourlyRate,
+        billedHours: job.billedActualHours ?? job.billedEstimatedHours,
+        // Stage 9 — kept byte-identical to getJobsForDay's line, same reason as
+        // the block above: the live feed and the prefetched one must not
+        // disagree about what a card says.
+        propertyType: job.propertyType,
         employeePay: job.employeePay,
         totalTip: job.totalTip,
         parking: job.parking,
@@ -146,7 +154,7 @@ export async function getJobsForCalendar(startDate?: Date, endDate?: Date) {
         rescheduleRequestedAt: job.rescheduleRequestedAt
           ? job.rescheduleRequestedAt.toISOString()
           : null,
-      },
+      }, viewer),
     };
   });
 }

@@ -15,6 +15,11 @@ import { NumberStepper, QuantityStepper, ChoiceButton } from "@/components/custo
 import { addonIcon } from "@/lib/addon-icons";
 import { MAX_ADDON_QUANTITY } from "@/lib/job-money";
 import { normalizeJobType } from "@/lib/calendar-labels";
+import {
+  PROPERTY_TYPE_HINT,
+  PROPERTY_TYPE_LABEL,
+  PROPERTY_TYPES,
+} from "@/lib/property-type";
 import PremiumSelect from "@/components/ui/PremiumSelect";
 import {
   NEW_ADDRESS,
@@ -23,6 +28,7 @@ import {
   type SavedAddress,
 } from "@/lib/client-address";
 import { checkServiceArea } from "../../actions/checkServiceArea";
+import BookingPhotoUpload from "./BookingPhotoUpload";
 
 const ROOM_LABELS: Record<RoomType, string> = {
   KITCHEN: "Kitchen",
@@ -318,6 +324,36 @@ export default function Step2Property({
           </div>
         );
 
+      // Apartment/condo vs house (Stage 9 / PDF #11). Two choice buttons, the
+      // same control the service picker above uses, and re-tapping the active
+      // one clears it — the field is optional, so "I'd rather not say" has to
+      // stay reachable after a stray tap. It prices nothing: no quote re-run is
+      // triggered and `computeBookingPrice` never sees it.
+      case "propertyType":
+        return (
+          <div key={f.key} className="cl-stack-12">
+            <span className="cl-label">{f.label}</span>
+            {f.helpText && (
+              <p style={{ fontSize: 12, color: "var(--primary-60)", margin: 0, lineHeight: 1.5 }}>
+                {f.helpText}
+              </p>
+            )}
+            <div className="cl-grid-2">
+              {PROPERTY_TYPES.map((p) => (
+                <ChoiceButton
+                  key={p}
+                  active={draft.propertyType === p}
+                  title={PROPERTY_TYPE_LABEL[p]}
+                  hint={PROPERTY_TYPE_HINT[p]}
+                  onClick={() =>
+                    onChange({ propertyType: draft.propertyType === p ? "" : p })
+                  }
+                />
+              ))}
+            </div>
+          </div>
+        );
+
       case "bedCount":
         return (
           <NumberStepper
@@ -433,6 +469,27 @@ export default function Step2Property({
                 </span>
               </div>
             )}
+          </div>
+        );
+
+      // Photos of the space (PDF #9, Stage 11). Post-construction is quoted from
+      // these, so the field is visible + required + locked for that service —
+      // see isLockedField in booking-page-config. Hidden everywhere else, which
+      // is why there is no `isPC` test here: the config decides.
+      case "photos":
+        return (
+          <div key={f.key} className="cl-stack-12">
+            <span className="cl-label">{f.label}</span>
+            {f.helpText && (
+              <p style={{ fontSize: 12, color: "var(--primary-60)", margin: 0, lineHeight: 1.5 }}>
+                {f.helpText}
+              </p>
+            )}
+            <BookingPhotoUpload
+              value={draft.photos}
+              onChange={(photos) => onChange({ photos })}
+              required={f.required}
+            />
           </div>
         );
 
@@ -603,7 +660,11 @@ export default function Step2Property({
                 }}>
                 <div>
                   <div style={{ fontSize: 12, color: "var(--primary-60)", marginBottom: 2 }}>
-                    Estimate ({draft.pcHours} hour{draft.pcHours !== 1 ? "s" : ""})
+                    Estimate ({draft.pcHours} hour{draft.pcHours !== 1 ? "s" : ""}
+                    {draft.pcCleaners
+                      ? `, ${draft.pcCleaners} cleaner${draft.pcCleaners !== 1 ? "s" : ""}`
+                      : ""}
+                    )
                   </div>
                   <div style={{ fontSize: 22, fontWeight: 700, color: "var(--primary)" }}>
                     ${basePrice.toFixed(0)}{" "}
@@ -612,8 +673,12 @@ export default function Step2Property({
                     </span>
                   </div>
                 </div>
-                <span style={{ fontSize: 11, color: "var(--primary-50)", maxWidth: 130, lineHeight: 1.4 }}>
-                  Final price confirmed after on-site assessment.
+                {/* PDF #9, Stage 11: the old line promised an "on-site
+                    assessment" that nobody was scheduled to do. The real flow is
+                    photos in, quote back — so say that. */}
+                <span style={{ fontSize: 11, color: "var(--primary-50)", maxWidth: 148, lineHeight: 1.4 }}>
+                  Estimate only — we send your final quote after reviewing your
+                  photos.
                 </span>
               </div>
             )}

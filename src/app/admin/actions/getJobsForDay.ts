@@ -1,10 +1,14 @@
 "use server";
 
 import { db } from "@/db";
-import { auth } from "@/lib/auth";
-import { headers } from "next/headers";
 import { computeBadgeMaps, type MissingItem } from "./_calendarBadges";
 import { CALENDAR_JOB_SELECT, type CalendarJobRow } from "./_calendarSelect";
+import {
+  calendarScopeFilter,
+  projectCalendarMetadata,
+  resolveCalendarViewer,
+  type CalendarViewer,
+} from "./_calendarScope";
 import type { PriorityLabel } from "@/lib/calendar-labels";
 import { activeSubtotal } from "@/lib/job-money";
 import { storeCivilDayRange, storeDateKey, storeParts } from "@/lib/timezone";
@@ -42,11 +46,18 @@ function toBusinessWallClock(date: Date): string {
  * route cannot drift: the range endpoint exists purely to collapse 31 HTTP
  * round trips into one, and the payload it emits has to stay byte-identical to
  * what the fan-out produced.
+ *
+ * Stage 7: `viewer` is REQUIRED, not optional. The metadata block below carries
+ * `price`, `employeePay`, `totalTip`, `parking` and payment state, and
+ * FIELD_LEAD now sees their whole group's jobs here — so there must be no way to
+ * build an event without deciding whether this viewer may read money. A
+ * defaulted parameter would have made the leak the quiet path.
  */
 function toCalendarEvent(
   job: CalendarJobRow,
   priorityMap: Record<string, PriorityLabel>,
-  missingEquipmentMap: Record<string, MissingItem[]>
+  missingEquipmentMap: Record<string, MissingItem[]>,
+  viewer: Pick<CalendarViewer, "canSeeMoney">
 ) {
   const startTime = new Date(job.startTime);
   const endTime = job.endTime ? new Date(job.endTime) : undefined;
@@ -65,7 +76,9 @@ function toCalendarEvent(
     confirmed: job.status !== "CREATED" && job.status !== "CANCELLED",
     importance:
       job.status === "IN_PROGRESS" ? 5 : job.status === "SCHEDULED" ? 3 : 1,
-    metadata: {
+    // Everything money-bearing in here is nulled and `notes` sanitized for
+    // viewers who aren't OWNER/ADMIN — see projectCalendarMetadata.
+    metadata: projectCalendarMetadata({
       jobId: job.id,
       jobType: job.jobType,
       location: job.location,
@@ -78,6 +91,15 @@ function toCalendarEvent(
       // byte-identical to getJobsForCalendar's line so the live feed and the
       // prefetched one can never quote different numbers for the same day.
       price: activeSubtotal(job),
+      // Stage 8 — byte-identical to getJobsForCalendar's block, same reason as
+      // the `price` line above. `billedHourlyRate` is money and is redacted by
+      // projectCalendarMetadata; the type and the hours are not.
+      billingType: job.billingType,
+      billedHourlyRate: job.billedHourlyRate,
+      billedHours: job.billedActualHours ?? job.billedEstimatedHours,
+      // Stage 9 — the card's "Apt"/"House" tag. Property information, no money
+      // in it, so every calendar audience sees it (see _calendarScope.ts).
+      propertyType: job.propertyType,
       employeePay: job.employeePay,
       totalTip: job.totalTip,
       parking: job.parking,
@@ -92,7 +114,7 @@ function toCalendarEvent(
       rescheduleRequestedAt: job.rescheduleRequestedAt
         ? job.rescheduleRequestedAt.toISOString()
         : null,
-    },
+    }, viewer),
   };
 }
 
@@ -103,28 +125,16 @@ type CalendarEventPayload = ReturnType<typeof toCalendarEvent>;
  *  request into an unbounded scan. */
 const MAX_RANGE_DAYS = 62;
 
-/** The viewer scope both feeds apply: everyone for admins/owners, own jobs otherwise. */
-async function requireCalendarViewer() {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
-
-  if (!session) {
-    throw new Error("Unauthorized");
-  }
-
-  const isAdmin =
-    (session.user as any).role === "ADMIN" ||
-    (session.user as any).role === "OWNER";
-
-  return { session, isAdmin };
-}
-
-function calendarWhere(
-  start: Date,
-  end: Date,
-  opts: { isAdmin: boolean; viewerId: string }
-) {
+/**
+ * The viewer scope both feeds apply:
+ *   OWNER/ADMIN → every job, money visible;
+ *   FIELD_LEAD  → their group's jobs, money redacted (Stage 7 / PDF #7);
+ *   everyone else → their own jobs, money redacted.
+ *
+ * Resolution lives in `./_calendarScope.ts` so the scope and the redaction are
+ * decided by the same object and cannot be applied one without the other.
+ */
+function calendarWhere(start: Date, end: Date, viewer: CalendarViewer) {
   const where: any = {
     deletedAt: null,
     OR: [
@@ -135,27 +145,19 @@ function calendarWhere(
     ],
   };
 
-  if (!opts.isAdmin) {
-    where.AND = [
-      {
-        OR: [
-          { employeeId: opts.viewerId },
-          { cleaners: { some: { id: opts.viewerId } } },
-        ],
-      },
-    ];
-  }
+  const scoped = calendarScopeFilter(viewer);
+  if (scoped) where.AND = [scoped];
 
   return where;
 }
 
 export async function getJobsForDay(dateStr: string) {
-  const { session, isAdmin } = await requireCalendarViewer();
+  const viewer = await resolveCalendarViewer();
 
   const { start, end } = getDayBounds(dateStr);
 
   const jobs = await db.job.findMany({
-    where: calendarWhere(start, end, { isAdmin, viewerId: session.user.id }),
+    where: calendarWhere(start, end, viewer),
     // Explicit select, not `include` (Stage 5 item 5). `include` with no select
     // pulls every one of Job's ~90 columns, of which the mapper uses 19. The
     // drawer fetches the rest on open (getJobSummary), so the grid payload has
@@ -169,13 +171,17 @@ export async function getJobsForDay(dateStr: string) {
     orderBy: [{ jobDate: "asc" }, { startTime: "asc" }, { id: "asc" }],
   });
 
-  // Resolve priority labels (R/I) + missing-equipment warnings. Admins see the
-  // warning for every assigned cleaner; cleaners see it for their own kit.
+  // Resolve priority labels (R/I) + missing-equipment warnings. Admins and field
+  // leads see the warning for every assigned cleaner on the jobs they can
+  // already see; a cleaner sees it for their own kit.
   const { priority: priorityMap, missing: missingEquipmentMap } =
-    await computeBadgeMaps(jobs, { isAdmin, viewerId: session.user.id });
+    await computeBadgeMaps(jobs, {
+      allAssignedCleaners: viewer.allAssignedCleaners,
+      viewerId: viewer.viewerId,
+    });
 
   return jobs.map((job) =>
-    toCalendarEvent(job, priorityMap, missingEquipmentMap)
+    toCalendarEvent(job, priorityMap, missingEquipmentMap, viewer)
   );
 }
 
@@ -197,7 +203,7 @@ export async function getJobsForDay(dateStr: string) {
  * payload stays as light per row as it was before.
  */
 export async function getJobsForRange(startStr: string, endStr: string) {
-  const { session, isAdmin } = await requireCalendarViewer();
+  const viewer = await resolveCalendarViewer();
 
   const { start } = getDayBounds(startStr);
   const { end } = getDayBounds(endStr);
@@ -210,7 +216,7 @@ export async function getJobsForRange(startStr: string, endStr: string) {
   }
 
   const jobs = await db.job.findMany({
-    where: calendarWhere(start, end, { isAdmin, viewerId: session.user.id }),
+    where: calendarWhere(start, end, viewer),
     select: CALENDAR_JOB_SELECT,
     // `id` last as a TIEBREAK. Without it two jobs sharing a jobDate and
     // startTime came back in whatever order the scan produced, which differs
@@ -221,7 +227,10 @@ export async function getJobsForRange(startStr: string, endStr: string) {
   });
 
   const { priority: priorityMap, missing: missingEquipmentMap } =
-    await computeBadgeMaps(jobs, { isAdmin, viewerId: session.user.id });
+    await computeBadgeMaps(jobs, {
+      allAssignedCleaners: viewer.allAssignedCleaners,
+      viewerId: viewer.viewerId,
+    });
 
   // Pre-seed every civil day in the span so a day with no jobs comes back as an
   // explicit empty array rather than a missing key.
@@ -238,7 +247,7 @@ export async function getJobsForRange(startStr: string, endStr: string) {
   }
 
   for (const job of jobs) {
-    const event = toCalendarEvent(job, priorityMap, missingEquipmentMap);
+    const event = toCalendarEvent(job, priorityMap, missingEquipmentMap, viewer);
     // A Set, because the two clauses of `calendarWhere` frequently point at the
     // same day and the per-day route returned one row, not two.
     const keys = new Set<string>();

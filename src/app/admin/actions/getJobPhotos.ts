@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import type { JobPhotoDTO } from "./getJobPhotos.types";
+import { BOOKING_PHOTO_UPLOADER_LABEL } from "@/lib/booking-deposit";
 
 export async function getJobPhotos(
   jobId: string
@@ -52,11 +53,15 @@ export async function getJobPhotos(
       id: p.id,
       jobId: p.jobId,
       employeeId: p.employeeId,
-      employeeName: p.employee.name,
+      // A booking photo has no uploader (Stage 11) — labelled, not blanked, so
+      // the galleries can say who it came from.
+      employeeName: p.employee?.name ?? BOOKING_PHOTO_UPLOADER_LABEL,
       url: p.url,
       caption: p.caption,
       createdAt: p.createdAt,
-      canDelete: isAdmin || p.employeeId === session.user.id,
+      // A customer-uploaded photo (employeeId NULL) is admin-only to delete: it
+      // is evidence the quote was priced from, and no cleaner owns it.
+      canDelete: isAdmin || (!!p.employeeId && p.employeeId === session.user.id),
     }));
 
     return { success: true, photos: dto };

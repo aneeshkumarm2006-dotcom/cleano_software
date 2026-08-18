@@ -28,38 +28,17 @@ import {
 } from "@/lib/work-sessions";
 import { markOnMyWay } from "../onMyWay";
 import { getCoords } from "../OnMyWayButton";
-import type { ClockOutUsage } from "@/lib/clock-out";
+import type { ClosingReport } from "@/lib/clock-out";
+import ClosingInventoryReport, {
+  answeredCount,
+  buildReport,
+  type ClosingReportDraft,
+  type ClosingReportItem,
+} from "../../ClosingInventoryReport";
 import {
   ClockOutErrorNotice,
-  ClockOutFieldNote,
-  clockOutFieldStyle,
-  isClockOutFieldError,
   type ClockOutErrorState,
 } from "../../ClockOutError";
-
-type ProductCategory = "LIQUID_SPRAY" | "MOP_LIQUID" | "DISPOSABLE" | "OTHER";
-
-interface EmployeeProduct {
-  id: string;
-  productId: string;
-  quantity: number;
-  product: { id: string; name: string; unit: string; category: ProductCategory };
-}
-
-const SPRAY_OPTIONS = [
-  { label: "None", sprays: 0 },
-  { label: "Light use", hint: "10–20 sprays", sprays: 15 },
-  { label: "Medium use", hint: "20–40 sprays", sprays: 30 },
-  { label: "Heavy use", hint: "40+ sprays", sprays: 50 },
-];
-const MOP_OPTIONS = [
-  { label: "None", mops: 0 },
-  { label: "1 mop", mops: 1 },
-  { label: "2 mops", mops: 2 },
-  { label: "3+ mops", mops: 3 },
-];
-const DISPOSABLE_OPTIONS = [0, 1, 2, 3];
-const ML_PER_SPRAY = 1.25;
 
 interface ClockPageClientProps {
   jobId: string;
@@ -72,7 +51,8 @@ interface ClockPageClientProps {
   /** True when a break is already running (item 26). */
   initialOnBreak?: boolean;
   onMyWayAt?: string | null;
-  employeeProducts?: EmployeeProduct[];
+  /** This cleaner's kit, as the closing report needs to see it (Stage 3). */
+  employeeProducts?: ClosingReportItem[];
   /** Admin setting `tracking.gpsEnabled`; when false, never prompt for GPS. */
   gpsEnabled?: boolean;
   /** This cleaner's work sessions on this job, oldest first (item 6). */
@@ -203,34 +183,19 @@ export default function ClockPageClient({
   const [coLoading, setCoLoading] = useState(false);
   const [coFailure, setCoFailure] = useState<ClockOutErrorState | null>(null);
   /** The payload of the failed attempt, so Retry resends it unchanged (5.5). */
-  const [coLastPayload, setCoLastPayload] = useState<ClockOutUsage | null>(null);
-  const [sprayPick, setSprayPick] = useState<Record<string, number>>({});
-  const [mopPick, setMopPick] = useState<Record<string, number>>({});
-  const [dispPick, setDispPick] = useState<Record<string, number>>({});
-  const [remaining, setRemaining] = useState<Record<string, string>>({});
+  const [coLastPayload, setCoLastPayload] = useState<ClosingReport | null>(null);
+  // The closing report: has the cleaner opened it, and what have they answered.
+  const [coEditing, setCoEditing] = useState(false);
+  const [coDrafts, setCoDrafts] = useState<Record<string, ClosingReportDraft>>({});
 
   // Checklist state (wired into the clock-out modal)
   const [checklistItems, setChecklistItems] = useState<JobChecklistItemDTO[]>([]);
   const [checklistLoading, setChecklistLoading] = useState(false);
   const [checklistPending, setChecklistPending] = useState<string | null>(null);
 
-  const { sprays, mops, disposables, others } = useMemo(() => ({
-    sprays: employeeProducts.filter(ep => ep.product.category === "LIQUID_SPRAY"),
-    mops: employeeProducts.filter(ep => ep.product.category === "MOP_LIQUID"),
-    disposables: employeeProducts.filter(ep => ep.product.category === "DISPOSABLE"),
-    others: employeeProducts.filter(ep => ep.product.category === "OTHER"),
-  }), [employeeProducts]);
-
   async function openClockOut() {
-    const sp: Record<string, number> = {};
-    const mp: Record<string, number> = {};
-    const dp: Record<string, number> = {};
-    const rem: Record<string, string> = {};
-    sprays.forEach(ep => (sp[ep.productId] = 0));
-    mops.forEach(ep => (mp[ep.productId] = 0));
-    disposables.forEach(ep => (dp[ep.productId] = 0));
-    others.forEach(ep => (rem[ep.productId] = ep.quantity.toString()));
-    setSprayPick(sp); setMopPick(mp); setDispPick(dp); setRemaining(rem);
+    setCoEditing(false);
+    setCoDrafts({});
     setCoFailure(null);
     setCoLastPayload(null);
     setChecklistItems([]);
@@ -260,26 +225,42 @@ export default function ClockPageClient({
   async function handleChecklistToggle(item: JobChecklistItemDTO) {
     if (checklistPending) return;
     const nextStatus = item.status === "COMPLETED" ? "PENDING" : "COMPLETED";
+    const previousStatus = item.status;
     setChecklistPending(item.id);
     setChecklistItems(prev =>
       prev.map(it => it.id === item.id ? { ...it, status: nextStatus as typeof item.status } : it)
     );
-    await updateChecklistItem({ itemId: item.id, status: nextStatus as typeof item.status });
-    setChecklistPending(null);
+    try {
+      const res = await updateChecklistItem({ itemId: item.id, status: nextStatus as typeof item.status });
+      // The result was previously discarded, so a refused write (a regenerated
+      // checklist, a lost session) left the optimistic tick on screen claiming
+      // work had been recorded that had not. Put the row back where it was.
+      if (!res.success) {
+        setChecklistItems(prev =>
+          prev.map(it => it.id === item.id ? { ...it, status: previousStatus } : it)
+        );
+      }
+    } catch (e) {
+      // Without this the `finally` never ran and `checklistPending` latched,
+      // blocking every later tick on the whole list until a reload — see the
+      // matching note in JobChecklistPanel.
+      console.error("checklist toggle", e);
+      setChecklistItems(prev =>
+        prev.map(it => it.id === item.id ? { ...it, status: previousStatus } : it)
+      );
+    } finally {
+      setChecklistPending(null);
+    }
   }
 
-  function buildUsage(): ClockOutUsage {
-    return {
-      sprays: sprays.map(ep => ({ productId: ep.productId, sprayCount: SPRAY_OPTIONS[sprayPick[ep.productId] ?? 0].sprays })),
-      mops: mops.map(ep => ({ productId: ep.productId, mopCount: MOP_OPTIONS[mopPick[ep.productId] ?? 0].mops })),
-      disposables: disposables.map(ep => ({ productId: ep.productId, quantity: DISPOSABLE_OPTIONS[dispPick[ep.productId] ?? 0] })),
-      // Blank stays blank. The old `?? "0"` read a MISSING key as "zero left",
-      // which would have deducted a cleaner's entire stock of that product.
-      remaining: others.map(ep => ({ productId: ep.productId, inventoryAfter: parseFloat(remaining[ep.productId] ?? "") })).filter(r => !isNaN(r.inventoryAfter)),
-    };
+  // Blank stays blank. The old `?? "0"` read a MISSING key as "zero left",
+  // which would have deducted a cleaner's entire stock of that product; the
+  // shared report keeps a cleared box as "I didn't count it".
+  function buildUsage(): ClosingReport {
+    return buildReport(coDrafts);
   }
 
-  async function submitClockOut(usage: ClockOutUsage) {
+  async function submitClockOut(usage: ClosingReport) {
     // Re-entry guard — the confirm button is disabled in flight, but a double
     // tap can beat the re-render on a slow phone.
     if (coLoading) return;
@@ -308,6 +289,7 @@ export default function ClockPageClient({
 
   const handleClockOut = () => submitClockOut(buildUsage());
   const handleClockOutRetry = () => submitClockOut(coLastPayload ?? buildUsage());
+  const coReported = answeredCount(coDrafts);
 
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
@@ -740,134 +722,15 @@ export default function ClockPageClient({
                   </div>
                 );
               })() : null}
-              {sprays.length + mops.length + disposables.length + others.length === 0 ? (
-                <div className="co-empty"><p>No products assigned. You can clock out now.</p></div>
-              ) : (
-                <>
-                  {sprays.length > 0 && (
-                    <div className="pju-section">
-                      <div className="pju-section-head">
-                        <span className="pju-section-icon">💧</span>
-                        <div><h3>Liquid sprays</h3><p>How much did you spray?</p></div>
-                      </div>
-                      {sprays.map(ep => {
-                        const pick = sprayPick[ep.productId] ?? 0;
-                        const mlDeducted = SPRAY_OPTIONS[pick].sprays * ML_PER_SPRAY;
-                        const flagged = isClockOutFieldError(coFailure, ep.productId);
-                        return (
-                          <div key={ep.productId} className="pju-card" style={clockOutFieldStyle(flagged)}>
-                            <div className="pju-card-head">
-                              <span className="pju-card-name">{ep.product.name}</span>
-                              <span className="pju-card-stock">{ep.quantity.toFixed(1)} {ep.product.unit}</span>
-                            </div>
-                            <div className="pju-pills">
-                              {SPRAY_OPTIONS.map((opt, idx) => (
-                                <button key={idx} type="button" className={`pju-pill${pick === idx ? " selected" : ""}`} onClick={() => setSprayPick(p => ({ ...p, [ep.productId]: idx }))}>
-                                  <span className="lbl">{opt.label}</span>
-                                  {opt.hint && <span className="hint">{opt.hint}</span>}
-                                </button>
-                              ))}
-                            </div>
-                            {mlDeducted > 0 && <div className="pju-card-foot">Deducts {mlDeducted.toFixed(2)} ml</div>}
-                            {flagged && coFailure && <ClockOutFieldNote state={coFailure} />}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {mops.length > 0 && (
-                    <div className="pju-section">
-                      <div className="pju-section-head">
-                        <span className="pju-section-icon">🧹</span>
-                        <div><h3>Mop-based liquids</h3><p>How many mop uses?</p></div>
-                      </div>
-                      {mops.map(ep => {
-                        const pick = mopPick[ep.productId] ?? 0;
-                        const flagged = isClockOutFieldError(coFailure, ep.productId);
-                        return (
-                          <div key={ep.productId} className="pju-card" style={clockOutFieldStyle(flagged)}>
-                            <div className="pju-card-head">
-                              <span className="pju-card-name">{ep.product.name}</span>
-                              <span className="pju-card-stock">{ep.quantity.toFixed(1)} {ep.product.unit}</span>
-                            </div>
-                            <div className="pju-pills">
-                              {MOP_OPTIONS.map((opt, idx) => (
-                                <button key={idx} type="button" className={`pju-pill${pick === idx ? " selected" : ""}`} onClick={() => setMopPick(p => ({ ...p, [ep.productId]: idx }))}>
-                                  <span className="lbl">{opt.label}</span>
-                                </button>
-                              ))}
-                            </div>
-                            {flagged && coFailure && <ClockOutFieldNote state={coFailure} />}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {disposables.length > 0 && (
-                    <div className="pju-section">
-                      <div className="pju-section-head">
-                        <span className="pju-section-icon">📦</span>
-                        <div><h3>Disposables</h3><p>How many items did you use?</p></div>
-                      </div>
-                      <div className="pju-disp-grid">
-                        {disposables.map(ep => {
-                          const pick = dispPick[ep.productId] ?? 0;
-                          const flagged = isClockOutFieldError(coFailure, ep.productId);
-                          return (
-                            <div key={ep.productId} className="pju-disp-card" style={clockOutFieldStyle(flagged)}>
-                              <div className="pju-disp-name">{ep.product.name}</div>
-                              <div className="pju-disp-stock">{ep.quantity.toFixed(0)} in stock</div>
-                              <div className="pju-disp-pills">
-                                {DISPOSABLE_OPTIONS.map((opt, idx) => (
-                                  <button key={idx} type="button" className={`pju-disp-pill${pick === idx ? " selected" : ""}`} onClick={() => setDispPick(p => ({ ...p, [ep.productId]: idx }))}>
-                                    {idx === 0 ? "0" : `+${opt}`}
-                                  </button>
-                                ))}
-                              </div>
-                              {flagged && coFailure && <ClockOutFieldNote state={coFailure} />}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {others.length > 0 && (
-                    <div className="pju-section">
-                      <div className="pju-section-head">
-                        <span className="pju-section-icon">•••</span>
-                        <div><h3>Other</h3><p>How much do you have remaining?</p></div>
-                      </div>
-                      {others.map(ep => {
-                        const flagged = isClockOutFieldError(coFailure, ep.productId);
-                        return (
-                        <div key={ep.productId} className="pju-card" style={clockOutFieldStyle(flagged)}>
-                          <div className="pju-card-head">
-                            <span className="pju-card-name">{ep.product.name}</span>
-                            <span className="pju-card-stock">Started with {ep.quantity} {ep.product.unit}</span>
-                          </div>
-                          <input
-                            className="co-input"
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            max={ep.quantity}
-                            value={remaining[ep.productId] ?? ""}
-                            onChange={e => setRemaining(p => ({ ...p, [ep.productId]: e.target.value }))}
-                            placeholder={`Remaining ${ep.product.unit}`}
-                            aria-invalid={flagged || undefined}
-                            style={flagged ? { borderColor: "#dc2626" } : undefined}
-                          />
-                          {flagged && coFailure && <ClockOutFieldNote state={coFailure} />}
-                        </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </>
-              )}
+              <ClosingInventoryReport
+                items={employeeProducts}
+                drafts={coDrafts}
+                onChange={setCoDrafts}
+                editing={coEditing}
+                onEditingChange={setCoEditing}
+                failure={coFailure}
+                disabled={coLoading}
+              />
             </div>
 
             {coFailure && (
@@ -887,8 +750,16 @@ export default function ClockPageClient({
                   const allRequiredDone = requiredItemsSatisfied(checklistItems);
                   return (
                     <>
+                      {/* Until the cleaner opens the report this button IS the
+                          "No changes" fast path — one tap, per PDF #2. */}
                       <button className="co-btn-confirm" onClick={handleClockOut} disabled={coLoading || !allRequiredDone}>
-                        {coLoading ? "Submitting…" : "Submit & clock out"}
+                        {coLoading
+                          ? "Submitting…"
+                          : coEditing
+                            ? coReported > 0
+                              ? `Save ${coReported} update${coReported === 1 ? "" : "s"} & clock out`
+                              : "Clock out"
+                            : "No changes — clock out"}
                       </button>
                       {!allRequiredDone && (
                         <span style={{ fontSize: 11, color: "#dc2626", textAlign: "right" }}>

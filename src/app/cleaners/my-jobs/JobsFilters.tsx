@@ -130,7 +130,7 @@ export function JobsFilters({
   return (
     <div className="cl-toolbar">
       {/* Search */}
-      <div style={{ flex: "1", minWidth: 220 }}>
+      <div className="cl-toolbar-field" style={{ flex: "1" }}>
         <label style={{ display: "block", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--primary-50)", marginBottom: 6 }}>
           Search
         </label>
@@ -156,7 +156,7 @@ export function JobsFilters({
       </div>
 
       {/* Status */}
-      <div style={{ minWidth: 160 }}>
+      <div className="cl-toolbar-field">
         <label style={{ display: "block", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--primary-50)", marginBottom: 6 }}>
           Status
         </label>
@@ -175,7 +175,7 @@ export function JobsFilters({
       </div>
 
       {/* Job Type */}
-      <div style={{ minWidth: 160 }}>
+      <div className="cl-toolbar-field">
         <label style={{ display: "block", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--primary-50)", marginBottom: 6 }}>
           Job type
         </label>
@@ -194,7 +194,7 @@ export function JobsFilters({
       </div>
 
       {/* Per Page */}
-      <div style={{ minWidth: 100 }}>
+      <div className="cl-toolbar-field">
         <label style={{ display: "block", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--primary-50)", marginBottom: 6 }}>
           Per page
         </label>

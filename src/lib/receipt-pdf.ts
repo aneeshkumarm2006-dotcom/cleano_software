@@ -8,6 +8,7 @@ import {
   type AddOnLine,
 } from "@/lib/job-money";
 import { getTaxRates } from "@/lib/tax.server";
+import { resolveDepositCredit } from "@/lib/booking-deposit";
 
 const BRAND = "#008C9C";
 
@@ -34,6 +35,12 @@ export interface ReceiptData {
   gstAmount: number;
   qstAmount: number;
   totalAmount: number;
+  /**
+   * Deposit collected at booking and credited against the total (Stage 11 / PDF
+   * #9: *"the final invoice applies the deposit toward the confirmed total"*).
+   * Zero when no deposit was taken, which is every admin-created and imported job.
+   */
+  depositApplied: number;
   refundedAmount: number;
   paidAt: string | null;
 }
@@ -72,6 +79,10 @@ export async function loadReceiptData(jobId: string): Promise<ReceiptData | null
     gstAmount: money.gstAmount,
     qstAmount: money.qstAmount,
     totalAmount: money.totalAmount,
+    // `resolveDepositCredit`, so the receipt's credit is BYTE-IDENTICAL to the one
+    // `resolveAmountDue` takes off at charge time. A receipt that credits a
+    // different figure from the charge is worse than one that credits nothing.
+    depositApplied: resolveDepositCredit(job),
     refundedAmount: job.refundedAmount,
     paidAt: job.paidAt?.toISOString() ?? null,
   };
@@ -309,6 +320,30 @@ export async function buildReceiptPdfBuffer(
           fmt(data.totalAmount)
         )
       ),
+      // Deposit credit (Stage 11 / PDF #9). BELOW the total, not inside the
+      // subtotal: the job is worth what it is worth, and the deposit is money
+      // already collected against it. Folding it into the subtotal would
+      // under-report the sale and mis-state the tax base.
+      ...(data.depositApplied > 0
+        ? [
+            React.createElement(
+              View,
+              { key: "dep", style: styles.lineItemRow },
+              React.createElement(Text, null, "Deposit applied"),
+              React.createElement(Text, null, `-${fmt(data.depositApplied)}`)
+            ),
+            React.createElement(
+              View,
+              { key: "bal", style: styles.lineItemRow },
+              React.createElement(Text, null, "Balance after deposit"),
+              React.createElement(
+                Text,
+                null,
+                fmt(Math.max(0, data.totalAmount - data.depositApplied))
+              )
+            ),
+          ]
+        : []),
 
       // Footer
       React.createElement(

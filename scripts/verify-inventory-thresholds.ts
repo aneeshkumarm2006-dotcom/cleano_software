@@ -69,7 +69,15 @@ ok("clockOut no longer falls back to minStock", !clockOut.includes("?? ep.produc
 ok("clockOut uses the cleaner threshold rule", clockOut.includes("isCleanerLow"));
 
 const myInv = read("src/app/cleaners/my-inventory/page.tsx");
-ok("cleaner app uses the cleaner threshold rule", myInv.includes("isCleanerLow"));
+// The cleaner app moved from calling isCleanerLow() directly to calling
+// itemAttentionState(), which calls it internally (Stage 2 of
+// `_ai_context/TODO.md`). That is a STRONGER guarantee, not a weaker one: the
+// shared helper is also what decides that a reusable tool has no "low" state at
+// all, so a screen calling isCleanerLow() by hand is now the thing to catch.
+ok("cleaner app uses the shared attention rule",
+  myInv.includes("itemAttentionState("));
+ok("...and does not hand-roll a second low rule",
+  !myInv.includes("isCleanerLow("));
 ok("cleaner app never reads minStock", !myInv.includes("minStock"));
 
 const dash = read("src/app/admin/dashboard/page.tsx");

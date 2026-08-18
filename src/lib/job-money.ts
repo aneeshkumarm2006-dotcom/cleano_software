@@ -3,6 +3,10 @@ import {
   isJobTaxExempt,
   type TaxRates,
 } from "./tax";
+import {
+  hourlyServiceAmount,
+  type HourlyBillingFields,
+} from "./hourly-billing";
 
 /**
  * THE money math for a job's add-ons. One helper, so the surfaces that print a
@@ -63,13 +67,29 @@ import {
  *
  * ## Client-safe, deliberately
  *
- * This module imports ONLY from `./tax`. It must never reach for `@/db`,
- * `server-only`, `@/lib/stripe` or `@/lib/job-billing` — that last one is the
- * trap, since it pulls BOOKING_DEPOSIT_CENTS out of lib/stripe.ts, whose first
- * line is `import Stripe from "stripe"`. Three client components render from
- * here (JobModal's live total preview, JobDetailView's Financials tab, and the
+ * This module imports ONLY from `./tax` and `./hourly-billing`, both of which
+ * are themselves pure. It must never reach for `@/db`, `server-only`,
+ * `@/lib/stripe` or `@/lib/job-billing` — that last one is the trap, since it
+ * pulls BOOKING_DEPOSIT_CENTS out of lib/stripe.ts, whose first line is
+ * `import Stripe from "stripe"`. Three client components render from here
+ * (JobModal's live total preview, JobDetailView's Financials tab, and the
  * /book steps), so a server-only import would break the build at the far end of
  * the app from wherever it was added. verify-awer-fixes-3.ts asserts this.
+ *
+ * ## Hourly billing sits UNDER the mode, not beside it (Stage 8 / PDF #8)
+ *
+ * `Job.billingType = HOURLY` changes exactly ONE thing here: what the base
+ * service line is. Instead of `Job.price` it is
+ * `billedHourlyRate × (billedActualHours ?? billedEstimatedHours)`. Everything
+ * downstream — add-ons, discount, tax, the pay basis — is untouched, and the
+ * FINAL_PRICE override still wins outright, which is the PDF's *"unless admin
+ * manually overrides the price"*.
+ *
+ * The hourly columns are OPTIONAL on the input types below, so a `select` that
+ * predates Stage 8 keeps pricing off `Job.price` rather than silently pricing a
+ * job at zero. That fallback is safe because BOTH save paths also write the
+ * derived hourly amount into `Job.price` — see the `hourlyBase` note in
+ * saveJob.ts. This module is the live authority; the column is the mirror.
  */
 
 /**
@@ -135,7 +155,7 @@ export interface MoneyAddOn {
   quantity?: number | null;
 }
 
-export interface JobMoneyJob {
+export interface JobMoneyJob extends HourlyBillingFields {
   bookingSource?: string | null;
   /**
    * The stamped mode. Typed loosely because it arrives from three places with
@@ -164,6 +184,14 @@ export interface AddOnLine {
 
 export interface JobMoney {
   basis: JobMoneyBasis;
+  /**
+   * The hourly service line (`rate × hours`) when this job is billed HOURLY and
+   * the figure is usable, else null. Drives LABELS — "4h × $60.00/hr" — and is
+   * how a surface tells "this base price was derived" from "an admin typed it".
+   * Non-null even under FINAL_PRICE, where it is the counterfactual the
+   * override is replacing; `basePrice` is still the active number in that case.
+   */
+  hourlyServiceAmount: number | null;
   /**
    * The mode this computation actually ran under, after the fallback. What the
    * UIs label the job with — never re-derive it beside a `computeJobMoney` call.
@@ -324,13 +352,20 @@ export function addOnAmountIsIncluded(
  * dashboard, which nobody notices. Making it a type error moves the failure to
  * the build.
  */
-export interface ActiveValueJob {
+export interface ActiveValueJob extends HourlyBillingFields {
   price: number | null;
   discountAmount: number | null;
   subtotalAmount: number | null;
   bookingSource: string | null;
   pricingMode: JobPricingMode | string | null;
   addOns: readonly MoneyAddOn[];
+  // The four Stage 8 hourly columns arrive OPTIONAL (from HourlyBillingFields)
+  // rather than required like the six above, and the difference is deliberate.
+  // The six are required because forgetting one changes the answer with no
+  // fallback. Forgetting the hourly four falls back to `Job.price`, which both
+  // save paths keep equal to the derived hourly amount — so an un-threaded
+  // reporting query prints the right dollar figure, it just won't recompute
+  // live. Making them required would mean editing ~15 selects to no gain.
 }
 
 /**
@@ -400,6 +435,15 @@ export function activeSubtotal(job: JobMoneyJob): number {
  * did. Second, the PDF's own definition of the basis lists "base price, add-ons,
  * extra charges, and the active manual price override" and conspicuously omits
  * discounts. See `jobRevenue` in metrics-shared.ts for the other half of this.
+ *
+ * ## Hourly jobs need no branch here (Stage 8)
+ *
+ * Because this delegates to `computeJobMoney`, an HOURLY-billed job's basis IS
+ * `rate × hours (+ add-ons)` automatically — which is what PDF #8 asks for when
+ * it says cleaner pay must calculate correctly for hourly jobs. A PERCENTAGE
+ * crew on a 5-hour $60/hr job takes their tier cut of $300, and when the actual
+ * hours are snapshotted at clock-out the basis moves with them. Nothing in
+ * `computeJobPayShares` changed; it reads this.
  *
  * Implemented by re-running `computeJobMoney` with the discount zeroed rather
  * than by writing `price + addOns` out again, so the basis can never drift from
@@ -518,11 +562,27 @@ export function computeJobMoney(job: JobMoneyJob, rates: TaxRates): JobMoney {
   const discountRecorded = Number(job.discountAmount) || 0;
   const storedSubtotal = Number(job.subtotalAmount) || 0;
   const storedTotal = Number(job.totalAmount) || 0;
-  const price = Number(job.price) || 0;
+  const storedPrice = Number(job.price) || 0;
+
+  // ── Hourly billing (Stage 8) ──────────────────────────────────────────────
+  // The ONE thing `billingType = HOURLY` changes: the base service line is
+  // `rate × hours` instead of the stored `price`. Null for every FLAT job and
+  // for an hourly job with no rate or no hours yet, in which case `price` is
+  // used exactly as before — so this is inert on every row written before the
+  // column existed.
+  //
+  // Deliberately NOT applied inside the FINAL_PRICE branches below: an override
+  // is the admin saying "this job is worth $X regardless", and rate × hours
+  // must not quietly outrank it. It stays computed here so the UI can still
+  // print the hourly line beside the override it is being overridden by.
+  const hourly = hourlyServiceAmount(job);
+  const price = hourly ?? storedPrice;
 
   // What the PARTS come to, in every mode. Under FINAL_PRICE this is not what
   // the customer pays — it is the counterfactual the UI prints beside the
-  // override and the number "Recalculate from items" would adopt.
+  // override and the number "Recalculate from items" would adopt. On an hourly
+  // job that counterfactual is the hourly line plus add-ons, which is what
+  // makes "Recalculate from items" mean "go back to billing rate × hours".
   const itemizedSubtotal = round2(
     Math.max(0, round2(price) + addOnTotal - discountRecorded)
   );
@@ -546,6 +606,7 @@ export function computeJobMoney(job: JobMoneyJob, rates: TaxRates): JobMoney {
       : computeJobTaxes(subtotalAmount, rates, exempt);
     return {
       basis: "INCLUSIVE",
+      hourlyServiceAmount: hourly,
       pricingMode,
       pricingModeIsExplicit,
       itemizedSubtotal,
@@ -571,11 +632,15 @@ export function computeJobMoney(job: JobMoneyJob, rates: TaxRates): JobMoney {
   // override they are typing and nothing is stored yet. Mirrors
   // resolveAmountDue's own `price − discountAmount` fallback so display and
   // billing agree.
-  if (pricingMode === "FINAL_PRICE" && price > 0) {
-    const subtotalAmount = round2(Math.max(0, price - discountRecorded));
+  // `storedPrice`, NOT the hourly-derived figure: in this branch `price` IS the
+  // override the admin typed, so deriving it from rate × hours would make the
+  // override unreachable on an hourly job.
+  if (pricingMode === "FINAL_PRICE" && storedPrice > 0) {
+    const subtotalAmount = round2(Math.max(0, storedPrice - discountRecorded));
     const taxes = computeJobTaxes(subtotalAmount, rates, exempt);
     return {
       basis: "LEGACY_PRICE",
+      hourlyServiceAmount: hourly,
       pricingMode,
       pricingModeIsExplicit,
       itemizedSubtotal,
@@ -606,6 +671,7 @@ export function computeJobMoney(job: JobMoneyJob, rates: TaxRates): JobMoney {
   const taxes = computeJobTaxes(subtotalAmount, rates, exempt);
   return {
     basis: "ADDITIVE",
+    hourlyServiceAmount: hourly,
     pricingMode,
     pricingModeIsExplicit,
     itemizedSubtotal,

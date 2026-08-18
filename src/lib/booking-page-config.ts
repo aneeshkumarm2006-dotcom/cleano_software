@@ -121,6 +121,23 @@ const DEFAULT_FIELDS: Record<BookingStepId, BookingFieldConfig[]> = {
       { order: 2 }
     ),
     f("serviceType", "Service type", "", { order: 3, required: true }),
+    // Stage 9 / PDF #11 — "carries into the admin job form automatically".
+    // Optional and NOT locked: it prices nothing, so a booking without it is
+    // perfectly valid and an admin may hide it here like any other field.
+    //
+    // Order 3.5, deliberately fractional rather than renumbering 4–11. Stored
+    // configs keep their own integer orders, and `normalizeFields` only falls
+    // back to the default for a key that isn't in storage — so renumbering the
+    // defaults would slot this field correctly on a fresh install and wrongly
+    // on every store that has already saved a booking-page edit. The admin
+    // editor reorders by swapping the two values, which works the same either
+    // way (see BookingPageTab's `move`).
+    f(
+      "propertyType",
+      "Property type",
+      "Helps us send the right team and equipment. Optional.",
+      { order: 3.5 }
+    ),
     f("bedCount", "Bedrooms", "", { order: 4 }),
     f("bathCount", "Full bathrooms", "", { order: 5 }),
     f("halfBathCount", "Half bathrooms", "", { order: 6 }),
@@ -129,6 +146,21 @@ const DEFAULT_FIELDS: Record<BookingStepId, BookingFieldConfig[]> = {
     // by an `isPC` branch in the component.
     f("pcHours", "Estimated hours (4 hr min)", "", { order: 8, visible: false }),
     f("pcCleaners", "Number of cleaners", "", { order: 9, visible: false }),
+    // Stage 11 / PDF #9 — "the client uploads pictures of the space". Hidden by
+    // default and switched on (and LOCKED on) for post-construction, whose whole
+    // flow is "quote after photo review": a post-construction booking with no
+    // photos is a deposit taken for a quote nobody can produce.
+    //
+    // Order 9.5, fractional for the same reason propertyType's 3.5 is — stored
+    // configs keep their own integer orders, so renumbering 10–11 would slot
+    // this correctly on a fresh install and wrongly on every store that has
+    // already saved a booking-page edit.
+    f(
+      "photos",
+      "Photos of the space",
+      "",
+      { order: 9.5, visible: false }
+    ),
     f(
       "frequency",
       "Frequency",
@@ -189,6 +221,14 @@ const DEFAULT_OVERRIDES: Record<string, Record<string, BookingFieldOverride>> = 
     "property.pcHours": { visible: true },
     "property.pcCleaners": { visible: true },
     "property.frequency": { visible: false },
+    // Stage 11 / PDF #9. Visible AND required — and locked below, so an admin
+    // cannot switch off the input the quote flow is built on.
+    "property.photos": {
+      visible: true,
+      required: true,
+      helpText:
+        "At least 2 photos of the space, so we can quote the real job instead of guessing. Wide shots of each room work best.",
+    },
   },
 };
 
@@ -275,10 +315,20 @@ export function isLockedField(
 ): boolean {
   if (LOCKED_FIELDS.has(overrideKey(stepId, fieldKey))) return true;
   // Move-in/out is priced per square foot — see moveInOutBasePrice().
-  return (
+  if (
     serviceType === "MOVE_IN_OUT" &&
     stepId === "property" &&
     fieldKey === "squareFootage"
+  ) {
+    return true;
+  }
+  // Post-construction is QUOTED from the photos (PDF #9, Stage 11): the deposit
+  // is charged before submission and an admin prices the job from what they see.
+  // Hiding this field would take a $200 deposit for a quote nobody can produce.
+  return (
+    serviceType === "POST_CONSTRUCTION" &&
+    stepId === "property" &&
+    fieldKey === "photos"
   );
 }
 

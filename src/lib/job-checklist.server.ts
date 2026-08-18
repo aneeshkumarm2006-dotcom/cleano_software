@@ -9,7 +9,11 @@
 // The rules it enforces are in job-checklist.ts (pure, unit-testable).
 
 import { db } from "@/db";
-import { templateMatchesJob } from "@/lib/checklist-triggers";
+import {
+  resolveChecklistTemplates,
+  type ChecklistResolutionTier,
+  type ChecklistScopedJob,
+} from "@/lib/checklist-triggers";
 import {
   resolveChecklistAction,
   type ChecklistItemShape,
@@ -90,36 +94,58 @@ const ITEM_SELECT = {
 } as const;
 
 /**
- * The item set the CURRENT active templates produce for this job.
+ * What the CURRENT active templates produce for this job: the items, plus which
+ * templates produced them and under which precedence tier.
  *
  * Every active template is loaded and filtered in memory rather than matched in
  * SQL: case-insensitive add-on matching can't be expressed with an `in` clause,
- * and the template table is small (one row per checklist, not per job).
+ * the customer/service precedence is a multi-tier rule rather than a filter, and
+ * the template table is small (one row per checklist, not per job).
  */
-export async function expectedChecklistItems(job: {
-  jobType: string | null;
-  addOnNames: string[];
-}): Promise<ChecklistItemShape[]> {
+export interface ExpectedChecklist {
+  items: ChecklistItemShape[];
+  /** Templates behind `items`, in the order their items appear. */
+  templates: { id: string; name: string }[];
+  tier: ChecklistResolutionTier;
+  /** The job pins a template that is deleted or deactivated — see the resolver. */
+  pinnedUnavailable: boolean;
+}
+
+export async function resolveExpectedChecklist(
+  job: ChecklistScopedJob
+): Promise<ExpectedChecklist> {
   const candidates = await db.checklistTemplate.findMany({
     where: { isActive: true },
     include: { items: { orderBy: { sortOrder: "asc" } } },
   });
 
-  const matching = candidates.filter((t) =>
-    templateMatchesJob(
-      { jobType: t.jobType, addOnName: t.addOnName },
-      { jobType: job.jobType, addOnNames: job.addOnNames }
-    )
-  );
+  // Stage 10: one shared precedence — job pin → address → client → service
+  // default. Before this the filter was the service trigger alone.
+  const resolved = resolveChecklistTemplates(candidates, job);
 
-  return matching.flatMap((tpl, tplIdx) =>
-    tpl.items.map((item, itemIdx) => ({
-      title: item.title,
-      description: item.description,
-      isRequired: item.isRequired,
-      sortOrder: tplIdx * 1000 + (item.sortOrder ?? itemIdx),
-    }))
-  );
+  return {
+    items: resolved.templates.flatMap((tpl, tplIdx) =>
+      tpl.items.map((item, itemIdx) => ({
+        title: item.title,
+        description: item.description,
+        isRequired: item.isRequired,
+        sortOrder: tplIdx * 1000 + (item.sortOrder ?? itemIdx),
+      }))
+    ),
+    templates: resolved.templates.map((t) => ({ id: t.id, name: t.name })),
+    tier: resolved.tier,
+    pinnedUnavailable: resolved.pinnedUnavailable,
+  };
+}
+
+/**
+ * The item set alone. Kept as the narrow entry point for callers that only ask
+ * "what should be on this list" and have no use for the provenance.
+ */
+export async function expectedChecklistItems(
+  job: ChecklistScopedJob
+): Promise<ChecklistItemShape[]> {
+  return (await resolveExpectedChecklist(job)).items;
 }
 
 /**
@@ -143,6 +169,11 @@ export async function ensureJobChecklist(
         deletedAt: true,
         jobType: true,
         employeeId: true,
+        // Stage 10 — the customer link and the per-job pin are inputs to the
+        // resolution now, so they have to travel with the service trigger.
+        clientId: true,
+        clientAddressId: true,
+        checklistTemplateId: true,
         cleaners: { select: { id: true } },
         addOns: { select: { name: true } },
       },
@@ -156,10 +187,14 @@ export async function ensureJobChecklist(
       return EMPTY("NOT_AUTHORIZED");
     }
 
-    const expected = await expectedChecklistItems({
+    const resolved = await resolveExpectedChecklist({
       jobType: job.jobType,
       addOnNames: job.addOns.map((a) => a.name),
+      clientId: job.clientId,
+      clientAddressId: job.clientAddressId,
+      checklistTemplateId: job.checklistTemplateId,
     });
+    const expected = resolved.items;
 
     // `findFirst` ordered by createdAt: there is no unique constraint on
     // (jobId, employeeId) in the deployed database yet, so if a duplicate ever
@@ -178,7 +213,16 @@ export async function ensureJobChecklist(
       // generation now firing on every page open, that would have baked an
       // empty checklist into every job on day one.
       if (expected.length === 0) return EMPTY("NO_TEMPLATES");
-      return { checklist: await createChecklist(jobId, employeeId, expected), stale: false, reason: null };
+      return {
+        checklist: await createChecklist(
+          jobId,
+          employeeId,
+          expected,
+          primaryTemplateId(resolved)
+        ),
+        stale: false,
+        reason: null,
+      };
     }
 
     const action = resolveChecklistAction(
@@ -217,7 +261,11 @@ export async function ensureJobChecklist(
       db.jobChecklistItem.deleteMany({ where: { checklistId: existing.id } }),
       db.jobChecklist.update({
         where: { id: existing.id },
-        data: { items: { create: expected } },
+        // Step 10.3 — the provenance is rewritten with the items. A regenerate
+        // is exactly the moment the source template can have changed (a
+        // customer link added, a job pinned), so leaving the old id behind
+        // would make the column lie in precisely the case it exists for.
+        data: { templateId: primaryTemplateId(resolved), items: { create: expected } },
         select: {
           id: true,
           jobId: true,
@@ -233,10 +281,28 @@ export async function ensureJobChecklist(
   }
 }
 
+/**
+ * Which template to record on `JobChecklist.templateId` (step 10.3).
+ *
+ * The column is a single FK but a checklist can legitimately be the
+ * concatenation of several templates — that is the whole DEFAULT tier: a global
+ * list plus a jobType list plus an add-on list. So it records the source only
+ * when the answer is unambiguous, and NULL otherwise; a "primary" picked out of
+ * three equals would be a guess dressed up as provenance.
+ *
+ * In practice the tiers that matter for PDF #10 — a pinned job, a customer
+ * checklist, a location checklist — are single-template by construction, which
+ * is exactly where traceability was wanted.
+ */
+function primaryTemplateId(resolved: ExpectedChecklist): string | null {
+  return resolved.templates.length === 1 ? resolved.templates[0].id : null;
+}
+
 async function createChecklist(
   jobId: string,
   employeeId: string,
-  items: ChecklistItemShape[]
+  items: ChecklistItemShape[],
+  templateId: string | null
 ): Promise<JobChecklistDTO> {
   const select = {
     id: true,
@@ -247,7 +313,9 @@ async function createChecklist(
   try {
     return toDTO(
       await db.jobChecklist.create({
-        data: { jobId, employeeId, templateId: null, items: { create: items } },
+        // `templateId` was hard-coded null here until Stage 10, so no checklist
+        // ever recorded where it came from.
+        data: { jobId, employeeId, templateId, items: { create: items } },
         select,
       })
     );
@@ -295,6 +363,106 @@ export async function readJobChecklist(
   } catch (error) {
     console.error("readJobChecklist failed", jobId, employeeId, error);
     return EMPTY("ERROR");
+  }
+}
+
+// ── The admin's per-job checklist view (Stage 10 / PDF #10, step 10.5) ──────
+//
+// Until Stage 10 there was NO admin-facing checklist surface at all: templates
+// were configured in Settings, checklists were generated on the cleaner's phone,
+// and nothing in between ever showed an admin which list a given job would
+// produce. That gap is exactly why "why did the Mckiernan crew get the generic
+// list" was unanswerable without reading the database.
+//
+// READ-ONLY, deliberately. It resolves what the cleaner WOULD get and reports
+// what has already been generated; it creates nothing. Generating a checklist
+// for a cleaner who has not opened the job would put items in their app that
+// nobody asked for and would freeze the snapshot early — before the admin has
+// finished editing the job.
+
+export interface JobChecklistSummary {
+  tier: ChecklistResolutionTier;
+  /** Templates that resolution picks for this job right now. */
+  templates: { id: string; name: string }[];
+  /** How many items those templates would produce. */
+  itemCount: number;
+  requiredCount: number;
+  /** The job pins a template that is deleted or inactive — see the resolver. */
+  pinnedUnavailable: boolean;
+  /** True when an admin pinned this job rather than letting it auto-resolve. */
+  pinned: boolean;
+  /** What has actually been generated, per cleaner. */
+  generated: {
+    employeeId: string;
+    employeeName: string;
+    total: number;
+    completed: number;
+    /** Stored items no longer match what the templates now produce. */
+    drifted: boolean;
+  }[];
+}
+
+export async function summarizeJobChecklist(
+  jobId: string
+): Promise<JobChecklistSummary | null> {
+  try {
+    const job = await db.job.findUnique({
+      where: { id: jobId },
+      select: {
+        jobType: true,
+        clientId: true,
+        clientAddressId: true,
+        checklistTemplateId: true,
+        addOns: { select: { name: true } },
+        checklists: {
+          orderBy: { createdAt: "asc" },
+          select: {
+            employeeId: true,
+            employee: { select: { name: true } },
+            items: {
+              select: {
+                title: true,
+                description: true,
+                isRequired: true,
+                sortOrder: true,
+                status: true,
+                notes: true,
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!job) return null;
+
+    const resolved = await resolveExpectedChecklist({
+      jobType: job.jobType,
+      addOnNames: job.addOns.map((a) => a.name),
+      clientId: job.clientId,
+      clientAddressId: job.clientAddressId,
+      checklistTemplateId: job.checklistTemplateId,
+    });
+
+    return {
+      tier: resolved.tier,
+      templates: resolved.templates,
+      itemCount: resolved.items.length,
+      requiredCount: resolved.items.filter((i) => i.isRequired).length,
+      pinnedUnavailable: resolved.pinnedUnavailable,
+      pinned: !!job.checklistTemplateId && !resolved.pinnedUnavailable,
+      generated: job.checklists.map((c) => ({
+        employeeId: c.employeeId,
+        employeeName: c.employee?.name ?? "Unknown",
+        total: c.items.length,
+        completed: c.items.filter((i) => i.status === "COMPLETED").length,
+        // Same rule the cleaner's page runs, so the admin's "out of date" badge
+        // and the cleaner's stale banner can never disagree (step 10.8).
+        drifted: resolveChecklistAction(c.items, resolved.items) !== "KEEP",
+      })),
+    };
+  } catch (error) {
+    console.error("summarizeJobChecklist failed", jobId, error);
+    return null;
   }
 }
 

@@ -11,6 +11,7 @@ import {
   StatusIndicator,
   CategoryIndicator,
   AssignmentWarningPanel,
+  AvailabilityLink,
 } from "@/components/admin/AssignmentIndicators";
 import { categoryMismatchWarning } from "@/lib/service-permissions";
 
@@ -57,6 +58,16 @@ export default function CleanerSelector({
   // time are (JobTypeSelector also writes into a hidden input). Drives the
   // service-category advisory — awerfixes.pdf item 3.
   const [jobType, setJobType] = useState("");
+  // The scheduled window, mirrored out of the same poll. Only the deep link into
+  // /admin/availability (Stage 12.5) reads it — the availability lookup itself
+  // sends the values straight through without storing them.
+  // (Named `formWindow`, not `window` — this file calls the real
+  // `window.addEventListener` further down.)
+  const [formWindow, setFormWindow] = useState<{
+    startDate: string;
+    startTime: string;
+    endTime: string;
+  }>({ startDate: "", startTime: "", endTime: "" });
   const dropdownRef = useRef<HTMLDivElement>(null);
   const inputContainerRef = useRef<HTMLDivElement>(null);
 
@@ -93,6 +104,8 @@ export default function CleanerSelector({
       // Category matching is pure and local — no server round trip needed, and
       // it must still update when only the job type changed.
       setJobType(nextJobType);
+      // Same for the availability deep link: it is a URL, not a query.
+      setFormWindow({ startDate, startTime, endTime });
 
       if (!startDate || !startTime || userIds.length === 0) {
         generation++;
@@ -406,6 +419,16 @@ export default function CleanerSelector({
           </div>
         </div>
       )}
+
+      {/* Stage 12.5 — into the all-cleaner availability view on this job's own
+          date and window. Above the panel, not inside it: the moment an admin
+          most needs to go looking for coverage is before anyone is picked, when
+          the panel below renders nothing at all. */}
+      <AvailabilityLink
+        date={formWindow.startDate}
+        startTime={formWindow.startTime}
+        endTime={formWindow.endTime}
+      />
 
       {/* Availability + service-category advisories, visible before the booking
           is saved. Advisory only — the admin can still create the job (nothing

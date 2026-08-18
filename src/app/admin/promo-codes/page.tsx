@@ -1,4 +1,4 @@
-import { requireAdmin } from "@/lib/page-guards";
+import { requireOwnerAdmin } from "@/lib/page-guards";
 import { db } from "@/db";
 import PromoCodesClient from "./PromoCodesClient";
 
@@ -9,7 +9,9 @@ export default async function PromoCodesPage({
 }: {
   searchParams: SearchParams;
 }) {
-  await requireAdmin();
+  // requireOwnerAdmin, NOT requireAdmin: `isAdminRole` also admits
+  // OPS_MANAGER and FIELD_LEAD, and this page prints money.
+  await requireOwnerAdmin();
 
   const params = await searchParams;
   const archived = params.archived === "1";

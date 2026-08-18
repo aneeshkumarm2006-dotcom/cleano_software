@@ -15,6 +15,7 @@
  */
 import { randomBytes } from "crypto";
 import { addOnKey } from "../checklist-triggers";
+import { inferPropertyTypeFromText, type PropertyType } from "../property-type";
 
 // Broad guard window — only rejects clearly-bogus dates, not real bookings.
 // Previously hardcoded to Jun 1–Sep 1 2026, which silently dropped every
@@ -332,6 +333,19 @@ export interface NormalizedJob {
   location: string | null;
   aptNumber: string | null;
   jobType: string;
+  /**
+   * Apartment/condo vs house, read from the SAME raw "Service" string that
+   * `jobType` above is derived from - but read BEFORE `mapService` collapses
+   * "House" / "Apartment" / "Condo" / "Townhouse" / "Detached Home" onto the
+   * single service category RESIDENTIAL (Stage 9 / PDF #11).
+   *
+   * That collapse is correct and unchanged: a house clean and an apartment
+   * clean are the same SERVICE. What it lost was the PROPERTY fact, and this is
+   * where that now survives. Null for a genuine service name ("Deep Cleaning",
+   * "Move In & Out") and for anything unrecognised - the column is nullable and
+   * an admin can set it by hand afterwards, which beats guessing.
+   */
+  propertyType: PropertyType | null;
   status: "CREATED" | "SCHEDULED" | "PAID";
   price: number;
   subtotalAmount: number;
@@ -539,6 +553,10 @@ export function parseAndNormalize(csvText: string): ParseResult {
         location: address || null,
         aptNumber: cleanOrNull(get("Apt")),
         jobType,
+        // Captured from the raw column, deliberately NOT from `jobType` - by
+        // the time `mapService` has run, "Condo" and "Deep Cleaning" are both
+        // just RESIDENTIAL/DEEP and the property word is gone (step 9.6).
+        propertyType: inferPropertyTypeFromText(clean(get("Service"))),
         status,
         price: serviceTotal,
         subtotalAmount: serviceTotal,
@@ -705,6 +723,13 @@ export interface ImportReport {
     row: number;
     client: string;
     jobType: string;
+    /**
+     * How the CSV's "Service" word classified as a PROPERTY (Stage 9), beside
+     * how it classified as a SERVICE. Both are in the dry-run table so the
+     * admin can see the split is right before committing - the one place the
+     * heuristic in `inferPropertyTypeFromText` is reviewable.
+     */
+    propertyType: string | null;
     start: string;
     price: number;
     status: string;

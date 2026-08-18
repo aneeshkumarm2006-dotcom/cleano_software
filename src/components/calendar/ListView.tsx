@@ -15,6 +15,8 @@ import { AlertCircle } from "lucide-react";
 import {
   statusMeta,
   hasMissingEquipment,
+  hourlyLabel,
+  propertyLabel,
   priceLabel,
   cleanerLabel,
   shortLocation,
@@ -104,6 +106,12 @@ export const ListView: React.FC<ListViewProps> = ({ view }) => {
               const loc = shortLocation(event);
               const pay = priceLabel(event);
               const who = cleanerLabel(event);
+              // "Hourly · 4h" (Stage 8). Carries no rate, so it is safe for
+              // every viewer the list serves — see hourlyLabel's note.
+              const hourly = hourlyLabel(event);
+              // "Apt" / "House" (Stage 9). Null when unrecorded, and carries no
+              // money, so it is safe for every viewer this list serves.
+              const property = propertyLabel(event);
               return (
                 <button
                   key={event.id}
@@ -127,6 +135,8 @@ export const ListView: React.FC<ListViewProps> = ({ view }) => {
                     </span>
                     <span className="cal-list-sub">
                       {typeName}
+                      {property ? ` · ${property}` : ""}
+                      {hourly ? ` · ${hourly}` : ""}
                       {who ? ` · ${who}` : ""}
                       {loc ? ` · ${loc}` : ""}
                     </span>

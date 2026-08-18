@@ -51,7 +51,13 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
         "bg-transparent border-0 hover:bg-gray-50 focus:bg-white focus:focus:border-neutral-950/70",
       outline:
         "bg-white border-neutral-950/10 hover:border-neutral-950/20 focus:border-neutral-950/25",
-      form: "bg-[#008C9C]/5 hover:bg-[#008C9C]/8 focus:bg-[#008C9C]/8 border-transparent !text-[#008C9C] placeholder:text-[#008C9C]/40",
+      // Stage 6 / PDF #3 (readability). This variant used to type in #008C9C
+      // (4.01:1 on white — the brand teal cannot reach AA as small text at ANY
+      // alpha) with a 0.40-alpha placeholder at roughly 1.6:1, which is the
+      // "barely readable" field the PDF's p.3 screenshot circles. #005a63 is the
+      // one teal in the palette that passes as small text (7.95:1), and the
+      // placeholder at 0.85 of it measures 5.5:1. Same visual family, legible.
+      form: "bg-[#008C9C]/5 hover:bg-[#008C9C]/8 focus:bg-[#008C9C]/8 border-transparent !text-[#005a63] placeholder:text-[#005a63]/85",
     }[variant];
 
     const errorClasses = error

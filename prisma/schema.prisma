@@ -55,6 +55,7 @@ model User {
   washPayouts                  WashPayout[]
   accounts                     Account[]
   assignedProducts             EmployeeProduct[]
+  inventoryFlags               InventoryFlag[]
   inventoryRequests            InventoryRequest[]
   jobs                         Job[]                   @relation("EmployeeJobs")
   sessions                     Session[]
@@ -87,8 +88,8 @@ model User {
   salesCommissions             Commission[]            @relation("SalesRepCommissions")
   // Applicant portal account (decision D4) — null unless this User was
   // minted via "Invite to portal" from a JobApplication.
-  jobApplication                JobApplication?
-  applicantInviteTokens         ApplicantInviteToken[]
+  jobApplication               JobApplication?
+  applicantInviteTokens        ApplicantInviteToken[]
 
   // Present in the database since an earlier migration but never declared here,
   // which showed up as schema drift. Field-lead grouping reads this column, so
@@ -151,6 +152,12 @@ model Product {
   // Backfilled from InventoryRule.refillThreshold, which is now read-only legacy.
   cleanerRestockThreshold Float                    @default(0)
   category                ProductCategory          @default(OTHER)
+  // WHAT KIND of thing this is (liquid / countable consumable / reusable
+  // equipment). Separate from `category`, which only says how usage was logged
+  // at clock-out. Every threshold and status rule branches on this one.
+  // Default is COUNTABLE_CONSUMABLE so a product created before an admin has
+  // thought about it behaves exactly as it does today.
+  itemType                ItemType                 @default(COUNTABLE_CONSUMABLE)
   // Stock-count audit trail — who last edited the count and when. Denormalized
   // name so the inventory screen can show "Updated by" without a join.
   stockUpdatedAt          DateTime?
@@ -162,7 +169,6 @@ model Product {
   inventoryRequests       InventoryRequest[]
   jobUsage                JobProductUsage[]
   kitItems                KitTemplateItem[]
-  inventoryRule           InventoryRule?
   supplierPrices          SupplierPrice[]
   // Exact purchase link for re-ordering this product (the "one link" case).
   // Additional links live in ProductLink.
@@ -170,6 +176,7 @@ model Product {
   locationStock           InventoryLocationStock[]
   checkoutItems           InventoryCheckoutItem[]
   inventoryChanges        InventoryChange[]
+  inventoryFlags          InventoryFlag[]
   links                   ProductLink[]
 }
 
@@ -224,15 +231,13 @@ model KitTemplateItem {
   @@index([productId])
 }
 
-model InventoryRule {
-  id              String   @id @default(cuid())
-  productId       String   @unique
-  usagePerJob     Float    @default(0)
-  refillThreshold Float    @default(0)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  product         Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-}
+// NOTE: `model InventoryRule` stood here until Stage 3 (`_ai_context/TODO.md`).
+// It held `usagePerJob` (an admin-typed guess at consumption) and
+// `refillThreshold`, both of which awer_fixes.pdf item 20 stopped reading — the
+// forecast moved to measured usage and the threshold moved to
+// `Product.cleanerRestockThreshold`. It has been dead code since then; the drop
+// was held back for a deploy with a backup point, which is this batch.
+// Migration: prisma/migrations/20260817020000_drop_inventory_rule.
 
 model Supplier {
   id        String          @id @default(cuid())
@@ -314,6 +319,8 @@ model Client {
   complaints                       Complaint[]
   waitlistEntries                  Waitlist[]
   addresses                        ClientAddress[]
+  /// Customer-specific checklists (Stage 10 / PDF #10).
+  checklistTemplates               ChecklistTemplate[]
   recurringCancellations           RecurringCancellation[]
   referredBy                       Client?                 @relation("ClientReferrals", fields: [referredByClientId], references: [id], onDelete: SetNull)
   referrals                        Client[]                @relation("ClientReferrals")
@@ -373,26 +380,28 @@ model RecurringCancellation {
 }
 
 model ClientAddress {
-  id          String   @id @default(cuid())
-  clientId    String
-  label       String   @default("Home")
-  address     String
-  aptNumber   String?
+  id                 String              @id @default(cuid())
+  clientId           String
+  label              String              @default("Home")
+  address            String
+  aptNumber          String?
   /// awerfixes.pdf item 2 (round 3, stage 4). `postalCode`, not `zip`, even
   /// though Client carries the legacy flat trio (address/city/state/zip): the
   /// two are separate stores and are deliberately NOT merged. Client.* is the
   /// customer's billing address; these rows are the service address book.
-  city        String?
-  postalCode  String?
+  city               String?
+  postalCode         String?
   /// Door codes, gate codes, buzzer numbers, parking instructions. Surfaced to
   /// the ASSIGNED cleaner on the job page — cleaners cannot get in without it.
   /// Never rendered on anything customer-facing or on an unclaimed job.
-  accessNotes String?
-  isDefault   Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  jobs        Job[]
+  accessNotes        String?
+  isDefault          Boolean             @default(false)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  client             Client              @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  jobs               Job[]
+  /// Location-specific checklists (Stage 10 / PDF #10).
+  checklistTemplates ChecklistTemplate[]
 
   @@index([clientId])
 }
@@ -496,6 +505,38 @@ model Job {
   depositPaymentIntentId         String?               @unique
   depositPaid                    Boolean               @default(false)
   depositPaidAt                  DateTime?
+  /// WHAT THE DEPOSIT ACTUALLY WAS, in dollars (PDF #9, Stage 11).
+  ///
+  /// Before this column the deposit was the literal 20, re-typed in six places,
+  /// so a post-construction booking that charges $200 would have been refunded
+  /// $20 and credited $20 against its invoice. Every reader now goes through
+  /// `resolveDepositCredit()` in src/lib/booking-deposit.ts.
+  ///
+  /// Nullable, and NULL is not "unknown": every booking written before this
+  /// charged exactly $20, so the fallback in that helper is the historically
+  /// correct figure and no existing row changes value. Stored rather than
+  /// re-derived from the setting, because the setting can be edited after a
+  /// booking is taken and the job must still credit what it collected.
+  depositAmount                  Float?
+  /// Quote lifecycle for a booking that is priced AFTER review (PDF #9).
+  /// NULL — every existing row — means "not a quote". See `enum QuoteStatus`
+  /// above and `src/lib/quote-status.ts`.
+  quoteStatus                    QuoteStatus?
+  /// When the final price was emailed to the customer. Set alongside
+  /// `quoteStatus = QUOTED`; NULL while a quote is still under review, so the
+  /// admin panel can say "not sent yet" without reading the job log.
+  quotedAt                       DateTime?
+  /// The customer's own post-construction estimate, as entered in /book: hours
+  /// of work and crew size (PDF #9, Stage 11).
+  ///
+  /// These drove `postConstructionBasePrice` and were then THROWN AWAY — the
+  /// booking action priced with them and wrote neither, hardcoding
+  /// `requiredCleaners: 1`, so nothing downstream could reconstruct the quote or
+  /// staff the job. Persisted here as the customer's REQUEST, not as billing
+  /// columns: what the customer is charged still lives in `price` /
+  /// `billedHourlyRate` / `billed*Hours` like every other job.
+  pcHours                        Float?
+  pcCleaners                     Int?
   // The card this booking is attached to, captured when the booking was
   // confirmed. NULL means "no card was pinned" — every charge path falls back
   // to the client's current default, which is exactly the old behaviour, so
@@ -522,6 +563,26 @@ model Job {
   // HOURLY = cleaner is shown an hourly rate. employeePay stays the payout.
   payType                        JobPayType            @default(PERCENTAGE)
   hourlyRate                     Float?
+  // ── Customer-side hourly billing (PDF #8, Stage 8) ────────────────────────
+  // DO NOT confuse these with `payType`/`hourlyRate` two lines above: those are
+  // what the CLEANER is paid, these are what the CUSTOMER is charged. Before
+  // this stage the second thing did not exist at all — an "hourly job" could
+  // only mean hourly cleaner pay — which is exactly what PDF #8 reports.
+  //
+  // FLAT (the default, and every pre-existing row) = today's behaviour: `price`
+  // is the base service line. HOURLY = the service line is
+  // `billedHourlyRate × (billedActualHours ?? billedEstimatedHours)`, computed
+  // by `hourlyServiceAmount()` and applied inside `computeJobMoney`. A manual
+  // FINAL_PRICE override still wins over both — see src/lib/hourly-billing.ts.
+  billingType                    JobBillingType        @default(FLAT)
+  /// Customer-facing $/hr. Deliberately NOT named `hourlyRate`.
+  billedHourlyRate               Float?
+  /// What the admin quoted. Used until the job is worked.
+  billedEstimatedHours           Float?
+  /// Snapshotted from JobWorkSession at final clock-out, rounded to 0.25h
+  /// (decision D7), and editable by an admin afterwards. ELAPSED hours, not
+  /// man-hours — see the long note in src/lib/hourly-billing.ts.
+  billedActualHours              Float?
   /// Itemized vs Final-price-override (cleano_new_fixes.pdf fix 2). Nullable on
   /// purpose: NULL = "not stamped", and `resolvePricingMode()` falls back to the
   /// old `bookingSource` rule for those rows, so the column can roll out without
@@ -565,6 +626,25 @@ model Job {
   externalBookingId              String?
   squareFootage                  Int?
   halfBathCount                  Int?
+  /// Apartment/condo vs house (PDF #11, Stage 9). Property INFORMATION, in the
+  /// same family as `bedCount`/`squareFootage` above — NOT a service category.
+  /// `jobType` stays the answer to "what cleaning is this"; this answers "what
+  /// kind of building". Nullable because "not recorded" is the honest state for
+  /// every row written before this column and for a booking taken without it —
+  /// see src/lib/property-type.ts, which is the only place the rules live.
+  propertyType                   PropertyType?
+  /// Per-job checklist override (PDF #10, Stage 10). NULL — every existing row
+  /// — means "resolve automatically", which is the behaviour that already
+  /// exists: address-scoped template → client-scoped template → the jobType /
+  /// add-on default. Set, it PINS this job to one template and beats all three.
+  ///
+  /// Propagates across a recurring series (`SERIES_PROPAGATED_FIELDS`), because
+  /// the PDF asks for "checklist assignment stays consistent when recurring
+  /// jobs are generated" and a series is one agreement.
+  ///
+  /// onDelete: SetNull — deleting the template returns the job to automatic
+  /// resolution rather than deleting the job.
+  checklistTemplateId            String?
   // Rag-wash projection — computed from job specs at completion.
   // `washCreditsAwarded` flips to true once credits are written to
   // the assigned cleaner ledger(s), making the award idempotent.
@@ -618,9 +698,11 @@ model Job {
   employee                       User?                 @relation("EmployeeJobs", fields: [employeeId], references: [id], onDelete: SetNull)
   client                         Client?               @relation(fields: [clientId], references: [id], onDelete: SetNull)
   clientAddress                  ClientAddress?        @relation(fields: [clientAddressId], references: [id], onDelete: SetNull)
+  checklistTemplate              ChecklistTemplate?    @relation("JobChecklistTemplate", fields: [checklistTemplateId], references: [id], onDelete: SetNull)
   parentJob                      Job?                  @relation("JobRecurrence", fields: [parentJobId], references: [id], onDelete: SetNull)
   childJobs                      Job[]                 @relation("JobRecurrence")
   productUsage                   JobProductUsage[]
+  inventoryFlags                 InventoryFlag[]
   cleaners                       User[]                @relation("JobCleaners")
   assignmentInvites              JobAssignmentInvite[]
   logs                           JobLog[]
@@ -650,6 +732,7 @@ model Job {
   @@index([status])
   @@index([parentJobId])
   @@index([clientAddressId])
+  @@index([checklistTemplateId])
   @@index([isFlexible])
   @@index([externalBookingId])
   // Used to answer "which bookings is this card attached to?" — needed before
@@ -745,7 +828,7 @@ model InventoryRequest {
 // cleaner's assigned stock). One row per adjustment: item, delta, reason, who,
 // when — surfaced on the redesigned inventory page.
 model InventoryChange {
-  id             String   @id @default(cuid())
+  id             String           @id @default(cuid())
   productId      String
   // Set when the change is to a specific cleaner's inventory; null = warehouse.
   employeeId     String?
@@ -754,26 +837,74 @@ model InventoryChange {
   newQuantity    Float
   unit           String?
   reason         String?
+  // WHAT this row records, written by the action that performed the movement.
+  // Retires the reason-string pattern matching the activity log used to do
+  // (Stage 3). Nullable because every row written before that migration has no
+  // action — back-filling one would bake the very guess we are retiring into
+  // the permanent record, so old rows keep their prose and are labelled as
+  // derived at read time (`src/lib/inventory-action.ts`).
+  action         InventoryAction?
+  // Status transition, when this row records one (PDF #1 wants history to carry
+  // "previous status → new status" alongside the count columns above). Stored as
+  // free text rather than an enum because one table logs three different status
+  // vocabularies — LiquidLevel, EquipmentCondition, and the countable
+  // OK/LOW/EMPTY/MISSING/DAMAGED chips.
+  previousStatus String?
+  newStatus      String?
   changedById    String?
   changedByName  String?
-  createdAt      DateTime @default(now())
-  product        Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt      DateTime         @default(now())
+  product        Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@index([productId, createdAt])
   @@index([employeeId])
 }
 
+/// Admin review/restock flag (PDF #1/#2). Deliberately NOT an InventoryRequest:
+/// that model is an APPROVAL queue with its own status machine and is already
+/// flooded with auto-created rows. A flag is "someone should look at this",
+/// which is a different thing from "please approve N units".
+model InventoryFlag {
+  id           String              @id @default(cuid())
+  type         InventoryFlagType
+  status       InventoryFlagStatus @default(OPEN)
+  employeeId   String
+  productId    String
+  jobId        String? // set when raised at clock-out
+  source       String // "CLOCK_OUT" | "RECOUNT" | "ISSUE_REPORT" | "ADMIN"
+  notes        String?
+  createdAt    DateTime            @default(now())
+  resolvedAt   DateTime?
+  resolvedById String?
+  employee     User                @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  product      Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
+  job          Job?                @relation(fields: [jobId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([employeeId])
+  @@index([productId])
+}
+
 model EmployeeProduct {
-  id         String   @id @default(cuid())
-  employeeId String
-  productId  String
-  quantity   Float
-  assignedAt DateTime @default(now())
-  notes      String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  employee   User     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  id              String              @id @default(cuid())
+  employeeId      String
+  productId       String
+  quantity        Float
+  assignedAt      DateTime            @default(now())
+  notes           String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  // Latest status the cleaner reported for this kit row. Which column is
+  // meaningful depends on the product's ItemType: `levelStatus` for LIQUID,
+  // `quantity` (above) for COUNTABLE_CONSUMABLE, `condition` for
+  // REUSABLE_EQUIPMENT. All nullable — "never reported yet" is a real state and
+  // must not be confused with "reported as full/available".
+  levelStatus     LiquidLevel?
+  condition       EquipmentCondition?
+  statusUpdatedAt DateTime?
+  statusNotes     String?
+  employee        User                @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  product         Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@unique([employeeId, productId])
   @@index([employeeId])
@@ -962,6 +1093,77 @@ enum ProductCategory {
   OTHER
 }
 
+// ── Item-type classification (cleano_inventory_operations_fixes.pdf #1 + #4) ──
+// ProductCategory answers "how did the cleaner USE this at clock-out?". It has
+// no opinion on whether the thing is consumed at all, so a bucket and a bottle
+// of Windex both landed on OTHER/LIQUID_SPRAY and ran through the same refill
+// thresholds — which is why a cleaner holding exactly one scraper was told they
+// were "running low". ItemType answers the different question "what KIND of
+// thing is this?", and is what the reporting/threshold rules branch on.
+enum ItemType {
+  // Liquids & dilutables → reported as a level (Full/Good/Half/Low/Empty).
+  LIQUID
+  // Gloves, bags, rolls → reported as a quantity plus a status.
+  COUNTABLE_CONSUMABLE
+  // Scrapers, brooms, vacuums, mops, buckets → condition reporting only.
+  // Refill thresholds never apply to these.
+  REUSABLE_EQUIPMENT
+}
+
+// Reported level for a LIQUID item. Deliberately coarse — a cleaner eyeballs a
+// bottle, they do not measure millilitres (which is what the estimated-usage
+// flow Stage 3 deletes was pretending they did).
+enum LiquidLevel {
+  FULL
+  GOOD
+  HALF
+  LOW
+  EMPTY
+}
+
+// Reported condition for a REUSABLE_EQUIPMENT item. Replaces Low/OK entirely
+// for tools: one scraper in good order is AVAILABLE, not "low".
+enum EquipmentCondition {
+  AVAILABLE
+  MISSING
+  DAMAGED
+  NEEDS_REPLACEMENT
+  NEEDS_MAINTENANCE
+}
+
+enum InventoryFlagType {
+  LOW
+  EMPTY
+  MISSING
+  DAMAGED
+  NEEDS_REPLACEMENT
+  NEEDS_MAINTENANCE
+  RESTOCK
+}
+
+enum InventoryFlagStatus {
+  OPEN
+  RESOLVED
+  DISMISSED
+}
+
+// What an InventoryChange row records. Written by the actor performing the
+// movement so the activity log reads a stored verb instead of pattern-matching
+// the `reason` sentence — eleven action files write those sentences, and
+// rewording any of them used to silently reclassify history.
+// Labels and the legacy fallback live in `src/lib/inventory-action.ts`.
+enum InventoryAction {
+  RECOUNT // cleaner recounted their own kit
+  STATUS_REPORT // level/condition report that moved no quantity
+  ASSIGN // admin assigned stock to a cleaner (single, bulk or kit)
+  PICKUP // cleaner collected from a warehouse/locker location
+  ADMIN_SET // admin set a number outright
+  JOB_REPORT // reported at clock-out against a job (Stage 3)
+  REQUEST_FULFILLED // refill/equipment request approved and fulfilled
+  ISSUE // reported lost / broken / ran out / other
+  IMPORT // written by a CSV import
+}
+
 enum NotificationRecipient {
   ADMIN
   CUSTOMER
@@ -1045,6 +1247,48 @@ enum JobPayType {
   PERCENTAGE
   FLAT
   HOURLY
+}
+
+/// How the CUSTOMER is billed for a job (PDF #8, Stage 8). Distinct from
+/// `JobPayType`, which is how the CLEANER is paid — a job can be billed HOURLY
+/// and pay its crew a PERCENTAGE, and that combination is the common one.
+/// See `src/lib/hourly-billing.ts`.
+enum JobBillingType {
+  FLAT
+  HOURLY
+}
+
+/// What KIND OF BUILDING a job is at (PDF #11, Stage 9). Distinct from the
+/// service category in `Job.jobType`: a house clean and an apartment clean are
+/// the same service, which is why the BookingKoala importer folds both onto
+/// RESIDENTIAL — this column is where the property fact survives that fold.
+/// Exactly the PDF's two options (decision D8); extending it later is an enum
+/// add plus a label in `src/lib/property-type.ts`.
+enum PropertyType {
+  APARTMENT_CONDO
+  HOUSE
+}
+
+/// Where a QUOTED booking is in its life before it becomes a normal job
+/// (PDF #9, Stage 11). Post-construction is not priced instantly — the customer
+/// pays a deposit, uploads photos, and an admin sets the real price afterwards.
+///
+///   PENDING_REVIEW  deposit paid, photos in, waiting for an admin to look
+///   QUOTED          admin set a final price and emailed it to the customer
+///   ACCEPTED        customer confirmed; from here it is an ordinary job
+///   DECLINED        customer said no; the deposit disposition is a separate call
+///
+/// Deliberately NOT extra values on `JobStatus`: that enum drives clock-in,
+/// payroll, invoicing, both calendars and a dozen admin filters, and a quote has
+/// no business in any of them. A quote-pending job carries `status = CREATED`
+/// AND `quoteStatus = PENDING_REVIEW`; the second column is what hides it from
+/// cleaners. NULL = not a quote, which is every row that predates this stage.
+/// See `src/lib/quote-status.ts`.
+enum QuoteStatus {
+  PENDING_REVIEW
+  QUOTED
+  ACCEPTED
+  DECLINED
 }
 
 /// How a job's money is assembled — an ADMIN CHOICE, not a guess from
@@ -1404,13 +1648,24 @@ model AvailabilityException {
 model JobPhoto {
   id         String   @id @default(cuid())
   jobId      String
-  employeeId String
+  /// WHO uploaded it. NULL = the CUSTOMER did, from the public booking flow
+  /// (PDF #9, Stage 11) — there is no `User` row for a guest booker and no crew
+  /// assigned yet, so the only honest value is "nobody on staff".
+  ///
+  /// Was NOT NULL until Stage 11, which is precisely why the earlier round of
+  /// fixes shipped post-construction photo *prompts* instead of photo *uploads*
+  /// (see verify-awer-fixes-3.ts §10). Every pre-existing row has an employee,
+  /// so nothing changes for cleaner-uploaded photos; readers label a null
+  /// uploader rather than assuming one.
+  employeeId String?
   url        String
   caption    String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   job        Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  employee   User     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  /// Cascade is kept from before: deleting a cleaner still removes the photos
+  /// they took. It can never fire for a booking photo, whose employeeId is NULL.
+  employee   User?    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
   @@index([jobId])
   @@index([employeeId])
@@ -1560,16 +1815,46 @@ model ReviewPhoto {
 }
 
 model ChecklistTemplate {
-  id            String                  @id @default(cuid())
-  name          String
-  jobType       String?
-  addOnName     String?
-  description   String?
+  id              String  @id @default(cuid())
+  name            String
+  jobType         String?
+  addOnName       String?
+  description     String?
+  /// Customer / contract scoping (PDF #10, Stage 10). NULL = not scoped to a
+  /// customer, which is every template written before this column and is what
+  /// keeps the old jobType/add-on matching working untouched.
+  ///
+  /// When set, the template applies ONLY to that client's jobs — and it
+  /// OVERRIDES the service-type default rather than stacking on top of it
+  /// ("every Mckiernan job gets the strict Mckiernan checklist"). The
+  /// precedence lives in one place: `resolveChecklistTemplates()` in
+  /// src/lib/checklist-triggers.ts.
+  ///
+  /// onDelete: Cascade — a client-scoped template is worthless without its
+  /// client, and SetNull would be actively dangerous: it would silently promote
+  /// a strict customer checklist into a GLOBAL one that fires on every job in
+  /// the business. `deleteClient` already refuses while any job is linked, so
+  /// this only ever fires for a client with no history.
+  clientId        String?
+  /// Narrower still: one LOCATION of that client. Always stored alongside
+  /// `clientId` (the editor and both actions enforce it), which is what makes
+  /// onDelete: SetNull safe here — deleting the address degrades the template
+  /// from "Mckiernan — 12 Main St" to "Mckiernan — all locations" instead of
+  /// making it global.
+  clientAddressId String?
+
   isActive      Boolean                 @default(true)
   createdAt     DateTime                @default(now())
   updatedAt     DateTime                @updatedAt
   items         ChecklistTemplateItem[]
   jobChecklists JobChecklist[]
+  client        Client?                 @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientAddress ClientAddress?          @relation(fields: [clientAddressId], references: [id], onDelete: SetNull)
+  /// Jobs that pin this template explicitly (`Job.checklistTemplateId`).
+  pinnedJobs    Job[]                   @relation("JobChecklistTemplate")
+
+  @@index([clientId])
+  @@index([clientAddressId])
 }
 
 model ChecklistTemplateItem {
@@ -2365,7 +2650,7 @@ model ServiceArea {
 
 model Lead {
   deletedAt      DateTime? // soft-delete (recoverable via Archived view)
-  id             String     @id @default(cuid())
+  id             String       @id @default(cuid())
   email          String
   name           String?
   phone          String?
@@ -2377,17 +2662,17 @@ model Lead {
   halfBathCount  Int?
   squareFootage  Int?
   preferredDate  DateTime?
-  isFlexible     Boolean    @default(false)
+  isFlexible     Boolean      @default(false)
   preferredSlot  String?
   payload        Json?
-  status         LeadStatus @default(NEW)
+  status         LeadStatus   @default(NEW)
   source         String?
   convertedJobId String?
   convertedAt    DateTime?
-  lastActivityAt DateTime   @default(now())
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
-  convertedJob   Job?       @relation(fields: [convertedJobId], references: [id], onDelete: SetNull)
+  lastActivityAt DateTime     @default(now())
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  convertedJob   Job?         @relation(fields: [convertedJobId], references: [id], onDelete: SetNull)
   contact        Contact?
   commissions    Commission[]
 
@@ -2449,12 +2734,12 @@ model Commission {
 /// definition engine is built.
 model Contact {
   deletedAt          DateTime? // soft-delete (recoverable via Archived view)
-  id                 String            @id @default(cuid())
+  id                 String               @id @default(cuid())
   name               String
   email              String?
   phone              String?
   address            String?
-  lifecycle          LifecycleStage    @default(NEW_LEAD)
+  lifecycle          LifecycleStage       @default(NEW_LEAD)
   source             String?
   sourceDetail       String?
   latestSource       String?
@@ -2463,21 +2748,21 @@ model Contact {
   leadScore          Int?
   nextStep           String?
   nextStepDue        DateTime?
-  tags               String[]          @default([])
+  tags               String[]             @default([])
   props              Json? // flexible property bag — drives the property cards
   ratingAvg          Float?
-  ratingCount        Int               @default(0)
-  lifetimeValue      Float             @default(0)
-  bookingsCount      Int               @default(0)
-  duplicateDismissed Boolean           @default(false)
+  ratingCount        Int                  @default(0)
+  lifetimeValue      Float                @default(0)
+  bookingsCount      Int                  @default(0)
+  duplicateDismissed Boolean              @default(false)
   archivedAt         DateTime?
-  clientId           String?           @unique
-  leadId             String?           @unique
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
-  lastActivityAt     DateTime          @default(now())
-  client             Client?           @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  lead               Lead?             @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  clientId           String?              @unique
+  leadId             String?              @unique
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  lastActivityAt     DateTime             @default(now())
+  client             Client?              @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  lead               Lead?                @relation(fields: [leadId], references: [id], onDelete: SetNull)
   activities         ContactActivity[]
   rejectedPairsAsA   DuplicateRejection[] @relation("DuplicateRejectionA")
   rejectedPairsAsB   DuplicateRejection[] @relation("DuplicateRejectionB")

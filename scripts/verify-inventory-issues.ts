@@ -71,7 +71,14 @@ ok("cleaner kit is always updated", action.includes("employeeProduct.update"));
 ok("company write-off is conditional, not unconditional",
   action.includes("if (writeOff)"));
 ok("a kit audit row is always written", action.includes("inventoryChange.create"));
-ok("everything runs in one transaction", action.includes("db.$transaction(ops)"));
+// Stage 4 turned this from the array form of $transaction into the interactive
+// form — `adjustWarehouseStock` reads the location rows before it writes, which
+// no prepared promise can do. Still one transaction; the open-flag lookup moved
+// inside it as a bonus.
+ok("everything runs in one transaction",
+  action.includes("db.$transaction(async (tx) => {"));
+ok("the company write-off goes through the one warehouse writer",
+  action.includes("adjustWarehouseStock(tx, {"));
 ok("cleaner can only report against their OWN kit",
   action.includes("employeeId: actor.id"));
 ok("over-reporting is rejected", action.includes("You only have"));
@@ -88,11 +95,17 @@ ok("UI takes an optional note", ui.includes("setDamageReason"));
 ok("UI explains the consequence per type",
   ui.includes("writesOffCompanyStock(damageKind)"));
 
-const log = read("src/app/admin/actions/getInventoryActivity.ts");
+// The activity labels moved out of the reader and into a pure module when
+// Stage 3 replaced reason-string matching with a stored `InventoryAction`
+// column. These rows are old enough to predate that column, so the derived
+// reading is still what labels them — and still has to know the issue words.
+const log = read("src/lib/inventory-action.ts");
 ok("activity log labels the new issue types",
   log.includes('"Reported broken"') && log.includes('"Ran out"'));
 ok("activity log still labels legacy 'damaged' rows",
   log.includes('"Reported damaged"'));
+ok("...and the reader delegates to it rather than keeping its own copy",
+  read("src/app/admin/actions/getInventoryActivity.ts").includes("activityActionLabel("));
 
 console.log(`\n${pass}/${pass + fail} passed`);
 process.exit(fail === 0 ? 0 : 1);

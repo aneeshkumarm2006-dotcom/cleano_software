@@ -2,6 +2,8 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
+import { itemAttentionState } from "@/lib/inventory-thresholds";
+import { loadCleanerThresholdDefault } from "@/lib/inventory-thresholds.server";
 import ProductDetailView from "./ProductDetailView";
 
 export default async function ProductPage({
@@ -19,8 +21,13 @@ export default async function ProductPage({
     redirect("/sign-in");
   }
 
+  // The comment above has always said OWNER/ADMIN; the code only ever excluded
+  // EMPLOYEE, which the admin layout already does — so this was a no-op and the
+  // page (cost per unit, total inventory value, supplier price comparisons) was
+  // open to OPS_MANAGER and FIELD_LEAD. The nav entry is `adminOnly: true`,
+  // which hid it without protecting it.
   const userRole = (session.user as any).role;
-  if (userRole === "EMPLOYEE") {
+  if (userRole !== "OWNER" && userRole !== "ADMIN") {
     redirect("/admin/dashboard");
   }
 
@@ -81,6 +88,7 @@ export default async function ProductPage({
     costPerUnit: product.costPerUnit,
     stockLevel: product.stockLevel,
     minStock: product.minStock,
+    itemType: product.itemType,
     stockUpdatedAt: product.stockUpdatedAt
       ? product.stockUpdatedAt.toISOString()
       : null,
@@ -118,11 +126,26 @@ export default async function ProductPage({
     },
   }));
 
+  // Per-holder status, from the same shared rule the cleaner's own app and the
+  // Cleaner Inventory tab use (Stage 2 / PDF #4). Without it this table showed
+  // a bare quantity, so "3 people hold a scraper" said nothing about the fact
+  // that two of them are damaged.
+  const kitThresholdDefault = await loadCleanerThresholdDefault();
+
   const employeeAssignmentsData = product.employeeProducts.map((ep) => ({
     id: ep.id,
     quantity: ep.quantity,
     assignedAt: ep.assignedAt.toISOString(),
     notes: ep.notes,
+    attention: itemAttentionState({
+      quantity: ep.quantity,
+      condition: ep.condition,
+      levelStatus: ep.levelStatus,
+      itemType: product.itemType,
+      cleanerRestockThreshold: product.cleanerRestockThreshold,
+      defaultThreshold: kitThresholdDefault,
+    }),
+    statusUpdatedAt: ep.statusUpdatedAt ? ep.statusUpdatedAt.toISOString() : null,
     employee: {
       id: ep.employee.id,
       name: ep.employee.name,

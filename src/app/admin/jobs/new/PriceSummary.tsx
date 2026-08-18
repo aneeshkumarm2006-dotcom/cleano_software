@@ -9,6 +9,13 @@ export default function PriceSummary() {
   const [tip, setTip] = useState(0);
   const [parking, setParking] = useState(0);
   const [employeePay, setEmployeePay] = useState(0);
+  // Customer-side hourly billing (Stage 8). Subscribed by DOM id like every
+  // other field here, so an hourly job's Pre-tax line shows `rate × hours`
+  // rather than the empty Price box. Without this the summary read $0.00 on
+  // exactly the jobs PDF #8 is about.
+  const [billedRate, setBilledRate] = useState(0);
+  const [billedEstimated, setBilledEstimated] = useState(0);
+  const [billedActual, setBilledActual] = useState(0);
   // Not money — the pricing mode (fix 2), mirrored into a hidden input by
   // PricingModeField so this component can subscribe the same way it does to
   // every other field. It changes what `price` MEANS, and therefore what this
@@ -22,40 +29,56 @@ export default function PriceSummary() {
       { id: "totalTip", setter: setTip },
       { id: "parking", setter: setParking },
       { id: "employeePay", setter: setEmployeePay },
+      { id: "billedHourlyRate", setter: setBilledRate },
+      { id: "billedEstimatedHours", setter: setBilledEstimated },
+      { id: "billedActualHours", setter: setBilledActual },
     ];
 
-    const handlers: Array<{ el: HTMLInputElement; fn: () => void }> = [];
-
-    for (const { id, setter } of fields) {
-      const el = document.getElementById(id) as HTMLInputElement | null;
-      if (!el) continue;
-      const fn = () => setter(parseFloat(el.value) || 0);
-      fn();
-      el.addEventListener("input", fn);
-      handlers.push({ el, fn });
-    }
-
-    const modeEl = document.getElementById(
-      "pricingMode"
-    ) as HTMLInputElement | null;
-    if (modeEl) {
-      const fn = () => setFinalPriceMode(modeEl.value === "FINAL_PRICE");
-      fn();
-      modeEl.addEventListener("input", fn);
-      handlers.push({ el: modeEl, fn });
-    }
-
-    return () => {
-      for (const { el, fn } of handlers) {
-        el.removeEventListener("input", fn);
+    // Delegated from `document`, not bound per input.
+    //
+    // This used to attach one listener per element on mount, which was fine
+    // while every field it watches existed for the whole life of the form.
+    // Stage 8's billing inputs do NOT: they are mounted only once the admin
+    // picks Hourly, so a per-element binding taken at mount would never see
+    // them and the summary would sit at $0.00 on exactly the jobs this stage is
+    // about. One listener on the document re-reads whatever is on screen now.
+    const readAll = () => {
+      for (const { id, setter } of fields) {
+        const el = document.getElementById(id) as HTMLInputElement | null;
+        setter(el ? parseFloat(el.value) || 0 : 0);
       }
+      const modeEl = document.getElementById(
+        "pricingMode"
+      ) as HTMLInputElement | null;
+      setFinalPriceMode(modeEl?.value === "FINAL_PRICE");
     };
+
+    readAll();
+    document.addEventListener("input", readAll, true);
+    return () => document.removeEventListener("input", readAll, true);
   }, []);
 
-  const subtotal = price - discount + tip + parking;
+  // On an hourly job the Price box is left blank and the service line is
+  // `rate × hours` — actual when it has been measured, else the estimate. Same
+  // precedence as `billedHours()` on the server; kept inline because this
+  // component reads raw DOM strings rather than a job object.
+  const billedHours = billedActual > 0 ? billedActual : billedEstimated;
+  const hourlyLine =
+    billedRate > 0 && billedHours > 0
+      ? Math.round(billedRate * billedHours * 100) / 100
+      : 0;
+  const serviceLine = hourlyLine > 0 && !finalPriceMode ? hourlyLine : price;
+
+  const subtotal = serviceLine - discount + tip + parking;
   const margin = subtotal - employeePay;
 
-  if (price === 0 && discount === 0 && tip === 0 && parking === 0 && employeePay === 0) {
+  if (
+    serviceLine === 0 &&
+    discount === 0 &&
+    tip === 0 &&
+    parking === 0 &&
+    employeePay === 0
+  ) {
     return null;
   }
 
@@ -109,6 +132,15 @@ export default function PriceSummary() {
       {discount > 0 && (
         <div style={{ fontSize: 12, color: "var(--primary-50)" }}>
           −${discount.toFixed(2)} discount applied
+        </div>
+      )}
+      {/* Says where the service line came from on an hourly job, so the
+          Pre-tax figure is never a number with no visible origin. */}
+      {hourlyLine > 0 && !finalPriceMode && (
+        <div style={{ fontSize: 12, color: "var(--primary-50)" }}>
+          Hourly · {billedHours}h × ${billedRate.toFixed(2)}/hr = $
+          {hourlyLine.toFixed(2)}
+          {billedActual > 0 ? " (actual)" : " (estimate)"}
         </div>
       )}
     </div>

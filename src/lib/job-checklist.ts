@@ -10,6 +10,14 @@
 // work the cleaner has already done; never regenerating leaves them following
 // the wrong list. The rule below is the small, safe middle: regenerate only
 // while nothing has been touched, otherwise keep their progress and say so.
+//
+// Stage 10 (PDF #10) widened WHAT can change without widening this rule at all,
+// which was the point. Re-pinning a job, linking a customer template, or moving
+// a job to a different client all change the item set that
+// `resolveExpectedChecklist` produces — and from there they are the same drift
+// as an edited add-on: untouched → REGENERATE, mid-way → STALE. Nothing here
+// needed a special case, and the admin's job panel shows the same verdict by
+// running this same function (`summarizeJobChecklist`).
 
 export interface ChecklistItemShape {
   title: string;

@@ -14,6 +14,10 @@ import QuickAssignModal, {
   type QuickAssignProduct,
 } from "./QuickAssignModal";
 import ActivityView from "./ActivityView";
+import AttentionView, { type InventoryFlagEntry } from "./AttentionView";
+import { INVENTORY_FORECAST_ENABLED } from "@/lib/inventory-forecast.flag";
+import type { ItemType } from "@/lib/item-type";
+import type { ItemAttentionState } from "@/lib/inventory-thresholds";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import {
@@ -25,6 +29,7 @@ import {
   Settings,
   ArrowUpRight,
   Activity,
+  AlertTriangle,
 } from "lucide-react";
 
 type ProductCategory = "LIQUID_SPRAY" | "MOP_LIQUID" | "DISPOSABLE" | "OTHER";
@@ -37,7 +42,9 @@ interface Product {
   costPerUnit: number;
   stockLevel: number;
   minStock: number;
+  cleanerRestockThreshold?: number;
   category?: ProductCategory;
+  itemType?: ItemType;
   stockUpdatedAt: string | null;
   stockUpdatedByName: string | null;
   purchaseUrl: string | null;
@@ -84,6 +91,7 @@ interface ForecastEmployee {
 type TabId =
   | "products"
   | "cleaners"
+  | "attention"
   | "activity"
   | "requests"
   | "suppliers"
@@ -97,14 +105,28 @@ interface CleanerInventoryEntry {
   itemCount: number;
   totalUnits: number;
   totalValue: number;
-  lowCount: number;
+  /** Consumables below threshold + tools whose condition isn't Available. */
+  attentionCount: number;
   items: Array<{
     productId: string;
     productName: string;
     unit: string;
     quantity: number;
     costPerUnit: number;
+    itemType: ItemType;
     refillThreshold: number;
+    attention: ItemAttentionState;
+    statusUpdatedAt: string | null;
+    statusNotes: string | null;
+    /** Latest reported status transition for this kit row (Stage 3). */
+    lastReport: {
+      at: string;
+      previousStatus: string | null;
+      newStatus: string;
+      reason: string | null;
+    } | null;
+    /** Open `InventoryFlag` types still outstanding against it. */
+    openFlagTypes: string[];
     isLow: boolean;
     lastChange: {
       at: string;
@@ -142,6 +164,8 @@ interface InventoryPageClientProps {
     suppliers: Array<{ id: string; name: string; website?: string | null }>;
   };
   forecastData?: ForecastEmployee[];
+  /** Open inventory flags — the Attention queue (Stage 3.5). */
+  attentionFlags?: InventoryFlagEntry[];
   cleanerInventory?: CleanerInventoryEntry[];
   /** OWNER/ADMIN may edit cleaner kit counts; everyone else gets read-only. */
   canEditCleanerInventory?: boolean;
@@ -157,6 +181,7 @@ function isTabId(v: string): v is TabId {
   return (
     v === "products" ||
     v === "cleaners" ||
+    v === "attention" ||
     v === "activity" ||
     v === "requests" ||
     v === "suppliers" ||
@@ -174,6 +199,7 @@ export default function InventoryPageClient({
   initialRowsPerPage,
   supplierData,
   forecastData,
+  attentionFlags = [],
   cleanerInventory = [],
   canEditCleanerInventory = false,
   assignProducts = [],
@@ -194,7 +220,9 @@ export default function InventoryPageClient({
   };
 
   const pendingRequests = requests.filter((r) => r.status === "PENDING").length;
-  const lowCleanerCount = cleanerInventory.filter((c) => c.lowCount > 0).length;
+  const attentionCleanerCount = cleanerInventory.filter(
+    (c) => c.attentionCount > 0
+  ).length;
 
   const TABS: Array<{
     id: TabId;
@@ -207,7 +235,16 @@ export default function InventoryPageClient({
       id: "cleaners",
       label: "Cleaner Inventory",
       icon: <Users size={15} />,
-      badge: lowCleanerCount,
+      badge: attentionCleanerCount,
+    },
+    // Stage 3.5. Sits beside Cleaner Inventory rather than inside Requests on
+    // purpose: a damaged scraper is something to look at, not a request to
+    // approve, and mixing the two is what buried the Requests tab.
+    {
+      id: "attention",
+      label: "Needs Attention",
+      icon: <AlertTriangle size={15} />,
+      badge: attentionFlags.length,
     },
     { id: "activity", label: "Activity", icon: <Activity size={15} /> },
     {
@@ -217,13 +254,29 @@ export default function InventoryPageClient({
       badge: pendingRequests,
     },
     { id: "suppliers", label: "Supplier Comparison", icon: <DollarSign size={15} /> },
-    { id: "forecast", label: "Forecast", icon: <TrendingDown size={15} /> },
+    // Forecast is hidden while nothing measures per-job usage (decision D3) —
+    // see src/lib/inventory-forecast.flag.ts. The tab, the view and the maths
+    // are all still here; only the entry point is withheld.
+    ...(INVENTORY_FORECAST_ENABLED
+      ? [
+          {
+            id: "forecast" as TabId,
+            label: "Forecast",
+            icon: <TrendingDown size={15} />,
+          },
+        ]
+      : []),
     { id: "settings", label: "Settings", icon: <Settings size={15} /> },
   ];
 
-  const [activeTab, setActiveTab] = useState<TabId>(
-    isTabId(initialView) ? initialView : "products"
-  );
+  const [activeTab, setActiveTab] = useState<TabId>(() => {
+    const requested = isTabId(initialView) ? initialView : "products";
+    // A bookmarked `?view=forecast` must not land on a tab that no longer has
+    // a button, which would look like an empty page rather than a hidden one.
+    return requested === "forecast" && !INVENTORY_FORECAST_ENABLED
+      ? "products"
+      : requested;
+  });
 
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);
@@ -378,6 +431,8 @@ export default function InventoryPageClient({
         />
       )}
 
+      {activeTab === "attention" && <AttentionView flags={attentionFlags} />}
+
       {activeTab === "activity" && (
         <ActivityView
           cleaners={assignCleaners.map((c) => ({ id: c.id, name: c.name }))}
@@ -394,7 +449,7 @@ export default function InventoryPageClient({
         />
       )}
 
-      {activeTab === "forecast" && forecastData && (
+      {activeTab === "forecast" && INVENTORY_FORECAST_ENABLED && forecastData && (
         <ForecastView employees={forecastData} />
       )}
 

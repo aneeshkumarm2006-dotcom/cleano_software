@@ -1,4 +1,5 @@
 import Stripe from "stripe";
+import { STANDARD_BOOKING_DEPOSIT_USD } from "@/lib/booking-deposit";
 
 let _stripe: Stripe | null = null;
 
@@ -21,12 +22,23 @@ export const stripe = new Proxy({} as Stripe, {
 });
 
 /**
- * The booking deposit, in cents. Charged by `/api/stripe/charge-deposit` and
- * re-verified by `submitBooking`, which is why it lives here rather than being
- * written out at both ends — the two must never drift apart, or verification
- * would reject legitimate deposits.
+ * The STANDARD booking deposit, in cents. Charged by
+ * `/api/stripe/charge-deposit` and re-verified by `submitBooking`, which is why
+ * it lives here rather than being written out at both ends — the two must never
+ * drift apart, or verification would reject legitimate deposits.
+ *
+ * ⚠️ NO LONGER "the deposit" (PDF #9, Stage 11). Post-construction charges a
+ * configurable deposit (default $200), so the amount for a given booking is
+ * resolved per service type by `resolveDepositCentsForService()` in
+ * `@/lib/booking-deposit.server.ts` and then STORED on `Job.depositAmount`.
+ * This constant is now only:
+ *   • the amount every non-quoted service charges, and
+ *   • the historical value that `resolveDepositCredit()` credits for rows
+ *     written before `Job.depositAmount` existed.
+ * Sourced from the dollar figure in `@/lib/booking-deposit` so the two can't
+ * drift. Do not reintroduce a read of this as "the deposit" for a job.
  */
-export const BOOKING_DEPOSIT_CENTS = 2000;
+export const BOOKING_DEPOSIT_CENTS = STANDARD_BOOKING_DEPOSIT_USD * 100;
 export const BOOKING_DEPOSIT_CURRENCY = "cad";
 
 export async function getOrCreateStripeCustomer(clientId: string, email: string, name: string) {

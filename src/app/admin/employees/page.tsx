@@ -1,15 +1,10 @@
-import { auth } from "@/lib/auth";
-import { headers } from "next/headers";
-import { redirect } from "next/navigation";
+import Link from "next/link";
+import { CalendarClock } from "lucide-react";
+import { requireOwnerAdmin } from "@/lib/page-guards";
 import { db } from "@/db";
 import { jobRevenue, getEmployeeCounts } from "@/lib/metrics";
-import {
-  dateKeyFromStoredDate,
-  dateKeyToStoredDate,
-  dateKeyTz,
-} from "@/lib/availability";
+import { AVAILABILITY_VIEW_PATH } from "@/lib/availability-view";
 import EmployeesPageClient from "./EmployeesPageClient";
-import AvailabilityOverview from "./AvailabilityOverview";
 
 type SearchParams = Promise<{
   [key: string]: string | string[] | undefined;
@@ -23,19 +18,13 @@ export default async function EmployeesPage({
 }: {
   searchParams: SearchParams;
 }) {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
-
-  if (!session) {
-    redirect("/sign-in");
-  }
-
-  // Admin only - OWNER or ADMIN
-  const userRole = (session.user as any).role;
-  if (userRole !== "OWNER" && userRole !== "ADMIN") {
-    redirect("/admin/dashboard");
-  }
+  // OWNER/ADMIN only. Same rule as before, now stated through the canonical
+  // guard (Stage 7.6) so this page can't drift from `requireOwnerAdmin`'s
+  // semantics — notably `homeForRole`, which sends a CLIENT or APPLICANT who
+  // guesses this URL to their own area rather than to /admin/dashboard.
+  //
+  // The nav entry carries `adminOnly: true` to match (src/app/admin/Sidebar.tsx).
+  await requireOwnerAdmin();
 
   // Parse search params
   const params = await searchParams;
@@ -117,57 +106,13 @@ export default async function EmployeesPage({
     };
   });
 
-  // All-cleaners availability overview (one batched query; active view only).
-  const cleanerRows = employees.filter(
-    (e) => e.role === "EMPLOYEE" || e.role === "FIELD_LEAD"
-  );
-  const availabilitySlots = archived
-    ? []
-    : await db.employeeAvailability.findMany({
-        where: { employeeId: { in: cleanerRows.map((e) => e.id) } },
-        select: {
-          employeeId: true,
-          day: true,
-          startTime: true,
-          endTime: true,
-          isAvailable: true,
-        },
-      });
-  // Upcoming one-off time off (vacation / appointment / sick day). These beat the
-  // weekly rule, so the overview has to show them or the table lies.
-  const today = dateKeyToStoredDate(dateKeyTz(new Date()));
-  const timeOff =
-    archived || !today
-      ? []
-      : await db.availabilityException.findMany({
-          where: {
-            employeeId: { in: cleanerRows.map((e) => e.id) },
-            date: { gte: today },
-          },
-          orderBy: { date: "asc" },
-          select: { employeeId: true, date: true, reason: true },
-        });
-
-  const availabilityRows = archived
-    ? []
-    : cleanerRows.map((e) => ({
-        employeeId: e.id,
-        employeeName: e.name,
-        slots: availabilitySlots
-          .filter((s) => s.employeeId === e.id)
-          .map((s) => ({
-            day: s.day as string,
-            startTime: s.startTime,
-            endTime: s.endTime,
-            isAvailable: s.isAvailable,
-          })),
-        timeOff: timeOff
-          .filter((t) => t.employeeId === e.id)
-          .map((t) => ({
-            date: dateKeyFromStoredDate(t.date),
-            reason: t.reason,
-          })),
-      }));
+  // The collapsed all-cleaner availability grid that used to live here — and the
+  // two batched queries that fed it — was RETIRED in Stage 12 (PDF #12, step
+  // 12.6). It answered "what are everyone's weekly hours?" and could say nothing
+  // about a specific date, which is the question admins were actually asking;
+  // /admin/availability answers both, filtered, and keeping a second grid here
+  // would have been two surfaces reading the same two tables and drifting. The
+  // link below replaces it.
 
   // Canonical field-staff headcount (active/inactive) so the headline agrees
   // with Dashboard and Analytics. Admins are surfaced separately below.
@@ -196,7 +141,21 @@ export default async function EmployeesPage({
         archived={archived}
         fieldLeads={fieldLeads}
       />
-      {!archived && <AvailabilityOverview rows={availabilityRows} />}
+      {!archived && (
+        <Link
+          href={AVAILABILITY_VIEW_PATH}
+          className="dcard flex items-center gap-3 px-5 py-4 hover:bg-black/[0.02]">
+          <CalendarClock className="w-4 h-4 text-[#008C9C] shrink-0" />
+          <span className="text-sm font-[600] text-gray-800">
+            Availability overview
+          </span>
+          <span className="text-xs text-gray-500">
+            Everyone&apos;s hours by week or by day, filtered by service,
+            group and date.
+          </span>
+          <span className="ml-auto text-xs text-[#008C9C]">Open →</span>
+        </Link>
+      )}
     </div>
   );
 }

@@ -83,6 +83,19 @@ export interface JobPayInput {
   subtotalAmount?: number | null;
   discountAmount?: number | null;
   addOns?: readonly MoneyAddOn[] | null;
+  /**
+   * Customer-side hourly billing (Stage 8). Read ONLY through `jobPayBasis`,
+   * which is what makes a PERCENTAGE crew on an hourly job take their tier cut
+   * of `rate × hours` rather than of a `price` column that may not have caught
+   * up yet. Nothing below multiplies by them.
+   *
+   * NOT to be confused with `hourlyRate`/`payType` above, which are the
+   * CLEANER's hourly pay. A job can be billed HOURLY and pay PERCENTAGE.
+   */
+  billingType?: string | null;
+  billedHourlyRate?: number | null;
+  billedEstimatedHours?: number | null;
+  billedActualHours?: number | null;
   jobDate: Date | null;
   startTime: Date | null;
   endTime: Date | null;
@@ -140,6 +153,13 @@ export const JOB_PAY_SELECT = {
   subtotalAmount: true,
   discountAmount: true,
   addOns: { select: { name: true, price: true, quantity: true } },
+  // Stage 8: the basis of an HOURLY-billed job is `rate × hours`, so payroll
+  // has to see these four or it would pay a percentage of the stale `price`
+  // mirror rather than of the hours the crew actually worked.
+  billingType: true,
+  billedHourlyRate: true,
+  billedEstimatedHours: true,
+  billedActualHours: true,
   payType: true,
   hourlyRate: true,
   // payRateMultiplier is deliberately NOT selected: the money path stopped

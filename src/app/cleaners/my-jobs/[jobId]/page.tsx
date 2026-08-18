@@ -19,6 +19,8 @@ import {
 import { Calendar, Users, Package, Zap, Camera, ClipboardList, ListChecks, MapPin, DollarSign, KeyRound } from "lucide-react";
 import { formatAddressLine } from "@/lib/client-address";
 import { addOnQuantity } from "@/lib/job-money";
+import { formatHours } from "@/lib/hourly-billing";
+import { propertyTypeLabel } from "@/lib/property-type";
 import { afterPhotosAllowed, photoExpectationLine } from "@/lib/job-photos";
 import { ensureJobChecklist, readJobChecklist } from "@/lib/job-checklist.server";
 import { CHECKLIST_NONE_CONFIGURED } from "@/lib/job-checklist";
@@ -42,6 +44,7 @@ import JobChatThread, {
 } from "@/components/JobChatThread";
 import ScrollToTop from "./ScrollToTop";
 import { cleanerPayoutForJobs } from "@/lib/cleaner-pay-display";
+import { isAwaitingQuote } from "@/lib/quote-status";
 import { sanitizeCleanerNotes } from "@/lib/cleaner-notes";
 
 type PageProps = {
@@ -113,20 +116,20 @@ export default async function JobDetailPage({ params }: PageProps) {
   const showCustomerPhone = await getSetting("provider.showCustomerPhone");
   const gpsEnabled = await getSetting("tracking.gpsEnabled");
 
+  // This cleaner's kit, for the closing inventory report (Stage 3). Same shape
+  // as the clock screen's, because both render the same component.
   const employeeProductsRaw = await db.employeeProduct.findMany({
     where: { employeeId: session.user.id },
     include: { product: true },
   });
   const employeeProducts = employeeProductsRaw.map((ep) => ({
-    id: ep.id,
     productId: ep.productId,
+    name: ep.product.name,
+    unit: ep.product.unit,
     quantity: ep.quantity,
-    product: {
-      id: ep.product.id,
-      name: ep.product.name,
-      unit: ep.product.unit,
-      category: ep.product.category,
-    },
+    itemType: ep.product.itemType,
+    levelStatus: ep.levelStatus,
+    condition: ep.condition,
   }));
 
   const jobWithClock = job as any;
@@ -190,9 +193,27 @@ export default async function JobDetailPage({ params }: PageProps) {
   // that's finished keeps whatever was generated while it ran rather than
   // minting a fresh empty list. Never throws: the checklist is not worth
   // 500-ing the page over.
+  //
+  // CREATED is in the generate list, and that is the fix for admin-created
+  // jobs. `Job.status` defaults to CREATED and `saveJob` writes no status, so
+  // every job booked from the admin form sat outside this gate until clock-in
+  // flipped it to IN_PROGRESS — i.e. the checklist appeared only once the
+  // cleaner was already standing in the building, which is the one moment a
+  // "know the requirements before you arrive" list is too late to be useful.
+  // CREATED is a real state and stays one (quote-status.ts: "a quote-pending
+  // job carries BOTH: status = CREATED (it is not scheduled work)"), so the
+  // gate widens rather than the status being rewritten on save.
+  //
+  // The quote guard is NOT optional here. `quoteSettledFilter()` lives in
+  // `cleanerAssignedWhere`, which every LIST query goes through — but this page
+  // looks the job up by id, so an unsettled post-construction quote (status
+  // CREATED, quoteStatus PENDING_REVIEW) reaches it. Without this, widening to
+  // CREATED would start minting checklists for quotes nobody has accepted.
+  const quoteSettled = !isAwaitingQuote(job.quoteStatus);
   const checklistState =
     isEmployee || isCleaner
-      ? ["SCHEDULED", "IN_PROGRESS"].includes(job.status)
+      ? quoteSettled &&
+        ["CREATED", "SCHEDULED", "IN_PROGRESS"].includes(job.status)
         ? await ensureJobChecklist(job.id, session.user.id)
         : await readJobChecklist(job.id, session.user.id)
       : null;
@@ -273,15 +294,33 @@ export default async function JobDetailPage({ params }: PageProps) {
             <div className="cl-jd-quick-tile">
               <div className="lbl">Est. duration</div>
               <div className="val">
-                {job.endTime && job.startTime
-                  ? (() => {
-                      const mins = Math.round(
-                        (new Date(job.endTime).getTime() - new Date(job.startTime).getTime()) / 60000
-                      );
-                      return `${(mins / 60).toFixed(1)}h`;
-                    })()
-                  : "—"}
+                {/* On an hourly job the BILLED hours are the number that
+                    matters operationally — it is what the customer booked — so
+                    they win over the scheduled window when both exist. The rate
+                    and the total deliberately never appear on this page: PDF #8
+                    asks for hours here, and `cleaner-notes.ts` / the money rules
+                    keep customer pricing off cleaner surfaces (step 8.7). */}
+                {job.billingType === "HOURLY" &&
+                (job.billedActualHours ?? job.billedEstimatedHours) != null
+                  ? formatHours(
+                      (job.billedActualHours ?? job.billedEstimatedHours) as number
+                    )
+                  : job.endTime && job.startTime
+                    ? (() => {
+                        const mins = Math.round(
+                          (new Date(job.endTime).getTime() - new Date(job.startTime).getTime()) / 60000
+                        );
+                        return `${(mins / 60).toFixed(1)}h`;
+                      })()
+                    : "—"}
               </div>
+              {job.billingType === "HOURLY" && (
+                <div className="lbl" style={{ marginTop: 2 }}>
+                  {job.billedActualHours != null
+                    ? "hourly job · actual"
+                    : "hourly job · booked"}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -525,6 +564,26 @@ export default async function JobDetailPage({ params }: PageProps) {
                 </dd>
               </div>
             )}
+            {/* Hours the job is billed for (Stage 8 / PDF #8) — visible to the
+                whole crew, because it is what they are expected to be on site
+                for. The customer's RATE and TOTAL are deliberately absent: this
+                page shows the cleaner their own pay and nothing about what the
+                client is charged. */}
+            {job.billingType === "HOURLY" &&
+              (job.billedActualHours ?? job.billedEstimatedHours) != null && (
+                <div className="cl-jd-dl-row">
+                  <dt>
+                    {job.billedActualHours != null
+                      ? "Hours worked"
+                      : "Booked hours"}
+                  </dt>
+                  <dd>
+                    {formatHours(
+                      (job.billedActualHours ?? job.billedEstimatedHours) as number
+                    )}
+                  </dd>
+                </div>
+              )}
             {isEmployee && job.payType === "HOURLY" && job.hourlyRate != null && (
               <div className="cl-jd-dl-row">
                 <dt>Pay rate</dt>
@@ -634,11 +693,11 @@ export default async function JobDetailPage({ params }: PageProps) {
       )}
 
       {/* Home details */}
-      {(job.bedCount != null || job.bathCount != null || job.halfBathCount != null || addOnsArr.length > 0) && (
+      {(job.bedCount != null || job.bathCount != null || job.halfBathCount != null || propertyTypeLabel(job.propertyType) || addOnsArr.length > 0) && (
         <>
           <h2 className="cl-jd-section-title">Home <em>details.</em></h2>
           <div className="cl-jd-row">
-            {(job.bedCount != null || job.bathCount != null || job.halfBathCount != null || job.squareFootage) && (
+            {(job.bedCount != null || job.bathCount != null || job.halfBathCount != null || job.squareFootage || propertyTypeLabel(job.propertyType)) && (
               <div className="cl-jd-card">
                 <div className="cl-jd-card-head">
                   <span className="icon-bubble">
@@ -649,6 +708,13 @@ export default async function JobDetailPage({ params }: PageProps) {
                   <h3>Property size</h3>
                 </div>
                 <dl className="cl-jd-dl">
+                  {/* PDF #11's reason for this field, in the place it applies:
+                      "helps cleaners understand the job setup before arriving".
+                      Leads the list — buzzer-and-elevator vs driveway-and-stairs
+                      changes how you pack the car, before any room count does. */}
+                  {propertyTypeLabel(job.propertyType) && (
+                    <div className="cl-jd-dl-row"><dt>Property type</dt><dd>{propertyTypeLabel(job.propertyType)}</dd></div>
+                  )}
                   {job.bedCount != null && (
                     <div className="cl-jd-dl-row"><dt>Bedrooms</dt><dd>{job.bedCount}</dd></div>
                   )}
@@ -721,7 +787,10 @@ export default async function JobDetailPage({ params }: PageProps) {
 
       {/* Checklist — already generated server-side, so it renders with zero
           clicks (item 12.b: the "Generate Checklist" button is gone). */}
-      {["SCHEDULED", "IN_PROGRESS", "COMPLETED", "PAID"].includes(job.status) && (
+      {quoteSettled &&
+        ["CREATED", "SCHEDULED", "IN_PROGRESS", "COMPLETED", "PAID"].includes(
+          job.status
+        ) && (
         <>
           <h2 className="cl-jd-section-title" id="checklist" style={{ scrollMarginTop: 80 }}>
             <ListChecks size={22} />
@@ -783,11 +852,13 @@ export default async function JobDetailPage({ params }: PageProps) {
       {/* Product usage */}
       {job.productUsage.length > 0 && (
         <>
+          {/* Decision D4: legacy estimated usage, kept readable. Nothing has
+              written these rows since the closing inventory report shipped. */}
           <h2 className="cl-jd-section-title">Products <em>used.</em></h2>
           <div className="cl-jd-card" style={{ marginBottom: 28 }}>
             <div className="cl-jd-card-head">
               <span className="icon-bubble"><Package size={20} /></span>
-              <h3>Product usage</h3>
+              <h3>Product usage (estimated)</h3>
               <span className="head-extra">{job.productUsage.length} item{job.productUsage.length === 1 ? "" : "s"}</span>
             </div>
             <div style={{ overflowX: "auto" }}>

@@ -1,0 +1,26 @@
+-- Stage 3 of `_ai_context/TODO.md`, step 3.6 — drop the dead InventoryRule table.
+--
+-- ── Why ────────────────────────────────────────────────────────────────────
+-- `InventoryRule` held two numbers:
+--   * `usagePerJob`     — an admin-typed guess at how much of a product a job
+--                         consumes. awer_fixes.pdf item 20 replaced it with a
+--                         measured trailing average, and Stage 3 removes even
+--                         that source (nothing estimates usage any more).
+--   * `refillThreshold` — superseded by `Product.cleanerRestockThreshold`.
+-- Nothing has read either column since that round; `verify-awer-fixes-3.ts`
+-- asserts, by sweep over `src/`, that no code anywhere mentions the model. The
+-- drop was deliberately held back for a deploy that has a backup point behind
+-- it — this batch is that deploy.
+--
+-- ── Blast radius ───────────────────────────────────────────────────────────
+-- DESTRUCTIVE, and the only destructive statement in this batch. It deletes the
+-- rows in `InventoryRule` and nothing else:
+--   * The FK is `InventoryRule.productId → Product.id`, so dropping the child
+--     table cannot cascade into `Product`. No product, count, kit or job row is
+--     affected.
+--   * The data is not recoverable from the app afterwards. It is recoverable
+--     from the pre-deploy backup, which is the reason this waited.
+-- If in any doubt on the day, snapshot the table first:
+--   CREATE TABLE "_InventoryRule_backup" AS SELECT * FROM "InventoryRule";
+
+DROP TABLE IF EXISTS "InventoryRule";

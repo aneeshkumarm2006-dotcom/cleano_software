@@ -325,6 +325,7 @@ export async function runBookingKoalaImport(
         row: r.rowNum,
         client: r.job.clientName,
         jobType: r.job.jobType,
+        propertyType: r.job.propertyType,
         start: r.job.startTime.toISOString().slice(0, 16),
         price: r.job.price,
         status: r.job.status,
@@ -452,6 +453,11 @@ export async function runBookingKoalaImport(
           bathCount: r.job.bathCount,
           halfBathCount: r.job.halfBathCount,
           squareFootage: r.job.squareFootage,
+          // Apartment/condo vs house (Stage 9 / PDF #11), read off the CSV's
+          // "Service" column before it was folded into the service category
+          // above. Null on rows whose service name carries no property word —
+          // an admin edits those from either job form.
+          propertyType: r.job.propertyType,
           paymentType: r.job.paymentType,
           isCashJob: r.job.isCashJob,
           paymentReceived: r.job.paymentReceived,

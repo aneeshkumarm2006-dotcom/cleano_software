@@ -272,7 +272,7 @@ export default function ResolveClient({
                 </div>
 
                 <div className="mt-4 pt-4 border-t border-gray-100">
-                  <p className="text-xs uppercase tracking-wide text-[#008C9C]/60 mb-2">
+                  <p className="text-xs uppercase tracking-wide text-[#005a63] mb-2">
                     Available at Locations
                   </p>
                   {!stock || stock.locations.length === 0 ? (
@@ -286,7 +286,7 @@ export default function ResolveClient({
                           key={loc.locationId}
                           className="flex items-center justify-between text-sm">
                           <div className="flex items-center gap-2">
-                            <MapPin className="w-4 h-4 text-gray-400" />
+                            <MapPin className="w-4 h-4 text-gray-500" />
                             <span className="text-gray-900">
                               {loc.locationName}
                             </span>
@@ -302,7 +302,7 @@ export default function ResolveClient({
                                 ? "text-green-700 font-[400]"
                                 : loc.quantity > 0
                                 ? "text-amber-700"
-                                : "text-gray-400"
+                                : "text-gray-600"
                             }`}>
                             {loc.quantity} {item.unit} in stock
                             {loc.quantity >= item.shortBy && " ✓"}

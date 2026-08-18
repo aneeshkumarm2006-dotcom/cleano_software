@@ -19,6 +19,12 @@ import { setEmployeeServiceCategories } from "../../actions/setEmployeeServiceCa
 import { getEmployeeFileUrl } from "../../actions/getEmployeeFileUrl";
 import { PERMISSION_CATEGORIES } from "@/lib/service-permissions";
 import { TIER_LABEL, type CleanerTier } from "@/lib/pay-tiers";
+import { ITEM_TYPE_LABEL, type ItemType } from "@/lib/item-type";
+import { unitsRemovedFromKit } from "@/lib/kit-edit";
+import type {
+  AttentionTone,
+  ItemAttentionState,
+} from "@/lib/inventory-thresholds";
 import { fmtDateTime, fmtDate, fmtTime } from "@/lib/time";
 import {
   ArrowLeft,
@@ -103,12 +109,23 @@ interface ProductUsage {
 }
 
 interface AssignedProduct {
-  id: string;
+  /**
+   * The `EmployeeProduct` row id. Named for what it is: this DTO used to carry
+   * it as `id` next to `productId`, and every inventory action here keys off
+   * the PRODUCT — one refactor-swap away from the exact "Product not found."
+   * this stage fixes (Stage 5, PDF #6).
+   */
+  employeeProductId: string;
   productId: string;
   productName: string;
   quantity: number;
   unit: string;
   costPerUnit: number;
+  itemType: ItemType;
+  /** Server-computed by itemAttentionState() — never re-derived in this file. */
+  attention: ItemAttentionState;
+  statusUpdatedAt: string | null;
+  statusNotes: string | null;
 }
 
 interface InventoryRequestDTO {
@@ -256,33 +273,64 @@ interface StrikeDTO {
  * The page itself is already OWNER/ADMIN-only, and setCleanerProductQuantity
  * re-checks the role server-side — the UI is not the authorization boundary.
  */
+/** Badge variant per attention tone — see `itemAttentionState()`. */
+const ATTENTION_VARIANT: Record<
+  AttentionTone,
+  "success" | "warning" | "error"
+> = {
+  ok: "success",
+  warn: "warning",
+  critical: "error",
+};
+
 function AssignedProductRow({
   employeeId,
   item,
+  onNotice,
 }: {
   employeeId: string;
   item: AssignedProduct;
+  /**
+   * Reports a warehouse return UP to the page. Deliberately not row-local
+   * state: setting a count to 0 unmounts this row, and `router.refresh()`
+   * remounts the whole tab — either way a message held here is gone before it
+   * is read, and a return that says nothing is exactly what PDF #6 is about.
+   */
+  onNotice: (message: string | null) => void;
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [qty, setQty] = useState(String(item.quantity));
   const [reason, setReason] = useState("");
+  // PDF #6: warehouse stock stays untouched unless the admin says otherwise.
+  const [returnToWarehouse, setReturnToWarehouse] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const removed = unitsRemovedFromKit(qty, item.quantity);
 
   const open = () => {
     setQty(String(item.quantity));
     setReason("");
+    setReturnToWarehouse(false);
     setError(null);
+    onNotice(null);
     setEditing(true);
   };
 
   const close = () => {
     setEditing(false);
+    setReturnToWarehouse(false);
     setError(null);
   };
 
   async function save() {
+    // An EMPTY box is not zero — and zero deletes the row. See the same guard
+    // on the Cleaner Inventory tab.
+    if (qty.trim() === "") {
+      setError("Enter a quantity — type 0 to remove the item.");
+      return;
+    }
     const value = Number(qty);
     if (!Number.isFinite(value) || value < 0) {
       setError("Enter a quantity of 0 or more.");
@@ -295,12 +343,18 @@ function AssignedProductRow({
       productId: item.productId,
       quantity: value,
       reason: reason.trim() || undefined,
+      returnToWarehouse: returnToWarehouse && removed > 0,
     });
     setSaving(false);
     if (!res.success) {
       setError(res.error);
       return;
     }
+    onNotice(
+      res.returned
+        ? `${res.returned.quantity} ${res.returned.unit} of ${item.productName} returned to ${res.returned.locationName} — warehouse now ${res.returned.stockLevel}.`
+        : null
+    );
     setEditing(false);
     router.refresh();
   }
@@ -345,6 +399,25 @@ function AssignedProductRow({
           placeholder="Reason (optional) — e.g. cycle count, restocked van"
           className="w-full px-2 py-1.5 rounded-lg border border-[#008C9C]/20 text-sm text-[#003C46] placeholder:text-[#008C9C]/40 focus:outline-none focus:border-[#008C9C]"
         />
+        {/* Only offered when the count is going DOWN — see the same control on
+            the Cleaner Inventory tab. */}
+        {removed > 0 && (
+          <label className="flex items-start gap-2 text-xs text-[#008C9C] cursor-pointer">
+            <input
+              type="checkbox"
+              checked={returnToWarehouse}
+              disabled={saving}
+              onChange={(e) => setReturnToWarehouse(e.target.checked)}
+              className="mt-0.5 w-4 h-4 accent-[#008C9C]"
+            />
+            <span>
+              Return the {removed} {item.unit} removed to warehouse stock
+              <span className="block text-[11px] text-[#008C9C]/50">
+                Off by default — tick only if the units physically came back.
+              </span>
+            </span>
+          </label>
+        )}
         {error && <p className="text-xs text-red-600">{error}</p>}
         <div className="flex items-center gap-2">
           <Button
@@ -375,14 +448,24 @@ function AssignedProductRow({
         </div>
         <p className="text-[11px] text-[#008C9C]/50">
           Saved to the product&rsquo;s stock history with your name and the change
-          amount. Warehouse stock is not affected.
+          amount.{" "}
+          {returnToWarehouse && removed > 0
+            ? "The removed units will be added back to warehouse stock."
+            : "Warehouse stock is not affected."}
         </p>
       </div>
     );
   }
 
+  const equipment = item.itemType === "REUSABLE_EQUIPMENT";
+
   return (
-    <div className="flex items-center justify-between p-3 rounded-xl bg-[#008C9C]/5">
+    <div
+      className={`flex items-center justify-between p-3 rounded-xl ${
+        item.attention.tone === "critical"
+          ? "bg-red-50 border border-red-200"
+          : "bg-[#008C9C]/5"
+      }`}>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-[400] text-[#008C9C] truncate">
           {item.productName}
@@ -390,8 +473,30 @@ function AssignedProductRow({
         <p className="text-xs text-[#008C9C]/60">
           {item.quantity} {item.unit}
         </p>
+        {/* Tools carry when their condition was last reported; a count alone
+            says nothing about whether the thing still works (PDF #4). */}
+        {equipment && item.statusUpdatedAt && (
+          <p className="text-[11px] text-[#008C9C]/50 truncate">
+            Condition reported {fmtDateTime(item.statusUpdatedAt)}
+            {item.statusNotes ? ` · “${item.statusNotes}”` : ""}
+          </p>
+        )}
       </div>
       <div className="flex items-center gap-3">
+        {/* The same badge the cleaner sees on their own screen — equipment by
+            condition, consumables by Low/Empty. */}
+        {(equipment || item.attention.needsAttention) && (
+          <Badge
+            variant={ATTENTION_VARIANT[item.attention.tone]}
+            size="sm"
+            title={
+              equipment
+                ? `${ITEM_TYPE_LABEL[item.itemType]} — reusable tools report a condition, not a refill level`
+                : "At or below the cleaner restock threshold"
+            }>
+            {item.attention.label}
+          </Badge>
+        )}
         <span className="text-sm font-[400] text-[#008C9C]">
           ${(item.quantity * item.costPerUnit).toFixed(2)}
         </span>
@@ -627,6 +732,11 @@ export default function EmployeeDetailView({
 
   const [requestBusy, setRequestBusy] = useState<string | null>(null);
   const [requestError, setRequestError] = useState<string | null>(null);
+  // A warehouse return moves a number on another screen entirely. Held HERE
+  // rather than on the row, because the row is unmounted by both things that
+  // follow a successful return: `router.refresh()` and, on a set-to-0, the row
+  // ceasing to exist (Stage 5).
+  const [kitNotice, setKitNotice] = useState<string | null>(null);
 
   async function handleResolveRequest(requestId: string, decision: "APPROVED" | "REJECTED") {
     setRequestBusy(requestId);
@@ -654,13 +764,29 @@ export default function EmployeeDetailView({
       kitTemplateId: selectedKitId,
     });
     if (res.success) {
-      setKitMessage({ type: "success", text: "Kit assigned successfully." });
+      // Archived lines are skipped rather than issued (Stage 5). When that
+      // happened, say which and DON'T auto-close — a message the admin never
+      // reads is the same as skipping silently.
+      const skipped = res.skipped ?? [];
+      setKitMessage({
+        type: "success",
+        text:
+          skipped.length > 0
+            ? `Kit assigned, minus ${skipped.length} archived product${
+                skipped.length === 1 ? "" : "s"
+              }: ${skipped.join(", ")}. Restore them from Inventory → Archived, or remove them from the kit.`
+            : "Kit assigned successfully.",
+      });
       setSelectedKitId("");
-      setTimeout(() => {
-        setKitModalOpen(false);
-        setKitMessage(null);
+      if (skipped.length > 0) {
         router.refresh();
-      }, 900);
+      } else {
+        setTimeout(() => {
+          setKitModalOpen(false);
+          setKitMessage(null);
+          router.refresh();
+        }, 900);
+      }
     } else {
       setKitMessage({ type: "error", text: res.error || "Failed to assign kit." });
     }
@@ -1139,8 +1265,17 @@ export default function EmployeeDetailView({
                       {jobTypeLabel(job.jobType)}
                     </Badge>
                   )}
+                  {/* JOB VALUE, not this cleaner's pay. `Job.price` is the
+                      customer-facing service line; the cleaner's share of it is
+                      a tier percentage computed by `computeJobPayShares` and
+                      shown on the job's Financials tab. Unlabelled on a
+                      CLEANER's page it read as earnings — on an hourly job that
+                      meant a $15 bill looking like $15 of pay against $6 of
+                      actual pay. The number is right; only the label was
+                      missing. */}
                   {job.price && (
                     <span className="text-sm font-[400] text-[#008C9C]">
+                      <span className="text-[#008C9C]/60 mr-1">Job value</span>
                       ${job.price.toFixed(2)}
                     </span>
                   )}
@@ -1192,8 +1327,17 @@ export default function EmployeeDetailView({
                     className="px-2 py-1">
                     {job.paymentReceived ? "Paid" : "Unpaid"}
                   </Badge>
+                  {/* JOB VALUE, not this cleaner's pay. `Job.price` is the
+                      customer-facing service line; the cleaner's share of it is
+                      a tier percentage computed by `computeJobPayShares` and
+                      shown on the job's Financials tab. Unlabelled on a
+                      CLEANER's page it read as earnings — on an hourly job that
+                      meant a $15 bill looking like $15 of pay against $6 of
+                      actual pay. The number is right; only the label was
+                      missing. */}
                   {job.price && (
                     <span className="text-sm font-[400] text-[#008C9C]">
+                      <span className="text-[#008C9C]/60 mr-1">Job value</span>
                       ${job.price.toFixed(2)}
                     </span>
                   )}
@@ -1232,6 +1376,21 @@ export default function EmployeeDetailView({
           Assign Starter Kit
         </Button>
       </div>
+
+      {/* What a kit edit moved into the warehouse — said here because the
+          number it changed lives on a different screen (PDF #6). */}
+      {kitNotice && (
+        <div className="flex items-start justify-between gap-3 rounded-xl border border-[#008C9C]/20 bg-[#008C9C]/5 px-4 py-3">
+          <p className="text-xs text-[#008C9C]">{kitNotice}</p>
+          <button
+            type="button"
+            aria-label="Dismiss"
+            onClick={() => setKitNotice(null)}
+            className="text-[#008C9C]/50 hover:text-[#008C9C]">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Equipment / Refill Requests */}
       {inventoryRequests.length > 0 && (
@@ -1429,9 +1588,10 @@ export default function EmployeeDetailView({
           <div className="space-y-2">
             {assignedProducts.map((item) => (
               <AssignedProductRow
-                key={item.id}
+                key={item.employeeProductId}
                 employeeId={employee.id}
                 item={item}
+                onNotice={setKitNotice}
               />
             ))}
           </div>

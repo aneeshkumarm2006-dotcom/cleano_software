@@ -1,7 +1,6 @@
 "use server";
 
 import { db } from "@/db";
-import type { Prisma } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
@@ -13,6 +12,27 @@ import {
   writesOffCompanyStock,
   type InventoryIssueType,
 } from "@/lib/inventory-issues";
+import {
+  conditionFlagType,
+  type EquipmentCondition,
+} from "@/lib/inventory-status";
+import { adjustWarehouseStock, pickSourceLocationId } from "@/lib/stock.server";
+
+/**
+ * The condition a reported issue puts a REUSABLE tool into (Stage 2, PDF #4).
+ *
+ * Only the two issues that describe a physical fact about the tool map to a
+ * condition. "Ran out" is a consumable idea — a broom cannot be used up — and
+ * "Other" is by definition unstated, so neither is allowed to overwrite a
+ * condition an admin may be acting on. `null` means "leave the condition
+ * alone", which is different from reporting it as fine.
+ */
+const ISSUE_CONDITION: Record<InventoryIssueType, EquipmentCondition | null> = {
+  LOST: "MISSING",
+  BROKEN: "DAMAGED",
+  RAN_OUT: null,
+  OTHER: null,
+};
 
 /**
  * Cleaner reports an inventory issue against their own kit
@@ -60,7 +80,9 @@ export async function reportDamagedItem(input: {
       },
     },
     include: {
-      product: { select: { name: true, unit: true, stockLevel: true } },
+      product: {
+        select: { name: true, unit: true, stockLevel: true, itemType: true },
+      },
     },
   });
   if (!kit) {
@@ -75,20 +97,45 @@ export async function reportDamagedItem(input: {
 
   const newKitQty = kit.quantity - qty;
   const writeOff = writesOffCompanyStock(issue);
-  const newStockLevel = kit.product.stockLevel - qty;
   const auditReason = issueAuditReason(issue, reason);
   const label = ISSUE_LABEL[issue];
 
-  // Built up conditionally, then run as ONE transaction so a partial report can
-  // never leave the kit and the audit trail disagreeing.
-  const ops: Prisma.PrismaPromise<unknown>[] = [
+  // Stage 2 (PDF #4): a reported issue against a REUSABLE tool is also a
+  // condition report. A cleaner saying "my scraper broke" should leave the
+  // admin looking at a DAMAGED scraper in a review queue, not just a kit count
+  // that quietly went down by one. The stock rules above are untouched —
+  // LOST/BROKEN still write off company stock, RAN_OUT/OTHER still don't.
+  const isEquipment = kit.product.itemType === "REUSABLE_EQUIPMENT";
+  const newCondition = isEquipment ? ISSUE_CONDITION[issue] : null;
+  const flagType = newCondition ? conditionFlagType(newCondition) : null;
+  const now = new Date();
+
+  // ONE transaction so a partial report can never leave the kit, the warehouse
+  // and the audit trail disagreeing.
+  //
+  // Stage 4 turned this from the array form into the interactive form. It had
+  // to: `adjustWarehouseStock` reads the location rows, recomputes the total
+  // and writes — that cannot be expressed as a prepared promise. The upside is
+  // that the open-flag lookup moved INSIDE the transaction too, closing the
+  // duplicate-flag race Stage 2 recorded as a known limit.
+  await db.$transaction(async (tx) => {
     // The cleaner's kit always reflects reality.
-    db.employeeProduct.update({
+    await tx.employeeProduct.update({
       where: { id: kit.id },
-      data: { quantity: { decrement: qty } },
-    }),
+      data: {
+        quantity: { decrement: qty },
+        ...(newCondition
+          ? {
+              condition: newCondition,
+              statusUpdatedAt: now,
+              statusNotes: reason || null,
+            }
+          : {}),
+      },
+    });
+
     // Audit: the cleaner's assigned stock.
-    db.inventoryChange.create({
+    await tx.inventoryChange.create({
       data: {
         productId: input.productId,
         employeeId: actor.id,
@@ -96,38 +143,67 @@ export async function reportDamagedItem(input: {
         quantityChange: -qty,
         newQuantity: newKitQty,
         unit: kit.product.unit,
+        action: "ISSUE",
+        // The status transition, when this report carries one (PDF #1's
+        // history list). Null on consumables, which have no condition.
+        previousStatus: newCondition ? (kit.condition ?? null) : null,
+        newStatus: newCondition,
         reason: auditReason,
         changedById: actor.id,
         changedByName: actor.name ?? null,
       },
-    }),
-  ];
+    });
 
-  if (writeOff) {
-    ops.push(
-      db.product.update({
-        where: { id: input.productId },
-        data: { stockLevel: { decrement: qty } },
-      }),
-      // The matching write-off against master/warehouse stock.
-      db.inventoryChange.create({
-        data: {
+    if (writeOff) {
+      // The matching write-off against company stock. Which items are written
+      // off is unchanged (LOST/BROKEN yes, RAN_OUT/OTHER no) — only the route
+      // changed: it now goes through the one helper that moves the location row
+      // and `stockLevel` together, instead of decrementing the count alone and
+      // leaving the locker saying something else.
+      const locationId = await pickSourceLocationId(tx, input.productId, qty);
+      await adjustWarehouseStock(tx, {
+        productId: input.productId,
+        locationId,
+        delta: -qty,
+        action: "ISSUE",
+        unit: kit.product.unit,
+        reason: auditReason,
+        actor,
+      });
+    }
+
+    if (flagType) {
+      // De-dupe against whatever is already OPEN for this (cleaner, product,
+      // type), so a cleaner reporting the same broken scraper twice leaves the
+      // admin one thing to action rather than two.
+      const openFlag = await tx.inventoryFlag.findFirst({
+        where: {
+          employeeId: actor.id,
           productId: input.productId,
-          employeeId: null,
-          employeeName: null,
-          quantityChange: -qty,
-          newQuantity: newStockLevel,
-          unit: kit.product.unit,
-          reason: auditReason,
-          changedById: actor.id,
-          changedByName: actor.name ?? null,
+          type: flagType,
+          status: "OPEN",
         },
-      })
-    );
-  }
+        select: { id: true },
+      });
+      if (openFlag) {
+        await tx.inventoryFlag.update({
+          where: { id: openFlag.id },
+          data: { notes: reason || null },
+        });
+      } else {
+        await tx.inventoryFlag.create({
+          data: {
+            type: flagType,
+            employeeId: actor.id,
+            productId: input.productId,
+            source: "ISSUE_REPORT",
+            notes: reason || null,
+          },
+        });
+      }
+    }
 
-  ops.push(
-    db.alert.create({
+    await tx.alert.create({
       data: {
         type: "LOW_INVENTORY",
         severity: needsRestock(issue) ? "INFO" : "WARNING",
@@ -143,12 +219,19 @@ export async function reportDamagedItem(input: {
         relatedId: input.productId,
         relatedType: "Product",
       },
-    })
-  );
-
-  await db.$transaction(ops);
+    });
+  }, {
+    // A write-off is nine sequential queries: the kit update, its audit row,
+    // `adjustWarehouseStock`'s source-location pick, upsert, SUM, cache write
+    // and audit row, the flag de-dupe, and the alert. Supabase round-trips take
+    // that past Prisma's default 5s window, and a P2028 partway through would
+    // roll a cleaner's report back without telling them.
+    maxWait: 10_000,
+    timeout: 30_000,
+  });
 
   revalidatePath("/cleaners/my-inventory");
   revalidatePath("/admin/inventory");
+  revalidatePath("/admin/settings");
   return { success: true };
 }

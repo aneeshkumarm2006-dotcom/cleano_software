@@ -10,7 +10,10 @@ import {
   resolvePricingMode,
 } from "@/lib/job-money";
 import { sanitizeCleanerNotes } from "@/lib/cleaner-notes";
+import { propertyTypeLabel } from "@/lib/property-type";
 import { formatAddressLine } from "@/lib/client-address";
+import { formatDeposit, resolveDepositCredit } from "@/lib/booking-deposit";
+import { isAwaitingQuote, quoteStatusLabel } from "@/lib/quote-status";
 import { fmtDateTime } from "@/lib/time";
 import Link from "next/link";
 import { ArrowLeft, Download, MapPin, Users, CreditCard } from "lucide-react";
@@ -214,6 +217,20 @@ export default async function BookingDetailPage({
         </div>
       ) : null}
 
+      {/* Post-construction quote state (PDF #9, Stage 11). Without this the
+          portal shows a provisional estimate under a "Total" heading with no
+          indication that the price isn't settled — the same misleading promise
+          the booking flow's estimate line used to make. */}
+      {job.quoteStatus === "PENDING_REVIEW" || job.quoteStatus === "QUOTED" ? (
+        <div style={{ marginBottom: 24 }}>
+          <Banner kind="amber">
+            {job.quoteStatus === "PENDING_REVIEW"
+              ? `${quoteStatusLabel(job.quoteStatus)} — we're reviewing your photos and will email your final price shortly. The total below is an estimate.`
+              : `${quoteStatusLabel(job.quoteStatus)} — check your email for the final price. Reply or call us to confirm and we'll lock in your date.`}
+          </Banner>
+        </div>
+      ) : null}
+
       <div
         style={{
           display: "grid",
@@ -243,7 +260,14 @@ export default async function BookingDetailPage({
               />
               <DetailRow
                 dt="Property"
-                dd={`${job.bedCount ?? "?"} bed · ${job.bathCount ?? "?"} bath${
+                dd={`${
+                  // Stage 9 / PDF #11 — the customer's own answer, echoed back
+                  // to them. Absent on bookings taken before the field existed,
+                  // and on any booking where the admin hid the control.
+                  propertyTypeLabel(job.propertyType)
+                    ? `${propertyTypeLabel(job.propertyType)} · `
+                    : ""
+                }${job.bedCount ?? "?"} bed · ${job.bathCount ?? "?"} bath${
                   job.halfBathCount ? ` + ${job.halfBathCount} half` : ""
                 }${
                   job.squareFootage ? ` · ${job.squareFootage} sq ft` : ""
@@ -430,7 +454,10 @@ export default async function BookingDetailPage({
               {job.depositPaid ? (
                 <DetailRow
                   dt="Deposit paid"
-                  dd={`−${formatPrice(20)}`}
+                  // The deposit this booking actually charged (Stage 11 / PDF #9).
+                  // Was a literal 20, which told a post-construction customer they
+                  // had paid $20 of the $200 on their card statement.
+                  dd={`−${formatPrice(resolveDepositCredit(job))}`}
                 />
               ) : null}
               {job.refundedAmount > 0 ? (
@@ -460,7 +487,13 @@ export default async function BookingDetailPage({
                 />
                 <span>
                   {job.depositPaid
-                    ? "$20 deposit collected at booking. The remaining balance will be charged after your cleaning is complete."
+                    ? isAwaitingQuote(job.quoteStatus)
+                      ? `${formatDeposit(
+                          resolveDepositCredit(job)
+                        )} deposit collected with your request. It comes off your final quote, and nothing further is charged until you approve it.`
+                      : `${formatDeposit(
+                          resolveDepositCredit(job)
+                        )} deposit collected at booking. The remaining balance will be charged after your cleaning is complete.`
                     : "You won't be charged until after your cleaning is complete."}
                 </span>
               </div>

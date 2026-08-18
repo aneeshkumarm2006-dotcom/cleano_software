@@ -12,6 +12,7 @@ import {
   BarChart3,
   TrendingUp,
   CalendarDays,
+  CalendarClock,
   Briefcase,
   Inbox,
   Clock,
@@ -20,6 +21,7 @@ import {
   Globe,
   Flame,
   Users,
+  UsersRound,
   UserPlus,
   Package,
   Droplets,
@@ -93,6 +95,15 @@ interface NavItem {
    * Keep this in sync when a page's own role gate changes.
    */
   adminOnly?: boolean;
+  /**
+   * Shown only to a FIELD_LEAD. The mirror image of `adminOnly`: /admin/my-team
+   * is a Field Lead's own group view, so an OPS_MANAGER has no team there and an
+   * OWNER/ADMIN reaches it through a lead picker rather than through the nav.
+   *
+   * `adminOnly` and this are mutually exclusive by construction — a page cannot
+   * be both OWNER/ADMIN-only and FIELD_LEAD-only.
+   */
+  fieldLeadOnly?: boolean;
 }
 
 const NAV: { label: string; items: NavItem[] }[] = [
@@ -153,7 +164,13 @@ const NAV: { label: string; items: NavItem[] }[] = [
         Icon: Contact,
         adminOnly: true,
       },
-      { href: "/admin/web-bookings", label: "Web Bookings", Icon: Globe },
+      {
+        href: "/admin/web-bookings",
+        label: "Web Bookings",
+        Icon: Globe,
+        // Prints real booking totals — see the guard on its page.
+        adminOnly: true,
+      },
       // Leads used to sit here. It belongs to the sales funnel, not to daily
       // operations (client feedback item 2) — see the Sales & Marketing group.
       // Item 24: one communication entry — direct messages + group chat live
@@ -176,6 +193,24 @@ const NAV: { label: string; items: NavItem[] }[] = [
         label: "Employees",
         Icon: Users,
         adminOnly: true,
+      },
+      // Stage 12 / PDF #12 — the all-cleaner availability view. Sits next to
+      // Employees because it is the same roster read a different way, and the
+      // Employees page's own collapsed grid was retired in its favour.
+      {
+        href: "/admin/availability",
+        label: "Availability",
+        Icon: CalendarClock,
+        adminOnly: true,
+      },
+      // Stage 7 / PDF #7. Leads the Staff group for a Field Lead because it is
+      // the only group-scoped view they have — Employees, which would sit here
+      // for an admin, bounces them.
+      {
+        href: "/admin/my-team",
+        label: "My Team",
+        Icon: UsersRound,
+        fieldLeadOnly: true,
       },
       { href: "/admin/time-tracking", label: "Time Tracking", Icon: Clock },
       {
@@ -209,7 +244,10 @@ const NAV: { label: string; items: NavItem[] }[] = [
         badge: "inventory",
         adminOnly: true,
       },
-      { href: "/admin/wash-payouts", label: "Wash Payouts", Icon: Droplets },
+      { href: "/admin/wash-payouts", label: "Wash Payouts", Icon: Droplets,
+        // Prints payout totals — see the guard on its page.
+        adminOnly: true,
+      },
     ],
   },
   {
@@ -243,7 +281,13 @@ const NAV: { label: string; items: NavItem[] }[] = [
         Icon: FileText,
         badge: "quotes",
       },
-      { href: "/admin/gift-cards", label: "Gift Cards & Promos", Icon: Gift },
+      {
+        href: "/admin/gift-cards",
+        label: "Gift Cards & Promos",
+        Icon: Gift,
+        // Prints outstanding/redeemed balances — see the guard on its page.
+        adminOnly: true,
+      },
     ],
   },
   {
@@ -399,9 +443,14 @@ export default function Sidebar({
   // Note this is presentation only — each page keeps its own server-side guard,
   // which is what actually enforces access.
   const isOwnerAdmin = user.role === "OWNER" || user.role === "ADMIN";
+  const isFieldLead = user.role === "FIELD_LEAD";
   const visibleNav = NAV.map((section) => ({
     ...section,
-    items: section.items.filter((item) => !item.adminOnly || isOwnerAdmin),
+    items: section.items.filter(
+      (item) =>
+        (!item.adminOnly || isOwnerAdmin) &&
+        (!item.fieldLeadOnly || isFieldLead)
+    ),
     // A section with nothing the viewer can open is hidden entirely rather than
     // left as an empty heading.
   })).filter((section) => section.items.length > 0);

@@ -9,6 +9,7 @@ import {
   resolveAssignedQuantity,
   type AssignMode as AssignModeType,
 } from "@/lib/inventory-assign";
+import { adjustWarehouseStock } from "@/lib/stock.server";
 
 /**
  * Quick-assign inventory to ONE cleaner, many products at a time
@@ -213,6 +214,9 @@ export async function bulkAssignCleanerInventory(
               quantityChange: delta,
               newQuantity: after,
               unit: product.unit,
+              // FROM_LOCKER hands stock over; the other mode is an admin
+              // correcting a number, which is a different verb.
+              action: mode === "FROM_LOCKER" ? "ASSIGN" : "ADMIN_SET",
               reason: notes ? `${reasonBase} — ${notes}` : reasonBase,
               changedById: actor?.id ?? null,
               changedByName: actor?.name ?? null,
@@ -221,57 +225,27 @@ export async function bulkAssignCleanerInventory(
 
           // Company stock moves ONLY in FROM_LOCKER mode.
           if (mode === "FROM_LOCKER") {
-            const stockRow = await tx.inventoryLocationStock.findUnique({
-              where: {
-                locationId_productId: {
-                  locationId: location!.id,
-                  productId: item.productId,
-                },
-              },
-              select: { quantity: true },
+            // Stage 4: the locker row, `Product.stockLevel` and the warehouse
+            // audit row are now one call. Writing them by hand here was fine
+            // while this action was the only writer that bothered — it wasn't,
+            // and the ones that didn't are what made the p.5 numbers disagree.
+            const moved = await adjustWarehouseStock(tx, {
+              productId: item.productId,
+              locationId: location!.id,
+              delta: -item.quantity,
+              action: "ASSIGN",
+              unit: product.unit,
+              reason: `Handed to ${cleaner.name ?? "cleaner"} — ${location!.name}`,
+              actor,
             });
-            const lockerBefore = stockRow?.quantity ?? 0;
-            const lockerAfter = round2(lockerBefore - item.quantity);
 
-            if (lockerAfter < 0) {
+            // A short locker warns and reconciles later rather than blocking
+            // the hand-out (the decision in item 5).
+            if (moved.locationQuantity < 0) {
               warnings.push(
-                `${product.name}: ${location!.name} will show ${lockerAfter} ${product.unit} — flagged for reconciliation.`
+                `${product.name}: ${location!.name} will show ${moved.locationQuantity} ${product.unit} — flagged for reconciliation.`
               );
             }
-
-            await tx.inventoryLocationStock.upsert({
-              where: {
-                locationId_productId: {
-                  locationId: location!.id,
-                  productId: item.productId,
-                },
-              },
-              update: { quantity: { decrement: item.quantity } },
-              create: {
-                locationId: location!.id,
-                productId: item.productId,
-                quantity: -item.quantity,
-              },
-            });
-
-            await tx.product.update({
-              where: { id: item.productId },
-              data: { stockLevel: { decrement: item.quantity } },
-            });
-
-            await tx.inventoryChange.create({
-              data: {
-                productId: item.productId,
-                employeeId: null,
-                employeeName: null,
-                quantityChange: -item.quantity,
-                newQuantity: round2(product.stockLevel - item.quantity),
-                unit: product.unit,
-                reason: `Handed to ${cleaner.name ?? "cleaner"} — ${location!.name}`,
-                changedById: actor?.id ?? null,
-                changedByName: actor?.name ?? null,
-              },
-            });
           }
         }
       },
@@ -283,6 +257,7 @@ export async function bulkAssignCleanerInventory(
     revalidatePath("/admin/inventory");
     revalidatePath(`/admin/employees/${cleanerId}`);
     revalidatePath("/cleaners/my-inventory");
+    revalidatePath("/admin/settings");
 
     return { success: true, updated: actionable.length, warnings };
   } catch (error) {

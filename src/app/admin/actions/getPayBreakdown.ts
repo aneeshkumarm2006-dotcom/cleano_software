@@ -21,6 +21,7 @@ import {
   type JobPayInput,
 } from "@/lib/cleaner-earnings";
 import { computeJobMoney, jobPayBasis } from "@/lib/job-money";
+import { hourlyLineLabel } from "@/lib/hourly-billing";
 import { getTaxRates } from "@/lib/tax.server";
 
 /**
@@ -224,6 +225,14 @@ export async function getPayBreakdown(
       discount,
       parking,
       clientTotal,
+      // Stage 8 — how the CUSTOMER is billed. Present only in this ADMIN
+      // payload: the rate is a client charge, and the cleaner payload above is
+      // built to contain nothing but the cleaner's own money.
+      billingType: job.billingType === "HOURLY" ? "HOURLY" : "FLAT",
+      billedHourlyRate: job.billedHourlyRate ?? null,
+      billedEstimatedHours: job.billedEstimatedHours ?? null,
+      billedActualHours: job.billedActualHours ?? null,
+      billedHourlyLine: hourlyLineLabel(job),
       payType,
       hourlyRate: job.hourlyRate ?? null,
       // Pay at the bare TIER BASE rate, so the before/after below is a real

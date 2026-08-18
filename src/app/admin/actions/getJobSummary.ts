@@ -3,6 +3,8 @@
 import { db } from "@/db";
 import { getActor } from "@/lib/action-guards";
 import { computeJobMoney } from "@/lib/job-money";
+import { computeJobPayShares, type JobPayInput } from "@/lib/cleaner-earnings";
+import { getCleanerRateInputs } from "@/lib/cleaner-rates";
 import { resolveAmountDue } from "@/lib/job-billing";
 import { getTaxRates } from "@/lib/tax.server";
 import { formatDate, formatTime } from "@/lib/timezone";
@@ -47,6 +49,14 @@ export async function getJobSummary(jobId: string): Promise<JobSummaryResult> {
         description: true,
         startTime: true,
         endTime: true,
+        // The remaining `JOB_PAY_SELECT` scalars, so `computeJobPayShares`
+        // below sees the same row payroll does. `employeeId` in particular is
+        // the job's LEAD, who is a participant whether or not they also appear
+        // in `cleaners`.
+        employeeId: true,
+        jobDate: true,
+        clockInTime: true,
+        clockOutTime: true,
 
         clientName: true,
         clientId: true,
@@ -63,6 +73,11 @@ export async function getJobSummary(jobId: string): Promise<JobSummaryResult> {
         bathCount: true,
         halfBathCount: true,
         squareFootage: true,
+        // Stage 9 — printed in the drawer AND used to seed the edit modal.
+        propertyType: true,
+        // Pinned checklist template (Stage 10) — the calendar edit modal needs
+        // it or it un-pins the job on save.
+        checklistTemplateId: true,
         cleaners: { select: { id: true, name: true } },
         employee: { select: { id: true, name: true } },
         assignments: {
@@ -88,6 +103,10 @@ export async function getJobSummary(jobId: string): Promise<JobSummaryResult> {
         invoiceSent: true,
         paidAt: true,
         depositPaid: true,
+        // Stage 11: `resolveAmountDue` credits the deposit the job actually
+        // charged. Omitting this here would quote a $200 post-construction
+        // deposit as $20 on the calendar modal and the Charge button.
+        depositAmount: true,
         refundedAmount: true,
         tipAmount: true,
         totalTip: true,
@@ -96,6 +115,14 @@ export async function getJobSummary(jobId: string): Promise<JobSummaryResult> {
         employeePayIsManual: true,
         payType: true,
         hourlyRate: true,
+        // Customer-side hourly billing (Stage 8). Load-bearing twice over:
+        // `computeJobMoney` below derives the service line from them, and the
+        // drawer's Edit button seeds JobModal from this DTO — without them the
+        // modal would open a HOURLY job on Flat and reset it on save.
+        billingType: true,
+        billedHourlyRate: true,
+        billedEstimatedHours: true,
+        billedActualHours: true,
         stripePaymentMethodId: true,
 
         notes: true,
@@ -130,9 +157,37 @@ export async function getJobSummary(jobId: string): Promise<JobSummaryResult> {
     const rates = await getTaxRates();
     const money = computeJobMoney(job, rates);
 
-    // Per-cleaner pay comes off JobAssignment (the payroll split), keyed back
-    // onto the crew list so an unassigned-but-invited cleaner still shows.
-    const payByCleaner = new Map(
+    // Per-cleaner pay, from the SAME function payroll, the Financials tab and
+    // the cleaner's own My Pay screen use.
+    //
+    // This used to read `JobAssignment.payAmount` and call it "the payroll
+    // split". It is not: `payAmount` is the MANUAL PER-CLEANER OVERRIDE ("I
+    // promised Sam $70 of this $100 job"), and it is null on almost every job.
+    // The drawer therefore fell through to printing raw `Job.employeePay`
+    // labelled "(job total)" — and on a PERCENTAGE job that column is a
+    // SAVE-TIME ESTIMATE (`employeePayIsManual: false`), which the schema is
+    // explicit about being superseded silently by the live calculation. So an
+    // hourly job whose price was recomputed at clock-out kept showing the crew
+    // the PRE-clock-out estimate for ever: $96 (40% of the original 4 × $60)
+    // beside a Financials tab correctly reading $6 (40% of the actual 0.25h).
+    const participantIds = Array.from(
+      new Set(
+        [job.employeeId, ...job.cleaners.map((c) => c.id)].filter(
+          (id): id is string => !!id
+        )
+      )
+    );
+    const payShares =
+      participantIds.length > 0
+        ? computeJobPayShares(
+            job as unknown as JobPayInput,
+            await getCleanerRateInputs(participantIds)
+          )
+        : new Map();
+
+    // Assignment rows still carry the crew's CLOCK status for the row beside
+    // each name — that part was always right.
+    const assignmentByCleaner = new Map(
       job.assignments.map((a) => [a.cleanerId, a])
     );
 
@@ -194,11 +249,16 @@ export async function getJobSummary(jobId: string): Promise<JobSummaryResult> {
       bathCount: job.bathCount,
       halfBathCount: job.halfBathCount,
       squareFootage: job.squareFootage,
+      propertyType: job.propertyType,
+      checklistTemplateId: job.checklistTemplateId,
       cleaners: job.cleaners.map((c) => ({
         id: c.id,
         name: c.name,
-        status: payByCleaner.get(c.id)?.status ?? null,
-        pay: payByCleaner.get(c.id)?.payAmount ?? null,
+        status: assignmentByCleaner.get(c.id)?.status ?? null,
+        // `base` — this cleaner's share of what the job is worth. Tips and
+        // transportation are their own rows in this drawer, so folding them in
+        // here would print them twice. Matches the Financials tab exactly.
+        pay: payShares.get(c.id)?.base ?? null,
       })),
       leadEmployee: job.employee ?? null,
 
@@ -218,6 +278,7 @@ export async function getJobSummary(jobId: string): Promise<JobSummaryResult> {
         ? `Paid ${formatDate(job.paidAt, { month: "short", day: "numeric" })}`
         : null,
       depositPaid: job.depositPaid,
+      depositAmount: job.depositAmount,
       refundedAmount: job.refundedAmount,
       tipAmount: job.tipAmount,
       totalTip: job.totalTip,
@@ -226,6 +287,10 @@ export async function getJobSummary(jobId: string): Promise<JobSummaryResult> {
       employeePayIsManual: job.employeePayIsManual,
       payType: job.payType,
       hourlyRate: job.hourlyRate,
+      billingType: job.billingType,
+      billedHourlyRate: job.billedHourlyRate,
+      billedEstimatedHours: job.billedEstimatedHours,
+      billedActualHours: job.billedActualHours,
       hasCardOnFile: !!job.stripePaymentMethodId,
 
       notes: job.notes,

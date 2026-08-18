@@ -30,6 +30,7 @@ import {
 } from "@/lib/metrics";
 import { activeSubtotal, type ActiveValueJob } from "@/lib/job-money";
 import { isCleanerLow } from "@/lib/inventory-thresholds";
+import { loadCleanerThresholdDefault } from "@/lib/inventory-thresholds.server";
 import { avatarColor, initials } from "@/lib/avatar";
 import CleanerDashboard from "./CleanerDashboard";
 
@@ -128,9 +129,11 @@ type JobRow = ActiveValueJob & {
 };
 
 function ListCard({
-  title, viewAllHref, empty, rows,
+  title, viewAllHref, empty, rows, showMoney,
 }: {
   title: string; viewAllHref: string; empty: string; rows: JobRow[];
+  /** False for OPS_MANAGER / FIELD_LEAD — see `canSeeMoney` in DashboardPage. */
+  showMoney: boolean;
 }) {
   return (
     <div className="dcard" style={{ gap: 4, padding: 0 }}>
@@ -156,7 +159,9 @@ function ListCard({
                   <div className="dash-listrow-sub">{fmtDate(when, { weekday: "short", month: "short", day: "numeric" })} · {fmtTime(when)}</div>
                 </div>
                 <div className="dash-listrow-right">
-                  <div className="dash-listrow-price">{money(activeSubtotal(j))}</div>
+                  {showMoney && (
+                    <div className="dash-listrow-price">{money(activeSubtotal(j))}</div>
+                  )}
                   <StatusPill status={simpleJobStatus(j)} />
                 </div>
               </Link>
@@ -176,6 +181,25 @@ export default async function DashboardPage() {
   if (!isAdminRole(role)) {
     return <CleanerDashboard userId={session.user.id} userName={session.user.name ?? ""} />;
   }
+
+  /**
+   * May this viewer read money on the dashboard? (Stage 7.6 audit.)
+   *
+   * `isAdminRole` above admits OPS_MANAGER and FIELD_LEAD, and `homeForRole`
+   * sends both of them HERE after sign-in — so this page was the first thing a
+   * Field Lead saw and it opened with total revenue collected, scheduled value,
+   * inventory value and a price on every job in both lists. Stage 7's whole
+   * premise is that a Field Lead coordinates a crew without seeing the books, and
+   * a My Team page that withholds prices means nothing while the landing page
+   * prints the company total.
+   *
+   * Redacted, not blocked: the operational half of this dashboard (today's jobs,
+   * in progress, low stock, refill alerts, upcoming/completed lists, quick
+   * actions) is exactly what an ops manager or field lead needs, so the money
+   * tiles drop out and everything else stays. The queries behind them are skipped
+   * rather than computed-and-hidden.
+   */
+  const canSeeMoney = role === "OWNER" || role === "ADMIN";
 
   const now = new Date();
   // Store-timezone day boundary — setHours() would be the server's midnight
@@ -217,13 +241,15 @@ export default async function DashboardPage() {
   const [totalRevenue, monthlyRevenue, scheduledValue, employeeCounts, onSiteEmployees, products] = await Promise.all([
     // Canonical realized revenue (completed+paid, discount/refund applied, tax
     // excluded, startTime basis) — shared with Analytics/Clients/Employees.
-    getTotalRevenue(),
+    // Skipped entirely for viewers who may not see it: three aggregate queries
+    // whose only consumer is a tile that will not render.
+    canSeeMoney ? getTotalRevenue() : Promise.resolve(0),
     // Trailing-30-day slice of the same canonical rule (startTime basis) so a
     // bulk import doesn't dump all revenue into the current month.
-    getTotalRevenue({ from: thirtyDaysAgo }),
+    canSeeMoney ? getTotalRevenue({ from: thirtyDaysAgo }) : Promise.resolve(0),
     // Booked but not yet collected — the SQL twin of the predicate the Jobs page
     // applies to its filtered list, so the two cards agree to the cent (item 10).
-    getScheduledValue(),
+    canSeeMoney ? getScheduledValue() : Promise.resolve(0),
     getEmployeeCounts(),
     db.user.count({ where: { cleaningJobs: { some: { status: "IN_PROGRESS" } } } }),
     // Same active-record rule as the Inventory page — soft-deleted products
@@ -238,23 +264,35 @@ export default async function DashboardPage() {
 
   // Refill alerts (employee inventory below threshold) — tracked per cleaner
   // so the tile can deep-link to /admin/employees/{id}.
-  const employeesWithProducts = await db.employeeProduct.findMany({
-    select: {
-      productId: true,
-      quantity: true,
-      product: { select: { cleanerRestockThreshold: true } },
-      employee: { select: { id: true, name: true } },
-    },
-  });
+  const [employeesWithProducts, kitThresholdDefault] = await Promise.all([
+    db.employeeProduct.findMany({
+      select: {
+        productId: true,
+        quantity: true,
+        product: {
+          select: { cleanerRestockThreshold: true, itemType: true },
+        },
+        employee: { select: { id: true, name: true } },
+      },
+    }),
+    // Passed through so this tile counts the same rows the cleaner's own app
+    // calls low. Omitting it fell back to 1 and undercounted (PDF #4).
+    loadCleanerThresholdDefault(),
+  ]);
   let refillAlertCount = 0;
   const refillCleanerMap = new Map<string, { id: string; name: string; lowCount: number }>();
   for (const ep of employeesWithProducts) {
     // The CLEANER restock threshold, which every product has (fix list item
     // 14). This once required an InventoryRule row to exist, so products
     // without one could never raise a refill alert at all.
+    //
+    // `itemType` makes this a REFILL alert in fact as well as in name: a
+    // reusable tool is never low, so it can never land in this count.
     if (
       isCleanerLow(ep.quantity, {
         cleanerRestockThreshold: ep.product.cleanerRestockThreshold,
+        defaultThreshold: kitThresholdDefault,
+        itemType: ep.product.itemType,
       })
     ) {
       refillAlertCount++;
@@ -293,8 +331,12 @@ export default async function DashboardPage() {
         low-stock tiles surface anything that needs attention.
       */}
       <div className="astat-grid" style={{ marginBottom: 18 }}>
-        <Stat icon={CreditCard} label="Total revenue collected" value={money2(totalRevenue)} delta={money(monthlyRevenue)} deltaUp hint="this month" />
-        <Stat icon={Wallet} label="Scheduled value" value={money2(scheduledValue)} hint="booked · not yet earned" />
+        {canSeeMoney && (
+          <>
+            <Stat icon={CreditCard} label="Total revenue collected" value={money2(totalRevenue)} delta={money(monthlyRevenue)} deltaUp hint="this month" />
+            <Stat icon={Wallet} label="Scheduled value" value={money2(scheduledValue)} hint="booked · not yet earned" />
+          </>
+        )}
         <Stat icon={Briefcase} label="Total jobs" value={totalJobs} delta={String(completedJobs)} hint="completed" />
         <Stat icon={Users} label="Employees" value={employeeCount} delta={String(onSiteEmployees)} deltaUp hint={employeeCounts.inactive > 0 ? `active now · ${employeeCounts.inactive} inactive` : "active now"} />
       </div>
@@ -303,7 +345,9 @@ export default async function DashboardPage() {
       <div className="dash-secondary" style={{ marginBottom: 32 }}>
         <Stat icon={CalendarDays} label="Today's jobs" value={todaysJobs} hint="scheduled today" />
         <Stat icon={Clock} label="In progress" value={inProgressJobs} hint="cleaners on site" />
-        {pendingPaymentJobs > 0 && (
+        {/* A collections queue, not an operational one — money-gated with the
+            tiles above rather than left as the one payment figure on the page. */}
+        {canSeeMoney && pendingPaymentJobs > 0 && (
           <AlertTile icon={AlertTriangle} label="Pending payment" value={pendingPaymentJobs} hint="jobs awaiting payment" href="/admin/jobs?payment=pending" />
         )}
         {lowStockProducts.length > 0 && (
@@ -332,8 +376,8 @@ export default async function DashboardPage() {
 
       {/* Two-column lists */}
       <div className="tab-panel" style={{ marginBottom: lowStockProducts.length ? 18 : 32 }}>
-        <ListCard title="Upcoming jobs" viewAllHref="/admin/jobs?subTab=upcoming" empty="No upcoming jobs scheduled." rows={upcomingJobs} />
-        <ListCard title="Recently completed" viewAllHref="/admin/jobs?subTab=completed" empty="No completed jobs yet." rows={recentJobs} />
+        <ListCard title="Upcoming jobs" viewAllHref="/admin/jobs?subTab=upcoming" empty="No upcoming jobs scheduled." rows={upcomingJobs} showMoney={canSeeMoney} />
+        <ListCard title="Recently completed" viewAllHref="/admin/jobs?subTab=completed" empty="No completed jobs yet." rows={recentJobs} showMoney={canSeeMoney} />
       </div>
 
       {/* Low stock alert */}
@@ -372,10 +416,24 @@ export default async function DashboardPage() {
         <div className="dash-qa-grid">
           {[
             { Icon: Plus, label: "New job", sub: "Schedule a cleaning", href: "/admin/jobs/new" },
-            { Icon: Users, label: "Employees", sub: `${employeeCount} on the team`, href: "/admin/employees" },
+            // /admin/employees is OWNER/ADMIN-only, so a Field Lead's version of
+            // this tile points at their own group instead of at a page that
+            // bounces them.
+            role === "FIELD_LEAD"
+              ? { Icon: Users, label: "My Team", sub: "Group schedule & availability", href: "/admin/my-team" }
+              : { Icon: Users, label: "Employees", sub: `${employeeCount} on the team`, href: "/admin/employees" },
             // Carries what the retired Products tile used to say, so the count
-            // and inventory value stay on the dashboard without a tile.
-            { Icon: Package, label: "Inventory", sub: `${totalProducts} products · ${money(totalInventoryValue)}`, href: "/admin/inventory" },
+            // and inventory value stay on the dashboard without a tile. The value
+            // is a money figure, so it drops for viewers who may not see money —
+            // the product count, which is operational, stays.
+            {
+              Icon: Package,
+              label: "Inventory",
+              sub: canSeeMoney
+                ? `${totalProducts} products · ${money(totalInventoryValue)}`
+                : `${totalProducts} products`,
+              href: "/admin/inventory",
+            },
             { Icon: Briefcase, label: "All jobs", sub: `${totalJobs} total`, href: "/admin/jobs" },
           ].map((q) => (
             <Link key={q.label} href={q.href} className="dash-qa">

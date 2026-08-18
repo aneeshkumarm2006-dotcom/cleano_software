@@ -59,6 +59,15 @@ export type JobSummaryDTO = {
   bathCount: number | null;
   halfBathCount: number | null;
   squareFootage: number | null;
+  /**
+   * Apartment/condo vs house (Stage 9 / PDF #11), or null when unrecorded.
+   * Load-bearing twice, like the billing columns below: the drawer prints it,
+   * and the drawer's Edit button seeds JobModal from this DTO — without it the
+   * modal would open on "Not specified" and erase the job's type on save.
+   */
+  propertyType: string | null;
+  /** Pinned checklist template (Stage 10). Null = resolve automatically. */
+  checklistTemplateId: string | null;
   cleaners: { id: string; name: string; status: string | null; pay: number | null }[];
   leadEmployee: { id: string; name: string } | null;
 
@@ -91,6 +100,11 @@ export type JobSummaryDTO = {
   /** "Paid Aug 12" / null. */
   paidAtLabel: string | null;
   depositPaid: boolean;
+  /**
+   * What the deposit actually was (Stage 11 / PDF #9). Null on rows written
+   * before the column — all of which charged the standard $20.
+   */
+  depositAmount: number | null;
   refundedAmount: number;
   tipAmount: number;
   totalTip: number | null;
@@ -101,6 +115,16 @@ export type JobSummaryDTO = {
   employeePayIsManual: boolean;
   payType: string | null;
   hourlyRate: number | null;
+  /**
+   * Customer-side hourly billing (Stage 8 / PDF #8) — how the CUSTOMER is
+   * charged, never to be read together with `payType`/`hourlyRate` above, which
+   * are how the CLEANER is paid. `money.hourlyServiceAmount` carries the
+   * resulting `rate × hours` figure.
+   */
+  billingType: string;
+  billedHourlyRate: number | null;
+  billedEstimatedHours: number | null;
+  billedActualHours: number | null;
   hasCardOnFile: boolean;
 
   // ── Rest ──────────────────────────────────────────────────────────────────

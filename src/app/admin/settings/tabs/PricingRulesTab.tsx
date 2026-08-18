@@ -23,6 +23,13 @@ import {
   DISCOUNTABLE_CATEGORIES,
   FREQ_DISCOUNT_KEYS,
 } from "@/lib/service-pricing";
+import {
+  PC_DEPOSIT_DEFAULT_USD,
+  PC_DEPOSIT_MAX_USD,
+  PC_DEPOSIT_SETTING_KEY,
+  STANDARD_BOOKING_DEPOSIT_USD,
+  formatDeposit,
+} from "@/lib/booking-deposit";
 
 // Human labels for the discount grid.
 const CATEGORY_LABELS: Record<string, string> = {
@@ -128,6 +135,13 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
   const [svc, setSvc] = useState<ServicePricingConfig>(() =>
     normalizeServicePricing(getSetting<unknown>(settings, SERVICE_PRICING_KEY, {}))
   );
+  // Post-construction deposit (Stage 11 / PDF #9). Lives beside the PC pricing
+  // block because that is where an admin already goes to change what
+  // post-construction costs — the deposit is the first number the customer pays,
+  // not a payments-tab detail.
+  const [pcDeposit, setPcDeposit] = useState<number>(() =>
+    getSetting<number>(settings, PC_DEPOSIT_SETTING_KEY, PC_DEPOSIT_DEFAULT_USD)
+  );
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<Msg>(null);
 
@@ -164,18 +178,26 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
     setSaving(true);
     setMsg(null);
 
-    const [r1, r2, r3] = await Promise.all([
+    const [r1, r2, r3, r4] = await Promise.all([
       updateAppSetting({ key: PER_UNIT_KEY, category: "pricing", value: rates }),
       updateAppSetting({ key: ADDONS_KEY, category: "pricing", value: addOns }),
       updateAppSetting({ key: SERVICE_PRICING_KEY, category: "pricing", value: svc }),
+      // Registry-governed and flagged `sensitive`, so this write is validated and
+      // audit-logged by the settings spine rather than upserted raw. `category`
+      // is ignored for a registered key — the registry's own ("bookings") wins.
+      updateAppSetting({
+        key: PC_DEPOSIT_SETTING_KEY,
+        category: "bookings",
+        value: pcDeposit,
+      }),
     ]);
 
-    if (r1.success && r2.success && r3.success) {
+    if (r1.success && r2.success && r3.success && r4.success) {
       setMsg({ type: "success", text: "Pricing rules saved." });
     } else {
       setMsg({
         type: "error",
-        text: r1.error ?? r2.error ?? r3.error ?? "Failed to save.",
+        text: r1.error ?? r2.error ?? r3.error ?? r4.error ?? "Failed to save.",
       });
     }
     setSaving(false);
@@ -586,6 +608,32 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
               }
             />
           </Field>
+        </div>
+        {/* Stage 11 / PDF #9 — the deposit charged before a post-construction
+            request can be submitted. Its own row, below the rate/minimum grid,
+            because it is a different KIND of number: the rate prices the job, this
+            is what the customer's card is charged up front and credited back
+            against the final quote. */}
+        <div className="mt-4 pt-4 border-t border-[#008C9C]/10">
+          <Field label="Deposit charged at booking ($)">
+            <Input
+              variant="form"
+              type="number"
+              min="0"
+              max={String(PC_DEPOSIT_MAX_USD)}
+              step="10"
+              value={pcDeposit}
+              onChange={(e) => setPcDeposit(parseFloat(e.target.value) || 0)}
+            />
+          </Field>
+          <p className="text-sm text-[#008C9C]/60 mt-2">
+            Charged when the customer submits a post-construction request, before
+            anyone has seen the space, and credited against the final quote. Every
+            other service keeps its{" "}
+            {formatDeposit(STANDARD_BOOKING_DEPOSIT_USD)} deposit. Changing this
+            affects NEW requests only — existing bookings keep the deposit they
+            actually charged.
+          </p>
         </div>
         <p className="text-sm text-[#008C9C]/60 mt-3">
           {svc.postConstruction.minHours}h × 1 cleaner ={" "}

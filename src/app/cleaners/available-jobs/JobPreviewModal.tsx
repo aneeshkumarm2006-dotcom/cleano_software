@@ -6,6 +6,7 @@ import Modal from "@/components/ui/Modal";
 import { fmtDate, fmtTime } from "@/lib/time";
 import { getAvailableJobPreview } from "./getAvailableJobPreview";
 import type { AvailableJobPreview } from "./getAvailableJobPreview.types";
+import { propertyTypeLabel } from "@/lib/property-type";
 
 interface JobPreviewModalProps {
   jobId: string | null;
@@ -69,6 +70,10 @@ export default function JobPreviewModal({
 
   const size = data
     ? [
+        // Stage 9 — leads the line: "House" tells a cleaner more about what
+        // they're claiming than any room count does, and it drops out silently
+        // on the many jobs where it was never recorded.
+        propertyTypeLabel(data.propertyType),
         data.bedCount != null ? `${data.bedCount}bd` : null,
         data.bathCount != null ? `${data.bathCount}ba` : null,
         data.halfBathCount ? `${data.halfBathCount} half` : null,

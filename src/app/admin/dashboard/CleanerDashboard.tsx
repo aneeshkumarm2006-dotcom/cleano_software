@@ -7,6 +7,7 @@ import {
 import { getStrikeSummary, STRIKE_THRESHOLD } from "@/lib/strikes";
 import { cleanerPayoutForJobs } from "@/lib/cleaner-pay-display";
 import { isCleanerLow } from "@/lib/inventory-thresholds";
+import { loadCleanerThresholdDefault } from "@/lib/inventory-thresholds.server";
 import { fmtDate, fmtTime, startOfDayTz } from "@/lib/time";
 import {
   upcomingJobsWhere,
@@ -74,6 +75,7 @@ export default async function CleanerDashboard({ userId, userName }: Props) {
     recentJobs,
     employeeProducts,
     ratings,
+    kitThresholdDefault,
   ] = await Promise.all([
     // Next 6 upcoming jobs (list only — never the source of a count)
     db.job.findMany({
@@ -107,6 +109,10 @@ export default async function CleanerDashboard({ userId, userName }: Props) {
       orderBy: { createdAt: "desc" },
       take: 30,
     }).catch(() => []),
+    // The admin's global refill floor. Without it this tile judged the kit
+    // against the built-in 1 while My Inventory used the configured 2 — the
+    // cleaner saw "Low" on their own page and "0 low items" on this one.
+    loadCleanerThresholdDefault(),
   ]);
 
   // Earnings — must use the correct per-cleaner payout (base price × rating
@@ -152,9 +158,14 @@ export default async function CleanerDashboard({ userId, userName }: Props) {
   // Low inventory — CLEANER restock threshold (item 14). Previously a product
   // with no InventoryRule row was skipped entirely, so it could never show as
   // low no matter how empty the cleaner's kit was.
+  //
+  // `itemType` keeps reusable tools out of this list entirely (PDF #4): one
+  // scraper is the right number of scrapers, not a supplies warning.
   const lowItems = employeeProducts.filter((ep) =>
     isCleanerLow(ep.quantity, {
       cleanerRestockThreshold: ep.product.cleanerRestockThreshold,
+      defaultThreshold: kitThresholdDefault,
+      itemType: ep.product.itemType,
     })
   );
 

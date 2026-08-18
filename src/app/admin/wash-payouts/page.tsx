@@ -1,10 +1,12 @@
-import { requireAdmin } from "@/lib/page-guards";
+import { requireOwnerAdmin } from "@/lib/page-guards";
 import { db } from "@/db";
 import WashPayoutsPageClient from "./WashPayoutsPageClient";
 import { isOverProjection } from "@/lib/wash";
 
 export default async function WashPayoutsPage() {
-  await requireAdmin();
+  // requireOwnerAdmin, NOT requireAdmin: `isAdminRole` also admits
+  // OPS_MANAGER and FIELD_LEAD, and this page prints money.
+  await requireOwnerAdmin();
 
   const [cleaners, payouts, flaggedJobs] = await Promise.all([
     db.user.findMany({

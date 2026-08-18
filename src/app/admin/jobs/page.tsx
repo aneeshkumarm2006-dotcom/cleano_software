@@ -96,15 +96,38 @@ export default async function JobsPage({
       taxExempt: true,
       usesFixedPrice: true,
       discountAmount: true,
+      // The modal renders a Reason control and posts it on EVERY save, so a row
+      // handed over without it arrives blank and the save writes that blank
+      // back — which is how discounts lost their "Courtesy"/"Loyalty" reason
+      // just by being edited from this list. Same rule as the Stage 8-10
+      // columns above (§14.3.a).
+      discountReason: true,
       refundedAmount: true,
       deletedAt: true,
       // Feed the edit modal's money basis + live total preview.
       bookingSource: true,
       pricingMode: true,
       subtotalAmount: true,
+      // The pay model and the BILLING model, both of which the edit modal owns
+      // a control for. A control that is rendered but not prefilled posts its
+      // default and silently resets the job — which is why these have to travel
+      // with the row: without `payType`/`hourlyRate` an hourly-PAID job edited
+      // from this list reverted to PERCENTAGE, and Stage 8's four columns would
+      // have done the same to an hourly-BILLED one.
+      payType: true,
+      hourlyRate: true,
+      billingType: true,
+      billedHourlyRate: true,
+      billedEstimatedHours: true,
+      billedActualHours: true,
       bedCount: true,
       bathCount: true,
       halfBathCount: true,
+      // Same reason as the four billing columns above: the edit modal renders a
+      // property-type control, so a row that arrived without this would post a
+      // blank and quietly erase the job's type on a quick edit (Stage 9).
+      propertyType: true,
+      checklistTemplateId: true,
       cleaners: { select: { id: true, name: true } },
       addOns: { select: { id: true, name: true, price: true, quantity: true } },
       productUsage: { select: { quantity: true, product: { select: { costPerUnit: true } } } },
@@ -222,6 +245,7 @@ export default async function JobsPage({
       taxExempt: job.taxExempt,
       usesFixedPrice: job.usesFixedPrice,
       discountAmount: job.discountAmount,
+      discountReason: job.discountReason,
       // Needed client-side by the canonical revenue predicate (metrics-shared):
       // revenue = price − discount − refund, and only for non-archived rows.
       refundedAmount: job.refundedAmount,
@@ -229,6 +253,24 @@ export default async function JobsPage({
       bedCount: job.bedCount,
       bathCount: job.bathCount,
       halfBathCount: job.halfBathCount,
+      propertyType: job.propertyType,
+      checklistTemplateId: job.checklistTemplateId,
+      // The pay model and the billing model. Both were already in the `select`
+      // above and in JobsPageClient's `Job` type, each with a comment saying a
+      // row must not arrive without them — but neither was ever copied HERE, so
+      // every modal opened from this list read `undefined` and fell back to its
+      // default. Because the modal owns these controls it posts them on every
+      // save, so a quick edit from this list silently rewrote the job: an
+      // hourly-BILLED job became FLAT with its rate and hours nulled (and its
+      // price with them, since price mirrors rate × hours), and an hourly-PAID
+      // job reverted to PERCENTAGE. Found by Stage 14.3's two-save-paths pass;
+      // `verify-stage14-regression.ts` now pins the whole select→map→type chain.
+      payType: job.payType,
+      hourlyRate: job.hourlyRate,
+      billingType: job.billingType,
+      billedHourlyRate: job.billedHourlyRate,
+      billedEstimatedHours: job.billedEstimatedHours,
+      billedActualHours: job.billedActualHours,
       profit,
       profitPct,
       timeSpentMs,

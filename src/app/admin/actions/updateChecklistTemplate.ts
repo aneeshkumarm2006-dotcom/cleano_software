@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { resolveTemplateScope } from "@/lib/checklist-scope.server";
 
 interface ChecklistItemInput {
   title: string;
@@ -18,6 +19,10 @@ interface UpdateChecklistTemplateInput {
   description?: string | null;
   jobType?: string | null;
   addOnName?: string | null;
+  /** Customer scope (Stage 10 / PDF #10). Null = not customer-specific. */
+  clientId?: string | null;
+  /** One location of that customer. Requires `clientId`. */
+  clientAddressId?: string | null;
   isActive?: boolean;
   items: ChecklistItemInput[];
 }
@@ -37,6 +42,9 @@ export async function updateChecklistTemplate(
       return { success: false, error: "Template id and name are required" };
     }
 
+    const scope = await resolveTemplateScope(input);
+    if ("error" in scope) return { success: false, error: scope.error };
+
     const filtered = (input.items || []).filter((it) => it.title?.trim());
 
     await db.$transaction([
@@ -47,6 +55,12 @@ export async function updateChecklistTemplate(
           description: input.description?.trim() || null,
           jobType: input.jobType?.trim() || null,
           addOnName: input.addOnName?.trim() || null,
+          // Written unconditionally, including back to null: the editor always
+          // sends the current state of both pickers, so clearing the customer
+          // is a real edit ("this list is generic after all") and must not be
+          // read as "field omitted, leave it alone".
+          clientId: scope.clientId,
+          clientAddressId: scope.clientAddressId,
           isActive: input.isActive ?? true,
         },
       }),

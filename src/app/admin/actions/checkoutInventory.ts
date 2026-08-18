@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { adjustWarehouseStock } from "@/lib/stock.server";
 
 interface CheckoutInventoryInput {
   locationId: string;
@@ -106,28 +107,22 @@ export async function checkoutInventory(input: CheckoutInventoryInput) {
         });
 
         for (const item of input.items) {
-          // upsert, not update: this location may have no stock row for the
-          // product at all. Creating it at a negative quantity records the debt
-          // instead of rejecting the pickup (fix list item 5).
-          await tx.inventoryLocationStock.upsert({
-            where: {
-              locationId_productId: {
-                locationId: input.locationId,
-                productId: item.productId,
-              },
-            },
-            update: { quantity: { decrement: item.quantity } },
-            create: {
-              locationId: input.locationId,
-              productId: item.productId,
-              quantity: -item.quantity,
-            },
-          });
+          const product = productById.get(item.productId)!;
 
-          // Keep the global stockLevel admins see in sync with pickups.
-          await tx.product.update({
-            where: { id: item.productId },
-            data: { stockLevel: { decrement: item.quantity } },
+          // Stage 4: one call now does what this used to do in two — decrement
+          // THIS location's row (upserting it negative when the location never
+          // carried the product, which is what keeps a cleaner from being
+          // stranded, fix list item 5), recompute `Product.stockLevel` from
+          // every location row, and write the warehouse audit row. Doing both
+          // stores here by hand is exactly how they came apart.
+          await adjustWarehouseStock(tx, {
+            productId: item.productId,
+            locationId: input.locationId,
+            delta: -item.quantity,
+            action: "PICKUP",
+            unit: product.unit,
+            reason: `Warehouse pickup by ${session.user.name ?? "cleaner"} — ${location.name}`,
+            actor: { id: session.user.id, name: session.user.name ?? null },
           });
 
           const kitRow = await tx.employeeProduct.upsert({
@@ -146,35 +141,22 @@ export async function checkoutInventory(input: CheckoutInventoryInput) {
           });
 
           // Unified audit trail (spec item 15): pickups appear in the same
-          // Stock History as every other change — one row for the cleaner's
-          // kit (+), one for the warehouse (−).
-          const product = productById.get(item.productId)!;
-          const warehouseAfter = product.stockLevel - item.quantity;
-          await tx.inventoryChange.createMany({
-            data: [
-              {
-                productId: item.productId,
-                employeeId: session.user.id,
-                employeeName: session.user.name ?? null,
-                quantityChange: item.quantity,
-                newQuantity: kitRow.quantity,
-                unit: product.unit,
-                reason: `Warehouse pickup — ${location.name}`,
-                changedById: session.user.id,
-                changedByName: session.user.name ?? null,
-              },
-              {
-                productId: item.productId,
-                employeeId: null,
-                employeeName: null,
-                quantityChange: -item.quantity,
-                newQuantity: warehouseAfter,
-                unit: product.unit,
-                reason: `Warehouse pickup by ${session.user.name ?? "cleaner"} — ${location.name}`,
-                changedById: session.user.id,
-                changedByName: session.user.name ?? null,
-              },
-            ],
+          // Stock History as every other change. This is the cleaner's side (+);
+          // the warehouse side (−) is written by `adjustWarehouseStock` above,
+          // which is the only thing that knows the post-move total.
+          await tx.inventoryChange.create({
+            data: {
+              productId: item.productId,
+              employeeId: session.user.id,
+              employeeName: session.user.name ?? null,
+              quantityChange: item.quantity,
+              newQuantity: kitRow.quantity,
+              unit: product.unit,
+              action: "PICKUP",
+              reason: `Warehouse pickup — ${location.name}`,
+              changedById: session.user.id,
+              changedByName: session.user.name ?? null,
+            },
           });
         }
 
@@ -192,6 +174,7 @@ export async function checkoutInventory(input: CheckoutInventoryInput) {
     revalidatePath("/cleaners/my-inventory/checkout");
     revalidatePath("/cleaners/my-inventory/history");
     revalidatePath("/admin/inventory");
+    revalidatePath("/admin/settings");
 
     // `warnings` is non-empty when the locker went low/negative. The pickup
     // still succeeded — the UI shows these for information and the admin

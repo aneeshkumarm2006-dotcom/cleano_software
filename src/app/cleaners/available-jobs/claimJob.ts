@@ -8,6 +8,8 @@ import {
   isCategoryAllowed,
   CATEGORY_BLOCKED_MESSAGE,
 } from "@/lib/service-permissions";
+import { quoteSettledFilter } from "@/lib/cleaner-jobs";
+import { isAwaitingQuote } from "@/lib/quote-status";
 
 export async function claimJob(jobId: string) {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -32,6 +34,8 @@ export async function claimJob(jobId: string) {
       employeeId: true,
       requiredCleaners: true,
       jobType: true,
+      // Stage 11 / PDF #9 — an unsettled quote is not claimable work.
+      quoteStatus: true,
       cleaners: { select: { id: true } },
     },
   });
@@ -86,6 +90,13 @@ export async function claimJob(jobId: string) {
   if (job.status !== "CREATED" && job.status !== "SCHEDULED") {
     return { success: false, error: "This job is no longer available" };
   }
+  // An unaccepted post-construction quote is unpriced, unconfirmed work (Stage 11,
+  // step 11.7). It can't be reached from the board — `claimableJobsWhere` filters
+  // it out — but this action takes a jobId from the client, so the rule has to
+  // exist here too or the board's filter is decorative.
+  if (isAwaitingQuote(job.quoteStatus)) {
+    return { success: false, error: "This job is no longer available" };
+  }
   if (job.startTime.getTime() < Date.now()) {
     return { success: false, error: "This job has already started" };
   }
@@ -104,6 +115,10 @@ export async function claimJob(jobId: string) {
         status: { in: ["CREATED", "SCHEDULED"] },
         cleaners: { none: { id: userId } },
         OR: [{ employeeId: null }, { employeeId: { not: userId } }],
+        // In the WHERE clause too, so an admin sending a quote back for review
+        // between the read above and this write loses the race rather than the
+        // cleaner claiming an unpriced job. Same reasoning as the status guard.
+        AND: [quoteSettledFilter()],
       },
       data: { cleaners: { connect: { id: userId } } },
     });

@@ -1,5 +1,6 @@
 import { requireAdmin } from "@/lib/page-guards";
 import { db } from "@/db";
+import { ASSIGNABLE_PRODUCT_WHERE } from "@/lib/kit-product.server";
 import KitsAdminClient from "./KitsAdminClient";
 
 export default async function KitsPage() {
@@ -29,7 +30,13 @@ export default async function KitsPage() {
         },
       },
     }),
+    // The "Add to kit" picker. Archived products are excluded (Stage 5): this
+    // list had no filter at all, which is the single easiest way to put a
+    // soft-deleted product into a cleaner's kit and orphan the row. The kits
+    // ABOVE are deliberately unfiltered — an archived item already in someone's
+    // kit must stay visible so it can be removed.
     db.product.findMany({
+      where: ASSIGNABLE_PRODUCT_WHERE,
       orderBy: { name: "asc" },
       select: {
         id: true,

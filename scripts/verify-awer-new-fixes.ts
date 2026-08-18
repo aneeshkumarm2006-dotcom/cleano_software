@@ -128,6 +128,38 @@ has(
       return /\.tsx?$/.test(e.name) ? [full] : [];
     });
 
+  // The named scope helpers in @/lib/cleaner-jobs. Each one returns a
+  // JobWhereInput that already carries `deletedAt: null`, so a read composing
+  // one is filtered even though no literal appears on site. Spelled as a rule
+  // rather than by adding another file to ALLOWED, for the reason given at the
+  // id-pinned rule below: allowlisting a whole FILE also silences the next,
+  // unrelated read someone adds to it. Asserted just below, so a helper that
+  // ever loses its filter fails here instead of quietly widening every caller.
+  const SCOPE_HELPERS = [
+    "cleanerAssignedWhere",
+    "claimableJobsWhere",
+    "calendarJobsWhere",
+    "fieldLeadScopedJobsWhere",
+  ];
+  const helperSrc = read("src/lib/cleaner-jobs.ts");
+  // Follows delegation, because several of these are one-liners over a shared
+  // builder (calendarJobsWhere → cleanerAssignedWhere → cleanerScopedWhere) and
+  // only the innermost one holds the literal.
+  const filtersArchive = (helper: string, seen = new Set<string>()): boolean => {
+    if (seen.has(helper)) return false; // cycle guard
+    seen.add(helper);
+    const at = helperSrc.indexOf(`function ${helper}(`);
+    if (at === -1) return false;
+    const body = helperSrc.slice(at, at + 900);
+    if (body.includes("deletedAt: null")) return true;
+    // `return someOtherWhereBuilder(...)` — chase it.
+    return [...body.matchAll(/return\s+(\w*Where\w*)\s*\(/g)]
+      .some((m) => filtersArchive(m[1], seen));
+  };
+  for (const helper of SCOPE_HELPERS) {
+    ok(`scope helper ${helper}() filters the archive itself`, filtersArchive(helper));
+  }
+
   const offenders: string[] = [];
   for (const file of walk("src")) {
     const lines = read(file).split("\n");
@@ -135,6 +167,8 @@ has(
       if (!/db\.job\.(findMany|count|aggregate|groupBy)/.test(line)) return;
       const window = lines.slice(i, i + 17).join("\n");
       if (window.includes("deletedAt")) return;
+      // Composed from a scope helper that filters — see SCOPE_HELPERS above.
+      if (SCOPE_HELPERS.some((h) => window.includes(`${h}(`))) return;
       // A read pinned to explicit ids is not an archive-FILTER question — the
       // caller already named the rows it wants, and some of these exist
       // precisely to ask "is this id still live?". The allowlist above carries

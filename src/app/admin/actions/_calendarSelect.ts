@@ -48,6 +48,19 @@ export const CALENDAR_JOB_SELECT = {
   bookingSource: true,
   pricingMode: true,
   addOns: { select: { name: true, price: true, quantity: true } },
+  // Stage 8 — part of the same exception. `activeSubtotal` derives an hourly
+  // job's value from these four, so a card without them would print the mirror
+  // in `price` and go stale the moment the crew's hours were snapshotted. The
+  // event card also carries an "Hourly" badge off `billingType`.
+  billingType: true,
+  billedHourlyRate: true,
+  billedEstimatedHours: true,
+  billedActualHours: true,
+  // Stage 9 — the card prints an "Apt"/"House" tag. One nullable enum, and it
+  // is not money: a field lead sorting a day's route needs to know which stops
+  // are walk-ups, and knowing that reveals no dollar figure. Hence it is NOT on
+  // REDACTED_CALENDAR_KEYS, for the same reason `billingType` isn't.
+  propertyType: true,
   employeePay: true,
   totalTip: true,
   parking: true,

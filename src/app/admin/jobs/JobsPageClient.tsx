@@ -56,6 +56,10 @@ export interface Job {
   bedCount: number | null;
   bathCount: number | null;
   halfBathCount: number | null;
+  /** Apartment/condo vs house — prefills the modal's control (Stage 9). */
+  propertyType: string | null;
+  /** Pinned checklist template (Stage 10). Null = resolve automatically. */
+  checklistTemplateId: string | null;
   profit: number;
   profitPct: number;
   timeSpentMs: number;
@@ -66,6 +70,18 @@ export interface Job {
   /** Decides whether add-ons add to `price` or are already inside it (fix 2). */
   pricingMode: string | null;
   subtotalAmount: number | null;
+  /** Cleaner pay model — prefills the modal's control so an edit can't reset it. */
+  payType?: string | null;
+  hourlyRate?: number | null;
+  /**
+   * Customer-side hourly billing (Stage 8). Same reason as `payType`: the modal
+   * renders these controls, so a row that arrives without them would post a
+   * FLAT default and quietly un-hourly the job on the next quick edit.
+   */
+  billingType?: string | null;
+  billedHourlyRate?: number | null;
+  billedEstimatedHours?: number | null;
+  billedActualHours?: number | null;
 }
 
 interface JobsPageClientProps {
@@ -218,6 +234,9 @@ export default function JobsPageClient({
       <JobsView
         serviceOptions={serviceOptions}
         jobs={initialJobs}
+        // Only the empty state reads this — so "there are no jobs" and "none
+        // are assigned to you" stop reading as the same broken query.
+        isAdmin={isAdmin}
         isLoading={isLoading}
         searchTerm={searchTerm}
         statusFilter={statusFilter}

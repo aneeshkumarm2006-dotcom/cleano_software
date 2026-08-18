@@ -29,15 +29,27 @@ import {
 } from "@/lib/email";
 import { isValidEmail, isValidPhone } from "@/lib/validation";
 import { AFTER_PHOTO_CONSENT_VERSION } from "@/lib/policy";
+import { stripe, BOOKING_DEPOSIT_CURRENCY } from "@/lib/stripe";
 import {
-  stripe,
-  BOOKING_DEPOSIT_CENTS,
-  BOOKING_DEPOSIT_CURRENCY,
-} from "@/lib/stripe";
+  BOOKING_PHOTO_CAPTION,
+  BOOKING_PHOTO_MAX,
+  BOOKING_PHOTO_MIN,
+  formatDeposit,
+  isBookingPhotoUrl,
+  isDepositIntentKind,
+  isQuotedService,
+} from "@/lib/booking-deposit";
+import { resolveDepositUsdForService } from "@/lib/booking-deposit.server";
+// `isAwaitingQuote` — not a bare PENDING_REVIEW test — on the three retry paths
+// below. A resubmit can land after an admin has already sent the quote, and
+// "QUOTED" is still not a confirmed cleaning: the confirmation screen must not
+// promise one.
+import { isAwaitingQuote } from "@/lib/quote-status";
 import { logActivity } from "@/lib/activity-log";
 import { applyPromoCode } from "./applyPromoCode";
 import { formatAddressLine } from "@/lib/client-address";
 import { resolveJobAddressId } from "@/lib/client-address-store";
+import { parsePropertyType } from "@/lib/property-type";
 
 type Frequency =
   | "ONE_TIME"
@@ -62,6 +74,14 @@ interface SubmitBookingInput {
    * exactly the reasoning applied to the Stripe ids above.
    */
   addressId?: string | null;
+  /**
+   * Apartment/condo vs house (Stage 9 / PDF #11). Optional, and UNTRUSTED like
+   * everything else on this public action: it is re-parsed through
+   * `parsePropertyType` below, so an unrecognised string lands as null rather
+   * than reaching the column. Prices nothing - `computeBookingPrice` never
+   * sees it.
+   */
+  propertyType?: string | null;
   bedCount: number;
   bathCount: number;
   halfBathCount: number;
@@ -69,6 +89,16 @@ interface SubmitBookingInput {
   serviceType: string;
   pcHours?: number; // post-construction hours (drives hourly pricing)
   pcCleaners?: number; // post-construction crew size (× hourly)
+  /**
+   * Photos of the space the customer uploaded during step 2 (PDF #9, Stage 11).
+   *
+   * URLs, not files: `uploadBookingPhoto` already put them in storage, because
+   * the job they attach to does not exist until this action runs. UNTRUSTED like
+   * everything else here — every one is re-checked with `isBookingPhotoUrl`
+   * against our own cloud and our own upload folder, so this cannot be used to
+   * staple an arbitrary internet image (or another job's photo) onto a job row.
+   */
+  photoUrls?: string[];
   frequency: Frequency;
   // Client sends id (preferred) and/or name; the price is resolved server-side
   // from the catalog and any client-supplied price is ignored. `quantity` IS
@@ -107,6 +137,17 @@ interface VerifiedDeposit {
   paymentIntentId: string;
   stripeCustomerId: string;
   stripePaymentMethodId: string | null;
+  /**
+   * What Stripe says was ACTUALLY captured, in dollars — `amount_received`, not
+   * the figure we asked for (Stage 11).
+   *
+   * This is what lands in `Job.depositAmount`, and therefore what gets credited
+   * at completion and capped at refund time. Reading the charge rather than the
+   * request means the credit can never exceed the money: if a customer paid the
+   * $200 post-construction deposit and then switched to a standard clean, they
+   * are credited the $200 they really paid, not the $20 that service asks for.
+   */
+  amountUsd: number;
 }
 
 /**
@@ -134,7 +175,15 @@ type DepositVerification =
 async function verifyBookingDeposit(
   paymentIntentId: unknown,
   bookingEmail: string,
-  existingStripeCustomerId: string | null
+  existingStripeCustomerId: string | null,
+  /**
+   * What THIS booking's deposit must be, in cents — resolved server-side from the
+   * service type being booked (Stage 11). Passed in rather than read from a
+   * constant, because a post-construction booking owes $200 and a $20 intent must
+   * not satisfy it. Getting this wrong is not a cosmetic bug: the deposit is the
+   * only thing standing in for authentication in the guest flow.
+   */
+  requiredCents: number
 ): Promise<DepositVerification> {
   const GENERIC =
     "We couldn't verify your deposit payment. Please try again, or contact us if the problem continues.";
@@ -164,12 +213,15 @@ async function verifyBookingDeposit(
   }
 
   // (4) amount_received, NOT amount — `amount` is only the intent, and proves
-  // nothing was actually captured.
-  if ((pi.amount_received ?? 0) < BOOKING_DEPOSIT_CENTS) {
+  // nothing was actually captured. The floor is THIS booking's deposit, not a
+  // constant (Stage 11): the old `>= BOOKING_DEPOSIT_CENTS` would have accepted a
+  // $20 intent for a $200 post-construction quote, which is the whole deposit
+  // requirement bypassed by editing one field in the browser.
+  if ((pi.amount_received ?? 0) < requiredCents) {
     return { status: "rejected", error: GENERIC };
   }
 
-  // (5) Blocks a $20 intent denominated in a weaker currency.
+  // (5) Blocks a deposit denominated in a weaker currency.
   if (pi.currency !== BOOKING_DEPOSIT_CURRENCY) {
     return { status: "rejected", error: GENERIC };
   }
@@ -179,8 +231,15 @@ async function verifyBookingDeposit(
   // a cancellation fee — could be replayed here to mint a "paid" booking, and
   // would then become the refund target. `type` is accepted alongside the newer
   // `kind` so intents created before this shipped still verify.
+  //
+  // Both deposit kinds are accepted (`booking_deposit`, `pc_deposit`) rather than
+  // requiring the one matching this service: the KIND is a reporting label, and
+  // the amount check above is what actually holds a post-construction booking to
+  // its $200. Pinning the kind as well would reject a customer who legitimately
+  // switched service type between paying and submitting, whose intent is worth
+  // MORE than the booking now needs.
   const isDeposit =
-    pi.metadata?.kind === "booking_deposit" || pi.metadata?.type === "deposit";
+    isDepositIntentKind(pi.metadata?.kind) || pi.metadata?.type === "deposit";
   if (!isDeposit) {
     return { status: "rejected", error: GENERIC };
   }
@@ -246,7 +305,12 @@ async function verifyBookingDeposit(
 
   return {
     status: "ok",
-    deposit: { paymentIntentId, stripeCustomerId, stripePaymentMethodId },
+    deposit: {
+      paymentIntentId,
+      stripeCustomerId,
+      stripePaymentMethodId,
+      amountUsd: Math.round(pi.amount_received ?? 0) / 100,
+    },
   };
 }
 
@@ -389,6 +453,40 @@ export async function submitBooking(input: SubmitBookingInput) {
       where: { email },
     });
 
+    // ── Post-construction quote flow (PDF #9, Stage 11) ──────────────────────
+    //
+    // Resolved from the SERVICE TYPE, server-side, before anything is charged or
+    // created. `isQuote` decides three things at once: how big the deposit has to
+    // be, whether photos are mandatory, and whether the job is created as a quote
+    // request instead of a booked cleaning.
+    const isQuote = isQuotedService(input.serviceType);
+    const requiredDepositUsd = await resolveDepositUsdForService(input.serviceType);
+
+    // Photos. PDF #9: *"the client uploads pictures of the space"*. Validated
+    // here rather than trusted, for two independent reasons — the URLs come from
+    // the browser (so they are re-checked against our own upload folder), and the
+    // COUNT is a business rule the step gate also enforces (so a crafted request
+    // can't submit a photo-less quote request that an admin can never price).
+    const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+    const photoUrls = Array.from(
+      new Set(
+        (Array.isArray(input.photoUrls) ? input.photoUrls : []).filter((u) =>
+          isBookingPhotoUrl(u, cloudName)
+        )
+      )
+    ).slice(0, BOOKING_PHOTO_MAX);
+
+    if (isQuote && photoUrls.length < BOOKING_PHOTO_MIN) {
+      // Refused BEFORE the deposit is verified and BEFORE any row is written, so
+      // a booking that can't be quoted never takes the customer's money. Worded
+      // as something they can act on: the generic deposit error would send them
+      // to support over a form field.
+      return {
+        success: false,
+        error: `Please add at least ${BOOKING_PHOTO_MIN} photos of the space so we can quote your post-construction cleaning.`,
+      };
+    }
+
     // 4a. Verify the deposit BEFORE anything is created. This action is public
     // and unauthenticated, so without a mandatory verified deposit anyone can
     // POST it and mint unlimited real jobs (and, on a recurring frequency, a
@@ -397,7 +495,8 @@ export async function submitBooking(input: SubmitBookingInput) {
     const verification = await verifyBookingDeposit(
       input.depositPaymentIntentId,
       email,
-      existingClient?.stripeCustomerId ?? null
+      existingClient?.stripeCustomerId ?? null,
+      Math.round(requiredDepositUsd * 100)
     );
     if (verification.status === "rejected") {
       await logActivity({
@@ -421,7 +520,15 @@ export async function submitBooking(input: SubmitBookingInput) {
     if (verification.status === "already_used") {
       const existingJob = await db.job.findUnique({
         where: { id: verification.jobId },
-        select: { id: true, price: true },
+        // `depositAmount`/`quoteStatus` too: this branch is a legitimate retry, so
+        // the confirmation screen it lands on has to describe the job that really
+        // exists — a quote request, with the deposit it really took.
+        select: {
+          id: true,
+          price: true,
+          depositAmount: true,
+          quoteStatus: true,
+        },
       });
       if (existingJob) {
         return {
@@ -429,6 +536,8 @@ export async function submitBooking(input: SubmitBookingInput) {
           jobId: existingJob.id,
           childJobIds: [],
           total: existingJob.price ?? 0,
+          depositAmount: existingJob.depositAmount ?? null,
+          quotePending: isAwaitingQuote(existingJob.quoteStatus),
         };
       }
       // The job vanished between the two lookups (permanently deleted). Don't
@@ -685,10 +794,32 @@ export async function submitBooking(input: SubmitBookingInput) {
         jobId: recentDuplicate.id,
         childJobIds: [],
         total: recentDuplicate.price ?? primaryPricing.total,
+        depositAmount: recentDuplicate.depositAmount ?? deposit.amountUsd,
+        quotePending: isAwaitingQuote(recentDuplicate.quoteStatus),
       };
     }
 
     // 6. Create the primary Job
+
+    // Property type (Stage 9 / PDF #11). Parsed ONCE, here, so the primary job
+    // and every recurring child are written from the same value — and parsed
+    // rather than passed through, because this action is public: anything that
+    // isn't one of the two enum values (a hidden field, a stale client, a
+    // crafted request) becomes null instead of reaching the column.
+    const propertyType = parsePropertyType(input.propertyType);
+
+    // The post-construction estimate the customer entered (Stage 11 / PDF #9).
+    // Normalised through the SAME arithmetic `postConstructionBasePrice` used to
+    // price it — round for hours, clamp crew to >= 1 — so the stored request and
+    // the charged price can't describe two different jobs. Null on every other
+    // service, which is what "this isn't a post-construction booking" means; a 0
+    // would read as "zero cleaners were requested".
+    const pcHours = isQuote
+      ? Math.max(0, Math.round(Number(input.pcHours) || 0))
+      : null;
+    const pcCleaners = isQuote
+      ? Math.max(1, Math.round(Number(input.pcCleaners) || 1))
+      : null;
 
     // After-photo consent — saved to every job from this booking (incl. the
     // recurring children). Only stamp the timestamp/version when consent is
@@ -717,13 +848,36 @@ export async function submitBooking(input: SubmitBookingInput) {
         jobType: input.serviceType,
         jobDate: startTime,
         startTime,
-        status: input.isFlexible ? "CREATED" : "SCHEDULED",
+        // A quote request is never SCHEDULED, however specific the customer was
+        // about the date (Stage 11). The date they picked is a PREFERENCE until
+        // they approve the price, and stamping SCHEDULED would put unpriced work
+        // on the calendar as though a crew were expected. `quoteStatus` below is
+        // what hides it from cleaners; this is what keeps it off the schedule.
+        status: isQuote || input.isFlexible ? "CREATED" : "SCHEDULED",
         bedCount: input.bedCount,
         bathCount: input.bathCount,
         halfBathCount: input.halfBathCount,
         squareFootage: input.squareFootage > 0 ? input.squareFootage : null,
+        // PDF #11 - the customer's selection lands on the admin job with no
+        // re-keying. Null when they skipped it or the admin hid the field.
+        propertyType,
         isFlexible: input.isFlexible,
-        requiredCleaners: 1,
+        // PDF #9 / Stage 11: was a hardcoded `1`, next to pricing that had just
+        // multiplied by `pcCleaners`. So a customer who booked and paid for a
+        // two-cleaner post-construction job reached the admin as a one-cleaner
+        // job, and the crew size they were charged for existed nowhere. Clamped
+        // to >= 1 through the same helpers the price used, so the number staffed
+        // and the number billed are the same number.
+        requiredCleaners: pcCleaners ?? 1,
+        // The customer's own estimate, kept as the REQUEST it is. Null for every
+        // non-post-construction booking, which is what those services mean.
+        pcHours,
+        pcCleaners,
+        // Quote lifecycle. NULL for a normal booking — the column means "not a
+        // quote" — and PENDING_REVIEW for post-construction, which is what makes
+        // the admin queue, the cleaner-facing guards and the customer portal all
+        // treat it as unpriced.
+        quoteStatus: isQuote ? "PENDING_REVIEW" : null,
         // Net of BOTH the referral credit and the promo (see 5b-ter).
         price: primaryPricing.total,
         subtotalAmount: primaryPricing.subtotal,
@@ -760,6 +914,11 @@ export async function submitBooking(input: SubmitBookingInput) {
         depositPaymentIntentId: deposit.paymentIntentId,
         depositPaid: true,
         depositPaidAt: new Date(),
+        // WHAT WAS ACTUALLY CHARGED (Stage 11) — read off the verified
+        // PaymentIntent's `amount_received`, never from the request body and never
+        // re-derived from the setting. Every downstream credit, invoice line and
+        // refund cap reads this column, so it must equal the money that moved.
+        depositAmount: deposit.amountUsd,
         // Pin the card this booking was confirmed on, so a later card change
         // doesn't silently move the charge to a different card.
         stripePaymentMethodId: deposit.stripePaymentMethodId,
@@ -770,6 +929,24 @@ export async function submitBooking(input: SubmitBookingInput) {
             quantity: a.quantity,
           })),
         },
+        // The customer's photos of the space (PDF #9). Written in the same
+        // statement as the job so a quote request can never exist without the
+        // photos it is supposed to be quoted from.
+        //
+        // `employeeId` is deliberately absent: this is what Stage 11's migration
+        // made nullable. A guest booker has no `User` row and no crew is assigned
+        // yet, so "nobody on staff took this" is the only honest value — and it is
+        // what every reader uses to label the photo as the customer's.
+        ...(photoUrls.length > 0
+          ? {
+              photos: {
+                create: photoUrls.map((url) => ({
+                  url,
+                  caption: BOOKING_PHOTO_CAPTION,
+                })),
+              },
+            }
+          : {}),
       },
       });
     } catch (e) {
@@ -785,7 +962,12 @@ export async function submitBooking(input: SubmitBookingInput) {
       ) {
         const winner = await db.job.findFirst({
           where: { depositPaymentIntentId: deposit.paymentIntentId },
-          select: { id: true, price: true },
+          select: {
+            id: true,
+            price: true,
+            depositAmount: true,
+            quoteStatus: true,
+          },
         });
         if (winner) {
           return {
@@ -793,6 +975,8 @@ export async function submitBooking(input: SubmitBookingInput) {
             jobId: winner.id,
             childJobIds: [],
             total: winner.price ?? primaryPricing.total,
+            depositAmount: winner.depositAmount ?? deposit.amountUsd,
+            quotePending: isAwaitingQuote(winner.quoteStatus),
           };
         }
       }
@@ -839,8 +1023,13 @@ export async function submitBooking(input: SubmitBookingInput) {
       actorLabel: "GUEST",
       targetType: "Client",
       targetId: client.id,
-      message: `Verified $${(BOOKING_DEPOSIT_CENTS / 100).toFixed(2)} deposit for ${client.name} and created booking.`,
-      amount: BOOKING_DEPOSIT_CENTS / 100,
+      // The amount that actually moved, not the constant — an audit trail that
+      // reports every deposit as $20 is worse than no audit trail on the day a
+      // $200 one is disputed.
+      message: `Verified ${formatDeposit(deposit.amountUsd)} deposit for ${client.name} and created ${
+        isQuote ? "post-construction quote request" : "booking"
+      }.`,
+      amount: deposit.amountUsd,
       providerId: deposit.paymentIntentId,
       metadata: {
         jobId: primaryJob.id,
@@ -848,6 +1037,8 @@ export async function submitBooking(input: SubmitBookingInput) {
         stripeCustomerId: deposit.stripeCustomerId,
         paymentMethodId: deposit.stripePaymentMethodId,
         isNewClient,
+        quoteRequest: isQuote,
+        photoCount: photoUrls.length,
       },
     });
 
@@ -926,7 +1117,15 @@ export async function submitBooking(input: SubmitBookingInput) {
     const weeklyHorizon = await getSetting("scheduling.recurringWeeklyHorizon");
     const recurrences = recurrenceCount(input.frequency, weeklyHorizon);
     const childJobIds: string[] = [];
-    if (recurrences > 0 && input.frequency !== "ONE_TIME") {
+    // `!isQuote` (Stage 11 / PDF #9): a quote-pending booking must not mint a
+    // series. Its price is provisional and its scope is unreviewed, so generating
+    // future visits would put N unpriced jobs on the books off ONE unreviewed
+    // estimate — and every one of them would need re-pricing the moment the admin
+    // set the real number. (In practice post-construction hides the frequency
+    // control entirely, so `frequency` is already ONE_TIME; this is the guard for
+    // a stale draft or a crafted request, which is exactly the case item 15's
+    // coercion above exists for.)
+    if (!isQuote && recurrences > 0 && input.frequency !== "ONE_TIME") {
       // Compute discounted price for 2nd+ cleanings (first cleaning is full price)
       const discountPct = await recurringDiscountPercent(
         input.frequency,
@@ -987,6 +1186,11 @@ export async function submitBooking(input: SubmitBookingInput) {
             halfBathCount: input.halfBathCount,
             squareFootage:
               input.squareFootage > 0 ? input.squareFootage : null,
+            // Written explicitly, not spread: this is a literal payload, and a
+            // series is one address, so every occurrence is at the same kind of
+            // building (Stage 9 - it is in SERIES_PROPAGATED_FIELDS for the
+            // same reason).
+            propertyType,
             isFlexible: input.isFlexible,
             requiredCleaners: 1,
             price: childPricing.total,
@@ -1003,6 +1207,31 @@ export async function submitBooking(input: SubmitBookingInput) {
             // As on the primary job — a series is one agreement, so every
             // occurrence is priced by the same rule (fix 2).
             pricingMode: "FINAL_PRICE",
+            // Stage 8 deliberately adds NOTHING here. A web booking is quoted
+            // as one agreed total by `computeBookingPrice` and stored as
+            // FINAL_PRICE, so both the primary job and every child stay on
+            // `billingType = FLAT` (the column default) and price exactly as
+            // they did before that column existed. Post-construction is the one
+            // hourly service the public flow offers, and its hours are already
+            // folded into the quoted total by `postConstructionBasePrice`.
+            // ⚠️ Stage 11 DOES give a post-construction job real hourly billing
+            // columns — but never here, and that is the point. They are written by
+            // `sendJobQuote` when an admin prices the request, long after this
+            // code has run, and a quote-pending booking generates no children at
+            // all (see the `!isQuote` guard on the loop above). So the hazard this
+            // note warned about — a FLAT child under an HOURLY parent silently
+            // re-pricing the series — cannot arise: there is no series.
+            //
+            // If post-construction ever becomes recurring, that guard is what has
+            // to be revisited, together with this literal.
+            //
+            // Stage 10 also adds nothing here, for a different reason: the
+            // public booking flow has no checklist control, so both the primary
+            // job and every child keep `checklistTemplateId = NULL` (the column
+            // default) and resolve automatically. A customer-scoped template
+            // still reaches the whole series for free — every occurrence
+            // carries the same `client` connect above, and that is what the
+            // resolver matches on.
             ...afterPhotoConsentData,
             addOns: {
               create: resolvedAddOns.map((a) => ({
@@ -1058,6 +1287,14 @@ export async function submitBooking(input: SubmitBookingInput) {
       total: primaryPricing.total,
       // Always true now — a booking cannot be created without a verified deposit.
       depositPaid: true,
+      // The amount that was really charged (Stage 11). Without it the email's
+      // "Deposit paid today / Remaining balance" rows would print $20 and a
+      // remaining balance $180 short of what the card will actually be charged —
+      // the same class of lie the deposit row was added to fix.
+      depositAmount: deposit.amountUsd,
+      // A quote request gets quote wording instead of "booking confirmed": the
+      // date isn't booked and the total isn't the price yet.
+      quotePending: isQuote,
       logId: emailLog.id,
       // ONE_TIME → cust.booking.receipt_ot; anything else (weekly/monthly/etc.)
       // → cust.booking.receipt_rec
@@ -1114,7 +1351,7 @@ export async function submitBooking(input: SubmitBookingInput) {
       clientName: client.name,
       jobId: primaryJob.id,
       jobNumber: primaryJob.jobNumber,
-      amount: BOOKING_DEPOSIT_CENTS / 100,
+      amount: deposit.amountUsd,
     }).catch((err) => console.error("customer prepaid email", err));
 
     // 10. Log the booking activity on the primary job
@@ -1122,7 +1359,13 @@ export async function submitBooking(input: SubmitBookingInput) {
       data: {
         jobId: primaryJob.id,
         action: "CREATED",
-        description: `Booked via web by ${client.name}`,
+        description: isQuote
+          ? `Post-construction quote requested via web by ${client.name} — ${formatDeposit(
+              deposit.amountUsd
+            )} deposit paid, ${photoUrls.length} photo${
+              photoUrls.length === 1 ? "" : "s"
+            } attached, awaiting review`
+          : `Booked via web by ${client.name}`,
       },
     });
 
@@ -1131,6 +1374,10 @@ export async function submitBooking(input: SubmitBookingInput) {
       jobId: primaryJob.id,
       childJobIds,
       total: primaryPricing.total,
+      // Both read by the confirmation screen, which must not promise a scheduled
+      // cleaning on a job that is still a quote request.
+      depositAmount: deposit.amountUsd,
+      quotePending: isQuote,
     };
   } catch (error) {
     console.error("Error submitting booking:", error);

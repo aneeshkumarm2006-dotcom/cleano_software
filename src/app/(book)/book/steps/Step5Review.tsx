@@ -3,7 +3,15 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
-import { CreditCard, Loader2, ShieldCheck, Tag, CheckCircle2, Banknote } from "lucide-react";
+import {
+  CreditCard,
+  Loader2,
+  ShieldCheck,
+  Tag,
+  CheckCircle2,
+  Banknote,
+  Image as ImageIcon,
+} from "lucide-react";
 import { applyPromoCode } from "../../actions/applyPromoCode";
 import { BookingDraft, SERVICE_TYPES } from "../types";
 import {
@@ -15,6 +23,12 @@ import { formatAddressLine } from "@/lib/client-address";
 import { calculateTax } from "@/lib/tax";
 import { addOnLineTotal, sumAddOns } from "@/lib/job-money";
 import { normalizeJobType } from "@/lib/calendar-labels";
+import { propertyTypeLabel } from "@/lib/property-type";
+import {
+  STANDARD_BOOKING_DEPOSIT_USD,
+  formatDeposit,
+  isQuotedService,
+} from "@/lib/booking-deposit";
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
@@ -64,6 +78,14 @@ export default function Step5Review({
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [stripeLoading, setStripeLoading] = useState(false);
   const [stripeError, setStripeError] = useState<string | null>(null);
+  // What the deposit actually is, as reported by the route that created the
+  // intent (PDF #9, Stage 11). NOT computed here: the amount is resolved
+  // server-side from the service type, and a locally-derived figure could quote
+  // the customer one number while their card was charged another. Starts on the
+  // standard $20 so the first paint of a non-PC booking is unchanged.
+  const [depositUsd, setDepositUsd] = useState(STANDARD_BOOKING_DEPOSIT_USD);
+
+  const isQuote = isQuotedService(draft.serviceType);
 
   // Promo code
   const [promoMsg, setPromoMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -110,7 +132,17 @@ export default function Step5Review({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [promoCodeTrimmed, promoSubtotal, promoAlreadyApplied]);
 
-  // Create a $20 deposit PaymentIntent when contact info is known
+  // Create the deposit PaymentIntent when contact info is known.
+  //
+  // `serviceType` goes with it so the route can resolve the right amount — $20
+  // for a regular booking, the configured post-construction deposit otherwise
+  // (PDF #9). It is a SELECTOR, not a price: the route picks between two
+  // server-side figures and `submitBooking` re-resolves the same one, so a
+  // tampered value can only produce an intent that fails verification.
+  //
+  // Re-runs on serviceType too. Without that, a customer who reached step 5,
+  // went back and switched to post-construction would pay against a stale $20
+  // intent and have their booking rejected at submit.
   useEffect(() => {
     if (!draft.email || !draft.name) return;
     setStripeLoading(true);
@@ -118,12 +150,19 @@ export default function Step5Review({
     fetch("/api/stripe/charge-deposit", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: draft.email, name: draft.name }),
+      body: JSON.stringify({
+        email: draft.email,
+        name: draft.name,
+        serviceType: draft.serviceType,
+      }),
     })
       .then((r) => r.json())
       .then((data) => {
         if (data.clientSecret) {
           setClientSecret(data.clientSecret);
+          if (typeof data.amountUsd === "number" && data.amountUsd >= 0) {
+            setDepositUsd(data.amountUsd);
+          }
           onChange({ stripeCustomerId: data.customerId });
         } else {
           setStripeError("Could not initialise payment. Please refresh.");
@@ -132,7 +171,7 @@ export default function Step5Review({
       .catch(() => setStripeError("Could not initialise payment. Please refresh."))
       .finally(() => setStripeLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draft.email, draft.name]);
+  }, [draft.email, draft.name, draft.serviceType]);
 
   const service = SERVICE_TYPES.find((s) => s.value === draft.serviceType);
   // Per-service label from the admin config. The old lookup searched only the
@@ -151,6 +190,9 @@ export default function Step5Review({
         0;
 
   const propertyLine = [
+    // Stage 9 / PDF #11 — echoed back before they pay, so a mis-tap on step 2
+    // is visible while it is still correctable. Drops out when unanswered.
+    propertyTypeLabel(draft.propertyType),
     `${draft.bedCount} bed`,
     `${draft.bathCount} bath${draft.halfBathCount ? ` + ${draft.halfBathCount} half` : ""}`,
     draft.squareFootage > 0 ? `${draft.squareFootage} sq ft` : null,
@@ -174,9 +216,49 @@ export default function Step5Review({
           <em>booking.</em>
         </h1>
         <p className="cl-subtitle">
-          A <strong>$20 deposit</strong> is charged today to secure your booking. The remaining balance is charged after your cleaning is complete.
+          {isQuote ? (
+            <>
+              A <strong>{formatDeposit(depositUsd)} deposit</strong> is charged
+              today to book your post-construction assessment. We review your
+              photos and email your <strong>final quote</strong> — the balance is
+              only charged once you&apos;ve approved it and the work is done.
+            </>
+          ) : (
+            <>
+              A <strong>{formatDeposit(depositUsd)} deposit</strong> is charged
+              today to secure your booking. The remaining balance is charged after
+              your cleaning is complete.
+            </>
+          )}
         </p>
       </header>
+
+      {/* PDF #9 — the price above the fold has to say out loud that it is not
+          the price. A customer who reads "$600" and later receives a $760 quote
+          was misled by this screen, not by the admin who priced the job. */}
+      {isQuote && (
+        <div
+          style={{
+            display: "flex",
+            gap: 10,
+            alignItems: "flex-start",
+            padding: "14px 16px",
+            borderRadius: 12,
+            background: "var(--primary-10)",
+            border: "1px solid var(--primary-15)",
+          }}>
+          <ImageIcon size={16} style={{ color: "var(--primary)", marginTop: 2, flex: "0 0 auto" }} />
+          <span style={{ fontSize: 13, lineHeight: 1.55, color: "var(--ink-soft)" }}>
+            <strong>This is an estimate, not your final price.</strong> Post-
+            construction jobs are quoted from your photos
+            {draft.photos.length > 0
+              ? ` (${draft.photos.length} attached)`
+              : ""}
+            . We&apos;ll email the final quote — usually within one business day —
+            and your deposit comes off it.
+          </span>
+        </div>
+      )}
 
       <div className="cl-card-soft">
         <span className="cl-label" style={{ display: "block", marginBottom: 14 }}>
@@ -230,7 +312,15 @@ export default function Step5Review({
           ) : null}
           <Row dt="GST (5%)" dd={`$${breakdown.gstAmount.toFixed(2)}`} />
           <Row dt="QST (9.975%)" dd={`$${breakdown.qstAmount.toFixed(2)}`} />
-          <RowBorder total dt="Total (1st cleaning)" dd={`$${breakdown.total.toFixed(2)}`} />
+          <RowBorder
+            total
+            dt={
+              isQuote
+                ? "Estimated total — final quote after photo review"
+                : "Total (1st cleaning)"
+            }
+            dd={`$${breakdown.total.toFixed(2)}`}
+          />
           {recurringPct > 0 && (
             <div className="cl-dlist-row" style={{ marginTop: 6 }}>
               <dt style={{ color: "var(--primary)", fontSize: 12 }}>
@@ -248,11 +338,15 @@ export default function Step5Review({
                 Due today (deposit)
               </span>
             </dt>
-            <dd style={{ color: "var(--primary)", fontWeight: 700 }}>$20.00</dd>
+            <dd style={{ color: "var(--primary)", fontWeight: 700 }}>
+              {formatDeposit(depositUsd)}
+            </dd>
           </div>
           <div className="cl-dlist-row">
             <dt style={{ color: "var(--primary-50)", fontSize: 12 }}>Remaining balance</dt>
-            <dd style={{ color: "var(--primary-50)", fontSize: 12 }}>After cleaning</dd>
+            <dd style={{ color: "var(--primary-50)", fontSize: 12 }}>
+              {isQuote ? "After you approve the quote" : "After cleaning"}
+            </dd>
           </div>
         </dl>
       </div>
@@ -288,11 +382,20 @@ export default function Step5Review({
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
           <CreditCard size={20} style={{ color: "var(--primary)" }} />
           <span style={{ fontWeight: 600, fontSize: 15, color: "var(--ink)" }}>
-            Pay $20 deposit &amp; save card
+            Pay {formatDeposit(depositUsd)} deposit &amp; save card
           </span>
         </div>
         <p style={{ fontSize: 13, color: "var(--primary-70)", margin: "0 0 16px", lineHeight: 1.55 }}>
-          A $20 deposit is charged now to secure your booking. Your card is saved for the remaining balance after cleaning. Apple Pay and Google Pay accepted.
+          {/* The deposit is charged BEFORE the request is submitted, per PDF #9 —
+              the button below confirms the payment first and only then creates
+              the booking. */}
+          {isQuote
+            ? `A ${formatDeposit(
+                depositUsd
+              )} deposit is charged now to book your assessment, and it comes off your final quote. Your card is saved for the balance. Apple Pay and Google Pay accepted.`
+            : `A ${formatDeposit(
+                depositUsd
+              )} deposit is charged now to secure your booking. Your card is saved for the remaining balance after cleaning. Apple Pay and Google Pay accepted.`}
         </p>
 
         {stripeLoading && (

@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/db";
-import { syncDefaultLocationStock } from "@/lib/inventory";
+import { adjustWarehouseStock } from "@/lib/stock.server";
 import { revalidatePath } from "next/cache";
 import type { ProductCategory } from "@prisma/client";
 import { requireOwnerAdmin } from "@/lib/action-guards";
@@ -9,6 +9,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { sanitizeHttpUrl } from "@/lib/safe-url";
 import { parseProductLinks } from "@/lib/product-links";
+import { inferItemType, isItemType, type ItemType } from "@/lib/item-type";
 
 const ALLOWED_CATEGORIES: readonly ProductCategory[] = [
   "LIQUID_SPRAY",
@@ -50,6 +51,15 @@ export default async function createProduct(
   const category: ProductCategory = ALLOWED_CATEGORIES.includes(categoryRaw as ProductCategory)
     ? (categoryRaw as ProductCategory)
     : "OTHER";
+
+  // Item type (inventory fixes PDF #1). The modal always sends one; anything
+  // else reaching this action (an older client, a script) gets the same
+  // name/category heuristic the CSV importer and the backfill use, rather than
+  // a blanket "consumable" that would put a bucket back on refill thresholds.
+  const itemTypeRaw = formData.get("itemType");
+  const itemType: ItemType = isItemType(itemTypeRaw)
+    ? itemTypeRaw
+    : inferItemType({ name: (formData.get("name") as string) || "", category });
 
   // Purchase links — same allow-list rule as updateProduct: absolute http(s)
   // only, so a stored link can never become script when rendered as an href.
@@ -99,39 +109,65 @@ export default async function createProduct(
     const session = await auth.api.getSession({ headers: await headers() });
     const user = session?.user as { id?: string; name?: string } | undefined;
 
-    // Create the product
-    const product = await db.product.create({
-      data: {
-        name,
-        description: description || null,
+    // Create the product, then place its opening stock — both in one
+    // transaction, so a product can never exist with a count nobody put
+    // anywhere.
+    await db.$transaction(async (tx) => {
+      const product = await tx.product.create({
+        data: {
+          name,
+          description: description || null,
+          unit,
+          costPerUnit,
+          // Opening count deliberately 0 here: `adjustWarehouseStock` sets it
+          // from the location rows below. Per-location stock is the truth and
+          // `stockLevel` is its cache (Stage 4 / decision D5) — writing the
+          // number in two places is what let them drift.
+          stockLevel: 0,
+          minStock,
+          cleanerRestockThreshold,
+          category,
+          itemType,
+          purchaseUrl,
+          stockUpdatedAt: new Date(),
+          stockUpdatedById: user?.id ?? null,
+          stockUpdatedByName: user?.name ?? null,
+          ...(parsedLinks.links.length > 0
+            ? {
+                links: {
+                  create: parsedLinks.links.map((l) => ({
+                    label: l.label,
+                    url: l.url,
+                  })),
+                },
+              }
+            : {}),
+        },
+        select: { id: true },
+      });
+
+      // Places the opening stock in the default location so cleaners can see
+      // and pick it up (cleaner pickup reads per-location stock), recomputes
+      // `stockLevel` from it, and records where the number came from. A zero
+      // opening count is a no-op and writes no audit row.
+      await adjustWarehouseStock(tx, {
+        productId: product.id,
+        delta: stockLevel,
+        action: "ADMIN_SET",
         unit,
-        costPerUnit,
-        stockLevel,
-        minStock,
-        cleanerRestockThreshold,
-        category,
-        purchaseUrl,
-        stockUpdatedAt: new Date(),
-        stockUpdatedById: user?.id ?? null,
-        stockUpdatedByName: user?.name ?? null,
-        ...(parsedLinks.links.length > 0
-          ? {
-              links: {
-                create: parsedLinks.links.map((l) => ({
-                  label: l.label,
-                  url: l.url,
-                })),
-              },
-            }
-          : {}),
-      },
+        reason: "Opening stock count",
+        actor: user,
+      });
+    }, {
+      // The create plus `adjustWarehouseStock`'s four queries; the same
+      // Supabase round-trip latency that blows the default 5s window open on
+      // the other stock movements applies here.
+      maxWait: 10_000,
+      timeout: 30_000,
     });
 
-    // Mirror the initial stock into the default location so cleaners can see
-    // and pick it up (cleaner pickup reads per-location stock, not stockLevel).
-    await syncDefaultLocationStock(product.id, stockLevel);
-
     revalidatePath("/admin/inventory");
+    revalidatePath("/admin/settings");
     return {
       message: "Product created successfully!",
       error: "",

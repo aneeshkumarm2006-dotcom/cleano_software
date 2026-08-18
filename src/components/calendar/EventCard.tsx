@@ -7,6 +7,7 @@ import {
   isCancelled,
   priceLabel,
   cleanerLabel,
+  propertyLabel,
   shortLocation,
 } from "./status-meta";
 import CornerBadge from "./CornerBadge";
@@ -58,6 +59,10 @@ export const EventCard: React.FC<EventCardProps> = ({
   // Spec item 17: card shows client, time, service type, cleaner, and PRICE.
   const price = priceLabel(event);
   const who = cleanerLabel(event);
+  // "Apt" / "House" (Stage 9 / PDF #11) — null when unrecorded, which is most
+  // historical jobs. Rides on the meta line beside the service type rather than
+  // taking a row of its own: a time-grid card is 34px tall at its shortest.
+  const property = propertyLabel(event);
 
   const showMeta = layout.height >= 34;
   const showFoot = layout.height >= 72 && (loc || who || price);
@@ -100,6 +105,7 @@ export const EventCard: React.FC<EventCardProps> = ({
         {showMeta ? (
           <div className="cal-ev-meta">
             {timeStr(event.start)} · {typeName}
+            {property ? ` · ${property}` : ""}
           </div>
         ) : null}
         {showFoot ? (

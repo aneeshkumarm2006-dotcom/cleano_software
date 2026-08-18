@@ -3,12 +3,38 @@
 import { useFormStatus } from "react-dom";
 import Button from "@/components/ui/Button";
 
-export default function DeleteButton() {
-  const { pending } = useFormStatus();
+/**
+ * Archive, as a button INSIDE the job form rather than a form of its own.
+ *
+ * It used to render `<form action={archiveJobAction}>` nested inside the page's
+ * `<form action={saveJob}>`. HTML forbids that: the parser drops the inner
+ * start tag and the inner `</form>` then closes the OUTER form, so the browser
+ * and React disagreed about where the form ended — three console errors and a
+ * hydration mismatch that made React rebuild the whole tree on every edit-mode
+ * visit. React 19's `formAction` does the same job with valid markup: the
+ * button submits the surrounding form's data (which already carries the hidden
+ * `jobId`) to a different action.
+ *
+ * `formNoValidate` because this form has required fields and archiving must not
+ * be blocked by an incomplete one. `useFormStatus().action` tells the two
+ * submissions apart, so pressing Save no longer spins this button.
+ */
+export default function DeleteButton({
+  action,
+}: {
+  action: (formData: FormData) => void | Promise<void>;
+}) {
+  const { pending, action: submittingAction } = useFormStatus();
+  const archiving = pending && submittingAction === action;
 
   return (
-    <Button type="submit" variant="destructive" disabled={pending}>
-      {pending ? (
+    <Button
+      type="submit"
+      formAction={action}
+      formNoValidate
+      variant="destructive"
+      disabled={pending}>
+      {archiving ? (
         <span className="flex items-center gap-2">
           <svg
             className="animate-spin h-4 w-4"

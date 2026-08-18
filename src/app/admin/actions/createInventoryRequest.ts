@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { findAssignableProduct } from "@/lib/kit-product.server";
 
 interface CreateInventoryRequestInput {
   productId?: string;
@@ -59,12 +60,13 @@ export async function createInventoryRequest(
     let relatedType: string | null = null;
 
     if (input.productId) {
-      const product = await db.product.findUnique({
-        where: { id: input.productId },
-      });
-      if (!product) {
-        return { success: false, error: "Product not found" };
+      // Requesting an item is a request to be GIVEN one, so the catalogue
+      // rules apply (Stage 5): an archived product is refused by name.
+      const lookup = await findAssignableProduct(input.productId);
+      if (!lookup.ok) {
+        return { success: false, error: lookup.error };
       }
+      const product = lookup.product;
       alertTitle = `Equipment requested: ${product.name}`;
       alertMessage = `${session.user.name} requested ${input.quantity} ${product.unit} of ${product.name}`;
       relatedId = product.id;

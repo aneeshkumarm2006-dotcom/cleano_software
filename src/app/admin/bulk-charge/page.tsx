@@ -27,6 +27,10 @@ export default async function BulkChargePage() {
       // bulkChargeJobs -> chargeJob will put on the card.
       totalAmount: true,
       depositPaid: true,
+      // Both of these feed resolveAmountDue too — without depositAmount the
+      // preview would show $180 more than bulkChargeJobs actually charges on a
+      // post-construction job (Stage 11).
+      depositAmount: true,
       jobType: true,
       clockOutTime: true,
       client: { select: { defaultPaymentMethodId: true, stripeCustomerId: true } },

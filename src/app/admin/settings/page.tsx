@@ -175,6 +175,12 @@ export default async function SettingsPage() {
             db.checklistTemplate.findMany({
               include: {
                 items: { orderBy: { sortOrder: "asc" } },
+                // Stage 10 — the customer scope chip ("Mckiernan — 12 Main
+                // St"). Joined here rather than resolved in the client so the
+                // list is correct on first paint and stays correct even if the
+                // lazy picker load in `getChecklistScopeOptions` never runs.
+                client: { select: { id: true, name: true } },
+                clientAddress: { select: { id: true, label: true, address: true } },
               },
               orderBy: { name: "asc" },
             }),
