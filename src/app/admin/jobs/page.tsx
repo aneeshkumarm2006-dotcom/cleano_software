@@ -82,7 +82,15 @@ export default async function JobsPage({
       jobDate: true,
       startTime: true,
       endTime: true,
+      // Round 4, fix 1 — the completion predicate (`isCompletedJob`) reads it:
+      // a clock-out proves the work happened even when the scheduled start is
+      // still ahead. Without this column the client tab and the server bucket
+      // `jobStatusWhere("completed")` would classify that row differently.
+      clockOutTime: true,
       status: true,
+      // Round 4, fix 6 — the list renders the hold reason inline and names it
+      // in the release confirmation, so it has to travel with the row.
+      holdReason: true,
       price: true,
       employeePay: true,
       employeePayIsManual: true,
@@ -231,7 +239,9 @@ export default async function JobsPage({
       jobDate: job.jobDate?.toISOString() || null,
       startTime: job.startTime.toISOString(),
       endTime: job.endTime?.toISOString() || null,
+      clockOutTime: job.clockOutTime?.toISOString() || null,
       status: job.status,
+      holdReason: job.holdReason,
       price: job.price,
       employeePay: job.employeePay,
       employeePayIsManual: job.employeePayIsManual,

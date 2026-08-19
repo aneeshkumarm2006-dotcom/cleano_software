@@ -916,7 +916,17 @@ export default async function JobFormPage({
     // ("the UI is just warped with the screen"). `p-8` is the container all 30
     // other admin pages use.
     <div className="h-full overflow-hidden overflow-y-auto p-8">
-      <div className="max-w-[68rem] mx-auto text-black pb-24">
+      {/* ROUND 4, FIX 8 (step 5B.4) — this page was checked for the modal's
+          bug and does NOT have it: its action bar is already `fixed bottom-0`,
+          so Cancel / Create never scrolls away. What it did share was the
+          bottom edge. The clearance below the form was a flat 6rem, and the bar
+          itself stopped at the bottom of the layout viewport — which on a phone
+          with a home indicator is under the gesture strip, where a tap is a
+          swipe. Both now grow by the safe-area inset, so the desktop spacing is
+          unchanged and a notched phone gets exactly the strip's height back. */}
+      <div
+        className="max-w-[68rem] mx-auto text-black"
+        style={{ paddingBottom: "calc(6rem + env(safe-area-inset-bottom))" }}>
       {/* Back button */}
       <Link
         href={quoteSource ? "/admin/quotes" : "/admin/jobs"}
@@ -1277,7 +1287,7 @@ export default async function JobFormPage({
             background: "rgba(250, 247, 242, 0.92)",
             backdropFilter: "blur(8px)",
             borderTop: "1px solid rgba(0,140,156,0.10)",
-            padding: "14px 32px",
+            padding: "14px 32px calc(14px + env(safe-area-inset-bottom))",
           }}
         >
           <div

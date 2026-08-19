@@ -39,6 +39,7 @@ import {
   type JobBillingType,
 } from "@/lib/hourly-billing";
 import { parsePropertyType, type PropertyType } from "@/lib/property-type";
+import { HOLD_REASON, ON_HOLD_STATUS } from "@/lib/job-hold";
 import { resolveJobAddressId } from "@/lib/client-address-store";
 import { resolveJobClient } from "@/lib/client-capture";
 import { getServicePricingConfig } from "@/lib/booking-pricing";
@@ -442,8 +443,12 @@ export async function saveJob(formData: FormData) {
     //  • PERCENTAGE (default): tier/split math — auto-estimate the pool when the
     //    admin leaves employeePay blank (manual entry wins as an override).
     //  • FLAT: employeePay is the agreed fixed payout, exactly as entered.
-    //  • HOURLY: hourlyRate drives it — employeePay = hourlyRate × hours when
-    //    left blank, otherwise the entered override wins.
+    //  • HOURLY: hourlyRate drives it — employeePay = hourlyRate × scheduled
+    //    hours × crew size when left blank, otherwise the entered override wins.
+    //    That figure is an ESTIMATE only: from AWER round 4 (fix 5) the final
+    //    clock-out replaces it with the crew's real clocked hours × the rate
+    //    (snapshotHourlyEmployeePay), which is why the estimate now carries the
+    //    crew multiplier — the two must be in the same unit.
     const editingJobIdForPay = (formData.get("jobId") as string | null) || null;
     let payType: PayType = "PERCENTAGE";
     let hourlyRate: number | null = null;
@@ -703,7 +708,20 @@ export async function saveJob(formData: FormData) {
       }
     } else if (payType === "HOURLY") {
       if (manualEmployeePay === null && hourlyRate !== null && payHours !== null) {
-        estimatedEmployeePay = +(hourlyRate * payHours).toFixed(2);
+        // TEAM TOTAL = rate × scheduled hours × CREW SIZE (AWER round 4, fix 5).
+        //
+        // `employeePay` is the team total that `computeJobPayShares` divides
+        // between the crew, so the old `rate × hours` paid a two-person crew
+        // half the rate each — and then clock-out paid them the full rate each,
+        // because fix 5 settles an hourly job at "this cleaner's own clocked
+        // hours × the rate". The estimate has to be in the same unit as the
+        // settlement or the figure halves the moment the job is worked.
+        //
+        // `max(1, …)` because an unassigned job is estimated for one cleaner
+        // rather than for nobody; assigning the second crew member re-saves and
+        // the estimate follows.
+        const crewSize = Math.max(1, cleanerIds.length);
+        estimatedEmployeePay = +(hourlyRate * payHours * crewSize).toFixed(2);
       }
     }
     // FLAT: estimatedEmployeePay stays as the manually entered payout.
@@ -1318,6 +1336,26 @@ export async function saveJob(formData: FormData) {
         seriesSkipped: seriesResult?.skipped ?? 0,
       };
     } else {
+      // ── Round 4, fix 6 — an admin-created job is SCHEDULED, and says so ───
+      //
+      // Nothing here set a status, so every job an admin created fell to the
+      // Prisma default `CREATED` — which the calendar renders as "On hold".
+      // That is where the client's "what triggers On Hold?" question came from:
+      // the answer was "creating a job", and it drowned the two holds that
+      // actually mean something (a $0 import, an unpriced quote) in noise.
+      //
+      // Stamping it explicitly is what lets `CREATED` MEAN on hold from here
+      // on. A job with a date is scheduled work; a job saved without one cannot
+      // be scheduled, so it is a genuine hold and carries the reason why.
+      //
+      // Only on CREATE. The edit path a few hundred lines above must never
+      // write a status it wasn't given — that is `statusRaw`'s job, and
+      // re-stamping SCHEDULED there would drag a completed job backwards.
+      const hasSchedule = Boolean(startDate && startTime);
+      jobData.status = statusRaw ?? (hasSchedule ? "SCHEDULED" : ON_HOLD_STATUS);
+      jobData.holdReason =
+        jobData.status === ON_HOLD_STATUS && !hasSchedule ? HOLD_REASON.NO_DATE : null;
+
       if (cleanerIds.length > 0) {
         jobData.cleaners = {
           connect: cleanerIds.map((id) => ({ id })),
@@ -1450,6 +1488,13 @@ export async function saveJob(formData: FormData) {
             ...jobData,
             jobDate: cursor,
             startTime: cursor,
+            // Every occurrence has a computed date by construction, so none of
+            // them is ever the "created without a date" hold the parent might
+            // be (round 4, fix 6). Spelled out rather than inherited: the
+            // spread above would otherwise hand a whole series the parent's
+            // hold and its reason, which would be wrong for all of them.
+            status: "SCHEDULED",
+            holdReason: null,
             endTime: durationMs != null ? new Date(cursor.getTime() + durationMs) : null,
             discountAmount: childDiscount,
             // Children carry ONLY the recurring frequency discount, so their

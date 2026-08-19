@@ -35,7 +35,12 @@ export interface Job {
   jobDate: string | null;
   startTime: string;
   endTime: string | null;
+  /** Round 4, fix 1 — feeds `isCompletedJob` in JobsView; see the note on the
+   *  same field there and on the `select` in page.tsx. */
+  clockOutTime: string | null;
   status: string;
+  /** Round 4, fix 6 — why this job is on hold; null when it isn't. */
+  holdReason?: string | null;
   price: number | null;
   employeePay: number | null;
   /** D2 — is that figure an order or a save-time estimate? Feeds JobModal. */
@@ -113,6 +118,7 @@ export default function JobsPageClient({
   initialPayment,
   initialPage,
   initialRowsPerPage,
+  initialSubTab,
   users,
   cleaners = [],
   clients,
@@ -237,6 +243,12 @@ export default function JobsPageClient({
         // Only the empty state reads this — so "there are no jobs" and "none
         // are assigned to you" stop reading as the same broken query.
         isAdmin={isAdmin}
+        // `?subTab=` has been parsed by page.tsx and passed down here since it
+        // was written, and then dropped on the floor: JobsView always opened on
+        // All, so the dashboard's three "View all →" links landed on the wrong
+        // tab. Wired up in round 4, fix 6 — the new On-hold tile is a queue
+        // link, and a queue link that lands somewhere else is not a queue link.
+        initialSubTab={initialSubTab}
         isLoading={isLoading}
         searchTerm={searchTerm}
         statusFilter={statusFilter}

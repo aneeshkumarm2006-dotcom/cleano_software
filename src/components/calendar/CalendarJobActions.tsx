@@ -33,12 +33,16 @@ import {
   MapPin,
   Pencil,
   Phone,
+  PlayCircle,
   Receipt,
   StickyNote,
   Trash2,
   X,
 } from "lucide-react";
 import { markArrived } from "@/app/admin/actions/markArrived";
+import { releaseJobHold } from "@/app/admin/actions/releaseJobHold";
+import { HOLD_LABEL, holdReasonText, ON_HOLD_STATUS } from "@/lib/job-hold";
+import { isAwaitingQuote } from "@/lib/quote-status";
 import { addJobNote } from "@/app/admin/actions/addJobNote";
 import { getJobSummary } from "@/app/admin/actions/getJobSummary";
 import type { JobSummaryDTO } from "@/app/admin/actions/getJobSummary.types";
@@ -368,6 +372,26 @@ export default function CalendarJobActions({
     refreshEvents();
   }, [jobId, reloadSummary, refreshEvents]);
 
+  /**
+   * Release this booking from hold (round 4, fix 6). Same shape as the two
+   * handlers around it — act, reload the summary, refresh the grid — so the
+   * card repaints from amber the moment it lands.
+   */
+  const handleReleaseHold = useCallback(async () => {
+    if (!jobId) return;
+    setActionLoading("hold");
+    setActionMessage(null);
+    const res = await releaseJobHold(jobId);
+    setActionLoading(null);
+    if (!res.success) {
+      setActionMessage({ type: "error", text: res.error });
+      return;
+    }
+    setActionMessage({ type: "success", text: "Released from hold — now scheduled." });
+    await reloadSummary();
+    refreshEvents();
+  }, [jobId, reloadSummary, refreshEvents]);
+
   const handleCharge = useCallback(async () => {
     if (!jobId) return;
     setActionLoading("charge");
@@ -438,6 +462,12 @@ export default function CalendarJobActions({
   const status = (summary?.status ?? meta.status) as string | undefined;
   const cancelled = status === "CANCELLED";
   const completed = status === "COMPLETED" || status === "PAID";
+  // Round 4, fix 6. `holdReason` only arrives with the summary fetch, so the
+  // panel appears a beat after the drawer opens — the reason is the point of
+  // it, and a box that says "On hold" and then fills in why reads worse than
+  // one that arrives complete.
+  const onHold = status === ON_HOLD_STATUS;
+  const isQuoteRequest = isAwaitingQuote(summary?.quoteStatus);
   const hasMissingEquipment =
     Array.isArray(meta.missingEquipment) && meta.missingEquipment.length > 0;
 
@@ -948,6 +978,38 @@ export default function CalendarJobActions({
             // ── Admin set (Q2 §6 — every one of these already existed on the
             //    job detail page; this is the surfacing) ────────────────────
             <>
+              {/* On hold (round 4, fix 6). Sits at the TOP of the admin action
+                  set, above the payment line, because a held booking has not
+                  been agreed yet — charging a card for it is not the next
+                  thing anyone should be doing. A quote's hold points at the
+                  full job page instead: `releaseJobHold` refuses those, and
+                  the deposit decision that goes with them lives there.
+                  (Round 4, Stage 6: this block was written second and rendered
+                  second, so the drawer read "$195.46 due · Mark paid" and only
+                  then "On hold". The order above is the whole argument for the
+                  block existing; the click-through on job #2273 is what caught
+                  the comment and the JSX disagreeing.) */}
+              {onHold && summary ? (
+                <div className="cjd-payline" style={{ alignItems: "flex-start", gap: 8 }}>
+                  <span style={{ color: "var(--amber-800)" }}>
+                    <strong>{HOLD_LABEL}</strong>
+                    <br />
+                    <span style={{ fontSize: 12 }}>{holdReasonText(summary.holdReason)}</span>
+                  </span>
+                  {isQuoteRequest ? null : (
+                    <span className="cjd-actions">
+                      <button
+                        className="btn btn-secondary btn-sm"
+                        onClick={handleReleaseHold}
+                        disabled={actionLoading === "hold"}>
+                        <PlayCircle size={14} />
+                        {actionLoading === "hold" ? "Releasing…" : "Release"}
+                      </button>
+                    </span>
+                  )}
+                </div>
+              ) : null}
+
               {!paid && !cancelled && summary ? (
                 <div className="cjd-payline">
                   <span>

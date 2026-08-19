@@ -4,7 +4,10 @@ import { db } from "@/db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { alertIfTraineeLeftUnpaired } from "@/lib/job-assignments";
+import {
+  alertIfTraineeLeftUnpaired,
+  resolveJobLead,
+} from "@/lib/job-assignments";
 
 /**
  * Cleaner responds to a job-assignment invite from /my-jobs.
@@ -30,6 +33,9 @@ export async function respondToJobInvite(input: {
           jobNumber: true,
           status: true,
           deletedAt: true,
+          // The lead. Both branches below have to keep it pointing at a real
+          // member of the crew — see the notes on each (round 4, fix 2).
+          employeeId: true,
           cleaners: { select: { id: true } },
         },
       },
@@ -141,6 +147,16 @@ export async function respondToJobInvite(input: {
           where: { id: invite.jobId },
           data: { cleaners: { connect: { id: session.user.id } } },
         }),
+        // Round 4, fix 2 — a last-minute broadcast attaches a cleaner to a job
+        // that by definition had nobody on it, so if the lead slot is still
+        // empty this cleaner fills it. Written as a compare-and-set on
+        // `employeeId: null` (rather than reading the value above and writing it
+        // back) so two cleaners racing the same broadcast can't both claim the
+        // lead, and an existing lead is never displaced.
+        db.job.updateMany({
+          where: { id: invite.jobId, employeeId: null },
+          data: { employeeId: session.user.id },
+        }),
         // Per-cleaner assignment status row (item 9).
         db.jobAssignment.upsert({
           where: {
@@ -193,6 +209,27 @@ export async function respondToJobInvite(input: {
     }
   } else {
     // Decline: remove the cleaner from the job and log it.
+    //
+    // Round 4, fix 2 — the lead has to come off with them. `employeeId` is the
+    // OTHER half of "who is on this job" (`cleanerAssignedWhere` matches either
+    // one), so disconnecting the M2M row alone left a declined job sitting on
+    // the decliner's own schedule, and the admin's employee profile — which
+    // reads the lead relation — still showing them on it. Whoever is left on
+    // the crew takes over; an empty crew clears the column.
+    //
+    // Only when the decliner IS the lead. A job whose lead is someone outside
+    // the M2M list (legacy rows predate `resolveJobLead` keeping the two in
+    // step) must not have that lead wiped by an unrelated cleaner's decline.
+    const declinerIsLead = invite.job.employeeId === session.user.id;
+    const nextLead = declinerIsLead
+      ? resolveJobLead(
+          invite.job.employeeId,
+          invite.job.cleaners
+            .map((c) => c.id)
+            .filter((id) => id !== session.user.id)
+        )
+      : invite.job.employeeId;
+
     await db.$transaction([
       db.jobAssignmentInvite.update({
         where: { id: invite.id },
@@ -206,6 +243,7 @@ export async function respondToJobInvite(input: {
         where: { id: invite.jobId },
         data: {
           cleaners: { disconnect: { id: session.user.id } },
+          employeeId: nextLead,
         },
       }),
       // Drop the per-cleaner assignment row for the declined cleaner

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   Search, Filter, Briefcase, CheckCircle2, DollarSign,
   AlertTriangle, Loader, Plus, CalendarClock, Wallet,
-  Trash2, XCircle, UserPlus, Tag, RotateCcw,
+  Trash2, XCircle, UserPlus, Tag, RotateCcw, PlayCircle,
 } from "lucide-react";
 import Button from "@/components/ui/Button";
 import PremiumSelect from "@/components/ui/PremiumSelect";
@@ -32,8 +32,14 @@ import {
   jobRevenue,
   isScheduledValueJob,
   jobScheduledValue,
+  isCompletedJob,
+  isFutureJob,
+  isOnHoldJob,
+  isUpcomingJob,
   simpleJobStatus,
 } from "@/lib/metrics-shared";
+import { HOLD_LABEL, holdLabel, holdReasonText, isOnHold } from "@/lib/job-hold";
+import { releaseJobHold } from "../actions/releaseJobHold";
 // Client-safe by design (see the header of job-money.ts) — the table can price
 // a row with exactly the function the job page and the invoice use.
 import { activeSubtotal } from "@/lib/job-money";
@@ -48,7 +54,16 @@ interface Job {
   jobDate: string | null;
   startTime: string;
   endTime: string | null;
+  /** Round 4, fix 1 — required by the completion predicate, which treats a
+   *  clock-out as proof the work happened even when the scheduled start is
+   *  still ahead (an early finish on a job booked for later today). Without it
+   *  the tab and the SQL bucket would answer differently for that one row. */
+  clockOutTime: string | null;
   status: string;
+  /** Round 4, fix 6 — why this job is on hold. Non-null only on a held row;
+   *  rendered in the pill's tooltip and in the row's release confirmation, so
+   *  an admin never has to open a job to find out what is blocking it. */
+  holdReason?: string | null;
   price: number | null;
   employeePay: number | null;
   /** D2 — is that figure an order or a save-time estimate? Feeds JobModal. */
@@ -89,6 +104,12 @@ interface JobsViewProps {
   /** Service list from Settings → Job Types (item 20). */
   serviceOptions?: { value: string; label: string }[];
   jobs: Job[];
+  /**
+   * The tab to open on, from `?subTab=` (round 4, fix 6). Anything unrecognised
+   * falls back to All, so an old or hand-typed link degrades to the full list
+   * rather than to an empty page.
+   */
+  initialSubTab?: string;
   isLoading: boolean;
   searchTerm: string;
   statusFilter: string;
@@ -154,8 +175,15 @@ function AvatarStack({ cleaners, max = 3 }: { cleaners: Array<{ id: string; name
 // spec's three main statuses: Scheduled (future), Completed (date passed,
 // unpaid), Paid (payment received). "Paid" is distinct green-on-emerald so it
 // reads differently from Completed at a glance.
-function StatusPill({ status }: { status: string }) {
+function StatusPill({ status, title }: { status: string; title?: string }) {
   const map: Record<string, { label: string; bg: string; color: string; dot: string }> = {
+    // Round 4, fix 6. `simpleJobStatus` returns ON_HOLD for a CREATED job, so
+    // this entry is what stops a held row falling through to the grey
+    // unknown-status fallback and printing the raw enum. Amber: a hold is
+    // waiting on somebody here, unlike Scheduled which is waiting on the date.
+    // The REASON rides on `title` — the PDF's "visible on hover" — and the pill
+    // itself stays two words, because a pill is a chip, not a sentence.
+    ON_HOLD:     { label: HOLD_LABEL,    bg: '#fef3c7', color: '#92400e', dot: '#d97706' },
     SCHEDULED:   { label: 'Scheduled',   bg: '#dbeafe', color: '#1e40af', dot: '#3b82f6' },
     IN_PROGRESS: { label: 'In Progress', bg: '#fef3c7', color: '#92400e', dot: '#f59e0b' },
     COMPLETED:   { label: 'Completed',   bg: '#d1fae5', color: '#065f46', dot: '#10b981' },
@@ -165,10 +193,21 @@ function StatusPill({ status }: { status: string }) {
   };
   const c = map[status] || { label: status, bg: '#f3f4f6', color: '#374151', dot: '#9ca3af' };
   return (
-    <span className="pill" style={{ background: c.bg, color: c.color }}>
+    <span className="pill" style={{ background: c.bg, color: c.color }} title={title}>
       <span className="pill-dot" style={{ background: c.dot }} />
       {c.label}
     </span>
+  );
+}
+
+/** The pill for a job row, carrying its hold reason when it has one. */
+function JobStatusPill({ job }: { job: Job }) {
+  const status = simpleJobStatus(job);
+  return (
+    <StatusPill
+      status={status}
+      title={status === 'ON_HOLD' ? holdLabel(job.holdReason) : undefined}
+    />
   );
 }
 
@@ -299,6 +338,11 @@ function profitClass(pct: number | undefined): string {
 const TABS = [
   { id: 'all',        label: 'All' },
   { id: 'upcoming',   label: 'Upcoming' },
+  // Round 4, fix 6. On-hold work left Upcoming (it is not scheduled work — PDF
+  // p5) and this is where it went, sitting beside Upcoming rather than at the
+  // end with Discounted/Free because it is a QUEUE: every row in it is waiting
+  // on a decision from this office, and each carries a Release button.
+  { id: 'onhold',     label: 'On hold' },
   { id: 'completed',  label: 'Completed' },
   { id: 'overdue',    label: 'Overdue' },
   { id: 'cancelled',  label: 'Cancelled' },
@@ -310,25 +354,39 @@ type TabId = (typeof TABS)[number]['id'];
 // Single source of truth for tab membership, kept in lockstep with
 // src/lib/metrics.ts `jobStatusWhere` so a tab's COUNT and its filtered LIST
 // always use the exact same predicate:
-//   upcoming  = future start AND not completed/cancelled
-//   completed = COMPLETED | PAID
+//   upcoming  = future start AND not cancelled AND not on hold AND not
+//               genuinely completed
+//   onhold    = CREATED (round 4, fix 6 — no date test: a hold outlives its
+//               own date, and the stale ones are the ones to find)
+//   completed = (COMPLETED | PAID) AND the job has actually happened
 //   overdue   = COMPLETED AND unpaid
 //   cancelled = CANCELLED
 //   free      = price null / 0
 // (`discounted` is a jobs-list convenience bucket, not a metrics bucket.)
+//
+// Round 4, fix 1: `upcoming` and `completed` are no longer spelled out here.
+// They delegate to `isUpcomingJob` / `isCompletedJob` in metrics-shared, which
+// `jobStatusWhere` mirrors in SQL — the Completed tab used to be a bare
+// `status ∈ {COMPLETED, PAID}` with no date test, which is how tomorrow's jobs
+// ended up under Completed with a green pill (PDF p1 / IMG-1).
 function jobMatchesTab(
   tab: TabId,
   job: Job,
   now: number
 ): boolean {
-  const jobTime = new Date(job.startTime).getTime();
+  const at = new Date(now);
   switch (tab) {
     case 'upcoming':
-      return jobTime >= now && ['CREATED', 'SCHEDULED', 'IN_PROGRESS'].includes(job.status);
+      return isUpcomingJob(job, at);
+    case 'onhold':
+      return isOnHoldJob(job);
     case 'completed':
-      return ['COMPLETED', 'PAID'].includes(job.status);
+      return isCompletedJob(job, at);
     case 'overdue':
-      return job.status === 'COMPLETED' && !job.paymentReceived;
+      // Unpaid work we've already done. The completion guard applies for the
+      // same reason it does above — an unpaid job dated next week is not
+      // overdue, it just hasn't happened.
+      return job.status === 'COMPLETED' && !job.paymentReceived && isCompletedJob(job, at);
     case 'cancelled':
       return job.status === 'CANCELLED';
     case 'discounted':
@@ -388,6 +446,7 @@ const ChevronRightSvg = ({ size = 14 }: { size?: number }) => (
 
 export default function JobsView({
   jobs,
+  initialSubTab,
   isLoading,
   searchTerm,
   statusFilter,
@@ -430,14 +489,16 @@ export default function JobsView({
       : catalogServiceOptions(DEFAULT_SERVICE_CATALOG)),
   ];
 
-  const [tab, setTab] = useState<TabId>('all');
+  const [tab, setTab] = useState<TabId>(
+    TABS.some(t => t.id === initialSubTab) ? (initialSubTab as TabId) : 'all'
+  );
   const [showFilters, setShowFilters] = useState(false);
 
   // Optimistic per-row overrides for the $ / ✉ table actions — merged over the
   // server-provided list so the row, pills, tabs, and stat cards all move the
   // instant the icon is clicked, then reconciled by router.refresh().
   const [rowOverrides, setRowOverrides] = useState<
-    Record<string, Partial<Pick<Job, 'paymentReceived' | 'invoiceSent' | 'status'>>>
+    Record<string, Partial<Pick<Job, 'paymentReceived' | 'invoiceSent' | 'status' | 'holdReason'>>>
   >({});
   const [payBusyId, setPayBusyId] = useState<string | null>(null);
   const effectiveJobs = useMemo(
@@ -464,15 +525,14 @@ export default function JobsView({
 
   const tabCounts = useMemo(() => {
     const now = Date.now();
-    return {
-      all:        effectiveJobs.length,
-      upcoming:   effectiveJobs.filter(j => jobMatchesTab('upcoming', j, now)).length,
-      completed:  effectiveJobs.filter(j => jobMatchesTab('completed', j, now)).length,
-      overdue:    effectiveJobs.filter(j => jobMatchesTab('overdue', j, now)).length,
-      cancelled:  effectiveJobs.filter(j => jobMatchesTab('cancelled', j, now)).length,
-      discounted: effectiveJobs.filter(j => jobMatchesTab('discounted', j, now)).length,
-      free:       effectiveJobs.filter(j => jobMatchesTab('free', j, now)).length,
-    } as Record<TabId, number>;
+    // Derived from TABS rather than written out per tab. The hand-written
+    // object was cast `as Record<TabId, number>`, which told TypeScript it was
+    // complete instead of checking — so adding the On-hold tab (round 4, fix 6)
+    // compiled cleanly and rendered a blank count beside it. Mapping the tab
+    // list means a new tab cannot arrive without its count.
+    return Object.fromEntries(
+      TABS.map(t => [t.id, effectiveJobs.filter(j => jobMatchesTab(t.id, j, now)).length])
+    ) as Record<TabId, number>;
   }, [effectiveJobs]);
 
   // Additional filters stacked on top of tab filter
@@ -517,14 +577,22 @@ export default function JobsView({
   // refund. "Scheduled value" is explicitly NOT revenue — it's the booked value
   // of live work that hasn't been completed+paid yet, shown so a pipeline of
   // priced-but-unpaid jobs doesn't read as "$0.00 revenue".
+  //
+  // Round 4, fix 1: the Completed and Pending-payment counters were the same
+  // bare status test the Completed tab used, so IMG-1's stat row read
+  // "Total Jobs 16 · Completed 16" over a list whose top two rows were dated
+  // TOMORROW. Both now go through `isCompletedJob`, the identical predicate
+  // behind the tab, its count, and the Dashboard's SQL bucket.
   const stats = useMemo(() => {
+    const at = new Date();
     let completedJobs = 0;
     let pendingPayment = 0;
     let totalRevenue = 0;
     let scheduledValue = 0;
     for (const j of filteredJobs) {
-      if (j.status === 'COMPLETED' || j.status === 'PAID') completedJobs++;
-      if (j.status === 'COMPLETED' && !j.paymentReceived) pendingPayment++;
+      const done = isCompletedJob(j, at);
+      if (done) completedJobs++;
+      if (done && j.status === 'COMPLETED' && !j.paymentReceived) pendingPayment++;
       if (isRevenueJob(j)) totalRevenue += jobRevenue(j);
       else if (isScheduledValueJob(j)) scheduledValue += jobScheduledValue(j);
     }
@@ -549,10 +617,14 @@ export default function JobsView({
   // revert on failure, reconcile with a refresh either way.
   async function handleTogglePaid(job: Job) {
     const next = !job.paymentReceived;
+    // Mirrors the rule the server action applies (togglePaymentReceived), so
+    // the optimistic row and the refreshed one agree. Round 4, fix 1: marking a
+    // FUTURE job paid no longer flips it to PAID — a lifecycle status — it just
+    // records the payment and leaves the job where it is on the calendar.
     const optimisticStatus = job.status === 'CANCELLED'
       ? job.status
       : next
-        ? 'PAID'
+        ? (isFutureJob(job) ? job.status : 'PAID')
         : new Date(job.startTime).getTime() < Date.now() ? 'COMPLETED' : 'SCHEDULED';
     setPayBusyId(job.id);
     setRowOverrides(o => ({
@@ -567,6 +639,42 @@ export default function JobsView({
           [job.id]: { ...o[job.id], paymentReceived: job.paymentReceived, status: job.status },
         }));
         alert(res?.error || 'Failed to update payment status');
+      }
+    } finally {
+      setPayBusyId(null);
+      router.refresh();
+    }
+  }
+
+  /**
+   * Take a job off hold from the list (round 4, fix 6 — PDF: "admin should be
+   * able to release a job from On Hold").
+   *
+   * The confirm names the reason rather than asking a bare "are you sure?": the
+   * whole complaint behind this fix is that nobody could tell why a job was
+   * held, so the moment of releasing it is exactly when that has to be legible.
+   * Optimistic like the two handlers above, and it moves `holdReason` with the
+   * status so the row does not sit there Scheduled-but-still-explaining-itself.
+   */
+  async function handleReleaseHold(job: Job) {
+    if (
+      !window.confirm(
+        `Release this job from hold?\n\nReason on file: ${holdReasonText(job.holdReason)}\n\nIt becomes a Scheduled job and appears on the cleaners' schedules.`
+      )
+    ) return;
+    setPayBusyId(job.id);
+    setRowOverrides(o => ({
+      ...o,
+      [job.id]: { ...o[job.id], status: 'SCHEDULED', holdReason: null },
+    }));
+    try {
+      const res = await releaseJobHold(job.id);
+      if (!res.success) {
+        setRowOverrides(o => ({
+          ...o,
+          [job.id]: { ...o[job.id], status: job.status, holdReason: job.holdReason ?? null },
+        }));
+        alert(res.error);
       }
     } finally {
       setPayBusyId(null);
@@ -880,8 +988,14 @@ export default function JobsView({
               value={statusFilter}
               onChange={(v) => { onStatusFilterChange(v); onPageChange(1); updateURLParams({ status: v, page: 1 }); }}
               size="sm"
+              /* Values are `simpleJobStatus` outputs, which is what the filter
+                 compares against — so ON_HOLD had to be added here the moment
+                 that function learned to return it (round 4, fix 6). Without
+                 it "On hold" was the one status on the page you could see but
+                 not filter for. */
               options={[
                 { value: "all", label: "Any status" },
+                { value: "ON_HOLD", label: HOLD_LABEL },
                 { value: "SCHEDULED", label: "Scheduled" },
                 { value: "IN_PROGRESS", label: "In Progress" },
                 { value: "COMPLETED", label: "Completed" },
@@ -1071,7 +1185,27 @@ export default function JobsView({
                           : <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{payTypeLabel(job.paymentType)}</span>
                         }
                       </td>
-                      <td><StatusPill status={simpleJobStatus(job)} /></td>
+                      <td>
+                        <JobStatusPill job={job} />
+                        {/* Fix 6 — the reason INLINE, not only on hover. The
+                            PDF's complaint is that a held job explained
+                            nothing; a tooltip alone would still make an admin
+                            hunt row by row for the one that needs attention. */}
+                        {isOnHold(job) && (
+                          <div
+                            title={holdReasonText(job.holdReason)}
+                            style={{
+                              marginTop: 4, fontSize: 11, lineHeight: 1.3,
+                              color: 'var(--amber-700)', maxWidth: 170,
+                              overflow: 'hidden', textOverflow: 'ellipsis',
+                              display: '-webkit-box', WebkitLineClamp: 2,
+                              WebkitBoxOrient: 'vertical',
+                            }}
+                          >
+                            {holdReasonText(job.holdReason)}
+                          </div>
+                        )}
+                      </td>
                       <td>
                         <PayIcons
                           paymentReceived={job.paymentReceived}
@@ -1083,6 +1217,22 @@ export default function JobsView({
                       </td>
                       <td className="col-actions">
                         <div className="row" style={{ justifyContent: 'flex-end', gap: 6 }}>
+                          {/* Fix 6 — the release action, on the row that needs
+                              it. Archived jobs are excluded: restoring one is
+                              the decision there, not scheduling it. */}
+                          {!archived && isOnHold(job) && (
+                            <button
+                              type="button"
+                              className="icon-btn"
+                              aria-label="Release from hold"
+                              title={`Release from hold — ${holdReasonText(job.holdReason)}`}
+                              disabled={payBusyId === job.id}
+                              onClick={(e) => { e.stopPropagation(); handleReleaseHold(job); }}
+                              style={{ width: 30, height: 30, color: 'var(--amber-700)' }}
+                            >
+                              <PlayCircle size={14} />
+                            </button>
+                          )}
                           {archived ? (
                             <>
                             <button
@@ -1172,7 +1322,7 @@ export default function JobsView({
                     {job.location && <div className="jcard-meta">{job.location.split(',')[0]}</div>}
                     </div>
                   </div>
-                  <StatusPill status={simpleJobStatus(job)} />
+                  <JobStatusPill job={job} />
                 </div>
                 <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
                   <TypePill type={job.jobType} />
@@ -1180,6 +1330,26 @@ export default function JobsView({
                   {job.usesFixedPrice && <FixedPricePill />}
                   <AvatarStack cleaners={job.cleaners} max={2} />
                 </div>
+                {/* Fix 6 — a phone has no hover, so the reason and the release
+                    action are both spelled out on the card. */}
+                {isOnHold(job) && (
+                  <div
+                    className="row"
+                    style={{ gap: 8, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}
+                  >
+                    <span style={{ fontSize: 12, color: 'var(--amber-700)', flex: 1, minWidth: 140 }}>
+                      {holdReasonText(job.holdReason)}
+                    </span>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      disabled={payBusyId === job.id}
+                      onClick={(e) => { e.stopPropagation(); handleReleaseHold(job); }}
+                    >
+                      <PlayCircle size={13} /> Release
+                    </button>
+                  </div>
+                )}
                 <div className="jcard-row" style={{ paddingTop: 10, borderTop: '1px solid var(--primary-10)' }}>
                   {/* Mobile card — same active figure as the table column
                       above. `activeSubtotal` is already discount-net, so the

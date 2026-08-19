@@ -126,6 +126,239 @@ export function stripDuplicatedApt(
   return addr;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   ROUND 4, FIX 7 — finding the apartment when nobody put it in `aptNumber`.
+   ═══════════════════════════════════════════════════════════════════════════
+
+   `stripDuplicatedApt` above solves the easy half: the unit is in BOTH the
+   street string and the column, so one of them is redundant. The screenshot on
+   p6 of `awerfixesaug18.pdf` is the hard half — the unit is in the street
+   string and NOWHERE else:
+
+     "5550 Chemin de la Côte Saint-Luc, Montreal, QC, Canada, 23"
+                                                             ^^ apartment 23
+
+   Rendered through `formatAddressLine` that is one long line ending in a bare
+   number, which is exactly how a cleaner drives to the right building and
+   knocks on the wrong door. To give the unit its own line, something first has
+   to know which part of the string IS the unit.
+
+   These rules are deliberately timid, because they also feed a backfill that
+   writes to `Job.aptNumber`. A wrong split is worse than no split: it invents
+   an apartment that doesn't exist and, in the trailing case, deletes a real
+   piece of the street. So:
+
+     • A LEADING unit must be labelled. "Apt 12 – 4820 Sherbrooke" splits;
+       "5550 Chemin de la Côte" never does, because a leading bare number is a
+       street number, always.
+     • A TRAILING unit may be bare, but only in the shapes a unit actually
+       takes (23 · 12B · B12), and never one that is really a postal code.
+     • A labelled unit must contain a digit. Without that rule "Ste Foy" reads
+       as suite "Foy" — and this is Montréal, where half the South Shore is a
+       Sainte-something.
+     • When nothing matches, the string is returned untouched. Silence is a
+       correct answer here; a guess is not. */
+
+/**
+ * Designator words a form, an importer or a human writes in front of a unit.
+ * Bilingual: "Apt 4" and "App 4" turn up in the same address book here.
+ * Longest alternatives first — `app` before `appartement` would swallow it.
+ */
+const UNIT_DESIGNATOR =
+  "appartement|apartment|appt\\.?|apt\\.?|app\\.?|unité|unite|unit|suite|ste\\.?|local|bureau|no\\.|nº|#";
+
+/** A designator followed by the unit itself: "Apt 4B", "#1204", "Suite 300". */
+const LABELLED_UNIT = new RegExp(
+  `^(?:${UNIT_DESIGNATOR})\\s*([A-Za-z0-9][A-Za-z0-9\\s-]{0,9})$`,
+  "i"
+);
+
+/** Does this text START with a designator? Used for display, not for splitting. */
+const DESIGNATOR_PREFIX = new RegExp(`^(?:${UNIT_DESIGNATOR})(?![A-Za-z])`, "i");
+
+/**
+ * A unit written without a designator: "23", "12B", "12 B", "B12".
+ * Capped at four digits so a five-digit US ZIP can never read as an apartment.
+ */
+const BARE_UNIT = /^(?:\d{1,4}\s?-?\s?[A-Za-z]?|[A-Za-z]\s?-?\s?\d{1,4})$/;
+
+/**
+ * A Canadian postal code. Tested FIRST and rejected outright: "H3Z 1H2" is the
+ * one thing that sits at the end of an address, is short, and mixes letters
+ * with digits — i.e. it is the false positive this whole module risks.
+ */
+const POSTAL_CODE = /^[A-Za-z]\d[A-Za-z][ -]?\d[A-Za-z]\d$/;
+
+/** Head / separator / tail, splitting on the FIRST separator only. */
+const LEADING_SPLIT = /^([^,–—|/]+?)\s*(?:[,–—|/]|\s-\s)\s*(.+)$/;
+
+/** A labelled unit at the very end of a string that has no commas at all. */
+const TRAILING_LABELLED = new RegExp(
+  `\\s((?:${UNIT_DESIGNATOR})\\s*[A-Za-z0-9][A-Za-z0-9\\s-]{0,9})$`,
+  "i"
+);
+
+/** Could this fragment be a unit on its own? */
+function looksLikeUnit(fragment: string, labelledOnly = false): boolean {
+  const t = fragment.trim();
+  if (!t || t.length > 14) return false;
+  if (POSTAL_CODE.test(t)) return false;
+  const labelled = t.match(LABELLED_UNIT);
+  // A designator with no number behind it is a place name, not a unit.
+  if (labelled) return /\d/.test(labelled[1]);
+  if (labelledOnly) return false;
+  return BARE_UNIT.test(t) && /\d/.test(t);
+}
+
+/** What `splitAptFromLocation` hands back. */
+export interface SplitAddress {
+  /** The street with the unit removed. Equal to the input when none was found. */
+  street: string;
+  /** The unit exactly as it was written, or null. */
+  apt: string | null;
+}
+
+/**
+ * Pull the unit out of a raw street string, for the rows where `aptNumber` is
+ * empty. The sibling of `stripDuplicatedApt`: that one knows the unit and
+ * removes it, this one has to find it first — and so it RETURNS what it took.
+ *
+ * Never invents: when no rule fires the input comes back untouched with a null
+ * apt, and the caller renders exactly what it renders today.
+ */
+export function splitAptFromLocation(location?: string | null): SplitAddress {
+  const raw = (location ?? "").trim();
+  if (!raw) return { street: "", apt: null };
+
+  // 1 — leading, labelled only ("Apt 12 – 4820 Sherbrooke", the shape the
+  //     BookingKoala importer used to write; see the header of this file).
+  const lead = raw.match(LEADING_SPLIT);
+  if (lead) {
+    const head = lead[1].trim();
+    const rest = lead[2].trim();
+    if (rest && looksLikeUnit(head, true)) return { street: rest, apt: head };
+  }
+
+  // 2 — the last comma-separated segment, labelled or bare. This is IMG-5.
+  const comma = raw.lastIndexOf(",");
+  if (comma > 0) {
+    const tail = raw.slice(comma + 1).trim();
+    const head = raw.slice(0, comma).trim();
+    if (head && looksLikeUnit(tail)) return { street: head, apt: tail };
+  }
+
+  // 3 — a labelled unit at the end of a comma-less string ("14 Main St Apt 3").
+  const trail = raw.match(TRAILING_LABELLED);
+  if (trail?.index != null && /\d/.test(trail[1])) {
+    const head = raw.slice(0, trail.index).trim();
+    if (head) return { street: head, apt: trail[1].trim() };
+  }
+
+  return { street: raw, apt: null };
+}
+
+/**
+ * Values that mean "no apartment" even though the column is not empty.
+ *
+ * Not hypothetical: three live jobs on this database have `aptNumber = "None"`.
+ * Fix 7 puts the unit on its own bold line, which turns that from a harmless
+ * trailing token into a prominent "Apt None" — worse than showing nothing. So
+ * a placeholder is read as blank everywhere the unit is read.
+ */
+const APT_PLACEHOLDER = /^(?:none|n\/?a|nil|null|no|-{1,2}|—|\.)$/i;
+
+/** The unit, or null when the column is empty or holds a placeholder. */
+export function normalizeApt(apt?: string | null): string | null {
+  const t = (apt ?? "").trim();
+  return !t || APT_PLACEHOLDER.test(t) ? null : t;
+}
+
+/**
+ * A value short and unit-shaped enough to read "Apt" in front of: "23", "8E",
+ * "PH2". Requires a digit, which is what keeps "Basement" out.
+ */
+const PREFIXABLE_UNIT = /^[A-Za-z0-9][A-Za-z0-9\s-]{0,7}$/;
+
+/**
+ * How a unit is written when it is shown on its own, away from the street.
+ *
+ *   "23"                       → "Apt 23"
+ *   "Suite 300" · "#12"        → unchanged; the designator is never doubled
+ *   "Door C (locks after 6pm)" → unchanged; a live row really says this, and
+ *                                "Apt Door C (locks after 6pm)" helps nobody
+ *   "None"                     → null
+ */
+export function formatAptLabel(apt?: string | null): string | null {
+  const t = normalizeApt(apt);
+  if (!t) return null;
+  if (DESIGNATOR_PREFIX.test(t)) return t;
+  return PREFIXABLE_UNIT.test(t) && /\d/.test(t) ? `Apt ${t}` : t;
+}
+
+/** An address broken into the pieces a screen renders separately. */
+export interface ResolvedAddress {
+  /** Street only — no unit. Safe to hand to a geocoder. */
+  street: string;
+  /** The unit as stored or as recovered from the street string. */
+  apt: string | null;
+  /** The unit as it should be DISPLAYED ("Apt 23"). */
+  aptLabel: string | null;
+  city: string | null;
+  postalCode: string | null;
+}
+
+/**
+ * The one place that answers "where is the apartment number on this row?".
+ *
+ * The column wins when it has anything in it — that is what an admin typed, or
+ * what the importer mapped from the Apt column — and the street string is then
+ * only cleaned of a duplicate. Only when the column is empty does the split
+ * above go looking. Both paths end in the same shape, so a caller never has to
+ * care which of the two storage habits produced the row it is rendering.
+ */
+export function resolveAddressParts(a: AddressParts): ResolvedAddress {
+  const stored = normalizeApt(a.aptNumber);
+  const { street, apt } = stored
+    ? { street: stripDuplicatedApt(a.address, stored), apt: stored }
+    : splitAptFromLocation(a.address);
+
+  return {
+    street,
+    apt: apt || null,
+    aptLabel: formatAptLabel(apt),
+    city: (a.city ?? "").trim() || null,
+    postalCode: (a.postalCode ?? "").trim() || null,
+  };
+}
+
+/**
+ * The line the cleaner's Copy button puts on the clipboard.
+ *
+ * Apartment INCLUDED and labelled — the PDF is explicit about it, and copying
+ * an address that silently drops the unit is how the round-3 Copy button sent
+ * people to buildings with no way in. Differs from `formatAddressLine` in
+ * exactly that: the unit is labelled rather than left as a bare trailing
+ * number, because the bare trailing number is the bug.
+ */
+export function formatAddressCopy(a: AddressParts): string {
+  const p = resolveAddressParts(a);
+  const locality = [p.city, p.postalCode].filter(Boolean).join(" ");
+  return [p.street, p.aptLabel, locality].filter(Boolean).join(", ");
+}
+
+/**
+ * The query handed to Waze / Google Maps / Apple Maps — street, city, postal
+ * code, and deliberately NO unit. Geocoders get worse at finding a building
+ * when a unit is in the query, and the PDF asks for the apartment in the
+ * navigation links only "when possible". Legibility on the screen and on the
+ * clipboard is where fix 7 is actually won.
+ */
+export function formatAddressQuery(a: AddressParts): string {
+  const p = resolveAddressParts(a);
+  const locality = [p.city, p.postalCode].filter(Boolean).join(" ");
+  return [p.street, locality].filter(Boolean).join(", ");
+}
+
 /**
  * The de-duplication key for "is this address already in the book?".
  *
@@ -170,7 +403,12 @@ export function formatAddressLine(a: AddressParts): string {
   const street = stripDuplicatedApt(a.address, a.aptNumber);
   if (street) parts.push(street);
 
-  const apt = (a.aptNumber ?? "").trim();
+  // `normalizeApt`, not a bare trim (round 4, fix 7): three live rows store the
+  // string "None" in this column, and "4820 Sherbrooke, None, Montréal" has
+  // been going out on invoices. Display only — `normalizeAddressKey` below is
+  // deliberately NOT normalised, because two rows whose units differ only by a
+  // placeholder are still two rows and merging them would lose one.
+  const apt = normalizeApt(a.aptNumber);
   if (apt) parts.push(apt);
 
   const locality = [(a.city ?? "").trim(), (a.postalCode ?? "").trim()]

@@ -6,10 +6,27 @@
 // the SERVER (getPayBreakdown.ts) — the fields simply do not exist in the
 // response a cleaner receives.
 
+import type { PayBasisKind } from "@/lib/pay-basis";
+
 export type JobPayType = "PERCENTAGE" | "FLAT" | "HOURLY";
 
+/**
+ * WHICH rule produced the payout, on BOTH payloads (round 4, fix 5 — "UI states
+ * which basis is in use").
+ *
+ * Cleaner-safe by construction: every label names the rule and, on an hourly
+ * job, the cleaner's OWN hours and OWN rate. None of them carries a client
+ * charge, a tier percentage or the job's price, which is what keeps this
+ * shareable with the redacted payload above.
+ */
+export interface PayBasisFields {
+  basis: PayBasisKind;
+  /** "Hourly — 3.5h clocked × $25.00/h", "Percentage — tier rate…". */
+  basisLabel: string;
+}
+
 /** What a cleaner is allowed to see about their own pay for a job. */
-export type CleanerPayBreakdown = {
+export type CleanerPayBreakdown = PayBasisFields & {
   audience: "CLEANER";
   jobId: string;
   clientName: string;
@@ -42,7 +59,7 @@ export type CleanerPayBreakdown = {
 };
 
 /** The full internal breakdown. ADMIN/OWNER only. */
-export type AdminPayBreakdown = {
+export type AdminPayBreakdown = PayBasisFields & {
   audience: "ADMIN";
   jobId: string;
   clientName: string;

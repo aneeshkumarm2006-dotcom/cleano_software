@@ -4,6 +4,9 @@ import {
   getTotalRevenue,
   getEmployeeCounts,
   totalRevenueOf,
+  isActiveJob,
+  isCompletedJob,
+  isOnHoldJob,
   isRevenueJob,
   jobRevenue,
 } from "@/lib/metrics";
@@ -269,13 +272,32 @@ export default async function AnalyticsPage({
   );
 
   // === JOB STATS ===
-  const completedJobs = jobs.filter(
-    (j) => j.status === "COMPLETED" || j.status === "PAID"
-  );
+  // Round 4, fixes 3 + 6. `jobStats.total` below was `jobs.length` — every row
+  // in the filtered list, cancellations and unpriced holds included — which is
+  // the same defect the Dashboard's Total jobs tile had, and the reason the two
+  // pages could quote different-looking figures for the same idea. Both now
+  // count ACTIVE work through the one predicate: `isActiveJob` here (this page
+  // filters in memory, so the SQL helper can't answer it) and
+  // `activeJobsWhere()` on the Dashboard, held in lockstep by design.
+  const activeJobs = jobs.filter(isActiveJob);
+  // Round 4, fix 1. This was a bare `status === COMPLETED || status === PAID`,
+  // the exact predicate the rest of the round replaced: payment is not
+  // completion, and a future job stamped PAID by an import or a card charge
+  // was counted here as finished work. Caught by clicking the two pages side
+  // by side — Analytics said 29 completed and 26 payments outstanding while
+  // the Dashboard and the Jobs tab said 27 and 24, the same two mis-stamped
+  // Aug 19 rows. `isCompletedJob` is the one predicate behind all of them, so
+  // the three cannot drift again; the PDF asks for exactly that ("dashboard
+  // counts and Completed filters share one status logic").
+  //
+  // The blast radius is wider than the tile: everything below that reduces
+  // over `completedJobs` — average duration, average job price, labour cost,
+  // tips, parking, net profit and the pending-payment list — was reading
+  // future work as delivered work.
+  const completedJobs = jobs.filter((j) => isCompletedJob(j, now));
   const inProgressJobs = jobs.filter((j) => j.status === "IN_PROGRESS");
-  const scheduledJobs = jobs.filter(
-    (j) => j.status === "CREATED" || j.status === "SCHEDULED"
-  );
+  const scheduledJobs = jobs.filter((j) => j.status === "SCHEDULED");
+  const onHoldJobs = jobs.filter(isOnHoldJob);
   const cancelledJobs = jobs.filter((j) => j.status === "CANCELLED");
 
   // Average duration (for completed jobs with end time)
@@ -291,14 +313,20 @@ export default async function AnalyticsPage({
       : 0;
 
   const jobStats = {
-    total: jobs.length,
+    total: activeJobs.length,
     completed: completedJobs.length,
     inProgress: inProgressJobs.length,
     scheduled: scheduledJobs.length,
+    onHold: onHoldJobs.length,
     cancelled: cancelledJobs.length,
     avgDuration,
+    // Over ACTIVE work too, and this one mattered most: with cancellations in
+    // the denominator, a month of cancelled bookings read as a month of failed
+    // completions. A cancelled job is not a job we failed to complete.
     completionRate:
-      jobs.length > 0 ? (completedJobs.length / jobs.length) * 100 : 0,
+      activeJobs.length > 0
+        ? (completedJobs.length / activeJobs.length) * 100
+        : 0,
   };
 
   // === REVENUE STATS ===
@@ -509,9 +537,11 @@ export default async function AnalyticsPage({
     .filter((e) => e.role === "EMPLOYEE")
     .map((e) => {
       const empJobs = jobsOf(e.id);
-      const completedEmpJobs = empJobs.filter(
-        (j) => j.status === "COMPLETED" || j.status === "PAID"
-      );
+      // Same guard as `completedJobs` above (round 4, fix 1) — a future job
+      // stamped PAID by an import is not a job this cleaner has completed, and
+      // it must not carry its price into their revenue or its estimate into
+      // their average.
+      const completedEmpJobs = empJobs.filter((j) => isCompletedJob(j, now));
       const totalRevenue = completedEmpJobs.reduce(
         (sum, j) => sum + activeSubtotal(j),
         0
@@ -890,9 +920,16 @@ export default async function AnalyticsPage({
   // Deliberately UNFILTERED. This pass writes rows; which alerts exist must not
   // depend on whether somebody had Airbnb selected when the page rendered.
   const sevenDaysAgo = addStoreDays(now, -7);
+  // Round 4, fix 1, and this one WRITES. The predicate was a bare status test,
+  // so a future job stamped COMPLETED/PAID by an import or a card charge, booked
+  // more than a week ago and not yet paid, minted a real "Overdue payment" alert
+  // for work nobody has done. `isCompletedJob` keeps this pass in step with the
+  // Dashboard's pending-payment tile, which already counts through
+  // `jobStatusWhere("overdue")` — the two were answering the same question
+  // differently, and only one of them left rows behind.
   const overdueJobs = allJobs.filter(
     (j) =>
-      (j.status === "COMPLETED" || j.status === "PAID") &&
+      isCompletedJob(j, now) &&
       !j.paymentReceived &&
       new Date(j.createdAt) < sevenDaysAgo
   );

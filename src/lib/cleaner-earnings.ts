@@ -23,8 +23,9 @@ import {
   type CleanerRateInput,
 } from "./pay-tiers";
 import { computePayoutTotals } from "./payout-math";
+import { payBasisLabel, type PayBasisKind } from "./pay-basis";
 import { summariseBreaks } from "./time-tracking";
-import { summariseSessions } from "./work-sessions";
+import { crewActiveMinutesByCleaner } from "./work-sessions";
 import {
   currentPayPeriodRange,
   parseBusinessDate,
@@ -263,32 +264,93 @@ export function jobWorkedHours(job: JobPayInput): number {
  * committed — falls back to exactly the old calculation, the job-level span
  * divided evenly. So nothing about historical payroll moves.
  *
- * NOTE ON MONEY: this feeds `JobPayShare.hours`, which is REPORTING ONLY.
- * Payouts come from `base`, and HOURLY jobs take `employeePay` — computed at
- * save time from hourlyRate x SCHEDULED hours (saveJob.ts). Changing this
- * changes what payroll REPORTS, never what it pays. Verified against live data
- * before the switch: 0 multi-cleaner jobs had clock pairs, so the delta was
- * 8.4h → 8.4h (probe-stage5.ts).
+ * NOTE ON MONEY: as of AWER round 4 (fix 5) this is no longer reporting-only on
+ * an HOURLY job — `computeJobPayShares` pays these very hours × `hourlyRate`.
+ * On every other pay type it stays what it was: a reported figure that no payout
+ * reads. Verified against live data before the round-3 switch: 0 multi-cleaner
+ * jobs had clock pairs, so the delta was 8.4h → 8.4h (probe-stage5.ts).
+ *
+ * The measurement is `crewActiveMinutesByCleaner` (src/lib/work-sessions.ts) —
+ * THE same per-cleaner map the customer's `billedActualHours` is summed from, so
+ * "billed 6h, paid 3h" is not expressible.
  */
 export function cleanerWorkedHours(
   job: JobPayInput,
   cleanerId: string,
   participantCount: number
 ): number {
-  const mine = (job.workSessions ?? []).filter((s) => s.cleanerId === cleanerId);
+  const minutes = crewActiveMinutesByCleaner(job.workSessions, job.breaks).get(
+    cleanerId
+  );
 
   // No sessions for this cleaner → the legacy shape, unchanged.
-  if (mine.length === 0) {
+  if (minutes === undefined) {
     return participantCount > 0 ? jobWorkedHours(job) / participantCount : 0;
   }
 
-  // Breaks with no cleanerId are pre-item-26-era rows; treat them as this
-  // cleaner's rather than dropping the deduction entirely.
-  const myBreaks = (job.breaks ?? []).filter(
-    (b) => b.cleanerId == null || b.cleanerId === cleanerId
-  );
-  const summary = summariseSessions(mine, myBreaks);
-  return summary.activeMinutes / 60;
+  return minutes / 60;
+}
+
+/**
+ * The per-cleaner clocked hours an HOURLY-PAID job is settled from, or null when
+ * the clock cannot answer (AWER round 4, fix 5).
+ *
+ * Null means "the stored `employeePay` stands" and covers three cases, each on
+ * purpose:
+ *   • not HOURLY pay — FLAT and PERCENTAGE are none of this function's business;
+ *   • no `hourlyRate` — there is nothing to multiply by, which is exactly the
+ *     state fix 5's other half (the modal resetting the field) used to leave
+ *     jobs in;
+ *   • no work sessions — the job was never clocked, so `employeePay` is still
+ *     the save-time ESTIMATE from the scheduled window and must stay it. A
+ *     legacy job-level clock pair deliberately does NOT qualify: it carries no
+ *     per-cleaner record, and `jobWorkedHours` falls back to SCHEDULED times
+ *     when the pair is empty, so treating it as clock evidence would invent pay
+ *     out of the calendar.
+ *
+ * A cleaner on the job with no sessions of their own maps to ZERO hours rather
+ * than to a share of the job's span: on an hourly job the clock is the record,
+ * and a silent schedule-derived payout for someone who never clocked in is the
+ * kind of invisible money this module exists to remove. The basis label says
+ * "0h clocked", so an admin sees it and either fixes the clock or types a
+ * per-cleaner override — both of which win over this.
+ */
+export function hourlyClockedHours(
+  job: JobPayInput,
+  participantIds: readonly string[]
+): { rate: number; hoursById: Map<string, number> } | null {
+  if (((job.payType as JobPayType) ?? "PERCENTAGE") !== "HOURLY") return null;
+  const rate = Number(job.hourlyRate);
+  if (!Number.isFinite(rate) || rate <= 0) return null;
+  if ((job.workSessions ?? []).length === 0) return null;
+
+  const minutes = crewActiveMinutesByCleaner(job.workSessions, job.breaks);
+  const hoursById = new Map<string, number>();
+  for (const id of participantIds) {
+    hoursById.set(id, (minutes.get(id) ?? 0) / 60);
+  }
+  return { rate, hoursById };
+}
+
+/**
+ * The TEAM TOTAL an HOURLY job owes from the clock — Σ (per-cleaner hours ×
+ * rate) — or null when the clock cannot answer (see `hourlyClockedHours`).
+ *
+ * This is what `snapshotHourlyEmployeePay` writes into `Job.employeePay` at
+ * clock-out, and it is the sum of exactly the shares `computeJobPayShares`
+ * hands out, because both call the function above.
+ */
+export function hourlyTeamPayFromClock(
+  job: JobPayInput,
+  rates?: Map<string, CleanerRateInput>
+): number | null {
+  const participantIds = jobParticipantIds(job, rates);
+  if (participantIds.length === 0) return null;
+  const clock = hourlyClockedHours(job, participantIds);
+  if (!clock) return null;
+  let total = 0;
+  for (const hours of clock.hoursById.values()) total += hours * clock.rate;
+  return round2(total);
 }
 
 /** The instant a job counts against for period/year bucketing. */
@@ -327,6 +389,19 @@ export interface JobPayShare {
   total: number;
   /** Per-person share of the worked hours. */
   hours: number;
+  /**
+   * Which rule produced `base` (fix 5). Decided here, beside the amount, and
+   * carried rather than re-derived per screen — re-deriving it is how the pay
+   * modal, the job page and payroll would come to disagree about a figure they
+   * already agree on. The vocabulary lives in `./pay-basis`, which is pure so
+   * client components can read the labels too.
+   */
+  basis: PayBasisKind;
+  /**
+   * That rule in words, ready to print: "Hourly — 3.5h clocked × $25.00/h",
+   * "Percentage — tier rate", "Manual — team total, split evenly".
+   */
+  basisLabel: string;
 }
 
 /** The zero share, so the several "no participant" fallbacks cannot drift. */
@@ -337,6 +412,8 @@ export const EMPTY_PAY_SHARE: JobPayShare = {
   parking: 0,
   total: 0,
   hours: 0,
+  basis: "PERCENTAGE",
+  basisLabel: "No pay calculated — nobody is assigned to this job.",
 };
 
 /**
@@ -350,7 +427,15 @@ export const EMPTY_PAY_SHARE: JobPayShare = {
  *     PAY BASIS (src/lib/pay-tiers.ts). Paired jobs no longer halve anything.
  *     Legacy jobs with no basis fall back to an even split of employeePay.
  *   • FLAT       — employeePay is the agreed TEAM TOTAL, split between the crew.
- *   • HOURLY     — employeePay is hourlyRate x hours, same semantics as FLAT.
+ *   • HOURLY     — each cleaner earns THEIR OWN clocked hours × `hourlyRate`
+ *     (round 4, fix 5). Until anything is clocked, `employeePay` is still the
+ *     save-time estimate from the scheduled window and is split evenly, labelled
+ *     as an estimate. See `hourlyClockedHours`.
+ *
+ * Every share carries `basis` / `basisLabel` saying WHICH of those rules paid
+ * it, so the pay modal, the Financials tab and payroll can all print the reason
+ * without re-deriving it and drifting apart (fix 5's "UI states which basis is
+ * in use").
  *
  * ## The basis moved (fix 5, Stage 4a.3)
  *
@@ -409,6 +494,23 @@ export function computeJobPayShares(
     }
   }
 
+  // ── HOURLY, settled from the clock (AWER round 4, fix 5) ──────────────────
+  //
+  // The PDF: "pay = total clocked hours × cleaner hourly rate, all sessions
+  // summed". Before this, an HOURLY job's `employeePay` was computed ONCE at
+  // save time from the SCHEDULED window and never revisited — a cleaner who
+  // stayed two hours late was paid for the hours nobody worked. Now each cleaner
+  // earns THEIR OWN clocked hours × the job's rate, and the team total is the
+  // sum of those (which is what `snapshotHourlyEmployeePay` stores back).
+  //
+  // Null when the clock cannot answer — see `hourlyClockedHours`, which is also
+  // what the stored-column snapshot calls, so the two cannot diverge. A manual
+  // team total (D2) is checked first below and still wins, as does a per-cleaner
+  // override: an admin's stated figure beats a measurement, always.
+  const hourlyClock = manualTeamTotal
+    ? null
+    : hourlyClockedHours(job, participantIds);
+
   // FLAT / HOURLY / MANUAL: `employeePay` is the TEAM TOTAL for the job, divided
   // between the assigned cleaners — NOT paid to each of them (client decision).
   // Anyone with a manual override takes their fixed amount off the top; whoever
@@ -449,6 +551,8 @@ export function computeJobPayShares(
   let unoverriddenSeen = 0;
   for (const [index, id] of participantIds.entries()) {
     let base: number;
+    let basis: PayBasisKind;
+    let basisDetail: { hours?: number; rate?: number } = {};
     const override = overrideById.get(id);
     if (override != null) {
       // MANUAL OVERRIDE — exactly the amount the admin promised this cleaner,
@@ -457,6 +561,16 @@ export function computeJobPayShares(
       // which was invisible while that factor was pinned at 1.0 and wrong the
       // day it wasn't.
       base = override;
+      basis = "MANUAL_CLEANER";
+    } else if (hourlyClock) {
+      // HOURLY FROM THE CLOCK (round 4, fix 5) — this cleaner's own sessions,
+      // breaks deducted, times the job's cleaner rate. Not a slice of a team
+      // total: two cleaners who each worked 3h at $25 are paid $75 each, and the
+      // $150 team figure is the CONSEQUENCE rather than the input.
+      const hours = hourlyClock.hoursById.get(id) ?? 0;
+      base = hours * hourlyClock.rate;
+      basis = "HOURLY_CLOCK";
+      basisDetail = { hours, rate: hourlyClock.rate };
     } else if (payType === "FLAT" || payType === "HOURLY" || manualTeamTotal) {
       // employeePay is an agreed TEAM TOTAL — a manual amount too. Untouched by
       // any rate. `manualTeamTotal` is decision D2: on a PERCENTAGE job an admin
@@ -465,12 +579,21 @@ export function computeJobPayShares(
       base =
         (perPersonCents + (unoverriddenSeen < extraCents ? 1 : 0)) / 100;
       unoverriddenSeen += 1;
+      basis = manualTeamTotal
+        ? "MANUAL_TEAM"
+        : payType === "HOURLY"
+          ? // HOURLY with nothing clocked yet: `employeePay` is still saveJob's
+            // estimate from the scheduled window. Labelled as an estimate rather
+            // than dressed up as a measurement.
+            "HOURLY_ESTIMATE"
+          : "FLAT";
     } else if (usePriceModel) {
       // PERCENTAGE — the rating multiplier is ALREADY inside the rate that
       // computeJobPayout used (tier base x multiplier). Applying it again here
       // would pay the rating premium twice. The BASIS is the job's active value
       // (base + add-ons, or the override total), not the bare price — fix 5.
       base = tierAmountById.get(id) ?? 0;
+      basis = "PERCENTAGE";
     } else {
       // Legacy PERCENTAGE row with no basis at all: employeePay is whatever the
       // admin or the BookingKoala importer recorded — also a manual amount.
@@ -478,6 +601,7 @@ export function computeJobPayShares(
       // rating premium would invent money no rate ever justified.
       base =
         (legacyPerPersonCents + (index < legacyExtraCents ? 1 : 0)) / 100;
+      basis = "LEGACY";
     }
     result.set(id, {
       base: round2(base),
@@ -491,9 +615,15 @@ export function computeJobPayShares(
       // introduced and FLAT thirds don't shift by a cent.
       total: round2(base + tipShare + parkingShare),
       // Each cleaner's OWN hours when sessions exist; the old even split of
-      // the job span otherwise (see cleanerWorkedHours). Reporting only —
-      // nothing above reads it.
-      hours: cleanerWorkedHours(job, id, participantIds.length),
+      // the job span otherwise (see cleanerWorkedHours). On an HOURLY job
+      // settled from the clock this is the very figure `base` was computed
+      // from — including the 0 of a cleaner who never clocked in, so the row
+      // cannot show hours the pay disagrees with.
+      hours: hourlyClock
+        ? hourlyClock.hoursById.get(id) ?? 0
+        : cleanerWorkedHours(job, id, participantIds.length),
+      basis,
+      basisLabel: payBasisLabel(basis, basisDetail),
     });
   }
   return result;

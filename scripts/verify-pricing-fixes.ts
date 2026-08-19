@@ -1123,10 +1123,27 @@ lacks(
   "src/app/admin/jobs/[id]/JobDetailView.tsx",
   "not used"
 );
+// AWER round 4, fix 5 widened this label from manual-or-not to the ACTUAL basis
+// (hourly-from-the-clock, hourly-estimate, flat, percentage, manual), because
+// manual-or-not could not tell an hourly job apart from a tier-rate one and
+// printed "automatic (tier rates)" on both. The ternary this used to pin moved
+// into the shared vocabulary; the guarantee is unchanged and is asserted one
+// level down — the page still labels where the number came from, and the two
+// round-2 strings are still the wording for those two cases.
 has(
   "4c.4 · …replaced by a labelled pay source",
   "src/app/admin/jobs/[id]/JobDetailView.tsx",
-  "'Manual amount' : 'Automatic (tier rates)'"
+  "PAY_BASIS_SHORT_LABEL[payBasisKinds[0]]"
+);
+has(
+  "4c.4 · …whose manual wording survives round 4",
+  "src/lib/pay-basis.ts",
+  'MANUAL_TEAM: "Manual amount"'
+);
+has(
+  "4c.4 · …and whose automatic wording does too",
+  "src/lib/pay-basis.ts",
+  'PERCENTAGE: "Automatic (tier rates)"'
 );
 has(
   "4b.2 · the Financials rows name the pass-through instead of a company expense",

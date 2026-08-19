@@ -3068,6 +3068,27 @@ body {
   color: rgba(255, 255, 255, 0.85);
   margin-bottom: 8px;
 }
+/* APARTMENT NUMBER on the cleaner's job hero — round 4, fix 7 (IMG-5).
+   Same argument as the access notes below, one step earlier in the journey:
+   the unit was the tail of a wrapped address line, and the p6 screenshot is a
+   cleaner circling it in red because it is the one thing they had to hunt for.
+   Own line, own box, bigger and heavier than the address above it — a cleaner
+   glancing at the phone in a lobby sees "Apt 23" without reading a word. */
+.cl-jd-apt {
+  /* `flex`, not `inline-flex`: the address line above is inline-flex, and two
+     inline boxes share a line. This one has to own its own. */
+  display: flex; width: fit-content; max-width: 100%;
+  align-items: center; gap: 8px;
+  font-size: 17px; font-weight: 700; letter-spacing: 0.01em;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  border-radius: 10px;
+  padding: 7px 13px;
+  margin-bottom: 10px;
+}
+.cl-jd-apt svg { flex-shrink: 0; opacity: 0.9; }
+
 /* Access notes (door / gate / buzzer codes) on the cleaner's job hero — item 2.
    Boxed rather than run into the address line: it's the thing a cleaner is
    hunting for while standing at a locked door. */
@@ -3575,6 +3596,12 @@ body {
 .cl-jobs2-meta-rows .txt {
   min-width: 0; line-height: 1.4;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+/* Apartment number on the job card — round 4, fix 7. Heavier and darker than
+   the address row it sits under: the address gets a cleaner to the building,
+   this gets them to the door, and only one of the two is ever missing. */
+.cl-jobs2-apt {
+  min-width: 0; font-weight: 700; color: var(--primary-800); letter-spacing: 0.01em;
 }
 .cl-jobs2-side {
   display: flex; flex-direction: column; align-items: flex-end; justify-content: center; gap: 10px;
@@ -7754,4 +7781,76 @@ a.q-v.link:hover { text-decoration: underline; }
   /* Kill the stepper arrows Windows Chrome would otherwise draw. */
   *::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
   *::-webkit-scrollbar-corner { background: transparent; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ADMIN JOB MODAL — round 4, fix 8 (`awerfixesaug18.pdf` p7, IMG-6)
+   ═══════════════════════════════════════════════════════════════════════════
+
+   The screenshot is an admin on a phone, scrolled to the very bottom of the
+   edit-job form, with a red **Delete Job** as the last thing they can reach and
+   no **Update Job** anywhere. The job could not be saved from a phone at all.
+
+   Three things put it there, and all three had to go:
+
+    1. `95vh`, twice — on the card and on its scroller — inside an overlay with
+       `p-4`. That is 95vh + 2rem of box in a 100vh window before iOS Safari's
+       chrome takes its cut, and the overlay centres the overflow, so the last
+       ~10% of the form hung below the screen with nothing to scroll it into
+       view. `dvh` measures the viewport that is actually visible; the plain
+       `vh` line above it is the fallback for a browser that predates it.
+
+    2. The action row scrolled WITH the form. Even at the right height, "the
+       primary action is at the bottom of a 60-field form" is a bad deal on a
+       phone. It is now stuck to the bottom of the scroller, so Create / Update
+       / Next is on screen on every step, at every scroll position.
+
+    3. On mobile the row stacked as a COLUMN with Delete first — which is why
+       Delete is the control the screenshot ends on. Delete now lives in the
+       body of step 3 (see `JobModal.tsx`), and the footer holds only Back and
+       the primary action.
+
+   Same shape as `.cl-sheet` and `.co-sheet` above, which fixed this on the
+   cleaner side in an earlier round, including the part `dvh` cannot do on its
+   own: `position: fixed` is measured against the LAYOUT viewport, which the
+   on-screen keyboard does not shrink, so the modal also reads
+   `window.visualViewport` and writes the two custom properties below. */
+.job-modal-overlay {
+  /* The keyboard's height, written by JobModal from visualViewport. Lifting a
+     vertically-centred box by it re-centres what is left above the keyboard. */
+  padding: 1rem 1rem calc(1rem + var(--job-modal-kb, 0px));
+}
+.job-modal-card {
+  display: flex;
+  flex-direction: column;
+  /* Fallback first, for browsers without dvh. */
+  max-height: calc(100vh - 2rem);
+  max-height: var(--job-modal-max, calc(100dvh - 2rem));
+  /* The sticky footer paints over the card's rounded bottom corners without
+     this, and a square white bar under a 24px radius reads as a broken modal. */
+  overflow: hidden;
+}
+.job-modal-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  /* Room for a focused field to clear the keyboard AND the sticky footer when
+     the browser scrolls it into view. */
+  scroll-padding-bottom: 140px;
+}
+.job-modal-foot {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  background: #fff;
+  border-top: 1px solid rgba(0, 140, 156, 0.12);
+  /* Cancels the scroller's side padding so the bar spans the card, and adds the
+     home-indicator strip on an iPhone — a button under that strip is a button
+     the thumb argues with. */
+  margin: 0 -1.5rem;
+  padding: 0.875rem 1.5rem calc(0.875rem + env(safe-area-inset-bottom));
+}
+@media (min-width: 768px) {
+  .job-modal-foot { margin: 0 -2rem; padding-left: 2rem; padding-right: 2rem; }
 }

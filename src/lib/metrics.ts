@@ -13,9 +13,11 @@ import type { Prisma } from "@prisma/client";
 import {
   jobRevenue,
   jobScheduledValue,
+  COMPLETED_STATUSES,
   EMPLOYEE_ROLES,
   REVENUE_STATUSES,
 } from "./metrics-shared";
+import { INACTIVE_JOB_STATUSES, ON_HOLD_STATUS } from "./job-hold";
 
 export * from "./metrics-shared";
 
@@ -116,6 +118,41 @@ export async function getCompletedJobCount(now: Date = new Date()): Promise<numb
   return db.job.count({ where: jobStatusWhere("completed", now) });
 }
 
+// ── Active job count ────────────────────────────────────────────────────────
+// Round 4, fixes 3 + 6. "Total Jobs" on the Dashboard was
+// `db.job.count({ where: { deletedAt: null } })` — every row in the table,
+// cancellations included — so a cancelled booking still counted as a job the
+// business did, and the number could only ever go up. Analytics repeated the
+// same thing in memory as `jobs.length`.
+//
+// A job is ACTIVE when it is neither cancelled (it did not happen) nor on hold
+// (nobody has agreed it will). Both remain visible: the Dashboard prints their
+// counts beside the total they were removed from, and each has its own bucket
+// below — which is the PDF's "cancelled jobs should still be visible in records
+// or as a separate stat" and "dashboard should separate on-hold".
+//
+// KEEP IN LOCKSTEP with `isActiveJob()` in ./metrics-shared — this is the SQL
+// form of the same predicate, and Analytics applies the pure one to its
+// filtered list.
+
+export function activeJobsWhere(range?: DateRange): Prisma.JobWhereInput {
+  const where: Prisma.JobWhereInput = {
+    deletedAt: null,
+    status: { notIn: [...INACTIVE_JOB_STATUSES] },
+  };
+  if (range?.from || range?.to) {
+    where.startTime = {
+      ...(range.from ? { gte: range.from } : {}),
+      ...(range.to ? { lt: range.to } : {}),
+    };
+  }
+  return where;
+}
+
+export async function getActiveJobCount(range?: DateRange): Promise<number> {
+  return db.job.count({ where: activeJobsWhere(range) });
+}
+
 // ── Employee count ──────────────────────────────────────────────────────────
 // Spec: one count across Dashboard, Analytics, Employees. Active cleaner /
 // employee profiles only. Exclude clients (imported CLIENT-role logins),
@@ -153,6 +190,7 @@ export function productWhere(archived = false): Prisma.ProductWhereInput {
 // Shared so the Jobs list tabs, Dashboard, and reports bucket jobs identically.
 export type JobStatusBucket =
   | "upcoming"
+  | "onhold"
   | "completed"
   | "cancelled"
   | "overdue"
@@ -164,20 +202,50 @@ export function jobStatusWhere(
 ): Prisma.JobWhereInput {
   switch (bucket) {
     case "upcoming":
+      // Round 4, fix 1 — the SQL twin of `isUpcomingJob`. This was an
+      // allow-list of {CREATED, SCHEDULED, IN_PROGRESS}, which meant a future
+      // job mis-stamped COMPLETED/PAID belonged to no bucket at all: the
+      // completed guard below rightly refuses it and this refused it too, so
+      // it vanished from the app entirely. Anything future that isn't
+      // cancelled and wasn't genuinely worked is upcoming.
+      //
+      // Round 4, fix 6 — `not: CANCELLED` became `notIn: [CANCELLED, CREATED]`.
+      // On-hold work is not scheduled work (PDF p5), so it leaves this bucket
+      // for the `onhold` one below. Nothing is orphaned by that: every future
+      // non-cancelled row is in exactly one of upcoming / onhold / completed,
+      // which `verify-awer-fixes-4.ts` proves over the whole cross-product.
       return {
         deletedAt: null,
-        status: { in: ["CREATED", "SCHEDULED", "IN_PROGRESS"] },
         startTime: { gte: now },
+        status: { notIn: [...INACTIVE_JOB_STATUSES] },
+        NOT: { status: { in: [...COMPLETED_STATUSES] }, clockOutTime: { not: null } },
       };
+    case "onhold":
+      // Round 4, fix 6 — the SQL twin of `isOnHoldJob`. No date test on
+      // purpose: a hold is a statement about the agreement, not about the
+      // calendar, so it survives its own date until an admin releases it.
+      return { deletedAt: null, status: ON_HOLD_STATUS };
     case "completed":
-      return { deletedAt: null, status: { in: ["COMPLETED", "PAID"] } };
+      // Round 4, fix 1 — the SQL twin of `isCompletedJob`: stamped done AND
+      // not still in the future. `NOT: { a, b }` negates the CONJUNCTION in
+      // Prisma, so this reads exactly as `!isFutureJob` does — not future
+      // UNLESS (starts later AND never clocked out).
+      return {
+        deletedAt: null,
+        status: { in: [...COMPLETED_STATUSES] },
+        NOT: { startTime: { gt: now }, clockOutTime: null },
+      };
     case "cancelled":
       return { deletedAt: null, status: "CANCELLED" };
     case "overdue":
+      // Overdue ⊂ completed, so it inherits the same date guard (round 4, fix
+      // 1): unpaid work we have actually done. A job dated next week that was
+      // mis-stamped COMPLETED is not overdue — nobody owes us for it yet.
       return {
         deletedAt: null,
         status: "COMPLETED",
         paymentReceived: false,
+        NOT: { startTime: { gt: now }, clockOutTime: null },
       };
     case "free":
       return { deletedAt: null, OR: [{ price: null }, { price: 0 }] };

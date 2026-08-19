@@ -45,6 +45,7 @@ import { resolveDepositUsdForService } from "@/lib/booking-deposit.server";
 // "QUOTED" is still not a confirmed cleaning: the confirmation screen must not
 // promise one.
 import { isAwaitingQuote } from "@/lib/quote-status";
+import { HOLD_REASON } from "@/lib/job-hold";
 import { logActivity } from "@/lib/activity-log";
 import { applyPromoCode } from "./applyPromoCode";
 import { formatAddressLine } from "@/lib/client-address";
@@ -869,6 +870,17 @@ export async function submitBooking(input: SubmitBookingInput) {
         // on the calendar as though a crew were expected. `quoteStatus` below is
         // what hides it from cleaners; this is what keeps it off the schedule.
         status: isQuote || input.isFlexible ? "CREATED" : "SCHEDULED",
+        // Round 4, fix 6 — both of the CREATED cases above are genuine holds,
+        // and now each says which one it is. A quote is waiting on a price; a
+        // flexible booking is waiting on a date. Before this they were the same
+        // unlabelled grey block on the calendar as every admin-created job.
+        // The quote reads first because a flexible post-construction booking is
+        // blocked on the price before it is blocked on the date.
+        holdReason: isQuote
+          ? HOLD_REASON.QUOTE_PENDING
+          : input.isFlexible
+            ? HOLD_REASON.FLEXIBLE_DATE
+            : null,
         bedCount: input.bedCount,
         bathCount: input.bathCount,
         halfBathCount: input.halfBathCount,
@@ -1196,6 +1208,10 @@ export async function submitBooking(input: SubmitBookingInput) {
             jobDate: cursor,
             startTime: cursor,
             status: input.isFlexible ? "CREATED" : "SCHEDULED",
+            // Same hold, same reason, per occurrence (round 4, fix 6). A quote
+            // never reaches here — post-construction bookings are not recurring
+            // — so the flexible case is the only one this loop can produce.
+            holdReason: input.isFlexible ? HOLD_REASON.FLEXIBLE_DATE : null,
             bedCount: input.bedCount,
             bathCount: input.bathCount,
             halfBathCount: input.halfBathCount,

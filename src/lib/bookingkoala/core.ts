@@ -16,6 +16,7 @@
 import { randomBytes } from "crypto";
 import { addOnKey } from "../checklist-triggers";
 import { inferPropertyTypeFromText, type PropertyType } from "../property-type";
+import { HOLD_REASON } from "../job-hold";
 
 // Broad guard window — only rejects clearly-bogus dates, not real bookings.
 // Previously hardcoded to Jun 1–Sep 1 2026, which silently dropped every
@@ -347,6 +348,13 @@ export interface NormalizedJob {
    */
   propertyType: PropertyType | null;
   status: "CREATED" | "SCHEDULED" | "PAID";
+  /**
+   * Why an imported row is on hold (round 4, fix 6). Non-null exactly when
+   * `status` is CREATED — a $0 service total AND $0 final amount, i.e. a row
+   * the CSV priced at nothing, which somebody has to look at before a crew is
+   * sent. Null on every other row.
+   */
+  holdReason: string | null;
   price: number;
   subtotalAmount: number;
   totalAmount: number;
@@ -430,8 +438,13 @@ function customerKeyFrom(email: string, name: string, phone: string): string {
   return `np:${name.toLowerCase()}|${phone.replace(/\D/g, "")}`;
 }
 
-/** Parse a BookingKoala CSV export → date-filtered, normalized rows. */
-export function parseAndNormalize(csvText: string): ParseResult {
+/**
+ * Parse a BookingKoala CSV export → date-filtered, normalized rows.
+ *
+ * `now` is injectable so the status derivation below (round 4, fix 1) is
+ * testable without freezing the clock; every caller uses the default.
+ */
+export function parseAndNormalize(csvText: string, now: Date = new Date()): ParseResult {
   const rows = parseCSV(csvText);
   const header = (rows[0] ?? []).map((h) => h.trim());
   const idx = (name: string) => header.indexOf(name);
@@ -482,8 +495,26 @@ export function parseAndNormalize(csvText: string): ParseResult {
     const paymentMethod = clean(get("Payment method"));
     const paymentType = paymentMethod === "CC" ? "CREDIT_CARD" : "CASH";
     const paid = amountPaid > 0;
+    // Round 4, fix 1 (PDF p1): "completion never inferred from payment, import,
+    // or creation." `paid ⇒ PAID` had no date test, so importing a CSV of
+    // prepaid bookings stamped every FUTURE one with a done status — which put
+    // tomorrow's jobs in the Completed tab (IMG-1) and, because COMPLETED is a
+    // CLEANER_CLOSED_STATUS, hid the assigned ones from their cleaner's
+    // schedule entirely (IMG-3, fix 2). A prepaid future booking is SCHEDULED
+    // work that happens to be paid; `paymentReceived` below still records the
+    // payment, which is where payment belongs.
+    const paidAndPast = paid && start.getTime() <= now.getTime();
     const status =
-      serviceTotal <= 0 && finalAmount <= 0 ? "CREATED" : paid ? "PAID" : "SCHEDULED";
+      serviceTotal <= 0 && finalAmount <= 0
+        ? "CREATED"
+        : paidAndPast
+          ? "PAID"
+          : "SCHEDULED";
+    // Round 4, fix 6 (PDF p5): "automatic holds should show what triggered
+    // them." This is the only hold this importer creates, and until now it was
+    // indistinguishable from every admin-created job, which also landed on
+    // CREATED. Now the row says what it is: a booking the CSV priced at zero.
+    const holdReason = status === "CREATED" ? HOLD_REASON.IMPORT_ZERO_TOTAL : null;
 
     const providers = parseProviderDetails(get("Provider details"));
     const teamPayout = money(get("Provider/team payment (CAD)"));
@@ -558,6 +589,7 @@ export function parseAndNormalize(csvText: string): ParseResult {
         // just RESIDENTIAL/DEEP and the property word is gone (step 9.6).
         propertyType: inferPropertyTypeFromText(clean(get("Service"))),
         status,
+        holdReason,
         price: serviceTotal,
         subtotalAmount: serviceTotal,
         totalAmount: finalAmount || serviceTotal,

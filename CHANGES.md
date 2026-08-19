@@ -1405,3 +1405,94 @@ The client praised these explicitly: dashboard layout and quick actions · analy
 attachment and KPIs tab · Requests · Waitlist · Documents · Clients · Web bookings · Employees ·
 Time tracking · Inventory and supplier links · Wash payouts · Lead source and CPA · Gift cards and
 promos · Payouts, finances, invoices, bulk charge · the entire cleaner-side app.
+
+---
+
+# Part 3 — AWER round 4 (`awerfixesaug18.pdf`, 8 items)
+
+Full PR description: [`AWER_FIXES_4_PR.md`](AWER_FIXES_4_PR.md). Working tracker with every
+decision and its rationale: `_ai_context/TODO.md`. Prior rounds: `AWER_FIXES.md` (29),
+`AWER_NEW_FIXES.md` (5), `AWER_FIXES_3_PR.md` (20). **Where this PDF conflicts with earlier
+behaviour, this PDF wins** — including one deliberate reversal of a round-3 rule (fix 4).
+
+## What changed, in one line each
+
+| # | Fix | The one-line version |
+|---|---|---|
+| 1 | Future jobs read as Completed | Payment state was written into lifecycle state with no date guard. Completion is now derived from the status enum **and** the calendar, in one predicate (`isCompletedJob` + its SQL twin `jobStatusWhere("completed")`) that every surface imports. |
+| 2 | Assigned jobs missing from the cleaner schedule | A **future** job can now only leave a cleaner's schedule by being **cancelled**, whatever its status says. Three assignment write paths repaired: `claimJob`, `respondToJobInvite`, `cancelShift`. |
+| 3 | Cancelled jobs inflate Total Jobs | Dashboard 222 → **198**. Cancelled (7) and on-hold (17) are excluded from the total and shown twice each — in the hint and as their own tiles. |
+| 6 | "On Hold" meant nothing | It was the Prisma default: **13 of 17 holds in the business were nothing but that**. Now a real status with a written reason, a `Release` action on three surfaces, its own Jobs tab and its own tile. Admin-created jobs are born `SCHEDULED`. |
+| 4 | Hourly hours | Billable hours are **total crew hours** (2 × 15h = 30h), reversing round 3's "elapsed" rule. The rate is still multiplied exactly once. Cleaner-facing labels became "Crew hours". |
+| 5 | Cleaner hourly pay not saving / not calculating | The save bug was one DTO on the job **detail** page dropping `payType`/`hourlyRate` into `<JobModal>`. Pay is now each cleaner's own clocked hours × the rate, recomputed on clock-out and clock edits, with the basis stated in words on every pay surface. |
+| 7 | Apartment number easy to miss | Not a data-recovery job — **0 of 155** addressed jobs hide a unit in the string. A rendering fix: **Apt N** on its own bold line above the map buttons, its own row on the list card, included in **Copy**, excluded from the geocode query. |
+| 8 | Mobile job form could not be saved | `max-h-[95vh]` on card *and* scroller with the action row as the last child of the scroll: **Update Job sat 3121px below the fold**. Now `dvh` + `visualViewport` sizing, a sticky footer, and Delete demoted into the body. |
+
+## Migrations to apply
+
+```
+20260819000000_job_hold_reason
+```
+
+One additive nullable column (`Job.holdReason TEXT`). **Already applied to the live DB**
+(2026-08-19, owner-authorised) because the code reads it and the running app talks to that
+database. Re-running `migrate deploy` is a no-op.
+
+## Scripts added
+
+| Script | Safe to run? | What it does |
+|---|---|---|
+| `scripts/probe-awer-fixes-4.ts` | **read-only** (asserted mechanically) | Every live-data measurement in this round. Runs the *shipped* helpers against real rows rather than a second opinion about them. |
+| `scripts/fixFutureCompletedJobs.ts` | dry-run by default, `--commit` to write | Resets future-dated `COMPLETED`/`PAID` rows with no clock-out to `SCHEDULED`. Update body is exactly `{ status: "SCHEDULED" }` — every money column preserved. 2 rows. |
+| `scripts/releaseLegacyJobHolds.ts` | dry-run by default, `--commit` to write | Releases the enum-default holds (13) and writes a reason on the ones that stay held (4). Never overwrites a reason a human typed. |
+| `scripts/recomputeHourlyJobs.ts` | dry-run by default, `--commit` to write — **needs `--conditions=react-server`** | Re-snapshots hourly customer hours and cleaner pay through the app's own helpers, so every guard applies. 0 customer bills, 2 pay rows. |
+| `scripts/backfillJobAptNumbers.ts` | dry-run by default, `--commit` to write | Fills a blank `Job.aptNumber` from a unit buried in the address string. A no-op here (0 rows); it exists for the next import. |
+| `scripts/verify-awer-fixes-4.ts` | read-only | 457 checks across all eight items. Auto-discovered by `run-verify.ts`; the sweep is 32/32. |
+
+## Owner actions still open
+
+1. **Run the four data scripts** in the order above, each dry-run → review → `--commit`. Every
+   `--commit` is deliberately held: `DATABASE_URL` is the production Supabase, and there is no dev
+   copy of it.
+2. **The write-side live click-through** — assigning a cleaner, cancelling a job, clocking a crew
+   in and out of an hourly job, releasing a hold, and one actual save from the mobile modal. All
+   read-only checks are done; these five need a write to production, and the first can send mail
+   to real cleaners.
+3. **The cleaner side of fix 7** — open a job with an apartment as its assigned cleaner and check
+   the **Apt** line and the **Copy** button. Cleaner routes bounce an owner to `/admin/dashboard`.
+4. **iOS Safari for fix 8** — the engine whose `vh` over-reporting started it, and the only one
+   that shows a real keyboard.
+5. **Two client confirmations** — fix 4's crew-hours rule (changes future hourly prices, changes
+   nothing retroactively) and fix 5's per-cleaner hourly pay.
+6. **Tell the team about the un-blocked email fan-out.** Fixing `cancelShift` means a sole cleaner
+   cancelling inside 24h now genuinely empties the crew, so the last-minute repost finally fires —
+   a bonus-bearing "opening" email to every cleaner. Designed behaviour, unreachable until now.
+
+## The available-jobs board: an explained hold is not claimable — DONE
+
+An unpriced hold must not be claimable from the available-jobs board. The obvious edit — drop
+`CREATED` from `claimableJobsWhere` — was only safe *after* `releaseLegacyJobHolds` committed,
+because most `CREATED` rows are not holds at all: they are ordinary jobs born on the Prisma
+default back when `saveJob` set no status (16 such rows on live data, every one with
+`holdReason IS NULL`). Dropping the status would have deleted all of them from the board, i.e.
+recreated fix 2, this round's P0.
+
+So the rule keys on the **reason** instead — the column this round added. New
+`openForClaimFilter()` in `src/lib/cleaner-jobs.ts`:
+
+- `SCHEDULED` → claimable, as always.
+- `CREATED` **with** a `holdReason` → a real hold. **Not claimable.** Every producer stamps one
+  ($0 import, quote pending/declined, flexible booking, created-without-a-date), plus any manual
+  free text — so every hold made from this round on is covered the moment it is created.
+- `CREATED` with **no** reason → a legacy default, i.e. real work. Still claimable.
+- Anything else (`IN_PROGRESS` / `COMPLETED` / `PAID` / `CANCELLED`) → excluded, as before.
+
+Zero behaviour change on live data today (**183 claimable before, 183 after, 0 dropped**), and it
+**self-completes**: once the backfill moves the legacy rows to `SCHEDULED` and stamps the genuine
+holds, this filter *is* "drop `CREATED`" — no second deploy. `claimJob` carries the identical rule
+as a read guard and inside its compare-and-set `WHERE`, so the board's filter is not decorative and
+an admin placing a hold mid-claim wins the race.
+
+The cleaner's **schedule** (`upcomingFilter`) still admits `CREATED` deliberately — that half of
+the asymmetry is unchanged and still asserted, because a cleaner needs to see the job they are
+booked on even while an admin is deciding about it.

@@ -16,8 +16,8 @@ import {
   CLOCK_IN_EARLY_WINDOW_MIN,
   clockInOpensAt,
 } from "@/lib/cleaner-jobs";
-import { Calendar, Users, Package, Zap, Camera, ClipboardList, ListChecks, MapPin, DollarSign, KeyRound } from "lucide-react";
-import { formatAddressLine } from "@/lib/client-address";
+import { Calendar, Users, Package, Zap, Camera, ClipboardList, ListChecks, MapPin, DollarSign, KeyRound, DoorOpen } from "lucide-react";
+import { formatAddressLine, resolveAddressParts } from "@/lib/client-address";
 import { addOnQuantity } from "@/lib/job-money";
 import { formatHours } from "@/lib/hourly-billing";
 import { propertyTypeLabel } from "@/lib/property-type";
@@ -226,6 +226,23 @@ export default async function JobDetailPage({ params }: PageProps) {
   const safeNotes = sanitizeCleanerNotes(job.notes);
   const photosAllowed = afterPhotosAllowed(job);
 
+  // ROUND 4, FIX 7 — where the apartment number actually is on THIS row.
+  // Resolved once and shared by the address line, the apartment line and the
+  // map buttons, so the three can never disagree about which part of the
+  // string is the unit. `resolveAddressParts` prefers the column and only
+  // falls back to splitting the raw string when the column is empty, which is
+  // the case IMG-5 shows (unit at the tail of an imported `location`).
+  //
+  // The job's own postal code comes first for the same reason it did in item
+  // 2: it is the snapshot taken when the job was booked, and it is the ONLY
+  // one an imported job with no saved-address link has.
+  const address = resolveAddressParts({
+    address: job.location,
+    aptNumber: job.aptNumber ?? job.clientAddress?.aptNumber ?? null,
+    city: job.clientAddress?.city ?? null,
+    postalCode: job.postalCode ?? job.clientAddress?.postalCode ?? null,
+  });
+
   return (
     <div className="cl-jd-shell">
       <ScrollToTop jobId={job.id} />
@@ -238,24 +255,37 @@ export default async function JobDetailPage({ params }: PageProps) {
           <>
             <div className="loc">
               <MapPin size={14} />
-              {/* Unit + city/postal now show alongside the street (item 2).
-                  The job's own snapshot wins over the saved address, because
-                  the snapshot is where this job is actually being served. */}
+              {/* Street + city/postal, and NO unit — the unit gets its own line
+                  below (round 4, fix 7). The job's own snapshot wins over the
+                  saved address, because the snapshot is where this job is
+                  actually being served. */}
               {formatAddressLine({
-                address: job.location,
-                aptNumber: job.aptNumber ?? job.clientAddress?.aptNumber ?? null,
-                city: job.clientAddress?.city ?? null,
-                // The job's own postal code first (item 2). It is the snapshot
-                // taken when the job was booked, and it is the ONLY one an
-                // imported or hand-typed job with no saved-address link has —
-                // reading the address alone left those cleaners with a street
-                // and no postal code at all.
-                postalCode: job.postalCode ?? job.clientAddress?.postalCode ?? null,
+                address: address.street,
+                aptNumber: null,
+                city: address.city,
+                postalCode: address.postalCode,
               })}
             </div>
-            {/* Map deep-links keep the raw street: adding a unit or postal code
-                to the query makes Google/Apple/Waze worse at finding it. */}
-            <MapLinks address={job.location} />
+            {/* ROUND 4, FIX 7 (IMG-5). The unit used to ride at the tail of the
+                address line — "…, Montreal, QC, Canada, 23" — where a cleaner
+                standing outside the building has to read to the end of a
+                wrapped line to find the one thing they still need. Its own
+                line, boxed and labelled, in the same treatment as the access
+                notes right below it: both are "how do I actually get in". */}
+            {address.aptLabel && (
+              <div className="cl-jd-apt">
+                <DoorOpen size={15} />
+                <span>{address.aptLabel}</span>
+              </div>
+            )}
+            {/* Structured, not the raw string: Copy takes the apartment with it
+                (the PDF is explicit), the navigation links leave it out. */}
+            <MapLinks
+              street={address.street}
+              apt={address.apt}
+              city={address.city}
+              postalCode={address.postalCode}
+            />
           </>
         )}
         {job.clientAddress?.accessNotes && (
@@ -297,14 +327,26 @@ export default async function JobDetailPage({ params }: PageProps) {
           )}
           {(job.endTime || job.startTime) && (
             <div className="cl-jd-quick-tile">
-              <div className="lbl">Est. duration</div>
+              {/* ROUND 4, FIX 4 — this tile had to be relabelled, not just left
+                  alone. Stage 8's billed hours were ELAPSED, so on an hourly job
+                  they WERE how long the cleaner would be on site and "Est.
+                  duration" was the right heading. The PDF reverses the rule to
+                  TOTAL CREW HOURS, which means a two-person job now reads 6h for
+                  a 3-hour shift — a cleaner planning their day off that number
+                  would plan the wrong day. So when the figure shown is the crew
+                  total, the heading says so and the scheduled window is what
+                  keeps the "Est. duration" name.
+
+                  The rate and the total still never appear here: PDF #8 asks for
+                  hours on this page, and `cleaner-notes.ts` / the money rules
+                  keep customer pricing off cleaner surfaces (step 8.7). */}
+              <div className="lbl">
+                {job.billingType === "HOURLY" &&
+                (job.billedActualHours ?? job.billedEstimatedHours) != null
+                  ? "Crew hours"
+                  : "Est. duration"}
+              </div>
               <div className="val">
-                {/* On an hourly job the BILLED hours are the number that
-                    matters operationally — it is what the customer booked — so
-                    they win over the scheduled window when both exist. The rate
-                    and the total deliberately never appear on this page: PDF #8
-                    asks for hours here, and `cleaner-notes.ts` / the money rules
-                    keep customer pricing off cleaner surfaces (step 8.7). */}
                 {job.billingType === "HOURLY" &&
                 (job.billedActualHours ?? job.billedEstimatedHours) != null
                   ? formatHours(
@@ -322,8 +364,8 @@ export default async function JobDetailPage({ params }: PageProps) {
               {job.billingType === "HOURLY" && (
                 <div className="lbl" style={{ marginTop: 2 }}>
                   {job.billedActualHours != null
-                    ? "hourly job · actual"
-                    : "hourly job · booked"}
+                    ? "everyone's time added up · actual"
+                    : "everyone's time added up · booked"}
                 </div>
               )}
             </div>
@@ -573,14 +615,17 @@ export default async function JobDetailPage({ params }: PageProps) {
                 whole crew, because it is what they are expected to be on site
                 for. The customer's RATE and TOTAL are deliberately absent: this
                 page shows the cleaner their own pay and nothing about what the
-                client is charged. */}
+                client is charged.
+                Round 4, fix 4: this is now the CREW total, so the label says
+                "crew" — "Hours worked" beside a cleaner's own pay would read as
+                their own hours and be double on any two-person job. */}
             {job.billingType === "HOURLY" &&
               (job.billedActualHours ?? job.billedEstimatedHours) != null && (
                 <div className="cl-jd-dl-row">
                   <dt>
                     {job.billedActualHours != null
-                      ? "Hours worked"
-                      : "Booked hours"}
+                      ? "Crew hours worked"
+                      : "Crew hours booked"}
                   </dt>
                   <dd>
                     {formatHours(
@@ -596,7 +641,12 @@ export default async function JobDetailPage({ params }: PageProps) {
                   ${job.hourlyRate.toFixed(2)}/hr
                   {myPayout > 0 && (
                     <span style={{ color: "var(--primary-50)", fontWeight: 400 }}>
-                      {" "}· ${myPayout.toFixed(2)} est.
+                      {/* Round 4, fix 5 — once this cleaner has clocked out,
+                          `myPayout` is their own clocked hours × this rate, not
+                          a projection, so it stops calling itself an estimate.
+                          Before that it still is one. */}
+                      {" "}· ${myPayout.toFixed(2)}
+                      {job.clockOutTime ? " clocked" : " est."}
                     </span>
                   )}
                 </dd>

@@ -65,7 +65,7 @@ export default async function CleanerDashboard({ userId, userName }: Props) {
   // job that shows on My Jobs also shows here — including IN_PROGRESS jobs and
   // today's already-started job, and never a soft-deleted or cancelled one.
   const upcomingWhere = upcomingJobsWhere(userId, now);
-  const doneWhere = doneJobsWhere(userId);
+  const doneWhere = doneJobsWhere(userId, now);
 
   const [
     upcomingJobs,

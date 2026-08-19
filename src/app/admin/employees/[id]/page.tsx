@@ -24,6 +24,7 @@ import {
   startOfStoreDay,
   storeWeekday,
 } from "@/lib/timezone";
+import { doneJobsWhere, upcomingJobsWhere } from "@/lib/cleaner-jobs";
 
 export default async function EmployeePage({
   params,
@@ -66,6 +67,15 @@ export default async function EmployeePage({
           // Attributed revenue is the ACTIVE subtotal (fix 3), so the add-on
           // rows have to travel with the job.
           addOns: { select: { name: true, price: true, quantity: true } },
+          // The clock (round 4, fix 5). `totalPaid` below runs
+          // `computeJobPayShares`, which settles an HOURLY job from each
+          // cleaner's own sessions — without these rows this page would report
+          // an even split of the team total and disagree with payroll on
+          // exactly the jobs where the crew's hours differed.
+          workSessions: {
+            select: { cleanerId: true, startedAt: true, endedAt: true },
+          },
+          breaks: { select: { cleanerId: true, startedAt: true, endedAt: true } },
         },
         orderBy: {
           startTime: "desc",
@@ -131,35 +141,111 @@ export default async function EmployeePage({
   totalTips = Math.round(totalTips * 100) / 100;
   const unpaidJobs = completedJobs.filter((j) => !j.paymentReceived).length;
 
-  // Upcoming jobs (in progress, future start time)
-  const upcomingJobs = employee.jobs
-    .filter((j) => j.status === "IN_PROGRESS" && new Date(j.startTime) > now)
-    .slice(0, 5)
-    .map((j) => ({
-      id: j.id,
-      clientName: j.clientName,
-      jobType: j.jobType,
-      startTime: j.startTime.toISOString(),
-      price: j.price,
-      status: j.status,
-      paymentReceived: j.paymentReceived,
-    }));
+  // ── This cleaner's SCHEDULE (round 4, fix 2) ──────────────────────────────
+  //
+  // The Jobs tab below is the "profile history" surface the PDF names alongside
+  // the cleaner's own job list and calendar: all of them must read the same
+  // assignment data. It did not. Both panels were built from `employee.jobs`,
+  // which is the `EmployeeJobs` relation — `Job.employeeId`, the LEAD only — so
+  // a cleaner who worked a two-person job without leading it had that job
+  // missing from their profile entirely. And the upcoming filter asked for
+  // `status === "IN_PROGRESS" && startTime > now`, a combination almost nothing
+  // ever satisfies, so the panel read "No upcoming jobs" for cleaners with a
+  // full week booked.
+  //
+  // Both now go through @/lib/cleaner-jobs — the same builders My Jobs, the
+  // cleaner dashboard and the cleaner calendar use — so this page shows exactly
+  // the schedule the cleaner sees, lead or not.
+  //
+  // The MONEY stats above deliberately stay on `employee.jobs`: the Employees
+  // list computes attributed revenue from the same lead relation ("employeeId
+  // relation", employees/page.tsx), and the two cards have to agree. Widening
+  // one and not the other is how a cleaner ends up with different revenue on
+  // two pages. `totalPaid`/`totalTips` are already per-cleaner via
+  // `computeJobPayShares`, so they are unaffected by the narrower set.
+  const [assignedUpcoming, assignedRecent] = await Promise.all([
+    db.job.findMany({
+      where: upcomingJobsWhere(employee.id, now),
+      orderBy: { startTime: "asc" },
+      select: {
+        id: true,
+        clientName: true,
+        jobType: true,
+        startTime: true,
+        endTime: true,
+        price: true,
+        status: true,
+        paymentReceived: true,
+      },
+    }),
+    // Recent Jobs was the panel 2.4 did NOT rewire, and clicking the two side
+    // by side is what found it: Annabel Karim's Aug 19 job — the very job of
+    // IMG-2/IMG-3, still stamped COMPLETED in the database — showed up under
+    // BOTH "Upcoming Jobs" and "Recent Jobs (completed in last 30 days)". Its
+    // clause was a hand-written `status: "COMPLETED"` with a lower date bound
+    // and no upper one, so a future job stamped done read as recently done.
+    // That is the duplicate `doneFilter`'s guard exists to prevent (round 4,
+    // fix 2) — this page just wasn't going through it.
+    //
+    // Two things change by composing the shared builder instead of a fourth
+    // local definition of "done", and both are corrections:
+    //   • a future job with no clock-out is no longer "recent" (the bug), and
+    //   • a job whose status has moved on to PAID is again listed, where the
+    //     bare `status: "COMPLETED"` used to drop a cleaner's work from their
+    //     own profile the moment the customer's payment landed.
+    db.job.findMany({
+      where: {
+        AND: [
+          doneJobsWhere(employee.id, now),
+          { startTime: { gt: thirtyDaysAgo } },
+        ],
+      },
+      orderBy: { startTime: "desc" },
+      take: 5,
+      select: {
+        id: true,
+        clientName: true,
+        jobType: true,
+        startTime: true,
+        price: true,
+        status: true,
+        paymentReceived: true,
+      },
+    }),
+  ]);
+
+  const toJobDto = (j: {
+    id: string;
+    clientName: string;
+    jobType: string | null;
+    startTime: Date;
+    price: number | null;
+    status: string;
+    paymentReceived: boolean;
+  }) => ({
+    id: j.id,
+    clientName: j.clientName,
+    jobType: j.jobType,
+    startTime: j.startTime.toISOString(),
+    price: j.price,
+    status: j.status,
+    paymentReceived: j.paymentReceived,
+  });
+
+  // Upcoming jobs — everything still ahead of this cleaner, soonest first.
+  const upcomingJobs = assignedUpcoming.slice(0, 5).map(toJobDto);
 
   // Recent jobs (completed in last 30 days)
-  const recentJobs = employee.jobs
-    .filter(
-      (j) => j.status === "COMPLETED" && new Date(j.startTime) > thirtyDaysAgo
-    )
-    .slice(0, 5)
-    .map((j) => ({
-      id: j.id,
-      clientName: j.clientName,
-      jobType: j.jobType,
-      startTime: j.startTime.toISOString(),
-      price: j.price,
-      status: j.status,
-      paymentReceived: j.paymentReceived,
-    }));
+  const recentJobs = assignedRecent.map(toJobDto);
+
+  // The same schedule, trimmed to jobs still genuinely ahead — the basis for
+  // BOTH the availability-conflict list and the kit forecast further down.
+  // `upcomingJobsWhere` runs from the start of the business day, so it also
+  // carries this morning's work, which is nothing an admin can now reschedule
+  // around and nothing a kit still needs stocking for.
+  const upcomingForConflicts = assignedUpcoming.filter(
+    (j) => j.startTime.getTime() >= now.getTime()
+  );
 
   // Top products used
   const productUsageMap = new Map<
@@ -238,17 +324,13 @@ export default async function EmployeePage({
 
   // Forecast for this employee — upcoming jobs × measured per-job usage, vs
   // what is currently in their kit.
-  const upcomingEmployeeJobs = await db.job.count({
-    where: {
-      deletedAt: null,
-      OR: [
-        { employeeId: employee.id },
-        { cleaners: { some: { id: employee.id } } },
-      ],
-      status: { in: ["CREATED", "SCHEDULED", "IN_PROGRESS"] },
-      jobDate: { gte: new Date() },
-    },
-  });
+  //
+  // Counted off the SAME scoped schedule as the Jobs tab (round 4, fix 2)
+  // instead of a fourth hand-written "upcoming" clause, which had its own
+  // status allow-list and keyed off `jobDate` rather than `startTime`. The two
+  // could and did disagree: this page could show a job under Upcoming Jobs and
+  // not count it toward the kit that job needs.
+  const upcomingEmployeeJobs = upcomingForConflicts.length;
 
   // Same source as the Inventory page's forecast, through the same helper, so
   // the two cannot disagree about what a product costs per job (item 14).
@@ -317,11 +399,9 @@ export default async function EmployeePage({
     isRecurring: a.isRecurring,
   }));
 
-  const upcomingForConflicts = employee.jobs.filter((j) => {
-    if (!["CREATED", "SCHEDULED", "IN_PROGRESS"].includes(j.status)) return false;
-    return new Date(j.startTime) >= now;
-  });
-
+  // Availability conflicts read the SAME scoped schedule as the Jobs tab above
+  // (round 4, fix 2) — a cleaner booked onto a job they don't lead, on a day
+  // they marked unavailable, used to raise no conflict here at all.
   const conflicts = upcomingForConflicts
     .map((j) => {
       const start = new Date(j.startTime);

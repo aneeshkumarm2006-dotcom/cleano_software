@@ -16,8 +16,18 @@
 // PURE — no DB, no framework, no `@prisma/client` import. Three client
 // components render through `computeJobMoney`, which imports this file, so a
 // server-only import here would break the build at the far end of the app.
+// The ONE import is `./work-sessions`, which is pure by the same rule and for
+// the same reason: round 4 makes the customer's billable hours and the cleaner's
+// paid hours the same measurement, and it lives there (see the crew-hours note
+// further down). The verify script pins the allow-list of one.
 // The enum values below mirror `enum JobBillingType` in schema.prisma; the
 // verify script asserts the two lists match.
+
+import {
+  crewActiveMinutes,
+  type CrewBreak,
+  type CrewSession,
+} from "./work-sessions";
 
 /** `Job.billingType`. Spelled as a union, not imported — see the header. */
 export type JobBillingType = "FLAT" | "HOURLY";
@@ -159,140 +169,63 @@ export function formatHours(hours: number): string {
 
 // ── Actual hours, measured from the work sessions ────────────────────────────
 //
-// THE RULE (documented here because it is the one judgement call in Stage 8):
-// billable hours are ELAPSED, not man-hours. Two cleaners on site together for
-// three hours is THREE billable hours, not six.
+// THE RULE — AWER round 4, fix 4 (`awerfixesaug18.pdf` p4), which REVERSES the
+// Stage 8 rule that used to be documented here:
 //
-// Why: `billedEstimatedHours` is typed by an admin looking at the scheduled
-// window, so the actual figure has to be measured in the same unit or the total
-// would jump the moment a second cleaner is assigned — an invisible doubling of
-// a real customer's bill. Sending more crew shortens the job; it does not
-// double the rate. (A per-cleaner-hour model is what `postConstructionBasePrice`
-// uses — `hours × rate × cleaners` — and Stage 11 can reach it from here by
-// multiplying the rate, never by redefining these hours.)
+//   Billable hours are TOTAL CREW HOURS, not elapsed hours. Two cleaners on
+//   site together for three hours is SIX billable hours.
 //
-// Concretely: per cleaner, take each work session and cut their own breaks out
-// of it; then UNION every remaining piece across the crew. A break one cleaner
-// takes while a teammate keeps working does not stop the clock, because the job
-// was still being worked.
+// Stage 8 billed the union of the crew's time ("three hours") on the reasoning
+// that `billedEstimatedHours` is typed from the scheduled window and the two
+// figures had to share a unit. Round 4's PDF answers that directly and settles
+// it the other way: the estimate is cumulative too — "Estimated hours = 30 means
+// 1 cleaner × 30h OR 2 cleaners × 15h" — so both numbers are man-hours and the
+// unit still matches. Per this round's standing rule, the PDF wins. Both job
+// forms now say so on the field itself, so an admin typing 30 is typing the same
+// thing the clock will measure.
+//
+// What did NOT change, and must not: the rate is multiplied by these hours
+// exactly ONCE. `hourlyServiceAmount` is `rate × hours` and there is no crew
+// factor anywhere near it — the man-hours live INSIDE the hours, never as a
+// second multiplication. (`postConstructionBasePrice` in service-pricing.ts is
+// the one place that spells it `hours × rate × cleaners`; that is a QUOTE built
+// from a per-cleaner estimate, it already produces man-hours, and it is
+// therefore aligned with this rule rather than an exception to it.)
+//
+// The measurement itself lives in `work-sessions.ts` — per cleaner, sessions
+// summed with their own breaks removed, then added across the crew — because
+// fix 5 pays each cleaner from the very same per-cleaner figures. One map, two
+// answers, no way for the bill and the payroll to disagree about what happened.
 
-export interface BilledInterval {
-  startedAt: Date | string;
-  endedAt?: Date | string | null;
-}
-
-export interface BilledSession extends BilledInterval {
-  cleanerId?: string | null;
-}
-
-export interface BilledBreak extends BilledInterval {
-  cleanerId?: string | null;
-}
-
-interface Span {
-  start: number;
-  end: number;
-}
-
-function toMs(v: Date | string | null | undefined): number | null {
-  if (!v) return null;
-  const d = v instanceof Date ? v : new Date(v);
-  const t = d.getTime();
-  return Number.isNaN(t) ? null : t;
-}
-
-/** `base` with every span in `cuts` removed. Cuts may overlap and be unsorted. */
-function subtractSpans(base: Span, cuts: Span[]): Span[] {
-  let pieces: Span[] = [base];
-  for (const cut of cuts) {
-    if (cut.end <= cut.start) continue;
-    const next: Span[] = [];
-    for (const p of pieces) {
-      if (cut.end <= p.start || cut.start >= p.end) {
-        next.push(p);
-        continue;
-      }
-      if (cut.start > p.start) next.push({ start: p.start, end: cut.start });
-      if (cut.end < p.end) next.push({ start: cut.end, end: p.end });
-    }
-    pieces = next;
-    if (pieces.length === 0) break;
-  }
-  return pieces;
-}
-
-/** Overlapping/adjacent spans collapsed into the fewest spans that cover the same time. */
-function mergeSpans(spans: Span[]): Span[] {
-  const sorted = spans
-    .filter((s) => s.end > s.start)
-    .sort((a, b) => a.start - b.start);
-  const out: Span[] = [];
-  for (const s of sorted) {
-    const last = out[out.length - 1];
-    if (last && s.start <= last.end) {
-      if (s.end > last.end) last.end = s.end;
-    } else {
-      out.push({ ...s });
-    }
-  }
-  return out;
-}
+/** @deprecated Spelling kept for callers; `CrewSession` is the same shape. */
+export type BilledSession = CrewSession;
+/** @deprecated Spelling kept for callers; `CrewBreak` is the same shape. */
+export type BilledBreak = CrewBreak;
 
 /**
- * Minutes this job was being worked by AT LEAST ONE cleaner, breaks removed.
+ * TOTAL CREW MINUTES worked on this job, breaks removed.
  *
  * An open session (no `endedAt`) counts up to `now`, matching
  * `summariseSessions` — so a live figure doesn't jump when the last cleaner
  * finally clocks out.
  */
-export function billableElapsedMinutes(
-  sessions: readonly BilledSession[] | null | undefined,
-  breaks: readonly BilledBreak[] | null | undefined = [],
+export function billableCrewMinutes(
+  sessions: readonly CrewSession[] | null | undefined,
+  breaks: readonly CrewBreak[] | null | undefined = [],
   now: Date = new Date()
 ): number {
-  const nowMs = now.getTime();
-  const breakSpansByCleaner = new Map<string, Span[]>();
-  for (const b of breaks ?? []) {
-    const start = toMs(b.startedAt);
-    if (start === null) continue;
-    const end = toMs(b.endedAt ?? null) ?? nowMs;
-    if (end <= start) continue;
-    const key = b.cleanerId ?? "";
-    const list = breakSpansByCleaner.get(key) ?? [];
-    list.push({ start, end });
-    breakSpansByCleaner.set(key, list);
-  }
-
-  const active: Span[] = [];
-  for (const s of sessions ?? []) {
-    const start = toMs(s.startedAt);
-    if (start === null) continue;
-    const end = toMs(s.endedAt ?? null) ?? nowMs;
-    if (end <= start) continue;
-    // A break row with no cleanerId belongs to whoever was working — the
-    // pre-per-cleaner shape — so it cuts every session.
-    const cuts = [
-      ...(breakSpansByCleaner.get(s.cleanerId ?? "") ?? []),
-      ...(s.cleanerId ? breakSpansByCleaner.get("") ?? [] : []),
-    ];
-    active.push(...subtractSpans({ start, end }, cuts));
-  }
-
-  return mergeSpans(active).reduce(
-    (sum, s) => sum + (s.end - s.start) / 60_000,
-    0
-  );
+  return crewActiveMinutes(sessions, breaks, now);
 }
 
 /**
- * The figure written into `billedActualHours`: elapsed worked time, rounded to
- * the nearest quarter hour (D7). Returns 0 when nothing was worked, which the
+ * The figure written into `billedActualHours`: total crew time, rounded to the
+ * nearest quarter hour (D7). Returns 0 when nothing was worked, which the
  * caller treats as "nothing to snapshot" rather than "the job billed nothing".
  */
 export function billableActualHours(
-  sessions: readonly BilledSession[] | null | undefined,
-  breaks: readonly BilledBreak[] | null | undefined = [],
+  sessions: readonly CrewSession[] | null | undefined,
+  breaks: readonly CrewBreak[] | null | undefined = [],
   now: Date = new Date()
 ): number {
-  return roundBilledHours(billableElapsedMinutes(sessions, breaks, now) / 60);
+  return roundBilledHours(billableCrewMinutes(sessions, breaks, now) / 60);
 }

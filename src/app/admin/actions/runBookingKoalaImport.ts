@@ -519,6 +519,10 @@ export async function runBookingKoalaImport(
           startTime: r.job.startTime,
           endTime: r.job.endTime,
           status: r.job.status,
+          // Round 4, fix 6 — non-null only on a $0 row, which is the one hold
+          // this importer creates. Without it the job would land on hold with
+          // no stated trigger, which is the complaint the fix exists for.
+          holdReason: r.job.holdReason,
           price: r.job.price,
           subtotalAmount: taxes.subtotalAmount,
           totalAmount: csvTotalHasTax ? r.job.totalAmount : taxes.totalAmount,

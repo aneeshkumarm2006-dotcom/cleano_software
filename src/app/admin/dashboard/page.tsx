@@ -12,6 +12,8 @@ import {
   Clock,
   AlertTriangle,
   MapPin,
+  PauseCircle,
+  XCircle,
   Plus,
   ChevronRight,
   type LucideIcon,
@@ -24,10 +26,14 @@ import {
   getScheduledValue,
   getCompletedJobCount,
   getEmployeeCounts,
+  getActiveJobCount,
+  activeJobsWhere,
+  jobStatusWhere,
   productWhere,
   simpleJobStatus,
   ACTIVE_VALUE_SELECT,
 } from "@/lib/metrics";
+import { HOLD_LABEL } from "@/lib/job-hold";
 import { activeSubtotal, type ActiveValueJob } from "@/lib/job-money";
 import { isCleanerLow } from "@/lib/inventory-thresholds";
 import { loadCleanerThresholdDefault } from "@/lib/inventory-thresholds.server";
@@ -56,6 +62,8 @@ function money2(n: number): string {
 // Derived-status pill map (matches the Jobs table — spec's three operational
 // statuses, with Paid visually distinct).
 const STATUS_PILL: Record<string, { label: string; bg: string; color: string; dot: string }> = {
+  // Fix 6 — the one label, amber because a hold is something to act on.
+  ON_HOLD: { label: HOLD_LABEL, bg: "#fef3c7", color: "#92400e", dot: "#d97706" },
   SCHEDULED: { label: "Scheduled", bg: "#dbeafe", color: "#1e40af", dot: "#3b82f6" },
   IN_PROGRESS: { label: "In Progress", bg: "#fef3c7", color: "#92400e", dot: "#f59e0b" },
   COMPLETED: { label: "Completed", bg: "#d1fae5", color: "#065f46", dot: "#10b981" },
@@ -126,6 +134,9 @@ type JobRow = ActiveValueJob & {
   jobDate: Date | null;
   startTime: Date;
   status: string;
+  /** Round 4, fix 1 — `simpleJobStatus` reads it to tell a job that was
+   *  genuinely worked from one merely stamped done ahead of its date. */
+  clockOutTime: Date | null;
 };
 
 function ListCard({
@@ -210,9 +221,18 @@ export default async function DashboardPage() {
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
   const [
-    totalJobs, completedJobs, inProgressJobs, pendingPaymentJobs, todaysJobs, upcomingJobs, recentJobs,
+    totalJobs, onHoldJobs, cancelledJobs, completedJobs, inProgressJobs, pendingPaymentJobs, todaysJobs, upcomingJobs, recentJobs,
   ] = await Promise.all([
-    db.job.count({ where: { deletedAt: null } }),
+    // Round 4, fix 3 — this was `count({ where: { deletedAt: null } })`: every
+    // row in the table. So cancelling a job left "Total jobs" exactly where it
+    // was, and the figure could only ever climb. It now counts ACTIVE work —
+    // not cancelled, not on hold — through the one helper Analytics also uses,
+    // and the two counts it excludes are printed right beside it (and again as
+    // their own tiles) so nothing disappears from the record.
+    getActiveJobCount(),
+    // Fix 6 — "the dashboard should separate on-hold jobs from active ones."
+    db.job.count({ where: jobStatusWhere("onhold", now) }),
+    db.job.count({ where: jobStatusWhere("cancelled", now) }),
     // COMPLETED ∪ PAID, via the canonical bucket the Jobs page's Completed tab
     // uses. Counting bare status:"COMPLETED" here is what made the dashboard
     // read 62 while /admin/jobs read 84 (item 27): the 62 were simply the
@@ -220,21 +240,36 @@ export default async function DashboardPage() {
     // two rows down, which is what gave the bug away.
     getCompletedJobCount(now),
     db.job.count({ where: { deletedAt: null, status: "IN_PROGRESS" } }),
-    db.job.count({ where: { deletedAt: null, status: "COMPLETED", paymentReceived: false } }),
+    // Round 4, fix 1 — "pending payment" is unpaid work we have DONE. The bare
+    // status test counted a job dated next week that some writer had stamped
+    // COMPLETED, which is the same mis-stamping the Completed tile shows. The
+    // canonical `overdue` bucket carries the date guard.
+    db.job.count({ where: { ...jobStatusWhere("overdue", now), paymentReceived: false } }),
+    // Round 4, fix 3 — same defect as Total jobs, one tile over: the hint under
+    // this number says "scheduled today", and a cancelled booking is not
+    // scheduled. Cancelling the only job on a quiet day used to leave the tile
+    // reading 1.
     db.job.count({
-      where: { deletedAt: null, jobDate: { gte: startOfToday, lt: endOfToday } },
+      where: { ...activeJobsWhere(), jobDate: { gte: startOfToday, lt: endOfToday } },
     }),
     db.job.findMany({
-      where: { deletedAt: null, jobDate: { gte: new Date() }, status: { in: ["CREATED", "SCHEDULED"] } },
+      // Fix 6 — CREATED dropped out of this list: an on-hold job is not
+      // upcoming work (PDF p5), and it has its own tile below that links
+      // straight to the queue where it can be released.
+      where: { deletedAt: null, jobDate: { gte: new Date() }, status: "SCHEDULED" },
       orderBy: { jobDate: "asc" },
       take: 5,
-      select: { ...ACTIVE_VALUE_SELECT, id: true, clientName: true, jobDate: true, startTime: true, status: true },
+      select: { ...ACTIVE_VALUE_SELECT, id: true, clientName: true, jobDate: true, startTime: true, status: true, clockOutTime: true },
     }),
     db.job.findMany({
-      where: { deletedAt: null, status: "COMPLETED" },
+      // Round 4, fix 1 — the "Recently completed" list is a Completed surface
+      // like the tab and the tile, so it takes the same date guard. Kept to
+      // status COMPLETED (not the COMPLETED ∪ PAID bucket) so the list keeps
+      // meaning what it always did; only the future rows drop out.
+      where: { deletedAt: null, status: "COMPLETED", NOT: { startTime: { gt: now }, clockOutTime: null } },
       orderBy: { updatedAt: "desc" },
       take: 5,
-      select: { ...ACTIVE_VALUE_SELECT, id: true, clientName: true, jobDate: true, startTime: true, status: true },
+      select: { ...ACTIVE_VALUE_SELECT, id: true, clientName: true, jobDate: true, startTime: true, status: true, clockOutTime: true },
     }),
   ]);
 
@@ -303,8 +338,17 @@ export default async function DashboardPage() {
   }
   const refillCleaners = [...refillCleanerMap.values()].sort((a, b) => b.lowCount - a.lowCount);
 
+  // "completed · 3 on hold · 12 cancelled" — only naming what actually exists,
+  // so a clean business doesn't read a dashboard full of zeroes (fix 3 + 6).
+  const excludedHint = [
+    "completed",
+    onHoldJobs > 0 ? `${onHoldJobs} on hold` : null,
+    cancelledJobs > 0 ? `${cancelledJobs} cancelled` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
   // Store-timezone hour, not the server's. This page renders on the host (UTC),
-  // so now.getHours() greeted the owner with "Good morning" at 10:13 PM (Q9).
   const hours = getStoreHour(now);
   const greeting = hours < 12 ? "Good morning" : hours < 18 ? "Good afternoon" : "Good evening";
   const dateLabel = fmtDate(now, { weekday: "long", month: "long", day: "numeric" });
@@ -337,7 +381,12 @@ export default async function DashboardPage() {
             <Stat icon={Wallet} label="Scheduled value" value={money2(scheduledValue)} hint="booked · not yet earned" />
           </>
         )}
-        <Stat icon={Briefcase} label="Total jobs" value={totalJobs} delta={String(completedJobs)} hint="completed" />
+        {/* Fix 3 + 6: the number is ACTIVE jobs, and the two kinds of job it
+            leaves out are named in the hint right underneath it. That pairing
+            is the point — a total that quietly shed rows would be a second bug
+            rather than a fix, and the PDF asks for the cancelled records to
+            stay visible. Each excluded count is also a tile of its own below. */}
+        <Stat icon={Briefcase} label="Total jobs" value={totalJobs} delta={String(completedJobs)} hint={excludedHint} />
         <Stat icon={Users} label="Employees" value={employeeCount} delta={String(onSiteEmployees)} deltaUp hint={employeeCounts.inactive > 0 ? `active now · ${employeeCounts.inactive} inactive` : "active now"} />
       </div>
 
@@ -345,6 +394,18 @@ export default async function DashboardPage() {
       <div className="dash-secondary" style={{ marginBottom: 32 }}>
         <Stat icon={CalendarDays} label="Today's jobs" value={todaysJobs} hint="scheduled today" />
         <Stat icon={Clock} label="In progress" value={inProgressJobs} hint="cleaners on site" />
+        {/* Fix 6. An alert tile, not a plain stat: a hold is work that is
+            waiting on somebody in this office, and the link lands on the Jobs
+            page's On-hold tab where each row carries a Release button and the
+            reason it was held. Hidden at zero, like the alerts beside it. */}
+        {onHoldJobs > 0 && (
+          <AlertTile icon={PauseCircle} label={HOLD_LABEL} value={onHoldJobs} hint="waiting on a decision" href="/admin/jobs?subTab=onhold" />
+        )}
+        {/* Fix 3 — the records the total no longer counts, still one click
+            away. A plain stat: nothing here needs acting on. */}
+        {cancelledJobs > 0 && (
+          <Stat icon={XCircle} label="Cancelled" value={cancelledJobs} hint="not counted in total jobs" />
+        )}
         {/* A collections queue, not an operational one — money-gated with the
             tiles above rather than left as the one payment figure on the page. */}
         {canSeeMoney && pendingPaymentJobs > 0 && (
@@ -434,7 +495,11 @@ export default async function DashboardPage() {
                 : `${totalProducts} products`,
               href: "/admin/inventory",
             },
-            { Icon: Briefcase, label: "All jobs", sub: `${totalJobs} total`, href: "/admin/jobs" },
+            // "active", not "total": this is the same number as the tile above,
+            // and the tile no longer counts cancelled or on-hold work (fix 3).
+            // Calling it "total" here would put two different meanings of the
+            // word on one page.
+            { Icon: Briefcase, label: "All jobs", sub: `${totalJobs} active`, href: "/admin/jobs" },
           ].map((q) => (
             <Link key={q.label} href={q.href} className="dash-qa">
               <span className="dash-qa-icon"><q.Icon size={20} /></span>

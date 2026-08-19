@@ -46,9 +46,18 @@ export async function togglePaymentReceived(jobId: string) {
     // "Paid" must never be representable two divergent ways. Un-marking
     // reverts to Completed (past job) or Scheduled (future job); a cancelled
     // job stays cancelled either way.
+    //
+    // Round 4, fix 1: marking a job paid may no longer move a FUTURE job into
+    // PAID. PAID is a lifecycle status — the Completed tab, the Completed
+    // count and the green pill all read it — so stamping it on work that has
+    // not happened is the very "completion inferred from payment" the PDF
+    // rules out. A future job keeps its current status and simply carries
+    // `paymentReceived = true`, which the payment column already shows.
+    const isFuture =
+      !job.clockOutTime && new Date(job.startTime).getTime() > Date.now();
     const syncedStatus = (() => {
       if (job.status === "CANCELLED") return undefined;
-      if (newStatus) return "PAID" as const;
+      if (newStatus) return isFuture ? undefined : ("PAID" as const);
       return new Date(job.startTime) < startOfDayTz(new Date())
         ? ("COMPLETED" as const)
         : ("SCHEDULED" as const);

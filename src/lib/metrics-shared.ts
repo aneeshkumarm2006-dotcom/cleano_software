@@ -9,6 +9,7 @@
 
 import { startOfDayTz } from "./time";
 import { activeSubtotal, type ActiveValueJob } from "./job-money";
+import { INACTIVE_JOB_STATUSES, isOnHold } from "./job-hold";
 
 // ── Total Revenue ───────────────────────────────────────────────────────────
 // Spec: completed AND paid jobs only; excludes taxes; applies discounts;
@@ -111,6 +112,124 @@ export function totalScheduledValueOf(jobs: RevenueJobShape[]): number {
 // (imported customers) and the office OWNER/ADMIN (counted separately).
 export const EMPLOYEE_ROLES = ["OPS_MANAGER", "FIELD_LEAD", "EMPLOYEE"] as const;
 
+// ── Has the job actually happened? (round 4, fix 1) ─────────────────────────
+//
+// The bug this answers: a job dated TOMORROW was rendering with a green
+// "Completed" pill, sitting in the Completed tab, and incrementing the
+// Completed stat — because every "is this done" test in the app was a pure
+// read of the `status` enum, and several writers stamp that enum from PAYMENT
+// state with no date guard (a BookingKoala import of a prepaid booking, the
+// mark-paid toggle, a card charge, an invoice marked paid). Payment is not
+// completion, and the enum alone cannot tell the two apart.
+//
+// So completion is now derived from the enum AND the calendar, in one place.
+// The guard is DEFENSE IN DEPTH — the writers were fixed in the same round so
+// they stop producing these rows, and a backfill repairs the ones already in
+// the database — but a read-side rule is what makes a future job impossible to
+// display as done no matter which writer misbehaves next.
+
+/** Statuses that claim a job is finished. Coincides with `REVENUE_STATUSES`
+ *  by value, deliberately kept separate: that one answers "did we earn this",
+ *  this one answers "is the work over". They are free to diverge. */
+export const COMPLETED_STATUSES = ["COMPLETED", "PAID"] as const;
+
+/** The two columns every lifecycle predicate below reads. */
+export interface JobLifecycleShape {
+  status: string;
+  startTime?: Date | string | null;
+  /** Set when the crew clocked out — the strongest "this really happened"
+   *  signal a job row carries, and the reason an early finish on a job that
+   *  starts later today still reads as completed. */
+  clockOutTime?: Date | string | null;
+}
+
+/**
+ * Is this job still ahead of us — i.e. can it not possibly be finished?
+ *
+ * FAILS OPEN on purpose. A row handed over without `startTime` returns false
+ * ("not provably future"), so a caller whose `select` omits the column keeps
+ * exactly the old behaviour instead of silently reclassifying every job it
+ * shows. The guard only ever fires when we actually know the date.
+ */
+export function isFutureJob(j: JobLifecycleShape, now: Date = new Date()): boolean {
+  if (!j.startTime) return false;
+  // Clocked out ⇒ worked, whatever the clock says. A 6 PM job finished early
+  // at 4 PM is done, not "future".
+  if (j.clockOutTime) return false;
+  return new Date(j.startTime).getTime() > now.getTime();
+}
+
+/**
+ * Is this job genuinely completed — stamped done AND actually past?
+ *
+ * The predicate behind the Jobs page's Completed tab, its tab count, its
+ * Completed stat card, and (in SQL form, `jobStatusWhere("completed")`) the
+ * Dashboard's completed count. One function so those four can never disagree
+ * about which jobs are completed, which was the other half of this fix.
+ */
+export function isCompletedJob(j: JobLifecycleShape, now: Date = new Date()): boolean {
+  if (!(COMPLETED_STATUSES as readonly string[]).includes(j.status)) return false;
+  return !isFutureJob(j, now);
+}
+
+/**
+ * Is this job still coming up for the business?
+ *
+ * The complement of `isCompletedJob` over future-dated work, rather than an
+ * allow-list of statuses. That matters: the allow-list it replaces was
+ * {CREATED, SCHEDULED, IN_PROGRESS}, so a future job mis-stamped COMPLETED or
+ * PAID matched NO tab at all — dropped from Completed by the guard above and
+ * never picked up by Upcoming. A future job is upcoming unless it is cancelled
+ * or was genuinely worked.
+ *
+ * Round 4, fix 6: ...or ON HOLD. The PDF is explicit that "on-hold jobs should
+ * not count as active or scheduled", and a $0 import nobody has priced is not
+ * work anyone is coming to do. It is not lost — `isOnHoldJob` below is its own
+ * bucket with its own tab and a Release button, which is the other half of the
+ * fix. Read the two together: nothing falls between them.
+ */
+export function isUpcomingJob(j: JobLifecycleShape, now: Date = new Date()): boolean {
+  if (j.status === "CANCELLED") return false;
+  if (isOnHold(j)) return false;
+  if (isCompletedJob(j, now)) return false;
+  if (!j.startTime) return false;
+  return new Date(j.startTime).getTime() >= now.getTime();
+}
+
+/**
+ * Is this job on hold — parked, with a reason, waiting for an admin?
+ *
+ * Round 4, fix 6. The SQL twin is `jobStatusWhere("onhold")`. Deliberately has
+ * NO date test: a hold does not expire because its date slid past, which is
+ * exactly what the nightly sweep used to do to one (it swept CREATED →
+ * COMPLETED, so an unpriced import silently reported as finished work — see
+ * src/lib/job-sweep.ts).
+ */
+export function isOnHoldJob(j: JobLifecycleShape): boolean {
+  return isOnHold(j);
+}
+
+/** The columns `isActiveJob` reads. */
+export interface ActiveJobShape {
+  status: string;
+  deletedAt?: Date | string | null;
+}
+
+/**
+ * Does this job count as a job the business is actually doing?
+ *
+ * Round 4, fix 3 + fix 6, and the PURE twin of `activeJobsWhere()` in
+ * metrics.ts — Analytics filters its list in memory, the Dashboard counts in
+ * SQL, and the two must agree. Cancelled work was never done and on-hold work
+ * has not been agreed to; neither belongs in "Total jobs". Both stay visible as
+ * their own counts beside it, which is what the PDF asks for ("cancelled jobs
+ * should still be visible in records or as a separate stat").
+ */
+export function isActiveJob(j: ActiveJobShape): boolean {
+  if (j.deletedAt) return false;
+  return !(INACTIVE_JOB_STATUSES as readonly string[]).includes(j.status);
+}
+
 // ── Simplified operational status ───────────────────────────────────────────
 // The three main operational statuses per spec: Scheduled (job date still
 // ahead), Completed (date passed, payment not received), Paid (payment
@@ -119,6 +238,7 @@ export const EMPLOYEE_ROLES = ["OPS_MANAGER", "FIELD_LEAD", "EMPLOYEE"] as const
 // "Paid" can never diverge between the status enum and the paymentReceived
 // boolean. IN_PROGRESS (cleaner on site) and CANCELLED pass through untouched.
 export type SimpleJobStatus =
+  | "ON_HOLD"
   | "SCHEDULED"
   | "IN_PROGRESS"
   | "COMPLETED"
@@ -126,19 +246,43 @@ export type SimpleJobStatus =
   | "CANCELLED";
 
 export function simpleJobStatus(
-  j: {
-    status: string;
+  j: JobLifecycleShape & {
     paymentReceived?: boolean | null;
-    startTime?: Date | string | null;
   },
   now: Date = new Date()
 ): SimpleJobStatus {
   if (j.status === "CANCELLED") return "CANCELLED";
-  if (j.paymentReceived || j.status === "PAID") return "PAID";
+  // Round 4, fix 6 — ON HOLD, before every derivation below it.
+  //
+  // A held job used to print whatever the date happened to imply: "Scheduled"
+  // while its date was ahead, and "Completed" the morning after (the
+  // `startTime < startOfDay` branch at the bottom of this function, plus the
+  // nightly sweep writing the same thing into the row). So the one status an
+  // admin had to act on was the one status the app never showed. It is first
+  // because a hold is a statement about the AGREEMENT, and no amount of clock
+  // settles an agreement: an unpriced import does not become finished work by
+  // being left alone overnight.
+  //
+  // Payment is not hidden by this — a held job that was somehow paid shows its
+  // payment in the payment column, which is where fix 1 established payment
+  // belongs.
+  if (isOnHold(j)) return "ON_HOLD";
+  // Round 4, fix 1. The `paymentReceived || PAID ⇒ PAID` branch below used to
+  // fire before any date logic, so this function — which draws the pill on
+  // every jobs row, the dashboard list and the job detail header, and backs the
+  // status filter — printed "Paid" (a done status) over a job that has not
+  // happened. A future job is Scheduled; its payment shows in the payment
+  // column, which is where payment belongs.
+  const future = isFutureJob(j, now);
+  if (!future && (j.paymentReceived || j.status === "PAID")) return "PAID";
+  // IN_PROGRESS stays untouched by the date guard: a cleaner may clock in up to
+  // CLOCK_IN_EARLY_WINDOW_MIN (2h) before the scheduled start, so "on site" is
+  // legitimately reachable while `startTime` is still in the future.
   if (j.status === "IN_PROGRESS") return "IN_PROGRESS";
-  if (j.status === "COMPLETED") return "COMPLETED";
-  // CREATED / SCHEDULED: the job date has passed (previous business day or
-  // earlier) → Completed. Same-day jobs stay Scheduled until clock-out.
+  if (!future && j.status === "COMPLETED") return "COMPLETED";
+  // SCHEDULED: the job date has passed (previous business day or earlier) →
+  // Completed. Same-day jobs stay Scheduled until clock-out. CREATED used to
+  // reach here too and no longer can — it returns ON_HOLD above.
   if (j.startTime && new Date(j.startTime) < startOfDayTz(now)) {
     return "COMPLETED";
   }

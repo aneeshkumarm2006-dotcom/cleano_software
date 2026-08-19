@@ -140,11 +140,24 @@ has(
     "claimableJobsWhere",
     "calendarJobsWhere",
     "fieldLeadScopedJobsWhere",
+    // The per-tab builders. They were absent while their only callers happened
+    // to be allowlisted by FILE (my-jobs, CleanerDashboard); round 4's fix 2
+    // pointed the admin employee profile at `upcomingJobsWhere` too, and this
+    // guard is the right place to answer "does that read filter the archive?"
+    // — by proving the helper does, not by silencing another file.
+    "upcomingJobsWhere",
+    "doneJobsWhere",
+    "pastJobsWhere",
+    "cancelledJobsWhere",
   ];
   const helperSrc = read("src/lib/cleaner-jobs.ts");
   // Follows delegation, because several of these are one-liners over a shared
   // builder (calendarJobsWhere → cleanerAssignedWhere → cleanerScopedWhere) and
-  // only the innermost one holds the literal.
+  // only the innermost one holds the literal. Any `…Where…(` CALL in the body
+  // is chased, not just a `return` of one: `cleanerScopedWhere` reaches the
+  // filter through `const base = cleanerAssignedWhere(id)` and then spreads it.
+  // Bounded to this file — a name it can't find a `function` for is not a
+  // helper and resolves to false.
   const filtersArchive = (helper: string, seen = new Set<string>()): boolean => {
     if (seen.has(helper)) return false; // cycle guard
     seen.add(helper);
@@ -152,9 +165,8 @@ has(
     if (at === -1) return false;
     const body = helperSrc.slice(at, at + 900);
     if (body.includes("deletedAt: null")) return true;
-    // `return someOtherWhereBuilder(...)` — chase it.
-    return [...body.matchAll(/return\s+(\w*Where\w*)\s*\(/g)]
-      .some((m) => filtersArchive(m[1], seen));
+    return [...body.matchAll(/\b(\w*Where\w*)\s*\(/g)]
+      .some((m) => m[1] !== helper && filtersArchive(m[1], seen));
   };
   for (const helper of SCOPE_HELPERS) {
     ok(`scope helper ${helper}() filters the archive itself`, filtersArchive(helper));

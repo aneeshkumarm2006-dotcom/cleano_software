@@ -20,6 +20,19 @@ export type JobSummaryDTO = {
   id: string;
   jobNumber: number;
   status: string;
+  /**
+   * Why this job is on hold (round 4, fix 6). Non-null only when `status` is
+   * CREATED. The calendar drawer prints it and offers the Release button beside
+   * it — a held booking clicked on the calendar was previously an unexplained
+   * grey block with no action at all.
+   */
+  holdReason: string | null;
+  /**
+   * Quote lifecycle (Stage 11 / PDF #9); null on every non-quote booking. The
+   * drawer reads it to decide whether a hold is releasable here or belongs to
+   * the Quote review panel on the full job page (round 4, fix 6).
+   */
+  quoteStatus: string | null;
   /** Raw stored jobType code; `serviceLabel` is the resolved display name. */
   jobType: string | null;
   serviceLabel: string;

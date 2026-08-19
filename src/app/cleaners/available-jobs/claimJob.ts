@@ -8,8 +8,9 @@ import {
   isCategoryAllowed,
   CATEGORY_BLOCKED_MESSAGE,
 } from "@/lib/service-permissions";
-import { quoteSettledFilter } from "@/lib/cleaner-jobs";
+import { openForClaimFilter, quoteSettledFilter } from "@/lib/cleaner-jobs";
 import { isAwaitingQuote } from "@/lib/quote-status";
+import { isOnHold } from "@/lib/job-hold";
 
 export async function claimJob(jobId: string) {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -36,6 +37,10 @@ export async function claimJob(jobId: string) {
       jobType: true,
       // Stage 11 / PDF #9 — an unsettled quote is not claimable work.
       quoteStatus: true,
+      // Round 4, fix 6 — a hold that says WHY it is held is not claimable work
+      // either. Selected because the guard below reads it; without the column
+      // the check would be `undefined` and quietly pass everything.
+      holdReason: true,
       cleaners: { select: { id: true } },
     },
   });
@@ -90,6 +95,15 @@ export async function claimJob(jobId: string) {
   if (job.status !== "CREATED" && job.status !== "SCHEDULED") {
     return { success: false, error: "This job is no longer available" };
   }
+  // Round 4, fix 6 — and an EXPLAINED hold is not open work. The board filters
+  // these out (`openForClaimFilter`), but this action takes a jobId from the
+  // client, so the rule has to exist here too or the filter is decorative —
+  // exactly the reasoning the quote guard below is written on. A `CREATED` row
+  // with no reason is a legacy default rather than a hold and stays claimable;
+  // see `openForClaimFilter` for why that distinction is the one being made.
+  if (isOnHold(job) && job.holdReason !== null) {
+    return { success: false, error: "This job is on hold and can't be claimed yet" };
+  }
   // An unaccepted post-construction quote is unpriced, unconfirmed work (Stage 11,
   // step 11.7). It can't be reached from the board — `claimableJobsWhere` filters
   // it out — but this action takes a jobId from the client, so the rule has to
@@ -112,13 +126,15 @@ export async function claimJob(jobId: string) {
       where: {
         id: jobId,
         deletedAt: null,
-        status: { in: ["CREATED", "SCHEDULED"] },
         cleaners: { none: { id: userId } },
         OR: [{ employeeId: null }, { employeeId: { not: userId } }],
         // In the WHERE clause too, so an admin sending a quote back for review
-        // between the read above and this write loses the race rather than the
-        // cleaner claiming an unpriced job. Same reasoning as the status guard.
-        AND: [quoteSettledFilter()],
+        // — or putting the job ON HOLD (round 4, fix 6) — between the read
+        // above and this write loses the race rather than the cleaner claiming
+        // unpriced or parked work. `openForClaimFilter` carries the status test
+        // that used to sit on its own line here, so the board, the guard above
+        // and this race window can never disagree about what "open" means.
+        AND: [quoteSettledFilter(), openForClaimFilter()],
       },
       data: { cleaners: { connect: { id: userId } } },
     });
@@ -143,6 +159,41 @@ export async function claimJob(jobId: string) {
       .catch((e) => console.error("claimJob rollback", e));
     return { success: false, error: "This job is already fully staffed" };
   }
+
+  // Round 4, fix 2 — the three places an assignment is recorded must move
+  // together. This action wrote ONLY the `cleaners` M2M row, so a claimed job
+  // came out half-assigned: no lead, and no per-cleaner `JobAssignment` row.
+  //
+  // The M2M alone is enough for the job to reach the cleaner's own list
+  // (`cleanerAssignedWhere` reads `employeeId OR cleaners`), which is why this
+  // never showed up as a missing job — but the admin's employee profile reads
+  // the `employeeId` relation, `JobAssignment` carries the per-cleaner status
+  // and pay override, and the PDF asks for all four surfaces to read the same
+  // assignment data. Half a record is how they drift apart.
+  //
+  // Both writes run only after the capacity check above has held, so a claim
+  // that gets rolled back never leaves a lead or an assignment row behind.
+  //
+  // `updateMany` with `employeeId: null` in the WHERE is a compare-and-set: two
+  // cleaners claiming the same open job concurrently can't both become the
+  // lead, and an existing lead is never displaced. Same shape bulkAssignCleaner
+  // uses. Best-effort on both — the claim itself already succeeded, and failing
+  // it now would tell the cleaner they didn't get a job they did.
+  await db.job
+    .updateMany({
+      where: { id: jobId, employeeId: null },
+      data: { employeeId: userId },
+    })
+    .catch((e) => console.error("claimJob lead", e));
+
+  await db.jobAssignment
+    .upsert({
+      where: { jobId_cleanerId: { jobId, cleanerId: userId } },
+      // An existing row keeps whatever live status it already reached.
+      update: {},
+      create: { jobId, cleanerId: userId, status: "ASSIGNED" },
+    })
+    .catch((e) => console.error("claimJob assignment row", e));
 
   await db.jobLog.create({
     data: {

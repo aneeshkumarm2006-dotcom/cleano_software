@@ -30,6 +30,7 @@ import {
   fieldLeadScopedJobsWhere,
   cleanerAssignedWhere,
   claimableJobsWhere,
+  openForClaimFilter,
 } from "../src/lib/cleaner-jobs";
 import {
   projectCalendarMetadata,
@@ -167,10 +168,22 @@ check(
   },
   { deletedAt: null, OR: [{ employeeId: B }, { cleaners: { some: { id: B } } }] }
 );
+// The point of this check is that STAGE 7 did not widen the board, not that the
+// status test never moves. AWER round 4 fix 6 moved it into `openForClaimFilter`
+// (SCHEDULED, or CREATED with no hold reason) so a hold that says why it is held
+// stops being claimable; see verify-awer-fixes-4.ts for that rule's own checks.
+// What stage 7 owns is the scoping either side of it, so pin that instead.
 ok(
-  "claimableJobsWhere is unchanged (still CREATED/SCHEDULED only)",
-  JSON.stringify(claimableJobsWhere(B, new Date(0)).status) ===
-    JSON.stringify({ in: ["CREATED", "SCHEDULED"] })
+  "claimableJobsWhere still scopes by the open-work filter, not a bare status list",
+  claimableJobsWhere(B, new Date(0)).status === undefined &&
+    (claimableJobsWhere(B, new Date(0)).AND as unknown[]).some(
+      (w) => JSON.stringify(w) === JSON.stringify(openForClaimFilter())
+    )
+);
+ok(
+  "...and stage 7's lead check is still the top-level OR (unwidened)",
+  JSON.stringify(claimableJobsWhere(B, new Date(0)).OR) ===
+    JSON.stringify([{ employeeId: null }, { employeeId: { not: B } }])
 );
 
 ok(

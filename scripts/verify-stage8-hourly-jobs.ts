@@ -3,10 +3,19 @@
 //
 // Run: npx tsx scripts/verify-stage8-hourly-jobs.ts
 //
+// ⚠️ SUPERSEDED IN PART BY AWER ROUND 4, FIX 4 (`awerfixesaug18.pdf` p4).
+// Stage 8 billed the UNION of the crew's time ("two cleaners for three hours is
+// three billable hours"). Round 4's PDF reverses that to TOTAL CREW HOURS ("2
+// cleaners × 15h is 30"), and this round's standing rule is that the PDF wins.
+// Section 3 below was rewritten to the new rule rather than deleted, so the
+// reversal stays visible and cannot be quietly reverted; everything else in this
+// file — the service line, the rounding, the money branches, the pay
+// consequence, the source sweep — is unchanged and still load-bearing.
+//
 // Three halves, same shape as the other verify-* scripts in this repo:
 //   1. The PURE rules, exercised directly — the hourly service line, the
-//      0.25h rounding, the elapsed-vs-man-hours measurement, and the money
-//      helper's three branches.
+//      0.25h rounding, the crew-hours measurement, and the money helper's
+//      three branches.
 //   2. The PAY consequence: a PERCENTAGE crew on an hourly job is paid off
 //      rate × hours, and an HOURLY-PAY crew is not (PDF #8's last bullet).
 //   3. A SOURCE SWEEP proving both save paths changed together, that the two
@@ -20,7 +29,7 @@ import fs from "node:fs";
 import {
   BILLED_HOURS_INCREMENT,
   billableActualHours,
-  billableElapsedMinutes,
+  billableCrewMinutes,
   billedHours,
   billedHoursSource,
   formatHours,
@@ -110,57 +119,61 @@ check("2h54m → 3h", roundBilledHours(174 / 60), 3);
 check("an exact figure is untouched", roundBilledHours(4), 4);
 check("nothing worked is zero, never negative", [roundBilledHours(0), roundBilledHours(-3)], [0, 0]);
 
-/* ═══════════════ 3. ELAPSED HOURS, NOT MAN-HOURS ══════════════════════════ */
-// The one judgement call in Stage 8. Two cleaners on site together for three
-// hours is THREE billable hours: the estimate is typed from the scheduled
-// window, so the measurement has to be in the same unit or assigning a second
-// cleaner would silently double a real customer's bill.
+/* ═══════════════ 3. TOTAL CREW HOURS (round 4, fix 4) ═════════════════════ */
+// REVERSED FROM STAGE 8. This block used to assert the union ("two cleaners for
+// three hours is THREE billable hours") on the reasoning that the estimate is
+// typed from the scheduled window and both figures needed one unit.
+// `awerfixesaug18.pdf` fix 4 answers that directly — "Estimated hours = 30 means
+// 1 cleaner × 30h OR 2 cleaners × 15h" — so the estimate is man-hours too, the
+// units still match, and the crew sum is the rule. Both job forms now say so on
+// the field itself. The expectations below are the old ones with the new
+// answers, kept side by side on purpose.
 
 const T = (h: number, m = 0) => new Date(Date.UTC(2026, 7, 17, h, m)).toISOString();
 
 check(
   "one cleaner, 9→14, is 5 hours",
-  billableElapsedMinutes([{ cleanerId: "a", startedAt: T(9), endedAt: T(14) }]) / 60,
+  billableCrewMinutes([{ cleanerId: "a", startedAt: T(9), endedAt: T(14) }]) / 60,
   5
 );
 check(
-  "TWO cleaners over the same 9→14 window is still 5 hours, not 10",
-  billableElapsedMinutes([
+  "TWO cleaners over the same 9→14 window is 10 crew hours, not 5",
+  billableCrewMinutes([
     { cleanerId: "a", startedAt: T(9), endedAt: T(14) },
     { cleanerId: "b", startedAt: T(9), endedAt: T(14) },
   ]) / 60,
-  5
+  10
 );
 check(
-  "partially overlapping crews cover the union: 9→12 and 11→15 is 6 hours",
-  billableElapsedMinutes([
+  "partially overlapping crews ADD: 9→12 (3h) and 11→15 (4h) is 7 crew hours",
+  billableCrewMinutes([
     { cleanerId: "a", startedAt: T(9), endedAt: T(12) },
     { cleanerId: "b", startedAt: T(11), endedAt: T(15) },
   ]) / 60,
-  6
+  7
 );
 check(
   "one cleaner's own break comes off their own time",
-  billableElapsedMinutes(
+  billableCrewMinutes(
     [{ cleanerId: "a", startedAt: T(9), endedAt: T(14) }],
     [{ cleanerId: "a", startedAt: T(12), endedAt: T(12, 30) }]
   ) / 60,
   4.5
 );
 check(
-  "...but a break taken while a TEAMMATE works does not stop the clock",
-  billableElapsedMinutes(
+  "...and comes off THEIR hours only — the teammate still working is unaffected",
+  billableCrewMinutes(
     [
       { cleanerId: "a", startedAt: T(9), endedAt: T(14) },
       { cleanerId: "b", startedAt: T(9), endedAt: T(14) },
     ],
     [{ cleanerId: "a", startedAt: T(12), endedAt: T(12, 30) }]
   ) / 60,
-  5
+  9.5
 );
 check(
-  "...and when the WHOLE crew is on break, it does",
-  billableElapsedMinutes(
+  "...and when the WHOLE crew is on break, both halves come off",
+  billableCrewMinutes(
     [
       { cleanerId: "a", startedAt: T(9), endedAt: T(14) },
       { cleanerId: "b", startedAt: T(9), endedAt: T(14) },
@@ -170,11 +183,11 @@ check(
       { cleanerId: "b", startedAt: T(12), endedAt: T(12, 30) },
     ]
   ) / 60,
-  4.5
+  9
 );
 check(
-  "a legacy break row with no cleanerId cuts every session",
-  billableElapsedMinutes(
+  "a legacy break row with no cleanerId cuts every cleaner's time",
+  billableCrewMinutes(
     [{ cleanerId: "a", startedAt: T(9), endedAt: T(14) }],
     [{ startedAt: T(12), endedAt: T(13) }]
   ) / 60,
@@ -182,13 +195,18 @@ check(
 );
 check(
   "a split shift adds its pieces and nothing between them",
-  billableElapsedMinutes([
+  billableCrewMinutes([
     { cleanerId: "a", startedAt: T(9), endedAt: T(11) },
     { cleanerId: "a", startedAt: T(13), endedAt: T(15) },
   ]) / 60,
   4
 );
-check("no sessions is zero, not NaN", billableElapsedMinutes([], []), 0);
+check("no sessions is zero, not NaN", billableCrewMinutes([], []), 0);
+check(
+  "the legacy job-level pair has no per-cleaner data, so it counts ONCE",
+  billableCrewMinutes([{ cleanerId: null, startedAt: T(9), endedAt: T(12) }]) / 60,
+  3
+);
 check(
   "the snapshot rounds what it measured (2h47m of work → 2.75h)",
   billableActualHours([{ cleanerId: "a", startedAt: T(9), endedAt: T(11, 47) }]),
@@ -439,10 +457,22 @@ for (const forbidden of ['from "@/db"', '"server-only"', "@/lib/stripe", "@/lib/
     !read(PURE).includes(forbidden)
   );
 }
-ok(
-  "hourly-billing.ts imports nothing at all — it is pure by construction",
-  !/^\s*import\s/m.test(read(PURE))
-);
+// Round 4 gave this module ONE import — `./work-sessions`, which is itself pure
+// and holds the crew-hours measurement that fixes 4 and 5 now share. The check
+// was "imports nothing at all"; it is now an allow-list of exactly that one, so
+// the client-safety guarantee survives while the sharing is possible.
+{
+  const imports = [...read(PURE).matchAll(/^\s*import\s[\s\S]*?from\s+"([^"]+)"/gm)].map(
+    (m) => m[1]
+  );
+  check("hourly-billing.ts imports only the pure sessions module", imports, [
+    "./work-sessions",
+  ]);
+  ok(
+    "...and that module is itself import-free, so the chain ends there",
+    !/^\s*import\s/m.test(read("src/lib/work-sessions.ts"))
+  );
+}
 
 // ── The two hourly rates are never crossed (decision D6). ──────────────────
 lacks(

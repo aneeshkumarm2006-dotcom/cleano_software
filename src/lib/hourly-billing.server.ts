@@ -163,6 +163,13 @@ export async function snapshotBilledActualHours(
 
   // Legacy jobs have no session rows — their clock pair IS the one session, the
   // same fallback `sessionsForCleaner` applies everywhere else.
+  //
+  // It counts ONCE even on a two-person job, and deliberately: round 4's rule is
+  // total CREW hours, but a single job-level pair carries no per-cleaner data to
+  // expand into crew hours, and inventing "× crew size" from a column that was
+  // never a per-cleaner record would bill a customer for hours nobody clocked.
+  // The pair is one record of work, so it counts as one. Every job clocked since
+  // JobWorkSession landed has real per-cleaner rows and gets the crew sum.
   const sessions =
     job.workSessions.length > 0
       ? job.workSessions

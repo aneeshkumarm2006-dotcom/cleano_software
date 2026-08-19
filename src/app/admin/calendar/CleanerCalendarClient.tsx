@@ -26,6 +26,7 @@ import { avatarColor, initials } from "@/lib/avatar";
 import { fmtDate as fmtDateTz, fmtTime as fmtTimeTz } from "@/lib/time";
 import { civilKey, tzDateKey, tzMinOfDay, tzToday } from "@/lib/tz-calendar";
 import { jobTypeLabel } from "@/lib/calendar-labels";
+import { HOLD_LABEL } from "@/lib/job-hold";
 
 interface CalJob {
   id: string;
@@ -49,7 +50,8 @@ interface CalJob {
 
 type StatusMeta = { label: string; color: string; tint: string };
 const STATUS: Record<string, StatusMeta> = {
-  CREATED: { label: "Created", color: "#64748b", tint: "rgba(100,116,139,0.10)" },
+  // Round 4, fix 6 — one label, one colour, shared with the admin calendar.
+  CREATED: { label: HOLD_LABEL, color: "#d97706", tint: "rgba(217,119,6,0.11)" },
   SCHEDULED: { label: "Scheduled", color: "#008C9C", tint: "rgba(0,140,156,0.09)" },
   IN_PROGRESS: { label: "In progress", color: "#d97706", tint: "rgba(217,119,6,0.11)" },
   COMPLETED: { label: "Completed", color: "#059669", tint: "rgba(5,150,105,0.11)" },

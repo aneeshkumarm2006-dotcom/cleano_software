@@ -17,6 +17,11 @@
 // from the work sessions at clock-out (rounded to 0.25h, decision D7). An admin
 // can correct the measurement afterwards, which is why the input unlocks once a
 // figure exists rather than staying locked forever.
+//
+// Both hour fields are TOTAL CREW HOURS (round 4, fix 4): 2 cleaners × 15h is
+// 30, and the rate is multiplied by that figure exactly once. The estimate and
+// the measurement share the unit, which is why the helper text under each one
+// says the same sentence.
 import { useState } from "react";
 import PremiumSelect from "@/components/ui/PremiumSelect";
 import Input from "@/components/ui/Input";
@@ -120,8 +125,7 @@ export default function BillingTypeFields({
               onChange={setEstimated}
             />
             <p style={{ marginTop: 6, fontSize: 12, color: "var(--primary-50)" }}>
-              Hours on site, not hours per cleaner — a two-person crew for three
-              hours is 3.
+              Total job hours across all cleaners — 2 cleaners × 15h is 30.
             </p>
           </div>
 
@@ -136,8 +140,8 @@ export default function BillingTypeFields({
             />
             <p style={{ marginTop: 6, fontSize: 12, color: "var(--primary-50)" }}>
               {actualHoursEditable
-                ? `Measured from the crew's clock, to the nearest ${BILLED_HOURS_INCREMENT}h. Correct it here if the clock was wrong.`
-                : "Filled in automatically when the crew clocks out."}
+                ? `Every cleaner's clocked time added up, to the nearest ${BILLED_HOURS_INCREMENT}h. Correct it here if the clock was wrong.`
+                : "Filled in automatically when the crew clocks out — every cleaner's time added up."}
             </p>
           </div>
 

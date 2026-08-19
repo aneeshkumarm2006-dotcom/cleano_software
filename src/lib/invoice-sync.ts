@@ -35,10 +35,28 @@ export async function syncJobsForInvoiceStatus(
   const notCancelled = { id: { in: jobIds }, status: { not: "CANCELLED" as const } };
 
   if (newStatus === "PAID") {
-    await db.job.updateMany({
-      where: notCancelled,
-      data: { paymentReceived: true, paidAt: new Date(), status: "PAID", invoiceSent: true },
-    });
+    // Round 4, fix 1: an invoice marked paid records payment on every job it
+    // covers, but only moves a job to the PAID *lifecycle* status if that job
+    // has actually happened. A consolidated invoice routinely covers a month
+    // of work including bookings still to come, and stamping those done put
+    // future jobs in the Completed tab and out of their cleaner's schedule.
+    // Split in two so the future rows keep their current status.
+    const now = new Date();
+    // Same shape as `jobStatusWhere("completed")` in metrics.ts: a job is still
+    // ahead of us when it starts later AND was never clocked out. Prisma's
+    // `NOT: { a, b }` negates the conjunction, so the two arms partition the
+    // invoice's jobs exactly.
+    const stillAhead = { startTime: { gt: now }, clockOutTime: null };
+    await db.$transaction([
+      db.job.updateMany({
+        where: { ...notCancelled, NOT: stillAhead },
+        data: { paymentReceived: true, paidAt: now, status: "PAID", invoiceSent: true },
+      }),
+      db.job.updateMany({
+        where: { ...notCancelled, ...stillAhead },
+        data: { paymentReceived: true, paidAt: now, invoiceSent: true },
+      }),
+    ]);
   } else if (prevStatus === "PAID") {
     // Un-paying the invoice reverts its jobs: Completed when the date has
     // passed, Scheduled otherwise.

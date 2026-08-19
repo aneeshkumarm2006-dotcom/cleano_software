@@ -45,6 +45,9 @@ export async function getJobSummary(jobId: string): Promise<JobSummaryResult> {
         id: true,
         jobNumber: true,
         status: true,
+        // Round 4, fix 6 — the drawer states the hold reason and releases it.
+        holdReason: true,
+        quoteStatus: true,
         jobType: true,
         description: true,
         startTime: true,
@@ -83,6 +86,15 @@ export async function getJobSummary(jobId: string): Promise<JobSummaryResult> {
         assignments: {
           select: { cleanerId: true, status: true, payAmount: true },
         },
+        // The clock (round 4, fix 5). `computeJobPayShares` settles an HOURLY
+        // job from each cleaner's own sessions, so the drawer needs the same
+        // rows payroll reads or it prints the even split of a stored total —
+        // the exact class of stale figure the note beside `payShares` below
+        // documents this drawer for having printed before.
+        workSessions: {
+          select: { cleanerId: true, startedAt: true, endedAt: true },
+        },
+        breaks: { select: { cleanerId: true, startedAt: true, endedAt: true } },
 
         // Money — every column computeJobMoney reads, plus the payment state
         // the drawer's quick-glance row shows.
@@ -207,6 +219,8 @@ export async function getJobSummary(jobId: string): Promise<JobSummaryResult> {
       id: job.id,
       jobNumber: job.jobNumber,
       status: job.status,
+      holdReason: job.holdReason,
+      quoteStatus: job.quoteStatus,
       jobType: job.jobType,
       serviceLabel: job.jobType ? jobTypeLabel(job.jobType) : "Cleaning",
       description: job.description,

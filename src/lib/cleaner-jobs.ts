@@ -20,6 +20,7 @@
 
 import type { Prisma } from "@prisma/client";
 import { startOfDayTz } from "@/lib/time";
+import { ON_HOLD_STATUS } from "@/lib/job-hold";
 
 /** Statuses that close a job out — never "upcoming" work. */
 export const CLEANER_CLOSED_STATUSES = ["COMPLETED", "CANCELLED"] as const;
@@ -69,20 +70,65 @@ export function cleanerAssignedWhere(cleanerId: string): Prisma.JobWhereInput {
 
 /**
  * Fragment (no cleaner scope): the job is still ahead of the cleaner.
- * Not completed, not cancelled, not clocked out, and starting no earlier than
- * the start of *today* in the business timezone.
+ * Starting no earlier than the start of *today* in the business timezone, and
+ * not already clocked out.
+ *
+ * ── Round 4, fix 2 ─────────────────────────────────────────────────────────
+ * A cleaner was assigned to a job on Aug 19 and the job never appeared on their
+ * schedule (IMG-2/IMG-3). The assignment had saved perfectly — M2M row,
+ * `JobAssignment` row and `employeeId` all named her. What hid the job was its
+ * *status*: something had stamped a job dated TOMORROW as `COMPLETED` (fix 1),
+ * and `COMPLETED` is in `CLEANER_CLOSED_STATUSES`, so the plain `notIn` this
+ * used to be threw the row away.
+ *
+ * The PDF's rule is that an assigned future job is never hidden "by date
+ * filtering, availability warnings, job status, or sync issues". So the status
+ * test is now split in two:
+ *
+ *   • FUTURE work (`startTime > now`) — only a CANCELLATION removes it. Whatever
+ *     else the status column says about a job that has not started yet, the
+ *     cleaner still has to turn up to it.
+ *   • Work that has already STARTED today — unchanged: `COMPLETED`/`CANCELLED`
+ *     close it out. A job the crew finished this afternoon must not resurface
+ *     as upcoming, which is exactly what a blanket "future-ish jobs are always
+ *     upcoming" rule would have done.
+ *
+ * `clockOutTime: null` stays common to both arms, and is the same tie-breaker
+ * `isFutureJob` (src/lib/metrics-shared.ts) uses: a clock-out is the strongest
+ * "this really happened" signal a job row carries, so an early finish counts as
+ * finished even when the scheduled start is still ahead.
+ *
+ * This is defense in depth, not the whole fix — fix 1 stops the bad statuses
+ * being written and a backfill repairs the rows already stored. But a read-side
+ * rule is what makes an assigned future job reach its cleaner no matter which
+ * writer misbehaves next, and the field-lead group schedule already worked this
+ * way (`getMyTeam.ts` filters on CANCELLED alone).
  */
 export function upcomingFilter(now: Date = new Date()): Prisma.JobWhereInput {
   return {
-    status: { notIn: [...CLEANER_CLOSED_STATUSES] },
-    clockOutTime: null,
     startTime: { gte: startOfDayTz(now) },
+    clockOutTime: null,
+    OR: [
+      // Not started yet → only a cancellation takes it off the schedule.
+      { startTime: { gt: now }, status: { not: "CANCELLED" } },
+      // Already under way today → the closing statuses still close it.
+      { status: { notIn: [...CLEANER_CLOSED_STATUSES] } },
+    ],
   };
 }
 
-/** Fragment: work the cleaner has finished (completed / paid / clocked out). */
-export function doneFilter(): Prisma.JobWhereInput {
+/**
+ * Fragment: work the cleaner has finished (completed / paid / clocked out).
+ *
+ * Carries the mirror image of `upcomingFilter`'s guard (round 4, fix 2): a job
+ * that has not started and was never clocked out cannot be finished, whatever
+ * its status enum claims. Without this the same mis-stamped future job would
+ * appear in BOTH lists — restored to Upcoming by the filter above and still
+ * sitting in Completed here — which reads as a duplicate rather than a fix.
+ */
+export function doneFilter(now: Date = new Date()): Prisma.JobWhereInput {
   return {
+    NOT: { startTime: { gt: now }, clockOutTime: null },
     OR: [
       { status: { in: [...CLEANER_DONE_STATUSES] } },
       { clockOutTime: { not: null }, status: { not: "CANCELLED" } },
@@ -137,8 +183,11 @@ export function upcomingJobsWhere(
 }
 
 /** Everything the cleaner has finished. */
-export function doneJobsWhere(cleanerId: string): Prisma.JobWhereInput {
-  return cleanerScopedWhere(cleanerId, doneFilter());
+export function doneJobsWhere(
+  cleanerId: string,
+  now: Date = new Date()
+): Prisma.JobWhereInput {
+  return cleanerScopedWhere(cleanerId, doneFilter(now));
 }
 
 /** Jobs whose day has passed. */
@@ -204,9 +253,55 @@ export function fieldLeadScopedJobsWhere(
 }
 
 /**
+ * Fragment: the job is open work, and not a hold anybody has explained.
+ *
+ * ── Round 4, fix 6, the follow-on ──────────────────────────────────────────
+ * The PDF asks that on-hold jobs "not be treated as active/scheduled jobs
+ * unless admin releases them", and the available-jobs board is the sharpest
+ * version of that: an unpriced $0 import must not be claimable by a cleaner who
+ * would then turn up to it.
+ *
+ * The obvious edit — delete `CREATED` from the status list — was deliberately
+ * NOT made, because it is only safe AFTER `scripts/releaseLegacyJobHolds.ts`
+ * has run. Until then most `CREATED` rows are not holds at all: they are
+ * ordinary jobs born on the Prisma default back when `saveJob` set no status
+ * (16 such rows on live data today, every one of them `holdReason IS NULL`).
+ * Dropping the status outright would have deleted all of them from the board —
+ * recreating fix 2, the P0 this round opened with.
+ *
+ * So the rule keys on the REASON instead of the status, which is what the round
+ * actually made possible: a hold now says why it is held. Read it as "we only
+ * refuse work we can explain refusing".
+ *
+ *   • `SCHEDULED`                    → claimable, as always.
+ *   • `CREATED` + a `holdReason`     → a REAL hold. Not claimable. Every
+ *     producer stamps one (`$0` import, quote pending/declined, flexible
+ *     booking, created-without-a-date), so every hold made from this round on
+ *     is covered the moment it is created — no backfill required.
+ *   • `CREATED` + no reason          → a legacy default, i.e. real scheduled
+ *     work. Still claimable, exactly as today.
+ *   • anything else (IN_PROGRESS / COMPLETED / PAID / CANCELLED) → excluded, as
+ *     the old `status: { in: [...] }` did.
+ *
+ * It also SELF-COMPLETES: `releaseLegacyJobHolds --commit` moves the legacy
+ * rows to `SCHEDULED` and stamps the genuine ones with their reason, after
+ * which no `CREATED` row is claimable and this filter means precisely "drop
+ * CREATED" — without a second deploy.
+ */
+export function openForClaimFilter(): Prisma.JobWhereInput {
+  return {
+    OR: [
+      { status: "SCHEDULED" },
+      { status: ON_HOLD_STATUS, holdReason: null },
+    ],
+  };
+}
+
+/**
  * Available-jobs board scope: genuinely open, claimable work only.
- * Deliberately narrow — IN_PROGRESS / COMPLETED / PAID / CANCELLED jobs and
- * jobs the cleaner already leads or is already on are NOT claimable.
+ * Deliberately narrow — IN_PROGRESS / COMPLETED / PAID / CANCELLED jobs, holds
+ * carrying a reason, and jobs the cleaner already leads or is already on are
+ * NOT claimable.
  */
 export function claimableJobsWhere(
   cleanerId: string,
@@ -214,7 +309,6 @@ export function claimableJobsWhere(
 ): Prisma.JobWhereInput {
   return {
     deletedAt: null,
-    status: { in: ["CREATED", "SCHEDULED"] },
     startTime: { gte: now },
     // Already ON the job (as a cleaner) or already LEADING it (employeeId) →
     // not claimable. The lead check was missing, so leads saw (and could claim)
@@ -227,7 +321,13 @@ export function claimableJobsWhere(
     // shape this predicate looks for — so without the guard every quote request
     // would appear here, at a provisional price, seconds after the deposit was
     // taken, ready for a cleaner to claim and show up to.
-    AND: [quoteSettledFilter()],
+    //
+    // The hold guard rides in the SAME `AND` array rather than as a second
+    // top-level `OR:` key — that key is already spoken for by the employeeId
+    // test above, and a duplicate would silently REPLACE it, widening the board
+    // from "jobs I'm not on" to "everything". Same trap `cleanerScopedWhere`
+    // documents.
+    AND: [quoteSettledFilter(), openForClaimFilter()],
   };
 }
 

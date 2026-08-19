@@ -753,6 +753,11 @@ export default function JobModal({
   sqftRates = null,
 }: JobModalProps) {
   const router = useRouter();
+  // The fixed overlay. Round 4, fix 8 writes the visual viewport's dimensions
+  // onto it as custom properties — see the effect above the render guard.
+  const overlayRef = useRef<HTMLDivElement>(null);
+  // The scrolling body, so a step change starts at the top of the new step.
+  const scrollRef = useRef<HTMLDivElement>(null);
   const [currentStep, setCurrentStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
   const [globalError, setGlobalError] = useState<string | null>(null);
@@ -1726,10 +1731,66 @@ export default function JobModal({
     }
   };
 
+  /**
+   * ROUND 4, FIX 8 — a step change starts at the top of the new step.
+   *
+   * A consequence of the sticky footer rather than a separate fix: Next used to
+   * be reachable only from the bottom of the form, so pressing it was always
+   * the last thing you did on a step. It is now on screen the whole time, and
+   * pressing it from halfway down step 1 used to leave you halfway down step 2
+   * — past fields you had not seen. The scroller goes back to the top instead.
+   */
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: 0 });
+  }, [currentStep]);
+
+  /**
+   * ROUND 4, FIX 8 — keep the modal inside the viewport the phone can actually
+   * show, keyboard included.
+   *
+   * `100dvh` in the stylesheet handles the browser chrome, and on its own it
+   * would be enough for a page of text. It is not enough for a FORM: a
+   * `position: fixed` overlay is laid out against the LAYOUT viewport, which
+   * the on-screen keyboard does not shrink, so with the keyboard up a
+   * correctly-sized modal is still centred on a box half of which is behind
+   * it. `window.visualViewport` is the one that reports the space left.
+   *
+   * Two properties, both written onto the overlay:
+   *   --job-modal-max  the height the card may take
+   *   --job-modal-kb   the keyboard's height, added to the overlay's bottom
+   *                    padding so centring happens ABOVE the keyboard
+   *
+   * Where visualViewport is unsupported both are simply absent and the CSS
+   * falls back to its `dvh` (then `vh`) defaults. Same approach, and the same
+   * reasoning, as the cleaner app's `Modal` in my-inventory/MyInventoryClient.
+   */
+  useEffect(() => {
+    const vv = typeof window === "undefined" ? null : window.visualViewport;
+    const overlay = overlayRef.current;
+    if (!isOpen || !vv || !overlay) return;
+    const apply = () => {
+      const inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      overlay.style.setProperty("--job-modal-kb", `${Math.round(inset)}px`);
+      // Less the overlay's own 1rem top padding and 1rem bottom padding.
+      overlay.style.setProperty("--job-modal-max", `${Math.round(vv.height - 32)}px`);
+    };
+    apply();
+    vv.addEventListener("resize", apply);
+    vv.addEventListener("scroll", apply);
+    return () => {
+      vv.removeEventListener("resize", apply);
+      vv.removeEventListener("scroll", apply);
+    };
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+    // ROUND 4, FIX 8 — `job-modal-*` carries the height, scroll and footer
+    // rules; see the block at the bottom of globals.css for why each exists.
+    // `p-4` is gone from here on purpose: the overlay's padding is now the
+    // class's, because the bottom edge has to grow by the keyboard's height.
+    <div className="job-modal-overlay fixed inset-0 z-[1000] flex items-center justify-center" ref={overlayRef}>
       {/* Blurred backdrop */}
       <div
         className="absolute inset-0"
@@ -1741,10 +1802,10 @@ export default function JobModal({
       />
 
       {/* Modal Container */}
-      <div className="relative z-[1001] w-full max-w-2xl max-h-[95vh] bg-white rounded-3xl tracking-tight">
+      <div className="job-modal-card relative z-[1001] w-full max-w-2xl bg-white rounded-3xl tracking-tight">
         {/* Scrollable Content */}
-        <div className="w-full max-h-[95vh] overflow-y-auto overflow-x-visible">
-          <div className="w-full px-6 md:px-8 py-6 md:py-8">
+        <div className="job-modal-scroll w-full" ref={scrollRef}>
+          <div className="w-full px-6 md:px-8 pt-6 md:pt-8">
             {/* Header */}
             <div className="w-full flex items-start justify-between gap-1 mb-6">
               <div>
@@ -1814,53 +1875,6 @@ export default function JobModal({
                   <p className="text-sm text-green-700 font-[400]">
                     {successMessage}
                   </p>
-                </div>
-              </div>
-            )}
-
-            {/* Delete Confirmation */}
-            {mode === "edit" && showDeleteConfirm && (
-              <div className="rounded-2xl p-4 flex items-start gap-3 bg-red-50 border border-red-200 mb-6">
-                <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-                <div className="flex flex-col gap-2 flex-1">
-                  <p className="text-sm text-red-700 font-[400]">
-                    Archive this job?
-                  </p>
-                  <p className="text-xs text-red-600/70">
-                    It moves to Jobs &rarr; Archived and drops out of every list,
-                    count and report. You can restore it from there, or delete it
-                    permanently once archived.
-                  </p>
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    <Button
-                      variant="default"
-                      size="sm"
-                      border={false}
-                      onClick={() => setShowDeleteConfirm(false)}
-                      disabled={isDeleting}
-                      className="px-4 py-2">
-                      Cancel
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      border={false}
-                      onClick={handleDelete}
-                      disabled={isDeleting}
-                      className="px-4 py-2">
-                      {isDeleting ? (
-                        <>
-                          <Loader className="w-4 h-4 mr-2 animate-spin" />
-                          Deleting...
-                        </>
-                      ) : (
-                        <>
-                          <Trash2 className="w-4 h-4 mr-2" />
-                          Confirm Delete
-                        </>
-                      )}
-                    </Button>
-                  </div>
                 </div>
               </div>
             )}
@@ -2559,8 +2573,8 @@ export default function JobModal({
                             border={false}
                           />
                           <p className="mt-1.5 text-[11px] tracking-tight text-[#008C9C]/60">
-                            Hours on site, not per cleaner — two cleaners for
-                            three hours is 3.
+                            Total job hours across all cleaners — 2 cleaners ×
+                            15h is 30.
                           </p>
                         </div>
 
@@ -2589,8 +2603,8 @@ export default function JobModal({
                           />
                           <p className="mt-1.5 text-[11px] tracking-tight text-[#008C9C]/60">
                             {actualHoursEditable
-                              ? `From the crew's clock, to the nearest ${BILLED_HOURS_INCREMENT}h. Edit to correct it.`
-                              : "Filled in automatically when the crew clocks out."}
+                              ? `Every cleaner's clocked time added up, to the nearest ${BILLED_HOURS_INCREMENT}h. Edit to correct it.`
+                              : "Filled in automatically when the crew clocks out — every cleaner's time added up."}
                           </p>
                         </div>
 
@@ -3613,40 +3627,126 @@ export default function JobModal({
                         </p>
                       )}
                   </div>
+
+                  {/* ROUND 4, FIX 8 — Delete lives here now, at the end of the
+                      form's own content, rather than as the first item of the
+                      action row. Two things move with it:
+
+                        • It is no longer the bottom-most control on a phone.
+                          The action row is stuck to the bottom of the modal, so
+                          whatever is last in the BODY is by definition not the
+                          last thing you can reach — and it should certainly not
+                          be the destructive one (IMG-6).
+                        • The confirmation appears HERE, where the button is.
+                          It used to render at the top of the modal, above the
+                          form: on a phone you tapped Delete, the button
+                          vanished, and the question you were being asked was
+                          two screens up.
+
+                      The guard itself is unchanged — still two deliberate taps
+                      on two different buttons, still `handleDelete` behind the
+                      second one. `type="button"` on all three is not optional:
+                      this block is inside the <form>, and the shared Button
+                      submits by default. */}
+                  {mode === "edit" && onDelete && (
+                    <div className="pt-2 border-t border-[#008C9C]/10">
+                      {showDeleteConfirm ? (
+                        <div className="rounded-2xl p-4 flex items-start gap-3 bg-red-50 border border-red-200">
+                          <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                          <div className="flex flex-col gap-2 flex-1">
+                            <p className="text-sm text-red-700 font-[400]">
+                              Archive this job?
+                            </p>
+                            <p className="text-xs text-red-600/70">
+                              It moves to Jobs &rarr; Archived and drops out of
+                              every list, count and report. You can restore it
+                              from there, or delete it permanently once
+                              archived.
+                            </p>
+                            <div className="flex flex-wrap gap-2 mt-2">
+                              <Button
+                                type="button"
+                                variant="default"
+                                size="sm"
+                                border={false}
+                                onClick={() => setShowDeleteConfirm(false)}
+                                disabled={isDeleting}
+                                className="px-4 py-2">
+                                Cancel
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="destructive"
+                                size="sm"
+                                border={false}
+                                onClick={handleDelete}
+                                disabled={isDeleting}
+                                className="px-4 py-2">
+                                {isDeleting ? (
+                                  <>
+                                    <Loader className="w-4 h-4 mr-2 animate-spin" />
+                                    Deleting...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Trash2 className="w-4 h-4 mr-2" />
+                                    Confirm Delete
+                                  </>
+                                )}
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="md"
+                          border={false}
+                          onClick={() => setShowDeleteConfirm(true)}
+                          disabled={disableForm}
+                          className="px-4 py-3 w-full md:w-auto">
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          Delete Job
+                        </Button>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
-              {/* Global Error */}
-              {globalError && (
-                <div className="bg-red-50 rounded-2xl p-3 mt-6">
-                  <p className="text-xs text-red-600">{globalError}</p>
-                </div>
-              )}
+              {/* ROUND 4, FIX 8 — the action row, stuck to the bottom of the
+                  scroller so Create / Update / Next is reachable at every
+                  scroll position and on every step. It used to be the last
+                  child of a 95vh scrolling column, which on a phone is the
+                  same as not existing (IMG-6).
 
-              {/* Action Buttons */}
-              <div className="w-full flex flex-col md:flex-row justify-between pt-6 items-center border-[#008C9C]/10 gap-4">
-                {/* Left side - Delete button (only in edit mode on last step) */}
-                {mode === "edit" &&
-                currentStep === 3 &&
-                !showDeleteConfirm &&
-                onDelete ? (
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    size="md"
-                    border={false}
-                    onClick={() => setShowDeleteConfirm(true)}
-                    disabled={disableForm}
-                    className="px-4 py-3 w-full md:w-auto">
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    Delete Job
-                  </Button>
-                ) : (
-                  <div />
+                  Delete is deliberately NOT here any more. It was the FIRST
+                  item of this row, and on mobile the row stacked as a column —
+                  so the one control the screenshot ends on is the destructive
+                  one. It now sits in the body of step 3, where it is still one
+                  tap from where it always was and can no longer be mistaken
+                  for the way to save.
+
+                  No `w-full` on this div, deliberately. The bar spans the card
+                  by cancelling the body's side padding with negative margins,
+                  and `width: 100%` pins it to the padded width instead — so it
+                  ends up 48px narrow and shifted 24px left of the card. Caught
+                  by measuring it in a browser, not by reading it. */}
+              <div className="job-modal-foot">
+                {/* The submit error travels WITH the submit button. It used to
+                    render at the end of the scrolling body, directly above a
+                    button you had to scroll to — so it was always in view.
+                    Now that the button is always in view, an error left down
+                    there would be the one thing that isn't: you'd tap Update,
+                    nothing would appear to happen, and the reason would be
+                    off-screen. */}
+                {globalError && (
+                  <div className="bg-red-50 rounded-2xl p-3 mb-3">
+                    <p className="text-xs text-red-600">{globalError}</p>
+                  </div>
                 )}
-
-                {/* Right side - Navigation buttons */}
-                <div className="flex gap-3 w-full md:w-auto">
+                <div className="flex gap-3 w-full justify-end">
                   {currentStep > 1 ? (
                     <Button
                       type="button"

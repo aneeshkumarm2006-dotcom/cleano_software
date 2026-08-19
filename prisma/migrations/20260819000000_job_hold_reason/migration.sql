@@ -1,0 +1,39 @@
+-- Round 4, fix 6 of `_ai_context/TODO.md` — "On Hold" becomes a real status
+-- (awerfixesaug18.pdf p5). Implements step 3B.1: one nullable column.
+--
+-- ── Why ────────────────────────────────────────────────────────────────────
+-- The client's own question was "what currently triggers On Hold, and is it
+-- automatic or manual?". Recon's answer: automatic only, and it was not even a
+-- status — "On hold" was the CALENDAR's display label for `JobStatus.CREATED`,
+-- which is the Prisma default. So every admin-created job was born on hold
+-- (saveJob never set a status), and the two holds that MEANT something — a
+-- BookingKoala row imported at $0, and a post-construction quote waiting on a
+-- price — were invisible in that noise. There was no reason, no manual hold and
+-- no release.
+--
+-- `saveJob` now stamps SCHEDULED explicitly, so `CREATED` means on hold, and
+-- this column is the "why". The three automatic producers write it from the
+-- fixed strings in src/lib/job-hold.ts; `releaseJobHold` clears it.
+--
+-- Deliberately a plain nullable TEXT, not an enum:
+--   * the PDF also asks for an admin-visible reason on manual holds, which is
+--     free text by definition;
+--   * an enum would need a migration every time a new automatic trigger is
+--     added, and the trigger vocabulary lives in TypeScript (HOLD_REASON),
+--     where the backfill and the verify script can share the exact literals.
+--
+-- ── Blast radius ───────────────────────────────────────────────────────────
+-- Additive only. Nothing is dropped, renamed, rewritten or backfilled.
+--   * NULL on every existing row, and NULL is readable: `holdReasonText()`
+--     renders it as "Pending admin review" rather than as a blank. A DEFAULT
+--     would have forged a reason onto ~every historical row, including the ones
+--     that are not on hold at all.
+--   * No index. Nothing filters or sorts on the reason; the queries that find
+--     held jobs filter on `status`, which is already indexed.
+-- No status value is changed by this file — the legacy CREATED backlog is
+-- released by `scripts/releaseLegacyJobHolds.ts`, dry-run first, so the row
+-- rewrite is reviewable and logged per job rather than hidden in a migration.
+-- No price, total, tax, payout, pay-rate or payment column is touched.
+
+ALTER TABLE "Job"
+  ADD COLUMN "holdReason" TEXT;

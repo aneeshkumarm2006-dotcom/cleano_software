@@ -21,6 +21,12 @@ import { resendReceipt } from "../../actions/resendReceipt";
 import { generateInvoiceFromJob } from "../../actions/generateInvoiceFromJob";
 import { markJobComplete } from "../../actions/markJobComplete";
 import { simpleJobStatus } from "@/lib/metrics-shared";
+// Round 4, fix 5 — the pay-basis vocabulary. Its own module precisely so a
+// client component can import it: `cleaner-earnings`, which DECIDES the basis,
+// reaches @/db and cannot be pulled into the browser bundle.
+import { PAY_BASIS_SHORT_LABEL, type PayBasisKind } from "@/lib/pay-basis";
+import { HOLD_LABEL, holdLabel, holdReasonText, isOnHold } from "@/lib/job-hold";
+import { releaseJobHold } from "../../actions/releaseJobHold";
 import { createRatingToken } from "../../actions/createRatingToken";
 import { setAfterPhotosEnabled } from "../../actions/setAfterPhotoOverride";
 import { setJobPriorityLabel } from "../../actions/setJobPriorityLabel";
@@ -32,6 +38,7 @@ import {
   AlertTriangle, Trash2, Loader, Briefcase, Receipt, Camera, X,
   ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, FileText,
   Star, Copy, Check, Inbox, RotateCcw, XCircle, Navigation, Bell, Home,
+  PauseCircle, PlayCircle,
 } from "lucide-react";
 import { resolveJobRequest } from "../../actions/resolveJobRequest";
 import { fmtDate, fmtDateTime, fmtTime } from "@/lib/time";
@@ -127,6 +134,8 @@ interface Job {
   onMyWayLng: number | null;
   onMyWayLocationAt: string | null;
   status: string;
+  /** Round 4, fix 6 — why this job is on hold; null when it isn't on hold. */
+  holdReason?: string | null;
   price: number | null;
   /**
    * Historical fallback for `pricingMode` (see resolvePricingMode). Was missing
@@ -157,6 +166,18 @@ interface Job {
    * apart and dismissed both as unused, which is the PDF's complaint.
    */
   employeePayIsManual?: boolean | null;
+  /**
+   * The CLEANER's pay model (round 4, fix 5). Carried for one reason: this page
+   * hands the whole DTO to <JobModal mode="edit">, which renders a Pay type
+   * control and therefore POSTS one on every save. A row arriving without these
+   * two let the modal post its PERCENTAGE default over an hourly job and null
+   * the rate — the "hourly pay not saving" the PDF reports.
+   *
+   * Never to be read together with `billingType`/`billed*` above, which are what
+   * the CUSTOMER is charged (decision D6).
+   */
+  payType?: string | null;
+  hourlyRate?: number | null;
   totalTip: number | null;
   parking: number | null;
   paymentReceived: boolean;
@@ -365,6 +386,15 @@ interface JobDetailViewProps {
     parking: number;
     total: number;
     isOverride: boolean;
+    /**
+     * WHICH rule produced `amount`, straight off the share `computeJobPayShares`
+     * returned (round 4, fix 5 — "UI states which basis is in use"). Not
+     * re-derived here: this page and the pay modal used to each infer it from
+     * `employeePayIsManual` alone, so an hourly job settled from the clock read
+     * "automatic (tier rates)" — the one thing it was not.
+     */
+    basis?: PayBasisKind;
+    basisLabel?: string;
   }>;
   /** False when nobody is payable yet — the cost is $0, not `job.employeePay`. */
   hasPayableParticipants?: boolean;
@@ -507,8 +537,11 @@ function ChecklistCard({ summary }: { summary: JobChecklistSummary | null }) {
 
 // Same derived-status pill as the Jobs table (spec's three operational
 // statuses) — the detail page must never disagree with the list row.
-function StatusPill({ status }: { status: string }) {
+function StatusPill({ status, title }: { status: string; title?: string }) {
   const map: Record<string, { label: string; bg: string; color: string; dot: string }> = {
+    // Round 4, fix 6 — same entry, same wording and same amber as the Jobs
+    // list and the Dashboard. Four screens used to render this enum four ways.
+    ON_HOLD:     { label: HOLD_LABEL,    bg: '#fef3c7', color: '#92400e', dot: '#d97706' },
     SCHEDULED:   { label: 'Scheduled',   bg: '#dbeafe', color: '#1e40af', dot: '#3b82f6' },
     IN_PROGRESS: { label: 'In Progress', bg: '#fef3c7', color: '#92400e', dot: '#f59e0b' },
     COMPLETED:   { label: 'Completed',   bg: '#d1fae5', color: '#065f46', dot: '#10b981' },
@@ -518,7 +551,7 @@ function StatusPill({ status }: { status: string }) {
   };
   const c = map[status] || { label: status, bg: '#f3f4f6', color: '#374151', dot: '#9ca3af' };
   return (
-    <span className="pill" style={{ background: c.bg, color: c.color }}>
+    <span className="pill" style={{ background: c.bg, color: c.color }} title={title}>
       <span className="pill-dot" style={{ background: c.dot }} />
       {c.label}
     </span>
@@ -699,6 +732,9 @@ export default function JobDetailView({
     job.priorityLabel ?? "AUTO"
   );
   const [savingPriority, setSavingPriority] = useState(false);
+  // Round 4, fix 6 — the hold banner's Release button.
+  const [releasingHold, setReleasingHold] = useState(false);
+  const [holdError, setHoldError] = useState<string | null>(null);
 
   // "Link to client" repair for a job with no customer record (Stage 4.7).
   const [linkClientId, setLinkClientId] = useState("");
@@ -1129,6 +1165,25 @@ export default function JobDetailView({
     router.refresh();
   };
 
+  /**
+   * Take this job off hold (round 4, fix 6). The banner it sits in states the
+   * reason, so this button does not repeat it — it just does the thing and
+   * refreshes; the job log records the release with the reason that was
+   * cleared, which is the audit trail the PDF's "release" ask needs.
+   */
+  const handleReleaseHold = async () => {
+    if (releasingHold) return;
+    setReleasingHold(true);
+    setHoldError(null);
+    const res = await releaseJobHold(job.id);
+    setReleasingHold(false);
+    if (!res.success) {
+      setHoldError(res.error);
+      return;
+    }
+    router.refresh();
+  };
+
   const openRatingModal = (cleaner: { id: string; name: string }) => {
     setRatingStars(5);
     setRatingNote("");
@@ -1247,7 +1302,38 @@ export default function JobDetailView({
   // dismissed every stored figure as unused and paid the tier math regardless.
   // That row is what the PDF names: do not show a stored value as unused.
   const payIsManual = !!job.employeePayIsManual && job.employeePay !== null;
-  const paySourceLabel = payIsManual ? 'Manual amount' : 'Automatic (tier rates)';
+  // WHICH rule is paying this crew, in the crew's own terms (round 4, fix 5 —
+  // "UI states which basis is in use: hourly / percentage / manual").
+  //
+  // Read off the shares rather than inferred from `employeePayIsManual`, which
+  // could only ever say manual-or-not: an hourly job settled from the clock and
+  // a tier-rate job both printed "automatic (tier rates)", and the first of
+  // those is the one the client could not get to stick. When the crew is on
+  // mixed bases (one cleaner on a manual amount, the rest on the clock) the
+  // summary says so and the per-cleaner rows below carry the detail.
+  const payBasisKinds = Array.from(
+    new Set(payRows.map(r => r.basis).filter(Boolean))
+  ) as PayBasisKind[];
+  // The pill: two or three words. The line under the figure: the arithmetic.
+  const payBasisPill =
+    payBasisKinds.length === 1
+      ? PAY_BASIS_SHORT_LABEL[payBasisKinds[0]]
+      : payBasisKinds.length > 1
+        ? 'Mixed'
+        : payIsManual
+          ? PAY_BASIS_SHORT_LABEL.MANUAL_TEAM
+          : PAY_BASIS_SHORT_LABEL.PERCENTAGE;
+  const payBasisDetails = Array.from(
+    new Set(payRows.map(r => r.basisLabel).filter(Boolean))
+  ) as string[];
+  const paySourceLabel =
+    payBasisDetails.length === 1
+      ? payBasisDetails[0]
+      : payBasisDetails.length > 1
+        ? 'Mixed bases — see each cleaner below'
+        : payIsManual
+          ? 'Manual — team total, split evenly'
+          : "Percentage — tier rate on the job's value";
   // Only meaningful for an AUTOMATIC job now: a manual figure IS the payout, so
   // it cannot disagree with itself.
   const storedPayDiffers =
@@ -1360,6 +1446,55 @@ export default function JobDetailView({
 
   const DetailsTab = () => (
     <div className="tab-panel">
+      {/* On hold (round 4, fix 6 / PDF p5). Above even the quote panel, because
+          it is the answer to "why is nothing happening with this booking?" —
+          the question an admin opened the page with. It states the trigger and
+          offers the way out in the same box, which is the whole fix: before
+          this the status was an unexplained grey block on the calendar with no
+          release action anywhere in the app.
+
+          A quote's release lives in the Quote review panel below instead, so
+          the button steps aside rather than offering a shortcut that
+          `releaseJobHold` would (correctly) refuse. */}
+      {isOnHold(job) && (
+        <div className="dcard" style={{ borderLeft: '3px solid var(--amber-600, #d97706)' }}>
+          <div className="dcard-head">
+            <h3 style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--amber-800)' }}>
+              <PauseCircle size={16} /> {HOLD_LABEL}
+            </h3>
+          </div>
+          <p style={{ margin: '0 0 12px', fontSize: 13.5, color: 'var(--primary-70)' }}>
+            {holdReasonText(job.holdReason)}
+          </p>
+          {isQuoteJob ? (
+            <p style={{ margin: 0, fontSize: 12.5, color: 'var(--primary-60)' }}>
+              This booking is a quote request. Price it and record the
+              customer&apos;s answer in Quote review below — accepting the quote
+              schedules the job.
+            </p>
+          ) : (
+            <>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={handleReleaseHold}
+                disabled={releasingHold}
+              >
+                <PlayCircle size={14} />
+                {releasingHold ? 'Releasing…' : 'Release from hold'}
+              </button>
+              <p style={{ margin: '8px 0 0', fontSize: 12.5, color: 'var(--primary-60)' }}>
+                Moves this job to Scheduled and puts it on the assigned
+                cleaners&apos; schedules. Recorded in the job log.
+              </p>
+            </>
+          )}
+          {holdError && (
+            <p style={{ margin: '8px 0 0', fontSize: 12.5, color: 'var(--error)' }}>{holdError}</p>
+          )}
+        </div>
+      )}
+
       {/* Quote review (Stage 11 / PDF #9). FIRST in the tab, because on a
           PENDING_REVIEW job it is the only thing an admin is here to do — the
           customer has paid a deposit and is waiting on a price. Renders for a
@@ -2090,9 +2225,10 @@ export default function JobDetailView({
         <div className="astat">
           <div className="astat-head">
             <span>Employee pay</span>
-            {/* 4c.4 — say WHERE the number came from, at the job level. A manual
-                amount is used and labelled; an automatic one is recomputed live
-                from the tier rates and the job's active value. */}
+            {/* 4c.4 — say WHERE the number came from, at the job level. Round 4
+                fix 5 widened this from manual-or-not to the actual basis, so an
+                hourly job settled from the clock stops reading "automatic (tier
+                rates)" — which is what it was never doing. */}
             {hasPayableParticipants && (
               <span
                 className="pill"
@@ -2101,19 +2237,15 @@ export default function JobDetailView({
                     ? { background: '#fffbeb', color: '#92400e' }
                     : { background: 'var(--primary-10)', color: 'var(--primary-800)' }
                 }
-                title={
-                  payIsManual
-                    ? 'A manual team total set by an admin (or imported from BookingKoala). Split evenly across the crew, minus any per-cleaner amount. Clear it on the job form to go back to the tier calculation.'
-                    : 'Computed live from each cleaner’s tier rate and the job’s active value (base + add-ons, or the override total).'
-                }>
-                {paySourceLabel}
+                title={paySourceLabel}>
+                {payBasisPill}
               </span>
             )}
           </div>
           <div className="astat-value">{hasPayableParticipants ? `$${computedEmployeePay.toFixed(2)}` : '—'}</div>
           <div className="astat-delta">
             {hasPayableParticipants
-              ? `${payRows.length} cleaner${payRows.length === 1 ? '' : 's'} · ${payIsManual ? 'split evenly' : 'live rate'}`
+              ? `${payRows.length} cleaner${payRows.length === 1 ? '' : 's'} · ${paySourceLabel}`
               : 'No cleaners assigned'}
           </div>
           {/* PDF #8: "cleaner pay should calculate correctly for hourly jobs
@@ -2367,7 +2499,7 @@ export default function JobDetailView({
             {hasPayableParticipants && (
               <div className="finrow negative">
                 <span className="finrow-label">
-                  Employee pay · {payRows.length} cleaner{payRows.length === 1 ? '' : 's'} · {paySourceLabel.toLowerCase()}
+                  Employee pay · {payRows.length} cleaner{payRows.length === 1 ? '' : 's'} · {paySourceLabel}
                 </span>
                 <span className="finrow-value">−${computedEmployeePay.toFixed(2)}</span>
               </div>
@@ -2387,6 +2519,16 @@ export default function JobDetailView({
                   {r.isOverride && (
                     <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 600, borderRadius: 999, padding: '1px 7px', background: '#fffbeb', color: '#92400e' }}>
                       Manual amount
+                    </span>
+                  )}
+                  {/* Round 4, fix 5 — the basis, per cleaner. On an hourly job
+                      this is where "3.5h clocked × $25.00/h" appears, so a crew
+                      member's figure can be checked against the clock without
+                      opening the pay modal. The override chip above already
+                      states its own case, so it is not repeated. */}
+                  {!r.isOverride && r.basisLabel && (
+                    <span style={{ display: 'block', fontSize: 10, color: 'var(--primary-50)', marginTop: 1 }}>
+                      {r.basisLabel}
                     </span>
                   )}
                 </span>
@@ -3079,7 +3221,10 @@ export default function JobDetailView({
           <div className="jdetail-head-left">
             <h1 className="jdetail-title">{job.clientName}</h1>
             <div className="jdetail-meta-row">
-              <StatusPill status={simpleJobStatus(job)} />
+              <StatusPill
+                status={simpleJobStatus(job)}
+                title={isOnHold(job) ? holdLabel(job.holdReason) : undefined}
+              />
               {job.onMyWayAt && !job.clockInTime && (
                 <span
                   title="Cleaner tapped On the way and has not clocked in yet"

@@ -81,7 +81,7 @@ export default async function MyJobsPage({
   } else if (status === "in_progress") {
     andFilters.push(inProgressFilter());
   } else if (status === "completed") {
-    andFilters.push(doneFilter());
+    andFilters.push(doneFilter(now));
   } else if (status === "cancelled") {
     andFilters.push(cancelledFilter());
   } else if (status === "past") {

@@ -11,6 +11,7 @@ import {
   isDepositDisposition,
   type DepositDisposition,
 } from "@/lib/quote-status";
+import { HOLD_REASON } from "@/lib/job-hold";
 
 /**
  * Accept or decline a sent quote (PDF #9, Stage 11, steps 11.4 + 11.6).
@@ -111,7 +112,15 @@ export async function resolveJobQuote(input: ResolveJobQuoteInput) {
             // from CREATED — if an admin has already moved the job on (assigned
             // and started it, say), accepting the quote must not drag it back.
             ...(job.status === "CREATED" && !job.isFlexible
-              ? { status: "SCHEDULED" as const }
+              ? { status: "SCHEDULED" as const, holdReason: null }
+              : {}),
+            // Round 4, fix 6. A flexible quote stays on hold — but the reason
+            // it is held has just CHANGED: it is no longer waiting on a price,
+            // it is waiting on a date. Leaving "Quote pending review" on the
+            // row would send an admin back to a panel that has nothing left to
+            // do, which is exactly the kind of stale hold this fix removes.
+            ...(job.status === "CREATED" && job.isFlexible
+              ? { holdReason: HOLD_REASON.FLEXIBLE_DATE }
               : {}),
           },
         }),
@@ -208,7 +217,15 @@ export async function resolveJobQuote(input: ResolveJobQuoteInput) {
     await db.$transaction([
       db.job.update({
         where: { id: job.id },
-        data: { quoteStatus: "DECLINED" },
+        data: {
+          quoteStatus: "DECLINED",
+          // Round 4, fix 6 — the hold outlives the quote, so its reason has to
+          // move on with it. "Quote pending review" on a declined booking sends
+          // the next admin to a panel with nothing left to decide.
+          ...(job.status === "CREATED"
+            ? { holdReason: HOLD_REASON.QUOTE_DECLINED }
+            : {}),
+        },
       }),
       db.jobLog.create({
         data: {

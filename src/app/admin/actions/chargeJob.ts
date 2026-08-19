@@ -53,13 +53,23 @@ export async function chargeJob(jobId: string) {
   const remainingDue = Math.max(0, totalAmount - giftCardApplied);
   const amountCents = Math.round(remainingDue * 100);
 
+  // Round 4, fix 1. Charging a card is a PAYMENT event, not a completion one.
+  // Pre-charging a booking a week out used to stamp it PAID — a done status —
+  // so it landed in the Completed tab with a green pill (IMG-1) before anyone
+  // had cleaned anything. A future job records the payment and keeps its
+  // current lifecycle status; only a job that has actually happened moves to
+  // PAID. `paidAt` and `paymentReceived` are unaffected either way.
+  const isFuture =
+    !job.clockOutTime && new Date(job.startTime).getTime() > Date.now();
+  const paidStatus = isFuture ? {} : { status: "PAID" as const };
+
   // Atomically claim this job so two concurrent charges (a double-click or two
   // admins) can't both reach Stripe. Only the call that flips paymentReceived
   // false→true proceeds; the rest abort. Rolled back if the charge fails.
   const claim = await db.job.updateMany({
     // An archived job is not chargeable (new fix list item 1).
     where: { id: jobId, deletedAt: null, paymentReceived: false },
-    data: { paymentReceived: true, paidAt: new Date(), status: "PAID" },
+    data: { paymentReceived: true, paidAt: new Date(), ...paidStatus },
   });
   if (claim.count === 0) {
     return { success: false, error: "Already paid" };
@@ -72,8 +82,12 @@ export async function chargeJob(jobId: string) {
         data: {
           paymentReceived: false,
           paidAt: null,
-          // Undo the claim's status flip — back to the pre-charge status.
-          status: job.status === "PAID" ? "COMPLETED" : job.status,
+          // Undo the claim's status flip — back to the pre-charge status. A
+          // future job's claim never touched `status`, so there is nothing to
+          // undo and writing one back would invent a transition.
+          ...(isFuture
+            ? {}
+            : { status: job.status === "PAID" ? "COMPLETED" : job.status }),
           ...(failureReason
             ? {
                 paymentFailedAt: new Date(),
@@ -95,7 +109,9 @@ export async function chargeJob(jobId: string) {
     await db.$transaction([
       db.job.update({
         where: { id: jobId },
-        data: { paymentReceived: true, paidAt: new Date(), status: "PAID" },
+        // Same date guard as the claim above — a gift card covering a future
+        // booking is still a payment, not a completion.
+        data: { paymentReceived: true, paidAt: new Date(), ...paidStatus },
       }),
       db.client.update({
         where: { id: client.id },

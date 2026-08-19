@@ -13,6 +13,10 @@ import {
 } from "@/lib/clock-edit";
 import { syncClockMirrors } from "@/lib/work-sessions.server";
 import { snapshotBilledActualHours } from "@/lib/hourly-billing.server";
+import {
+  LOCKED_PAY_PERIOD_STATUSES,
+  snapshotHourlyEmployeePay,
+} from "@/lib/hourly-pay.server";
 
 /**
  * Admin correction of clock-in / clock-out times (new fix list item 4).
@@ -145,6 +149,12 @@ export async function updateClockTimes(
     await snapshotBilledActualHours(job.id).catch((e) =>
       console.error("billed-hours snapshot", e)
     );
+    // ...and pays the crew from the same corrected sessions (round 4, fix 5).
+    // It refuses to write under a locked pay period — the same rule the warning
+    // at the bottom of this action reports, off the same status list.
+    await snapshotHourlyEmployeePay(job.id).catch((e) =>
+      console.error("hourly-pay snapshot", e)
+    );
   } else if (cleanerId) {
     // Only someone actually on the job can have times recorded against them.
     // Without this, the upsert below would MINT a JobAssignment row for an
@@ -268,7 +278,7 @@ export async function updateClockTimes(
   const jobDay = job.jobDate ?? job.startTime;
   const period = await db.payPeriod.findFirst({
     where: {
-      status: { in: ["PENDING_APPROVAL", "APPROVED", "PAID"] },
+      status: { in: [...LOCKED_PAY_PERIOD_STATUSES] },
       startDate: { lte: jobDay },
       endDate: { gte: jobDay },
     },
@@ -277,7 +287,7 @@ export async function updateClockTimes(
   if (period) {
     warning = `Payroll for this date is already ${period.status
       .toLowerCase()
-      .replace("_", " ")}. The recorded payout was not changed — adjust it on the pay period if this edit affects it.`;
+      .replace("_", " ")}. The recorded payout was not changed, and neither was this job's stored cleaner pay — adjust it on the pay period if this edit affects it.`;
   }
 
   revalidatePath(`/admin/jobs/${job.id}`);
@@ -340,9 +350,13 @@ export async function deleteJobWorkSession(input: {
   // that were just removed. Every reader falls back to those columns, so the
   // deleted work would go on being reported in hours, payroll and time tracking.
   await syncClockMirrors(job.id, { reconcile: [row.cleanerId] });
-  // Deleted work is work the customer is no longer billed for (Stage 8).
+  // Deleted work is work the customer is no longer billed for (Stage 8) — and
+  // not work the crew is paid for either (round 4, fix 5).
   await snapshotBilledActualHours(job.id).catch((e) =>
     console.error("billed-hours snapshot", e)
+  );
+  await snapshotHourlyEmployeePay(job.id).catch((e) =>
+    console.error("hourly-pay snapshot", e)
   );
 
   const fmt = (d: Date | null) => (d ? fmtDateTime(d) : "—");
@@ -368,7 +382,7 @@ export async function deleteJobWorkSession(input: {
   const jobDay = job.jobDate ?? job.startTime;
   const period = await db.payPeriod.findFirst({
     where: {
-      status: { in: ["PENDING_APPROVAL", "APPROVED", "PAID"] },
+      status: { in: [...LOCKED_PAY_PERIOD_STATUSES] },
       startDate: { lte: jobDay },
       endDate: { gte: jobDay },
     },
@@ -377,7 +391,7 @@ export async function deleteJobWorkSession(input: {
   if (period) {
     warning = `Payroll for this date is already ${period.status
       .toLowerCase()
-      .replace("_", " ")}. The recorded payout was not changed — adjust it on the pay period if this edit affects it.`;
+      .replace("_", " ")}. The recorded payout was not changed, and neither was this job's stored cleaner pay — adjust it on the pay period if this edit affects it.`;
   }
 
   revalidatePath(`/admin/jobs/${job.id}`);

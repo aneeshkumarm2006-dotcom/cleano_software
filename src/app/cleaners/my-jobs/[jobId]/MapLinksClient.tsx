@@ -2,13 +2,41 @@
 
 import { useState } from "react";
 import { Copy, Check, Navigation } from "lucide-react";
+import { formatAddressCopy, formatAddressQuery } from "@/lib/client-address";
 
-export default function MapLinks({ address }: { address: string }) {
+/**
+ * ROUND 4, FIX 7. This used to take one prop — `job.location`, the raw string —
+ * which made both of its jobs wrong at once:
+ *
+ *   • COPY pasted whatever the string happened to hold, so a job whose unit,
+ *     city and postal code live in columns copied a bare street, and a job
+ *     whose unit rides at the tail copied a trailing number nobody reads as an
+ *     apartment. The PDF asks for the apartment to be IN the copied address.
+ *   • The NAVIGATION links passed that same string to the geocoders, unit and
+ *     all — and a unit in the query is the thing that makes Google, Apple and
+ *     Waze worse at finding the building.
+ *
+ * Structured props settle both: the copy is assembled with the unit labelled,
+ * the deep links are assembled without it. Neither has to guess.
+ */
+export default function MapLinks({
+  street,
+  apt,
+  city,
+  postalCode,
+}: {
+  street: string;
+  apt?: string | null;
+  city?: string | null;
+  postalCode?: string | null;
+}) {
   const [copied, setCopied] = useState(false);
-  const encoded = encodeURIComponent(address);
+  const parts = { address: street, aptNumber: apt, city, postalCode };
+  const copyText = formatAddressCopy(parts);
+  const encoded = encodeURIComponent(formatAddressQuery(parts));
 
   function handleCopy() {
-    navigator.clipboard.writeText(address).then(() => {
+    navigator.clipboard.writeText(copyText).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });

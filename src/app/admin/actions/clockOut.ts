@@ -19,6 +19,7 @@ import {
   type InventoryFlagType,
 } from "@/lib/inventory-status";
 import { snapshotBilledActualHours } from "@/lib/hourly-billing.server";
+import { snapshotHourlyEmployeePay } from "@/lib/hourly-pay.server";
 import {
   findOpenSession,
   findRecentlyClosedSession,
@@ -251,6 +252,18 @@ async function finishClockOut(args: {
   if (isFinalClockOut) {
     await snapshotBilledActualHours(args.jobId).catch((e) =>
       console.error("billed-hours snapshot", e)
+    );
+    // ── Cleaner pay: settle it from the same clock (round 4, fix 5) ──────────
+    //
+    // The other half of the sentence above. An HOURLY job's `employeePay` was
+    // computed once at save time from the SCHEDULED window and never revisited,
+    // so a crew that stayed late was paid for hours nobody worked — the PDF's
+    // "pay = total clocked hours × cleaner hourly rate". Same guards, same
+    // best-effort discipline: it refuses a manual figure, a locked pay period
+    // and a job with nothing clocked, and a pay recalculation must never be the
+    // reason a cleaner cannot clock out.
+    await snapshotHourlyEmployeePay(args.jobId).catch((e) =>
+      console.error("hourly-pay snapshot", e)
     );
   }
 

@@ -8,7 +8,10 @@ import { createAssignmentInvites } from "@/lib/invites";
 import { sendProviderLastMinuteOpening } from "@/lib/email";
 import { LAST_MINUTE_CLAIM_BONUS_USD } from "@/lib/policy";
 import { applyStrike } from "@/lib/strikes";
-import { alertIfTraineeLeftUnpaired } from "@/lib/job-assignments";
+import {
+  alertIfTraineeLeftUnpaired,
+  resolveJobLead,
+} from "@/lib/job-assignments";
 
 const LATE_CANCEL_HOURS = 24;
 /** Inside this window the cleaner cancel triggers the last-minute repost. */
@@ -48,16 +51,42 @@ export async function cancelShift(jobId: string): Promise<{ success: true; penal
     const hoursUntilShift = (job.startTime.getTime() - Date.now()) / (1000 * 60 * 60);
     const isLateCancel = hoursUntilShift < LATE_CANCEL_HOURS && hoursUntilShift > 0;
 
-    // Unassign the employee from the job
+    // Unassign the employee from the job — from BOTH halves of the assignment.
+    //
+    // Round 4, fix 2. This used to be an if/ELSE: a cleaner who was the LEAD had
+    // `employeeId` nulled and was left connected to `cleaners`. Since
+    // `resolveJobLead` guarantees the lead is also a member of the crew, that is
+    // the normal shape of a modern job — so cancelling a shift as its lead did
+    // essentially nothing a cleaner could see. `cleanerAssignedWhere` matches on
+    // `employeeId OR cleaners`, so the cancelled shift stayed on their My Jobs
+    // list and their calendar, and they still counted as crew.
+    //
+    // It also broke the last-minute repost below, which only fans out when
+    // `cleaners.length === 0` — a count that could never reach zero while the
+    // canceller was still connected. The shift went quietly leaderless with
+    // nobody invited to cover it.
+    //
+    // The lead moves to whoever is left (or clears), and only when the canceller
+    // held it: a job whose lead sits outside the M2M list (legacy rows predate
+    // the two being kept in step) must not lose that lead to someone else's
+    // cancellation.
+    const remainingCleanerIds = job.cleaners
+      .map((c) => c.id)
+      .filter((id) => id !== employeeId);
+    const nextLead =
+      job.employeeId === employeeId
+        ? resolveJobLead(job.employeeId, remainingCleanerIds)
+        : job.employeeId;
+
     await db.$transaction(async (tx) => {
-      if (job.employeeId === employeeId) {
-        await tx.job.update({ where: { id: jobId }, data: { employeeId: null } });
-      } else {
-        await tx.job.update({
-          where: { id: jobId },
-          data: { cleaners: { disconnect: { id: employeeId } } },
-        });
-      }
+      await tx.job.update({
+        where: { id: jobId },
+        data: {
+          // A no-op when they were only the lead and never in the crew list.
+          cleaners: { disconnect: { id: employeeId } },
+          employeeId: nextLead,
+        },
+      });
 
       // Mark this cleaner's assignment row cancelled (if one exists).
       await tx.jobAssignment.updateMany({

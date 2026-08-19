@@ -143,6 +143,93 @@ export function summariseSessions(
   };
 }
 
+// ── TOTAL CREW HOURS (AWER round 4, fixes 4 + 5) ─────────────────────────────
+//
+// One measurement, two consumers, and that is the point of putting it here:
+//
+//   fix 4  the CUSTOMER is billed `rate × total crew hours`
+//          (src/lib/hourly-billing.ts → billableCrewMinutes)
+//   fix 5  the CLEANER is paid `their own clocked hours × their rate`
+//          (src/lib/cleaner-earnings.ts → computeJobPayShares)
+//
+// The team's pay is the sum of the per-cleaner figures, and the customer's bill
+// is the sum of the same per-cleaner figures. So both sides read the SAME map,
+// and "the customer was billed 6h while the crew was paid for 3h" stops being
+// expressible.
+//
+// BREAK ALLOCATION. A break belongs to the cleaner who took it: their lunch
+// comes off their hours and nobody else's. A break row with no `cleanerId` is
+// the pre-item-26 shape and applies to everyone, and the legacy job-level clock
+// pair — which stands for the whole crew, not one person — has every break
+// deducted from it, matching `jobWorkedHours` on the pay side.
+
+/** A work session that knows whose it is. Null `cleanerId` = the legacy pair. */
+export interface CrewSession extends WorkSession {
+  cleanerId?: string | null;
+}
+
+/** A break that knows whose it is. Null `cleanerId` = "everybody's". */
+export interface CrewBreak extends BreakInterval {
+  cleanerId?: string | null;
+}
+
+/** The key a null/absent `cleanerId` groups under — the legacy job-level pair. */
+const LEGACY_KEY = "";
+
+/**
+ * ACTIVE minutes per cleaner: their sessions summed, their own breaks removed.
+ *
+ * Keyed by `cleanerId`; the legacy job-level pair (no cleanerId) lands under
+ * `""` and is counted ONCE, because there is no per-cleaner data behind it to
+ * expand — a single pair is one record of work, not one per crew member.
+ */
+export function crewActiveMinutesByCleaner(
+  sessions: readonly CrewSession[] | null | undefined,
+  breaks: readonly CrewBreak[] | null | undefined = [],
+  now: Date = new Date()
+): Map<string, number> {
+  const byCleaner = new Map<string, WorkSession[]>();
+  for (const s of sessions ?? []) {
+    const key = s.cleanerId ?? LEGACY_KEY;
+    const list = byCleaner.get(key);
+    if (list) list.push(s);
+    else byCleaner.set(key, [s]);
+  }
+
+  const allBreaks = [...(breaks ?? [])];
+  const out = new Map<string, number>();
+  for (const [key, mine] of byCleaner) {
+    // The legacy pair stands for the whole crew, so every break comes off it —
+    // the same rule `jobWorkedHours` applies when it deducts the job's whole
+    // break total from the job's single clock span.
+    const applicable =
+      key === LEGACY_KEY
+        ? allBreaks
+        : allBreaks.filter((b) => b.cleanerId == null || b.cleanerId === key);
+    out.set(key, summariseSessions(mine, applicable, now).activeMinutes);
+  }
+  return out;
+}
+
+/**
+ * TOTAL CREW MINUTES — every cleaner's active time, added up.
+ *
+ * Two cleaners on site together for three hours is SIX crew hours. That is the
+ * round-4 rule and it reverses Stage 8's union ("three hours"); see the long
+ * note in src/lib/hourly-billing.ts for why the PDF wins.
+ */
+export function crewActiveMinutes(
+  sessions: readonly CrewSession[] | null | undefined,
+  breaks: readonly CrewBreak[] | null | undefined = [],
+  now: Date = new Date()
+): number {
+  let total = 0;
+  for (const minutes of crewActiveMinutesByCleaner(sessions, breaks, now).values()) {
+    total += minutes;
+  }
+  return total;
+}
+
 /**
  * The legacy fallback: turn a pre-JobWorkSession clock pair into the one
  * session it represents. Jobs that predate this table — and any job whose

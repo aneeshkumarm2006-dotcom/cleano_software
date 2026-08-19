@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, MapPin, Clock } from "lucide-react";
+import { AlertTriangle, MapPin, Clock, DoorOpen } from "lucide-react";
 import PayBreakdownModal from "./PayBreakdownModal";
 import JobChatUnreadPill from "@/components/JobChatUnread";
 import { fmtDate, fmtTime } from "@/lib/time";
 import { jobTypeLabel } from "@/lib/calendar-labels";
+import { resolveAddressParts } from "@/lib/client-address";
 
 interface MissingEquipmentInfo {
   productId: string;
@@ -65,6 +66,16 @@ export function JobRow({ job, isMainEmployee, missingEquipment = [], cleanerPay 
   const ctaLabel = canClockIn ? "Start job" : canClockOut ? "Complete job" : "View details";
   const sc = statusClass(job.status);
 
+  // ROUND 4, FIX 7 — the card reads the job's own snapshot only. It has no
+  // `clientAddress` join (three paginated queries feed this list), so an
+  // apartment recorded ONLY against the saved address shows on the job page
+  // rather than here. The two cases that matter both live on the row: a typed
+  // `aptNumber`, and an imported unit at the tail of `location`.
+  const address = resolveAddressParts({
+    address: job.location,
+    aptNumber: job.aptNumber ?? null,
+  });
+
   // Render the job date in the business timezone so a date-only value stored at
   // UTC midnight does not roll back a day (fixes the "one day early" list bug).
   const date = job.jobDate ? new Date(job.jobDate) : null;
@@ -114,7 +125,17 @@ export function JobRow({ job, isMainEmployee, missingEquipment = [], cleanerPay 
             {job.location && (
               <span className="row">
                 <MapPin size={13} className="icon" />
-                <span className="txt">{job.location}</span>
+                <span className="txt">{address.street}</span>
+              </span>
+            )}
+            {/* ROUND 4, FIX 7 — its own row, not appended to the address.
+                `.txt` above is clamped to two lines, so on a narrow phone a
+                unit at the tail of a long address is not merely easy to miss,
+                it is CUT OFF. A short row of its own can't be. */}
+            {address.aptLabel && (
+              <span className="row">
+                <DoorOpen size={13} className="icon" />
+                <span className="cl-jobs2-apt">{address.aptLabel}</span>
               </span>
             )}
             {job.startTime && (

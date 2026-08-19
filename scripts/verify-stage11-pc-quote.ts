@@ -486,10 +486,15 @@ section("3 · no cleaner-facing surface sees an unsettled quote", () => {
     "src/app/cleaners/available-jobs/claimJob.ts",
     "if (isAwaitingQuote(job.quoteStatus))"
   );
+  // Matched on the CALL, not on the whole `AND: [...]` literal it sits in: AWER
+  // round 4 fix 6 added `openForClaimFilter()` beside it, and this check is
+  // about the quote guard being in the race window — not about being the only
+  // thing there. Pinning the array literal made an unrelated guard's arrival
+  // read as the quote guard leaving.
   has(
     "...and in the compare-and-set WHERE, so an admin un-quoting mid-claim wins the race",
     "src/app/cleaners/available-jobs/claimJob.ts",
-    "AND: [quoteSettledFilter()]"
+    "AND: [quoteSettledFilter(),"
   );
   has(
     "the available-jobs preview reuses claimableJobsWhere rather than restating it",

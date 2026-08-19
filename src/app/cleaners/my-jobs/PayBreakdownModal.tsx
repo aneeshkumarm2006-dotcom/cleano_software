@@ -83,7 +83,21 @@ export default function PayBreakdownModal({
             </span>
           </div>
 
-          {hourlyRate != null && (
+          {/* WHY it is that number (round 4, fix 5 — the PDF asks the UI to
+              state which basis is in use). Straight off the share that produced
+              the figure above, so this modal cannot describe a rule the payout
+              did not follow. Cleaner-safe: the hourly labels quote the cleaner's
+              own hours and own rate, never a client charge or a tier %. */}
+          <div className="flex items-start gap-2 px-3 py-2 rounded-xl bg-gray-50">
+            <span className="text-[10px] font-[600] uppercase tracking-wide text-gray-500 mt-0.5">
+              Basis
+            </span>
+            <span className="text-sm text-gray-800">{data.basisLabel}</span>
+          </div>
+
+          {/* The rate on its own line, except when the basis line above already
+              spells out "Nh clocked × $R/h" and would just repeat it. */}
+          {hourlyRate != null && data.basis !== "HOURLY_CLOCK" && (
             <Row label="Hourly rate" value={`$${hourlyRate.toFixed(2)}/hr`} />
           )}
 

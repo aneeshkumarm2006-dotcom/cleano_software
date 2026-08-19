@@ -282,6 +282,12 @@ export default async function JobPage({
     parking: share.parking,
     total: share.total,
     isOverride: payOverrides[uid] != null,
+    // Round 4, fix 5 — the rule that produced `amount`, carried rather than
+    // re-inferred. The Financials tab used to label every row from
+    // `employeePayIsManual` alone, which cannot tell an hourly job settled from
+    // the clock apart from a tier-rate one.
+    basis: share.basis,
+    basisLabel: share.basisLabel,
   }));
 
   // What the card would actually be charged, resolved HERE with the exact
@@ -365,6 +371,10 @@ export default async function JobPage({
     onMyWayLng: job.onMyWayLng ?? null,
     onMyWayLocationAt: job.onMyWayLocationAt?.toISOString() || null,
     status: job.status,
+    // Round 4, fix 6 — feeds the hold banner and its Release button. Without it
+    // the banner could say a job is on hold but not why, which is the exact
+    // complaint the fix exists for.
+    holdReason: job.holdReason,
     price: job.price,
     // Both feed computeJobMoney in the view. `bookingSource` was never passed,
     // so an imported job's add-ons were rendered as if they added to its price;
@@ -379,6 +389,21 @@ export default async function JobPage({
     billedHourlyRate: job.billedHourlyRate,
     billedEstimatedHours: job.billedEstimatedHours,
     billedActualHours: job.billedActualHours,
+    // ── THE CLEANER's pay model (round 4, fix 5) ─────────────────────────────
+    //
+    // This page hands `job` straight to <JobModal mode="edit">, and the modal
+    // OWNS the Pay type control — so it posts `payType` on every save. Without
+    // these two lines the modal read `undefined`, fell back to its PERCENTAGE
+    // default, and the save wrote that default over the job: an hourly-paid job
+    // edited from here came back Percentage with its rate nulled. That is
+    // exactly the client's "cleaner hourly pay not saving", and it is why 7 of
+    // the 11 HOURLY jobs on live data carry no `hourlyRate`.
+    //
+    // Same trap the four billing columns above document, and the same trap the
+    // jobs list was repaired for in Stage 14.3 — this was the mount site nobody
+    // came back to. A verify check now pins all of them together.
+    payType: job.payType,
+    hourlyRate: job.hourlyRate,
     subtotalAmount: job.subtotalAmount,
     gstAmount: job.gstAmount,
     qstAmount: job.qstAmount,

@@ -67,10 +67,13 @@ const MENU_ITEMS: Array<{ id: TabView; label: string; icon: React.ReactNode }> =
 // ── Types ──
 
 interface JobStats {
+  /** ACTIVE jobs — cancelled and on-hold excluded (round 4, fixes 3 + 6). */
   total: number;
   completed: number;
   inProgress: number;
   scheduled: number;
+  /** Excluded from `total`, shown beside it so the record stays visible. */
+  onHold: number;
   cancelled: number;
   avgDuration: number;
   completionRate: number;
@@ -645,6 +648,16 @@ export default function AnalyticsView({
     }
   };
 
+  // What "Total jobs" leaves out, spelled out under it (round 4, fixes 3 + 6).
+  // Same wording as the Dashboard's tile, so the two pages read as one report.
+  const jobsExcludedHint = [
+    "completed",
+    jobStats.onHold > 0 ? `${jobStats.onHold} on hold` : null,
+    jobStats.cancelled > 0 ? `${jobStats.cancelled} cancelled` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
   // ── % recurring (item 11 · Q7) ──
   // A recurring job is one with a parent OR one with children — the frequency
   // itself is never stored on Job. Both readings ship: the headline is the
@@ -687,7 +700,11 @@ export default function AnalyticsView({
           }
         />
         <AnStat icon={TrendingUp} label="Net profit" value={`$${revenueStats.netProfit.toFixed(0)}`} delta={`${revenueStats.profitMargin.toFixed(0)}%`} hint="margin" />
-        <AnStat icon={Briefcase} label="Total jobs" value={jobStats.total} delta={`${jobStats.completed}`} hint="completed" />
+        {/* Fixes 3 + 6 — ACTIVE jobs, with the two excluded kinds named in the
+            hint so the number can be reconciled against the raw list without
+            leaving the page. Identical rule to the Dashboard's tile of the
+            same name; that is the point of `isActiveJob`. */}
+        <AnStat icon={Briefcase} label="Total jobs" value={jobStats.total} delta={`${jobStats.completed}`} hint={jobsExcludedHint} />
         <RecurringStat />
         <AnStat icon={AlertTriangle} label="Pending payments" value={`$${revenueStats.pendingAmount.toFixed(0)}`} hint={`${revenueStats.pendingPayments} jobs outstanding`} />
       </div>
@@ -757,7 +774,9 @@ export default function AnalyticsView({
       {
         label: "Job Completion Rate",
         value: `${jobStats.completionRate.toFixed(1)}%`,
-        subValue: `${jobStats.completed} of ${jobStats.total} jobs`,
+        // "active jobs", because that is now the denominator: a cancelled
+        // booking is not a job we failed to complete (round 4, fixes 3 + 6).
+        subValue: `${jobStats.completed} of ${jobStats.total} active jobs`,
         icon: <CheckCircle2 className="w-5 h-5" />,
       },
       {

@@ -12,6 +12,7 @@ import ClientPaymentMethods from "./ClientPaymentMethods";
 import { jobTypeLabel } from "@/lib/calendar-labels";
 import { avatarColor, initials } from "@/lib/avatar";
 import type { PropertyType } from "@/lib/property-type";
+import { HOLD_LABEL } from "@/lib/job-hold";
 
 type TabKey = "history" | "payments" | "ratings";
 
@@ -100,7 +101,9 @@ interface RatingEntry {
 }
 
 const STATUS_PILLS: Record<string, { bg: string; fg: string; dot: string; label: string }> = {
-  CREATED:     { bg: "rgba(148,163,184,0.18)", fg: "#475569", dot: "#94a3b8", label: "Created" },
+  // Round 4, fix 6 — "Created" was the raw enum leaking into a customer-facing
+  // admin screen. Same word and same amber as every other surface now.
+  CREATED:     { bg: "rgba(217,119,6,0.12)",   fg: "#92400e", dot: "#d97706", label: HOLD_LABEL },
   SCHEDULED:   { bg: "rgba(217,119,6,0.12)",   fg: "#92400e", dot: "#d97706", label: "Scheduled" },
   IN_PROGRESS: { bg: "rgba(2,132,199,0.10)",   fg: "#075985", dot: "#0284c7", label: "In Progress" },
   COMPLETED:   { bg: "rgba(5,150,105,0.10)",   fg: "#065f46", dot: "#10b981", label: "Completed" },

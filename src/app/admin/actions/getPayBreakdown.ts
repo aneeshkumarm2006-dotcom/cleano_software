@@ -64,6 +64,16 @@ export async function getPayBreakdown(
         // Manual per-cleaner pay overrides — without these the number a cleaner
         // sees here would disagree with what payroll actually pays them.
         assignments: { select: { cleanerId: true, payAmount: true } },
+        // THE CLOCK (round 4, fix 5). An HOURLY job is now settled from these
+        // rows — each cleaner's own sessions × the rate — so a payload built
+        // without them falls back to splitting the stored team total evenly and
+        // this modal quotes a cleaner a different figure from the one payroll
+        // pays. `include` loads scalars but never relations, which is exactly
+        // how they were missing: nothing here asked for them.
+        workSessions: {
+          select: { cleanerId: true, startedAt: true, endedAt: true },
+        },
+        breaks: { select: { cleanerId: true, startedAt: true, endedAt: true } },
       },
     });
 
@@ -155,6 +165,11 @@ export async function getPayBreakdown(
         jobId: job.id,
         clientName: job.clientName,
         payType,
+        // Round 4, fix 5 — off the share that produced the amount, never
+        // re-derived. On an hourly job this is what tells the cleaner their pay
+        // came from the clock, and with how many hours on it.
+        basis: share.basis,
+        basisLabel: share.basisLabel,
         hourlyRate: payType === "HOURLY" ? job.hourlyRate ?? null : null,
         tipShare: share.tip,
         parkingShare: share.parking,
@@ -235,6 +250,9 @@ export async function getPayBreakdown(
       billedHourlyLine: hourlyLineLabel(job),
       payType,
       hourlyRate: job.hourlyRate ?? null,
+      // The same two fields the cleaner payload carries, from the same share.
+      basis: share.basis,
+      basisLabel: share.basisLabel,
       // Pay at the bare TIER BASE rate, so the before/after below is a real
       // comparison rather than the same number printed twice (the multiplier is
       // folded into the rate now, not applied to the finished amount).

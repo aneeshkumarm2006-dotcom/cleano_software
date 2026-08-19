@@ -474,6 +474,22 @@ model Job {
   clockInTime                    DateTime?
   clockOutTime                   DateTime?
   status                         JobStatus             @default(CREATED)
+  /// WHY this job is on hold (awerfixesaug18.pdf fix 6, round 4).
+  ///
+  /// Only ever set alongside `status = CREATED`, which from this round on MEANS
+  /// on hold: `saveJob` stamps SCHEDULED explicitly when an admin creates a
+  /// dated job, so `CREATED` stopped being the Prisma default leaking into the
+  /// UI and became a deliberate state. The three automatic producers each write
+  /// their trigger here — a $0 import, a post-construction quote awaiting a
+  /// price, a flexible booking with no agreed date — from the fixed strings in
+  /// src/lib/job-hold.ts, so "automatic holds show their trigger" is one string
+  /// per trigger rather than prose retyped at each call site.
+  ///
+  /// Nullable, and NULL is not "no reason": it is "written before this column
+  /// existed", which `holdReasonText()` renders as "Pending admin review" —
+  /// something an admin can act on. `releaseJobHold` clears it as it moves the
+  /// job to SCHEDULED, so a released job carries no stale explanation.
+  holdReason                     String?
   price                          Float?
   employeePay                    Float?
   /// Is `employeePay` an authoritative MANUAL TEAM TOTAL, or a save-time
@@ -584,6 +600,14 @@ model Job {
   // Cleaner pay model for this job. PERCENTAGE (default) = existing tier/split
   // math. FLAT = cleaner is shown a fixed payout only (no % of job price).
   // HOURLY = cleaner is shown an hourly rate. employeePay stays the payout.
+  //
+  // Round 4, fix 5: on an HOURLY job each cleaner is paid THEIR OWN clocked
+  // hours × `hourlyRate` (all their sessions summed, their own breaks removed),
+  // so `employeePay` — the team total — is the sum of those, and is rewritten
+  // from the clock at final clock-out unless `employeePayIsManual` is set. With
+  // no session rows the stored team total is split evenly, exactly as before.
+  // See computeJobPayShares (src/lib/cleaner-earnings.ts) and
+  // snapshotHourlyEmployeePay (src/lib/hourly-pay.server.ts).
   payType                        JobPayType            @default(PERCENTAGE)
   hourlyRate                     Float?
   // ── Customer-side hourly billing (PDF #8, Stage 8) ────────────────────────
@@ -600,11 +624,20 @@ model Job {
   billingType                    JobBillingType        @default(FLAT)
   /// Customer-facing $/hr. Deliberately NOT named `hourlyRate`.
   billedHourlyRate               Float?
-  /// What the admin quoted. Used until the job is worked.
+  /// What the admin quoted, in TOTAL CREW HOURS. Used until the job is worked.
+  /// 30 means one cleaner for 30h or two for 15h — the crew size is already
+  /// inside the number and is never multiplied in again.
   billedEstimatedHours           Float?
   /// Snapshotted from JobWorkSession at final clock-out, rounded to 0.25h
-  /// (decision D7), and editable by an admin afterwards. ELAPSED hours, not
-  /// man-hours — see the long note in src/lib/hourly-billing.ts.
+  /// (decision D7), and editable by an admin afterwards.
+  ///
+  /// TOTAL CREW HOURS — every cleaner's active time added up, so two cleaners
+  /// on site for three hours is 6. This REVERSES the Stage 8 rule (elapsed /
+  /// union) on the instruction of `awerfixesaug18.pdf` fix 4, under round 4's
+  /// standing "the PDF wins" rule. See the long note in
+  /// src/lib/hourly-billing.ts; the measurement itself is
+  /// `crewActiveMinutes` in src/lib/work-sessions.ts, which is the same
+  /// per-cleaner figure `hourlyRate` above is paid from.
   billedActualHours              Float?
   /// Itemized vs Final-price-override (cleano_new_fixes.pdf fix 2). Nullable on
   /// purpose: NULL = "not stamped", and `resolvePricingMode()` falls back to the
