@@ -12,8 +12,11 @@ const ADMIN_ROUTES = [
 const CLEANER_ROUTES = ["my-jobs","my-pay","my-inventory","available-jobs","availability"];
 
 const nextConfig: NextConfig = {
+  // Type errors fail the build. Turned on for the multi-tenant migration: the
+  // compiler is the guardrail that catches a query missing its organization
+  // scope across ~1,400 call sites. Do not re-enable ignoreBuildErrors.
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
   serverExternalPackages: ["@prisma/client", ".prisma/client"],
   experimental: {
