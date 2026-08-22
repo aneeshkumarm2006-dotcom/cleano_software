@@ -9,6 +9,10 @@ datasource db {
 }
 
 model User {
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId               String?
   deletedAt                    DateTime? // soft-delete (recoverable via Archived view)
   id                           String                  @id @default(cuid())
   name                         String
@@ -95,6 +99,7 @@ model User {
   // which showed up as schema drift. Field-lead grouping reads this column, so
   // the index is kept and declared rather than dropped.
   @@index([fieldLeadId])
+  @@index([organizationId])
 }
 
 model Account {
@@ -134,6 +139,10 @@ model Verification {
 }
 
 model Product {
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId          String?
   deletedAt               DateTime? // soft-delete (recoverable via Archived view)
   id                      String                   @id @default(cuid())
   name                    String
@@ -178,34 +187,50 @@ model Product {
   inventoryChanges        InventoryChange[]
   inventoryFlags          InventoryFlag[]
   links                   ProductLink[]
+
+  @@index([organizationId])
 }
 
 // Extra purchase links for a product (a product can be bought from several
 // places). `purchaseUrl` on Product stays the primary/exact link.
 model ProductLink {
-  id        String   @id @default(cuid())
-  productId String
-  label     String?
-  url       String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String   @id @default(cuid())
+  productId      String
+  label          String?
+  url            String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  product        Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@index([productId])
+  @@index([organizationId])
 }
 
 model AppSetting {
-  id        String   @id @default(cuid())
-  key       String   @unique
-  category  String
-  value     Json
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String   @id @default(cuid())
+  key            String   @unique
+  category       String
+  value          Json
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   @@index([category])
+  @@index([organizationId])
 }
 
 model KitTemplate {
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId    String?
   id                String             @id @default(cuid())
   name              String
   description       String?
@@ -214,21 +239,28 @@ model KitTemplate {
   updatedAt         DateTime           @updatedAt
   items             KitTemplateItem[]
   inventoryRequests InventoryRequest[]
+
+  @@index([organizationId])
 }
 
 model KitTemplateItem {
-  id            String      @id @default(cuid())
-  kitTemplateId String
-  productId     String
-  quantity      Float
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-  kitTemplate   KitTemplate @relation(fields: [kitTemplateId], references: [id], onDelete: Cascade)
-  product       Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String      @id @default(cuid())
+  kitTemplateId  String
+  productId      String
+  quantity       Float
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  kitTemplate    KitTemplate @relation(fields: [kitTemplateId], references: [id], onDelete: Cascade)
+  product        Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@unique([kitTemplateId, productId])
   @@index([kitTemplateId])
   @@index([productId])
+  @@index([organizationId])
 }
 
 // NOTE: `model InventoryRule` stood here until Stage 3 (`_ai_context/TODO.md`).
@@ -240,41 +272,56 @@ model KitTemplateItem {
 // Migration: prisma/migrations/20260817020000_drop_inventory_rule.
 
 model Supplier {
-  id        String          @id @default(cuid())
-  name      String
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String          @id @default(cuid())
+  name           String
   // Suppliers are treated as websites: the primary identifier is the store URL
   // that admin compares prices across. contact/email/phone/address are legacy
   // optional fields kept for backward compatibility.
-  website   String?
-  contact   String?
-  email     String?
-  phone     String?
-  address   String?
-  notes     String?
-  isActive  Boolean         @default(true)
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @updatedAt
-  prices    SupplierPrice[]
+  website        String?
+  contact        String?
+  email          String?
+  phone          String?
+  address        String?
+  notes          String?
+  isActive       Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  prices         SupplierPrice[]
+
+  @@index([organizationId])
 }
 
 model SupplierPrice {
-  id         String   @id @default(cuid())
-  supplierId String
-  productId  String
-  price      Float
-  unit       String?
-  notes      String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
-  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String   @id @default(cuid())
+  supplierId     String
+  productId      String
+  price          Float
+  unit           String?
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  supplier       Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  product        Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@unique([supplierId, productId])
   @@index([supplierId])
   @@index([productId])
+  @@index([organizationId])
 }
 
 model Client {
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId                   String?
   deletedAt                        DateTime? // soft-delete (recoverable via Archived view)
   id                               String                  @id @default(cuid())
   name                             String
@@ -330,12 +377,17 @@ model Client {
   @@index([clientType])
   @@index([isActive])
   @@index([referredByClientId])
+  @@index([organizationId])
 }
 
 // Saved cards on a client profile. Client.defaultPaymentMethodId still points
 // at the default Stripe payment-method id; this table lets admin save several
 // cards, see them (brand/last4/expiry), remove them, and switch the default.
 model ClientPaymentMethod {
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId        String?
   id                    String   @id @default(cuid())
   clientId              String
   stripePaymentMethodId String   @unique
@@ -350,36 +402,46 @@ model ClientPaymentMethod {
   client                Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
   @@index([clientId])
+  @@index([organizationId])
 }
 
 /// Recurring-service cancellation + save-offer tracking. Created only when a
 /// customer cancels their ENTIRE recurring service (not a single cleaning).
 model RecurringCancellation {
-  id            String    @id @default(cuid())
-  clientId      String
-  frequency     String?
-  reason        String?
-  cancelledAt   DateTime  @default(now())
-  emailSentAt   DateTime?
-  offerType     String? // PERCENT | FIXED
-  offerValue    Float?
-  offerCode     String?
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String    @id @default(cuid())
+  clientId       String
+  frequency      String?
+  reason         String?
+  cancelledAt    DateTime  @default(now())
+  emailSentAt    DateTime?
+  offerType      String? // PERCENT | FIXED
+  offerValue     Float?
+  offerCode      String?
   // PENDING | SENT | OPENED | CLICKED | REPLIED | REDEEMED | EXPIRED | NONE
-  offerStatus   String    @default("PENDING")
-  openedAt      DateTime?
-  clickedAt     DateTime?
-  repliedAt     DateTime?
-  reactivatedAt DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  client        Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  offerStatus    String    @default("PENDING")
+  openedAt       DateTime?
+  clickedAt      DateTime?
+  repliedAt      DateTime?
+  reactivatedAt  DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  client         Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
   @@index([clientId])
   @@index([offerStatus])
   @@index([cancelledAt])
+  @@index([organizationId])
 }
 
 model ClientAddress {
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId     String?
   id                 String              @id @default(cuid())
   clientId           String
   label              String              @default("Home")
@@ -427,6 +489,7 @@ model ClientAddress {
   checklistTemplates ChecklistTemplate[]
 
   @@index([clientId])
+  @@index([organizationId])
 }
 
 enum ClientType {
@@ -443,6 +506,10 @@ enum ServiceFrequency {
 }
 
 model Job {
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId                 String?
   // Soft delete — set when bulk/single deleted; hidden from lists, recoverable
   // from the Archived view. Never hard-deleted.
   deletedAt                      DateTime?
@@ -794,40 +861,55 @@ model Job {
   // Used to answer "which bookings is this card attached to?" — needed before
   // a card can be safely removed.
   @@index([stripePaymentMethodId])
+  @@index([organizationId])
 }
 
 model JobAddOn {
-  id        String   @id @default(cuid())
-  jobId     String
-  name      String
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String   @id @default(cuid())
+  jobId          String
+  name           String
   /// The UNIT price. Every consumer computes `price * quantity` — see
   /// addOnLineTotal() in src/lib/job-money.ts, which is the only place that
   /// multiplication should be written.
-  price     Float    @default(0)
+  price          Float    @default(0)
   /// How many of this add-on the customer booked (awerfixes item 7, round 3).
   /// Always >= 1; clamped by addOnQuantity() at every parse boundary rather
   /// than by a CHECK constraint, which Prisma cannot model without drift.
-  quantity  Int      @default(1)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  quantity       Int      @default(1)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  job            Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
   @@index([jobId])
+  @@index([organizationId])
 }
 
 model PricingRule {
-  id        String   @id @default(cuid())
-  bedCount  Int
-  bathCount Int
-  basePrice Float
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String   @id @default(cuid())
+  bedCount       Int
+  bathCount      Int
+  basePrice      Float
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   @@unique([bedCount, bathCount])
+  @@index([organizationId])
 }
 
 model JobProductUsage {
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId  String?
   id              String   @id @default(cuid())
   jobId           String
   productId       String
@@ -841,49 +923,64 @@ model JobProductUsage {
   product         Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@unique([jobId, productId])
+  @@index([organizationId])
 }
 
 model JobLog {
-  id          String       @id @default(cuid())
-  jobId       String
-  userId      String?
-  action      JobLogAction
-  field       String?
-  oldValue    String?
-  newValue    String?
-  description String
-  createdAt   DateTime     @default(now())
-  job         Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  user        User?        @relation("UserJobLogs", fields: [userId], references: [id], onDelete: SetNull)
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String       @id @default(cuid())
+  jobId          String
+  userId         String?
+  action         JobLogAction
+  field          String?
+  oldValue       String?
+  newValue       String?
+  description    String
+  createdAt      DateTime     @default(now())
+  job            Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  user           User?        @relation("UserJobLogs", fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([jobId])
   @@index([createdAt])
   @@index([userId])
+  @@index([organizationId])
 }
 
 model InventoryRequest {
-  id          String        @id @default(cuid())
-  employeeId  String
-  productId   String?
-  kitId       String?
-  quantity    Float
-  reason      String?
-  status      RequestStatus @default(PENDING)
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-  employee    User          @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  product     Product?      @relation(fields: [productId], references: [id], onDelete: SetNull)
-  kitTemplate KitTemplate?  @relation(fields: [kitId], references: [id], onDelete: SetNull)
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String        @id @default(cuid())
+  employeeId     String
+  productId      String?
+  kitId          String?
+  quantity       Float
+  reason         String?
+  status         RequestStatus @default(PENDING)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  employee       User          @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  product        Product?      @relation(fields: [productId], references: [id], onDelete: SetNull)
+  kitTemplate    KitTemplate?  @relation(fields: [kitId], references: [id], onDelete: SetNull)
 
   @@index([employeeId])
   @@index([productId])
   @@index([kitId])
+  @@index([organizationId])
 }
 
 // Audit trail for every inventory count change (admin warehouse stock OR a
 // cleaner's assigned stock). One row per adjustment: item, delta, reason, who,
 // when — surfaced on the redesigned inventory page.
 model InventoryChange {
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
   id             String           @id @default(cuid())
   productId      String
   // Set when the change is to a specific cleaner's inventory; null = warehouse.
@@ -914,6 +1011,7 @@ model InventoryChange {
 
   @@index([productId, createdAt])
   @@index([employeeId])
+  @@index([organizationId])
 }
 
 /// Admin review/restock flag (PDF #1/#2). Deliberately NOT an InventoryRequest:
@@ -921,27 +1019,36 @@ model InventoryChange {
 /// flooded with auto-created rows. A flag is "someone should look at this",
 /// which is a different thing from "please approve N units".
 model InventoryFlag {
-  id           String              @id @default(cuid())
-  type         InventoryFlagType
-  status       InventoryFlagStatus @default(OPEN)
-  employeeId   String
-  productId    String
-  jobId        String? // set when raised at clock-out
-  source       String // "CLOCK_OUT" | "RECOUNT" | "ISSUE_REPORT" | "ADMIN"
-  notes        String?
-  createdAt    DateTime            @default(now())
-  resolvedAt   DateTime?
-  resolvedById String?
-  employee     User                @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  product      Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
-  job          Job?                @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String              @id @default(cuid())
+  type           InventoryFlagType
+  status         InventoryFlagStatus @default(OPEN)
+  employeeId     String
+  productId      String
+  jobId          String? // set when raised at clock-out
+  source         String // "CLOCK_OUT" | "RECOUNT" | "ISSUE_REPORT" | "ADMIN"
+  notes          String?
+  createdAt      DateTime            @default(now())
+  resolvedAt     DateTime?
+  resolvedById   String?
+  employee       User                @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  product        Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
+  job            Job?                @relation(fields: [jobId], references: [id], onDelete: SetNull)
 
   @@index([status, createdAt])
   @@index([employeeId])
   @@index([productId])
+  @@index([organizationId])
 }
 
 model EmployeeProduct {
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId  String?
   id              String              @id @default(cuid())
   employeeId      String
   productId       String
@@ -965,27 +1072,37 @@ model EmployeeProduct {
   @@unique([employeeId, productId])
   @@index([employeeId])
   @@index([productId])
+  @@index([organizationId])
 }
 
 model PayPeriod {
-  id           String          @id @default(cuid())
-  startDate    DateTime
-  endDate      DateTime
-  status       PayPeriodStatus @default(DRAFT)
-  notes        String?
-  approvedById String?
-  approvedAt   DateTime?
-  paidAt       DateTime?
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
-  approvedBy   User?           @relation("PayPeriodApprover", fields: [approvedById], references: [id], onDelete: SetNull)
-  payouts      Payout[]
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String          @id @default(cuid())
+  startDate      DateTime
+  endDate        DateTime
+  status         PayPeriodStatus @default(DRAFT)
+  notes          String?
+  approvedById   String?
+  approvedAt     DateTime?
+  paidAt         DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  approvedBy     User?           @relation("PayPeriodApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+  payouts        Payout[]
 
   @@index([startDate])
   @@index([status])
+  @@index([organizationId])
 }
 
 model Payout {
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
   id             String    @id @default(cuid())
   payPeriodId    String
   employeeId     String
@@ -1005,46 +1122,61 @@ model Payout {
   @@unique([payPeriodId, employeeId])
   @@index([payPeriodId])
   @@index([employeeId])
+  @@index([organizationId])
 }
 
 model Transaction {
-  id          String         @id @default(cuid())
-  date        DateTime       @default(now())
-  categoryId  String
-  amount      Float
-  description String?
-  notes       String?
-  jobId       String?
-  source      String?
-  taxAmount   Float          @default(0)
-  isAuto      Boolean        @default(false)
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-  job         Job?           @relation(fields: [jobId], references: [id], onDelete: SetNull)
-  category    BudgetCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String         @id @default(cuid())
+  date           DateTime       @default(now())
+  categoryId     String
+  amount         Float
+  description    String?
+  notes          String?
+  jobId          String?
+  source         String?
+  taxAmount      Float          @default(0)
+  isAuto         Boolean        @default(false)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  job            Job?           @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  category       BudgetCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
 
   @@index([date])
   @@index([categoryId])
   @@index([jobId])
+  @@index([organizationId])
 }
 
 model RagWash {
-  id         String   @id @default(cuid())
-  employeeId String
-  washDate   DateTime @default(now())
-  ragCount   Int      @default(0)
-  padCount   Int      @default(0)
-  notes      String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  employee   User     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String   @id @default(cuid())
+  employeeId     String
+  washDate       DateTime @default(now())
+  ragCount       Int      @default(0)
+  padCount       Int      @default(0)
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  employee       User     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
   @@index([employeeId])
   @@index([washDate])
+  @@index([organizationId])
 }
 
 // Per-spec rag-wash credit-to-cash redemption. Records every payout drain.
 model WashPayout {
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId   String?
   id               String           @id @default(cuid())
   employeeId       String
   ragCreditsUsed   Int              @default(0)
@@ -1060,6 +1192,7 @@ model WashPayout {
   @@index([employeeId])
   @@index([status])
   @@index([createdAt])
+  @@index([organizationId])
 }
 
 enum WashPayoutStatus {
@@ -1069,18 +1202,23 @@ enum WashPayoutStatus {
 }
 
 model Budget {
-  id         String         @id @default(cuid())
-  categoryId String
-  period     String
-  amount     Float
-  notes      String?
-  createdAt  DateTime       @default(now())
-  updatedAt  DateTime       @updatedAt
-  category   BudgetCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String         @id @default(cuid())
+  categoryId     String
+  period         String
+  amount         Float
+  notes          String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  category       BudgetCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
 
   @@unique([categoryId, period])
   @@index([period])
   @@index([categoryId])
+  @@index([organizationId])
 }
 
 /// Budget / transaction categories. Was the hard `TransactionCategory` enum
@@ -1096,21 +1234,26 @@ model Budget {
 /// Deleting a category that has budgets or transactions sets `archivedAt`
 /// instead: it disappears from the pickers, history keeps rendering.
 model BudgetCategory {
-  id         String             @id @default(cuid())
-  name       String
-  slug       String             @unique
-  kind       BudgetCategoryKind @default(EXPENSE)
-  isDefault  Boolean            @default(false)
-  sortOrder  Int                @default(0)
-  archivedAt DateTime?
-  createdAt  DateTime           @default(now())
-  updatedAt  DateTime           @updatedAt
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String             @id @default(cuid())
+  name           String
+  slug           String             @unique
+  kind           BudgetCategoryKind @default(EXPENSE)
+  isDefault      Boolean            @default(false)
+  sortOrder      Int                @default(0)
+  archivedAt     DateTime?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
 
   budgets      Budget[]
   transactions Transaction[]
 
   @@index([archivedAt])
   @@index([sortOrder])
+  @@index([organizationId])
 }
 
 /// Whether amounts filed under a category count as money in or money out.
@@ -1236,22 +1379,27 @@ enum NotificationChannel {
 // per-channel enabled flag. Seeded from the Notification Catalog spec; admin
 // can toggle any row from Settings → Notifications.
 model NotificationSetting {
-  id         String                @id @default(cuid())
-  recipient  NotificationRecipient
-  category   String
-  key        String
-  label      String
-  trigger    String
-  channel    NotificationChannel
-  enabled    Boolean               @default(false)
-  isProposed Boolean               @default(false)
-  sortOrder  Int                   @default(0)
-  createdAt  DateTime              @default(now())
-  updatedAt  DateTime              @updatedAt
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String                @id @default(cuid())
+  recipient      NotificationRecipient
+  category       String
+  key            String
+  label          String
+  trigger        String
+  channel        NotificationChannel
+  enabled        Boolean               @default(false)
+  isProposed     Boolean               @default(false)
+  sortOrder      Int                   @default(0)
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
 
   @@unique([recipient, key, channel])
   @@index([recipient])
   @@index([category])
+  @@index([organizationId])
 }
 
 enum JobStatus {
@@ -1386,6 +1534,10 @@ enum InvoiceStatus {
 }
 
 model Invoice {
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
   deletedAt      DateTime? // soft-delete (recoverable via Archived view)
   id             String            @id @default(cuid())
   invoiceNumber  String            @unique
@@ -1412,29 +1564,39 @@ model Invoice {
   @@index([jobId])
   @@index([status])
   @@index([createdAt])
+  @@index([organizationId])
 }
 
 model InvoiceLineItem {
-  id          String   @id @default(cuid())
-  invoiceId   String
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String   @id @default(cuid())
+  invoiceId      String
   // Consolidated invoices: a multi-job invoice links each line to its job so
   // marking the invoice paid can flip every covered job to Paid.
-  jobId       String?
-  description String
-  quantity    Float    @default(1)
-  unitPrice   Float    @default(0)
-  amount      Float    @default(0)
-  sortOrder   Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  jobLink     Job?     @relation("InvoiceLineJobs", fields: [jobId], references: [id], onDelete: SetNull)
+  jobId          String?
+  description    String
+  quantity       Float    @default(1)
+  unitPrice      Float    @default(0)
+  amount         Float    @default(0)
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  invoice        Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  jobLink        Job?     @relation("InvoiceLineJobs", fields: [jobId], references: [id], onDelete: SetNull)
 
   @@index([invoiceId])
   @@index([jobId])
+  @@index([organizationId])
 }
 
 model Alert {
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId  String?
   id              String        @id @default(cuid())
   type            AlertType
   severity        AlertSeverity @default(WARNING)
@@ -1457,23 +1619,33 @@ model Alert {
   @@index([createdAt])
   @@index([recipientUserId])
   @@index([employeeId])
+  @@index([organizationId])
 }
 
 model Target {
-  id          String       @id @default(cuid())
-  metric      TargetMetric
-  period      TargetPeriod
-  periodStart DateTime
-  targetValue Float
-  notes       String?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String       @id @default(cuid())
+  metric         TargetMetric
+  period         TargetPeriod
+  periodStart    DateTime
+  targetValue    Float
+  notes          String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
   @@unique([metric, period, periodStart])
   @@index([periodStart])
+  @@index([organizationId])
 }
 
 model AlertRoutingRule {
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId     String?
   id                 String         @id @default(cuid())
   alertType          AlertType
   recipientRole      Roles
@@ -1487,6 +1659,7 @@ model AlertRoutingRule {
   @@unique([alertType, recipientRole])
   @@index([alertType])
   @@index([recipientRole])
+  @@index([organizationId])
 }
 
 enum AlertFrequency {
@@ -1496,28 +1669,33 @@ enum AlertFrequency {
 }
 
 model Complaint {
-  id           String            @id @default(cuid())
-  jobId        String?
-  clientId     String?
-  employeeId   String?
-  resolvedById String?
-  category     ComplaintCategory
-  priority     ComplaintPriority @default(MEDIUM)
-  details      String            @db.Text
-  status       ComplaintStatus   @default(OPEN)
-  resolvedAt   DateTime?
-  createdAt    DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
-  job          Job?              @relation(fields: [jobId], references: [id], onDelete: SetNull)
-  client       Client?           @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  employee     User?             @relation("EmployeeComplaints", fields: [employeeId], references: [id], onDelete: SetNull)
-  resolvedBy   User?             @relation("ResolvedComplaints", fields: [resolvedById], references: [id], onDelete: SetNull)
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String            @id @default(cuid())
+  jobId          String?
+  clientId       String?
+  employeeId     String?
+  resolvedById   String?
+  category       ComplaintCategory
+  priority       ComplaintPriority @default(MEDIUM)
+  details        String            @db.Text
+  status         ComplaintStatus   @default(OPEN)
+  resolvedAt     DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  job            Job?              @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  client         Client?           @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  employee       User?             @relation("EmployeeComplaints", fields: [employeeId], references: [id], onDelete: SetNull)
+  resolvedBy     User?             @relation("ResolvedComplaints", fields: [resolvedById], references: [id], onDelete: SetNull)
 
   @@index([jobId])
   @@index([clientId])
   @@index([employeeId])
   @@index([status])
   @@index([createdAt])
+  @@index([organizationId])
 }
 
 enum ComplaintCategory {
@@ -1582,27 +1760,32 @@ enum StrikeStatus {
 }
 
 model CleanerStrike {
-  id          String       @id @default(cuid())
-  cleanerId   String
-  reasonCode  StrikeReason
-  reason      String
-  jobId       String?
-  status      StrikeStatus @default(ACTIVE)
-  isAuto      Boolean      @default(true)
-  appliedById String?
-  adminNote   String?
-  excusedById String?
-  excusedAt   DateTime?
-  expiresAt   DateTime
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  cleaner     User         @relation("CleanerStrikes", fields: [cleanerId], references: [id], onDelete: Cascade)
-  job         Job?         @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String       @id @default(cuid())
+  cleanerId      String
+  reasonCode     StrikeReason
+  reason         String
+  jobId          String?
+  status         StrikeStatus @default(ACTIVE)
+  isAuto         Boolean      @default(true)
+  appliedById    String?
+  adminNote      String?
+  excusedById    String?
+  excusedAt      DateTime?
+  expiresAt      DateTime
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  cleaner        User         @relation("CleanerStrikes", fields: [cleanerId], references: [id], onDelete: Cascade)
+  job            Job?         @relation(fields: [jobId], references: [id], onDelete: SetNull)
 
   @@index([cleanerId])
   @@index([status])
   @@index([jobId])
   @@index([expiresAt])
+  @@index([organizationId])
 }
 
 enum AlertSeverity {
@@ -1667,21 +1850,26 @@ enum WithdrawalStatus {
 }
 
 model EmployeeAvailability {
-  id            String          @id @default(cuid())
-  employeeId    String
-  day           AvailabilityDay
-  startTime     String
-  endTime       String
-  isAvailable   Boolean         @default(true)
-  isRecurring   Boolean         @default(true)
-  effectiveFrom DateTime?
-  effectiveTo   DateTime?
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
-  employee      User            @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String          @id @default(cuid())
+  employeeId     String
+  day            AvailabilityDay
+  startTime      String
+  endTime        String
+  isAvailable    Boolean         @default(true)
+  isRecurring    Boolean         @default(true)
+  effectiveFrom  DateTime?
+  effectiveTo    DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  employee       User            @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
   @@unique([employeeId, day])
   @@index([employeeId])
+  @@index([organizationId])
 }
 
 // One-off date blocks (vacation, appointment, sick day) layered ON TOP of the
@@ -1689,21 +1877,30 @@ model EmployeeAvailability {
 // (employee, weekday) so it can't express "this specific Monday is off" —
 // that's what this is for. A row = the cleaner is unavailable that date.
 model AvailabilityException {
-  id         String   @id @default(cuid())
-  employeeId String
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String   @id @default(cuid())
+  employeeId     String
   // Date-only (midnight, business timezone) — the blocked day.
-  date       DateTime
-  reason     String?
-  createdAt  DateTime @default(now())
-  employee   User     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  date           DateTime
+  reason         String?
+  createdAt      DateTime @default(now())
+  employee       User     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
   @@unique([employeeId, date])
   @@index([employeeId, date])
+  @@index([organizationId])
 }
 
 model JobPhoto {
-  id         String       @id @default(cuid())
-  jobId      String
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String       @id @default(cuid())
+  jobId          String
   /// WHO uploaded it. NULL = the CUSTOMER did, from the public booking flow
   /// (PDF #9, Stage 11) — there is no `User` row for a guest booker and no crew
   /// assigned yet, so the only honest value is "nobody on staff".
@@ -1713,9 +1910,9 @@ model JobPhoto {
   /// (see verify-awer-fixes-3.ts §10). Every pre-existing row has an employee,
   /// so nothing changes for cleaner-uploaded photos; readers label a null
   /// uploader rather than assuming one.
-  employeeId String?
-  url        String
-  caption    String?
+  employeeId     String?
+  url            String
+  caption        String?
   /// WHAT this photo documents (new photo/address fixes, item 1).
   ///
   /// Before this column the only discriminator was the free-text `caption`, so
@@ -1728,19 +1925,20 @@ model JobPhoto {
   /// the bucket the galleries show without a badge. A nullable column would
   /// have meant the same thing while forcing every reader to handle a fourth
   /// state that is really the fifth value of a four-value enum.
-  kind       JobPhotoKind @default(GENERAL)
-  createdAt  DateTime     @default(now())
-  updatedAt  DateTime     @updatedAt
-  job        Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  kind           JobPhotoKind @default(GENERAL)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  job            Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
   /// Cascade is kept from before: deleting a cleaner still removes the photos
   /// they took. It can never fire for a booking photo, whose employeeId is NULL.
-  employee   User?        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employee       User?        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
   @@index([jobId])
   @@index([employeeId])
   /// The galleries group and filter by type within one job, which is exactly
   /// this pair — and the per-job photo cap counts rows the same way.
   @@index([jobId, kind])
+  @@index([organizationId])
 }
 
 /// How a job photo is filed (new photo/address fixes, item 1).
@@ -1770,6 +1968,10 @@ enum JobChatSenderRole {
 // can view/moderate). Keyed by jobId — the job IS the thread. In-app both sides
 // (client uses the customer portal); a Twilio SMS bridge can be layered later.
 model JobChatMessage {
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId   String?
   id               String            @id @default(cuid())
   jobId            String
   senderId         String?
@@ -1804,55 +2006,76 @@ model JobChatMessage {
   job              Job               @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
   @@index([jobId, createdAt])
+  @@index([organizationId])
 }
 
 // Cleaner group chat (spec #15). One default "All cleaners" channel; admin can
 // create more and moderate (soft-delete messages). Visible to all cleaners.
 model GroupChannel {
-  id          String               @id @default(cuid())
-  name        String
-  isDefault   Boolean              @default(false)
-  isActive    Boolean              @default(true)
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String               @id @default(cuid())
+  name           String
+  isDefault      Boolean              @default(false)
+  isActive       Boolean              @default(true)
   // Direct (1:1) cleaner-to-cleaner conversation — exactly two member rows.
-  isDirect    Boolean              @default(false)
-  createdById String?
-  createdAt   DateTime             @default(now())
-  updatedAt   DateTime             @updatedAt
-  messages    GroupMessage[]
-  members     GroupChannelMember[]
+  isDirect       Boolean              @default(false)
+  createdById    String?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  messages       GroupMessage[]
+  members        GroupChannelMember[]
+
+  @@index([organizationId])
 }
 
 // Channel membership. The default (isDefault) channel has no member rows —
 // all staff belong implicitly. Custom channels and DMs list members explicitly.
 model GroupChannelMember {
-  id        String       @id @default(cuid())
-  channelId String
-  userId    String
-  createdAt DateTime     @default(now())
-  channel   GroupChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String       @id @default(cuid())
+  channelId      String
+  userId         String
+  createdAt      DateTime     @default(now())
+  channel        GroupChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
 
   @@unique([channelId, userId])
   @@index([userId])
+  @@index([organizationId])
 }
 
 model Announcement {
-  id         String                 @id @default(cuid())
-  title      String
-  body       String                 @db.Text
-  pinned     Boolean                @default(false)
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String                 @id @default(cuid())
+  title          String
+  body           String                 @db.Text
+  pinned         Boolean                @default(false)
   // Denormalized author (same pattern as GroupMessage.senderName).
-  authorId   String?
-  authorName String?
-  createdAt  DateTime               @default(now())
-  updatedAt  DateTime               @updatedAt
-  reactions  AnnouncementReaction[]
+  authorId       String?
+  authorName     String?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  reactions      AnnouncementReaction[]
 
   @@index([createdAt])
+  @@index([organizationId])
 }
 
 // One reaction per user per announcement (unique constraint) — picking a
 // different emoji replaces the previous one; picking the same one removes it.
 model AnnouncementReaction {
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
   id             String       @id @default(cuid())
   announcementId String
   userId         String
@@ -1862,48 +2085,68 @@ model AnnouncementReaction {
 
   @@unique([announcementId, userId])
   @@index([announcementId])
+  @@index([organizationId])
 }
 
 model GroupMessage {
-  id         String       @id @default(cuid())
-  channelId  String
-  senderId   String
-  senderName String
-  body       String       @db.Text
-  deletedAt  DateTime?
-  createdAt  DateTime     @default(now())
-  channel    GroupChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String       @id @default(cuid())
+  channelId      String
+  senderId       String
+  senderName     String
+  body           String       @db.Text
+  deletedAt      DateTime?
+  createdAt      DateTime     @default(now())
+  channel        GroupChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
 
   @@index([channelId, createdAt])
+  @@index([organizationId])
 }
 
 // Per-user read cursor for a group channel — powers unread badges + read
 // receipts in team chat (spec: job chat and team chat track read separately).
 model GroupChannelRead {
-  id         String   @id @default(cuid())
-  channelId  String
-  userId     String
-  lastReadAt DateTime @default(now())
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String   @id @default(cuid())
+  channelId      String
+  userId         String
+  lastReadAt     DateTime @default(now())
 
   @@unique([channelId, userId])
   @@index([userId])
+  @@index([organizationId])
 }
 
 // Photos a CLIENT attaches to a poor review. Distinct from JobPhoto (cleaner
 // before/after photos) — these have no employeeId and are created from the
 // public/portal rating flow. Visible to admin alongside the review.
 model ReviewPhoto {
-  id        String   @id @default(cuid())
-  jobId     String
-  url       String
-  rating    Int?
-  createdAt DateTime @default(now())
-  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String   @id @default(cuid())
+  jobId          String
+  url            String
+  rating         Int?
+  createdAt      DateTime @default(now())
+  job            Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
   @@index([jobId])
+  @@index([organizationId])
 }
 
 model ChecklistTemplate {
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId  String?
   id              String  @id @default(cuid())
   name            String
   jobType         String?
@@ -1944,33 +2187,43 @@ model ChecklistTemplate {
 
   @@index([clientId])
   @@index([clientAddressId])
+  @@index([organizationId])
 }
 
 model ChecklistTemplateItem {
-  id          String            @id @default(cuid())
-  templateId  String
-  title       String
-  description String?
-  isRequired  Boolean           @default(true)
-  sortOrder   Int               @default(0)
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
-  template    ChecklistTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String            @id @default(cuid())
+  templateId     String
+  title          String
+  description    String?
+  isRequired     Boolean           @default(true)
+  sortOrder      Int               @default(0)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  template       ChecklistTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
 
   @@index([templateId])
+  @@index([organizationId])
 }
 
 model JobChecklist {
-  id         String             @id @default(cuid())
-  jobId      String
-  employeeId String
-  templateId String?
-  createdAt  DateTime           @default(now())
-  updatedAt  DateTime           @updatedAt
-  job        Job                @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  employee   User               @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  template   ChecklistTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
-  items      JobChecklistItem[]
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String             @id @default(cuid())
+  jobId          String
+  employeeId     String
+  templateId     String?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  job            Job                @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  employee       User               @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  template       ChecklistTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  items          JobChecklistItem[]
 
   // One checklist per cleaner per job. Generation now fires when the cleaner
   // OPENS the job (awerfixes.pdf item 5) rather than from a button, which turns
@@ -1981,71 +2234,93 @@ model JobChecklist {
   @@unique([jobId, employeeId])
   @@index([jobId])
   @@index([employeeId])
+  @@index([organizationId])
 }
 
 model JobChecklistItem {
-  id          String              @id @default(cuid())
-  checklistId String
-  title       String
-  description String?
-  status      ChecklistItemStatus @default(PENDING)
-  isRequired  Boolean             @default(true)
-  sortOrder   Int                 @default(0)
-  notes       String?
-  completedAt DateTime?
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
-  checklist   JobChecklist        @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String              @id @default(cuid())
+  checklistId    String
+  title          String
+  description    String?
+  status         ChecklistItemStatus @default(PENDING)
+  isRequired     Boolean             @default(true)
+  sortOrder      Int                 @default(0)
+  notes          String?
+  completedAt    DateTime?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  checklist      JobChecklist        @relation(fields: [checklistId], references: [id], onDelete: Cascade)
 
   @@index([checklistId])
+  @@index([organizationId])
 }
 
 model Document {
-  id          String              @id @default(cuid())
-  title       String
-  description String?
-  content     String?             @db.Text
-  fileUrl     String?
-  version     String              @default("1.0")
-  dueDate     DateTime?
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
-  signatures  DocumentSignature[]
-  accessLogs  DocumentAccessLog[]
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String              @id @default(cuid())
+  title          String
+  description    String?
+  content        String?             @db.Text
+  fileUrl        String?
+  version        String              @default("1.0")
+  dueDate        DateTime?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  signatures     DocumentSignature[]
+  accessLogs     DocumentAccessLog[]
+
+  @@index([organizationId])
 }
 
 // Real document activity for the Training & Docs "Document access log"
 // (spec item 20) — who opened/downloaded/completed which document, when.
 model DocumentAccessLog {
-  id         String   @id @default(cuid())
-  documentId String
-  userId     String
-  action     String // OPEN | VIEW | DOWNLOAD | COMPLETE
-  createdAt  DateTime @default(now())
-  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String   @id @default(cuid())
+  documentId     String
+  userId         String
+  action         String // OPEN | VIEW | DOWNLOAD | COMPLETE
+  createdAt      DateTime @default(now())
+  document       Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([documentId, createdAt])
   @@index([userId, createdAt])
   @@index([createdAt])
+  @@index([organizationId])
 }
 
 model DocumentSignature {
-  id           String         @id @default(cuid())
-  documentId   String
-  employeeId   String
-  status       DocumentStatus @default(PENDING)
-  signatureUrl String?
-  signedAt     DateTime?
-  ipAddress    String?
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
-  document     Document       @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  employee     User           @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String         @id @default(cuid())
+  documentId     String
+  employeeId     String
+  status         DocumentStatus @default(PENDING)
+  signatureUrl   String?
+  signedAt       DateTime?
+  ipAddress      String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  document       Document       @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  employee       User           @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
   @@unique([documentId, employeeId])
   @@index([documentId])
   @@index([employeeId])
+  @@index([organizationId])
 }
 
 /// A file the EMPLOYEE uploads about themselves, as opposed to a Document the
@@ -2065,70 +2340,95 @@ model DocumentSignature {
 /// because signing needs both and the repo's only URL→public-id parser
 /// (deleteJobPhoto.ts) assumes an `/upload/` path it will never see here.
 model EmployeeFile {
-  id           String   @id @default(cuid())
-  employeeId   String
-  kind         String // VOID_CHEQUE
-  fileUrl      String
-  publicId     String
-  resourceType String   @default("image") // Cloudinary resource_type: image | raw
-  fileName     String
-  mimeType     String
-  uploadedAt   DateTime @default(now())
-  employee     User     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String   @id @default(cuid())
+  employeeId     String
+  kind           String // VOID_CHEQUE
+  fileUrl        String
+  publicId       String
+  resourceType   String   @default("image") // Cloudinary resource_type: image | raw
+  fileName       String
+  mimeType       String
+  uploadedAt     DateTime @default(now())
+  employee       User     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
   // The only read this table serves: "newest file of this kind for this
   // employee". One index covers it.
   @@index([employeeId, kind, uploadedAt])
+  @@index([organizationId])
 }
 
 model TrainingModule {
-  id          String             @id @default(cuid())
-  title       String
-  description String?
-  videoUrl    String?
-  duration    Int?
-  isRequired  Boolean            @default(false)
-  sortOrder   Int                @default(0)
-  isActive    Boolean            @default(true)
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
-  quizzes     TrainingQuiz[]
-  progress    TrainingProgress[]
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String             @id @default(cuid())
+  title          String
+  description    String?
+  videoUrl       String?
+  duration       Int?
+  isRequired     Boolean            @default(false)
+  sortOrder      Int                @default(0)
+  isActive       Boolean            @default(true)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  quizzes        TrainingQuiz[]
+  progress       TrainingProgress[]
+
+  @@index([organizationId])
 }
 
 model TrainingQuiz {
-  id        String         @id @default(cuid())
-  moduleId  String
-  question  String
-  options   Json
-  sortOrder Int            @default(0)
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
-  module    TrainingModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String         @id @default(cuid())
+  moduleId       String
+  question       String
+  options        Json
+  sortOrder      Int            @default(0)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  module         TrainingModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
 
   @@index([moduleId])
+  @@index([organizationId])
 }
 
 model TrainingProgress {
-  id            String         @id @default(cuid())
-  moduleId      String
-  employeeId    String
-  status        TrainingStatus @default(NOT_STARTED)
-  videoProgress Float          @default(0)
-  quizScore     Float?
-  quizAttempts  Int            @default(0)
-  completedAt   DateTime?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  module        TrainingModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
-  employee      User           @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String         @id @default(cuid())
+  moduleId       String
+  employeeId     String
+  status         TrainingStatus @default(NOT_STARTED)
+  videoProgress  Float          @default(0)
+  quizScore      Float?
+  quizAttempts   Int            @default(0)
+  completedAt    DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  module         TrainingModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  employee       User           @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
   @@unique([moduleId, employeeId])
   @@index([moduleId])
   @@index([employeeId])
+  @@index([organizationId])
 }
 
 model EmployeeRating {
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
   id             String    @id @default(cuid())
   employeeId     String
   jobId          String?
@@ -2156,78 +2456,105 @@ model EmployeeRating {
   @@index([createdAt])
   // Averages/counts always read the ACTIVE subset (item 5).
   @@index([employeeId, excludedAt])
+  @@index([organizationId])
 }
 
 model Withdrawal {
-  id            String           @id @default(cuid())
-  employeeId    String
-  amount        Float
-  status        WithdrawalStatus @default(PENDING)
-  paymentMethod PaymentType?
-  notes         String?
-  processedAt   DateTime?
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
-  employee      User             @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String           @id @default(cuid())
+  employeeId     String
+  amount         Float
+  status         WithdrawalStatus @default(PENDING)
+  paymentMethod  PaymentType?
+  notes          String?
+  processedAt    DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  employee       User             @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
   @@index([employeeId])
   @@index([status])
+  @@index([organizationId])
 }
 
 model InventoryLocation {
-  id        String                   @id @default(cuid())
-  name      String
-  address   String?
-  notes     String?
-  isActive  Boolean                  @default(true)
-  createdAt DateTime                 @default(now())
-  updatedAt DateTime                 @updatedAt
-  stock     InventoryLocationStock[]
-  checkouts InventoryCheckout[]
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String                   @id @default(cuid())
+  name           String
+  address        String?
+  notes          String?
+  isActive       Boolean                  @default(true)
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+  stock          InventoryLocationStock[]
+  checkouts      InventoryCheckout[]
+
+  @@index([organizationId])
 }
 
 model InventoryLocationStock {
-  id         String            @id @default(cuid())
-  locationId String
-  productId  String
-  quantity   Float             @default(0)
-  createdAt  DateTime          @default(now())
-  updatedAt  DateTime          @updatedAt
-  location   InventoryLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
-  product    Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String            @id @default(cuid())
+  locationId     String
+  productId      String
+  quantity       Float             @default(0)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  location       InventoryLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  product        Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@unique([locationId, productId])
   @@index([locationId])
   @@index([productId])
+  @@index([organizationId])
 }
 
 model InventoryCheckout {
-  id         String                  @id @default(cuid())
-  employeeId String
-  locationId String
-  notes      String?
-  createdAt  DateTime                @default(now())
-  updatedAt  DateTime                @updatedAt
-  employee   User                    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  location   InventoryLocation       @relation(fields: [locationId], references: [id], onDelete: Cascade)
-  items      InventoryCheckoutItem[]
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String                  @id @default(cuid())
+  employeeId     String
+  locationId     String
+  notes          String?
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+  employee       User                    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  location       InventoryLocation       @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  items          InventoryCheckoutItem[]
 
   @@index([employeeId])
   @@index([locationId])
+  @@index([organizationId])
 }
 
 model InventoryCheckoutItem {
-  id         String            @id @default(cuid())
-  checkoutId String
-  productId  String
-  quantity   Float
-  createdAt  DateTime          @default(now())
-  updatedAt  DateTime          @updatedAt
-  checkout   InventoryCheckout @relation(fields: [checkoutId], references: [id], onDelete: Cascade)
-  product    Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String            @id @default(cuid())
+  checkoutId     String
+  productId      String
+  quantity       Float
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  checkout       InventoryCheckout @relation(fields: [checkoutId], references: [id], onDelete: Cascade)
+  product        Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@index([checkoutId])
   @@index([productId])
+  @@index([organizationId])
 }
 
 // ── Phase 8: Sales & Marketing ──
@@ -2249,50 +2576,65 @@ enum CampaignStatus {
 }
 
 model SalesArea {
-  id        String        @id @default(cuid())
-  name      String
-  type      SalesAreaType
-  latitude  Float
-  longitude Float
-  address   String?
-  notes     String?
-  date      DateTime      @default(now())
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String        @id @default(cuid())
+  name           String
+  type           SalesAreaType
+  latitude       Float
+  longitude      Float
+  address        String?
+  notes          String?
+  date           DateTime      @default(now())
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
   @@index([type])
   @@index([date])
+  @@index([organizationId])
 }
 
 model LandingPage {
-  id          String             @id @default(cuid())
-  title       String
-  slug        String             @unique
-  content     String             @db.Text
-  ctaText     String             @default("Get a Free Quote")
-  ctaLink     String             @default("/")
-  isPublished Boolean            @default(false)
-  campaignId  String?
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
-  campaign    MarketingCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
-  visits      PageVisit[]
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String             @id @default(cuid())
+  title          String
+  slug           String             @unique
+  content        String             @db.Text
+  ctaText        String             @default("Get a Free Quote")
+  ctaLink        String             @default("/")
+  isPublished    Boolean            @default(false)
+  campaignId     String?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  campaign       MarketingCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  visits         PageVisit[]
 
   @@index([slug])
   @@index([campaignId])
+  @@index([organizationId])
 }
 
 model PageVisit {
-  id            String      @id @default(cuid())
-  landingPageId String
-  ipHash        String?
-  referrer      String?
-  userAgent     String?
-  createdAt     DateTime    @default(now())
-  landingPage   LandingPage @relation(fields: [landingPageId], references: [id], onDelete: Cascade)
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String      @id @default(cuid())
+  landingPageId  String
+  ipHash         String?
+  referrer       String?
+  userAgent      String?
+  createdAt      DateTime    @default(now())
+  landingPage    LandingPage @relation(fields: [landingPageId], references: [id], onDelete: Cascade)
 
   @@index([landingPageId])
   @@index([createdAt])
+  @@index([organizationId])
 }
 
 // ── Chat ──
@@ -2303,6 +2645,10 @@ enum ChatSenderRole {
 }
 
 model ChatConversation {
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId        String?
   id                    String        @id @default(cuid())
   employeeId            String        @unique
   lastMessageAt         DateTime?
@@ -2316,9 +2662,14 @@ model ChatConversation {
   messages              ChatMessage[]
 
   @@index([lastMessageAt])
+  @@index([organizationId])
 }
 
 model ChatMessage {
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId   String?
   id               String           @id @default(cuid())
   conversationId   String
   senderId         String
@@ -2336,25 +2687,31 @@ model ChatMessage {
 
   @@index([conversationId, createdAt])
   @@index([senderId])
+  @@index([organizationId])
 }
 
 model MarketingCampaign {
-  id           String         @id @default(cuid())
-  name         String
-  description  String?
-  status       CampaignStatus @default(DRAFT)
-  budget       Float          @default(0)
-  spent        Float          @default(0)
-  startDate    DateTime?
-  endDate      DateTime?
-  channel      String?
-  notes        String?
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
-  landingPages LandingPage[]
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String         @id @default(cuid())
+  name           String
+  description    String?
+  status         CampaignStatus @default(DRAFT)
+  budget         Float          @default(0)
+  spent          Float          @default(0)
+  startDate      DateTime?
+  endDate        DateTime?
+  channel        String?
+  notes          String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  landingPages   LandingPage[]
 
   @@index([status])
   @@index([startDate])
+  @@index([organizationId])
 }
 
 // ── BookingKoala replacement (P0 foundation) ──
@@ -2410,6 +2767,10 @@ enum JobApplicationStatus {
 
 /// Cleaner job-application intake from the public careers page.
 model JobApplication {
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId    String?
   deletedAt         DateTime? // soft-delete (recoverable via Archived view)
   id                String               @id @default(cuid())
   // Personal information
@@ -2474,6 +2835,7 @@ model JobApplication {
 
   @@index([status])
   @@index([createdAt])
+  @@index([organizationId])
 }
 
 /**
@@ -2485,16 +2847,21 @@ model JobApplication {
  * only they received is what stands in for email verification.
  */
 model ApplicantInviteToken {
-  id        String    @id @default(cuid())
-  userId    String
-  token     String    @unique
-  expiresAt DateTime
-  usedAt    DateTime?
-  createdAt DateTime  @default(now())
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String    @id @default(cuid())
+  userId         String
+  token          String    @unique
+  expiresAt      DateTime
+  usedAt         DateTime?
+  createdAt      DateTime  @default(now())
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([expiresAt])
+  @@index([organizationId])
 }
 
 /**
@@ -2504,6 +2871,10 @@ model ApplicantInviteToken {
  * admin-only note and must stay that way.
  */
 model ApplicantMessage {
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId   String?
   id               String         @id @default(cuid())
   jobApplicationId String
   authorRole       String // "ADMIN" | "APPLICANT"
@@ -2513,6 +2884,7 @@ model ApplicantMessage {
   jobApplication   JobApplication @relation(fields: [jobApplicationId], references: [id], onDelete: Cascade)
 
   @@index([jobApplicationId, createdAt])
+  @@index([organizationId])
 }
 
 enum JobInviteDecision {
@@ -2536,20 +2908,29 @@ enum GiftCardStatus {
  * is emailed by admin via the job detail "Send Add card link" action.
  */
 model ClientCardSetupToken {
-  id        String    @id @default(cuid())
-  clientId  String
-  token     String    @unique
-  expiresAt DateTime
-  usedAt    DateTime?
-  jobId     String?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String    @id @default(cuid())
+  clientId       String
+  token          String    @unique
+  expiresAt      DateTime
+  usedAt         DateTime?
+  jobId          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   @@index([clientId])
   @@index([expiresAt])
+  @@index([organizationId])
 }
 
 model GiftCard {
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId        String?
   deletedAt             DateTime? // soft-delete (recoverable via Archived view)
   id                    String         @id @default(cuid())
   code                  String         @unique
@@ -2582,6 +2963,7 @@ model GiftCard {
   @@index([recipientEmail])
   @@index([scheduledDeliveryDate])
   @@index([createdAt])
+  @@index([organizationId])
 }
 
 enum JobCleanerStatus {
@@ -2598,22 +2980,27 @@ enum JobCleanerStatus {
 // assignment and updated by the cleaner clock actions. The job-level
 // clockInTime/clockOutTime/onMyWayAt stay as the legacy/first-cleaner fields.
 model JobAssignment {
-  id           String           @id @default(cuid())
-  jobId        String
-  cleanerId    String
-  status       JobCleanerStatus @default(ASSIGNED)
-  onMyWayAt    DateTime?
-  clockInTime  DateTime?
-  clockOutTime DateTime?
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String           @id @default(cuid())
+  jobId          String
+  cleanerId      String
+  status         JobCleanerStatus @default(ASSIGNED)
+  onMyWayAt      DateTime?
+  clockInTime    DateTime?
+  clockOutTime   DateTime?
   // This cleaner's pay for this job (same proportional-split math as payroll).
-  payAmount    Float?
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
-  job          Job              @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  cleaner      User             @relation("CleanerAssignments", fields: [cleanerId], references: [id], onDelete: Cascade)
+  payAmount      Float?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  job            Job              @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  cleaner        User             @relation("CleanerAssignments", fields: [cleanerId], references: [id], onDelete: Cascade)
 
   @@unique([jobId, cleanerId])
   @@index([cleanerId])
+  @@index([organizationId])
 }
 
 /// One clock-in → clock-out stretch for ONE cleaner on ONE job
@@ -2637,18 +3024,23 @@ model JobAssignment {
 /// maintained as derived mirrors, so every legacy reader keeps working and jobs
 /// that predate this model still report correctly from the pair alone.
 model JobWorkSession {
-  id        String    @id @default(cuid())
-  jobId     String
-  cleanerId String
-  startedAt DateTime  @default(now())
-  endedAt   DateTime?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  job       Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  cleaner   User      @relation(fields: [cleanerId], references: [id], onDelete: Cascade)
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String    @id @default(cuid())
+  jobId          String
+  cleanerId      String
+  startedAt      DateTime  @default(now())
+  endedAt        DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  job            Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  cleaner        User      @relation(fields: [cleanerId], references: [id], onDelete: Cascade)
 
   @@index([jobId, cleanerId])
   @@index([cleanerId])
+  @@index([organizationId])
 }
 
 /// A break/pause taken by ONE cleaner during ONE job (awer_fixes.pdf item 26).
@@ -2658,21 +3050,30 @@ model JobWorkSession {
 /// job, and a single pair would silently overwrite the earlier break.
 /// `endedAt` null = the break is currently running.
 model JobBreak {
-  id        String    @id @default(cuid())
-  jobId     String
-  cleanerId String
-  startedAt DateTime  @default(now())
-  endedAt   DateTime?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  job       Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  cleaner   User      @relation(fields: [cleanerId], references: [id], onDelete: Cascade)
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String    @id @default(cuid())
+  jobId          String
+  cleanerId      String
+  startedAt      DateTime  @default(now())
+  endedAt        DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  job            Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  cleaner        User      @relation(fields: [cleanerId], references: [id], onDelete: Cascade)
 
   @@index([jobId, cleanerId])
   @@index([cleanerId])
+  @@index([organizationId])
 }
 
 model JobAssignmentInvite {
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId     String?
   id                 String            @id @default(cuid())
   jobId              String
   cleanerId          String
@@ -2699,45 +3100,60 @@ model JobAssignmentInvite {
   @@unique([jobId, cleanerId])
   @@index([cleanerId, decision])
   @@index([expiresAt])
+  @@index([organizationId])
 }
 
 model QuoteRequest {
-  deletedAt     DateTime? // soft-delete (recoverable via Archived view)
-  id            String             @id @default(cuid())
-  name          String
-  email         String
-  phone         String?
-  address       String?
-  serviceType   String?
-  bedCount      Int?
-  bathCount     Int?
-  squareFootage Int?
-  preferredDate DateTime?
-  message       String?
-  status        QuoteRequestStatus @default(NEW)
-  source        String?
-  notes         String?
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  deletedAt      DateTime? // soft-delete (recoverable via Archived view)
+  id             String             @id @default(cuid())
+  name           String
+  email          String
+  phone          String?
+  address        String?
+  serviceType    String?
+  bedCount       Int?
+  bathCount      Int?
+  squareFootage  Int?
+  preferredDate  DateTime?
+  message        String?
+  status         QuoteRequestStatus @default(NEW)
+  source         String?
+  notes          String?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
 
   @@index([status])
   @@index([createdAt])
+  @@index([organizationId])
 }
 
 model ServiceArea {
-  id        String   @id @default(cuid())
-  prefix    String   @unique
-  zoneName  String
-  isActive  Boolean  @default(true)
-  travelFee Float    @default(0)
-  notes     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String   @id @default(cuid())
+  prefix         String   @unique
+  zoneName       String
+  isActive       Boolean  @default(true)
+  travelFee      Float    @default(0)
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   @@index([isActive])
+  @@index([organizationId])
 }
 
 model Lead {
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
   deletedAt      DateTime? // soft-delete (recoverable via Archived view)
   id             String       @id @default(cuid())
   email          String
@@ -2768,6 +3184,7 @@ model Lead {
   @@index([email])
   @@index([status])
   @@index([lastActivityAt])
+  @@index([organizationId])
 }
 
 /// Sales-rep commission ledger (client feedback item 20, Stage 11.2 — "for
@@ -2790,29 +3207,34 @@ model Lead {
 /// `paidAt` IS the status: null = pending, set = paid. A rep's totals are the
 /// two sums either side of that one column.
 model Commission {
-  id         String    @id @default(cuid())
-  salesRepId String
-  jobId      String?
-  leadId     String?
-  amount     Float
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String    @id @default(cuid())
+  salesRepId     String
+  jobId          String?
+  leadId         String?
+  amount         Float
   /// Percentage the amount was worked out at, when there was one (0–100).
-  rate       Float?
-  note       String?
+  rate           Float?
+  note           String?
   /// Payout month bucket, "YYYY-MM". Same shape as `Budget.period`, produced by
   /// `storeMonthPeriod()` so the month is the store's, not the server's.
-  period     String
-  paidAt     DateTime?
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  salesRep   User      @relation("SalesRepCommissions", fields: [salesRepId], references: [id], onDelete: Restrict)
-  job        Job?      @relation(fields: [jobId], references: [id], onDelete: SetNull)
-  lead       Lead?     @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  period         String
+  paidAt         DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  salesRep       User      @relation("SalesRepCommissions", fields: [salesRepId], references: [id], onDelete: Restrict)
+  job            Job?      @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  lead           Lead?     @relation(fields: [leadId], references: [id], onDelete: SetNull)
 
   @@index([salesRepId])
   @@index([period])
   @@index([paidAt])
   @@index([jobId])
   @@index([leadId])
+  @@index([organizationId])
 }
 
 /// Unified CRM record. One Contact spans a person's whole lifecycle — lead,
@@ -2822,6 +3244,10 @@ model Commission {
 /// (bedrooms, sqft, frequency, …) live in `props` until a full property-
 /// definition engine is built.
 model Contact {
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId     String?
   deletedAt          DateTime? // soft-delete (recoverable via Archived view)
   id                 String               @id @default(cuid())
   name               String
@@ -2861,6 +3287,7 @@ model Contact {
   @@index([lastActivityAt])
   @@index([email])
   @@index([phone])
+  @@index([organizationId])
 }
 
 /// "These two are not the same person." Scoped to the PAIR, deliberately —
@@ -2870,32 +3297,42 @@ model Contact {
 /// `contactAId` always holds the lexicographically smaller id so the unique
 /// index catches the same pair submitted in either order.
 model DuplicateRejection {
-  id         String   @id @default(cuid())
-  contactAId String
-  contactBId String
-  rejectedAt DateTime @default(now())
-  rejectedBy String? // admin display name, snapshot (User rows may be removed)
-  contactA   Contact  @relation("DuplicateRejectionA", fields: [contactAId], references: [id], onDelete: Cascade)
-  contactB   Contact  @relation("DuplicateRejectionB", fields: [contactBId], references: [id], onDelete: Cascade)
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String   @id @default(cuid())
+  contactAId     String
+  contactBId     String
+  rejectedAt     DateTime @default(now())
+  rejectedBy     String? // admin display name, snapshot (User rows may be removed)
+  contactA       Contact  @relation("DuplicateRejectionA", fields: [contactAId], references: [id], onDelete: Cascade)
+  contactB       Contact  @relation("DuplicateRejectionB", fields: [contactBId], references: [id], onDelete: Cascade)
 
   @@unique([contactAId, contactBId])
   @@index([contactBId])
   @@index([rejectedAt])
+  @@index([organizationId])
 }
 
 /// Mixed-type timeline entry on a Contact (note, call, email, lifecycle change…).
 model ContactActivity {
-  id        String              @id @default(cuid())
-  contactId String
-  type      ContactActivityType @default(NOTE)
-  title     String
-  body      String?
-  actor     String?
-  createdAt DateTime            @default(now())
-  contact   Contact             @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String              @id @default(cuid())
+  contactId      String
+  type           ContactActivityType @default(NOTE)
+  title          String
+  body           String?
+  actor          String?
+  createdAt      DateTime            @default(now())
+  contact        Contact             @relation(fields: [contactId], references: [id], onDelete: Cascade)
 
   @@index([contactId])
   @@index([createdAt])
+  @@index([organizationId])
 }
 
 enum LifecycleStage {
@@ -2927,44 +3364,58 @@ enum ContactActivityType {
 /// available on each CRM object. System properties are locked from deletion and
 /// internal-name/type changes after creation.
 model PropertyDefinition {
-  id           String    @id @default(cuid())
-  objectType   String // contact | company | booking
-  groupName    String
-  label        String
-  internalName String
-  fieldType    String // text|textarea|number|email|phone|date|dropdown|multi|checkbox|user
-  options      String[]  @default([])
-  isSystem     Boolean   @default(false)
-  isRequired   Boolean   @default(false)
-  isUnique     Boolean   @default(false)
-  visibility   String    @default("everyone") // everyone | admin
-  sortOrder    Int       @default(0)
-  archivedAt   DateTime?
-  createdAt    DateTime  @default(now())
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String    @id @default(cuid())
+  objectType     String // contact | company | booking
+  groupName      String
+  label          String
+  internalName   String
+  fieldType      String // text|textarea|number|email|phone|date|dropdown|multi|checkbox|user
+  options        String[]  @default([])
+  isSystem       Boolean   @default(false)
+  isRequired     Boolean   @default(false)
+  isUnique       Boolean   @default(false)
+  visibility     String    @default("everyone") // everyone | admin
+  sortOrder      Int       @default(0)
+  archivedAt     DateTime?
+  createdAt      DateTime  @default(now())
   // The DEFAULT exists in the database already; declaring it keeps the schema
   // and the database in sync and lets raw inserts omit the column.
-  updatedAt    DateTime  @default(now()) @updatedAt
+  updatedAt      DateTime  @default(now()) @updatedAt
 
   @@unique([objectType, internalName])
   @@index([objectType])
+  @@index([organizationId])
 }
 
 /// Marketing ad-spend entries (manual or CSV import) used to compute true CPA
 /// by channel. Funnel metrics are derived live from Contact source/lifecycle.
 model AdSpendImport {
-  id           String   @id @default(cuid())
-  channel      String // normalized channel id: google | instagram | facebook | …
-  date         DateTime
-  amount       Float
-  source       String? // "Manual" | "CSV · file.csv"
-  importedById String?
-  createdAt    DateTime @default(now())
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String   @id @default(cuid())
+  channel        String // normalized channel id: google | instagram | facebook | …
+  date           DateTime
+  amount         Float
+  source         String? // "Manual" | "CSV · file.csv"
+  importedById   String?
+  createdAt      DateTime @default(now())
 
   @@index([channel])
   @@index([date])
+  @@index([organizationId])
 }
 
 model Waitlist {
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
   deletedAt      DateTime? // soft-delete (recoverable via Archived view)
   id             String         @id @default(cuid())
   preferredDate  DateTime
@@ -2987,9 +3438,14 @@ model Waitlist {
   @@index([preferredDate])
   @@index([status])
   @@index([email])
+  @@index([organizationId])
 }
 
 model EmailLog {
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId  String?
   id              String      @id @default(cuid())
   kind            EmailKind
   recipient       String
@@ -3010,9 +3466,14 @@ model EmailLog {
   @@index([status])
   @@index([jobId])
   @@index([recipient])
+  @@index([organizationId])
 }
 
 model JobRatingToken {
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId  String?
   id              String    @id @default(cuid())
   jobId           String
   token           String    @unique
@@ -3029,49 +3490,60 @@ model JobRatingToken {
 
   @@index([jobId])
   @@index([token])
+  @@index([organizationId])
 }
 
 model PromoCode {
-  deletedAt     DateTime? // soft-delete (recoverable via Archived view)
-  id            String    @id @default(cuid())
-  code          String    @unique
-  description   String?
-  discountType  String    @default("FIXED") // FIXED | PERCENT
-  discountValue Float
-  maxUses       Int?
-  usesCount     Int       @default(0)
-  expiresAt     DateTime?
-  isActive      Boolean   @default(true)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  deletedAt      DateTime? // soft-delete (recoverable via Archived view)
+  id             String    @id @default(cuid())
+  code           String    @unique
+  description    String?
+  discountType   String    @default("FIXED") // FIXED | PERCENT
+  discountValue  Float
+  maxUses        Int?
+  usesCount      Int       @default(0)
+  expiresAt      DateTime?
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   @@index([code])
+  @@index([organizationId])
 }
 
 // Unified activity / audit log — one row per notable system event (email, SMS,
 // payment, refund, etc.) with a common shape so the admin Logs page can show
 // successes and failures across the whole system in one timeline.
 model ActivityLog {
-  id         String           @id @default(cuid())
-  createdAt  DateTime         @default(now())
-  category   ActivityCategory
-  action     String
-  status     ActivityStatus   @default(SUCCESS)
-  actorId    String? // user who triggered it (null = system/anonymous)
-  actorLabel String? // denormalized name/email for display
-  targetType String? // e.g. "job", "client", "giftCard"
-  targetId   String?
-  message    String?
-  error      String?
-  amount     Float?
-  providerId String? // Stripe PI / Twilio SID / Resend id
-  metadata   Json?
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String           @id @default(cuid())
+  createdAt      DateTime         @default(now())
+  category       ActivityCategory
+  action         String
+  status         ActivityStatus   @default(SUCCESS)
+  actorId        String? // user who triggered it (null = system/anonymous)
+  actorLabel     String? // denormalized name/email for display
+  targetType     String? // e.g. "job", "client", "giftCard"
+  targetId       String?
+  message        String?
+  error          String?
+  amount         Float?
+  providerId     String? // Stripe PI / Twilio SID / Resend id
+  metadata       Json?
 
   @@index([category])
   @@index([status])
   @@index([createdAt])
   @@index([actorId])
   @@index([targetType, targetId])
+  @@index([organizationId])
 }
 
 enum ActivityCategory {
@@ -3100,11 +3572,16 @@ enum ActivityStatus {
 // before processing and deleted if processing fails (so Stripe's retry can
 // reprocess it).
 model WebhookEvent {
-  id        String   @id // Stripe event id (evt_...)
-  type      String
-  createdAt DateTime @default(now())
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String   @id // Stripe event id (evt_...)
+  type           String
+  createdAt      DateTime @default(now())
 
   @@index([createdAt])
+  @@index([organizationId])
 }
 
 /**
@@ -3138,42 +3615,52 @@ enum FaqVisibility {
 }
 
 model FaqCategory {
-  id        String   @id @default(cuid())
-  name      String
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String   @id @default(cuid())
+  name           String
   // French label. Optional everywhere: an untranslated field falls back to the
   // English one at render time rather than showing a blank.
-  nameFr    String?
-  sortOrder Int      @default(0)
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  faqs      Faq[]
+  nameFr         String?
+  sortOrder      Int      @default(0)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  faqs           Faq[]
 
   @@index([sortOrder])
+  @@index([organizationId])
 }
 
 model Faq {
-  id         String        @id @default(cuid())
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String        @id @default(cuid())
   // Nullable with onDelete: SetNull — deleting a category must never destroy
   // the questions inside it. They fall into an "Uncategorised" group that both
   // surfaces render last.
-  categoryId String?
-  question   String        @db.Text
-  answer     String        @db.Text
-  questionFr String?       @db.Text
-  answerFr   String?       @db.Text
+  categoryId     String?
+  question       String        @db.Text
+  answer         String        @db.Text
+  questionFr     String?       @db.Text
+  answerFr       String?       @db.Text
   // Defaults chosen so a migrated JSON entry behaves exactly as it did before:
   // published, on both surfaces, with no admin action required.
-  status     FaqStatus     @default(PUBLISHED)
-  visibility FaqVisibility @default(BOTH)
-  sortOrder  Int           @default(0)
-  createdAt  DateTime      @default(now())
-  updatedAt  DateTime      @updatedAt
-  category   FaqCategory?  @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  events     FaqEvent[]
+  status         FaqStatus     @default(PUBLISHED)
+  visibility     FaqVisibility @default(BOTH)
+  sortOrder      Int           @default(0)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  category       FaqCategory?  @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  events         FaqEvent[]
 
   @@index([status, visibility])
   @@index([categoryId, sortOrder])
+  @@index([organizationId])
 }
 
 /**
@@ -3200,19 +3687,71 @@ enum FaqEventType {
 }
 
 model FaqEvent {
-  id        String       @id @default(cuid())
-  type      FaqEventType
+  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
+  // migration, and on platform-level rows that belong to no organization.
+  // Enforced NOT NULL + RLS once every row is backfilled.
+  organizationId String?
+  id             String       @id @default(cuid())
+  type           FaqEventType
   // SetNull, not Cascade: deleting a question must not rewrite history and
   // erase the traffic it once had.
-  faqId     String?
+  faqId          String?
   // Normalised search term (lowercased, trimmed, capped) for SEARCH events.
-  query     String?
+  query          String?
   /// "public" | "portal"
-  surface   String
-  createdAt DateTime     @default(now())
-  faq       Faq?         @relation(fields: [faqId], references: [id], onDelete: SetNull)
+  surface        String
+  createdAt      DateTime     @default(now())
+  faq            Faq?         @relation(fields: [faqId], references: [id], onDelete: SetNull)
 
   @@index([type, createdAt])
   @@index([faqId, type])
   @@index([query])
+  @@index([organizationId])
+}
+
+// ---------------------------------------------------------------------------
+// Multi-tenancy (Awer platform)
+// ---------------------------------------------------------------------------
+
+// One customer of Awer — a cleaning company. Every business row in this schema
+// carries organizationId pointing here. TeamCleano is the first, backfilled
+// from the single-tenant data this database started as.
+//
+// Deliberately NOT declared as a Prisma relation on the 97 scoped models: that
+// would need a foreign key on every table, and adding 97 FK constraints to a
+// live database means validating every existing row. A plain indexed column is
+// a pure ADD COLUMN — instant, no table rewrite — and isolation is enforced by
+// row-level security rather than by referential integrity.
+model Organization {
+  id String @id @default(cuid())
+
+  // Subdomain label: "teamcleano" serves teamcleano.useawer.com. Lowercase,
+  // hyphen-separated, and reserved words are rejected at the application layer.
+  slug String @unique
+  name String
+
+  status OrgStatus @default(PENDING)
+  plan   OrgPlan   @default(STARTER)
+
+  // Replaces the single NEXT_PUBLIC_BUSINESS_TIMEZONE env var, which could only
+  // ever describe one company.
+  timezone String @default("America/Toronto")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+}
+
+enum OrgStatus {
+  PENDING // signed up or requested access, not yet provisioned
+  ACTIVE
+  SUSPENDED // non-payment or admin action; data retained, access blocked
+  CANCELLED
+}
+
+enum OrgPlan {
+  STARTER
+  PROFESSIONAL
+  ORGANIZATION // request-access tier
 }
