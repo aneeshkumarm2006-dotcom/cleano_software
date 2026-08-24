@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { getSessionCookie } from 'better-auth/cookies'
+import { ORG_SLUG_HEADER, orgSlugFromHost } from '@/lib/tenant'
 
 // Exact public paths
 const PUBLIC_EXACT = new Set<string>([
@@ -43,10 +44,26 @@ function isPublic(pathname: string): boolean {
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
+  // Which organization is this request for? Derived from the host alone, so it
+  // costs no database round-trip here. Anything that is not a tenant subdomain
+  // (www, the apex, a vercel.app build URL, localhost) resolves to the default
+  // org, which is what keeps www.useawer.com behaving exactly as it does today.
+  //
+  // Stamped on the request rather than resolved to a record here: proxy runs on
+  // every request including static-ish ones, and server components can look the
+  // organization up once, cached, only when they actually need it.
+  const orgSlug = orgSlugFromHost(request.headers.get('host'))
+  const headers = new Headers(request.headers)
+  headers.set(ORG_SLUG_HEADER, orgSlug)
+  // A client must never be able to spoof its way into another tenant by sending
+  // this header itself; setting it from the host on every request overwrites
+  // anything inbound.
+  const next = () => NextResponse.next({ request: { headers } })
+
   // Allow public routes (customer-facing + auth pages). "/" is the customer
   // home and is gated by the customer (secured) layout, not here.
   if (isPublic(pathname)) {
-    return NextResponse.next()
+    return next()
   }
 
   // Check for session cookie
@@ -77,7 +94,7 @@ export async function proxy(request: NextRequest) {
   }
 
   // Session cookie exists, allow request to proceed
-  return NextResponse.next()
+  return next()
 }
 
 export const config = {
