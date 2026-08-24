@@ -202,6 +202,69 @@ Composite keys anchored on an already-scoped FK (`jobId`, `employeeId`,
 
 ---
 
+## Scenario analysis
+
+What breaks with a second tenant, beyond the query layer. Grouped by when it has
+to be solved, not by how hard it is.
+
+### 🔴 Must be solved before a second tenant exists
+
+**`www.useawer.com` cannot be two things.** It is TeamCleano's customer portal
+today. As a product it should be Awer's marketing and signup page. Those are
+incompatible, and resolving it means TeamCleano's customers move to
+`teamcleano.useawer.com` — changing bookmarks, saved links, and every URL in
+every email ever sent. Needs a decision and a redirect plan, not just code.
+*(Cookies are set per-host, so this also logs every existing user out once.)*
+
+**Email links point at one host.** `NEXT_PUBLIC_APP_URL` is a single env var
+used throughout `src/lib/email.ts` — "View this booking", "Rate your cleaning",
+receipts, password resets. FixaroPro's customers would receive links to
+TeamCleano's subdomain. Must be derived per-organization from `org.slug`.
+
+**One Twilio number cannot serve many companies.** `api/twilio/inbound` matches
+an inbound SMS by phone number across all clients. Two organizations can have
+the same customer, and with one shared number there is no way to know which
+company a reply belongs to. Either a number per organization, or inbound SMS
+does not survive multi-tenancy.
+
+**Sender identity is global.** One `EMAIL_FROM`, one Twilio sender. FixaroPro's
+customers would get mail from TeamCleano. Per-org sender or a neutral Awer
+sender with the org name in the body.
+
+### 🟠 Before taking real money from a second tenant
+
+**Cloudinary is one shared bucket.** Booking photos land in a single folder, and
+`isBookingPhotoUrl` validates that a URL sits inside it — so org A's photo passes
+org B's check. Cloudinary URLs are public to anyone holding them. Needs per-org
+folders and per-org validation.
+
+**Stripe.** Existing TeamCleano cards live on the platform account; a connected
+account changes which account holds them. Needs a deliberate migration, or live
+customers' cards silently stop working.
+
+**Suspension mid-session.** `isOrgUsable()` exists but nothing calls it. A
+suspended org's users currently keep working until their session expires.
+
+**Tenant offboarding.** No export, no delete. A company that leaves has a legal
+right to its data and to have it removed, and a shared database makes "delete
+everything for org X" a real piece of work rather than dropping a database.
+
+### 🟡 Watch, not urgent
+
+- **Cross-org references.** Nothing at the database level stops a Job pointing
+  at another org's Client. The scoped client prevents it in practice; RLS will
+  make it structural. Worth a periodic integrity check.
+- **Noisy neighbours.** One shared Postgres. Fine at single-digit tenants;
+  revisit if one company gets large.
+- **Backup granularity.** Backups are whole-database. Restoring one tenant to
+  yesterday, without touching the others, is not currently possible.
+- **PWA manifests.** The cleaner app's manifest and `start_url` are global; an
+  installed icon would be Awer-branded rather than per-company.
+- **Scripts.** 29 operational scripts talk to Prisma directly with no request
+  context. They must name their organization explicitly.
+
+---
+
 ## Open decisions
 
 | # | Question | Status |
