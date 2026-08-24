@@ -1,0 +1,83 @@
+/** Adversarial check: can org A touch org B's rows through the scoped client? */
+import { PrismaClient } from "@prisma/client";
+import { scopedTo, CrossTenantError } from "../src/lib/db-scoped";
+
+const db = new PrismaClient();
+let pass = 0, fail = 0;
+const ok = (n: string) => { pass++; console.log(`  ok    ${n}`); };
+const bad = (n: string, d: string) => { fail++; console.log(`  FAIL  ${n} — ${d}`); };
+
+async function expectRefused(name: string, fn: () => Promise<unknown>) {
+  try { await fn(); bad(name, "the write was ALLOWED"); }
+  catch (e) {
+    if (e instanceof CrossTenantError) ok(name);
+    else bad(name, `wrong error: ${(e as Error).message.slice(0, 60)}`);
+  }
+}
+
+(async () => {
+  if (!(process.env.DATABASE_URL ?? "").includes("udgbixmlyqsoalvrjbgo")) {
+    throw new Error("ABORT: not staging");
+  }
+  const A = await db.organization.findUniqueOrThrow({ where: { slug: "teamcleano-demo" } });
+  const B = await db.organization.findUniqueOrThrow({ where: { slug: "fixaropro-demo" } });
+  const dbA = scopedTo(db, A.id);
+
+  // a row that definitively belongs to B
+  const bJob = await db.job.findFirstOrThrow({ where: { organizationId: B.id } });
+  const bClient = await db.client.findFirstOrThrow({ where: { organizationId: B.id } });
+
+  console.log("\nREADS");
+  const jobs = await dbA.job.findMany({ select: { organizationId: true } });
+  jobs.every((j) => j.organizationId === A.id) && jobs.length > 0
+    ? ok(`findMany returns only A's rows (${jobs.length})`)
+    : bad("findMany", `leaked ${jobs.filter((j) => j.organizationId !== A.id).length}`);
+
+  (await dbA.job.count()) === jobs.length ? ok("count is scoped") : bad("count", "unscoped");
+
+  (await dbA.job.findUnique({ where: { id: bJob.id } })) === null
+    ? ok("findUnique on B's job -> null")
+    : bad("findUnique", "returned another tenant's row");
+
+  (await dbA.job.findFirst({ where: { id: bJob.id } })) === null
+    ? ok("findFirst on B's job -> null")
+    : bad("findFirst", "returned another tenant's row");
+
+  try {
+    await dbA.job.findUniqueOrThrow({ where: { id: bJob.id } });
+    bad("findUniqueOrThrow on B's job", "returned it");
+  } catch (e) {
+    e instanceof CrossTenantError ? ok("findUniqueOrThrow on B's job -> refused")
+      : bad("findUniqueOrThrow", (e as Error).name);
+  }
+
+  console.log("\nWRITES");
+  await expectRefused("update B's job", () =>
+    dbA.job.update({ where: { id: bJob.id }, data: { notes: "pwned" } }));
+  await expectRefused("delete B's client", () =>
+    dbA.client.delete({ where: { id: bClient.id } }));
+  await expectRefused("upsert onto B's job", () =>
+    dbA.job.upsert({
+      where: { id: bJob.id },
+      update: { notes: "pwned" },
+      create: { clientName: "x", startTime: new Date() },
+    }));
+
+  const bBefore = await db.job.count({ where: { organizationId: B.id } });
+  await dbA.job.updateMany({ data: { notes: "bulk-a" } });
+  const touchedB = await db.job.count({ where: { organizationId: B.id, notes: "bulk-a" } });
+  touchedB === 0 ? ok("updateMany did not touch B") : bad("updateMany", `hit ${touchedB} of B's rows`);
+
+  console.log("\nCREATE STAMPING");
+  const made = await dbA.client.create({ data: { name: "Scoped Create Test" } });
+  made.organizationId === A.id ? ok("create stamped with A") : bad("create", `got ${made.organizationId}`);
+  await db.client.delete({ where: { id: made.id } });
+
+  console.log("\nCOLLATERAL DAMAGE CHECK");
+  const bAfter = await db.job.count({ where: { organizationId: B.id } });
+  bAfter === bBefore ? ok(`B's job count unchanged (${bAfter})`) : bad("B row count", `${bBefore} -> ${bAfter}`);
+
+  console.log(`\n${pass} passed, ${fail} failed`);
+  process.exitCode = fail === 0 ? 0 : 1;
+})().catch((e) => { console.error("ERROR:", e.message); process.exitCode = 1; })
+  .finally(() => db.$disconnect());

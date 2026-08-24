@@ -12,6 +12,7 @@ import { cache } from "react";
 import { headers } from "next/headers";
 
 import { db } from "@/db";
+import { scopedTo } from "@/lib/db-scoped";
 import { DEFAULT_ORG_SLUG, ORG_SLUG_HEADER, orgSlugFromHost } from "@/lib/tenant";
 
 /**
@@ -67,3 +68,15 @@ export async function isOrgUsable(): Promise<boolean> {
   const org = await getCurrentOrg();
   return org?.status === "ACTIVE";
 }
+
+/**
+ * A Prisma client confined to this request's organization.
+ *
+ * This is what application code should use instead of the raw `db` import. It
+ * carries the organization implicitly, so a query cannot forget to name its
+ * tenant -- the mistake that hand-editing ~1,400 `where` clauses would invite.
+ *
+ * Throws when the host resolves to no organization, which stops the request
+ * rather than letting it run unscoped.
+ */
+export const getScopedDb = cache(async () => scopedTo(db, await requireOrgId()));
