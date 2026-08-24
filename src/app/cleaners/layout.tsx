@@ -1,6 +1,6 @@
 import { getCachedSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { getSetting } from "@/lib/settings";
 import { isCleanerRole, homeForRole } from "@/lib/role-routing";
 import signOut from "@/app/admin/actions/signOut";

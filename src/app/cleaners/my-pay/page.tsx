@@ -1,4 +1,4 @@
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { requireCleaner } from "@/lib/page-guards";
 import MyPayClient from "./MyPayClient";
 import { getEmployeeAvgRating } from "@/app/admin/actions/setEmployeeRating";

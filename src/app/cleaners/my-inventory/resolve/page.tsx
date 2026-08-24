@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { checkEquipmentForJob } from "@/app/admin/actions/checkEquipmentForJob";
 import { getLocationStock } from "@/app/admin/actions/getLocationStock";
 import type { ProductLocationStock } from "@/app/admin/actions/getLocationStock.types";

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { requireCleaner } from "@/lib/page-guards";
 import { ShieldAlert, ShieldCheck } from "lucide-react";
 import { fmtDate } from "@/lib/time";

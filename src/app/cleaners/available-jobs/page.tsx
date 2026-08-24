@@ -1,5 +1,5 @@
 import { requireCleaner } from "@/lib/page-guards";
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { claimableJobsWhere } from "@/lib/cleaner-jobs";
 import { isCategoryAllowed } from "@/lib/service-permissions";
 import { getCleanerRateInputs } from "@/lib/cleaner-rates";

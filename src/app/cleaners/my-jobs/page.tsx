@@ -1,4 +1,4 @@
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { requireCleaner } from "@/lib/page-guards";
 import { getServiceCatalog } from "@/lib/service-catalog.server";
 import { loadPerJobAverages } from "@/lib/inventory-forecast.server";
