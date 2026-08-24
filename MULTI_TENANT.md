@@ -87,8 +87,8 @@ rewrite. Isolation comes from RLS; an FK only guarantees the id isn't garbage.
 | 1 | `Organization` table + nullable `organizationId` on 97 models | ✅ done (staging) |
 | 2 | Backfill — found TeamCleano, claim every row | ✅ done (staging) |
 | — | Synthetic seeder, drop prod data from staging | ✅ done |
-| 3 | Tenant context — subdomain → org in `proxy.ts`, Prisma extension | ⬜ next |
-| 4 | Scope ~1,400 queries, module by module | ⬜ |
+| 3 | Tenant context — subdomain → org in `proxy.ts` | ✅ done |
+| 4 | Scope ~1,400 queries, module by module | ⬜ next |
 | 5 | Enforce — `NOT NULL`, RLS, and the constraint fixes below | ⬜ |
 | 6 | Platform layer — super admin, signup, plans, provisioning | ⬜ |
 | 7 | Second real tenant + Stripe Connect | ⬜ |
@@ -138,6 +138,28 @@ Not throwaway work: provisioning a new org with sensible starting data is
 exactly what Step 6 must do when a company signs up. `AppSetting` rows are
 deliberately not seeded — the settings registry returns its declared default
 when no row exists, so a fresh org works with an empty settings table.
+
+### Step 3 — tenant context
+`src/lib/tenant.ts` (pure host→slug parsing), `src/proxy.ts` (stamps
+`x-awer-org` on every request), `src/lib/org.ts` (`getCurrentOrg`,
+`requireOrgId`, cached per request).
+
+Anything that is not a tenant subdomain resolves to `DEFAULT_ORG_SLUG`, which is
+what keeps `www.useawer.com` behaving exactly as today. The slug is always
+recomputed from the host and overwrites any inbound header, so a client cannot
+reach another tenant by sending it.
+
+Two things found while wiring it:
+- **The proxy matcher skips `/api/*`.** Route handlers — Stripe webhooks, cron,
+  better-auth — would never have seen the header. `getOrgSlug()` now falls back
+  to parsing the host itself, making resolution a property of the request rather
+  than of the matcher.
+- **Reserved labels** (`api`, `www`, `admin`, `staging`, …) are refused as
+  tenant slugs, or `api.useawer.com` stops meaning the API.
+
+Verified against both seeded orgs: each resolves from its own host, `www` falls
+back to default, unknown slugs resolve to no org, and `*.localhost` works for
+local subdomain testing. 19 parsing cases pass.
 
 ---
 
