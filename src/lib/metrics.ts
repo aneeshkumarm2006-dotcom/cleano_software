@@ -8,7 +8,7 @@
 // a client-side filtered list. They are re-exported here — server code keeps
 // importing from "@/lib/metrics" and the two definitions can never drift.
 import "server-only";
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import type { Prisma } from "@prisma/client";
 import {
   jobRevenue,

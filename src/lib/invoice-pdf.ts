@@ -4,7 +4,7 @@
  * the company tax IDs.
  */
 
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { formatDate } from "@/lib/timezone";
 import { formatAddressLine, normalizeAddressKey } from "@/lib/client-address";
 import { resolveDepositCredit } from "@/lib/booking-deposit";

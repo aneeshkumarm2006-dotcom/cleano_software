@@ -1,4 +1,5 @@
 import type { InventoryAction, Prisma } from "@prisma/client";
+import type { ScopedTx } from "@/lib/db-scoped";
 
 /**
  * WAREHOUSE STOCK — the only module allowed to move it (Stage 4, PDF #5).
@@ -45,7 +46,7 @@ import type { InventoryAction, Prisma } from "@prisma/client";
  * Anything that can run a query — the interactive-transaction client, or the
  * plain `db` for reads outside a transaction. Writes must always pass a `tx`.
  */
-export type StockClient = Prisma.TransactionClient;
+export type StockClient = Prisma.TransactionClient | ScopedTx;
 
 interface StockActor {
   id?: string | null;

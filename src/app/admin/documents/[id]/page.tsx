@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect, notFound } from "next/navigation";
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import DocumentSigningView from "./DocumentSigningView";
 
 export default async function DocumentSigningPage({

@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import SalesPageClient from "./SalesPageClient";
 import { SALES_REP_ROLES } from "./commissionTypes";
 import { storeMonthPeriod } from "@/lib/timezone";

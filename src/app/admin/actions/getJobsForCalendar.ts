@@ -1,6 +1,6 @@
 "use server";
 
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { computeBadgeMaps } from "./_calendarBadges";
 import { CALENDAR_JOB_SELECT } from "./_calendarSelect";
 import {

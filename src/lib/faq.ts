@@ -15,7 +15,7 @@
  * Not a "use server" module — these are plain server helpers.
  */
 
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { getSetting } from "@/lib/settings";
 
 export type FaqSurface = "public" | "portal";

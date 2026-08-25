@@ -6,7 +6,7 @@
 // feature have no rows — read-side code derives a fallback status from the
 // job-level clockInTime/clockOutTime/onMyWayAt fields instead.
 
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import type { JobCleanerStatus } from "@prisma/client";
 import { notifyAdmins } from "@/lib/admin-alerts";
 import {

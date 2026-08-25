@@ -20,7 +20,7 @@
  * network-callable server action, and this takes a caller-supplied clientId.
  */
 
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 
 export interface JobClientCapture {
   /** Already-linked client, from the form's hidden field / picker. */

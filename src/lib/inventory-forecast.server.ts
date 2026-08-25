@@ -1,4 +1,4 @@
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import {
   USAGE_WINDOW_DAYS,
   perJobAverages,

@@ -6,7 +6,7 @@
 // forgets to filter on role sweeps the entire customer book in with the crew.
 // That is exactly what "Assign to: all employees" used to do.
 import "server-only";
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 
 // Every role that is staff. Mirrors the Roles enum in prisma/schema.prisma
 // minus CLIENT.

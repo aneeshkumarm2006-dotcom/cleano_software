@@ -1,4 +1,4 @@
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import {
   RECURRING_SAVE_OFFER_KEY,
   DEFAULT_SAVE_OFFER,

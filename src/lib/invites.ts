@@ -21,7 +21,7 @@
  * cleaner-facing countdown kept threatening it.
  */
 
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { getSetting } from "@/lib/settings";
 
 interface CreateInviteOpts {

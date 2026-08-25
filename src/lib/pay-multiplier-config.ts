@@ -1,4 +1,4 @@
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import {
   DEFAULT_RATING_MULTIPLIERS,
   MAX_RATING_MULTIPLIER,

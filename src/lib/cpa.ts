@@ -2,7 +2,7 @@
 // the real Contact set (source → channel, lifecycle, paid bookings); spend comes
 // from the AdSpendImport table. True CPA = spend ÷ first-cleaning customers.
 import "server-only";
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { listContacts } from "@/lib/crm";
 import { addStoreMonths, formatDate, startOfStoreMonth } from "@/lib/timezone";
 import {

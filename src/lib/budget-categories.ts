@@ -1,4 +1,4 @@
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import type { BudgetCategory, BudgetCategoryKind } from "@prisma/client";
 // Type-only, so nothing from this server module leaks into the client bundle.
 // The DTO is declared next to the screens that consume it.

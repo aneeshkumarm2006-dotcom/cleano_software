@@ -1,5 +1,5 @@
 import { requireOwnerAdmin } from "@/lib/page-guards";
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import PromoCodesClient from "./PromoCodesClient";
 
 type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>;

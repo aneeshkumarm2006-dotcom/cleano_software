@@ -1,6 +1,6 @@
 "use server";
 
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { getActor } from "@/lib/action-guards";
 import { fieldLeadScopedJobsWhere } from "@/lib/cleaner-jobs";
 import {

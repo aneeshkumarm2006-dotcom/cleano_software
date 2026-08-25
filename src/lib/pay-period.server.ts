@@ -5,7 +5,7 @@
 // responsible for that (the action gates on ADMIN/OWNER; the cron gates on
 // CRON_SECRET).
 import "server-only";
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { getCleanerRateInputs } from "@/lib/cleaner-rates";
 import { getFieldLeadWeeklyBonus } from "@/lib/field-lead-bonus.server";
 import { formatPayPeriodRange, type PayPeriodRange } from "@/lib/pay-period";

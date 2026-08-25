@@ -1,4 +1,4 @@
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import type { AlertType, AlertSeverity, Roles } from "@prisma/client";
 import { alertAlreadyOpen } from "./alert-dedupe";
 

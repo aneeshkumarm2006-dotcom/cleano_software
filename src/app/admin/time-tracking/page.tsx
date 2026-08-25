@@ -1,4 +1,4 @@
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { requireAdmin } from "@/lib/page-guards";
 import { EMPLOYEE_ROLES } from "@/lib/metrics";
 import TimeTrackingClient from "./TimeTrackingClient";

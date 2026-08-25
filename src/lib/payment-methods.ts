@@ -1,4 +1,4 @@
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { STORE_TZ } from "@/lib/timezone";
 
 /**

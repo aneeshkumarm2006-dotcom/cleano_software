@@ -19,7 +19,7 @@
 // so a lead is resolved here purely by "who points at me", never by tier —
 // otherwise a group would silently empty out the moment an admin changed a tier.
 
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 
 export interface FieldLeadGroupMember {
   id: string;

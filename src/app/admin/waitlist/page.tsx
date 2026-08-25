@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import WaitlistPageClient from "./WaitlistPageClient";
 
 type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>;

@@ -12,7 +12,7 @@
 // The labels and the option list live in ./checklist-options.ts, which is pure
 // so the client components can share them.
 
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { describeScope, describeTrigger } from "@/lib/checklist-triggers";
 import type { ChecklistTemplateOption } from "@/lib/checklist-options";
 

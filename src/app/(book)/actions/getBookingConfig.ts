@@ -1,6 +1,6 @@
 "use server";
 
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { getSetting } from "@/lib/settings";
 import { getServicePricingConfig } from "@/lib/booking-pricing";
 import { normalizeAddOnCatalog, type AddOnCatalogEntry } from "@/lib/addon-catalog";

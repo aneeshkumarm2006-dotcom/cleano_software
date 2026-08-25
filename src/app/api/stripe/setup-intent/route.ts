@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { stripe, getOrCreateStripeCustomer } from "@/lib/stripe";
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { auth } from "@/lib/auth";
 import { isAdminRole } from "@/lib/role-routing";
 

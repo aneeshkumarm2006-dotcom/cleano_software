@@ -1,5 +1,5 @@
 import { requireAdmin } from "@/lib/page-guards";
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { EMPLOYEE_ROLES } from "@/lib/metrics";
 import TrainingDocsClient from "./TrainingDocsClient";
 

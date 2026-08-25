@@ -1,6 +1,6 @@
 "use server";
 
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 
 export async function joinWaitlist(formData: FormData) {
   const email = (formData.get("email") as string)?.trim();

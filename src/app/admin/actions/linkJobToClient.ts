@@ -1,6 +1,6 @@
 "use server";
 
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { revalidatePath } from "next/cache";
 import { requireOwnerAdmin } from "@/lib/action-guards";
 import { resolveJobAddressId } from "@/lib/client-address-store";

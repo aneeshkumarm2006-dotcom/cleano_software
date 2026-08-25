@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import SettingsClient from "./SettingsClient";
 import { seedNotificationCatalog } from "@/lib/notifications";
 import { requireStaff } from "@/lib/page-guards";

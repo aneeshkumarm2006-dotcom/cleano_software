@@ -1,4 +1,4 @@
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { formatDate } from "@/lib/timezone";
 import {
   ADDON_INCLUDED_LABEL,

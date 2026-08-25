@@ -3,7 +3,7 @@
 // whose only caller is the GET handler at
 // src/app/api/admin/attention-counts/route.ts.
 
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 

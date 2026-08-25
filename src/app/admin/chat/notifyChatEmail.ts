@@ -1,5 +1,5 @@
 import { Resend } from "resend";
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { isNotificationEnabled } from "@/lib/notifications";
 
 const FROM = process.env.EMAIL_FROM ?? "Cleano <no-reply@cleano.ca>";

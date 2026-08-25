@@ -6,7 +6,7 @@
 // the full series". What was missing is the other half: applying an edit to the
 // WHOLE series at once.
 
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 
 /**
  * Fields that propagate when an admin chooses "apply to the whole series".

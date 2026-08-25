@@ -1,5 +1,5 @@
 import { requireAdmin } from "@/lib/page-guards";
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { ASSIGNABLE_PRODUCT_WHERE } from "@/lib/kit-product.server";
 import KitsAdminClient from "./KitsAdminClient";
 

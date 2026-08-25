@@ -1,7 +1,7 @@
 // Server-side reader for THE service catalog (awer_fixes.pdf item 20).
 // The pure model lives in ./service-catalog so client pickers can share it.
 import "server-only";
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import {
   SERVICE_CATALOG_KEY,
   normalizeServiceCatalog,

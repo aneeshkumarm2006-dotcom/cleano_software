@@ -1,6 +1,6 @@
 "use server";
 
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { stripe } from "@/lib/stripe";
 import {
   sendGiftCardToRecipient,

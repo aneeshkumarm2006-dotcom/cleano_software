@@ -11,7 +11,7 @@
  * Not a "use server" module: these are plain server helpers, not form actions.
  */
 
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { logActivity } from "@/lib/activity-log";
 import {
   findSettingDef,

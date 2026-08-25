@@ -1,5 +1,5 @@
 import "server-only";
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import type { InvoiceStatus } from "@prisma/client";
 import { startOfDayTz } from "./time";
 

@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect, notFound } from "next/navigation";
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { getSettings } from "@/lib/settings";
 import {
   ADDON_INCLUDED_LABEL,

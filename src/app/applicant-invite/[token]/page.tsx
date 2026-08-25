@@ -1,4 +1,4 @@
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import SetPasswordForm from "./SetPasswordForm";
 import SplitShell, { BRAND_IMAGES } from "@/components/customer/SplitShell";
 import { Banner } from "@/components/customer/Field";

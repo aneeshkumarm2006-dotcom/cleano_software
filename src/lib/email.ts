@@ -1,5 +1,5 @@
 import { Resend } from "resend";
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { isNotificationEnabled } from "@/lib/notifications";
 import { coverFor } from "@/lib/gift-cards/covers";
 import { BOOKING_DEPOSIT_USD } from "@/lib/job-billing";

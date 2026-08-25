@@ -1,4 +1,4 @@
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { effectiveMultiplier } from "./pay-multiplier";
 import { getRatingMultiplierMap } from "./pay-multiplier-config";
 import {

@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { headers, cookies } from "next/headers";
 import { auth } from "@/lib/auth";
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { getSetting } from "@/lib/settings";
 import { homeForRole } from "@/lib/role-routing";
 import signOut from "../actions/portalSignOut";

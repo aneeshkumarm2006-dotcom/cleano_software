@@ -1,6 +1,6 @@
 "use server";
 
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { getActor } from "@/lib/action-guards";
 import { computeJobMoney } from "@/lib/job-money";
 import { computeJobPayShares, type JobPayInput } from "@/lib/cleaner-earnings";

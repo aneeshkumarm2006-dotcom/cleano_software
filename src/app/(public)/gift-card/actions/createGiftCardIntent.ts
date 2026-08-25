@@ -1,6 +1,6 @@
 "use server";
 
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { stripe } from "@/lib/stripe";
 import { generateGiftCardCode } from "@/lib/gift-cards/code";
 import { GIFT_CARD_COVERS } from "@/lib/gift-cards/covers";

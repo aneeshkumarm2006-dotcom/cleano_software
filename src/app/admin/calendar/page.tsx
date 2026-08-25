@@ -1,7 +1,7 @@
 import React from "react";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import {
   SAVED_ADDRESS_ORDER,
   SAVED_ADDRESS_SELECT,

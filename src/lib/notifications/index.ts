@@ -1,4 +1,4 @@
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { NOTIFICATION_CATALOG, type CatalogEntry, type Recipient, type Channel } from "./catalog";
 
 export type { CatalogEntry, Recipient, Channel } from "./catalog";

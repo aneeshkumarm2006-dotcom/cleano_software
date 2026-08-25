@@ -4,7 +4,7 @@ import {
   getOrCreateStripeCustomer,
   BOOKING_DEPOSIT_CURRENCY,
 } from "@/lib/stripe";
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { depositIntentKind, isQuotedService } from "@/lib/booking-deposit";
 import { resolveDepositCentsForService } from "@/lib/booking-deposit.server";
 

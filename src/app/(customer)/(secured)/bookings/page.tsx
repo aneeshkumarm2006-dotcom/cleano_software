@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import BookingsClient from "./BookingsClient";
 import CancelRecurringCard from "../../CancelRecurringCard";
 import { RECURRING_FREQUENCIES } from "@/lib/retention-constants";

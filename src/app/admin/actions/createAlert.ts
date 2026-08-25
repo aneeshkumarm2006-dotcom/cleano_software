@@ -1,6 +1,6 @@
 "use server";
 
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { revalidatePath } from "next/cache";
 import type { AlertType, AlertSeverity, Prisma } from "@prisma/client";
 import {

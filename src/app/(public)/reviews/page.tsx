@@ -1,4 +1,4 @@
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { getSettings } from "@/lib/settings";
 
 // Reviews + settings change at runtime, so render per request.

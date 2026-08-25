@@ -4,7 +4,7 @@ import { customSession } from "better-auth/plugins"
 import { cache } from "react";
 import { headers as nextHeaders } from "next/headers";
 
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { sendAccountEmail } from "@/lib/email";
 
 // better-auth doesn't ship a "role" on the user object passed to email hooks

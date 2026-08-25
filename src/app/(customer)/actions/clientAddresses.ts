@@ -14,7 +14,7 @@
  * editing a form field. Ownership of a row is re-checked on every write.
  */
 
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";

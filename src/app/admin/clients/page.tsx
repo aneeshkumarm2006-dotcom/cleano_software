@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { jobRevenue, ACTIVE_VALUE_SELECT } from "@/lib/metrics";
 import ClientsPageClient from "./ClientsPageClient";
 

@@ -8,7 +8,7 @@
 //
 // The rules it enforces are in job-checklist.ts (pure, unit-testable).
 
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import {
   resolveChecklistTemplates,
   type ChecklistResolutionTier,

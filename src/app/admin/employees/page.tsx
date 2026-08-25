@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { CalendarClock } from "lucide-react";
 import { requireOwnerAdmin } from "@/lib/page-guards";
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { jobRevenue, getEmployeeCounts } from "@/lib/metrics";
 import { AVAILABILITY_VIEW_PATH } from "@/lib/availability-view";
 import EmployeesPageClient from "./EmployeesPageClient";

@@ -1,6 +1,6 @@
 "use server";
 
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { resolveChargePaymentMethod } from "@/lib/payment-methods";
 import { resolveAmountDue } from "@/lib/job-billing";
 import { auth } from "@/lib/auth";

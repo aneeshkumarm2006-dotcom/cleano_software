@@ -8,7 +8,7 @@
  * awerfixes.pdf item 2 (round 3, stage 4).
  */
 
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import {
   autoAddressLabel,
   normalizeAddressKey,

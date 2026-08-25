@@ -16,7 +16,7 @@
 
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { revalidatePath } from "next/cache";
 import { storeMonthPeriod } from "@/lib/timezone";
 import { SALES_REP_ROLES, type CommissionRow } from "@/app/admin/sales/commissionTypes";

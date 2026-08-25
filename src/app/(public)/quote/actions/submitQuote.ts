@@ -1,6 +1,6 @@
 "use server";
 
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { sendCustomerQuoteReceived, sendAdminQuoteRequest } from "@/lib/email";
 import { getSetting } from "@/lib/settings";
 import { getServiceCatalog } from "@/lib/service-catalog.server";

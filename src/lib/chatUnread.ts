@@ -1,6 +1,6 @@
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import type { Prisma } from "@prisma/client";
 import { isAdminRole } from "@/lib/role-routing";
 

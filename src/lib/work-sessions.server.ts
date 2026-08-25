@@ -16,7 +16,7 @@
 //   JobAssignment.clockInTime  = that cleaner's first session start
 //   JobAssignment.clockOutTime = that cleaner's last session end (NULL if open)
 
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { summariseSessions } from "@/lib/work-sessions";
 
 export interface ClockMirrorState {

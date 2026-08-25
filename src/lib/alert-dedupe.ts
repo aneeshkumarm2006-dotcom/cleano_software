@@ -14,7 +14,7 @@
 // Scoped to undismissed rows on purpose: once an admin has cleared an alert, the
 // condition recurring is news again and must be allowed to re-raise.
 import "server-only";
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import type { AlertType } from "@prisma/client";
 
 export interface AlertIdentity {

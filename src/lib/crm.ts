@@ -1,7 +1,7 @@
 // Server-side CRM data layer. Aggregates the unified Contact table with the
 // operational Client/Job rows it back-links to, and detects duplicates.
 import "server-only";
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import type { LifecycleStage, ContactActivityType } from "@prisma/client";
 import { avatarColor, initials } from "@/lib/avatar";
 import type {

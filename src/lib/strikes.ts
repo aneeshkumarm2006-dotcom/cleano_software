@@ -1,4 +1,4 @@
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import type { StrikeReason } from "@prisma/client";
 import {
   STRIKE_WINDOW_DAYS,

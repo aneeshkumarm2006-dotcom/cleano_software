@@ -14,7 +14,7 @@
 // actually decides. Money visibility is a separate flag on the resolved viewer —
 // see `./_calendarScope.ts`.
 
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { loadPerJobAverages } from "@/lib/inventory-forecast.server";
 import { getSetting } from "@/lib/settings";
 import { resolvePriorityLabel, type PriorityLabel } from "@/lib/calendar-labels";

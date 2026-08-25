@@ -2,7 +2,7 @@
 
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { revalidatePath } from "next/cache";
 
 export async function createSalesArea(formData: FormData) {

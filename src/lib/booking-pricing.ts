@@ -1,4 +1,4 @@
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { calculateTax, TaxBreakdown } from "./tax";
 import { sumAddOns } from "./job-money";
 import { normalizeJobType } from "./calendar-labels";

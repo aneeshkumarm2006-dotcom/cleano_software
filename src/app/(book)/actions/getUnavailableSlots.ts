@@ -1,6 +1,6 @@
 "use server";
 
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { getBlockedSlots } from "@/lib/blocked-dates";
 import { storeCivilDayRange, storeTimeKey } from "@/lib/timezone";
 

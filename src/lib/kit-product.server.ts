@@ -35,11 +35,12 @@
 // found" for a product the admin is looking at is the part of this bug that
 // cost the most time.
 
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import type { Prisma } from "@prisma/client";
+import type { ScopedTx } from "@/lib/db-scoped";
 
 /** `db`, or a transaction client when the lookup belongs inside one. */
-export type ProductLookupClient = Prisma.TransactionClient | typeof db;
+export type ProductLookupClient = Prisma.TransactionClient | ScopedTx | typeof db;
 
 /** The fields every kit flow needs: identity, unit for the audit row, status. */
 export interface KitProduct {

@@ -14,7 +14,7 @@
 //
 // Server-only (imports the db client).
 
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { getCleanerRateInputs } from "./cleaner-rates";
 import { jobPayBasis, type MoneyAddOn } from "./job-money";
 import {

@@ -1,5 +1,5 @@
 import "server-only";
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { startOfDayTz } from "./time";
 
 // Spec item 8: jobs move Scheduled → Completed once the job date has passed

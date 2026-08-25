@@ -1,5 +1,5 @@
 import "server-only";
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import type { PropertyDef } from "@/lib/prop-engine-meta";
 
 export async function listObjectProperties(objectType: string): Promise<PropertyDef[]> {

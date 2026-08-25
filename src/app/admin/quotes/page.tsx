@@ -1,5 +1,5 @@
 import { requireAdmin } from "@/lib/page-guards";
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { getSetting } from "@/lib/settings";
 import { getServiceCatalogWithLabels } from "@/lib/service-catalog.server";
 import { serviceOptions } from "@/lib/service-catalog";

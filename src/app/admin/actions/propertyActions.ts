@@ -2,7 +2,7 @@
 
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { revalidatePath } from "next/cache";
 import { FIELD_TYPES, OBJECT_TYPES, GROUPS, HAS_OPTIONS, toInternal } from "@/lib/prop-engine-meta";
 

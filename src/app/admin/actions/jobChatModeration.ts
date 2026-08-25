@@ -1,6 +1,6 @@
 "use server";
 
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { revalidatePath } from "next/cache";
 import { requireOwnerAdmin } from "@/lib/action-guards";
 import { logActivity } from "@/lib/activity-log";

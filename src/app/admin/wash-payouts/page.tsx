@@ -1,5 +1,5 @@
 import { requireOwnerAdmin } from "@/lib/page-guards";
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import WashPayoutsPageClient from "./WashPayoutsPageClient";
 import { isOverProjection } from "@/lib/wash";
 

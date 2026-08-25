@@ -20,7 +20,7 @@
 // publishes every export as a callable endpoint, and a validation helper is not
 // something the browser should be able to call.
 
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 
 export interface TemplateScopeInput {
   clientId?: string | null;

@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import FinancesPageClient from "./FinancesPageClient";
 import { formatDate } from "@/lib/timezone";
 import { getBudgetCategoryOptions } from "@/lib/budget-categories";

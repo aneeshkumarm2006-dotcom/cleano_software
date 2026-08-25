@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import {
   MapPin, CheckCircle2, AlertTriangle, Package, DollarSign,
   Calendar, Briefcase, ShieldAlert,

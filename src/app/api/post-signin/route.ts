@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { auth } from "@/lib/auth";
 import { logActivity } from "@/lib/activity-log";
 import { notifyAdmins } from "@/lib/admin-alerts";

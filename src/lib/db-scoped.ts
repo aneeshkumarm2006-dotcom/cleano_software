@@ -153,3 +153,15 @@ export function scopedTo(base: PrismaClient, organizationId: string) {
 }
 
 export type ScopedDb = ReturnType<typeof scopedTo>;
+
+/**
+ * The client handed to a `$transaction` callback on a scoped client.
+ *
+ * An extended client's transaction client is not `Prisma.TransactionClient` --
+ * it carries the extension's types -- so helpers that accept "something you can
+ * query with inside a transaction" must name this instead.
+ */
+export type ScopedTx = Omit<
+  ScopedDb,
+  "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends"
+>;

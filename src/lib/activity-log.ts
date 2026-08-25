@@ -1,4 +1,4 @@
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import type { ActivityCategory, ActivityStatus } from "@prisma/client";
 
 export interface LogActivityInput {

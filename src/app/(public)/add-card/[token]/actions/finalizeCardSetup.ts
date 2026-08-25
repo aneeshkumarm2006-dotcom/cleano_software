@@ -1,6 +1,6 @@
 "use server";
 
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { stripe } from "@/lib/stripe";
 import { logActivity } from "@/lib/activity-log";
 import { notifyCardReplaced } from "@/lib/payment-methods";

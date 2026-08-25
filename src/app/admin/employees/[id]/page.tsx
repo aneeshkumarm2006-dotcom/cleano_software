@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import EmployeeDetailView from "./EmployeeDetailView";
 import { jobRevenue } from "@/lib/metrics";
 import { computeJobPayShares, type JobPayInput } from "@/lib/cleaner-earnings";

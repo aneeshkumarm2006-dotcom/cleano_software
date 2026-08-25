@@ -1,5 +1,5 @@
 import "server-only";
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { getCleanerRateInputs } from "@/lib/cleaner-rates";
 import {
   JOB_PAY_SELECT,

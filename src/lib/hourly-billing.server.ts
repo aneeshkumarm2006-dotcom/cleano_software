@@ -10,7 +10,7 @@ import "server-only";
 // Pure rules live in `./hourly-billing`; the arithmetic lives in
 // `./job-money`. Nothing here re-implements either.
 
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { billableActualHours, isHourlyBilled } from "./hourly-billing";
 import {
   computeJobMoney,

@@ -7,7 +7,7 @@
 // so server code keeps importing from "@/lib/tax.server" while client display
 // code can apply the identical rule. Only the DB read is server-only.
 import "server-only";
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { DEFAULT_TAX_RATES, type TaxRates } from "@/lib/tax";
 
 export {

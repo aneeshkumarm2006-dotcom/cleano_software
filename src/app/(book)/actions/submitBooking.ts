@@ -1,6 +1,6 @@
 "use server";
 
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { checkServiceAreaInternal } from "@/lib/service-area";
 import { getBlockedDates, isTimeBlocked } from "@/lib/blocked-dates";
 import { getBookingConfig } from "./getBookingConfig";

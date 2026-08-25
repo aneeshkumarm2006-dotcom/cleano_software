@@ -1,4 +1,4 @@
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
 import crypto from "crypto";

@@ -1,6 +1,6 @@
 "use server";
 
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { hashPassword } from "better-auth/crypto";
 import { logActivity } from "@/lib/activity-log";
 import { notifyAdmins } from "@/lib/admin-alerts";

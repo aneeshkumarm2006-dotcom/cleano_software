@@ -16,7 +16,7 @@ import "server-only";
 //
 // The pure rules live in `./cleaner-earnings`; nothing here re-implements them.
 
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { getCleanerRateInputs } from "./cleaner-rates";
 import {
   JOB_PAY_SELECT,

@@ -1,4 +1,4 @@
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { TIME_SLOTS } from "@/app/(book)/book/types";
 
 // AppSetting key holding the admin-configured booking closures.

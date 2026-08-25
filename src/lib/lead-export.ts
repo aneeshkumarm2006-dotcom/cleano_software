@@ -25,7 +25,7 @@
  * is the work, and it can be exercised directly by a test.
  */
 
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import type { LeadStatus, LifecycleStage, Prisma } from "@prisma/client";
 import { formatDate } from "@/lib/timezone";
 import {

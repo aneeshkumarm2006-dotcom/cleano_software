@@ -1,4 +1,4 @@
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 
 // Referral economics used to live here as NEW_CLIENT_DISCOUNT / REFERRER_CREDIT.
 // They now live in Settings as `customer.newClientReferralDiscountUsd` and

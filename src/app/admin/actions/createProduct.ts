@@ -1,6 +1,6 @@
 "use server";
 
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { adjustWarehouseStock } from "@/lib/stock.server";
 import { revalidatePath } from "next/cache";
 import type { ProductCategory } from "@prisma/client";

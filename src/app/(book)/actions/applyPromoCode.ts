@@ -1,6 +1,6 @@
 "use server";
 
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 
 export async function applyPromoCode(code: string, subtotal: number): Promise<{
   valid: boolean;

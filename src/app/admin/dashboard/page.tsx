@@ -1,6 +1,6 @@
 import { getCachedSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import Link from "next/link";
 import {
   CreditCard,

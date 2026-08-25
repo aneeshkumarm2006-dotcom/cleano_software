@@ -1,5 +1,5 @@
 import { requireAdmin } from "@/lib/page-guards";
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import ApplicationsInboxClient from "./ApplicationsInboxClient";
 
 type SearchParams = Promise<{

@@ -1,6 +1,6 @@
 "use server";
 
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { stripe } from "@/lib/stripe";
 import { requireOwnerAdmin } from "@/lib/action-guards";
 import { logActivity } from "@/lib/activity-log";

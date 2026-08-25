@@ -1,4 +1,4 @@
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 import { randomBytes } from "crypto";
 import { sendCustomerRateUs } from "@/lib/email";
 

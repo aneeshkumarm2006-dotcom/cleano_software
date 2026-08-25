@@ -26,7 +26,7 @@
  */
 
 import "server-only";
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
 
 /** The identity fields matching needs. Any lead row satisfies this. */
 export interface LeadIdentity {
