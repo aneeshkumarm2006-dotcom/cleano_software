@@ -92,12 +92,55 @@ export function scopedTo(base: PrismaClient, organizationId: string) {
             });
           }
 
-          // findUnique cannot take a non-unique filter, so the row is fetched
-          // and then rejected if it is not ours. The caller sees exactly what it
-          // would see for a row that does not exist.
+          // findUnique cannot carry a non-unique filter, so it is re-issued as a
+          // findFirst that can.
+          //
+          // The obvious alternative -- run the query and check the row's
+          // organizationId afterwards -- is wrong, and quietly so: a caller
+          // passing `select: { role: true }` gets back a row with no
+          // organizationId on it, the check reads undefined, and every lookup is
+          // rejected as foreign. better-auth's session handler does exactly
+          // that, so this would have silently downgraded the role on every
+          // request.
+          //
+          // Compound-key lookups cannot be spread into findFirst, so those keep
+          // the after-the-fact check, re-reading organizationId by id when the
+          // caller's select left it out.
           if (operation === "findUnique" || operation === "findUniqueOrThrow") {
-            const row = (await query(a)) as { organizationId?: string } | null;
-            if (row && row.organizationId !== organizationId) {
+            const where = (a.where ?? {}) as Record<string, unknown>;
+            const isCompoundKey = Object.values(where).some(
+              (v) => v !== null && typeof v === "object" && !(v instanceof Date),
+            );
+
+            if (!isCompoundKey) {
+              const delegate = (base as unknown as Record<string, {
+                findFirst: (q: unknown) => Promise<unknown>;
+              }>)[delegateOf(model)];
+              const row = await delegate.findFirst({
+                ...a,
+                where: { ...where, organizationId },
+              });
+              if (!row && operation === "findUniqueOrThrow") {
+                throw new CrossTenantError(model, operation);
+              }
+              return row;
+            }
+
+            const row = (await query(a)) as
+              | { id?: string; organizationId?: string }
+              | null;
+            if (!row) return row;
+            let owner = row.organizationId;
+            if (owner === undefined && row.id) {
+              const delegate = (base as unknown as Record<string, {
+                findFirst: (q: unknown) => Promise<{ organizationId: string } | null>;
+              }>)[delegateOf(model)];
+              owner = (await delegate.findFirst({
+                where: { id: row.id },
+                select: { organizationId: true },
+              }))?.organizationId;
+            }
+            if (owner !== organizationId) {
               if (operation === "findUniqueOrThrow") {
                 throw new CrossTenantError(model, operation);
               }

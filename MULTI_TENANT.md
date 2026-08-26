@@ -89,7 +89,7 @@ rewrite. Isolation comes from RLS; an FK only guarantees the id isn't garbage.
 | — | Synthetic seeder, drop prod data from staging | ✅ done |
 | 3 | Tenant context — subdomain → org in `proxy.ts` | ✅ done |
 | 4 | Scope ~1,400 queries, module by module | ⬜ next |
-| 5 | Enforce — `NOT NULL`, RLS, and the constraint fixes below | ⬜ |
+| 5 | Enforce — `NOT NULL`, RLS, and the constraint fixes below | 🚧 5a/5b/5c done |
 | 6 | Platform layer — super admin, signup, plans, provisioning | ⬜ |
 | 7 | Second real tenant + Stripe Connect | ⬜ |
 | 8 | Production cutover (needs explicit approval) | ⬜ |
@@ -160,6 +160,30 @@ Two things found while wiring it:
 Verified against both seeded orgs: each resolves from its own host, `www` falls
 back to default, unknown slugs resolve to no org, and `*.localhost` works for
 local subdomain testing. 19 parsing cases pass.
+
+### Step 5a/5b/5c — enforcement so far
+- **5a** Ten unique constraints made per-organization. Surfaced 41 type errors,
+  all code addressing rows by a key that is no longer globally unique.
+- **5b** Per-organization job numbering, allocated by an atomic
+  `UPDATE ... RETURNING`. Three of eight creation sites build `jobData: any`, so
+  the compiler could not see the missing required field — found by reading every
+  site. Invoice numbering already worked, because it reads through the scoped
+  client.
+- **5c** `User.email` unique per organization. The same person can hold separate
+  accounts at two cleaning companies.
+
+**A bug worth remembering, found in 5c.** better-auth's session handler reads
+the user with `select: { role: true }`. The scoped client checked ownership by
+reading `row.organizationId` *after* the query, which is absent when the caller
+did not select it — so the check read `undefined` and rejected every lookup.
+Every session would have silently fallen back to the default role. `findUnique`
+is now re-issued as a filtered `findFirst`, which respects any `select`, and
+three regression cases cover it.
+
+**Two security properties now verified**, not assumed:
+- The same email signs into different accounts depending on the subdomain.
+- A session cookie from one tenant does not resolve on another — the user lookup
+  is organization-scoped, so the session is simply invalid there.
 
 ---
 

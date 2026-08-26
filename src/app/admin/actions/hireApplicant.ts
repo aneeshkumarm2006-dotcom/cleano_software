@@ -86,7 +86,7 @@ export async function hireApplicant(applicationId: string): Promise<HireResult> 
     if (!email) return { error: "Application has no email" };
 
     // Path 2 — no portal account, but a User already exists for this email.
-    const existingUser = await db.user.findUnique({ where: { email } });
+    const existingUser = await db.user.findFirst({ where: { email } });
     if (existingUser) {
       // Reactivate / ensure they can work; don't downgrade an admin/owner role.
       await db.user.update({

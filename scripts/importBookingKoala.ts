@@ -384,7 +384,7 @@ async function main() {
       continue;
     }
     try {
-      const existing = await db.user.findUnique({ where: { email: p.email } });
+      const existing = await db.user.findFirst({ where: { email: p.email } });
       if (existing) {
         cleanerTally.existing++;
         cleanerUserId.set(lookupKey, existing.id);
@@ -947,7 +947,7 @@ async function ensureCustomerLogin(
   email: string,
   clientId: string
 ): Promise<{ userId: string; tempPassword: string | null }> {
-  const existing = await db.user.findUnique({
+  const existing = await db.user.findFirst({
     where: { email },
     include: { accounts: true },
   });

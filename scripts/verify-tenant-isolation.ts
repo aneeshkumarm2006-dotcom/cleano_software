@@ -51,6 +51,31 @@ async function expectRefused(name: string, fn: () => Promise<unknown>) {
       : bad("findUniqueOrThrow", (e as Error).name);
   }
 
+  // Regression: a narrow select must not break the ownership check. Checking
+  // row.organizationId after the fact reads undefined when the caller did not
+  // select it, which silently rejected every lookup -- including better-auth's
+  // session handler, which selects only `role`.
+  const ownJob = await db.job.findFirstOrThrow({ where: { organizationId: A.id } });
+  const narrow = await dbA.job.findUnique({
+    where: { id: ownJob.id },
+    select: { id: true, status: true },
+  });
+  narrow?.id === ownJob.id
+    ? ok("findUnique with a narrow select still returns our own row")
+    : bad("narrow select", "own row was rejected");
+
+  (await dbA.job.findUnique({ where: { id: bJob.id }, select: { id: true } })) === null
+    ? ok("findUnique with a narrow select still rejects B's row")
+    : bad("narrow select", "returned another tenant's row");
+
+  const narrowUser = await dbA.user.findUnique({
+    where: { id: (await db.user.findFirstOrThrow({ where: { organizationId: A.id } })).id },
+    select: { role: true },
+  });
+  narrowUser?.role
+    ? ok(`user role reads through a role-only select (${narrowUser.role})`)
+    : bad("session-shaped select", "role came back empty");
+
   console.log("\nWRITES");
   await expectRefused("update B's job", () =>
     dbA.job.update({ where: { id: bJob.id }, data: { notes: "pwned" } }));

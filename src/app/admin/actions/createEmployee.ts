@@ -55,7 +55,7 @@ export default async function createEmployee(
 
   try {
     // Check if email already exists
-    const existingUser = await db.user.findUnique({
+    const existingUser = await db.user.findFirst({
       where: { email },
     });
 

@@ -99,7 +99,7 @@ export async function sendLoginInvites(
       // No login yet — create a CLIENT user so we can invite them. They set
       // their own password via the emailed link (no temp password stored).
       if (!c.email) { skippedNoEmail++; continue; }
-      const existingByEmail = await db.user.findUnique({
+      const existingByEmail = await db.user.findFirst({
         where: { email: c.email.toLowerCase() },
         select: { id: true, email: true, name: true, lastSeenAt: true },
       });

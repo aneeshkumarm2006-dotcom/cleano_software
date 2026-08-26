@@ -31,7 +31,7 @@ export async function updateUserSettings(params: UpdateUserSettingsParams) {
 
     // Check if email is already taken by another user
     if (email !== session.user.email) {
-      const existingUser = await db.user.findUnique({
+      const existingUser = await db.user.findFirst({
         where: { email },
       });
 

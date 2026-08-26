@@ -51,7 +51,7 @@ export async function inviteApplicantToPortal(applicationId: string): Promise<In
       userId = existing.id;
       resent = true;
     } else {
-      const existingByEmail = await db.user.findUnique({ where: { email } });
+      const existingByEmail = await db.user.findFirst({ where: { email } });
       if (existingByEmail) {
         return {
           error: `An account already exists for this email (${existingByEmail.role.toLowerCase()}) — no invite needed.`,

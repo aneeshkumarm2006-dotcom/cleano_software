@@ -16,7 +16,11 @@ model User {
   deletedAt                    DateTime? // soft-delete (recoverable via Archived view)
   id                           String                  @id @default(cuid())
   name                         String
-  email                        String                  @unique
+  // Unique per organization, not globally: the same person can be a customer
+  // of two cleaning companies, with a separate account at each. better-auth
+  // resolves users through the organization-scoped client (see lib/auth.ts),
+  // so a lookup only ever sees this organization's users.
+  email                        String
   image                        String?
   createdAt                    DateTime                @default(now())
   updatedAt                    DateTime                @updatedAt
@@ -95,6 +99,7 @@ model User {
   jobApplication               JobApplication?
   applicantInviteTokens        ApplicantInviteToken[]
 
+  @@unique([organizationId, email])
   // Present in the database since an earlier migration but never declared here,
   // which showed up as schema drift. Field-lead grouping reads this column, so
   // the index is kept and declared rather than dropped.

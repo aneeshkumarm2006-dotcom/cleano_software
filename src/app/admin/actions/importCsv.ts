@@ -212,7 +212,7 @@ const jobsHandler: Handler = async (v, opts) => {
 
   let employeeId: string | null = null;
   if (str(v.employeeEmail)) {
-    const u = await db.user.findUnique({ where: { email: str(v.employeeEmail)! } });
+    const u = await db.user.findFirst({ where: { email: str(v.employeeEmail)! } });
     if (!u) return { status: "failed", reason: `Employee email ${v.employeeEmail} not found`, label: clientName };
     employeeId = u.id;
   }
@@ -224,7 +224,7 @@ const jobsHandler: Handler = async (v, opts) => {
       .map((s) => s.trim())
       .filter(Boolean);
     for (const em of emails) {
-      const u = await db.user.findUnique({ where: { email: em } });
+      const u = await db.user.findFirst({ where: { email: em } });
       if (!u) return { status: "failed", reason: `Cleaner email ${em} not found`, label: clientName };
       cleanerConnect.push({ id: u.id });
     }
@@ -267,7 +267,7 @@ const jobsHandler: Handler = async (v, opts) => {
 const employeesHandler: Handler = async (v) => {
   const email = (v.email as string).trim();
   const name = v.name as string;
-  const existing = await db.user.findUnique({ where: { email } });
+  const existing = await db.user.findFirst({ where: { email } });
   if (existing) return { status: "skipped", duplicate: true, reason: `Employee ${email} already exists`, label: email };
 
   const role = (v.role as string) || "EMPLOYEE";
@@ -383,7 +383,7 @@ const inventoryLocationsHandler: Handler = async (v) => {
 
 const inventoryRequestsHandler: Handler = async (v) => {
   const email = (v.employeeEmail as string).trim();
-  const emp = await db.user.findUnique({ where: { email } });
+  const emp = await db.user.findFirst({ where: { email } });
   if (!emp) return { status: "failed", reason: `Employee ${email} not found`, label: email };
 
   const qty = v.quantity as number;

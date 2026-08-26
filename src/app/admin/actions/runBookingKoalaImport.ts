@@ -148,7 +148,7 @@ export async function runBookingKoalaImport(
       continue;
     }
     try {
-      const existing = await db.user.findUnique({ where: { email: p.email } });
+      const existing = await db.user.findFirst({ where: { email: p.email } });
       if (existing) {
         report.cleaners.existing++;
         cleanerUserId.set(key, existing.id);
@@ -685,7 +685,7 @@ async function ensureCustomerLogin(
   email: string,
   clientId: string
 ): Promise<string | null> {
-  const existing = await db.user.findUnique({
+  const existing = await db.user.findFirst({
     where: { email },
     include: { accounts: true },
   });
