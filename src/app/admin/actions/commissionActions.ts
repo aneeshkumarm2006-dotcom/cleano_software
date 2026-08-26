@@ -97,7 +97,7 @@ export async function saveCommission(input: CommissionInput): Promise<SaveResult
   if (rawJobNumber) {
     const typed = Number(rawJobNumber.replace(/^#/, ""));
     if (!Number.isInteger(typed) || typed <= 0) return { error: "Job number must be a whole number" };
-    const job = await db.job.findUnique({ where: { jobNumber: typed }, select: { id: true } });
+    const job = await db.job.findFirst({ where: { jobNumber: typed }, select: { id: true } });
     if (!job) return { error: `No job #${typed}` };
     jobId = job.id;
     jobNumber = typed;

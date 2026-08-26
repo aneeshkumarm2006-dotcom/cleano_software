@@ -57,6 +57,7 @@ import Textarea from "@/components/ui/Textarea";
 import PriceSummary from "./PriceSummary";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
+import { allocateJobNumber } from "@/lib/job-number";
 
 // Optional manual per-cleaner payout (fix 4). Reads the `payFor_<id>` fields
 // from the create/edit form and writes them onto JobAssignment.payAmount,
@@ -812,6 +813,8 @@ export default async function JobFormPage({
         };
       }
 
+      // jobData is typed `any` here too — see saveJob.ts.
+      jobData.jobNumber = await allocateJobNumber();
       const created = await db.job.create({
         data: jobData,
       });

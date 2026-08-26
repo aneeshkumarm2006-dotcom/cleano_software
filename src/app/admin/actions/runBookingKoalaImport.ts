@@ -18,6 +18,7 @@ import { getBookingConfig } from "@/app/(book)/actions/getBookingConfig";
 import { getTaxRates, computeJobTaxes } from "@/lib/tax.server";
 import { jobTypeLabel } from "@/lib/calendar-labels";
 import { startOfDayTz } from "@/lib/time";
+import { allocateJobNumber } from "@/lib/job-number";
 import {
   parseAndNormalize,
   aggregateCustomers,
@@ -501,6 +502,7 @@ export async function runBookingKoalaImport(
         Math.abs(r.job.totalAmount - r.job.subtotalAmount) > 0.01;
       const created = await db.job.create({
         data: {
+          jobNumber: await allocateJobNumber(),
           clientName: r.job.clientName,
           ...(clientId ? { client: { connect: { id: clientId } } } : {}),
           location: r.job.location,

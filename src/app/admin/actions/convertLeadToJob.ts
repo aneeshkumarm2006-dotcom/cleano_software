@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { resolveJobClient } from "@/lib/client-capture";
+import { allocateJobNumber } from "@/lib/job-number";
 
 export async function convertLeadToJob(leadId: string) {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -33,6 +34,7 @@ export async function convertLeadToJob(leadId: string) {
 
   const job = await db.job.create({
     data: {
+      jobNumber: await allocateJobNumber(),
       employeeId: session.user.id,
       clientId,
       clientName: lead.name || lead.email,

@@ -56,6 +56,7 @@ import {
 } from "@/lib/job-assignments";
 import { fmtDate, fmtTime, tzWallClockToUtc } from "@/lib/time";
 import { addStoreDays, storeDateKey, storeWallClockToUtc } from "@/lib/timezone";
+import { allocateJobNumber } from "@/lib/job-number";
 import {
   recurringDiscountPercent,
   recurrenceCount,
@@ -1371,6 +1372,9 @@ export async function saveJob(formData: FormData) {
         };
       }
 
+      // jobData is typed `any`, so the compiler cannot enforce this the way it
+      // does at the other creation sites. Allocated per organization.
+      jobData.jobNumber = await allocateJobNumber();
       const newJob = await db.job.create({ data: jobData });
 
       // Creation / booking-source audit trail lives in Job Logs (not the Team
@@ -1556,6 +1560,7 @@ export async function saveJob(formData: FormData) {
             };
           }
 
+          childData.jobNumber = await allocateJobNumber();
           const child = await db.job.create({ data: childData });
 
           if (cleanerIds.length > 0) {

@@ -515,7 +515,11 @@ model Job {
   // from the Archived view. Never hard-deleted.
   deletedAt                      DateTime?
   id                             String                @id @default(cuid())
-  jobNumber                      Int                   @unique @default(autoincrement())
+  // Allocated per organization by allocateJobNumber(), not by a global
+  // sequence: every company numbers its own jobs from 1. Existing jobs keep the
+  // numbers they were given -- those appear on invoices, in emails and on
+  // printed sheets, so renumbering them would break every historical reference.
+  jobNumber                      Int
   employeeId                     String?
   clientName                     String
   clientId                       String?
@@ -850,6 +854,7 @@ model Job {
   convertedFromWaitlist          Waitlist[]
   commissions                    Commission[]
 
+  @@unique([organizationId, jobNumber])
   @@index([jobDate])
   @@index([clientName])
   @@index([clientId])
@@ -3742,6 +3747,9 @@ model Organization {
   // Replaces the single NEXT_PUBLIC_BUSINESS_TIMEZONE env var, which could only
   // ever describe one company.
   timezone String @default("America/Toronto")
+
+  /// Next job number to hand out. Allocated atomically -- see allocateJobNumber().
+  nextJobNumber Int @default(1)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

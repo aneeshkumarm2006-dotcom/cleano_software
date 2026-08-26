@@ -10,6 +10,7 @@ import { sendAccountEmail } from "@/lib/email";
 import { adjustWarehouseStock } from "@/lib/stock.server";
 import { inferItemType, isItemType } from "@/lib/item-type";
 import { startOfDayTz, tzWallClockToUtc } from "@/lib/time";
+import { allocateJobNumber } from "@/lib/job-number";
 import {
   CSV_ENTITIES,
   validateRecord,
@@ -231,6 +232,7 @@ const jobsHandler: Handler = async (v, opts) => {
 
   await db.job.create({
     data: {
+      jobNumber: await allocateJobNumber(),
       clientName,
       clientId,
       employeeId,

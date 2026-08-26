@@ -60,7 +60,7 @@ async function expectRefused(name: string, fn: () => Promise<unknown>) {
     dbA.job.upsert({
       where: { id: bJob.id },
       update: { notes: "pwned" },
-      create: { clientName: "x", startTime: new Date() },
+      create: { clientName: "x", startTime: new Date(), jobNumber: 999999 },
     }));
 
   const bBefore = await db.job.count({ where: { organizationId: B.id } });

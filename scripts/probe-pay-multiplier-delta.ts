@@ -194,7 +194,7 @@ async function main() {
     }),
     // Key mirrors RATING_MULTIPLIER_SETTING_KEY in pay-multiplier-config.ts,
     // inlined for the same reason — that module imports the db singleton.
-    db.appSetting.findUnique({ where: { key: "multipliers.ratings" } }),
+    db.appSetting.findFirst({ where: { key: "multipliers.ratings" } }),
   ]);
 
   const rawMap =

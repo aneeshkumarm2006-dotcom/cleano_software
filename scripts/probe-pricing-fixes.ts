@@ -353,7 +353,7 @@ async function probeClockOut() {
   }
   }
 
-  const budgetCat = await db.budgetCategory.findUnique({
+  const budgetCat = await db.budgetCategory.findFirst({
     where: { slug: "supplies" },
     select: { id: true, archivedAt: true },
   });

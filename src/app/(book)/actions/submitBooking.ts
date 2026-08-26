@@ -51,6 +51,7 @@ import { applyPromoCode } from "./applyPromoCode";
 import { formatAddressLine } from "@/lib/client-address";
 import { resolveJobAddressId } from "@/lib/client-address-store";
 import { parsePropertyType } from "@/lib/property-type";
+import { allocateJobNumber } from "@/lib/job-number";
 
 type Frequency =
   | "ONE_TIME"
@@ -853,6 +854,7 @@ export async function submitBooking(input: SubmitBookingInput) {
     try {
       primaryJob = await db.job.create({
       data: {
+        jobNumber: await allocateJobNumber(),
         clientName: client.name,
         client: { connect: { id: client.id } },
         location: bookingAddress,
@@ -1194,6 +1196,7 @@ export async function submitBooking(input: SubmitBookingInput) {
         cursor = nextOccurrence(cursor, input.frequency);
         const child = await db.job.create({
           data: {
+            jobNumber: await allocateJobNumber(),
             clientName: client.name,
             client: { connect: { id: client.id } },
             location: bookingAddress,

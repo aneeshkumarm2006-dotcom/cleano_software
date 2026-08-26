@@ -147,6 +147,10 @@ async function main() {
     const job = await db.job.create({
       data: {
         organizationId,
+        // The seeder numbers its own jobs rather than calling
+        // allocateJobNumber(), which needs a request context. The counter is
+        // set to follow them once the loop finishes.
+        jobNumber: i + 1,
         clientName: client.name,
         clientId: client.id,
         employeeId: cleaner.id,
@@ -165,6 +169,11 @@ async function main() {
     }).catch(() => {}); // assignment shape varies; job alone is enough
     jobs++;
   }
+
+  await db.organization.update({
+    where: { id: organizationId },
+    data: { nextJobNumber: jobs + 1 },
+  });
 
   console.log(`seeded: 8 users, ${clients.length} clients, ${jobs} jobs`);
   console.log(`login: owner@${slug}.test / ${PASSWORD}`);

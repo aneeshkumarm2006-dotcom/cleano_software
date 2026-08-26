@@ -138,7 +138,7 @@ function readBookings(csvText: string): {
  * script never reads).
  */
 async function loadCatalog(): Promise<{ name: string }[]> {
-  const setting = await db.appSetting.findUnique({ where: { key: "pricing.addOns" } });
+  const setting = await db.appSetting.findFirst({ where: { key: "pricing.addOns" } });
   if (!setting || !Array.isArray(setting.value)) return [];
   return normalizeAddOnCatalog(setting.value);
 }
