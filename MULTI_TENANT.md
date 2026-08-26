@@ -90,7 +90,7 @@ rewrite. Isolation comes from RLS; an FK only guarantees the id isn't garbage.
 | 3 | Tenant context — subdomain → org in `proxy.ts` | ✅ done |
 | 4 | Scope ~1,400 queries, module by module | ⬜ next |
 | 5 | Enforce — `NOT NULL`, RLS, constraint fixes, suspension | ✅ done |
-| 6 | Platform layer — super admin, signup, plans, provisioning | ✅ done (6d migration written, **not yet applied to staging**) |
+| 6 | Platform layer — super admin, signup, plans, provisioning | ✅ done, migration applied to staging |
 | 7 | Second real tenant + Stripe Connect | ⬜ |
 | 8 | Production cutover (needs explicit approval) | ⬜ |
 
@@ -353,8 +353,8 @@ and that the request form is next, instead of linking to a page that does not
 exist. No welcome email — that waits for per-organization email URLs in step 7.
 
 ### Step 6d — the Organization tier can be asked for
-`20260826120000_access_requests` — **written, not yet applied.** One enum, one
-table, three indexes. The SQL was hand-written and then diffed against
+`20260826120000_access_requests` — **applied to staging 2026-08-26.** One enum,
+one table, three indexes. The SQL was hand-written and then diffed against
 `prisma migrate diff` run offline from the previous schema: byte-identical apart
 from the comments and the revoke.
 
@@ -362,7 +362,21 @@ from the comments and the revoke.
 # staging only, from .env.local
 DATABASE_URL="$STAGING_DATABASE_URL" DIRECT_URL="$STAGING_DIRECT_URL" \
   npx prisma migrate deploy
+
+# 9 checks, including the one that matters
+DATABASE_URL="$STAGING_DIRECT_URL" npx tsx scripts/verify-access-requests.ts
 ```
+
+Verified on staging: exactly the 17 expected columns, the enum, the three
+indexes, **`awer_app` holds no privilege on the table at all** — and, as a
+contrast so that pass cannot just mean "that role has nothing anywhere", the same
+role still reaches `Subscription`. No RLS, deliberately. A probe row defaults to
+PENDING and was removed.
+
+Production re-checked immediately after and is unchanged: **0 `organizationId`
+columns, 0 tables with RLS, 0 multi-tenant tables**, and `_prisma_migrations`
+still 90 rows / 87 finished / 3 rolled back — the same May attempts recorded at
+the top of this file.
 
 `AccessRequest` is platform-level like `PlatformAuditLog`: prospective
 customers' names, emails and phone numbers, belonging to no workspace. So it
