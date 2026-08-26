@@ -50,6 +50,62 @@ function delegateOf(model: string): string {
   return model.charAt(0).toLowerCase() + model.slice(1);
 }
 
+/**
+ * Stamp organizationId onto every row a write payload creates, however deeply
+ * nested.
+ *
+ * A parent write can create children in the same statement --
+ * `job.create({ data: { photos: { create: [...] } } })` -- and those children
+ * are rows in tenant-scoped tables too. Stamping only the top level leaves them
+ * unclaimed, which becomes a NOT NULL violation the moment the column is
+ * required, on real features: booking photos, invoice line items, checklist
+ * items, chat channel members.
+ *
+ * Safe to apply blindly because every model reachable by a nested create from a
+ * tenant model is itself tenant-scoped. The only unscoped models are
+ * Organization and better-auth's Account, Session and Verification, and nothing
+ * nested-creates those.
+ *
+ * `createMany` is handled by name rather than by looking for a `data` key,
+ * because a model may legitimately have its own column called `data`.
+ */
+function stampCreated(value: unknown, organizationId: string): unknown {
+  if (Array.isArray(value)) {
+    return value.map((v) => stampCreated(v, organizationId));
+  }
+  if (value === null || typeof value !== "object" || value instanceof Date) {
+    return value;
+  }
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    if (k === "create") {
+      out[k] = Array.isArray(v)
+        ? v.map((row) => stampRow(row, organizationId))
+        : stampRow(v, organizationId);
+    } else if (k === "createMany") {
+      const cm = (v ?? {}) as Record<string, unknown>;
+      out[k] = {
+        ...cm,
+        data: Array.isArray(cm.data)
+          ? cm.data.map((row) => stampRow(row, organizationId))
+          : stampRow(cm.data, organizationId),
+      };
+    } else {
+      out[k] = stampCreated(v, organizationId);
+    }
+  }
+  return out;
+}
+
+/** One row being created: stamp it, and anything it creates in turn. */
+function stampRow(row: unknown, organizationId: string): unknown {
+  if (row === null || typeof row !== "object" || Array.isArray(row)) return row;
+  return {
+    ...(stampCreated(row, organizationId) as Record<string, unknown>),
+    organizationId,
+  };
+}
+
 export class CrossTenantError extends Error {
   constructor(model: string, operation: string) {
     super(
@@ -87,9 +143,9 @@ export function scopedTo(base: PrismaClient, organizationId: string) {
             return query({
               ...a,
               data: Array.isArray(data)
-                ? data.map((d) => ({ ...d, organizationId }))
-                : { ...(data as object | undefined), organizationId },
-            });
+                ? data.map((d) => stampRow(d, organizationId))
+                : stampRow(data, organizationId),
+            } as typeof args);
           }
 
           // findUnique cannot carry a non-unique filter, so it is re-issued as a
@@ -175,6 +231,12 @@ export function scopedTo(base: PrismaClient, organizationId: string) {
                 }
               }
             }
+            if (operation === "update" && a.data !== undefined) {
+              return query({
+                ...a,
+                data: stampCreated(a.data, organizationId),
+              } as typeof args);
+            }
             if (operation === "upsert") {
               // The TENANT_MODELS guard above has already excluded Organization
               // and the better-auth tables, but $allModels types `create` as the
@@ -182,7 +244,10 @@ export function scopedTo(base: PrismaClient, organizationId: string) {
               // organizationId. The cast asserts what the guard established.
               return query({
                 ...a,
-                create: { ...(a.create as object | undefined), organizationId },
+                create: stampRow(a.create, organizationId),
+                ...(a.update !== undefined
+                  ? { update: stampCreated(a.update, organizationId) }
+                  : {}),
               } as typeof args);
             }
             return query(a);

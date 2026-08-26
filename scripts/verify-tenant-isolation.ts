@@ -1,6 +1,7 @@
 /** Adversarial check: can org A touch org B's rows through the scoped client? */
 import { PrismaClient } from "@prisma/client";
 import { scopedTo, CrossTenantError } from "../src/lib/db-scoped";
+import { allocateJobNumber } from "../src/lib/job-number";
 
 const db = new PrismaClient();
 let pass = 0, fail = 0;
@@ -97,6 +98,38 @@ async function expectRefused(name: string, fn: () => Promise<unknown>) {
   const made = await dbA.client.create({ data: { name: "Scoped Create Test" } });
   made.organizationId === A.id ? ok("create stamped with A") : bad("create", `got ${made.organizationId}`);
   await db.client.delete({ where: { id: made.id } });
+
+  console.log("\nNESTED WRITES");
+  // A parent write that creates children in the same statement: the children are
+  // rows in a tenant table too, and go unclaimed unless stamped recursively.
+  // That becomes a NOT NULL violation on real features -- booking photos,
+  // invoice line items, checklist items.
+  const parent = await dbA.job.create({
+    data: {
+      jobNumber: await allocateJobNumber(A.id),
+      clientName: "Nested Write Probe",
+      startTime: new Date(),
+      addOns: { create: [{ name: "Oven", price: 30 }, { name: "Fridge", price: 25 }] },
+    },
+    include: { addOns: true },
+  });
+  const kids = parent.addOns ?? [];
+  kids.length === 2 && kids.every((k) => k.organizationId === A.id)
+    ? ok(`children created by a nested write inherit the organization (${kids.length})`)
+    : bad("nested create", `${kids.filter((k) => k.organizationId !== A.id).length} unclaimed child rows`);
+
+  // and the same through an update
+  const viaUpdate = await dbA.job.update({
+    where: { id: parent.id },
+    data: { addOns: { create: [{ name: "Windows", price: 40 }] } },
+    include: { addOns: true },
+  });
+  (viaUpdate.addOns ?? []).every((k) => k.organizationId === A.id)
+    ? ok("children created by a nested update inherit it too")
+    : bad("nested update", "unclaimed child row");
+
+  await db.jobAddOn.deleteMany({ where: { jobId: parent.id } });
+  await db.job.delete({ where: { id: parent.id } });
 
   console.log("\nCOLLATERAL DAMAGE CHECK");
   const bAfter = await db.job.count({ where: { organizationId: B.id } });

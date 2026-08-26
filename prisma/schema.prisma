@@ -12,7 +12,7 @@ model User {
   // Tenant owner. NULL means "not yet assigned" during the multi-tenant
   // migration, and on platform-level rows that belong to no organization.
   // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId               String?
+  organizationId               String                  @default("")
   deletedAt                    DateTime? // soft-delete (recoverable via Archived view)
   id                           String                  @id @default(cuid())
   name                         String
@@ -147,7 +147,7 @@ model Product {
   // Tenant owner. NULL means "not yet assigned" during the multi-tenant
   // migration, and on platform-level rows that belong to no organization.
   // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId          String?
+  organizationId          String                   @default("")
   deletedAt               DateTime? // soft-delete (recoverable via Archived view)
   id                      String                   @id @default(cuid())
   name                    String
@@ -199,10 +199,9 @@ model Product {
 // Extra purchase links for a product (a product can be bought from several
 // places). `purchaseUrl` on Product stays the primary/exact link.
 model ProductLink {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String   @default("")
   id             String   @id @default(cuid())
   productId      String
   label          String?
@@ -216,10 +215,9 @@ model ProductLink {
 }
 
 model AppSetting {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String   @default("")
   id             String   @id @default(cuid())
   key            String
   category       String
@@ -236,7 +234,7 @@ model KitTemplate {
   // Tenant owner. NULL means "not yet assigned" during the multi-tenant
   // migration, and on platform-level rows that belong to no organization.
   // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId    String?
+  organizationId    String             @default("")
   id                String             @id @default(cuid())
   name              String
   description       String?
@@ -250,10 +248,9 @@ model KitTemplate {
 }
 
 model KitTemplateItem {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String      @default("")
   id             String      @id @default(cuid())
   kitTemplateId  String
   productId      String
@@ -278,10 +275,9 @@ model KitTemplateItem {
 // Migration: prisma/migrations/20260817020000_drop_inventory_rule.
 
 model Supplier {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String          @default("")
   id             String          @id @default(cuid())
   name           String
   // Suppliers are treated as websites: the primary identifier is the store URL
@@ -302,10 +298,9 @@ model Supplier {
 }
 
 model SupplierPrice {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String   @default("")
   id             String   @id @default(cuid())
   supplierId     String
   productId      String
@@ -327,7 +322,7 @@ model Client {
   // Tenant owner. NULL means "not yet assigned" during the multi-tenant
   // migration, and on platform-level rows that belong to no organization.
   // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId                   String?
+  organizationId                   String                  @default("")
   deletedAt                        DateTime? // soft-delete (recoverable via Archived view)
   id                               String                  @id @default(cuid())
   name                             String
@@ -393,7 +388,7 @@ model ClientPaymentMethod {
   // Tenant owner. NULL means "not yet assigned" during the multi-tenant
   // migration, and on platform-level rows that belong to no organization.
   // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId        String?
+  organizationId        String   @default("")
   id                    String   @id @default(cuid())
   clientId              String
   stripePaymentMethodId String   @unique
@@ -414,10 +409,9 @@ model ClientPaymentMethod {
 /// Recurring-service cancellation + save-offer tracking. Created only when a
 /// customer cancels their ENTIRE recurring service (not a single cleaning).
 model RecurringCancellation {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String    @default("")
   id             String    @id @default(cuid())
   clientId       String
   frequency      String?
@@ -447,7 +441,7 @@ model ClientAddress {
   // Tenant owner. NULL means "not yet assigned" during the multi-tenant
   // migration, and on platform-level rows that belong to no organization.
   // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId     String?
+  organizationId     String              @default("")
   id                 String              @id @default(cuid())
   clientId           String
   label              String              @default("Home")
@@ -515,7 +509,7 @@ model Job {
   // Tenant owner. NULL means "not yet assigned" during the multi-tenant
   // migration, and on platform-level rows that belong to no organization.
   // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId                 String?
+  organizationId                 String                @default("")
   // Soft delete — set when bulk/single deleted; hidden from lists, recoverable
   // from the Archived view. Never hard-deleted.
   deletedAt                      DateTime?
@@ -876,10 +870,9 @@ model Job {
 }
 
 model JobAddOn {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String   @default("")
   id             String   @id @default(cuid())
   jobId          String
   name           String
@@ -900,10 +893,9 @@ model JobAddOn {
 }
 
 model PricingRule {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String   @default("")
   id             String   @id @default(cuid())
   bedCount       Int
   bathCount      Int
@@ -920,7 +912,7 @@ model JobProductUsage {
   // Tenant owner. NULL means "not yet assigned" during the multi-tenant
   // migration, and on platform-level rows that belong to no organization.
   // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId  String?
+  organizationId  String   @default("")
   id              String   @id @default(cuid())
   jobId           String
   productId       String
@@ -938,10 +930,9 @@ model JobProductUsage {
 }
 
 model JobLog {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String       @default("")
   id             String       @id @default(cuid())
   jobId          String
   userId         String?
@@ -961,10 +952,9 @@ model JobLog {
 }
 
 model InventoryRequest {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String        @default("")
   id             String        @id @default(cuid())
   employeeId     String
   productId      String?
@@ -988,10 +978,9 @@ model InventoryRequest {
 // cleaner's assigned stock). One row per adjustment: item, delta, reason, who,
 // when — surfaced on the redesigned inventory page.
 model InventoryChange {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String           @default("")
   id             String           @id @default(cuid())
   productId      String
   // Set when the change is to a specific cleaner's inventory; null = warehouse.
@@ -1030,10 +1019,9 @@ model InventoryChange {
 /// flooded with auto-created rows. A flag is "someone should look at this",
 /// which is a different thing from "please approve N units".
 model InventoryFlag {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String              @default("")
   id             String              @id @default(cuid())
   type           InventoryFlagType
   status         InventoryFlagStatus @default(OPEN)
@@ -1059,7 +1047,7 @@ model EmployeeProduct {
   // Tenant owner. NULL means "not yet assigned" during the multi-tenant
   // migration, and on platform-level rows that belong to no organization.
   // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId  String?
+  organizationId  String              @default("")
   id              String              @id @default(cuid())
   employeeId      String
   productId       String
@@ -1087,10 +1075,9 @@ model EmployeeProduct {
 }
 
 model PayPeriod {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String          @default("")
   id             String          @id @default(cuid())
   startDate      DateTime
   endDate        DateTime
@@ -1110,10 +1097,9 @@ model PayPeriod {
 }
 
 model Payout {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String    @default("")
   id             String    @id @default(cuid())
   payPeriodId    String
   employeeId     String
@@ -1137,10 +1123,9 @@ model Payout {
 }
 
 model Transaction {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String         @default("")
   id             String         @id @default(cuid())
   date           DateTime       @default(now())
   categoryId     String
@@ -1163,10 +1148,9 @@ model Transaction {
 }
 
 model RagWash {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String   @default("")
   id             String   @id @default(cuid())
   employeeId     String
   washDate       DateTime @default(now())
@@ -1187,7 +1171,7 @@ model WashPayout {
   // Tenant owner. NULL means "not yet assigned" during the multi-tenant
   // migration, and on platform-level rows that belong to no organization.
   // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId   String?
+  organizationId   String           @default("")
   id               String           @id @default(cuid())
   employeeId       String
   ragCreditsUsed   Int              @default(0)
@@ -1213,10 +1197,9 @@ enum WashPayoutStatus {
 }
 
 model Budget {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String         @default("")
   id             String         @id @default(cuid())
   categoryId     String
   period         String
@@ -1245,10 +1228,9 @@ model Budget {
 /// Deleting a category that has budgets or transactions sets `archivedAt`
 /// instead: it disappears from the pickers, history keeps rendering.
 model BudgetCategory {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String             @default("")
   id             String             @id @default(cuid())
   name           String
   slug           String
@@ -1391,10 +1373,9 @@ enum NotificationChannel {
 // per-channel enabled flag. Seeded from the Notification Catalog spec; admin
 // can toggle any row from Settings → Notifications.
 model NotificationSetting {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String                @default("")
   id             String                @id @default(cuid())
   recipient      NotificationRecipient
   category       String
@@ -1546,10 +1527,9 @@ enum InvoiceStatus {
 }
 
 model Invoice {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String            @default("")
   deletedAt      DateTime? // soft-delete (recoverable via Archived view)
   id             String            @id @default(cuid())
   invoiceNumber  String
@@ -1581,10 +1561,9 @@ model Invoice {
 }
 
 model InvoiceLineItem {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String   @default("")
   id             String   @id @default(cuid())
   invoiceId      String
   // Consolidated invoices: a multi-job invoice links each line to its job so
@@ -1609,7 +1588,7 @@ model Alert {
   // Tenant owner. NULL means "not yet assigned" during the multi-tenant
   // migration, and on platform-level rows that belong to no organization.
   // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId  String?
+  organizationId  String        @default("")
   id              String        @id @default(cuid())
   type            AlertType
   severity        AlertSeverity @default(WARNING)
@@ -1636,10 +1615,9 @@ model Alert {
 }
 
 model Target {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String       @default("")
   id             String       @id @default(cuid())
   metric         TargetMetric
   period         TargetPeriod
@@ -1658,7 +1636,7 @@ model AlertRoutingRule {
   // Tenant owner. NULL means "not yet assigned" during the multi-tenant
   // migration, and on platform-level rows that belong to no organization.
   // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId     String?
+  organizationId     String         @default("")
   id                 String         @id @default(cuid())
   alertType          AlertType
   recipientRole      Roles
@@ -1682,10 +1660,9 @@ enum AlertFrequency {
 }
 
 model Complaint {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String            @default("")
   id             String            @id @default(cuid())
   jobId          String?
   clientId       String?
@@ -1773,10 +1750,9 @@ enum StrikeStatus {
 }
 
 model CleanerStrike {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String       @default("")
   id             String       @id @default(cuid())
   cleanerId      String
   reasonCode     StrikeReason
@@ -1863,10 +1839,9 @@ enum WithdrawalStatus {
 }
 
 model EmployeeAvailability {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String          @default("")
   id             String          @id @default(cuid())
   employeeId     String
   day            AvailabilityDay
@@ -1890,10 +1865,9 @@ model EmployeeAvailability {
 // (employee, weekday) so it can't express "this specific Monday is off" —
 // that's what this is for. A row = the cleaner is unavailable that date.
 model AvailabilityException {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String   @default("")
   id             String   @id @default(cuid())
   employeeId     String
   // Date-only (midnight, business timezone) — the blocked day.
@@ -1908,10 +1882,9 @@ model AvailabilityException {
 }
 
 model JobPhoto {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String       @default("")
   id             String       @id @default(cuid())
   jobId          String
   /// WHO uploaded it. NULL = the CUSTOMER did, from the public booking flow
@@ -1984,7 +1957,7 @@ model JobChatMessage {
   // Tenant owner. NULL means "not yet assigned" during the multi-tenant
   // migration, and on platform-level rows that belong to no organization.
   // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId   String?
+  organizationId   String            @default("")
   id               String            @id @default(cuid())
   jobId            String
   senderId         String?
@@ -2025,10 +1998,9 @@ model JobChatMessage {
 // Cleaner group chat (spec #15). One default "All cleaners" channel; admin can
 // create more and moderate (soft-delete messages). Visible to all cleaners.
 model GroupChannel {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String               @default("")
   id             String               @id @default(cuid())
   name           String
   isDefault      Boolean              @default(false)
@@ -2047,10 +2019,9 @@ model GroupChannel {
 // Channel membership. The default (isDefault) channel has no member rows —
 // all staff belong implicitly. Custom channels and DMs list members explicitly.
 model GroupChannelMember {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String       @default("")
   id             String       @id @default(cuid())
   channelId      String
   userId         String
@@ -2063,10 +2034,9 @@ model GroupChannelMember {
 }
 
 model Announcement {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String                 @default("")
   id             String                 @id @default(cuid())
   title          String
   body           String                 @db.Text
@@ -2085,10 +2055,9 @@ model Announcement {
 // One reaction per user per announcement (unique constraint) — picking a
 // different emoji replaces the previous one; picking the same one removes it.
 model AnnouncementReaction {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String       @default("")
   id             String       @id @default(cuid())
   announcementId String
   userId         String
@@ -2102,10 +2071,9 @@ model AnnouncementReaction {
 }
 
 model GroupMessage {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String       @default("")
   id             String       @id @default(cuid())
   channelId      String
   senderId       String
@@ -2122,10 +2090,9 @@ model GroupMessage {
 // Per-user read cursor for a group channel — powers unread badges + read
 // receipts in team chat (spec: job chat and team chat track read separately).
 model GroupChannelRead {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String   @default("")
   id             String   @id @default(cuid())
   channelId      String
   userId         String
@@ -2140,10 +2107,9 @@ model GroupChannelRead {
 // before/after photos) — these have no employeeId and are created from the
 // public/portal rating flow. Visible to admin alongside the review.
 model ReviewPhoto {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String   @default("")
   id             String   @id @default(cuid())
   jobId          String
   url            String
@@ -2159,7 +2125,7 @@ model ChecklistTemplate {
   // Tenant owner. NULL means "not yet assigned" during the multi-tenant
   // migration, and on platform-level rows that belong to no organization.
   // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId  String?
+  organizationId  String  @default("")
   id              String  @id @default(cuid())
   name            String
   jobType         String?
@@ -2204,10 +2170,9 @@ model ChecklistTemplate {
 }
 
 model ChecklistTemplateItem {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String            @default("")
   id             String            @id @default(cuid())
   templateId     String
   title          String
@@ -2223,10 +2188,9 @@ model ChecklistTemplateItem {
 }
 
 model JobChecklist {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String             @default("")
   id             String             @id @default(cuid())
   jobId          String
   employeeId     String
@@ -2251,10 +2215,9 @@ model JobChecklist {
 }
 
 model JobChecklistItem {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String              @default("")
   id             String              @id @default(cuid())
   checklistId    String
   title          String
@@ -2273,10 +2236,9 @@ model JobChecklistItem {
 }
 
 model Document {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String              @default("")
   id             String              @id @default(cuid())
   title          String
   description    String?
@@ -2295,10 +2257,9 @@ model Document {
 // Real document activity for the Training & Docs "Document access log"
 // (spec item 20) — who opened/downloaded/completed which document, when.
 model DocumentAccessLog {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String   @default("")
   id             String   @id @default(cuid())
   documentId     String
   userId         String
@@ -2314,10 +2275,9 @@ model DocumentAccessLog {
 }
 
 model DocumentSignature {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String         @default("")
   id             String         @id @default(cuid())
   documentId     String
   employeeId     String
@@ -2353,10 +2313,9 @@ model DocumentSignature {
 /// because signing needs both and the repo's only URL→public-id parser
 /// (deleteJobPhoto.ts) assumes an `/upload/` path it will never see here.
 model EmployeeFile {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String   @default("")
   id             String   @id @default(cuid())
   employeeId     String
   kind           String // VOID_CHEQUE
@@ -2375,10 +2334,9 @@ model EmployeeFile {
 }
 
 model TrainingModule {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String             @default("")
   id             String             @id @default(cuid())
   title          String
   description    String?
@@ -2396,10 +2354,9 @@ model TrainingModule {
 }
 
 model TrainingQuiz {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String         @default("")
   id             String         @id @default(cuid())
   moduleId       String
   question       String
@@ -2414,10 +2371,9 @@ model TrainingQuiz {
 }
 
 model TrainingProgress {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String         @default("")
   id             String         @id @default(cuid())
   moduleId       String
   employeeId     String
@@ -2438,10 +2394,9 @@ model TrainingProgress {
 }
 
 model EmployeeRating {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String    @default("")
   id             String    @id @default(cuid())
   employeeId     String
   jobId          String?
@@ -2473,10 +2428,9 @@ model EmployeeRating {
 }
 
 model Withdrawal {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String           @default("")
   id             String           @id @default(cuid())
   employeeId     String
   amount         Float
@@ -2494,10 +2448,9 @@ model Withdrawal {
 }
 
 model InventoryLocation {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String                   @default("")
   id             String                   @id @default(cuid())
   name           String
   address        String?
@@ -2512,10 +2465,9 @@ model InventoryLocation {
 }
 
 model InventoryLocationStock {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String            @default("")
   id             String            @id @default(cuid())
   locationId     String
   productId      String
@@ -2532,10 +2484,9 @@ model InventoryLocationStock {
 }
 
 model InventoryCheckout {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String                  @default("")
   id             String                  @id @default(cuid())
   employeeId     String
   locationId     String
@@ -2552,10 +2503,9 @@ model InventoryCheckout {
 }
 
 model InventoryCheckoutItem {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String            @default("")
   id             String            @id @default(cuid())
   checkoutId     String
   productId      String
@@ -2589,10 +2539,9 @@ enum CampaignStatus {
 }
 
 model SalesArea {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String        @default("")
   id             String        @id @default(cuid())
   name           String
   type           SalesAreaType
@@ -2610,10 +2559,9 @@ model SalesArea {
 }
 
 model LandingPage {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String             @default("")
   id             String             @id @default(cuid())
   title          String
   slug           String
@@ -2634,10 +2582,9 @@ model LandingPage {
 }
 
 model PageVisit {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String      @default("")
   id             String      @id @default(cuid())
   landingPageId  String
   ipHash         String?
@@ -2662,7 +2609,7 @@ model ChatConversation {
   // Tenant owner. NULL means "not yet assigned" during the multi-tenant
   // migration, and on platform-level rows that belong to no organization.
   // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId        String?
+  organizationId        String        @default("")
   id                    String        @id @default(cuid())
   employeeId            String        @unique
   lastMessageAt         DateTime?
@@ -2683,7 +2630,7 @@ model ChatMessage {
   // Tenant owner. NULL means "not yet assigned" during the multi-tenant
   // migration, and on platform-level rows that belong to no organization.
   // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId   String?
+  organizationId   String           @default("")
   id               String           @id @default(cuid())
   conversationId   String
   senderId         String
@@ -2705,10 +2652,9 @@ model ChatMessage {
 }
 
 model MarketingCampaign {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String         @default("")
   id             String         @id @default(cuid())
   name           String
   description    String?
@@ -2784,7 +2730,7 @@ model JobApplication {
   // Tenant owner. NULL means "not yet assigned" during the multi-tenant
   // migration, and on platform-level rows that belong to no organization.
   // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId    String?
+  organizationId    String               @default("")
   deletedAt         DateTime? // soft-delete (recoverable via Archived view)
   id                String               @id @default(cuid())
   // Personal information
@@ -2861,10 +2807,9 @@ model JobApplication {
  * only they received is what stands in for email verification.
  */
 model ApplicantInviteToken {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String    @default("")
   id             String    @id @default(cuid())
   userId         String
   token          String    @unique
@@ -2888,7 +2833,7 @@ model ApplicantMessage {
   // Tenant owner. NULL means "not yet assigned" during the multi-tenant
   // migration, and on platform-level rows that belong to no organization.
   // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId   String?
+  organizationId   String         @default("")
   id               String         @id @default(cuid())
   jobApplicationId String
   authorRole       String // "ADMIN" | "APPLICANT"
@@ -2922,10 +2867,9 @@ enum GiftCardStatus {
  * is emailed by admin via the job detail "Send Add card link" action.
  */
 model ClientCardSetupToken {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String    @default("")
   id             String    @id @default(cuid())
   clientId       String
   token          String    @unique
@@ -2944,7 +2888,7 @@ model GiftCard {
   // Tenant owner. NULL means "not yet assigned" during the multi-tenant
   // migration, and on platform-level rows that belong to no organization.
   // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId        String?
+  organizationId        String         @default("")
   deletedAt             DateTime? // soft-delete (recoverable via Archived view)
   id                    String         @id @default(cuid())
   code                  String         @unique
@@ -2994,10 +2938,9 @@ enum JobCleanerStatus {
 // assignment and updated by the cleaner clock actions. The job-level
 // clockInTime/clockOutTime/onMyWayAt stay as the legacy/first-cleaner fields.
 model JobAssignment {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String           @default("")
   id             String           @id @default(cuid())
   jobId          String
   cleanerId      String
@@ -3038,10 +2981,9 @@ model JobAssignment {
 /// maintained as derived mirrors, so every legacy reader keeps working and jobs
 /// that predate this model still report correctly from the pair alone.
 model JobWorkSession {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String    @default("")
   id             String    @id @default(cuid())
   jobId          String
   cleanerId      String
@@ -3064,10 +3006,9 @@ model JobWorkSession {
 /// job, and a single pair would silently overwrite the earlier break.
 /// `endedAt` null = the break is currently running.
 model JobBreak {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String    @default("")
   id             String    @id @default(cuid())
   jobId          String
   cleanerId      String
@@ -3087,7 +3028,7 @@ model JobAssignmentInvite {
   // Tenant owner. NULL means "not yet assigned" during the multi-tenant
   // migration, and on platform-level rows that belong to no organization.
   // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId     String?
+  organizationId     String            @default("")
   id                 String            @id @default(cuid())
   jobId              String
   cleanerId          String
@@ -3118,10 +3059,9 @@ model JobAssignmentInvite {
 }
 
 model QuoteRequest {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String             @default("")
   deletedAt      DateTime? // soft-delete (recoverable via Archived view)
   id             String             @id @default(cuid())
   name           String
@@ -3146,10 +3086,9 @@ model QuoteRequest {
 }
 
 model ServiceArea {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String   @default("")
   id             String   @id @default(cuid())
   prefix         String
   zoneName       String
@@ -3165,10 +3104,9 @@ model ServiceArea {
 }
 
 model Lead {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String       @default("")
   deletedAt      DateTime? // soft-delete (recoverable via Archived view)
   id             String       @id @default(cuid())
   email          String
@@ -3222,10 +3160,9 @@ model Lead {
 /// `paidAt` IS the status: null = pending, set = paid. A rep's totals are the
 /// two sums either side of that one column.
 model Commission {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String    @default("")
   id             String    @id @default(cuid())
   salesRepId     String
   jobId          String?
@@ -3262,7 +3199,7 @@ model Contact {
   // Tenant owner. NULL means "not yet assigned" during the multi-tenant
   // migration, and on platform-level rows that belong to no organization.
   // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId     String?
+  organizationId     String               @default("")
   deletedAt          DateTime? // soft-delete (recoverable via Archived view)
   id                 String               @id @default(cuid())
   name               String
@@ -3312,10 +3249,9 @@ model Contact {
 /// `contactAId` always holds the lexicographically smaller id so the unique
 /// index catches the same pair submitted in either order.
 model DuplicateRejection {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String   @default("")
   id             String   @id @default(cuid())
   contactAId     String
   contactBId     String
@@ -3332,10 +3268,9 @@ model DuplicateRejection {
 
 /// Mixed-type timeline entry on a Contact (note, call, email, lifecycle change…).
 model ContactActivity {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String              @default("")
   id             String              @id @default(cuid())
   contactId      String
   type           ContactActivityType @default(NOTE)
@@ -3379,10 +3314,9 @@ enum ContactActivityType {
 /// available on each CRM object. System properties are locked from deletion and
 /// internal-name/type changes after creation.
 model PropertyDefinition {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String    @default("")
   id             String    @id @default(cuid())
   objectType     String // contact | company | booking
   groupName      String
@@ -3409,10 +3343,9 @@ model PropertyDefinition {
 /// Marketing ad-spend entries (manual or CSV import) used to compute true CPA
 /// by channel. Funnel metrics are derived live from Contact source/lifecycle.
 model AdSpendImport {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String   @default("")
   id             String   @id @default(cuid())
   channel        String // normalized channel id: google | instagram | facebook | …
   date           DateTime
@@ -3427,10 +3360,9 @@ model AdSpendImport {
 }
 
 model Waitlist {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String         @default("")
   deletedAt      DateTime? // soft-delete (recoverable via Archived view)
   id             String         @id @default(cuid())
   preferredDate  DateTime
@@ -3460,7 +3392,7 @@ model EmailLog {
   // Tenant owner. NULL means "not yet assigned" during the multi-tenant
   // migration, and on platform-level rows that belong to no organization.
   // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId  String?
+  organizationId  String      @default("")
   id              String      @id @default(cuid())
   kind            EmailKind
   recipient       String
@@ -3488,7 +3420,7 @@ model JobRatingToken {
   // Tenant owner. NULL means "not yet assigned" during the multi-tenant
   // migration, and on platform-level rows that belong to no organization.
   // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId  String?
+  organizationId  String    @default("")
   id              String    @id @default(cuid())
   jobId           String
   token           String    @unique
@@ -3509,10 +3441,9 @@ model JobRatingToken {
 }
 
 model PromoCode {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String    @default("")
   deletedAt      DateTime? // soft-delete (recoverable via Archived view)
   id             String    @id @default(cuid())
   code           String
@@ -3535,10 +3466,9 @@ model PromoCode {
 // payment, refund, etc.) with a common shape so the admin Logs page can show
 // successes and failures across the whole system in one timeline.
 model ActivityLog {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String           @default("")
   id             String           @id @default(cuid())
   createdAt      DateTime         @default(now())
   category       ActivityCategory
@@ -3588,10 +3518,9 @@ enum ActivityStatus {
 // before processing and deleted if processing fails (so Stripe's retry can
 // reprocess it).
 model WebhookEvent {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String   @default("")
   id             String   @id // Stripe event id (evt_...)
   type           String
   createdAt      DateTime @default(now())
@@ -3631,10 +3560,9 @@ enum FaqVisibility {
 }
 
 model FaqCategory {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String   @default("")
   id             String   @id @default(cuid())
   name           String
   // French label. Optional everywhere: an untranslated field falls back to the
@@ -3651,10 +3579,9 @@ model FaqCategory {
 }
 
 model Faq {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String        @default("")
   id             String        @id @default(cuid())
   // Nullable with onDelete: SetNull — deleting a category must never destroy
   // the questions inside it. They fall into an "Uncategorised" group that both
@@ -3703,10 +3630,9 @@ enum FaqEventType {
 }
 
 model FaqEvent {
-  // Tenant owner. NULL means "not yet assigned" during the multi-tenant
-  // migration, and on platform-level rows that belong to no organization.
-  // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId String?
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String       @default("")
   id             String       @id @default(cuid())
   type           FaqEventType
   // SetNull, not Cascade: deleting a question must not rewrite history and
