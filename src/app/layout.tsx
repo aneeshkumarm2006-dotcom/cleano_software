@@ -3,6 +3,9 @@ import { Montserrat } from "next/font/google";
 import "./globals.css";
 import "./customer.css";
 import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
+import { getCurrentOrg } from "@/lib/org";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 
 /**
  * The one family, everywhere (CLN-P1-8-02/03/09).
@@ -49,11 +52,39 @@ export const viewport: Viewport = {
   maximumScale: 5,
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Every request passes through here, so it is the one place a workspace can be
+  // gated without a guard on each area. getCurrentOrg is cached per request, so
+  // this costs one query however many components ask for it.
+  //
+  // It REDIRECTS rather than rendering the notice in place. Returning early from
+  // a layout only hides the page: Next renders children in parallel, so a
+  // suspended workspace still served its entire client list -- names, emails,
+  // phone numbers -- inside the payload of a screen that said "on hold". A
+  // redirect means nothing downstream runs at all.
+  const path = (await headers()).get("x-awer-path") ?? "";
+  if (!path.startsWith("/workspace-unavailable")) {
+    const org = await getCurrentOrg();
+    const blocked = !org
+      ? "not-found"
+      : org.status === "SUSPENDED"
+        ? "suspended"
+        : org.status === "CANCELLED"
+          ? "cancelled"
+          : org.status === "PENDING"
+            ? "pending"
+            : null;
+    if (blocked) {
+      const q = new URLSearchParams({ reason: blocked });
+      if (org?.name) q.set("name", org.name);
+      redirect(`/workspace-unavailable?${q.toString()}`);
+    }
+  }
+
   return (
     <html lang="en" className={montserrat.variable}>
       <head>

@@ -89,7 +89,7 @@ rewrite. Isolation comes from RLS; an FK only guarantees the id isn't garbage.
 | — | Synthetic seeder, drop prod data from staging | ✅ done |
 | 3 | Tenant context — subdomain → org in `proxy.ts` | ✅ done |
 | 4 | Scope ~1,400 queries, module by module | ⬜ next |
-| 5 | Enforce — `NOT NULL`, RLS, constraint fixes | ✅ done (5g outstanding) |
+| 5 | Enforce — `NOT NULL`, RLS, constraint fixes, suspension | ✅ done |
 | 6 | Platform layer — super admin, signup, plans, provisioning | ⬜ |
 | 7 | Second real tenant + Stripe Connect | ⬜ |
 | 8 | Production cutover (needs explicit approval) | ⬜ |
@@ -212,6 +212,30 @@ Verified with the whole application running on the restricted role: public pages
 serve for both tenants, sign-in works, each admin sees exactly its own 25 clients
 and none of the other's, and a session cookie from one tenant still will not
 resolve on the other.
+
+### Step 5g — a suspended workspace is locked out
+Anything not ACTIVE — suspended, cancelled, or still being provisioned — gets a
+notice instead of the application, and an unknown subdomain gets one that
+reveals nothing about which workspaces exist.
+
+**The gate had to move twice before it was right.** Gating in the root layout by
+returning a notice in place *looked* correct and was not: Next renders a page in
+parallel with its layout, so a suspended workspace still streamed its entire
+client list — names, emails, phone numbers — inside the payload of a screen that
+read "on hold". Redirecting instead of rendering did not fix it either; the page
+had already been streamed, so the 307 carried 101KB of client data in its body.
+
+The gate now sits at the **data layer**: `requireOrgId()` refuses a workspace
+that is not ACTIVE, so nothing is fetched at all and there is nothing to stream.
+The layout redirect stays on top, for the notice.
+
+Worth being accurate about what this was: a suspended customer able to pull
+*their own* data over raw HTTP — a billing-enforcement gap, not a cross-tenant
+leak. It matters, and it is not a breach.
+
+Verified: a live session on a workspace suspended mid-session gets 307 with zero
+client emails and zero client names in the body, lands on the notice, and the
+other tenant is unaffected throughout.
 
 ---
 

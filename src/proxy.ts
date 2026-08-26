@@ -21,6 +21,7 @@ const PUBLIC_EXACT = new Set<string>([
   '/reviews', // public reviews
   '/join-waitlist', // public waitlist signup
   '/apple-icon', // PWA icon for iOS home screen
+  '/workspace-unavailable', // suspended / unknown workspace notice
 ])
 
 // Public path prefixes (anything under these is public)
@@ -55,6 +56,10 @@ export async function proxy(request: NextRequest) {
   const orgSlug = orgSlugFromHost(request.headers.get('host'))
   const headers = new Headers(request.headers)
   headers.set(ORG_SLUG_HEADER, orgSlug)
+  // The gate in the root layout needs to know which path is being served, so it
+  // can let the "workspace unavailable" page itself through instead of
+  // redirecting to it forever.
+  headers.set('x-awer-path', pathname)
   // A client must never be able to spoof its way into another tenant by sending
   // this header itself; setting it from the host on every request overwrites
   // anything inbound.

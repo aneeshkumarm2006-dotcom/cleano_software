@@ -50,11 +50,36 @@ export const getCurrentOrg = cache(async () => {
  * loudly and stop the request, never quietly run unscoped and return another
  * company's rows.
  */
+export class OrgUnavailableError extends Error {
+  constructor(
+    readonly reason: "not-found" | "suspended" | "cancelled" | "pending",
+    slug: string,
+  ) {
+    super(`Workspace "${slug}" is unavailable (${reason}).`);
+    this.name = "OrgUnavailableError";
+  }
+}
+
 export async function requireOrgId(): Promise<string> {
+  const slug = await getOrgSlug();
   const org = await getCurrentOrg();
-  if (!org) {
-    throw new Error(
-      `No organization for slug "${await getOrgSlug()}". Refusing to run an unscoped query.`,
+  if (!org) throw new OrgUnavailableError("not-found", slug);
+
+  // A workspace that is not ACTIVE cannot be queried at all.
+  //
+  // Refusing here rather than only in the layout is deliberate. Next renders a
+  // page in parallel with its layout, so a layout that redirects still lets the
+  // page run and stream its data -- a suspended workspace was serving its whole
+  // client list inside the body of a 307. Stopping at the data layer means
+  // there is nothing to serve in the first place.
+  if (org.status !== "ACTIVE") {
+    throw new OrgUnavailableError(
+      org.status === "SUSPENDED"
+        ? "suspended"
+        : org.status === "CANCELLED"
+          ? "cancelled"
+          : "pending",
+      slug,
     );
   }
   return org.id;
