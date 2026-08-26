@@ -89,7 +89,7 @@ rewrite. Isolation comes from RLS; an FK only guarantees the id isn't garbage.
 | — | Synthetic seeder, drop prod data from staging | ✅ done |
 | 3 | Tenant context — subdomain → org in `proxy.ts` | ✅ done |
 | 4 | Scope ~1,400 queries, module by module | ⬜ next |
-| 5 | Enforce — `NOT NULL`, RLS, and the constraint fixes below | 🚧 5a/5b/5c done |
+| 5 | Enforce — `NOT NULL`, RLS, constraint fixes | ✅ done (5g outstanding) |
 | 6 | Platform layer — super admin, signup, plans, provisioning | ⬜ |
 | 7 | Second real tenant + Stripe Connect | ⬜ |
 | 8 | Production cutover (needs explicit approval) | ⬜ |
@@ -184,6 +184,34 @@ three regression cases cover it.
 - The same email signs into different accounts depending on the subdomain.
 - A session cookie from one tenant does not resolve on another — the user lookup
   is organization-scoped, so the session is simply invalid there.
+
+### Step 5d/5e/5f — the database enforces it now
+- **5d** `organizationId` NOT NULL on all 97 tables, plus a CHECK that it is not
+  blank. Nested writes had to be stamped first, or requiring the column would
+  have broken booking photos, invoice line items and checklist items.
+- **5e** Row-level security on all 97 tables, USING **and** WITH CHECK, FORCE
+  set, and the application connecting as `awer_app` — a role that owns nothing
+  and cannot bypass. The `postgres` role Supabase provides has `rolbypassrls`,
+  so policies under it would have been decoration.
+- **5f** The promo-code raw SQL now names its organization. Raw SQL bypasses the
+  scoped client entirely, and two companies both running WELCOME10 would have
+  burned each other's uses.
+
+**The hard part was not the policies, it was announcing the tenant.** Every
+statement runs inside a transaction that first sets `app.current_org_id`. The
+~80 interactive transactions in the codebase hold one connection for their whole
+body, so the announcement is made once at the top and an AsyncLocalStorage flag
+stops nested operations opening a second transaction on a different connection —
+which is precisely how RLS turns into blank screens.
+
+`current_setting(..., true)` returns NULL when unset, and `"organizationId" =
+NULL` is never true, so a connection that fails to announce itself sees **nothing
+rather than everything**.
+
+Verified with the whole application running on the restricted role: public pages
+serve for both tenants, sign-in works, each admin sees exactly its own 25 clients
+and none of the other's, and a session cookie from one tenant still will not
+resolve on the other.
 
 ---
 

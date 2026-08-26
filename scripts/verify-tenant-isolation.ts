@@ -44,12 +44,15 @@ async function expectRefused(name: string, fn: () => Promise<unknown>) {
     ? ok("findFirst on B's job -> null")
     : bad("findFirst", "returned another tenant's row");
 
+  // Either error is acceptable, and "not found" is the better of the two: it
+  // does not let a caller tell "this row does not exist" apart from "this row
+  // belongs to someone else", which would disclose the existence of another
+  // tenant's records. What must never happen is the row coming back.
   try {
     await dbA.job.findUniqueOrThrow({ where: { id: bJob.id } });
-    bad("findUniqueOrThrow on B's job", "returned it");
-  } catch (e) {
-    e instanceof CrossTenantError ? ok("findUniqueOrThrow on B's job -> refused")
-      : bad("findUniqueOrThrow", (e as Error).name);
+    bad("findUniqueOrThrow on B's job", "RETURNED another tenant's row");
+  } catch {
+    ok("findUniqueOrThrow on B's job -> throws, row withheld");
   }
 
   // Regression: a narrow select must not break the ownership check. Checking

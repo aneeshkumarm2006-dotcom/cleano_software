@@ -27,7 +27,8 @@
  * point: those are exactly the places where quietly operating on the wrong
  * tenant would go unnoticed.
  */
-import { getScopedDb } from "@/lib/org";
+import { getScopedDb, requireOrgId } from "@/lib/org";
+import { announceTenant, tenantConnection } from "@/lib/db-scoped";
 import type { ScopedDb } from "@/lib/db-scoped";
 
 type AnyFn = (...args: unknown[]) => unknown;
@@ -53,9 +54,63 @@ export const db = new Proxy({} as ScopedDb, {
   get(_t, prop: string | symbol) {
     if (typeof prop !== "string") return undefined;
 
-    // Client-level members ($transaction, $queryRaw, $connect...) forward
-    // straight through. Note that $queryRaw is NOT scoped by the extension --
-    // raw SQL bypasses it, and must carry its own organizationId filter.
+    // Interactive transactions hold one connection for their whole body, so the
+    // tenant is announced once at the top and every operation inside runs on a
+    // connection that already knows it. Without this each nested operation would
+    // open its own transaction on a different connection, and the announcement
+    // and the query would land in different places -- the classic way RLS turns
+    // into blank screens.
+    if (prop === "$transaction") {
+      return async (arg: unknown, ...rest: unknown[]) => {
+        const scoped = (await getScopedDb()) as unknown as Record<string, AnyFn>;
+        const organizationId = await requireOrgId();
+        if (typeof arg === "function") {
+          const body = arg as (tx: unknown) => Promise<unknown>;
+          return scoped.$transaction(async (tx: unknown) => {
+            await announceTenant(
+              tx as { $executeRawUnsafe: (q: string, ...v: unknown[]) => Promise<unknown> },
+              organizationId,
+            );
+            return tenantConnection.run(organizationId, () => body(tx));
+          }, ...rest);
+        }
+        // Array form: the statements are already batched onto one connection,
+        // so the announcement is prepended to the batch.
+        const scopedAny = scoped as unknown as {
+          $executeRawUnsafe: (q: string, ...v: unknown[]) => unknown;
+        };
+        const batch = [
+          scopedAny.$executeRawUnsafe(
+            "SELECT set_config('app.current_org_id', $1, true)",
+            organizationId,
+          ),
+          ...(arg as unknown[]),
+        ];
+        const out = (await scoped.$transaction(batch, ...rest)) as unknown[];
+        return out.slice(1);
+      };
+    }
+
+    // Raw SQL bypasses the query extension entirely, so it gets the tenant
+    // announced around it and must still carry its own organizationId filter --
+    // the policies protect it, the extension cannot.
+    if (prop === "$queryRaw" || prop === "$queryRawUnsafe" ||
+        prop === "$executeRaw" || prop === "$executeRawUnsafe") {
+      return async (...callArgs: unknown[]) => {
+        const scoped = (await getScopedDb()) as unknown as Record<string, AnyFn>;
+        if (tenantConnection.getStore()) return scoped[prop](...callArgs);
+        const organizationId = await requireOrgId();
+        return scoped.$transaction(async (tx: unknown) => {
+          await announceTenant(
+            tx as { $executeRawUnsafe: (q: string, ...v: unknown[]) => Promise<unknown> },
+            organizationId,
+          );
+          return (tx as Record<string, AnyFn>)[prop](...callArgs);
+        });
+      };
+    }
+
+    // Everything else on the client ($connect, $disconnect, ...) passes through.
     if (prop.startsWith("$")) {
       return async (...args: unknown[]) => {
         const scoped = (await getScopedDb()) as unknown as Record<string, AnyFn>;

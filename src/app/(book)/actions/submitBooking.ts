@@ -52,6 +52,7 @@ import { formatAddressLine } from "@/lib/client-address";
 import { resolveJobAddressId } from "@/lib/client-address-store";
 import { parsePropertyType } from "@/lib/property-type";
 import { allocateJobNumber } from "@/lib/job-number";
+import { requireOrgId } from "@/lib/org";
 
 type Frequency =
   | "ONE_TIME"
@@ -1097,10 +1098,17 @@ export async function submitBooking(input: SubmitBookingInput) {
     // is enforced atomically; a read-then-increment lets concurrent bookings
     // push a limited code past its cap.
     if (appliedPromoCode) {
+      // Raw SQL bypasses the scoped client, so the organization is named here
+      // explicitly. Without it, two companies running the same code -- WELCOME10
+      // is not an imaginative choice -- would burn each other's uses. The
+      // row-level policies would also catch this, but a filter that is only
+      // correct because of a policy elsewhere is a filter waiting to be wrong.
+      const promoOrgId = await requireOrgId();
       await db.$executeRaw`
         UPDATE "PromoCode"
            SET "usesCount" = "usesCount" + 1
          WHERE "code" = ${appliedPromoCode}
+           AND "organizationId" = ${promoOrgId}
            AND "isActive" = true
            AND "deletedAt" IS NULL
            AND ("maxUses" IS NULL OR "usesCount" < "maxUses")
