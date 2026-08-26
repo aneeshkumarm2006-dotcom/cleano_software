@@ -90,7 +90,7 @@ rewrite. Isolation comes from RLS; an FK only guarantees the id isn't garbage.
 | 3 | Tenant context — subdomain → org in `proxy.ts` | ✅ done |
 | 4 | Scope ~1,400 queries, module by module | ⬜ next |
 | 5 | Enforce — `NOT NULL`, RLS, constraint fixes, suspension | ✅ done |
-| 6 | Platform layer — super admin, signup, plans, provisioning | ⬜ |
+| 6 | Platform layer — super admin, signup, plans, provisioning | 🟡 6a + 6b done; signup UI, request-access form and plan-limit enforcement left |
 | 7 | Second real tenant + Stripe Connect | ⬜ |
 | 8 | Production cutover (needs explicit approval) | ⬜ |
 
@@ -236,6 +236,71 @@ leak. It matters, and it is not a breach.
 Verified: a live session on a workspace suspended mid-session gets 307 with zero
 client emails and zero client names in the body, lands on the notice, and the
 other tenant is unaffected throughout.
+
+### Step 6a — plans, subscriptions, and an identity above the tenants
+`Subscription` (tenant-scoped), `PlatformAuditLog` (not tenant-scoped — it is a
+record *about* organizations), `User.platformRole`, and `src/lib/plans.ts` as the
+single source of what each plan costs and allows.
+
+`platformRole` is deliberately **not** a value in `Roles`. `OWNER` there means
+"owns this cleaning company"; one widened check would have handed a customer the
+keys to every other customer's data.
+
+### Step 6b — the console
+`/console`, served at `platform.useawer.com`. Eight screens over real data:
+overview, workspaces, one workspace in full, trials, billing, audit log, staff
+access, system health.
+
+**Reads** go through `src/lib/console/queries.ts` — the only module besides
+`platform-db.ts` allowed to see across organizations, and read-only. Grouped
+queries, never one per workspace: the workspace list is five `groupBy` calls
+assembled in memory, and it is wrapped in React `cache()` so the rail, the table
+and the attention queue share one set of results and cannot disagree with each
+other.
+
+**Writes** go through `src/lib/console/actions.ts`. Four rules hold for every
+action without exception:
+
+1. It begins with `requirePlatformStaff()` naming its minimum role. No action
+   trusts that the page already checked — a page guard protects a page, and an
+   action can be called directly.
+2. It writes a `PlatformAuditLog` row after the change succeeds.
+3. It refuses to touch Awer's own workspace. Suspending ourselves would lock the
+   console out of the console.
+4. It returns a result object rather than throwing, so the UI can say what went
+   wrong instead of showing an error page.
+
+Roles are enforced, not decorative: `SUPPORT` reads everything and changes
+nothing, `ADMIN` adds plans/seats/trials/suspend, `OWNER` adds staff access.
+
+**Four things the adversarial pass changed:**
+
+- `if (plan in PLANS)` → an explicit allowlist. `"__proto__" in PLANS` is true,
+  and every argument here arrives from a browser with its TypeScript type erased.
+- Same for the staff-role argument, which would otherwise have reached a Prisma
+  enum update as an arbitrary string.
+- The suspension reason is stored verbatim in the audit log, so it is capped.
+- **`setStaffRole` now requires the target account to live in the platform
+  workspace.** Without it, a mistyped id could have granted the keys to every
+  customer on Awer to a cleaner's or a customer's login — an account nobody at
+  Awer controls.
+
+**Deliberately not built yet, and said so on the page rather than faked:**
+signing in as a customer (needs a single-use short-lived link, a banner the
+customer can see, and a record at both ends — its own pass), export and delete
+in the danger zone, and the uptime/error/cron panels on system health. The
+isolation panel there is real: every line is a live `pg_catalog` query, because a
+green tick someone typed into a template is worse than a blank space.
+
+Routing: `/console/*` uses the staff sign-in door; platform staff land on
+`/console` after signing in, read from the database rather than the session,
+since `platformRole` is not in the session payload. A signed-in non-staff user is
+sent to their own home, not made to retype a password that was never the problem.
+
+Verified: `tsc --noEmit` clean, `next build` clean with all eight routes dynamic,
+eslint clean. Not exercised against a database — production lacks the
+`organizationId` columns entirely, so the console can only be run against
+staging, which is the standing rule anyway.
 
 ---
 

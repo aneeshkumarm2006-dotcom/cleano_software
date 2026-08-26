@@ -76,14 +76,19 @@ export async function proxy(request: NextRequest) {
 
   // If no session cookie exists, redirect to the login door for that area:
   //   /admin/*     → staff sign-in (/sign-in)
+  //   /console/*   → staff sign-in (/sign-in) — Awer's own console
   //   /cleaners/*  → cleaner sign-in (/cleanos/login)
   //   /applicant/* → applicant portal sign-in (/applicant-login), decision D4
   //   everything else (customer area, incl. "/") → customer sign-in (/login)
   if (!sessionCookie) {
     const isAdminArea = pathname.startsWith('/admin')
+    // Awer's own console uses the same staff door. It gives away nothing that
+    // /sign-in doesn't: whether the account is platform staff is decided after
+    // the password, by the console layout, not here.
+    const isConsoleArea = pathname.startsWith('/console')
     const isCleanerArea = pathname.startsWith('/cleaners')
     const isApplicantArea = pathname.startsWith('/applicant')
-    const target = isAdminArea
+    const target = isAdminArea || isConsoleArea
       ? '/sign-in'
       : isCleanerArea
         ? '/cleanos/login'
@@ -92,7 +97,7 @@ export async function proxy(request: NextRequest) {
           : '/login'
     const signInUrl = new URL(target, request.url)
     // Preserve the intended destination for redirect after login (staff areas).
-    if (isAdminArea || isCleanerArea || isApplicantArea) {
+    if (isAdminArea || isConsoleArea || isCleanerArea || isApplicantArea) {
       signInUrl.searchParams.set('callbackUrl', pathname)
     }
     return NextResponse.redirect(signInUrl)

@@ -161,5 +161,18 @@ export async function GET(req: Request) {
     }
     return bounce(`/sign-in?error=no_access`, "role has no staff access");
   }
+
+  // Awer's own staff land in the console rather than in a cleaning company's
+  // dashboard. Read from the database, not the session: platformRole is not part
+  // of the session payload, and a value a client could influence is the wrong
+  // thing to route the most privileged area of the product on.
+  const staff = await db.user.findFirst({
+    where: { id: session.user.id },
+    select: { platformRole: true },
+  });
+  if (staff?.platformRole) {
+    return granted("/console");
+  }
+
   return granted(homeForRole(role));
 }
