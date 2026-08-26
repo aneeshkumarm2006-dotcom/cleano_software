@@ -11,6 +11,7 @@ import { adjustWarehouseStock } from "@/lib/stock.server";
 import { inferItemType, isItemType } from "@/lib/item-type";
 import { startOfDayTz, tzWallClockToUtc } from "@/lib/time";
 import { allocateJobNumber } from "@/lib/job-number";
+import { checkCleanerSeats } from "@/lib/plan-limits";
 import {
   CSV_ENTITIES,
   validateRecord,
@@ -500,6 +501,42 @@ export async function importCsv(
   const opts: ImportOptions = {
     skipSameDayDuplicates: options?.skipSameDayDuplicates === true,
   };
+
+  // Seat check for the whole file, before any row runs.
+  //
+  // It cannot be per-row: the loop below runs rows concurrently, so several
+  // workers would read the same "seats used" and each conclude there was room.
+  // Checking the batch up front also fails the import cleanly rather than
+  // creating the first few cleaners and leaving an admin to work out which of
+  // their twenty rows made it in.
+  //
+  // Only rows that would actually create a new cleaner count. Re-importing a
+  // file full of people who already exist adds no seats, and must not be
+  // refused as though it did.
+  if (entity === "employees") {
+    const emails = records
+      .map((r) => (r.email ?? "").trim().toLowerCase())
+      .filter(Boolean);
+    const existing = new Set(
+      (
+        await db.user.findMany({
+          where: { email: { in: emails } },
+          select: { email: true },
+        })
+      ).map((u) => u.email.toLowerCase()),
+    );
+    const newCleaners = new Set(
+      records
+        .filter((r) => ((r.role ?? "").trim() || "EMPLOYEE") === "EMPLOYEE")
+        .map((r) => (r.email ?? "").trim().toLowerCase())
+        .filter((e) => e && !existing.has(e)),
+    ).size;
+
+    if (newCleaners > 0) {
+      const seats = await checkCleanerSeats(newCleaners);
+      if (!seats.ok) return { ok: false, error: seats.message, ...empty };
+    }
+  }
 
   // Process rows with bounded concurrency so a large file finishes in seconds
   // (sequential per-row round-trips to a remote DB is what risks a timeout).

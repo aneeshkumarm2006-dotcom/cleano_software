@@ -17,6 +17,7 @@ import { cache } from "react";
 import type { OrgPlan, OrgStatus, SubscriptionStatus } from "@prisma/client";
 
 import { platformDb } from "@/lib/platform-db";
+import { CLEANER_SEAT_WHERE } from "@/lib/seat-rules";
 import { PLANS, cleanerLimitFor } from "@/lib/plans";
 import { PLATFORM_ORG_SLUG } from "@/lib/tenant";
 
@@ -105,7 +106,9 @@ export const listWorkspaces = cache(async (): Promise<WorkspaceRow[]> => {
   const [cleaners, clients, jobs, seen, owners] = await Promise.all([
     platformDb.user.groupBy({
       by: ["organizationId"],
-      where: { organizationId: { in: ids }, role: "EMPLOYEE", isActive: true, deletedAt: null },
+      // Same definition of "a cleaner seat" the app enforces with, imported
+      // rather than restated, so the number here is the number that blocks.
+      where: { organizationId: { in: ids }, ...CLEANER_SEAT_WHERE },
       _count: { _all: true },
     }),
     platformDb.client.groupBy({

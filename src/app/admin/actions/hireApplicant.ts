@@ -7,6 +7,7 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { randomBytes } from "crypto";
 import { sendAccountEmail } from "@/lib/email";
+import { checkCleanerSeats, takesASeat } from "@/lib/plan-limits";
 
 type HireResult =
   | { success: true; existing: true }
@@ -56,6 +57,20 @@ export async function hireApplicant(applicationId: string): Promise<HireResult> 
       const portalUser = await db.user.findUnique({ where: { id: app.userId } });
       if (portalUser) {
         const isApplicant = portalUser.role === "APPLICANT";
+
+        // Hiring is not the only way to use a seat. An applicant becoming a
+        // cleaner, or a deactivated cleaner being switched back on, each take
+        // one — and neither reads like "create". Compare before and after.
+        if (
+          takesASeat(portalUser, {
+            role: isApplicant ? "EMPLOYEE" : portalUser.role,
+            isActive: true,
+          })
+        ) {
+          const seats = await checkCleanerSeats(1);
+          if (!seats.ok) return { error: seats.message };
+        }
+
         await db.user.update({
           where: { id: portalUser.id },
           data: {
@@ -88,6 +103,10 @@ export async function hireApplicant(applicationId: string): Promise<HireResult> 
     // Path 2 — no portal account, but a User already exists for this email.
     const existingUser = await db.user.findFirst({ where: { email } });
     if (existingUser) {
+      if (takesASeat(existingUser, { role: existingUser.role, isActive: true })) {
+        const seats = await checkCleanerSeats(1);
+        if (!seats.ok) return { error: seats.message };
+      }
       // Reactivate / ensure they can work; don't downgrade an admin/owner role.
       await db.user.update({
         where: { id: existingUser.id },
@@ -103,6 +122,9 @@ export async function hireApplicant(applicationId: string): Promise<HireResult> 
     }
 
     // Path 3 — brand new hire, no invite was ever sent.
+    const seats = await checkCleanerSeats(1);
+    if (!seats.ok) return { error: seats.message };
+
     const tempPassword = makeTempPassword();
     const hashed = await hashPassword(tempPassword);
 

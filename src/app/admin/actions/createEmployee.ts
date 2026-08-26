@@ -6,6 +6,7 @@ import { hashPassword } from "better-auth/crypto";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { sendAccountEmail } from "@/lib/email";
+import { checkCleanerSeats } from "@/lib/plan-limits";
 
 type State = {
   message: string;
@@ -51,6 +52,13 @@ export default async function createEmployee(
       message: "",
       error: "Password must be at least 8 characters long.",
     };
+  }
+
+  // Only a cleaner occupies a plan seat. Admins, owners and ops managers are
+  // not what the plan counts, so hiring an office manager is never blocked.
+  if (role === "EMPLOYEE") {
+    const seats = await checkCleanerSeats(1);
+    if (!seats.ok) return { message: "", error: seats.message };
   }
 
   try {

@@ -19,6 +19,7 @@ import { getTaxRates, computeJobTaxes } from "@/lib/tax.server";
 import { jobTypeLabel } from "@/lib/calendar-labels";
 import { startOfDayTz } from "@/lib/time";
 import { allocateJobNumber } from "@/lib/job-number";
+import { checkCleanerSeats } from "@/lib/plan-limits";
 import {
   parseAndNormalize,
   aggregateCustomers,
@@ -136,6 +137,36 @@ export async function runBookingKoalaImport(
   const rows = opts.batch
     ? parsed.rows.slice(opts.batch.start, opts.batch.start + opts.batch.size)
     : parsed.rows;
+
+  // Seat check for this slice, before any cleaner is created.
+  //
+  // Not inside the loop: seat usage is cached for the length of a request, so a
+  // check that ran per creation would keep reading the count from before the
+  // first one and wave the rest through. Counted once, up front, from the people
+  // in this slice who do not already have an account.
+  //
+  // Only on commit — a dry run creates nobody, and refusing it would hide the
+  // rest of the preview, which is the one thing a dry run is for.
+  if (commit) {
+    const candidates = collectCleaners(rows)
+      .map((p) => p.email?.trim().toLowerCase())
+      .filter((e): e is string => Boolean(e));
+    if (candidates.length > 0) {
+      const known = new Set(
+        (
+          await db.user.findMany({
+            where: { email: { in: candidates } },
+            select: { email: true },
+          })
+        ).map((u) => u.email.toLowerCase()),
+      );
+      const arriving = new Set(candidates.filter((e) => !known.has(e))).size;
+      if (arriving > 0) {
+        const seats = await checkCleanerSeats(arriving);
+        if (!seats.ok) return { ...empty(), error: seats.message };
+      }
+    }
+  }
 
   // ── 1. cleaners ────────────────────────────────────────────────────────────
   const cleanerUserId = new Map<string, string | null>();

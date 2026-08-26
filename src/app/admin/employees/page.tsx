@@ -4,6 +4,7 @@ import { requireOwnerAdmin } from "@/lib/page-guards";
 import { db } from "@/lib/org-db";
 import { jobRevenue, getEmployeeCounts } from "@/lib/metrics";
 import { AVAILABILITY_VIEW_PATH } from "@/lib/availability-view";
+import { cleanerSeatUsage } from "@/lib/plan-limits";
 import EmployeesPageClient from "./EmployeesPageClient";
 
 type SearchParams = Promise<{
@@ -128,8 +129,32 @@ export default async function EmployeesPage({
     totalRevenue: employeesData.reduce((sum, e) => sum + e.totalRevenue, 0),
   };
 
+  // Seats left on the plan. Shown only when the cap is close enough to matter:
+  // a workspace using three of twenty does not need reminding, and a banner that
+  // is always there is a banner nobody reads on the day it counts.
+  const seats = await cleanerSeatUsage();
+  const seatWarning =
+    seats.limit != null && seats.remaining != null && seats.remaining <= 2 && !archived;
+
   return (
     <div className="h-full overflow-hidden overflow-y-auto p-8 space-y-6">
+      {seatWarning && (
+        <div
+          className={`dcard px-5 py-4 text-sm ${
+            seats.atCap ? "text-[#B3261E]" : "text-[#8A5A00]"
+          }`}
+          role="status">
+          <span className="font-[600]">
+            {seats.atCap
+              ? `All ${seats.limit} cleaner seats on ${seats.planLabel} are in use.`
+              : `${seats.remaining} cleaner seat${seats.remaining === 1 ? "" : "s"} left on ${seats.planLabel}.`}
+          </span>{" "}
+          <span className="text-gray-600">
+            {seats.used} of {seats.limit} in use. Deactivating someone who has left frees a
+            seat and keeps their history.
+          </span>
+        </div>
+      )}
       <EmployeesPageClient
         initialEmployees={employeesData}
         initialStats={stats}

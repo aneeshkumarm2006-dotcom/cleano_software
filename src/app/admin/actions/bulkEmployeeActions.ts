@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import type { CleanerTier } from "@/lib/pay-tiers";
+import { checkCleanerSeats } from "@/lib/plan-limits";
 
 const VALID_TIERS: CleanerTier[] = ["TRAINEE", "STANDARD", "FIELD_LEAD"];
 
@@ -44,6 +45,25 @@ export async function bulkSetEmployeeActive(
     return { success: false, error: "Nothing selected" };
 
   try {
+    // Switching people back on is the bulk equivalent of hiring them, so it is
+    // checked as a whole rather than one at a time: allowing "as many as fit"
+    // out of a selection would leave an admin guessing which of the ten they
+    // ticked actually came back.
+    if (isActive) {
+      const returning = await db.user.count({
+        where: {
+          id: { in: cleanIds },
+          role: "EMPLOYEE",
+          isActive: false,
+          deletedAt: null,
+        },
+      });
+      if (returning > 0) {
+        const seats = await checkCleanerSeats(returning);
+        if (!seats.ok) return { success: false, error: seats.message };
+      }
+    }
+
     const res = await db.user.updateMany({
       where: { id: { in: cleanIds }, role: { not: "CLIENT" } },
       data: { isActive },

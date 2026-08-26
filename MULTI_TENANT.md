@@ -90,7 +90,7 @@ rewrite. Isolation comes from RLS; an FK only guarantees the id isn't garbage.
 | 3 | Tenant context — subdomain → org in `proxy.ts` | ✅ done |
 | 4 | Scope ~1,400 queries, module by module | ⬜ next |
 | 5 | Enforce — `NOT NULL`, RLS, constraint fixes, suspension | ✅ done |
-| 6 | Platform layer — super admin, signup, plans, provisioning | 🟡 6a–6d done (6d migration written, **not applied**); plan-limit enforcement left |
+| 6 | Platform layer — super admin, signup, plans, provisioning | ✅ done (6d migration written, **not yet applied to staging**) |
 | 7 | Second real tenant + Stripe Connect | ⬜ |
 | 8 | Production cutover (needs explicit approval) | ⬜ |
 
@@ -394,6 +394,45 @@ password and should not be asked to change it.
 
 Nothing is emailed to the requester at either decision, and the console says so
 rather than implying otherwise.
+
+### Step 6e — the cleaner cap actually bites
+Until now the limit was a number on a pricing page. `lib/seat-rules.ts` holds
+what a seat *is* (pure), `lib/plan-limits.ts` holds the check that needs a
+database.
+
+**The console and the app import the same definition of a seat.** If those two
+ever disagreed, a customer would be blocked at four of five or allowed a seventh
+— and the screen showing the number would be the last place anyone looked.
+
+**Hiring is not the only way to use a seat**, which is what makes this more than
+one `if`. Reactivating a login, converting an applicant, restoring an archived
+person and promoting someone into the cleaner role each take one, and each lives
+in a different action under a different name. `takesASeat(before, after)` decides
+from state rather than from what the operation is called, so the paths cannot
+drift apart. Ten cases exercised offline, including the two that would have hurt:
+re-saving an unchanged cleaner must **not** consume a seat (otherwise every edit
+is blocked at the cap), and promoting a cleaner to admin must **free** one.
+
+Six paths enforce it: create employee, hire applicant (all three of its paths),
+edit employee, bulk activate, CSV import, BookingKoala import.
+
+**The two importers are checked once for the whole batch, not per row.** The CSV
+importer runs rows concurrently, so per-row checks would each read the same
+"seats used" and all conclude there was room; and seat usage is cached per
+request, so a sequential loop would keep reading the count from before its own
+first insert. Both count only rows that would create someone new, so re-importing
+a file of people who already exist is not refused as though it added anyone.
+
+Deactivating frees a seat; soft-deleting frees a seat. That is deliberate — an
+admin at the cap can let someone go without destroying the history attached to
+them. Admins, owners and ops managers are not cleaners and never count, so hiring
+an office manager is never blocked.
+
+The employees page warns at two seats remaining rather than always, because a
+banner that is always there is a banner nobody reads on the day it matters. Every
+refusal says what to do — deactivate someone who has left, or move up a plan —
+since a limit that only says "no" sends someone to support to be told the same
+thing more slowly.
 
 ---
 

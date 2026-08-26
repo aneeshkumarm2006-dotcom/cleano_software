@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { normalizeAllowedCategories } from "@/lib/service-permissions";
+import { checkCleanerSeats, takesASeat } from "@/lib/plan-limits";
 
 type State = {
   message: string;
@@ -71,6 +72,18 @@ export async function updateEmployee(
         message: "",
         error: "An employee with this email already exists.",
       };
+    }
+
+    // This form can occupy a seat two ways without either being a hire:
+    // switching a deactivated cleaner back on, or moving someone into the
+    // cleaner role. Both are read off before-and-after rather than guessed at.
+    const before = await db.user.findFirst({
+      where: { id: employeeId },
+      select: { role: true, isActive: true, deletedAt: true },
+    });
+    if (takesASeat(before, { role, isActive })) {
+      const seats = await checkCleanerSeats(1);
+      if (!seats.ok) return { message: "", error: seats.message };
     }
 
     // Update the user
