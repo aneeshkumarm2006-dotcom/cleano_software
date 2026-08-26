@@ -16,7 +16,8 @@
 import { PrismaClient, Roles, JobStatus, ClientType } from "@prisma/client";
 import { hashPassword } from "better-auth/crypto";
 
-const STAGING_REF = "udgbixmlyqsoalvrjbgo";
+import { assertSafeTarget } from "../src/lib/safe-target";
+
 const PASSWORD = "StagingPass123!";
 
 const db = new PrismaClient();
@@ -47,10 +48,10 @@ const CITIES = ["Montreal","Laval","Longueuil","Brossard","Westmount"];
 const JOB_TYPES = ["Standard Clean","Deep Clean","Move-Out","Post-Construction","Office Clean"];
 
 async function main() {
-  const url = process.env.DATABASE_URL ?? "";
-  if (!url.includes(STAGING_REF) && process.env.SEED_ALLOW_ANY_DB !== "1") {
-    throw new Error("refusing to seed: DATABASE_URL is not the staging branch");
-  }
+  // The rule is "never production", not "only staging" -- see safe-target.ts.
+  // A local database is a legitimate, and safer, place to seed.
+  const target = assertSafeTarget(process.env.DATABASE_URL, "seed");
+  console.log(`seeding into: ${target}`);
 
   const slug = arg("slug");
   const name = arg("name", slug);
@@ -71,6 +72,24 @@ async function main() {
   });
   const organizationId = org.id;
   console.log(`org ${org.slug} -> ${organizationId}`);
+
+  // A subscription, because provisionOrganization() creates one and a workspace
+  // without it is not a state the product ever produces. Seeding without it
+  // meant the console showed seeded tenants as "No subscription" -- realistic
+  // enough to be confusing, and it hid the fact that nothing was flagging it.
+  //
+  // Seeded companies are treated as paying: a trial would expire mid-testing and
+  // quietly change what the console shows from one day to the next.
+  const periodEnd = new Date();
+  periodEnd.setMonth(periodEnd.getMonth() + 1);
+  await db.subscription.create({
+    data: {
+      organizationId,
+      plan: "PROFESSIONAL",
+      status: "ACTIVE",
+      currentPeriodEnd: periodEnd,
+    },
+  });
 
   const hashed = await hashPassword(PASSWORD);
   async function makeUser(local: string, fullName: string, role: Roles) {

@@ -30,6 +30,34 @@ import {
 export { originForSlug };
 
 /**
+ * The origin the browser actually asked for.
+ *
+ * For redirects back into the app, this is the only correct answer, and
+ * `new URL(request.url).origin` is not it: Next does not guarantee that the URL
+ * a route handler sees carries the public host, and in practice it can report
+ * the server's own origin instead. On a single-domain app the difference is
+ * invisible. On this one it is a broken sign-in — a redirect built that way sent
+ * someone who signed in at `<company>.useawer.com` to the bare domain, where
+ * their session cookie does not exist, so they arrived back at a login screen
+ * having just logged in successfully.
+ *
+ * The Host header is what the browser asked for, so that is what is used.
+ */
+export async function requestOrigin(fallback = ""): Promise<string> {
+  try {
+    const h = await headers();
+    const host = h.get("host");
+    if (!host) return fallback;
+    const proto =
+      h.get("x-forwarded-proto") ??
+      (host.startsWith("localhost") || host.includes(".localhost") ? "http" : "https");
+    return `${proto}://${host}`;
+  } catch {
+    return fallback;
+  }
+}
+
+/**
  * The address for whatever organization this code is running on behalf of.
  *
  * Three sources, in order of how specific they are:

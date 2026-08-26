@@ -10,6 +10,7 @@
  * apply would look exactly like a revoke that did.
  */
 import { PrismaClient } from "@prisma/client";
+import { assertSafeTarget } from "../src/lib/safe-target";
 
 const db = new PrismaClient();
 let pass = 0,
@@ -24,9 +25,7 @@ const bad = (m: string, d: string) => {
 };
 
 (async () => {
-  if (!(process.env.DATABASE_URL ?? "").includes("udgbixmlyqsoalvrjbgo")) {
-    throw new Error("ABORT: not staging");
-  }
+  assertSafeTarget(process.env.DATABASE_URL, "test");
 
   console.log("\nSHAPE");
   // The exact set, not a count: a count is something a person can get wrong

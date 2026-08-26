@@ -15,6 +15,7 @@ import { db } from "../src/lib/org-db";
 import { runAsOrg } from "../src/lib/org-context";
 import { getOrgSlug, requireOrgId } from "../src/lib/org";
 import { originForSlug } from "../src/lib/tenant";
+import { assertSafeTarget } from "../src/lib/safe-target";
 
 /**
  * The control connection, used to work out what the answer SHOULD be.
@@ -39,12 +40,8 @@ const bad = (m: string, d: string) => {
 };
 
 (async () => {
-  if (!(process.env.DATABASE_URL ?? "").includes("udgbixmlyqsoalvrjbgo")) {
-    throw new Error("ABORT: not staging");
-  }
-  if (!(controlUrl ?? "").includes("udgbixmlyqsoalvrjbgo")) {
-    throw new Error("ABORT: control connection is not staging");
-  }
+  assertSafeTarget(process.env.DATABASE_URL, "test");
+  assertSafeTarget(controlUrl, "test");
   // Prove the control connection can actually see across organizations, or every
   // comparison below is meaningless.
   if ((await platform.client.count()) === 0) {

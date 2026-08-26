@@ -303,6 +303,20 @@ export function attentionQueue(rows: WorkspaceRow[]): AttentionItem[] {
       });
       continue;
     }
+    // A live workspace with no subscription row at all. Provisioning always
+    // creates one, so this means something went wrong on the way in -- and
+    // without it the workspace is billed for nothing, has no plan to enforce and
+    // no trial to expire. It would otherwise sit here looking healthy forever,
+    // because every other rule below reads the subscription it does not have.
+    if (w.status === "ACTIVE" && !w.subscription) {
+      out.push({
+        severity: "high",
+        slug: w.slug,
+        title: `${w.name} has no subscription`,
+        detail: "Nothing to bill and no plan to enforce. It was not provisioned normally.",
+      });
+      continue;
+    }
     if (w.subscription?.status === "PAST_DUE") {
       out.push({
         severity: "high",

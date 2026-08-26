@@ -23,6 +23,11 @@ import {
  * worked.
  */
 
+/** "1 customer record", "4 customer records" — never "1 customer records". */
+function count(n: number, one: string, many = one + "s"): string {
+  return `${n.toLocaleString()} ${n === 1 ? one : many}`;
+}
+
 function Result({ r }: { r: ActionResult | null }) {
   if (!r) return null;
   return (
@@ -251,7 +256,9 @@ export function AccessPanel({
           <p>
             {suspended
               ? "Everyone gets access back immediately. Nothing was lost while it was suspended."
-              : `Locks all ${cleaners} cleaners and every admin out immediately and shows them a billing notice. Nothing is deleted, and access returns the moment you reactivate.`}
+              : cleaners > 0
+                ? `Locks ${count(cleaners, "cleaner")} and every admin out immediately and shows them a billing notice. Nothing is deleted, and access returns the moment you reactivate.`
+                : "Locks every admin out immediately and shows them a billing notice. Nothing is deleted, and access returns the moment you reactivate."}
           </p>
         </div>
         {suspended ? (
@@ -283,7 +290,7 @@ export function AccessPanel({
             </svg>
             <div>
               <b>{name} will lose access the moment you confirm.</b> Anyone signed in is stopped
-              mid-task. {clients.toLocaleString()} customer records stay exactly where they are.
+              mid-task. {count(clients, "customer record")} stay exactly where they are.
             </div>
           </div>
           <div className="formrow">
@@ -336,8 +343,8 @@ export function AccessPanel({
         <div className="txt">
           <b>Delete workspace</b>
           <p>
-            Permanent. {clients.toLocaleString()} customer records would be destroyed. Deliberately
-            not wired up yet: deletion needs a grace period and a verified export first.
+            Permanent. {count(clients, "customer record")} would be destroyed. Deliberately not
+            wired up yet: deletion needs a grace period and a verified export first.
           </p>
         </div>
         <button type="button" className="btn danger" disabled>

@@ -2,6 +2,7 @@
 import { PrismaClient } from "@prisma/client";
 import { scopedTo, CrossTenantError } from "../src/lib/db-scoped";
 import { allocateJobNumber } from "../src/lib/job-number";
+import { assertSafeTarget } from "../src/lib/safe-target";
 
 const db = new PrismaClient();
 let pass = 0, fail = 0;
@@ -17,11 +18,33 @@ async function expectRefused(name: string, fn: () => Promise<unknown>) {
 }
 
 (async () => {
-  if (!(process.env.DATABASE_URL ?? "").includes("udgbixmlyqsoalvrjbgo")) {
-    throw new Error("ABORT: not staging");
+  assertSafeTarget(process.env.DATABASE_URL, "test");
+
+  // Pick the organizations rather than naming them: the staging branch seeded
+  // "-demo" slugs and a local database seeds the plain ones, and a script that
+  // only runs in one of those places is a script nobody runs.
+  //
+  // Both must actually HAVE jobs and clients. An empty workspace passes every
+  // check below for the wrong reason -- there is nothing there to leak -- and a
+  // suite that cannot fail is worse than no suite.
+  const candidates = await db.organization.findMany({
+    where: { slug: { not: "platform" } },
+    orderBy: { slug: "asc" },
+    select: { id: true, slug: true },
+  });
+  const withData: { id: string; slug: string }[] = [];
+  for (const c of candidates) {
+    const jobs = await db.job.count({ where: { organizationId: c.id } });
+    const clients = await db.client.count({ where: { organizationId: c.id } });
+    if (jobs > 0 && clients > 0) withData.push({ id: c.id, slug: c.slug });
   }
-  const A = await db.organization.findUniqueOrThrow({ where: { slug: "teamcleano-demo" } });
-  const B = await db.organization.findUniqueOrThrow({ where: { slug: "fixaropro-demo" } });
+  if (withData.length < 2) {
+    throw new Error(
+      `need two seeded organizations WITH data; found ${withData.length}. Run scripts/seed-tenant.ts twice.`,
+    );
+  }
+  const [A, B] = withData;
+  console.log(`comparing "${A.slug}" against "${B.slug}"`);
   const dbA = scopedTo(db, A.id);
 
   // a row that definitively belongs to B

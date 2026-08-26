@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { db } from "@/lib/org-db";
 import { auth } from "@/lib/auth";
 import { logActivity } from "@/lib/activity-log";
+import { requestOrigin } from "@/lib/org-url";
 import { notifyAdmins } from "@/lib/admin-alerts";
 import {
   homeForRole,
@@ -23,7 +24,12 @@ import {
 //   (no from)       → staff door (/sign-in) — admin/staff roles only.
 export async function GET(req: Request) {
   const url = new URL(req.url);
-  const baseUrl = `${url.protocol}//${url.host}`;
+  // From the Host header, NOT from req.url. Next does not guarantee that the URL
+  // a route handler sees carries the public host, and it reported the bare
+  // server origin here -- which sent someone who had just signed in at
+  // <company>.useawer.com to a domain their session cookie does not cover, so
+  // they landed back on the login screen. See requestOrigin().
+  const baseUrl = await requestOrigin(`${url.protocol}//${url.host}`);
   const from = url.searchParams.get("from");
 
   const session = await auth.api.getSession({ headers: await headers() });

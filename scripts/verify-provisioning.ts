@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { provisionOrganization, ProvisioningError, findFreeSlug, slugify } from "../src/lib/provisioning";
 import { TRIAL_DAYS } from "../src/lib/plans";
+import { assertSafeTarget } from "../src/lib/safe-target";
 const db = new PrismaClient();
 let pass=0, fail=0;
 const ok=(m:string)=>{pass++;console.log("  ok    "+m)};
@@ -16,7 +17,7 @@ async function wipe(slug: string) {
 }
 
 (async () => {
-  if (!(process.env.DATABASE_URL ?? "").includes("udgbixmlyqsoalvrjbgo")) throw new Error("ABORT: not staging");
+  assertSafeTarget(process.env.DATABASE_URL, "test");
   await wipe("sparkle-clean"); await wipe("sparkle-clean-2");
 
   console.log("\nHAPPY PATH");
