@@ -44,7 +44,7 @@ export function sanitizeRatingMultiplierMap(
 // for any step that isn't set or isn't a usable number. Server-only (touches
 // the DB).
 export async function getRatingMultiplierMap(): Promise<RatingMultiplierMap> {
-  const setting = await db.appSetting.findUnique({
+  const setting = await db.appSetting.findFirst({
     where: { key: RATING_MULTIPLIER_SETTING_KEY },
   });
 

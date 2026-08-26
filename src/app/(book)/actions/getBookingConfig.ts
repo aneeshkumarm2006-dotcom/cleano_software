@@ -38,14 +38,14 @@ export async function getBookingConfig(): Promise<{
       getSetting("scheduling.minLeadDays"),
       getSetting("customer.smsOptInDefault"),
       getServicePricingConfig(),
-      db.appSetting.findUnique({ where: { key: SERVICE_CONTENT_KEY } }),
+      db.appSetting.findFirst({ where: { key: SERVICE_CONTENT_KEY } }),
       getSetting(BOOKING_PAGE_CONFIG_KEY),
     ]);
   const frequencyDiscounts = pricingCfg.frequencyDiscounts;
   const serviceContent = normalizeServiceContent(contentSetting?.value);
   const rest = { minLeadDays, smsOptInDefault, frequencyDiscounts, serviceContent, bookingPage };
   try {
-    const setting = await db.appSetting.findUnique({
+    const setting = await db.appSetting.findFirst({
       where: { key: "pricing.addOns" },
     });
 

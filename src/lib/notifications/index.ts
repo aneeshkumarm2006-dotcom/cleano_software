@@ -103,8 +103,8 @@ export async function isNotificationEnabled(
   key: string,
   channel: Channel
 ): Promise<boolean> {
-  const row = await db.notificationSetting.findUnique({
-    where: { recipient_key_channel: { recipient, key, channel } },
+  const row = await db.notificationSetting.findFirst({
+    where: { recipient, key, channel },
     select: { enabled: true },
   });
   if (row) return row.enabled;

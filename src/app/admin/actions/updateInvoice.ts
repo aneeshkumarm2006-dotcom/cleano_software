@@ -49,7 +49,7 @@ export async function updateInvoice(params: UpdateInvoiceParams) {
 
     // If line items are being updated, recalculate totals
     if (params.lineItems) {
-      const taxConfig = await db.appSetting.findUnique({
+      const taxConfig = await db.appSetting.findFirst({
         where: { key: "tax.config" },
       });
       const raw = (taxConfig?.value ?? null) as {

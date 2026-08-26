@@ -53,7 +53,7 @@ export const DEFAULT_BUDGET_CATEGORIES: readonly DefaultCategorySeed[] = [
  * payment webhook can't 500 on a bookkeeping detail.
  */
 export async function requireBudgetCategoryId(slug: string): Promise<string> {
-  const found = await db.budgetCategory.findUnique({
+  const found = await db.budgetCategory.findFirst({
     where: { slug },
     select: { id: true },
   });
@@ -63,10 +63,15 @@ export async function requireBudgetCategoryId(slug: string): Promise<string> {
   if (!seed) {
     throw new Error(`Unknown budget category slug: ${slug}`);
   }
-  const created = await db.budgetCategory.upsert({
+  // slug is unique per organization now, so upsert cannot address a row by slug
+  // alone. findFirst + create through the scoped client is equivalent.
+  const existing = await db.budgetCategory.findFirst({
     where: { slug: seed.slug },
-    create: { ...seed, isDefault: true },
-    update: {},
+    select: { id: true },
+  });
+  if (existing) return existing.id;
+  const created = await db.budgetCategory.create({
+    data: { ...seed, isDefault: true },
     select: { id: true },
   });
   return created.id;

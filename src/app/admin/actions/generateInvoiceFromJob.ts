@@ -99,7 +99,7 @@ export async function generateInvoiceFromJob(jobId: string) {
     }
 
     // Get tax config
-    const taxConfig = await db.appSetting.findUnique({
+    const taxConfig = await db.appSetting.findFirst({
       where: { key: "tax.config" },
     });
     const raw = (taxConfig?.value ?? null) as {

@@ -20,7 +20,7 @@ export type { TaxRates } from "@/lib/tax";
 
 export async function getTaxRates(): Promise<TaxRates> {
   try {
-    const setting = await db.appSetting.findUnique({
+    const setting = await db.appSetting.findFirst({
       where: { key: "tax.config" },
     });
     const raw = (setting?.value ?? null) as {

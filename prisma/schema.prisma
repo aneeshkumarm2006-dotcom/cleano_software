@@ -216,12 +216,13 @@ model AppSetting {
   // Enforced NOT NULL + RLS once every row is backfilled.
   organizationId String?
   id             String   @id @default(cuid())
-  key            String   @unique
+  key            String
   category       String
   value          Json
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
+  @@unique([organizationId, key])
   @@index([category])
   @@index([organizationId])
 }
@@ -901,7 +902,7 @@ model PricingRule {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  @@unique([bedCount, bathCount])
+  @@unique([organizationId, bedCount, bathCount])
   @@index([organizationId])
 }
 
@@ -1240,7 +1241,7 @@ model BudgetCategory {
   organizationId String?
   id             String             @id @default(cuid())
   name           String
-  slug           String             @unique
+  slug           String
   kind           BudgetCategoryKind @default(EXPENSE)
   isDefault      Boolean            @default(false)
   sortOrder      Int                @default(0)
@@ -1251,6 +1252,7 @@ model BudgetCategory {
   budgets      Budget[]
   transactions Transaction[]
 
+  @@unique([organizationId, slug])
   @@index([archivedAt])
   @@index([sortOrder])
   @@index([organizationId])
@@ -1396,7 +1398,7 @@ model NotificationSetting {
   createdAt      DateTime              @default(now())
   updatedAt      DateTime              @updatedAt
 
-  @@unique([recipient, key, channel])
+  @@unique([organizationId, recipient, key, channel])
   @@index([recipient])
   @@index([category])
   @@index([organizationId])
@@ -1540,7 +1542,7 @@ model Invoice {
   organizationId String?
   deletedAt      DateTime? // soft-delete (recoverable via Archived view)
   id             String            @id @default(cuid())
-  invoiceNumber  String            @unique
+  invoiceNumber  String
   status         InvoiceStatus     @default(DRAFT)
   clientId       String
   jobId          String?
@@ -1560,6 +1562,7 @@ model Invoice {
   job            Job?              @relation(fields: [jobId], references: [id], onDelete: SetNull)
   lineItems      InvoiceLineItem[]
 
+  @@unique([organizationId, invoiceNumber])
   @@index([clientId])
   @@index([jobId])
   @@index([status])
@@ -1636,7 +1639,7 @@ model Target {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
-  @@unique([metric, period, periodStart])
+  @@unique([organizationId, metric, period, periodStart])
   @@index([periodStart])
   @@index([organizationId])
 }
@@ -1656,7 +1659,7 @@ model AlertRoutingRule {
   createdAt          DateTime       @default(now())
   updatedAt          DateTime       @updatedAt
 
-  @@unique([alertType, recipientRole])
+  @@unique([organizationId, alertType, recipientRole])
   @@index([alertType])
   @@index([recipientRole])
   @@index([organizationId])
@@ -2603,7 +2606,7 @@ model LandingPage {
   organizationId String?
   id             String             @id @default(cuid())
   title          String
-  slug           String             @unique
+  slug           String
   content        String             @db.Text
   ctaText        String             @default("Get a Free Quote")
   ctaLink        String             @default("/")
@@ -2614,6 +2617,7 @@ model LandingPage {
   campaign       MarketingCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
   visits         PageVisit[]
 
+  @@unique([organizationId, slug])
   @@index([slug])
   @@index([campaignId])
   @@index([organizationId])
@@ -3137,7 +3141,7 @@ model ServiceArea {
   // Enforced NOT NULL + RLS once every row is backfilled.
   organizationId String?
   id             String   @id @default(cuid())
-  prefix         String   @unique
+  prefix         String
   zoneName       String
   isActive       Boolean  @default(true)
   travelFee      Float    @default(0)
@@ -3145,6 +3149,7 @@ model ServiceArea {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
+  @@unique([organizationId, prefix])
   @@index([isActive])
   @@index([organizationId])
 }
@@ -3500,7 +3505,7 @@ model PromoCode {
   organizationId String?
   deletedAt      DateTime? // soft-delete (recoverable via Archived view)
   id             String    @id @default(cuid())
-  code           String    @unique
+  code           String
   description    String?
   discountType   String    @default("FIXED") // FIXED | PERCENT
   discountValue  Float
@@ -3511,6 +3516,7 @@ model PromoCode {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
+  @@unique([organizationId, code])
   @@index([code])
   @@index([organizationId])
 }

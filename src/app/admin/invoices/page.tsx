@@ -44,7 +44,7 @@ export default async function InvoicesPage({
       },
       orderBy: { name: "asc" },
     }),
-    db.appSetting.findUnique({ where: { key: "tax.config" } }),
+    db.appSetting.findFirst({ where: { key: "tax.config" } }),
   ]);
 
   const raw = (taxConfig?.value ?? null) as {

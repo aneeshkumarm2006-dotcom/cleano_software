@@ -44,7 +44,7 @@ export async function generateTaxSummary(
     const yearEnd = new Date(year + 1, 0, 1);
 
     let taxRate = DEFAULT_TAX_RATE;
-    const taxSetting = await db.appSetting.findUnique({
+    const taxSetting = await db.appSetting.findFirst({
       where: { key: TAX_SETTING_KEY },
     });
     if (taxSetting && typeof taxSetting.value === "number") {

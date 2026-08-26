@@ -3,6 +3,7 @@
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { db } from "@/lib/org-db";
+import { writeAppSetting } from "@/lib/app-setting-write";
 
 // ---- Types ----------------------------------------------------------------
 
@@ -110,7 +111,7 @@ const DEFAULT_TEAM_CHAT: TeamChatSettingsDTO = {
 
 async function readTeamChatSettings(): Promise<TeamChatSettingsDTO> {
   try {
-    const row = await db.appSetting.findUnique({
+    const row = await db.appSetting.findFirst({
       where: { key: TEAM_CHAT_KEY },
     });
     const raw = (row?.value ?? null) as {
@@ -159,11 +160,7 @@ export async function updateTeamChatSettings(
         : current.showContactInfo,
   };
 
-  await db.appSetting.upsert({
-    where: { key: TEAM_CHAT_KEY },
-    create: { key: TEAM_CHAT_KEY, category: "team", value: next as never },
-    update: { category: "team", value: next as never },
-  });
+  await writeAppSetting(TEAM_CHAT_KEY, "team", next as never);
 
   return { success: true, data: next };
 }

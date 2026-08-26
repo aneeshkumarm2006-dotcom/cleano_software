@@ -4,6 +4,7 @@ import { db } from "@/lib/org-db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { writeAppSetting } from "@/lib/app-setting-write";
 import {
   type NotificationPrefs,
   defaultPrefsForRole,
@@ -44,7 +45,7 @@ export async function getNotificationPrefs(employeeId?: string): Promise<
     }
 
     const [setting, defaults] = await Promise.all([
-      db.appSetting.findUnique({ where: { key: KEY_PREFIX + targetId } }),
+      db.appSetting.findFirst({ where: { key: KEY_PREFIX + targetId } }),
       targetDefaults(targetId),
     ]);
 
@@ -93,18 +94,7 @@ export async function updateNotificationPrefs(input: {
     }
 
     const key = KEY_PREFIX + targetId;
-    await db.appSetting.upsert({
-      where: { key },
-      create: {
-        key,
-        category: "notifications",
-        value: merged as never,
-      },
-      update: {
-        category: "notifications",
-        value: merged as never,
-      },
-    });
+    await writeAppSetting(key, "notifications", merged as never);
 
     revalidatePath("/admin/settings");
     return { success: true, prefs: merged };

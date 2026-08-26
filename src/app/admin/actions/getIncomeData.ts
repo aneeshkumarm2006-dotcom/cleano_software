@@ -63,7 +63,7 @@ export async function getIncomeData(
     ) {
       taxRate = input.taxRate;
     } else {
-      const setting = await db.appSetting.findUnique({
+      const setting = await db.appSetting.findFirst({
         where: { key: TAX_SETTING_KEY },
       });
       if (

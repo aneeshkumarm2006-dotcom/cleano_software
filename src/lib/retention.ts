@@ -9,7 +9,7 @@ export * from "@/lib/retention-constants";
 
 /** Read the admin-configured save-offer settings, falling back to defaults. */
 export async function getSaveOfferConfig(): Promise<SaveOfferConfig> {
-  const row = await db.appSetting.findUnique({
+  const row = await db.appSetting.findFirst({
     where: { key: RECURRING_SAVE_OFFER_KEY },
   });
   if (!row?.value || typeof row.value !== "object") return DEFAULT_SAVE_OFFER;

@@ -49,7 +49,7 @@ function slotInRange(slot: string, start: string, end: string): boolean {
  */
 export async function getClosures(): Promise<Closure[]> {
   try {
-    const setting = await db.appSetting.findUnique({
+    const setting = await db.appSetting.findFirst({
       where: { key: BLOCKED_DATES_KEY },
     });
     const v = setting?.value as Record<string, unknown> | null;

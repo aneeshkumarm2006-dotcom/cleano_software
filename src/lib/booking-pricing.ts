@@ -28,7 +28,7 @@ export interface PricingInput {
 
 /** Reads the admin-configured per-service-type rates, falling back to defaults. */
 export async function getServicePricingConfig(): Promise<ServicePricingConfig> {
-  const setting = await db.appSetting.findUnique({
+  const setting = await db.appSetting.findFirst({
     where: { key: SERVICE_PRICING_KEY },
   });
   return normalizeServicePricing(setting?.value);
@@ -75,7 +75,7 @@ async function resolveBasePrice(input: PricingInput): Promise<number> {
   }
 
   // Prefer flat per-unit rates set in Settings > Pricing Rules
-  const setting = await db.appSetting.findUnique({ where: { key: "pricing.perUnit" } });
+  const setting = await db.appSetting.findFirst({ where: { key: "pricing.perUnit" } });
   if (setting?.value && typeof setting.value === "object") {
     const v = setting.value as Record<string, unknown>;
     // Flat base service price applied to every booking (default $100).

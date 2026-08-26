@@ -131,10 +131,10 @@ export async function loadInvoiceData(
     distinctAddresses.size === 1 ? [...distinctAddresses.values()][0] : null;
 
   const gstSetting = await db.appSetting
-    .findUnique({ where: { key: "gstNumber" } })
+    .findFirst({ where: { key: "gstNumber" } })
     .catch(() => null);
   const qstSetting = await db.appSetting
-    .findUnique({ where: { key: "qstNumber" } })
+    .findFirst({ where: { key: "qstNumber" } })
     .catch(() => null);
   const gstNumber =
     typeof gstSetting?.value === "string" ? gstSetting.value : "";

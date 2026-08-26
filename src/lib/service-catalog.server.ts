@@ -12,7 +12,7 @@ import {
 /** The admin-configured service list, falling back to the shipped defaults. */
 export async function getServiceCatalog(): Promise<ServiceCatalogEntry[]> {
   try {
-    const setting = await db.appSetting.findUnique({
+    const setting = await db.appSetting.findFirst({
       where: { key: SERVICE_CATALOG_KEY },
     });
     return normalizeServiceCatalog(setting?.value);

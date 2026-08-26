@@ -24,7 +24,7 @@ export async function createLandingPage(formData: FormData) {
   if (!content) return { error: "Content is required" };
 
   try {
-    const existing = await db.landingPage.findUnique({ where: { slug } });
+    const existing = await db.landingPage.findFirst({ where: { slug } });
     if (existing) return { error: "A page with this slug already exists" };
 
     const page = await db.landingPage.create({

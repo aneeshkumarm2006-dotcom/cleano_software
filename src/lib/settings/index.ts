@@ -13,6 +13,7 @@
 
 import { db } from "@/lib/org-db";
 import { logActivity } from "@/lib/activity-log";
+import { writeAppSetting } from "@/lib/app-setting-write";
 import {
   findSettingDef,
   getSettingDef,
@@ -42,7 +43,7 @@ export async function getSetting<K extends SettingKey>(
   const def = getSettingDef(key);
   let value: SettingValue<K> = def.default;
   try {
-    const row = await db.appSetting.findUnique({ where: { key } });
+    const row = await db.appSetting.findFirst({ where: { key } });
     if (row && row.value !== null && row.value !== undefined) {
       const parsed = def.validate(row.value);
       if (parsed.ok) value = parsed.value;
@@ -127,17 +128,13 @@ export async function writeSetting(
   // Capture the prior value for the audit trail before overwriting.
   let oldValue: unknown;
   try {
-    const existing = await db.appSetting.findUnique({ where: { key } });
+    const existing = await db.appSetting.findFirst({ where: { key } });
     oldValue = existing?.value ?? def.default;
   } catch {
     oldValue = def.default;
   }
 
-  await db.appSetting.upsert({
-    where: { key },
-    create: { key, category: def.category, value: parsed.value as never },
-    update: { category: def.category, value: parsed.value as never },
-  });
+  await writeAppSetting(key, def.category, parsed.value as never);
 
   invalidateSetting(key);
 

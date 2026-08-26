@@ -34,7 +34,7 @@ export default async function LandingPageRoute({
 }) {
   const { slug } = await params;
 
-  const page = await db.landingPage.findUnique({
+  const page = await db.landingPage.findFirst({
     where: { slug },
   });
 
@@ -74,7 +74,7 @@ export default async function LandingPageRoute({
 
 export async function generateMetadata({ params }: { params: Params }) {
   const { slug } = await params;
-  const page = await db.landingPage.findUnique({
+  const page = await db.landingPage.findFirst({
     where: { slug },
     select: { title: true },
   });

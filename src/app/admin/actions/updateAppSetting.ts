@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { db } from "@/lib/org-db";
 import { revalidatePath } from "next/cache";
+import { writeAppSetting } from "@/lib/app-setting-write";
 import {
   isRegisteredSetting,
   writeSetting,
@@ -73,18 +74,7 @@ export async function updateAppSetting(params: UpdateAppSettingParams) {
     }
 
     // Legacy / unregistered settings: existing passthrough behavior.
-    await db.appSetting.upsert({
-      where: { key },
-      create: {
-        key,
-        category,
-        value: value as never,
-      },
-      update: {
-        category,
-        value: value as never,
-      },
-    });
+    await writeAppSetting(key, category, value as never);
 
     invalidateSetting(key); // no-op if not cached; keeps spine reads fresh
     revalidatePath("/admin/settings");
@@ -100,7 +90,9 @@ export async function deleteAppSetting(key: string) {
     const guard = await requireAdmin();
     if ("error" in guard) return { success: false, error: guard.error };
 
-    await db.appSetting.delete({ where: { key } });
+    // key is unique per organization now, so deleteMany (which the scoped
+    // client filters) replaces a delete addressed by key alone.
+    await db.appSetting.deleteMany({ where: { key } });
     revalidatePath("/admin/settings");
     return { success: true };
   } catch (error) {

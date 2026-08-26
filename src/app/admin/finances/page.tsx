@@ -26,7 +26,7 @@ export default async function FinancesPage() {
       orderBy: [{ period: "desc" }, { category: { sortOrder: "asc" } }],
     }),
     getBudgetCategoryOptions(),
-    db.appSetting.findUnique({ where: { key: "tax.config" } }),
+    db.appSetting.findFirst({ where: { key: "tax.config" } }),
     db.job.findMany({
       // Job picker for linking a transaction — archived jobs aren't offered
       // (new fix list item 1).

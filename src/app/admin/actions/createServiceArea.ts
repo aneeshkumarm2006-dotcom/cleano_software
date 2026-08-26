@@ -34,7 +34,7 @@ export async function createServiceArea(input: CreateServiceAreaInput) {
       return { success: false, error: "Zone name is required" };
     }
 
-    const existing = await db.serviceArea.findUnique({ where: { prefix } });
+    const existing = await db.serviceArea.findFirst({ where: { prefix } });
     if (existing) {
       return { success: false, error: `Prefix ${prefix} already exists` };
     }

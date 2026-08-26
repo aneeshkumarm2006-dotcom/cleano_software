@@ -20,7 +20,7 @@ interface GetQuoteInput {
 }
 
 async function getPerUnitRates() {
-  const setting = await db.appSetting.findUnique({ where: { key: "pricing.perUnit" } });
+  const setting = await db.appSetting.findFirst({ where: { key: "pricing.perUnit" } });
   if (setting?.value && typeof setting.value === "object") {
     const v = setting.value as Record<string, unknown>;
     const baseServicePrice =

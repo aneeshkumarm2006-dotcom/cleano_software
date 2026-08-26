@@ -30,22 +30,33 @@ const ALERT_ROUTING_DEFAULTS: ReadonlyArray<{
   { alertType: AlertType.GENERAL, recipientRole: Roles.OPS_MANAGER },
 ];
 
+// Alert routing is per-organization now, so the defaults are seeded for each
+// one rather than once globally. This runs with the unscoped client and names
+// the organization explicitly, because a seed has no request to resolve one
+// from.
 async function seedAlertRoutingRules() {
-  for (const rule of ALERT_ROUTING_DEFAULTS) {
-    await db.alertRoutingRule.upsert({
-      where: {
-        alertType_recipientRole: {
-          alertType: rule.alertType,
-          recipientRole: rule.recipientRole,
-        },
-      },
-      update: {},
-      create: { ...rule, isActive: true },
-    });
+  const orgs = await db.organization.findMany({ select: { id: true, slug: true } });
+  if (orgs.length === 0) {
+    console.log("No organizations yet — nothing to seed.");
+    return;
   }
-  console.log(
-    `Seeded ${ALERT_ROUTING_DEFAULTS.length} AlertRoutingRule defaults.`,
-  );
+  for (const org of orgs) {
+    for (const rule of ALERT_ROUTING_DEFAULTS) {
+      await db.alertRoutingRule.upsert({
+        where: {
+          organizationId_alertType_recipientRole: {
+            organizationId: org.id,
+            alertType: rule.alertType,
+            recipientRole: rule.recipientRole,
+          },
+        },
+        update: {},
+        create: { ...rule, isActive: true, organizationId: org.id },
+      });
+    }
+    console.log(`  ${org.slug}: ${ALERT_ROUTING_DEFAULTS.length} rules`);
+  }
+  console.log(`Seeded AlertRoutingRule defaults for ${orgs.length} organization(s).`);
 }
 
 async function main() {

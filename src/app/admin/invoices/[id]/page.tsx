@@ -41,7 +41,7 @@ export default async function InvoiceDetailPage({
 
   if (!invoice) notFound();
 
-  const taxConfig = await db.appSetting.findUnique({
+  const taxConfig = await db.appSetting.findFirst({
     where: { key: "tax.config" },
   });
 

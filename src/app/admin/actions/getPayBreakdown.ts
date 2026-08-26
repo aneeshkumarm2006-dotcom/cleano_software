@@ -184,13 +184,8 @@ export async function getPayBreakdown(
     let basePriceSource: AdminPayBreakdown["basePriceSource"] = "NONE";
 
     if (job.bedCount !== null && job.bathCount !== null) {
-      const rule = await db.pricingRule.findUnique({
-        where: {
-          bedCount_bathCount: {
-            bedCount: job.bedCount,
-            bathCount: job.bathCount,
-          },
-        },
+      const rule = await db.pricingRule.findFirst({
+        where: { bedCount: job.bedCount, bathCount: job.bathCount },
       });
       if (rule && rule.isActive) {
         basePrice = rule.basePrice;
