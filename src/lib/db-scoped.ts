@@ -28,7 +28,7 @@
  */
 import { AsyncLocalStorage } from "node:async_hooks";
 
-import { PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 
 import { TENANT_MODELS } from "@/lib/tenant-models";
 
@@ -43,6 +43,42 @@ import { TENANT_MODELS } from "@/lib/tenant-models";
  * how RLS turns into blank screens.
  */
 export const tenantConnection = new AsyncLocalStorage<string>();
+
+/**
+ * How long a scoped operation may take.
+ *
+ * Prisma's defaults for an interactive transaction are `timeout: 5000` and
+ * `maxWait: 2000`, and they are wrong here — not because they are short, but
+ * because of what they are being applied to. Those defaults assume a
+ * transaction is something a few call sites opt into deliberately. In this
+ * client EVERY query is one, because announcing the tenant with `SET LOCAL`
+ * only holds for the transaction that set it.
+ *
+ * So a five-second budget stopped being "a generous limit for a unit of work"
+ * and became "the timeout on every single query in the product", covering the
+ * announcement round-trip, an ownership check, the query itself and sometimes a
+ * follow-up lookup. Against a database in another region, or on a report that
+ * legitimately takes a while, that throws P2028 and the page fails — and it
+ * fails *more* the busier things get, which is the worst time for it.
+ *
+ * Raised well clear of any real query, and left configurable so it can be tuned
+ * without a deploy. This is a ceiling that should never be reached, not a
+ * target.
+ */
+const TX_TIMEOUT_MS = Number(process.env.TENANT_TX_TIMEOUT_MS ?? 20_000);
+/** How long to wait for a free connection before giving up. */
+const TX_MAX_WAIT_MS = Number(process.env.TENANT_TX_MAX_WAIT_MS ?? 10_000);
+
+const TX_OPTIONS = { timeout: TX_TIMEOUT_MS, maxWait: TX_MAX_WAIT_MS } as const;
+
+/**
+ * The same budget for transactions opened by org-db.ts.
+ *
+ * Those hold a connection for a whole multi-step body, so they need it at least
+ * as much as a single query does. Exported rather than duplicated so there is
+ * one number to change.
+ */
+export const TENANT_TX_OPTIONS = TX_OPTIONS;
 
 /** Announce the tenant for the remainder of the current transaction. */
 export async function announceTenant(
@@ -226,6 +262,48 @@ export function scopedTo(base: PrismaClient, organizationId: string) {
             return query(p.args as typeof args);
           }
 
+          // FAST PATH — one round trip instead of four.
+          //
+          // The interactive form below opens a transaction, announces the
+          // tenant, runs the query and commits: four separate exchanges with the
+          // database. That is fine once. It is not fine when EVERY query in the
+          // product is one, which is what this client makes them. A dashboard
+          // issuing a hundred queries was paying four hundred round trips, and
+          // against a database in another region that turned a page into twenty
+          // seconds -- and eventually into transaction timeouts, because the
+          // whole thing is racing a clock that was never meant to cover network
+          // latency.
+          //
+          // Prisma's array form sends the whole batch in a single exchange, and
+          // still wraps it in BEGIN/COMMIT -- so `set_config(..., true)` is
+          // transaction-local exactly as before and still applies to the
+          // statement after it. Identical guarantees, a quarter of the traffic.
+          //
+          // Only the plans that need no extra queries qualify. Anything with an
+          // ownership check or a result to inspect has to see one answer before
+          // deciding the next, which a batch cannot express, and those fall
+          // through to the interactive path unchanged.
+          if (!p.ownershipCheck && !p.postFilter) {
+            const delegate = (base as unknown as Record<
+              string,
+              Record<string, (q: unknown) => unknown>
+            >)[delegateOf(model)];
+
+            const batch = [
+              base.$executeRawUnsafe(
+                "SELECT set_config('app.current_org_id', $1, true)",
+                organizationId,
+              ),
+              delegate[p.operation](p.args),
+            ] as unknown as Prisma.PrismaPromise<unknown>[];
+
+            // No timeout option here, and none needed: the array form is not an
+            // interactive transaction, so it is not racing the clock that the
+            // path below has to be given room against.
+            const out = (await base.$transaction(batch)) as unknown[];
+            return out[1] as never;
+          }
+
           return base.$transaction(async (tx) => {
             await announceTenant(
               tx as unknown as { $executeRawUnsafe: (q: string, ...v: unknown[]) => Promise<unknown> },
@@ -272,7 +350,7 @@ export function scopedTo(base: PrismaClient, organizationId: string) {
               }
             }
             return result;
-          });
+          }, TX_OPTIONS);
         },
       },
     },

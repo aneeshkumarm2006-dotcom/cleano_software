@@ -30,7 +30,7 @@
  * where quietly operating on the wrong tenant would go unnoticed.
  */
 import { getScopedDbForCurrent, requireOrgId } from "@/lib/org";
-import { announceTenant, tenantConnection } from "@/lib/db-scoped";
+import { announceTenant, tenantConnection, TENANT_TX_OPTIONS } from "@/lib/db-scoped";
 import type { ScopedDb } from "@/lib/db-scoped";
 
 type AnyFn = (...args: unknown[]) => unknown;
@@ -66,6 +66,10 @@ export const db = new Proxy({} as ScopedDb, {
       return async (arg: unknown, ...rest: unknown[]) => {
         const scoped = (await getScopedDbForCurrent()) as unknown as Record<string, AnyFn>;
         const organizationId = await requireOrgId();
+        // A caller that stated its own timeout keeps it; everyone else gets the
+        // tenant default rather than Prisma's 5 seconds, which is far too tight
+        // for a body that now also carries the tenant announcement.
+        const opts = rest.length > 0 ? rest : [TENANT_TX_OPTIONS];
         if (typeof arg === "function") {
           const body = arg as (tx: unknown) => Promise<unknown>;
           return scoped.$transaction(async (tx: unknown) => {
@@ -74,7 +78,7 @@ export const db = new Proxy({} as ScopedDb, {
               organizationId,
             );
             return tenantConnection.run(organizationId, () => body(tx));
-          }, ...rest);
+          }, ...opts);
         }
         // Array form: the statements are already batched onto one connection,
         // so the announcement is prepended to the batch.
@@ -88,7 +92,7 @@ export const db = new Proxy({} as ScopedDb, {
           ),
           ...(arg as unknown[]),
         ];
-        const out = (await scoped.$transaction(batch, ...rest)) as unknown[];
+        const out = (await scoped.$transaction(batch, ...opts)) as unknown[];
         return out.slice(1);
       };
     }
