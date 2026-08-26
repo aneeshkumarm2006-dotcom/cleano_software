@@ -265,18 +265,33 @@ everything for org X" a real piece of work rather than dropping a database.
 
 ---
 
-## Open decisions
+## Decisions
 
-| # | Question | Status |
+| # | Question | Answer |
 |---|---|---|
-| 1 | Stripe Connect account type — Standard / **Express** (recommended) / Custom | deferred by Prem |
-| 2 | Do you take a cut of tenant transactions, or subscription revenue only? | open — decides #1 |
-| 3 | Real pricing. Placeholders: Starter $49, Professional $149, Organization custom | placeholder |
-| 4 | Signup: two self-serve tiers; "Organization" is request-access via form | ✅ confirmed |
-| 5 | Super admin sits **above** all orgs, separate from the `Roles` enum | ✅ agreed, not built |
-| 6 | Whitelabel | ❌ no — Awer branding, subdomains only |
+| 1 | Job / invoice numbering | **Per-org.** Every organization starts at #1 |
+| 2 | Suspended organization | **Locked out entirely**, "contact billing" screen |
+| 3 | Same email at two companies | **Allowed.** One person can be a customer of two cleaning companies |
+| 4 | `www.useawer.com` | **Awer's marketing + signup page.** TeamCleano moves to `teamcleano.useawer.com` |
+| 5 | Free trial | **One month, limited features** |
+| 6 | Plan limits | **Enforced** — a Starter org cannot add a 6th cleaner |
+| 7 | Inbound SMS | **A Twilio number per organization** |
+| 8 | Email sender | **Neutral Awer address**, org name as display name, org address as Reply-To |
+| — | Whitelabel | No. Awer branding, subdomains only |
+| — | Stripe Connect account type | Still open. Express recommended; blocks Step 7 only |
+| — | Real pricing | Placeholder: Starter $49 / Professional $149 / Organization custom |
 
----
+**On #8:** per-org sender domains would make every tenant verify a domain and
+configure SPF/DKIM. A non-technical owner gets that wrong, their mail lands in
+spam, and Awer gets blamed. One warmed domain under our control has much better
+deliverability, and Reply-To still routes replies to the company. The cost is
+shared sending reputation, so per-org rate limits are part of this. If volume
+grows, per-tenant subdomains isolate reputation without tenant DNS work.
+
+**On #3:** this is the most delicate change in Step 5. better-auth looks a user
+up with `findUnique({ where: { email } })`, which Prisma only permits while
+email is globally unique. Making it per-org means that lookup has to change, so
+it is sequenced last and on its own.
 
 ## Known wrinkles
 
