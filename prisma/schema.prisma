@@ -16,6 +16,11 @@ model User {
   deletedAt                    DateTime? // soft-delete (recoverable via Archived view)
   id                           String                  @id @default(cuid())
   name                         String
+  // Awer staff, not a tenant role. Deliberately NOT a value in `role`: OWNER
+  // there means "owns this cleaning company", and one widened check would have
+  // handed a customer the keys to every other customer's data. NULL for
+  // everyone except Awer's own people.
+  platformRole                 PlatformRole?
   // Unique per organization, not globally: the same person can be a customer
   // of two cleaning companies, with a separate account at each. better-auth
   // resolves users through the organization-scoped client (see lib/auth.ts),
@@ -3682,6 +3687,8 @@ model Organization {
   /// Next job number to hand out. Allocated atomically -- see allocateJobNumber().
   nextJobNumber Int @default(1)
 
+  subscription Subscription?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -3699,4 +3706,77 @@ enum OrgPlan {
   STARTER
   PROFESSIONAL
   ORGANIZATION // request-access tier
+}
+
+// ---------------------------------------------------------------------------
+// Platform: subscriptions, plans, and Awer's own staff
+// ---------------------------------------------------------------------------
+
+/// Awer staff. Separate from Roles, which describes someone's job inside one
+/// cleaning company.
+enum PlatformRole {
+  SUPPORT /// read-only, may impersonate a tenant to help them
+  ADMIN /// manage organizations, plans and subscriptions
+  OWNER /// everything, including managing other Awer staff
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE /// payment failed; still usable during the grace window
+  CANCELED
+}
+
+/// What a company is paying for.
+///
+/// Tenant-scoped like everything else, so a company can read its own plan and
+/// no one else's. The super-admin console reads across organizations through
+/// the platform client instead, which is the only place that is allowed to.
+model Subscription {
+  organizationId String       @default("")
+  id             String       @id @default(cuid())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  plan   OrgPlan            @default(STARTER)
+  status SubscriptionStatus @default(TRIALING)
+
+  /// One month from signup, per the agreed trial. NULL once they convert.
+  trialEndsAt      DateTime?
+  currentPeriodEnd DateTime?
+
+  /// Seat cap actually sold. NULL means the plan default applies.
+  seats Int?
+
+  stripeCustomerId     String? @unique
+  stripeSubscriptionId String? @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId])
+  @@index([status])
+  @@index([trialEndsAt])
+}
+
+/// Every action Awer staff take against a customer's account.
+///
+/// Not tenant-scoped: it is a record ABOUT organizations, kept for the platform.
+/// Impersonation means our staff can see live customer data, so it is written
+/// down every time.
+model PlatformAuditLog {
+  id String @id @default(cuid())
+
+  actorId    String
+  actorEmail String
+  action     String /// e.g. "org.suspend", "org.impersonate", "plan.change"
+
+  targetOrgId   String?
+  targetOrgSlug String?
+  detail        Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([targetOrgId])
+  @@index([createdAt])
+  @@index([actorId])
 }

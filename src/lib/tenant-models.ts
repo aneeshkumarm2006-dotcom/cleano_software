@@ -8,6 +8,7 @@
  *   grep -B0 "organizationId String?" prisma/schema.prisma
  */
 export const TENANT_MODELS: ReadonlySet<string> = new Set([
+  "Subscription",
   "User",
   "Product",
   "ProductLink",

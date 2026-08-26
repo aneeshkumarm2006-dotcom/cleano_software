@@ -24,16 +24,35 @@ export const DEFAULT_ORG_SLUG =
   process.env.DEFAULT_ORG_SLUG?.trim().toLowerCase() || "teamcleano";
 
 /**
- * Labels that are infrastructure, not tenants. A company signing up must not be
- * able to claim these — `api.useawer.com` has to keep meaning the API.
+ * Labels that are infrastructure and can never be a workspace.
+ *
+ * Kept deliberately small and separate from RESERVED_SLUGS below. These two
+ * lists answer different questions: this one decides how a HOST resolves, the
+ * other decides what a company may CLAIM at signup. Conflating them meant
+ * `platform.useawer.com` silently resolved to the default workspace, which
+ * would have left Awer's own staff with nowhere to sign in.
+ */
+const INFRA_LABELS = new Set([
+  "www", "api", "static", "assets", "cdn", "img", "mail", "smtp", "ftp",
+]);
+
+/**
+ * Slugs a company may not claim at signup.
+ *
+ * Wider than INFRA_LABELS: it also covers names we want to keep for ourselves
+ * (platform, billing, status) and names that would be confusing or misleading
+ * in a customer's hands.
  */
 export const RESERVED_SLUGS = new Set([
-  "www", "api", "app", "admin", "auth", "static", "assets", "cdn", "img",
-  "mail", "smtp", "ftp", "blog", "docs", "help", "support", "status",
+  ...INFRA_LABELS,
+  "app", "admin", "auth", "blog", "docs", "help", "support", "status",
   "staging", "preview", "dev", "test", "demo", "internal", "dashboard",
   "billing", "account", "accounts", "login", "signup", "book", "booking",
-  "awer", "useawer",
+  "awer", "useawer", "platform", "console", "operator",
 ]);
+
+/** The workspace Awer's own staff belong to. Not a customer. */
+export const PLATFORM_ORG_SLUG = "platform";
 
 /** A DNS label: lowercase alphanumeric and hyphens, not leading/trailing. */
 const LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
@@ -41,6 +60,12 @@ const LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 /** Hosts whose first label is never a tenant. */
 const NON_TENANT_SUFFIXES = [".vercel.app", ".now.sh"];
 
+/** May a host label address a workspace at all? */
+function isRoutableLabel(slug: string): boolean {
+  return LABEL.test(slug) && !INFRA_LABELS.has(slug) && !slug.includes("--");
+}
+
+/** May a company claim this slug when signing up? */
 export function isValidOrgSlug(slug: string): boolean {
   return LABEL.test(slug) && !RESERVED_SLUGS.has(slug) && !slug.includes("--");
 }
@@ -74,7 +99,7 @@ export function orgSlugFromHost(host: string | null | undefined): string {
   if (parts[parts.length - 1] === "localhost") {
     if (parts.length < 2) return DEFAULT_ORG_SLUG;
     const label = parts[0];
-    return isValidOrgSlug(label) ? label : DEFAULT_ORG_SLUG;
+    return isRoutableLabel(label) ? label : DEFAULT_ORG_SLUG;
   }
 
   // A tenant needs a label in front of the registrable domain, so at minimum
@@ -82,5 +107,5 @@ export function orgSlugFromHost(host: string | null | undefined): string {
   if (parts.length < 3) return DEFAULT_ORG_SLUG;
 
   const label = parts[0];
-  return isValidOrgSlug(label) ? label : DEFAULT_ORG_SLUG;
+  return isRoutableLabel(label) ? label : DEFAULT_ORG_SLUG;
 }
