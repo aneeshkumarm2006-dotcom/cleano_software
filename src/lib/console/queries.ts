@@ -431,6 +431,21 @@ export const listStaff = cache(async () => {
   });
 });
 
+/**
+ * Companies asking for the Organization tier.
+ *
+ * Waiting ones first and oldest first inside that, because the cost of this
+ * queue is somebody sitting unanswered — sorting by newest would bury exactly
+ * the request that has been ignored longest.
+ */
+export const listAccessRequests = cache(async () => {
+  const rows = await platformDb.accessRequest.findMany({
+    orderBy: { createdAt: "asc" },
+  });
+  const rank = { PENDING: 0, APPROVED: 1, DECLINED: 2 } as const;
+  return rows.sort((a, b) => rank[a.status] - rank[b.status]);
+});
+
 export type IsolationCheck = { label: string; ok: boolean; detail: string };
 
 /**

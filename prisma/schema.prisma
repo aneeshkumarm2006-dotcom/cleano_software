@@ -3780,3 +3780,50 @@ model PlatformAuditLog {
   @@index([createdAt])
   @@index([actorId])
 }
+
+enum AccessRequestStatus {
+  PENDING
+  APPROVED /// a workspace was created from it
+  DECLINED
+}
+
+/// A company asking for the Organization tier, which is priced per deal and so
+/// cannot be signed up for.
+///
+/// Not tenant-scoped, and deliberately unreadable by the application role: these
+/// are prospective customers' names, addresses and phone numbers, belonging to
+/// no workspace. Only Awer's console reads them.
+model AccessRequest {
+  id String @id @default(cuid())
+
+  companyName String
+  contactName String
+  email       String
+  phone       String?
+  /// Roughly how many cleaners they run. Free text on purpose -- a company that
+  /// cannot answer in a dropdown is exactly the company worth talking to.
+  fleetSize   String?
+  /// The address they would like, if they said. Not reserved by asking: a
+  /// request is not a claim, and two requests may want the same one.
+  wantedSlug  String?
+  message     String?
+
+  status     AccessRequestStatus @default(PENDING)
+  /// Set when a workspace is created from this request.
+  createdOrgId String?
+  /// Why it was declined, or a note left when approving.
+  decisionNote String?
+  decidedById  String?
+  decidedByEmail String?
+  decidedAt    DateTime?
+
+  /// Kept for rate limiting and for spotting a flood from one place.
+  submittedFrom String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
+  @@index([email])
+}

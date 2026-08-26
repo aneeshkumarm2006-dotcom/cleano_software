@@ -25,6 +25,7 @@ export default function ConsoleRail({
   workspaces,
   trials,
   needsBilling,
+  requests,
   staffCount,
 }: {
   staffName: string;
@@ -32,6 +33,7 @@ export default function ConsoleRail({
   workspaces: number;
   trials: number;
   needsBilling: number;
+  requests: number;
   staffCount: number;
 }) {
   const path = usePathname();
@@ -77,6 +79,19 @@ export default function ConsoleRail({
       icon: (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
           <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+        </svg>
+      ),
+    },
+    {
+      href: "/console/requests",
+      label: "Access requests",
+      count: requests || undefined,
+      // Somebody is sitting unanswered, which is worth the same weight as a
+      // failed payment.
+      alert: requests > 0,
+      icon: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" />
         </svg>
       ),
     },

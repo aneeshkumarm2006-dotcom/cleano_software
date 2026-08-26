@@ -90,7 +90,7 @@ rewrite. Isolation comes from RLS; an FK only guarantees the id isn't garbage.
 | 3 | Tenant context — subdomain → org in `proxy.ts` | ✅ done |
 | 4 | Scope ~1,400 queries, module by module | ⬜ next |
 | 5 | Enforce — `NOT NULL`, RLS, constraint fixes, suspension | ✅ done |
-| 6 | Platform layer — super admin, signup, plans, provisioning | 🟡 6a–6c done; request-access form and plan-limit enforcement left |
+| 6 | Platform layer — super admin, signup, plans, provisioning | 🟡 6a–6d done (6d migration written, **not applied**); plan-limit enforcement left |
 | 7 | Second real tenant + Stripe Connect | ⬜ |
 | 8 | Production cutover (needs explicit approval) | ⬜ |
 
@@ -351,6 +351,49 @@ page that can drift from what is enforced is a promise nobody kept.
 Left: the Organization tier says plainly that it is arranged rather than bought
 and that the request form is next, instead of linking to a page that does not
 exist. No welcome email — that waits for per-organization email URLs in step 7.
+
+### Step 6d — the Organization tier can be asked for
+`20260826120000_access_requests` — **written, not yet applied.** One enum, one
+table, three indexes. The SQL was hand-written and then diffed against
+`prisma migrate diff` run offline from the previous schema: byte-identical apart
+from the comments and the revoke.
+
+```bash
+# staging only, from .env.local
+DATABASE_URL="$STAGING_DATABASE_URL" DIRECT_URL="$STAGING_DIRECT_URL" \
+  npx prisma migrate deploy
+```
+
+`AccessRequest` is platform-level like `PlatformAuditLog`: prospective
+customers' names, emails and phone numbers, belonging to no workspace. So it
+gets **no RLS policy and a revoked grant** — deliberate, not an omission. RLS
+keys off `organizationId` and this table has none; the protection is that
+`awer_app` cannot touch it at all, and only the console's platform client can.
+
+Public form at `/get-started/organization`, separate from signup because it ends
+somewhere else: signup ends in a working workspace, this ends in a conversation.
+Three required fields — company, contact, email — because every extra required
+box costs a conversation with a company that was ready to have one. A honeypot
+field answers bots with "thanks, we'll be in touch" rather than a rejection, so
+a script gets no signal to tune against.
+
+Console queue at `/console/requests`, ordered by **how long each has waited**,
+oldest first, with the wait on every card and past three days in red. Sorting by
+newest would bury exactly the request that has been ignored longest. The count
+also reaches the rail and the overview headline, because a company sitting
+unanswered is worth the same weight as a failed payment.
+
+**Approving creates the workspace in the same action.** Two separate steps —
+mark approved, create later — is the failure that leaves a customer waiting on
+something everyone believes already happened. The staff member confirms the
+address (editable, since what was asked for is not always what it should be),
+and gets a random first password shown once, stored only as a hash, paired with
+`mustChangePassword` so the owner replaces it immediately. That flag is set here
+rather than inside provisioning: a company that signs itself up chose its own
+password and should not be asked to change it.
+
+Nothing is emailed to the requester at either decision, and the console says so
+rather than implying otherwise.
 
 ---
 

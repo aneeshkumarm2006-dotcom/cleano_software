@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import {
   attentionQueue,
+  listAccessRequests,
   listWorkspaces,
   overviewStats,
   recentAudit,
@@ -22,10 +23,14 @@ export const metadata = { title: "Overview · Awer Console" };
  * shows, so the two can never disagree.
  */
 export default async function ConsoleOverview() {
-  const rows = await listWorkspaces();
+  const [rows, audit, requests] = await Promise.all([
+    listWorkspaces(),
+    recentAudit(6),
+    listAccessRequests(),
+  ]);
   const stats = overviewStats(rows);
   const queue = attentionQueue(rows);
-  const audit = await recentAudit(6);
+  const pending = requests.filter((r) => r.status === "PENDING");
 
   const today = new Date().toLocaleDateString("en-CA", {
     weekday: "long",
@@ -47,10 +52,13 @@ export default async function ConsoleOverview() {
     };
   });
 
+  // A company waiting for a reply counts as something needing a person, so it
+  // belongs in the headline rather than only on its own page.
+  const todo = queue.length + pending.length;
   const headline =
-    queue.length === 0
+    todo === 0
       ? "Nothing needs a person today."
-      : `${queue.length} thing${queue.length === 1 ? "" : "s"} need${queue.length === 1 ? "s" : ""} a person today.`;
+      : `${todo} thing${todo === 1 ? "" : "s"} need${todo === 1 ? "s" : ""} a person today.`;
 
   return (
     <>
@@ -85,6 +93,10 @@ export default async function ConsoleOverview() {
           <div className={stats.pastDue + stats.suspended > 0 ? "stat flag" : "stat"}>
             <h3>Needs attention</h3>
             <div className="stat-n">{queue.length}</div>
+          </div>
+          <div className={pending.length > 0 ? "stat warn" : "stat"}>
+            <h3>Waiting on a reply</h3>
+            <div className="stat-n">{pending.length}</div>
           </div>
           <div className="stat">
             <h3>Cleaners on Awer</h3>
@@ -129,6 +141,40 @@ export default async function ConsoleOverview() {
                 </ul>
               )}
             </div>
+
+            {pending.length > 0 && (
+              <div className="card">
+                <header>
+                  <h2>Companies waiting on a reply</h2>
+                  <span className="right muted">
+                    <Link href="/console/requests">Open the queue</Link>
+                  </span>
+                </header>
+                <ul className="queue">
+                  {pending.slice(0, 4).map((r) => {
+                    const days = Math.floor(
+                      (Date.now() - r.createdAt.getTime()) / 86_400_000,
+                    );
+                    return (
+                      <li key={r.id}>
+                        <span className={`sev ${days >= 3 ? "high" : "medium"}`} />
+                        <div className="txt">
+                          <b>{r.companyName}</b>
+                          <p>
+                            {r.contactName}
+                            {r.fleetSize ? ` · ${r.fleetSize}` : ""} ·{" "}
+                            {days < 1 ? "today" : days === 1 ? "1 day" : `${days} days`} waiting
+                          </p>
+                        </div>
+                        <Link className="btn sm" href="/console/requests">
+                          Read it
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
 
             <div className="card">
               <header>

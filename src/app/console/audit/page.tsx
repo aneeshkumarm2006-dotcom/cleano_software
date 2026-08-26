@@ -19,6 +19,7 @@ const FILTERS = [
   { key: "org.reactivate", label: "Reactivations" },
   { key: "plan.", label: "Plan and seats" },
   { key: "trial.", label: "Trials" },
+  { key: "request.", label: "Access requests" },
   { key: "staff.", label: "Staff access" },
 ];
 
@@ -32,6 +33,8 @@ const WORDS: Record<string, { label: string; tone: "ok" | "trial" | "due" | "off
   "trial.restart": { label: "Trial restarted", tone: "trial" },
   "staff.role": { label: "Staff role changed", tone: "plain" },
   "staff.revoke": { label: "Staff access removed", tone: "off" },
+  "request.approve": { label: "Request approved", tone: "ok" },
+  "request.decline": { label: "Request declined", tone: "off" },
 };
 
 function describe(detail: unknown): string {

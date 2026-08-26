@@ -3,7 +3,7 @@ import { IBM_Plex_Mono } from "next/font/google";
 
 import { getCachedSession } from "@/lib/auth";
 import { getPlatformStaff } from "@/lib/platform-db";
-import { listStaff, listWorkspaces } from "@/lib/console/queries";
+import { listAccessRequests, listStaff, listWorkspaces } from "@/lib/console/queries";
 
 import ConsoleRail from "./ConsoleRail";
 import "./console.css";
@@ -41,7 +41,11 @@ export default async function ConsoleLayout({
     redirect(session ? "/api/post-signin" : "/sign-in?callbackUrl=/console");
   }
 
-  const [rows, staffList] = await Promise.all([listWorkspaces(), listStaff()]);
+  const [rows, staffList, requests] = await Promise.all([
+    listWorkspaces(),
+    listStaff(),
+    listAccessRequests(),
+  ]);
 
   return (
     <div className={`awer-console ${plexMono.variable}`}>
@@ -54,6 +58,7 @@ export default async function ConsoleLayout({
           needsBilling={
             rows.filter((w) => w.subscription?.status === "PAST_DUE").length
           }
+          requests={requests.filter((r) => r.status === "PENDING").length}
           staffCount={staffList.length}
         />
         <main>{children}</main>

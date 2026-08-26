@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import Link from "next/link";
 import { Check } from "lucide-react";
 
 import { Banner, Button, Field, Input, PasswordInput } from "@/components/customer/Field";
@@ -345,15 +346,29 @@ export default function SignupForm({
 
         {!selfServe && (
           <Banner kind="amber">
-            {chosen?.label} is arranged with us rather than signed up for, because it is priced per
-            company. The request form is the next thing being built — until then, pick a plan above
-            to start today and we can move you across later without losing anything.
+            {chosen?.label} is priced per company, so it is arranged with us rather than signed up
+            for. Tell us how you work and we will come back with a number.
           </Banner>
         )}
 
-        <Button type="submit" variant="primary" block size="lg" disabled={!canSubmit} loading={busy}>
-          {busy ? "Creating your workspace…" : `Start my ${trialDays} days`}
-        </Button>
+        {selfServe ? (
+          <Button
+            type="submit"
+            variant="primary"
+            block
+            size="lg"
+            disabled={!canSubmit}
+            loading={busy}
+          >
+            {busy ? "Creating your workspace…" : `Start my ${trialDays} days`}
+          </Button>
+        ) : (
+          <Link href="/get-started/organization">
+            <Button type="button" variant="primary" block size="lg">
+              Tell us about your company
+            </Button>
+          </Link>
+        )}
 
         <p className="cl-subtitle" style={{ fontSize: 12 }}>
           No card needed to start, and nothing is charged when the trial ends — you choose then.

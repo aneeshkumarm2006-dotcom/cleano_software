@@ -14,13 +14,16 @@
  *   4. It returns a plain result object instead of throwing, so the UI can say
  *      what went wrong rather than showing an error page.
  */
+import { randomBytes } from "node:crypto";
+
 import { revalidatePath } from "next/cache";
 
 import type { OrgPlan } from "@prisma/client";
 
 import { platformDb, recordPlatformAction, requirePlatformStaff } from "@/lib/platform-db";
 import { PLANS, trialEndFrom } from "@/lib/plans";
-import { PLATFORM_ORG_SLUG } from "@/lib/tenant";
+import { ProvisioningError, provisionOrganization, slugify } from "@/lib/provisioning";
+import { PLATFORM_ORG_SLUG, isValidOrgSlug } from "@/lib/tenant";
 
 export type ActionResult = { ok: true; message: string } | { ok: false; message: string };
 
@@ -305,6 +308,163 @@ export async function restartTrial(orgId: string): Promise<ActionResult> {
 
   refresh(org.slug);
   return { ok: true, message: `${org.name} is on a fresh trial.` };
+}
+
+// ---------------------------------------------------------------------------
+// Access requests
+// ---------------------------------------------------------------------------
+
+/**
+ * A first password for a workspace created on someone's behalf.
+ *
+ * Random, shown to the staff member once, stored only as a hash, and paired with
+ * mustChangePassword so the owner replaces it the first time they sign in. A
+ * memorable password chosen by whoever is on shift would be the same password
+ * for every customer.
+ */
+function temporaryPassword(): string {
+  return `awer-${randomBytes(9).toString("base64url")}`;
+}
+
+export type ApproveResult =
+  | { ok: true; message: string; slug: string; email: string; password: string }
+  | { ok: false; message: string };
+
+/**
+ * Approve a request and create the workspace it asked for.
+ *
+ * One action rather than two, because "approved" and "has a workspace" drifting
+ * apart is the failure that leaves a customer waiting on something everyone
+ * believes already happened.
+ */
+export async function approveAccessRequest(
+  id: string,
+  slugInput: string,
+): Promise<ApproveResult> {
+  let staff;
+  try {
+    staff = await requirePlatformStaff("ADMIN");
+  } catch {
+    return { ok: false, message: "You do not have permission to approve a request." };
+  }
+
+  const req = await platformDb.accessRequest.findUnique({ where: { id } });
+  if (!req) return { ok: false, message: "That request no longer exists." };
+  if (req.status !== "PENDING") {
+    return { ok: false, message: `That request was already ${req.status.toLowerCase()}.` };
+  }
+
+  const slug = slugify(slugInput || req.wantedSlug || req.companyName);
+  if (!isValidOrgSlug(slug)) {
+    return { ok: false, message: `"${slug}" cannot be used as an address.` };
+  }
+
+  const password = temporaryPassword();
+
+  try {
+    const created = await provisionOrganization({
+      slug,
+      companyName: req.companyName,
+      ownerName: req.contactName,
+      ownerEmail: req.email,
+      password,
+      plan: "ORGANIZATION",
+      // The Organization tier is not self-serve; this is the sanctioned way in.
+      createdByStaff: true,
+    });
+
+    await platformDb.$transaction(async (tx) => {
+      // They did not choose this password, so they must replace it. The flag is
+      // set here rather than inside provisioning because a company that signs
+      // itself up chose its own and should not be asked to change it.
+      await tx.user.update({
+        where: { id: created.ownerId },
+        data: { mustChangePassword: true },
+      });
+      await tx.accessRequest.update({
+        where: { id: req.id },
+        data: {
+          status: "APPROVED",
+          createdOrgId: created.organizationId,
+          decidedById: staff.id,
+          decidedByEmail: staff.email,
+          decidedAt: new Date(),
+        },
+      });
+    });
+
+    await recordPlatformAction(
+      staff,
+      "request.approve",
+      { id: created.organizationId, slug: created.slug },
+      { requestId: req.id, company: req.companyName, email: req.email },
+    );
+
+    revalidatePath("/console/requests");
+    revalidatePath("/console/workspaces");
+    revalidatePath("/console");
+    revalidatePath("/console/audit");
+
+    return {
+      ok: true,
+      message: `${req.companyName} is live at ${created.slug}.`,
+      slug: created.slug,
+      email: req.email,
+      password,
+    };
+  } catch (e) {
+    if (e instanceof ProvisioningError) return { ok: false, message: e.message };
+    console.error("approve request failed", e);
+    return { ok: false, message: "Could not create the workspace. Nothing was changed." };
+  }
+}
+
+export async function declineAccessRequest(
+  id: string,
+  note: string,
+): Promise<ActionResult> {
+  let staff;
+  try {
+    staff = await requirePlatformStaff("ADMIN");
+  } catch {
+    return { ok: false, message: "You do not have permission to decline a request." };
+  }
+
+  const trimmed = typeof note === "string" ? note.trim().slice(0, MAX_REASON) : "";
+  if (trimmed.length < 4) {
+    return { ok: false, message: "Say why, briefly. It is what you will read next time." };
+  }
+
+  const req = await platformDb.accessRequest.findUnique({ where: { id } });
+  if (!req) return { ok: false, message: "That request no longer exists." };
+  if (req.status !== "PENDING") {
+    return { ok: false, message: `That request was already ${req.status.toLowerCase()}.` };
+  }
+
+  await platformDb.accessRequest.update({
+    where: { id: req.id },
+    data: {
+      status: "DECLINED",
+      decisionNote: trimmed,
+      decidedById: staff.id,
+      decidedByEmail: staff.email,
+      decidedAt: new Date(),
+    },
+  });
+
+  await recordPlatformAction(staff, "request.decline", undefined, {
+    requestId: req.id,
+    company: req.companyName,
+    email: req.email,
+    reason: trimmed,
+  });
+
+  revalidatePath("/console/requests");
+  revalidatePath("/console/audit");
+  return {
+    ok: true,
+    message: `${req.companyName} marked as declined. Nothing was sent to them — write to them yourself.`,
+  };
 }
 
 // ---------------------------------------------------------------------------
