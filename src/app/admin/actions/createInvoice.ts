@@ -9,6 +9,7 @@ import { jobTypeLabel } from "@/lib/calendar-labels";
 import { fmtDate } from "@/lib/time";
 import { isJobTaxExempt } from "@/lib/tax.server";
 import { getServiceCatalogWithLabels } from "@/lib/service-catalog.server";
+import { currentAppUrl } from "@/lib/org-url";
 
 async function requireAdmin() {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -207,7 +208,7 @@ export async function createInvoice(params: CreateInvoiceParams) {
       select: { name: true, email: true },
     });
     if (client?.email) {
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+      const appUrl = await currentAppUrl();
       sendInvoiceEmail({
         to: client.email,
         recipient: "CUSTOMER",

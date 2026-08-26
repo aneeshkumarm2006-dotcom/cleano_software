@@ -21,6 +21,7 @@ import { isNotificationEnabled } from "./notifications";
 import type { Recipient } from "./notifications/catalog";
 import { logActivity } from "./activity-log";
 import { STORE_TZ } from "./timezone";
+import { senderForCurrentOrg } from "@/lib/sms-sender";
 
 // Store timezone — customer-facing times must render here, not serverless UTC.
 // Single source of truth: src/lib/timezone.ts.
@@ -99,14 +100,19 @@ export async function sendSms(input: SendSmsInput): Promise<SendResult> {
 
   const sid = process.env.TWILIO_ACCOUNT_SID!;
   const token = process.env.TWILIO_AUTH_TOKEN!;
-  const from = process.env.TWILIO_FROM_NUMBER;
-  const msgService = process.env.TWILIO_MESSAGING_SERVICE_SID;
+
+  // The number belongs to the cleaning company, not to the deployment. A
+  // workspace without one of its own falls back to the environment, so the
+  // first tenant is unaffected.
+  const sender = await senderForCurrentOrg();
 
   const params = new URLSearchParams();
   params.set("To", to);
   params.set("Body", input.body);
-  if (msgService) params.set("MessagingServiceSid", msgService);
-  else if (from) params.set("From", from);
+  if (sender.messagingServiceSid)
+    params.set("MessagingServiceSid", sender.messagingServiceSid);
+  else if (sender.from) params.set("From", sender.from);
+  else return record({ sent: false, reason: "no-sender-number" });
 
   try {
     const res = await fetch(

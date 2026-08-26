@@ -47,8 +47,9 @@ function addressDoorKey(
 
 /**
  * Server-side BookingKoala import behind the admin "Import from BookingKoala"
- * button. Runs on the server, so email links use the deployed NEXT_PUBLIC_APP_URL
- * (no localhost). Dry-run by default — pass commit:true to write + email.
+ * button. Runs on the server, so email links point at the importing company's
+ * own address rather than at localhost or at whichever tenant the server was
+ * configured with. Dry-run by default — pass commit:true to write + email.
  */
 export async function runBookingKoalaImport(
   csvText: string,

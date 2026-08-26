@@ -13,7 +13,7 @@ export interface GiftCardCover {
   key: string;
   name: string;
   description: string;
-  /** Resolved at runtime against NEXT_PUBLIC_APP_URL when present. */
+  /** Relative; resolved against the organization's own address when sent. */
   imagePath: string;
   /** CSS gradient used as a fallback if the image is missing. */
   gradient: string;

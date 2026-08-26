@@ -1,14 +1,23 @@
 import { NextRequest } from "next/server";
 import crypto from "crypto";
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
+import { runAsOrg } from "@/lib/org-context";
+import { orgForInboundNumber } from "@/lib/sms-sender";
 import { toE164 } from "@/lib/sms";
 import { isJobChatOpenForClient } from "@/lib/jobChatActions";
 
 // Inbound leg of the job-specific chat SMS bridge (#11). Twilio POSTs here
-// (application/x-www-form-urlencoded) when a client texts the Cleano number.
-// We verify the Twilio signature, match the sender's phone to a client + their
-// active job, and append the reply to that job's chat thread as a CLIENT
-// message — so it appears in the cleaner/admin app. Returns empty TwiML.
+// (application/x-www-form-urlencoded) when a client texts a company's number.
+// We verify the Twilio signature, work out WHICH cleaning company was texted,
+// match the sender's phone to one of that company's clients + their active job,
+// and append the reply to that job's chat thread as a CLIENT message — so it
+// appears in the cleaner/admin app. Returns empty TwiML.
+//
+// Every company shares this one webhook, so the number the message arrived on
+// (Twilio's `To`) is the only thing that says who it was meant for. Matching the
+// sender's phone first and asking which company later would be the bug: two
+// cleaning companies can easily share a customer, and the same mobile number
+// would then land in whichever company's chat happened to be found first.
 //
 // Twilio setup: point the Messaging Service (or number) "A message comes in"
 // webhook (HTTP POST) at  https://<your-domain>/api/twilio/inbound
@@ -24,7 +33,7 @@ function isValidTwilioSignature(
   url: string,
   params: Record<string, string>,
   signature: string | null,
-  authToken: string
+  authToken: string,
 ): boolean {
   if (!signature) return false;
   const data =
@@ -39,7 +48,7 @@ function isValidTwilioSignature(
   try {
     return crypto.timingSafeEqual(
       Buffer.from(expected),
-      Buffer.from(signature)
+      Buffer.from(signature),
     );
   } catch {
     return false;
@@ -49,7 +58,7 @@ function isValidTwilioSignature(
 function twiml(body = ""): Response {
   return new Response(
     `<?xml version="1.0" encoding="UTF-8"?><Response>${body}</Response>`,
-    { status: 200, headers: { "Content-Type": "text/xml" } }
+    { status: 200, headers: { "Content-Type": "text/xml" } },
   );
 }
 
@@ -62,7 +71,8 @@ export async function POST(req: NextRequest) {
 
   const form = await req.formData();
   const params: Record<string, string> = {};
-  for (const [k, v] of form.entries()) params[k] = typeof v === "string" ? v : "";
+  for (const [k, v] of form.entries())
+    params[k] = typeof v === "string" ? v : "";
 
   // Reconstruct the exact URL Twilio signed.
   const base =
@@ -82,66 +92,74 @@ export async function POST(req: NextRequest) {
   const phone = toE164(from);
   if (!phone) return twiml();
 
-  // Match the sender's phone to a client (primary or secondary number).
-  const client = await db.client.findFirst({
-    where: { OR: [{ phone }, { secondaryPhone: phone }] },
-    select: { id: true, name: true },
-  });
-  if (!client) return twiml();
+  // Which company was texted? No match means a number we do not serve — accept
+  // and ignore, rather than guessing a workspace and filing a stranger's message
+  // in it.
+  const org = await orgForInboundNumber(params.To ?? "");
+  if (!org) return twiml();
 
-  // Find the most relevant job to attach the reply to: the client's thread with
-  // the most recent chat activity, else their nearest active (non-cancelled)
-  // job. This keeps a running conversation on the same thread.
-  //
-  // Ordered by the newest MESSAGE, not by message count. Counting meant a
-  // client's chattiest old booking captured every later reply forever, so
-  // answers to a recent "I'm on my way" landed on a months-old job.
-  //
-  // Bounded to a recent window so a long-dormant thread doesn't swallow what is
-  // really a new conversation — past that, the active-job fallback is better.
-  const RETHREAD_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
-  const latestChat = await db.jobChatMessage.findFirst({
-    where: {
-      job: { clientId: client.id },
-      createdAt: { gte: new Date(Date.now() - RETHREAD_WINDOW_MS) },
-    },
-    orderBy: { createdAt: "desc" },
-    select: { jobId: true },
-  });
-
-  let jobId = latestChat?.jobId ?? null;
-  if (!jobId) {
-    const activeJob = await db.job.findFirst({
-      where: {
-        clientId: client.id,
-        status: { in: ["CREATED", "SCHEDULED", "IN_PROGRESS", "COMPLETED"] },
-      },
-      orderBy: { startTime: "desc" },
-      select: { id: true },
+  return runAsOrg(org, async () => {
+    // Match the sender's phone to a client (primary or secondary number).
+    const client = await db.client.findFirst({
+      where: { OR: [{ phone }, { secondaryPhone: phone }] },
+      select: { id: true, name: true },
     });
-    jobId = activeJob?.id ?? null;
-  }
+    if (!client) return twiml();
 
-  if (!jobId) return twiml();
+    // Find the most relevant job to attach the reply to: the client's thread with
+    // the most recent chat activity, else their nearest active (non-cancelled)
+    // job. This keeps a running conversation on the same thread.
+    //
+    // Ordered by the newest MESSAGE, not by message count. Counting meant a
+    // client's chattiest old booking captured every later reply forever, so
+    // answers to a recent "I'm on my way" landed on a months-old job.
+    //
+    // Bounded to a recent window so a long-dormant thread doesn't swallow what is
+    // really a new conversation — past that, the active-job fallback is better.
+    const RETHREAD_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+    const latestChat = await db.jobChatMessage.findFirst({
+      where: {
+        job: { clientId: client.id },
+        createdAt: { gte: new Date(Date.now() - RETHREAD_WINDOW_MS) },
+      },
+      orderBy: { createdAt: "desc" },
+      select: { jobId: true },
+    });
 
-  // CLN-P0-3-14 — an admin who turned messaging off for this booking, or for
-  // this customer, must not be bypassed by the customer texting instead. This
-  // is the one write path into job chat with no session behind it, so the check
-  // cannot come from resolveParticipant. Silently accepted (empty TwiML) rather
-  // than answered: telling a blocked sender they are blocked invites a retry
-  // storm, and Twilio would keep redelivering a non-2xx.
-  if (!(await isJobChatOpenForClient(jobId, client.id))) return twiml();
+    let jobId = latestChat?.jobId ?? null;
+    if (!jobId) {
+      const activeJob = await db.job.findFirst({
+        where: {
+          clientId: client.id,
+          status: { in: ["CREATED", "SCHEDULED", "IN_PROGRESS", "COMPLETED"] },
+        },
+        orderBy: { startTime: "desc" },
+        select: { id: true },
+      });
+      jobId = activeJob?.id ?? null;
+    }
 
-  await db.jobChatMessage.create({
-    data: {
-      jobId,
-      senderId: null,
-      senderRole: "CLIENT",
-      senderName: client.name ?? "Client",
-      body: bodyText,
-      readByClientAt: new Date(), // the client obviously saw their own message
-    },
+    if (!jobId) return twiml();
+
+    // CLN-P0-3-14 — an admin who turned messaging off for this booking, or for
+    // this customer, must not be bypassed by the customer texting instead. This
+    // is the one write path into job chat with no session behind it, so the check
+    // cannot come from resolveParticipant. Silently accepted (empty TwiML) rather
+    // than answered: telling a blocked sender they are blocked invites a retry
+    // storm, and Twilio would keep redelivering a non-2xx.
+    if (!(await isJobChatOpenForClient(jobId, client.id))) return twiml();
+
+    await db.jobChatMessage.create({
+      data: {
+        jobId,
+        senderId: null,
+        senderRole: "CLIENT",
+        senderName: client.name ?? "Client",
+        body: bodyText,
+        readByClientAt: new Date(), // the client obviously saw their own message
+      },
+    });
+
+    return twiml();
   });
-
-  return twiml();
 }

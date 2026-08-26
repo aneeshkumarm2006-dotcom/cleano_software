@@ -6,6 +6,7 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { randomBytes } from "crypto";
 import { sendApplicantInvite } from "@/lib/email";
+import { currentAppUrl } from "@/lib/org-url";
 
 const INVITE_TTL_DAYS = 7;
 
@@ -83,7 +84,7 @@ export async function inviteApplicantToPortal(applicationId: string): Promise<In
       data: { userId, token, expiresAt },
     });
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+    const appUrl = await currentAppUrl();
     const link = `${appUrl}/applicant-invite/${token}`;
     const result = await sendApplicantInvite({ to: email, applicantName: app.name, link });
     if (!result.ok) {

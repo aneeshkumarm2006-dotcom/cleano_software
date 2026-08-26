@@ -91,7 +91,7 @@ rewrite. Isolation comes from RLS; an FK only guarantees the id isn't garbage.
 | 4 | Scope ~1,400 queries, module by module | ⬜ next |
 | 5 | Enforce — `NOT NULL`, RLS, constraint fixes, suspension | ✅ done |
 | 6 | Platform layer — super admin, signup, plans, provisioning | ✅ done, migration applied to staging |
-| 7 | Second real tenant + Stripe Connect | ⬜ |
+| 7 | Per-org links, cron, SMS, uploads | 🟡 7a done (Stripe deliberately deferred) |
 | 8 | Production cutover (needs explicit approval) | ⬜ |
 
 ---
@@ -447,6 +447,57 @@ banner that is always there is a banner nobody reads on the day it matters. Ever
 refusal says what to do — deactivate someone who has left, or move up a plan —
 since a limit that only says "no" sends someone to support to be told the same
 thing more slowly.
+
+### Step 7a — links, scheduled work and SMS belong to a company, not a deployment
+Stripe deliberately set aside; everything else in step 7 that does not depend on
+it.
+
+**Absolute links in emails.** 67 call sites built every "View this booking",
+"Rate your cleaning" and password reset from one environment variable. One
+variable names one company, so a second tenant's customers would have received
+links into the first tenant's workspace — clicked, they land on a login screen
+for a company they have never heard of. All 67 now resolve the organization they
+belong to. The derivation reuses `workspaceOriginFor()` from the signup handoff
+rather than being a second copy of it, and needs **no new configuration**: the
+existing `NEXT_PUBLIC_APP_URL` already yields the right root. Ten configurations
+checked, including a bare domain, a trailing slash, localhost, and a Vercel build
+URL where subdomains cannot work and it must fall back rather than emit a dead
+link.
+
+**Scheduled work.** The four cron jobs queried the whole table with the raw
+client. Under RLS that now returns *nothing* — it fails closed, which is the
+right way round, but the reminders stop. They run once per active organization
+instead. One company's failure is caught and reported without stopping the rest:
+a run that aborts half way leaves every remaining company without its reminders
+that day, and the cause is usually specific to one workspace's data.
+
+**The seam that made this small.** Rather than thread a client through every
+helper, `runAsOrg()` announces the organization and `@/lib/org-db` was taught to
+consult that announcement before the request host. So helpers defined at module
+scope — which cannot be handed a client as an argument — are scoped without being
+touched. Each cron route changed by one import and one wrapper.
+
+**SMS.** `20260826140000_org_sms_number` — **applied to staging.** Outbound now
+sends from the company's own number; inbound routes *by the number the message
+arrived on*, because that is the only thing Twilio tells us about who was meant.
+Matching the sender's phone first would have been the bug: two cleaning companies
+can share a customer, and the same mobile would land in whichever company's chat
+was found first. `smsNumber` is UNIQUE precisely because it is a routing key.
+Both columns are nullable and nothing is backfilled — a workspace without a
+number falls back to the environment, so the first tenant is unaffected.
+
+Verified on staging against two live tenants, **connected as the restricted
+application role**: 11 of 11 (`scripts/verify-tenant-runtime.ts`) — the
+announcement reaches the query layer, each org counts only its own 25 clients,
+one org asking for another's client *by id* gets nothing, context does not leak
+between loop iterations, the two orgs produce different email addresses, and an
+unowned phone number resolves to nothing rather than to a default.
+
+**The harness was wrong before the code was.** The first run reported two
+failures; the scoped reads were correct and the *control* query returned zero,
+because it was pointed at the restricted role, which RLS refuses. The script now
+takes a separate elevated connection and asserts up front that it can see across
+organizations at all — otherwise every comparison in it is meaningless.
 
 ---
 

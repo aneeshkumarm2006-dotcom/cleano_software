@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { randomBytes } from "crypto";
 import { sendAccountEmail } from "@/lib/email";
+import { currentAppUrl } from "@/lib/org-url";
 
 /**
  * Admin action: mint a one-time token tied to a client, email the
@@ -49,7 +50,7 @@ export async function sendAddCardLink(input: {
     },
   });
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await currentAppUrl();
   const link = `${appUrl}/add-card/${token}`;
 
   const result = await sendAccountEmail({

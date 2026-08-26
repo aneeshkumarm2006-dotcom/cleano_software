@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { InvoiceStatus } from "@prisma/client";
 import { sendInvoiceEmail } from "@/lib/email";
 import { syncJobsForInvoiceStatus } from "@/lib/invoice-sync";
+import { currentAppUrl } from "@/lib/org-url";
 
 async function requireAdmin() {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -143,7 +144,7 @@ export async function updateInvoice(params: UpdateInvoiceParams) {
       include: { client: { select: { name: true, email: true } } },
     });
     if (fresh) {
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+      const appUrl = await currentAppUrl();
       const link = `${appUrl}/bookings${fresh.jobId ? `/${fresh.jobId}` : ""}`;
       // Status changed to PAID → admin + customer charge confirmation
       if (params.status === "PAID" && existing.status !== "PAID") {

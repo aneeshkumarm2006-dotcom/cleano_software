@@ -8,7 +8,7 @@
  * below it keeps working, and is now confined to the organization serving the
  * request.
  *
- * WHY A PROXY, rather than `const db = await getScopedDb()` in each function.
+ * WHY A PROXY, rather than `const db = await getScopedDbForCurrent()` in each function.
  *
  * The scoped client has to be awaited, so the alternative was inserting a line
  * into the body of every async function that touches the database -- 19 of them
@@ -21,13 +21,15 @@
  * resolving the organization inside the call changes nothing about how call
  * sites are written.
  *
- * OUTSIDE A REQUEST this throws, and that is intended. Cron jobs, webhooks and
- * scripts have no host to resolve, so they must name the organization
- * explicitly -- see scopedTo() in db-scoped.ts. Failing loudly there is the
- * point: those are exactly the places where quietly operating on the wrong
- * tenant would go unnoticed.
+ * OUTSIDE A REQUEST this throws unless the organization has been named
+ * explicitly. Cron jobs, webhooks and scripts have no host to resolve, so they
+ * announce which tenant they are working on with runAsOrg() and everything
+ * below them -- including helpers defined at module scope, which cannot be
+ * handed a client as an argument -- is scoped to it. Failing loudly when
+ * nobody has announced anything is the point: those are exactly the places
+ * where quietly operating on the wrong tenant would go unnoticed.
  */
-import { getScopedDb, requireOrgId } from "@/lib/org";
+import { getScopedDbForCurrent, requireOrgId } from "@/lib/org";
 import { announceTenant, tenantConnection } from "@/lib/db-scoped";
 import type { ScopedDb } from "@/lib/db-scoped";
 
@@ -38,7 +40,7 @@ function modelProxy(model: string) {
   return new Proxy({} as Record<string, AnyFn>, {
     get(_t, operation: string) {
       return async (...args: unknown[]) => {
-        const scoped = (await getScopedDb()) as unknown as Record<
+        const scoped = (await getScopedDbForCurrent()) as unknown as Record<
           string,
           Record<string, AnyFn>
         >;
@@ -62,7 +64,7 @@ export const db = new Proxy({} as ScopedDb, {
     // into blank screens.
     if (prop === "$transaction") {
       return async (arg: unknown, ...rest: unknown[]) => {
-        const scoped = (await getScopedDb()) as unknown as Record<string, AnyFn>;
+        const scoped = (await getScopedDbForCurrent()) as unknown as Record<string, AnyFn>;
         const organizationId = await requireOrgId();
         if (typeof arg === "function") {
           const body = arg as (tx: unknown) => Promise<unknown>;
@@ -97,7 +99,7 @@ export const db = new Proxy({} as ScopedDb, {
     if (prop === "$queryRaw" || prop === "$queryRawUnsafe" ||
         prop === "$executeRaw" || prop === "$executeRawUnsafe") {
       return async (...callArgs: unknown[]) => {
-        const scoped = (await getScopedDb()) as unknown as Record<string, AnyFn>;
+        const scoped = (await getScopedDbForCurrent()) as unknown as Record<string, AnyFn>;
         if (tenantConnection.getStore()) return scoped[prop](...callArgs);
         const organizationId = await requireOrgId();
         return scoped.$transaction(async (tx: unknown) => {
@@ -113,7 +115,7 @@ export const db = new Proxy({} as ScopedDb, {
     // Everything else on the client ($connect, $disconnect, ...) passes through.
     if (prop.startsWith("$")) {
       return async (...args: unknown[]) => {
-        const scoped = (await getScopedDb()) as unknown as Record<string, AnyFn>;
+        const scoped = (await getScopedDbForCurrent()) as unknown as Record<string, AnyFn>;
         return scoped[prop](...args);
       };
     }

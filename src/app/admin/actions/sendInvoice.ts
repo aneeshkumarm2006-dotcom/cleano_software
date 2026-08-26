@@ -6,6 +6,7 @@ import { db } from "@/lib/org-db";
 import { revalidatePath } from "next/cache";
 import { sendInvoiceEmail } from "@/lib/email";
 import { buildInvoicePdfBuffer, loadInvoiceData } from "@/lib/invoice-pdf";
+import { currentAppUrl } from "@/lib/org-url";
 
 async function requireAdmin() {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -83,7 +84,7 @@ export async function sendInvoice(invoiceId: string) {
       };
     }
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+    const appUrl = await currentAppUrl();
     let pdfAttachment: { filename: string; content: Buffer } | undefined;
     try {
       const data = await loadInvoiceData(invoiceId);

@@ -154,3 +154,35 @@ export function workspaceOriginFor(
   const suffix = port ? `:${port}` : "";
   return `${protocol}://${slug}.${root}${suffix}`;
 }
+
+/**
+ * Where a workspace lives, for code that has no request to read a host from.
+ *
+ * Cron jobs and scripts still have to put absolute links in emails. They take
+ * the root from configuration instead: `APP_ROOT_DOMAIN` if set, otherwise
+ * `NEXT_PUBLIC_APP_URL`, which an existing deployment already has — so this
+ * needs no new setup to start behaving correctly.
+ *
+ * Accepts either form for those variables: a bare domain (`useawer.com`) or a
+ * full URL (`https://www.useawer.com`). Both are things a person reasonably
+ * types into an environment variable, and guessing wrong here means every link
+ * in every email is broken.
+ */
+export function originForSlug(slug: string): string {
+  const fallback = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/+$/, "");
+  const base = (process.env.APP_ROOT_DOMAIN || process.env.NEXT_PUBLIC_APP_URL || "").trim();
+  if (!slug || !base) return fallback;
+
+  let host: string;
+  let protocol: string;
+  try {
+    const u = new URL(base.includes("://") ? base : `https://${base}`);
+    host = u.host;
+    protocol = u.protocol.replace(":", "");
+  } catch {
+    return fallback;
+  }
+
+  // Same derivation the signup handoff uses, rather than a second copy of it.
+  return workspaceOriginFor(slug, host, protocol) ?? fallback;
+}

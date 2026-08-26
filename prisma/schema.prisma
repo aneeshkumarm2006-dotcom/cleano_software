@@ -3687,6 +3687,21 @@ model Organization {
   /// Next job number to hand out. Allocated atomically -- see allocateJobNumber().
   nextJobNumber Int @default(1)
 
+  /// The Twilio number this company texts from, in E.164.
+  ///
+  /// Unique because it is also how an INBOUND text is routed: Twilio tells us
+  /// which number received the message and nothing else useful, so this column
+  /// is the only way to know which company a customer is replying to. Two
+  /// workspaces sharing a number would make that unanswerable.
+  ///
+  /// NULL means "use the number in the environment", which is what keeps the
+  /// first tenant working with no configuration at all.
+  smsNumber String? @unique
+
+  /// A Twilio Messaging Service, if this company uses one instead of a bare
+  /// number. Not unique: a service can front several numbers.
+  smsMessagingServiceSid String?
+
   subscription Subscription?
 
   createdAt DateTime @default(now())

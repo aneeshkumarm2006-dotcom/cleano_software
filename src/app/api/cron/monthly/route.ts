@@ -11,13 +11,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAuthorizedCron } from "@/lib/cron-auth";
 import { logActivity } from "@/lib/activity-log";
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
+import { forEachOrganization, summarise } from "@/lib/cron-tenants";
 import { sendCustomerMonthlyStatement } from "@/lib/email";
 import {
   buildStatementPdfBuffer,
   type StatementBookingRow,
 } from "@/lib/statement-pdf";
-import { addStoreMonths, formatDate, startOfStoreMonth, storeMonthPeriod } from "@/lib/timezone";
+import {
+  addStoreMonths,
+  formatDate,
+  startOfStoreMonth,
+  storeMonthPeriod,
+} from "@/lib/timezone";
 import { ACTIVE_VALUE_SELECT } from "@/lib/metrics";
 import { activeSubtotal } from "@/lib/job-money";
 
@@ -70,129 +76,135 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const now = new Date();
-  const period = lastMonthRange(now);
-  const notificationKey = `monthly_statement:${period.monthKey}`;
+  // Once per cleaning company. Inside here `db` resolves to that company,
+  // so every helper below -- including the ones defined at module scope --
+  // is scoped to it without being handed a client.
+  const results = await forEachOrganization(async () => {
+    const now = new Date();
+    const period = lastMonthRange(now);
+    const notificationKey = `monthly_statement:${period.monthKey}`;
 
-  const clients = await db.client.findMany({
-    where: { isActive: true, email: { not: null } },
-    select: { id: true, name: true, email: true },
-  });
-
-  let sent = 0;
-  let skipped = 0;
-  const errors: Array<{ clientId: string; error: string }> = [];
-
-  for (const client of clients) {
-    if (!client.email) {
-      skipped++;
-      continue;
-    }
-    const log = await ensureNotSent(notificationKey, client.email);
-    if (!log) {
-      skipped++;
-      continue;
-    }
-
-    const jobs = await db.job.findMany({
-      where: {
-        clientId: client.id,
-        // Archived jobs stay off client statements (item 1).
-        deletedAt: null,
-        startTime: { gte: period.start, lt: period.end },
-      },
-      orderBy: { startTime: "asc" },
-      select: {
-        // Fix 3: a customer statement lists what each booking was WORTH, so it
-        // reads the active subtotal — otherwise the statement disagrees with
-        // the invoice and the receipt for the same job.
-        ...ACTIVE_VALUE_SELECT,
-        jobNumber: true,
-        jobDate: true,
-        startTime: true,
-        jobType: true,
-        paymentReceived: true,
-      },
+    const clients = await db.client.findMany({
+      where: { isActive: true, email: { not: null } },
+      select: { id: true, name: true, email: true },
     });
 
-    if (jobs.length === 0) {
-      // No activity — skip silently. Keep the log row so re-runs same
-      // month don't re-process the client.
-      skipped++;
-      continue;
-    }
+    let sent = 0;
+    let skipped = 0;
+    const errors: Array<{ clientId: string; error: string }> = [];
 
-    const bookings: StatementBookingRow[] = jobs.map((j) => ({
-      jobNumber: j.jobNumber,
-      jobDate: (j.jobDate ?? j.startTime).toISOString(),
-      serviceType: j.jobType,
-      amount: activeSubtotal(j),
-      paid: j.paymentReceived,
-    }));
+    for (const client of clients) {
+      if (!client.email) {
+        skipped++;
+        continue;
+      }
+      const log = await ensureNotSent(notificationKey, client.email);
+      if (!log) {
+        skipped++;
+        continue;
+      }
 
-    const totalBilled = bookings.reduce((s, b) => s + b.amount, 0);
-    const totalPaid = bookings
-      .filter((b) => b.paid)
-      .reduce((s, b) => s + b.amount, 0);
-    const totalOutstanding = totalBilled - totalPaid;
-
-    try {
-      const pdf = await buildStatementPdfBuffer({
-        clientName: client.name,
-        monthLabel: period.monthLabel,
-        periodStart: period.periodStart,
-        periodEnd: period.periodEnd,
-        bookings,
-        totalBilled,
-        totalPaid,
-        totalOutstanding,
+      const jobs = await db.job.findMany({
+        where: {
+          clientId: client.id,
+          // Archived jobs stay off client statements (item 1).
+          deletedAt: null,
+          startTime: { gte: period.start, lt: period.end },
+        },
+        orderBy: { startTime: "asc" },
+        select: {
+          // Fix 3: a customer statement lists what each booking was WORTH, so it
+          // reads the active subtotal — otherwise the statement disagrees with
+          // the invoice and the receipt for the same job.
+          ...ACTIVE_VALUE_SELECT,
+          jobNumber: true,
+          jobDate: true,
+          startTime: true,
+          jobType: true,
+          paymentReceived: true,
+        },
       });
 
-      await sendCustomerMonthlyStatement({
-        to: client.email,
-        clientName: client.name,
-        monthLabel: period.monthLabel,
-        periodStart: period.periodStart,
-        periodEnd: period.periodEnd,
-        totalBilled,
-        totalPaid,
-        totalOutstanding,
-        bookingsCount: bookings.length,
-        pdf,
-      });
+      if (jobs.length === 0) {
+        // No activity — skip silently. Keep the log row so re-runs same
+        // month don't re-process the client.
+        skipped++;
+        continue;
+      }
 
-      await db.emailLog.update({
-        where: { id: log.id },
-        data: { status: "SENT" },
-      });
-      sent++;
-    } catch (e) {
-      const msg =
-        (e as { message?: string })?.message ?? "monthly statement failed";
-      console.error("monthly statement failed for", client.email, e);
-      errors.push({ clientId: client.id, error: msg });
-      await db.emailLog
-        .update({
+      const bookings: StatementBookingRow[] = jobs.map((j) => ({
+        jobNumber: j.jobNumber,
+        jobDate: (j.jobDate ?? j.startTime).toISOString(),
+        serviceType: j.jobType,
+        amount: activeSubtotal(j),
+        paid: j.paymentReceived,
+      }));
+
+      const totalBilled = bookings.reduce((s, b) => s + b.amount, 0);
+      const totalPaid = bookings
+        .filter((b) => b.paid)
+        .reduce((s, b) => s + b.amount, 0);
+      const totalOutstanding = totalBilled - totalPaid;
+
+      try {
+        const pdf = await buildStatementPdfBuffer({
+          clientName: client.name,
+          monthLabel: period.monthLabel,
+          periodStart: period.periodStart,
+          periodEnd: period.periodEnd,
+          bookings,
+          totalBilled,
+          totalPaid,
+          totalOutstanding,
+        });
+
+        await sendCustomerMonthlyStatement({
+          to: client.email,
+          clientName: client.name,
+          monthLabel: period.monthLabel,
+          periodStart: period.periodStart,
+          periodEnd: period.periodEnd,
+          totalBilled,
+          totalPaid,
+          totalOutstanding,
+          bookingsCount: bookings.length,
+          pdf,
+        });
+
+        await db.emailLog.update({
           where: { id: log.id },
-          data: { status: "FAILED", error: msg },
-        })
-        .catch(() => {});
+          data: { status: "SENT" },
+        });
+        sent++;
+      } catch (e) {
+        const msg =
+          (e as { message?: string })?.message ?? "monthly statement failed";
+        console.error("monthly statement failed for", client.email, e);
+        errors.push({ clientId: client.id, error: msg });
+        await db.emailLog
+          .update({
+            where: { id: log.id },
+            data: { status: "FAILED", error: msg },
+          })
+          .catch(() => {});
+      }
     }
-  }
 
-  await logActivity({
-    category: "CRON",
-    action: "monthly",
-    status: errors.length > 0 ? "FAILED" : "SUCCESS",
-    message: `Monthly statements (${period.monthLabel}): sent ${sent}, skipped ${skipped}, failed ${errors.length}`,
-    error: errors.length > 0 ? errors.slice(0, 3).join("; ") : null,
+    await logActivity({
+      category: "CRON",
+      action: "monthly",
+      status: errors.length > 0 ? "FAILED" : "SUCCESS",
+      message: `Monthly statements (${period.monthLabel}): sent ${sent}, skipped ${skipped}, failed ${errors.length}`,
+      error: errors.length > 0 ? errors.slice(0, 3).join("; ") : null,
+    });
+    return {
+      monthLabel: period.monthLabel,
+      sent,
+      skipped,
+      failed: errors.length,
+      errors,
+    };
   });
-  return NextResponse.json({
-    ok: true,
-    monthLabel: period.monthLabel,
-    sent,
-    skipped,
-    failed: errors.length,
-    errors,
-  });
+
+  return NextResponse.json({ ok: true, ...summarise(results) });
 }

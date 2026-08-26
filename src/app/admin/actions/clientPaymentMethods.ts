@@ -13,6 +13,7 @@ import type {
   ClientPaymentMethodDTO,
   ListClientPaymentMethodsResult,
 } from "./clientPaymentMethods.types";
+import { currentAppUrl } from "@/lib/org-url";
 
 // Multiple saved cards per client.
 //
@@ -574,7 +575,7 @@ export async function sendClientAddCardLink(
       });
     }
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+    const appUrl = await currentAppUrl();
     const result = await sendAccountEmail({
       to: client.email,
       name: client.name,

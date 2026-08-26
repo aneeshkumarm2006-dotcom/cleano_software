@@ -16,12 +16,18 @@ import { isAuthorizedCron } from "@/lib/cron-auth";
 import { logActivity } from "@/lib/activity-log";
 import { previousPayPeriodRange } from "@/lib/pay-period";
 import { generatePayPeriodForWeek } from "@/lib/pay-period.server";
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
+import { forEachOrganization, summarise } from "@/lib/cron-tenants";
 import {
   sendProviderWeeklyPerformance,
   sendAdminWeeklyRagWashDashboard,
 } from "@/lib/email";
-import { addStoreDays, formatDate, startOfStoreDay, storeDateKey } from "@/lib/timezone";
+import {
+  addStoreDays,
+  formatDate,
+  startOfStoreDay,
+  storeDateKey,
+} from "@/lib/timezone";
 
 // Store-timezone day boundaries — setHours(0) on the host gave UTC midnight,
 // which is 8 PM the previous evening in Montréal, so the digest window was
@@ -61,7 +67,11 @@ async function ensureNotSent(notificationKey: string, recipient: string) {
   });
 }
 
-async function runProviderPerformance(weekStart: Date, weekEnd: Date, label: string) {
+async function runProviderPerformance(
+  weekStart: Date,
+  weekEnd: Date,
+  label: string,
+) {
   const notificationKey = `weekly_perf:${isoDay(weekStart)}`;
 
   const providers = await db.user.findMany({
@@ -106,7 +116,9 @@ async function runProviderPerformance(weekStart: Date, weekEnd: Date, label: str
     const jobsCompleted = completedJobs.length;
     const hours = completedJobs.reduce((sum, j) => {
       if (!j.clockInTime || !j.clockOutTime) return sum;
-      return sum + (j.clockOutTime.getTime() - j.clockInTime.getTime()) / 3_600_000;
+      return (
+        sum + (j.clockOutTime.getTime() - j.clockInTime.getTime()) / 3_600_000
+      );
     }, 0);
     const tipsTotal = completedJobs.reduce((sum, j) => {
       const headcount = Math.max(1, j.cleaners.length);
@@ -122,7 +134,8 @@ async function runProviderPerformance(weekStart: Date, weekEnd: Date, label: str
       _avg: { rating: true },
       _count: { rating: true },
     });
-    const avgRating = ratingAgg._count.rating > 0 ? ratingAgg._avg.rating : null;
+    const avgRating =
+      ratingAgg._count.rating > 0 ? ratingAgg._avg.rating : null;
 
     // Skip the email if the cleaner had zero activity this week. The
     // PENDING row stays so re-runs in the same week don't re-process them.
@@ -154,7 +167,11 @@ async function runProviderPerformance(weekStart: Date, weekEnd: Date, label: str
   return { sent, skipped, total: providers.length };
 }
 
-async function runRagWashDashboard(weekStart: Date, weekEnd: Date, label: string) {
+async function runRagWashDashboard(
+  weekStart: Date,
+  weekEnd: Date,
+  label: string,
+) {
   const notificationKey = `weekly_ragwash:${isoDay(weekStart)}`;
 
   // We log per "ADMIN" recipient bucket. fetchAdmins inside the helper sends
@@ -217,7 +234,13 @@ async function runRagWashDashboard(weekStart: Date, weekEnd: Date, label: string
       where: { id: log.id },
       data: { status: "SENT" },
     });
-    return { sent: true, ragsCredited, padsCredited, payoutsCount, flaggedJobsCount };
+    return {
+      sent: true,
+      ragsCredited,
+      padsCredited,
+      payoutsCount,
+      flaggedJobsCount,
+    };
   } catch (e) {
     console.error("weekly ragwash dashboard failed", e);
     return { sent: false };
@@ -230,39 +253,46 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const now = new Date();
-  const { start, end, label } = weekRange(now);
+  // Once per cleaning company. Inside here `db` resolves to that company,
+  // so every helper below -- including the ones defined at module scope --
+  // is scoped to it without being handed a client.
+  const results = await forEachOrganization(async () => {
+    const now = new Date();
+    const { start, end, label } = weekRange(now);
 
-  const [perf, dashboard] = await Promise.all([
-    runProviderPerformance(start, end, label),
-    runRagWashDashboard(start, end, label),
-  ]);
+    const [perf, dashboard] = await Promise.all([
+      runProviderPerformance(start, end, label),
+      runRagWashDashboard(start, end, label),
+    ]);
 
-  // Auto-advance payroll: cut the DRAFT pay period for the week that just
-  // closed (Mon–Sun). Idempotent — an existing non-cancelled period for that
-  // week is left alone, so a cron re-run never double-pays a job.
-  let payroll: { created: boolean; label?: string; note?: string };
-  try {
-    const lastWeek = previousPayPeriodRange(now);
-    const res = await generatePayPeriodForWeek(
-      lastWeek,
-      "Auto-created by the Monday payroll cron"
-    );
-    payroll = res.success
-      ? { created: true, label: res.periodLabel }
-      : { created: false, note: res.error };
-  } catch (e) {
-    console.error("weekly cron: pay period", e);
-    payroll = { created: false, note: "Failed to create pay period" };
-  }
+    // Auto-advance payroll: cut the DRAFT pay period for the week that just
+    // closed (Mon–Sun). Idempotent — an existing non-cancelled period for that
+    // week is left alone, so a cron re-run never double-pays a job.
+    let payroll: { created: boolean; label?: string; note?: string };
+    try {
+      const lastWeek = previousPayPeriodRange(now);
+      const res = await generatePayPeriodForWeek(
+        lastWeek,
+        "Auto-created by the Monday payroll cron",
+      );
+      payroll = res.success
+        ? { created: true, label: res.periodLabel }
+        : { created: false, note: res.error };
+    } catch (e) {
+      console.error("weekly cron: pay period", e);
+      payroll = { created: false, note: "Failed to create pay period" };
+    }
 
-  await logActivity({
-    category: "CRON",
-    action: "weekly",
-    status: "SUCCESS",
-    message: `Weekly cron ran for ${label}${
-      payroll.created ? ` · pay period created (${payroll.label})` : ""
-    }`,
+    await logActivity({
+      category: "CRON",
+      action: "weekly",
+      status: "SUCCESS",
+      message: `Weekly cron ran for ${label}${
+        payroll.created ? ` · pay period created (${payroll.label})` : ""
+      }`,
+    });
+    return { weekLabel: label, perf, dashboard, payroll };
   });
-  return NextResponse.json({ ok: true, weekLabel: label, perf, dashboard, payroll });
+
+  return NextResponse.json({ ok: true, ...summarise(results) });
 }

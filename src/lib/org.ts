@@ -12,7 +12,8 @@ import { cache } from "react";
 import { headers } from "next/headers";
 
 import { db } from "@/db";
-import { scopedTo } from "@/lib/db-scoped";
+import { scopedTo, type ScopedDb } from "@/lib/db-scoped";
+import { orgFromContext, type OrgContext } from "@/lib/org-context";
 import { DEFAULT_ORG_SLUG, ORG_SLUG_HEADER, orgSlugFromHost } from "@/lib/tenant";
 
 /**
@@ -21,6 +22,12 @@ import { DEFAULT_ORG_SLUG, ORG_SLUG_HEADER, orgSlugFromHost } from "@/lib/tenant
  * host to read and are not tenant-specific.
  */
 export const getOrgSlug = cache(async (): Promise<string> => {
+  // Cron jobs and scripts announce their organization explicitly, because they
+  // have no host to read one from. That announcement wins: it is the whole
+  // reason it exists.
+  const ctx = orgFromContext();
+  if (ctx?.slug) return ctx.slug;
+
   try {
     const h = await headers();
 
@@ -61,6 +68,13 @@ export class OrgUnavailableError extends Error {
 }
 
 export async function requireOrgId(): Promise<string> {
+  // An explicit context already carries the id, and forEachOrganization only
+  // ever selects ACTIVE workspaces — so this needs no lookup and no status
+  // check. It also avoids depending on React's per-request cache in code that
+  // runs outside a request entirely.
+  const ctx = orgFromContext();
+  if (ctx?.id) return ctx.id;
+
   const slug = await getOrgSlug();
   const org = await getCurrentOrg();
   if (!org) throw new OrgUnavailableError("not-found", slug);
@@ -105,3 +119,26 @@ export async function isOrgUsable(): Promise<boolean> {
  * rather than letting it run unscoped.
  */
 export const getScopedDb = cache(async () => scopedTo(db, await requireOrgId()));
+
+/**
+ * The scoped client for whatever this code is running as — request or context.
+ *
+ * The request path goes through React's cache above, which dedupes it across a
+ * render. Code running under an explicit context is outside a request entirely,
+ * where that cache does not apply, so those are memoised against the context
+ * object instead: one scoped client per organization per cron iteration, rather
+ * than one per query.
+ */
+const scopedByContext = new WeakMap<OrgContext, ScopedDb>();
+
+export async function getScopedDbForCurrent(): Promise<ScopedDb> {
+  const ctx = orgFromContext();
+  if (!ctx) return getScopedDb();
+
+  const existing = scopedByContext.get(ctx);
+  if (existing) return existing;
+
+  const made = scopedTo(db, ctx.id);
+  scopedByContext.set(ctx, made);
+  return made;
+}

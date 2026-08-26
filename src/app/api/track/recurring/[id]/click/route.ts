@@ -11,7 +11,11 @@ interface RouteContext {
  */
 export async function GET(req: NextRequest, ctx: RouteContext) {
   const { id } = await ctx.params;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? new URL(req.url).origin;
+  // The customer is already on their cleaning company's own address — they got
+  // here by clicking a link in that company's email — so forward them within it.
+  // Reading a configured domain instead would bounce a second tenant's customer
+  // onto the first tenant's booking page.
+  const appUrl = new URL(req.url).origin;
 
   let dest = `${appUrl}/book`;
   try {

@@ -4,6 +4,7 @@ import { isNotificationEnabled } from "@/lib/notifications";
 import { coverFor } from "@/lib/gift-cards/covers";
 import { BOOKING_DEPOSIT_USD } from "@/lib/job-billing";
 import { STORE_TZ } from "@/lib/timezone";
+import { currentAppUrl } from "@/lib/org-url";
 
 /**
  * Identifies the catalog row that gates a given email send.
@@ -202,7 +203,7 @@ export async function sendBookingConfirmation(opts: {
     ? "Flexible — our team will confirm the time"
     : fmtTime(opts.startTime);
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await currentAppUrl();
   const deposit = opts.depositAmount ?? BOOKING_DEPOSIT_USD;
   const quote = opts.quotePending === true;
 
@@ -291,8 +292,8 @@ export async function sendReminder24h(opts: {
       ]) +
       p(cleanerLine) +
       p("Please ensure access to your home and any parking instructions are noted. See you tomorrow!") +
-      btn("View this booking", `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/bookings/${opts.jobId}`) +
-      btn("Manage all my bookings", `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/bookings`)
+      btn("View this booking", `${await currentAppUrl()}/bookings/${opts.jobId}`) +
+      btn("Manage all my bookings", `${await currentAppUrl()}/bookings`)
   );
 
   return deliver({
@@ -320,7 +321,7 @@ export async function sendReceipt(opts: {
   logId?: string;
 }) {
   const ratingSection = opts.ratingToken
-    ? btn("Rate your cleaning", `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/rate/${opts.ratingToken}`)
+    ? btn("Rate your cleaning", `${await currentAppUrl()}/rate/${opts.ratingToken}`)
     : "";
 
   const html = layout(
@@ -336,8 +337,8 @@ export async function sendReceipt(opts: {
         ["Total charged", fmt(opts.total)],
       ]) +
       p("You can also download a PDF receipt from your client portal.") +
-      btn("Download receipt", `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/api/receipts/${opts.jobId}`) +
-      btn("Manage all my bookings", `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/bookings`) +
+      btn("Download receipt", `${await currentAppUrl()}/api/receipts/${opts.jobId}`) +
+      btn("Manage all my bookings", `${await currentAppUrl()}/bookings`) +
       (ratingSection ? `<div style="margin-top:24px">${p("How did we do? A quick rating helps our team a lot.")}</div>${ratingSection}` : "")
   );
 
@@ -365,7 +366,7 @@ export async function sendRefundConfirmation(opts: {
       (opts.reason ? p(`Reason: ${opts.reason}`) : "") +
       p("The amount will appear on your original payment method within 5–10 business days, depending on your bank.") +
       p("If you have any questions, reply to this email or text us at (514) 555-CLEAN.") +
-      btn("View your bookings", `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/bookings`)
+      btn("View your bookings", `${await currentAppUrl()}/bookings`)
   );
 
   return deliver({
@@ -423,7 +424,7 @@ export async function sendAdminNewBookingNotification(opts: {
   const timeLine = opts.isFlexible
     ? "Flexible — confirm time with customer"
     : fmtTime(opts.startTime);
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await currentAppUrl();
 
   const html = layout(
     h1(`New booking: ${opts.clientName}`) +
@@ -605,7 +606,7 @@ export async function sendAdminBookingModified(opts: LifecycleJobInfo & {
   const admins = await fetchAdmins();
   if (admins.length === 0) return;
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await currentAppUrl();
   const html = layout(
     h1(after5 ? "Late booking change" : "Booking updated") +
       p(`${opts.changedBy} updated job #${opts.jobNumber} for <strong>${opts.clientName}</strong>.`) +
@@ -645,7 +646,7 @@ export async function sendAdminBookingCanceled(opts: LifecycleJobInfo & {
   const admins = await fetchAdmins();
   if (admins.length === 0) return;
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await currentAppUrl();
   const html = layout(
     h1(after5 ? "Late cancellation" : "Booking canceled") +
       p(`${opts.canceledBy} canceled job #${opts.jobNumber} for <strong>${opts.clientName}</strong>.`) +
@@ -674,7 +675,7 @@ export async function sendAdminBookingCanceled(opts: LifecycleJobInfo & {
 export async function sendAdminBookingCancellationRequest(opts: LifecycleJobInfo) {
   const admins = await fetchAdmins();
   if (admins.length === 0) return;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await currentAppUrl();
 
   const html = layout(
     h1("Cancellation requested") +
@@ -704,7 +705,7 @@ export async function sendAdminBookingCancellationRequest(opts: LifecycleJobInfo
 export async function sendAdminBookingPostpone(opts: LifecycleJobInfo) {
   const admins = await fetchAdmins();
   if (admins.length === 0) return;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await currentAppUrl();
 
   const html = layout(
     h1("Booking postponed by customer") +
@@ -735,7 +736,7 @@ export async function sendCustomerBookingConfirmed(opts: LifecycleJobInfo & {
   to: string;
   cleanerNames: string[];
 }) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await currentAppUrl();
   const html = layout(
     h1(`Your cleaner is confirmed`) +
       p(`Hi ${opts.clientName.split(" ")[0]}, great news — your booking is fully set.`) +
@@ -763,7 +764,7 @@ export async function sendCustomerBookingModified(opts: LifecycleJobInfo & {
   to: string;
   changesSummary?: string;
 }) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await currentAppUrl();
   const html = layout(
     h1(`Your booking was updated`) +
       p(`Hi ${opts.clientName.split(" ")[0]}, we've made a change to your upcoming cleaning.`) +
@@ -793,7 +794,7 @@ export async function sendCustomerBookingCancellation(opts: LifecycleJobInfo & {
   reason?: string | null;
   refundIssued?: boolean;
 }) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await currentAppUrl();
   const html = layout(
     h1(`Your booking was canceled`) +
       p(`Hi ${opts.clientName.split(" ")[0]}, your Cleano booking has been canceled.`) +
@@ -831,7 +832,7 @@ export async function sendCustomerBookingCharged(opts: {
   amount: number;
   paymentMethod?: string;
 }) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await currentAppUrl();
   const html = layout(
     h1("Payment received") +
       p(`Hi ${opts.clientName.split(" ")[0]}, we've received your payment for job #${opts.jobNumber}.`) +
@@ -865,7 +866,7 @@ export async function sendCustomerFeesCharged(opts: {
     extra: "Extra charge",
     reschedule: "Reschedule fee charged",
   } as const;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await currentAppUrl();
   const html = layout(
     h1(labelMap[opts.feeType]) +
       p(
@@ -893,7 +894,7 @@ export async function sendCustomerBookingsPrepaid(opts: {
   jobNumber: number;
   amount: number;
 }) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await currentAppUrl();
   const html = layout(
     h1("Deposit received") +
       p(`Hi ${opts.clientName.split(" ")[0]}, we collected your ${fmt(opts.amount)} deposit for booking #${opts.jobNumber}.`) +
@@ -927,7 +928,7 @@ export async function sendCustomerCardDeclined(opts: {
     hold: "Card declined during hold",
     modified_hold_failed: "Card hold failed for booking change",
   };
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await currentAppUrl();
 
   const html = layout(
     h1(labelMap[opts.context]) +
@@ -958,7 +959,7 @@ export async function sendCustomerCardExpiring(opts: {
   jobNumber: number;
   jobDateLabel: string;
 }) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await currentAppUrl();
   const card = `${opts.brand ?? "card"} •••• ${opts.last4 ?? "????"}`;
 
   const html = layout(
@@ -988,7 +989,7 @@ export async function sendAdminCardExpiring(opts: {
 }) {
   const admins = await fetchAdmins();
   if (admins.length === 0) return;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await currentAppUrl();
 
   const html = layout(
     h1(`Card expiring — ${opts.clientName}`) +
@@ -1032,7 +1033,7 @@ export async function sendAdminCardReplaced(opts: {
 }) {
   const admins = await fetchAdmins();
   if (admins.length === 0) return;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await currentAppUrl();
 
   const html = layout(
     h1(`Card replaced — ${opts.clientName}`) +
@@ -1087,7 +1088,7 @@ export async function sendAdminCardDeclined(opts: {
 
   const admins = await fetchAdmins();
   if (admins.length === 0) return;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await currentAppUrl();
   const html = layout(
     h1(`Card declined — ${opts.clientName}`) +
       p(`The customer's card was declined while attempting to process job #${opts.jobNumber}.`) +
@@ -1141,7 +1142,7 @@ export async function sendAdminTipReceived(opts: {
 }) {
   const admins = await fetchAdmins();
   if (admins.length === 0) return;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await currentAppUrl();
   const html = layout(
     h1(`Tip received — ${fmt(opts.tipAmount)}`) +
       p(`<strong>${opts.clientName}</strong> tipped ${fmt(opts.tipAmount)} on job #${opts.jobNumber}.`) +
@@ -1172,7 +1173,7 @@ export async function sendCustomerRateUs(opts: {
   jobNumber: number;
   ratingToken: string;
 }) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await currentAppUrl();
   const html = layout(
     h1(`How did we do?`) +
       p(`Hi ${opts.clientName.split(" ")[0]}, your cleaning is done — would you mind sharing how it went? It takes 10 seconds and helps our team a lot.`) +
@@ -1221,7 +1222,7 @@ export async function sendAdminNewReview(opts: {
 }) {
   const admins = await fetchAdmins();
   if (admins.length === 0) return;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await currentAppUrl();
   const isPoor = opts.rating <= 3;
   const overallDropped =
     typeof opts.overallRating === "number" && opts.overallRating < 4;
@@ -1266,7 +1267,7 @@ export async function sendProviderNewReview(opts: {
   rating: number;
   notes?: string | null;
 }) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await currentAppUrl();
   const html = layout(
     h1(`You got a ${opts.rating}/5 review`) +
       p(`Hi ${opts.employeeName.split(" ")[0]}, you received a new rating.`) +
@@ -1294,7 +1295,7 @@ export async function sendAdminClockedIn(opts: {
 }) {
   const admins = await fetchAdmins();
   if (admins.length === 0) return;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await currentAppUrl();
   const html = layout(
     h1(`${opts.cleanerName} clocked in`) +
       p(`Job #${opts.jobNumber} for <strong>${opts.clientName}</strong> just started.`) +
@@ -1319,7 +1320,7 @@ export async function sendAdminOnTheWay(opts: {
 }) {
   const admins = await fetchAdmins();
   if (admins.length === 0) return;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await currentAppUrl();
   const html = layout(
     h1(`${opts.cleanerName} is on the way`) +
       p(`Job #${opts.jobNumber} for <strong>${opts.clientName}</strong> — the cleaner is en route and will clock in on arrival.`) +
@@ -1345,7 +1346,7 @@ export async function sendAdminClockedOut(opts: {
 }) {
   const admins = await fetchAdmins();
   if (admins.length === 0) return;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await currentAppUrl();
   const html = layout(
     h1(`${opts.cleanerName} clocked out`) +
       p(`Job #${opts.jobNumber} for <strong>${opts.clientName}</strong> is done.`) +
@@ -1374,7 +1375,7 @@ export async function sendAdminChecklistCompleted(opts: {
 }) {
   const admins = await fetchAdmins();
   if (admins.length === 0) return;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await currentAppUrl();
   const html = layout(
     h1(`Checklist complete — ${opts.clientName}`) +
       p(`<strong>${opts.cleanerName}</strong> just finished every checklist item on job #${opts.jobNumber}.`) +
@@ -1532,8 +1533,10 @@ export async function sendAccountEmail(opts: AccountEmailOpts) {
 // ── BookingKoala import welcome emails ───────────────────────────────────────
 // Sent only by the one-time migration (CLI or the admin import button). These
 // carry a temp password, so they are intentionally NOT gated by Settings →
-// Notifications — they are operational, not marketing. Links use the server's
-// NEXT_PUBLIC_APP_URL (the deployed domain on Vercel).
+// Notifications — they are operational, not marketing. Links point at the
+// organization's own address, so a company's people are always sent back to
+// that company's workspace rather than to whichever one the server was
+// configured with.
 
 function credentialsBox(email: string, tempPassword: string, loginUrl: string) {
   return (
@@ -1553,7 +1556,7 @@ export async function sendCustomerImportWelcome(opts: {
   name: string;
   tempPassword: string;
 }) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await currentAppUrl();
   const html = layout(
     h1(`Your Cleano account is ready, ${opts.name.split(" ")[0]}`) +
       p(
@@ -1573,7 +1576,7 @@ export async function sendCleanerImportWelcome(opts: {
   name: string;
   tempPassword: string;
 }) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await currentAppUrl();
   const html = layout(
     h1(`Welcome to Cleano, ${opts.name.split(" ")[0]}!`) +
       p(
@@ -1796,7 +1799,7 @@ export async function sendAdminUnassignedEvent(opts: {
 }) {
   const admins = await fetchAdmins();
   if (admins.length === 0) return;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await currentAppUrl();
   const html = layout(
     h1(UNASSIGNED_LABEL[opts.event]) +
       p(`Job #${opts.jobNumber} for <strong>${opts.clientName}</strong>${opts.event === "new" || opts.event === "moved" ? " is currently unassigned." : "."}`) +
@@ -1885,7 +1888,7 @@ export async function sendAdminSignupReview(opts: {
 }) {
   const admins = await fetchAdmins();
   if (admins.length === 0) return;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await currentAppUrl();
   const html = layout(
     h1("New cleaner sign-up to review") +
       p(`<strong>${opts.applicantName}</strong> (${opts.applicantEmail}) signed up. Approve or reject from the admin.`) +
@@ -1914,7 +1917,7 @@ export async function sendProviderNewTip(opts: {
   tipAmount: number;
   clientName: string;
 }) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await currentAppUrl();
   const html = layout(
     h1(`You received a tip!`) +
       p(`Hi ${opts.providerName.split(" ")[0]}, <strong>${opts.clientName}</strong> just tipped you ${fmt(opts.tipAmount)} on job #${opts.jobNumber}.`) +
@@ -1939,7 +1942,7 @@ export async function sendProviderPayoutRequested(opts: {
   amount: number;
   paymentMethod?: string | null;
 }) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await currentAppUrl();
   const html = layout(
     h1("We got your payout request") +
       p(`Hi ${opts.providerName.split(" ")[0]}, we've received your request to withdraw <strong>${fmt(opts.amount)}</strong>${payoutMethod(opts.paymentMethod)}. We'll email you again as soon as it's on its way.`) +
@@ -1960,7 +1963,7 @@ export async function sendProviderPayoutCompleted(opts: {
   amount: number;
   paymentMethod?: string | null;
 }) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await currentAppUrl();
   const html = layout(
     h1("Your payout is on its way 🎉") +
       p(`Hi ${opts.providerName.split(" ")[0]}, your withdrawal of <strong>${fmt(opts.amount)}</strong>${payoutMethod(opts.paymentMethod)} has been completed.`) +
@@ -1982,7 +1985,7 @@ export async function sendAdminPayoutRequest(opts: {
 }) {
   const admins = await fetchAdmins();
   if (admins.length === 0) return;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await currentAppUrl();
   const html = layout(
     h1("Payout request received") +
       p(`<strong>${opts.providerName}</strong> requested a payout of <strong>${fmt(opts.amount)}</strong>${payoutMethod(opts.paymentMethod)}.`) +
@@ -2038,7 +2041,7 @@ export async function sendAdminUnassignedDeadline(opts: {
   } as const;
   const admins = await fetchAdmins();
   if (admins.length === 0) return;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await currentAppUrl();
   const html = layout(
     h1(`Unassigned booking starts in ${subjectMap[opts.window]}`) +
       p(`Job #${opts.jobNumber} for <strong>${opts.clientName}</strong> has no cleaner assigned yet.`) +
@@ -2070,7 +2073,7 @@ export async function sendAdminNotClockedIn(opts: {
 }) {
   const admins = await fetchAdmins();
   if (admins.length === 0) return;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await currentAppUrl();
   const html = layout(
     h1("Cleaner hasn't clocked in") +
       p(`Job #${opts.jobNumber} for <strong>${opts.clientName}</strong> was supposed to start at ${fmtTime(opts.startTime)}. No clock-in yet.`) +
@@ -2099,7 +2102,7 @@ export async function sendAdminCashCheckReminder(opts: {
 }) {
   const admins = await fetchAdmins();
   if (admins.length === 0) return;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await currentAppUrl();
   const html = layout(
     h1(`Upcoming cash/check booking`) +
       p(`Heads up — job #${opts.jobNumber} for <strong>${opts.clientName}</strong> uses ${opts.paymentType}. Cleaner should collect payment on-site.`) +
@@ -2141,7 +2144,7 @@ export async function sendAdminPoorRatingTwiceWeek(opts: {
 
 /** Customer 48h reminder (catalog key `cust.reminders.booking_reminder_2`). */
 export async function sendCustomerReminder48h(opts: JobReminderOpts) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await currentAppUrl();
   const html = layout(
     h1("Your Cleano cleaning is in 2 days") +
       p(`Hi ${opts.recipientName.split(" ")[0]}, just a heads-up that your cleaning is coming up in about 48 hours.`) +
@@ -2173,7 +2176,7 @@ export async function sendCustomerNeverFoundProvider(opts: {
   startTime: string;
   logId: string;
 }) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await currentAppUrl();
   const html = layout(
     h1("We weren't able to staff your booking") +
       p(`Hi ${opts.clientName.split(" ")[0]}, unfortunately we couldn't find a cleaner for your booking on ${fmtDate(opts.startTime)}. The booking has been canceled and you won't be charged.`) +
@@ -2197,7 +2200,7 @@ export async function sendCustomerLeaveTip(opts: {
   cleanerNames: string[];
   logId: string;
 }) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await currentAppUrl();
   const html = layout(
     h1("Care to tip your cleaner?") +
       p(`Hi ${opts.clientName.split(" ")[0]}, if you enjoyed your cleaning, leaving a tip is a great way to show ${opts.cleanerNames.join(" and ") || "your cleaner"} you appreciated it.`) +
@@ -2234,7 +2237,7 @@ export async function sendProviderJobReminder(opts: {
     "1h": "Job starts in 1 hour",
     unassigned_pool: "Open jobs available",
   } as const;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await currentAppUrl();
   const html = layout(
     h1(subjMap[opts.window]) +
       p(`Hi ${opts.providerName.split(" ")[0]}, ${opts.window === "unassigned_pool" ? "there are unassigned jobs you can pick up." : `you have a job for ${opts.clientName} coming up.`}`) +
@@ -2274,7 +2277,7 @@ export async function sendCustomerRequestResolved(opts: {
   decision: "approve" | "deny";
   note?: string;
 }) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await currentAppUrl();
 
   const title =
     opts.decision === "approve"
@@ -2357,7 +2360,7 @@ export async function sendProviderBookingCanceled(opts: {
   const subject = after5
     ? `Late cancel (after 5 pm) — ${opts.clientName} (#${opts.jobNumber})`
     : `Booking canceled — ${opts.clientName} (#${opts.jobNumber})`;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await currentAppUrl();
 
   const html = layout(
     h1(after5 ? "Your job was canceled (late)" : "Your job was canceled") +
@@ -2436,7 +2439,7 @@ export async function sendAdminWeeklyRagWashDashboard(opts: {
 }) {
   const admins = await fetchAdmins();
   if (admins.length === 0) return;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await currentAppUrl();
   const html = layout(
     h1(`Weekly Rag Wash — ${opts.weekLabel}`) +
       section([
@@ -2473,7 +2476,7 @@ export async function sendAdminLateArrival(opts: {
 }) {
   const admins = await fetchAdmins();
   if (admins.length === 0) return;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await currentAppUrl();
   const html = layout(
     h1(`Late arrival — ${opts.cleanerName}`) +
       p(`<strong>${opts.cleanerName}</strong> clocked in <strong>${opts.minutesLate} min late</strong> for booking #${opts.jobNumber} (${opts.clientName}). This job's customer rating will be reduced by <strong>${opts.penalty} stars</strong>.`) +
@@ -2502,7 +2505,7 @@ export async function sendProviderLateArrival(opts: {
   minutesLate: number;
   penalty: number;
 }) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await currentAppUrl();
   const html = layout(
     h1(`Late arrival on booking #${opts.jobNumber}`) +
       p(`Hi ${opts.providerName.split(" ")[0]}, you clocked in <strong>${opts.minutesLate} min late</strong>. As per our service standards, your rating for this job will be reduced by <strong>${opts.penalty} stars</strong>.`) +
@@ -2532,7 +2535,7 @@ export async function sendGiftCardToRecipient(opts: {
   coverKey: string;
 }) {
   const cover = coverFor(opts.coverKey);
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await currentAppUrl();
   const imageUrl = appUrl ? `${appUrl}${cover.imagePath}` : cover.imagePath;
   const html = layout(
     `<div style="margin-bottom:24px;border-radius:14px;overflow:hidden;background:${cover.gradient};min-height:180px;display:flex;align-items:center;justify-content:center;color:#fff;text-align:center;padding:36px 24px;">
@@ -2755,7 +2758,7 @@ export async function sendCustomerFinalQuote(opts: {
   hourlyLine?: string | null;
   logId?: string;
 }) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await currentAppUrl();
   const balance = Math.max(0, opts.total - opts.depositAmount);
 
   const rows: [string, string][] = [
@@ -2807,7 +2810,7 @@ export async function sendAdminQuoteRequest(opts: {
 }) {
   const admins = await fetchAdmins();
   if (admins.length === 0) return;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await currentAppUrl();
   const html = layout(
     h1(`New quote request — ${opts.name}`) +
       section([
@@ -2909,7 +2912,7 @@ export async function sendProviderLastMinuteOpening(opts: {
   address: string;
   bonusUsd: number;
 }) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await currentAppUrl();
   const html = layout(
     h1(`Last minute booking — $${opts.bonusUsd.toFixed(0)} bonus`) +
       p(`Hi ${opts.providerName.split(" ")[0]}, a booking just opened up. Whoever picks it up first gets a $${opts.bonusUsd.toFixed(2)} bonus on top of regular pay.`) +
@@ -2942,7 +2945,7 @@ export async function sendRecurringSaveOffer(opts: {
   offerLabel: string | null;
   offerCode: string | null;
 }) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await currentAppUrl();
   const firstName = opts.clientName.split(" ")[0] || opts.clientName;
   const clickUrl = `${appUrl}/api/track/recurring/${opts.cancellationId}/click`;
   const pixel = `<img src="${appUrl}/api/track/recurring/${opts.cancellationId}/open" width="1" height="1" alt="" style="display:none" />`;
@@ -3000,7 +3003,7 @@ export async function sendAdminNewApplication(opts: {
 }) {
   const admins = await fetchAdmins();
   if (admins.length === 0) return;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const appUrl = await currentAppUrl();
   const html = layout(
     h1(`New job application — ${opts.name}`) +
       section([
