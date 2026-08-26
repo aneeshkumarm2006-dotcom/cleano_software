@@ -21,10 +21,16 @@ function SignInInner() {
   const searchParams = useSearchParams();
 
   const rememberedKey = "cleano_remember_email";
+
+  // Arriving from signup on another host: the workspace was just created, and
+  // the session cookie could not follow across the subdomain boundary. Carry the
+  // address over so the owner's first act here is typing one thing, not two.
+  const welcomed = searchParams.get("welcome") === "1";
+  const handoffEmail = searchParams.get("email") ?? "";
+
   const initialEmail =
-    typeof window !== "undefined"
-      ? localStorage.getItem(rememberedKey) ?? ""
-      : "";
+    handoffEmail ||
+    (typeof window !== "undefined" ? localStorage.getItem(rememberedKey) ?? "" : "");
 
   // Explain a wrong-role bounce from /api/post-signin.
   const errorParam = searchParams.get("error");
@@ -37,7 +43,9 @@ function SignInInner() {
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(Boolean(initialEmail));
   const [error, setError] = useState<string | null>(initialError);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(
+    welcomed ? "Your workspace is ready. Sign in to open it." : null,
+  );
   const [loading, setLoading] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
 

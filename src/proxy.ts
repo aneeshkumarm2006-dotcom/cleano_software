@@ -7,6 +7,7 @@ import { ORG_SLUG_HEADER, orgSlugFromHost } from '@/lib/tenant'
 const PUBLIC_EXACT = new Set<string>([
   '/sign-in',
   '/sign-up',
+  '/get-started', // a cleaning company creating its own workspace on Awer
   '/cleanos/login', // cleaner sign-in
   '/applicant-login', // applicant portal sign-in (decision D4)
   '/login', // customer sign-in

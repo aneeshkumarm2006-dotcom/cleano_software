@@ -51,17 +51,31 @@ export function slugify(name: string): string {
     .slice(0, 40);
 }
 
-/** A free slug near the one asked for, so signup does not dead-end. */
+/**
+ * A free slug near the one asked for, so signup does not dead-end.
+ *
+ * One query, not one per candidate. Every candidate shares the same prefix, so
+ * the taken ones can be fetched together and the choice made in memory. The
+ * per-candidate version was fine when only a script called this; it is now
+ * reachable from an unauthenticated signup form, where turning one request into
+ * fifty database round-trips is an amplification worth not having.
+ */
 export async function findFreeSlug(desired: string): Promise<string> {
   const base = slugify(desired) || "workspace";
+
+  const taken = new Set(
+    (
+      await platformDb.organization.findMany({
+        where: { slug: { startsWith: base } },
+        select: { slug: true },
+      })
+    ).map((o) => o.slug),
+  );
+
   for (let i = 0; i < 50; i++) {
     const candidate = i === 0 ? base : `${base}-${i + 1}`;
     if (!isValidOrgSlug(candidate)) continue;
-    const taken = await platformDb.organization.findUnique({
-      where: { slug: candidate },
-      select: { id: true },
-    });
-    if (!taken) return candidate;
+    if (!taken.has(candidate)) return candidate;
   }
   throw new ProvisioningError("slug-taken", "Could not find a free address.");
 }

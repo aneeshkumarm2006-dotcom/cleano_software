@@ -66,8 +66,15 @@ export default async function RootLayout({
   // suspended workspace still served its entire client list -- names, emails,
   // phone numbers -- inside the payload of a screen that said "on hold". A
   // redirect means nothing downstream runs at all.
+  //
+  // Two paths sit outside the gate. The notice itself, or it would redirect to
+  // itself forever; and signup, which belongs to Awer rather than to any one
+  // workspace -- a visitor creating a company must not be turned away because
+  // the host they happened to arrive on has no workspace behind it.
   const path = (await headers()).get("x-awer-path") ?? "";
-  if (!path.startsWith("/workspace-unavailable")) {
+  const outsideTheGate =
+    path.startsWith("/workspace-unavailable") || path.startsWith("/get-started");
+  if (!outsideTheGate) {
     const org = await getCurrentOrg();
     const blocked = !org
       ? "not-found"

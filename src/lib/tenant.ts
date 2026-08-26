@@ -109,3 +109,48 @@ export function orgSlugFromHost(host: string | null | undefined): string {
   const label = parts[0];
   return isRoutableLabel(label) ? label : DEFAULT_ORG_SLUG;
 }
+
+/**
+ * Where a workspace lives, worked out from the host the request arrived on.
+ *
+ * Signup happens on one host and finishes on another, so this has to build a URL
+ * for a host the running code is not serving. Deriving it from the current
+ * request rather than an env var means it is right in every environment at once:
+ * `www.useawer.com` and `platform.useawer.com` both give
+ * `<slug>.useawer.com`, and `localhost:3000` gives `<slug>.localhost:3000`,
+ * which browsers resolve to 127.0.0.1 with no DNS or hosts file involved.
+ *
+ * Returns null where subdomains cannot work — a `*.vercel.app` build URL has its
+ * own meaning for the first label, so a caller must show the address as text
+ * instead of linking somewhere that would not resolve.
+ */
+export function workspaceOriginFor(
+  slug: string,
+  host: string | null | undefined,
+  protocol = "https",
+): string | null {
+  if (!host) return null;
+
+  const [rawHost, port] = host.split(":");
+  const hostname = rawHost.trim().toLowerCase().replace(/\.$/, "");
+  if (!hostname) return null;
+
+  // Bare IPs and Vercel build URLs cannot carry a tenant label.
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(hostname) || hostname.includes("[")) return null;
+  if (NON_TENANT_SUFFIXES.some((s) => hostname.endsWith(s))) return null;
+
+  const parts = hostname.split(".");
+  const isLocal = parts[parts.length - 1] === "localhost";
+
+  // Drop an existing tenant (or infrastructure) label to get back to the root
+  // the workspaces hang off. "useawer.com" and "localhost" are already roots.
+  const root =
+    isLocal
+      ? "localhost"
+      : parts.length >= 3
+        ? parts.slice(1).join(".")
+        : hostname;
+
+  const suffix = port ? `:${port}` : "";
+  return `${protocol}://${slug}.${root}${suffix}`;
+}

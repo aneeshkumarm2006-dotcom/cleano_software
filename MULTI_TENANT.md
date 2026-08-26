@@ -90,7 +90,7 @@ rewrite. Isolation comes from RLS; an FK only guarantees the id isn't garbage.
 | 3 | Tenant context — subdomain → org in `proxy.ts` | ✅ done |
 | 4 | Scope ~1,400 queries, module by module | ⬜ next |
 | 5 | Enforce — `NOT NULL`, RLS, constraint fixes, suspension | ✅ done |
-| 6 | Platform layer — super admin, signup, plans, provisioning | 🟡 6a + 6b done; signup UI, request-access form and plan-limit enforcement left |
+| 6 | Platform layer — super admin, signup, plans, provisioning | 🟡 6a–6c done; request-access form and plan-limit enforcement left |
 | 7 | Second real tenant + Stripe Connect | ⬜ |
 | 8 | Production cutover (needs explicit approval) | ⬜ |
 
@@ -301,6 +301,56 @@ Verified: `tsc --noEmit` clean, `next build` clean with all eight routes dynamic
 eslint clean. Not exercised against a database — production lacks the
 `organizationId` columns entirely, so the console can only be run against
 staging, which is the standing rule anyway.
+
+### Step 6c — a company can sign itself up
+`/get-started`. Pick a plan, name the company, claim an address, create the
+owner account. `provisionOrganization()` does the rest in one transaction, so a
+half-made workspace cannot exist.
+
+**No card is taken.** The trial is 30 days and the agreed answer was "one month,
+limited features", so signup ends in a working workspace, not a checkout. Card
+capture belongs with the Stripe work in step 7, and the console already shows
+who has no card on file.
+
+**The handoff between hosts is the interesting part.** Signup runs on one host
+and the workspace lives on another, and a session cookie set on `www` can never
+apply to `<slug>.useawer.com`. Rather than pretend otherwise, signup finishes by
+handing over the address; the owner signs in at their own door, with the email
+carried across so they type one thing rather than two.
+
+`workspaceOriginFor()` derives that address from the host the request arrived
+on, not an env var, so it is correct in every environment at once — and it
+returns null where subdomains cannot work (a `*.vercel.app` build URL) so the
+caller shows text instead of a link that would not resolve. Checked against
+nine hosts, including a round-trip back through `orgSlugFromHost()`: the URL
+signup hands out resolves to the slug it was built from.
+
+**Two problems found reading it back:**
+
+- `findFreeSlug()` made one query per candidate — up to 50 round-trips. Fine
+  when only a script called it; not fine behind an unauthenticated form. Now one
+  prefix query, chosen in memory.
+- The address-availability endpoints had no ceiling at all. They do now, at a
+  much higher limit than signup itself, because a real visitor types and retypes.
+
+Throttling is honest about what it is: the per-address window is in memory, so
+it covers one instance and resets on deploy. The global hourly cap is a database
+count, so it holds everywhere. A durable per-address limit needs shared storage
+and is worth doing when signup volume is real.
+
+`/get-started` sits outside the tenant gate in the root layout, alongside the
+unavailable notice. Signup belongs to Awer, not to any one workspace, so a
+visitor creating a company must not be turned away because the host they landed
+on has no workspace behind it.
+
+Reuses the sign-in page's shell and form controls rather than inventing a second
+visual language for the same audience. Plans, prices and cleaner caps are read
+from `lib/plans.ts` — the same definition that enforces them — because a pricing
+page that can drift from what is enforced is a promise nobody kept.
+
+Left: the Organization tier says plainly that it is arranged rather than bought
+and that the request form is next, instead of linking to a page that does not
+exist. No welcome email — that waits for per-organization email URLs in step 7.
 
 ---
 
