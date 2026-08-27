@@ -871,10 +871,30 @@ DATABASE_URL="$PROD" npx tsx scripts/seed-platform.ts \
 | `DATABASE_URL` | the **`awer_app`** connection string | row-level security is decorative under a role that can bypass it |
 | `PLATFORM_DATABASE_URL` | the elevated string | the console has to read across companies |
 | `DEFAULT_ORG_SLUG` | `platform` | the bare domain is Awer's front door, not a customer's app |
-| `LEGACY_ORG_SLUG` | `teamcleano` | forwards old bookmarks; clear it once they die out |
+| `LEGACY_ORG_SLUG` | **leave unset** | see below — the old address is a clean break, not a forward |
 | `APP_ROOT_DOMAIN` | `useawer.com` | how links in emails are built for each company |
 | `STRIPE_ENV_ORG_SLUG` | `teamcleano` | binds the existing Stripe key to the one company it belongs to |
 | `SECRETS_KEY` | the value from step 4 | encrypts credentials companies paste into Settings |
+
+### The old address is a clean break — decided 2026-08-27
+
+`LEGACY_ORG_SLUG` exists and is deliberately **not set**. The code can forward
+old bookmarks from the bare domain to the company that used to live there, and
+the customer chose not to.
+
+The reasoning is sound: a forward that works forever is a migration that never
+finishes. Everyone keeps using the old link, it can never be switched off, and
+the "temporary" redirect outlives the person who added it.
+
+So `useawer.com` is Awer's front door only. TeamCleano's team use
+`teamcleano.useawer.com` and nothing else. That is a decision to communicate,
+not a technical fallback — the team has to be told before the cutover, not
+discover it.
+
+Consequence worth knowing: a cleaner opening a stale bookmark lands on Awer's
+signup page, which will not mean anything to them. If that turns out to bite,
+the fix is either setting `LEGACY_ORG_SLUG=teamcleano` (one variable, no deploy)
+or a short "this has moved" page on the front door.
 
 ### Afterwards, in a browser
 
