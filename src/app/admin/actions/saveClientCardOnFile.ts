@@ -3,11 +3,11 @@
 import { db } from "@/lib/org-db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
-import { stripe } from "@/lib/stripe";
+import { requireStripeForCurrentOrg } from "@/lib/stripe-org";
 import { revalidatePath } from "next/cache";
 
 /**
- * Called immediately after `stripe.confirmSetup()` succeeds in the admin
+ * Called immediately after `(await requireStripeForCurrentOrg()).confirmSetup()` succeeds in the admin
  * JobModal card-entry panel. Reads the SetupIntent from Stripe, pulls
  * the resulting payment_method, and stores it on the Client so future
  * charges (chargeJob, bulkChargeJobs, captureCardHold) can run
@@ -35,7 +35,7 @@ export async function saveClientCardOnFile(input: {
 
   let setupIntent;
   try {
-    setupIntent = await stripe.setupIntents.retrieve(input.setupIntentId);
+    setupIntent = await (await requireStripeForCurrentOrg()).setupIntents.retrieve(input.setupIntentId);
   } catch (err) {
     const msg =
       (err as { message?: string })?.message ?? "SetupIntent not found";

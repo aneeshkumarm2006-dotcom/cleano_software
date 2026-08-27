@@ -5,7 +5,7 @@ import { resolveChargePaymentMethod } from "@/lib/payment-methods";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { stripe } from "@/lib/stripe";
+import { requireStripeForCurrentOrg } from "@/lib/stripe-org";
 import { sendCustomerNoShowFee } from "@/lib/email";
 import { getSetting } from "@/lib/settings";
 import { requireBudgetCategoryId } from "@/lib/budget-categories";
@@ -54,7 +54,7 @@ export async function markNoShow(jobId: string) {
 
   if (client.stripeCustomerId && feeCard) {
     try {
-      const pi = await stripe.paymentIntents.create({
+      const pi = await (await requireStripeForCurrentOrg()).paymentIntents.create({
         amount: amountCents,
         currency: "cad",
         customer: client.stripeCustomerId,

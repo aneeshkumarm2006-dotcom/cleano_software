@@ -25,14 +25,35 @@
 // that reads the admin setting.
 
 /**
- * The standard deposit, in dollars. Equals `BOOKING_DEPOSIT_CENTS / 100` in
- * lib/stripe.ts, which is still the constant the Stripe layer works in.
+ * The DEFAULT standard deposit, in dollars. Equals `BOOKING_DEPOSIT_CENTS / 100`
+ * in lib/stripe.ts, which is still the constant the Stripe layer works in.
  *
- * Deliberately NOT an admin setting: PDF #9 asks for a configurable deposit on
- * post-construction only, and "regular bookings keep the $20". Adding a second
- * money setting nobody asked for is how a fix becomes a feature.
+ * It used to be the only answer — "regular bookings keep the $20", hardcoded.
+ * That held while one company used the product. It cannot hold across many:
+ * $20 is a meaningful deposit on a $200 flat and a rounding error on a
+ * post-construction site, and every company prices differently. So this is now
+ * the default behind `STANDARD_DEPOSIT_SETTING_KEY`, and an untouched workspace
+ * behaves exactly as before.
  */
 export const STANDARD_BOOKING_DEPOSIT_USD = 20;
+
+/** Registry key for the deposit every non-quoted service charges. */
+export const STANDARD_DEPOSIT_SETTING_KEY = "booking.standardDepositUsd";
+
+/**
+ * Bounds on the configured standard deposit.
+ *
+ * Zero is allowed, and it is not a neutral choice. In the guest booking flow
+ * the captured deposit is what stands in for authentication — it is the reason
+ * a stranger cannot mint unlimited real jobs from the public page. A workspace
+ * that sets this to 0 is choosing to take bookings with no barrier at all, so
+ * the settings copy says so rather than leaving it to be discovered.
+ *
+ * The ceiling is a fat-finger guard, not a policy: a mistyped 5000 should be
+ * refused here rather than by a chargeback.
+ */
+export const STANDARD_DEPOSIT_MIN_USD = 0;
+export const STANDARD_DEPOSIT_MAX_USD = 500;
 
 /** Registry key for the post-construction deposit. Default 200 (PDF #9). */
 export const PC_DEPOSIT_SETTING_KEY = "booking.postConstructionDepositUsd";
@@ -71,9 +92,16 @@ export function isQuotedService(serviceType?: string | null): boolean {
  */
 export function depositUsdForService(
   serviceType: string | null | undefined,
-  pcDepositUsd: number
+  pcDepositUsd: number,
+  // Defaulted so every existing caller keeps its exact previous behaviour; the
+  // two server paths that resolve settings pass the configured figure.
+  standardDepositUsd: number = STANDARD_BOOKING_DEPOSIT_USD
 ): number {
-  if (!isQuotedService(serviceType)) return STANDARD_BOOKING_DEPOSIT_USD;
+  if (!isQuotedService(serviceType)) {
+    const std = Number(standardDepositUsd);
+    if (!Number.isFinite(std) || std < 0) return STANDARD_BOOKING_DEPOSIT_USD;
+    return Math.round(std * 100) / 100;
+  }
   const n = Number(pcDepositUsd);
   if (!Number.isFinite(n) || n < 0) return PC_DEPOSIT_DEFAULT_USD;
   return Math.round(n * 100) / 100;
@@ -82,9 +110,10 @@ export function depositUsdForService(
 /** The same figure in cents, which is the unit Stripe intents are created in. */
 export function depositCentsForService(
   serviceType: string | null | undefined,
-  pcDepositUsd: number
+  pcDepositUsd: number,
+  standardDepositUsd: number = STANDARD_BOOKING_DEPOSIT_USD
 ): number {
-  return Math.round(depositUsdForService(serviceType, pcDepositUsd) * 100);
+  return Math.round(depositUsdForService(serviceType, pcDepositUsd, standardDepositUsd) * 100);
 }
 
 /** The `metadata.kind` stamped on the PaymentIntent, per service type. */

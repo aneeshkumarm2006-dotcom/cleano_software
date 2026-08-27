@@ -1,12 +1,12 @@
 "use server";
 
 import { db } from "@/lib/org-db";
-import { stripe } from "@/lib/stripe";
+import { requireStripeForCurrentOrg } from "@/lib/stripe-org";
 import { logActivity } from "@/lib/activity-log";
 import { notifyCardReplaced } from "@/lib/payment-methods";
 
 /**
- * Called after `stripe.confirmSetup` succeeds on the public /add-card
+ * Called after `(await requireStripeForCurrentOrg()).confirmSetup` succeeds on the public /add-card
  * page. Reads the SetupIntent, pulls the resulting payment method,
  * saves it to the Client, and marks the token as used.
  */
@@ -26,7 +26,7 @@ export async function finalizeCardSetup(input: {
   let setupIntent;
   try {
     // payment_method is expanded so the history entry can record brand/last4.
-    setupIntent = await stripe.setupIntents.retrieve(input.setupIntentId, {
+    setupIntent = await (await requireStripeForCurrentOrg()).setupIntents.retrieve(input.setupIntentId, {
       expand: ["payment_method"],
     });
   } catch {

@@ -7,6 +7,7 @@ import Button from "@/components/ui/Button";
 import { updateAppSetting } from "../../actions/updateAppSetting";
 import { AppSettingRecord, getSetting } from "../types";
 import { SectionCard, Field, Feedback, Msg } from "./_shared";
+import StripeConnectionSection from "./StripeConnectionSection";
 import { SETTINGS } from "@/lib/settings/registry";
 
 const FEE = SETTINGS["policy.cancellationFeeUsd"];
@@ -61,6 +62,10 @@ export default function PaymentsTab({ settings }: Props) {
   }
 
   return (
+    <div className="space-y-6">
+      {/* Which Stripe account the money goes into comes first: the fees below
+          are meaningless until there is an account to collect them. */}
+      <StripeConnectionSection />
     <SectionCard
       title="Payments &amp; Fees"
       description="Cancellation fee and gift-card pricing. Money-affecting changes are audit-logged. All charges are processed in CAD."
@@ -111,5 +116,6 @@ export default function PaymentsTab({ settings }: Props) {
         </Button>
       </form>
     </SectionCard>
+    </div>
   );
 }

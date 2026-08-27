@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/lib/org-db";
-import { stripe } from "@/lib/stripe";
+import { requireStripeForCurrentOrg } from "@/lib/stripe-org";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
@@ -82,7 +82,7 @@ export async function issueRefund(input: IssueRefundInput) {
     let stripeRefundId: string | null = null;
     if (targetPI) {
       try {
-        const refund = await stripe.refunds.create({
+        const refund = await (await requireStripeForCurrentOrg()).refunds.create({
           payment_intent: targetPI,
           amount: Math.round(input.amount * 100),
           reason: "requested_by_customer",

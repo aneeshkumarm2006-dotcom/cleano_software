@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  stripe,
-  getOrCreateStripeCustomer,
-  BOOKING_DEPOSIT_CURRENCY,
-} from "@/lib/stripe";
+import { BOOKING_DEPOSIT_CURRENCY } from "@/lib/stripe";
+
+import { getOrCreateStripeCustomer, requireStripeForCurrentOrg } from "@/lib/stripe-org";
 import { db } from "@/lib/org-db";
 import { depositIntentKind, isQuotedService } from "@/lib/booking-deposit";
+import { StripeNotConfigured, stripeForCurrentOrg } from "@/lib/stripe-org";
 import { resolveDepositCentsForService } from "@/lib/booking-deposit.server";
 
 export async function POST(req: NextRequest) {
@@ -33,17 +32,46 @@ export async function POST(req: NextRequest) {
       typeof serviceType === "string" ? serviceType : null;
     const amount = await resolveDepositCentsForService(requestedService);
 
+    // A workspace can set its deposit to zero, and then there is nothing to
+    // charge and no card to collect. Answered here rather than by creating a
+    // zero-value PaymentIntent, which Stripe refuses anyway.
+    if (amount <= 0) {
+      return NextResponse.json({
+        depositWaived: true,
+        clientSecret: null,
+        customerId: null,
+        paymentIntentId: null,
+        amount: 0,
+        amountUsd: 0,
+      });
+    }
+
+    // A deposit is due but this workspace has no Stripe account. Say so in
+    // words the customer's screen can show. Falling back to the platform's own
+    // account is what this whole change exists to prevent — that is somebody
+    // else's bank — and a 500 would just read as "the site is broken".
+    const configured = await stripeForCurrentOrg();
+    if (!configured.ok) {
+      return NextResponse.json(
+        {
+          error: new StripeNotConfigured(configured.reason).message,
+          code: "STRIPE_NOT_CONFIGURED",
+        },
+        { status: 503 },
+      );
+    }
+
     const client = await db.client.findFirst({ where: { email: normalizedEmail } });
 
     let customerId: string;
     if (client) {
       customerId = await getOrCreateStripeCustomer(client.id, normalizedEmail, name);
     } else {
-      const customer = await stripe.customers.create({ email: normalizedEmail, name });
+      const customer = await (await requireStripeForCurrentOrg()).customers.create({ email: normalizedEmail, name });
       customerId = customer.id;
     }
 
-    const paymentIntent = await stripe.paymentIntents.create({
+    const paymentIntent = await (await requireStripeForCurrentOrg()).paymentIntents.create({
       amount,
       currency: BOOKING_DEPOSIT_CURRENCY,
       customer: customerId,

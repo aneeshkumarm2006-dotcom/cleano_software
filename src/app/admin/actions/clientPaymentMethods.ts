@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/lib/org-db";
-import { stripe } from "@/lib/stripe";
+import { requireStripeForCurrentOrg } from "@/lib/stripe-org";
 import { requireOwnerAdmin } from "@/lib/action-guards";
 import { logActivity } from "@/lib/activity-log";
 import { getCardRemovalBlock, notifyCardReplaced } from "@/lib/payment-methods";
@@ -170,7 +170,7 @@ async function assertOwnedCard(
 
   let pm;
   try {
-    pm = await stripe.paymentMethods.retrieve(paymentMethodId);
+    pm = await (await requireStripeForCurrentOrg()).paymentMethods.retrieve(paymentMethodId);
   } catch {
     return { ok: false, error: "Card not found" };
   }
@@ -210,7 +210,7 @@ export async function listClientPaymentMethods(
   }
 
   try {
-    const list = await stripe.paymentMethods.list({
+    const list = await (await requireStripeForCurrentOrg()).paymentMethods.list({
       customer: client.stripeCustomerId,
       type: "card",
       limit: MAX_CARDS,
@@ -315,7 +315,7 @@ export async function setDefaultClientPaymentMethod(input: {
   });
 
   try {
-    await stripe.customers.update(client.stripeCustomerId!, {
+    await (await requireStripeForCurrentOrg()).customers.update(client.stripeCustomerId!, {
       invoice_settings: { default_payment_method: paymentMethodId },
     });
 
@@ -431,7 +431,7 @@ export async function removeClientPaymentMethod(input: {
 
   try {
     try {
-      await stripe.paymentMethods.detach(paymentMethodId);
+      await (await requireStripeForCurrentOrg()).paymentMethods.detach(paymentMethodId);
     } catch (err) {
       // Already detached in Stripe — keep going so the local mirror converges
       // (idempotent remove). Anything else is a real failure.
@@ -452,7 +452,7 @@ export async function removeClientPaymentMethod(input: {
       });
 
       if (next) {
-        await stripe.customers.update(client.stripeCustomerId!, {
+        await (await requireStripeForCurrentOrg()).customers.update(client.stripeCustomerId!, {
           invoice_settings: {
             default_payment_method: next.stripePaymentMethodId,
           },

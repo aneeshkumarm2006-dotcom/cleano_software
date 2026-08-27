@@ -76,6 +76,9 @@ export default function Step5Review({
   }, [draft, basePrice]);
 
   const [clientSecret, setClientSecret] = useState<string | null>(null);
+  // True when this company charges no deposit at all, which makes the whole
+  // card step disappear rather than showing an empty payment form.
+  const [depositWaived, setDepositWaived] = useState(false);
   const [stripeLoading, setStripeLoading] = useState(false);
   const [stripeError, setStripeError] = useState<string | null>(null);
   // What the deposit actually is, as reported by the route that created the
@@ -158,6 +161,18 @@ export default function Step5Review({
     })
       .then((r) => r.json())
       .then((data) => {
+        // This company charges no deposit. There is no card to collect and
+        // nothing to confirm with Stripe — the booking is simply made.
+        if (data.depositWaived) {
+          setDepositWaived(true);
+          setClientSecret(null);
+          setDepositUsd(0);
+          onChange({ depositWaived: true, stripeCardReady: false });
+          return;
+        }
+        setDepositWaived(false);
+        onChange({ depositWaived: false });
+
         if (data.clientSecret) {
           setClientSecret(data.clientSecret);
           if (typeof data.amountUsd === "number" && data.amountUsd >= 0) {
@@ -165,10 +180,17 @@ export default function Step5Review({
           }
           onChange({ stripeCustomerId: data.customerId });
         } else {
-          setStripeError("Could not initialise payment. Please refresh.");
+          // The company has not connected a payment account yet. Say that,
+          // rather than "please refresh" — refreshing has never once fixed it,
+          // and the person who can fix it is not the one reading the message.
+          setStripeError(
+            data.code === "STRIPE_NOT_CONFIGURED"
+              ? "This company can't take card payments online yet. Please contact them directly to book."
+              : "Could not start the payment. Please try again in a moment.",
+          );
         }
       })
-      .catch(() => setStripeError("Could not initialise payment. Please refresh."))
+      .catch(() => setStripeError("Could not start the payment. Please try again in a moment."))
       .finally(() => setStripeLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft.email, draft.name, draft.serviceType]);
@@ -377,7 +399,24 @@ export default function Step5Review({
         </div>
       )}
 
-      {/* Stripe deposit charge */}
+      {/* No deposit: this company takes bookings without a card. The whole
+          payment block disappears rather than rendering an empty card form
+          with a "$0.00 deposit" heading above it. */}
+      {depositWaived ? (
+        <div className="cl-card-soft cl-stack-12">
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <ShieldCheck size={20} style={{ color: "var(--primary)" }} />
+            <span style={{ fontWeight: 600, fontSize: 15, color: "var(--ink)" }}>
+              No deposit needed
+            </span>
+          </div>
+          <p style={{ fontSize: 13, color: "var(--primary-70)", margin: 0, lineHeight: 1.55 }}>
+            Confirm below and your booking is placed. Payment is arranged after your
+            cleaning.
+          </p>
+        </div>
+      ) : (
+      /* Stripe deposit charge */
       <div className="cl-card-soft cl-stack-12">
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
           <CreditCard size={20} style={{ color: "var(--primary)" }} />
@@ -420,6 +459,7 @@ export default function Step5Review({
           Secured by Stripe · 256-bit encryption
         </div>
       </div>
+      )}
     </div>
   );
 }

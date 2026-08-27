@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/lib/org-db";
-import { stripe } from "@/lib/stripe";
+import { requireStripeForCurrentOrg } from "@/lib/stripe-org";
 import { generateGiftCardCode } from "@/lib/gift-cards/code";
 import { GIFT_CARD_COVERS } from "@/lib/gift-cards/covers";
 import { getSetting } from "@/lib/settings";
@@ -79,7 +79,7 @@ export async function createGiftCardIntent(input: CreateGiftCardInput) {
   });
 
   try {
-    const pi = await stripe.paymentIntents.create({
+    const pi = await (await requireStripeForCurrentOrg()).paymentIntents.create({
       amount: amount * 100,
       currency: "cad",
       automatic_payment_methods: { enabled: true },

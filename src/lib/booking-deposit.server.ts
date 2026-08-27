@@ -13,7 +13,7 @@
 // review step (a client component), and it must stay free of the db. Same split
 // as `inventory-thresholds.ts` / `.server.ts`.
 
-import { getSetting } from "@/lib/settings";
+import { getSetting, getSettings } from "@/lib/settings";
 import {
   depositCentsForService,
   depositUsdForService,
@@ -40,15 +40,34 @@ export function loadPcDepositUsd(): Promise<number> {
  * less, so a client that asks for a post-construction booking while presenting a
  * $20 intent is rejected rather than quietly under-charged.
  */
+/**
+ * Both configured deposits, read in ONE query rather than two.
+ *
+ * Charging a deposit is already the slowest thing the booking flow does, and
+ * these two are always needed together.
+ */
+async function loadDeposits(): Promise<{ pc: number; standard: number }> {
+  const s = await getSettings([
+    "booking.postConstructionDepositUsd",
+    "booking.standardDepositUsd",
+  ] as const);
+  return {
+    pc: s["booking.postConstructionDepositUsd"],
+    standard: s["booking.standardDepositUsd"],
+  };
+}
+
 export async function resolveDepositUsdForService(
   serviceType: string | null | undefined
 ): Promise<number> {
-  return depositUsdForService(serviceType, await loadPcDepositUsd());
+  const { pc, standard } = await loadDeposits();
+  return depositUsdForService(serviceType, pc, standard);
 }
 
 /** The same figure in cents, which is the unit Stripe intents are created in. */
 export async function resolveDepositCentsForService(
   serviceType: string | null | undefined
 ): Promise<number> {
-  return depositCentsForService(serviceType, await loadPcDepositUsd());
+  const { pc, standard } = await loadDeposits();
+  return depositCentsForService(serviceType, pc, standard);
 }

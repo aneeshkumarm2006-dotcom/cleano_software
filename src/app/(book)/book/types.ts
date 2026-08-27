@@ -124,6 +124,12 @@ export interface BookingDraft {
   // Step 5 — Stripe
   stripeCustomerId?: string;
   stripeCardReady?: boolean;
+  /**
+   * True when this company charges no deposit, so there is no card to collect.
+   * Set by the review step from the server's answer, never chosen by the
+   * browser: the amount is re-resolved server-side before anything is created.
+   */
+  depositWaived?: boolean;
   // Step 5 — after-photo consent (opt-in, not pre-selected)
   afterPhotoConsent: boolean;
   // Step 4 — SMS notification consent (default from customer.smsOptInDefault)

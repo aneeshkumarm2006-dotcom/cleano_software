@@ -29,7 +29,8 @@ import {
 } from "@/lib/email";
 import { isValidEmail, isValidPhone } from "@/lib/validation";
 import { AFTER_PHOTO_CONSENT_VERSION } from "@/lib/policy";
-import { stripe, BOOKING_DEPOSIT_CURRENCY } from "@/lib/stripe";
+import { BOOKING_DEPOSIT_CURRENCY } from "@/lib/stripe";
+import { requireStripeForCurrentOrg } from "@/lib/stripe-org";
 import {
   BOOKING_PHOTO_CAPTION,
   BOOKING_PHOTO_MAX,
@@ -158,8 +159,24 @@ interface VerifiedDeposit {
  * idempotency key for a booking, so a retry that presents the same intent gets
  * the job it already paid for rather than an error or a second job.
  */
+/**
+ * What a booking records about payment, once the deposit question is settled.
+ *
+ * Every field is nullable because a workspace may charge no deposit at all, and
+ * then there is no intent, no Stripe customer and no saved card. Writing empty
+ * strings instead would be worse than wrong: Client.stripeCustomerId is UNIQUE,
+ * so the second no-deposit booking would collide with the first.
+ */
+interface DepositOutcome {
+  paymentIntentId: string | null;
+  stripeCustomerId: string | null;
+  stripePaymentMethodId: string | null;
+  amountUsd: number;
+}
+
 type DepositVerification =
   | { status: "ok"; deposit: VerifiedDeposit }
+  | { status: "waived" }
   | { status: "rejected"; error: string }
   | { status: "already_used"; jobId: string };
 
@@ -202,7 +219,7 @@ async function verifyBookingDeposit(
   // (2) Must actually exist under OUR key. A forged or test-mode id 404s here.
   let pi;
   try {
-    pi = await stripe.paymentIntents.retrieve(paymentIntentId, {
+    pi = await (await requireStripeForCurrentOrg()).paymentIntents.retrieve(paymentIntentId, {
       expand: ["latest_charge"],
     });
   } catch {
@@ -495,12 +512,25 @@ export async function submitBooking(input: SubmitBookingInput) {
     // POST it and mint unlimited real jobs (and, on a recurring frequency, a
     // whole series of them) for free. The verified payment is what stands in
     // for authentication in the guest booking flow.
-    const verification = await verifyBookingDeposit(
-      input.depositPaymentIntentId,
-      email,
-      existingClient?.stripeCustomerId ?? null,
-      Math.round(requiredDepositUsd * 100)
-    );
+    //
+    // A workspace can set its deposit to zero, and then there is no payment to
+    // verify. That is a real decision with a real cost: the verified deposit is
+    // the ONLY thing standing between this public endpoint and a stranger
+    // minting unlimited bookings, so the settings page says so in as many
+    // words. What must never happen is the reverse — a workspace that DOES
+    // charge a deposit accepting a booking without one — and that cannot happen
+    // here, because the amount is re-resolved from the service type on the
+    // server, never taken from the request.
+    const depositDue = Math.round(requiredDepositUsd * 100) > 0;
+
+    const verification: DepositVerification = depositDue
+      ? await verifyBookingDeposit(
+          input.depositPaymentIntentId,
+          email,
+          existingClient?.stripeCustomerId ?? null,
+          Math.round(requiredDepositUsd * 100)
+        )
+      : { status: "waived" };
     if (verification.status === "rejected") {
       await logActivity({
         category: "DEPOSIT",
@@ -552,7 +582,10 @@ export async function submitBooking(input: SubmitBookingInput) {
       };
     }
 
-    const deposit = verification.deposit;
+    const deposit: DepositOutcome =
+      verification.status === "ok"
+        ? verification.deposit
+        : { paymentIntentId: null, stripeCustomerId: null, stripePaymentMethodId: null, amountUsd: 0 };
 
     const isNewClient = !existingClient;
     const newReferralCode = isNewClient ? await generateUniqueReferralCode() : null;
@@ -584,7 +617,14 @@ export async function submitBooking(input: SubmitBookingInput) {
             // Both ids come from the VERIFIED PaymentIntent, never from the
             // request body. Accepting them from the client let anyone repoint
             // any customer's default card by booking on their email address.
-            stripeCustomerId: deposit.stripeCustomerId,
+            //
+            // Written only when there IS one. A workspace that charges no
+            // deposit produces no Stripe customer, and assigning null here
+            // would erase the id a returning customer already had — taking
+            // their saved card with it.
+            ...(deposit.stripeCustomerId && {
+              stripeCustomerId: deposit.stripeCustomerId,
+            }),
             ...(deposit.stripePaymentMethodId && {
               defaultPaymentMethodId: deposit.stripePaymentMethodId,
             }),
@@ -599,7 +639,9 @@ export async function submitBooking(input: SubmitBookingInput) {
             serviceFrequency: storeFrequency,
             referredByClientId,
             referralCode: newReferralCode,
-            stripeCustomerId: deposit.stripeCustomerId,
+            ...(deposit.stripeCustomerId && {
+              stripeCustomerId: deposit.stripeCustomerId,
+            }),
             ...(deposit.stripePaymentMethodId && {
               defaultPaymentMethodId: deposit.stripePaymentMethodId,
             }),

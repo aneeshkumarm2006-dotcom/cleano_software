@@ -117,7 +117,11 @@ function stepRequirementsMet(
         isValidPhone(draft.phone)
       );
     case 4:
-      return agree && !!draft.stripeCardReady;
+      // A card is required only when there is a deposit to charge. A workspace
+      // that charges none has no card step at all, and the server re-checks the
+      // amount before creating anything, so this cannot be used to skip a real
+      // deposit by setting a flag in the browser.
+      return agree && (!!draft.stripeCardReady || !!draft.depositWaived);
     default:
       return false;
   }
@@ -576,7 +580,13 @@ export default function BookPage() {
     setSubmitting(true);
     setSubmitError(null);
 
-    // Confirm the $20 deposit payment first
+    // Confirm the deposit payment first — unless this company charges none, in
+    // which case there is no card form to wait for and nothing to confirm.
+    //
+    // The flag is set from the SERVER's answer, not chosen by the browser. It
+    // only decides whether to run the card step here; `submitBooking`
+    // re-resolves the deposit from the service type and still refuses a booking
+    // that owed one and did not pay it.
     const confirmFn = (window as any).__stripeConfirmCard as
       | (() => Promise<{ paymentIntentId: string; paymentMethodId: string } | null>)
       | undefined;
@@ -587,7 +597,7 @@ export default function BookPage() {
     // load), we must NOT fall through and submit — the server now requires a
     // verified deposit and would reject with a generic message, so fail here
     // with something the customer can act on.
-    if (!confirmFn) {
+    if (!confirmFn && !draft.depositWaived) {
       setSubmitError(
         "The payment form didn't load. Please refresh the page and try again."
       );
@@ -596,14 +606,17 @@ export default function BookPage() {
       return;
     }
 
-    const depositResult = await confirmFn();
-    if (!depositResult) {
-      setSubmitError("Payment failed. Please check your card details and try again.");
-      setSubmitting(false);
-      submittingRef.current = false;
-      return;
+    // No deposit, no card, nothing to charge — go straight to booking.
+    if (confirmFn) {
+      const depositResult = await confirmFn();
+      if (!depositResult) {
+        setSubmitError("Payment failed. Please check your card details and try again.");
+        setSubmitting(false);
+        submittingRef.current = false;
+        return;
+      }
+      depositPaymentIntentId = depositResult.paymentIntentId;
     }
-    depositPaymentIntentId = depositResult.paymentIntentId;
 
     const res = await submitBooking({
       postalCode: draft.postalCode,

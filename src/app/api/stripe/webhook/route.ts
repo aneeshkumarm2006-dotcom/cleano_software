@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { stripe } from "@/lib/stripe";
+import { getCurrentOrg } from "@/lib/org";
+import { PLATFORM_ORG_SLUG } from "@/lib/tenant";
+import { requireStripeForCurrentOrg, webhookSecretForOrgId } from "@/lib/stripe-org";
 import { db } from "@/lib/org-db";
 import { platformDb } from "@/lib/platform-db";
 import { runAsOrg, type OrgContext } from "@/lib/org-context";
@@ -199,7 +201,7 @@ async function handleSetupIntentSucceeded(si: Stripe.SetupIntent) {
   });
 
   // Also set it as default on the Stripe customer
-  await stripe.customers.update(customerId, {
+  await (await requireStripeForCurrentOrg()).customers.update(customerId, {
     invoice_settings: { default_payment_method: paymentMethodId },
   });
 
@@ -296,10 +298,43 @@ async function organizationForEvent(event: Stripe.Event): Promise<OrgContext | n
   return org ?? null;
 }
 
+/**
+ * The signing secrets this delivery could legitimately have been signed with.
+ *
+ * There is an ordering problem here that is worth naming. To trust the payload
+ * we must verify the signature; to know which company's secret to verify with,
+ * we would like to read the payload. So neither can come first.
+ *
+ * The way out is the address. Each company's Stripe dashboard points at that
+ * company's own host — acme.useawer.com/api/stripe/webhook — so the host names
+ * the company before a byte of the body is trusted.
+ *
+ * The bare domain is the exception, and it has to be: the company that predates
+ * multi-tenancy configured its endpoint there years ago, and silently failing
+ * their live webhooks would be a worse outcome than carrying one fallback. When
+ * the request arrives with no company in the host, the environment's secret is
+ * tried and the company is worked out from the event, exactly as before.
+ *
+ * Trying more than one secret is safe: both belong to us, and a forged body
+ * verifies against neither.
+ */
+async function candidateSecrets(): Promise<string[]> {
+  const out: string[] = [];
+  const org = await getCurrentOrg();
+
+  if (org && org.slug !== PLATFORM_ORG_SLUG) {
+    const own = await webhookSecretForOrgId(org.id);
+    if (own) out.push(own);
+  } else if (process.env.STRIPE_WEBHOOK_SECRET) {
+    out.push(process.env.STRIPE_WEBHOOK_SECRET);
+  }
+  return out;
+}
+
 export async function POST(req: NextRequest) {
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-  if (!webhookSecret) {
-    console.error("STRIPE_WEBHOOK_SECRET not set");
+  const secrets = await candidateSecrets();
+  if (secrets.length === 0) {
+    console.error("stripe webhook: no signing secret for this address");
     return NextResponse.json({ error: "Webhook secret not configured" }, { status: 500 });
   }
 
@@ -310,17 +345,37 @@ export async function POST(req: NextRequest) {
 
   const rawBody = await req.text();
 
-  let event: Stripe.Event;
-  try {
-    event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
-  } catch (err: any) {
-    console.error("Webhook signature verification failed:", err.message);
-    return NextResponse.json({ error: `Webhook error: ${err.message}` }, { status: 400 });
+  // Verification needs no account credentials -- it is an HMAC over the body --
+  // so any Stripe instance will do, and this one is never used to call the API.
+  const verifier = new Stripe("sk_unused_for_signature_verification_only", {
+    apiVersion: "2026-04-22.dahlia",
+  });
+
+  let event: Stripe.Event | null = null;
+  let lastError = "no secret matched";
+  for (const secret of secrets) {
+    try {
+      event = verifier.webhooks.constructEvent(rawBody, sig, secret);
+      break;
+    } catch (err: any) {
+      lastError = err?.message ?? String(err);
+    }
+  }
+  if (!event) {
+    console.error("Webhook signature verification failed:", lastError);
+    return NextResponse.json({ error: `Webhook error: ${lastError}` }, { status: 400 });
   }
 
   // Which company is this for? Must come first: every query below is scoped, and
   // without a tenant they all return nothing rather than failing loudly.
-  const org = await organizationForEvent(event);
+  //
+  // The host answers it when the delivery arrived on a company's own address.
+  // Otherwise it is the bare-domain case above, and the event itself decides.
+  const hostOrg = await getCurrentOrg();
+  const org =
+    hostOrg && hostOrg.slug !== PLATFORM_ORG_SLUG
+      ? { id: hostOrg.id, slug: hostOrg.slug, name: hostOrg.name, timezone: hostOrg.timezone }
+      : await organizationForEvent(event);
   if (!org) {
     // Nothing of ours matches. Acknowledge rather than 500 — Stripe would retry
     // for days, and a retry cannot make a missing row appear. Recorded so a

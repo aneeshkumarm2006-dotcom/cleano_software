@@ -6,7 +6,7 @@ import { resolveAmountDue } from "@/lib/job-billing";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { stripe } from "@/lib/stripe";
+import { requireStripeForCurrentOrg } from "@/lib/stripe-org";
 import { requireBudgetCategoryId } from "@/lib/budget-categories";
 import {
   sendCustomerHoldPlaced,
@@ -75,7 +75,7 @@ export async function placeCardHold(jobId: string) {
   const amountCents = Math.round(amount * 100);
 
   try {
-    const pi = await stripe.paymentIntents.create({
+    const pi = await (await requireStripeForCurrentOrg()).paymentIntents.create({
       amount: amountCents,
       currency: "cad",
       customer: client.stripeCustomerId,
@@ -158,7 +158,7 @@ export async function captureCardHold(jobId: string) {
   const revenueCategoryId = await requireBudgetCategoryId("revenue");
 
   try {
-    const pi = await stripe.paymentIntents.capture(job.holdPaymentIntentId, {
+    const pi = await (await requireStripeForCurrentOrg()).paymentIntents.capture(job.holdPaymentIntentId, {
       amount_to_capture: amountCents,
     });
     const now = new Date();
@@ -246,7 +246,7 @@ export async function releaseCardHold(jobId: string, reason?: string) {
   }
 
   try {
-    await stripe.paymentIntents.cancel(job.holdPaymentIntentId, {
+    await (await requireStripeForCurrentOrg()).paymentIntents.cancel(job.holdPaymentIntentId, {
       cancellation_reason: "requested_by_customer",
     });
     const now = new Date();

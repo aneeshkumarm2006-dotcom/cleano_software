@@ -5,7 +5,7 @@ import { resolveChargePaymentMethod } from "@/lib/payment-methods";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { stripe } from "@/lib/stripe";
+import { requireStripeForCurrentOrg } from "@/lib/stripe-org";
 import {
   sendAdminBookingCancellationRequest,
   sendCustomerFeesCharged,
@@ -80,7 +80,7 @@ export async function requestCancellation(jobId: string, reason?: string) {
         : null;
       if (client?.stripeCustomerId && feeCard) {
         try {
-          const pi = await stripe.paymentIntents.create({
+          const pi = await (await requireStripeForCurrentOrg()).paymentIntents.create({
             amount: amountCents,
             currency: "cad",
             customer: client.stripeCustomerId,

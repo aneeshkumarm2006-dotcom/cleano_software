@@ -233,25 +233,46 @@ async function bookACleaning(page: Page): Promise<void> {
 
   if (!ready) {
     const body = (await page.locator("body").innerText().catch(() => "")).replace(/\s+/g, " ");
-    const why = /Could not initialise payment/i.test(body)
-      ? "payment could not start — Stripe is not configured here"
+    const noStripe =
+      /can't take card payments online yet/i.test(body) ||
+      /Could not (initialise|start) the payment/i.test(body);
+    const why = noStripe
+      ? "this workspace has no Stripe account connected here"
       : "the button never became pressable";
     // Not counted as a defect when the cause is a missing local key: the app
     // told the visitor and refused to take a booking it could not charge for,
     // which is the correct thing to do.
     console.log(`  ${"confirm".padEnd(22)} blocked — ${why}`);
-    if (!/Could not initialise payment/i.test(body)) {
-      note("booking", "cannot confirm", why);
-    }
+    if (!noStripe) note("booking", "cannot confirm", why);
     return;
   }
 
   await confirm.click().catch(() => {});
-  await page.waitForTimeout(7000);
+  await page.waitForTimeout(8000);
   const done = (await page.locator("body").innerText().catch(() => "")).replace(/\s+/g, " ");
-  /confirm|booked|thank/i.test(done)
-    ? console.log("  confirmed               booking went through")
-    : note("booking", "confirm did nothing", done.slice(0, 140));
+
+  // The confirmation screen greets the customer by name and says a confirmation
+  // was sent. Matching a loose word like "confirm" is NOT good enough: it also
+  // appears on the review step's own "Confirm booking" button, so a booking
+  // that silently failed reported success. That is the same "said it worked
+  // without checking" mistake this harness exists to catch.
+  const booked = /Thanks,/i.test(done) && /We sent a confirmation to/i.test(done);
+  if (booked) {
+    console.log("  confirmed               booking went through");
+    return;
+  }
+  // The wizard shows the server's own message in an error banner.
+  const banner = (await page
+    .locator('[class*="banner"], [role="alert"]')
+    .allInnerTexts()
+    .catch(() => [] as string[]))
+    .map((t) => t.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+  note(
+    "booking",
+    "the booking did not complete",
+    banner.length ? banner.join(" | ").slice(0, 200) : done.slice(-200),
+  );
 }
 
 (async () => {

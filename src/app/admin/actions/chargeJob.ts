@@ -4,7 +4,7 @@ import { db } from "@/lib/org-db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { stripe } from "@/lib/stripe";
+import { requireStripeForCurrentOrg } from "@/lib/stripe-org";
 import { logActivity } from "@/lib/activity-log";
 import { resolveChargePaymentMethod } from "@/lib/payment-methods";
 import { resolveAmountDue } from "@/lib/job-billing";
@@ -183,7 +183,7 @@ export async function chargeJob(jobId: string) {
   }
 
   try {
-    const paymentIntent = await stripe.paymentIntents.create({
+    const paymentIntent = await (await requireStripeForCurrentOrg()).paymentIntents.create({
       amount: amountCents,
       currency: "cad",
       customer: client.stripeCustomerId,

@@ -34,6 +34,10 @@ import {
   PC_DEPOSIT_MAX_USD,
   PC_DEPOSIT_MIN_USD,
   PC_DEPOSIT_SETTING_KEY,
+  STANDARD_BOOKING_DEPOSIT_USD,
+  STANDARD_DEPOSIT_MAX_USD,
+  STANDARD_DEPOSIT_MIN_USD,
+  STANDARD_DEPOSIT_SETTING_KEY,
 } from "@/lib/booking-deposit";
 
 export type SettingCategory =
@@ -564,6 +568,22 @@ export const SETTINGS = {
   // `sensitive` because this is charged to a customer's card before anyone has
   // seen the space. The upper bound in the validator is a fat-finger guard, not a
   // policy: a mistyped 20000 must be refused here rather than by a chargeback.
+  // The deposit every non-quoted booking charges. Hardcoded at $20 while one
+  // company used the product; $20 is a fair hold on a small flat and nothing at
+  // all on a large job, and every company prices differently.
+  //
+  // Zero is permitted and is a real decision, not a neutral one: in the guest
+  // flow the captured deposit is what stops a stranger minting unlimited real
+  // jobs from the public page. The label says so.
+  [STANDARD_DEPOSIT_SETTING_KEY]: def({
+    key: STANDARD_DEPOSIT_SETTING_KEY,
+    category: "bookings",
+    label: "Booking deposit ($) — 0 takes bookings with no deposit and no card",
+    default: STANDARD_BOOKING_DEPOSIT_USD,
+    validate: moneyRange(STANDARD_DEPOSIT_MIN_USD, STANDARD_DEPOSIT_MAX_USD),
+    audit: true,
+    sensitive: true,
+  }),
   [PC_DEPOSIT_SETTING_KEY]: def({
     key: PC_DEPOSIT_SETTING_KEY,
     category: "bookings",

@@ -3702,6 +3702,28 @@ model Organization {
   /// number. Not unique: a service can front several numbers.
   smsMessagingServiceSid String?
 
+  /// This company's own Stripe credentials, pasted into their settings.
+  ///
+  /// Deliberately NOT "null means use the environment's key", which is how
+  /// smsNumber above works. For a phone number that fallback is untidy; for
+  /// payments it would take a second company's customer's deposit and put it in
+  /// the FIRST company's bank account. A workspace with nothing here cannot
+  /// take card payments at all, which is the safe way to be wrong.
+  ///
+  /// The environment's key belongs to exactly one workspace, named by
+  /// STRIPE_ENV_ORG_SLUG, so the company it was set up for keeps working
+  /// without pasting anything.
+  ///
+  /// The secret and webhook signing secret are encrypted at rest (see
+  /// lib/secret-box.ts); the publishable key is public by design and is not.
+  stripeSecretKeyEnc     String?
+  stripePublishableKey   String?
+  stripeWebhookSecretEnc String?
+  /// Last four of the saved secret key, so settings can show WHICH key is in
+  /// place without being able to show the key.
+  stripeKeyHint          String?
+  stripeConnectedAt      DateTime?
+
   subscription Subscription?
 
   createdAt DateTime @default(now())
@@ -3823,14 +3845,14 @@ model AccessRequest {
   wantedSlug  String?
   message     String?
 
-  status     AccessRequestStatus @default(PENDING)
+  status         AccessRequestStatus @default(PENDING)
   /// Set when a workspace is created from this request.
-  createdOrgId String?
+  createdOrgId   String?
   /// Why it was declined, or a note left when approving.
-  decisionNote String?
-  decidedById  String?
+  decisionNote   String?
+  decidedById    String?
   decidedByEmail String?
-  decidedAt    DateTime?
+  decidedAt      DateTime?
 
   /// Kept for rate limiting and for spotting a flood from one place.
   submittedFrom String?

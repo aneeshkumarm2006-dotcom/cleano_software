@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { stripe, getOrCreateStripeCustomer } from "@/lib/stripe";
+
+import { getOrCreateStripeCustomer, requireStripeForCurrentOrg } from "@/lib/stripe-org";
 import { db } from "@/lib/org-db";
 import { auth } from "@/lib/auth";
 import { isAdminRole } from "@/lib/role-routing";
@@ -34,11 +35,11 @@ export async function POST(req: NextRequest) {
       customerId = await getOrCreateStripeCustomer(resolvedClientId, email, name);
     } else {
       // Guest — create a temporary customer, will be linked after booking
-      const customer = await stripe.customers.create({ email, name });
+      const customer = await (await requireStripeForCurrentOrg()).customers.create({ email, name });
       customerId = customer.id;
     }
 
-    const setupIntent = await stripe.setupIntents.create({
+    const setupIntent = await (await requireStripeForCurrentOrg()).setupIntents.create({
       customer: customerId,
       payment_method_types: ["card"],
       usage: "off_session",

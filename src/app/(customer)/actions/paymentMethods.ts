@@ -4,7 +4,8 @@ import { db } from "@/lib/org-db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { stripe, getOrCreateStripeCustomer } from "@/lib/stripe";
+
+import { getOrCreateStripeCustomer, requireStripeForCurrentOrg } from "@/lib/stripe-org";
 import { logActivity } from "@/lib/activity-log";
 import { getCardRemovalBlock, notifyCardReplaced } from "@/lib/payment-methods";
 
@@ -87,7 +88,7 @@ async function assertOwnedCard(
 
   let pm;
   try {
-    pm = await stripe.paymentMethods.retrieve(paymentMethodId);
+    pm = await (await requireStripeForCurrentOrg()).paymentMethods.retrieve(paymentMethodId);
   } catch {
     return { ok: false, error: "Card not found" };
   }
@@ -117,7 +118,7 @@ export async function listMyPaymentMethods(): Promise<
   }
 
   try {
-    const list = await stripe.paymentMethods.list({
+    const list = await (await requireStripeForCurrentOrg()).paymentMethods.list({
       customer: client.stripeCustomerId,
       type: "card",
     });
@@ -180,7 +181,7 @@ export async function createMySetupIntent(): Promise<
       client.name
     );
 
-    const setupIntent = await stripe.setupIntents.create({
+    const setupIntent = await (await requireStripeForCurrentOrg()).setupIntents.create({
       customer: customerId,
       payment_method_types: ["card"],
       usage: "off_session",
@@ -200,7 +201,7 @@ export async function createMySetupIntent(): Promise<
 
 /**
  * Confirms a newly added card and makes it the default for future bookings.
- * Called after `stripe.confirmSetup` succeeds in the browser.
+ * Called after `(await requireStripeForCurrentOrg()).confirmSetup` succeeds in the browser.
  */
 export async function finalizeMyCardSetup(
   setupIntentId: string
@@ -211,7 +212,7 @@ export async function finalizeMyCardSetup(
 
   let setupIntent;
   try {
-    setupIntent = await stripe.setupIntents.retrieve(setupIntentId, {
+    setupIntent = await (await requireStripeForCurrentOrg()).setupIntents.retrieve(setupIntentId, {
       expand: ["payment_method"],
     });
   } catch {
@@ -249,7 +250,7 @@ export async function finalizeMyCardSetup(
 
   try {
     // A newly added card becomes the default for future bookings.
-    await stripe.customers.update(client.stripeCustomerId, {
+    await (await requireStripeForCurrentOrg()).customers.update(client.stripeCustomerId, {
       invoice_settings: { default_payment_method: paymentMethodId },
     });
 
@@ -334,7 +335,7 @@ export async function setMyDefaultPaymentMethod(
   const previousDefault = client.defaultPaymentMethodId;
 
   try {
-    await stripe.customers.update(client.stripeCustomerId!, {
+    await (await requireStripeForCurrentOrg()).customers.update(client.stripeCustomerId!, {
       invoice_settings: { default_payment_method: owned.id },
     });
 
@@ -599,7 +600,7 @@ export async function removeMyPaymentMethod(
 
   try {
     try {
-      await stripe.paymentMethods.detach(owned.id);
+      await (await requireStripeForCurrentOrg()).paymentMethods.detach(owned.id);
     } catch (err) {
       // Already detached in Stripe — converge the mirror anyway.
       const code = (err as { code?: string })?.code;
@@ -619,7 +620,7 @@ export async function removeMyPaymentMethod(
       });
 
       if (next) {
-        await stripe.customers.update(client.stripeCustomerId!, {
+        await (await requireStripeForCurrentOrg()).customers.update(client.stripeCustomerId!, {
           invoice_settings: {
             default_payment_method: next.stripePaymentMethodId,
           },

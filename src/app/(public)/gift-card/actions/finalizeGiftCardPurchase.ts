@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/lib/org-db";
-import { stripe } from "@/lib/stripe";
+import { requireStripeForCurrentOrg } from "@/lib/stripe-org";
 import {
   sendGiftCardToRecipient,
   sendGiftCardPurchaserReceipt,
@@ -25,7 +25,7 @@ export async function finalizeGiftCardPurchase(giftCardId: string) {
     return { success: false, error: "No payment in progress" };
   }
 
-  const pi = await stripe.paymentIntents.retrieve(
+  const pi = await (await requireStripeForCurrentOrg()).paymentIntents.retrieve(
     card.stripePaymentIntentId
   );
   if (pi.status !== "succeeded") {

@@ -27,6 +27,8 @@ import {
   PC_DEPOSIT_DEFAULT_USD,
   PC_DEPOSIT_MAX_USD,
   PC_DEPOSIT_SETTING_KEY,
+  STANDARD_DEPOSIT_MAX_USD,
+  STANDARD_DEPOSIT_SETTING_KEY,
   STANDARD_BOOKING_DEPOSIT_USD,
   formatDeposit,
 } from "@/lib/booking-deposit";
@@ -139,6 +141,9 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
   // block because that is where an admin already goes to change what
   // post-construction costs — the deposit is the first number the customer pays,
   // not a payments-tab detail.
+  const [standardDeposit, setStandardDeposit] = useState<number>(() =>
+    getSetting<number>(settings, STANDARD_DEPOSIT_SETTING_KEY, STANDARD_BOOKING_DEPOSIT_USD)
+  );
   const [pcDeposit, setPcDeposit] = useState<number>(() =>
     getSetting<number>(settings, PC_DEPOSIT_SETTING_KEY, PC_DEPOSIT_DEFAULT_USD)
   );
@@ -185,6 +190,11 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
       // Registry-governed and flagged `sensitive`, so this write is validated and
       // audit-logged by the settings spine rather than upserted raw. `category`
       // is ignored for a registered key — the registry's own ("bookings") wins.
+      updateAppSetting({
+        key: STANDARD_DEPOSIT_SETTING_KEY,
+        category: "bookings",
+        value: standardDeposit,
+      }),
       updateAppSetting({
         key: PC_DEPOSIT_SETTING_KEY,
         category: "bookings",
@@ -614,8 +624,40 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
             because it is a different KIND of number: the rate prices the job, this
             is what the customer's card is charged up front and credited back
             against the final quote. */}
+        {/* The deposit every OTHER service charges. Hardcoded at $20 while one
+            company used the product; $20 is a fair hold on a small flat and
+            nothing at all on a large job, and every company prices differently. */}
         <div className="mt-4 pt-4 border-t border-[#008C9C]/10">
-          <Field label="Deposit charged at booking ($)">
+          <Field label="Standard booking deposit ($)">
+            <Input
+              variant="form"
+              type="number"
+              min="0"
+              max={String(STANDARD_DEPOSIT_MAX_USD)}
+              step="5"
+              value={standardDeposit}
+              onChange={(e) => setStandardDeposit(parseFloat(e.target.value) || 0)}
+            />
+          </Field>
+          <p className="text-sm text-[#008C9C]/60 mt-2">
+            Charged when a customer books any service other than
+            post-construction, and credited against the final invoice.
+            {standardDeposit === 0 ? (
+              <>
+                {" "}
+                <strong>Set to $0, bookings are taken with no deposit and no
+                card.</strong>{" "}
+                The deposit is the only thing stopping a stranger filling your
+                calendar with bookings that were never real, so leave this at $0
+                only if you check every booking by hand.
+              </>
+            ) : (
+              " Changing it affects NEW bookings only — existing ones keep the deposit they actually charged."
+            )}
+          </p>
+        </div>
+        <div className="mt-4 pt-4 border-t border-[#008C9C]/10">
+          <Field label="Post-construction deposit ($)">
             <Input
               variant="form"
               type="number"
@@ -629,10 +671,10 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
           <p className="text-sm text-[#008C9C]/60 mt-2">
             Charged when the customer submits a post-construction request, before
             anyone has seen the space, and credited against the final quote. Every
-            other service keeps its{" "}
-            {formatDeposit(STANDARD_BOOKING_DEPOSIT_USD)} deposit. Changing this
-            affects NEW requests only — existing bookings keep the deposit they
-            actually charged.
+            other service charges the{" "}
+            {formatDeposit(standardDeposit)} standard deposit set above. Changing
+            this affects NEW requests only — existing bookings keep the deposit
+            they actually charged.
           </p>
         </div>
         <p className="text-sm text-[#008C9C]/60 mt-3">

@@ -1,7 +1,8 @@
 "use server";
 
 import { db } from "@/lib/org-db";
-import { stripe, getOrCreateStripeCustomer } from "@/lib/stripe";
+
+import { getOrCreateStripeCustomer, requireStripeForCurrentOrg } from "@/lib/stripe-org";
 
 /**
  * Public action triggered by the /add-card/[token] page. Validates the
@@ -31,7 +32,7 @@ export async function createSetupIntentForToken(token: string) {
     client.name
   );
 
-  const setupIntent = await stripe.setupIntents.create({
+  const setupIntent = await (await requireStripeForCurrentOrg()).setupIntents.create({
     customer: customerId,
     payment_method_types: ["card"],
     usage: "off_session",

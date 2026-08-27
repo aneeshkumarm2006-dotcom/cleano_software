@@ -15,9 +15,23 @@ export function getStripe(): Stripe {
   return _stripe;
 }
 
+/**
+ * The platform-wide Stripe client. NOT for taking payments.
+ *
+ * It has no idea which company it is acting for, which is exactly how a second
+ * company's deposit would have been paid into the first company's account. Use
+ * `requireStripeForCurrentOrg()` from lib/stripe-org.ts, which resolves the
+ * workspace's own credentials and refuses when there are none.
+ *
+ * Kept exported and throwing rather than deleted so that anything still reaching
+ * for it fails immediately and says why, instead of finding a global by accident.
+ */
 export const stripe = new Proxy({} as Stripe, {
   get(_target, prop) {
-    return (getStripe() as any)[prop];
+    throw new Error(
+      `stripe.${String(prop)} — the shared Stripe client cannot take payments, because it does not ` +
+        "know which company it is acting for. Use requireStripeForCurrentOrg() from @/lib/stripe-org.",
+    );
   },
 });
 
@@ -40,19 +54,3 @@ export const stripe = new Proxy({} as Stripe, {
  */
 export const BOOKING_DEPOSIT_CENTS = STANDARD_BOOKING_DEPOSIT_USD * 100;
 export const BOOKING_DEPOSIT_CURRENCY = "cad";
-
-export async function getOrCreateStripeCustomer(clientId: string, email: string, name: string) {
-  const { db } = await import("@/db");
-  const client = await db.client.findUnique({ where: { id: clientId }, select: { stripeCustomerId: true } });
-
-  if (client?.stripeCustomerId) return client.stripeCustomerId;
-
-  const customer = await stripe.customers.create({ email, name, metadata: { clientId } });
-
-  await db.client.update({
-    where: { id: clientId },
-    data: { stripeCustomerId: customer.id },
-  });
-
-  return customer.id;
-}
