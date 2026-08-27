@@ -4,6 +4,7 @@ import { db as rawDb } from "@/db";
 import { scopedTo, type ScopedDb } from "@/lib/db-scoped";
 import { runAsOrg, type OrgContext } from "@/lib/org-context";
 import { platformDb } from "@/lib/platform-db";
+import { PLATFORM_ORG_SLUG } from "@/lib/tenant";
 
 /**
  * Running the same scheduled work for every cleaning company on Awer.
@@ -47,7 +48,12 @@ export async function forEachOrganization<T>(
   fn: (db: ScopedDb, org: OrgContext) => Promise<T>,
 ): Promise<OrgRunResult<T>[]> {
   const orgs = await platformDb.organization.findMany({
-    where: { status: "ACTIVE" },
+    // Awer's own workspace is excluded. It is not a cleaning company: it has no
+    // customers to remind, no cleaners to pay and no statements to send. Left in,
+    // it quietly acquired a payroll period and a run of monthly statements on the
+    // first real cron run -- work that means nothing and would confuse anyone
+    // who later looked at it.
+    where: { status: "ACTIVE", slug: { not: PLATFORM_ORG_SLUG } },
     select: { id: true, slug: true, name: true, timezone: true },
     orderBy: { slug: "asc" },
   });

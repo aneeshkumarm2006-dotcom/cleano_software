@@ -158,7 +158,7 @@ export async function GET(req: NextRequest) {
           totalOutstanding,
         });
 
-        await sendCustomerMonthlyStatement({
+        const delivery = await sendCustomerMonthlyStatement({
           to: client.email,
           clientName: client.name,
           monthLabel: period.monthLabel,
@@ -171,11 +171,23 @@ export async function GET(req: NextRequest) {
           pdf,
         });
 
-        await db.emailLog.update({
-          where: { id: log.id },
-          data: { status: "SENT" },
-        });
-        sent++;
+        // Honour what the mailer actually reported. It returns { ok: false }
+        // rather than throwing when it is unconfigured or the provider refuses,
+        // so marking SENT unconditionally recorded statements as delivered that
+        // never left the building -- and the cron reported a healthy "sent 16".
+        if (delivery?.ok === false) {
+          const why = delivery.error ?? "email was not sent";
+          errors.push({ clientId: client.id, error: why });
+          await db.emailLog
+            .update({ where: { id: log.id }, data: { status: "FAILED", error: why } })
+            .catch(() => {});
+        } else {
+          await db.emailLog.update({
+            where: { id: log.id },
+            data: { status: "SENT" },
+          });
+          sent++;
+        }
       } catch (e) {
         const msg =
           (e as { message?: string })?.message ?? "monthly statement failed";
