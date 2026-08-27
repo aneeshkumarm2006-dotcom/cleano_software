@@ -801,6 +801,44 @@ risky part of this.
    `openssl rand -hex 32`. Lose it and every stored Stripe credential becomes
    unreadable (the app fails closed and asks for re-entry, but it is a bad day).
 
+### The migration and the deploy are ONE step, not two
+
+**Do not apply the migrations in advance to "get them out of the way".** They
+must land within minutes of the new code, and here is why.
+
+Every tenant table gets `organizationId TEXT NOT NULL DEFAULT ''` plus a CHECK
+that it is not blank. The code running in production today has no idea the
+column exists — `origin/main` contains the string `organizationId` exactly zero
+times — so its inserts take the empty default and are refused:
+
+```
+ERROR: new row for relation "Client" violates check constraint
+       "Client_organizationId_not_blank"
+```
+
+Reads keep working. Only writes fail. So the site looks completely normal while
+quietly refusing to save a booking, a client, a clock-in or an invoice — which is
+the worst way for an outage to present, because nobody notices for an hour.
+
+Verified against the rehearsal copy of production's schema on 2026-08-27 by
+inserting a row the way the live code does. It failed, as it should.
+
+**What this means for the window:**
+
+- Writes are broken from the moment `migrate deploy` finishes until the new code
+  is serving. That gap is however long a Vercel build takes — two to five
+  minutes.
+- Pick a genuinely quiet hour. For TeamCleano that is the middle of the night in
+  Canada.
+- **Pause the cron jobs** for the window, or a nightly run lands mid-gap and
+  fails half way through a payroll period.
+- Have the deploy queued and ready to promote BEFORE running the migration, so
+  the gap is the promote, not the build.
+
+There is no way to make this zero without splitting every CHECK constraint into
+a second migration, and those constraints are the thing keeping unclaimed rows
+out of the database. A few minutes at 3am is the cheaper trade.
+
 ### The window
 
 Set `PROD` to the elevated (postgres) connection string, not the pooler.
