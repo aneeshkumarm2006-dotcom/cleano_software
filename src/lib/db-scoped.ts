@@ -170,6 +170,66 @@ interface Plan {
   postFilter?: boolean;
 }
 
+/**
+ * The compound unique keys each model has, by the name Prisma wraps them in.
+ *
+ * `@@unique([channelId, userId])` is addressed as
+ * `where: { channelId_userId: { channelId, userId } }`. That shape is legal for
+ * findUnique and for the `where` of an update, delete or upsert — and illegal
+ * for findFirst, which is what the ownership check below has to issue.
+ *
+ * Read from the schema rather than guessed at. The tempting shortcut — treat
+ * any object-valued key as a compound wrapper — also swallows ordinary filters
+ * like `{ status: { in: [...] } }` and turns them into nonsense.
+ */
+const COMPOUND_KEYS: Map<string, Set<string>> = (() => {
+  const out = new Map<string, Set<string>>();
+  for (const m of Prisma.dmmf.datamodel.models) {
+    const names = new Set<string>();
+    // Both shapes: a named @@unique gets its own name, an unnamed one is
+    // addressed by its fields joined with underscores.
+    for (const idx of m.uniqueIndexes ?? []) {
+      if (idx.fields.length > 1) names.add(idx.name || idx.fields.join("_"));
+    }
+    for (const fields of m.uniqueFields ?? []) {
+      if (fields.length > 1) names.add(fields.join("_"));
+    }
+    if (names.size) out.set(m.name, names);
+  }
+  return out;
+})();
+
+/**
+ * A unique `where` rewritten as something findFirst will accept.
+ *
+ * Only the keys the schema says are compound wrappers are unwrapped; everything
+ * else is passed through untouched.
+ *
+ * Without this, every write addressed by a compound key died: the check issued
+ * `findFirst({ where: { channelId_userId: {...} } })` and Prisma rejected the
+ * argument outright. Thirty-one models have such a key -- User by
+ * organizationId_email, Job by organizationId_jobNumber, Invoice by its number,
+ * JobAssignment by job and cleaner -- so this was not one broken page. Opening
+ * the team chat was simply the first place anyone pressed the button.
+ */
+function ownershipFilter(
+  model: string,
+  where: Record<string, unknown>,
+): Record<string, unknown> {
+  const compound = COMPOUND_KEYS.get(model);
+  if (!compound) return where;
+
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(where)) {
+    if (compound.has(key) && value !== null && typeof value === "object") {
+      Object.assign(out, value as Record<string, unknown>);
+    } else {
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
 function plan(operation: string, a: Record<string, unknown>, organizationId: string): Plan {
   if (FILTERABLE.has(operation)) {
     return {
@@ -315,14 +375,15 @@ export function scopedTo(base: PrismaClient, organizationId: string) {
             >)[delegateOf(model)];
 
             if (p.ownershipCheck) {
+              const filter = ownershipFilter(model, p.ownershipCheck);
               const owned = await delegate.findFirst({
-                where: { ...p.ownershipCheck, organizationId },
+                where: { ...filter, organizationId },
                 select: { id: true },
               });
               if (!owned) {
                 if (!p.allowMissing) throw new CrossTenantError(model, operation);
                 const anywhere = await delegate.findFirst({
-                  where: p.ownershipCheck,
+                  where: filter,
                   select: { id: true },
                 });
                 if (anywhere) throw new CrossTenantError(model, operation);

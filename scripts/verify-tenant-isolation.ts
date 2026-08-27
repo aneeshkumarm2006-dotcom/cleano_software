@@ -157,6 +157,81 @@ async function expectRefused(name: string, fn: () => Promise<unknown>) {
   await db.jobAddOn.deleteMany({ where: { jobId: parent.id } });
   await db.job.delete({ where: { id: parent.id } });
 
+  console.log("\nCOMPOUND UNIQUE KEYS");
+  // Thirty-one models are addressed by a two-part key -- a cleaner's
+  // availability by employee and day, a job by organization and number, an
+  // invoice by its number. Every write through such a key used to die: the
+  // ownership check re-issued the caller's `where` as a findFirst, and Prisma
+  // rejects `{ employeeId_day: {...} }` there outright. Reads had their own
+  // path and were fine, which is why it stayed hidden -- pages loaded; only
+  // pressing a button failed.
+  const aEmp = await db.user.findFirstOrThrow({
+    where: { organizationId: A.id, role: "EMPLOYEE" },
+  });
+  const bEmp = await db.user.findFirstOrThrow({
+    where: { organizationId: B.id, role: "EMPLOYEE" },
+  });
+  const DAY = "SUNDAY" as const;
+
+  await db.employeeAvailability.deleteMany({ where: { employeeId: { in: [aEmp.id, bEmp.id] }, day: DAY } });
+
+  // upsert through the compound key, on our own employee
+  const madeUp = await dbA.employeeAvailability.upsert({
+    where: { employeeId_day: { employeeId: aEmp.id, day: DAY } },
+    create: { employeeId: aEmp.id, day: DAY, startTime: "09:00", endTime: "17:00" },
+    update: { endTime: "18:00" },
+  });
+  madeUp.organizationId === A.id
+    ? ok("upsert through a two-part key creates, stamped with our organization")
+    : bad("compound upsert", `stamped ${madeUp.organizationId}`);
+
+  // and again, so it takes the update branch rather than the create branch
+  const again = await dbA.employeeAvailability.upsert({
+    where: { employeeId_day: { employeeId: aEmp.id, day: DAY } },
+    create: { employeeId: aEmp.id, day: DAY, startTime: "09:00", endTime: "17:00" },
+    update: { endTime: "18:00" },
+  });
+  again.endTime === "18:00"
+    ? ok("upsert through a two-part key updates the row it already made")
+    : bad("compound upsert update branch", again.endTime);
+
+  const updated = await dbA.employeeAvailability.update({
+    where: { employeeId_day: { employeeId: aEmp.id, day: DAY } },
+    data: { startTime: "08:00" },
+  });
+  updated.startTime === "08:00"
+    ? ok("update through a two-part key changes our own row")
+    : bad("compound update", updated.startTime);
+
+  // the same key, pointed at the other company
+  await db.employeeAvailability.create({
+    data: { organizationId: B.id, employeeId: bEmp.id, day: DAY, startTime: "09:00", endTime: "17:00" },
+  });
+  await expectRefused("update B's row through a two-part key", () =>
+    dbA.employeeAvailability.update({
+      where: { employeeId_day: { employeeId: bEmp.id, day: DAY } },
+      data: { startTime: "23:00" },
+    }));
+  await expectRefused("delete B's row through a two-part key", () =>
+    dbA.employeeAvailability.delete({
+      where: { employeeId_day: { employeeId: bEmp.id, day: DAY } },
+    }));
+  await expectRefused("upsert onto B's row through a two-part key", () =>
+    dbA.employeeAvailability.upsert({
+      where: { employeeId_day: { employeeId: bEmp.id, day: DAY } },
+      create: { employeeId: bEmp.id, day: DAY, startTime: "01:00", endTime: "02:00" },
+      update: { startTime: "01:00" },
+    }));
+
+  const bRow = await db.employeeAvailability.findFirstOrThrow({
+    where: { employeeId: bEmp.id, day: DAY },
+  });
+  bRow.startTime === "09:00"
+    ? ok("B's row is exactly as it was")
+    : bad("B's row was modified", bRow.startTime);
+
+  await db.employeeAvailability.deleteMany({ where: { employeeId: { in: [aEmp.id, bEmp.id] }, day: DAY } });
+
   console.log("\nCOLLATERAL DAMAGE CHECK");
   const bAfter = await db.job.count({ where: { organizationId: B.id } });
   bAfter === bBefore ? ok(`B's job count unchanged (${bAfter})`) : bad("B row count", `${bBefore} -> ${bAfter}`);
