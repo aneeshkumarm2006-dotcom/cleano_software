@@ -106,30 +106,31 @@ export async function assignCleaners(input: {
       job.jobType
     );
 
-    await db.$transaction([
-      db.job.update({
-        where: { id: input.jobId },
-        data: {
-          // Keep the lead pointing at a real member of the team. Without this
-          // the column kept whatever it held before — including an admin left
-          // over from the old saveJob behaviour (fix list items 3 + 4).
-          employeeId: resolveJobLead(job.employeeId, input.cleanerIds),
-          cleaners:
-            input.cleanerIds.length > 0
-              ? { set: input.cleanerIds.map((id) => ({ id })) }
-              : { set: [] },
-        },
-      }),
-      db.jobLog.create({
-        data: {
-          jobId: input.jobId,
-          userId: session.user.id,
-          action: "UPDATED",
-          field: "cleaners",
-          description: `Cleaners updated by ${session.user.name ?? "Admin"} — ${input.cleanerIds.length} assigned`,
-        },
-      }),
-    ]);
+    await db.$transaction(async (tx) => {
+      const __t0 = await tx.job.update({
+          where: { id: input.jobId },
+          data: {
+            // Keep the lead pointing at a real member of the team. Without this
+            // the column kept whatever it held before — including an admin left
+            // over from the old saveJob behaviour (fix list items 3 + 4).
+            employeeId: resolveJobLead(job.employeeId, input.cleanerIds),
+            cleaners:
+              input.cleanerIds.length > 0
+                ? { set: input.cleanerIds.map((id) => ({ id })) }
+                : { set: [] },
+          },
+        });
+      const __t1 = await tx.jobLog.create({
+          data: {
+            jobId: input.jobId,
+            userId: session.user.id,
+            action: "UPDATED",
+            field: "cleaners",
+            description: `Cleaners updated by ${session.user.name ?? "Admin"} — ${input.cleanerIds.length} assigned`,
+          },
+        });
+      return [__t0, __t1];
+    });
 
     // Keep per-cleaner JobAssignment rows in sync with the assigned team.
     // Surfaced, not swallowed — the admin must not be told the assignment saved

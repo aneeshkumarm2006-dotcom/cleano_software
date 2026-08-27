@@ -229,20 +229,21 @@ export async function runLeadExport(
         continue;
       }
 
-      await db.$transaction([
-        db.contact.update({ where: { id: existing.id }, data }),
-        db.contactActivity.create({
-          data: {
-            contactId: existing.id,
-            type: "NOTE",
-            title: "Lead attached from Leads",
-            body:
-              leadSummary(lead) +
-              (filled.length ? ` · Filled in: ${filled.join(", ")}` : " · Nothing was missing"),
-            actor,
-          },
-        }),
-      ]);
+      await db.$transaction(async (tx) => {
+        const __t0 = await tx.contact.update({ where: { id: existing.id }, data });
+        const __t1 = await tx.contactActivity.create({
+            data: {
+              contactId: existing.id,
+              type: "NOTE",
+              title: "Lead attached from Leads",
+              body:
+                leadSummary(lead) +
+                (filled.length ? ` · Filled in: ${filled.join(", ")}` : " · Nothing was missing"),
+              actor,
+            },
+          });
+        return [__t0, __t1];
+      });
 
       linked++;
       indexContact(index, {

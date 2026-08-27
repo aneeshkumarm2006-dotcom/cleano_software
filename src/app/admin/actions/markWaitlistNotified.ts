@@ -21,21 +21,22 @@ export async function markWaitlistNotified(id: string) {
       return { success: false, error: "Already notified" };
     }
 
-    await db.$transaction([
-      db.waitlist.update({
-        where: { id },
-        data: { status: "NOTIFIED", notifiedAt: new Date() },
-      }),
-      db.emailLog.create({
-        data: {
-          kind: "WAITLIST_AVAILABLE",
-          recipient: entry.email,
-          subject: `Slot opened up for ${formatDate(entry.preferredDate, { weekday: "short", month: "short", day: "numeric", year: "numeric" })}`,
-          status: "PENDING",
-          waitlistId: id,
-        },
-      }),
-    ]);
+    await db.$transaction(async (tx) => {
+      const __t0 = await tx.waitlist.update({
+          where: { id },
+          data: { status: "NOTIFIED", notifiedAt: new Date() },
+        });
+      const __t1 = await tx.emailLog.create({
+          data: {
+            kind: "WAITLIST_AVAILABLE",
+            recipient: entry.email,
+            subject: `Slot opened up for ${formatDate(entry.preferredDate, { weekday: "short", month: "short", day: "numeric", year: "numeric" })}`,
+            status: "PENDING",
+            waitlistId: id,
+          },
+        });
+      return [__t0, __t1];
+    });
 
     revalidatePath("/admin/waitlist");
     return { success: true };

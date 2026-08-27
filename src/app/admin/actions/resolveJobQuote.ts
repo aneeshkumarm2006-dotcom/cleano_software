@@ -101,43 +101,44 @@ export async function resolveJobQuote(input: ResolveJobQuoteInput) {
 
     /* ------------------------------- ACCEPTED ------------------------------ */
     if (input.decision === "ACCEPTED") {
-      await db.$transaction([
-        db.job.update({
-          where: { id: job.id },
-          data: {
-            quoteStatus: "ACCEPTED",
-            // Back onto the normal ladder. `isFlexible` is respected exactly as
-            // `submitBooking` would have: a flexible booking stays CREATED for an
-            // admin to time, a dated one becomes SCHEDULED. Only ever promoted
-            // from CREATED — if an admin has already moved the job on (assigned
-            // and started it, say), accepting the quote must not drag it back.
-            ...(job.status === "CREATED" && !job.isFlexible
-              ? { status: "SCHEDULED" as const, holdReason: null }
-              : {}),
-            // Round 4, fix 6. A flexible quote stays on hold — but the reason
-            // it is held has just CHANGED: it is no longer waiting on a price,
-            // it is waiting on a date. Leaving "Quote pending review" on the
-            // row would send an admin back to a panel that has nothing left to
-            // do, which is exactly the kind of stale hold this fix removes.
-            ...(job.status === "CREATED" && job.isFlexible
-              ? { holdReason: HOLD_REASON.FLEXIBLE_DATE }
-              : {}),
-          },
-        }),
-        db.jobLog.create({
-          data: {
-            jobId: job.id,
-            userId: session.user.id,
-            action: "UPDATED",
-            field: "quoteStatus",
-            oldValue: "QUOTED",
-            newValue: "ACCEPTED",
-            description: `Customer accepted the quote${
-              input.reason?.trim() ? `: ${input.reason.trim()}` : ""
-            }. Job is now schedulable and visible to cleaners.`,
-          },
-        }),
-      ]);
+      await db.$transaction(async (tx) => {
+        const __t0 = await tx.job.update({
+            where: { id: job.id },
+            data: {
+              quoteStatus: "ACCEPTED",
+              // Back onto the normal ladder. `isFlexible` is respected exactly as
+              // `submitBooking` would have: a flexible booking stays CREATED for an
+              // admin to time, a dated one becomes SCHEDULED. Only ever promoted
+              // from CREATED — if an admin has already moved the job on (assigned
+              // and started it, say), accepting the quote must not drag it back.
+              ...(job.status === "CREATED" && !job.isFlexible
+                ? { status: "SCHEDULED" as const, holdReason: null }
+                : {}),
+              // Round 4, fix 6. A flexible quote stays on hold — but the reason
+              // it is held has just CHANGED: it is no longer waiting on a price,
+              // it is waiting on a date. Leaving "Quote pending review" on the
+              // row would send an admin back to a panel that has nothing left to
+              // do, which is exactly the kind of stale hold this fix removes.
+              ...(job.status === "CREATED" && job.isFlexible
+                ? { holdReason: HOLD_REASON.FLEXIBLE_DATE }
+                : {}),
+            },
+          });
+        const __t1 = await tx.jobLog.create({
+            data: {
+              jobId: job.id,
+              userId: session.user.id,
+              action: "UPDATED",
+              field: "quoteStatus",
+              oldValue: "QUOTED",
+              newValue: "ACCEPTED",
+              description: `Customer accepted the quote${
+                input.reason?.trim() ? `: ${input.reason.trim()}` : ""
+              }. Job is now schedulable and visible to cleaners.`,
+            },
+          });
+        return [__t0, __t1];
+      });
 
       await logActivity({
         category: "BOOKING",
@@ -214,38 +215,39 @@ export async function resolveJobQuote(input: ResolveJobQuoteInput) {
     // in QUOTED — reading to the next admin as "waiting on the customer" for a
     // quote the customer has already turned down. Recording the decision and
     // reporting a failed refund is the honest pair.
-    await db.$transaction([
-      db.job.update({
-        where: { id: job.id },
-        data: {
-          quoteStatus: "DECLINED",
-          // Round 4, fix 6 — the hold outlives the quote, so its reason has to
-          // move on with it. "Quote pending review" on a declined booking sends
-          // the next admin to a panel with nothing left to decide.
-          ...(job.status === "CREATED"
-            ? { holdReason: HOLD_REASON.QUOTE_DECLINED }
-            : {}),
-        },
-      }),
-      db.jobLog.create({
-        data: {
-          jobId: job.id,
-          userId: session.user.id,
-          action: "UPDATED",
-          field: "quoteStatus",
-          oldValue: "QUOTED",
-          newValue: "DECLINED",
-          description:
-            `Customer declined the quote. Deposit ($${depositPaid.toFixed(2)}): ` +
-            (disposition === "REFUND"
-              ? `refunding $${refundTarget.toFixed(2)} in full`
-              : disposition === "PARTIAL"
-                ? `refunding $${refundTarget.toFixed(2)} of $${depositRemaining.toFixed(2)} remaining`
-                : "kept, no refund issued") +
-            (reason ? ` — ${reason}` : ""),
-        },
-      }),
-    ]);
+    await db.$transaction(async (tx) => {
+      const __t0 = await tx.job.update({
+          where: { id: job.id },
+          data: {
+            quoteStatus: "DECLINED",
+            // Round 4, fix 6 — the hold outlives the quote, so its reason has to
+            // move on with it. "Quote pending review" on a declined booking sends
+            // the next admin to a panel with nothing left to decide.
+            ...(job.status === "CREATED"
+              ? { holdReason: HOLD_REASON.QUOTE_DECLINED }
+              : {}),
+          },
+        });
+      const __t1 = await tx.jobLog.create({
+          data: {
+            jobId: job.id,
+            userId: session.user.id,
+            action: "UPDATED",
+            field: "quoteStatus",
+            oldValue: "QUOTED",
+            newValue: "DECLINED",
+            description:
+              `Customer declined the quote. Deposit ($${depositPaid.toFixed(2)}): ` +
+              (disposition === "REFUND"
+                ? `refunding $${refundTarget.toFixed(2)} in full`
+                : disposition === "PARTIAL"
+                  ? `refunding $${refundTarget.toFixed(2)} of $${depositRemaining.toFixed(2)} remaining`
+                  : "kept, no refund issued") +
+              (reason ? ` — ${reason}` : ""),
+          },
+        });
+      return [__t0, __t1];
+    });
 
     // `issueRefund` is the ONE refund path: it picks the Stripe PI (falling back
     // to the deposit intent when there is no full charge — which is every quote

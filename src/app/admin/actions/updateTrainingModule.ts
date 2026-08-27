@@ -49,32 +49,33 @@ export async function updateTrainingModule(input: UpdateTrainingModuleInput) {
         q.options.every((o) => o.text?.trim())
     );
 
-    await db.$transaction([
-      db.trainingModule.update({
-        where: { id: input.id },
-        data: {
-          title: input.title.trim(),
-          description: input.description?.trim() || null,
-          videoUrl: input.videoUrl?.trim() || null,
-          duration: input.duration ?? null,
-          isRequired: input.isRequired ?? false,
-          isActive: input.isActive ?? true,
-          sortOrder: input.sortOrder ?? 0,
-        },
-      }),
-      db.trainingQuiz.deleteMany({ where: { moduleId: input.id } }),
-      db.trainingQuiz.createMany({
-        data: validQuizzes.map((q, idx) => ({
-          moduleId: input.id,
-          question: q.question.trim(),
-          options: q.options.map((o) => ({
-            text: o.text.trim(),
-            isCorrect: !!o.isCorrect,
+    await db.$transaction(async (tx) => {
+      const __t0 = await tx.trainingModule.update({
+          where: { id: input.id },
+          data: {
+            title: input.title.trim(),
+            description: input.description?.trim() || null,
+            videoUrl: input.videoUrl?.trim() || null,
+            duration: input.duration ?? null,
+            isRequired: input.isRequired ?? false,
+            isActive: input.isActive ?? true,
+            sortOrder: input.sortOrder ?? 0,
+          },
+        });
+      const __t1 = await tx.trainingQuiz.deleteMany({ where: { moduleId: input.id } });
+      const __t2 = await tx.trainingQuiz.createMany({
+          data: validQuizzes.map((q, idx) => ({
+            moduleId: input.id,
+            question: q.question.trim(),
+            options: q.options.map((o) => ({
+              text: o.text.trim(),
+              isCorrect: !!o.isCorrect,
+            })),
+            sortOrder: q.sortOrder ?? idx,
           })),
-          sortOrder: q.sortOrder ?? idx,
-        })),
-      }),
-    ]);
+        });
+      return [__t0, __t1, __t2];
+    });
 
     revalidatePath("/admin/settings");
     revalidatePath("/admin/training");

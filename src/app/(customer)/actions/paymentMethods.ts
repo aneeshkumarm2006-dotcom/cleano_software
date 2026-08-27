@@ -253,29 +253,30 @@ export async function finalizeMyCardSetup(
       invoice_settings: { default_payment_method: paymentMethodId },
     });
 
-    await db.$transaction([
-      db.clientPaymentMethod.updateMany({
-        where: { clientId: client.id },
-        data: { isDefault: false },
-      }),
-      db.clientPaymentMethod.upsert({
-        where: { stripePaymentMethodId: paymentMethodId },
-        create: {
-          clientId: client.id,
-          stripePaymentMethodId: paymentMethodId,
-          brand: card?.brand ?? null,
-          last4: card?.last4 ?? null,
-          expMonth: card?.exp_month ?? null,
-          expYear: card?.exp_year ?? null,
-          isDefault: true,
-        },
-        update: { isDefault: true },
-      }),
-      db.client.update({
-        where: { id: client.id },
-        data: { defaultPaymentMethodId: paymentMethodId },
-      }),
-    ]);
+    await db.$transaction(async (tx) => {
+      const __t0 = await tx.clientPaymentMethod.updateMany({
+          where: { clientId: client.id },
+          data: { isDefault: false },
+        });
+      const __t1 = await tx.clientPaymentMethod.upsert({
+          where: { stripePaymentMethodId: paymentMethodId },
+          create: {
+            clientId: client.id,
+            stripePaymentMethodId: paymentMethodId,
+            brand: card?.brand ?? null,
+            last4: card?.last4 ?? null,
+            expMonth: card?.exp_month ?? null,
+            expYear: card?.exp_year ?? null,
+            isDefault: true,
+          },
+          update: { isDefault: true },
+        });
+      const __t2 = await tx.client.update({
+          where: { id: client.id },
+          data: { defaultPaymentMethodId: paymentMethodId },
+        });
+      return [__t0, __t1, __t2];
+    });
 
     await logActivity({
       category: "PAYMENT",
@@ -337,20 +338,21 @@ export async function setMyDefaultPaymentMethod(
       invoice_settings: { default_payment_method: owned.id },
     });
 
-    await db.$transaction([
-      db.clientPaymentMethod.updateMany({
-        where: { clientId: client.id },
-        data: { isDefault: false },
-      }),
-      db.clientPaymentMethod.updateMany({
-        where: { clientId: client.id, stripePaymentMethodId: owned.id },
-        data: { isDefault: true },
-      }),
-      db.client.update({
-        where: { id: client.id },
-        data: { defaultPaymentMethodId: owned.id },
-      }),
-    ]);
+    await db.$transaction(async (tx) => {
+      const __t0 = await tx.clientPaymentMethod.updateMany({
+          where: { clientId: client.id },
+          data: { isDefault: false },
+        });
+      const __t1 = await tx.clientPaymentMethod.updateMany({
+          where: { clientId: client.id, stripePaymentMethodId: owned.id },
+          data: { isDefault: true },
+        });
+      const __t2 = await tx.client.update({
+          where: { id: client.id },
+          data: { defaultPaymentMethodId: owned.id },
+        });
+      return [__t0, __t1, __t2];
+    });
 
     await logActivity({
       category: "PAYMENT",
@@ -622,20 +624,21 @@ export async function removeMyPaymentMethod(
             default_payment_method: next.stripePaymentMethodId,
           },
         });
-        await db.$transaction([
-          db.clientPaymentMethod.updateMany({
-            where: { clientId: client.id },
-            data: { isDefault: false },
-          }),
-          db.clientPaymentMethod.update({
-            where: { id: next.id },
-            data: { isDefault: true },
-          }),
-          db.client.update({
-            where: { id: client.id },
-            data: { defaultPaymentMethodId: next.stripePaymentMethodId },
-          }),
-        ]);
+        await db.$transaction(async (tx) => {
+          const __t0 = await tx.clientPaymentMethod.updateMany({
+              where: { clientId: client.id },
+              data: { isDefault: false },
+            });
+          const __t1 = await tx.clientPaymentMethod.update({
+              where: { id: next.id },
+              data: { isDefault: true },
+            });
+          const __t2 = await tx.client.update({
+              where: { id: client.id },
+              data: { defaultPaymentMethodId: next.stripePaymentMethodId },
+            });
+          return [__t0, __t1, __t2];
+        });
         warning = `${next.brand ?? "Your other card"} •••• ${next.last4 ?? "????"} is now your default payment method.`;
         await notifyCardReplaced({
           clientId: client.id,

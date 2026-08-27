@@ -33,15 +33,16 @@ export async function sweepPastScheduledJobs(now: Date = new Date()): Promise<{
     status: { in: ["SCHEDULED", "IN_PROGRESS"] as ("SCHEDULED" | "IN_PROGRESS")[] },
     startTime: { lt: dayStart },
   };
-  const [paid, completed] = await db.$transaction([
-    db.job.updateMany({
-      where: { ...pastUnfinished, paymentReceived: true },
-      data: { status: "PAID" },
-    }),
-    db.job.updateMany({
-      where: { ...pastUnfinished, paymentReceived: false },
-      data: { status: "COMPLETED" },
-    }),
-  ]);
+  const [paid, completed] = await db.$transaction(async (tx) => {
+    const __t0 = await tx.job.updateMany({
+        where: { ...pastUnfinished, paymentReceived: true },
+        data: { status: "PAID" },
+      });
+    const __t1 = await tx.job.updateMany({
+        where: { ...pastUnfinished, paymentReceived: false },
+        data: { status: "COMPLETED" },
+      });
+    return [__t0, __t1];
+  });
   return { completed: completed.count, paid: paid.count };
 }

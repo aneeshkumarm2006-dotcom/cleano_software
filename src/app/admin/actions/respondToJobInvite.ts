@@ -138,27 +138,27 @@ export async function respondToJobInvite(input: {
     // them to job.cleaners and invalidate every other pending last-
     // minute invite on the same job — first claim wins.
     if (invite.isLastMinute) {
-      await db.$transaction([
-        db.jobAssignmentInvite.update({
+      await db.$transaction(async (tx) => {
+        await tx.jobAssignmentInvite.update({
           where: { id: invite.id },
           data: { decision: "ACCEPTED", respondedAt: now },
-        }),
-        db.job.update({
+        });
+        await tx.job.update({
           where: { id: invite.jobId },
           data: { cleaners: { connect: { id: session.user.id } } },
-        }),
+        });
         // Round 4, fix 2 — a last-minute broadcast attaches a cleaner to a job
         // that by definition had nobody on it, so if the lead slot is still
         // empty this cleaner fills it. Written as a compare-and-set on
         // `employeeId: null` (rather than reading the value above and writing it
         // back) so two cleaners racing the same broadcast can't both claim the
         // lead, and an existing lead is never displaced.
-        db.job.updateMany({
+        await tx.job.updateMany({
           where: { id: invite.jobId, employeeId: null },
           data: { employeeId: session.user.id },
-        }),
+        });
         // Per-cleaner assignment status row (item 9).
-        db.jobAssignment.upsert({
+        await tx.jobAssignment.upsert({
           where: {
             jobId_cleanerId: {
               jobId: invite.jobId,
@@ -171,8 +171,8 @@ export async function respondToJobInvite(input: {
             cleanerId: session.user.id,
             status: "ASSIGNED",
           },
-        }),
-        db.jobAssignmentInvite.updateMany({
+        });
+        await tx.jobAssignmentInvite.updateMany({
           where: {
             jobId: invite.jobId,
             decision: "PENDING",
@@ -180,32 +180,32 @@ export async function respondToJobInvite(input: {
             NOT: { id: invite.id },
           },
           data: { decision: "EXPIRED", respondedAt: now },
-        }),
-        db.jobLog.create({
+        });
+        await tx.jobLog.create({
           data: {
             jobId: invite.jobId,
             userId: session.user.id,
             action: "NOTE_ADDED",
             description: `LAST-MINUTE CLAIM: ${session.user.name ?? "Cleaner"} claimed this booking. $${invite.bonusUsd.toFixed(2)} claim bonus to be added at payout.`,
           },
-        }),
-      ]);
+        });
+      });
     } else {
       // Standard pre-assigned invite: cleaner is already on job.cleaners.
-      await db.$transaction([
-        db.jobAssignmentInvite.update({
+      await db.$transaction(async (tx) => {
+        await tx.jobAssignmentInvite.update({
           where: { id: invite.id },
           data: { decision: "ACCEPTED", respondedAt: now },
-        }),
-        db.jobLog.create({
+        });
+        await tx.jobLog.create({
           data: {
             jobId: invite.jobId,
             userId: session.user.id,
             action: "NOTE_ADDED",
             description: `${session.user.name ?? "Cleaner"} accepted the assignment.`,
           },
-        }),
-      ]);
+        });
+      });
     }
   } else {
     // Decline: remove the cleaner from the job and log it.
@@ -230,32 +230,32 @@ export async function respondToJobInvite(input: {
         )
       : invite.job.employeeId;
 
-    await db.$transaction([
-      db.jobAssignmentInvite.update({
+    await db.$transaction(async (tx) => {
+      await tx.jobAssignmentInvite.update({
         where: { id: invite.id },
         data: {
           decision: "DECLINED",
           respondedAt: now,
           declineReason: input.reason?.trim() || null,
         },
-      }),
-      db.job.update({
+      });
+      await tx.job.update({
         where: { id: invite.jobId },
         data: {
           cleaners: { disconnect: { id: session.user.id } },
           employeeId: nextLead,
         },
-      }),
+      });
       // Drop the per-cleaner assignment row for the declined cleaner
       // (keep CANCELLED history rows, matching syncJobAssignments).
-      db.jobAssignment.deleteMany({
+      await tx.jobAssignment.deleteMany({
         where: {
           jobId: invite.jobId,
           cleanerId: session.user.id,
           status: { not: "CANCELLED" },
         },
-      }),
-      db.jobLog.create({
+      });
+      await tx.jobLog.create({
         data: {
           jobId: invite.jobId,
           userId: session.user.id,
@@ -264,8 +264,8 @@ export async function respondToJobInvite(input: {
             ? `${session.user.name ?? "Cleaner"} declined: ${input.reason.trim()}`
             : `${session.user.name ?? "Cleaner"} declined the assignment.`,
         },
-      }),
-    ]);
+      });
+    });
     // Spec item 12 backstop: declining may have left a trainee solo — alert
     // admins to re-pair.
     await alertIfTraineeLeftUnpaired(invite.jobId);

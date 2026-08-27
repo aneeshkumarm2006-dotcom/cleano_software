@@ -55,19 +55,20 @@ export async function resolveJobRequest(input: {
         ? "Reschedule approved — admin will follow up to set a new time"
         : "Reschedule request denied";
 
-    await db.$transaction([
-      db.job.update({ where: { id: input.jobId }, data: updates }),
-      db.jobLog.create({
-        data: {
-          jobId: input.jobId,
-          userId: session.user.id,
-          action: "NOTE_ADDED",
-          description: input.note?.trim()
-            ? `${desc} · ${input.note.trim()}`
-            : desc,
-        },
-      }),
-    ]);
+    await db.$transaction(async (tx) => {
+      const __t0 = await tx.job.update({ where: { id: input.jobId }, data: updates });
+      const __t1 = await tx.jobLog.create({
+          data: {
+            jobId: input.jobId,
+            userId: session.user.id,
+            action: "NOTE_ADDED",
+            description: input.note?.trim()
+              ? `${desc} · ${input.note.trim()}`
+              : desc,
+          },
+        });
+      return [__t0, __t1];
+    });
 
     const lifecycleInfo = {
       jobId: input.jobId,

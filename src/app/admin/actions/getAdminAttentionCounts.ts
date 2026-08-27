@@ -74,7 +74,7 @@ export async function getAdminAttentionCounts(): Promise<AdminAttentionCounts> {
     if (!isAdmin) return ZERO;
     const isOwnerAdmin = role === "OWNER" || role === "ADMIN";
 
-    const [requests, applications, quotes, documents] = await db.$transaction([
+    const [requests, applications, quotes, documents] = await Promise.all([
       // Unchanged from the retired getPendingRequestCount: `resolveJobRequest`
       // clears the `*RequestedAt` field on approve/deny, so "field still set"
       // naturally means "still pending". Archived jobs excluded, matching the
@@ -111,7 +111,7 @@ export async function getAdminAttentionCounts(): Promise<AdminAttentionCounts> {
     let payouts = 0;
     let inventory = 0;
     if (isOwnerAdmin) {
-      [leads, payouts, inventory] = await db.$transaction([
+      [leads, payouts, inventory] = await Promise.all([
         db.lead.count({ where: { status: "NEW", deletedAt: null } }),
         db.payPeriod.count({ where: { status: "PENDING_APPROVAL" } }),
         db.inventoryRequest.count({ where: { status: "PENDING" } }),

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
-import { db } from "@/db";
+import { db } from "@/lib/org-db";
+import { platformDb } from "@/lib/platform-db";
+import { runAsOrg, type OrgContext } from "@/lib/org-context";
 import { requireBudgetCategoryId } from "@/lib/budget-categories";
 import { logActivity } from "@/lib/activity-log";
 import { notifyCardReplaced } from "@/lib/payment-methods";
@@ -28,36 +30,37 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
 
   const revenueCategoryId = await requireBudgetCategoryId("revenue");
 
-  await db.$transaction([
-    db.job.update({
-      where: { id: jobId },
-      data: {
-        paymentReceived: true,
-        paidAt: new Date(),
-        stripePaymentIntentId: pi.id,
-        paymentFailedAt: null,
-        paymentFailureReason: null,
-      },
-    }),
-    db.transaction.create({
-      data: {
-        date: new Date(),
-        categoryId: revenueCategoryId,
-        amount: pi.amount_received / 100,
-        description: `Stripe payment confirmed — job #${job.jobNumber}`,
-        jobId,
-        source: "CREDIT_CARD",
-        isAuto: true,
-      },
-    }),
-    db.jobLog.create({
-      data: {
-        jobId,
-        action: "PAYMENT_RECEIVED",
-        description: `Payment of $${(pi.amount_received / 100).toFixed(2)} confirmed via Stripe webhook (PI: ${pi.id})`,
-      },
-    }),
-  ]);
+  await db.$transaction(async (tx) => {
+    const __t0 = await tx.job.update({
+        where: { id: jobId },
+        data: {
+          paymentReceived: true,
+          paidAt: new Date(),
+          stripePaymentIntentId: pi.id,
+          paymentFailedAt: null,
+          paymentFailureReason: null,
+        },
+      });
+    const __t1 = await tx.transaction.create({
+        data: {
+          date: new Date(),
+          categoryId: revenueCategoryId,
+          amount: pi.amount_received / 100,
+          description: `Stripe payment confirmed — job #${job.jobNumber}`,
+          jobId,
+          source: "CREDIT_CARD",
+          isAuto: true,
+        },
+      });
+    const __t2 = await tx.jobLog.create({
+        data: {
+          jobId,
+          action: "PAYMENT_RECEIVED",
+          description: `Payment of $${(pi.amount_received / 100).toFixed(2)} confirmed via Stripe webhook (PI: ${pi.id})`,
+        },
+      });
+    return [__t0, __t1, __t2];
+  });
 
   queueAndSendReceipt(jobId).catch(() => {});
 
@@ -145,33 +148,34 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
     });
     const alreadyRefunded = current?.refundedAmount ?? 0;
 
-    await db.$transaction([
-      db.job.update({
-        where: { id: job.id },
-        data: { refundedAmount: alreadyRefunded + refundAmount },
-      }),
-      db.transaction.create({
-        data: {
-          date: new Date(),
-          categoryId: revenueCategoryId,
-          amount: -refundAmount,
-          description: `Stripe refund — Job #${job.jobNumber} (refund: ${refund.id})`,
-          jobId: job.id,
-          source: "refund",
-          isAuto: true,
-        },
-      }),
-      db.jobLog.create({
-        data: {
-          jobId: job.id,
-          action: "UPDATED",
-          field: "refundedAmount",
-          oldValue: String(alreadyRefunded),
-          newValue: String(alreadyRefunded + refundAmount),
-          description: `Refund of $${refundAmount.toFixed(2)} confirmed via Stripe webhook (refund: ${refund.id})`,
-        },
-      }),
-    ]);
+    await db.$transaction(async (tx) => {
+      const __t0 = await tx.job.update({
+          where: { id: job.id },
+          data: { refundedAmount: alreadyRefunded + refundAmount },
+        });
+      const __t1 = await tx.transaction.create({
+          data: {
+            date: new Date(),
+            categoryId: revenueCategoryId,
+            amount: -refundAmount,
+            description: `Stripe refund — Job #${job.jobNumber} (refund: ${refund.id})`,
+            jobId: job.id,
+            source: "refund",
+            isAuto: true,
+          },
+        });
+      const __t2 = await tx.jobLog.create({
+          data: {
+            jobId: job.id,
+            action: "UPDATED",
+            field: "refundedAmount",
+            oldValue: String(alreadyRefunded),
+            newValue: String(alreadyRefunded + refundAmount),
+            description: `Refund of $${refundAmount.toFixed(2)} confirmed via Stripe webhook (refund: ${refund.id})`,
+          },
+        });
+      return [__t0, __t1, __t2];
+    });
   }
 }
 
@@ -220,6 +224,78 @@ async function handleSetupIntentSucceeded(si: Stripe.SetupIntent) {
   }
 }
 
+
+/**
+ * Which cleaning company a Stripe event belongs to.
+ *
+ * Stripe knows nothing about organizations. Every event arrives at one shared
+ * endpoint carrying only its own identifiers, so the company has to be worked
+ * back out from the row those identifiers point at — and that lookup has to
+ * happen BEFORE anything else, because every query below it is scoped and would
+ * otherwise return nothing at all.
+ *
+ * Uses the platform client on purpose: this is the one moment the request has no
+ * tenant yet, so it is the one lookup allowed to see across all of them. It
+ * reads ids only, never customer data.
+ *
+ * Returns null when nothing matches — a payment for a job we do not have. The
+ * caller acknowledges those rather than retrying, because a retry cannot make a
+ * missing row appear.
+ */
+async function organizationForEvent(event: Stripe.Event): Promise<OrgContext | null> {
+  let organizationId: string | null = null;
+
+  switch (event.type) {
+    case "payment_intent.succeeded":
+    case "payment_intent.payment_failed": {
+      const pi = event.data.object as Stripe.PaymentIntent;
+      const jobId = pi.metadata?.jobId;
+      if (jobId) {
+        const job = await platformDb.job.findUnique({
+          where: { id: jobId },
+          select: { organizationId: true },
+        });
+        organizationId = job?.organizationId ?? null;
+      }
+      break;
+    }
+    case "charge.refunded": {
+      const charge = event.data.object as Stripe.Charge;
+      const pi = charge.payment_intent as string | null;
+      if (pi) {
+        const job = await platformDb.job.findFirst({
+          where: { stripePaymentIntentId: pi },
+          select: { organizationId: true },
+        });
+        organizationId = job?.organizationId ?? null;
+      }
+      break;
+    }
+    case "setup_intent.succeeded": {
+      const si = event.data.object as Stripe.SetupIntent;
+      const customerId = si.customer as string | null;
+      if (customerId) {
+        const client = await platformDb.client.findFirst({
+          where: { stripeCustomerId: customerId },
+          select: { organizationId: true },
+        });
+        organizationId = client?.organizationId ?? null;
+      }
+      break;
+    }
+    default:
+      return null;
+  }
+
+  if (!organizationId) return null;
+
+  const org = await platformDb.organization.findUnique({
+    where: { id: organizationId },
+    select: { id: true, slug: true, name: true, timezone: true },
+  });
+  return org ?? null;
+}
+
 export async function POST(req: NextRequest) {
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
   if (!webhookSecret) {
@@ -242,6 +318,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Webhook error: ${err.message}` }, { status: 400 });
   }
 
+  // Which company is this for? Must come first: every query below is scoped, and
+  // without a tenant they all return nothing rather than failing loudly.
+  const org = await organizationForEvent(event);
+  if (!org) {
+    // Nothing of ours matches. Acknowledge rather than 500 — Stripe would retry
+    // for days, and a retry cannot make a missing row appear. Recorded so a
+    // genuine mismatch is visible instead of silently dropped.
+    console.warn(`stripe webhook ${event.type} ${event.id}: no matching organization`);
+    return NextResponse.json({ received: true, unmatched: true });
+  }
+
+  return runAsOrg(org, async () => {
   // Idempotency: claim the event id before processing. A duplicate delivery
   // collides on the primary key and is skipped (Stripe retries the same id).
   try {
@@ -292,4 +380,5 @@ export async function POST(req: NextRequest) {
   });
 
   return NextResponse.json({ received: true });
+  });
 }

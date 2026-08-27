@@ -215,27 +215,28 @@ export async function toggleInvoiceSent(jobId: string) {
 
     const newStatus = !job.invoiceSent;
 
-    await db.$transaction([
-      db.job.update({
-        where: { id: jobId },
-        data: {
-          invoiceSent: newStatus,
-        },
-      }),
-      db.jobLog.create({
-        data: {
-          jobId,
-          userId: session.user.id,
-          action: "INVOICE_SENT",
-          field: "invoiceSent",
-          oldValue: job.invoiceSent.toString(),
-          newValue: newStatus.toString(),
-          description: newStatus
-            ? `Invoice marked as sent by ${session.user.name}`
-            : `Invoice marked as not sent by ${session.user.name}`,
-        },
-      }),
-    ]);
+    await db.$transaction(async (tx) => {
+      const __t0 = await tx.job.update({
+          where: { id: jobId },
+          data: {
+            invoiceSent: newStatus,
+          },
+        });
+      const __t1 = await tx.jobLog.create({
+          data: {
+            jobId,
+            userId: session.user.id,
+            action: "INVOICE_SENT",
+            field: "invoiceSent",
+            oldValue: job.invoiceSent.toString(),
+            newValue: newStatus.toString(),
+            description: newStatus
+              ? `Invoice marked as sent by ${session.user.name}`
+              : `Invoice marked as not sent by ${session.user.name}`,
+          },
+        });
+      return [__t0, __t1];
+    });
 
     revalidatePath(`/admin/jobs/${jobId}`);
     revalidatePath("/admin/jobs");

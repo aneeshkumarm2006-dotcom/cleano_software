@@ -119,12 +119,12 @@ export async function issueRefund(input: IssueRefundInput) {
     // original charge, so the two net out on the P&L.
     const revenueCategoryId = await requireBudgetCategoryId("revenue");
 
-    await db.$transaction([
-      db.job.update({
+    await db.$transaction(async (tx) => {
+      await tx.job.update({
         where: { id: input.jobId },
         data: { refundedAmount: alreadyRefunded + input.amount },
-      }),
-      db.transaction.create({
+      });
+      await tx.transaction.create({
         data: {
           date: new Date(),
           categoryId: revenueCategoryId,
@@ -135,8 +135,8 @@ export async function issueRefund(input: IssueRefundInput) {
           source: "refund",
           isAuto: true,
         },
-      }),
-      db.jobLog.create({
+      });
+      await tx.jobLog.create({
         data: {
           jobId: input.jobId,
           userId: session.user.id,
@@ -146,21 +146,20 @@ export async function issueRefund(input: IssueRefundInput) {
           newValue: String(alreadyRefunded + input.amount),
           description: `Refund of $${input.amount.toFixed(2)} issued${input.reason ? `: ${input.reason}` : ""}${stripeRefundId ? ` (Stripe: ${stripeRefundId})` : ""}`,
         },
-      }),
-      ...(job.client?.email
-        ? [
-            db.emailLog.create({
-              data: {
-                kind: "REFUND" as const,
-                recipient: job.client.email,
-                subject: `Refund processed — Job #${job.jobNumber}`,
-                status: "PENDING" as const,
-                jobId: input.jobId,
-              },
-            }),
-          ]
-        : []),
-    ]);
+      });
+      // Only queue the customer email when there is somewhere to send it.
+      if (job.client?.email) {
+        await tx.emailLog.create({
+          data: {
+            kind: "REFUND" as const,
+            recipient: job.client.email,
+            subject: `Refund processed — Job #${job.jobNumber}`,
+            status: "PENDING" as const,
+            jobId: input.jobId,
+          },
+        });
+      }
+    });
 
     queueAndSendRefund(input.jobId, input.amount, input.reason).catch(() => {});
 

@@ -116,26 +116,26 @@ export async function bulkAssignCleaner(
       return parts.length ? ` — ${parts.join("; ")}` : "";
     });
 
-    await db.$transaction([
-      ...jobs.map((j) =>
-        db.job.update({
+    await db.$transaction(async (tx) => {
+      for (const j of jobs) {
+        await tx.job.update({
           where: { id: j.id },
           data: {
             cleaners: { connect: { id: cleanerId } },
             ...(j.employeeId ? {} : { employeeId: cleanerId }),
           },
-        })
-      ),
+        });
+      }
       // Per-cleaner assignment status row (item 9) — idempotent upsert.
-      ...jobs.map((j) =>
-        db.jobAssignment.upsert({
+      for (const j of jobs) {
+        await tx.jobAssignment.upsert({
           where: { jobId_cleanerId: { jobId: j.id, cleanerId } },
           update: {},
           create: { jobId: j.id, cleanerId, status: "ASSIGNED" },
-        })
-      ),
-      ...jobs.map((j, i) =>
-        db.jobLog.create({
+        });
+      }
+      for (const [i, j] of jobs.entries()) {
+        await tx.jobLog.create({
           data: {
             jobId: j.id,
             userId: gate.userId,
@@ -143,9 +143,9 @@ export async function bulkAssignCleaner(
             field: "cleaners",
             description: `Cleaner assigned via bulk action by ${gate.userName}${overrideNotes[i]}`,
           },
-        })
-      ),
-    ]);
+        });
+      }
+    });
 
     revalidatePath("/admin/jobs");
     return { success: true, count: jobs.length, warnings };

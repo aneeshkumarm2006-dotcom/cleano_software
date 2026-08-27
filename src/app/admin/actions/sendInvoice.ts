@@ -47,23 +47,27 @@ export async function sendInvoice(invoiceId: string) {
 
     // If linked to a job, update the job's invoiceSent flag
     if (invoice.jobId) {
-      await db.$transaction([
-        db.job.update({
-          where: { id: invoice.jobId },
-          data: { invoiceSent: true },
-        }),
-        db.jobLog.create({
-          data: {
-            jobId: invoice.jobId,
-            userId: guard.session.user.id,
-            action: "INVOICE_SENT",
-            field: "invoiceSent",
-            oldValue: "false",
-            newValue: "true",
-            description: `Invoice ${invoice.invoiceNumber} sent by ${guard.session.user.name}`,
-          },
-        }),
-      ]);
+      // Captured before the callback: TypeScript's narrowing from the `if` does
+      // not survive into a closure, and the id cannot change here anyway.
+      const jobId = invoice.jobId;
+      await db.$transaction(async (tx) => {
+        const __t0 = await tx.job.update({
+            where: { id: jobId },
+            data: { invoiceSent: true },
+          });
+        const __t1 = await tx.jobLog.create({
+            data: {
+              jobId,
+              userId: guard.session.user.id,
+              action: "INVOICE_SENT",
+              field: "invoiceSent",
+              oldValue: "false",
+              newValue: "true",
+              description: `Invoice ${invoice.invoiceNumber} sent by ${guard.session.user.name}`,
+            },
+          });
+        return [__t0, __t1];
+      });
       revalidatePath(`/admin/jobs/${invoice.jobId}`);
       revalidatePath("/admin/jobs");
     }

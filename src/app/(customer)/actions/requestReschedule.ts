@@ -32,20 +32,21 @@ export async function requestReschedule(input: {
       noteParts.push(`Preferred date: ${input.preferredDate}`);
     if (input.notes?.trim()) noteParts.push(input.notes.trim());
 
-    await db.$transaction([
-      db.job.update({
-        where: { id: input.jobId },
-        data: { rescheduleRequestedAt: new Date() },
-      }),
-      db.jobLog.create({
-        data: {
-          jobId: input.jobId,
-          userId: session.user.id,
-          action: "NOTE_ADDED",
-          description: noteParts.join(" · "),
-        },
-      }),
-    ]);
+    await db.$transaction(async (tx) => {
+      const __t0 = await tx.job.update({
+          where: { id: input.jobId },
+          data: { rescheduleRequestedAt: new Date() },
+        });
+      const __t1 = await tx.jobLog.create({
+          data: {
+            jobId: input.jobId,
+            userId: session.user.id,
+            action: "NOTE_ADDED",
+            description: noteParts.join(" · "),
+          },
+        });
+      return [__t0, __t1];
+    });
 
     // Notify all admins (gated).
     sendAdminBookingPostpone({

@@ -132,17 +132,18 @@ export async function setContactLifecycle(id: string, stage: LifecycleStage): Pr
   const gate = await requireAdmin();
   if ("error" in gate) return gate;
   try {
-    await db.$transaction([
-      db.contact.update({ where: { id }, data: { lifecycle: stage, lastActivityAt: new Date() } }),
-      db.contactActivity.create({
-        data: {
-          contactId: id,
-          type: "LIFECYCLE",
-          title: `Lifecycle → ${stage.replace("_", " ").toLowerCase()}`,
-          actor: "name" in gate ? gate.name : "Admin",
-        },
-      }),
-    ]);
+    await db.$transaction(async (tx) => {
+      const __t0 = await tx.contact.update({ where: { id }, data: { lifecycle: stage, lastActivityAt: new Date() } });
+      const __t1 = await tx.contactActivity.create({
+          data: {
+            contactId: id,
+            type: "LIFECYCLE",
+            title: `Lifecycle → ${stage.replace("_", " ").toLowerCase()}`,
+            actor: "name" in gate ? gate.name : "Admin",
+          },
+        });
+      return [__t0, __t1];
+    });
     revalidateContact(id);
     return { success: true };
   } catch (e) {
@@ -170,12 +171,13 @@ export async function logContactActivity(
     SMS: "SMS logged",
   };
   try {
-    await db.$transaction([
-      db.contactActivity.create({
-        data: { contactId: id, type, title: titleMap[type], body, actor: "name" in gate ? gate.name : "Admin" },
-      }),
-      db.contact.update({ where: { id }, data: { lastActivityAt: new Date() } }),
-    ]);
+    await db.$transaction(async (tx) => {
+      const __t0 = await tx.contactActivity.create({
+          data: { contactId: id, type, title: titleMap[type], body, actor: "name" in gate ? gate.name : "Admin" },
+        });
+      const __t1 = await tx.contact.update({ where: { id }, data: { lastActivityAt: new Date() } });
+      return [__t0, __t1];
+    });
     revalidateContact(id);
     return { success: true };
   } catch (e) {
@@ -236,16 +238,16 @@ export async function mergeContacts(
       `Archived: ${archivedList || "—"}.` +
       (changes.length ? ` Master values changed — ${changes.join("; ")}.` : " Master values unchanged.");
 
-    await db.$transaction([
-      db.contact.update({ where: { id: masterId }, data }),
-      db.contact.updateMany({ where: { id: { in: loserIds } }, data: { archivedAt: new Date(), duplicateDismissed: true } }),
+    await db.$transaction(async (tx) => {
+      await tx.contact.update({ where: { id: masterId }, data });
+      await tx.contact.updateMany({ where: { id: { in: loserIds } }, data: { archivedAt: new Date(), duplicateDismissed: true } });
       // The archived records can never be half of a live suggestion again, so
       // their rejections are dead weight — clear them rather than leave rows
       // pointing at contacts nobody can act on.
-      db.duplicateRejection.deleteMany({
+      await tx.duplicateRejection.deleteMany({
         where: { OR: [{ contactAId: { in: loserIds } }, { contactBId: { in: loserIds } }] },
-      }),
-      db.contactActivity.create({
+      });
+      await tx.contactActivity.create({
         data: {
           contactId: masterId,
           type: "LIFECYCLE",
@@ -253,8 +255,8 @@ export async function mergeContacts(
           body: auditBody,
           actor: "name" in gate ? gate.name : "Admin",
         },
-      }),
-    ]);
+      });
+    });
     revalidatePath("/admin/contacts");
     revalidatePath("/admin/contacts/duplicates");
     revalidatePath(`/admin/contacts/${masterId}`);

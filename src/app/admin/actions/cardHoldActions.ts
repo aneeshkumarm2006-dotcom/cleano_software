@@ -87,24 +87,25 @@ export async function placeCardHold(jobId: string) {
       metadata: { jobId, jobNumber: String(job.jobNumber), kind: "hold" },
     });
 
-    await db.$transaction([
-      db.job.update({
-        where: { id: jobId },
-        data: {
-          holdPaymentIntentId: pi.id,
-          holdPlacedAt: new Date(),
-          holdAmount: amount,
-        },
-      }),
-      db.jobLog.create({
-        data: {
-          jobId,
-          userId: gate.userId,
-          action: "NOTE_ADDED",
-          description: `Card hold placed for $${amount.toFixed(2)} (PI: ${pi.id}).`,
-        },
-      }),
-    ]);
+    await db.$transaction(async (tx) => {
+      const __t0 = await tx.job.update({
+          where: { id: jobId },
+          data: {
+            holdPaymentIntentId: pi.id,
+            holdPlacedAt: new Date(),
+            holdAmount: amount,
+          },
+        });
+      const __t1 = await tx.jobLog.create({
+          data: {
+            jobId,
+            userId: gate.userId,
+            action: "NOTE_ADDED",
+            description: `Card hold placed for $${amount.toFixed(2)} (PI: ${pi.id}).`,
+          },
+        });
+      return [__t0, __t1];
+    });
 
     if (client.email) {
       sendCustomerHoldPlaced({
@@ -161,36 +162,37 @@ export async function captureCardHold(jobId: string) {
       amount_to_capture: amountCents,
     });
     const now = new Date();
-    await db.$transaction([
-      db.job.update({
-        where: { id: jobId },
-        data: {
-          holdCapturedAt: now,
-          paymentReceived: true,
-          paidAt: now,
-          stripePaymentIntentId: pi.id,
-        },
-      }),
-      db.transaction.create({
-        data: {
-          date: now,
-          categoryId: revenueCategoryId,
-          amount,
-          description: `Stripe hold captured — job #${job.jobNumber}`,
-          jobId,
-          source: "CREDIT_CARD",
-          isAuto: true,
-        },
-      }),
-      db.jobLog.create({
-        data: {
-          jobId,
-          userId: gate.userId,
-          action: "PAYMENT_RECEIVED",
-          description: `Hold captured for $${amount.toFixed(2)} (PI: ${pi.id}).`,
-        },
-      }),
-    ]);
+    await db.$transaction(async (tx) => {
+      const __t0 = await tx.job.update({
+          where: { id: jobId },
+          data: {
+            holdCapturedAt: now,
+            paymentReceived: true,
+            paidAt: now,
+            stripePaymentIntentId: pi.id,
+          },
+        });
+      const __t1 = await tx.transaction.create({
+          data: {
+            date: now,
+            categoryId: revenueCategoryId,
+            amount,
+            description: `Stripe hold captured — job #${job.jobNumber}`,
+            jobId,
+            source: "CREDIT_CARD",
+            isAuto: true,
+          },
+        });
+      const __t2 = await tx.jobLog.create({
+          data: {
+            jobId,
+            userId: gate.userId,
+            action: "PAYMENT_RECEIVED",
+            description: `Hold captured for $${amount.toFixed(2)} (PI: ${pi.id}).`,
+          },
+        });
+      return [__t0, __t1, __t2];
+    });
 
     revalidatePath(`/admin/jobs/${jobId}`);
     revalidatePath("/admin/finances");
@@ -248,22 +250,23 @@ export async function releaseCardHold(jobId: string, reason?: string) {
       cancellation_reason: "requested_by_customer",
     });
     const now = new Date();
-    await db.$transaction([
-      db.job.update({
-        where: { id: jobId },
-        data: { holdReleasedAt: now },
-      }),
-      db.jobLog.create({
-        data: {
-          jobId,
-          userId: gate.userId,
-          action: "NOTE_ADDED",
-          description: reason?.trim()
-            ? `Card hold released (${reason.trim()}).`
-            : "Card hold released.",
-        },
-      }),
-    ]);
+    await db.$transaction(async (tx) => {
+      const __t0 = await tx.job.update({
+          where: { id: jobId },
+          data: { holdReleasedAt: now },
+        });
+      const __t1 = await tx.jobLog.create({
+          data: {
+            jobId,
+            userId: gate.userId,
+            action: "NOTE_ADDED",
+            description: reason?.trim()
+              ? `Card hold released (${reason.trim()}).`
+              : "Card hold released.",
+          },
+        });
+      return [__t0, __t1];
+    });
     if (job.client?.email) {
       sendCustomerHoldReleased({
         to: job.client.email,

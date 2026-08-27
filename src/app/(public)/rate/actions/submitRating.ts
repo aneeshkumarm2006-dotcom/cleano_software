@@ -82,34 +82,36 @@ export async function submitRating(input: SubmitRatingInput) {
         select: { id: true, employeeId: true },
       });
       const editedAt = new Date();
-      await db.$transaction([
-        ...cleanerIds.map((employeeId) => {
+      await db.$transaction(async (tx) => {
+        for (const employeeId of cleanerIds) {
           const row = existing.find((r) => r.employeeId === employeeId);
-          return row
-            ? db.employeeRating.update({
-                where: { id: row.id },
-                data: { rating: effectiveStars, notes: ratingNotes, editedAt },
-              })
-            : db.employeeRating.create({
-                data: {
-                  jobId: tokenRow.jobId,
-                  employeeId,
-                  rating: effectiveStars,
-                  notes: ratingNotes,
-                  ratedBy: "client-link",
-                  editedAt,
-                },
-              });
-        }),
-        db.jobRatingToken.update({
+          if (row) {
+            await tx.employeeRating.update({
+              where: { id: row.id },
+              data: { rating: effectiveStars, notes: ratingNotes, editedAt },
+            });
+          } else {
+            await tx.employeeRating.create({
+              data: {
+                jobId: tokenRow.jobId,
+                employeeId,
+                rating: effectiveStars,
+                notes: ratingNotes,
+                ratedBy: "client-link",
+                editedAt,
+              },
+            });
+          }
+        }
+        await tx.jobRatingToken.update({
           where: { id: tokenRow.id },
           data: { ratingStars: input.stars },
-        }),
-      ]);
+        });
+      });
     } else {
-      await db.$transaction([
-        ...cleanerIds.map((employeeId) =>
-          db.employeeRating.create({
+      await db.$transaction(async (tx) => {
+        for (const employeeId of cleanerIds) {
+          await tx.employeeRating.create({
             data: {
               jobId: tokenRow.jobId,
               employeeId,
@@ -117,13 +119,13 @@ export async function submitRating(input: SubmitRatingInput) {
               notes: ratingNotes,
               ratedBy: "client-link",
             },
-          })
-        ),
-        db.jobRatingToken.update({
+          });
+        }
+        await tx.jobRatingToken.update({
           where: { id: tokenRow.id },
           data: { usedAt: new Date(), ratingStars: input.stars },
-        }),
-      ]);
+        });
+      });
     }
 
     // Persist any client-attached review photos (poor reviews). Sanitized to

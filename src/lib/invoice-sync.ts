@@ -47,30 +47,32 @@ export async function syncJobsForInvoiceStatus(
     // `NOT: { a, b }` negates the conjunction, so the two arms partition the
     // invoice's jobs exactly.
     const stillAhead = { startTime: { gt: now }, clockOutTime: null };
-    await db.$transaction([
-      db.job.updateMany({
-        where: { ...notCancelled, NOT: stillAhead },
-        data: { paymentReceived: true, paidAt: now, status: "PAID", invoiceSent: true },
-      }),
-      db.job.updateMany({
-        where: { ...notCancelled, ...stillAhead },
-        data: { paymentReceived: true, paidAt: now, invoiceSent: true },
-      }),
-    ]);
+    await db.$transaction(async (tx) => {
+      const __t0 = await tx.job.updateMany({
+          where: { ...notCancelled, NOT: stillAhead },
+          data: { paymentReceived: true, paidAt: now, status: "PAID", invoiceSent: true },
+        });
+      const __t1 = await tx.job.updateMany({
+          where: { ...notCancelled, ...stillAhead },
+          data: { paymentReceived: true, paidAt: now, invoiceSent: true },
+        });
+      return [__t0, __t1];
+    });
   } else if (prevStatus === "PAID") {
     // Un-paying the invoice reverts its jobs: Completed when the date has
     // passed, Scheduled otherwise.
     const dayStart = startOfDayTz(new Date());
-    await db.$transaction([
-      db.job.updateMany({
-        where: { ...notCancelled, startTime: { lt: dayStart } },
-        data: { paymentReceived: false, paidAt: null, status: "COMPLETED" },
-      }),
-      db.job.updateMany({
-        where: { ...notCancelled, startTime: { gte: dayStart } },
-        data: { paymentReceived: false, paidAt: null, status: "SCHEDULED" },
-      }),
-    ]);
+    await db.$transaction(async (tx) => {
+      const __t0 = await tx.job.updateMany({
+          where: { ...notCancelled, startTime: { lt: dayStart } },
+          data: { paymentReceived: false, paidAt: null, status: "COMPLETED" },
+        });
+      const __t1 = await tx.job.updateMany({
+          where: { ...notCancelled, startTime: { gte: dayStart } },
+          data: { paymentReceived: false, paidAt: null, status: "SCHEDULED" },
+        });
+      return [__t0, __t1];
+    });
   } else if (newStatus === "SENT") {
     await db.job.updateMany({
       where: { id: { in: jobIds } },

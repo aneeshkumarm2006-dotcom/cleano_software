@@ -106,37 +106,38 @@ export async function chargeJob(jobId: string) {
   // If gift card credit covers the booking entirely, skip Stripe.
   if (amountCents === 0) {
     try {
-    await db.$transaction([
-      db.job.update({
-        where: { id: jobId },
-        // Same date guard as the claim above — a gift card covering a future
-        // booking is still a payment, not a completion.
-        data: { paymentReceived: true, paidAt: new Date(), ...paidStatus },
-      }),
-      db.client.update({
-        where: { id: client.id },
-        data: { giftCardBalance: { decrement: giftCardApplied } },
-      }),
-      db.transaction.create({
-        data: {
-          date: new Date(),
-          categoryId: revenueCategoryId,
-          amount: giftCardApplied,
-          description: `Gift card credit applied — job #${job.jobNumber}`,
-          jobId,
-          source: "GIFT_CARD",
-          isAuto: true,
-        },
-      }),
-      db.jobLog.create({
-        data: {
-          jobId,
-          userId: session.user.id,
-          action: "PAYMENT_RECEIVED",
-          description: `Booking fully covered by gift card credit ($${giftCardApplied.toFixed(2)}).`,
-        },
-      }),
-    ]);
+    await db.$transaction(async (tx) => {
+      const __t0 = await tx.job.update({
+          where: { id: jobId },
+          // Same date guard as the claim above — a gift card covering a future
+          // booking is still a payment, not a completion.
+          data: { paymentReceived: true, paidAt: new Date(), ...paidStatus },
+        });
+      const __t1 = await tx.client.update({
+          where: { id: client.id },
+          data: { giftCardBalance: { decrement: giftCardApplied } },
+        });
+      const __t2 = await tx.transaction.create({
+          data: {
+            date: new Date(),
+            categoryId: revenueCategoryId,
+            amount: giftCardApplied,
+            description: `Gift card credit applied — job #${job.jobNumber}`,
+            jobId,
+            source: "GIFT_CARD",
+            isAuto: true,
+          },
+        });
+      const __t3 = await tx.jobLog.create({
+          data: {
+            jobId,
+            userId: session.user.id,
+            action: "PAYMENT_RECEIVED",
+            description: `Booking fully covered by gift card credit ($${giftCardApplied.toFixed(2)}).`,
+          },
+        });
+      return [__t0, __t1, __t2, __t3];
+    });
     } catch (e) {
       console.error("gift-card charge tx", e);
       await releaseClaim();
@@ -194,36 +195,34 @@ export async function chargeJob(jobId: string) {
     });
 
     const stripeAmount = amountCents / 100;
-    await db.$transaction([
-      db.job.update({
+    await db.$transaction(async (tx) => {
+      await tx.job.update({
         where: { id: jobId },
         data: {
           paymentReceived: true,
           paidAt: new Date(),
           stripePaymentIntentId: paymentIntent.id,
         },
-      }),
+      });
       // Decrement gift card balance if used.
-      ...(giftCardApplied > 0
-        ? [
-            db.client.update({
-              where: { id: client.id },
-              data: { giftCardBalance: { decrement: giftCardApplied } },
-            }),
-            db.transaction.create({
-              data: {
-                date: new Date(),
-                categoryId: revenueCategoryId,
-                amount: giftCardApplied,
-                description: `Gift card credit applied — job #${job.jobNumber}`,
-                jobId,
-                source: "GIFT_CARD" as const,
-                isAuto: true,
-              },
-            }),
-          ]
-        : []),
-      db.transaction.create({
+      if (giftCardApplied > 0) {
+        await tx.client.update({
+          where: { id: client.id },
+          data: { giftCardBalance: { decrement: giftCardApplied } },
+        });
+        await tx.transaction.create({
+          data: {
+            date: new Date(),
+            categoryId: revenueCategoryId,
+            amount: giftCardApplied,
+            description: `Gift card credit applied — job #${job.jobNumber}`,
+            jobId,
+            source: "GIFT_CARD" as const,
+            isAuto: true,
+          },
+        });
+      }
+      await tx.transaction.create({
         data: {
           date: new Date(),
           categoryId: revenueCategoryId,
@@ -233,8 +232,8 @@ export async function chargeJob(jobId: string) {
           source: "CREDIT_CARD",
           isAuto: true,
         },
-      }),
-      db.jobLog.create({
+      });
+      await tx.jobLog.create({
         data: {
           jobId,
           userId: session.user.id,
@@ -243,8 +242,8 @@ export async function chargeJob(jobId: string) {
             ? `Charged $${stripeAmount.toFixed(2)} via Stripe + $${giftCardApplied.toFixed(2)} gift card credit (PI: ${paymentIntent.id}).`
             : `Charged $${stripeAmount.toFixed(2)} via Stripe (PI: ${paymentIntent.id}).`,
         },
-      }),
-    ]);
+      });
+    });
 
     // Receipt — gated by the per-booking notifyClient toggle.
     if (job.notifyClient) queueAndSendReceipt(jobId).catch(() => {});

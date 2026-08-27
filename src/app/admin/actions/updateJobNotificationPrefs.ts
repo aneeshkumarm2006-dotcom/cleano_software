@@ -66,24 +66,25 @@ export async function updateJobNotificationPrefs(
       };
     }
 
-    const [updated] = await db.$transaction([
-      db.job.update({
-        where: { id: jobId },
-        data,
-        select: { notifyClient: true, notifyProvider: true },
-      }),
-      db.jobLog.create({
-        data: {
-          jobId,
-          userId: session.user.id,
-          action: "UPDATED",
-          field: "notificationPrefs",
-          description: `Notification settings changed by ${
-            session.user.name ?? "Admin"
-          } — ${changes.join(", ")}`,
-        },
-      }),
-    ]);
+    const [updated] = await db.$transaction(async (tx) => {
+      const __t0 = await tx.job.update({
+          where: { id: jobId },
+          data,
+          select: { notifyClient: true, notifyProvider: true },
+        });
+      const __t1 = await tx.jobLog.create({
+          data: {
+            jobId,
+            userId: session.user.id,
+            action: "UPDATED",
+            field: "notificationPrefs",
+            description: `Notification settings changed by ${
+              session.user.name ?? "Admin"
+            } — ${changes.join(", ")}`,
+          },
+        });
+      return [__t0, __t1];
+    });
 
     revalidatePath(`/admin/jobs/${jobId}`);
     return {

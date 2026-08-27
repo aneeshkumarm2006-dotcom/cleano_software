@@ -84,19 +84,19 @@ export async function markNoShow(jobId: string) {
   const now = new Date();
   const revenueCategoryId = await requireBudgetCategoryId("revenue");
 
-  await db.$transaction([
-    db.job.update({
+  await db.$transaction(async (tx) => {
+    await tx.job.update({
       where: { id: jobId },
       data: { noShowAt: now },
-    }),
-    db.client.update({
+    });
+    await tx.client.update({
       where: { id: client.id },
       data: {
         noShowCount: { increment: 1 },
         lastNoShowAt: now,
       },
-    }),
-    db.jobLog.create({
+    });
+    await tx.jobLog.create({
       data: {
         jobId,
         userId: session.user.id,
@@ -108,23 +108,22 @@ export async function markNoShow(jobId: string) {
               ? `No-show recorded. No card on file for fee — please collect manually. Automatic 1-star noted on client profile.`
               : `No-show recorded. Stripe charge FAILED: ${chargeError}. Automatic 1-star noted on client profile.`,
       },
-    }),
-    ...(chargeOutcome === "charged"
-      ? [
-          db.transaction.create({
-            data: {
-              date: now,
-              categoryId: revenueCategoryId,
-              amount: feeUsd,
-              description: `No-show fee — job #${job.jobNumber}`,
-              jobId,
-              source: "CREDIT_CARD" as const,
-              isAuto: true,
-            },
-          }),
-        ]
-      : []),
-  ]);
+    });
+    // Only a fee that actually cleared becomes revenue.
+    if (chargeOutcome === "charged") {
+      await tx.transaction.create({
+        data: {
+          date: now,
+          categoryId: revenueCategoryId,
+          amount: feeUsd,
+          description: `No-show fee — job #${job.jobNumber}`,
+          jobId,
+          source: "CREDIT_CARD" as const,
+          isAuto: true,
+        },
+      });
+    }
+  });
 
   if (client.email) {
     sendCustomerNoShowFee({

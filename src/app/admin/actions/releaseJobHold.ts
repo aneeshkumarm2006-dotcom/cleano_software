@@ -76,28 +76,29 @@ export async function releaseJobHold(
   const previousReason = holdReasonText(job.holdReason);
 
   try {
-    await db.$transaction([
-      db.job.update({
-        where: { id: job.id },
-        // Status and reason, and nothing else. A hold says nothing about money,
-        // payment or the crew, so releasing one must not touch any of them —
-        // the same rule `scripts/fixFutureCompletedJobs.ts` follows.
-        data: { status: "SCHEDULED", holdReason: null },
-      }),
-      db.jobLog.create({
-        data: {
-          jobId: job.id,
-          userId: session.user.id,
-          action: "STATUS_CHANGED",
-          field: "status",
-          oldValue: ON_HOLD_STATUS,
-          newValue: "SCHEDULED",
-          description: `Released from hold by ${
-            session.user.name ?? "an admin"
-          } — was "${previousReason}".`,
-        },
-      }),
-    ]);
+    await db.$transaction(async (tx) => {
+      const __t0 = await tx.job.update({
+          where: { id: job.id },
+          // Status and reason, and nothing else. A hold says nothing about money,
+          // payment or the crew, so releasing one must not touch any of them —
+          // the same rule `scripts/fixFutureCompletedJobs.ts` follows.
+          data: { status: "SCHEDULED", holdReason: null },
+        });
+      const __t1 = await tx.jobLog.create({
+          data: {
+            jobId: job.id,
+            userId: session.user.id,
+            action: "STATUS_CHANGED",
+            field: "status",
+            oldValue: ON_HOLD_STATUS,
+            newValue: "SCHEDULED",
+            description: `Released from hold by ${
+              session.user.name ?? "an admin"
+            } — was "${previousReason}".`,
+          },
+        });
+      return [__t0, __t1];
+    });
   } catch (e) {
     console.error("releaseJobHold", e);
     return { success: false, error: "Could not release this job" };

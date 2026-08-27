@@ -36,24 +36,25 @@ export async function updateKitTemplate(params: UpdateKitTemplateParams) {
       (it) => it.productId && it.quantity > 0
     );
 
-    await db.$transaction([
-      db.kitTemplate.update({
-        where: { id },
-        data: {
-          name: name.trim(),
-          description: description?.trim() || null,
-          isActive,
-        },
-      }),
-      db.kitTemplateItem.deleteMany({ where: { kitTemplateId: id } }),
-      db.kitTemplateItem.createMany({
-        data: filtered.map((it) => ({
-          kitTemplateId: id,
-          productId: it.productId,
-          quantity: it.quantity,
-        })),
-      }),
-    ]);
+    await db.$transaction(async (tx) => {
+      const __t0 = await tx.kitTemplate.update({
+          where: { id },
+          data: {
+            name: name.trim(),
+            description: description?.trim() || null,
+            isActive,
+          },
+        });
+      const __t1 = await tx.kitTemplateItem.deleteMany({ where: { kitTemplateId: id } });
+      const __t2 = await tx.kitTemplateItem.createMany({
+          data: filtered.map((it) => ({
+            kitTemplateId: id,
+            productId: it.productId,
+            quantity: it.quantity,
+          })),
+        });
+      return [__t0, __t1, __t2];
+    });
 
     revalidatePath("/admin/settings");
     return { success: true };

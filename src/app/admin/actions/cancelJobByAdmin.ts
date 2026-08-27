@@ -59,28 +59,29 @@ export async function cancelJobByAdmin(input: CancelJobInput) {
       return { success: false, error: "Cannot cancel a completed job" };
     }
 
-    await db.$transaction([
-      db.job.update({
-        where: { id: input.jobId },
-        data: {
-          status: "CANCELLED",
-          cancellationRequestedAt: null,
-          ...(input.reason?.trim()
-            ? { cancellationReason: input.reason.trim() }
-            : {}),
-        },
-      }),
-      db.jobLog.create({
-        data: {
-          jobId: input.jobId,
-          userId: session.user.id,
-          action: "STATUS_CHANGED",
-          field: "status",
-          newValue: "CANCELLED",
-          description: `Job cancelled by admin${input.reason ? `: ${input.reason}` : ""}`,
-        },
-      }),
-    ]);
+    await db.$transaction(async (tx) => {
+      const __t0 = await tx.job.update({
+          where: { id: input.jobId },
+          data: {
+            status: "CANCELLED",
+            cancellationRequestedAt: null,
+            ...(input.reason?.trim()
+              ? { cancellationReason: input.reason.trim() }
+              : {}),
+          },
+        });
+      const __t1 = await tx.jobLog.create({
+          data: {
+            jobId: input.jobId,
+            userId: session.user.id,
+            action: "STATUS_CHANGED",
+            field: "status",
+            newValue: "CANCELLED",
+            description: `Job cancelled by admin${input.reason ? `: ${input.reason}` : ""}`,
+          },
+        });
+      return [__t0, __t1];
+    });
 
     // Optionally refund the deposit (capped at the remaining deposit balance).
     //

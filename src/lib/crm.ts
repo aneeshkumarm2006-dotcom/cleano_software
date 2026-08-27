@@ -223,26 +223,27 @@ export async function advanceContactLifecycleForBooking(
       }
     }
 
-    await db.$transaction([
-      db.contactActivity.create({
-        data: {
-          contactId: contact.id,
-          type: "BOOKING",
-          title:
-            event === "BOOKING_COMPLETED"
-              ? "Booking completed"
-              : "Booking created",
-          actor: "System",
-        },
-      }),
-      db.contact.update({
-        where: { id: contact.id },
-        data: {
-          ...(next !== contact.lifecycle ? { lifecycle: next } : {}),
-          lastActivityAt: new Date(),
-        },
-      }),
-    ]);
+    await db.$transaction(async (tx) => {
+      const __t0 = await tx.contactActivity.create({
+          data: {
+            contactId: contact.id,
+            type: "BOOKING",
+            title:
+              event === "BOOKING_COMPLETED"
+                ? "Booking completed"
+                : "Booking created",
+            actor: "System",
+          },
+        });
+      const __t1 = await tx.contact.update({
+          where: { id: contact.id },
+          data: {
+            ...(next !== contact.lifecycle ? { lifecycle: next } : {}),
+            lastActivityAt: new Date(),
+          },
+        });
+      return [__t0, __t1];
+    });
   } catch (e) {
     console.error("advanceContactLifecycleForBooking", e);
   }
@@ -265,21 +266,22 @@ export async function logContactEvent(
       select: { id: true },
     });
     if (!contact) return;
-    await db.$transaction([
-      db.contactActivity.create({
-        data: {
-          contactId: contact.id,
-          type,
-          title,
-          body: body ?? null,
-          actor: "System",
-        },
-      }),
-      db.contact.update({
-        where: { id: contact.id },
-        data: { lastActivityAt: new Date() },
-      }),
-    ]);
+    await db.$transaction(async (tx) => {
+      const __t0 = await tx.contactActivity.create({
+          data: {
+            contactId: contact.id,
+            type,
+            title,
+            body: body ?? null,
+            actor: "System",
+          },
+        });
+      const __t1 = await tx.contact.update({
+          where: { id: contact.id },
+          data: { lastActivityAt: new Date() },
+        });
+      return [__t0, __t1];
+    });
   } catch (e) {
     console.error("logContactEvent", e);
   }

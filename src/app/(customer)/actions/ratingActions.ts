@@ -190,34 +190,36 @@ export async function submitCustomerRating(
       select: { id: true, employeeId: true },
     });
     const editedAt = new Date();
-    await db.$transaction([
-      ...cleanerIds.map((employeeId) => {
+    await db.$transaction(async (tx) => {
+      for (const employeeId of cleanerIds) {
         const row = existing.find((r) => r.employeeId === employeeId);
-        return row
-          ? db.employeeRating.update({
-              where: { id: row.id },
-              data: { rating: effectiveStars, notes: ratingNotes, editedAt },
-            })
-          : db.employeeRating.create({
-              data: {
-                jobId: tokenRow.job.id,
-                employeeId,
-                rating: effectiveStars,
-                notes: ratingNotes,
-                ratedBy: "client-portal",
-                editedAt,
-              },
-            });
-      }),
-      db.jobRatingToken.update({
+        if (row) {
+          await tx.employeeRating.update({
+            where: { id: row.id },
+            data: { rating: effectiveStars, notes: ratingNotes, editedAt },
+          });
+        } else {
+          await tx.employeeRating.create({
+            data: {
+              jobId: tokenRow.job.id,
+              employeeId,
+              rating: effectiveStars,
+              notes: ratingNotes,
+              ratedBy: "client-portal",
+              editedAt,
+            },
+          });
+        }
+      }
+      await tx.jobRatingToken.update({
         where: { id: tokenRow.id },
         data: { ratingStars: stars },
-      }),
-    ]);
+      });
+    });
   } else {
-    await db.$transaction([
-      ...cleanerIds.map((employeeId) =>
-        db.employeeRating.create({
+    await db.$transaction(async (tx) => {
+      for (const employeeId of cleanerIds) {
+        await tx.employeeRating.create({
           data: {
             jobId: tokenRow.job.id,
             employeeId,
@@ -225,13 +227,13 @@ export async function submitCustomerRating(
             notes: ratingNotes,
             ratedBy: "client-portal",
           },
-        })
-      ),
-      db.jobRatingToken.update({
+        });
+      }
+      await tx.jobRatingToken.update({
         where: { id: tokenRow.id },
         data: { usedAt: new Date(), ratingStars: stars },
-      }),
-    ]);
+      });
+    });
   }
 
   // Accountability: two consecutive sub-3-star customer ratings → strike.

@@ -122,8 +122,8 @@ export async function requestCancellation(jobId: string, reason?: string) {
 
     const revenueCategoryId = await requireBudgetCategoryId("revenue");
 
-    await db.$transaction([
-      db.job.update({
+    await db.$transaction(async (tx) => {
+      await tx.job.update({
         where: { id: jobId },
         data: {
           cancellationRequestedAt: now,
@@ -135,8 +135,8 @@ export async function requestCancellation(jobId: string, reason?: string) {
               }
             : {}),
         },
-      }),
-      db.jobLog.create({
+      });
+      await tx.jobLog.create({
         data: {
           jobId,
           userId: session.user.id,
@@ -145,23 +145,22 @@ export async function requestCancellation(jobId: string, reason?: string) {
             reason?.trim() ? ` Reason: ${reason.trim()}.` : ""
           }${feeNote}`,
         },
-      }),
-      ...(chargeOutcome === "charged"
-        ? [
-            db.transaction.create({
-              data: {
-                date: now,
-                categoryId: revenueCategoryId,
-                amount: feeUsd,
-                description: `Late-cancellation fee — job #${job.jobNumber}`,
-                jobId,
-                source: "CREDIT_CARD" as const,
-                isAuto: true,
-              },
-            }),
-          ]
-        : []),
-    ]);
+      });
+      // Only a fee that actually cleared becomes revenue.
+      if (chargeOutcome === "charged") {
+        await tx.transaction.create({
+          data: {
+            date: now,
+            categoryId: revenueCategoryId,
+            amount: feeUsd,
+            description: `Late-cancellation fee — job #${job.jobNumber}`,
+            jobId,
+            source: "CREDIT_CARD" as const,
+            isAuto: true,
+          },
+        });
+      }
+    });
 
     // §7: log the cancellation on the CRM contact timeline (no downgrade).
     if (job.clientId) {

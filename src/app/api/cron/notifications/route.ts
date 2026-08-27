@@ -597,21 +597,22 @@ export async function GET(req: NextRequest) {
     });
     for (const inv of expiredInvites) {
       try {
-        await db.$transaction([
-          db.jobAssignmentInvite.update({
-            where: { id: inv.id },
-            data: { decision: "EXPIRED", respondedAt: now },
-          }),
-          db.jobLog.create({
-            data: {
-              jobId: inv.jobId,
-              userId: inv.cleanerId,
-              action: "NOTE_ADDED",
-              description:
-                "Last-minute claim offer expired — no response within the configured window.",
-            },
-          }),
-        ]);
+        await db.$transaction(async (tx) => {
+          const __t0 = await tx.jobAssignmentInvite.update({
+              where: { id: inv.id },
+              data: { decision: "EXPIRED", respondedAt: now },
+            });
+          const __t1 = await tx.jobLog.create({
+              data: {
+                jobId: inv.jobId,
+                userId: inv.cleanerId,
+                action: "NOTE_ADDED",
+                description:
+                  "Last-minute claim offer expired — no response within the configured window.",
+              },
+            });
+          return [__t0, __t1];
+        });
         counts.invite_broadcast_expired++;
       } catch (e) {
         console.error("expired invite sweep failed", inv.id, e);
@@ -663,25 +664,25 @@ export async function GET(req: NextRequest) {
           inv.job.employeeId === inv.cleanerId ||
           inv.job.cleaners.some((c) => c.id === inv.cleanerId);
 
-        await db.$transaction([
-          db.jobAssignmentInvite.update({
+        await db.$transaction(async (tx) => {
+          await tx.jobAssignmentInvite.update({
             where: { id: inv.id },
             data: { unconfirmedAlertAt: now },
-          }),
-          ...(stillOnJob
-            ? [
-                db.jobLog.create({
-                  data: {
-                    jobId: inv.jobId,
-                    userId: inv.cleanerId,
-                    action: "NOTE_ADDED" as const,
-                    description:
-                      "Assignment not yet confirmed — no response within the configured window. The cleaner remains assigned; confirm manually or reassign.",
-                  },
-                }),
-              ]
-            : []),
-        ]);
+          });
+          // Only leave a note on the job when the cleaner is actually still on
+          // it; see the comment above.
+          if (stillOnJob) {
+            await tx.jobLog.create({
+              data: {
+                jobId: inv.jobId,
+                userId: inv.cleanerId,
+                action: "NOTE_ADDED" as const,
+                description:
+                  "Assignment not yet confirmed — no response within the configured window. The cleaner remains assigned; confirm manually or reassign.",
+              },
+            });
+          }
+        });
 
         if (!stillOnJob) {
           counts.invite_unconfirmed_skipped++;

@@ -80,20 +80,24 @@ export const db = new Proxy({} as ScopedDb, {
             return tenantConnection.run(organizationId, () => body(tx));
           }, ...opts);
         }
-        // Array form: the statements are already batched onto one connection,
-        // so the announcement is prepended to the batch.
-        const scopedAny = scoped as unknown as {
-          $executeRawUnsafe: (q: string, ...v: unknown[]) => unknown;
-        };
-        const batch = [
-          scopedAny.$executeRawUnsafe(
-            "SELECT set_config('app.current_org_id', $1, true)",
-            organizationId,
-          ),
-          ...(arg as unknown[]),
-        ];
-        const out = (await scoped.$transaction(batch, ...opts)) as unknown[];
-        return out.slice(1);
+        // ARRAY FORM IS NOT SUPPORTED, and says so rather than failing oddly.
+        //
+        // Prisma's `$transaction([...])` needs PrismaPromise objects it can defer
+        // and batch. This client makes every model call eager -- `db.job.update()`
+        // starts immediately and returns an ordinary Promise -- so the array form
+        // reaches Prisma with nothing it can batch and dies with "All elements of
+        // the array need to be Prisma Client promises", pointing at Prisma
+        // internals rather than at the call site.
+        //
+        // That cost real time to trace once. The interactive form is the
+        // supported shape and is what every call site now uses: the tenant is
+        // announced once at the top and every statement runs on that connection.
+        throw new Error(
+          "db.$transaction([...]) is not supported on the tenant client — the array " +
+            "form needs deferred Prisma promises and this client runs eagerly. " +
+            "Use db.$transaction(async (tx) => { await tx.x.y(); ... }) instead, " +
+            "and call everything inside it on `tx`, not on `db`.",
+        );
       };
     }
 

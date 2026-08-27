@@ -47,36 +47,37 @@ export async function updateChecklistTemplate(
 
     const filtered = (input.items || []).filter((it) => it.title?.trim());
 
-    await db.$transaction([
-      db.checklistTemplate.update({
-        where: { id: input.id },
-        data: {
-          name: input.name.trim(),
-          description: input.description?.trim() || null,
-          jobType: input.jobType?.trim() || null,
-          addOnName: input.addOnName?.trim() || null,
-          // Written unconditionally, including back to null: the editor always
-          // sends the current state of both pickers, so clearing the customer
-          // is a real edit ("this list is generic after all") and must not be
-          // read as "field omitted, leave it alone".
-          clientId: scope.clientId,
-          clientAddressId: scope.clientAddressId,
-          isActive: input.isActive ?? true,
-        },
-      }),
-      db.checklistTemplateItem.deleteMany({
-        where: { templateId: input.id },
-      }),
-      db.checklistTemplateItem.createMany({
-        data: filtered.map((it, idx) => ({
-          templateId: input.id,
-          title: it.title.trim(),
-          description: it.description?.trim() || null,
-          isRequired: it.isRequired ?? true,
-          sortOrder: it.sortOrder ?? idx,
-        })),
-      }),
-    ]);
+    await db.$transaction(async (tx) => {
+      const __t0 = await tx.checklistTemplate.update({
+          where: { id: input.id },
+          data: {
+            name: input.name.trim(),
+            description: input.description?.trim() || null,
+            jobType: input.jobType?.trim() || null,
+            addOnName: input.addOnName?.trim() || null,
+            // Written unconditionally, including back to null: the editor always
+            // sends the current state of both pickers, so clearing the customer
+            // is a real edit ("this list is generic after all") and must not be
+            // read as "field omitted, leave it alone".
+            clientId: scope.clientId,
+            clientAddressId: scope.clientAddressId,
+            isActive: input.isActive ?? true,
+          },
+        });
+      const __t1 = await tx.checklistTemplateItem.deleteMany({
+          where: { templateId: input.id },
+        });
+      const __t2 = await tx.checklistTemplateItem.createMany({
+          data: filtered.map((it, idx) => ({
+            templateId: input.id,
+            title: it.title.trim(),
+            description: it.description?.trim() || null,
+            isRequired: it.isRequired ?? true,
+            sortOrder: it.sortOrder ?? idx,
+          })),
+        });
+      return [__t0, __t1, __t2];
+    });
 
     revalidatePath("/admin/settings");
     return { success: true };

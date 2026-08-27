@@ -146,55 +146,56 @@ export async function sendJobQuote(input: SendJobQuoteInput) {
     const deposit = resolveDepositCredit(job);
     const quotedAt = new Date();
 
-    await db.$transaction([
-      db.job.update({
-        where: { id: job.id },
-        data: {
-          quoteStatus: "QUOTED",
-          quotedAt,
-          billingType: input.billingType,
-          billedHourlyRate,
-          billedEstimatedHours,
-          // On the hourly path this MIRRORS rate × hours; on the flat path it IS
-          // the quoted service price. Either way it matches what
-          // `computeJobMoney` derives, which is what keeps the ~15 reporting
-          // queries that still read `price` in agreement with the invoice.
-          price: servicePrice,
-          subtotalAmount: taxes.subtotalAmount,
-          gstAmount: taxes.gstAmount,
-          qstAmount: taxes.qstAmount,
-          // THE billed figure. `resolveAmountDue` prefers this and then takes the
-          // deposit off it, so the emailed balance is the charge.
-          totalAmount: taxes.totalAmount,
-          // A quote is one agreed total, not a sum of parts — see the enum note in
-          // schema.prisma. Add-on rows stay as scope, and stop moving the money.
-          pricingMode: "FINAL_PRICE",
-        },
-      }),
-      db.jobLog.create({
-        data: {
-          jobId: job.id,
-          userId: session.user.id,
-          action: "UPDATED",
-          field: "quoteStatus",
-          oldValue: job.quoteStatus,
-          newValue: "QUOTED",
-          description:
-            `Final quote sent: ${
-              input.billingType === "HOURLY"
-                ? `${billedEstimatedHours}h × $${billedHourlyRate!.toFixed(2)}/hr = `
-                : ""
-            }$${servicePrice.toFixed(2)} + tax = $${taxes.totalAmount.toFixed(2)}` +
-            (deposit > 0
-              ? ` (less $${deposit.toFixed(2)} deposit = $${Math.max(
-                  0,
-                  taxes.totalAmount - deposit
-                ).toFixed(2)} due)`
-              : "") +
-            (input.message?.trim() ? ` — "${input.message.trim()}"` : ""),
-        },
-      }),
-    ]);
+    await db.$transaction(async (tx) => {
+      const __t0 = await tx.job.update({
+          where: { id: job.id },
+          data: {
+            quoteStatus: "QUOTED",
+            quotedAt,
+            billingType: input.billingType,
+            billedHourlyRate,
+            billedEstimatedHours,
+            // On the hourly path this MIRRORS rate × hours; on the flat path it IS
+            // the quoted service price. Either way it matches what
+            // `computeJobMoney` derives, which is what keeps the ~15 reporting
+            // queries that still read `price` in agreement with the invoice.
+            price: servicePrice,
+            subtotalAmount: taxes.subtotalAmount,
+            gstAmount: taxes.gstAmount,
+            qstAmount: taxes.qstAmount,
+            // THE billed figure. `resolveAmountDue` prefers this and then takes the
+            // deposit off it, so the emailed balance is the charge.
+            totalAmount: taxes.totalAmount,
+            // A quote is one agreed total, not a sum of parts — see the enum note in
+            // schema.prisma. Add-on rows stay as scope, and stop moving the money.
+            pricingMode: "FINAL_PRICE",
+          },
+        });
+      const __t1 = await tx.jobLog.create({
+          data: {
+            jobId: job.id,
+            userId: session.user.id,
+            action: "UPDATED",
+            field: "quoteStatus",
+            oldValue: job.quoteStatus,
+            newValue: "QUOTED",
+            description:
+              `Final quote sent: ${
+                input.billingType === "HOURLY"
+                  ? `${billedEstimatedHours}h × $${billedHourlyRate!.toFixed(2)}/hr = `
+                  : ""
+              }$${servicePrice.toFixed(2)} + tax = $${taxes.totalAmount.toFixed(2)}` +
+              (deposit > 0
+                ? ` (less $${deposit.toFixed(2)} deposit = $${Math.max(
+                    0,
+                    taxes.totalAmount - deposit
+                  ).toFixed(2)} due)`
+                : "") +
+              (input.message?.trim() ? ` — "${input.message.trim()}"` : ""),
+          },
+        });
+      return [__t0, __t1];
+    });
 
     // ── Email the customer ───────────────────────────────────────────────────
     // Best-effort AFTER the write, and never inside the transaction: a send that

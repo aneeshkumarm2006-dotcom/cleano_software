@@ -79,18 +79,18 @@ export async function finalizeCardSetup(input: {
 
   const previousDefault = client.defaultPaymentMethodId;
 
-  await db.$transaction([
+  await db.$transaction(async (tx) => {
     // The customer id is no longer written here: the ownership check above
     // already proves it equals the client's stored value.
-    db.client.update({
+    await tx.client.update({
       where: { id: client.id },
       data: { defaultPaymentMethodId: paymentMethodId },
-    }),
-    db.clientCardSetupToken.update({
+    });
+    await tx.clientCardSetupToken.update({
       where: { id: row.id },
       data: { usedAt: new Date() },
-    }),
-  ]);
+    });
+  });
 
   // Payment-method history: records that a card was added and became the
   // default, and which card it replaced. Keyed on the Stripe `pm_` id.

@@ -257,23 +257,24 @@ export async function ensureJobChecklist(
     // REGENERATE — untouched, so rebuilding costs the cleaner nothing. Replace
     // the items in place so the checklist id (and anything referencing it)
     // survives.
-    const [, refreshed] = await db.$transaction([
-      db.jobChecklistItem.deleteMany({ where: { checklistId: existing.id } }),
-      db.jobChecklist.update({
-        where: { id: existing.id },
-        // Step 10.3 — the provenance is rewritten with the items. A regenerate
-        // is exactly the moment the source template can have changed (a
-        // customer link added, a job pinned), so leaving the old id behind
-        // would make the column lie in precisely the case it exists for.
-        data: { templateId: primaryTemplateId(resolved), items: { create: expected } },
-        select: {
-          id: true,
-          jobId: true,
-          employeeId: true,
-          items: { select: ITEM_SELECT, orderBy: { sortOrder: "asc" } },
-        },
-      }),
-    ]);
+    const [, refreshed] = await db.$transaction(async (tx) => {
+      const __t0 = await tx.jobChecklistItem.deleteMany({ where: { checklistId: existing.id } });
+      const __t1 = await tx.jobChecklist.update({
+          where: { id: existing.id },
+          // Step 10.3 — the provenance is rewritten with the items. A regenerate
+          // is exactly the moment the source template can have changed (a
+          // customer link added, a job pinned), so leaving the old id behind
+          // would make the column lie in precisely the case it exists for.
+          data: { templateId: primaryTemplateId(resolved), items: { create: expected } },
+          select: {
+            id: true,
+            jobId: true,
+            employeeId: true,
+            items: { select: ITEM_SELECT, orderBy: { sortOrder: "asc" } },
+          },
+        });
+      return [__t0, __t1];
+    });
     return { checklist: toDTO(refreshed), stale: false, reason: null };
   } catch (error) {
     console.error("ensureJobChecklist failed", jobId, employeeId, error);
