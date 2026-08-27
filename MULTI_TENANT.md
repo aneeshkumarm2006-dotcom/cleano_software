@@ -499,6 +499,40 @@ because it was pointed at the restricted role, which RLS refuses. The script now
 takes a separate elevated connection and asserts up front that it can see across
 organizations at all — otherwise every comparison in it is meaningless.
 
+### Cutover rehearsal — 2026-08-27
+
+Run against **production's real schema**, with no production data. `pg_dump
+--schema-only` (0 COPY/INSERT statements, verified) plus the `_prisma_migrations`
+rows, loaded into a scratch database, then filled with synthetic rows at
+production's exact volume: 232 users, 966 clients, 288 jobs.
+
+This mattered because production's schema is **not** what the migrations alone
+would build — 44 of 104 tables were created with `db push` and appear in no
+migration. The only way to know the pending migrations apply cleanly to what is
+actually there was to try it on a copy.
+
+| Step | Result |
+|---|---|
+| Create `awer_app` | instant |
+| **11 pending migrations** | **2 seconds**, no errors |
+| Grants + revokes | instant |
+
+Verified afterwards: 98 tables with `organizationId`, RLS and FORCE and the
+not-blank CHECK on all 98 (97 original + `Subscription` from step 6a — the "97"
+elsewhere in this file predates it); TeamCleano created as organization #1;
+**zero** unclaimed rows in users, clients or jobs; `awer_app` reaches `Job` and is
+denied on `AccessRequest`.
+
+Row-level security checked from the restricted role on that schema:
+
+- no organization announced → **0** clients visible (fails closed)
+- organization announced → **966** clients, **288** jobs
+
+**The migration is not the risky part.** At this data volume it is seconds, and
+it is re-runnable. The window is dominated by deploy, DNS and verification.
+
+---
+
 ---
 
 ## ⚠️ Constraints that break with a second tenant
