@@ -688,6 +688,96 @@ it is sequenced last and on its own.
 
 ---
 
+## Every company gets its own address — 2026-08-27
+
+TeamCleano predated multi-tenancy, so `www.useawer.com` *was* their application.
+That stopped being tenable the moment anyone could sign up: a cleaning company
+arriving at the product's home page would be shown another company's booking
+form. So the bare domain became Awer's front door, and TeamCleano became a
+tenant like everyone else.
+
+Decided with the customer beforehand: **nobody outside TeamCleano is using the
+app yet** — no customers have signed in, so there are no live links in anyone's
+inbox and no search ranking to preserve. That is what made a single clean cut
+safe instead of a staged migration with redirects held open for months.
+
+| Address | Before | Now |
+|---|---|---|
+| `useawer.com`, `www.` | TeamCleano's app | Awer's front door → `/get-started` |
+| `teamcleano.useawer.com` | (nothing) | TeamCleano's app |
+| `<slug>.useawer.com` | (nothing) | that company's app |
+
+Paths are unchanged — `/sign-in` → `/admin`, `/cleanos/login` → `/cleaners`,
+`/login` → the customer portal. Renaming them would have broken every cleaner's
+bookmark and phone home-screen icon to gain nothing anyone outside the company
+ever sees.
+
+**What the front door serves is an allowlist**, not a denylist:
+`/get-started`, `/console`, `/sign-in`, `/workspace-unavailable`, `/design`.
+Everything else is some company's application and is forwarded away. The
+allowlist is the point — with a denylist, every route added from here on would
+be served on the front door by accident, backed by Awer's own workspace, and
+someone would eventually find `useawer.com/admin` offering to add a cleaner to
+it.
+
+`LEGACY_ORG_SLUG` forwards old bookmarks from the bare domain to that company
+(307, deliberately temporary — a cached permanent redirect would outlive the
+setting). Clear it once the bookmarks have died out.
+
+Rollback is a single environment variable: setting `DEFAULT_ORG_SLUG` back to a
+company slug restores the previous behaviour completely, guard included, with no
+deploy.
+
+### Three bugs this turned up
+
+**Awer's console leaked every customer's name to any customer's admin.** The
+console layout refuses a non-staff visitor and redirects — and Next renders a
+layout and its children *in parallel*, so the page underneath had already run
+its queries and had its output flushed into the body of that same redirect. The
+browser navigated away; the bytes had gone. Nothing in the database was wrong
+and no query returned the wrong rows. Fixed at the query layer rather than the
+layout: `src/lib/console/queries.ts` is the only module besides platform-db that
+reads across organizations, so every cross-org read now asserts platform staff
+itself. Guarding the layout again would have fixed this page and lost to the
+next one somebody added. Covered by `scripts/verify-console-isolation.ts`, which
+was checked by disabling the guard and watching it go red.
+
+**Sign-in redirects lost the company.** `teamcleano.useawer.com/admin` bounced
+to a sign-in page on a different host, where the session does not exist —
+signing in there did nothing. `new URL(path, request.url)` was the cause: Next
+does not guarantee the URL a proxy sees carries the public host. The identical
+mistake had already broken sign-in once in `/api/post-signin`.
+
+**`setup-app-role.sql` could take production offline.** A Postgres role belongs
+to the *server*, not a database, so running the script against a scratch
+database — a rehearsal, a restored copy, a second deploy without the original
+password to hand — rotated the live application's password out from under it.
+Nothing errors; every request just starts failing with "authentication failed",
+which reads like the database is down. It happened locally during the cutover
+rehearsal. The script now leaves an existing role's password alone unless asked
+with `-v rotate_password=yes`, verified on a throwaway server.
+
+### Production environment variables
+
+```
+DEFAULT_ORG_SLUG=platform        # or omit — this is now the default
+LEGACY_ORG_SLUG=teamcleano       # clear once old bookmarks have died out
+APP_ROOT_DOMAIN=useawer.com
+```
+
+Still needed outside the code: wildcard DNS (`*.useawer.com`), the wildcard
+domain on Vercel, and the `platform` organization plus a staff account.
+
+### Checked
+
+`npx tsx scripts/verify-host-routing.ts` — 38 checks, pure functions, no
+database. Plus, against local Docker at real request level: sign-in on a tenant
+host lands on that host's dashboard; a session minted for one company shows
+neither its own nor the other company's clients on a second company's address;
+the console gives a customer's admin nothing and still renders for staff.
+
+---
+
 ## Runbook
 
 ```bash

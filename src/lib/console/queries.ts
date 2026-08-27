@@ -16,7 +16,7 @@ import { cache } from "react";
 
 import type { OrgPlan, OrgStatus, SubscriptionStatus } from "@prisma/client";
 
-import { platformDb } from "@/lib/platform-db";
+import { NotPlatformStaffError, getPlatformStaff, platformDb } from "@/lib/platform-db";
 import { CLEANER_SEAT_WHERE } from "@/lib/seat-rules";
 import { PLANS, cleanerLimitFor } from "@/lib/plans";
 import { PLATFORM_ORG_SLUG } from "@/lib/tenant";
@@ -78,7 +78,34 @@ export type WorkspaceRow = {
  * attention queue is derived from the same rows. One set of queries serves all
  * three rather than three sets that could disagree with each other.
  */
+/**
+ * Nobody reads across companies without being Awer staff.
+ *
+ * The console layout already redirects a non-staff visitor, and that is NOT
+ * enough. Next renders a layout and its children in PARALLEL: the redirect
+ * decides what the browser does next, while the page underneath has already
+ * run its queries and had its output flushed into the same response. A
+ * customer's admin who replayed their session cookie at /console got a redirect
+ * they never saw — and, in the body of that redirect, the name of every other
+ * cleaning company on the platform.
+ *
+ * The same shape of bug is documented in the root layout, for suspended
+ * workspaces. Guarding the layout again would fix this page and lose to the
+ * next one somebody adds, so the check lives here instead: this module is the
+ * only one besides platform-db that reads across organizations, so a query that
+ * cannot run unauthorized cannot leak, whoever calls it.
+ *
+ * Cached per request, so a console page asking for five of these still costs
+ * one lookup.
+ */
+const assertConsoleReader = cache(async (): Promise<void> => {
+  const staff = await getPlatformStaff();
+  if (!staff) throw new NotPlatformStaffError();
+});
+
 export const listWorkspaces = cache(async (): Promise<WorkspaceRow[]> => {
+  await assertConsoleReader();
+
   const since = windowStart();
 
   const orgs = await platformDb.organization.findMany({
@@ -208,6 +235,7 @@ export type WorkspaceDetail = {
 };
 
 export async function getWorkspaceDetail(orgId: string): Promise<WorkspaceDetail> {
+  await assertConsoleReader();
   const since = windowStart();
 
   const [admins, jobsAllTime, completed, first, last, branding] = await Promise.all([
@@ -417,6 +445,7 @@ export function overviewStats(rows: WorkspaceRow[]): OverviewStats {
 // ---------------------------------------------------------------------------
 
 export async function recentAudit(limit = 100, action?: string) {
+  await assertConsoleReader();
   return platformDb.platformAuditLog.findMany({
     where: action ? { action: { startsWith: action } } : undefined,
     orderBy: { createdAt: "desc" },
@@ -425,6 +454,7 @@ export async function recentAudit(limit = 100, action?: string) {
 }
 
 export async function auditForOrg(orgId: string, limit = 12) {
+  await assertConsoleReader();
   return platformDb.platformAuditLog.findMany({
     where: { targetOrgId: orgId },
     orderBy: { createdAt: "desc" },
@@ -433,6 +463,7 @@ export async function auditForOrg(orgId: string, limit = 12) {
 }
 
 export const listStaff = cache(async () => {
+  await assertConsoleReader();
   return platformDb.user.findMany({
     where: { platformRole: { not: null }, deletedAt: null },
     select: {
@@ -456,6 +487,7 @@ export const listStaff = cache(async () => {
  * the request that has been ignored longest.
  */
 export const listAccessRequests = cache(async () => {
+  await assertConsoleReader();
   const rows = await platformDb.accessRequest.findMany({
     orderBy: { createdAt: "asc" },
   });
@@ -473,6 +505,7 @@ export type IsolationCheck = { label: string; ok: boolean; detail: string };
  * all, so each line is something Postgres itself reports.
  */
 export async function isolationChecks(): Promise<IsolationCheck[]> {
+  await assertConsoleReader();
   type CountRow = { n: bigint };
 
   const [rls, forced, unscopedUsers, unscopedJobs, orgCount] = await Promise.all([

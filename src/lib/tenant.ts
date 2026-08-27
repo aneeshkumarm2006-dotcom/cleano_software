@@ -2,26 +2,52 @@
  * Resolving which organization a request belongs to, from its host.
  *
  *   teamcleano.useawer.com  -> "teamcleano"
- *   www.useawer.com         -> the default org
- *   useawer.com             -> the default org
+ *   acme.useawer.com        -> "acme"
+ *   www.useawer.com         -> Awer itself
+ *   useawer.com             -> Awer itself
  *
  * Pure functions only — no database, no request objects — so proxy.ts can use
  * this on every request without a query, and so the edge cases are testable.
  *
- * Everything that is NOT a tenant subdomain resolves to DEFAULT_ORG_SLUG. That
- * is deliberate: it is what keeps www.useawer.com behaving exactly as it does
- * today while the migration is in progress.
+ * Every cleaning company, TeamCleano included, is addressed by its own label.
+ * A host with no label is not a company at all: it is Awer's front door, where
+ * a cleaning company finds the product and signs up. It resolves to Awer's own
+ * workspace, and proxy.ts keeps the tenant application off it.
  */
 
 /** Header that proxy.ts stamps on the request for server code to read. */
 export const ORG_SLUG_HEADER = "x-awer-org";
 
+/** The workspace Awer's own staff belong to. Not a cleaning company. */
+export const PLATFORM_ORG_SLUG = "platform";
+
 /**
- * Org serving requests with no tenant subdomain. Production is TeamCleano, who
- * predate multi-tenancy; staging overrides this to its seeded demo org.
+ * Org serving requests whose host carries no tenant label: `useawer.com`, its
+ * `www`, a preview build URL, a bare IP.
+ *
+ * This is Awer's own workspace. It used to be TeamCleano — they predated
+ * multi-tenancy, so the bare domain WAS their app — and that is exactly what
+ * had to stop: a cleaning company shopping for software would land on the
+ * product's home page and be shown another company's booking form.
+ *
+ * Still overridable, and that override is the rollback: setting this back to a
+ * company slug restores the old behaviour completely, guard included, without
+ * a deploy.
  */
 export const DEFAULT_ORG_SLUG =
-  process.env.DEFAULT_ORG_SLUG?.trim().toLowerCase() || "teamcleano";
+  process.env.DEFAULT_ORG_SLUG?.trim().toLowerCase() || PLATFORM_ORG_SLUG;
+
+/**
+ * Where to send someone who arrives at the front door holding a link into the
+ * application — a cleaner's bookmark, a phone home-screen icon — from back when
+ * the bare domain served a company directly.
+ *
+ * Unset by default: the platform's own code should not carry a customer's name.
+ * Production sets it to the company that used to live there, and clears it once
+ * those bookmarks have died out.
+ */
+export const LEGACY_ORG_SLUG =
+  process.env.LEGACY_ORG_SLUG?.trim().toLowerCase() || "";
 
 /**
  * Labels that are infrastructure and can never be a workspace.
@@ -51,9 +77,6 @@ export const RESERVED_SLUGS = new Set([
   "awer", "useawer", "platform", "console", "operator",
 ]);
 
-/** The workspace Awer's own staff belong to. Not a customer. */
-export const PLATFORM_ORG_SLUG = "platform";
-
 /** A DNS label: lowercase alphanumeric and hyphens, not leading/trailing. */
 const LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 
@@ -68,6 +91,34 @@ function isRoutableLabel(slug: string): boolean {
 /** May a company claim this slug when signing up? */
 export function isValidOrgSlug(slug: string): boolean {
   return LABEL.test(slug) && !RESERVED_SLUGS.has(slug) && !slug.includes("--");
+}
+
+/**
+ * Paths that belong to Awer itself rather than to a cleaning company.
+ *
+ * Deliberately an ALLOWLIST. The alternative — listing the tenant areas and
+ * letting everything else through — means every route added from here on is
+ * served on the front door by accident, quietly backed by Awer's own workspace.
+ * Someone would eventually find `useawer.com/admin` showing an empty cleaning
+ * company with a real "add a cleaner" button on it. Listing the few paths that
+ * are genuinely ours fails the other way: a new route is kept off the front
+ * door until someone decides otherwise.
+ *
+ * `/sign-in` is on the list because it is also the console door — Awer staff
+ * sign in there. It gives nothing away: whether an account is platform staff is
+ * decided after the password, by the console layout.
+ */
+const PLATFORM_PATHS = [
+  "/get-started", // a cleaning company creating its workspace
+  "/console", // Awer's own super-admin console
+  "/sign-in", // staff door, shared with the console
+  "/workspace-unavailable", // the suspended / unknown workspace notice
+  "/design", // internal design reference
+];
+
+/** Is this path Awer's own, as opposed to part of a company's application? */
+export function isPlatformPath(pathname: string): boolean {
+  return PLATFORM_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
 /**

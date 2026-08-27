@@ -12,15 +12,57 @@
 -- a migration have no grants for this role yet.
 --
 --   psql "$ELEVATED_URL" -v pw=somepassword -f scripts/setup-app-role.sql
+--
+-- SAFE TO RE-RUN. It will NOT touch the password of a role that already
+-- exists, and that restraint is the whole point of the guard below.
+--
+-- A Postgres role belongs to the SERVER, not to one database. So running this
+-- against a scratch database -- a cutover rehearsal, a restored copy, a second
+-- deploy where someone did not have the original password to hand -- used to
+-- rotate the password out from under the live application on the same server.
+-- Nothing errors. Every request simply starts failing with "authentication
+-- failed against database server", which reads like the database is down.
+--
+-- That happened once, locally, during the cutover rehearsal. It would have
+-- been an outage in production.
+--
+-- To deliberately rotate the password, ask for it:
+--
+--   psql "$ELEVATED_URL" -v pw=newpassword -v rotate_password=yes \
+--     -f scripts/setup-app-role.sql
+--
+-- and remember the application's DATABASE_URL has to change in the same breath.
+
+-- Default the rotate flag, so an ordinary run does not fail on an unset
+-- variable and does not have to think about it.
+\if :{?rotate_password}
+\else
+  \set rotate_password no
+\endif
+
+-- Whether we are about to create it has to be captured BEFORE we create it.
+SELECT CASE WHEN EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'awer_app')
+              THEN 'no' ELSE 'yes' END AS creating_role
+\gset
 
 -- Create it only if missing. `\gexec` runs the text a query returns, which is
 -- how a conditional CREATE ROLE is expressed in plain psql -- a DO block cannot
 -- be used here because psql variables are not substituted inside dollar quotes.
 SELECT 'CREATE ROLE awer_app LOGIN'
- WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'awer_app')
+ WHERE :'creating_role' = 'yes'
 \gexec
 
-ALTER ROLE awer_app LOGIN PASSWORD :'pw';
+-- Set the password when creating the role, or when explicitly asked to rotate
+-- it. Never silently on a re-run: see the note at the top.
+SELECT format('ALTER ROLE awer_app LOGIN PASSWORD %L', :'pw')
+ WHERE :'creating_role' = 'yes' OR :'rotate_password' = 'yes'
+\gexec
+
+SELECT CASE
+         WHEN :'creating_role' = 'yes' THEN 'role created, password set'
+         WHEN :'rotate_password' = 'yes' THEN 'role existed, PASSWORD ROTATED'
+         ELSE 'role existed, password left alone'
+       END AS password_action;
 
 ALTER ROLE awer_app NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT;
 
