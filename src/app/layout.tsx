@@ -73,7 +73,11 @@ export default async function RootLayout({
   // the host they happened to arrive on has no workspace behind it.
   const path = (await headers()).get("x-awer-path") ?? "";
   const outsideTheGate =
-    path.startsWith("/workspace-unavailable") || path.startsWith("/get-started");
+    path.startsWith("/workspace-unavailable") ||
+    path.startsWith("/get-started") ||
+    // Awer's own front page. It describes the product to a stranger and belongs
+    // to no workspace, so a missing or suspended one must not hide it.
+    path.startsWith("/welcome");
   if (!outsideTheGate) {
     const org = await getCurrentOrg();
     const blocked = !org

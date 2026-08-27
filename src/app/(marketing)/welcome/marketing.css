@@ -1,0 +1,408 @@
+/*
+ * Awer's own front door.
+ *
+ * Uses the product's palette rather than a marketing one. A visitor who signs
+ * up here lands in the app thirty seconds later, and a site that looks like a
+ * different company than the thing it sells is its own small betrayal.
+ *
+ * Everything is scoped under .mk so it cannot reach the application's styles,
+ * which share this document through the root layout.
+ */
+.mk {
+  /* Brand, straight from customer.css — one source, not a second opinion. */
+  --mk-teal: #008c9c;
+  /* #008C9C on white is ~3.4:1 — fine behind large type, not enough under it.
+     Anything small or interactive uses the deeper tone, which clears 4.5:1. */
+  --mk-teal-ink: #00707d;
+  --mk-teal-deep: #003940;
+  --mk-ink: #0e1a1c;
+  --mk-ink-soft: #47585c;
+  /* Neutrals carry a little of the accent, so they read as chosen. */
+  --mk-wash: #f4f8f9;
+  --mk-line: #dce7e9;
+  --mk-white: #fff;
+
+  --mk-s1: 8px;
+  --mk-s2: 16px;
+  --mk-s3: 24px;
+  --mk-s4: 40px;
+  --mk-s5: 64px;
+  --mk-s6: 96px;
+  --mk-radius: 14px;
+  --mk-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+
+  color: var(--mk-ink);
+  background: var(--mk-white);
+  font-family: var(--font-app), system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+.mk *, .mk *::before, .mk *::after { box-sizing: border-box; }
+
+.mk :focus-visible {
+  outline: 3px solid var(--mk-teal-ink);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+.mk-skip {
+  position: absolute;
+  left: -9999px;
+  top: var(--mk-s2);
+  background: var(--mk-ink);
+  color: #fff;
+  padding: 12px 18px;
+  border-radius: 8px;
+  z-index: 100;
+}
+.mk-skip:focus { left: var(--mk-s2); }
+
+.mk-wrap {
+  width: 100%;
+  max-width: 1120px;
+  margin-inline: auto;
+  padding-inline: var(--mk-s3);
+}
+
+/* ---------------------------------------------------------------- nav --- */
+.mk-nav {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--mk-line);
+}
+.mk-nav-in {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mk-s2);
+  min-height: 68px;
+}
+.mk-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 19px;
+  letter-spacing: -0.02em;
+  color: var(--mk-ink);
+  text-decoration: none;
+}
+.mk-logo svg { color: var(--mk-teal); flex: none; }
+.mk-nav-actions { display: flex; align-items: center; gap: var(--mk-s1); }
+
+/* ------------------------------------------------------------ buttons --- */
+.mk-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  /* 44px minimum, so this is a real target on a phone. */
+  min-height: 46px;
+  padding: 0 22px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 180ms var(--mk-ease), border-color 180ms var(--mk-ease),
+    color 180ms var(--mk-ease);
+}
+.mk-btn-primary { background: var(--mk-teal-ink); color: #fff; }
+.mk-btn-primary:hover { background: var(--mk-teal-deep); }
+.mk-btn-ghost { color: var(--mk-ink); border-color: var(--mk-line); background: var(--mk-white); }
+.mk-btn-ghost:hover { border-color: var(--mk-teal); color: var(--mk-teal-ink); }
+.mk-btn-plain { color: var(--mk-ink); padding-inline: 12px; }
+.mk-btn-plain:hover { color: var(--mk-teal-ink); }
+.mk-btn-lg { min-height: 54px; padding: 0 30px; font-size: 16px; }
+
+/* --------------------------------------------------------------- type --- */
+.mk-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--mk-teal-ink);
+  margin: 0 0 var(--mk-s2);
+}
+.mk-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--mk-teal);
+  flex: none;
+}
+.mk-h1 {
+  font-size: clamp(34px, 5.4vw, 58px);
+  line-height: 1.06;
+  letter-spacing: -0.032em;
+  font-weight: 700;
+  margin: 0 0 var(--mk-s3);
+  text-wrap: balance;
+}
+.mk-h2 {
+  font-size: clamp(26px, 3.4vw, 38px);
+  line-height: 1.15;
+  letter-spacing: -0.025em;
+  font-weight: 700;
+  margin: 0 0 var(--mk-s2);
+  text-wrap: balance;
+}
+.mk-h3 { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 6px; }
+.mk-lead {
+  font-size: clamp(17px, 1.6vw, 19px);
+  line-height: 1.6;
+  color: var(--mk-ink-soft);
+  /* Kept near 65 characters so it stays readable at every width. */
+  max-width: 60ch;
+  margin: 0;
+}
+.mk-em { color: var(--mk-teal-ink); font-style: normal; }
+
+/* ------------------------------------------------------------ section --- */
+.mk-section { padding-block: clamp(var(--mk-s5), 9vw, var(--mk-s6)); }
+.mk-section-wash { background: var(--mk-wash); border-block: 1px solid var(--mk-line); }
+.mk-section-head { max-width: 62ch; margin-bottom: var(--mk-s4); }
+
+/* --------------------------------------------------------------- hero --- */
+.mk-hero { padding-block: clamp(var(--mk-s5), 8vw, 104px) var(--mk-s5); }
+.mk-hero-grid {
+  display: grid;
+  gap: clamp(var(--mk-s4), 5vw, var(--mk-s5));
+  grid-template-columns: 1fr;
+  align-items: center;
+}
+.mk-hero-cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: var(--mk-s4); }
+.mk-hero-note {
+  margin: var(--mk-s2) 0 0;
+  font-size: 14px;
+  color: var(--mk-ink-soft);
+}
+
+/* The address panel: the product's actual shape, not a stock illustration. */
+.mk-panel {
+  border: 1px solid var(--mk-line);
+  border-radius: 18px;
+  background: var(--mk-white);
+  box-shadow: 0 1px 2px rgba(14, 26, 28, 0.04), 0 18px 40px -24px rgba(0, 57, 64, 0.28);
+  overflow: hidden;
+}
+.mk-panel-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: var(--mk-wash);
+  border-bottom: 1px solid var(--mk-line);
+}
+.mk-panel-lights { display: flex; gap: 6px; flex: none; }
+.mk-panel-lights i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--mk-line);
+  display: block;
+}
+.mk-url {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 13px;
+  color: var(--mk-ink-soft);
+  background: var(--mk-white);
+  border: 1px solid var(--mk-line);
+  border-radius: 7px;
+  padding: 5px 12px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mk-url b { color: var(--mk-teal-ink); font-weight: 600; }
+
+.mk-doors { list-style: none; margin: 0; padding: 10px; display: grid; gap: 6px; }
+.mk-door {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 12px;
+  border-radius: 11px;
+  transition: background-color 180ms var(--mk-ease);
+}
+.mk-door:hover { background: var(--mk-wash); }
+.mk-door-icon {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: rgba(0, 140, 156, 0.1);
+  color: var(--mk-teal-ink);
+}
+.mk-door-body { min-width: 0; }
+.mk-door-body strong { display: block; font-size: 15px; font-weight: 600; }
+.mk-door-body span {
+  display: block;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 12.5px;
+  color: var(--mk-ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* --------------------------------------------------------- three-up --- */
+.mk-grid {
+  display: grid;
+  gap: var(--mk-s3);
+  grid-template-columns: 1fr;
+}
+.mk-card {
+  background: var(--mk-white);
+  border: 1px solid var(--mk-line);
+  border-radius: var(--mk-radius);
+  padding: var(--mk-s3);
+  height: 100%;
+}
+.mk-card-icon {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: rgba(0, 140, 156, 0.1);
+  color: var(--mk-teal-ink);
+  margin-bottom: 14px;
+}
+.mk-card p { margin: 0; color: var(--mk-ink-soft); font-size: 15px; }
+
+/* --------------------------------------------------------------- list --- */
+.mk-checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 11px; }
+.mk-checks li {
+  display: flex;
+  gap: 11px;
+  align-items: flex-start;
+  font-size: 15px;
+  color: var(--mk-ink-soft);
+}
+.mk-checks svg { color: var(--mk-teal-ink); flex: none; margin-top: 3px; }
+
+/* ------------------------------------------------------------ pricing --- */
+.mk-plan {
+  display: flex;
+  flex-direction: column;
+  background: var(--mk-white);
+  border: 1px solid var(--mk-line);
+  border-radius: var(--mk-radius);
+  padding: var(--mk-s3);
+  height: 100%;
+}
+/* The recommended plan is marked with a border AND a label — never colour
+   alone, which says nothing to anyone who cannot see it. */
+.mk-plan-featured { border-color: var(--mk-teal); box-shadow: 0 0 0 1px var(--mk-teal); }
+.mk-plan-tag {
+  display: inline-block;
+  align-self: flex-start;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #fff;
+  background: var(--mk-teal-ink);
+  border-radius: 999px;
+  padding: 4px 10px;
+  margin-bottom: 12px;
+}
+.mk-plan-name { font-size: 15px; font-weight: 700; margin: 0 0 6px; }
+.mk-price {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 4px;
+  /* Prices line up column to column rather than drifting by digit width. */
+  font-variant-numeric: tabular-nums;
+}
+.mk-price b { font-size: 40px; font-weight: 700; letter-spacing: -0.03em; line-height: 1.1; }
+.mk-price span { font-size: 14px; color: var(--mk-ink-soft); }
+.mk-plan-cap { font-size: 13.5px; color: var(--mk-ink-soft); margin: 0 0 var(--mk-s3); }
+.mk-plan .mk-checks { margin-bottom: var(--mk-s3); }
+.mk-plan .mk-btn { margin-top: auto; width: 100%; }
+
+/* -------------------------------------------------------------- steps --- */
+.mk-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--mk-s3); counter-reset: mk; }
+.mk-step { display: flex; gap: 16px; align-items: flex-start; counter-increment: mk; }
+.mk-step::before {
+  content: counter(mk);
+  flex: none;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--mk-teal-ink);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.mk-step p { margin: 0; color: var(--mk-ink-soft); font-size: 15px; }
+
+/* ---------------------------------------------------------------- cta --- */
+.mk-cta { background: var(--mk-teal-deep); color: #fff; text-align: center; }
+.mk-cta .mk-h2 { color: #fff; }
+.mk-cta .mk-lead { color: rgba(255, 255, 255, 0.82); margin-inline: auto; }
+.mk-cta .mk-eyebrow { color: #7fcdd4; }
+.mk-cta .mk-dot { background: #7fcdd4; }
+.mk-cta-row { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin-top: var(--mk-s4); }
+.mk-cta .mk-btn-primary { background: #fff; color: var(--mk-teal-deep); }
+.mk-cta .mk-btn-primary:hover { background: #d7eef1; }
+.mk-cta .mk-btn-ghost {
+  background: transparent;
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.4);
+}
+.mk-cta .mk-btn-ghost:hover { border-color: #fff; color: #fff; }
+.mk-cta :focus-visible { outline-color: #fff; }
+
+/* ------------------------------------------------------------- footer --- */
+.mk-foot { border-top: 1px solid var(--mk-line); padding-block: var(--mk-s4); }
+.mk-foot-in {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mk-s2);
+  align-items: center;
+  justify-content: space-between;
+  font-size: 14px;
+  color: var(--mk-ink-soft);
+}
+.mk-foot a { color: var(--mk-ink-soft); text-decoration: none; }
+.mk-foot a:hover { color: var(--mk-teal-ink); text-decoration: underline; }
+.mk-foot-links { display: flex; flex-wrap: wrap; gap: var(--mk-s3); }
+
+/* -------------------------------------------------------- breakpoints --- */
+@media (min-width: 768px) {
+  .mk-grid { grid-template-columns: repeat(3, 1fr); }
+  .mk-steps { grid-template-columns: repeat(3, 1fr); }
+}
+@media (min-width: 1024px) {
+  .mk-hero-grid { grid-template-columns: 1.05fr 0.95fr; }
+}
+@media (max-width: 520px) {
+  .mk-nav-actions .mk-hide-xs { display: none; }
+  .mk-hero-cta .mk-btn { width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mk *, .mk *::before, .mk *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}

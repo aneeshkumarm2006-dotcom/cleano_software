@@ -109,6 +109,7 @@ export function isValidOrgSlug(slug: string): boolean {
  * decided after the password, by the console layout.
  */
 const PLATFORM_PATHS = [
+  "/welcome", // Awer's own marketing page, served as `/` on the front door
   "/get-started", // a cleaning company creating its workspace
   "/console", // Awer's own super-admin console
   "/sign-in", // staff door, shared with the console

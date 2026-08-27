@@ -14,6 +14,7 @@ import {
 const PUBLIC_EXACT = new Set<string>([
   '/sign-in',
   '/sign-up',
+  '/welcome', // Awer's own marketing page
   '/get-started', // a cleaning company creating its own workspace on Awer
   '/get-started/organization', // Organization tier: a request, not a signup
   '/cleanos/login', // cleaner sign-in
@@ -116,6 +117,24 @@ export async function proxy(request: NextRequest) {
   //
   // Runs BEFORE the public-route check on purpose: `/book`, `/login` and
   // `/careers` are public, but they are still a particular company's pages.
+  // Marketing has one home. Left reachable on every company's subdomain it
+  // would be Awer's sales page sitting on a customer's address, and a search
+  // engine would index one copy of it per company we ever sign up.
+  if (orgSlug !== PLATFORM_ORG_SLUG && pathname.startsWith('/welcome')) {
+    return redirectSamePath(request, '/')
+  }
+
+  if (orgSlug === PLATFORM_ORG_SLUG && pathname === '/') {
+    // REWRITE, not redirect: the marketing page has to live somewhere in the
+    // route tree, and `/` is already taken — it is the customer portal home on
+    // every company's own subdomain, and two pages cannot both be the root.
+    // Rewriting serves /welcome while the address bar still says useawer.com,
+    // which is what a marketing URL has to be.
+    return NextResponse.rewrite(new URL('/welcome', selfOrigin(request)), {
+      request: { headers },
+    })
+  }
+
   if (orgSlug === PLATFORM_ORG_SLUG && !isPlatformPath(pathname)) {
     // Cleaners have this host bookmarked and installed on their phones from
     // before the move. Forward them rather than break them.
