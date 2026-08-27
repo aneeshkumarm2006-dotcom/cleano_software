@@ -778,6 +778,104 @@ the console gives a customer's admin nothing and still renders for staff.
 
 ---
 
+## Going live — the ordered cutover
+
+The order matters and is not obvious. Two migrations REVOKE privileges from
+`awer_app`, and a REVOKE naming a role that does not exist is an error — so the
+role must be created BEFORE the migrations. Tables created BY a migration have
+no grants for that role — so the grants must be applied AFTER them.
+
+Rehearsed against production's real schema (a structure-only dump, no customer
+rows) on 2026-08-27: all pending migrations applied in **2 seconds**, and again
+in 2 seconds after the Stripe columns were added. The database step is not the
+risky part of this.
+
+### Before the window — nothing changes yet
+
+1. **Buy point-in-time recovery** on the Supabase project. Daily backups are not
+   enough for a one-way migration. This is the only item here that cannot be
+   fixed afterwards.
+2. **Wildcard DNS**: `*.useawer.com` → Vercel.
+3. **Add `*.useawer.com`** as a domain on the Vercel project.
+4. **Generate the secrets key** and keep it somewhere durable —
+   `openssl rand -hex 32`. Lose it and every stored Stripe credential becomes
+   unreadable (the app fails closed and asks for re-entry, but it is a bad day).
+
+### The window
+
+Set `PROD` to the elevated (postgres) connection string, not the pooler.
+
+```bash
+# 5. A restore point you chose, rather than one you hope exists.
+#    Note the PITR timestamp before touching anything.
+
+# 6. The restricted role the app will connect as. BEFORE the migrations.
+psql "$PROD" -v ON_ERROR_STOP=1 -v pw='<a new strong password>' \
+  -f scripts/setup-app-role.sql
+#    Safe to re-run: it will not change an existing role's password unless
+#    asked with -v rotate_password=yes.
+
+# 7. The schema. ~2 seconds.
+DATABASE_URL="$PROD" DIRECT_URL="$PROD" npx prisma migrate deploy
+
+# 8. Grants for the tables the migrations just created. AFTER them.
+psql "$PROD" -v ON_ERROR_STOP=1 -f scripts/setup-app-grants.sql
+
+# 9. Awer's own workspace and your staff login.
+DATABASE_URL="$PROD" npx tsx scripts/seed-platform.ts \
+  --email you@awer.com --name "Your Name" --password '<a strong password>'
+```
+
+10. **Environment variables on Vercel**, then deploy:
+
+| Variable | Value | Why |
+|---|---|---|
+| `DATABASE_URL` | the **`awer_app`** connection string | row-level security is decorative under a role that can bypass it |
+| `PLATFORM_DATABASE_URL` | the elevated string | the console has to read across companies |
+| `DEFAULT_ORG_SLUG` | `platform` | the bare domain is Awer's front door, not a customer's app |
+| `LEGACY_ORG_SLUG` | `teamcleano` | forwards old bookmarks; clear it once they die out |
+| `APP_ROOT_DOMAIN` | `useawer.com` | how links in emails are built for each company |
+| `STRIPE_ENV_ORG_SLUG` | `teamcleano` | binds the existing Stripe key to the one company it belongs to |
+| `SECRETS_KEY` | the value from step 4 | encrypts credentials companies paste into Settings |
+
+### Afterwards, in a browser
+
+- `useawer.com` → Awer's marketing page (not a customer's login)
+- `useawer.com/sign-in` → your staff account → `/console`
+- `teamcleano.useawer.com/sign-in` → TeamCleano's admin
+- `teamcleano.useawer.com/cleanos/login` → a cleaner
+- `useawer.com/admin/dashboard` → forwards to `teamcleano.useawer.com/admin/dashboard`
+- Console → Health: every workspace ACTIVE, no unclaimed rows
+
+Everyone signs in again once. A session on `www.useawer.com` is not sent to
+`teamcleano.useawer.com` — that is the same rule that stops one company's login
+reaching another's, so it is working as intended. Warn the team the day before.
+
+**Do not run the verify suites against production.** They write probe rows;
+`assertSafeTarget` refuses production for exactly that reason, and the refusal
+is the feature.
+
+### Rollback
+
+`DEFAULT_ORG_SLUG=teamcleano` restores the previous behaviour completely —
+the front-door guard, the forwarding, all of it — with no deploy and no schema
+change. The added columns are nullable and unread by the old code, so they can
+sit there harmlessly until you try again.
+
+### Not covered by this, and known
+
+- **27 operational scripts are still single-tenant.** They act on whichever rows
+  they find. Do not run them after the cutover until they are converted.
+- **Cloudinary uploads share one folder** across companies.
+- **44 of 104 tables are in no migration** — they were created by `db push`, so
+  the migration history cannot rebuild this schema from scratch. It applies
+  cleanly ON TOP of the real schema, which is what was rehearsed and what
+  matters here.
+- **A real card payment has never been taken end to end**, because local has no
+  live Stripe key. The routing is proven; the charge is not.
+
+---
+
 ## Runbook
 
 ```bash
