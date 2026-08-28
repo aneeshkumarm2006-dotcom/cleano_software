@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+
+import { apiError } from "@/lib/api-errors";
 import { getJobsForDay } from "@/app/admin/actions/getJobsForDay";
 
 export async function GET(
@@ -9,11 +11,8 @@ export async function GET(
     const { date } = await context.params;
     const data = await getJobsForDay(date);
     return NextResponse.json({ success: true, data });
-  } catch (error: any) {
-    return NextResponse.json(
-      { success: false, error: error?.message || "Failed to load calendar" },
-      { status: 500 }
-    );
+  } catch (error) {
+    return apiError("calendar/[date]", error);
   }
 }
 

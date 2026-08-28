@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+
+import { apiError } from "@/lib/api-errors";
 import { getJobsForRange } from "@/app/admin/actions/getJobsForDay";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -29,10 +31,7 @@ export async function GET(req: Request) {
 
     const data = await getJobsForRange(start, end);
     return NextResponse.json({ success: true, data });
-  } catch (error: any) {
-    return NextResponse.json(
-      { success: false, error: error?.message || "Failed to load calendar" },
-      { status: 500 }
-    );
+  } catch (error) {
+    return apiError("calendar/range", error);
   }
 }
