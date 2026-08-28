@@ -198,7 +198,19 @@ export const BOOKING_PHOTO_MIME_TYPES: readonly string[] = [
  * public action cannot be used to attach an arbitrary internet image — or an
  * asset from another job's folder — to a job record.
  */
-export const BOOKING_PHOTO_FOLDER = "cleano/booking-uploads";
+/**
+ * REPLACED by `bookingPhotoFolderFor(slug)`.
+ *
+ * There used to be one booking folder for the whole platform. That made this
+ * check far weaker than it reads: a booking taken by company A could carry a
+ * URL pointing at a photo of company B's customer's home, and it passed —
+ * right cloud, right folder. The folder is now per company, so the check
+ * finally means what its comment always claimed.
+ *
+ * Kept only as the historical value, for recognising assets uploaded before
+ * the split. Nothing writes here any more.
+ */
+export const LEGACY_BOOKING_PHOTO_FOLDER = "cleano/booking-uploads";
 
 /**
  * Does this URL look like something OUR upload action produced?
@@ -210,8 +222,11 @@ export const BOOKING_PHOTO_FOLDER = "cleano/booking-uploads";
  */
 export function isBookingPhotoUrl(
   url: unknown,
-  cloudName: string | undefined
+  cloudName: string | undefined,
+  /** This company's booking folder — `bookingPhotoFolderFor(org.slug)`. */
+  folder: string
 ): boolean {
+  if (!folder) return false;
   if (typeof url !== "string" || !cloudName) return false;
   if (url.length > 2048) return false;
   let parsed: URL;
@@ -224,7 +239,9 @@ export function isBookingPhotoUrl(
   if (parsed.hostname !== "res.cloudinary.com") return false;
   // /<cloud>/image/upload/…/cleano/booking-uploads/<id>
   if (!parsed.pathname.startsWith(`/${cloudName}/`)) return false;
-  return parsed.pathname.includes(`/${BOOKING_PHOTO_FOLDER}/`);
+  // Only THIS company's folder. Not the shared legacy one, and not another
+  // company's — both are real, fetchable URLs on our cloud.
+  return parsed.pathname.includes(`/${folder}/`);
 }
 
 /** The caption stored on a photo the customer uploaded at booking time. */

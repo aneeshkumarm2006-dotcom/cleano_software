@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { cloudinary } from "@/lib/cloudinary";
 import type { UploadApiResponse } from "cloudinary";
 import { sendAdminDocSigned } from "@/lib/email";
+import { orgAssetFolder } from "@/lib/asset-folder";
 
 interface SignDocumentInput {
   documentId: string;
@@ -77,7 +78,7 @@ export async function signDocument(input: SignDocumentInput) {
       process.env.CLOUDINARY_API_SECRET
     ) {
       try {
-        const folder = `cleano/signatures/${documentId}`;
+        const folder = await orgAssetFolder("signatures", documentId);
         const publicId = `${employeeId}-${Date.now()}`;
         const result = await uploadDataUrl(signatureDataUrl, folder, publicId);
         signatureUrl = result.secure_url;

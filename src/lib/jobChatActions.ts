@@ -6,6 +6,7 @@ import { db } from "@/lib/org-db";
 import { smsJobChatMessage } from "@/lib/sms";
 import { cloudinary } from "@/lib/cloudinary";
 import type { UploadApiResponse } from "cloudinary";
+import { orgAssetFolder } from "@/lib/asset-folder";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -441,7 +442,7 @@ export async function sendJobChatPhoto(
     const buffer = Buffer.from(await file.arrayBuffer());
     uploaded = await streamUpload(
       buffer,
-      `cleano/job-chat/${jobId}`,
+      await orgAssetFolder("job-chat", jobId),
       `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     );
   } catch (e) {

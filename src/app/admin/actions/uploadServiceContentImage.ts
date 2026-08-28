@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { cloudinary } from "@/lib/cloudinary";
 import type { UploadApiResponse } from "cloudinary";
+import { orgAssetFolder } from "@/lib/asset-folder";
 
 // Uploads a single "What's included" graphic (item 3) to Cloudinary and returns
 // its URL. Admin-only; the URL is then stored in the `content.serviceIncluded`
@@ -67,7 +68,7 @@ export async function uploadServiceContentImage(
   try {
     const buffer = Buffer.from(await file.arrayBuffer());
     const publicId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const result = await streamUpload(buffer, "cleano/service-content", publicId);
+    const result = await streamUpload(buffer, await orgAssetFolder("service-content"), publicId);
     return { success: true, url: result.secure_url };
   } catch (error) {
     console.error("Error uploading service-content image:", error);

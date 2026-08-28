@@ -3,10 +3,10 @@
 import { cloudinary, cloudinaryConfigured } from "@/lib/cloudinary";
 import { headers } from "next/headers";
 import {
-  BOOKING_PHOTO_FOLDER,
   BOOKING_PHOTO_MAX_BYTES,
   BOOKING_PHOTO_MIME_TYPES,
 } from "@/lib/booking-deposit";
+import { bookingPhotoFolderFor, currentOrgSlug } from "@/lib/asset-folder";
 import type { UploadApiResponse } from "cloudinary";
 
 /**
@@ -85,11 +85,17 @@ async function clientIp(): Promise<string> {
   return h.get("x-real-ip") ?? "unknown";
 }
 
-function streamUpload(buffer: Buffer, publicId: string): Promise<UploadApiResponse> {
+// Folder passed in: this returns a Promise but is not async, and the company
+// must be resolved before the stream opens.
+function streamUpload(
+  buffer: Buffer,
+  publicId: string,
+  folder: string
+): Promise<UploadApiResponse> {
   return new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
       {
-        folder: BOOKING_PHOTO_FOLDER,
+        folder,
         public_id: publicId,
         resource_type: "image",
         // Never replace an existing asset — see guard (3) in the header.
@@ -157,7 +163,11 @@ export async function uploadBookingPhoto(
   try {
     const buffer = Buffer.from(await file.arrayBuffer());
     const publicId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-    const result = await streamUpload(buffer, publicId);
+    const result = await streamUpload(
+      buffer,
+      publicId,
+      bookingPhotoFolderFor(await currentOrgSlug())
+    );
     return { success: true, url: result.secure_url, publicId: result.public_id };
   } catch (error) {
     console.error("uploadBookingPhoto: upload failed", error);

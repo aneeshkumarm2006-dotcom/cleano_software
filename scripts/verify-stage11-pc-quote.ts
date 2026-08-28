@@ -20,7 +20,6 @@
 
 import fs from "node:fs";
 import {
-  BOOKING_PHOTO_FOLDER,
   BOOKING_PHOTO_MAX,
   BOOKING_PHOTO_MIN,
   BOOKING_PHOTO_UPLOADER_LABEL,
@@ -74,6 +73,7 @@ import {
   resolveField,
 } from "../src/lib/booking-page-config";
 import { postConstructionBasePrice } from "../src/lib/service-pricing";
+import { bookingPhotoFolderFor } from "../src/lib/asset-paths";
 
 let pass = 0;
 let fail = 0;
@@ -546,33 +546,62 @@ section("4 · booking: photos are required and validated", () => {
   // The trust boundary on the URL. This is what stops a public upload action
   // becoming "attach any image on the internet to a job record".
   const CLOUD = "cleano-demo";
-  const good = `https://res.cloudinary.com/${CLOUD}/image/upload/v1/${BOOKING_PHOTO_FOLDER}/abc123.jpg`;
-  ok("a URL from our folder on our cloud is accepted", isBookingPhotoUrl(good, CLOUD));
+  // Each company has its own booking folder now, so the check needs to be told
+  // WHOSE it is running for.
+  const MINE = bookingPhotoFolderFor("teamcleano");
+  const THEIRS = bookingPhotoFolderFor("acme-cleaning");
+  const good = `https://res.cloudinary.com/${CLOUD}/image/upload/v1/${MINE}/abc123.jpg`;
+  ok("a URL from our folder on our cloud is accepted", isBookingPhotoUrl(good, CLOUD, MINE));
   ok(
     "another cloud's URL is refused",
     !isBookingPhotoUrl(
-      `https://res.cloudinary.com/someone-else/image/upload/v1/${BOOKING_PHOTO_FOLDER}/abc.jpg`,
-      CLOUD
+      `https://res.cloudinary.com/someone-else/image/upload/v1/${MINE}/abc.jpg`,
+      CLOUD,
+      MINE
     )
   );
   ok(
     "another FOLDER on our own cloud is refused — including another job's photos",
     !isBookingPhotoUrl(
-      `https://res.cloudinary.com/${CLOUD}/image/upload/v1/cleano/jobs/someone-elses-job/x.jpg`,
-      CLOUD
+      `https://res.cloudinary.com/${CLOUD}/image/upload/v1/awer/teamcleano/jobs/someone-elses-job/x.jpg`,
+      CLOUD,
+      MINE
+    )
+  );
+  // THE ONE THIS SPLIT EXISTS FOR. Under the old single shared folder this URL
+  // passed every check — our cloud, the booking folder — and let one company
+  // attach a photo of another company's customer's home to its own job.
+  ok(
+    "ANOTHER COMPANY's booking photo is refused",
+    !isBookingPhotoUrl(
+      `https://res.cloudinary.com/${CLOUD}/image/upload/v1/${THEIRS}/abc123.jpg`,
+      CLOUD,
+      MINE
+    )
+  );
+  ok(
+    "and the shared folder we used to write into is refused too",
+    !isBookingPhotoUrl(
+      `https://res.cloudinary.com/${CLOUD}/image/upload/v1/cleano/booking-uploads/abc.jpg`,
+      CLOUD,
+      MINE
     )
   );
   ok(
     "an arbitrary host is refused",
-    !isBookingPhotoUrl(`https://evil.example/${BOOKING_PHOTO_FOLDER}/x.jpg`, CLOUD)
+    !isBookingPhotoUrl(`https://evil.example/${MINE}/x.jpg`, CLOUD, MINE)
   );
-  ok("http is refused", !isBookingPhotoUrl(good.replace("https:", "http:"), CLOUD));
-  ok("a non-URL is refused", !isBookingPhotoUrl("not a url", CLOUD));
-  ok("a data: URI is refused", !isBookingPhotoUrl("data:image/png;base64,AAAA", CLOUD));
-  ok("an absurdly long URL is refused", !isBookingPhotoUrl(good + "?x=" + "a".repeat(4000), CLOUD));
+  ok("http is refused", !isBookingPhotoUrl(good.replace("https:", "http:"), CLOUD, MINE));
+  ok("a non-URL is refused", !isBookingPhotoUrl("not a url", CLOUD, MINE));
+  ok("a data: URI is refused", !isBookingPhotoUrl("data:image/png;base64,AAAA", CLOUD, MINE));
+  ok("an absurdly long URL is refused", !isBookingPhotoUrl(good + "?x=" + "a".repeat(4000), CLOUD, MINE));
   ok(
     "and with NO cloud configured, everything is refused — fail closed",
-    !isBookingPhotoUrl(good, undefined)
+    !isBookingPhotoUrl(good, undefined, MINE)
+  );
+  ok(
+    "with no company folder resolved, everything is refused — fail closed",
+    !isBookingPhotoUrl(good, CLOUD, "")
   );
 
   // Server-side enforcement of the count, independent of the step gate.
@@ -585,10 +614,20 @@ section("4 · booking: photos are required and validated", () => {
     "...before the deposit is verified, so an unquotable booking never takes the money",
     (() => {
       const src = read("src/app/(book)/actions/submitBooking.ts");
-      return (
-        src.indexOf("if (isQuote && photoUrls.length < BOOKING_PHOTO_MIN)") <
-        src.indexOf("const verification = await verifyBookingDeposit(")
-      );
+      const photos = src.indexOf("if (isQuote && photoUrls.length < BOOKING_PHOTO_MIN)");
+      // The CALL, not the function definition, and not the old literal this
+      // used to match. When the deposit gained a "waived" path the assignment
+      // was reworded, indexOf returned -1, and `photos < -1` reported the
+      // ordering as broken when it was fine. An anchor that has gone missing
+      // must fail as "I cannot tell", never as "it is wrong".
+      const deposit = src.indexOf("const verification: DepositVerification =");
+      if (photos < 0 || deposit < 0) {
+        throw new Error(
+          "verify-stage11: lost track of the photo check or the deposit call in submitBooking.ts — " +
+            "the anchors moved, so this assertion cannot answer. Update them.",
+        );
+      }
+      return photos < deposit;
     })()
   );
   has(

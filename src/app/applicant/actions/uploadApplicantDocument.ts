@@ -12,6 +12,7 @@ import {
   validateApplicantDocument,
 } from "@/lib/employee-files";
 import { isApplicantRole } from "@/lib/role-routing";
+import { orgAssetFolder } from "@/lib/asset-folder";
 
 /**
  * An invited applicant uploads a supporting document (decision D4). Same
@@ -81,7 +82,7 @@ export async function uploadApplicantDocument(formData: FormData): Promise<
     const buffer = Buffer.from(await file.arrayBuffer());
     const fileName = (file.name || "document").slice(0, 120);
     const publicId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const folder = `cleano/applicant-documents/${applicantId}`;
+    const folder = await orgAssetFolder("applicant-documents", applicantId);
 
     const result = await streamUpload(buffer, folder, publicId, resourceType);
 

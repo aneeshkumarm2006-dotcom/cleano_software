@@ -54,6 +54,7 @@ import { resolveJobAddressId } from "@/lib/client-address-store";
 import { parsePropertyType } from "@/lib/property-type";
 import { allocateJobNumber } from "@/lib/job-number";
 import { requireOrgId } from "@/lib/org";
+import { bookingPhotoFolderFor, currentOrgSlug } from "@/lib/asset-folder";
 
 type Frequency =
   | "ONE_TIME"
@@ -488,10 +489,14 @@ export async function submitBooking(input: SubmitBookingInput) {
     // COUNT is a business rule the step gate also enforces (so a crafted request
     // can't submit a photo-less quote request that an admin can never price).
     const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+    // This company's own booking folder. With the single shared folder this
+    // check used to allow a photo of ANOTHER company's customer's home: right
+    // cloud, right folder, wrong company.
+    const bookingFolder = bookingPhotoFolderFor(await currentOrgSlug());
     const photoUrls = Array.from(
       new Set(
         (Array.isArray(input.photoUrls) ? input.photoUrls : []).filter((u) =>
-          isBookingPhotoUrl(u, cloudName)
+          isBookingPhotoUrl(u, cloudName, bookingFolder)
         )
       )
     ).slice(0, BOOKING_PHOTO_MAX);

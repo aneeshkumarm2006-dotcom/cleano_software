@@ -12,6 +12,7 @@ import type {
   EmployeeChatPayload,
 } from "./types";
 import { notifyChatEmail } from "./notifyChatEmail";
+import { orgAssetFolder } from "@/lib/asset-folder";
 
 type SessionUser = { id: string; name: string; role?: string };
 type AppRole = "OWNER" | "ADMIN" | "OPS_MANAGER" | "FIELD_LEAD" | "EMPLOYEE";
@@ -492,7 +493,7 @@ export async function uploadChatAttachment(formData: FormData): Promise<
   try {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
-    const folder = `cleano/chat/${a.user.id}`;
+    const folder = await orgAssetFolder("chat", a.user.id);
     const publicId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
     const result = await streamUploadAttachment(buffer, folder, publicId);

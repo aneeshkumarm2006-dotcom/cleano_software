@@ -12,6 +12,7 @@ import {
   parseJobPhotoKind,
 } from "@/lib/job-photos";
 import type { UploadApiResponse } from "cloudinary";
+import { orgAssetFolder } from "@/lib/asset-folder";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 const ALLOWED_TYPES = [
@@ -154,7 +155,7 @@ export async function uploadJobPhoto(formData: FormData) {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    const folder = `cleano/jobs/${jobId}`;
+    const folder = await orgAssetFolder("jobs", jobId);
     const publicId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
     const result = await streamUpload(buffer, folder, publicId);

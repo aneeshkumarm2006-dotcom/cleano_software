@@ -939,7 +939,20 @@ sit there harmlessly until you try again.
   `--org <slug>` or an explicit `--all-orgs`. `importBookingKoala` is the one
   most likely to be wanted — it is how a new company's history would come across
   from another system.
-- **Cloudinary uploads share one folder** across companies.
+- **Cloudinary uploads are per company** as of 2026-08-27: `awer/<slug>/...`,
+  replacing the shared `cleano/` tree named after the first customer. Existing
+  assets are not migrated and do not need to be — their URLs are stored on the
+  rows that use them and keep resolving; only new uploads take the new shape.
+
+  This closed a real hole, not just untidiness. `isBookingPhotoUrl` accepts a
+  photo that sits in the booking folder on our cloud, and with ONE booking
+  folder for the platform, a booking taken by company A could carry a photo of
+  company B's customer's home: right cloud, right folder, wrong company, and it
+  passed every check. Covered by `scripts/verify-asset-folders.ts`.
+
+  Folder paths key on the SLUG, which nothing in the codebase updates. That is
+  now load-bearing: adding a rename feature must move or alias the folders with
+  it, or every existing path is stranded.
 - **44 of 104 tables are in no migration** — they were created by `db push`, so
   the migration history cannot rebuild this schema from scratch. It applies
   cleanly ON TOP of the real schema, which is what was rehearsed and what

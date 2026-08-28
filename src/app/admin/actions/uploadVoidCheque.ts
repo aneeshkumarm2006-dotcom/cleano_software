@@ -11,6 +11,7 @@ import {
   resourceTypeFor,
   validateVoidCheque,
 } from "@/lib/employee-files";
+import { orgAssetFolder } from "@/lib/asset-folder";
 
 /**
  * A cleaner uploads their own void cheque / direct deposit info
@@ -83,7 +84,7 @@ export async function uploadVoidCheque(formData: FormData): Promise<
     const buffer = Buffer.from(await file.arrayBuffer());
     const fileName = (file.name || "void-cheque").slice(0, 120);
     const publicId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const folder = `cleano/void-cheques/${employeeId}`;
+    const folder = await orgAssetFolder("void-cheques", employeeId);
 
     const result = await streamUpload(buffer, folder, publicId, resourceType);
 

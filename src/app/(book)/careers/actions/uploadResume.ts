@@ -2,6 +2,7 @@
 
 import { cloudinary } from "@/lib/cloudinary";
 import type { UploadApiResponse } from "cloudinary";
+import { orgAssetFolder } from "@/lib/asset-folder";
 
 const MAX_FILE_SIZE = 8 * 1024 * 1024; // 8 MB
 const ALLOWED_TYPES = [
@@ -10,10 +11,17 @@ const ALLOWED_TYPES = [
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 ];
 
-function streamUpload(buffer: Buffer, publicId: string): Promise<UploadApiResponse> {
+// The folder is passed in rather than resolved here: this returns a Promise but
+// is not itself async, and the company has to be looked up before the stream is
+// opened.
+function streamUpload(
+  buffer: Buffer,
+  publicId: string,
+  folder: string
+): Promise<UploadApiResponse> {
   return new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
-      { folder: "cleano/resumes", public_id: publicId, resource_type: "raw", overwrite: false },
+      { folder, public_id: publicId, resource_type: "raw", overwrite: false },
       (error, result) => {
         if (error || !result) reject(error || new Error("Upload failed"));
         else resolve(result);
@@ -48,7 +56,7 @@ export async function uploadResume(formData: FormData) {
     const buffer = Buffer.from(await file.arrayBuffer());
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 60);
     const publicId = `${Date.now()}-${safeName}`;
-    const result = await streamUpload(buffer, publicId);
+    const result = await streamUpload(buffer, publicId, await orgAssetFolder("resumes"));
     return { success: true, url: result.secure_url };
   } catch (error) {
     console.error("Error uploading resume:", error);
