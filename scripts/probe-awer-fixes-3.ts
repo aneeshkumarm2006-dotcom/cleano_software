@@ -11,6 +11,7 @@
 import { PrismaClient } from "@prisma/client";
 import { normalizeJobType } from "../src/lib/calendar-labels";
 import { BILLING_LINE_SOURCE } from "../src/lib/cleaner-notes";
+import { refuseOnMultiTenant } from "./_scope";
 
 const db = new PrismaClient();
 
@@ -32,6 +33,9 @@ const db = new PrismaClient();
 const BILLING_LINE_SQL = `(?in)(${BILLING_LINE_SOURCE.replace(/\\b/g, "\\y")})`;
 
 async function main() {
+  // A diagnostic that mixes companies together reports nothing useful.
+  await refuseOnMultiTenant(db, "probe-awer-fixes-3.ts");
+
   console.log("Stage 0.3 — read-only probes  (no writes)\n");
 
   // ── Fix 15 · how many jobs carry billing text in cleaner-visible notes ────

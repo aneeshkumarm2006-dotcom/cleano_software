@@ -50,6 +50,7 @@ import {
   type BkAddOn,
 } from "../src/lib/bookingkoala/core";
 import { normalizeAddOnCatalog, resolveBkAddOns } from "../src/lib/addon-catalog";
+import { refuseOnMultiTenant } from "./_scope";
 
 const db = new PrismaClient();
 const args = process.argv.slice(2);
@@ -144,6 +145,9 @@ async function loadCatalog(): Promise<{ name: string }[]> {
 }
 
 async function main() {
+  // Written when there was one company; its queries do not name one.
+  await refuseOnMultiTenant(db, "backfill-bk-addons.ts");
+
   if (!csvPath) {
     console.error(
       "Usage: npx tsx scripts/backfill-bk-addons.ts <export.csv> [--commit]\n" +

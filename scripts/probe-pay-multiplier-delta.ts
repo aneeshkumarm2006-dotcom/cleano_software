@@ -47,6 +47,7 @@ import {
   formatPayPeriodRange,
   previousPayPeriodRange,
 } from "../src/lib/pay-period";
+import { refuseOnMultiTenant } from "./_scope";
 
 const db = new PrismaClient();
 
@@ -123,6 +124,9 @@ function oldJobPayShares(
 }
 
 async function main() {
+  // A diagnostic that mixes companies together reports nothing useful.
+  await refuseOnMultiTenant(db, "probe-pay-multiplier-delta.ts");
+
   console.log("Fix 1 · old-vs-new payout comparison  (read-only)\n");
 
   // ── Which period ──────────────────────────────────────────────────────────

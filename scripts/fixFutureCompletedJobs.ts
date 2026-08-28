@@ -40,6 +40,7 @@
  * compound.
  */
 import { PrismaClient } from "@prisma/client";
+import { refuseOnMultiTenant } from "./_scope";
 
 const db = new PrismaClient();
 const commit = process.argv.includes("--commit");
@@ -51,6 +52,9 @@ const when = (d: Date | null | undefined) =>
   d ? new Date(d).toISOString().replace("T", " ").slice(0, 16) : "—";
 
 async function main() {
+  // Written when there was one company; its queries do not name one.
+  await refuseOnMultiTenant(db, "fixFutureCompletedJobs.ts");
+
   const now = new Date();
   console.log(
     `fixFutureCompletedJobs — ${commit ? "COMMIT" : "DRY RUN"}  (now = ${now.toISOString()})\n`

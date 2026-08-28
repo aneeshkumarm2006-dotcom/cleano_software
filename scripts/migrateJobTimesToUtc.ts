@@ -22,6 +22,7 @@
  * untouched.
  */
 import { PrismaClient } from "@prisma/client";
+import { refuseOnMultiTenant } from "./_scope";
 
 const db = new PrismaClient();
 const commit = process.argv.includes("--commit");
@@ -56,6 +57,9 @@ const hhmm = (d: Date) =>
   new Intl.DateTimeFormat("en-US", { timeZone: TZ, hour: "2-digit", minute: "2-digit", hour12: false }).format(d);
 
 async function main() {
+  // Written when there was one company; its queries do not name one.
+  await refuseOnMultiTenant(db, "migrateJobTimesToUtc.ts");
+
   if (!before && !all) {
     console.error("Refusing to run without a scope. Pass --before=<ISO of the storage-fix deploy> (recommended) or --all.");
     process.exitCode = 1;

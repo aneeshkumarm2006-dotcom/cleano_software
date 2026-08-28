@@ -271,6 +271,9 @@ function note(s: string) {
 }
 
 async function main() {
+  // Written when there was one company; its queries do not name one.
+  await refuseOnMultiTenant(db as never, "importBookingKoala.ts");
+
   // Deprecation guard. This script writes wrong tax, drops bookings outside a
   // hard-coded 2026 window, and creates no add-on rows — see the file header.
   // It stays in the tree as a record of the original import, but it must not be
@@ -869,6 +872,7 @@ async function main() {
 // operational migration emails, so they bypass the Settings → Notifications
 // gate by design — only account/login emails go out, never booking receipts.
 import { Resend } from "resend";
+import { refuseOnMultiTenant } from "./_scope";
 
 const FROM = process.env.EMAIL_FROM ?? "Cleano <no-reply@cleano.ca>";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.cleano.ca";

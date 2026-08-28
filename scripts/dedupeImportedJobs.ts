@@ -15,6 +15,7 @@
  *   npx tsx scripts/dedupeImportedJobs.ts --commit   # apply pass 1
  */
 import { PrismaClient } from "@prisma/client";
+import { refuseOnMultiTenant } from "./_scope";
 
 const db = new PrismaClient();
 const commit = process.argv.includes("--commit");
@@ -61,6 +62,9 @@ function keepScore(j: JobRow): number {
 }
 
 async function main() {
+  // Written when there was one company; its queries do not name one.
+  await refuseOnMultiTenant(db, "dedupeImportedJobs.ts");
+
   const jobs = (await db.job.findMany({
     where: { deletedAt: null },
     select: {

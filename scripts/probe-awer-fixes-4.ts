@@ -25,6 +25,7 @@ import {
   normalizeApt,
   splitAptFromLocation,
 } from "../src/lib/client-address";
+import { refuseOnMultiTenant } from "./_scope";
 
 const db = new PrismaClient();
 
@@ -38,6 +39,9 @@ function heading(title: string) {
 }
 
 async function main() {
+  // A diagnostic that mixes companies together reports nothing useful.
+  await refuseOnMultiTenant(db, "probe-awer-fixes-4.ts");
+
   const now = new Date();
   const dayStart = startOfDayTz(now);
   console.log("Stage 0 — read-only probes  (no writes)");

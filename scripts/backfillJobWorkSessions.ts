@@ -29,6 +29,7 @@
  *   npx tsx scripts/backfillJobWorkSessions.ts --commit   # actually write
  */
 import { PrismaClient } from "@prisma/client";
+import { refuseOnMultiTenant } from "./_scope";
 
 const db = new PrismaClient();
 const commit = process.argv.includes("--commit");
@@ -43,6 +44,9 @@ interface PlannedSession {
 }
 
 async function main() {
+  // Written when there was one company; its queries do not name one.
+  await refuseOnMultiTenant(db, "backfillJobWorkSessions.ts");
+
   console.log(
     `Backfill JobWorkSession — ${commit ? "COMMIT" : "DRY RUN (no writes)"}\n`
   );

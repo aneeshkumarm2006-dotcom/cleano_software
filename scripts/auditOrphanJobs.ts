@@ -24,10 +24,14 @@
  */
 import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
+import { refuseOnMultiTenant } from "./_scope";
 
 const db = new PrismaClient();
 
 async function main() {
+  // Written when there was one company; its queries do not name one.
+  await refuseOnMultiTenant(db, "auditOrphanJobs.ts");
+
   const [total, orphans] = await Promise.all([
     db.job.count({ where: { deletedAt: null } }),
     db.job.findMany({

@@ -22,12 +22,16 @@
  *   npx tsx scripts/probe-stage5.ts
  */
 import { PrismaClient } from "@prisma/client";
+import { refuseOnMultiTenant } from "./_scope";
 
 const db = new PrismaClient();
 
 const pad = (label: string, width = 44) => label.padEnd(width, ".");
 
 async function main() {
+  // A diagnostic that mixes companies together reports nothing useful.
+  await refuseOnMultiTenant(db, "probe-stage5.ts");
+
   console.log("Stage 5 — read-only probes  (no writes)\n");
 
   // ── Item 12 · can JobChecklist take a unique index? ──────────────────────

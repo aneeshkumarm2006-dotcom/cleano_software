@@ -31,6 +31,7 @@
  */
 import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
+import { refuseOnMultiTenant } from "./_scope";
 
 const db = new PrismaClient();
 const APPLY = process.argv.includes("--apply");
@@ -45,6 +46,9 @@ function identityKey(a: {
 }
 
 async function main() {
+  // Written when there was one company; its queries do not name one.
+  await refuseOnMultiTenant(db, "dedupeAlerts.ts");
+
   const alerts = await db.alert.findMany({
     where: { isDismissed: false },
     orderBy: { createdAt: "desc" },

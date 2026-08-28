@@ -60,6 +60,7 @@
 import { PrismaClient } from "@prisma/client";
 import { billableActualHours, hourlyServiceAmount } from "../src/lib/hourly-billing";
 import { computeJobPayShares, type JobPayInput } from "../src/lib/cleaner-earnings";
+import { refuseOnMultiTenant } from "./_scope";
 
 const db = new PrismaClient();
 const commit = process.argv.includes("--commit");
@@ -79,6 +80,9 @@ function heading(title: string) {
  * produces an instruction instead of `server-only`'s stack trace.
  */
 async function loadWriters() {
+  // Written when there was one company; its queries do not name one.
+  await refuseOnMultiTenant(db, "recomputeHourlyJobs.ts");
+
   try {
     const [billing, pay, rates] = await Promise.all([
       import("../src/lib/hourly-billing.server"),

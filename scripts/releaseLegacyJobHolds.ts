@@ -53,6 +53,7 @@
  */
 import { PrismaClient } from "@prisma/client";
 import { HOLD_REASON } from "../src/lib/job-hold";
+import { refuseOnMultiTenant } from "./_scope";
 
 const db = new PrismaClient();
 const commit = process.argv.includes("--commit");
@@ -72,6 +73,9 @@ const BUCKET_REASON: Record<Exclude<Bucket, "RELEASE">, string> = {
 };
 
 async function main() {
+  // Written when there was one company; its queries do not name one.
+  await refuseOnMultiTenant(db, "releaseLegacyJobHolds.ts");
+
   const now = new Date();
   console.log(
     `releaseLegacyJobHolds — ${commit ? "COMMIT" : "DRY RUN"}  (now = ${now.toISOString()})\n`

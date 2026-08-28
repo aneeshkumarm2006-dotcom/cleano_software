@@ -11,6 +11,7 @@
  *   npx tsx scripts/restoreArchivedJobs.ts --commit   # apply
  */
 import { PrismaClient } from "@prisma/client";
+import { refuseOnMultiTenant } from "./_scope";
 
 const db = new PrismaClient();
 const commit = process.argv.includes("--commit");
@@ -25,6 +26,9 @@ const INCIDENT_FROM = new Date("2026-07-13T21:35:00.000Z");
 const INCIDENT_TO = new Date("2026-07-13T21:45:00.000Z");
 
 async function main() {
+  // Written when there was one company; its queries do not name one.
+  await refuseOnMultiTenant(db, "restoreArchivedJobs.ts");
+
   const where = {
     deletedAt: { gte: INCIDENT_FROM, lte: INCIDENT_TO },
   };

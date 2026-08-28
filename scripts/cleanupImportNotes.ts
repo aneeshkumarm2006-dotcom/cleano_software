@@ -30,6 +30,7 @@
  */
 import { PrismaClient } from "@prisma/client";
 import { hasBillingSegments, stripBillingSegments } from "../src/lib/cleaner-notes";
+import { refuseOnMultiTenant } from "./_scope";
 
 const db = new PrismaClient();
 const commit = process.argv.includes("--commit");
@@ -38,6 +39,9 @@ const commit = process.argv.includes("--commit");
 const ORIGINAL_MARKER = "Import billing text stripped from cleaner-visible notes.";
 
 async function main() {
+  // Written when there was one company; its queries do not name one.
+  await refuseOnMultiTenant(db, "cleanupImportNotes.ts");
+
   // Every row with notes; the shared rule decides. A Prisma `OR` of `contains`
   // clauses would be a SECOND copy of the vocabulary to keep in sync, and the
   // whole table is ~200 rows.

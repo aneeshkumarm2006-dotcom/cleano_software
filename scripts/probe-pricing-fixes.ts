@@ -33,6 +33,7 @@ import { DEFAULT_TAX_RATES } from "../src/lib/tax";
 // The REAL rate resolver, not a hand-built STANDARD/1.0 stand-in: a snapshot
 // the client will be shown has to use the rates payroll would actually use.
 import { getCleanerRateInputs } from "../src/lib/cleaner-rates";
+import { refuseOnMultiTenant } from "./_scope";
 
 const db = new PrismaClient();
 
@@ -583,6 +584,9 @@ async function probeMoneySnapshot() {
 }
 
 async function main() {
+  // A diagnostic that mixes companies together reports nothing useful.
+  await refuseOnMultiTenant(db, "probe-pricing-fixes.ts");
+
   console.log("Cleano — Stage 0 baseline probe (read-only)");
   console.log(`run at ${new Date().toISOString()}`);
   await probeSettingsPage();

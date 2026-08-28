@@ -39,6 +39,7 @@
  */
 import { PrismaClient } from "@prisma/client";
 import { splitAptFromLocation } from "../src/lib/client-address";
+import { refuseOnMultiTenant } from "./_scope";
 
 const db = new PrismaClient();
 const commit = process.argv.includes("--commit");
@@ -47,6 +48,9 @@ const commit = process.argv.includes("--commit");
 const MARKER = "Apartment number recovered from the address (round 4, fix 7)";
 
 async function main() {
+  // Written when there was one company; its queries do not name one.
+  await refuseOnMultiTenant(db, "backfillJobAptNumbers.ts");
+
   console.log(`backfillJobAptNumbers — ${commit ? "COMMIT" : "DRY RUN"}\n`);
 
   const rows = await db.job.findMany({

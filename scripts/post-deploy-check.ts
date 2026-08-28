@@ -49,6 +49,7 @@
  *      not a bug in the script.
  */
 import { PrismaClient } from "@prisma/client";
+import { refuseOnMultiTenant } from "./_scope";
 
 const db = new PrismaClient();
 
@@ -372,6 +373,9 @@ async function watchSettingsPage() {
 }
 
 async function main() {
+  // Written when there was one company; its queries do not name one.
+  await refuseOnMultiTenant(db as never, "post-deploy-check.ts");
+
   console.log("Cleano — Stage 7 post-deploy check (read-only)");
   console.log(`run at ${new Date().toISOString()} · window ${DAYS} day(s)`);
 

@@ -922,8 +922,23 @@ sit there harmlessly until you try again.
 
 ### Not covered by this, and known
 
-- **27 operational scripts are still single-tenant.** They act on whichever rows
-  they find. Do not run them after the cutover until they are converted.
+- **The maintenance scripts now refuse to run.** They were written when there
+  was one company, so a query like `updateMany({ where: { status: "COMPLETED" }})`
+  meant "this company's rows" and now means everybody's. Rather than half-convert
+  two dozen mostly-historical repairs, every one that can reach the database
+  stops on a multi-tenant database and says why (`scripts/_scope.ts`).
+
+  Verified by running all 24 against the local multi-tenant database: 21 refuse.
+  The other three cannot reach it — two take a CSV or are pure logic, and
+  `probe-awer-fixes-4` has been unable to load since before this work (it pulls
+  in `src/lib/metrics.ts`, which imports the `server-only` package that Next
+  aliases away and npm never installs).
+
+  To bring one back: give its queries an `organizationId` using `scopeWhere()`
+  and swap `refuseOnMultiTenant()` for `requireScriptScope()`, which takes
+  `--org <slug>` or an explicit `--all-orgs`. `importBookingKoala` is the one
+  most likely to be wanted — it is how a new company's history would come across
+  from another system.
 - **Cloudinary uploads share one folder** across companies.
 - **44 of 104 tables are in no migration** — they were created by `db push`, so
   the migration history cannot rebuild this schema from scratch. It applies

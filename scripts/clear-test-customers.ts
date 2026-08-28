@@ -10,11 +10,15 @@
  * /sessions). Cleaners are NOT touched.
  */
 import { db } from "@/db";
+import { refuseOnMultiTenant } from "./_scope";
 
 const EMAILS = ["premsaikilaru567@gmail.com", "20b91a12d9@gmail.com"];
 const COMMIT = process.argv.includes("--commit");
 
 async function main() {
+  // Written when there was one company; its queries do not name one.
+  await refuseOnMultiTenant(db as never, "clear-test-customers.ts");
+
   console.log(
     `\n${"=".repeat(64)}\nClear test-customer data — ${COMMIT ? "COMMIT (deleting)" : "DRY RUN (no writes)"}\n${"=".repeat(64)}`
   );

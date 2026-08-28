@@ -42,6 +42,7 @@
 
 import { PrismaClient } from "@prisma/client";
 import { reconcileProductStock } from "../src/lib/stock.server";
+import { refuseOnMultiTenant } from "./_scope";
 
 const db = new PrismaClient();
 
@@ -52,6 +53,9 @@ function fmt(n: number): string {
 }
 
 async function main() {
+  // Written when there was one company; its queries do not name one.
+  await refuseOnMultiTenant(db, "reconcileWarehouseStock.ts");
+
   console.log(
     DRY_RUN
       ? "DRY RUN — reporting mismatches, writing nothing.\n"

@@ -21,6 +21,7 @@
  * Re-running is safe; it is a no-op once the rows are gone.
  */
 import { PrismaClient } from "@prisma/client";
+import { refuseOnMultiTenant } from "./_scope";
 
 const db = new PrismaClient();
 
@@ -28,6 +29,9 @@ const COMMIT = process.argv.includes("--commit");
 const INCLUDE_SIGNED = process.argv.includes("--include-signed");
 
 async function main() {
+  // Written when there was one company; its queries do not name one.
+  await refuseOnMultiTenant(db, "cleanupClientDocumentAssignments.ts");
+
   const rows = await db.documentSignature.findMany({
     where: { employee: { role: "CLIENT" } },
     select: {
