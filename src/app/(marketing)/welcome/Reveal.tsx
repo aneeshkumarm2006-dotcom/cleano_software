@@ -93,6 +93,52 @@ export default function Reveal() {
       cleanups.push(() => io.disconnect());
     }
 
+    // ── Which section you are in ──────────────────────────────────────────
+    // A band across the middle of the viewport: whichever section is crossing
+    // it owns the nav. Watching for "any part visible" instead would light two
+    // links at once on every boundary.
+    const links = Array.from(document.querySelectorAll<HTMLAnchorElement>(".mk-nav-links a"));
+    const sections = links
+      .map((a) => document.querySelector(a.getAttribute("href") ?? ""))
+      .filter((el): el is Element => !!el);
+    if (sections.length) {
+      const seen = new Set<Element>();
+      const spy = new IntersectionObserver(
+        (entries) => {
+          for (const e of entries) {
+            if (e.isIntersecting) seen.add(e.target);
+            else seen.delete(e.target);
+          }
+          // Document order, so scrolling up lands on the earlier section
+          // rather than whichever one happened to fire last.
+          const on = sections.find((sec) => seen.has(sec));
+          for (const a of links) {
+            const href = a.getAttribute("href") ?? "";
+            const mine = on ? `#${on.id}` === href : false;
+            if (mine) a.setAttribute("aria-current", "true");
+            else a.removeAttribute("aria-current");
+          }
+        },
+        { rootMargin: "-45% 0px -50% 0px", threshold: 0 },
+      );
+      sections.forEach((sec) => spy.observe(sec));
+      cleanups.push(() => spy.disconnect());
+    }
+
+    // ── The phone CTA bar ─────────────────────────────────────────────────
+    // Shown once the hero's own buttons have left. Same sentinel trick as the
+    // nav: no scroll handler, and nothing runs on frames where nothing changed.
+    const bar = document.querySelector<HTMLElement>("[data-mk-bar]");
+    const heroCta = document.querySelector(".mk-hero-cta");
+    if (bar && heroCta) {
+      const io = new IntersectionObserver(
+        ([e]) => bar.classList.toggle("is-up", !e.isIntersecting && e.boundingClientRect.top < 0),
+        { threshold: 0 },
+      );
+      io.observe(heroCta);
+      cleanups.push(() => io.disconnect());
+    }
+
     // ── Pointer parallax on the hero panel ────────────────────────────────
     const hero = document.querySelector<HTMLElement>(".mk-hero");
     const tilt = document.querySelector<HTMLElement>(".mk-board-tilt");

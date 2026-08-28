@@ -405,6 +405,103 @@ const overflowAt = (page: Page) =>
       : bad(`${noJsHidden} section(s) invisible without JavaScript`);
     await noJs.close();
 
+    // ── The nav says which section you are in ──────────────────────────────
+    console.log("\nTHE NAV FOLLOWS THE PAGE");
+    const ctx3 = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const p3 = await ctx3.newPage();
+    await p3.goto(URL_, { waitUntil: "networkidle" });
+    for (const id of ["pricing", "inside"]) {
+      const state = await p3.evaluate(async (target: string) => {
+        document.getElementById(target)?.scrollIntoView();
+        await new Promise((r) => setTimeout(r, 400));
+        const on = [...document.querySelectorAll(".mk-nav-links a[aria-current='true']")].map(
+          (a) => a.getAttribute("href"),
+        );
+        return on;
+      }, id);
+      state.length === 1 && state[0] === `#${id}`
+        ? ok(`at #${id} exactly one nav link is marked current`)
+        : bad(`at #${id} the nav marked ${JSON.stringify(state)}`);
+    }
+
+    // ── The phone CTA bar ──────────────────────────────────────────────────
+    // It is a real link, so while it is off-screen it must be out of the tab
+    // order too — `visibility: hidden` rather than a transform alone.
+    console.log("\nTHE PHONE CTA BAR ARRIVES, AND IS NOT REACHABLE BEFORE IT DOES");
+    await p3.setViewportSize({ width: 390, height: 844 });
+    await p3.goto(URL_, { waitUntil: "networkidle" });
+    const barTop = await p3.evaluate(
+      () => getComputedStyle(document.querySelector("[data-mk-bar]")!).visibility,
+    );
+    barTop === "hidden"
+      ? ok("at the top of the page the bar is hidden and unfocusable")
+      : bad(`the bar is ${barTop} before it should be`);
+    const barDown = await p3.evaluate(async () => {
+      window.scrollTo(0, 1600);
+      await new Promise((r) => setTimeout(r, 600));
+      const el = document.querySelector("[data-mk-bar]")!;
+      return { vis: getComputedStyle(el).visibility, y: Math.round(el.getBoundingClientRect().top) };
+    });
+    barDown.vis === "visible" && barDown.y < 844
+      ? ok("once the hero's buttons are gone the bar is on screen")
+      : bad(`the bar did not arrive`, JSON.stringify(barDown));
+
+    // ── The board's one state change ───────────────────────────────────────
+    console.log("\nTHE BOARD CHANGES STATE ONCE, AND NOT UNDER REDUCED MOTION");
+    await p3.setViewportSize({ width: 1440, height: 900 });
+    await p3.goto(URL_, { waitUntil: "domcontentloaded" });
+    const flipped = await p3.evaluate(async () => {
+      await new Promise((r) => setTimeout(r, 9000));
+      const was = document.querySelector(".mk-chip-was")!;
+      const now = document.querySelector(".mk-chip-now")!;
+      return { was: getComputedStyle(was).opacity, now: getComputedStyle(now).opacity };
+    });
+    Number(flipped.now) > 0.9 && Number(flipped.was) < 0.1
+      ? ok("the waiting job becomes a clocked-in job, once")
+      : bad("the board never changed state", JSON.stringify(flipped));
+
+    const calm2 = await browser.newContext({
+      viewport: { width: 1440, height: 900 },
+      reducedMotion: "reduce",
+    });
+    const pc = await calm2.newPage();
+    await pc.goto(URL_, { waitUntil: "networkidle" });
+    const calmChip = await pc.evaluate(async () => {
+      await new Promise((r) => setTimeout(r, 1200));
+      return {
+        was: getComputedStyle(document.querySelector(".mk-chip-was")!).opacity,
+        now: getComputedStyle(document.querySelector(".mk-chip-now")!).opacity,
+      };
+    });
+    calmChip.was === "1" && calmChip.now === "0"
+      ? ok("reduced motion sees one steady chip, not a crossfade")
+      : bad("the chip swap ran under reduced motion", JSON.stringify(calmChip));
+
+    // ── The tabs hint at themselves, exactly once ──────────────────────────
+    console.log("\nTHE TABS ROTATE ONCE, AND STOP IF TOUCHED");
+    const fresh = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const pf = await fresh.newPage();
+    await pf.goto(URL_, { waitUntil: "networkidle" });
+    const idle = await pf.evaluate(async () => {
+      // Fresh load, nothing clicked.
+      const first = document.querySelector('[aria-selected="true"]')?.textContent?.trim();
+      await new Promise((r) => setTimeout(r, 7000));
+      const after = document.querySelector('[aria-selected="true"]')?.textContent?.trim();
+      await new Promise((r) => setTimeout(r, 3000));
+      const later = document.querySelector('[aria-selected="true"]')?.textContent?.trim();
+      return { first, after, later };
+    });
+    idle.first !== idle.after
+      ? ok(`left alone, the tabs move once (${idle.first} → ${idle.after})`)
+      : bad("the tabs never hinted that they are tabs", JSON.stringify(idle));
+    idle.after === idle.later
+      ? ok("and then stop — it is a hint, not a carousel")
+      : bad("the tabs kept rotating", JSON.stringify(idle));
+
+    await fresh.close();
+    await calm2.close();
+    await ctx3.close();
+
     // ── The accordion is a real disclosure, not a decorated div ─────────────
     console.log("\nTHE QUESTIONS OPEN");
     const ctx2 = await browser.newContext({ viewport: { width: 1440, height: 900 } });

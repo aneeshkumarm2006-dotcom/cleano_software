@@ -250,6 +250,15 @@
   transform-origin: right;
   transition: transform 200ms var(--e-out);
 }
+/* The section you are actually in keeps its underline, with no pointer
+   involved — a nav that only ever responds to hover tells you nothing about
+   where you are. */
+.mk-nav-links a[aria-current="true"] { color: var(--mk-teal-ink); }
+.mk-nav-links a[aria-current="true"]::after {
+  background: var(--mk-orange);
+  transform: scaleX(1);
+  transform-origin: left;
+}
 
 .mk-nav-actions { display: flex; align-items: center; gap: var(--mk-s1); }
 
@@ -716,6 +725,7 @@
 .mk-url-path { color: var(--mk-orange); }
 
 .mk-app-body { display: flex; min-height: 480px; }
+.mk-app-flat .mk-app-bar { border-bottom: 0; }
 .mk-app-rail {
   width: 52px;
   flex: none;
@@ -1009,7 +1019,15 @@
   border-radius: var(--mk-radius);
   padding: var(--mk-s3);
 }
-.mk-mod-icon { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 12px; margin-bottom: var(--mk-s2); }
+.mk-mod-icon {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  margin-bottom: var(--mk-s2);
+  transition: transform var(--d-micro) var(--e-out);
+}
 .mk-mod p { margin: 0; color: var(--mk-ink-soft); font-size: 15px; }
 .mk-mod-points { list-style: none; margin: var(--mk-s2) 0 0; padding: 0; display: grid; gap: 8px; }
 .mk-mod-points li { display: flex; align-items: center; gap: 9px; font-size: 14px; color: var(--mk-ink-soft); }
@@ -1224,6 +1242,253 @@
   color: var(--mk-ink-soft);
 }
 
+
+/* ── Deep dives ───────────────────────────────────────────────────────── */
+.mk-dive { padding-block: clamp(var(--mk-s5), 8vw, var(--mk-s6)); }
+.mk-dive.mk-section-wash { border-block: 1px solid var(--mk-line); }
+.mk-dive[id] { scroll-margin-top: 80px; }
+.mk-dive-grid { display: grid; gap: clamp(var(--mk-s4), 5vw, var(--mk-s5)); align-items: center; }
+.mk-dive-copy .mk-lead { margin-bottom: var(--mk-s3); }
+.mk-dive-shot { min-width: 0; }
+
+/* ── Surfaces: shared ─────────────────────────────────────────────────── */
+.mk-num { font-variant-numeric: tabular-nums; }
+.mk-rep, .mk-pay, .mk-inv { padding: var(--mk-s3); }
+.mk-rep-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 12px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--mk-ink-soft);
+}
+
+/* ── Surface: reports ─────────────────────────────────────────────────── */
+.mk-rep-range {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--mk-ink-soft);
+  background: var(--mk-wash);
+  border: 1px solid var(--mk-line);
+  border-radius: 999px;
+  padding: 5px 11px;
+  white-space: nowrap;
+}
+.mk-kpis {
+  list-style: none;
+  margin: 0 0 var(--mk-s3);
+  padding: 0;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.mk-kpis li {
+  padding: 12px 13px;
+  border-radius: 12px;
+  border: 1px solid var(--mk-line);
+  background: var(--mk-white);
+  min-width: 0;
+}
+.mk-kpis span { display: block; font-size: 11px; color: var(--mk-ink-soft); margin-bottom: 3px; }
+.mk-kpis b {
+  display: block;
+  font-family: var(--mk-display);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+.mk-kpis em {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: 3px;
+  font-style: normal;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.mk-up { color: var(--t-green); }
+.mk-down { color: var(--t-rose); }
+
+.mk-rep-grid { display: grid; gap: var(--mk-s2); }
+.mk-rep-card { padding: 15px; border-radius: 14px; border: 1px solid var(--mk-line); background: var(--mk-wash); }
+.mk-bars { display: flex; align-items: flex-end; gap: 9px; height: 108px; }
+.mk-bars span {
+  flex: 1;
+  min-width: 0;
+  border-radius: 7px 7px 3px 3px;
+  background: linear-gradient(to top, var(--mk-teal-ink), var(--mk-teal));
+}
+.mk-bars-axis { display: flex; gap: 9px; margin-top: 8px; }
+.mk-bars-axis span { flex: 1; text-align: center; font-size: 10px; color: var(--mk-ink-soft); }
+
+.mk-mix { list-style: none; margin: 0; padding: 0; display: grid; gap: 11px; }
+.mk-mix li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 74px 34px;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+  color: var(--mk-ink-soft);
+}
+.mk-mix li > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mk-mix i { display: block; height: 7px; border-radius: 4px; background: var(--mk-line); overflow: hidden; }
+.mk-mix em { display: block; height: 100%; border-radius: 4px; background: var(--tone); }
+.mk-mix b { text-align: right; font-weight: 600; color: var(--mk-ink); font-variant-numeric: tabular-nums; }
+
+/* ── Surface: payroll ─────────────────────────────────────────────────── */
+.mk-pay-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--t-green);
+  background: var(--t-green-bg);
+  border-radius: 999px;
+  padding: 5px 11px;
+  white-space: nowrap;
+}
+.mk-pay-head,
+.mk-pay-rows li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 54px 44px 84px;
+  align-items: center;
+  gap: 10px;
+}
+.mk-pay-head {
+  padding: 0 12px 9px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--mk-ink-soft);
+  border-bottom: 1px solid var(--mk-line);
+}
+.mk-pay-head span:not(:first-child),
+.mk-pay-rows li > span:not(.mk-pay-who),
+.mk-pay-rows li > b { text-align: right; }
+.mk-pay-rows { list-style: none; margin: 0; padding: 0; }
+.mk-pay-rows li { padding: 12px; border-bottom: 1px solid var(--mk-line); font-size: 13px; color: var(--mk-ink-soft); }
+.mk-pay-rows li:last-child { border-bottom: 0; }
+.mk-pay-who { display: flex; align-items: center; gap: 10px; min-width: 0; color: var(--mk-ink); font-weight: 600; }
+.mk-pay-who i {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-style: normal;
+  font-size: 11.5px;
+  font-weight: 700;
+  background: var(--tone-bg);
+  color: var(--tone);
+}
+.mk-pay-rows b { color: var(--mk-ink); font-weight: 700; }
+.mk-pay-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px var(--mk-s2);
+  margin-top: var(--mk-s2);
+  padding-top: var(--mk-s2);
+  border-top: 1px solid var(--mk-line);
+  font-size: 13px;
+  color: var(--mk-ink-soft);
+}
+.mk-pay-foot b { font-family: var(--mk-display); font-size: 22px; color: var(--mk-ink); letter-spacing: -0.03em; margin-right: 6px; }
+.mk-pay-note { font-size: 12px; }
+
+/* ── Surface: inventory ───────────────────────────────────────────────── */
+.mk-inv-alert {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--t-amber);
+  background: var(--t-amber-bg);
+  border-radius: 999px;
+  padding: 5px 11px;
+  white-space: nowrap;
+}
+.mk-stock { list-style: none; margin: 0 0 var(--mk-s3); padding: 0; display: grid; gap: 9px; }
+.mk-stock li {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 78px;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--mk-line);
+}
+.mk-st-icon { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; background: var(--mk-wash); color: var(--mk-ink-soft); }
+.mk-st-body { min-width: 0; }
+.mk-st-body b { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mk-st-body i { display: block; height: 6px; border-radius: 3px; background: var(--mk-line); overflow: hidden; }
+.mk-st-body em { display: block; height: 100%; border-radius: 3px; background: var(--t-green); }
+.mk-st-count { text-align: right; }
+.mk-st-count b { display: block; font-size: 15px; font-weight: 700; }
+.mk-st-count em { font-style: normal; font-size: 10.5px; color: var(--mk-ink-soft); }
+/* State is a word AND a colour AND a bar length — three signals, so none of
+   them has to carry it alone. */
+.mk-st-low { border-color: rgba(245, 158, 11, 0.45); background: rgba(245, 158, 11, 0.05); }
+.mk-st-low .mk-st-body em, .mk-st-low .mk-st-icon { background: var(--t-amber-bg); }
+.mk-st-low .mk-st-body em { background: var(--t-amber); }
+.mk-st-low .mk-st-icon { color: var(--t-amber); }
+.mk-st-low .mk-st-count em { color: var(--t-amber); font-weight: 600; }
+.mk-st-out { border-color: rgba(244, 63, 94, 0.4); background: rgba(244, 63, 94, 0.05); }
+.mk-st-out .mk-st-body em { background: var(--t-rose); }
+.mk-st-out .mk-st-icon { background: var(--t-rose-bg); color: var(--t-rose); }
+.mk-st-out .mk-st-count em { color: var(--t-rose); font-weight: 600; }
+
+.mk-wash-panel { margin-top: var(--mk-s3); }
+.mk-wash { padding: 15px; border-radius: 14px; background: var(--mk-wash); border: 1px solid var(--mk-line); }
+.mk-wash-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.mk-wash-row > span { padding: 10px 12px; border-radius: 11px; background: var(--tone-bg); }
+.mk-wash-row b { display: block; font-family: var(--mk-display); font-size: 20px; font-weight: 700; color: var(--tone); letter-spacing: -0.03em; }
+.mk-wash-row em { font-style: normal; font-size: 11px; color: var(--mk-ink-soft); }
+.mk-inv-foot { display: flex; align-items: flex-start; gap: 8px; margin: var(--mk-s2) 0 0; font-size: 12px; color: var(--mk-ink-soft); }
+.mk-inv-foot svg { flex: none; margin-top: 2px; color: var(--mk-teal-ink); }
+
+/* ── The board's one state change ─────────────────────────────────────── */
+/* Both chips live in the markup and one crossfades into the other, exactly
+   once, around seven seconds in. That is life INSIDE the frame — the product
+   is running — rather than the frame itself bobbing, which only ever says
+   "this is an animated div". Under reduced motion the first chip simply
+   stays. */
+.mk-chip-swap { display: grid; justify-items: end; }
+.mk-chip-swap > * { grid-area: 1 / 1; }
+.mk-chip-now { opacity: 0; }
+
+/* ── The phone CTA bar ────────────────────────────────────────────────── */
+.mk-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 45;
+  display: none;
+  padding: 10px var(--mk-s3) calc(10px + env(safe-area-inset-bottom));
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--mk-line);
+  /* visibility, not just opacity: a hidden bar must leave the tab order too. */
+  visibility: hidden;
+  opacity: 0;
+  transform: translateY(100%);
+  transition: transform 320ms var(--e-out), opacity 220ms var(--e-out), visibility 0s linear 320ms;
+}
+.mk-bar.is-up { visibility: visible; opacity: 1; transform: none; transition-delay: 0s; }
+.mk-bar-in { display: flex; align-items: center; justify-content: space-between; gap: var(--mk-s2); }
+.mk-bar-in b { display: block; font-size: 14px; font-weight: 700; letter-spacing: -0.015em; }
+.mk-bar-in em { display: block; font-style: normal; font-size: 12px; color: var(--mk-ink-soft); }
+
 /* ══ Hover, gated ═════════════════════════════════════════════════════ */
 /* Not optional. On iOS the first tap fires :hover, so an ungated card lift
    means the card lifts and STAYS lifted after the tap until something else is
@@ -1232,6 +1497,7 @@
   .mk-ann:hover svg { transform: translateX(3px); }
   .mk-nav-links a:hover { color: var(--mk-teal-ink); }
   .mk-nav-links a:hover::after { transform: scaleX(1); transform-origin: left; }
+  .mk-mod:hover .mk-mod-icon { transform: scale(1.06); }
   .mk-btn-primary:hover {
     background: var(--mk-orange-deep);
     transform: translateY(-2px);
@@ -1249,8 +1515,14 @@
 }
 
 /* ══ Breakpoints ══════════════════════════════════════════════════════ */
+@media (max-width: 899px) {
+  /* The bar sits over the page, so the last thing on it needs room to clear. */
+  .mk-bar { display: block; }
+  .mk-foot { padding-bottom: 96px; }
+}
 @media (min-width: 560px) {
   .mk-row { grid-template-columns: 48px minmax(0, 1fr) auto auto; }
+  .mk-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .mk-row-crew { display: block; }
   .mk-bento { grid-template-columns: repeat(2, 1fr); }
 }
@@ -1265,6 +1537,9 @@
 }
 @media (min-width: 640px) {
   .mk-ann-long { display: inline; }
+}
+@media (min-width: 700px) {
+  .mk-rep-grid { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); }
 }
 @media (min-width: 768px) {
   .mk-wrap { padding-inline: var(--mk-s4); }
@@ -1281,6 +1556,14 @@
   .mk-faq-head { margin-bottom: 0; }
   .mk-origin-grid { grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); }
   .mk-float { display: flex; }
+  .mk-dive-grid { grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr); }
+  /* The layout alternates; nothing about the MOTION does. The column widths
+     swap with the order, so the screen keeps the wider side either way —
+     reordering alone left every flipped row's product shot in the narrow
+     column. */
+  .mk-dive-flip { grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr); }
+  .mk-dive-flip .mk-dive-copy { order: 2; }
+  .mk-dive-flip .mk-dive-shot { order: 1; }
 }
 @media (min-width: 1024px) {
   .mk-nav-links { display: flex; }
@@ -1342,6 +1625,35 @@
   .mk-pulse { animation: mk-breathe 2.4s ease-in-out 1.4s infinite; }
 
   .mk-block { animation: mk-rise 320ms var(--e-out) backwards; --rise: 6px; }
+  .mk-pay-rows li,
+  .mk-stock li { animation: mk-rise 340ms var(--e-out) backwards; --rise: 7px; }
+
+  @keyframes mk-grow { from { height: 0; } }
+  .mk-bars span { animation: mk-grow 620ms var(--e-out) backwards; }
+
+  /* The one state change on the board, and it happens once. */
+  @keyframes mk-chip-out { 0%, 88% { opacity: 1; } 100% { opacity: 0; } }
+  @keyframes mk-chip-in { 0%, 88% { opacity: 0; } 100% { opacity: 1; } }
+  .mk-chip-was { animation: mk-chip-out 8s var(--e-out) forwards; }
+  .mk-chip-now { animation: mk-chip-in 8s var(--e-out) forwards; }
+
+  /* The deep-dive screens are driven by the scroll itself rather than by a
+     one-shot reveal, so the panel is still settling while you read the copy
+     beside it. Where view() is unsupported they are simply always in place. */
+  @supports (animation-timeline: view()) {
+    @keyframes mk-dive-in {
+      /* Starts at 0.62 rather than near-zero: a product screen that is still
+         visibly washed out while its own copy is being read looks broken, not
+         cinematic. It resolves by the time it is half in. */
+      from { opacity: 0.62; transform: translateY(26px) scale(0.972); }
+      to { opacity: 1; transform: none; }
+    }
+    .mk-dive-shot {
+      animation: mk-dive-in linear both;
+      animation-timeline: view();
+      animation-range: entry 4% entry 46%;
+    }
+  }
 
   /* Chips drift against the panel as the hero leaves. `translate` rather than
      `transform`, so it composes with the pointer parallax instead of
@@ -1358,6 +1670,8 @@
   .mk-btn-primary:hover, .mk-btn:active { transform: none; }
   .mk-btn:active { background: var(--mk-orange-deep); }
   .mk-board-tilt, .mk-float { transition: none; }
+  .mk-bar { transition: none; }
+  .mk-mod:hover .mk-mod-icon { transform: none; }
   /* An instant content swap is MORE disorienting, not less — the fade is the
      accessible form of "something changed here". */
   .mk-show-panel { transform: none; filter: none; }

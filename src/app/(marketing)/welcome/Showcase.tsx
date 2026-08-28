@@ -390,8 +390,28 @@ export default function Showcase() {
     return () => ro.disconnect();
   }, [moveInk]);
 
+  /**
+   * One rotation, six seconds in, and only if nobody has touched it.
+   *
+   * Tabs that nobody realises are tabs are just a heading. One move is enough
+   * to say "this is interactive"; a carousel that keeps going takes the page
+   * away from whoever is reading it, which is why this fires exactly once and
+   * cancels the moment anyone interacts.
+   */
+  const touched = useRef(false);
+  useEffect(() => {
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    const t = window.setTimeout(() => {
+      if (touched.current) return;
+      setDir(1);
+      setActive("cleaners");
+    }, 6000);
+    return () => window.clearTimeout(t);
+  }, []);
+
   const go = useCallback(
     (key: TabKey) => {
+      touched.current = true;
       setDir(TABS.findIndex((t) => t.key === key) > TABS.findIndex((t) => t.key === active) ? 1 : -1);
       setActive(key);
     },

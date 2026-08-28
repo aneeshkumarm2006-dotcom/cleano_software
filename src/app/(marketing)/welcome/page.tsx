@@ -26,6 +26,7 @@ import { PLANS, TRIAL_DAYS } from "@/lib/plans";
 
 import Reveal from "./Reveal";
 import Showcase from "./Showcase";
+import { InventorySurface, PayrollSurface, ReportsSurface } from "./Surfaces";
 import "./marketing.css";
 
 /**
@@ -179,6 +180,58 @@ const STAGES = [
   { stage: "Billed", title: "The invoice writes itself", body: "Hours close the job, the invoice goes out with the photos attached, and the card on file is charged." },
   { stage: "Paid", title: "Those hours become the pay period", body: "The same clock-ins that billed the customer pay the cleaner, and they can see exactly why." },
   { stage: "Followed up", title: "The receipt, the review, the next one", body: "Reminders, on-the-way texts and review requests go out from your address, on their own." },
+];
+
+/**
+ * Three claims the page makes, each shown rather than asserted.
+ *
+ * The layout alternates side to side; the MOTION does not. Everything on this
+ * page still enters from below, because alternating slide-in directions per
+ * section is the most reliable tell of a template.
+ */
+const DIVES = [
+  {
+    id: "reports",
+    eyebrow: "The numbers",
+    title: "Know what you actually made.",
+    body: "Revenue, repeat rate, labour cost and the job mix behind them — built from the jobs you already ran, not from a spreadsheet somebody remembered to update.",
+    points: [
+      "Revenue by week, by month, by crew",
+      "Labour as a share of every single job",
+      "Which work actually comes back",
+    ],
+    Surface: ReportsSurface,
+    flip: false,
+    wash: false,
+  },
+  {
+    id: "payroll",
+    eyebrow: "Payday",
+    title: "Every hour traced back to a job.",
+    body: "The clock-ins that billed the customer are the ones that pay the cleaner. Nobody reconstructs a fortnight from memory, and nobody argues about it afterwards.",
+    points: [
+      "Hours close when the job closes",
+      "Cleaners see what they earned and why",
+      "Approve a whole period, not one person at a time",
+    ],
+    Surface: PayrollSurface,
+    flip: true,
+    wash: true,
+  },
+  {
+    id: "supplies",
+    eyebrow: "Supplies",
+    title: "Know what is in every caddy.",
+    body: "What each cleaner is carrying, what is running out and what is still in the wash — before a crew turns up at a job without it.",
+    points: [
+      "Stock levels per kit and per cleaner",
+      "Reorder alerts on thresholds you set",
+      "The rag-wash cycle, actually counted",
+    ],
+    Surface: InventorySurface,
+    flip: false,
+    wash: false,
+  },
 ];
 
 const FAQ = [
@@ -355,10 +408,20 @@ export default function WelcomePage() {
                         <span>{row.kind}</span>
                       </span>
                       <span className="mk-row-crew">{row.crew}</span>
-                      <span className={`mk-chip mk-chip-${row.state}`}>
-                        {row.state === "live" && <i className="mk-pulse" />}
-                        {row.status}
-                      </span>
+                      {row.state === "soon" ? (
+                        <span className="mk-chip-swap">
+                          <span className="mk-chip mk-chip-soon mk-chip-was">{row.status}</span>
+                          <span className="mk-chip mk-chip-live mk-chip-now">
+                            <i className="mk-pulse" />
+                            Clocked in
+                          </span>
+                        </span>
+                      ) : (
+                        <span className={`mk-chip mk-chip-${row.state}`}>
+                          {row.state === "live" && <i className="mk-pulse" />}
+                          {row.status}
+                        </span>
+                      )}
                     </li>
                   ))}
                 </ol>
@@ -460,6 +523,40 @@ export default function WelcomePage() {
             </ul>
           </div>
         </section>
+
+        {/* ── Three claims, shown rather than asserted ─────────────────────── */}
+        {DIVES.map((d) => (
+          <section
+            key={d.id}
+            id={d.id}
+            className={`mk-dive${d.wash ? " mk-section-wash" : ""}`}
+          >
+            <div className={`mk-wrap mk-dive-grid${d.flip ? " mk-dive-flip" : ""}`}>
+              <div className="mk-dive-copy" data-reveal-group>
+                <p className="mk-eyebrow">
+                  <span className="mk-dot" aria-hidden="true" />
+                  {d.eyebrow}
+                </p>
+                <h2 className="mk-h2">{d.title}</h2>
+                <p className="mk-lead">{d.body}</p>
+                <ul className="mk-checks">
+                  {d.points.map((p) => (
+                    <li key={p}>
+                      <Check size={15} strokeWidth={2.8} aria-hidden="true" />
+                      <span>{p}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              {/* No data-reveal here: the shot is driven by a scroll-linked
+                  view() animation instead, and two systems writing one
+                  element's transform means one of them silently wins. */}
+              <div className="mk-dive-shot">
+                <d.Surface />
+              </div>
+            </div>
+          </section>
+        ))}
 
         {/* ── One job, end to end ─────────────────────────────────────────── */}
         <section className="mk-section" id="how">
@@ -669,6 +766,18 @@ export default function WelcomePage() {
           </div>
         </section>
       </main>
+
+      <div className="mk-bar" data-mk-bar>
+        <div className="mk-bar-in">
+          <span>
+            <b>{TRIAL_DAYS} days free</b>
+            <em>No card to start</em>
+          </span>
+          <Link href="/get-started" className="mk-btn mk-btn-primary">
+            Start free
+          </Link>
+        </div>
+      </div>
 
       <footer className="mk-foot">
         <div className="mk-wrap mk-foot-grid">
