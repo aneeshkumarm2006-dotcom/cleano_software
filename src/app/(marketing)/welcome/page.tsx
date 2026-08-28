@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { Archivo } from "next/font/google";
 import type { OrgPlan } from "@prisma/client";
@@ -13,9 +14,10 @@ import {
   ClipboardCheck,
   CreditCard,
   Home,
-  LayoutDashboard,
   MessageSquare,
   Smartphone,
+  Sparkles,
+  Star,
   UserPlus,
   Users,
 } from "lucide-react";
@@ -23,6 +25,7 @@ import {
 import { PLANS, TRIAL_DAYS } from "@/lib/plans";
 
 import Reveal from "./Reveal";
+import Showcase from "./Showcase";
 import "./marketing.css";
 
 /**
@@ -41,10 +44,12 @@ import "./marketing.css";
  * caps its cleaners. A pricing page that can drift from what is enforced is a
  * promise nobody kept.
  *
- * The page is built around one idea: a cleaning company's day is a board, and
- * Awer is the board everyone reads. So the hero shows a day rather than
- * describing one, and the features are not nine equal cards — they are one job
- * followed from booked to paid, which is what "one system" actually means.
+ * ON THE PRODUCT IMAGERY: every screen shown on this page is built as real DOM
+ * with invented names, addresses and figures. There are ~90 genuine screenshots
+ * of the running app in scripts/shots*, and none of them can be used here: they
+ * were captured against the production database and carry real customers' names
+ * and real money. DOM also stays sharp on any display and can animate, which a
+ * 1x PNG cannot.
  */
 
 /**
@@ -53,9 +58,9 @@ import "./marketing.css";
  * Montserrat stays the body and interface face because it is the product's
  * face, and a site that looks like a different company than the thing it sells
  * is its own small betrayal. Archivo carries the headlines: flatter and more
- * rectangular than Montserrat's circles, and set slightly wide it reads like
- * signage on a van or the header of a job sheet — the vernacular of the trade
- * this is sold to.
+ * rectangular than Montserrat's circles, and set wide it reads like signage on
+ * a van or the header of a job sheet — the vernacular of the trade this sells
+ * to.
  */
 const archivo = Archivo({
   subsets: ["latin"],
@@ -72,152 +77,114 @@ export const metadata: Metadata = {
 
 const ORDER: OrgPlan[] = ["STARTER", "PROFESSIONAL", "ORGANIZATION"];
 
-/**
- * The day on the hero board.
- *
- * Invented addresses and invented crew — it is a picture of the product, the
- * way a car advertisement photographs a road nobody drove on. Nothing here
- * claims to be a customer, a logo or a number anyone can be held to.
- */
+/** The day on the hero board. Invented addresses, invented crew. */
 const BOARD = [
-  {
-    time: "8:00",
-    place: "Willow Crescent",
-    kind: "3-bed deep clean",
-    crew: "Maria · Jo",
-    state: "live" as const,
-    status: "Clocked in",
-  },
-  {
-    time: "9:30",
-    place: "Harbour Lofts 4B",
-    kind: "Turnover",
-    crew: "Sam",
-    state: "soon" as const,
-    status: "On the way",
-  },
-  {
-    time: "11:00",
-    place: "Fen Street Office",
-    kind: "Weekly contract",
-    crew: "Priya · Alex",
-    state: "next" as const,
-    status: "Scheduled",
-  },
-  {
-    time: "13:15",
-    place: "Oakwood Avenue",
-    kind: "Move-out clean",
-    crew: "Maria",
-    state: "next" as const,
-    status: "Scheduled",
-  },
-  {
-    time: "15:00",
-    place: "Rosemary Court",
-    kind: "Recurring · fortnightly",
-    crew: "Jo",
-    state: "next" as const,
-    status: "Scheduled",
-  },
+  { time: "8:00", place: "Willow Crescent", kind: "3-bed deep clean", crew: "Maria · Jo", state: "live" as const, status: "Clocked in" },
+  { time: "9:30", place: "Harbour Lofts 4B", kind: "Turnover", crew: "Sam", state: "soon" as const, status: "On the way" },
+  { time: "11:00", place: "Fen Street Office", kind: "Weekly contract", crew: "Priya · Alex", state: "next" as const, status: "Scheduled" },
+  { time: "13:15", place: "Oakwood Avenue", kind: "Move-out clean", crew: "Maria", state: "next" as const, status: "Scheduled" },
+  { time: "15:00", place: "Rosemary Court", kind: "Recurring · fortnightly", crew: "Jo", state: "next" as const, status: "Scheduled" },
 ];
 
 /**
- * One job, from booked to paid.
+ * What Awer replaces.
  *
- * Numbered because it is a real sequence — this is the order the work actually
- * happens in, and each stage names the part of Awer that does it. A numbered
- * list that is not a sequence is just decoration wearing a uniform.
+ * This is the page's one honest piece of social proof. It names no customer and
+ * invents no number — it names the six things every cleaning company is already
+ * paying for and switching between, which is the actual pitch.
  */
-const STAGES = [
-  {
-    icon: Home,
-    stage: "Booked",
-    title: "The customer picks a slot",
-    body: "Your booking page prices the job by your own rules — rooms, extras, frequency, travel — and takes the deposit. Quotes go out the same way for anything that needs a look first.",
-  },
+const REPLACES = [
+  "the shared calendar",
+  "the pricing spreadsheet",
+  "the crew chat group",
+  "the invoicing app",
+  "the payroll sheet",
+  "the clipboard",
+];
+
+/**
+ * Every module, colour-coded.
+ *
+ * The colours are not decoration: each one is that area's colour everywhere it
+ * appears on this page, so a reader who has seen the violet card knows what the
+ * violet block on the week board is before they read it. `span` marks the two
+ * that carry the product — they get the room to prove it.
+ */
+const MODULES = [
   {
     icon: CalendarClock,
-    stage: "Scheduled",
-    title: "It lands on the board",
-    body: "Dispatch a crew, drag it to another day, or leave it alone — recurring work rebooks itself, and the whole week is one screen instead of four.",
+    tone: "teal",
+    span: true,
+    title: "Scheduling and dispatch",
+    body: "The whole week on one screen. Assign a crew, move a job to Thursday, and let recurring work rebook itself without anyone remembering to.",
+    points: ["Drag to reschedule", "Recurring, automatically", "Who is where, live"],
   },
   {
-    icon: ClipboardCheck,
-    stage: "Worked",
-    title: "The cleaner clocks in on site",
-    body: "They open the job on their phone, work the checklist, and leave before-and-after photos. You see it happen without ringing anyone.",
+    icon: Smartphone,
+    tone: "violet",
+    span: true,
+    title: "A real app for your cleaners",
+    body: "They clock in on site, work the checklist and leave before-and-after photos. It opens in a browser and installs to the home screen — nothing to approve, nothing to update.",
+    points: ["Clock in and out", "Checklists and photos", "Hours, pay and time off"],
+  },
+  {
+    icon: Home,
+    tone: "amber",
+    title: "Booking and quotes",
+    body: "A booking page priced by your own rules, and quotes for anything that needs a look first.",
   },
   {
     icon: Banknote,
-    stage: "Billed",
-    title: "The invoice writes itself",
-    body: "Hours close the job, the invoice goes out with the photos attached, and the card on file is charged. No second system, no re-typing.",
+    tone: "green",
+    title: "Invoicing and payments",
+    body: "Invoices, cards on file and receipts — settled into your own Stripe account, never ours.",
   },
   {
     icon: Users,
-    stage: "Paid",
-    title: "Those hours become the pay period",
-    body: "The same clock-ins that billed the customer pay the cleaner. They can see what they earned and which jobs it came from, so payday stops being an argument.",
+    tone: "sky",
+    title: "Payroll and payouts",
+    body: "The clock-ins that billed the customer are the ones that pay the cleaner. Payday stops being an argument.",
   },
-  {
-    icon: MessageSquare,
-    stage: "Followed up",
-    title: "The receipt, the review, the next one",
-    body: "Reminders, on-the-way texts, receipts and review requests all go out from your address, on their own, whether or not you remembered.",
-  },
-];
-
-const ALSO = [
   {
     icon: Boxes,
+    tone: "rose",
     title: "Supplies and inventory",
     body: "What each cleaner is carrying, what is running out, and what needs washing.",
   },
   {
     icon: UserPlus,
+    tone: "indigo",
+    span: true,
     title: "Hiring, built in",
     body: "A careers page, applications and an applicant portal — without a job board.",
   },
   {
     icon: BarChart3,
+    tone: "teal",
+    span: true,
     title: "Numbers you can act on",
     body: "Revenue, repeat rate and crew performance, reported rather than guessed at.",
   },
 ];
 
-const DOORS = [
-  {
-    icon: LayoutDashboard,
-    who: "The office",
-    path: "/sign-in",
-    body: "The board, the clients, the money and the crew.",
-    points: ["Today, this week, this month", "Invoices, quotes and payroll", "Who is where, right now"],
-  },
-  {
-    icon: Smartphone,
-    who: "Your cleaners",
-    path: "/cleanos/login",
-    body: "Only their own shifts \u2014 never anybody else\u2019s.",
-    points: ["Clock in and out on site", "Checklists and job photos", "Hours, pay and time off"],
-  },
-  {
-    icon: Home,
-    who: "Your customers",
-    path: "/login",
-    body: "Book, reschedule, pay and rate, without phoning you.",
-    points: ["Book in their own time", "Card on file and receipts", "Rate the clean afterwards"],
-  },
+/**
+ * One job, from booked to paid. Numbered because it is a real sequence — this
+ * is the order the work happens in, and each stage names the part of Awer that
+ * does it. A numbered list that is not a sequence is decoration in a uniform.
+ */
+const STAGES = [
+  { stage: "Booked", title: "The customer picks a slot", body: "Your booking page prices the job by your own rules — rooms, extras, frequency, travel — and takes the deposit." },
+  { stage: "Scheduled", title: "It lands on the board", body: "Dispatch a crew, drag it to another day, or leave it alone. Recurring work rebooks itself." },
+  { stage: "Worked", title: "The cleaner clocks in on site", body: "They open the job on their phone, work the checklist, and leave before-and-after photos." },
+  { stage: "Billed", title: "The invoice writes itself", body: "Hours close the job, the invoice goes out with the photos attached, and the card on file is charged." },
+  { stage: "Paid", title: "Those hours become the pay period", body: "The same clock-ins that billed the customer pay the cleaner, and they can see exactly why." },
+  { stage: "Followed up", title: "The receipt, the review, the next one", body: "Reminders, on-the-way texts and review requests go out from your address, on their own." },
 ];
 
-/**
- * Answers to the things a cleaning company owner actually asks before signing
- * up. Written from what the product does, not from what would sell best.
- */
 const FAQ = [
   {
     q: "Where does the money go?",
-    a: "Straight into your own Stripe account. Every workspace is connected to its own, so a payment your customer makes is settled to you and never passes through anyone else\u2019s balance.",
+    a: "Straight into your own Stripe account. Every workspace is connected to its own, so a payment your customer makes is settled to you and never passes through anyone else’s balance.",
   },
   {
     q: "Can I bring my existing customers across?",
@@ -248,7 +215,7 @@ const FAQ = [
  * If Reveal has not announced itself three seconds in — a hydration that failed,
  * a bundle that never arrived — this appends a stylesheet that unhides
  * everything. It adds a node to <head>; it never touches an element React
- * rendered, which is what made the earlier version mismatch on hydration.
+ * rendered, which is what made an earlier version mismatch on hydration.
  *
  * Decoration must never be the thing standing between a visitor and the page.
  */
@@ -256,6 +223,17 @@ const REVEAL_FAILSAFE = `(function(){try{setTimeout(function(){if(window.__mkRev
 
 /** The same override for a visitor with JavaScript switched off entirely. */
 const REVEAL_NOSCRIPT = ".mk [data-reveal]{opacity:1!important;transform:none!important}";
+
+function Mark({ size = 30 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 32 32" width={size} height={size} aria-hidden="true" className="mk-mark">
+      <rect width="32" height="32" rx="9" fill="currentColor" />
+      <rect x="7.5" y="9" width="17" height="3.1" rx="1.55" fill="#fff" />
+      <rect x="7.5" y="14.45" width="12" height="3.1" rx="1.55" fill="#fff" opacity=".72" />
+      <rect x="7.5" y="19.9" width="7.5" height="3.1" rx="1.55" fill="#fff" opacity=".46" />
+    </svg>
+  );
+}
 
 export default function WelcomePage() {
   return (
@@ -270,24 +248,29 @@ export default function WelcomePage() {
         Skip to content
       </a>
 
+      <Link href="/get-started" className="mk-ann">
+        <span className="mk-ann-tag">New</span>
+        {/* On a phone the long clause wrapped to three lines and left the dash
+            stranded on one of its own. The offer is the part that matters. */}
+        <span className="mk-ann-long">Awer is open to cleaning companies everywhere &mdash;</span>
+        <b>{TRIAL_DAYS} days free, no card</b>
+        <ArrowRight size={14} strokeWidth={2.6} aria-hidden="true" />
+      </Link>
+
       <header className="mk-nav">
         <div className="mk-wrap mk-nav-in">
           <Link href="/" className="mk-logo" aria-label="Awer home">
-            <svg viewBox="0 0 32 32" width="30" height="30" aria-hidden="true" className="mk-mark">
-              <rect width="32" height="32" rx="9" fill="currentColor" />
-              <rect x="7.5" y="9" width="17" height="3.1" rx="1.55" fill="#fff" />
-              <rect x="7.5" y="14.45" width="12" height="3.1" rx="1.55" fill="#fff" opacity=".72" />
-              <rect x="7.5" y="19.9" width="7.5" height="3.1" rx="1.55" fill="#fff" opacity=".46" />
-            </svg>
+            <Mark />
             Awer
           </Link>
           <nav className="mk-nav-links" aria-label="Sections">
+            <a href="#showcase">Product</a>
+            <a href="#inside">What&rsquo;s inside</a>
             <a href="#how">How it works</a>
             <a href="#pricing">Pricing</a>
-            <a href="#questions">Questions</a>
           </nav>
           <div className="mk-nav-actions">
-            <Link href="/sign-in" className="mk-btn mk-btn-plain mk-hide-xs">
+            <Link href="/sign-in" className="mk-btn mk-btn-plain mk-hide-sm">
               Sign in
             </Link>
             <Link href="/get-started" className="mk-btn mk-btn-primary">
@@ -298,16 +281,26 @@ export default function WelcomePage() {
       </header>
 
       <main id="main">
-        {/* Hero. The thesis is the board: a day you can read at a glance. */}
+        <div className="mk-nav-sentinel" aria-hidden="true" />
+        {/* ── Hero ─────────────────────────────────────────────────────────── */}
         <section className="mk-hero">
+          {/* Two soft colour fields behind the fold. Painted with radial
+              gradients rather than an image, so they cost nothing to load and
+              scale to any width without going soft. */}
+          <div className="mk-aurora" aria-hidden="true">
+            <span className="mk-aurora-a" />
+            <span className="mk-aurora-b" />
+          </div>
+
           <div className="mk-wrap mk-hero-grid">
             <div className="mk-hero-copy">
-              <p className="mk-eyebrow">
-                <span className="mk-dot" aria-hidden="true" />
+              <p className="mk-pill">
+                <Sparkles size={13} strokeWidth={2.4} aria-hidden="true" />
                 Software for cleaning companies
               </p>
               <h1 className="mk-h1">
-                The whole company on <em className="mk-em">one board.</em>
+                Every job. Every cleaner. Every dollar.
+                <em className="mk-em"> One board.</em>
               </h1>
               <p className="mk-lead">
                 Awer runs the scheduling, the crew, the customers, the invoicing and the
@@ -318,12 +311,12 @@ export default function WelcomePage() {
                   Start free for {TRIAL_DAYS} days
                   <ArrowRight size={17} strokeWidth={2.4} aria-hidden="true" />
                 </Link>
-                <a href="#pricing" className="mk-btn mk-btn-ghost mk-btn-lg">
-                  See pricing
+                <a href="#showcase" className="mk-btn mk-btn-ghost mk-btn-lg">
+                  See it working
                 </a>
               </div>
               <ul className="mk-trust">
-                {[`${TRIAL_DAYS} days free`, "No card to start", "Your own address"].map((t) => (
+                {[`${TRIAL_DAYS} days free`, "No card to start", "Set up in an afternoon"].map((t) => (
                   <li key={t}>
                     <Check size={15} strokeWidth={3} aria-hidden="true" />
                     {t}
@@ -332,59 +325,146 @@ export default function WelcomePage() {
               </ul>
             </div>
 
-            {/* The board itself. Sample data, plainly a picture of the product. */}
-            <div className="mk-board" aria-hidden="true">
-              <div className="mk-board-chrome">
-                <span className="mk-lights">
-                  <i /><i /><i />
-                </span>
-                <span className="mk-url">
-                  <b>yourcompany</b>.useawer.com
-                </span>
-              </div>
-
-              <div className="mk-board-head">
-                <div>
-                  <strong>Tuesday</strong>
-                  <span>12 August</span>
+            {/* The day, on the board. Sample data, plainly a picture. */}
+            <div className="mk-hero-stage">
+              <div className="mk-board-tilt">
+              <div className="mk-board" aria-hidden="true">
+                <div className="mk-board-chrome">
+                  <span className="mk-lights">
+                    <i /><i /><i />
+                  </span>
+                  <span className="mk-url">
+                    <b>yourcompany</b>.useawer.com
+                  </span>
                 </div>
-                <span className="mk-board-count">5 jobs · 4 cleaners</span>
+
+                <div className="mk-board-head">
+                  <div>
+                    <strong>Tuesday</strong>
+                    <span>12 August</span>
+                  </div>
+                  <span className="mk-board-count">5 jobs · 4 cleaners</span>
+                </div>
+
+                <ol className="mk-rows">
+                  {BOARD.map((row, i) => (
+                    <li key={row.place} className="mk-row" style={{ "--i": i } as CSSProperties}>
+                      <span className="mk-row-time">{row.time}</span>
+                      <span className="mk-row-main">
+                        <strong>{row.place}</strong>
+                        <span>{row.kind}</span>
+                      </span>
+                      <span className="mk-row-crew">{row.crew}</span>
+                      <span className={`mk-chip mk-chip-${row.state}`}>
+                        {row.state === "live" && <i className="mk-pulse" />}
+                        {row.status}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+
+                <div className="mk-board-foot">
+                  <span><b>18.5</b> hours logged</span>
+                  <span><b>$1,340</b> invoiced</span>
+                  <span><b>2</b> photo sets to review</span>
+                </div>
+              </div>
               </div>
 
-              <ol className="mk-rows">
-                {BOARD.map((row, i) => (
-                  <li
-                    key={row.place}
-                    className="mk-row"
-                    style={{ "--i": i } as CSSProperties}
-                  >
-                    <span className="mk-row-time">{row.time}</span>
-                    <span className="mk-row-main">
-                      <strong>{row.place}</strong>
-                      <span>{row.kind}</span>
-                    </span>
-                    <span className="mk-row-crew">{row.crew}</span>
-                    <span className={`mk-chip mk-chip-${row.state}`}>
-                      {row.state === "live" && <i className="mk-pulse" />}
-                      {row.status}
-                    </span>
-                  </li>
-                ))}
-              </ol>
-
-              <div className="mk-board-foot">
-                <span><b>18.5</b> hours logged</span>
-                <span><b>$1,340</b> invoiced</span>
-                <span><b>2</b> photo sets to review</span>
-              </div>
+              {/* Three things the board does while nobody is watching it. */}
+              <span className="mk-float mk-float-1" style={{ "--i": 0 } as CSSProperties} aria-hidden="true">
+                <i className="mk-float-i mk-tone-green"><Banknote size={15} /></i>
+                <b>$340 invoiced</b>
+                <em>Harbour Lofts · paid</em>
+              </span>
+              <span className="mk-float mk-float-2" style={{ "--i": 1 } as CSSProperties} aria-hidden="true">
+                <i className="mk-float-i mk-tone-violet"><ClipboardCheck size={15} /></i>
+                <b>Maria clocked in</b>
+                <em>Willow Crescent · 7:58</em>
+              </span>
             </div>
           </div>
         </section>
 
-        {/* One job, end to end. The spine of the whole product. */}
-        <section className="mk-section mk-section-wash" id="how">
+        {/* ── What it replaces ─────────────────────────────────────────────── */}
+        <section className="mk-replaces">
+          <div className="mk-wrap" data-reveal>
+            <p className="mk-replaces-label">One system, in place of</p>
+            <ul className="mk-replaces-row" data-reveal-group data-reveal-cols="6">
+              {REPLACES.map((r, i) => (
+                <li key={r}>
+                  <s>{r}</s>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+
+        {/* ── The product itself ───────────────────────────────────────────── */}
+        <section className="mk-section" id="showcase">
+          <div className="mk-wrap">
+            <div className="mk-section-head mk-center" data-reveal-group>
+              <p className="mk-eyebrow">
+                <span className="mk-dot" aria-hidden="true" />
+                See it working
+              </p>
+              <h2 className="mk-h2">Three people. Three screens. One system.</h2>
+              <p className="mk-lead">
+                Your office, your cleaners and your customers all arrive at the same address
+                and land where they belong — each seeing only what is theirs to see.
+              </p>
+            </div>
+            <div data-reveal>
+              <Showcase />
+            </div>
+          </div>
+        </section>
+
+        {/* ── Everything inside ───────────────────────────────────────────── */}
+        <section className="mk-section mk-section-wash" id="inside">
+          <div className="mk-wrap">
+            <div className="mk-section-head" data-reveal-group>
+              <p className="mk-eyebrow">
+                <span className="mk-dot" aria-hidden="true" />
+                What&rsquo;s inside
+              </p>
+              <h2 className="mk-h2">Everything a cleaning company runs on.</h2>
+              <p className="mk-lead">
+                Not a calendar with extras bolted on. Every part of the business, in one
+                place, sharing one set of facts.
+              </p>
+            </div>
+            <ul className="mk-bento" data-reveal-group data-reveal-cols="4">
+              {MODULES.map((m, i) => (
+                <li
+                  key={m.title}
+                  className={`mk-mod mk-tone-${m.tone}${m.span ? " mk-mod-wide" : ""}`}
+                >
+                  <span className="mk-mod-icon" aria-hidden="true">
+                    <m.icon size={19} strokeWidth={2.1} />
+                  </span>
+                  <h3 className="mk-h3">{m.title}</h3>
+                  <p>{m.body}</p>
+                  {m.points && (
+                    <ul className="mk-mod-points">
+                      {m.points.map((p) => (
+                        <li key={p}>
+                          <Check size={14} strokeWidth={3} aria-hidden="true" />
+                          {p}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+
+        {/* ── One job, end to end ─────────────────────────────────────────── */}
+        <section className="mk-section" id="how">
           <div className="mk-wrap mk-how-grid">
-            <div className="mk-section-head mk-how-head" data-reveal>
+            <div className="mk-section-head mk-how-head" data-reveal-group>
               <p className="mk-eyebrow">
                 <span className="mk-dot" aria-hidden="true" />
                 How the work moves
@@ -397,85 +477,59 @@ export default function WelcomePage() {
               </p>
             </div>
 
-            <ol className="mk-rail">
+            <ol className="mk-rail" data-reveal-group>
               {STAGES.map((s, i) => (
-                <li key={s.stage} className="mk-stage" data-reveal data-reveal-delay={i * 60}>
+                <li key={s.stage} className="mk-stage">
                   <div className="mk-stage-node" aria-hidden="true">
-                    <s.icon size={18} strokeWidth={2.1} />
+                    {String(i + 1).padStart(2, "0")}
                   </div>
                   <div className="mk-stage-body">
-                    <p className="mk-stage-label">
-                      <span className="mk-stage-num">{String(i + 1).padStart(2, "0")}</span>
-                      {s.stage}
-                    </p>
+                    <p className="mk-stage-label">{s.stage}</p>
                     <h3 className="mk-h3">{s.title}</h3>
                     <p>{s.body}</p>
                   </div>
                 </li>
               ))}
             </ol>
-
-            <div className="mk-also" data-reveal>
-              <p className="mk-also-label">And the rest of it</p>
-              <ul className="mk-also-grid">
-                {ALSO.map((a) => (
-                  <li key={a.title}>
-                    <span className="mk-also-icon" aria-hidden="true">
-                      <a.icon size={17} strokeWidth={2.1} />
-                    </span>
-                    <strong>{a.title}</strong>
-                    <span>{a.body}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
           </div>
         </section>
 
-        {/* Three doors — the thing that makes it your company, not ours. */}
-        <section className="mk-section">
-          <div className="mk-wrap">
-            <div className="mk-section-head" data-reveal>
+        {/* ── Where it came from ──────────────────────────────────────────── */}
+        <section className="mk-origin">
+          <div className="mk-wrap mk-origin-grid">
+            <div className="mk-origin-shot" data-reveal>
+              <Image
+                src="/employee-login.png"
+                alt="A cleaner in uniform holding a stocked caddy in a customer's living room"
+                width={941}
+                height={1672}
+                sizes="(min-width: 900px) 440px, 90vw"
+                className="mk-origin-img"
+              />
+            </div>
+            <div className="mk-origin-copy" data-reveal>
               <p className="mk-eyebrow">
                 <span className="mk-dot" aria-hidden="true" />
-                Everyone gets a way in
+                Where it came from
               </p>
-              <h2 className="mk-h2">Three doors, one address.</h2>
+              <h2 className="mk-h2">Built inside a working cleaning company.</h2>
               <p className="mk-lead">
-                Your office, your cleaners and your customers all arrive at the same address
-                and land where they belong — each seeing only what is theirs to see.
+                Awer was not designed on a whiteboard. Every screen in it exists because a
+                real crew needed it on a real Tuesday — a cleaner standing in a hallway
+                with no signal, an office trying to work out who was where, an owner
+                reconciling a pay period at eleven at night.
+              </p>
+              <p className="mk-lead">
+                That is why the parts fit together. They were never separate.
               </p>
             </div>
-            <ul className="mk-doors">
-              {DOORS.map((d, i) => (
-                <li key={d.who} className="mk-door" data-reveal data-reveal-delay={i * 70}>
-                  <span className="mk-door-icon" aria-hidden="true">
-                    <d.icon size={19} strokeWidth={2} />
-                  </span>
-                  <h3 className="mk-h3">{d.who}</h3>
-                  <p className="mk-door-path">
-                    <span>yourcompany.useawer.com</span>
-                    <b>{d.path}</b>
-                  </p>
-                  <p className="mk-door-body">{d.body}</p>
-                  <ul className="mk-checks">
-                    {d.points.map((p) => (
-                      <li key={p}>
-                        <Check size={15} strokeWidth={2.8} aria-hidden="true" />
-                        <span>{p}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </li>
-              ))}
-            </ul>
           </div>
         </section>
 
-        {/* Pricing, from the same definition that enforces the limits. */}
+        {/* ── Pricing ─────────────────────────────────────────────────────── */}
         <section className="mk-section mk-section-wash" id="pricing">
           <div className="mk-wrap">
-            <div className="mk-section-head" data-reveal>
+            <div className="mk-section-head mk-center" data-reveal-group>
               <p className="mk-eyebrow">
                 <span className="mk-dot" aria-hidden="true" />
                 Pricing
@@ -486,17 +540,15 @@ export default function WelcomePage() {
                 hire, not when you are asked to.
               </p>
             </div>
-            <ul className="mk-plans">
+            <ul className="mk-plans" data-reveal-group data-reveal-cols="3">
               {ORDER.map((key, i) => {
                 const p = PLANS[key];
                 const featured = key === "PROFESSIONAL";
                 const cap =
-                  p.maxCleaners == null
-                    ? "Unlimited cleaners"
-                    : `Up to ${p.maxCleaners} cleaners`;
-                // The cleaner cap is already the line under the price, and
-                // PLANS opens every highlight list with it. Printing both put
-                // "Up to 5 cleaners" on the card twice.
+                  p.maxCleaners == null ? "Unlimited cleaners" : `Up to ${p.maxCleaners} cleaners`;
+                // The cap is already the line under the price, and PLANS opens
+                // every highlight list with it. Printing both put "Up to 5
+                // cleaners" on the card twice.
                 const highlights = p.highlights.filter(
                   (h) => h.toLowerCase() !== cap.toLowerCase(),
                 );
@@ -504,8 +556,6 @@ export default function WelcomePage() {
                   <li
                     key={key}
                     className={`mk-plan${featured ? " mk-plan-featured" : ""}`}
-                    data-reveal
-                    data-reveal-delay={i * 70}
                   >
                     <div className="mk-plan-top">
                       <h3 className="mk-plan-name">{p.label}</h3>
@@ -524,14 +574,6 @@ export default function WelcomePage() {
                       )}
                     </p>
                     <p className="mk-plan-cap">{cap}</p>
-                    <ul className="mk-checks">
-                      {highlights.map((h) => (
-                        <li key={h}>
-                          <Check size={15} strokeWidth={2.8} aria-hidden="true" />
-                          <span>{h}</span>
-                        </li>
-                      ))}
-                    </ul>
                     <Link
                       href={
                         p.selfServe
@@ -547,6 +589,14 @@ export default function WelcomePage() {
                         ? `${TRIAL_DAYS} days free · no card`
                         : "Onboarding and migration included"}
                     </p>
+                    <ul className="mk-checks">
+                      {highlights.map((h) => (
+                        <li key={h}>
+                          <Check size={15} strokeWidth={2.8} aria-hidden="true" />
+                          <span>{h}</span>
+                        </li>
+                      ))}
+                    </ul>
                   </li>
                 );
               })}
@@ -559,10 +609,10 @@ export default function WelcomePage() {
           </div>
         </section>
 
-        {/* The objections, answered in the open. */}
+        {/* ── Questions ───────────────────────────────────────────────────── */}
         <section className="mk-section" id="questions">
           <div className="mk-wrap mk-faq-grid">
-            <div className="mk-section-head mk-faq-head" data-reveal>
+            <div className="mk-section-head mk-faq-head" data-reveal-group>
               <p className="mk-eyebrow">
                 <span className="mk-dot" aria-hidden="true" />
                 Before you start
@@ -587,8 +637,13 @@ export default function WelcomePage() {
           </div>
         </section>
 
-        <section className="mk-section mk-cta">
-          <div className="mk-wrap">
+        {/* ── The close ───────────────────────────────────────────────────── */}
+        <section className="mk-cta">
+          <div className="mk-aurora mk-aurora-dark" aria-hidden="true">
+            <span className="mk-aurora-a" />
+            <span className="mk-aurora-b" />
+          </div>
+          <div className="mk-wrap mk-cta-in">
             <p className="mk-eyebrow">
               <span className="mk-dot" aria-hidden="true" />
               Ready when you are
@@ -607,26 +662,46 @@ export default function WelcomePage() {
                 Talk to us
               </Link>
             </div>
+            <p className="mk-cta-fine">
+              <MessageSquare size={14} strokeWidth={2.2} aria-hidden="true" />
+              Larger team, or moving from another system? We will do the migration with you.
+            </p>
           </div>
         </section>
       </main>
 
       <footer className="mk-foot">
-        <div className="mk-wrap mk-foot-in">
-          <span className="mk-foot-brand">
-            <svg viewBox="0 0 32 32" width="22" height="22" aria-hidden="true" className="mk-mark">
-              <rect width="32" height="32" rx="9" fill="currentColor" />
-              <rect x="7.5" y="9" width="17" height="3.1" rx="1.55" fill="#fff" />
-              <rect x="7.5" y="14.45" width="12" height="3.1" rx="1.55" fill="#fff" opacity=".72" />
-              <rect x="7.5" y="19.9" width="7.5" height="3.1" rx="1.55" fill="#fff" opacity=".46" />
-            </svg>
-            &copy; {new Date().getFullYear()} Awer
-          </span>
-          <nav className="mk-foot-links" aria-label="Footer">
+        <div className="mk-wrap mk-foot-grid">
+          <div className="mk-foot-brand">
+            <Link href="/" className="mk-logo" aria-label="Awer home">
+              <Mark size={26} />
+              Awer
+            </Link>
+            <p>Scheduling, crew, customers, invoicing and payroll for cleaning companies.</p>
+          </div>
+          <nav aria-label="Product">
+            <p className="mk-foot-label">Product</p>
+            <a href="#showcase">See it working</a>
+            <a href="#inside">What&rsquo;s inside</a>
+            <a href="#how">How it works</a>
+            <a href="#pricing">Pricing</a>
+          </nav>
+          <nav aria-label="Get started">
+            <p className="mk-foot-label">Get started</p>
             <Link href="/get-started">Start free</Link>
             <Link href="/get-started/organization">Larger teams</Link>
-            <Link href="/sign-in">Sign in</Link>
+            <a href="#questions">Questions</a>
           </nav>
+          <nav aria-label="Sign in">
+            <p className="mk-foot-label">Sign in</p>
+            <Link href="/sign-in">Office</Link>
+            <Link href="/cleanos/login">Cleaners</Link>
+            <Link href="/login">Customers</Link>
+          </nav>
+        </div>
+        <div className="mk-wrap mk-foot-base">
+          <span>&copy; {new Date().getFullYear()} Awer</span>
+          <span>Made for people who clean for a living.</span>
         </div>
       </footer>
     </div>

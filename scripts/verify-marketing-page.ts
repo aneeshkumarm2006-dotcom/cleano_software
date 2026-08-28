@@ -126,11 +126,20 @@ const TEXT = [
   ".mk-trust",
   ".mk-checks li",
   ".mk-stage-body p",
-  ".mk-stage-num",
-  ".mk-also-label",
-  ".mk-also-grid li > span:last-child",
-  ".mk-door-body",
-  ".mk-door-path span",
+  ".mk-mod p",
+  ".mk-mod-points li",
+  ".mk-tab",
+  ".mk-tab-blurb",
+  ".mk-replaces-row li",
+  ".mk-stage-label",
+  ".mk-book-lines li",
+  ".mk-book-fine",
+  ".mk-app-stats",
+  ".mk-foot nav a",
+  ".mk-foot-base",
+  ".mk-ann",
+  ".mk-pill",
+  ".mk-cta-fine",
   ".mk-plan-cap",
   ".mk-plan-note",
   ".mk-plans-foot",
@@ -146,6 +155,17 @@ const TEXT = [
   ".mk-chip-live",
   ".mk-chip-soon",
   ".mk-chip-next",
+  // White on the action colour: the bright #EA580C only reaches 3.6:1, which is
+  // why a button is painted with the deeper tone instead.
+  ".mk-btn-primary",
+  ".mk-plan-tag",
+  ".mk-ann-tag",
+  ".mk-book-go",
+  ".mk-week-head",
+  ".mk-block b",
+  ".mk-block span",
+  ".mk-ph-clock",
+  ".mk-book-step",
 ];
 
 const overflowAt = (page: Page) =>
@@ -252,7 +272,7 @@ const overflowAt = (page: Page) =>
     await page.setViewportSize({ width: 768, height: 1024 });
     await page.waitForTimeout(80);
     const stretched = await page.evaluate(() =>
-      [...document.querySelectorAll(".mk-plan, .mk-door")]
+      [...document.querySelectorAll(".mk-plan, .mk-mod")]
         .map((el) => ({
           cls: el.className.split(" ")[0],
           w: Math.round(el.getBoundingClientRect().width),
@@ -265,6 +285,38 @@ const overflowAt = (page: Page) =>
           `${stretched.length} card(s) stretch past 560px on a tablet`,
           stretched.map((c) => `${c.cls} ${c.w}px`).join(", "),
         );
+
+    // ── The tab indicator points at the tab it claims to ───────────────────
+    // Two separate bugs have lived here: a `fill: "forwards"` animation that
+    // outranked the inline style so a resize never re-measured, and an
+    // indicator pinned to the bottom of the list that sat under the last row
+    // while pointing at a tab in the first. Both were invisible at one width.
+    console.log("\nTHE TAB INDICATOR TRACKS THE SELECTED TAB");
+    for (const width of [390, 768, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.waitForTimeout(120);
+      for (const idx of [2, 0]) {
+        const aligned = await page.evaluate(async (i: number) => {
+          const tabs = [...document.querySelectorAll<HTMLElement>(".mk-tab")];
+          tabs[i].click();
+          await new Promise((r) => setTimeout(r, 420));
+          const ink = document.querySelector(".mk-tab-ink")!.getBoundingClientRect();
+          const on = document.querySelector('[aria-selected="true"]')!.getBoundingClientRect();
+          return {
+            dx: Math.round(Math.abs(ink.x - on.x)),
+            dw: Math.round(Math.abs(ink.width - on.width)),
+            dy: Math.round(Math.abs(ink.y - on.bottom)),
+            label: document.querySelector('[aria-selected="true"]')!.textContent?.trim(),
+          };
+        }, idx);
+        aligned.dx <= 2 && aligned.dw <= 2 && aligned.dy <= 4
+          ? ok(`${width}px — the bar sits under "${aligned.label}"`)
+          : bad(
+              `${width}px — the bar is off "${aligned.label}"`,
+              `x off by ${aligned.dx}px, width by ${aligned.dw}px, y by ${aligned.dy}px`,
+            );
+      }
+    }
 
     // ── Every target is big enough for a thumb ──────────────────────────────
     console.log("\nEVERY LINK AND BUTTON IS AT LEAST 44px TALL");
