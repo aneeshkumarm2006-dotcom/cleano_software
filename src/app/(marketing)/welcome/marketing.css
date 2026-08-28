@@ -5,8 +5,15 @@
  * up here lands in the app thirty seconds later, and a site that looks like a
  * different company than the thing it sells is its own small betrayal.
  *
+ * The teal is deepened into a real scale rather than used as a lone accent on
+ * white: #062A2F is a ground, not a highlight, and it carries the two places
+ * the page raises its voice — the board in the hero and the closing band.
+ * Everything between them is quiet on purpose.
+ *
  * Everything is scoped under .mk so it cannot reach the application's styles,
- * which share this document through the root layout.
+ * which share this document through the root layout. The page is committed to
+ * one light theme and paints every surface explicitly, so it cannot borrow a
+ * colour from a host that renders it dark.
  */
 .mk {
   /* Brand, straight from customer.css — one source, not a second opinion. */
@@ -14,13 +21,29 @@
   /* #008C9C on white is ~3.4:1 — fine behind large type, not enough under it.
      Anything small or interactive uses the deeper tone, which clears 4.5:1. */
   --mk-teal-ink: #00707d;
-  --mk-teal-deep: #003940;
-  --mk-ink: #0e1a1c;
+  --mk-teal-deep: #073840;
+  --mk-teal-glow: #5fd4de;
+  --mk-teal-mist: #c9edf0;
+
+  --mk-ink: #0b1618;
   --mk-ink-soft: #47585c;
   /* Neutrals carry a little of the accent, so they read as chosen. */
-  --mk-wash: #f4f8f9;
-  --mk-line: #dce7e9;
+  --mk-wash: #f2f7f8;
+  --mk-line: #dbe7e9;
   --mk-white: #fff;
+
+  /* On the dark ground. Kept as their own set so no rule has to guess which
+     side of the page it is painting on. */
+  --mk-on-deep: #e6f2f3;
+  --mk-on-deep-soft: #9db6ba;
+  --mk-on-deep-line: rgba(255, 255, 255, 0.12);
+  --mk-on-deep-lift: rgba(255, 255, 255, 0.045);
+
+  /* Status. Deliberately separate from the accent: a chip that means
+     "happening now" must not be readable as "this is our brand colour". */
+  --mk-good: #6fe3a6;
+  --mk-warn: #f5c577;
+  --mk-on-chip: #b8cccf;
 
   --mk-s1: 8px;
   --mk-s2: 16px;
@@ -30,6 +53,9 @@
   --mk-s6: 96px;
   --mk-radius: 14px;
   --mk-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+
+  --mk-display: var(--mk-font-display), var(--font-app), system-ui, sans-serif;
+  --mk-mono: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
 
   color: var(--mk-ink);
   background: var(--mk-white);
@@ -61,7 +87,7 @@
 
 .mk-wrap {
   width: 100%;
-  max-width: 1120px;
+  max-width: 1180px;
   margin-inline: auto;
   padding-inline: var(--mk-s3);
 }
@@ -71,28 +97,44 @@
   position: sticky;
   top: 0;
   z-index: 40;
-  background: rgba(255, 255, 255, 0.88);
-  backdrop-filter: blur(10px);
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--mk-line);
 }
 .mk-nav-in {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--mk-s2);
-  min-height: 68px;
+  gap: var(--mk-s3);
+  min-height: 72px;
 }
 .mk-logo {
   display: inline-flex;
   align-items: center;
   gap: 10px;
+  font-family: var(--mk-display);
   font-weight: 700;
-  font-size: 19px;
-  letter-spacing: -0.02em;
+  font-size: 21px;
+  letter-spacing: -0.03em;
   color: var(--mk-ink);
   text-decoration: none;
+  min-height: 44px;
+  margin-right: auto;
 }
-.mk-logo svg { color: var(--mk-teal); flex: none; }
+.mk-mark { color: var(--mk-teal); flex: none; display: block; }
+
+.mk-nav-links { display: none; gap: var(--mk-s3); }
+.mk-nav-links a {
+  font-size: 14.5px;
+  font-weight: 500;
+  color: var(--mk-ink-soft);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  transition: color 180ms var(--mk-ease);
+}
+.mk-nav-links a:hover { color: var(--mk-teal-ink); }
+
 .mk-nav-actions { display: flex; align-items: center; gap: var(--mk-s1); }
 
 /* ------------------------------------------------------------ buttons --- */
@@ -104,7 +146,7 @@
   /* 44px minimum, so this is a real target on a phone. */
   min-height: 46px;
   padding: 0 22px;
-  border-radius: 10px;
+  border-radius: 11px;
   border: 1px solid transparent;
   font: inherit;
   font-size: 15px;
@@ -112,15 +154,16 @@
   text-decoration: none;
   cursor: pointer;
   transition: background-color 180ms var(--mk-ease), border-color 180ms var(--mk-ease),
-    color 180ms var(--mk-ease);
+    color 180ms var(--mk-ease), transform 180ms var(--mk-ease);
 }
+.mk-btn:active { transform: translateY(1px); }
 .mk-btn-primary { background: var(--mk-teal-ink); color: #fff; }
-.mk-btn-primary:hover { background: var(--mk-teal-deep); }
+.mk-btn-primary:hover { background: #005b66; }
 .mk-btn-ghost { color: var(--mk-ink); border-color: var(--mk-line); background: var(--mk-white); }
 .mk-btn-ghost:hover { border-color: var(--mk-teal); color: var(--mk-teal-ink); }
 .mk-btn-plain { color: var(--mk-ink); padding-inline: 12px; }
 .mk-btn-plain:hover { color: var(--mk-teal-ink); }
-.mk-btn-lg { min-height: 54px; padding: 0 30px; font-size: 16px; }
+.mk-btn-lg { min-height: 54px; padding: 0 28px; font-size: 16px; }
 
 /* --------------------------------------------------------------- type --- */
 .mk-eyebrow {
@@ -129,7 +172,7 @@
   gap: 8px;
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.09em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--mk-teal-ink);
   margin: 0 0 var(--mk-s2);
@@ -142,28 +185,39 @@
   flex: none;
 }
 .mk-h1 {
-  font-size: clamp(34px, 5.4vw, 58px);
-  line-height: 1.06;
-  letter-spacing: -0.032em;
+  font-family: var(--mk-display);
+  font-size: clamp(38px, 5.6vw, 62px);
+  font-stretch: 108%;
+  line-height: 1.02;
+  letter-spacing: -0.035em;
   font-weight: 700;
   margin: 0 0 var(--mk-s3);
   text-wrap: balance;
 }
 .mk-h2 {
-  font-size: clamp(26px, 3.4vw, 38px);
-  line-height: 1.15;
-  letter-spacing: -0.025em;
+  font-family: var(--mk-display);
+  font-size: clamp(28px, 3.6vw, 42px);
+  font-stretch: 105%;
+  line-height: 1.08;
+  letter-spacing: -0.03em;
   font-weight: 700;
   margin: 0 0 var(--mk-s2);
   text-wrap: balance;
 }
-.mk-h3 { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 6px; }
+.mk-h3 {
+  font-size: 17.5px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1.35;
+  margin: 0 0 8px;
+  text-wrap: balance;
+}
 .mk-lead {
-  font-size: clamp(17px, 1.6vw, 19px);
+  font-size: clamp(17px, 1.5vw, 19px);
   line-height: 1.6;
   color: var(--mk-ink-soft);
   /* Kept near 65 characters so it stays readable at every width. */
-  max-width: 60ch;
+  max-width: 58ch;
   margin: 0;
 }
 .mk-em { color: var(--mk-teal-ink); font-style: normal; }
@@ -171,10 +225,11 @@
 /* ------------------------------------------------------------ section --- */
 .mk-section { padding-block: clamp(var(--mk-s5), 9vw, var(--mk-s6)); }
 .mk-section-wash { background: var(--mk-wash); border-block: 1px solid var(--mk-line); }
-.mk-section-head { max-width: 62ch; margin-bottom: var(--mk-s4); }
+.mk-section-head { max-width: 60ch; margin-bottom: var(--mk-s4); }
+.mk-section[id] { scroll-margin-top: 88px; }
 
 /* --------------------------------------------------------------- hero --- */
-.mk-hero { padding-block: clamp(var(--mk-s5), 8vw, 104px) var(--mk-s5); }
+.mk-hero { padding-block: clamp(var(--mk-s4), 7vw, 92px) clamp(var(--mk-s5), 8vw, 104px); }
 .mk-hero-grid {
   display: grid;
   gap: clamp(var(--mk-s4), 5vw, var(--mk-s5));
@@ -182,135 +237,333 @@
   align-items: center;
 }
 .mk-hero-cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: var(--mk-s4); }
-.mk-hero-note {
-  margin: var(--mk-s2) 0 0;
+.mk-trust {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px var(--mk-s3);
+  margin: var(--mk-s3) 0 0;
+  padding: 0;
   font-size: 14px;
   color: var(--mk-ink-soft);
 }
+.mk-trust li { display: inline-flex; align-items: center; gap: 7px; }
+.mk-trust svg { color: var(--mk-teal-ink); flex: none; }
 
-/* The address panel: the product's actual shape, not a stock illustration. */
-.mk-panel {
-  border: 1px solid var(--mk-line);
-  border-radius: 18px;
-  background: var(--mk-white);
-  box-shadow: 0 1px 2px rgba(14, 26, 28, 0.04), 0 18px 40px -24px rgba(0, 57, 64, 0.28);
+/* ------------------------------------------------------------- board --- */
+/* The product's actual shape. Sample data, plainly a picture — and hidden from
+   assistive technology, because a screen reader must not read an invented
+   Tuesday as though it were somebody's real one. */
+.mk-board {
+  border-radius: 20px;
+  background: var(--mk-teal-deep);
+  color: var(--mk-on-deep);
   overflow: hidden;
+  box-shadow: 0 1px 2px rgba(7, 56, 64, 0.1), 0 30px 60px -30px rgba(7, 56, 64, 0.5);
 }
-.mk-panel-bar {
+.mk-board-chrome {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 16px;
-  background: var(--mk-wash);
-  border-bottom: 1px solid var(--mk-line);
+  gap: 12px;
+  padding: 13px 16px;
+  background: rgba(0, 0, 0, 0.22);
+  border-bottom: 1px solid var(--mk-on-deep-line);
 }
-.mk-panel-lights { display: flex; gap: 6px; flex: none; }
-.mk-panel-lights i {
+.mk-lights { display: flex; gap: 6px; flex: none; }
+.mk-lights i {
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: var(--mk-line);
+  background: rgba(255, 255, 255, 0.2);
   display: block;
 }
 .mk-url {
-  font-family: var(--font-mono), ui-monospace, monospace;
-  font-size: 13px;
-  color: var(--mk-ink-soft);
-  background: var(--mk-white);
-  border: 1px solid var(--mk-line);
+  font-family: var(--mk-mono);
+  font-size: 12.5px;
+  color: var(--mk-on-deep-soft);
+  background: rgba(255, 255, 255, 0.07);
   border-radius: 7px;
-  padding: 5px 12px;
+  padding: 6px 12px;
   flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.mk-url b { color: var(--mk-teal-ink); font-weight: 600; }
+.mk-url b { color: var(--mk-teal-glow); font-weight: 600; }
 
-.mk-doors { list-style: none; margin: 0; padding: 10px; display: grid; gap: 6px; }
-.mk-door {
+.mk-board-head {
   display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 14px 12px;
-  border-radius: 11px;
-  transition: background-color 180ms var(--mk-ease);
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--mk-s2);
+  padding: var(--mk-s3) var(--mk-s3) var(--mk-s2);
 }
-.mk-door:hover { background: var(--mk-wash); }
-.mk-door-icon {
-  width: 40px;
-  height: 40px;
-  flex: none;
+.mk-board-head strong {
+  font-family: var(--mk-display);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-right: 9px;
+}
+.mk-board-head span { color: var(--mk-on-deep-soft); font-size: 14px; }
+.mk-board-count { font-size: 13px; white-space: nowrap; }
+
+.mk-rows { list-style: none; margin: 0; padding: 0 12px 12px; display: grid; gap: 4px; }
+.mk-row {
   display: grid;
-  place-items: center;
-  border-radius: 10px;
-  background: rgba(0, 140, 156, 0.1);
-  color: var(--mk-teal-ink);
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 12px;
+  border-radius: 11px;
+  background: var(--mk-on-deep-lift);
 }
-.mk-door-body { min-width: 0; }
-.mk-door-body strong { display: block; font-size: 15px; font-weight: 600; }
-.mk-door-body span {
+.mk-row-time {
+  font-family: var(--mk-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  color: var(--mk-on-deep-soft);
+}
+.mk-row-main { min-width: 0; }
+.mk-row-main strong {
   display: block;
-  font-family: var(--font-mono), ui-monospace, monospace;
-  font-size: 12.5px;
-  color: var(--mk-ink-soft);
+  font-size: 14.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mk-row-main span {
+  display: block;
+  font-size: 12.5px;
+  color: var(--mk-on-deep-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mk-row-crew {
+  display: none;
+  font-size: 12.5px;
+  color: var(--mk-on-deep-soft);
+  white-space: nowrap;
 }
 
-/* --------------------------------------------------------- three-up --- */
-.mk-grid {
+/* Status carries a word as well as a colour, and the live one carries a dot
+   too — three signals, so none of them has to work alone. */
+.mk-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  padding: 5px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.mk-chip-live { background: rgba(111, 227, 166, 0.15); color: var(--mk-good); }
+.mk-chip-soon { background: rgba(245, 197, 119, 0.15); color: var(--mk-warn); }
+.mk-chip-next { background: rgba(255, 255, 255, 0.08); color: var(--mk-on-chip); }
+.mk-pulse {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+
+.mk-board-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px var(--mk-s3);
+  padding: var(--mk-s2) var(--mk-s3);
+  border-top: 1px solid var(--mk-on-deep-line);
+  background: rgba(0, 0, 0, 0.18);
+  font-size: 12.5px;
+  color: var(--mk-on-deep-soft);
+}
+.mk-board-foot b {
+  color: var(--mk-on-deep);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------- one job, end to end --- */
+.mk-rail { list-style: none; margin: 0; padding: 0; position: relative; }
+/* The rail runs between the first and last node rather than the full height,
+   so it does not dangle past either end of the sequence. */
+.mk-rail::before {
+  content: "";
+  position: absolute;
+  left: 21px;
+  top: 22px;
+  bottom: 22px;
+  width: 2px;
+  background: linear-gradient(
+    to bottom,
+    var(--mk-line),
+    var(--mk-teal-mist) 12%,
+    var(--mk-teal-mist) 88%,
+    var(--mk-line)
+  );
+}
+.mk-stage {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: var(--mk-s3);
+  padding-bottom: var(--mk-s4);
+  position: relative;
+}
+.mk-stage:last-child { padding-bottom: 0; }
+.mk-stage-node {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  background: var(--mk-white);
+  border: 1px solid var(--mk-line);
+  color: var(--mk-teal-ink);
+  position: relative;
+  z-index: 1;
+}
+.mk-stage-body { padding-top: 3px; }
+.mk-stage-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--mk-teal-ink);
+}
+.mk-stage-num {
+  font-variant-numeric: tabular-nums;
+  color: var(--mk-ink-soft);
+  opacity: 0.55;
+}
+.mk-stage-body p { margin: 0; color: var(--mk-ink-soft); font-size: 15.5px; max-width: 56ch; }
+
+.mk-also { margin-top: var(--mk-s5); border-top: 1px solid var(--mk-line); padding-top: var(--mk-s4); }
+.mk-also-label {
+  margin: 0 0 var(--mk-s3);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--mk-ink-soft);
+}
+.mk-also-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
   display: grid;
   gap: var(--mk-s3);
   grid-template-columns: 1fr;
 }
-.mk-card {
-  background: var(--mk-white);
-  border: 1px solid var(--mk-line);
-  border-radius: var(--mk-radius);
-  padding: var(--mk-s3);
-  height: 100%;
-}
-.mk-card-icon {
-  width: 38px;
-  height: 38px;
+.mk-also-grid li { display: grid; gap: 4px; }
+.mk-also-icon {
+  width: 34px;
+  height: 34px;
   display: grid;
   place-items: center;
   border-radius: 9px;
   background: rgba(0, 140, 156, 0.1);
   color: var(--mk-teal-ink);
-  margin-bottom: 14px;
+  margin-bottom: 6px;
 }
-.mk-card p { margin: 0; color: var(--mk-ink-soft); font-size: 15px; }
+.mk-also-grid strong { font-size: 15.5px; font-weight: 600; letter-spacing: -0.01em; }
+.mk-also-grid li > span:last-child { font-size: 14.5px; color: var(--mk-ink-soft); }
+
+/* -------------------------------------------------------------- doors --- */
+.mk-doors { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--mk-s3); }
+.mk-door {
+  display: flex;
+  flex-direction: column;
+  background: var(--mk-white);
+  border: 1px solid var(--mk-line);
+  border-radius: 18px;
+  padding: var(--mk-s3);
+  transition: border-color 200ms var(--mk-ease), box-shadow 200ms var(--mk-ease),
+    transform 200ms var(--mk-ease);
+}
+.mk-door:hover {
+  border-color: var(--mk-teal-mist);
+  box-shadow: 0 18px 40px -28px rgba(6, 42, 47, 0.4);
+  transform: translateY(-2px);
+}
+.mk-door-icon {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  background: rgba(0, 140, 156, 0.1);
+  color: var(--mk-teal-ink);
+  margin-bottom: var(--mk-s2);
+}
+.mk-door-path {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  margin: 0 0 12px;
+  font-family: var(--mk-mono);
+  font-size: 12.5px;
+  line-height: 1.5;
+  word-break: break-word;
+}
+.mk-door-path span { color: var(--mk-ink-soft); opacity: 0.75; }
+.mk-door-path b { color: var(--mk-teal-ink); font-weight: 600; }
+.mk-door-body { margin: 0 0 var(--mk-s3); font-size: 15px; color: var(--mk-ink-soft); }
+.mk-door .mk-checks { margin-top: auto; padding-top: var(--mk-s2); border-top: 1px solid var(--mk-line); }
 
 /* --------------------------------------------------------------- list --- */
-.mk-checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 11px; }
+.mk-checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .mk-checks li {
   display: flex;
-  gap: 11px;
+  gap: 10px;
   align-items: flex-start;
-  font-size: 15px;
+  font-size: 14.5px;
   color: var(--mk-ink-soft);
 }
-.mk-checks svg { color: var(--mk-teal-ink); flex: none; margin-top: 3px; }
+.mk-checks svg { color: var(--mk-teal-ink); flex: none; margin-top: 4px; }
 
 /* ------------------------------------------------------------ pricing --- */
+.mk-plans { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--mk-s3); align-items: stretch; }
 .mk-plan {
   display: flex;
   flex-direction: column;
   background: var(--mk-white);
   border: 1px solid var(--mk-line);
-  border-radius: var(--mk-radius);
+  border-radius: 18px;
   padding: var(--mk-s3);
-  height: 100%;
 }
 /* The recommended plan is marked with a border AND a label — never colour
    alone, which says nothing to anyone who cannot see it. */
-.mk-plan-featured { border-color: var(--mk-teal); box-shadow: 0 0 0 1px var(--mk-teal); }
+.mk-plan-featured {
+  border-color: var(--mk-teal);
+  box-shadow: 0 0 0 1px var(--mk-teal), 0 24px 50px -32px rgba(6, 42, 47, 0.45);
+}
+.mk-plan-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: var(--mk-s2);
+  min-height: 26px;
+}
+.mk-plan-name {
+  font-family: var(--mk-display);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  margin: 0;
+}
 .mk-plan-tag {
-  display: inline-block;
-  align-self: flex-start;
   font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -319,51 +572,107 @@
   background: var(--mk-teal-ink);
   border-radius: 999px;
   padding: 4px 10px;
-  margin-bottom: 12px;
+  white-space: nowrap;
 }
-.mk-plan-name { font-size: 15px; font-weight: 700; margin: 0 0 6px; }
 .mk-price {
   display: flex;
   align-items: baseline;
-  gap: 6px;
-  margin-bottom: 4px;
+  gap: 7px;
+  margin: 0 0 4px;
+  min-height: 50px;
   /* Prices line up column to column rather than drifting by digit width. */
   font-variant-numeric: tabular-nums;
 }
-.mk-price b { font-size: 40px; font-weight: 700; letter-spacing: -0.03em; line-height: 1.1; }
+.mk-price b {
+  font-family: var(--mk-display);
+  font-size: 44px;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1.08;
+}
+.mk-price-quote { font-size: 30px !important; letter-spacing: -0.03em !important; }
 .mk-price span { font-size: 14px; color: var(--mk-ink-soft); }
 .mk-plan-cap { font-size: 13.5px; color: var(--mk-ink-soft); margin: 0 0 var(--mk-s3); }
 .mk-plan .mk-checks { margin-bottom: var(--mk-s3); }
 .mk-plan .mk-btn { margin-top: auto; width: 100%; }
-
-/* -------------------------------------------------------------- steps --- */
-.mk-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--mk-s3); counter-reset: mk; }
-.mk-step { display: flex; gap: 16px; align-items: flex-start; counter-increment: mk; }
-.mk-step::before {
-  content: counter(mk);
-  flex: none;
-  width: 34px;
-  height: 34px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  background: var(--mk-teal-ink);
-  color: #fff;
-  font-size: 14px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
+.mk-plan-note {
+  margin: 12px 0 0;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--mk-ink-soft);
 }
-.mk-step p { margin: 0; color: var(--mk-ink-soft); font-size: 15px; }
+.mk-plans-foot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  margin: var(--mk-s4) 0 0;
+  font-size: 14px;
+  color: var(--mk-ink-soft);
+  text-align: center;
+}
+.mk-plans-foot svg { color: var(--mk-teal-ink); flex: none; }
+
+/* ---------------------------------------------------------------- faq --- */
+.mk-faq { display: grid; gap: 0; }
+.mk-q { border-bottom: 1px solid var(--mk-line); }
+.mk-q:first-child { border-top: 1px solid var(--mk-line); }
+.mk-q summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mk-s2);
+  /* 44px minimum even at the smallest text size. */
+  min-height: 60px;
+  padding-block: 14px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 16.5px;
+  font-weight: 600;
+  letter-spacing: -0.012em;
+  color: var(--mk-ink);
+  transition: color 180ms var(--mk-ease);
+}
+.mk-q summary::-webkit-details-marker { display: none; }
+.mk-q summary:hover { color: var(--mk-teal-ink); }
+/* A plus that becomes a minus — the state is in the shape, not only the fold. */
+.mk-q-mark {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  color: var(--mk-teal-ink);
+}
+.mk-q-mark::before,
+.mk-q-mark::after {
+  content: "";
+  position: absolute;
+  inset: 50% 0 auto;
+  height: 2px;
+  border-radius: 1px;
+  background: currentColor;
+  transform: translateY(-50%);
+  transition: transform 200ms var(--mk-ease), opacity 200ms var(--mk-ease);
+}
+.mk-q-mark::after { transform: translateY(-50%) rotate(90deg); }
+.mk-q[open] .mk-q-mark::after { transform: translateY(-50%) rotate(0deg); opacity: 0; }
+.mk-q > p {
+  margin: 0;
+  padding: 0 var(--mk-s4) var(--mk-s3) 0;
+  font-size: 15.5px;
+  color: var(--mk-ink-soft);
+  max-width: 62ch;
+}
 
 /* ---------------------------------------------------------------- cta --- */
 .mk-cta { background: var(--mk-teal-deep); color: #fff; text-align: center; }
 .mk-cta .mk-h2 { color: #fff; }
 .mk-cta .mk-lead { color: rgba(255, 255, 255, 0.82); margin-inline: auto; }
-.mk-cta .mk-eyebrow { color: #7fcdd4; }
-.mk-cta .mk-dot { background: #7fcdd4; }
+.mk-cta .mk-eyebrow { color: var(--mk-teal-glow); }
+.mk-cta .mk-dot { background: var(--mk-teal-glow); }
 .mk-cta-row { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin-top: var(--mk-s4); }
 .mk-cta .mk-btn-primary { background: #fff; color: var(--mk-teal-deep); }
-.mk-cta .mk-btn-primary:hover { background: #d7eef1; }
+.mk-cta .mk-btn-primary:hover { background: var(--mk-teal-mist); }
 .mk-cta .mk-btn-ghost {
   background: transparent;
   color: #fff;
@@ -383,26 +692,130 @@
   font-size: 14px;
   color: var(--mk-ink-soft);
 }
-.mk-foot a { color: var(--mk-ink-soft); text-decoration: none; }
+.mk-foot-brand { display: inline-flex; align-items: center; gap: 9px; }
+.mk-foot a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--mk-ink-soft);
+  text-decoration: none;
+}
 .mk-foot a:hover { color: var(--mk-teal-ink); text-decoration: underline; }
-.mk-foot-links { display: flex; flex-wrap: wrap; gap: var(--mk-s3); }
+.mk-foot-links { display: flex; flex-wrap: wrap; align-items: center; gap: 0 var(--mk-s3); }
 
 /* -------------------------------------------------------- breakpoints --- */
+@media (max-width: 559px) {
+  .mk-row { grid-template-columns: 40px minmax(0, 1fr) auto; gap: 10px; padding: 12px 10px; }
+  .mk-row-time { font-size: 12px; }
+  .mk-chip { font-size: 11px; padding: 5px 8px; }
+  .mk-stage { grid-template-columns: 40px minmax(0, 1fr); gap: var(--mk-s2); }
+  .mk-stage-node { width: 40px; height: 40px; border-radius: 12px; }
+  .mk-rail::before { left: 19px; top: 20px; bottom: 20px; }
+}
+@media (min-width: 560px) {
+  .mk-also-grid { grid-template-columns: repeat(3, 1fr); }
+  .mk-row { grid-template-columns: 48px minmax(0, 1fr) auto auto; }
+  .mk-row-crew { display: block; }
+}
+/* Between a phone and a laptop the cards would otherwise stretch the full
+   width of a tablet — a 520px column keeps them the shape they were drawn as,
+   and the wider gutter is the room a bigger screen is supposed to give back. */
+@media (max-width: 899px) {
+  .mk-doors,
+  .mk-plans { max-width: 520px; margin-inline: auto; }
+}
 @media (min-width: 768px) {
-  .mk-grid { grid-template-columns: repeat(3, 1fr); }
-  .mk-steps { grid-template-columns: repeat(3, 1fr); }
+  .mk-wrap { padding-inline: var(--mk-s4); }
+}
+@media (min-width: 900px) {
+  .mk-doors { grid-template-columns: repeat(3, 1fr); }
+  .mk-plans { grid-template-columns: repeat(3, 1fr); }
+  .mk-faq-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+    gap: clamp(var(--mk-s4), 5vw, 80px);
+    align-items: start;
+  }
+  .mk-faq-head { margin-bottom: 0; }
 }
 @media (min-width: 1024px) {
-  .mk-hero-grid { grid-template-columns: 1.05fr 0.95fr; }
+  .mk-nav-links { display: flex; }
+  .mk-hero-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1.08fr); }
+  .mk-how-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
+    column-gap: clamp(var(--mk-s4), 5vw, 80px);
+    align-items: start;
+  }
+  /* The heading holds still while the sequence moves past it — the section is
+     one argument, not six unrelated cards. */
+  .mk-how-head { position: sticky; top: 104px; margin-bottom: 0; }
+  .mk-also { grid-column: 1 / -1; }
 }
 @media (max-width: 520px) {
   .mk-nav-actions .mk-hide-xs { display: none; }
   .mk-hero-cta .mk-btn { width: 100%; }
+  .mk-board-head { flex-wrap: wrap; }
+}
+
+/* ------------------------------------------------------------- motion --- */
+/* The start state is plain CSS in the server-rendered stylesheet, so it is
+   never applied by a script mutating the document — that is what used to
+   mismatch on hydration. `.is-in` (three classes) outranks it (two), and the
+   three ways it could strand a visitor are each answered below without any
+   JavaScript at all. */
+.mk [data-reveal] {
+  opacity: 0;
+  transform: translateY(16px);
+}
+.mk [data-reveal].is-in {
+  opacity: 1;
+  transform: none;
+  transition: opacity 620ms var(--mk-ease), transform 620ms var(--mk-ease);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes mk-rise {
+    from { opacity: 0; transform: translateY(14px); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes mk-board-in {
+    from { opacity: 0; transform: translateY(20px) scale(0.985); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes mk-breathe {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.45; transform: scale(0.8); }
+  }
+
+  .mk-hero-copy > * { animation: mk-rise 600ms var(--mk-ease) backwards; }
+  .mk-hero-copy > *:nth-child(1) { animation-delay: 40ms; }
+  .mk-hero-copy > *:nth-child(2) { animation-delay: 100ms; }
+  .mk-hero-copy > *:nth-child(3) { animation-delay: 160ms; }
+  .mk-hero-copy > *:nth-child(4) { animation-delay: 220ms; }
+  .mk-hero-copy > *:nth-child(5) { animation-delay: 280ms; }
+
+  .mk-board { animation: mk-board-in 700ms var(--mk-ease) 160ms backwards; }
+  .mk-row {
+    animation: mk-rise 480ms var(--mk-ease) backwards;
+    animation-delay: calc(400ms + var(--i) * 70ms);
+  }
+  /* One live signal, because one job really is running right now. */
+  .mk-pulse { animation: mk-breathe 2.4s ease-in-out 1.6s infinite; }
+}
+
+/* Paper never scrolls, so a reveal that waits for a scroll prints six blank
+   sections. */
+@media print {
+  .mk [data-reveal] { opacity: 1 !important; transform: none !important; }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  /* Not "reveal it instantly" — never hide it in the first place. */
+  .mk [data-reveal] { opacity: 1 !important; transform: none !important; }
   .mk *, .mk *::before, .mk *::after {
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
   }
 }
