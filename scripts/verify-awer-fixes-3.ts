@@ -1532,8 +1532,8 @@ section(10, "Add-on icons and customer pop-ups (PDF #17)", () => {
     "src/app/(book)/book/steps/BookingPhotoUpload.tsx", "uploadBookingPhoto");
   has("...and attached to the job the booking creates",
     "src/app/(book)/actions/submitBooking.ts", "photos: {");
-  has("...only for URLs that came from our own upload folder",
-    "src/app/(book)/actions/submitBooking.ts", "isBookingPhotoUrl(u, cloudName)");
+  has("...only for URLs that came from THIS company's upload folder",
+    "src/app/(book)/actions/submitBooking.ts", "isBookingPhotoUrl(u, cloudName, bookingFolder)");
   has("the nullable uploader is what made that possible",
     "prisma/schema.prisma", "employeeId String?");
 });
@@ -2788,8 +2788,8 @@ section(19, "Void cheque upload in cleaner Documents (PDF #16)", () => {
 
   // 19.b — upload is private, self-scoped, and validated by the shared rule.
   has("the upload is authenticated, not public", UPLOAD, 'type: "authenticated"');
-  has("...into a per-employee folder", UPLOAD,
-    "const folder = `cleano/void-cheques/${employeeId}`;");
+  has("...into a folder that is this company's and this employee's", UPLOAD,
+    'const folder = await orgAssetFolder("void-cheques", employeeId);');
   has("...with the employee id taken from the session", UPLOAD,
     "const employeeId = session.user.id;");
   // No parameter an attacker could aim at someone else.

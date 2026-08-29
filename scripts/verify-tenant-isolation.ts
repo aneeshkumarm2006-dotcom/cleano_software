@@ -115,9 +115,17 @@ async function expectRefused(name: string, fn: () => Promise<unknown>) {
       create: { clientName: "x", startTime: new Date(), jobNumber: 999999 },
     }));
 
+  // The marker has to be unique to THIS run. It used to be the constant
+  // "bulk-a", which cannot tell a write made just now from one made by an
+  // earlier run — and that is not hypothetical: on staging, teamcleano-demo
+  // was company A once, kept all 40 of its jobs tagged "bulk-a", and then
+  // reported a cross-tenant write leak every time it ran afterwards as
+  // company B. A false alarm on the one assertion nobody can afford to
+  // ignore is worse than no assertion at all.
+  const bulkTag = `bulk-a-${Date.now().toString(36)}`;
   const bBefore = await db.job.count({ where: { organizationId: B.id } });
-  await dbA.job.updateMany({ data: { notes: "bulk-a" } });
-  const touchedB = await db.job.count({ where: { organizationId: B.id, notes: "bulk-a" } });
+  await dbA.job.updateMany({ data: { notes: bulkTag } });
+  const touchedB = await db.job.count({ where: { organizationId: B.id, notes: bulkTag } });
   touchedB === 0 ? ok("updateMany did not touch B") : bad("updateMany", `hit ${touchedB} of B's rows`);
 
   console.log("\nCREATE STAMPING");
