@@ -14,7 +14,7 @@ import { headers } from "next/headers";
 import { db } from "@/db";
 import { scopedTo, type ScopedDb } from "@/lib/db-scoped";
 import { orgFromContext, type OrgContext } from "@/lib/org-context";
-import { DEFAULT_ORG_SLUG, ORG_SLUG_HEADER, orgSlugFromHost } from "@/lib/tenant";
+import { DEFAULT_ORG_SLUG, orgSlugFromHost } from "@/lib/tenant";
 
 /**
  * Slug for this request. Falls back to the default outside a request context
@@ -31,12 +31,21 @@ export const getOrgSlug = cache(async (): Promise<string> => {
   try {
     const h = await headers();
 
-    // Normally set by proxy.ts. But the proxy matcher deliberately skips
-    // /api/*, so route handlers -- Stripe webhooks, cron, better-auth -- never
-    // see it. Falling back to the host means tenant resolution is a property of
-    // the request itself rather than of the matcher, and stays correct if the
-    // matcher is ever narrowed again.
-    return h.get(ORG_SLUG_HEADER) ?? orgSlugFromHost(h.get("host"));
+    // The host is the ONLY authority, and the inbound x-awer-org header is
+    // deliberately not consulted.
+    //
+    // proxy.ts stamps that header, but its matcher skips /api/* and every path
+    // containing a dot, so on exactly those requests nothing overwrites what
+    // the caller sent. Preferring the header there let an unauthenticated
+    // client pick its own tenant with one line of curl -- and since this
+    // function feeds requireOrgId(), the scoped client AND the row-level
+    // security announcement, both isolation layers moved to the attacker's
+    // choice together.
+    //
+    // Nothing is lost by ignoring it: proxy.ts derives the value it stamps
+    // from this same host (proxy.ts:98), so on proxied paths the two always
+    // agreed anyway.
+    return orgSlugFromHost(h.get("host"));
   } catch {
     // No request context at all: scripts and build-time prerendering.
     return DEFAULT_ORG_SLUG;

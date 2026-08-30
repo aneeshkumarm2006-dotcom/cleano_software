@@ -3,7 +3,6 @@ import { headers } from "next/headers";
 import { orgFromContext } from "@/lib/org-context";
 import {
   DEFAULT_ORG_SLUG,
-  ORG_SLUG_HEADER,
   orgSlugFromHost,
   originForSlug,
 } from "@/lib/tenant";
@@ -78,7 +77,11 @@ export async function currentAppUrl(): Promise<string> {
 
   try {
     const h = await headers();
-    const slug = h.get(ORG_SLUG_HEADER) ?? orgSlugFromHost(h.get("host"));
+    // Host only — never the inbound x-awer-org header. See the note in
+    // src/lib/org.ts: the proxy does not cover /api/* or dotted paths, so a
+    // caller can supply that header itself. Here it would aim the links inside
+    // an email at a workspace of the sender's choosing.
+    const slug = orgSlugFromHost(h.get("host"));
     if (slug) return originForSlug(slug);
   } catch {
     // No request context at all — a script, or build-time prerendering.

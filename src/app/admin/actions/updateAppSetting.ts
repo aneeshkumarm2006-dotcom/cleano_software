@@ -76,7 +76,7 @@ export async function updateAppSetting(params: UpdateAppSettingParams) {
     // Legacy / unregistered settings: existing passthrough behavior.
     await writeAppSetting(key, category, value as never);
 
-    invalidateSetting(key); // no-op if not cached; keeps spine reads fresh
+    await invalidateSetting(key); // keyed per organization; keeps spine reads fresh
     revalidatePath("/admin/settings");
     return { success: true };
   } catch (error) {

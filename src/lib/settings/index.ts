@@ -14,6 +14,7 @@
 import { db } from "@/lib/org-db";
 import { logActivity } from "@/lib/activity-log";
 import { writeAppSetting } from "@/lib/app-setting-write";
+import { requireOrgId } from "@/lib/org";
 import {
   findSettingDef,
   getSettingDef,
@@ -28,7 +29,37 @@ interface CacheEntry {
 
 /** Short TTL bounds cross-instance staleness; writes invalidate explicitly. */
 const TTL_MS = 30_000;
+
+/**
+ * Cached values, keyed by `<organizationId>:<settingKey>`.
+ *
+ * The organization MUST be part of the key. This map lives for the life of the
+ * process and is shared by every request that instance handles, while the read
+ * below is org-scoped — so a bare setting key hands the first company's answer
+ * to every other company for the length of the TTL. That is not only a leak of
+ * business name, fees and gift-card tiers: `booking.standardDepositUsd` is what
+ * `submitBooking` checks to decide whether a public booking needs a payment at
+ * all, so one workspace setting its deposit to zero would let strangers book
+ * another workspace for free.
+ */
 const cache = new Map<string, CacheEntry>();
+
+const ck = (orgId: string, key: string) => `${orgId}:${key}`;
+
+/**
+ * The organization to attribute a cached read to, or null when there is none.
+ *
+ * Null means "do not touch the cache at all" rather than "share one". Callers
+ * are unaffected: the scoped query below would fail without a tenant anyway,
+ * and the existing catch already degrades that to the registry default.
+ */
+async function cacheOrg(): Promise<string | null> {
+  try {
+    return await requireOrgId();
+  } catch {
+    return null;
+  }
+}
 
 /* --------------------------------- reads --------------------------------- */
 
@@ -36,9 +67,12 @@ const cache = new Map<string, CacheEntry>();
 export async function getSetting<K extends SettingKey>(
   key: K
 ): Promise<SettingValue<K>> {
-  const cached = cache.get(key);
-  if (cached && cached.expires > Date.now()) {
-    return cached.value as SettingValue<K>;
+  const orgId = await cacheOrg();
+  if (orgId) {
+    const cached = cache.get(ck(orgId, key));
+    if (cached && cached.expires > Date.now()) {
+      return cached.value as SettingValue<K>;
+    }
   }
   const def = getSettingDef(key);
   let value: SettingValue<K> = def.default;
@@ -55,7 +89,7 @@ export async function getSetting<K extends SettingKey>(
   } catch (e) {
     console.error(`[settings] read failed for "${key}"; using default`, e);
   }
-  cache.set(key, { value, expires: Date.now() + TTL_MS });
+  if (orgId) cache.set(ck(orgId, key), { value, expires: Date.now() + TTL_MS });
   return value;
 }
 
@@ -63,10 +97,19 @@ export async function getSetting<K extends SettingKey>(
 export async function getSettings<K extends SettingKey>(
   keys: readonly K[]
 ): Promise<{ [P in K]: SettingValue<P> }> {
-  const missing = keys.filter((k) => {
-    const c = cache.get(k);
-    return !(c && c.expires > Date.now());
-  });
+  const orgId = await cacheOrg();
+  const missing = orgId
+    ? keys.filter((k) => {
+        const c = cache.get(ck(orgId, k));
+        return !(c && c.expires > Date.now());
+      })
+    : // No tenant to attribute a cached value to: read everything fresh and
+      // store nothing, rather than borrowing another organization's entry.
+      [...keys];
+
+  // Values read in this call. Held locally as well as cached, so the merge
+  // below still has them when there is no organization to cache them under.
+  const fetched = new Map<K, unknown>();
 
   if (missing.length > 0) {
     try {
@@ -86,7 +129,8 @@ export async function getSettings<K extends SettingKey>(
               `[settings] stored "${key}" failed validation (${parsed.error}); using default`
             );
         }
-        cache.set(key, { value, expires: Date.now() + TTL_MS });
+        fetched.set(key, value);
+        if (orgId) cache.set(ck(orgId, key), { value, expires: Date.now() + TTL_MS });
       }
     } catch (e) {
       console.error("[settings] batch read failed; using defaults", e);
@@ -95,7 +139,11 @@ export async function getSettings<K extends SettingKey>(
 
   const out = {} as Record<K, unknown>;
   for (const key of keys) {
-    const cached = cache.get(key);
+    if (fetched.has(key)) {
+      out[key] = fetched.get(key);
+      continue;
+    }
+    const cached = orgId ? cache.get(ck(orgId, key)) : undefined;
     out[key] = cached ? cached.value : getSettingDef(key).default;
   }
   return out as { [P in K]: SettingValue<P> };
@@ -136,7 +184,7 @@ export async function writeSetting(
 
   await writeAppSetting(key, def.category, parsed.value as never);
 
-  invalidateSetting(key);
+  await invalidateSetting(key);
 
   if (def.audit || def.sensitive) {
     await logActivity({
@@ -161,10 +209,19 @@ export async function writeSetting(
 
 /* ------------------------------ cache control ----------------------------- */
 
-export function invalidateSetting(key: string): void {
-  cache.delete(key);
+/**
+ * Drop one setting for the CURRENT organization.
+ *
+ * Async because it has to know which organization is writing. Busting the bare
+ * key would leave this company reading a stale value while clearing everyone
+ * else's — the invalidation has to be keyed the same way the read is.
+ */
+export async function invalidateSetting(key: string): Promise<void> {
+  const orgId = await cacheOrg();
+  if (orgId) cache.delete(ck(orgId, key));
 }
 
+/** Drop everything, for every organization. Broader than needed, never wrong. */
 export function invalidateAllSettings(): void {
   cache.clear();
 }

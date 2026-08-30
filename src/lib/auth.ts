@@ -78,6 +78,49 @@ export const auth = betterAuth({
     expiresIn: 60 * 60 * 24 * 30,
     updateAge: 60 * 60 * 24,
   },
+  /**
+   * Public sign-up may only ever mint a CUSTOMER.
+   *
+   * This hook fires only for accounts created through better-auth's own
+   * /api/auth/sign-up/email endpoint. Every staff account is created with
+   * Prisma directly — provisionOrganization (OWNER), createEmployee,
+   * hireApplicant, sendLoginInvites, inviteApplicantToPortal, importCsv,
+   * runBookingKoalaImport — so none of them pass through here and none of
+   * them change.
+   *
+   * That endpoint is public on every workspace subdomain, and the row it
+   * creates is stamped with that host's organizationId, so signing up JOINS an
+   * existing company rather than creating one. `role` defaults to EMPLOYEE in
+   * the schema, and EMPLOYEE is a STAFF role: it opens the cleaner app, with
+   * that company's job list, client names, full street addresses and prices.
+   * So a stranger could curl themselves a cleaner's account inside any
+   * customer's workspace — or inside Awer's own platform workspace, which is
+   * the one precondition setStaffRole checks before granting a platformRole.
+   *
+   * CLIENT is the customer portal: it shows the holder their own record and
+   * nothing else, which is what a stranger signing up should get. The one
+   * legitimate caller, the /setup portal flow, already promotes to CLIENT
+   * immediately afterwards via linkClientAccount — this just makes the account
+   * correct from the moment it exists rather than one round-trip later.
+   */
+  user: {
+    additionalFields: {
+      // Declared so better-auth stops dropping it. Without this the adapter
+      // strips any field it does not know, the INSERT omits the column, and
+      // Prisma's `@default(EMPLOYEE)` fills it in — which is the whole bug.
+      //
+      // `input: false` is the other half: it stops a caller from simply
+      // putting `"role": "OWNER"` in the sign-up JSON body.
+      role: { type: "string", defaultValue: "CLIENT", input: false },
+    },
+  },
+  databaseHooks: {
+    user: {
+      create: {
+        before: async (user) => ({ data: { ...user, role: "CLIENT" } }),
+      },
+    },
+  },
   emailAndPassword: {
     enabled: true,
     sendResetPassword: async ({ user, url }) => {
@@ -120,15 +163,37 @@ export const auth = betterAuth({
   plugins: [customSession(async (session) => {
       if (session.user) {
         // Only fetch the role — full user record was an expensive overshoot.
+        //
+        // This read goes through the ORG-SCOPED client, so it misses whenever
+        // the session belongs to someone who is not a member of the workspace
+        // this host resolved to. That miss is the ONLY signal we get: session
+        // validation itself is not tenant-bound, because Session is a
+        // better-auth internal and is deliberately absent from TENANT_MODELS.
+        //
+        // So a miss must mean no session. It used to mean `role: 'EMPLOYEE'`,
+        // which handed anyone holding any valid session — a cleaner at another
+        // company, or a stranger who signed up for a free trial — a working
+        // cleaner's role in every other workspace, since every guard downstream
+        // checks the role and never the membership.
         const userProfile = await db.user.findUnique({
           where: { id: session.user.id },
           select: { role: true },
         });
+        //
+        // Returning null really does mean "no session" here. The plugin's
+        // endpoint ends in `return ctx.json(fnResult)`, and uses `ctx.json(null)`
+        // itself for the unauthenticated case a few lines above. The cast only
+        // satisfies a callback type that is narrower than the runtime; if a
+        // future version ever stopped honouring it, the fallback would be a
+        // session carrying no role at all, and every isXRole() guard still
+        // refuses that.
+        if (!userProfile) return null as unknown as typeof session;
+
         return {
           ...session,
           user: {
             ...session.user,
-            role: userProfile?.role ?? 'EMPLOYEE',
+            role: userProfile.role,
           },
         };
       }
