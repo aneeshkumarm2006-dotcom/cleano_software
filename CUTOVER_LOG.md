@@ -215,6 +215,67 @@ src/lib/org-url.ts
 
 ---
 
+## 2026-08-30 — full production backup taken and verified ✅
+
+PITR was **not** bought. The 7-day tier is $100/month (prorated hourly, so a
+3-day window would have been ~$10), but it also requires upgrading the project to
+a Small compute size, and changing compute size restarts the database. Decision:
+take a verified dump instead.
+
+```
+/Users/premsaikilaru/awer-prod-backup-20260830-073003.dump
+2.3 MB compressed · 11.8 MB of data · 137 TABLE DATA entries
+```
+
+**Contains real customer data** — 972 clients with names, addresses and phone
+numbers. It lives in the home folder, deliberately NOT in the repo.
+
+### Verified, not assumed
+
+Every one of the **83 public tables holding rows** is present in the dump. The four
+that looked missing are Supabase's own bookkeeping in other schemas
+(`auth.schema_migrations`, `realtime.schema_migrations`, `storage.migrations`,
+`supabase_migrations.schema_migrations`) — not app data, and Supabase recreates them.
+
+Rows were then extracted from the dump file and counted against live:
+
+| table | in dump | live |
+|---|---|---|
+| Client | 972 | 972 |
+| Job | 300 | 300 |
+| User | 234 | 234 |
+| Invoice | 23 | 23 |
+| EmailLog | 7883 | 7883 |
+| JobPhoto | 586 | 586 |
+| Contact | 725 | 725 |
+| Alert | 2008 | 2008 |
+| ActivityLog | 26310 | 26312 |
+
+`ActivityLog` differing by two is correct, and was chased down rather than waved
+away: the dump was taken at 02:00:03 UTC, and the `notifications` cron wrote rows
+at 02:01:18 and 02:05:20 — after the snapshot. Exactly two.
+
+**Restore-verification numbers** — if this backup is ever restored, these are what
+to check: `Client=972 Job=300 User=234 Invoice=23`.
+
+### What this changes
+
+An earlier note in this log called PITR "the only item that cannot be fixed
+afterwards". With a verified dump that is **no longer true** — the restore point
+exists. Take a **fresh dump immediately before `migrate deploy`** as step zero of
+the window; on a 43 MB database it takes seconds and covers the real risk.
+
+What a dump still does not give you is recovery from a problem noticed days later
+without losing everything since. That is a judgement call now, not a blocker.
+
+### Incidental finding, relevant to the window
+
+The `notifications` cron writes to the database **every ~5 minutes**. The window has
+a 2-5 minute gap where writes fail, so a cron run landing inside it is likely, not
+theoretical. Pausing the crons is not optional.
+
+---
+
 ## Still to do before cutover
 
 ### Code (mine)
@@ -229,7 +290,9 @@ src/lib/org-url.ts
       your call. Written up at the end of `SECURITY.md`.
 
 ### Yours
-- [ ] **Buy Supabase PITR.** Still the only item that cannot be fixed afterwards.
+- [x] ~~Buy Supabase PITR~~ — declined (needs a Small-compute upgrade + restart).
+      Replaced by a verified pg_dump; see the 2026-08-30 backup entry above.
+- [ ] **Take a FRESH dump immediately before `migrate deploy`** — step zero of the window.
 - [ ] **Generate `SECRETS_KEY`** — `openssl rand -hex 32`, kept somewhere durable.
       Lose it and every stored Stripe credential becomes unreadable.
 - [ ] **Add the DMARC TXT** in Vercel DNS (above).
