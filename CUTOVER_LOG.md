@@ -314,3 +314,104 @@ order is not obvious and matters: the role is created **before** the migrations
 (two of them REVOKE from it), the grants **after** them (migration-created tables
 have none), and the deploy must be **built and waiting** so the gap where writes
 fail is a promote and not a build.
+
+---
+
+## 2026-08-30 — nobody could sign in on a workspace address ✅ FIXED
+
+Reported from the team as *"it says invalid origin"* while the sign-in page
+itself loaded normally.
+
+### What was happening
+
+A POST to `/api/auth/sign-in/email` on `teamcleano.useawer.com` was answered:
+
+```
+HTTP 403  {"code":"INVALID_ORIGIN","message":"Invalid origin"}
+```
+
+better-auth refuses any state-changing request whose `Origin` header is not on
+its trusted list. That list defaults to exactly one entry — the `baseURL` — and
+`baseURL` in production resolves to `https://www.useawer.com`. Probed against
+production, three requests told the whole story:
+
+| POST to | with Origin | result |
+|---|---|---|
+| `www.useawer.com` | `https://www.useawer.com` | 401 — origin accepted |
+| `www.useawer.com` | `https://teamcleano.useawer.com` | **403 Invalid origin** |
+| `teamcleano.useawer.com` | `https://www.useawer.com` | 401 — origin accepted |
+
+One host was trusted everywhere, and it was not any workspace's host. Every
+cleaner, admin and customer signing in at their own address was refused.
+
+### Why the page still loaded, and why our testing missed it
+
+Two reasons, both worth remembering:
+
+1. The check **skips GET entirely**. The sign-in page is a GET, so it rendered
+   perfectly. Only the POST behind the button was refused. "I can see it" and
+   "I can use it" were different questions.
+2. The check only runs **when the request carries a cookie**
+   (`if (useCookies && !skipCSRFCheck)`). Every verification we ran was curl
+   with no cookie jar, so every one of them sailed past the check that a real
+   browser hits. The same POST passes or fails depending on whether a cookie
+   is attached.
+
+That second point is the lesson: a curl that does not carry a cookie is not a
+test of a login.
+
+### The second bug behind the same cause
+
+`baseURL` is also what better-auth builds emailed links from —
+`` `${ctx.baseURL}/reset-password/${token}` `` — so every password reset and
+every "set your password" staff invite pointed at `www`. Confirmed live:
+
+```
+GET https://teamcleano.useawer.com/api/auth/reset-password/<token>?callbackURL=%2Freset-password
+→ 302 location: https://www.useawer.com/reset-password?error=INVALID_TOKEN
+```
+
+A TeamCleano cleaner following their invite landed on the platform front door,
+where `db` is scoped to the platform organization and their user row is not
+visible. `sendLoginInvites` is how staff get their first password, so this was
+the other half of "the team cannot log in".
+
+### The fix — `src/lib/auth.ts`, two changes
+
+1. **`trustedOrigins` is now derived per request**: the host the request
+   actually arrived on, and only that one. This is not a loosening. The `Origin`
+   header is set by the browser and cannot be forged by a page on another site,
+   so a form on `evil.com` still sends `Origin: https://evil.com` and is still
+   refused — and so is one workspace posting at another's, which a wildcard
+   like `*.useawer.com` would have allowed.
+2. **`onRequestHost()` moves emailed links onto the request's host**, and makes
+   the `callbackURL` travelling inside them absolute at the same time. The
+   second half matters: better-auth resolves a *relative* callbackURL against
+   the same stale `baseURL`, which is how a link opened on the right host still
+   redirected to the wrong one.
+
+Deliberately **not** fixed by setting `BETTER_AUTH_URL`: one variable can only
+ever name one host, which is the bug, not the cure. The fix works whether or
+not that variable is set — verified both ways.
+
+### Verified
+
+Against a server running the fix, on a real workspace subdomain, with
+`BETTER_AUTH_URL` pinned exactly as production pins it:
+
+| request | before | after |
+|---|---|---|
+| cleaner signing in on their own workspace | 403 Invalid origin | **401** — reaches the password check |
+| a page on `evil.example.com` | 403 | **403** — still refused |
+| one workspace posting at another's | 403 | **403** — still refused |
+| reset link with an absolute callbackURL | n/a | lands on the **workspace** host |
+| reset link with a relative callbackURL | lands on the pinned host | (no longer emitted) |
+
+`npx tsc --noEmit` clean; production build clean.
+
+### Still open, same root
+
+`ctx.options.baseURL` is mutated once per instance and cached — better-auth
+works it out from the first request an instance ever serves. Nothing in the
+sign-in or reset paths depends on it any more, but anything added later that
+reads `baseURL` will inherit the same trap.

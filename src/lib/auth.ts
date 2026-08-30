@@ -5,6 +5,7 @@ import { cache } from "react";
 import { headers as nextHeaders } from "next/headers";
 
 import { db } from "@/lib/org-db";
+import { requestOrigin } from "@/lib/org-url";
 import { sendAccountEmail } from "@/lib/email";
 
 // better-auth doesn't ship a "role" on the user object passed to email hooks
@@ -19,6 +20,44 @@ async function roleOf(userId: string): Promise<"CUSTOMER" | "PROVIDER"> {
   if (!u) return "CUSTOMER";
   // Anything that isn't a customer (CLIENT) is a provider on Cleano.
   return u.role === "CLIENT" ? "CUSTOMER" : "PROVIDER";
+}
+
+/**
+ * Move a link better-auth built onto the host the browser is actually on.
+ *
+ * Every emailed link — password reset, "set your password" invites, address
+ * verification — is built by better-auth as `${ctx.baseURL}/...`, and
+ * `ctx.baseURL` is not per request. better-auth works it out once, from the
+ * first request an instance ever serves (or from BETTER_AUTH_URL), and keeps
+ * it. On a single-domain app that is invisible. Here it meant a TeamCleano
+ * cleaner's set-password link pointed at whichever host happened to warm the
+ * instance, and the reset then failed on a workspace that is not theirs.
+ *
+ * The callbackURL travelling inside the link has to be made absolute at the
+ * same time: better-auth resolves a relative one against that same stale
+ * baseURL when it redirects, which is how a link opened on the right host
+ * still landed on the wrong one.
+ *
+ * The Host header is the source, as everywhere else in the tenancy model — it
+ * is what the proxy resolves the organization from on every request.
+ */
+async function onRequestHost(url: string): Promise<string> {
+  const origin = await requestOrigin();
+  if (!origin) return url;
+  try {
+    const here = new URL(origin);
+    const link = new URL(url);
+    link.protocol = here.protocol;
+    link.host = here.host;
+    const callback = link.searchParams.get("callbackURL");
+    if (callback && callback.startsWith("/")) {
+      link.searchParams.set("callbackURL", `${here.origin}${callback}`);
+    }
+    return link.toString();
+  } catch {
+    // Not a URL we can parse. Sending the original beats sending nothing.
+    return url;
+  }
 }
 
 export const auth = betterAuth({
@@ -70,6 +109,39 @@ export const auth = betterAuth({
      * like a broken login.
      */
     useSecureCookies: process.env.NODE_ENV === "production",
+  },
+  /**
+   * Trust the address the browser is actually on, and only that one.
+   *
+   * better-auth refuses any state-changing request whose Origin header is not
+   * on this list, which is its CSRF defence. The default list is a single
+   * entry: the baseURL. Ours is deliberately unset, so better-auth fills it in
+   * from the first request an instance serves and then never revisits it —
+   * and if BETTER_AUTH_URL is set in the environment, from that.
+   *
+   * Either way it is ONE host, and this product has one per company. Every
+   * cleaner signing in at `<company>.useawer.com` was answered
+   * `403 INVALID_ORIGIN`, while the same POST from the one blessed host went
+   * through. It was invisible in testing because the check only runs when the
+   * request carries a cookie, so curl passed and browsers did not.
+   *
+   * Derived per request instead. The Origin header is set by the browser and
+   * cannot be forged by a page on another site, so trusting the host this
+   * request arrived on is exactly the check that was intended: a form on
+   * evil.com posting here still sends `Origin: https://evil.com`, which will
+   * not match, and neither will one company's workspace posting at another's.
+   */
+  trustedOrigins: (request) => {
+    const host = request.headers.get("host");
+    if (!host) return [];
+    // A forwarded-proto header can carry a list; the first hop is the
+    // browser's. Same derivation as selfOrigin() in the proxy.
+    const forwarded = request.headers.get("x-forwarded-proto")?.split(",")[0].trim();
+    const isLocal =
+      host.startsWith("localhost") ||
+      host.includes(".localhost") ||
+      host.startsWith("127.0.0.1");
+    return [`${forwarded || (isLocal ? "http" : "https")}://${host}`];
   },
   // Spec item 14 (staff homescreen-app login persistence): sessions last 30
   // days and slide forward daily with use, so cleaners opening the installed
@@ -130,7 +202,7 @@ export const auth = betterAuth({
         name: user.name,
         role,
         event: "reset_password",
-        link: url,
+        link: await onRequestHost(url),
       }).catch((e) => console.error("reset_password email", e));
     },
     onPasswordReset: async ({ user }) => {
@@ -156,7 +228,7 @@ export const auth = betterAuth({
         name: user.name,
         role,
         event: role === "CUSTOMER" ? "setup_password" : "email_verification",
-        link: url,
+        link: await onRequestHost(url),
       }).catch((e) => console.error("verify email", e));
     },
   },
