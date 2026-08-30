@@ -51,8 +51,17 @@ export async function createPropertyDefinition(input: PropertyInput): Promise<Re
   if (!internalName) return { error: "Could not derive an internal name from the label" };
 
   try {
-    const existing = await db.propertyDefinition.findUnique({
-      where: { objectType_internalName: { objectType: input.objectType, internalName } },
+    // findFirst, not findUnique: the scoped client injects organizationId into
+    // a findFirst `where`, so this asks "does THIS company already use that
+    // internal name" — which is now exactly what the unique index enforces.
+    //
+    // It used to ask the same org-scoped question against a GLOBAL index, and
+    // the mismatch was the bug: another company's row was invisible here, so
+    // this reported "available", and the create below then failed on the shared
+    // index with a P2002 the customer could not act on — and which reliably
+    // revealed that someone else on the platform had taken that name.
+    const existing = await db.propertyDefinition.findFirst({
+      where: { objectType: input.objectType, internalName },
     });
     if (existing) return { error: `A property with internal name "${internalName}" already exists on this object` };
 

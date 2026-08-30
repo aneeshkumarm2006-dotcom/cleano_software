@@ -1,109 +1,35 @@
 /**
- * The models carrying organizationId — generated from prisma/schema.prisma.
+ * The models carrying organizationId — derived from the schema, not listed.
  *
  * Anything NOT in this set is either a better-auth internal (Account, Session,
  * Verification) or Organization itself, and is intentionally unscoped.
  *
- * Regenerate if the schema gains a tenant-scoped model:
- *   grep -B0 "organizationId String?" prisma/schema.prisma
+ * This used to be a hand-written list of 98 names with a comment asking the
+ * next person to "regenerate if the schema gains a tenant-scoped model". That
+ * is a bad instruction to leave lying around, because of what happens when it
+ * is missed: the gate in db-scoped.ts is
+ *
+ *   if (!model || !TENANT_MODELS.has(model)) return query(args);
+ *
+ * — a model absent from this set is passed straight through with no filter, no
+ * ownership check, no transaction and no tenant announced. Not a degraded
+ * query: an unscoped one, returning every company's rows. And the list had to
+ * be kept in step with a second hand-written list in the row-level-security
+ * migration, in a different language, in a different part of the tree.
+ *
+ * Both were correct at the time this was written — 98 models, 98 entries, 98
+ * policies, verified in all directions — so deriving the set changes nothing
+ * today. It changes what happens on the day someone adds a tenant table and
+ * updates only one of the two places.
+ *
+ * Prisma.dmmf is the schema as the client itself understands it, so this cannot
+ * drift from the model definitions. It does not, however, know about the RLS
+ * policies — that side still needs the assertion described in SECURITY.md.
  */
-export const TENANT_MODELS: ReadonlySet<string> = new Set([
-  "Subscription",
-  "User",
-  "Product",
-  "ProductLink",
-  "AppSetting",
-  "KitTemplate",
-  "KitTemplateItem",
-  "Supplier",
-  "SupplierPrice",
-  "Client",
-  "ClientPaymentMethod",
-  "RecurringCancellation",
-  "ClientAddress",
-  "Job",
-  "JobAddOn",
-  "PricingRule",
-  "JobProductUsage",
-  "JobLog",
-  "InventoryRequest",
-  "InventoryChange",
-  "InventoryFlag",
-  "EmployeeProduct",
-  "PayPeriod",
-  "Payout",
-  "Transaction",
-  "RagWash",
-  "WashPayout",
-  "Budget",
-  "BudgetCategory",
-  "NotificationSetting",
-  "Invoice",
-  "InvoiceLineItem",
-  "Alert",
-  "Target",
-  "AlertRoutingRule",
-  "Complaint",
-  "CleanerStrike",
-  "EmployeeAvailability",
-  "AvailabilityException",
-  "JobPhoto",
-  "JobChatMessage",
-  "GroupChannel",
-  "GroupChannelMember",
-  "Announcement",
-  "AnnouncementReaction",
-  "GroupMessage",
-  "GroupChannelRead",
-  "ReviewPhoto",
-  "ChecklistTemplate",
-  "ChecklistTemplateItem",
-  "JobChecklist",
-  "JobChecklistItem",
-  "Document",
-  "DocumentAccessLog",
-  "DocumentSignature",
-  "EmployeeFile",
-  "TrainingModule",
-  "TrainingQuiz",
-  "TrainingProgress",
-  "EmployeeRating",
-  "Withdrawal",
-  "InventoryLocation",
-  "InventoryLocationStock",
-  "InventoryCheckout",
-  "InventoryCheckoutItem",
-  "SalesArea",
-  "LandingPage",
-  "PageVisit",
-  "ChatConversation",
-  "ChatMessage",
-  "MarketingCampaign",
-  "JobApplication",
-  "ApplicantInviteToken",
-  "ApplicantMessage",
-  "ClientCardSetupToken",
-  "GiftCard",
-  "JobAssignment",
-  "JobWorkSession",
-  "JobBreak",
-  "JobAssignmentInvite",
-  "QuoteRequest",
-  "ServiceArea",
-  "Lead",
-  "Commission",
-  "Contact",
-  "DuplicateRejection",
-  "ContactActivity",
-  "PropertyDefinition",
-  "AdSpendImport",
-  "Waitlist",
-  "EmailLog",
-  "JobRatingToken",
-  "PromoCode",
-  "ActivityLog",
-  "WebhookEvent",
-  "FaqCategory",
-  "Faq",
-  "FaqEvent",
-]);
+import { Prisma } from "@prisma/client";
+
+export const TENANT_MODELS: ReadonlySet<string> = new Set(
+  Prisma.dmmf.datamodel.models
+    .filter((m) => m.fields.some((f) => f.name === "organizationId"))
+    .map((m) => m.name),
+);

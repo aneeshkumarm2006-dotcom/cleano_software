@@ -388,3 +388,88 @@ register a known customer's address in that workspace and inherit their client r
 This is pre-existing logic, not introduced by the multi-tenant work, and the fix — requiring
 email verification before linking — changes the customer signup experience. That is a product
 decision, so it is recorded here rather than made unilaterally.
+
+---
+
+# Tenant-isolation audit — 2026-08-30
+
+The pass that was interrupted earlier, now completed: `db-scoped.ts`, the RLS
+migrations, `setup-app-role.sql` / `setup-app-grants.sql`, and the per-org unique
+constraints.
+
+> **Verdict: SHIP**, conditional on VULN-001 (fixed below) and on `DATABASE_URL`
+> authenticating as `awer_app` — verified directly against production:
+> `rolsuper=f, rolbypassrls=f`, member of nothing, connects through both poolers.
+
+## What was found sound — this is the important part
+
+- **RLS is complete.** All **98** tenant tables have `ENABLE` + `FORCE ROW LEVEL
+  SECURITY` and a policy with no `FOR` clause (so `FOR ALL`, covering SELECT /
+  INSERT / UPDATE / DELETE) carrying both `USING` and `WITH CHECK`. The three-way
+  diff between "models with organizationId", "tables with RLS" and "tables with a
+  policy" is empty in both directions. `FORCE` is set even though `awer_app` owns
+  nothing, so the classic owner-bypass hole is closed twice.
+- **An un-announced connection sees nothing, not everything.**
+  `current_setting('app.current_org_id', true)` is NULL when unset, and
+  `"organizationId" = NULL` is never true.
+- **The tenant announcement cannot leak across a pooled connection.** Every
+  `set_config` passes `is_local = true` and every call site is inside a
+  transaction, the batched fast path included.
+- **No SQL injection** anywhere in scope — the announcement uses a bound `$1`
+  placeholder, and the two raw queries use tagged templates.
+- **Compound-key handling holds under attack.** Feeding a victim's
+  `organizationId` inside a compound `where` does hoist it into the filter, but
+  ours is spread last and wins; the write is then refused by RLS as well.
+- **Only three files import the unscoped client**, and all three are justified.
+
+## Fixed now
+
+### VULN-001 (High) — `PropertyDefinition` uniqueness was still global
+`prisma/schema.prisma:3343`. Ten sibling constraints were converted to per-org in
+`20260826054325`; this one was missed — verified, zero mentions in that migration.
+
+The failure was not just a collision. The duplicate check in
+`propertyActions.ts:54` was **org-scoped while the index was global**, so another
+company's row was invisible to the check, it reported "available", and the insert
+then failed on the shared index — with an error the customer cannot act on, and
+which reliably reveals that someone else on the platform holds that name. Internal
+names are derived from labels, so they are trivially guessable (`industry`,
+`source`, `region`, `owner`).
+
+Fixed by `20260830020000_property_definition_per_org_unique` plus the schema
+change, and the check switched to `findFirst` so it asks the question the index
+now enforces. Rehearsed on staging. Production has 25 rows and no duplicate
+`(objectType, internalName)` pair, so the new index builds without collision.
+
+### VULN-002 (Medium) — `updateManyAndReturn` was in no coverage set
+`db-scoped.ts:97`. `FILTERABLE` had `updateMany` but not `updateManyAndReturn`,
+while `CREATES` remembered `createManyAndReturn` — an oversight, not a decision.
+An unrecognised operation is passed through with no filter, no ownership check and
+no tenant announced. No call sites exist today, so nothing was leaking. Added.
+
+### VULN-008 (Medium) — the tenant model list was hand-maintained
+`tenant-models.ts` was 98 hand-written names, and the gate is
+`if (!TENANT_MODELS.has(model)) return query(args)` — a missing model is passed
+through **completely unscoped**. It is now derived from `Prisma.dmmf`.
+
+Proven a no-op before swapping: derived set 98, hand-written set 98, difference
+empty in both directions. `tenant-models.ts` is imported by exactly one file,
+which already imports `Prisma` and already reads `Prisma.dmmf`, so nothing new
+reaches the edge bundle.
+
+## Deferred, with reasons — all latent, none exploitable at HEAD
+
+Each was checked for live call sites and each is contained by RLS. Deferred
+deliberately rather than changed on the most critical path hours before a cutover.
+
+| # | What | Why it can wait |
+|---|---|---|
+| VULN-003 | `update`/`updateMany` do not pin `organizationId` in `data`, so a spread request body could move a row to another org | RLS `WITH CHECK` already refuses the resulting row. No call site spreads a body into `data`. |
+| VULN-004 | Nested `connect` and scalar FKs are unvalidated; Postgres RI checks bypass RLS by design | Not a read leak — the row is stamped with the attacker's org and `include` is RLS-filtered. Impact is an existence oracle on unguessable cuids. |
+| VULN-005 | `ALTER DEFAULT PRIVILEGES` grants every future table to `awer_app`; RLS is not automatic | Correct today. It is the likeliest future regression: needs the grant default inverted and a CI assertion that every `organizationId` table has `FORCE` + a policy. |
+| VULN-006 | `upsert`'s cross-tenant existence probe is unreachable — it runs on the announced connection, so RLS always hides the row | No access results. It is dead code that reads like a working control, which is its own hazard. |
+| VULN-007 | Raw SQL on `db` inside `db.$transaction` runs on a different, un-announced connection | Fails closed (RLS denies), but silently — the transaction commits believing it worked. No call site combines the two. |
+
+Also noted: `Client.referralCode` and `GiftCard.code` repeat the VULN-001 pattern
+(org-scoped check, global index) at much lower probability, and
+`_prisma_migrations` should be revoked from the app role.

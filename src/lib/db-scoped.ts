@@ -96,7 +96,14 @@ export async function announceTenant(
 
 const FILTERABLE = new Set([
   "findFirst", "findFirstOrThrow", "findMany", "count", "aggregate", "groupBy",
-  "updateMany", "deleteMany",
+  // `updateManyAndReturn` belongs here for the same reason `updateMany` does.
+  // It was missed while its sibling `createManyAndReturn` was remembered in
+  // CREATES below, and an operation this file does not recognise is passed
+  // through with no filter, no ownership check and no tenant announced. There
+  // are no call sites today, so nothing was leaking -- but the first person to
+  // reach for it would have had nothing between their `where` and every other
+  // company's rows except row-level security.
+  "updateMany", "updateManyAndReturn", "deleteMany",
 ]);
 const CREATES = new Set(["create", "createMany", "createManyAndReturn"]);
 const UNIQUE_WRITES = new Set(["update", "delete", "upsert"]);

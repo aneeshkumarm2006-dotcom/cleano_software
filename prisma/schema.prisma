@@ -3340,7 +3340,7 @@ model PropertyDefinition {
   // and the database in sync and lets raw inserts omit the column.
   updatedAt      DateTime  @default(now()) @updatedAt
 
-  @@unique([objectType, internalName])
+  @@unique([organizationId, objectType, internalName])
   @@index([objectType])
   @@index([organizationId])
 }
