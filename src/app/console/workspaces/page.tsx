@@ -1,7 +1,9 @@
 import { listWorkspaces, overviewStats, WINDOW_DAYS } from "@/lib/console/queries";
+import { getPlatformStaff } from "@/lib/platform-db";
 import { PLANS } from "@/lib/plans";
 
 import { TopBar, ago, fmtMoney, renewalCell, workspaceState } from "../ui";
+import NewWorkspace from "./NewWorkspace";
 import WorkspaceTable, { type Row } from "./WorkspaceTable";
 
 export const metadata = { title: "Workspaces · Awer Console" };
@@ -14,8 +16,12 @@ export const metadata = { title: "Workspaces · Awer Console" };
  * no second copy of those rules.
  */
 export default async function WorkspacesPage() {
-  const rows = await listWorkspaces();
+  const [rows, staff] = await Promise.all([listWorkspaces(), getPlatformStaff()]);
   const stats = overviewStats(rows);
+
+  // Creating a workspace is an ADMIN action, and the server action checks it
+  // again regardless. This only decides whether the button looks available.
+  const canEdit = staff?.platformRole === "ADMIN" || staff?.platformRole === "OWNER";
 
   const seatsSold = rows.reduce((n, w) => n + (w.seatLimit ?? w.cleaners), 0);
 
@@ -71,6 +77,7 @@ export default async function WorkspacesPage() {
               Every cleaning company on Awer, what they use, and what each one is worth.
             </p>
           </div>
+          <NewWorkspace canEdit={canEdit} />
         </div>
 
         <div className="stats">

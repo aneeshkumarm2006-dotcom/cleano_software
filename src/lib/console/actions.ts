@@ -330,6 +330,126 @@ export type ApproveResult =
   | { ok: true; message: string; slug: string; email: string; password: string }
   | { ok: false; message: string };
 
+// ---------------------------------------------------------------------------
+// Creating a workspace
+// ---------------------------------------------------------------------------
+
+export interface CreateWorkspaceInput {
+  companyName: string;
+  slug: string;
+  ownerName: string;
+  ownerEmail: string;
+  plan: string;
+  timezone?: string;
+}
+
+/** Longest any single field may be. Everything here ends up in a database row. */
+const MAX_FIELD = 120;
+
+/**
+ * Create a workspace outright, with no request behind it.
+ *
+ * The other two ways in both start with the company: they sign themselves up at
+ * /get-started, or they ask for the Organization tier and someone approves it.
+ * This is the third — Awer staff creating a workspace for a company that never
+ * filled anything in, which is what onboarding a customer won over the phone
+ * actually looks like.
+ *
+ * It is deliberately the same machinery as an approval rather than a second
+ * copy of it: one provisionOrganization call, one transaction, the same
+ * one-time password, the same forced change on first sign-in. The only thing
+ * that differs is that there is no AccessRequest row to mark decided.
+ *
+ * `createdByStaff` is what lets the Organization plan through — that tier is
+ * not self-serve on purpose, and this is a sanctioned way past that, so it
+ * takes an ADMIN and it is written to the audit log like every other action
+ * here.
+ */
+export async function createWorkspace(
+  input: CreateWorkspaceInput,
+): Promise<ApproveResult> {
+  let staff;
+  try {
+    staff = await requirePlatformStaff("ADMIN");
+  } catch {
+    return { ok: false, message: "You do not have permission to create a workspace." };
+  }
+
+  const companyName = String(input?.companyName ?? "").trim().slice(0, MAX_FIELD);
+  const ownerName = String(input?.ownerName ?? "").trim().slice(0, MAX_FIELD);
+  const ownerEmail = String(input?.ownerEmail ?? "").trim().toLowerCase().slice(0, MAX_FIELD);
+  const timezone = String(input?.timezone ?? "").trim().slice(0, MAX_FIELD);
+  const plan = String(input?.plan ?? "") as OrgPlan;
+
+  if (companyName.length < 2) {
+    return { ok: false, message: "Give the company's name." };
+  }
+  if (ownerName.length < 2) {
+    return { ok: false, message: "Give the owner's name — it is who the account belongs to." };
+  }
+  // Deliberately loose, matching signup: address syntax is a poor test of
+  // whether an address works, and this one is typed by staff who can see it.
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ownerEmail)) {
+    return { ok: false, message: "That email address does not look right." };
+  }
+  // Allowlist rather than `in`, for the reason given at the top of this file.
+  if (!VALID_PLANS.includes(plan)) {
+    return { ok: false, message: "Pick a plan." };
+  }
+
+  const slug = slugify(input?.slug || companyName);
+  if (!isValidOrgSlug(slug)) {
+    return { ok: false, message: `"${slug}" cannot be used as an address.` };
+  }
+
+  const password = temporaryPassword();
+
+  try {
+    const created = await provisionOrganization({
+      slug,
+      companyName,
+      ownerName,
+      ownerEmail,
+      password,
+      plan,
+      timezone: timezone || undefined,
+      // Staff are doing this on the company's behalf, so the self-serve gate on
+      // the Organization tier does not apply.
+      createdByStaff: true,
+    });
+
+    // They did not choose this password, so they must replace it. Same reasoning
+    // as an approval: a company that signs itself up chose its own and is not
+    // asked to change it.
+    await platformDb.user.update({
+      where: { id: created.ownerId },
+      data: { mustChangePassword: true },
+    });
+
+    await recordPlatformAction(
+      staff,
+      "org.create",
+      { id: created.organizationId, slug: created.slug },
+      { company: companyName, email: ownerEmail, plan, owner: ownerName },
+    );
+
+    refresh(created.slug);
+    revalidatePath("/console/requests");
+
+    return {
+      ok: true,
+      message: `${companyName} is live at ${created.slug}.`,
+      slug: created.slug,
+      email: ownerEmail,
+      password,
+    };
+  } catch (e) {
+    if (e instanceof ProvisioningError) return { ok: false, message: e.message };
+    console.error("create workspace failed", e);
+    return { ok: false, message: "Could not create the workspace. Nothing was changed." };
+  }
+}
+
 /**
  * Approve a request and create the workspace it asked for.
  *
