@@ -64,7 +64,52 @@ SELECT CASE
          ELSE 'role existed, password left alone'
        END AS password_action;
 
-ALTER ROLE awer_app NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT;
+-- Harden the role: VERIFY, do not force.
+--
+-- `ALTER ROLE awer_app NOSUPERUSER NOBYPASSRLS ...` is what this used to do, and
+-- on Supabase it fails outright:
+--
+--   ERROR: permission denied to alter role
+--   DETAIL: Only roles with the SUPERUSER attribute may alter roles with the
+--           SUPERUSER attribute.
+--
+-- Supabase's `postgres` is NOT a superuser, and only a superuser may touch the
+-- SUPERUSER or BYPASSRLS attributes -- even to turn them off. With
+-- ON_ERROR_STOP that aborted the script here, silently skipping the two GRANTs
+-- below and leaving a role that could not connect at all.
+--
+-- It does not need forcing. A plain CREATE ROLE already yields NOSUPERUSER,
+-- NOBYPASSRLS, NOCREATEDB and NOCREATEROLE. So check the attributes that matter
+-- and stop hard if they are ever wrong, because row-level security is purely
+-- decorative under a role that can bypass it.
+DO $$
+DECLARE r record;
+BEGIN
+  SELECT rolsuper, rolbypassrls, rolcreatedb, rolcreaterole
+    INTO r FROM pg_roles WHERE rolname = 'awer_app';
+
+  IF r.rolsuper OR r.rolbypassrls THEN
+    RAISE EXCEPTION
+      'awer_app has SUPERUSER=% BYPASSRLS=% -- row-level security would not '
+      'apply to it. Do not point the application at this role.',
+      r.rolsuper, r.rolbypassrls;
+  END IF;
+
+  IF r.rolcreatedb OR r.rolcreaterole THEN
+    RAISE WARNING 'awer_app has CREATEDB=% CREATEROLE=% -- more than it needs.',
+      r.rolcreatedb, r.rolcreaterole;
+  END IF;
+
+  RAISE NOTICE 'awer_app verified: NOSUPERUSER, NOBYPASSRLS.';
+END $$;
+
+-- NOINHERIT is not a superuser-only attribute, so this one can be set, and it
+-- is worth setting. Supabase ships several roles that CAN bypass RLS
+-- (service_role, supabase_admin, supabase_read_only_user, supabase_etl_admin).
+-- If awer_app is ever granted membership in one of them, INHERIT would apply
+-- those privileges automatically and silently; NOINHERIT requires a deliberate
+-- SET ROLE instead.
+ALTER ROLE awer_app NOINHERIT;
 
 GRANT CONNECT ON DATABASE postgres TO awer_app;
 GRANT USAGE ON SCHEMA public TO awer_app;
