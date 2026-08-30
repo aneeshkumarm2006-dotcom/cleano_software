@@ -1,6 +1,7 @@
 import { getOrgSlug } from "@/lib/org";
 import { PLATFORM_ORG_SLUG } from "@/lib/tenant";
 
+import PlatformSignIn from "./PlatformSignIn";
 import SignInForm from "./SignInForm";
 
 /**
@@ -17,5 +18,11 @@ import SignInForm from "./SignInForm";
  */
 export default async function SignInPage() {
   const slug = await getOrgSlug();
-  return <SignInForm isPlatform={slug === PLATFORM_ORG_SLUG} />;
+
+  // Two genuinely different pages behind one route. On Awer's own host we do
+  // not know which company the visitor belongs to, so that version asks and
+  // then hands off; on a workspace host the answer is the hostname, and the
+  // existing form is left exactly as it was.
+  if (slug === PLATFORM_ORG_SLUG) return <PlatformSignIn />;
+  return <SignInForm isPlatform={false} />;
 }

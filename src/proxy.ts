@@ -44,6 +44,7 @@ const PUBLIC_PREFIXES = [
   '/gift-card/', // gift card purchase + redemption flow
   '/api/auth/', // Better Auth endpoints
   '/api/post-signin', // role-aware redirect endpoint
+  '/api/workspace-signin', // finishes a sign-in that began on Awer's front door
   '/icon/', // PWA install icons (32/192/512) — Chrome fetches without a session
 ]
 
