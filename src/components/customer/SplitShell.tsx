@@ -26,6 +26,21 @@ interface SplitShellProps {
   topRightLabel?: string;
   topRightHref?: string;
   badge?: string;
+  /**
+   * Wordmark in the top-left of the brand panel. Defaults to the cleaning
+   * company's own logo, which is right on a workspace host and wrong on Awer's.
+   */
+  logo?: React.ReactNode;
+  /**
+   * The line along the bottom of the brand panel, with its stars.
+   *
+   * This used to be the hardcoded string "Loved by 2,400+ Montréal homes",
+   * which is one specific cleaning company's marketing. It was rendering on
+   * every page that uses this shell — including Awer's OWN signup page, so a
+   * cleaning company evaluating the product was shown a competitor's customer
+   * count. Pass `null` to omit the line and its stars entirely.
+   */
+  footNote?: React.ReactNode;
   children: React.ReactNode;
 }
 
@@ -37,6 +52,8 @@ export default function SplitShell({
   topRightLabel,
   topRightHref,
   badge,
+  logo,
+  footNote = "Loved by 2,400+ Montréal homes",
   children,
 }: SplitShellProps) {
   return (
@@ -55,7 +72,7 @@ export default function SplitShell({
             } as React.CSSProperties
           }>
           <div className="cl-split-brand-top">
-            <CustomerLogo onDark />
+            {logo ?? <CustomerLogo onDark />}
             {badge ? (
               <span
                 style={{
@@ -78,20 +95,22 @@ export default function SplitShell({
             ) : null}
             {quoteSub ? <p className="cl-split-brand-sub">{quoteSub}</p> : null}
           </div>
-          <div className="cl-split-brand-foot">
-            <span style={{ display: "inline-flex", gap: 4 }}>
-              {[1, 2, 3, 4, 5].map((n) => (
-                <Star
-                  key={n}
-                  size={11}
-                  fill="#facc15"
-                  stroke="none"
-                  style={{ color: "#facc15" }}
-                />
-              ))}
-            </span>
-            <span>Loved by 2,400+ Montréal homes</span>
-          </div>
+          {footNote ? (
+            <div className="cl-split-brand-foot">
+              <span style={{ display: "inline-flex", gap: 4 }}>
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <Star
+                    key={n}
+                    size={11}
+                    fill="#facc15"
+                    stroke="none"
+                    style={{ color: "#facc15" }}
+                  />
+                ))}
+              </span>
+              <span>{footNote}</span>
+            </div>
+          ) : null}
         </aside>
 
         <section className="cl-split-form">

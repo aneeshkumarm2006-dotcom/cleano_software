@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import type { OrgPlan } from "@prisma/client";
 
-import SplitShell from "@/components/customer/SplitShell";
+import SplitShell, { BRAND_IMAGES } from "@/components/customer/SplitShell";
+import AwerLogo from "@/components/AwerLogo";
 import { PLANS, TRIAL_DAYS } from "@/lib/plans";
 
 import SignupForm, { type PlanCard } from "./SignupForm";
@@ -55,7 +56,13 @@ export default async function GetStartedPage({
 
   return (
     <SplitShell
-      image="/admin-login.png"
+      // Awer's own front door: its own mark, a neutral photo, and no
+      // cleaning company's customer count. /admin-login.png is TeamCleano's
+      // branded shot -- polo shirt and framed logo -- and belongs on their
+      // workspace, not on the page where their competitors sign up.
+      logo={<AwerLogo onDark />}
+      footNote={null}
+      image={BRAND_IMAGES.home}
       quoteHtml={"Every job, every<br/>cleaner, <em>one<br/>place.</em>"}
       quoteSub="Awer runs the scheduling, the crew, the customers and the invoicing for cleaning companies."
       topRightLabel="Sign in →"

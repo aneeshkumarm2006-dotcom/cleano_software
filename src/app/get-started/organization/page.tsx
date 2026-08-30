@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
-import SplitShell from "@/components/customer/SplitShell";
+import SplitShell, { BRAND_IMAGES } from "@/components/customer/SplitShell";
+import AwerLogo from "@/components/AwerLogo";
 import { PLANS } from "@/lib/plans";
 
 import RequestForm from "./RequestForm";
@@ -25,7 +26,13 @@ export default function OrganizationRequestPage() {
 
   return (
     <SplitShell
-      image="/admin-login.png"
+      // Awer's own front door: its own mark, a neutral photo, and no
+      // cleaning company's customer count. /admin-login.png is TeamCleano's
+      // branded shot -- polo shirt and framed logo -- and belongs on their
+      // workspace, not on the page where their competitors sign up.
+      logo={<AwerLogo onDark />}
+      footNote={null}
+      image={BRAND_IMAGES.home}
       quoteHtml={"Bigger operations<br/>need a <em>real<br/>conversation.</em>"}
       quoteSub={`Above ${pro} cleaners the price depends on how you work, so we would rather talk than guess.`}
       topRightLabel="Start a free trial →"
