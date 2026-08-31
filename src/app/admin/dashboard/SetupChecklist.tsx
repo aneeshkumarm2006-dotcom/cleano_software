@@ -29,7 +29,7 @@ export default function SetupChecklist({
   const nearlyThere = done >= steps.length - 2;
 
   return (
-    <div className="dash-setup" style={{ marginBottom: 32 }}>
+    <div className="dash-setup" data-tour="setupChecklist" style={{ marginBottom: 32 }}>
       <div className="dash-setup-head">
         <div>
           <h2 className="dash-setup-title">

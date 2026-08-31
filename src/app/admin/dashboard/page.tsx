@@ -40,6 +40,7 @@ import { loadCleanerThresholdDefault } from "@/lib/inventory-thresholds.server";
 import { avatarColor, initials } from "@/lib/avatar";
 import CleanerDashboard from "./CleanerDashboard";
 import SetupChecklist from "./SetupChecklist";
+import TourLauncher from "./TourLauncher";
 import { readSetupChecklist } from "@/lib/setup-checklist.server";
 
 export const dynamic = "force-dynamic";
@@ -307,6 +308,7 @@ export default async function DashboardPage() {
     ? await readSetupChecklist({ cleanerCount: employeeCount })
     : [];
   const setupDone = setupSteps.every((s) => s.done);
+  const showChecklist = setupSteps.length > 0 && !setupDone;
   const totalProducts = products.length;
   const lowStockProducts = products.filter((p) => p.stockLevel <= p.minStock).sort((a, b) => a.stockLevel - b.stockLevel).slice(0, 8);
   const totalInventoryValue = products.reduce((s, p) => s + p.stockLevel * p.costPerUnit, 0);
@@ -370,20 +372,28 @@ export default async function DashboardPage() {
 
   return (
     <div className="p-8" style={{ maxWidth: 1280, margin: "0 auto" }}>
-      <header style={{ marginBottom: 32 }}>
-        <p className="eyebrow">{dateLabel}</p>
-        <h1 className="display" style={{ fontSize: "clamp(34px, 4.4vw, 50px)", marginTop: 6 }}>
-          {greeting}, <em>{firstName}.</em>
-        </h1>
-        <p className="subtitle" style={{ marginTop: 12, fontSize: 16 }}>
-          Here&apos;s what&apos;s happening with your business today.
-        </p>
+      <header className="dash-head">
+        <div>
+          <p className="eyebrow">{dateLabel}</p>
+          <h1 className="display" style={{ fontSize: "clamp(34px, 4.4vw, 50px)", marginTop: 6 }}>
+            {greeting}, <em>{firstName}.</em>
+          </h1>
+          <p className="subtitle" style={{ marginTop: 12, fontSize: 16 }}>
+            Here&apos;s what&apos;s happening with your business today.
+          </p>
+        </div>
+        {/* Offered to the two roles that can act on what it shows, and started
+            on its own only for a workspace that still has setup outstanding —
+            everyone else has to ask for it. */}
+        {canSeeMoney && (
+          <TourLauncher autoStart={showChecklist} hasChecklist={showChecklist} />
+        )}
       </header>
 
       {/* Setup checklist — a new workspace only. It disappears of its own
           accord once every step reports done, so an established company like
           Cleano never renders it and there is nothing to dismiss. */}
-      {setupSteps.length > 0 && !setupDone && (
+      {showChecklist && (
         <SetupChecklist steps={setupSteps} firstName={firstName} />
       )}
 

@@ -5745,6 +5745,105 @@ select.cl-field-input { background: #fff; }
 .dash-lowstock-qty { font-size: 13px; color: var(--amber-800); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .dash-lowstock-qty strong { font-weight: 700; }
 
+/* ── Guided tour ────────────────────────────────────────────────────────────
+   Runs alongside the setup checklist above, and answers a different question:
+   the checklist says what is still to DO, this says what the thing IS. */
+.dash-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 20px; flex-wrap: wrap; margin-bottom: 32px;
+}
+.tour-launch {
+  display: inline-flex; align-items: center; gap: 7px; flex: 0 0 auto;
+  margin-top: 8px; padding: 8px 14px;
+  background: #fff; border: 1px solid var(--primary-20); border-radius: 999px;
+  font-family: inherit; font-size: 13px; font-weight: 600; color: var(--primary-800);
+  cursor: pointer; box-shadow: var(--shadow-soft);
+  transition: border-color .15s, background .15s, transform .1s;
+}
+.tour-launch:hover {
+  background: var(--primary-5); border-color: var(--primary-40); transform: translateY(-1px);
+}
+
+.tour-root { position: fixed; inset: 0; z-index: 1000; }
+/* Two ways to dim, one job. `.tour-dim` is the plain sheet used when a step has
+   nothing to point at; `.tour-spot` is the same sheet with a hole in it, drawn
+   as a transparent box with an enormous spread shadow so the cut-out costs one
+   element rather than four strips around it. */
+.tour-dim { position: absolute; inset: 0; background: rgba(14, 26, 28, 0.55); }
+.tour-spot {
+  position: fixed; border-radius: 10px; pointer-events: auto;
+  box-shadow: 0 0 0 9999px rgba(14, 26, 28, 0.55), 0 0 0 2px var(--primary-light);
+  transition: top .22s cubic-bezier(.4,0,.2,1), left .22s cubic-bezier(.4,0,.2,1),
+              width .22s cubic-bezier(.4,0,.2,1), height .22s cubic-bezier(.4,0,.2,1);
+}
+
+.tour-card {
+  position: fixed; width: 336px; max-width: calc(100vw - 32px);
+  background: #fff; border-radius: 14px; padding: 16px;
+  box-shadow: 0 20px 50px rgba(14,26,28,.28), 0 0 0 1px var(--primary-10);
+  transition: top .22s cubic-bezier(.4,0,.2,1), left .22s cubic-bezier(.4,0,.2,1);
+}
+.tour-card:focus { outline: none; }
+.tour-card:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+.tour-card-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  margin-bottom: 8px;
+}
+.tour-step {
+  font-size: 11px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase;
+  color: var(--primary-60);
+}
+.tour-x {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border-radius: 7px; flex: 0 0 auto;
+  background: transparent; border: 0; cursor: pointer; color: var(--primary-60);
+}
+.tour-x:hover { background: var(--primary-5); color: var(--ink); }
+.tour-title { margin: 0 0 6px; font-size: 16px; font-weight: 600; color: var(--ink); }
+.tour-body { margin: 0; font-size: 13.5px; line-height: 1.6; color: var(--ink-soft); }
+
+.tour-dots { display: flex; gap: 5px; margin: 14px 0 12px; }
+.tour-dots span {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--primary-10);
+  transition: background .15s, width .15s;
+}
+.tour-dots span.past { background: var(--primary-30); }
+.tour-dots span.on { width: 18px; border-radius: 999px; background: var(--primary); }
+
+.tour-actions {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+}
+.tour-nav { display: flex; align-items: center; gap: 7px; }
+.tour-skip {
+  background: none; border: 0; padding: 4px 2px; cursor: pointer;
+  font-family: inherit; font-size: 12.5px; font-weight: 500; color: var(--primary-60);
+}
+.tour-skip:hover { color: var(--ink); text-decoration: underline; }
+.tour-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 8px 13px; border-radius: 9px; cursor: pointer;
+  font-family: inherit; font-size: 13px; font-weight: 600;
+  background: #fff; border: 1px solid var(--primary-20); color: var(--primary-800);
+}
+.tour-btn:hover { background: var(--primary-5); }
+.tour-btn.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+.tour-btn.primary:hover { background: var(--primary-hover); }
+
+/* Somebody who asked for less motion still gets the tour — it just stops
+   sliding between stops, which is the part that causes trouble. */
+@media (prefers-reduced-motion: reduce) {
+  .tour-spot, .tour-card, .tour-dots span, .tour-launch { transition: none; }
+}
+@media (max-width: 700px) {
+  /* The sidebar is off-screen on a phone, so most targets measure zero and the
+     step centres itself. Pin the card to the bottom so it never lands under a
+     thumb or off the edge. */
+  .tour-card {
+    top: auto !important; bottom: 16px; left: 16px !important;
+    right: 16px; width: auto; transform: none !important;
+  }
+}
+
 /* ── New-workspace setup checklist ──────────────────────────────────────────
    Teal, not amber: a workspace running on defaults is working, not broken, so
    this is guidance rather than an alarm. The one step that genuinely stops

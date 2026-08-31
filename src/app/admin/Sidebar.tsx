@@ -104,6 +104,15 @@ interface NavItem {
    * be both OWNER/ADMIN-only and FIELD_LEAD-only.
    */
   fieldLeadOnly?: boolean;
+  /**
+   * Stamped onto the link as `data-tour`, so the guided tour can point at this
+   * entry without matching on an href or a label.
+   *
+   * A tour step that hunts for `a[href="/admin/jobs"]` breaks the day somebody
+   * moves the route, and it breaks silently — the spotlight simply lands on
+   * nothing. Only the handful of entries the tour actually visits carry one.
+   */
+  tour?: string;
 }
 
 const NAV: { label: string; items: NavItem[] }[] = [
@@ -118,7 +127,7 @@ const NAV: { label: string; items: NavItem[] }[] = [
         adminOnly: true,
       },
       { href: "/admin/kpi", label: "KPIs", Icon: TrendingUp },
-      { href: "/admin/calendar", label: "Calendar", Icon: CalendarDays },
+      { href: "/admin/calendar", label: "Calendar", Icon: CalendarDays, tour: "calendar" },
     ],
   },
   {
@@ -133,6 +142,7 @@ const NAV: { label: string; items: NavItem[] }[] = [
       {
         href: "/admin/jobs",
         label: "Jobs",
+        tour: "jobs",
         Icon: Briefcase,
         // Unread cleaner↔client messages across live jobs (CLN-P0-3-08).
         badge: "jobChat",
@@ -161,12 +171,14 @@ const NAV: { label: string; items: NavItem[] }[] = [
       {
         href: "/admin/clients",
         label: "Clients",
+        tour: "clients",
         Icon: Contact,
         adminOnly: true,
       },
       {
         href: "/admin/web-bookings",
         label: "Web Bookings",
+        tour: "webBookings",
         Icon: Globe,
         // Prints real booking totals — see the guard on its page.
         adminOnly: true,
@@ -191,6 +203,7 @@ const NAV: { label: string; items: NavItem[] }[] = [
       {
         href: "/admin/employees",
         label: "Employees",
+        tour: "employees",
         Icon: Users,
         adminOnly: true,
       },
@@ -306,6 +319,7 @@ const NAV: { label: string; items: NavItem[] }[] = [
       {
         href: "/admin/finances",
         label: "Finances",
+        tour: "finances",
         Icon: Receipt,
         adminOnly: true,
       },
@@ -341,6 +355,7 @@ const NAV: { label: string; items: NavItem[] }[] = [
       {
         href: "/admin/settings",
         label: "Settings",
+        tour: "settings",
         Icon: Settings,
         adminOnly: true,
       },
@@ -810,6 +825,7 @@ export default function Sidebar({
                       <Link
                         key={item.href}
                         href={item.href}
+                        data-tour={item.tour}
                         className={`anav-item ${active ? "active" : ""}`}
                       >
                         <Icon size={16} strokeWidth={1.7} />
