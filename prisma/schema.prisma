@@ -61,6 +61,11 @@ model User {
   // customer sets their own password.
   mustChangePassword           Boolean                 @default(false)
   lastSeenAt                   DateTime?
+  // When this person finished or dismissed the guided tour. NULL = never seen
+  // it, which is what a brand-new owner is. A timestamp rather than a boolean
+  // so it also answers "when", and so a future tour can decide for itself
+  // whether a viewing from months ago still counts.
+  tourSeenAt                   DateTime?
   // Self-wash credit ledger — accumulates as jobs complete; drained when
   // the cleaner claims a wash payout. See /lib/wash for the rules.
   ragCredits                   Int                     @default(0)

@@ -33,34 +33,6 @@ export interface TourStop {
   body: string;
 }
 
-/**
- * Remembered per browser, not per user.
- *
- * There is no per-user preference column on User, and adding one means a
- * migration against the production database for a "don't show me this again"
- * flag. That trade is not worth it: the cost of being wrong here is that
- * somebody on a second browser is offered the tour again and dismisses it in
- * one click. Never read outside a try/catch — Safari's private mode throws on
- * access rather than returning null.
- */
-const SEEN_KEY = "awer.tour.seen.v1";
-
-function markSeen() {
-  try {
-    window.localStorage.setItem(SEEN_KEY, "1");
-  } catch {
-    /* storage unavailable — the tour simply offers itself again next time */
-  }
-}
-
-export function hasSeenTour(): boolean {
-  try {
-    return window.localStorage.getItem(SEEN_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-
 interface Box {
   top: number;
   left: number;
@@ -85,7 +57,6 @@ export default function Tour({
   const last = i === stops.length - 1;
 
   const finish = useCallback(() => {
-    markSeen();
     onClose();
   }, [onClose]);
 

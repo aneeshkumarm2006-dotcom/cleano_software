@@ -309,6 +309,19 @@ export default async function DashboardPage() {
     : [];
   const setupDone = setupSteps.every((s) => s.done);
   const showChecklist = setupSteps.length > 0 && !setupDone;
+  // Has this PERSON been shown the tour? Only asked for the roles that are
+  // offered it; everyone else is treated as having seen it so the launcher's
+  // auto-start can never fire for them.
+  const tourSeen = canSeeMoney
+    ? Boolean(
+        (
+          await db.user.findUnique({
+            where: { id: session.user.id },
+            select: { tourSeenAt: true },
+          })
+        )?.tourSeenAt
+      )
+    : true;
   const totalProducts = products.length;
   const lowStockProducts = products.filter((p) => p.stockLevel <= p.minStock).sort((a, b) => a.stockLevel - b.stockLevel).slice(0, 8);
   const totalInventoryValue = products.reduce((s, p) => s + p.stockLevel * p.costPerUnit, 0);
@@ -386,7 +399,11 @@ export default async function DashboardPage() {
             on its own only for a workspace that still has setup outstanding —
             everyone else has to ask for it. */}
         {canSeeMoney && (
-          <TourLauncher autoStart={showChecklist} hasChecklist={showChecklist} />
+          <TourLauncher
+            autoStart={showChecklist}
+            hasChecklist={showChecklist}
+            seen={tourSeen}
+          />
         )}
       </header>
 

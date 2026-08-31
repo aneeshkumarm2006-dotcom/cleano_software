@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Compass } from "lucide-react";
 
-import Tour, { hasSeenTour, type TourStop } from "./Tour";
+import Tour, { type TourStop } from "./Tour";
+import { markTourSeen } from "@/app/admin/actions/markTourSeen";
 
 /**
  * Owns whether the tour is open, and is the one place it can be started from.
@@ -83,18 +84,25 @@ export default function TourLauncher({
   autoStart,
   /** False once the setup card has gone, so the tour stops citing a card that is not there. */
   hasChecklist,
+  /** Whether this PERSON has already been shown it — User.tourSeenAt, read on the server. */
+  seen,
 }: {
   autoStart: boolean;
   hasChecklist: boolean;
+  seen: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  // Safe in the initial state now that it arrives as a prop. The previous
+  // version read localStorage, which does not exist on the server, so it had to
+  // wait for an effect and the tour appeared a frame late; and being per-browser
+  // it showed the same owner the tour again on their phone.
+  const [open, setOpen] = useState(autoStart && !seen);
 
-  // Deliberately in an effect and not in the initial state. localStorage is not
-  // available on the server, so seeding state from it renders different markup
-  // on the client and trips hydration — the classic version of this bug.
-  useEffect(() => {
-    if (autoStart && !hasSeenTour()) setOpen(true);
-  }, [autoStart]);
+  function close() {
+    setOpen(false);
+    // Fire and forget: the overlay must close instantly, and the action already
+    // swallows its own failures. Losing this write costs one extra offer.
+    void markTourSeen();
+  }
 
   const stops = hasChecklist
     ? [STOPS[0], CHECKLIST_STOP, ...STOPS.slice(1)]
@@ -106,7 +114,7 @@ export default function TourLauncher({
         <Compass size={14} />
         Take a tour
       </button>
-      {open && <Tour stops={stops} onClose={() => setOpen(false)} />}
+      {open && <Tour stops={stops} onClose={close} />}
     </>
   );
 }

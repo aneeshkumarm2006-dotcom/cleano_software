@@ -1,0 +1,19 @@
+-- Remember, per person, that they have seen the guided tour.
+--
+-- It was in localStorage, which is per BROWSER: the same owner on their phone
+-- and their laptop was shown the tour twice, and clearing site data brought it
+-- back. A column on the person is the honest model for a fact about a person.
+--
+-- Nullable, no default and no backfill, so this is a catalog update rather than
+-- a table rewrite -- it takes milliseconds and holds no meaningful lock. NULL
+-- means "has never seen it", which is exactly right for every existing user:
+-- they have not, because until now there was nothing to see.
+--
+-- A timestamp rather than a boolean so it also records WHEN, and so a later
+-- tour can decide for itself whether a viewing from months ago still counts.
+--
+-- Grants need no change: setup-app-grants.sql grants awer_app at TABLE level
+-- (GRANT ... ON ALL TABLES IN SCHEMA public), not per column, so the new column
+-- is readable and writable by the app role the moment it exists. RLS is
+-- unaffected -- the User policies filter on organizationId, which is a row test.
+ALTER TABLE "User" ADD COLUMN "tourSeenAt" TIMESTAMP(3);
