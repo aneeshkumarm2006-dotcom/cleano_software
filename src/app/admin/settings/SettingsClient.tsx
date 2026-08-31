@@ -84,6 +84,17 @@ import type {
 interface SettingsClientProps {
   user: SettingsUser;
   isAdmin: boolean;
+  /**
+   * Which tab to open on, from `?tab=` on the URL.
+   *
+   * The active tab is local state and always has been, so until now every link
+   * into Settings landed on Profile and the person following it had to find the
+   * tab themselves — fine from the sidebar, useless for "your prices are still
+   * the defaults → fix them here". Resolved against TABS below rather than
+   * trusted: an unknown id, or an admin-only tab requested by somebody who is
+   * not an admin, falls back to Profile.
+   */
+  initialTab?: string;
   appSettings: AppSettingRecord[];
   products: ProductRecord[];
   kitTemplates: KitTemplateRecord[];
@@ -327,6 +338,7 @@ const TABS: TabDef[] = [
 export default function SettingsClient({
   user,
   isAdmin,
+  initialTab,
   appSettings,
   products,
   kitTemplates,
@@ -343,7 +355,10 @@ export default function SettingsClient({
   budgetCategories,
   failedSections = [],
 }: SettingsClientProps) {
-  const [activeTab, setActiveTab] = useState<TabId>("profile");
+  const [activeTab, setActiveTab] = useState<TabId>(() => {
+    const wanted = TABS.find((t) => t.id === initialTab);
+    return wanted && (!wanted.adminOnly || isAdmin) ? wanted.id : "profile";
+  });
 
   // Budget categories are edited in-page (Settings → Budgets) and their count is
   // rendered out here in the sidebar, so the list is held one level above the

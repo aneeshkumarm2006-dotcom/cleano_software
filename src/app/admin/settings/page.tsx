@@ -57,7 +57,21 @@ async function settledSection<T>(
   }
 }
 
-export default async function SettingsPage() {
+export default async function SettingsPage({
+  searchParams,
+}: {
+  /**
+   * `?tab=` — which tab to open on. Resolved in SettingsClient against its own
+   * TAB list (an unknown id, or an admin-only tab asked for by somebody who is
+   * not an admin, falls back to Profile), so nothing here has to be trusted.
+   * Read on the server rather than with useSearchParams so the right tab is in
+   * the first paint and no Suspense boundary is needed.
+   */
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const tabParam = (await searchParams)?.tab;
+  const initialTab = typeof tabParam === "string" ? tabParam : undefined;
+
   // ONE shared page for every staff role (decision D6). `SettingsClient` has
   // always rendered role-appropriate tabs — `adminOnly: true` tab defs plus the
   // `isAdmin` prop — and the cleaner route re-exports this file, so the guard
@@ -348,6 +362,7 @@ export default async function SettingsPage() {
       <SettingsClient
         user={userWithRole}
         isAdmin={isAdmin}
+        initialTab={initialTab}
         appSettings={appSettings as never}
         products={products as never}
         kitTemplates={kitTemplates as never}

@@ -39,6 +39,8 @@ import { isCleanerLow } from "@/lib/inventory-thresholds";
 import { loadCleanerThresholdDefault } from "@/lib/inventory-thresholds.server";
 import { avatarColor, initials } from "@/lib/avatar";
 import CleanerDashboard from "./CleanerDashboard";
+import SetupChecklist from "./SetupChecklist";
+import { readSetupChecklist } from "@/lib/setup-checklist.server";
 
 export const dynamic = "force-dynamic";
 
@@ -293,6 +295,18 @@ export default async function DashboardPage() {
   ]);
 
   const employeeCount = employeeCounts.active;
+
+  /**
+   * What this workspace still has to fill in (Calgary and every company after
+   * it). Read only for OWNER/ADMIN — the two roles that can actually open the
+   * settings tabs each row links to; listing them for an OPS_MANAGER would be a
+   * list of doors that do not open. Three queries, and they do not run at all
+   * for anybody else.
+   */
+  const setupSteps = canSeeMoney
+    ? await readSetupChecklist({ cleanerCount: employeeCount })
+    : [];
+  const setupDone = setupSteps.every((s) => s.done);
   const totalProducts = products.length;
   const lowStockProducts = products.filter((p) => p.stockLevel <= p.minStock).sort((a, b) => a.stockLevel - b.stockLevel).slice(0, 8);
   const totalInventoryValue = products.reduce((s, p) => s + p.stockLevel * p.costPerUnit, 0);
@@ -365,6 +379,13 @@ export default async function DashboardPage() {
           Here&apos;s what&apos;s happening with your business today.
         </p>
       </header>
+
+      {/* Setup checklist — a new workspace only. It disappears of its own
+          accord once every step reports done, so an established company like
+          Cleano never renders it and there is nothing to dismiss. */}
+      {setupSteps.length > 0 && !setupDone && (
+        <SetupChecklist steps={setupSteps} firstName={firstName} />
+      )}
 
       {/* Primary metrics */}
       {/*
