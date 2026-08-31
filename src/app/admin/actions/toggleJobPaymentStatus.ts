@@ -1,10 +1,10 @@
 "use server";
 
 import { db } from "@/lib/org-db";
+import type { ScopedTx } from "@/lib/db-scoped";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
-import type { Prisma } from "@prisma/client";
 import { queueAndSendReceipt, sendCustomerBookingCharged } from "@/lib/email";
 import { getTaxRates } from "@/lib/tax.server";
 import { resolveAmountDue } from "@/lib/job-billing";
@@ -63,8 +63,18 @@ export async function togglePaymentReceived(jobId: string) {
         : ("SCHEDULED" as const);
     })();
 
-    const ops: Prisma.PrismaPromise<unknown>[] = [
-      db.job.update({
+    /**
+     * The write, as steps rather than as started queries.
+     *
+     * This was an array handed to `db.$transaction(ops)`, which the tenant
+     * client rejects on purpose (see org-db.ts): the array form needs deferred
+     * Prisma promises and this client runs eagerly. Worse than the throw, the
+     * eagerness meant each `db.x.y(...)` below had already executed by the time
+     * it was pushed, so marking a job paid half-applied and then reported
+     * "Failed to update payment status" to the admin who clicked it.
+     */
+    const ops: ((tx: ScopedTx) => Promise<unknown>)[] = [
+      (tx) => tx.job.update({
         where: { id: jobId },
         data: {
           paymentReceived: newStatus,
@@ -75,7 +85,7 @@ export async function togglePaymentReceived(jobId: string) {
       // Job → invoice sync (spec item 10): this job's own invoice follows the
       // payment mark. Consolidated multi-job invoices are left alone — one job
       // paid doesn't mean the whole invoice is.
-      db.invoice.updateMany({
+      (tx) => tx.invoice.updateMany({
         where: newStatus
           ? { jobId, deletedAt: null, status: { notIn: ["PAID", "CANCELLED"] } }
           : { jobId, deletedAt: null, status: "PAID" },
@@ -83,7 +93,7 @@ export async function togglePaymentReceived(jobId: string) {
           ? { status: "PAID", paidAt: new Date() }
           : { status: "SENT", paidAt: null },
       }),
-      db.jobLog.create({
+      (tx) => tx.jobLog.create({
         data: {
           jobId,
           userId: session.user.id,
@@ -123,11 +133,15 @@ export async function togglePaymentReceived(jobId: string) {
             (netAmount * rates.gstRate) / 100 + (netAmount * rates.qstRate) / 100;
         }
       }
-      ops.push(
-        db.transaction.create({
+      // Resolved before the transaction opens: this helper runs its own
+      // queries, and those belong outside the transaction that is about to
+      // start, not on a connection it is holding.
+      const revenueCategoryId = await requireBudgetCategoryId("revenue");
+      ops.push((tx) =>
+        tx.transaction.create({
           data: {
             date: new Date(),
-            categoryId: await requireBudgetCategoryId("revenue"),
+            categoryId: revenueCategoryId,
             amount: netAmount,
             description: `Revenue from job for ${job.clientName}`,
             jobId: job.id,
@@ -138,18 +152,21 @@ export async function togglePaymentReceived(jobId: string) {
         })
       );
     } else if (!newStatus) {
-      ops.push(
-        db.transaction.deleteMany({
+      const revenueCategoryId = await requireBudgetCategoryId("revenue");
+      ops.push((tx) =>
+        tx.transaction.deleteMany({
           where: {
             jobId: job.id,
-            categoryId: await requireBudgetCategoryId("revenue"),
+            categoryId: revenueCategoryId,
             isAuto: true,
           },
         })
       );
     }
 
-    await db.$transaction(ops);
+    await db.$transaction(async (tx) => {
+      for (const op of ops) await op(tx);
+    });
 
     // Send receipt + "booking charged" email when payment is marked received.
     // Gated by the per-booking notifyClient toggle.

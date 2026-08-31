@@ -24,7 +24,7 @@
  *
  * Prisma.dmmf is the schema as the client itself understands it, so this cannot
  * drift from the model definitions. It does not, however, know about the RLS
- * policies — that side still needs the assertion described in SECURITY.md.
+ * policies — that side still needs the assertion described in docs/cutover/SECURITY.md.
  */
 import { Prisma } from "@prisma/client";
 

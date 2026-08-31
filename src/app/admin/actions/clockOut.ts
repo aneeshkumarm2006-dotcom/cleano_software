@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/org-db";
+import type { ScopedTx } from "@/lib/db-scoped";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
@@ -88,7 +89,7 @@ import {
  *   report moves no quantity at all; a COUNT report SETS the number to what the
  *   cleaner says is left, which is a recount rather than a subtraction.
  *   NO SUPPLIES TRANSACTION. Per-job supplies cost was priced off the estimate,
- *   so it went with it (TODO decision D2 — see INVENTORY_REPORTING_CHANGE.md).
+ *   so it went with it (TODO decision D2 — see docs/reference/INVENTORY_REPORTING_CHANGE.md).
  *   FLAGS, NOT SILENCE. Low / empty / missing / damaged / needs-maintenance
  *   raises an `InventoryFlag` an admin works through, de-duped per (cleaner,
  *   product, type) so a queue like the 48-row one in the PDF cannot re-form.
@@ -687,7 +688,25 @@ export async function clockOut(
     // and the supplies `Transaction` it was priced into. The tables are left in
     // place and readable — old rows are labelled "Legacy estimated usage" in the
     // activity log (decision D4) — nothing writes them any more.
-    const ops: Prisma.PrismaPromise<unknown>[] = [];
+    /**
+     * The clock-out write, as steps rather than as started queries.
+     *
+     * This was `Prisma.PrismaPromise<unknown>[]`, handed to
+     * `db.$transaction(ops)`. Both halves of that were wrong on the tenant
+     * client, and it broke clock-out outright at the multi-tenant cutover:
+     *
+     *   - the array form is rejected on purpose (see org-db.ts) — it needs
+     *     deferred Prisma promises, and this client runs eagerly;
+     *   - running eagerly, every `db.x.y(...)` below had ALREADY executed by
+     *     the time it was pushed, each in its own transaction. So the throw
+     *     came after the writes, leaving a half-applied clock-out and telling
+     *     the cleaner it had failed.
+     *
+     * Steps, taken in order inside one interactive transaction, are the shape
+     * this client supports: the tenant is announced once and either the whole
+     * clock-out lands or none of it does.
+     */
+    const ops: ((tx: ScopedTx) => Promise<unknown>)[] = [];
     const inventoryChanges: Prisma.InventoryChangeCreateManyInput[] = [];
     const jobLogs: Prisma.JobLogCreateManyInput[] = [];
 
@@ -709,8 +728,8 @@ export async function clockOut(
       // The kit row. `statusUpdatedAt` is stamped for every reported line —
       // including a COUNT with no chip — because "when did anyone last look at
       // this" is a question the admin surfaces ask of all three types.
-      ops.push(
-        db.employeeProduct.update({
+      ops.push((tx) =>
+        tx.employeeProduct.update({
           where: { id: ep.id },
           data: {
             ...(entry.kind === "COUNT" ? { quantity: entry.quantity } : {}),
@@ -769,16 +788,16 @@ export async function clockOut(
     });
 
     if (inventoryChanges.length > 0) {
-      ops.push(db.inventoryChange.createMany({ data: inventoryChanges }));
+      ops.push((tx) => tx.inventoryChange.createMany({ data: inventoryChanges }));
     }
-    ops.push(db.jobLog.createMany({ data: jobLogs }));
+    ops.push((tx) => tx.jobLog.createMany({ data: jobLogs }));
 
     // ── The admin review queue (PDF #1/#2) ───────────────────────────────────
     // One create for everything new, one update closing everything stale, and a
     // note refresh for anything already open on the same problem.
     if (flagsToCreate.length > 0) {
-      ops.push(
-        db.inventoryFlag.createMany({
+      ops.push((tx) =>
+        tx.inventoryFlag.createMany({
           data: flagsToCreate.map((f) => ({
             type: f.type,
             employeeId: userId,
@@ -791,16 +810,16 @@ export async function clockOut(
       );
     }
     if (staleFlagIds.length > 0) {
-      ops.push(
-        db.inventoryFlag.updateMany({
+      ops.push((tx) =>
+        tx.inventoryFlag.updateMany({
           where: { id: { in: staleFlagIds } },
           data: { status: "RESOLVED", resolvedAt: now, resolvedById: userId },
         })
       );
     }
     for (const open of flagsToRenote) {
-      ops.push(
-        db.inventoryFlag.update({
+      ops.push((tx) =>
+        tx.inventoryFlag.update({
           where: { id: open.id },
           data: { notes: wantedByProduct.get(open.productId)?.note ?? null },
         })
@@ -810,8 +829,8 @@ export async function clockOut(
     // Close THIS cleaner's running session. The clock columns are recomputed
     // from every session on the job after the transaction — including
     // Job.clockOutTime, which stays NULL while a teammate is still working.
-    ops.push(
-      db.jobWorkSession.update({
+    ops.push((tx) =>
+      tx.jobWorkSession.update({
         where: { id: openSession.id },
         data: { endedAt: now },
       })
@@ -820,8 +839,8 @@ export async function clockOut(
     // Wash projection is recomputed on EVERY clock-out (Decision 4) — the
     // inputs don't change, so it is idempotent. The credit AWARD flag is
     // separately once-per-job and already guarded.
-    ops.push(
-      db.job.update({
+    ops.push((tx) =>
+      tx.job.update({
         where: { id: jobId },
         data: {
           washProjectedRags: projection.projectedRags,
@@ -842,8 +861,8 @@ export async function clockOut(
     // Any break still running is closed at clock-out (item 26). Left open it
     // would never end, and the job's active working time would keep shrinking
     // as the clock ran on.
-    ops.push(
-      db.jobBreak.updateMany({
+    ops.push((tx) =>
+      tx.jobBreak.updateMany({
         where: { jobId, cleanerId: userId, endedAt: null },
         data: { endedAt: now },
       })
@@ -863,7 +882,7 @@ export async function clockOut(
     // job's P&L as a measured cost. Removed with the estimate itself (decision
     // D2): supplies are a warehouse-level cost, tracked when stock is bought
     // and restocked, not apportioned per job from a number nobody counted.
-    // The owner-facing note is INVENTORY_REPORTING_CHANGE.md.
+    // The owner-facing note is docs/reference/INVENTORY_REPORTING_CHANGE.md.
 
     // Per spec: one combined cleaner-facing restock alert when ≥1 item is low.
     if (restockNeeded.length > 0) {
@@ -879,8 +898,8 @@ export async function clockOut(
           ? `You reported ${list} as low or empty. Please refill it from the storage locker before your next job.`
           : `You reported ${list} as low or empty. Please refill these items from the storage locker before your next job.`;
 
-      ops.push(
-        db.alert.create({
+      ops.push((tx) =>
+        tx.alert.create({
           data: {
             type: "PROVIDER_LOW_STOCK",
             severity: "WARNING",
@@ -894,7 +913,9 @@ export async function clockOut(
       );
     }
 
-    await db.$transaction(ops);
+    await db.$transaction(async (tx) => {
+      for (const op of ops) await op(tx);
+    });
 
     // From here the shift IS saved. A failure below must never be reported as
     // "nothing happened" — it gets its own code, and Retry lands on the resume

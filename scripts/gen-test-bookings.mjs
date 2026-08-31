@@ -135,5 +135,5 @@ function field(col, val) {
 const lines = [COLS.join(",")];
 for (const r of rows) lines.push(COLS.map((c) => field(c, r[c])).join(","));
 const out = lines.join("\n") + "\n";
-writeFileSync(new URL("../test-bookings-dummy.csv", import.meta.url), out);
+writeFileSync(new URL("../data/test-bookings-dummy.csv", import.meta.url), out);
 console.log(`Wrote test-bookings-dummy.csv — ${rows.length} rows, ${COLS.length} columns`);

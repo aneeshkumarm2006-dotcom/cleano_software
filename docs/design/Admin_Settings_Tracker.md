@@ -3,7 +3,7 @@
 Living tracker for making the BookingKoala-spec settings **admin-editable** (per
 [Admin_Settings_Roadmap.md](Admin_Settings_Roadmap.md)). Update statuses as work
 lands. Companion to the feature docs:
-[Feature_Comparison_Full.md](Feature_Comparison_Full.md) ·
+[Feature_Comparison_Full.md](../product/Feature_Comparison_Full.md) ·
 [Admin_Settings_Roadmap.md](Admin_Settings_Roadmap.md).
 
 **Legend**

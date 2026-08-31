@@ -1,6 +1,6 @@
 # AWER round 4 — `awerfixesaug18.pdf`, 8 items
 
-Working tracker: [`_ai_context/TODO.md`](../_ai_context/TODO.md). Prior rounds:
+Working tracker: [`_ai_context/TODO.md`](../../../_ai_context/TODO.md). Prior rounds:
 [`AWER_FIXES.md`](AWER_FIXES.md) (29 items), [`AWER_NEW_FIXES.md`](AWER_NEW_FIXES.md)
 (5) and [`AWER_FIXES_3_PR.md`](AWER_FIXES_3_PR.md) (20). Where this PDF conflicts
 with earlier behaviour, **this PDF wins** — and in one place it deliberately

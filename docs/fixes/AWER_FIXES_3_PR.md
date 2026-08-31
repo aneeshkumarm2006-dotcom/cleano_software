@@ -1,6 +1,6 @@
 # AWER round 3 — `awerfixes.pdf`, 20 items
 
-Working tracker: [`_ai_context/TODO.md`](../_ai_context/TODO.md). Prior rounds:
+Working tracker: [`_ai_context/TODO.md`](../../../_ai_context/TODO.md). Prior rounds:
 [`AWER_FIXES.md`](AWER_FIXES.md) (29 items) and [`AWER_NEW_FIXES.md`](AWER_NEW_FIXES.md)
 (5 items). Where this PDF conflicts with earlier behaviour, this PDF wins.
 
@@ -92,7 +92,7 @@ restoring them is a manual query.
 
 Twenty items from the PDF, worked in seven stages. Full per-item detail and every
 decision is in `_ai_context/TODO.md`; the client-facing version is in
-[`CLIENT_SUMMARY.md`](CLIENT_SUMMARY.md).
+[`CLIENT_SUMMARY.md`](../product/CLIENT_SUMMARY.md).
 
 **Money and pay**
 - **1 — Pay multiplier now actually pays.** `rate = tier base × the cleaner's

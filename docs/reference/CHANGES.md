@@ -1410,7 +1410,7 @@ promos · Payouts, finances, invoices, bulk charge · the entire cleaner-side ap
 
 # Part 3 — AWER round 4 (`awerfixesaug18.pdf`, 8 items)
 
-Full PR description: [`AWER_FIXES_4_PR.md`](AWER_FIXES_4_PR.md). Working tracker with every
+Full PR description: [`AWER_FIXES_4_PR.md`](../fixes/AWER_FIXES_4_PR.md). Working tracker with every
 decision and its rationale: `_ai_context/TODO.md`. Prior rounds: `AWER_FIXES.md` (29),
 `AWER_NEW_FIXES.md` (5), `AWER_FIXES_3_PR.md` (20). **Where this PDF conflicts with earlier
 behaviour, this PDF wins** — including one deliberate reversal of a round-3 rule (fix 4).

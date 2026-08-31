@@ -281,14 +281,17 @@ export async function moveBudgetCategory(id: string, direction: "up" | "down") {
     const [moved] = reordered.splice(from, 1);
     reordered.splice(to, 0, moved);
 
-    await db.$transaction(
-      reordered.map((c, i) =>
-        db.budgetCategory.update({
+    // Interactive form, not `$transaction([...])`: the tenant client rejects
+    // the array form on purpose (see org-db.ts) and runs eagerly, so the mapped
+    // updates would already have fired before the throw.
+    await db.$transaction(async (tx) => {
+      for (const [i, c] of reordered.entries()) {
+        await tx.budgetCategory.update({
           where: { id: c.id },
           data: { sortOrder: i },
-        })
-      )
-    );
+        });
+      }
+    });
 
     revalidateCategoryConsumers();
     return { success: true };

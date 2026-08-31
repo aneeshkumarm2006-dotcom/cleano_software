@@ -2254,10 +2254,10 @@ has(
 // probe, not here.
 ok(
   "7.3 · the numbers-will-move memo exists",
-  fs.existsSync("NUMBERS_THAT_MOVE.md")
+  fs.existsSync("docs/product/NUMBERS_THAT_MOVE.md")
 );
 for (const d of ["D1", "D2", "D3", "D4", "D5", "D6"]) {
-  has(`7.4 · ${d} is recorded in CLIENT_DECISIONS.md`, "CLIENT_DECISIONS.md", d);
+  has(`7.4 · ${d} is recorded in CLIENT_DECISIONS.md`, "docs/product/CLIENT_DECISIONS.md", d);
 }
 
 // ───────────────────────────────────────────────────────────────────────────

@@ -277,7 +277,7 @@ has(
   'invite.decision === "EXPIRED" && !invite.isLastMinute'
 );
 
-// Defects caught reviewing my own work (see AWER_NEW_FIXES.md § Review pass).
+// Defects caught reviewing my own work (see docs/fixes/AWER_NEW_FIXES.md § Review pass).
 has(
   "a late answer is refused once the cleaner is off the job",
   "src/app/admin/actions/respondToJobInvite.ts",

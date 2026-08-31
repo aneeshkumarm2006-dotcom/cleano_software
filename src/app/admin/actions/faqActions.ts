@@ -296,9 +296,14 @@ export async function reorderFaqs(ids: string[]): Promise<Result<{ count: number
   const knownIds = new Set(known.map((k) => k.id));
   const ordered = clean.filter((i) => knownIds.has(i));
 
-  await db.$transaction(
-    ordered.map((id, i) => db.faq.update({ where: { id }, data: { sortOrder: i } }))
-  );
+  // Interactive form, not `$transaction([...])`: the tenant client rejects the
+  // array form on purpose (see org-db.ts) and runs eagerly, so the mapped
+  // updates would already have fired before the throw.
+  await db.$transaction(async (tx) => {
+    for (const [i, id] of ordered.entries()) {
+      await tx.faq.update({ where: { id }, data: { sortOrder: i } });
+    }
+  });
 
   await audit(guard.userId, "faq.reorder", null, `FAQ order changed (${ordered.length} questions)`, {
     order: ordered,
@@ -417,9 +422,11 @@ export async function reorderFaqCategories(
   const knownIds = new Set(known.map((k) => k.id));
   const ordered = clean.filter((i) => knownIds.has(i));
 
-  await db.$transaction(
-    ordered.map((id, i) => db.faqCategory.update({ where: { id }, data: { sortOrder: i } }))
-  );
+  await db.$transaction(async (tx) => {
+    for (const [i, id] of ordered.entries()) {
+      await tx.faqCategory.update({ where: { id }, data: { sortOrder: i } });
+    }
+  });
 
   await audit(guard.userId, "faq.categoryReorder", null, "FAQ category order changed", {
     order: ordered,

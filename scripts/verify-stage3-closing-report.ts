@@ -648,11 +648,11 @@ has("...and the nullable column", "prisma/migrations/20260817010000_add_inventor
 
 section("3.7 · the record");
 
-has("CHANGES.md §4 points at what replaced it", "CHANGES.md", "SUPERSEDED");
-has("...naming the new component", "CHANGES.md", "ClosingInventoryReport.tsx");
-ok("the owner-facing note exists", fs.existsSync("INVENTORY_REPORTING_CHANGE.md"));
+has("CHANGES.md §4 points at what replaced it", "docs/reference/CHANGES.md", "SUPERSEDED");
+has("...naming the new component", "docs/reference/CHANGES.md", "ClosingInventoryReport.tsx");
+ok("the owner-facing note exists", fs.existsSync("docs/reference/INVENTORY_REPORTING_CHANGE.md"));
 for (const d of ["D2", "D3", "D4"]) {
-  has(`...and records decision ${d}`, "INVENTORY_REPORTING_CHANGE.md", `**${d}**`);
+  has(`...and records decision ${d}`, "docs/reference/INVENTORY_REPORTING_CHANGE.md", `**${d}**`);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
