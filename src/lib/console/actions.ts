@@ -16,6 +16,8 @@
  */
 import { randomBytes } from "node:crypto";
 
+import { hashPassword } from "better-auth/crypto";
+
 import { revalidatePath } from "next/cache";
 
 import type { OrgPlan } from "@prisma/client";
@@ -23,7 +25,8 @@ import type { OrgPlan } from "@prisma/client";
 import { platformDb, recordPlatformAction, requirePlatformStaff } from "@/lib/platform-db";
 import { PLANS, trialEndFrom } from "@/lib/plans";
 import { ProvisioningError, provisionOrganization, slugify } from "@/lib/provisioning";
-import { PLATFORM_ORG_SLUG, isValidOrgSlug } from "@/lib/tenant";
+import { PLATFORM_ORG_SLUG, isValidOrgSlug, originForSlug } from "@/lib/tenant";
+import { sendWorkspaceCredentials } from "@/lib/platform-email";
 
 export type ActionResult = { ok: true; message: string } | { ok: false; message: string };
 
@@ -327,7 +330,20 @@ function temporaryPassword(): string {
 }
 
 export type ApproveResult =
-  | { ok: true; message: string; slug: string; email: string; password: string }
+  | {
+      ok: true;
+      message: string;
+      slug: string;
+      email: string;
+      password: string;
+      /**
+       * Whether the credentials email actually went out. Reported rather than
+       * assumed: the password is still shown on screen, and staff need to know
+       * whether they have to pass it on by hand.
+       */
+      emailed?: boolean;
+      emailError?: string;
+    }
   | { ok: false; message: string };
 
 // ---------------------------------------------------------------------------
@@ -433,6 +449,19 @@ export async function createWorkspace(
       { company: companyName, email: ownerEmail, plan, owner: ownerName },
     );
 
+    // Sent, not just shown. The on-screen copy is seen once by whoever pressed
+    // the button; the owner needs it themselves, and a workspace whose password
+    // lives only in a browser tab is one lost tab away from being unreachable.
+    // Never allowed to fail the creation — the workspace exists either way, and
+    // the result says whether the email got out so staff can pass it on by hand.
+    const mail = await sendWorkspaceCredentials({
+      to: ownerEmail,
+      ownerName,
+      companyName,
+      origin: originForSlug(created.slug),
+      password,
+    }).catch((e) => ({ ok: false as const, error: e instanceof Error ? e.message : "send failed" }));
+
     refresh(created.slug);
     revalidatePath("/console/requests");
 
@@ -442,12 +471,122 @@ export async function createWorkspace(
       slug: created.slug,
       email: ownerEmail,
       password,
+      emailed: mail.ok,
+      emailError: mail.ok ? undefined : mail.error,
     };
   } catch (e) {
     if (e instanceof ProvisioningError) return { ok: false, message: e.message };
     console.error("create workspace failed", e);
     return { ok: false, message: "Could not create the workspace. Nothing was changed." };
   }
+}
+
+/**
+ * Issue the owner a new password and email it to them.
+ *
+ * The gap this closes. A staff-created workspace's password was generated once,
+ * shown once on the screen of whoever pressed the button, and stored only as a
+ * hash. Navigate away and it was gone — and there was nothing behind it: the
+ * console had no reset, "Forgot password?" on the staff sign-in says "contact
+ * your administrator" (which an OWNER does not have), and signing in as the
+ * customer is not built. One lost browser tab left a workspace we had just sold
+ * permanently unreachable. That happened, to CleanoCalgary, which is what
+ * prompted this.
+ *
+ * ADMIN, and audited like every other action here: handing somebody the keys to
+ * a customer's account is exactly the sort of thing the log exists to record.
+ * The new password is emailed AND returned, for the same reason creation does
+ * both — the address may not be reachable yet, and staff need to know.
+ */
+export async function resendOwnerCredentials(orgId: string): Promise<ApproveResult> {
+  let staff;
+  try {
+    staff = await requirePlatformStaff("ADMIN");
+  } catch {
+    return { ok: false, message: "You do not have permission to reset a password." };
+  }
+
+  const { error, org } = await loadTarget(orgId);
+  if (error) return { ok: false, message: error };
+
+  // The FIRST owner, not any owner. A workspace can grow a second one, and the
+  // account this is meant to rescue is the one provisioning created.
+  const owner = await platformDb.user.findFirst({
+    where: { organizationId: org.id, role: "OWNER", deletedAt: null },
+    orderBy: { createdAt: "asc" },
+    select: { id: true, name: true, email: true },
+  });
+  if (!owner) {
+    return { ok: false, message: `${org.name} has no owner account to reset.` };
+  }
+
+  const password = temporaryPassword();
+  const hashed = await hashPassword(password);
+
+  try {
+    await platformDb.$transaction(async (tx) => {
+      // Upsert rather than update: an owner who has only ever signed in another
+      // way has no credential row, and this is precisely the moment to give
+      // them one rather than to fail.
+      const account = await tx.account.findFirst({
+        where: { userId: owner.id, providerId: "credential" },
+        select: { id: true },
+      });
+      if (account) {
+        await tx.account.update({ where: { id: account.id }, data: { password: hashed } });
+      } else {
+        await tx.account.create({
+          data: {
+            userId: owner.id,
+            accountId: owner.id,
+            providerId: "credential",
+            password: hashed,
+          },
+        });
+      }
+      // They did not choose it, so it buys one sign-in and no more.
+      await tx.user.update({
+        where: { id: owner.id },
+        data: { mustChangePassword: true },
+      });
+    });
+  } catch (e) {
+    console.error("resend owner credentials failed", e);
+    return { ok: false, message: "Could not reset the password. Nothing was changed." };
+  }
+
+  const mail = await sendWorkspaceCredentials({
+    to: owner.email,
+    ownerName: owner.name,
+    companyName: org.name,
+    origin: originForSlug(org.slug),
+    password,
+    reissued: true,
+  }).catch((e) => ({ ok: false as const, error: e instanceof Error ? e.message : "send failed" }));
+
+  // Recorded WITHOUT the password. The audit log is read by more people than
+  // may sign in as this customer, and a log that leaks credentials is worse
+  // than the problem it documents.
+  await recordPlatformAction(
+    staff,
+    "org.owner.password_reset",
+    { id: org.id, slug: org.slug },
+    { owner: owner.email, emailed: mail.ok },
+  );
+
+  refresh(org.slug);
+
+  return {
+    ok: true,
+    message: mail.ok
+      ? `New password sent to ${owner.email}.`
+      : `New password set. The email did not go out — pass it on yourself.`,
+    slug: org.slug,
+    email: owner.email,
+    password,
+    emailed: mail.ok,
+    emailError: mail.ok ? undefined : mail.error,
+  };
 }
 
 /**
@@ -520,6 +659,16 @@ export async function approveAccessRequest(
       { requestId: req.id, company: req.companyName, email: req.email },
     );
 
+    // Same reasoning as createWorkspace: a password that exists only on the
+    // approver's screen is one closed tab away from an unreachable workspace.
+    const mail = await sendWorkspaceCredentials({
+      to: req.email,
+      ownerName: req.contactName,
+      companyName: req.companyName,
+      origin: originForSlug(created.slug),
+      password,
+    }).catch((e) => ({ ok: false as const, error: e instanceof Error ? e.message : "send failed" }));
+
     revalidatePath("/console/requests");
     revalidatePath("/console/workspaces");
     revalidatePath("/console");
@@ -531,6 +680,8 @@ export async function approveAccessRequest(
       slug: created.slug,
       email: req.email,
       password,
+      emailed: mail.ok,
+      emailError: mail.ok ? undefined : mail.error,
     };
   } catch (e) {
     if (e instanceof ProvisioningError) return { ok: false, message: e.message };

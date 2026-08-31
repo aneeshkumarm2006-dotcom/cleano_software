@@ -8,10 +8,12 @@ import {
   changePlan,
   extendTrial,
   reactivateWorkspace,
+  resendOwnerCredentials,
   restartTrial,
   setSeats,
   suspendWorkspace,
   type ActionResult,
+  type ApproveResult,
 } from "@/lib/console/actions";
 
 /**
@@ -353,6 +355,127 @@ export function AccessPanel({
       </div>
 
       <Result r={msg} />
+    </div>
+  );
+}
+
+/**
+ * Give the owner a way back in.
+ *
+ * A staff-created workspace's first password is shown once and stored only as a
+ * hash, and nothing behind it could reissue one: no console reset, a "Forgot
+ * password?" that tells an OWNER to contact an administrator they do not have,
+ * and no signing in as the customer. A closed browser tab was enough to make a
+ * workspace we had just sold permanently unreachable.
+ *
+ * Behind a confirm, because it INVALIDATES the password they may be using
+ * happily right now — this is a rescue, not a button to press while browsing.
+ */
+export function CredentialsPanel({
+  orgId,
+  ownerEmail,
+  canEdit,
+}: {
+  orgId: string;
+  ownerEmail: string | null;
+  canEdit: boolean;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  const [done, setDone] = useState<Extract<ApproveResult, { ok: true }> | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, start] = useTransition();
+
+  if (done) {
+    return (
+      <div className="body">
+        <div className={`notice ${done.emailed ? "good" : "bad"}`} style={{ marginBottom: 12 }}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+            <path d={done.emailed ? "M20 6 9 17l-5-5" : "M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"} />
+          </svg>
+          <div>
+            <b>{done.message}</b>
+            {!done.emailed && done.emailError && (
+              <div style={{ marginTop: 4, fontSize: 12 }}>{done.emailError}</div>
+            )}
+          </div>
+        </div>
+        <dl className="kv">
+          <dt>Sign in as</dt>
+          <dd className="mono">{done.email}</dd>
+          <dt>New password</dt>
+          <dd className="mono" style={{ wordBreak: "break-all" }}>{done.password}</dd>
+        </dl>
+        <p className="sub" style={{ marginTop: 10 }}>
+          Shown here once as well as emailed, so you can pass it on if the address turns out
+          not to work. They must change it the first time they sign in.
+        </p>
+        <button type="button" className="btn" style={{ marginTop: 12 }} onClick={() => setDone(null)}>
+          Done
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="body">
+      <div className="zone-row">
+        <div className="txt">
+          <b>Send a new password</b>
+          <p>
+            {ownerEmail
+              ? `Generates a fresh one-time password, emails it to ${ownerEmail}, and shows it here as well. Their current password stops working.`
+              : "This workspace has no owner account to reset."}
+          </p>
+        </div>
+        <button
+          type="button"
+          className="btn"
+          disabled={!canEdit || busy || !ownerEmail}
+          onClick={() => setConfirming((c) => !c)}
+        >
+          {confirming ? "Cancel" : "Reset"}
+        </button>
+      </div>
+
+      {confirming && (
+        <div style={{ paddingTop: 12 }}>
+          <div className="notice bad" style={{ marginBottom: 12 }}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
+            </svg>
+            <div>
+              <b>Their current password stops working immediately.</b> If they are signed in
+              right now they stay signed in, but the next sign-in needs the new password.
+            </div>
+          </div>
+          <button
+            type="button"
+            className="btn primary"
+            disabled={busy}
+            onClick={() =>
+              start(async () => {
+                setErr(null);
+                const r = await resendOwnerCredentials(orgId);
+                if (r.ok) {
+                  setDone(r);
+                  setConfirming(false);
+                } else setErr(r.message);
+              })
+            }
+          >
+            {busy ? "Resetting…" : "Reset and email it"}
+          </button>
+        </div>
+      )}
+
+      {err && (
+        <div className="notice bad" style={{ marginTop: 12 }} role="status">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+            <path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
+          </svg>
+          <div>{err}</div>
+        </div>
+      )}
     </div>
   );
 }

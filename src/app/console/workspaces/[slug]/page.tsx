@@ -25,7 +25,7 @@ import {
   fmtMoney,
   initialsOf,
 } from "../../ui";
-import { AccessPanel, PlanPanel, TrialPanel } from "./Panels";
+import { AccessPanel, CredentialsPanel, PlanPanel, TrialPanel } from "./Panels";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -425,6 +425,17 @@ export default async function WorkspacePage({
                   </dd>
                 </dl>
               </div>
+            </div>
+
+            <div className="card">
+              <header>
+                <h2>Sign-in details</h2>
+              </header>
+              <CredentialsPanel
+                orgId={w.id}
+                ownerEmail={w.owner?.email ?? null}
+                canEdit={canEdit}
+              />
             </div>
 
             <div className="card">

@@ -115,10 +115,26 @@ export default function NewWorkspace({ canEdit }: { canEdit: boolean }) {
               {created.password}
             </dd>
           </dl>
-          <p className="sub" style={{ marginTop: 10 }}>
-            Send these on yourself — Awer does not email them. The password is shown once and is
-            stored only as a hash, and they are made to change it the first time they sign in.
-          </p>
+          {created.emailed ? (
+            <p className="sub" style={{ marginTop: 10 }}>
+              These have been emailed to <span className="mono">{created.email}</span>. Kept on
+              screen too, so you can pass them on if that address turns out not to reach them.
+              The password is stored only as a hash and they must change it on first sign-in.
+            </p>
+          ) : (
+            <div className="notice bad" style={{ marginTop: 12 }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
+              </svg>
+              <div>
+                <b>The email did not go out — copy this password now.</b> It is shown once and
+                stored only as a hash. You can always issue a new one from the workspace page.
+                {created.emailError && (
+                  <div style={{ marginTop: 4, fontSize: 12 }}>{created.emailError}</div>
+                )}
+              </div>
+            </div>
+          )}
           <div style={{ display: "flex", gap: 7, marginTop: 12 }}>
             <button type="button" className="btn" onClick={reset}>
               Create another
