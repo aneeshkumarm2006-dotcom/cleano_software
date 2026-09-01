@@ -104,6 +104,9 @@ export function EmployeeModal({
   // it is still loading, so the panel never states a count it does not have.
   const [deletePreview, setDeletePreview] =
     useState<EmployeeDeletionPreview | null>(null);
+  // Distinct from "still loading". Without it a failed lookup left the panel
+  // saying "Checking what this would affect…" for ever, which reads as a hang.
+  const [previewFailed, setPreviewFailed] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [selectedRole, setSelectedRole] = useState<
     "OWNER" | "ADMIN" | "OPS_MANAGER" | "FIELD_LEAD" | "EMPLOYEE"
@@ -406,6 +409,12 @@ export function EmployeeModal({
                         </p>
                       )}
                     </div>
+                  ) : previewFailed ? (
+                    <p className="text-xs text-red-600/70">
+                      Could not check what this would affect. Upcoming jobs will
+                      still be unassigned, and anyone with finished jobs is
+                      archived rather than erased.
+                    </p>
                   ) : (
                     <p className="text-xs text-red-600/70">
                       Checking what this would affect…
@@ -679,10 +688,14 @@ export function EmployeeModal({
                     onClick={() => {
                       setShowDeleteConfirm(true);
                       setDeletePreview(null);
+                      setPreviewFailed(false);
                       if (employee) {
                         previewEmployeeDeletion(employee.id)
-                          .then(setDeletePreview)
-                          .catch(() => setDeletePreview(null));
+                          .then((r) => {
+                            if (r) setDeletePreview(r);
+                            else setPreviewFailed(true);
+                          })
+                          .catch(() => setPreviewFailed(true));
                       }
                     }}
                     disabled={disableForm}

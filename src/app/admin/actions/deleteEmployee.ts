@@ -62,16 +62,28 @@ export async function previewEmployeeDeletion(
   const actorRole = (session?.user as { role?: string } | undefined)?.role;
   if (actorRole !== "OWNER" && actorRole !== "ADMIN") return null;
 
-  const [futureJobs, pastJobs] = await Promise.all([
+  /**
+   * Two plain counts and a subtraction, rather than a second count wrapped in
+   * `NOT: futureJobsWhere(...)`.
+   *
+   * For LEGIBILITY, not speed — benchmarked against the NOT form and they are
+   * the same, ~550ms each on the staging pooler. A confirm dialog was measured
+   * taking 15s to fill in, which is what prompted the look; that time is
+   * `next dev` talking to a remote database, where trivial endpoints in the
+   * same session took 11-16s too. Nothing here was the cause, and rewriting it
+   * for performance would have been a fix for a problem that did not exist.
+   * "Everything they are on, minus the future ones" is simply easier to read
+   * than a negated predicate.
+   */
+  const onThisPerson = {
+    deletedAt: null,
+    OR: [{ employeeId }, { cleaners: { some: { id: employeeId } } }],
+  };
+  const [futureJobs, allJobs] = await Promise.all([
     db.job.count({ where: futureJobsWhere(employeeId) }),
-    db.job.count({
-      where: {
-        deletedAt: null,
-        OR: [{ employeeId }, { cleaners: { some: { id: employeeId } } }],
-        NOT: futureJobsWhere(employeeId),
-      },
-    }),
+    db.job.count({ where: onThisPerson }),
   ]);
+  const pastJobs = Math.max(0, allJobs - futureJobs);
 
   return { futureJobs, pastJobs, willArchive: pastJobs > 0 };
 }
@@ -122,13 +134,15 @@ export async function deleteEmployee(employeeId: string): Promise<{
       // the job's LEAD without asking again per job.
       select: { id: true, employeeId: true },
     });
-    const pastJobCount = await db.job.count({
+    // Same subtraction as the preview, and for the same reason: it reads
+    // better, not faster.
+    const allJobCount = await db.job.count({
       where: {
         deletedAt: null,
         OR: [{ employeeId }, { cleaners: { some: { id: employeeId } } }],
-        NOT: futureJobsWhere(employeeId),
       },
     });
+    const pastJobCount = Math.max(0, allJobCount - futureJobs.length);
 
     await db.$transaction(async (tx) => {
       // All three places an assignment is recorded, together — the same trio

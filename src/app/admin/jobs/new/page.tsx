@@ -523,6 +523,10 @@ export default async function JobFormPage({
     // customer. See src/lib/job-money.ts.
     const isCashJob = formData.get("isCashJob") === "on";
     const taxExempt = formData.get("taxExempt") === "on";
+    // Fixed start or any time that day (Aug 31 list, item 11). This page has
+    // its own form and its own action — the modal's copy of this control does
+    // nothing here — so the flag has to be read and written in both.
+    const isFlexible = formData.get("isFlexible") === "on";
     const editingIdForMoney = formData.get("jobId") as string | null;
     const moneyJob = editingIdForMoney
       ? await db.job.findUnique({
@@ -690,6 +694,7 @@ export default async function JobFormPage({
       // saveJob.ts (fix list items 3 + 4).
       employeeId: cleanerIds[0] ?? null,
       taxExempt,
+      isFlexible,
       clientName: clientName || (formData.get("clientName") as string),
       clientId,
       description: (formData.get("description") as string) || null,
@@ -1186,6 +1191,24 @@ export default async function JobFormPage({
                 />
                 <span style={{ fontSize: 14, color: "var(--ink)" }}>
                   Exempt this job from sales tax <span style={{ color: "var(--primary-50)", fontWeight: 400 }}>— no GST/QST on this job. Cleaner pay is unaffected (always calculated before tax).</span>
+                </span>
+              </label>
+            </div>
+
+            {/* Aug 31 list, item 11 — the same control the modal carries, on the
+                form that actually renders at /admin/jobs/new. Two forms write
+                jobs here and only one of them had it, which is exactly how
+                `taxExempt` went missing on this page before it. */}
+            <div className="md:col-span-2">
+              <label className="flex items-center gap-3 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  name="isFlexible"
+                  defaultChecked={(prefill as any)?.isFlexible === true}
+                  className="w-4 h-4 rounded accent-[#008C9C]"
+                />
+                <span style={{ fontSize: 14, color: "var(--ink)" }}>
+                  Flexible — any time on this day <span style={{ color: "var(--primary-50)", fontWeight: 400 }}>— the cleaner can do it whenever suits, so they are never counted late. Leave unticked if the client is opening the door at a set time.</span>
                 </span>
               </label>
             </div>
