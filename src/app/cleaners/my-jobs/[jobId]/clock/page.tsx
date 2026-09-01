@@ -58,7 +58,7 @@ export default async function ClockPage({ params }: PageProps) {
   // This cleaner's own work sessions and breaks (item 6). The session log used
   // to be a three-way ternary over the single clock pair, so it could render at
   // most one row no matter how many times the cleaner had been on site.
-  const [mySessions, myBreaks] = await Promise.all([
+  const [mySessions, myBreaks, jobSessionCount] = await Promise.all([
     db.jobWorkSession.findMany({
       where: { jobId: job.id, cleanerId: session.user.id },
       orderBy: { startedAt: "asc" },
@@ -68,6 +68,8 @@ export default async function ClockPage({ params }: PageProps) {
       where: { jobId: job.id, cleanerId: session.user.id },
       select: { startedAt: true, endedAt: true },
     }),
+    // Sessions belonging to ANYONE on this job — see `jobHasSessions` below.
+    db.jobWorkSession.count({ where: { jobId: job.id } }),
   ]);
 
   return (
@@ -79,6 +81,26 @@ export default async function ClockPage({ params }: PageProps) {
       status={job.status}
       clockInTime={j.clockInTime?.toISOString() ?? null}
       clockOutTime={j.clockOutTime?.toISOString() ?? null}
+      /**
+       * Does this job have per-cleaner session rows at all?
+       *
+       * The screen falls back to the job-level clock pair when a cleaner has no
+       * sessions, for jobs that predate JobWorkSession. That fallback was
+       * keyed on "no sessions FOR ME", which on a multi-cleaner job is a
+       * different statement entirely: the job-level pair is stamped by whoever
+       * clocked in FIRST, so a cleaner who had not started was shown their
+       * TEAMMATE's clock and told they were on shift.
+       *
+       * Production, job #2150: Priscilla clocked in at 03:39 and the pair was
+       * stamped on the job. Muralitharan, who never clocked in, opened the same
+       * screen, saw a running clock, and pressed Clock Out eight times — the
+       * server correctly refused every one with "you're not clocked in".
+       *
+       * So the fallback now asks whether the JOB has any sessions. If it does,
+       * the table is authoritative and "none of them are mine" means exactly
+       * what it says. Genuinely legacy jobs have none at all and are unaffected.
+       */
+      jobHasSessions={jobSessionCount > 0}
       initialOnBreak={onBreak}
       onMyWayAt={j.onMyWayAt?.toISOString() ?? null}
       employeeProducts={employeeProducts}

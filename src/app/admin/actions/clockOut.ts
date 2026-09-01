@@ -394,7 +394,30 @@ export async function clockOut(
 
     const isEmployee = job.employeeId === userId;
     const isCleaner = job.cleaners.some((c) => c.id === userId);
-    if (!isEmployee && !isCleaner) {
+
+    /**
+     * AN OPEN SESSION OUTRANKS THE ROSTER.
+     *
+     * Assignment says who SHOULD work the job; an open session is evidence that
+     * somebody DID. When the two disagree, the evidence wins — otherwise a
+     * roster change made while a cleaner is mid-shift strands them: they are
+     * clocked in, the clock is running, and the app refuses to let them stop.
+     *
+     * Production, job #2150: Priscilla claimed the job, clocked in at 03:39,
+     * and was taken off the roster at 03:41 — ninety seconds later, while her
+     * session was open. Every clock-out she tried after that was refused with
+     * "you are not assigned to this job", and she had no way to end a shift she
+     * had genuinely worked. Her hours would have gone unpaid.
+     *
+     * Safe by construction: this only admits somebody who already has an open
+     * `JobWorkSession` on THIS job, which nothing but their own clock-in
+     * creates. It widens who may CLOSE a session, never who may open one.
+     */
+    const strandedSession = !isEmployee && !isCleaner
+      ? await findOpenSession(jobId, userId)
+      : null;
+
+    if (!isEmployee && !isCleaner && !strandedSession) {
       const failure = fail(
         "NOT_ASSIGNED",
         "You are not assigned to this job, so you can't clock out of it. Ask your manager to add you."

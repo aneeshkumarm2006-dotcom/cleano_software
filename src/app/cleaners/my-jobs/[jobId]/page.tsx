@@ -137,7 +137,7 @@ export default async function JobDetailPage({ params }: PageProps) {
   // THIS cleaner's own sessions (item 6). Every clock gate below asks about
   // them, not about the job-level pair — that pair is shared, so it used to
   // mean one teammate's clock-in decided what everyone else could do.
-  const [myWorkSessions, myBreaks] = await Promise.all([
+  const [myWorkSessions, myBreaks, jobSessionCount] = await Promise.all([
     db.jobWorkSession.findMany({
       where: { jobId: job.id, cleanerId: session.user.id },
       orderBy: { startedAt: "asc" },
@@ -147,15 +147,24 @@ export default async function JobDetailPage({ params }: PageProps) {
       where: { jobId: job.id, cleanerId: session.user.id },
       select: { startedAt: true, endedAt: true },
     }),
+    // Anyone's sessions on this job — the fallback below turns on it.
+    db.jobWorkSession.count({ where: { jobId: job.id } }),
   ]);
   const mySessions =
     myWorkSessions.length > 0
       ? myWorkSessions
-      : // Legacy jobs have no session rows; their clock pair IS one session.
-        sessionsFromLegacyPair(
-          jobWithClock.clockInTime,
-          jobWithClock.clockOutTime
-        );
+      : jobSessionCount > 0
+        ? // The job HAS per-cleaner records and none of them are mine, so I am
+          // not clocked in. Falling through to the job-level pair here is what
+          // showed a cleaner their TEAMMATE's clock and told them their shift
+          // was running (production job #2150 — see the clock screen's note).
+          []
+        : // Genuinely legacy: no session rows at all, so the clock pair IS the
+          // one session it always was.
+          sessionsFromLegacyPair(
+            jobWithClock.clockInTime,
+            jobWithClock.clockOutTime
+          );
   const sessionSummary = summariseSessions(mySessions, myBreaks);
   /** Active minutes across every session, breaks removed. */
   const duration = sessionSummary.count > 0 ? sessionSummary.activeMinutes : null;

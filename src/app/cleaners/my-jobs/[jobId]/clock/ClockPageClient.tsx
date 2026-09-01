@@ -48,6 +48,8 @@ interface ClockPageClientProps {
   status: string;
   clockInTime: string | null;
   clockOutTime: string | null;
+  /** True when ANY cleaner has a session row here — see the note on the prop. */
+  jobHasSessions?: boolean;
   /** True when a break is already running (item 26). */
   initialOnBreak?: boolean;
   onMyWayAt?: string | null;
@@ -164,6 +166,7 @@ export default function ClockPageClient({
   status,
   clockInTime,
   clockOutTime,
+  jobHasSessions = false,
   initialOnBreak = false,
   onMyWayAt = null,
   employeeProducts = [],
@@ -318,12 +321,20 @@ export default function ClockPageClient({
   // Sessions are the truth (item 6); the job-level clock pair is the fallback
   // for jobs that predate JobWorkSession. `mySessions` is the one list the
   // whole screen reads, so old and new jobs render identically.
+  //
+  // `jobHasSessions` is what keeps the fallback honest on a multi-cleaner job.
+  // Keyed on "I have no sessions" alone, it handed a cleaner the job-level pair
+  // — which is whoever clocked in FIRST — and told them they were on shift when
+  // they had not started. Once the job has any session row the table is
+  // authoritative, and having none of my own means I am not clocked in.
   const mySessions: WorkSession[] = useMemo(
     () =>
       sessions.length > 0
         ? sessions.map((s) => ({ startedAt: s.startedAt, endedAt: s.endedAt }))
-        : sessionsFromLegacyPair(clockInTime, clockOutTime),
-    [sessions, clockInTime, clockOutTime]
+        : jobHasSessions
+          ? []
+          : sessionsFromLegacyPair(clockInTime, clockOutTime),
+    [sessions, clockInTime, clockOutTime, jobHasSessions]
   );
   const sessionSummary = useMemo(
     () => summariseSessions(mySessions, breaks, now),
