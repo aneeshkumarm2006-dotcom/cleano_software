@@ -104,15 +104,27 @@ export async function clockIn(jobId: string) {
       };
     }
 
-    // Late-arrival detection: minutes between scheduled start and clock-in.
-    // Only ever measured on the FIRST session (see isResume above).
-    const minutesLate = isResume
-      ? 0
-      : Math.max(
-          0,
-          Math.floor((now.getTime() - job.startTime.getTime()) / 60_000)
-        );
-    const penalty = isResume ? null : computeLateArrivalPenalty(minutesLate);
+    /**
+     * Late-arrival detection: minutes between scheduled start and clock-in.
+     * Only ever measured on the FIRST session (see isResume above).
+     *
+     * A FLEXIBLE job cannot be late (Aug 31 list, item 11). Its start time is
+     * only a slot on the day — the cleaner may do the work whenever suits, the
+     * client is not standing at the door — so measuring lateness against it
+     * produces a number that means nothing and then acts on it: a penalty
+     * against the cleaner's pay, a late-arrival email to the office, and a
+     * strike at 45 minutes. A cleaner working exactly as instructed was being
+     * disciplined for it.
+     */
+    const minutesLate =
+      isResume || job.isFlexible
+        ? 0
+        : Math.max(
+            0,
+            Math.floor((now.getTime() - job.startTime.getTime()) / 60_000)
+          );
+    const penalty =
+      isResume || job.isFlexible ? null : computeLateArrivalPenalty(minutesLate);
 
     // Open the session. This is the record of work now; the columns below are
     // derived mirrors of it.

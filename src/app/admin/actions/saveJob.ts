@@ -639,6 +639,17 @@ export async function saveJob(formData: FormData) {
     // Per-job tax exemption (item 7) — the modal DOES expose this one, and it
     // applies to this job alone.
     const taxExempt = formData.get("taxExempt") === "on";
+    /**
+     * Fixed start time, or anywhere on the day? (Aug 31 list, item 11.)
+     *
+     * `isFlexible` already existed on the Job and was already READ in four
+     * places — the available-jobs board, the job preview, Leads and Requests
+     * all say "Flexible" — but nothing could ever SET it, so it was false on
+     * every job in the system and those four displays were dead code. The
+     * cleaner-facing consequence is in clockIn.ts: a flexible job cannot be
+     * late, so it raises no penalty, no late email and no strike.
+     */
+    const isFlexible = formData.get("isFlexible") === "on";
     const taxRates = await getTaxRates();
     // ITEMIZED: add-ons and custom extra charges count (awerfixes item 10) — the
     // subtotal is `price + sum(unit x qty) - discount`, where it used to be
@@ -814,6 +825,7 @@ export async function saveJob(formData: FormData) {
       price,
       usesFixedPrice,
       taxExempt,
+      isFlexible,
       // Stamped on every save, so a job can never drift back to being priced by
       // inference (fix 2). `taxes.subtotalAmount` below is the ACTIVE service
       // total under whichever mode this is.

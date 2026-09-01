@@ -5,9 +5,83 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 
+/**
+ * Removing somebody from the team without removing them from the record.
+ *
+ * This used to refuse outright — "Cannot delete employee with existing jobs" —
+ * which left an admin two bad options: hand-reassign every job the person was
+ * ever on, or leave a departed cleaner sitting on next week's schedule. In
+ * practice they left them, and the jobs stayed assigned to somebody who was
+ * never coming.
+ *
+ * The rule now follows the work, not the person (Aug 31 list, item 13):
+ *
+ *   FUTURE jobs are released. Work that has not happened cannot be done by
+ *   somebody who has left, so the assignment comes off all three places it is
+ *   recorded and the job returns to the pool for reassignment.
+ *
+ *   PAST jobs keep them. Those are payroll, history and reporting — a finished
+ *   job that forgets who cleaned it is a hole in the books. So a person with
+ *   history is ARCHIVED (deletedAt) rather than erased, which keeps every
+ *   completed job's link intact.
+ *
+ * Only somebody who never worked a job is deleted outright, which is what this
+ * action always did for that case.
+ */
+
+/** Statuses that mean the work is settled and must keep its cleaner. */
+const FINISHED = ["COMPLETED", "PAID", "CANCELLED"] as const;
+
+/** Jobs this person is on that have NOT happened yet. */
+function futureJobsWhere(employeeId: string) {
+  return {
+    deletedAt: null,
+    startTime: { gt: new Date() },
+    status: { notIn: [...FINISHED] },
+    OR: [{ employeeId }, { cleaners: { some: { id: employeeId } } }],
+  };
+}
+
+export interface EmployeeDeletionPreview {
+  /** Upcoming jobs that will be released back to the pool. */
+  futureJobs: number;
+  /** Finished jobs that will keep this person attached. */
+  pastJobs: number;
+  /** True when the record is archived rather than erased. */
+  willArchive: boolean;
+}
+
+/**
+ * What deleting this person would do, so the admin is told BEFORE they confirm
+ * rather than after (item 13: "show how many future jobs will be affected").
+ */
+export async function previewEmployeeDeletion(
+  employeeId: string
+): Promise<EmployeeDeletionPreview | null> {
+  const session = await auth.api.getSession({ headers: await headers() });
+  const actorRole = (session?.user as { role?: string } | undefined)?.role;
+  if (actorRole !== "OWNER" && actorRole !== "ADMIN") return null;
+
+  const [futureJobs, pastJobs] = await Promise.all([
+    db.job.count({ where: futureJobsWhere(employeeId) }),
+    db.job.count({
+      where: {
+        deletedAt: null,
+        OR: [{ employeeId }, { cleaners: { some: { id: employeeId } } }],
+        NOT: futureJobsWhere(employeeId),
+      },
+    }),
+  ]);
+
+  return { futureJobs, pastJobs, willArchive: pastJobs > 0 };
+}
+
 export async function deleteEmployee(employeeId: string): Promise<{
   success: boolean;
   error?: string;
+  /** What actually happened, so the caller can say so. */
+  released?: number;
+  archived?: boolean;
 }> {
   try {
     const session = await auth.api.getSession({ headers: await headers() });
@@ -16,26 +90,15 @@ export async function deleteEmployee(employeeId: string): Promise<{
       return { success: false, error: "Not authorized." };
     }
 
-    // Check if employee has any jobs
     const employee = await db.user.findUnique({
       where: { id: employeeId },
-      include: {
-        jobs: true,
-      },
+      select: { id: true, name: true },
     });
-
     if (!employee) {
-      return {
-        success: false,
-        error: "Employee not found.",
-      };
+      return { success: false, error: "Employee not found." };
     }
-
-    if (employee.jobs.length > 0) {
-      return {
-        success: false,
-        error: "Cannot delete employee with existing jobs. Please reassign or delete their jobs first.",
-      };
+    if (employeeId === session?.user?.id) {
+      return { success: false, error: "You cannot delete your own account." };
     }
 
     // Commission rows are money owed to this person, so `Commission.salesRepId`
@@ -53,20 +116,61 @@ export async function deleteEmployee(employeeId: string): Promise<{
       };
     }
 
-    // Delete the employee's account first
-    await db.account.deleteMany({
-      where: { userId: employeeId },
+    const futureJobs = await db.job.findMany({
+      where: futureJobsWhere(employeeId),
+      // `employeeId` comes along so the loop below knows whether this person is
+      // the job's LEAD without asking again per job.
+      select: { id: true, employeeId: true },
+    });
+    const pastJobCount = await db.job.count({
+      where: {
+        deletedAt: null,
+        OR: [{ employeeId }, { cleaners: { some: { id: employeeId } } }],
+        NOT: futureJobsWhere(employeeId),
+      },
     });
 
-    // Delete the employee
-    await db.user.delete({
-      where: { id: employeeId },
+    await db.$transaction(async (tx) => {
+      // All three places an assignment is recorded, together — the same trio
+      // claimJob writes. Clearing one and not the others is how a job ends up
+      // half-assigned to somebody who has left.
+      for (const job of futureJobs) {
+        await tx.job.update({
+          where: { id: job.id },
+          data: {
+            cleaners: { disconnect: { id: employeeId } },
+            // Only clear the lead when it is actually this person — a job whose
+            // lead is somebody else must keep them.
+            ...(job.employeeId === employeeId ? { employeeId: null } : {}),
+          },
+        });
+      }
+      await tx.jobAssignment.deleteMany({
+        where: { cleanerId: employeeId, jobId: { in: futureJobs.map((j) => j.id) } },
+      });
+      // Pending invitations to work are assignments that have not happened yet.
+      await tx.jobAssignmentInvite.deleteMany({
+        where: { cleanerId: employeeId, jobId: { in: futureJobs.map((j) => j.id) } },
+      });
+
+      if (pastJobCount > 0) {
+        // Archived, not erased: every finished job keeps the person who worked
+        // it. `isActive: false` is what locks them out of the app.
+        await tx.user.update({
+          where: { id: employeeId },
+          data: { deletedAt: new Date(), isActive: false },
+        });
+      } else {
+        await tx.account.deleteMany({ where: { userId: employeeId } });
+        await tx.user.delete({ where: { id: employeeId } });
+      }
     });
 
     revalidatePath("/admin/employees");
-    return {
-      success: true,
-    };
+    revalidatePath("/admin/jobs");
+    revalidatePath("/admin/calendar");
+
+    return { success: true, released: futureJobs.length, archived: pastJobCount > 0 };
   } catch (error) {
     console.error("Error deleting employee:", error);
     return {
@@ -75,4 +179,3 @@ export async function deleteEmployee(employeeId: string): Promise<{
     };
   }
 }
-

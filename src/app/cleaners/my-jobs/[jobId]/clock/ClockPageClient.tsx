@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { clockIn } from "@/app/admin/actions/clockIn";
@@ -177,6 +177,20 @@ export default function ClockPageClient({
   const router = useRouter();
   const [now, setNow] = useState(() => new Date());
   const [loading, setLoading] = useState(false);
+  /**
+   * Held true until the SERVER re-render actually lands.
+   *
+   * `router.refresh()` is fire-and-forget — it returns immediately, long before
+   * the new payload arrives. The clock-in button therefore went back to saying
+   * "Clock in" the instant the action returned, while the screen still showed
+   * the pre-clock-in state for as long as the refresh took. Pressing a button,
+   * watching it un-press, and seeing nothing change is what "the screen froze"
+   * looks like from the cleaner's side — and pressing again is the natural next
+   * move. Inside a transition, `isRefreshing` stays true until the refresh
+   * resolves, so the button keeps saying "Clocking in…" for exactly as long as
+   * that is still true.
+   */
+  const [isRefreshing, startRefresh] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [otwSince, setOtwSince] = useState<string | null>(onMyWayAt);
   const [otwLoading, setOtwLoading] = useState(false);
@@ -384,12 +398,16 @@ export default function ClockPageClient({
     try {
       const result = await clockIn(jobId);
       if (result.success) {
-        router.refresh();
+        startRefresh(() => router.refresh());
       } else {
+        // Always a visible reason, never a silent no-op — the server's own
+        // message where there is one ("Too early to clock in. Clock-in opens…"),
+        // which is the difference between a screen that looks broken and one
+        // that tells the cleaner what to do.
         setError(result.error || "Failed to clock in");
       }
     } catch {
-      setError("Failed to clock in");
+      setError("Failed to clock in. Check your signal and try again.");
     } finally {
       setLoading(false);
     }
@@ -506,12 +524,12 @@ export default function ClockPageClient({
                 <button
                   className="clk-action"
                   onClick={handleClockIn}
-                  disabled={loading}
+                  disabled={loading || isRefreshing}
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                     <polygon points="5 3 19 12 5 21 5 3" />
                   </svg>
-                  {loading ? "Clocking in…" : "Clock in"}
+                  {loading || isRefreshing ? "Clocking in…" : "Clock in"}
                 </button>
               </>
             )
@@ -525,12 +543,12 @@ export default function ClockPageClient({
                 <button
                   className="clk-action"
                   onClick={handleClockIn}
-                  disabled={loading}>
+                  disabled={loading || isRefreshing}>
                   <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="1 4 1 10 7 10" />
                     <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
                   </svg>
-                  {loading ? "Clocking in…" : "Clock back in"}
+                  {loading || isRefreshing ? "Clocking in…" : "Clock back in"}
                 </button>
               )}
               <Link href={`/cleaners/my-jobs/${jobId}`} className="clk-action ghost">

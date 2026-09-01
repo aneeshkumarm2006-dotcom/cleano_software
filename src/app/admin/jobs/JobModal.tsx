@@ -178,6 +178,7 @@ interface Job {
   checklistTemplateId?: string | null;
   /** Per-job sales-tax exemption (item 7). */
   taxExempt?: boolean | null;
+  isFlexible?: boolean | null;
   /** Why a discount was applied (item 29). */
   discountReason?: string | null;
   cleaners: Array<{ id: string; name: string }>;
@@ -810,6 +811,7 @@ export default function JobModal({
   }, []);
   // Per-job sales-tax exemption (item 7).
   const [taxExempt, setTaxExempt] = useState(false);
+  const [isFlexible, setIsFlexible] = useState(false);
   // How this job is priced (cleano_new_fixes.pdf fix 2). Component state rather
   // than a react-hook-form field because it changes what the Price INPUT MEANS —
   // base service price under ITEMIZED, the whole agreed service total under
@@ -951,6 +953,7 @@ export default function JobModal({
         setAddressChoice(job.clientAddressId || NEW_ADDRESS);
         setSelectedPaymentType(job.paymentType || "");
         setTaxExempt(!!job.taxExempt);
+        setIsFlexible(!!job.isFlexible);
         // The job's stamped mode, or the historical provenance rule for a row
         // written before the column existed — the same answer the server will
         // reach, so the preview and the save agree.
@@ -1635,6 +1638,7 @@ export default function JobModal({
         discountReason === "Other" ? "" : discountReason
       );
       if (taxExempt) formData.append("taxExempt", "on");
+      if (isFlexible) formData.append("isFlexible", "on");
       // The mode is posted on every save, so it can never be re-inferred from
       // whether the price field still matches what was stored (fix 2).
       formData.append("pricingMode", pricingMode);
@@ -2932,6 +2936,41 @@ export default function JobModal({
                           )}
                         </div>
                       )}
+
+                      {/* Aug 31 list, item 11 — is the start time a promise or
+                          a slot? A fixed start means somebody is waiting at the
+                          door; flexible means any time that day. The cleaner's
+                          board already showed a "Flexible time" pill, but
+                          nothing could set the flag, so it never appeared. */}
+                      <div className="sm:col-span-2">
+                        <label className="input-label tracking-tight">
+                          Start time
+                        </label>
+                        <label
+                          className={`flex items-start gap-2 rounded-xl px-3 py-2.5 cursor-pointer border ${
+                            isFlexible
+                              ? "bg-amber-50 border-amber-200"
+                              : "bg-[#008C9C]/5 border-transparent"
+                          }`}>
+                          <input
+                            type="checkbox"
+                            checked={isFlexible}
+                            onChange={(e) => setIsFlexible(e.target.checked)}
+                            disabled={disableForm}
+                            className="mt-0.5"
+                          />
+                          <span className="text-xs">
+                            <span className="font-[500] text-[#008C9C]">
+                              Flexible — any time on this day
+                            </span>
+                            <span className="block text-[#008C9C]/60 mt-0.5">
+                              {isFlexible
+                                ? "The cleaner can do this job whenever suits on the day, so they are never counted late — no penalty, no strike."
+                                : "Fixed start: the cleaner is expected at the scheduled time, and arriving late is recorded."}
+                            </span>
+                          </span>
+                        </label>
+                      </div>
 
                       {/* Item 7: per-job sales-tax exemption. Applies to THIS
                           job only — there is no global switch here. */}

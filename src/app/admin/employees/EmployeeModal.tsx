@@ -20,7 +20,11 @@ import Input from "@/components/ui/Input";
 import CustomDropdown from "@/components/ui/custom-dropdown";
 import createEmployee from "../actions/createEmployee";
 import { updateEmployee } from "../actions/updateEmployee";
-import { deleteEmployee } from "../actions/deleteEmployee";
+import {
+  deleteEmployee,
+  previewEmployeeDeletion,
+  type EmployeeDeletionPreview,
+} from "../actions/deleteEmployee";
 import { setEmployeePassword } from "../actions/setEmployeePassword";
 import { PERMISSION_CATEGORIES } from "@/lib/service-permissions";
 
@@ -96,6 +100,10 @@ export function EmployeeModal({
   const [globalError, setGlobalError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  // What deleting would actually do, fetched when the confirm opens. Null while
+  // it is still loading, so the panel never states a count it does not have.
+  const [deletePreview, setDeletePreview] =
+    useState<EmployeeDeletionPreview | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [selectedRole, setSelectedRole] = useState<
     "OWNER" | "ADMIN" | "OPS_MANAGER" | "FIELD_LEAD" | "EMPLOYEE"
@@ -363,10 +371,46 @@ export function EmployeeModal({
                   <p className="text-sm text-red-700 font-[400]">
                     Are you sure you want to delete this employee?
                   </p>
-                  <p className="text-xs text-red-600/70">
-                    This action cannot be undone. All employee data will be
-                    permanently removed.
-                  </p>
+                  {/*
+                    The real consequences, read from the database rather than
+                    asserted. This said "all employee data will be permanently
+                    removed", which was never quite true and is now plainly
+                    wrong: somebody with finished jobs is archived so those jobs
+                    keep the person who worked them.
+                  */}
+                  {deletePreview ? (
+                    <div className="text-xs text-red-600/80 flex flex-col gap-1">
+                      {deletePreview.futureJobs > 0 ? (
+                        <p>
+                          <strong>
+                            {deletePreview.futureJobs} upcoming{" "}
+                            {deletePreview.futureJobs === 1 ? "job" : "jobs"}
+                          </strong>{" "}
+                          will be unassigned and returned to the pool for you to
+                          reassign.
+                        </p>
+                      ) : (
+                        <p>They have no upcoming jobs.</p>
+                      )}
+                      {deletePreview.willArchive ? (
+                        <p>
+                          Their {deletePreview.pastJobs} finished{" "}
+                          {deletePreview.pastJobs === 1 ? "job stays" : "jobs stay"}{" "}
+                          attached to them for payroll and history, so the record is
+                          archived rather than erased.
+                        </p>
+                      ) : (
+                        <p>
+                          They have never worked a job, so the record is removed
+                          outright. This cannot be undone.
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-red-600/70">
+                      Checking what this would affect…
+                    </p>
+                  )}
                   <div className="flex flex-wrap gap-2 mt-2">
                     <Button
                       variant="default"
@@ -632,7 +676,15 @@ export function EmployeeModal({
                     type="button"
                     variant="ghost"
                     size="md"
-                    onClick={() => setShowDeleteConfirm(true)}
+                    onClick={() => {
+                      setShowDeleteConfirm(true);
+                      setDeletePreview(null);
+                      if (employee) {
+                        previewEmployeeDeletion(employee.id)
+                          .then(setDeletePreview)
+                          .catch(() => setDeletePreview(null));
+                      }
+                    }}
                     disabled={disableForm}
                     className="text-red-600 hover:text-red-700 hover:bg-red-50 px-4 py-3 w-full md:w-auto">
                     <Trash2 className="w-4 h-4 mr-2" />
