@@ -31,6 +31,12 @@ export default async function BulkChargePage() {
       // preview would show $180 more than bulkChargeJobs actually charges on a
       // post-construction job (Stage 11).
       depositAmount: true,
+      // And these two, for the same reason: on a job whose `totalAmount` was
+      // never computed — every imported row — `resolveAmountDue` falls back to
+      // price and adds the pass-through, so a preview without them under-states
+      // what chargeJob will actually take.
+      totalTip: true,
+      parking: true,
       jobType: true,
       clockOutTime: true,
       client: { select: { defaultPaymentMethodId: true, stripeCustomerId: true } },

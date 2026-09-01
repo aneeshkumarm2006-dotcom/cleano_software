@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { db } from "@/lib/org-db";
 import { revalidatePath } from "next/cache";
+import { notifyNewJobPosted } from "@/lib/job-posted-notify";
 import { invalidateCalendarDay } from "./invalidateCalendarDay";
 import {
   sendAdminBookingModified,
@@ -1601,6 +1602,24 @@ export async function saveJob(formData: FormData) {
       }
       revalidatePath("/admin/jobs");
       revalidatePath("/admin/analytics");
+
+      /**
+       * A job created with nobody on it has just been POSTED (item 12).
+       *
+       * The helper decides for itself whether this job is really on the board —
+       * unassigned, future, not cancelled — so this call site does not have to
+       * duplicate that test and cannot drift from it.
+       *
+       * AWAITED, despite costing the admin a moment on save. Fire-and-forget is
+       * the tempting shape and the wrong one here: work left running after a
+       * serverless function returns may simply be killed, and this reads the
+       * database through the request-scoped tenant client, so by the time it ran
+       * there might be no organization in scope to read. An email that silently
+       * never sends is precisely the bug being fixed. It cannot fail the save —
+       * it swallows its own errors and records each attempt in EmailLog.
+       */
+      await notifyNewJobPosted(newJob.id);
+
       return { success: true, jobId: newJob.id };
     }
   } catch (error) {

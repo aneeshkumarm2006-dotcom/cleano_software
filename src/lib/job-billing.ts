@@ -1,5 +1,6 @@
 import { BOOKING_DEPOSIT_CENTS } from "@/lib/stripe";
 import { resolveDepositCredit } from "@/lib/booking-deposit";
+import { passThroughTotal } from "@/lib/job-money";
 
 /**
  * THE amount a job's card gets charged. One function, so the five paths that
@@ -83,6 +84,17 @@ export interface JobBillingFields {
    * much. Every reader in the repo is threaded; the verify script asserts it.
    */
   depositAmount?: number | null;
+  /**
+   * The customer-funded pass-throughs (decision D3), for the FALLBACK path
+   * below only.
+   *
+   * OPTIONAL for the same reason `depositAmount` is: a `select` that omits them
+   * lands on today's answer rather than on a wrong one. Include them wherever a
+   * job might not have `totalAmount` computed — every imported row is such a
+   * job.
+   */
+  totalTip?: number | null;
+  parking?: number | null;
 }
 
 function round2(n: number): number {
@@ -96,10 +108,27 @@ function round2(n: number): number {
  * the booking worth, net of what has already been collected".
  */
 export function resolveAmountDue(job: JobBillingFields): number {
-  const gross =
-    job.totalAmount != null && job.totalAmount > 0
-      ? job.totalAmount
-      : Math.max(0, (job.price ?? 0) - (job.discountAmount ?? 0));
+  /**
+   * THE FALLBACK HAS TO CARRY THE TIP TOO.
+   *
+   * `totalAmount` already contains tip and parking — `resolvePassThroughBilling`
+   * folds them in on every save (D3), which is why nothing is added on that
+   * branch and adding it would charge them twice.
+   *
+   * The other branch had no such protection. A job whose `totalAmount` was
+   * never computed falls back to `price − discount`, and the pass-through
+   * simply vanished from what the customer owed. That is not a rare shape: the
+   * BookingKoala import writes `price` and leaves `subtotalAmount` and
+   * `totalAmount` at 0, so EVERY imported job takes this branch. Production
+   * job #2211 carries a $19.25 tip against a $128.34 price and was asking the
+   * customer for nothing at all — the tip was recorded, owed to the cleaner,
+   * and never billed.
+   */
+  const usesStoredTotal = job.totalAmount != null && job.totalAmount > 0;
+  const gross = usesStoredTotal
+    ? job.totalAmount!
+    : Math.max(0, (job.price ?? 0) - (job.discountAmount ?? 0)) +
+      passThroughTotal(job);
 
   // Only when a deposit was actually taken, and only ever the amount that was
   // actually taken. `depositPaid` is stamped by submitBooking after

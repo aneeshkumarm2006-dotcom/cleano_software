@@ -2216,6 +2216,69 @@ export async function sendCustomerLeaveTip(opts: {
 }
 
 /** Provider "One day reminder" + "One hour reminder" + unassigned-pool reminder. */
+/**
+ * A job has landed on the available-jobs board (Aug 31 list, item 12).
+ *
+ * Cleaners were never told. The board only shows what is open the moment they
+ * happen to open it, so work posted in the evening sat unclaimed overnight
+ * while everyone who could have taken it had no idea it existed. The catalog
+ * row for this — `prov.unassigned.new`, "New booking in unassigned folder" —
+ * has been there all along with email switched on, and nothing ever sent it.
+ *
+ * WHAT IT DELIBERATELY DOES NOT SAY. No client name, no street address, no
+ * price to the customer. This goes to every cleaner who COULD claim the job,
+ * which is not the same as the one who ends up working it, so it may name only
+ * what the board itself shows before claiming: the service, when, the general
+ * area, and what the cleaner would earn. `deriveArea` is the same summary the
+ * board prints, so the email cannot leak more than the page it links to.
+ */
+export async function sendProviderNewJobPosted(opts: {
+  to: string;
+  providerName: string;
+  jobId: string;
+  jobNumber: number;
+  jobTypeLabel: string;
+  startTime: string;
+  /** True when the job may be done any time that day — item 11. */
+  isFlexible: boolean;
+  /** Coarse area only, never the street address. */
+  area: string | null;
+  /** What this cleaner would earn, when it can honestly be estimated. */
+  estPay: number | null;
+  logId: string;
+}) {
+  const appUrl = await currentAppUrl();
+  const when = opts.isFlexible
+    ? `${fmtDate(opts.startTime)} — any time that day`
+    : `${fmtDate(opts.startTime)}, ${fmtTime(opts.startTime)}`;
+
+  const rows: [string, string][] = [
+    ["Service", opts.jobTypeLabel],
+    ["When", when],
+  ];
+  if (opts.area) rows.push(["Area", opts.area]);
+  if (opts.estPay != null && opts.estPay > 0) {
+    rows.push(["You'd earn", `$${opts.estPay.toFixed(2)}`]);
+  }
+
+  const html = layout(
+    h1("New job available") +
+      p(
+        `Hi ${opts.providerName.split(" ")[0]}, a job has just been posted that you can pick up. First to claim it gets it.`
+      ) +
+      section(rows) +
+      btn("View and claim", `${appUrl}/cleaners/available-jobs`)
+  );
+
+  return deliver({
+    to: opts.to,
+    subject: `New job available — ${opts.jobTypeLabel}`,
+    html,
+    notification: { recipient: "PROVIDER", key: "prov.unassigned.new" },
+    logId: opts.logId,
+  });
+}
+
 export async function sendProviderJobReminder(opts: {
   window: "1d" | "1h" | "unassigned_pool";
   to: string;
