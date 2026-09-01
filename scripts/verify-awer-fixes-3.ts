@@ -463,10 +463,13 @@ section(1, "pay multiplier drives cleaner pay", () => {
     paid(job({ price: 100, cleaners: [{ id: "tim" }] }), "tim"), 33.9);
   check("FIELD_LEAD at 4.5 stars: 46% x 1.13 -> $51.98",
     paid(job({ price: 100, cleaners: [{ id: "fay" }] }), "fay"), 51.98);
-  check("a mixed-tier pair: neither cleaner's rate touches the other",
+  // Item 9 (Aug 31) reversed this: a pair now pools the AVERAGE rate and splits
+  // it evenly, so each cleaner's share does depend on who they work with.
+  // mean(33.9%, 51.98%) = 42.94% of $100, halved -> $21.47 each.
+  check("a mixed-tier pair pools the average rate and splits it evenly",
     [paid(job({ price: 100, cleaners: [{ id: "tim" }, { id: "fay" }] }), "tim"),
      paid(job({ price: 100, cleaners: [{ id: "tim" }, { id: "fay" }] }), "fay")],
-    [33.9, 51.98]);
+    [21.47, 21.47]);
 
   // ══ SOURCE — 1.c: the ladder is retired but still exported ════════════════
   lacks("individualRate no longer calls the retired rating ladder",

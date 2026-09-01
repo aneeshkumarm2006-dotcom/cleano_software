@@ -972,14 +972,17 @@ const job1809: JobPayInput = {
 // stored $88.55 but no manual flag, which is exactly the "stale snapshot" case.
 const shares1809 = computeJobPayShares(job1809, rates2);
 check(
-  "D1 · an UNFLAGGED stored $88.55 is still a snapshot — each cleaner earns 40%",
+  // Item 9 (Aug 31) pooled the rate: $177 x 40% once, then halved.
+  "D1 · an UNFLAGGED stored $88.55 is still a snapshot — the crew splits one 40% pool",
   [shares1809.get("viktoriia")?.base, shares1809.get("ahmed")?.base],
-  [70.8, 70.8]
+  [35.4, 35.4]
 );
 check(
-  "D1 · …so that job books $141.60 of labour, 80% of the price, as decided",
+  // Was $141.60 / 80% under awer_fixes.pdf item 3; item 9 halves it back to one
+  // 40% pool. The reversal is the point of the assertion.
+  "D1 · …so that job books $70.80 of labour, 40% of the price (item 9)",
   round2((shares1809.get("viktoriia")?.base ?? 0) + (shares1809.get("ahmed")?.base ?? 0)),
-  141.6
+  70.8
 );
 lacks(
   "D1 · the retired pool fraction is still unused by any pay path",
@@ -1006,7 +1009,7 @@ check(
 check(
   "4b.1 · total = base + tip + parking",
   shares1809.get("ahmed")?.total,
-  round2(70.8 + 8.85 + 10)
+  round2(35.4 + 8.85 + 10)
 );
 
 // ── 4c.3 · D2: the flag turns employeePay into an authoritative TEAM TOTAL ──
@@ -1054,11 +1057,11 @@ check(
 
 // Clearing the flag returns to the tier math (4c.6's second half).
 check(
-  "4c.6 · clearing the override returns to the per-cleaner full rate",
+  "4c.6 · clearing the override returns to the pooled tier math",
   computeJobPayShares({ ...manual1809, employeePayIsManual: false }, rates2).get(
     "ahmed"
   )?.base,
-  70.8
+  35.4
 );
 // A per-cleaner override still comes off the top of a manual team total — the
 // FLAT-path remainder logic D2 says to reuse verbatim.

@@ -87,24 +87,34 @@ check("assigned owner is still a participant",
 check("employee lead not in cleaners is kept",
   jobParticipantIds(job({ employeeId: "bob", cleaners: [{ id: "asia" }] }), RATES).sort(),
   ["asia", "bob"]);
-// ── The settled pay model (awer_fixes.pdf items 3 + 11) ────────────────────
-// A paired job pays each cleaner their OWN rate on the full price. $55.00 was
-// the old half-pool share the client rejected by name.
+// ── The pay model (Aug 31 list item 9, 2026-09-01) ─────────────────────────
+// REVERSED from awer_fixes.pdf item 3, which these very assertions used to
+// pin. The rate is now averaged across the crew, applied to the price ONCE and
+// split evenly, so a paired job costs half what it did. $55.00 below is the
+// exact figure the client rejected by name in the earlier round and has now
+// asked for; it is left spelled out so the reversal is impossible to miss.
 const paired = job({
   employeeId: "admin", price: 220,
   cleaners: [{ id: "asia" }, { id: "tanya" }],
 });
-check("paired job: 50% cleaner gets the full $110.00, not a half-pool share", paid(paired, "asia"), 110);
-check("paired job: the other 50% cleaner also gets $110.00", paid(paired, "tanya"), 110);
+check("paired job: pool is 220 x 50% applied once, halved -> $55.00", paid(paired, "asia"), 55);
+check("paired job: the other cleaner gets the same $55.00", paid(paired, "tanya"), 55);
+check("paired job: crew costs 220 x 50% in total, not twice that",
+  paid(paired, "asia") + paid(paired, "tanya"), 110);
 
-// A mixed-rate pair: each is independent of the other's rate.
+// A mixed-rate pair pools the AVERAGE rate and then splits evenly, so each
+// cleaner's share now depends on who they are working with.
 const mixed = job({ price: 220, cleaners: [{ id: "asia" }, { id: "bob" }] });
-check("mixed pair: 50% cleaner unaffected by partner's rate", paid(mixed, "asia"), 110);
-check("mixed pair: 40% cleaner gets 40% of the full price", paid(mixed, "bob"), 88);
+check("mixed pair: pool = 220 x mean(50%, 40%) = $99.00 total",
+  paid(mixed, "asia") + paid(mixed, "bob"), 99);
+check("mixed pair: split evenly regardless of tier", paid(mixed, "asia"), paid(mixed, "bob"));
 
-// Adding a third cleaner must not reduce anyone's pay.
-check("adding a cleaner does not dilute the others",
-  paid(job({ price: 220, cleaners: [{ id: "asia" }, { id: "bob" }, { id: "tanya" }] }), "asia"), 110);
+// Adding a cleaner now DOES dilute the others — that is the change, not a bug.
+const trio = job({ price: 220, cleaners: [{ id: "asia" }, { id: "bob" }, { id: "tanya" }] });
+check("adding a cleaner dilutes the others (deliberate)",
+  paid(trio, "asia") < paid(paired, "asia"), true);
+check("trio: shares still reconcile to the pool within a cent",
+  Math.abs(paid(trio, "asia") + paid(trio, "bob") + paid(trio, "tanya") - 102.67) < 0.02, true);
 
 // ── Lead resolution ────────────────────────────────────────────────────────
 check("lead: existing lead still on team is kept", resolveJobLead("tanya", ["asia", "tanya"]), "tanya");

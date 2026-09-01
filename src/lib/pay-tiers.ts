@@ -20,26 +20,37 @@
 // This REPLACES the hardcoded 40→45% ladder (standardRateForRating, below,
 // now deprecated). Running both would pay the rating premium twice.
 //
-//   • EVERY cleaner on the job earns individualRate × jobPrice — solo or paired.
+// THE SPLIT (Aug 31 list item 9, 2026-09-01) — this reversed once, so read both:
 //
-// The 50% "split pool" (paired jobs shared half the price, divided
-// proportionally by rate) was RETIRED per awer_fixes.pdf item 3, which
-// supersedes the earlier spec. Its three worked examples are the acceptance
-// test and none of them halve anything:
+//   • SOLO: the cleaner earns individualRate × jobPrice. Unchanged throughout.
+//   • CREW: the rate is averaged across the crew, applied to the price ONCE,
+//     and the pool is divided equally. "Cleaner pay percentage should apply to
+//     the job total once, not once per cleaner."
+//
+// WHAT CAME BEFORE, and why it is written down rather than deleted. Under
+// awer_fixes.pdf item 3 every cleaner earned their own rate on the FULL price,
+// solo or paired. The client asked for that explicitly and rejected the split
+// model by name — their three worked examples were the acceptance test:
 //
 //     $112 at 40%           → $44.80
 //     $112 at 45% (5-star)  → $50.40
 //     $220 at Tanya's 45%   → $99.00   ("not $55.00 or 25%")
 //
-// $55.00 is exactly what the old model produced for a 45% cleaner on a paired
-// $220 job (half the price, split two ways), which is the number the client
-// rejected by name.
+// $55.00 is what a split model paid a 45% cleaner on a paired $220 job, and it
+// is the number they turned down. The stated consequence — a 2-cleaner job
+// costing ~80–90% of the job price in labour rather than ~50% — was accepted
+// deliberately at the time.
 //
-// CONSEQUENCE, deliberately accepted by the client: a 2-cleaner job now costs
-// ~80–90% of the job price in labour rather than 50%. That is a pricing
-// decision, not a defect. Item 11's "split evenly between assigned cleaners"
-// governs a fixed/custom TOTAL payout (the FLAT / HOURLY path in
-// cleaner-earnings.ts), not this percentage model.
+// The Aug 31 list then asked for the split back, calling the per-cleaner model
+// an overpayment. That is the instruction in force and it is what the code now
+// does. It is a PRICING DECISION either way, not a defect in either direction:
+// crews are paid half what they were paid the day before this landed. Both
+// instructions are recorded here so the next reader knows this ground has been
+// fought over and does not re-reverse it from the older document alone.
+//
+// Item 11's "split evenly between assigned cleaners" governs a fixed/custom
+// TOTAL payout (the FLAT / HOURLY path in cleaner-earnings.ts), not this
+// percentage model.
 
 export type CleanerTier = "TRAINEE" | "STANDARD" | "FIELD_LEAD";
 
@@ -216,20 +227,50 @@ export function computeJobPayout(
     return { pool: 0, isSplit: false, shares: [] };
   }
 
-  // Every cleaner earns their own rate on the FULL job price, whether they are
-  // working alone or paired. No halving, no proportional redistribution — see
-  // the worked examples in the module header (awer_fixes.pdf item 3).
+  /**
+   * ONE POOL, THEN SPLIT EVENLY (Aug 31 list, item 9).
+   *
+   * "Cleaner pay percentage should apply to the job total once, not once per
+   * cleaner." The rate is averaged across the crew and applied to the price a
+   * single time; the result is then divided equally, which is the doc's
+   * "split should be even by default".
+   *
+   * A SOLO job is unchanged and needs no special case: the mean of one rate is
+   * that rate, and dividing by one changes nothing. Only crews move.
+   *
+   * The arithmetic is exactly "what the old model paid, divided by headcount" —
+   * pool = price x mean(rates), and the old total was price x sum(rates). So a
+   * two-person job now costs half what it did yesterday, which IS the change
+   * being asked for.
+   *
+   * ⚠️ THIS REVERSES awer_fixes.pdf item 3. See the module header: the client
+   * previously rejected the split model by name ("not $55.00 or 25%") and
+   * accepted the higher labour cost deliberately. Item 9 of the Aug 31 list
+   * asks for the split back. Both instructions are theirs; this implements the
+   * later one, and the header records the earlier so nobody re-reverses it by
+   * accident.
+   */
   const base = Math.max(0, p);
-  const shares: PayoutShare[] = valid.map((c) => {
-    const rate = individualRate(c);
-    return { id: c.id, rate, amount: round2(base * rate) };
+  const rates = valid.map(individualRate);
+  const poolRate = rates.reduce((sum, r) => sum + r, 0) / rates.length;
+  const pool = round2(base * poolRate);
+
+  // Split evenly, with the rounding remainder going to the first cleaner so the
+  // shares always add up to the pool exactly. A payroll total that disagrees
+  // with its own line items by a cent is a reconciliation problem later.
+  const even = round2(pool / valid.length);
+  const shares: PayoutShare[] = valid.map((c, i) => {
+    const amount = i === 0 ? round2(pool - even * (valid.length - 1)) : even;
+    return {
+      id: c.id,
+      // The EFFECTIVE fraction of the price this cleaner receives, which is no
+      // longer their tier rate — it is the pooled rate divided by the crew.
+      rate: base > 0 ? amount / base : 0,
+      amount,
+    };
   });
 
-  return {
-    pool: round2(shares.reduce((sum, s) => sum + s.amount, 0)),
-    isSplit: valid.length > 1,
-    shares,
-  };
+  return { pool, isSplit: valid.length > 1, shares };
 }
 
 export const TIER_LABEL: Record<CleanerTier, string> = {
