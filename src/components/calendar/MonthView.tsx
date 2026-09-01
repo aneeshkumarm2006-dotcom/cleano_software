@@ -11,7 +11,7 @@ import {
   format,
   eventOverlapsDay,
 } from "@/components/calendar/utils";
-import { statusMeta, isUnconfirmed } from "./status-meta";
+import { statusMeta, isUnconfirmed, isCancelled } from "./status-meta";
 import CornerBadge from "./CornerBadge";
 import { avatarColor, initials, shortName } from "@/lib/avatar";
 
@@ -82,6 +82,7 @@ export const MonthView = () => {
           const inMonth = isSameMonth(day, monthStart);
           const today = isSameDay(day, new Date());
           const list = eventsFor(day);
+          const activeCount = list.filter((e) => !isCancelled(e)).length;
           return (
             <div
               key={i}
@@ -96,9 +97,16 @@ export const MonthView = () => {
                 <span className={`cal-mdate ${today ? "today" : ""}`}>
                   {format(day, "d")}
                 </span>
-                {list.length ? (
+                {/*
+                  The count is ACTIVE work, not rows (Aug 31 list, item 10).
+                  Cancelled jobs stay on the day — they are still a record, and
+                  the doc asks for them to remain visible — but a day with one
+                  booking and two cancellations is a one-job day, and saying
+                  "3 jobs" made a quiet week look busy.
+                */}
+                {activeCount ? (
                   <span className="cal-mcount">
-                    {list.length} {list.length === 1 ? "job" : "jobs"}
+                    {activeCount} {activeCount === 1 ? "job" : "jobs"}
                   </span>
                 ) : null}
               </div>

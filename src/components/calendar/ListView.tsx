@@ -20,6 +20,7 @@ import {
   priceLabel,
   cleanerLabel,
   shortLocation,
+  isCancelled,
 } from "./status-meta";
 import { jobTypeLabel } from "@/lib/calendar-labels";
 
@@ -96,7 +97,9 @@ export const ListView: React.FC<ListViewProps> = ({ view }) => {
                 {day.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
               </span>
               <span className="cal-list-count">
-                {dayEvents.length} {dayEvents.length === 1 ? "job" : "jobs"}
+                {/* Active work, not rows — same rule as the month grid. */}
+                {dayEvents.filter((e) => !isCancelled(e)).length}{" "}
+                {dayEvents.filter((e) => !isCancelled(e)).length === 1 ? "job" : "jobs"}
               </span>
             </div>
             {dayEvents.map((event) => {
