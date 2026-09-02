@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { Bot, Mail, MessageSquare } from "lucide-react";
 import { db } from "@/lib/org-db";
+import NewMessageButton from "./NewMessageButton";
 
 export const dynamic = "force-dynamic";
 
@@ -49,9 +50,12 @@ export default async function ConversationsPage() {
 
   return (
     <div className="p-6 max-w-4xl">
-      <div className="flex items-center gap-3 mb-1">
-        <Bot size={22} className="text-[#008C9C]" />
-        <h1 className="text-xl font-semibold text-gray-900">AI Conversations</h1>
+      <div className="flex items-center justify-between gap-3 mb-1">
+        <div className="flex items-center gap-3">
+          <Bot size={22} className="text-[#008C9C]" />
+          <h1 className="text-xl font-semibold text-gray-900">AI Conversations</h1>
+        </div>
+        <NewMessageButton />
       </div>
       <p className="text-sm text-gray-500 mb-6">
         Customer texts and emails the AI assistant answered. Conversations that

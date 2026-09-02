@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/org-db";
 import { requireOwnerAdmin } from "@/lib/action-guards";
 import { logActivity } from "@/lib/activity-log";
-import { sendSms } from "@/lib/sms";
+import { sendSms, toE164 } from "@/lib/sms";
 import { sendConversationalEmailReply } from "@/lib/email";
 
 type Result = { success: true } | { success: false; error: string };
@@ -84,6 +84,111 @@ export async function replyToAiConversation(
   revalidatePath(`/admin/conversations/${convo.id}`);
   revalidatePath("/admin/conversations");
   return { success: true };
+}
+
+/**
+ * Staff starts a conversation with a customer — the outbound half of the
+ * receptionist. Unlike replying to an existing thread, starting one does NOT
+ * mute the assistant: the whole point is "you open the door, the assistant
+ * handles whoever walks through it" (follow-ups, win-backs, check-ins). The
+ * thread view offers the mute toggle for staff who want it personal.
+ */
+export async function startAiConversation(input: {
+  channel: "SMS" | "EMAIL";
+  to: string;
+  subject?: string;
+  body: string;
+}): Promise<{ success: true; conversationId: string } | { success: false; error: string }> {
+  const guard = await requireOwnerAdmin();
+  if ("error" in guard) return { success: false, error: guard.error };
+
+  const text = input.body.trim();
+  if (!text) return { success: false, error: "Write a message first." };
+  if (text.length > 1200)
+    return { success: false, error: "Keep messages under 1200 characters." };
+
+  let address: string;
+  if (input.channel === "SMS") {
+    const e164 = toE164(input.to);
+    if (!e164) return { success: false, error: "Enter a valid phone number." };
+    address = e164;
+  } else {
+    const email = input.to.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+      return { success: false, error: "Enter a valid email address." };
+    address = email;
+  }
+  const subject =
+    input.channel === "EMAIL" ? (input.subject ?? "").trim() || "A message from us" : null;
+
+  // Deliver first: a conversation row for a message that never sent would
+  // show staff a "sent" bubble the customer never received.
+  if (input.channel === "SMS") {
+    const sent = await sendSms({ to: address, body: text });
+    if (!sent.sent) {
+      return {
+        success: false,
+        error: "The text couldn't be sent. Check the workspace's SMS number and try again.",
+      };
+    }
+  } else {
+    const sent = await sendConversationalEmailReply({ to: address, subject: subject!, text });
+    if (!sent) return { success: false, error: "The email couldn't be sent. Try again in a moment." };
+  }
+
+  const client = await db.client.findFirst({
+    where:
+      input.channel === "SMS"
+        ? { OR: [{ phone: address }, { secondaryPhone: address }] }
+        : { email: address },
+    select: { id: true },
+  });
+
+  // Same 30-day threading rule the inbound side uses.
+  const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  let convo = await db.aiConversation.findFirst({
+    where: {
+      channel: input.channel,
+      customerAddress: address,
+      lastMessageAt: { gte: cutoff },
+    },
+    orderBy: { lastMessageAt: "desc" },
+    select: { id: true },
+  });
+  convo ??= await db.aiConversation.create({
+    data: {
+      channel: input.channel,
+      customerAddress: address,
+      clientId: client?.id ?? null,
+      ...(subject ? { subject } : {}),
+    },
+    select: { id: true },
+  });
+
+  await db.aiMessage.create({
+    data: {
+      conversationId: convo.id,
+      direction: "OUTBOUND",
+      author: "STAFF",
+      body: text,
+    },
+  });
+  await db.aiConversation.update({
+    where: { id: convo.id },
+    data: { lastMessageAt: new Date(), needsHuman: false },
+  });
+
+  await logActivity({
+    category: input.channel === "SMS" ? "SMS" : "EMAIL",
+    action: "ai_conversation.staff_start",
+    status: "SUCCESS",
+    targetType: "aiConversation",
+    targetId: convo.id,
+    message: text.slice(0, 160),
+  });
+
+  revalidatePath("/admin/conversations");
+  return { success: true, conversationId: convo.id };
 }
 
 /** Mute or un-mute the assistant on one conversation. */

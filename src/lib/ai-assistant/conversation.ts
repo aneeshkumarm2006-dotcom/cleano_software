@@ -26,6 +26,44 @@ const RETHREAD_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 /** How much history the model sees. Enough for context, bounded for cost. */
 const MAX_TURNS = 20;
 
+/**
+ * A prospect who texts or emails the business is a Lead. New conversation →
+ * find-or-create (deduped by the address, and never shadowing an existing
+ * lead); continuing conversation → bump lastActivityAt so the 30-day
+ * follow-up doesn't nag someone who is actively talking to us.
+ *
+ * SMS prospects have no email, and Lead.email is required — the empty string
+ * is used deliberately there (matching how imports handle it), with the phone
+ * carrying the identity.
+ */
+async function captureLead(
+  channel: AiChannel,
+  address: string,
+  isNewConversation: boolean,
+): Promise<void> {
+  const identity =
+    channel === "EMAIL" ? { email: address } : { phone: address };
+  const existing = await db.lead.findFirst({
+    where: { ...identity, deletedAt: null },
+    select: { id: true },
+  });
+  if (existing) {
+    await db.lead.update({
+      where: { id: existing.id },
+      data: { lastActivityAt: new Date() },
+    });
+    return;
+  }
+  if (!isNewConversation) return;
+  await db.lead.create({
+    data: {
+      email: channel === "EMAIL" ? address : "",
+      phone: channel === "SMS" ? address : null,
+      source: "ai-assistant",
+    },
+  });
+}
+
 export interface InboundResult {
   conversationId: string;
   /** What was sent back, if anything. */
@@ -64,13 +102,23 @@ export async function handleInboundAiMessage(opts: {
       },
       orderBy: { lastMessageAt: "desc" },
     });
-    convo ??= await db.aiConversation.create({
-      data: {
-        channel: opts.channel,
-        customerAddress: opts.address,
-        clientId: opts.clientId,
-      },
-    });
+    let isNewConversation = false;
+    if (!convo) {
+      isNewConversation = true;
+      convo = await db.aiConversation.create({
+        data: {
+          channel: opts.channel,
+          customerAddress: opts.address,
+          clientId: opts.clientId,
+        },
+      });
+    }
+
+    // A stranger starting a conversation IS a lead — capture it so the
+    // follow-up automations can see them. Best effort, never blocks the reply.
+    if (!opts.clientId) {
+      await captureLead(opts.channel, opts.address, isNewConversation).catch(() => {});
+    }
 
     await db.aiMessage.create({
       data: {

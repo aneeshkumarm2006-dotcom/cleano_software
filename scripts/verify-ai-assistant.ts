@@ -134,7 +134,26 @@ async function main() {
     check("capped: no reply", res4?.replied === false);
     check("capped: needsHuman", convo2?.needsHuman === true);
 
+    // 5. lead capture — the stranger from step 1 became a lead, exactly once
+    console.log("\n— lead capture —");
+    const leads = await db.lead.findMany({
+      where: { phone: TEST_ADDR, deletedAt: null },
+      select: { id: true, source: true, email: true, lastActivityAt: true },
+    });
+    check("one lead captured", leads.length === 1, `got ${leads.length}`);
+    check("lead source is ai-assistant", leads[0]?.source === "ai-assistant");
+    const capLead = await db.lead.count({ where: { phone: TEST_ADDR2, deletedAt: null } });
+    check("capped convo still captured its lead", capLead === 1, `got ${capLead}`);
+
+    // 6. availability section appears in knowledge
+    const k2 = await buildWorkspaceKnowledge();
+    check(
+      "availability days listed",
+      /Days currently open for booking/.test(k2.facts),
+    );
+
     // cleanup
+    await db.lead.deleteMany({ where: { phone: { in: [TEST_ADDR, TEST_ADDR2] } } });
     await db.aiConversation.deleteMany({
       where: { customerAddress: { in: [TEST_ADDR, TEST_ADDR2] } },
     });

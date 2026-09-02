@@ -25,6 +25,7 @@ import {
   normalizeAiAssistantConfig,
   type AiAssistantConfig,
 } from "./config";
+import { buildAvailabilitySummary } from "./availability";
 
 export interface WorkspaceKnowledge {
   config: AiAssistantConfig;
@@ -146,6 +147,15 @@ export async function buildWorkspaceKnowledge(): Promise<WorkspaceKnowledge> {
           .join("\n\n")}`,
       );
     }
+  } catch {
+    /* section dropped */
+  }
+
+  // Live openings, so "when could you come?" gets a real answer. Day-level:
+  // exact times belong to the booking page (see availability.ts).
+  try {
+    const availability = await buildAvailabilitySummary();
+    if (availability) sections.push(availability);
   } catch {
     /* section dropped */
   }
