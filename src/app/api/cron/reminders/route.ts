@@ -3,6 +3,7 @@ import { isAuthorizedCron } from "@/lib/cron-auth";
 import { logActivity } from "@/lib/activity-log";
 import { db } from "@/lib/org-db";
 import { forEachOrganization, summarise } from "@/lib/cron-tenants";
+import { runLeadFollowUps } from "@/lib/ai-assistant/follow-up";
 import { sendReminder24h } from "@/lib/email";
 import { smsReminder } from "@/lib/sms";
 
@@ -98,13 +99,22 @@ export async function GET(req: NextRequest) {
       sent++;
     }
 
+    // ── AI assistant: one-time follow-up for quiet leads ──────────────
+    // Per-workspace opt-in (Settings → AI Assistant, "follow up after N
+    // days"); a workspace with it off contributes zero work here. Never
+    // throws — a follow-up failure must not cost anyone their reminders.
+    const followUps = await runLeadFollowUps().catch((e) => {
+      console.error("lead follow-ups failed", e);
+      return { eligible: 0, sent: 0, skippedNoAddress: 0, failed: 0 };
+    });
+
     await logActivity({
       category: "CRON",
       action: "reminders",
       status: "SUCCESS",
-      message: `Reminders cron: sent ${sent}, skipped ${skipped}`,
+      message: `Reminders cron: sent ${sent}, skipped ${skipped}; lead follow-ups sent ${followUps.sent}/${followUps.eligible}`,
     });
-    return { sent, skipped };
+    return { sent, skipped, followUps };
   });
 
   return NextResponse.json({ ok: true, ...summarise(results) });

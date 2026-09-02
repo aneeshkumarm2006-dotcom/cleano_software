@@ -30,6 +30,7 @@ export default function AiAssistantTab({ settings }: Props) {
   const [emailReplies, setEmailReplies] = useState(initial.emailReplies);
   const [businessFacts, setBusinessFacts] = useState(initial.businessFacts);
   const [dailyMessageCap, setDailyMessageCap] = useState(initial.dailyMessageCap);
+  const [leadFollowUpDays, setLeadFollowUpDays] = useState(initial.leadFollowUpDays);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<Msg>(null);
 
@@ -46,6 +47,7 @@ export default function AiAssistantTab({ settings }: Props) {
         emailReplies,
         businessFacts,
         dailyMessageCap,
+        leadFollowUpDays,
       } satisfies AiAssistantConfig,
     });
     if (res.success) setMsg({ type: "success", text: "AI assistant settings saved." });
@@ -107,6 +109,24 @@ export default function AiAssistantTab({ settings }: Props) {
             Your services, service areas, deposits, cancellation policy and FAQ
             are included automatically and always current — no need to repeat
             them here.
+          </p>
+        </Field>
+
+        <Field label="Follow up with quiet leads after (days)">
+          <Input
+            variant="form"
+            type="number"
+            min="0"
+            max="365"
+            step="1"
+            value={leadFollowUpDays}
+            disabled={!enabled}
+            onChange={(e) => setLeadFollowUpDays(parseInt(e.target.value, 10) || 0)}
+          />
+          <p className="text-xs text-gray-500 mt-1">
+            Someone who inquired but never booked gets one friendly check-in
+            with your booking link after this many quiet days, and never a
+            second one. 0 turns this off.
           </p>
         </Field>
 

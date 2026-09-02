@@ -28,6 +28,12 @@ export interface AiAssistantConfig {
    * A runaway conversation (or a hostile texter) stops costing money here.
    */
   dailyMessageCap: number;
+  /**
+   * Days of silence after which a NEW lead gets one automatic follow-up
+   * message (then never again — it flips them to CONTACTED). 0 = off, and off
+   * is the default: nobody's leads get messaged because we shipped code.
+   */
+  leadFollowUpDays: number;
 }
 
 export const DEFAULT_AI_ASSISTANT: AiAssistantConfig = {
@@ -36,6 +42,7 @@ export const DEFAULT_AI_ASSISTANT: AiAssistantConfig = {
   emailReplies: true,
   businessFacts: "",
   dailyMessageCap: 200,
+  leadFollowUpDays: 0,
 };
 
 const CAP_MIN = 10;
@@ -57,6 +64,10 @@ export function normalizeAiAssistantConfig(v: unknown): AiAssistantConfig {
   const cap = Number.isFinite(capRaw)
     ? Math.min(CAP_MAX, Math.max(CAP_MIN, Math.round(capRaw)))
     : DEFAULT_AI_ASSISTANT.dailyMessageCap;
+  const fuRaw = Number(raw.leadFollowUpDays);
+  const followUp = Number.isFinite(fuRaw)
+    ? Math.min(365, Math.max(0, Math.round(fuRaw)))
+    : DEFAULT_AI_ASSISTANT.leadFollowUpDays;
   return {
     enabled: bool(raw.enabled, DEFAULT_AI_ASSISTANT.enabled),
     smsReplies: bool(raw.smsReplies, DEFAULT_AI_ASSISTANT.smsReplies),
@@ -66,5 +77,6 @@ export function normalizeAiAssistantConfig(v: unknown): AiAssistantConfig {
         ? raw.businessFacts.slice(0, FACTS_MAX_LEN)
         : DEFAULT_AI_ASSISTANT.businessFacts,
     dailyMessageCap: cap,
+    leadFollowUpDays: followUp,
   };
 }
