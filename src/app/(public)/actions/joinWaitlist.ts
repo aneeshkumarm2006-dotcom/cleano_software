@@ -1,8 +1,12 @@
 "use server";
 
 import { db } from "@/lib/org-db";
+import { rateLimitByIp } from "@/lib/rate-limit";
 
 export async function joinWaitlist(formData: FormData) {
+  if (await rateLimitByIp("join-waitlist", { max: 10, windowMs: 10 * 60_000 })) {
+    return { error: "Too many requests. Please try again later." };
+  }
   const email = (formData.get("email") as string)?.trim();
   const name = (formData.get("name") as string)?.trim() || null;
   const phone = (formData.get("phone") as string)?.trim() || null;

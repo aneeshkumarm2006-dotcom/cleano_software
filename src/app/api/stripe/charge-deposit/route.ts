@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { BOOKING_DEPOSIT_CURRENCY } from "@/lib/stripe";
+import { rateLimitHit } from "@/lib/rate-limit";
 
 import { getOrCreateStripeCustomer, requireStripeForCurrentOrg } from "@/lib/stripe-org";
 import { db } from "@/lib/org-db";
@@ -9,6 +10,17 @@ import { resolveDepositCentsForService } from "@/lib/booking-deposit.server";
 
 export async function POST(req: NextRequest) {
   try {
+    // Unauthenticated and it mints Stripe customers + PaymentIntents — the
+    // classic card-testing target. Two buckets: per-IP for the script kid,
+    // per-email so a distributed attack still can't churn one victim's record.
+    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+    if (rateLimitHit("charge-deposit:ip", ip, { max: 10, windowMs: 60_000 })) {
+      return NextResponse.json(
+        { error: "Too many attempts. Please wait a minute and try again." },
+        { status: 429 },
+      );
+    }
+
     const { email, name, serviceType } = await req.json();
 
     if (!email || !name) {
@@ -16,6 +28,13 @@ export async function POST(req: NextRequest) {
     }
 
     const normalizedEmail = String(email).trim().toLowerCase();
+
+    if (rateLimitHit("charge-deposit:email", normalizedEmail, { max: 6, windowMs: 60_000 })) {
+      return NextResponse.json(
+        { error: "Too many attempts. Please wait a minute and try again." },
+        { status: 429 },
+      );
+    }
 
     // ── The amount is resolved HERE, from the service type, and never taken
     // from the request body (PDF #9, Stage 11).

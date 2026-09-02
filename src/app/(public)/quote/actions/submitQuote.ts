@@ -6,6 +6,7 @@ import { getSetting } from "@/lib/settings";
 import { getServiceCatalog } from "@/lib/service-catalog.server";
 import { activeServices, serviceLabelMap } from "@/lib/service-catalog";
 import { storeWallClockToUtc } from "@/lib/timezone";
+import { rateLimitByIp } from "@/lib/rate-limit";
 import {
   QUOTE_PAGE_CONFIG_KEY,
   isQuoteFieldRequired,
@@ -32,6 +33,10 @@ export interface QuoteSubmissionInput {
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export async function submitQuote(input: QuoteSubmissionInput) {
+  // Public form that creates records, uploads, and admin email.
+  if (await rateLimitByIp("submit-quote", { max: 5, windowMs: 10 * 60_000 })) {
+    return { success: false, error: "Too many submissions. Please try again later." };
+  }
   const [rawConfig, catalog] = await Promise.all([
     getSetting(QUOTE_PAGE_CONFIG_KEY),
     getServiceCatalog(),

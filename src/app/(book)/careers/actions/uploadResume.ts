@@ -3,6 +3,7 @@
 import { cloudinary } from "@/lib/cloudinary";
 import type { UploadApiResponse } from "cloudinary";
 import { orgAssetFolder } from "@/lib/asset-folder";
+import { rateLimitByIp } from "@/lib/rate-limit";
 
 const MAX_FILE_SIZE = 8 * 1024 * 1024; // 8 MB
 const ALLOWED_TYPES = [
@@ -33,6 +34,10 @@ function streamUpload(
 
 /** Public resume upload for the careers form. Returns the hosted file URL. */
 export async function uploadResume(formData: FormData) {
+  // Public file upload into our storage — bound it.
+  if (await rateLimitByIp("upload-resume", { max: 10, windowMs: 10 * 60_000 })) {
+    return { success: false, error: "Too many uploads. Please try again later." };
+  }
   const file = formData.get("file");
   if (!file || typeof file === "string") {
     return { success: false, error: "No file provided" };

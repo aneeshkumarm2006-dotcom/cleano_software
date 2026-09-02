@@ -2,6 +2,7 @@
 
 import { db } from "@/lib/org-db";
 import { sendApplicantConfirmation, sendAdminNewApplication } from "@/lib/email";
+import { rateLimitByIp } from "@/lib/rate-limit";
 
 export interface JobApplicationInput {
   // Personal
@@ -53,6 +54,10 @@ const s = (v?: string | null) => (v?.trim() ? v.trim() : null);
 
 export async function submitJobApplication(input: JobApplicationInput) {
   try {
+    // Public form that creates records and sends confirmation email.
+    if (await rateLimitByIp("job-application", { max: 5, windowMs: 10 * 60_000 })) {
+      return { success: false, error: "Too many submissions. Please try again later." };
+    }
     const firstName = input.firstName?.trim();
     const lastName = input.lastName?.trim();
     const email = input.email?.trim().toLowerCase();

@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/org-db";
+import { rateLimitByIp } from "@/lib/rate-limit";
 
 export async function applyPromoCode(code: string, subtotal: number): Promise<{
   valid: boolean;
@@ -8,6 +9,13 @@ export async function applyPromoCode(code: string, subtotal: number): Promise<{
   message?: string;
 }> {
   if (!code?.trim()) return { valid: false, message: "Enter a promo code" };
+
+  // Public and guessable: without a limit this is a promo-code oracle an
+  // attacker can walk the keyspace of. The message matches "wrong code" so
+  // the limiter itself leaks nothing.
+  if (await rateLimitByIp("promo-code", { max: 10, windowMs: 60_000 })) {
+    return { valid: false, message: "Invalid or expired promo code" };
+  }
 
   const promo = await db.promoCode.findFirst({
     where: {

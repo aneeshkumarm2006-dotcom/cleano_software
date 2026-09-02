@@ -54,6 +54,7 @@ import { resolveJobAddressId } from "@/lib/client-address-store";
 import { parsePropertyType } from "@/lib/property-type";
 import { allocateJobNumber } from "@/lib/job-number";
 import { requireOrgId } from "@/lib/org";
+import { rateLimitByIp } from "@/lib/rate-limit";
 import { bookingPhotoFolderFor, currentOrgSlug } from "@/lib/asset-folder";
 
 type Frequency =
@@ -351,6 +352,13 @@ function addDays(ymd: string, days: number): string {
 
 export async function submitBooking(input: SubmitBookingInput) {
   try {
+    // The heaviest public action there is: Stripe verification, job +
+    // recurring-series creation, emails. A paid deposit already gates the
+    // outcome; this bounds how much *work* an unpaid caller can burn.
+    if (await rateLimitByIp("submit-booking", { max: 6, windowMs: 60_000 })) {
+      return { success: false, error: "Too many attempts. Please wait a minute and try again." };
+    }
+
     // 1. Validate basics
     const email = input.email?.trim().toLowerCase();
     if (!email || !isValidEmail(email)) {

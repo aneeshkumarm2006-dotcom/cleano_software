@@ -5,6 +5,7 @@ import { requireStripeForCurrentOrg } from "@/lib/stripe-org";
 import { generateGiftCardCode } from "@/lib/gift-cards/code";
 import { GIFT_CARD_COVERS } from "@/lib/gift-cards/covers";
 import { getSetting } from "@/lib/settings";
+import { rateLimitByIp } from "@/lib/rate-limit";
 
 export interface CreateGiftCardInput {
   amount: number;
@@ -25,6 +26,11 @@ export interface CreateGiftCardInput {
  * delivery (or schedule it).
  */
 export async function createGiftCardIntent(input: CreateGiftCardInput) {
+  // Unauthenticated and it mints Stripe PaymentIntents — same card-testing
+  // surface as the booking deposit, same bound.
+  if (await rateLimitByIp("gift-card-intent", { max: 6, windowMs: 60_000 })) {
+    return { success: false, error: "Too many attempts. Please wait a minute and try again." };
+  }
   const amount = Math.round(Number(input.amount));
   const tiers = await getSetting("payments.giftCardTiers");
   if (!tiers.includes(amount)) {

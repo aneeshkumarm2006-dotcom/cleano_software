@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/org-db";
+import { rateLimitByIp } from "@/lib/rate-limit";
 
 interface SaveLeadInput {
   email: string;
@@ -25,6 +26,11 @@ interface SaveLeadInput {
 // Called incrementally with debounce from the wizard.
 export async function saveLead(input: SaveLeadInput) {
   try {
+    // Public upsert called on a debounce from the wizard: bursty for real
+    // visitors, so the window is generous — this only stops bulk row-stuffing.
+    if (await rateLimitByIp("save-lead", { max: 30, windowMs: 60_000 })) {
+      return { success: false, error: "Too many requests" };
+    }
     const email = input.email?.trim().toLowerCase();
     if (!email) return { success: false, error: "Email is required" };
 

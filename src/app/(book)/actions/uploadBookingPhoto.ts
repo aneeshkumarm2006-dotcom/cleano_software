@@ -7,6 +7,7 @@ import {
   BOOKING_PHOTO_MIME_TYPES,
 } from "@/lib/booking-deposit";
 import { bookingPhotoFolderFor, currentOrgSlug } from "@/lib/asset-folder";
+import { rateLimitByIp } from "@/lib/rate-limit";
 import type { UploadApiResponse } from "cloudinary";
 
 /**
@@ -120,6 +121,12 @@ export type UploadBookingPhotoResult =
 export async function uploadBookingPhoto(
   formData: FormData
 ): Promise<UploadBookingPhotoResult> {
+  // Public file upload into our storage — bound it. Generous: a real booking
+  // legitimately uploads several photos in a burst.
+  if (await rateLimitByIp("upload-booking-photo", { max: 30, windowMs: 10 * 60_000 })) {
+    return { success: false, error: "Too many uploads. Please try again later." };
+  }
+
   const file = formData.get("file");
 
   if (!file || typeof file === "string") {
