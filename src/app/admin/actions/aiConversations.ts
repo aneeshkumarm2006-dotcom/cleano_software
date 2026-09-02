@@ -5,6 +5,7 @@ import { db } from "@/lib/org-db";
 import { requireOwnerAdmin } from "@/lib/action-guards";
 import { logActivity } from "@/lib/activity-log";
 import { sendSms } from "@/lib/sms";
+import { sendConversationalEmailReply } from "@/lib/email";
 
 type Result = { success: true } | { success: false; error: string };
 
@@ -33,18 +34,29 @@ export async function replyToAiConversation(
   });
   if (!convo) return { success: false, error: "Conversation not found." };
 
-  if (convo.channel !== "SMS") {
-    // Email conversations arrive with the email leg of the assistant; the
-    // staff reply path for them ships with it.
-    return { success: false, error: "Replying to email conversations isn't available yet." };
-  }
-
-  const sent = await sendSms({ to: convo.customerAddress, body: text });
-  if (!sent.sent) {
-    return {
-      success: false,
-      error: "The text couldn't be sent. Check the workspace's SMS number and try again.",
-    };
+  if (convo.channel === "SMS") {
+    const sent = await sendSms({ to: convo.customerAddress, body: text });
+    if (!sent.sent) {
+      return {
+        success: false,
+        error: "The text couldn't be sent. Check the workspace's SMS number and try again.",
+      };
+    }
+  } else {
+    const subject = convo.subject
+      ? /^re:/i.test(convo.subject)
+        ? convo.subject
+        : `Re: ${convo.subject}`
+      : "Re: your message";
+    const sent = await sendConversationalEmailReply({
+      to: convo.customerAddress,
+      subject,
+      text,
+      inReplyTo: convo.lastEmailMessageId,
+    });
+    if (!sent) {
+      return { success: false, error: "The email couldn't be sent. Try again in a moment." };
+    }
   }
 
   await db.aiMessage.create({
@@ -61,7 +73,7 @@ export async function replyToAiConversation(
   });
 
   await logActivity({
-    category: "SMS",
+    category: convo.channel === "SMS" ? "SMS" : "EMAIL",
     action: "ai_conversation.staff_reply",
     status: "SUCCESS",
     targetType: "aiConversation",

@@ -3898,6 +3898,14 @@ model AiConversation {
   /// This is what the admin Conversations view sorts to the top.
   needsHuman Boolean @default(false)
 
+  /// EMAIL only: the subject of the customer's first email, so replies can
+  /// say "Re: ..." and staff see what the thread is about.
+  subject String?
+
+  /// EMAIL only: the Message-ID of the newest inbound email, used as
+  /// In-Reply-To so our replies land in the customer's original thread.
+  lastEmailMessageId String?
+
   lastMessageAt DateTime @default(now())
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt

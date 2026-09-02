@@ -48,6 +48,7 @@ export default async function ConversationPage({
           customerAddress: convo.customerAddress,
           aiEnabled: convo.aiEnabled,
           needsHuman: convo.needsHuman,
+          subject: convo.subject,
           clientId: client?.id ?? null,
           clientName: client?.name ?? null,
         }}

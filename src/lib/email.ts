@@ -1,5 +1,6 @@
 import { Resend } from "resend";
 import { db } from "@/lib/org-db";
+import { getSetting } from "@/lib/settings";
 import { isNotificationEnabled } from "@/lib/notifications";
 import { coverFor } from "@/lib/gift-cards/covers";
 import { BOOKING_DEPOSIT_USD } from "@/lib/job-billing";
@@ -17,6 +18,35 @@ export interface NotificationGate {
 }
 
 const FROM = process.env.EMAIL_FROM ?? "Cleano <no-reply@cleano.ca>";
+
+/**
+ * The tenant-branded sender: the workspace's business name wearing the
+ * platform's verified address, with replies going to the business's real
+ * inbox. `From: "Sparkle Cleaning" <no-reply@useawer.com>` +
+ * `Reply-To: sparkle@gmail.com` is the standard SaaS answer to "our clients
+ * don't own domains" — deliverability rides ONE domain we control, the
+ * customer sees the company they hired, and hitting reply just works.
+ *
+ * Falls back to the bare env FROM on any failure: an email from the platform
+ * name is recoverable, a booking confirmation that never sent is not.
+ */
+async function tenantFrom(): Promise<{ from: string; replyTo?: string }> {
+  try {
+    const [name, replyTo] = await Promise.all([
+      getSetting("general.businessName"),
+      getSetting("general.businessEmail"),
+    ]);
+    // Keep only the address part of EMAIL_FROM; the display name is theirs.
+    const addr = FROM.includes("<") ? FROM.slice(FROM.indexOf("<")).trim() : `<${FROM.trim()}>`;
+    const display = String(name ?? "").replace(/[<>"\r\n]/g, "").trim();
+    return {
+      from: display ? `${display} ${addr}` : FROM,
+      replyTo: typeof replyTo === "string" && replyTo.includes("@") ? replyTo : undefined,
+    };
+  } catch {
+    return { from: FROM };
+  }
+}
 
 function getResend() {
   if (!process.env.RESEND_API_KEY) {
@@ -97,6 +127,8 @@ async function deliver(opts: {
   logId?: string;
   notification?: NotificationGate;
   attachments?: Array<{ filename: string; content: Buffer | string }>;
+  /** Extra SMTP headers, e.g. In-Reply-To/References for email threading. */
+  headers?: Record<string, string>;
 }) {
   // Respect admin's notification toggles (Settings → Notifications).
   // If the EMAIL channel for this catalog row is off, we skip the send
@@ -130,11 +162,14 @@ async function deliver(opts: {
     return { ok: false, error: "RESEND_API_KEY not configured" };
   }
   try {
+    const branding = await tenantFrom();
     const { data, error } = await resend.emails.send({
-      from: FROM,
+      from: branding.from,
       to: opts.to,
       subject: opts.subject,
       html: opts.html,
+      ...(branding.replyTo ? { replyTo: branding.replyTo } : {}),
+      ...(opts.headers ? { headers: opts.headers } : {}),
       ...(opts.attachments && opts.attachments.length > 0
         ? { attachments: opts.attachments }
         : {}),
@@ -1109,6 +1144,39 @@ export async function sendAdminAiHandoff(opts: {
       notification: { recipient: "ADMIN", key: "admin.ai.handoff" },
     }).catch((e) => console.error("sendAdminAiHandoff", admin.email, e));
   }
+}
+
+/**
+ * A conversational reply from the AI assistant (or a staff member using the
+ * Conversations page) to a customer's email. Deliberately NOT the branded
+ * layout the transactional emails use: a reply to "do you clean offices?"
+ * should look like a person typed it, not like a receipt.
+ *
+ * Not gated by the notification catalog — the AI Assistant settings tab is
+ * the switch for this, and it was checked before the reply was generated.
+ * Threading headers keep the reply in the customer's original email thread.
+ */
+export async function sendConversationalEmailReply(opts: {
+  to: string;
+  subject: string;
+  text: string;
+  inReplyTo?: string | null;
+}): Promise<boolean> {
+  const esc = (s: string) =>
+    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const html = `<div style="font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.6;color:#222;white-space:pre-wrap;">${esc(
+    opts.text,
+  )}</div>`;
+  const headers = opts.inReplyTo
+    ? { "In-Reply-To": opts.inReplyTo, References: opts.inReplyTo }
+    : undefined;
+  const res = await deliver({
+    to: opts.to,
+    subject: opts.subject,
+    html,
+    ...(headers ? { headers } : {}),
+  });
+  return res.ok === true;
 }
 
 /** Admin email when a customer card is declined. Context picks the catalog key. */

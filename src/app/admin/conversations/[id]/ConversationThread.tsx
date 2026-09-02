@@ -25,6 +25,7 @@ interface Conversation {
   customerAddress: string;
   aiEnabled: boolean;
   needsHuman: boolean;
+  subject: string | null;
   clientId: string | null;
   clientName: string | null;
 }
@@ -81,6 +82,7 @@ export default function ConversationThread({
           <div className="min-w-0">
             <div className="text-sm font-semibold text-gray-900 truncate">{who}</div>
             <div className="text-xs text-gray-500 truncate">
+              {conversation.subject && <>{conversation.subject} · </>}
               {conversation.customerAddress}
               {conversation.clientId && (
                 <>
