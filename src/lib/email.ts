@@ -1071,6 +1071,46 @@ export async function sendAdminCardReplaced(opts: {
   }
 }
 
+/**
+ * Admin email when the AI assistant hands a conversation to the team. The
+ * customer may have been told "someone will follow up" — this is what makes
+ * that true, so it goes to every admin and links straight to the thread.
+ */
+export async function sendAdminAiHandoff(opts: {
+  conversationId: string;
+  channelLabel: string;
+  customerLabel: string;
+  lastMessage: string;
+  reason: string;
+}) {
+  const admins = await fetchAdmins();
+  if (admins.length === 0) return;
+  const appUrl = await currentAppUrl();
+
+  const html = layout(
+    h1(`AI assistant needs a human — ${opts.customerLabel}`) +
+      p(
+        "The AI assistant stepped back from a conversation and the customer may be waiting on a reply from your team."
+      ) +
+      section([
+        ["Customer", opts.customerLabel],
+        ["Channel", opts.channelLabel],
+        ["Their last message", opts.lastMessage.slice(0, 300)],
+        ["Why", opts.reason],
+      ]) +
+      btn("Open conversation", `${appUrl}/admin/conversations/${opts.conversationId}`)
+  );
+
+  for (const admin of admins) {
+    await deliver({
+      to: admin.email,
+      subject: `AI assistant needs a human — ${opts.customerLabel}`,
+      html,
+      notification: { recipient: "ADMIN", key: "admin.ai.handoff" },
+    }).catch((e) => console.error("sendAdminAiHandoff", admin.email, e));
+  }
+}
+
 /** Admin email when a customer card is declined. Context picks the catalog key. */
 export async function sendAdminCardDeclined(opts: {
   jobId: string;

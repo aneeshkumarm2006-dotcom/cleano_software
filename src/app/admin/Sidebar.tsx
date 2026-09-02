@@ -8,6 +8,7 @@ import {
   X,
   ChevronDown,
   MessageCircle,
+  Bot,
   LayoutDashboard,
   BarChart3,
   TrendingUp,
@@ -280,6 +281,15 @@ const NAV: { label: string; items: NavItem[] }[] = [
         href: "/admin/sales",
         label: "Sales Leads",
         Icon: MapPin,
+        adminOnly: true,
+      },
+      {
+        // The AI receptionist's inbox: texts (and later emails) it answered or
+        // handed off. Lives in this section because most of what it catches is
+        // top-of-funnel — people who aren't clients yet.
+        href: "/admin/conversations",
+        label: "AI Conversations",
+        Icon: Bot,
         adminOnly: true,
       },
       {

@@ -288,6 +288,15 @@ export const NOTIFICATION_CATALOG: CatalogEntry[] = [
   },
   {
     recipient: "ADMIN",
+    category: "AI assistant",
+    key: "admin.ai.handoff",
+    label: "AI assistant needs a human",
+    trigger:
+      "The AI assistant hands a customer conversation to the team — the customer asked for a person, the question wasn't covered, or the assistant hit its daily limit.",
+    channels: { EMAIL: true, SMS: false },
+  },
+  {
+    recipient: "ADMIN",
     category: "Payments / cards",
     key: "admin.card.declined_on_hold",
     label: "Card declined on hold",

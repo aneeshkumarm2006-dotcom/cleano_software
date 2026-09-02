@@ -3869,3 +3869,80 @@ model AccessRequest {
   @@index([createdAt])
   @@index([email])
 }
+
+/// One customer <-> AI assistant exchange on one channel — the app's first
+/// real conversation model, deliberately small (the CRM inbox in the Cleano OS
+/// spec is a separate, later build).
+///
+/// Tenant-scoped with RLS like every customer table. `clientId` is a soft
+/// reference on purpose: a conversation can start before the texter is a
+/// client at all, and must survive the client being merged or archived.
+model AiConversation {
+  organizationId String @default("")
+  id             String @id @default(cuid())
+
+  channel AiChannel
+
+  /// The customer's address on the channel: E.164 phone for SMS, lowercased
+  /// email address for EMAIL. What replies get sent to.
+  customerAddress String
+
+  /// Matched Client.id when the address maps to one of this company's clients.
+  clientId String?
+
+  /// The per-conversation switch. Flipped false when a staff member takes
+  /// over (or toggles it off) — the assistant never talks over a human.
+  aiEnabled Boolean @default(true)
+
+  /// The assistant asked staff to step in and nobody has resolved it yet.
+  /// This is what the admin Conversations view sorts to the top.
+  needsHuman Boolean @default(false)
+
+  lastMessageAt DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  messages AiMessage[]
+
+  @@index([organizationId, lastMessageAt])
+  @@index([organizationId, needsHuman, lastMessageAt])
+  @@index([organizationId, channel, customerAddress])
+}
+
+model AiMessage {
+  organizationId String @default("")
+  id             String @id @default(cuid())
+
+  conversationId String
+  conversation   AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  direction AiMessageDirection
+  author    AiMessageAuthor
+
+  body String
+
+  /// The model's one-line internal note (e.g. why it handed off). Staff-only;
+  /// never sent to the customer.
+  internalNote String?
+
+  createdAt DateTime @default(now())
+
+  @@index([conversationId, createdAt])
+  @@index([organizationId, createdAt])
+}
+
+enum AiChannel {
+  SMS
+  EMAIL
+}
+
+enum AiMessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum AiMessageAuthor {
+  CUSTOMER
+  ASSISTANT
+  STAFF
+}

@@ -1,10 +1,12 @@
-import { NextRequest } from "next/server";
+import { NextRequest, after } from "next/server";
 import crypto from "crypto";
 import { db } from "@/lib/org-db";
 import { runAsOrg } from "@/lib/org-context";
 import { orgForInboundNumber } from "@/lib/sms-sender";
-import { toE164 } from "@/lib/sms";
+import { sendSms, toE164 } from "@/lib/sms";
 import { isJobChatOpenForClient } from "@/lib/jobChatActions";
+import { getAiAssistantConfig } from "@/lib/ai-assistant/knowledge";
+import { handleInboundAiMessage } from "@/lib/ai-assistant/conversation";
 
 // Inbound leg of the job-specific chat SMS bridge (#11). Twilio POSTs here
 // (application/x-www-form-urlencoded) when a client texts a company's number.
@@ -53,6 +55,43 @@ function isValidTwilioSignature(
   } catch {
     return false;
   }
+}
+
+/**
+ * The AI receptionist's front door. Texts used to be silently dropped in two
+ * places — a number we don't recognise as a client, and a client with no
+ * active booking to thread onto. Those are exactly the messages worth
+ * answering (the first one is a prospect), so when the workspace has turned
+ * the assistant on, they go to it instead of to the void.
+ *
+ * The webhook answers Twilio IMMEDIATELY and the model call runs via after():
+ * Twilio retries a slow webhook, and a retry would process the same text
+ * twice. runAsOrg is re-entered inside the callback because after() runs when
+ * the request-scoped org context is gone.
+ */
+function aiFallback(
+  org: NonNullable<Awaited<ReturnType<typeof orgForInboundNumber>>>,
+  phone: string,
+  text: string,
+  client: { id: string; name: string | null } | null,
+): Promise<Response> {
+  return getAiAssistantConfig().then((config) => {
+    if (!config.enabled || !config.smsReplies) return twiml();
+    after(() =>
+      runAsOrg(org, () =>
+        handleInboundAiMessage({
+          channel: "SMS",
+          address: phone,
+          clientId: client?.id ?? null,
+          clientName: client?.name ?? null,
+          text,
+          dailyMessageCap: config.dailyMessageCap,
+          deliver: async (body) => (await sendSms({ to: phone, body })).sent,
+        }),
+      ),
+    );
+    return twiml();
+  });
 }
 
 function twiml(body = ""): Response {
@@ -104,7 +143,8 @@ export async function POST(req: NextRequest) {
       where: { OR: [{ phone }, { secondaryPhone: phone }] },
       select: { id: true, name: true },
     });
-    if (!client) return twiml();
+    // Not a client — a prospect, or a wrong number. The assistant's best case.
+    if (!client) return aiFallback(org, phone, bodyText, null);
 
     // Find the most relevant job to attach the reply to: the client's thread with
     // the most recent chat activity, else their nearest active (non-cancelled)
@@ -139,7 +179,9 @@ export async function POST(req: NextRequest) {
       jobId = activeJob?.id ?? null;
     }
 
-    if (!jobId) return twiml();
+    // A client, but nothing to thread onto — no recent chat, no active job.
+    // That's a general question, not job talk, so the assistant may take it.
+    if (!jobId) return aiFallback(org, phone, bodyText, client);
 
     // CLN-P0-3-14 — an admin who turned messaging off for this booking, or for
     // this customer, must not be bypassed by the customer texting instead. This

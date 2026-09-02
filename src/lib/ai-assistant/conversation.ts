@@ -1,0 +1,182 @@
+// Orchestration: one inbound customer message, start to finish.
+//
+// The SMS webhook and (later) the email webhook both funnel here; they differ
+// only in the `deliver` callback that actually sends the reply. Everything
+// else — threading, the daily cap, the model call, recording both sides,
+// waking the team on a handoff — is channel-agnostic and lives in one place.
+//
+// Runs inside org context (the callers wrap runAsOrg), so `db` is scoped and
+// getSetting reads the right workspace.
+import "server-only";
+
+import type { AiChannel } from "@prisma/client";
+import { db } from "@/lib/org-db";
+import { sendAdminAiHandoff } from "@/lib/email";
+import { buildWorkspaceKnowledge } from "./knowledge";
+import { generateAssistantReply } from "./respond";
+import type { ChatTurn } from "./claude";
+
+/**
+ * A quiet gap after which a text from the same number is a NEW conversation,
+ * not a continuation. Mirrors the job-chat rethreading window: past a month,
+ * "hi, do you clean offices?" has nothing to do with last spring's booking.
+ */
+const RETHREAD_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+
+/** How much history the model sees. Enough for context, bounded for cost. */
+const MAX_TURNS = 20;
+
+export interface InboundResult {
+  conversationId: string;
+  /** What was sent back, if anything. */
+  replied: boolean;
+}
+
+/**
+ * Record an inbound customer message and, when the assistant is allowed to,
+ * answer it. Callers have ALREADY checked the workspace config (enabled +
+ * channel toggle) — this keeps the config read next to the webhook's early
+ * exits, where its absence is easiest to notice.
+ *
+ * Never throws: a failure here must not turn into a webhook 500 that makes
+ * Twilio retry-storm the workspace.
+ */
+export async function handleInboundAiMessage(opts: {
+  channel: AiChannel;
+  /** E.164 phone (SMS) or lowercased email address (EMAIL). */
+  address: string;
+  /** Matched client, when there is one. Prospects are null — and welcome. */
+  clientId: string | null;
+  clientName: string | null;
+  text: string;
+  dailyMessageCap: number;
+  /** Send `body` to the customer on this channel. Resolves true if sent. */
+  deliver: (body: string) => Promise<boolean>;
+}): Promise<InboundResult | null> {
+  try {
+    // ── Thread it ──────────────────────────────────────────────────────────
+    const cutoff = new Date(Date.now() - RETHREAD_WINDOW_MS);
+    let convo = await db.aiConversation.findFirst({
+      where: {
+        channel: opts.channel,
+        customerAddress: opts.address,
+        lastMessageAt: { gte: cutoff },
+      },
+      orderBy: { lastMessageAt: "desc" },
+    });
+    convo ??= await db.aiConversation.create({
+      data: {
+        channel: opts.channel,
+        customerAddress: opts.address,
+        clientId: opts.clientId,
+      },
+    });
+
+    await db.aiMessage.create({
+      data: {
+        conversationId: convo.id,
+        direction: "INBOUND",
+        author: "CUSTOMER",
+        body: opts.text,
+      },
+    });
+    await db.aiConversation.update({
+      where: { id: convo.id },
+      data: {
+        lastMessageAt: new Date(),
+        // A conversation that started before this person became a client can
+        // pick the link up now.
+        ...(opts.clientId && !convo.clientId ? { clientId: opts.clientId } : {}),
+      },
+    });
+
+    const customerLabel = opts.clientName ?? opts.address;
+    const escalate = async (reason: string) => {
+      // Notify only on the transition into needing a human — a customer
+      // sending five follow-up texts is one problem, not five emails.
+      if (!convo.needsHuman) {
+        await db.aiConversation.update({
+          where: { id: convo.id },
+          data: { needsHuman: true },
+        });
+        await sendAdminAiHandoff({
+          conversationId: convo.id,
+          channelLabel: opts.channel === "SMS" ? "Text message" : "Email",
+          customerLabel,
+          lastMessage: opts.text,
+          reason,
+        });
+      }
+    };
+
+    // ── May the assistant speak? ───────────────────────────────────────────
+    if (!convo.aiEnabled) {
+      // A human owns this thread. Record + surface, never talk over them.
+      await escalate("A teammate has taken over this conversation; the customer just wrote again.");
+      return { conversationId: convo.id, replied: false };
+    }
+
+    const dayStart = new Date();
+    dayStart.setHours(0, 0, 0, 0);
+    const sentToday = await db.aiMessage.count({
+      where: { author: "ASSISTANT", createdAt: { gte: dayStart } },
+    });
+    if (sentToday >= opts.dailyMessageCap) {
+      await escalate(
+        `The assistant reached its daily limit of ${opts.dailyMessageCap} messages and stayed quiet.`,
+      );
+      return { conversationId: convo.id, replied: false };
+    }
+
+    // ── Ask the model ──────────────────────────────────────────────────────
+    const history = await db.aiMessage.findMany({
+      where: { conversationId: convo.id },
+      orderBy: { createdAt: "desc" },
+      take: MAX_TURNS,
+      select: { author: true, body: true },
+    });
+    const turns: ChatTurn[] = history
+      .reverse()
+      .map((m) => ({
+        role: m.author === "CUSTOMER" ? ("user" as const) : ("assistant" as const),
+        content: m.body,
+      }));
+
+    const knowledge = await buildWorkspaceKnowledge();
+    const verdict = await generateAssistantReply({
+      knowledge,
+      channel: opts.channel,
+      turns,
+    });
+
+    // ── Deliver + record ───────────────────────────────────────────────────
+    let replied = false;
+    if (verdict.reply) {
+      replied = await opts.deliver(verdict.reply).catch(() => false);
+      if (replied) {
+        await db.aiMessage.create({
+          data: {
+            conversationId: convo.id,
+            direction: "OUTBOUND",
+            author: "ASSISTANT",
+            body: verdict.reply,
+            internalNote: verdict.reason,
+          },
+        });
+        await db.aiConversation.update({
+          where: { id: convo.id },
+          data: { lastMessageAt: new Date() },
+        });
+      }
+    }
+
+    if (verdict.handoff || !replied) {
+      await escalate(verdict.reason);
+    }
+
+    return { conversationId: convo.id, replied };
+  } catch (err) {
+    console.error("[ai-assistant] handleInboundAiMessage failed:", err);
+    return null;
+  }
+}
