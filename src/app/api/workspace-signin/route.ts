@@ -45,6 +45,53 @@ function rateLimited(key: string): boolean {
   return hit.n > MAX_ATTEMPTS;
 }
 
+/**
+ * Is the page that posted these credentials one of ours?
+ *
+ * This route exists to be called cross-HOST — the front door at the apex posts
+ * to the workspace's subdomain, which is why it cannot sit behind better-auth's
+ * own origin check (that runs only on /api/auth/* routes, and a direct
+ * `auth.api` call skips it). But cross-host is not cross-SITE: the apex and
+ * every workspace share a registrable domain, so the Origin a browser stamps on
+ * the POST must be the request's own host, its parent, or a sibling under it.
+ *
+ * Without this, any web page could auto-submit a hidden form here and log a
+ * visitor's browser into an account the attacker controls. The security review
+ * traced that chain and found /api/post-signin's staff-door bounce breaks it —
+ * every role an outsider can mint gets signed straight back out — so this is
+ * defence in depth, not the only thing holding the door. It stops the chain at
+ * the first link instead of the last.
+ *
+ * A MISSING Origin header is allowed through. Non-browser clients send none and
+ * are not a CSRF vector (CSRF is about riding a victim's browser, and browsers
+ * DO send Origin on cross-site form POSTs); rejecting on absence would break
+ * odd browsers and privacy extensions for no security gain. "null" — sandboxed
+ * iframes, data: URLs — fails URL parsing and is rejected, which is right.
+ */
+function sameSiteOrigin(req: NextRequest): boolean {
+  const raw = req.headers.get("origin");
+  if (!raw) return true;
+
+  let originHost: string;
+  try {
+    originHost = new URL(raw).hostname.toLowerCase().replace(/\.$/, "");
+  } catch {
+    return false;
+  }
+  const reqHost = (req.headers.get("host") ?? "")
+    .split(":")[0]
+    .trim()
+    .toLowerCase()
+    .replace(/\.$/, "");
+  if (!originHost || !reqHost) return false;
+
+  return (
+    originHost === reqHost ||
+    reqHost.endsWith(`.${originHost}`) ||
+    originHost.endsWith(`.${reqHost}`)
+  );
+}
+
 function backToSignIn(req: NextRequest, reason: string) {
   const url = new URL("/sign-in", req.nextUrl.origin);
   url.searchParams.set("error", reason);
@@ -52,6 +99,8 @@ function backToSignIn(req: NextRequest, reason: string) {
 }
 
 export async function POST(req: NextRequest) {
+  if (!sameSiteOrigin(req)) return backToSignIn(req, "invalid");
+
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
   if (rateLimited(ip)) return backToSignIn(req, "rate");
 
