@@ -1,17 +1,23 @@
-// The quiet-lead follow-up: the platform's version of the client's
-// "VA Lead after 30 days" workflow, minus the part where it was secretly
-// still in 7-day test mode.
+// The lead follow-up sequence: the platform's version of the client's two
+// scheduled n8n workflows ("VA Lead after 30 days" and "Follow Up"), as one
+// engine — minus the part where theirs was secretly still in 7-day test mode.
 //
-// Once a day (the reminders cron), each workspace with the assistant on and a
-// follow-up window configured messages every lead that has been quiet for that
-// many days: SMS if we have a phone, email otherwise. The message is a fixed,
-// friendly template — deterministic and free — and it lands IN the
-// conversation system, so when the lead replies the assistant picks the
-// thread up with full context.
+// Each workspace configures quiet-day thresholds in Settings → AI Assistant,
+// e.g. [3, 10, 30]: a lead silent 3 days gets touch one, silent 10 days gets
+// touch two, silent 30 gets the last call — then the sequence ends and the
+// lead flips NEW → CONTACTED, permanently out of the pool. A lead who writes
+// back has their count reset (captureLead): re-engaging restarts the clock,
+// because "you talked to us yesterday" and "you vanished a month ago" deserve
+// different treatment.
 //
-// Idempotency is the status flip: only NEW leads are followed up, and a sent
-// follow-up marks the lead CONTACTED. One follow-up per lead, ever — a second
-// nudge to someone who ignored the first is where "helpful" becomes "spam".
+// Messages are fixed, friendly templates — deterministic and free — and they
+// land IN the conversation system, so a reply goes straight to the assistant
+// with full context. SMS when we have a phone, email otherwise.
+//
+// Once a day from the reminders cron. Crash-safe by ordering: the lead's
+// counters advance only after a delivery succeeded, so a failed send simply
+// retries tomorrow, and a crash between send and update costs at most one
+// duplicate message, never a lost lead.
 import "server-only";
 
 import { db } from "@/lib/org-db";
@@ -24,77 +30,129 @@ const BATCH = 50;
 export interface FollowUpCounts {
   eligible: number;
   sent: number;
+  completedSequence: number;
   skippedNoAddress: number;
   failed: number;
 }
 
+/**
+ * Touch templates, indexed by how many follow-ups the lead already had.
+ * Written to escalate gently: check-in → nudge with openings → last call.
+ */
+function touchMessage(
+  touch: number,
+  totalTouches: number,
+  name: string | null,
+  businessName: string,
+  bookingUrl: string,
+): { text: string; subject: string } {
+  const first = name ? ` ${name.split(" ")[0]}` : "";
+  const book = bookingUrl ? ` You can see prices and book online here: ${bookingUrl}` : "";
+  const isLast = touch >= totalTouches - 1;
+
+  if (touch === 0) {
+    return {
+      subject: "Still thinking about a cleaning?",
+      text: `Hi${first}! It's ${businessName}. You reached out about a cleaning a little while ago and we didn't want to leave you hanging — still interested?${book} Or just reply here and I'll help you out.`,
+    };
+  }
+  if (!isLast) {
+    return {
+      subject: "We saved you a spot",
+      text: `Hi${first}, ${businessName} again. We've got openings this week and next if the timing works better now.${book} Happy to answer any questions — just reply here.`,
+    };
+  }
+  return {
+    subject: "Last note from us",
+    text: `Hi${first}, it's ${businessName}. We won't keep messaging you — this is our last note. If you ever need a cleaning, we'd love to help.${book} Take care!`,
+  };
+}
+
 /** Runs inside one org's context (the cron wraps runAsOrg). */
 export async function runLeadFollowUps(): Promise<FollowUpCounts> {
-  const counts: FollowUpCounts = { eligible: 0, sent: 0, skippedNoAddress: 0, failed: 0 };
+  const counts: FollowUpCounts = {
+    eligible: 0,
+    sent: 0,
+    completedSequence: 0,
+    skippedNoAddress: 0,
+    failed: 0,
+  };
 
   const knowledge = await buildWorkspaceKnowledge();
   const { config, businessName, bookingUrl } = knowledge;
-  if (!config.enabled || config.leadFollowUpDays <= 0) return counts;
+  const sequence = config.followUpSequenceDays;
+  if (!config.enabled || sequence.length === 0) return counts;
 
-  // Leave headroom under the daily cap for actual conversations.
+  // Leave headroom under the daily cap for actual conversations. The cap
+  // counts all message rows (see conversation.ts), so compare against ×2.
   const dayStart = new Date();
   dayStart.setHours(0, 0, 0, 0);
-  const sentToday = await db.aiMessage.count({
-    where: { author: "ASSISTANT", createdAt: { gte: dayStart } },
+  const usedToday = await db.aiMessage.count({
+    where: { createdAt: { gte: dayStart } },
   });
-  const budget = Math.max(0, Math.floor(config.dailyMessageCap / 2) - sentToday);
+  const budget = Math.max(0, config.dailyMessageCap - Math.floor(usedToday / 2));
   if (budget === 0) return counts;
 
-  const cutoff = new Date(Date.now() - config.leadFollowUpDays * 24 * 60 * 60 * 1000);
+  // A lead on touch k is due when quiet for sequence[k] days. The longest
+  // threshold bounds the query; exact eligibility is decided per lead.
+  const now = Date.now();
+  const widestCutoff = new Date(now - sequence[0] * 24 * 60 * 60 * 1000);
   const leads = await db.lead.findMany({
     where: {
       status: "NEW",
       deletedAt: null,
-      lastActivityAt: { lte: cutoff },
+      lastActivityAt: { lte: widestCutoff },
+      followUpCount: { lt: sequence.length },
     },
     orderBy: { lastActivityAt: "asc" },
     take: Math.min(BATCH, budget),
-    select: { id: true, name: true, email: true, phone: true },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      phone: true,
+      followUpCount: true,
+      lastActivityAt: true,
+    },
   });
-  counts.eligible = leads.length;
-
-  const message = (name: string | null) =>
-    [
-      `Hi${name ? ` ${name.split(" ")[0]}` : ""}! It's ${businessName}.`,
-      `You reached out about a cleaning a little while ago and we didn't want to leave you hanging — still interested?`,
-      bookingUrl ? `You can see prices and book online here: ${bookingUrl}` : "",
-      `Or just reply here and I'll help you out.`,
-    ]
-      .filter(Boolean)
-      .join(" ");
 
   for (const lead of leads) {
     try {
+      const touch = Math.min(lead.followUpCount, sequence.length - 1);
+      const quietDays = (now - lead.lastActivityAt.getTime()) / (24 * 60 * 60 * 1000);
+      if (quietDays < sequence[touch]) continue; // not this touch's turn yet
+      counts.eligible++;
+
       const phone = lead.phone?.trim() || null;
       const email = lead.email?.trim() || null;
       const channel = phone ? ("SMS" as const) : email ? ("EMAIL" as const) : null;
       if (!channel) {
         counts.skippedNoAddress++;
+        // Unreachable forever — retire it from the pool rather than rescanning daily.
+        await db.lead.update({
+          where: { id: lead.id },
+          data: { status: "CONTACTED" },
+        });
         continue;
       }
       const address = channel === "SMS" ? phone! : email!.toLowerCase();
-      const text = message(lead.name);
+      const msg = touchMessage(touch, sequence.length, lead.name, businessName, bookingUrl);
 
       const delivered =
         channel === "SMS"
-          ? (await sendSms({ to: address, body: text })).sent
+          ? (await sendSms({ to: address, body: msg.text })).sent
           : await sendConversationalEmailReply({
               to: address,
-              subject: `Still thinking about a cleaning?`,
-              text,
+              subject: msg.subject,
+              text: msg.text,
             });
       if (!delivered) {
         counts.failed++;
-        continue;
+        continue; // counters untouched — this touch retries tomorrow
       }
 
       // Record it where a reply will land, so the assistant has the context.
-      const cutoff30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const cutoff30 = new Date(now - 30 * 24 * 60 * 60 * 1000);
       let convo = await db.aiConversation.findFirst({
         where: { channel, customerAddress: address, lastMessageAt: { gte: cutoff30 } },
         orderBy: { lastMessageAt: "desc" },
@@ -109,8 +167,8 @@ export async function runLeadFollowUps(): Promise<FollowUpCounts> {
           conversationId: convo.id,
           direction: "OUTBOUND",
           author: "ASSISTANT",
-          body: text,
-          internalNote: `Automatic follow-up: lead quiet for ${config.leadFollowUpDays}+ days.`,
+          body: msg.text,
+          internalNote: `Automatic follow-up ${touch + 1} of ${sequence.length}: lead quiet ${Math.floor(quietDays)} days.`,
         },
       });
       await db.aiConversation.update({
@@ -118,12 +176,20 @@ export async function runLeadFollowUps(): Promise<FollowUpCounts> {
         data: { lastMessageAt: new Date() },
       });
 
-      // The dedupe: NEW → CONTACTED means this lead is never followed up again.
+      const sequenceDone = touch + 1 >= sequence.length;
       await db.lead.update({
         where: { id: lead.id },
-        data: { status: "CONTACTED", lastActivityAt: new Date() },
+        data: {
+          followUpCount: touch + 1,
+          lastFollowUpAt: new Date(),
+          // NOTE: lastActivityAt is deliberately NOT bumped — it means THEIR
+          // activity. Bumping it here would push every later touch out by the
+          // gap between touches.
+          ...(sequenceDone ? { status: "CONTACTED" as const } : {}),
+        },
       });
       counts.sent++;
+      if (sequenceDone) counts.completedSequence++;
     } catch (e) {
       console.error(`[ai-assistant] follow-up failed for lead ${lead.id}`, e);
       counts.failed++;

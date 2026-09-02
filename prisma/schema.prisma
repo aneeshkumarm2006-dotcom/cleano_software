@@ -3135,6 +3135,13 @@ model Lead {
   payload        Json?
   status         LeadStatus   @default(NEW)
   source         String?
+
+  /// How many automatic follow-ups this lead has received (AI assistant
+  /// sequence). Reset to 0 when the lead writes back — re-engagement restarts
+  /// the clock, going quiet again restarts the sequence.
+  followUpCount  Int          @default(0)
+  /// When the most recent automatic follow-up went out.
+  lastFollowUpAt DateTime?
   convertedJobId String?
   convertedAt    DateTime?
   lastActivityAt DateTime     @default(now())

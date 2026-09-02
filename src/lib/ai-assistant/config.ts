@@ -29,11 +29,17 @@ export interface AiAssistantConfig {
    */
   dailyMessageCap: number;
   /**
-   * Days of silence after which a NEW lead gets one automatic follow-up
-   * message (then never again — it flips them to CONTACTED). 0 = off, and off
-   * is the default: nobody's leads get messaged because we shipped code.
+   * The follow-up sequence: quiet-day thresholds, ascending. [3, 10, 30]
+   * means a lead who has been silent 3 days gets touch one, silent 10 days
+   * gets touch two, silent 30 days gets touch three — then the sequence ends
+   * (the lead flips to CONTACTED). A reply resets the count: re-engagement
+   * restarts the clock. Empty = off, and off is the default: nobody's leads
+   * get messaged because we shipped code.
+   *
+   * (Replaces the earlier single `leadFollowUpDays`; the normalizer migrates
+   * a stored single value into a one-touch sequence.)
    */
-  leadFollowUpDays: number;
+  followUpSequenceDays: number[];
 }
 
 export const DEFAULT_AI_ASSISTANT: AiAssistantConfig = {
@@ -42,8 +48,28 @@ export const DEFAULT_AI_ASSISTANT: AiAssistantConfig = {
   emailReplies: true,
   businessFacts: "",
   dailyMessageCap: 200,
-  leadFollowUpDays: 0,
+  followUpSequenceDays: [],
 };
+
+const SEQUENCE_MAX_TOUCHES = 5;
+const SEQUENCE_MAX_DAYS = 365;
+
+/** Parse anything (array, legacy number, "3, 10, 30" string) into a valid sequence. */
+export function normalizeFollowUpSequence(v: unknown): number[] {
+  const rawList: unknown[] = Array.isArray(v)
+    ? v
+    : typeof v === "string"
+      ? v.split(/[,\s]+/)
+      : typeof v === "number"
+        ? [v]
+        : [];
+  const days = rawList
+    .map((x) => Math.round(Number(x)))
+    .filter((n) => Number.isFinite(n) && n >= 1 && n <= SEQUENCE_MAX_DAYS);
+  // ascending + unique keeps the semantics coherent regardless of input order
+  const sorted = [...new Set(days)].sort((a, b) => a - b);
+  return sorted.slice(0, SEQUENCE_MAX_TOUCHES);
+}
 
 const CAP_MIN = 10;
 const CAP_MAX = 2000;
@@ -64,10 +90,12 @@ export function normalizeAiAssistantConfig(v: unknown): AiAssistantConfig {
   const cap = Number.isFinite(capRaw)
     ? Math.min(CAP_MAX, Math.max(CAP_MIN, Math.round(capRaw)))
     : DEFAULT_AI_ASSISTANT.dailyMessageCap;
-  const fuRaw = Number(raw.leadFollowUpDays);
-  const followUp = Number.isFinite(fuRaw)
-    ? Math.min(365, Math.max(0, Math.round(fuRaw)))
-    : DEFAULT_AI_ASSISTANT.leadFollowUpDays;
+  // Prefer the sequence; fall back to migrating a stored single-number config
+  // from the earlier shape so nobody's setting silently turns off.
+  const sequence =
+    raw.followUpSequenceDays !== undefined
+      ? normalizeFollowUpSequence(raw.followUpSequenceDays)
+      : normalizeFollowUpSequence(raw.leadFollowUpDays);
   return {
     enabled: bool(raw.enabled, DEFAULT_AI_ASSISTANT.enabled),
     smsReplies: bool(raw.smsReplies, DEFAULT_AI_ASSISTANT.smsReplies),
@@ -77,6 +105,6 @@ export function normalizeAiAssistantConfig(v: unknown): AiAssistantConfig {
         ? raw.businessFacts.slice(0, FACTS_MAX_LEN)
         : DEFAULT_AI_ASSISTANT.businessFacts,
     dailyMessageCap: cap,
-    leadFollowUpDays: followUp,
+    followUpSequenceDays: sequence,
   };
 }

@@ -12,6 +12,7 @@ import {
   AI_ASSISTANT_KEY,
   DEFAULT_AI_ASSISTANT,
   normalizeAiAssistantConfig,
+  normalizeFollowUpSequence,
   type AiAssistantConfig,
 } from "@/lib/ai-assistant/config";
 
@@ -30,7 +31,9 @@ export default function AiAssistantTab({ settings }: Props) {
   const [emailReplies, setEmailReplies] = useState(initial.emailReplies);
   const [businessFacts, setBusinessFacts] = useState(initial.businessFacts);
   const [dailyMessageCap, setDailyMessageCap] = useState(initial.dailyMessageCap);
-  const [leadFollowUpDays, setLeadFollowUpDays] = useState(initial.leadFollowUpDays);
+  const [followUpDaysText, setFollowUpDaysText] = useState(
+    initial.followUpSequenceDays.join(", ")
+  );
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<Msg>(null);
 
@@ -47,7 +50,7 @@ export default function AiAssistantTab({ settings }: Props) {
         emailReplies,
         businessFacts,
         dailyMessageCap,
-        leadFollowUpDays,
+        followUpSequenceDays: normalizeFollowUpSequence(followUpDaysText),
       } satisfies AiAssistantConfig,
     });
     if (res.success) setMsg({ type: "success", text: "AI assistant settings saved." });
@@ -112,21 +115,21 @@ export default function AiAssistantTab({ settings }: Props) {
           </p>
         </Field>
 
-        <Field label="Follow up with quiet leads after (days)">
+        <Field label="Follow up with quiet leads after (days, comma-separated)">
           <Input
             variant="form"
-            type="number"
-            min="0"
-            max="365"
-            step="1"
-            value={leadFollowUpDays}
+            type="text"
+            placeholder="e.g. 3, 10, 30"
+            value={followUpDaysText}
             disabled={!enabled}
-            onChange={(e) => setLeadFollowUpDays(parseInt(e.target.value, 10) || 0)}
+            onChange={(e) => setFollowUpDaysText(e.target.value)}
           />
           <p className="text-xs text-gray-500 mt-1">
-            Someone who inquired but never booked gets one friendly check-in
-            with your booking link after this many quiet days, and never a
-            second one. 0 turns this off.
+            Someone who inquired but never booked gets a friendly check-in at
+            each of these quiet-day marks — for example "3, 10, 30" sends a
+            check-in after 3 silent days, a nudge after 10, and a last note
+            after 30, then stops for good. If they reply, the sequence resets.
+            Leave empty to turn follow-ups off. Up to 5 touches.
           </p>
         </Field>
 

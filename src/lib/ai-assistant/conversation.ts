@@ -51,9 +51,15 @@ async function captureLead(
     select: { id: true },
   });
   if (existing) {
+    // They wrote back: bump their activity AND rewind the follow-up sequence.
+    // Re-engagement restarts the clock — going quiet again after a real
+    // conversation earns a fresh gentle check-in, not "touch 3 of 3, last
+    // call". Status is left alone on purpose: a CONTACTED lead (sequence
+    // finished, or an admin working them) talks to the assistant like anyone
+    // else but is never pulled back into the automatic pool.
     await db.lead.update({
       where: { id: existing.id },
-      data: { lastActivityAt: new Date() },
+      data: { lastActivityAt: new Date(), followUpCount: 0 },
     });
     return;
   }
