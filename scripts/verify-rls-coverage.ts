@@ -49,11 +49,9 @@ async function main() {
       (SELECT count(*)::int FROM pg_policies p
         WHERE p.schemaname = 'public' AND p.tablename = c.table_name
           AND (p.qual LIKE '%app.current_org_id%' OR p.with_check LIKE '%app.current_org_id%')) AS org_policy_count,
-      (SELECT count(*)::int FROM information_schema.check_constraints cc
-        JOIN information_schema.constraint_table_usage ctu
-          ON cc.constraint_name = ctu.constraint_name AND ctu.table_schema = 'public'
-        WHERE ctu.table_name = c.table_name
-          AND cc.check_clause LIKE '%organizationId%<>%') AS blank_check_count
+      (SELECT count(*)::int FROM pg_constraint con
+        WHERE con.conrelid = t.oid AND con.contype = 'c'
+          AND pg_get_constraintdef(con.oid) LIKE '%organizationId%<>%') AS blank_check_count
     FROM information_schema.columns c
     JOIN pg_class t ON t.relname = c.table_name
     JOIN pg_namespace n ON n.oid = t.relnamespace AND n.nspname = 'public'
@@ -64,6 +62,7 @@ async function main() {
   `;
 
   let bad = 0;
+  let warned = 0;
   let checked = 0;
   for (const r of rows) {
     if (EXEMPT.has(r.table_name)) continue;
@@ -72,16 +71,23 @@ async function main() {
     if (!r.rls_enabled) problems.push("RLS not enabled");
     if (!r.rls_forced) problems.push("RLS not FORCED (owner bypasses it)");
     if (r.org_policy_count === 0) problems.push("no app.current_org_id policy");
-    if (r.blank_check_count === 0) problems.push("no blank-organizationId CHECK");
     if (problems.length > 0) {
       bad++;
       console.log(`✗ ${r.table_name}: ${problems.join("; ")}`);
     }
+    // The blank-organizationId CHECK is a warning, not a failure: some tables
+    // (e.g. EmailLog) deliberately hold platform-level rows with '' — but a
+    // TENANT table without the CHECK is one app.current_org_id='' bug away
+    // from serving blank rows to everyone, so it is worth seeing.
+    if (problems.length === 0 && r.blank_check_count === 0) {
+      warned++;
+      console.log(`⚠ ${r.table_name}: no blank-organizationId CHECK (RLS itself is in place)`);
+    }
   }
 
   console.log(
-    `\n${checked} tenant tables checked, ${bad} unprotected` +
-      (bad === 0 ? " — every organizationId table is fenced." : ""),
+    `\n${checked} tenant tables checked, ${bad} unprotected, ${warned} warnings` +
+      (bad === 0 ? " — every organizationId table has forced RLS + an org policy." : ""),
   );
   await db.$disconnect();
   process.exit(bad > 0 ? 1 : 0);
