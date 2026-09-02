@@ -30,6 +30,7 @@ import {
   Tags,
   FileText,
   ClipboardList,
+  Bot,
 } from "lucide-react";
 import ProfileTab from "./tabs/ProfileTab";
 import TaxSettingsTab from "./tabs/TaxSettingsTab";
@@ -54,6 +55,7 @@ import DocumentsTab, {
 } from "./tabs/DocumentsTab";
 import NotificationsTab, { NotificationSettingRow } from "./tabs/NotificationsTab";
 import RetentionTab from "./tabs/RetentionTab";
+import AiAssistantTab from "./tabs/AiAssistantTab";
 import SchedulingTab from "./tabs/SchedulingTab";
 import CalendarLabelsTab from "./tabs/CalendarLabelsTab";
 import PaymentsTab from "./tabs/PaymentsTab";
@@ -145,7 +147,8 @@ type TabId =
   | "calendarLabels"
   | "website"
   | "retention"
-  | "notifications";
+  | "notifications"
+  | "aiAssistant";
 
 interface TabDef {
   id: TabId;
@@ -186,6 +189,7 @@ const TAB_SUBTITLES: Record<TabId, string> = {
   website: "Custom domain, FAQ and embed codes.",
   retention: "Save offers in the check-in email.",
   notifications: "Per-channel notification preferences.",
+  aiAssistant: "AI replies to customer texts and emails, with human handoff.",
 };
 
 // Which server-side section each tab's content comes from. Only used to point
@@ -224,6 +228,7 @@ const APP_SETTING_TABS: TabId[] = [
   "calendarLabels",
   "website",
   "retention",
+  "aiAssistant",
 ];
 
 // Sidebar groupings (label → ordered tab ids).
@@ -235,7 +240,7 @@ const TAB_GROUPS: { label: string; ids: TabId[] }[] = [
   { label: "Team", ids: ["training", "documents", "roles"] },
   {
     label: "Configuration",
-    ids: ["general", "customer", "provider", "scheduling", "calendarLabels", "website", "retention", "notifications"],
+    ids: ["general", "customer", "provider", "scheduling", "calendarLabels", "website", "retention", "notifications", "aiAssistant"],
   },
 ];
 
@@ -331,6 +336,12 @@ const TABS: TabDef[] = [
     id: "notifications",
     label: "Notifications",
     icon: Bell,
+    adminOnly: true,
+  },
+  {
+    id: "aiAssistant",
+    label: "AI Assistant",
+    icon: Bot,
     adminOnly: true,
   },
 ];
@@ -595,6 +606,9 @@ export default function SettingsClient({
           )}
           {activeTab === "notifications" && isAdmin && (
             <NotificationsTab settings={notificationSettings} />
+          )}
+          {activeTab === "aiAssistant" && isAdmin && (
+            <AiAssistantTab settings={appSettings} />
           )}
         </section>
       </div>

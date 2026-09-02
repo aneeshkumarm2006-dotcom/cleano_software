@@ -30,6 +30,12 @@ import {
   type QuotePageConfig,
 } from "@/lib/quote-page-config";
 import {
+  AI_ASSISTANT_KEY,
+  DEFAULT_AI_ASSISTANT,
+  normalizeAiAssistantConfig,
+  type AiAssistantConfig,
+} from "@/lib/ai-assistant/config";
+import {
   PC_DEPOSIT_DEFAULT_USD,
   PC_DEPOSIT_MAX_USD,
   PC_DEPOSIT_MIN_USD,
@@ -49,7 +55,8 @@ export type SettingCategory =
   | "scheduling"
   | "payments"
   | "notifications"
-  | "website";
+  | "website"
+  | "ai";
 
 export type ValidationResult<T> =
   | { ok: true; value: T }
@@ -222,6 +229,15 @@ function quotePageConfig() {
     // dropped and missing ones fall back to their default, so there is no
     // invalid value to reject.
     return { ok: true, value: normalizeQuotePageConfig(v) };
+  };
+}
+
+/** AI assistant config (enabled, channels, facts, cap). */
+function aiAssistantConfig() {
+  return (v: unknown): ValidationResult<AiAssistantConfig> => {
+    // Total normalizer, same as the booking-page config: bad fields fall back
+    // to their (off) defaults, so there is no invalid value to reject.
+    return { ok: true, value: normalizeAiAssistantConfig(v) };
   };
 }
 
@@ -535,6 +551,17 @@ export const SETTINGS = {
     validate: faqList(),
     // The editor tells admins "Changes are audit-logged"; without this flag the
     // settings spine skips the ActivityLog write and that promise was false.
+    audit: true,
+  }),
+  // AI assistant (front-desk auto-replies over SMS/email). The default keeps
+  // it OFF — the feature ships dark and an admin opts a workspace in. Audited:
+  // turning on an AI that talks to customers is a change worth a paper trail.
+  "ai.assistant": def({
+    key: AI_ASSISTANT_KEY,
+    category: "ai",
+    label: "AI assistant",
+    default: DEFAULT_AI_ASSISTANT,
+    validate: aiAssistantConfig(),
     audit: true,
   }),
   // Calendar priority badges: which service type gets "R" (Routine, blue) or
