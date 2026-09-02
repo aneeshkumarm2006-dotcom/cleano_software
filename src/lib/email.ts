@@ -1122,16 +1122,24 @@ export async function sendAdminAiHandoff(opts: {
   if (admins.length === 0) return;
   const appUrl = await currentAppUrl();
 
+  // Everything interpolated below except the channel label is written by an
+  // anonymous person on the internet (the message, and usually the label we
+  // show for them) or by the model under their influence (the reason). This
+  // is the one admin email that renders attacker-controlled text, so it is
+  // escaped — an inbound SMS must never become live HTML in an admin's inbox.
+  const esc = (s: string) =>
+    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
   const html = layout(
-    h1(`AI assistant needs a human — ${opts.customerLabel}`) +
+    h1(`AI assistant needs a human — ${esc(opts.customerLabel)}`) +
       p(
         "The AI assistant stepped back from a conversation and the customer may be waiting on a reply from your team."
       ) +
       section([
-        ["Customer", opts.customerLabel],
-        ["Channel", opts.channelLabel],
-        ["Their last message", opts.lastMessage.slice(0, 300)],
-        ["Why", opts.reason],
+        ["Customer", esc(opts.customerLabel)],
+        ["Channel", esc(opts.channelLabel)],
+        ["Their last message", esc(opts.lastMessage.slice(0, 300))],
+        ["Why", esc(opts.reason)],
       ]) +
       btn("Open conversation", `${appUrl}/admin/conversations/${opts.conversationId}`)
   );

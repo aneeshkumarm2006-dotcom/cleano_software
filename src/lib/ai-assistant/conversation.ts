@@ -26,6 +26,9 @@ const RETHREAD_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 /** How much history the model sees. Enough for context, bounded for cost. */
 const MAX_TURNS = 20;
 
+/** Handoff EMAILS per workspace per day; the conversations list is unlimited. */
+const HANDOFF_EMAILS_PER_DAY = 20;
+
 /**
  * A prospect who texts or emails the business is a Lead. New conversation →
  * find-or-create (deduped by the address, and never shadowing an existing
@@ -140,21 +143,44 @@ export async function handleInboundAiMessage(opts: {
 
     const customerLabel = opts.clientName ?? opts.address;
     const escalate = async (reason: string) => {
-      // Notify only on the transition into needing a human — a customer
-      // sending five follow-up texts is one problem, not five emails.
-      if (!convo.needsHuman) {
-        await db.aiConversation.update({
-          where: { id: convo.id },
-          data: { needsHuman: true },
-        });
-        await sendAdminAiHandoff({
-          conversationId: convo.id,
-          channelLabel: opts.channel === "SMS" ? "Text message" : "Email",
-          customerLabel,
-          lastMessage: opts.text,
-          reason,
-        });
-      }
+      // Notify only on the TRANSITION into needing a human — a customer
+      // sending five follow-up texts is one problem, not five emails. The
+      // flip is atomic (updateMany with the old state in the WHERE) so two
+      // rapid messages can't both win the transition and double-email.
+      const flipped = await db.aiConversation.updateMany({
+        where: { id: convo.id, needsHuman: false },
+        data: { needsHuman: true },
+      });
+      if (flipped.count !== 1) return;
+
+      // The handoff email has its own daily budget. Without one, an attacker
+      // who exhausts (or bypasses) the reply cap turns every further message
+      // into admins.length emails — and the real handoffs drown in the noise.
+      // Past the budget the conversation still flips needsHuman and still
+      // sorts to the top of /admin/conversations; only the email stops.
+      const dayStart = new Date();
+      dayStart.setHours(0, 0, 0, 0);
+      const handoffsToday = await db.emailLog.count({
+        where: { notificationKey: "admin.ai.handoff", createdAt: { gte: dayStart } },
+      });
+      if (handoffsToday >= HANDOFF_EMAILS_PER_DAY) return;
+      await db.emailLog.create({
+        data: {
+          kind: "OTHER",
+          recipient: "workspace admins",
+          subject: `AI handoff — ${customerLabel}`.slice(0, 200),
+          status: "SENT",
+          notificationKey: "admin.ai.handoff",
+        },
+      });
+
+      await sendAdminAiHandoff({
+        conversationId: convo.id,
+        channelLabel: opts.channel === "SMS" ? "Text message" : "Email",
+        customerLabel,
+        lastMessage: opts.text,
+        reason,
+      });
     };
 
     // ── May the assistant speak? ───────────────────────────────────────────
@@ -164,12 +190,19 @@ export async function handleInboundAiMessage(opts: {
       return { conversationId: convo.id, replied: false };
     }
 
+    // The budget counts EVERY message row today, not just delivered replies.
+    // Counting only assistant sends left a hole: a message engineered to make
+    // the model return nothing parseable (or to fail delivery) still paid for
+    // a full model call while never incrementing the counter — unmetered API
+    // spend. Inbound rows are written before the model is consulted, so they
+    // are the honest proxy for invocations; a normal exchange is two rows,
+    // hence the ×2.
     const dayStart = new Date();
     dayStart.setHours(0, 0, 0, 0);
-    const sentToday = await db.aiMessage.count({
-      where: { author: "ASSISTANT", createdAt: { gte: dayStart } },
+    const usedToday = await db.aiMessage.count({
+      where: { createdAt: { gte: dayStart } },
     });
-    if (sentToday >= opts.dailyMessageCap) {
+    if (usedToday >= opts.dailyMessageCap * 2) {
       await escalate(
         `The assistant reached its daily limit of ${opts.dailyMessageCap} messages and stayed quiet.`,
       );

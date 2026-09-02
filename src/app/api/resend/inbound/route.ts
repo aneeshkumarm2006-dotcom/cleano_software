@@ -158,6 +158,21 @@ export async function POST(req: NextRequest) {
   const auto = (header("Auto-Submitted") ?? "").toLowerCase();
   if ((auto && auto !== "no") || header("List-Id")) return ok();
 
+  // The svix signature proves this came from RESEND — it says nothing about
+  // who wrote the email. A From: header costs nothing to forge, and acting on
+  // a forged one means an attacker can speak AS a real client inside the
+  // staff inbox. So consult the receiving server's own verdicts:
+  //   - checks present and ALL failing → drop; that mail announced itself fake
+  //   - checks passing → full trust, including matching a Client record
+  //   - no verdict header at all → treat the sender as unverifiable: accept a
+  //     stranger (worst case, a spam lead) but NEVER bind to an existing
+  //     client — forwarding setups keep working, impersonation does not.
+  // DKIM survives mailbox forwarding (the tenant-Gmail-forwards-here setup)
+  // where SPF legitimately breaks, which is why any single pass suffices.
+  const authResults = (header("Authentication-Results") ?? "").toLowerCase();
+  const senderVerified = /(dmarc|dkim|spf)=pass/.test(authResults);
+  if (authResults && !senderVerified) return ok();
+
   const subject = (data.subject ?? "").trim() || "(no subject)";
   const text = (data.text ?? "").trim() || htmlToText(data.html ?? "");
   if (!text) return ok();
@@ -176,9 +191,20 @@ export async function POST(req: NextRequest) {
 
   after(() =>
     runAsOrg(org, async () => {
-      const client = await db.client
-        .findFirst({ where: { email: from }, select: { id: true, name: true } })
-        .catch(() => null);
+      // Client binding requires a verified sender (see the check above). An
+      // unverifiable email claiming a real client's address is dropped here
+      // rather than threaded into that client's history as if it were them.
+      const client = senderVerified
+        ? await db.client
+            .findFirst({ where: { email: from }, select: { id: true, name: true } })
+            .catch(() => null)
+        : null;
+      if (!senderVerified) {
+        const impersonatesClient = await db.client
+          .count({ where: { email: from } })
+          .catch(() => 0);
+        if (impersonatesClient > 0) return;
+      }
 
       const replySubject = /^re:/i.test(subject) ? subject : `Re: ${subject}`;
       const result = await handleInboundAiMessage({
