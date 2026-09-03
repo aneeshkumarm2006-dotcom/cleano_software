@@ -105,7 +105,7 @@ export async function GET(req: NextRequest) {
     // throws — a follow-up failure must not cost anyone their reminders.
     const followUps = await runLeadFollowUps().catch((e) => {
       console.error("lead follow-ups failed", e);
-      return { eligible: 0, sent: 0, skippedNoAddress: 0, failed: 0 };
+      return { eligible: 0, sent: 0, completedSequence: 0, retiredAsClient: 0, skippedNoAddress: 0, failed: 0 };
     });
 
     await logActivity({

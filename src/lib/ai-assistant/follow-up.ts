@@ -31,6 +31,7 @@ export interface FollowUpCounts {
   eligible: number;
   sent: number;
   completedSequence: number;
+  retiredAsClient: number;
   skippedNoAddress: number;
   failed: number;
 }
@@ -74,6 +75,7 @@ export async function runLeadFollowUps(): Promise<FollowUpCounts> {
     eligible: 0,
     sent: 0,
     completedSequence: 0,
+    retiredAsClient: 0,
     skippedNoAddress: 0,
     failed: 0,
   };
@@ -135,6 +137,25 @@ export async function runLeadFollowUps(): Promise<FollowUpCounts> {
         });
         continue;
       }
+      // Became a customer since inquiring? Then the sequence's job is done —
+      // "still interested?" after someone already booked reads as a company
+      // that doesn't know its own customers. Retire the lead as CONVERTED.
+      const nowClient = await db.client.findFirst({
+        where:
+          channel === "SMS"
+            ? { OR: [{ phone: phone! }, { secondaryPhone: phone! }] }
+            : { email: email!.toLowerCase() },
+        select: { id: true },
+      });
+      if (nowClient) {
+        await db.lead.update({
+          where: { id: lead.id },
+          data: { status: "CONVERTED" },
+        });
+        counts.retiredAsClient++;
+        continue;
+      }
+
       const address = channel === "SMS" ? phone! : email!.toLowerCase();
       const msg = touchMessage(touch, sequence.length, lead.name, businessName, bookingUrl);
 
