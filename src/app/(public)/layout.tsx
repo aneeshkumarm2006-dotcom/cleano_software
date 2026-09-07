@@ -9,7 +9,7 @@ export default async function PublicLayout({
   const initial = businessName.charAt(0).toUpperCase() || "C";
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-dvh bg-white">
       {/* Public Header */}
       <header className="border-b border-gray-100">
         <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">

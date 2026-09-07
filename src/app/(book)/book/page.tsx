@@ -714,7 +714,7 @@ export default function BookPage() {
       <div className="cl-customer">
         <div
           style={{
-            minHeight: "100vh",
+            minHeight: "100dvh",
             background:
               "linear-gradient(180deg, var(--cream) 0%, #fff 100%)",
           }}>

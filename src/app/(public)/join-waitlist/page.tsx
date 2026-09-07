@@ -67,7 +67,7 @@ export default function JoinWaitlistPage() {
 
   if (success && successData) {
     return (
-      <div style={{ minHeight: "100vh", background: "linear-gradient(160deg, #f9f6f1 0%, #fff 60%)", display: "flex", alignItems: "center", justifyContent: "center", padding: "40px 20px" }}>
+      <div style={{ minHeight: "100dvh", background: "linear-gradient(160deg, #f9f6f1 0%, #fff 60%)", display: "flex", alignItems: "center", justifyContent: "center", padding: "40px 20px" }}>
         <div style={{ maxWidth: 480, width: "100%", textAlign: "center" }}>
           <div style={{
             width: 72, height: 72, borderRadius: "50%",
@@ -119,7 +119,7 @@ export default function JoinWaitlistPage() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: "linear-gradient(160deg, #f9f6f1 0%, #fff 60%)" }}>
+    <div style={{ minHeight: "100dvh", background: "linear-gradient(160deg, #f9f6f1 0%, #fff 60%)" }}>
       {/* Header */}
       <header style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",

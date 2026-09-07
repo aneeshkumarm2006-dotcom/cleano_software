@@ -27,7 +27,7 @@ export default async function AddCardPage({
   return (
     <div
       style={{
-        minHeight: "100vh",
+        minHeight: "100dvh",
         background: "linear-gradient(180deg, #f7faf9 0%, #ffffff 100%)",
         padding: "48px 16px",
       }}>
