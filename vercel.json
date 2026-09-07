@@ -9,6 +9,10 @@
       "schedule": "*/5 * * * *"
     },
     {
+      "path": "/api/cron/subscriptions",
+      "schedule": "0 14 * * *"
+    },
+    {
       "path": "/api/cron/weekly",
       "schedule": "0 13 * * 1"
     },

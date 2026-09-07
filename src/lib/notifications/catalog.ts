@@ -288,6 +288,15 @@ export const NOTIFICATION_CATALOG: CatalogEntry[] = [
   },
   {
     recipient: "ADMIN",
+    category: "Your Awer account",
+    key: "admin.trial.ending",
+    label: "Awer trial ending",
+    trigger:
+      "Your free trial of Awer is within a week of running out and no card is on file yet. Sent once, not every day.",
+    channels: { EMAIL: true, SMS: false },
+  },
+  {
+    recipient: "ADMIN",
     category: "AI assistant",
     key: "admin.ai.handoff",
     label: "AI assistant needs a human",

@@ -3,6 +3,16 @@ import { db } from "@/lib/org-db";
 import SettingsClient from "./SettingsClient";
 import { twilioConnectionStatus } from "@/lib/twilio-org";
 import { getSetting } from "@/lib/settings";
+import { platformDb } from "@/lib/platform-db";
+import { cleanerSeatUsage } from "@/lib/plan-limits";
+import {
+  ANNUAL_MONTHS_SAVED,
+  PLANS,
+  effectiveMonthlyFor,
+  priceFor,
+  trialEndFrom,
+} from "@/lib/plans";
+import type { OrgPlan } from "@prisma/client";
 import { currentAppUrl } from "@/lib/org-url";
 import { requireOrgId } from "@/lib/org";
 import { seedNotificationCatalog } from "@/lib/notifications";
@@ -379,11 +389,58 @@ export default async function SettingsPage({
   const twilioForwardUrl = await getSetting("sms.forwardInboundUrl").catch(() => "");
   const twilioWebhookUrl = `${await currentAppUrl()}/api/twilio/inbound`;
 
+  // Plan and billing. Read straight from the platform rather than cached, so a
+  // card added a moment ago on Stripe is reflected the next time this loads.
+  const [subscription, seats] = await Promise.all([
+    platformDb.subscription
+      .findUnique({
+        where: { organizationId: orgId },
+        select: {
+          plan: true,
+          status: true,
+          interval: true,
+          trialEndsAt: true,
+          currentPeriodEnd: true,
+          cancelAtPeriodEnd: true,
+          stripeSubscriptionId: true,
+        },
+      })
+      .catch(() => null),
+    cleanerSeatUsage().catch(() => null),
+  ]);
+
+  const plans = (Object.keys(PLANS) as OrgPlan[]).map((key) => ({
+    key,
+    label: PLANS[key].label,
+    monthlyUsd: priceFor(key, "MONTHLY"),
+    annualUsd: priceFor(key, "ANNUAL"),
+    annualPerMonth: effectiveMonthlyFor(key, "ANNUAL"),
+    highlights: PLANS[key].highlights,
+    selfServe: PLANS[key].selfServe,
+  }));
+
+  const planStatus = {
+    plan: subscription?.plan ?? "STARTER",
+    status: subscription?.status ?? "TRIALING",
+    interval: subscription?.interval ?? "MONTHLY",
+    // A workspace provisioned before subscriptions existed has no row; show a
+    // trial from today rather than an empty panel that looks broken.
+    trialEndsAt: (subscription?.trialEndsAt ?? trialEndFrom(new Date())).toISOString(),
+    currentPeriodEnd: subscription?.currentPeriodEnd?.toISOString() ?? null,
+    cancelAtPeriodEnd: subscription?.cancelAtPeriodEnd ?? false,
+    paying: Boolean(subscription?.stripeSubscriptionId),
+    cleanersUsed: seats?.used ?? 0,
+    cleanerLimit: seats?.limit ?? null,
+    monthsSaved: ANNUAL_MONTHS_SAVED,
+  };
+
   return (
     <div className="h-full overflow-hidden overflow-y-auto p-8">
       <SettingsClient
         twilio={{ ...twilioStatus, forwardUrl: twilioForwardUrl }}
         twilioWebhookUrl={twilioWebhookUrl}
+        plans={plans}
+        planStatus={planStatus}
         user={userWithRole}
         isAdmin={isAdmin}
         initialTab={initialTab}

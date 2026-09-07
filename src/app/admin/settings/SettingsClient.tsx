@@ -58,6 +58,7 @@ import NotificationsTab, { NotificationSettingRow } from "./tabs/NotificationsTa
 import RetentionTab from "./tabs/RetentionTab";
 import AiAssistantTab from "./tabs/AiAssistantTab";
 import ConnectorsTab, { type TwilioStatus } from "./tabs/ConnectorsTab";
+import PlanTab, { type PlanOption, type PlanStatus } from "./tabs/PlanTab";
 import SchedulingTab from "./tabs/SchedulingTab";
 import CalendarLabelsTab from "./tabs/CalendarLabelsTab";
 import PaymentsTab from "./tabs/PaymentsTab";
@@ -122,6 +123,8 @@ interface SettingsClientProps {
   /** Live connector state, read server-side so the page shows what is true now. */
   twilio: TwilioStatus;
   twilioWebhookUrl: string;
+  plans: PlanOption[];
+  planStatus: PlanStatus;
 }
 
 type TabId =
@@ -154,7 +157,8 @@ type TabId =
   | "retention"
   | "notifications"
   | "aiAssistant"
-  | "connectors";
+  | "connectors"
+  | "plan";
 
 interface TabDef {
   id: TabId;
@@ -197,6 +201,7 @@ const TAB_SUBTITLES: Record<TabId, string> = {
   notifications: "Per-channel notification preferences.",
   aiAssistant: "AI replies to customer texts and emails, with human handoff.",
   connectors: "Outside services this workspace uses, and whether they are working.",
+  plan: "What this workspace pays Awer, and the card it is paid with.",
 };
 
 // Which server-side section each tab's content comes from. Only used to point
@@ -249,6 +254,9 @@ const TAB_GROUPS: { label: string; ids: TabId[] }[] = [
     label: "Configuration",
     ids: ["general", "customer", "provider", "scheduling", "calendarLabels", "website", "retention", "notifications", "aiAssistant", "connectors"],
   },
+  // Kept apart from "Money" on purpose: that group is the money this company
+  // takes from its customers, this is the money it pays us.
+  { label: "Awer account", ids: ["plan"] },
 ];
 
 const TABS: TabDef[] = [
@@ -357,6 +365,12 @@ const TABS: TabDef[] = [
     icon: Plug,
     adminOnly: true,
   },
+  {
+    id: "plan",
+    label: "Plan & Billing",
+    icon: CreditCard,
+    adminOnly: true,
+  },
 ];
 
 export default function SettingsClient({
@@ -380,6 +394,8 @@ export default function SettingsClient({
   failedSections = [],
   twilio,
   twilioWebhookUrl,
+  plans,
+  planStatus,
 }: SettingsClientProps) {
   const [activeTab, setActiveTab] = useState<TabId>(() => {
     const wanted = TABS.find((t) => t.id === initialTab);
@@ -627,6 +643,9 @@ export default function SettingsClient({
           )}
           {activeTab === "connectors" && isAdmin && (
             <ConnectorsTab twilio={twilio} webhookUrl={twilioWebhookUrl} />
+          )}
+          {activeTab === "plan" && isAdmin && (
+            <PlanTab plans={plans} status={planStatus} />
           )}
         </section>
       </div>

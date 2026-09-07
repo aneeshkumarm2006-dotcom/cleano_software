@@ -3232,3 +3232,49 @@ export async function sendApplicantInvite(opts: {
     html,
   });
 }
+
+/**
+ * The trial is nearly up. Sent once per workspace, to its admins.
+ *
+ * Deliberately plain about what happens next, because the honest answer today
+ * is "nothing switches off automatically" — a warning that implies a lockout
+ * we do not perform would be a lie that costs us the customer's trust the
+ * first time they notice.
+ */
+export async function sendTrialEnding(opts: {
+  daysLeft: number;
+  planLabel: string;
+}) {
+  const admins = await fetchAdmins();
+  if (admins.length === 0) return;
+  const appUrl = await currentAppUrl();
+
+  const when =
+    opts.daysLeft <= 0
+      ? "today"
+      : opts.daysLeft === 1
+        ? "tomorrow"
+        : `in ${opts.daysLeft} days`;
+
+  const html = layout(
+    h1(`Your Awer trial ends ${when}`) +
+      p(
+        `You have been trying Awer on the ${opts.planLabel} plan. To keep everything running without interruption, add a card and choose how you would like to be billed.`
+      ) +
+      section([
+        ["Plan", opts.planLabel],
+        ["Trial ends", when.charAt(0).toUpperCase() + when.slice(1)],
+      ]) +
+      btn("Choose a plan", `${appUrl}/admin/settings?tab=plan`) +
+      p("Nothing is charged until you add a card, and you can change plan or cancel at any time.")
+  );
+
+  for (const admin of admins) {
+    await deliver({
+      to: admin.email,
+      subject: `Your Awer trial ends ${when}`,
+      html,
+      notification: { recipient: "ADMIN", key: "admin.trial.ending" },
+    }).catch((e) => console.error("sendTrialEnding", admin.email, e));
+  }
+}
