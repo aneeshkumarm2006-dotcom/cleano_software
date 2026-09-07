@@ -217,44 +217,83 @@ export async function testTwilio(): Promise<TwilioTest> {
 
   // The check that would have caught the eighteen-day outage.
   const expected = "/api/twilio/inbound";
-  const serviceSid = match.messaging_service_sid || org.smsMessagingServiceSid || null;
+  const numberUrl = match.sms_url ?? "";
 
-  if (serviceSid) {
-    // A Messaging Service ALWAYS overrides the number's own webhook, so when
-    // one is attached it is the only configuration that matters.
+  // The number's own messaging_service_sid is unreliable (see
+  // messagingServiceMap), so fall back to asking the sender pools.
+  const serviceSid =
+    match.messaging_service_sid ||
+    org.smsMessagingServiceSid ||
+    (await messagingServiceMap(accountSid, authToken)).get(org.smsNumber)?.sid ||
+    null;
+
+  const pushInbound = (pass: boolean, detail: string) =>
+    checks.push({ label: "Incoming messages", pass, detail });
+
+  if (!serviceSid) {
+    pushInbound(
+      numberUrl.includes(expected),
+      numberUrl
+        ? numberUrl.includes(expected)
+          ? "Twilio delivers incoming texts to us."
+          : `Twilio sends incoming texts to ${numberUrl}, not to us. Customer replies will not arrive.`
+        : "This number has no inbound webhook set, so Twilio drops every incoming text silently.",
+    );
+  } else {
+    // A Messaging Service does NOT automatically win: `use_inbound_webhook_on_number`
+    // tells it to defer to the number instead. Guessing which one is in charge is
+    // how a webhook gets "fixed" in the place Twilio was never reading, so ask.
+    type Service = {
+      inbound_request_url?: string | null;
+      friendly_name?: string;
+      use_inbound_webhook_on_number?: boolean;
+    };
+    let svc: Service | null = null;
     try {
       const r = await fetch(`https://messaging.twilio.com/v1/Services/${serviceSid}`, {
         headers: { Authorization: auth(accountSid, authToken) },
         signal: AbortSignal.timeout(15_000),
       });
-      const svc = (await r.json()) as { inbound_request_url?: string | null; friendly_name?: string };
-      const url = svc.inbound_request_url ?? "";
-      checks.push({
-        label: "Incoming messages",
-        pass: url.includes(expected),
-        detail: url
-          ? url.includes(expected)
-            ? `Messaging Service "${svc.friendly_name ?? serviceSid}" delivers incoming texts to us.`
-            : `Messaging Service "${svc.friendly_name ?? serviceSid}" sends incoming texts to ${url}, not to us. Customer replies will not arrive.`
-          : `Messaging Service "${svc.friendly_name ?? serviceSid}" has NO inbound webhook set, so Twilio drops every incoming text silently. Set its inbound request URL to ${expected}.`,
-      });
+      if (r.ok) svc = (await r.json()) as Service;
     } catch {
-      checks.push({
-        label: "Incoming messages",
-        pass: false,
-        detail: "Couldn't read the Messaging Service configuration from Twilio.",
-      });
+      /* reported below */
     }
-  } else {
-    const url = match.sms_url ?? "";
+
+    if (!svc) {
+      pushInbound(false, "Couldn't read the Messaging Service configuration from Twilio.");
+    } else {
+      const name = svc.friendly_name || serviceSid;
+      if (svc.use_inbound_webhook_on_number) {
+        pushInbound(
+          numberUrl.includes(expected),
+          numberUrl.includes(expected)
+            ? `Messaging Service "${name}" defers to the number, and the number delivers to us.`
+            : numberUrl
+              ? `Messaging Service "${name}" is set to defer to the number's own webhook, and that webhook points at ${numberUrl}, not us. Change the number's webhook, or turn off "Use the webhook configured on the sender" in the service and set its inbound URL instead.`
+              : `Messaging Service "${name}" defers to the number's own webhook, and the number has none set, so Twilio drops every incoming text silently.`,
+        );
+      } else {
+        const url = svc.inbound_request_url ?? "";
+        pushInbound(
+          url.includes(expected),
+          url
+            ? url.includes(expected)
+              ? `Messaging Service "${name}" delivers incoming texts to us.`
+              : `Messaging Service "${name}" sends incoming texts to ${url}, not to us. Customer replies will not arrive.`
+            : `Messaging Service "${name}" has NO inbound webhook set, so Twilio drops every incoming text silently. Set its inbound request URL.`,
+        );
+      }
+    }
+  }
+
+  // Whatever wins, say what the OTHER setting holds. A number that quietly
+  // keeps a stranger's webhook is what a cutover leaves behind, and it becomes
+  // live again the moment the service defers or the number leaves the pool.
+  if (serviceSid && numberUrl && !numberUrl.includes(expected)) {
     checks.push({
-      label: "Incoming messages",
-      pass: url.includes(expected),
-      detail: url
-        ? url.includes(expected)
-          ? "Twilio delivers incoming texts to us."
-          : `Twilio sends incoming texts to ${url}, not to us. Customer replies will not arrive.`
-        : "This number has no inbound webhook set, so Twilio drops every incoming text silently.",
+      label: "Number's own webhook",
+      pass: true,
+      detail: `Unused while the Messaging Service is in charge, but still set to ${numberUrl}. Worth clearing once you are happy.`,
     });
   }
 
