@@ -1,11 +1,14 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { Check, Copy, Loader2, X } from "lucide-react";
 import {
+  claimTwilioNumber,
   connectTwilio,
   disconnectTwilio,
+  listTwilioNumbers,
   testTwilio,
+  type TwilioNumber,
   type TwilioTest,
 } from "../../actions/twilioConnection";
 import { themedInputClass } from "./_shared";
@@ -69,6 +72,7 @@ export default function ConnectorsTab({ twilio, webhookUrl }: Props) {
   const [token, setToken] = useState("");
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [test, setTest] = useState<TwilioTest | null>(null);
+  const [numbers, setNumbers] = useState<TwilioNumber[] | null>(null);
   const [copied, setCopied] = useState(false);
   const [busy, start] = useTransition();
 
@@ -82,6 +86,27 @@ export default function ConnectorsTab({ twilio, webhookUrl }: Props) {
         setToken("");
       }
     });
+
+  function loadNumbers() {
+    start(async () => {
+      setTest(null);
+      const r = await listTwilioNumbers();
+      if (r.ok) setNumbers(r.numbers);
+      else {
+        setNumbers(null);
+        setMsg({ ok: false, text: r.message });
+      }
+    });
+  }
+
+  // A connected workspace with no number yet has exactly one thing to do on
+  // this page, so it should not have to press a button to discover what its
+  // options are. Once a number is set the list is opt-in, because reading it
+  // costs a Twilio call on every visit.
+  useEffect(() => {
+    if (twilio.connected && !twilio.smsNumber) loadNumbers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [twilio.connected, twilio.smsNumber]);
 
   async function copyUrl() {
     try {
@@ -160,15 +185,85 @@ export default function ConnectorsTab({ twilio, webhookUrl }: Props) {
               it.
             </p>
           )}
-          {!twilio.smsNumber && (
+          {!twilio.smsNumber && !twilio.connected && (
             <p className="text-sm text-gray-500 mt-3">
-              A number is assigned by Awer support — ask them to set one up for this workspace.
+              On Awer&apos;s shared account a number is assigned by support. Connect your own Twilio
+              account below and you can choose one yourself.
             </p>
           )}
         </div>
 
         {/* connect / disconnect */}
         <div className="p-5 space-y-4">
+          {twilio.connected && (
+            <div className="rounded-xl border border-gray-200 overflow-hidden">
+              <div className="flex flex-wrap items-center justify-between gap-2 bg-gray-50/70 px-4 py-2.5">
+                <div className="text-sm font-semibold text-gray-900">
+                  {twilio.smsNumber ? "Change your texting number" : "Choose your texting number"}
+                </div>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={loadNumbers}
+                  className="text-sm font-semibold text-[#00707d] transition hover:underline disabled:opacity-40">
+                  {busy ? "Loading…" : numbers ? "Refresh" : "Show my Twilio numbers"}
+                </button>
+              </div>
+              {numbers === null ? (
+                <p className="px-4 py-3 text-sm text-gray-500">
+                  These come straight from the Twilio account you connected, so you can pick one
+                  here rather than asking support.
+                </p>
+              ) : numbers.length === 0 ? (
+                <p className="px-4 py-3 text-sm text-gray-600">
+                  That Twilio account has no phone numbers yet. Buy one in Twilio, then refresh.
+                </p>
+              ) : (
+                <ul className="divide-y divide-gray-100">
+                  {numbers.map((n) => {
+                    const current = n.phoneNumber === twilio.smsNumber;
+                    return (
+                      <li
+                        key={n.phoneNumber}
+                        className="flex flex-wrap items-center gap-3 px-4 py-3 text-sm">
+                        <div className="min-w-0 flex-1">
+                          <div className="font-medium text-gray-900 tabular-nums">
+                            {n.phoneNumber}
+                          </div>
+                          <div className="truncate text-xs text-gray-500">
+                            {!n.sms
+                              ? "Voice only — this number cannot receive texts"
+                              : n.taken
+                                ? "Already the texting number of another Awer workspace"
+                                : n.messagingServiceSid
+                                  ? `Sends through Messaging Service ${n.messagingServiceSid}`
+                                  : n.label}
+                          </div>
+                        </div>
+                        {current ? (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-200">
+                            <Check size={12} strokeWidth={3} />
+                            In use
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={busy || !n.sms || n.taken}
+                            onClick={() =>
+                              run(() => claimTwilioNumber({ phoneNumber: n.phoneNumber }))
+                            }
+                            className="shrink-0 rounded-lg border border-[#008C9C]/25 bg-[#008C9C]/5 px-3 py-1.5 text-xs font-semibold text-[#00707d] transition hover:bg-[#008C9C]/10 disabled:opacity-40 disabled:cursor-not-allowed">
+                            Use this number
+                          </button>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          )}
+
           {!twilio.connected && (
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
