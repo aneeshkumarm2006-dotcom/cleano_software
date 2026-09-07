@@ -394,11 +394,12 @@ export default function ConnectorsTab({ twilio, webhookUrl }: Props) {
             </button>
           </div>
           <p className="text-xs leading-relaxed text-gray-500 mt-2.5 max-w-3xl">
-            If your number uses a <strong className="font-semibold text-gray-700">Messaging
-            Service</strong>, set the address there. A Messaging Service always overrides the
-            number&apos;s own setting, so filling in only the number looks correct and delivers
-            nothing. Then use <strong className="font-semibold text-gray-700">Test connection</strong> —
-            it asks Twilio what is actually configured rather than taking our word for it.
+            If your number is in a <strong className="font-semibold text-gray-700">Messaging
+            Service</strong>, the service normally decides where incoming texts go — but it can be
+            set to defer to the number&apos;s own webhook instead, and then the number decides.
+            Only one of the two is ever being read, so don&apos;t guess: run{" "}
+            <strong className="font-semibold text-gray-700">Test connection</strong> and it names
+            the setting Twilio is actually using.
           </p>
         </div>
       </div>
