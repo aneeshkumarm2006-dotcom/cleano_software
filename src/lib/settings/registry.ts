@@ -56,7 +56,8 @@ export type SettingCategory =
   | "payments"
   | "notifications"
   | "website"
-  | "ai";
+  | "ai"
+  | "connectors";
 
 export type ValidationResult<T> =
   | { ok: true; value: T }
@@ -267,7 +268,55 @@ function def<T>(d: SettingDef<T>): SettingDef<T> {
 // More settings (gift-card min/tiers, provider pay %, currency/timezone) are
 // added in their own PRs once each current value is verified at its source.
 
+/**
+ * A tenant-supplied address we will POST customer messages to.
+ *
+ * This is the one setting that makes our server call out to somewhere an admin
+ * chose, so it is validated like an untrusted destination rather than a
+ * preference: https only, a real public hostname, no embedded credentials. The
+ * relay itself refuses redirects, which is the other half — a permitted
+ * hostname that 302s to an internal address would otherwise walk straight past
+ * every check made here.
+ */
+function relayUrl(v: unknown): ValidationResult<string> {
+  const raw = typeof v === "string" ? v.trim() : "";
+  if (!raw) return { ok: true, value: "" }; // empty means "do not forward"
+
+  let u: URL;
+  try {
+    u = new URL(raw);
+  } catch {
+    return { ok: false, error: "That is not a valid web address." };
+  }
+  if (u.protocol !== "https:") {
+    return { ok: false, error: "The address must start with https://" };
+  }
+  if (u.username || u.password) {
+    return { ok: false, error: "Remove the username and password from the address." };
+  }
+  const host = u.hostname.toLowerCase();
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.includes(":") || host.startsWith("[")) {
+    return { ok: false, error: "Use a hostname, not an IP address." };
+  }
+  if (
+    host === "localhost" ||
+    !host.includes(".") ||
+    /\.(local|localhost|internal|localdomain|home|lan)$/.test(host)
+  ) {
+    return { ok: false, error: "That address is not reachable from the internet." };
+  }
+  return { ok: true, value: u.toString() };
+}
+
 export const SETTINGS = {
+  "sms.forwardInboundUrl": def({
+    key: "sms.forwardInboundUrl",
+    category: "connectors",
+    label: "Also send incoming texts to",
+    default: "",
+    validate: relayUrl,
+    audit: true,
+  }),
   "policy.cancellationFeeUsd": def({
     key: "policy.cancellationFeeUsd",
     category: "payments",

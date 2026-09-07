@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/org-db";
 import SettingsClient from "./SettingsClient";
 import { twilioConnectionStatus } from "@/lib/twilio-org";
+import { getSetting } from "@/lib/settings";
 import { currentAppUrl } from "@/lib/org-url";
 import { requireOrgId } from "@/lib/org";
 import { seedNotificationCatalog } from "@/lib/notifications";
@@ -375,12 +376,13 @@ export default async function SettingsPage({
       usingPlatform: false,
       smsNumber: null,
     }));
+  const twilioForwardUrl = await getSetting("sms.forwardInboundUrl").catch(() => "");
   const twilioWebhookUrl = `${await currentAppUrl()}/api/twilio/inbound`;
 
   return (
     <div className="h-full overflow-hidden overflow-y-auto p-8">
       <SettingsClient
-        twilio={twilioStatus}
+        twilio={{ ...twilioStatus, forwardUrl: twilioForwardUrl }}
         twilioWebhookUrl={twilioWebhookUrl}
         user={userWithRole}
         isAdmin={isAdmin}

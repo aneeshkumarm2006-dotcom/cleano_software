@@ -1,5 +1,4 @@
 import { NextRequest, after } from "next/server";
-import crypto from "crypto";
 import { db } from "@/lib/org-db";
 import { runAsOrg } from "@/lib/org-context";
 import { orgForInboundNumber } from "@/lib/sms-sender";
@@ -9,6 +8,8 @@ import { getAiAssistantConfig } from "@/lib/ai-assistant/knowledge";
 import { handleInboundAiMessage } from "@/lib/ai-assistant/conversation";
 import { logAiFailed } from "@/lib/ai-assistant/log";
 import { twilioForOrgId } from "@/lib/twilio-org";
+import { forwardInboundText } from "@/lib/sms-forward";
+import { isValidTwilioSignature } from "@/lib/twilio-signature";
 
 // Inbound leg of the job-specific chat SMS bridge (#11). Twilio POSTs here
 // (application/x-www-form-urlencoded) when a client texts a company's number.
@@ -30,34 +31,6 @@ import { twilioForOrgId } from "@/lib/twilio-org";
 // if the auto-detected origin ever mismatches behind proxies.
 
 export const runtime = "nodejs";
-
-// Validates X-Twilio-Signature per Twilio's spec: base64(HMAC-SHA1(authToken,
-// fullUrl + sorted(key+value) concatenated)).
-function isValidTwilioSignature(
-  url: string,
-  params: Record<string, string>,
-  signature: string | null,
-  authToken: string,
-): boolean {
-  if (!signature) return false;
-  const data =
-    url +
-    Object.keys(params)
-      .sort()
-      .reduce((acc, key) => acc + key + params[key], "");
-  const expected = crypto
-    .createHmac("sha1", authToken)
-    .update(Buffer.from(data, "utf-8"))
-    .digest("base64");
-  try {
-    return crypto.timingSafeEqual(
-      Buffer.from(expected),
-      Buffer.from(signature),
-    );
-  } catch {
-    return false;
-  }
-}
 
 /**
  * The AI receptionist's front door. Texts used to be silently dropped in two
@@ -157,6 +130,12 @@ export async function POST(req: NextRequest) {
   if (!isValidTwilioSignature(url, params, signature, resolved.creds.authToken)) {
     return new Response("Invalid signature", { status: 403 });
   }
+
+  // Verified and ours. Pass a copy on to whatever the workspace is migrating
+  // FROM, before any of the branching below — a message we choose not to act on
+  // (no body, unparseable number, chat closed) is still a message the other
+  // system would have received, and a relay with holes in it is worse than none.
+  after(() => runAsOrg(org, () => forwardInboundText(params, resolved.creds.authToken)));
 
   const from = params.From ?? "";
   const bodyText = (params.Body ?? "").trim();

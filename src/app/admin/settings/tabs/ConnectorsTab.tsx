@@ -5,6 +5,7 @@ import { Check, Copy, Loader2, X } from "lucide-react";
 import {
   claimTwilioNumber,
   connectTwilio,
+  setSmsForwardUrl,
   disconnectTwilio,
   listTwilioNumbers,
   testTwilio,
@@ -21,6 +22,8 @@ export interface TwilioStatus {
   unreadable: boolean;
   usingPlatform: boolean;
   smsNumber: string | null;
+  /** Second system that also receives incoming texts. Empty means none. */
+  forwardUrl: string;
 }
 
 interface Props {
@@ -73,6 +76,7 @@ export default function ConnectorsTab({ twilio, webhookUrl }: Props) {
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [test, setTest] = useState<TwilioTest | null>(null);
   const [numbers, setNumbers] = useState<TwilioNumber[] | null>(null);
+  const [forward, setForward] = useState(twilio.forwardUrl);
   const [copied, setCopied] = useState(false);
   const [busy, start] = useTransition();
 
@@ -374,6 +378,40 @@ export default function ConnectorsTab({ twilio, webhookUrl }: Props) {
               </div>
             </div>
           )}
+        </div>
+
+        {/* keep a second system fed during a migration */}
+        <div className="border-t border-gray-100 p-5">
+          <label
+            htmlFor="twilio-forward"
+            className="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">
+            Also send incoming texts to
+          </label>
+          <div className="flex flex-wrap items-stretch gap-2">
+            <input
+              id="twilio-forward"
+              type="url"
+              autoComplete="off"
+              spellCheck={false}
+              placeholder="https://… (leave empty to send nowhere else)"
+              className={`${themedInputClass} flex-1 min-w-[16rem] font-mono`}
+              value={forward}
+              onChange={(e) => setForward(e.target.value)}
+            />
+            <button
+              type="button"
+              disabled={busy || forward === twilio.forwardUrl}
+              onClick={() => run(() => setSmsForwardUrl({ url: forward }))}
+              className="shrink-0 rounded-xl border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">
+              Save
+            </button>
+          </div>
+          <p className="text-xs leading-relaxed text-gray-500 mt-2.5 max-w-3xl">
+            Twilio only lets one address receive a text, so moving to Awer would normally switch
+            your old system off on the same day. Put its address here and every incoming text is
+            stored here <em>and</em> passed on there, signed with your own Twilio credentials so it
+            arrives looking exactly as it does today. Clear the field when you no longer need it.
+          </p>
         </div>
 
         {/* webhook address */}

@@ -8,6 +8,8 @@ import { requireOrgId } from "@/lib/org";
 import { canStoreSecrets, hint as secretHint, seal } from "@/lib/secret-box";
 import { logActivity } from "@/lib/activity-log";
 import { twilioForOrgId } from "@/lib/twilio-org";
+import { writeSetting } from "@/lib/settings";
+import { SMS_FORWARD_URL_KEY } from "@/lib/sms-forward";
 
 type Result = { ok: true; message: string } | { ok: false; message: string };
 
@@ -541,5 +543,28 @@ export async function claimTwilioNumber(input: { phoneNumber: string }): Promise
     message: serviceSid
       ? `${number} is now your texting number, sending through your Messaging Service. Point that service's inbound webhook at the address below, then run Test connection.`
       : `${number} is now your texting number. Point its inbound webhook at the address below, then run Test connection.`,
+  };
+}
+
+/**
+ * Where else incoming texts should go, for a workspace still running a second
+ * system. Written through the settings spine so the address is validated (see
+ * relayUrl in the registry) and every change lands in the audit log — this
+ * points our server at an address an admin chose, so who set it and when is
+ * part of the feature, not an extra.
+ */
+export async function setSmsForwardUrl(input: { url: string }): Promise<Result> {
+  const guard = await requireOwnerAdmin();
+  if (!guard.ok) return { ok: false, message: guard.error };
+
+  const res = await writeSetting(SMS_FORWARD_URL_KEY, input.url.trim(), { id: guard.userId });
+  if (!res.success) return { ok: false, message: res.error ?? "That address could not be saved." };
+
+  revalidatePath("/admin/settings");
+  return {
+    ok: true,
+    message: input.url.trim()
+      ? "Saved. Every incoming text will be stored here and passed on there too."
+      : "Turned off. Incoming texts now stop with Awer.",
   };
 }
