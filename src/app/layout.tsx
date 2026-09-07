@@ -6,6 +6,7 @@ import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
 import { getCurrentOrg } from "@/lib/org";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import MetaPixel from "@/components/MetaPixel";
 
 /**
  * The one family, everywhere (CLN-P1-8-02/03/09).
@@ -116,6 +117,7 @@ export default async function RootLayout({
       <body suppressHydrationWarning>
         <ServiceWorkerRegistrar />
         {children}
+        <MetaPixel />
       </body>
     </html>
   );

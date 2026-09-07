@@ -7,6 +7,7 @@ import { Check } from "lucide-react";
 import { Banner, Button, Field, Input, PasswordInput } from "@/components/customer/Field";
 
 import { checkSlug, createWorkspace, suggestSlug, type SignupResult } from "./actions";
+import { trackMeta } from "@/components/MetaPixel";
 
 export type PlanCard = {
   key: string;
@@ -94,7 +95,13 @@ export default function SignupForm({
         password,
         plan,
       });
-      if (r.ok) setDone(r);
+      if (r.ok) {
+        setDone(r);
+        // The conversion the ad campaigns are actually buying. Fired here
+        // rather than on the server because the pixel lives in the browser,
+        // and only after the workspace really exists.
+        trackMeta("CompleteRegistration", { content_name: "workspace_signup" });
+      }
       else setError({ field: r.field, message: r.message });
     } catch {
       setError({ field: "form", message: "Unexpected error. Please try again." });
