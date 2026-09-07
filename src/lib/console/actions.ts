@@ -232,6 +232,83 @@ export async function setSeats(orgId: string, seats: number | null): Promise<Act
 }
 
 // ---------------------------------------------------------------------------
+// Messaging
+// ---------------------------------------------------------------------------
+
+/**
+ * The phone number a workspace texts from, and that its customers text back.
+ *
+ * This is the one setting a cleaning company cannot set for itself: the number
+ * is bought and pointed at us in OUR Twilio account, and it is the routing key
+ * for every inbound message (see orgForInboundNumber), so a tenant typing a
+ * number they do not own would quietly hijack another company's texts. Hence
+ * console-only, ADMIN-only, audited — and UNIQUE in the database, which is the
+ * backstop this check reports politely instead of throwing a constraint error.
+ *
+ * Pass null to unassign, e.g. when a number is being moved between workspaces.
+ */
+export async function setWorkspaceSmsNumber(
+  orgId: string,
+  rawNumber: string | null,
+): Promise<ActionResult> {
+  let staff;
+  try {
+    staff = await requirePlatformStaff("ADMIN");
+  } catch {
+    return { ok: false, message: "You do not have permission to change the SMS number." };
+  }
+
+  let number: string | null = null;
+  if (rawNumber != null && rawNumber.trim() !== "") {
+    // E.164, the only form Twilio routes on. Deliberately strict rather than
+    // reformatting for them: a silently "corrected" number that reaches Twilio
+    // wrong fails as silence, which is the exact failure mode that cost Calgary
+    // eighteen days.
+    const trimmed = rawNumber.trim().replace(/[\s()\-.]/g, "");
+    if (!/^\+[1-9]\d{7,14}$/.test(trimmed)) {
+      return {
+        ok: false,
+        message: "Enter the number in international form, e.g. +15873261328.",
+      };
+    }
+    number = trimmed;
+  }
+
+  const { error, org } = await loadTarget(orgId);
+  if (error) return { ok: false, message: error };
+
+  if (number) {
+    const taken = await platformDb.organization.findFirst({
+      where: { smsNumber: number, NOT: { id: org.id } },
+      select: { name: true },
+    });
+    if (taken) {
+      return {
+        ok: false,
+        message: `${number} is already assigned to ${taken.name}. One number belongs to one workspace.`,
+      };
+    }
+  }
+
+  await platformDb.organization.update({
+    where: { id: org.id },
+    data: { smsNumber: number },
+  });
+  await recordPlatformAction(staff, "org.sms_number", { id: org.id, slug: org.slug }, {
+    from: org.smsNumber,
+    to: number,
+  });
+
+  refresh(org.slug);
+  return {
+    ok: true,
+    message: number
+      ? `${org.name} now sends and receives texts on ${number}.`
+      : `${org.name} no longer has an SMS number; it falls back to the platform default.`,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Trial
 // ---------------------------------------------------------------------------
 

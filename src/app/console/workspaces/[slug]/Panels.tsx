@@ -11,6 +11,7 @@ import {
   resendOwnerCredentials,
   restartTrial,
   setSeats,
+  setWorkspaceSmsNumber,
   suspendWorkspace,
   type ActionResult,
   type ApproveResult,
@@ -371,6 +372,62 @@ export function AccessPanel({
  * Behind a confirm, because it INVALIDATES the password they may be using
  * happily right now — this is a rescue, not a button to press while browsing.
  */
+export function SmsNumberPanel({
+  orgId,
+  current,
+  canEdit,
+}: {
+  orgId: string;
+  current: string | null;
+  canEdit: boolean;
+}) {
+  const [value, setValue] = useState(current ?? "");
+  const [msg, setMsg] = useState<ActionResult | null>(null);
+  const [busy, start] = useTransition();
+
+  return (
+    <div className="body">
+      <p className="sub" style={{ marginBottom: 10 }}>
+        The number this company texts from, and the number their customers text back. Inbound
+        messages are routed by it, so it belongs to exactly one workspace. Set it here after the
+        number is pointed at us in Twilio.
+      </p>
+      <div className="formrow">
+        <div className="field" style={{ maxWidth: 220 }}>
+          <label htmlFor="smsnumber">SMS number</label>
+          <input
+            id="smsnumber"
+            type="tel"
+            placeholder="+15873261328"
+            value={value}
+            disabled={!canEdit || busy}
+            onChange={(e) => setValue(e.target.value)}
+          />
+        </div>
+        <button
+          type="button"
+          className="btn"
+          disabled={!canEdit || busy}
+          onClick={() =>
+            start(async () => setMsg(await setWorkspaceSmsNumber(orgId, value.trim() || null)))
+          }
+        >
+          {busy ? "Saving…" : current ? "Update number" : "Assign number"}
+        </button>
+      </div>
+      <p className="sub" style={{ marginTop: 10, marginBottom: 0 }}>
+        In Twilio, the number&apos;s <strong>Messaging Service</strong> must have its inbound
+        webhook pointed at this workspace&apos;s <code>/api/twilio/inbound</code>. A Messaging
+        Service always overrides the number-level field, so setting only the number-level webhook
+        looks correct and delivers nothing.
+      </p>
+      <Result r={msg} />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
 export function CredentialsPanel({
   orgId,
   ownerEmail,

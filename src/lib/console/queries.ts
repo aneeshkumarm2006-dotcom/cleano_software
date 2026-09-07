@@ -232,13 +232,15 @@ export type WorkspaceDetail = {
   lastJobAt: Date | null;
   /** They have set their own business name, rather than running on the default. */
   hasOwnName: boolean;
+  /** The number they text from; null means they fall back to the platform's. */
+  smsNumber: string | null;
 };
 
 export async function getWorkspaceDetail(orgId: string): Promise<WorkspaceDetail> {
   await assertConsoleReader();
   const since = windowStart();
 
-  const [admins, jobsAllTime, completed, first, last, branding] = await Promise.all([
+  const [admins, jobsAllTime, completed, first, last, branding, org] = await Promise.all([
     platformDb.user.count({
       where: {
         organizationId: orgId,
@@ -272,6 +274,10 @@ export async function getWorkspaceDetail(orgId: string): Promise<WorkspaceDetail
       where: { organizationId: orgId, key: "general.businessName" },
       select: { id: true },
     }),
+    platformDb.organization.findUnique({
+      where: { id: orgId },
+      select: { smsNumber: true },
+    }),
   ]);
 
   return {
@@ -282,6 +288,7 @@ export async function getWorkspaceDetail(orgId: string): Promise<WorkspaceDetail
     firstJobAt: first?.startTime ?? null,
     lastJobAt: last?.startTime ?? null,
     hasOwnName: branding != null,
+    smsNumber: org?.smsNumber ?? null,
   };
 }
 
@@ -296,6 +303,7 @@ export function setupSteps(w: WorkspaceRow, d: WorkspaceDetail) {
     { label: "First job booked", done: d.jobsAllTime > 0 },
     { label: "Card on file", done: w.subscription?.stripeCustomerId != null },
     { label: "Business name set", done: d.hasOwnName },
+    { label: "Texting number assigned", done: d.smsNumber != null },
   ];
 }
 

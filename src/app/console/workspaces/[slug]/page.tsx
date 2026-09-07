@@ -25,7 +25,13 @@ import {
   fmtMoney,
   initialsOf,
 } from "../../ui";
-import { AccessPanel, CredentialsPanel, PlanPanel, TrialPanel } from "./Panels";
+import {
+  AccessPanel,
+  CredentialsPanel,
+  PlanPanel,
+  SmsNumberPanel,
+  TrialPanel,
+} from "./Panels";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -425,6 +431,14 @@ export default async function WorkspacePage({
                   </dd>
                 </dl>
               </div>
+            </div>
+
+            <div className="card">
+              <header>
+                <h2>Texting</h2>
+                {!canEdit && <span className="right muted">admin only</span>}
+              </header>
+              <SmsNumberPanel orgId={w.id} current={detail.smsNumber} canEdit={canEdit} />
             </div>
 
             <div className="card">
