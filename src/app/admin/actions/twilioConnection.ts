@@ -261,6 +261,58 @@ export async function testTwilio(): Promise<TwilioTest> {
   return { ok: checks.every((c) => c.pass), checks };
 }
 
+/**
+ * Which Messaging Service each number actually sends through.
+ *
+ * IncomingPhoneNumbers.messaging_service_sid is NOT trustworthy: a number added
+ * to a service's sender pool frequently comes back with that field null, and
+ * believing the null is the eighteen-day outage in miniature — we would check
+ * and configure the number's own webhook while the service silently overrode
+ * it. So ask the services what they hold, which is the direction Twilio
+ * answers honestly. Best effort: a failure here degrades to "no service",
+ * never to a wrong one.
+ */
+async function messagingServiceMap(
+  accountSid: string,
+  authToken: string,
+): Promise<Map<string, { sid: string; name: string }>> {
+  const map = new Map<string, { sid: string; name: string }>();
+  const headers = { Authorization: auth(accountSid, authToken) };
+  let services: { sid?: string; friendly_name?: string }[] = [];
+  try {
+    const r = await fetch("https://messaging.twilio.com/v1/Services?PageSize=50", {
+      headers,
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!r.ok) return map;
+    services = ((await r.json()) as { services?: typeof services }).services ?? [];
+  } catch {
+    return map;
+  }
+
+  await Promise.all(
+    services.slice(0, 25).map(async (svc) => {
+      if (!svc.sid) return;
+      try {
+        const r = await fetch(
+          `https://messaging.twilio.com/v1/Services/${svc.sid}/PhoneNumbers?PageSize=100`,
+          { headers, signal: AbortSignal.timeout(15_000) },
+        );
+        if (!r.ok) return;
+        const body = (await r.json()) as { phone_numbers?: { phone_number?: string }[] };
+        for (const n of body.phone_numbers ?? []) {
+          if (n.phone_number && !map.has(n.phone_number)) {
+            map.set(n.phone_number, { sid: svc.sid!, name: svc.friendly_name || svc.sid! });
+          }
+        }
+      } catch {
+        /* one unreadable service must not blank the rest */
+      }
+    }),
+  );
+  return map;
+}
+
 export interface TwilioNumber {
   phoneNumber: string;
   label: string;
@@ -269,6 +321,7 @@ export interface TwilioNumber {
   /** Already the texting number of a different workspace. */
   taken: boolean;
   messagingServiceSid: string | null;
+  messagingServiceName: string | null;
 }
 
 export type TwilioNumberList =
@@ -331,6 +384,7 @@ export async function listTwilioNumbers(): Promise<TwilioNumberList> {
 
   const rows = payload.incoming_phone_numbers ?? [];
   const digits = rows.map((n) => n.phone_number ?? "").filter(Boolean);
+  const services = await messagingServiceMap(accountSid, authToken);
 
   // Which of these is another workspace already routing on. Only the fact is
   // returned, never which workspace — that is not this tenant's business.
@@ -348,13 +402,17 @@ export async function listTwilioNumbers(): Promise<TwilioNumberList> {
     ok: true,
     numbers: rows
       .filter((n) => n.phone_number)
-      .map((n) => ({
-        phoneNumber: n.phone_number!,
-        label: n.friendly_name?.trim() || n.phone_number!,
-        sms: n.capabilities?.sms !== false,
-        taken: claimed.has(n.phone_number!),
-        messagingServiceSid: n.messaging_service_sid || null,
-      })),
+      .map((n) => {
+        const svc = services.get(n.phone_number!) ?? null;
+        return {
+          phoneNumber: n.phone_number!,
+          label: n.friendly_name?.trim() || n.phone_number!,
+          sms: n.capabilities?.sms !== false,
+          taken: claimed.has(n.phone_number!),
+          messagingServiceSid: n.messaging_service_sid || svc?.sid || null,
+          messagingServiceName: svc?.name ?? null,
+        };
+      }),
   };
 }
 
@@ -410,7 +468,10 @@ export async function claimTwilioNumber(input: { phoneNumber: string }): Promise
   // number is in one we store it and send through it too. Mismatching those
   // (receiving on a service, sending from the bare number) is what breaks A2P
   // registration and quietly lowers delivery.
-  const serviceSid = match.messaging_service_sid || null;
+  const serviceSid =
+    match.messaging_service_sid ||
+    (await messagingServiceMap(accountSid, authToken)).get(number)?.sid ||
+    null;
 
   try {
     await platformDb.organization.update({

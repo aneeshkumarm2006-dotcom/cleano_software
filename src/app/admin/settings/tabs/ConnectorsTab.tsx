@@ -236,7 +236,7 @@ export default function ConnectorsTab({ twilio, webhookUrl }: Props) {
                               : n.taken
                                 ? "Already the texting number of another Awer workspace"
                                 : n.messagingServiceSid
-                                  ? `Sends through Messaging Service ${n.messagingServiceSid}`
+                                  ? `Sends through "${n.messagingServiceName ?? n.messagingServiceSid}"`
                                   : n.label}
                           </div>
                         </div>
