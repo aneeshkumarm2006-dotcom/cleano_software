@@ -7,6 +7,8 @@ import { sendSms, toE164 } from "@/lib/sms";
 import { isJobChatOpenForClient } from "@/lib/jobChatActions";
 import { getAiAssistantConfig } from "@/lib/ai-assistant/knowledge";
 import { handleInboundAiMessage } from "@/lib/ai-assistant/conversation";
+import { logAiFailed } from "@/lib/ai-assistant/log";
+import { twilioForOrgId } from "@/lib/twilio-org";
 
 // Inbound leg of the job-specific chat SMS bridge (#11). Twilio POSTs here
 // (application/x-www-form-urlencoded) when a client texts a company's number.
@@ -102,16 +104,48 @@ function twiml(body = ""): Response {
 }
 
 export async function POST(req: NextRequest) {
-  const authToken = process.env.TWILIO_AUTH_TOKEN;
-  if (!authToken) {
-    // Not configured yet — accept-and-ignore so Twilio doesn't retry-storm.
-    return twiml();
-  }
-
   const form = await req.formData();
   const params: Record<string, string> = {};
   for (const [k, v] of form.entries())
     params[k] = typeof v === "string" ? v : "";
+
+  // ── Routing BEFORE verification, deliberately ─────────────────────────────
+  //
+  // Twilio signs with the auth token of the account the number lives in, and a
+  // company that brought its own Twilio account signs with THEIR token. So the
+  // workspace has to be identified before there is a token to check against.
+  //
+  // This is safe because the lookup is not trust: `To` is only a key into our
+  // own table of numbers we serve, nothing is written, and every path below
+  // still refuses the request unless the signature verifies against that
+  // workspace's own credentials. Validating everything against the platform
+  // token instead would 403 every text a bring-your-own company received —
+  // silently, from Twilio's side, which is exactly the failure that hid for
+  // eighteen days on the old stack.
+  //
+  // No match means a number we do not serve: accept and ignore, rather than
+  // guessing a workspace and filing a stranger's message in it.
+  const org = await orgForInboundNumber(params.To ?? "");
+  if (!org) return twiml();
+
+  const resolved = await twilioForOrgId(org.id);
+  if (!resolved.ok) {
+    // Either they connected an account whose token no longer decrypts, or
+    // nothing is configured at all. Accept-and-ignore so Twilio does not
+    // retry-storm, and leave a row the admin can actually find.
+    after(() =>
+      runAsOrg(org, () =>
+        logAiFailed(
+          { address: params.From ?? null },
+          `A text arrived on ${params.To ?? "this workspace's number"} but it could not be verified.`,
+          resolved.reason === "unreadable"
+            ? "The saved Twilio credentials could not be read. Reconnect Twilio in Settings → Connectors."
+            : "No Twilio account is connected for this workspace.",
+        ),
+      ),
+    );
+    return twiml();
+  }
 
   // Reconstruct the exact URL Twilio signed.
   const base =
@@ -120,7 +154,7 @@ export async function POST(req: NextRequest) {
   const url = `${base}/api/twilio/inbound`;
 
   const signature = req.headers.get("x-twilio-signature");
-  if (!isValidTwilioSignature(url, params, signature, authToken)) {
+  if (!isValidTwilioSignature(url, params, signature, resolved.creds.authToken)) {
     return new Response("Invalid signature", { status: 403 });
   }
 
@@ -130,12 +164,6 @@ export async function POST(req: NextRequest) {
 
   const phone = toE164(from);
   if (!phone) return twiml();
-
-  // Which company was texted? No match means a number we do not serve — accept
-  // and ignore, rather than guessing a workspace and filing a stranger's message
-  // in it.
-  const org = await orgForInboundNumber(params.To ?? "");
-  if (!org) return twiml();
 
   return runAsOrg(org, async () => {
     // Match the sender's phone to a client (primary or secondary number).

@@ -31,6 +31,7 @@ import {
   FileText,
   ClipboardList,
   Bot,
+  Plug,
 } from "lucide-react";
 import ProfileTab from "./tabs/ProfileTab";
 import TaxSettingsTab from "./tabs/TaxSettingsTab";
@@ -56,6 +57,7 @@ import DocumentsTab, {
 import NotificationsTab, { NotificationSettingRow } from "./tabs/NotificationsTab";
 import RetentionTab from "./tabs/RetentionTab";
 import AiAssistantTab from "./tabs/AiAssistantTab";
+import ConnectorsTab, { type TwilioStatus } from "./tabs/ConnectorsTab";
 import SchedulingTab from "./tabs/SchedulingTab";
 import CalendarLabelsTab from "./tabs/CalendarLabelsTab";
 import PaymentsTab from "./tabs/PaymentsTab";
@@ -117,6 +119,9 @@ interface SettingsClientProps {
    * notice, rather than the whole page rendering an error screen.
    */
   failedSections?: SettingsSectionFailure[];
+  /** Live connector state, read server-side so the page shows what is true now. */
+  twilio: TwilioStatus;
+  twilioWebhookUrl: string;
 }
 
 type TabId =
@@ -148,7 +153,8 @@ type TabId =
   | "website"
   | "retention"
   | "notifications"
-  | "aiAssistant";
+  | "aiAssistant"
+  | "connectors";
 
 interface TabDef {
   id: TabId;
@@ -190,6 +196,7 @@ const TAB_SUBTITLES: Record<TabId, string> = {
   retention: "Save offers in the check-in email.",
   notifications: "Per-channel notification preferences.",
   aiAssistant: "AI replies to customer texts and emails, with human handoff.",
+  connectors: "Outside services this workspace uses, and whether they are working.",
 };
 
 // Which server-side section each tab's content comes from. Only used to point
@@ -240,7 +247,7 @@ const TAB_GROUPS: { label: string; ids: TabId[] }[] = [
   { label: "Team", ids: ["training", "documents", "roles"] },
   {
     label: "Configuration",
-    ids: ["general", "customer", "provider", "scheduling", "calendarLabels", "website", "retention", "notifications", "aiAssistant"],
+    ids: ["general", "customer", "provider", "scheduling", "calendarLabels", "website", "retention", "notifications", "aiAssistant", "connectors"],
   },
 ];
 
@@ -344,6 +351,12 @@ const TABS: TabDef[] = [
     icon: Bot,
     adminOnly: true,
   },
+  {
+    id: "connectors",
+    label: "Connectors",
+    icon: Plug,
+    adminOnly: true,
+  },
 ];
 
 export default function SettingsClient({
@@ -365,6 +378,8 @@ export default function SettingsClient({
   budgets,
   budgetCategories,
   failedSections = [],
+  twilio,
+  twilioWebhookUrl,
 }: SettingsClientProps) {
   const [activeTab, setActiveTab] = useState<TabId>(() => {
     const wanted = TABS.find((t) => t.id === initialTab);
@@ -609,6 +624,9 @@ export default function SettingsClient({
           )}
           {activeTab === "aiAssistant" && isAdmin && (
             <AiAssistantTab settings={appSettings} />
+          )}
+          {activeTab === "connectors" && isAdmin && (
+            <ConnectorsTab twilio={twilio} webhookUrl={twilioWebhookUrl} />
           )}
         </section>
       </div>

@@ -22,6 +22,7 @@ import type { Recipient } from "./notifications/catalog";
 import { logActivity } from "./activity-log";
 import { STORE_TZ } from "./timezone";
 import { senderForCurrentOrg } from "@/lib/sms-sender";
+import { twilioForCurrentOrg } from "@/lib/twilio-org";
 
 // Store timezone — customer-facing times must render here, not serverless UTC.
 // Single source of truth: src/lib/timezone.ts.
@@ -44,12 +45,14 @@ interface SendResult {
   twilioSid?: string;
 }
 
-function twilioConfigured(): boolean {
-  return Boolean(
-    process.env.TWILIO_ACCOUNT_SID &&
-      process.env.TWILIO_AUTH_TOKEN &&
-      (process.env.TWILIO_FROM_NUMBER || process.env.TWILIO_MESSAGING_SERVICE_SID)
-  );
+/**
+ * Can THIS workspace send at all? Credentials may be its own or the
+ * platform's (see lib/twilio-org.ts); a sender number may likewise be its own
+ * or the environment's, which senderForCurrentOrg already resolves.
+ */
+async function twilioConfigured(): Promise<boolean> {
+  const t = await twilioForCurrentOrg();
+  return t.ok;
 }
 
 function normalizeE164(input: string): string | null {
@@ -91,15 +94,25 @@ export async function sendSms(input: SendSmsInput): Promise<SendResult> {
     if (!allowed) return record({ sent: false, reason: "disabled-by-catalog" });
   }
 
-  if (!twilioConfigured()) {
+  if (!(await twilioConfigured())) {
     return record({ sent: false, reason: "twilio-not-configured" });
   }
 
   const to = normalizeE164(input.to);
   if (!to) return record({ sent: false, reason: "invalid-phone" });
 
-  const sid = process.env.TWILIO_ACCOUNT_SID!;
-  const token = process.env.TWILIO_AUTH_TOKEN!;
+  // The account is the workspace's own when they have connected one, and the
+  // platform's otherwise. Resolved per send rather than read from the
+  // environment, so a company on their own Twilio bills their own account.
+  const resolved = await twilioForCurrentOrg();
+  if (!resolved.ok) {
+    return record({
+      sent: false,
+      reason: resolved.reason === "unreadable" ? "twilio-credentials-unreadable" : "twilio-not-configured",
+    });
+  }
+  const sid = resolved.creds.accountSid;
+  const token = resolved.creds.authToken;
 
   // The number belongs to the cleaning company, not to the deployment. A
   // workspace without one of its own falls back to the environment, so the

@@ -3740,6 +3740,28 @@ model Organization {
   stripeKeyHint          String?
   stripeConnectedAt      DateTime?
 
+  /// The company's OWN Twilio account, when they have one.
+  ///
+  /// Same precedence as Stripe above: a workspace's own credentials win, and a
+  /// workspace without them falls back to the platform's Twilio account, so a
+  /// small company that never wants a Twilio account still gets texting.
+  ///
+  /// This is not only about sending. Twilio signs its inbound webhooks with the
+  /// account's auth token, so a company on their own account signs with THEIR
+  /// token — which is why the inbound route resolves the workspace from the
+  /// number FIRST and only then checks the signature with that workspace's
+  /// token. Validating everything against the platform token would silently
+  /// reject every text a bring-your-own company received.
+  ///
+  /// The SID is an identifier and is stored in clear; the auth token is a
+  /// credential and is encrypted at rest (lib/secret-box.ts).
+  twilioAccountSid    String?
+  twilioAuthTokenEnc  String?
+  /// Last four of the saved auth token, so settings can show WHICH token is in
+  /// place without being able to show the token.
+  twilioTokenHint     String?
+  twilioConnectedAt   DateTime?
+
   subscription Subscription?
 
   createdAt DateTime @default(now())

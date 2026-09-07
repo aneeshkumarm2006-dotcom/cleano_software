@@ -1,6 +1,9 @@
 import { redirect } from "next/navigation";
 import { db } from "@/lib/org-db";
 import SettingsClient from "./SettingsClient";
+import { twilioConnectionStatus } from "@/lib/twilio-org";
+import { currentAppUrl } from "@/lib/org-url";
+import { requireOrgId } from "@/lib/org";
 import { seedNotificationCatalog } from "@/lib/notifications";
 import { requireStaff } from "@/lib/page-guards";
 import { getBudgetCategoryOptions } from "@/lib/budget-categories";
@@ -357,9 +360,28 @@ export default async function SettingsPage({
     notes: b.notes,
   }));
 
+  // Connector status. Read here rather than in the client so the page shows
+  // what is true right now, and degrades to "not set up" rather than erroring
+  // if the platform database is unreachable.
+  const orgId = await requireOrgId();
+  const twilioStatus = await twilioConnectionStatus(orgId)
+    .then((t) => ({ ...t, connectedAt: t.connectedAt?.toISOString() ?? null }))
+    .catch(() => ({
+      connected: false,
+      accountSid: null,
+      tokenHint: null,
+      connectedAt: null,
+      unreadable: false,
+      usingPlatform: false,
+      smsNumber: null,
+    }));
+  const twilioWebhookUrl = `${await currentAppUrl()}/api/twilio/inbound`;
+
   return (
     <div className="h-full overflow-hidden overflow-y-auto p-8">
       <SettingsClient
+        twilio={twilioStatus}
+        twilioWebhookUrl={twilioWebhookUrl}
         user={userWithRole}
         isAdmin={isAdmin}
         initialTab={initialTab}
