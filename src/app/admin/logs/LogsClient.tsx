@@ -52,6 +52,7 @@ interface Counts {
 const CATEGORY_META: Record<string, { color: string; label: string }> = {
   EMAIL: { color: "#0284c7", label: "Email" },
   SMS: { color: "#7c3aed", label: "SMS" },
+  AI: { color: "#008C9C", label: "AI Assistant" },
   PAYMENT: { color: "#059669", label: "Payment" },
   REFUND: { color: "#d97706", label: "Refund" },
   DEPOSIT: { color: "#0d9488", label: "Deposit" },
@@ -63,7 +64,7 @@ const CATEGORY_META: Record<string, { color: string; label: string }> = {
   SYSTEM: { color: "#475569", label: "System" },
 };
 const CATEGORY_ORDER = [
-  "EMAIL", "SMS", "PAYMENT", "REFUND", "DEPOSIT", "WEBHOOK",
+  "EMAIL", "SMS", "AI", "PAYMENT", "REFUND", "DEPOSIT", "WEBHOOK",
   "AUTH", "BOOKING", "ADMIN", "CRON", "SYSTEM",
 ];
 

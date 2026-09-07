@@ -7,6 +7,7 @@ import { isValidOrgSlug } from "@/lib/tenant";
 import { sendConversationalEmailReply } from "@/lib/email";
 import { getAiAssistantConfig } from "@/lib/ai-assistant/knowledge";
 import { handleInboundAiMessage } from "@/lib/ai-assistant/conversation";
+import { logAiInboundRejected } from "@/lib/ai-assistant/log";
 
 /**
  * The email leg of the AI receptionist. Resend's inbound email product POSTs
@@ -171,7 +172,7 @@ export async function POST(req: NextRequest) {
   // where SPF legitimately breaks, which is why any single pass suffices.
   const authResults = (header("Authentication-Results") ?? "").toLowerCase();
   const senderVerified = /(dmarc|dkim|spf)=pass/.test(authResults);
-  if (authResults && !senderVerified) return ok();
+  const senderRejected = Boolean(authResults) && !senderVerified;
 
   const subject = (data.subject ?? "").trim() || "(no subject)";
   const text = (data.text ?? "").trim() || htmlToText(data.html ?? "");
@@ -184,6 +185,22 @@ export async function POST(req: NextRequest) {
     select: { id: true, slug: true, name: true, timezone: true },
   });
   if (!org) return ok();
+
+  // Forged sender: refuse it, but say so where an admin can see. "My customer
+  // emailed and got nothing back" needs a findable answer, and a run of these
+  // is worth someone noticing. The org had to be resolved first — a log row
+  // belongs to a workspace.
+  if (senderRejected) {
+    after(() =>
+      runAsOrg(org, () =>
+        logAiInboundRejected(
+          from,
+          "the sending server could not prove the address was genuine, so it was treated as forged",
+        ),
+      ),
+    );
+    return ok();
+  }
 
   // Same shape as the Twilio route: answer the webhook NOW, think in after().
   const config = await runAsOrg(org, () => getAiAssistantConfig());

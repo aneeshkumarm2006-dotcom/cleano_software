@@ -13,6 +13,7 @@ import type { AiChannel } from "@prisma/client";
 import { db } from "@/lib/org-db";
 import { sendAdminAiHandoff } from "@/lib/email";
 import { buildWorkspaceKnowledge } from "./knowledge";
+import { logAiFailed, logAiHandoff, logAiReplied } from "./log";
 import { generateAssistantReply } from "./respond";
 import type { ChatTurn } from "./claude";
 
@@ -189,10 +190,20 @@ export async function handleInboundAiMessage(opts: {
       });
     };
 
+    // Every handoff is logged, including the ones past the email budget —
+    // the admin panel is the floor under that budget: no email went out, but
+    // the event is still visible to anyone who looks.
+    const escalateAndLog = async (reason: string) => {
+      await escalate(reason);
+      await logAiHandoff({ conversationId: convo.id, address: opts.address }, reason);
+    };
+
     // ── May the assistant speak? ───────────────────────────────────────────
     if (!convo.aiEnabled) {
       // A human owns this thread. Record + surface, never talk over them.
-      await escalate("A teammate has taken over this conversation; the customer just wrote again.");
+      await escalateAndLog(
+        "A teammate has taken over this conversation; the customer just wrote again.",
+      );
       return { conversationId: convo.id, replied: false };
     }
 
@@ -209,7 +220,7 @@ export async function handleInboundAiMessage(opts: {
       where: { createdAt: { gte: dayStart } },
     });
     if (usedToday >= opts.dailyMessageCap * 2) {
-      await escalate(
+      await escalateAndLog(
         `The assistant reached its daily limit of ${opts.dailyMessageCap} messages and stayed quiet.`,
       );
       return { conversationId: convo.id, replied: false };
@@ -258,12 +269,41 @@ export async function handleInboundAiMessage(opts: {
     }
 
     if (verdict.handoff || !replied) {
-      await escalate(verdict.reason);
+      // Two different events wearing one flag: the assistant CHOOSING to hand
+      // off is normal, while wanting to answer and failing to deliver is a
+      // fault the admin must be able to see and act on.
+      if (!replied && verdict.reply) {
+        await logAiFailed(
+          { conversationId: convo.id, address: opts.address },
+          `Could not deliver the assistant's reply to ${opts.address}.`,
+          opts.channel === "SMS"
+            ? "The text was not accepted — check the workspace's SMS number and Twilio balance."
+            : "The email was not accepted by the mail provider.",
+        );
+      } else if (!verdict.reply) {
+        await logAiFailed(
+          { conversationId: convo.id, address: opts.address },
+          `The assistant could not produce a reply for ${opts.address}, so a teammate was asked to step in.`,
+          "The AI service did not return a usable answer — it may be unavailable, or no API key is configured.",
+        );
+      }
+      await escalateAndLog(verdict.reason);
+    } else {
+      await logAiReplied(
+        { conversationId: convo.id, address: opts.address },
+        opts.channel,
+        verdict.reason,
+      );
     }
 
     return { conversationId: convo.id, replied };
   } catch (err) {
     console.error("[ai-assistant] handleInboundAiMessage failed:", err);
+    await logAiFailed(
+      { address: opts.address },
+      `Something went wrong handling a message from ${opts.address}. It was not answered.`,
+      err instanceof Error ? err.message : String(err),
+    );
     return null;
   }
 }

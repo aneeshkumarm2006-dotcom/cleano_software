@@ -22,6 +22,15 @@ const EMAIL_KIND_LABEL: Record<string, string> = {
 };
 
 const ACTION_LABEL: Record<string, string> = {
+  // AI assistant. Named for what a customer experienced, not for the code
+  // path — "Assistant replied" is what an admin is scanning the page for.
+  "ai.replied": "Assistant replied",
+  "ai.handoff": "Handed to your team",
+  "ai.failed": "Assistant could not reply",
+  "ai.follow_ups": "Lead follow-ups",
+  "ai.inbound_rejected": "Email ignored",
+  "ai_conversation.staff_reply": "You replied",
+  "ai_conversation.staff_start": "You started a conversation",
   charge_job: "Card charged",
   issue_refund: "Refund issued",
   redeem_gift_card: "Gift card redeemed",
@@ -47,6 +56,7 @@ const ACTION_LABEL: Record<string, string> = {
 
 const TARGET_TYPE_LABEL: Record<string, string> = {
   job: "Job",
+  aiConversation: "Conversation",
   gift_card: "Gift card",
   user: "User",
   phone: "Phone",

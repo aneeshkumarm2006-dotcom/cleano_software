@@ -3512,6 +3512,10 @@ model ActivityLog {
 enum ActivityCategory {
   EMAIL
   SMS
+  /// AI assistant + the automations it drives (replies, handoffs, follow-ups).
+  /// Its own category so an admin can ask "is the assistant healthy?" without
+  /// reading every SMS and email row.
+  AI
   PAYMENT
   REFUND
   DEPOSIT

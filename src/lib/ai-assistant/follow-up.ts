@@ -24,6 +24,7 @@ import { db } from "@/lib/org-db";
 import { sendSms } from "@/lib/sms";
 import { sendConversationalEmailReply } from "@/lib/email";
 import { buildWorkspaceKnowledge } from "./knowledge";
+import { logAiFollowUpRun } from "./log";
 
 const BATCH = 50;
 
@@ -215,6 +216,12 @@ export async function runLeadFollowUps(): Promise<FollowUpCounts> {
       console.error(`[ai-assistant] follow-up failed for lead ${lead.id}`, e);
       counts.failed++;
     }
+  }
+
+  // One row per run, but only when there was something to do — a daily
+  // "0 of 0" from every workspace would bury the rows that matter.
+  if (counts.eligible > 0 || counts.failed > 0) {
+    await logAiFollowUpRun(counts);
   }
 
   return counts;
