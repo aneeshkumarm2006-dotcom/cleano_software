@@ -3795,6 +3795,14 @@ enum PlatformRole {
   OWNER /// everything, including managing other Awer staff
 }
 
+/// How often a workspace is billed. Stored rather than inferred from Stripe so
+/// the app can show the cycle without a network call, and so a subscription
+/// that predates Stripe still reads correctly.
+enum BillingInterval {
+  MONTHLY
+  ANNUAL
+}
+
 enum SubscriptionStatus {
   TRIALING
   ACTIVE
@@ -3821,6 +3829,17 @@ model Subscription {
 
   /// Seat cap actually sold. NULL means the plan default applies.
   seats Int?
+
+  interval BillingInterval @default(MONTHLY)
+
+  /// Set when the customer has cancelled but paid through the period. They
+  /// keep everything until currentPeriodEnd; this is what makes the difference
+  /// between "leaving" and "gone" visible before it happens.
+  cancelAtPeriodEnd Boolean @default(false)
+
+  /// When we last warned them the trial is ending, so the reminder is sent
+  /// once rather than every night the cron runs.
+  trialReminderSentAt DateTime?
 
   stripeCustomerId     String? @unique
   stripeSubscriptionId String? @unique
