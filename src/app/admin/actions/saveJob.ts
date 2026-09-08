@@ -58,6 +58,7 @@ import {
 import { fmtDate, fmtTime, tzWallClockToUtc } from "@/lib/time";
 import { addStoreDays, storeDateKey, storeWallClockToUtc } from "@/lib/timezone";
 import { allocateJobNumber } from "@/lib/job-number";
+import { clearClockTrailForReschedule } from "@/lib/job-reschedule";
 import {
   recurringDiscountPercent,
   recurrenceCount,
@@ -984,6 +985,22 @@ export async function saveJob(formData: FormData) {
         where: { id: editingJobId },
         data: updateData,
       });
+
+      // Moved to a different time? Then its clock trail belongs to the old
+      // time, not the new one (see lib/job-reschedule).
+      //
+      // Guarded on the form having actually POSTED a date: with no date fields
+      // submitted, jobData.startTime falls back to `new Date()`, which would
+      // read as a move on every save and end a live shift because somebody
+      // edited a note.
+      if (startDate && startTime && jobData.startTime && existingJob) {
+        const movedTo = jobData.startTime.getTime();
+        if (existingJob.startTime.getTime() !== movedTo) {
+          await clearClockTrailForReschedule(editingJobId).catch((e) =>
+            console.error("[saveJob] clearing the clock trail failed", e),
+          );
+        }
+      }
 
       // Pricing-mode changes are logged (fix 2). This is the one edit that can
       // move every money surface on the job without any figure on the form

@@ -4,6 +4,7 @@ import { db } from "@/lib/org-db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { clearClockTrailForReschedule } from "@/lib/job-reschedule";
 
 export async function updateJobDates(
   jobId: string,
@@ -22,7 +23,7 @@ export async function updateJobDates(
     // Check if user has permission to update this job
     const job = await db.job.findUnique({
       where: { id: jobId },
-      select: { employeeId: true },
+      select: { employeeId: true, startTime: true },
     });
 
     if (!job) {
@@ -49,11 +50,18 @@ export async function updateJobDates(
       },
     });
 
+    // A job that moved to a different time has not been worked at its new time,
+    // so it must not arrive there still clocked in. Compared against the old
+    // start rather than done unconditionally: dragging a job one pixel and
+    // dropping it back is a no-op, and it must not end a cleaner's live shift.
+    const moved = job.startTime?.getTime() !== startTime.getTime();
+    const cleared = moved ? await clearClockTrailForReschedule(jobId) : null;
+
     // Revalidate the calendar page to show updated data
     revalidatePath("/admin/calendar");
     revalidatePath("/admin/jobs");
 
-    return { success: true };
+    return { success: true, cleared };
   } catch (error) {
     console.error("Error updating job dates:", error);
     return { success: false, error: "Failed to update job dates" };
