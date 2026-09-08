@@ -43,6 +43,7 @@ import { releaseJobHold } from "../actions/releaseJobHold";
 // Client-safe by design (see the header of job-money.ts) — the table can price
 // a row with exactly the function the job page and the invoice use.
 import { activeSubtotal } from "@/lib/job-money";
+import { compareOperational, startOfYesterday } from "@/lib/job-order";
 
 interface Job {
   id: string;
@@ -376,6 +377,11 @@ function jobMatchesTab(
 ): boolean {
   const at = new Date(now);
   switch (tab) {
+    case 'all':
+      // Cancelled work is not the day's work. It keeps its own tab (and its
+      // own count), but it no longer pads the All list or the stat cards
+      // derived from it — ten jobs with two cancelled is eight jobs.
+      return job.status !== 'CANCELLED';
     case 'upcoming':
       return isUpcomingJob(job, at);
     case 'onhold':
@@ -501,6 +507,10 @@ export default function JobsView({
     Record<string, Partial<Pick<Job, 'paymentReceived' | 'invoiceSent' | 'status' | 'holdReason'>>>
   >({});
   const [payBusyId, setPayBusyId] = useState<string | null>(null);
+  // 'schedule' is the default because this page is opened to run the day.
+  // 'newest' is the old behaviour, kept because quoting and billing questions
+  // genuinely are "what did we book most recently".
+  const [sortMode, setSortMode] = useState<'schedule' | 'newest'>('schedule');
   const effectiveJobs = useMemo(
     () =>
       Object.keys(rowOverrides).length === 0
@@ -519,9 +529,13 @@ export default function JobsView({
       list.sort(
         (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
       );
+    } else if (sortMode === 'schedule') {
+      const cutoff = startOfYesterday(now);
+      list.sort((a, b) => compareOperational(a, b, cutoff));
     }
+    // 'newest' keeps the server's most-recent-first order untouched.
     return list;
-  }, [tab, effectiveJobs]);
+  }, [tab, effectiveJobs, sortMode]);
 
   const tabCounts = useMemo(() => {
     const now = Date.now();
@@ -951,6 +965,16 @@ export default function JobsView({
           {activeFilterCount > 0 && <span className="afilter-badge">{activeFilterCount}</span>}
         </button>
         <div style={{ flex: 1 }} />
+        <PremiumSelect
+          value={sortMode}
+          onChange={(v) => { setSortMode(v as 'schedule' | 'newest'); onPageChange(1); }}
+          options={[
+            { value: 'schedule', label: 'Yesterday onward' },
+            { value: 'newest', label: 'Newest first' },
+          ]}
+          size="sm"
+          style={{ width: 168 }}
+        />
         <PremiumSelect
           value={String(rowsPerPage)}
           onChange={(v) => { onRowsPerPageChange(parseInt(v, 10)); onPageChange(1); updateURLParams({ rowsPerPage: parseInt(v, 10), page: 1 }); }}

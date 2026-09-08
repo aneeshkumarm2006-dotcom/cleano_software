@@ -140,6 +140,11 @@ export default async function JobsPage({
       addOns: { select: { id: true, name: true, price: true, quantity: true } },
       productUsage: { select: { quantity: true, product: { select: { costPerUnit: true } } } },
     },
+    // Most-recent-first. This is the "Newest first" order the toolbar offers;
+    // the default view re-sorts these client-side into operational order
+    // (yesterday onward), which needs a "now" the server does not share with
+    // the browser. Every job is loaded here, so that re-sort is complete.
+    //
     // jobDate is nullable — push null-date jobs after dated ones instead of
     // letting them float to the top, then break ties on the real start instant.
     orderBy: [
