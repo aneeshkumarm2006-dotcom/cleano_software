@@ -288,6 +288,15 @@ export const NOTIFICATION_CATALOG: CatalogEntry[] = [
   },
   {
     recipient: "ADMIN",
+    category: "Clock in / clock out",
+    key: "admin.job.photos_uploaded",
+    label: "Photos added to a job",
+    trigger:
+      "A cleaner adds the first photo to a job. Sent once per job, not once per photo.",
+    channels: { EMAIL: true, SMS: false },
+  },
+  {
+    recipient: "ADMIN",
     category: "Your Awer account",
     key: "admin.trial.ending",
     label: "Awer trial ending",
@@ -499,7 +508,10 @@ export const NOTIFICATION_CATALOG: CatalogEntry[] = [
     key: "admin.clock.clocked_out",
     label: "Booking clocked out",
     trigger: "Provider clocks out.",
-    channels: { EMAIL: false, SMS: false },
+    // On, to match clocked_in. The email has been written and wired since the
+    // clock shipped; only this flag stopped it, which is why "we never hear
+    // when a cleaner finishes" read as a broken trigger rather than a default.
+    channels: { EMAIL: true, SMS: false },
   },
   // Booking reschedule fee
   {

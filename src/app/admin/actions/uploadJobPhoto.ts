@@ -4,6 +4,7 @@ import { db } from "@/lib/org-db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { sendAdminJobPhotos } from "@/lib/email";
 import { cloudinary } from "@/lib/cloudinary";
 import {
   afterPhotosAllowed,
@@ -169,6 +170,21 @@ export async function uploadJobPhoto(formData: FormData) {
         kind,
       },
     });
+
+    // First photo on this job: tell the team once. existingCount was read
+    // before the insert, so zero means this upload is the transition — the
+    // same rule the AI handoff uses, and the reason eight photos do not
+    // become eight emails.
+    if (existingCount === 0) {
+      const cleanerName = (session.user as { name?: string }).name || "A cleaner";
+      await sendAdminJobPhotos({
+        jobId,
+        jobNumber: job.jobNumber,
+        clientName: job.clientName,
+        cleanerName,
+        kindLabel: jobPhotoKindLabel(kind),
+      }).catch((e) => console.error("uploadJobPhoto: admin notify failed", e));
+    }
 
     revalidatePath(`/cleaners/my-jobs/${jobId}`);
     // The admin job page renders the same rows server-side, so without this an

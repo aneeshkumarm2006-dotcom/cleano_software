@@ -3278,3 +3278,43 @@ export async function sendTrialEnding(opts: {
     }).catch((e) => console.error("sendTrialEnding", admin.email, e));
   }
 }
+
+/**
+ * A cleaner has started documenting a job.
+ *
+ * Sent on the FIRST photo only. Photos upload one at a time, so a mail per
+ * photo would mean eight for one bathroom — the same "notify on the
+ * transition, not on every event" rule the AI handoff follows.
+ */
+export async function sendAdminJobPhotos(opts: {
+  jobId: string;
+  jobNumber: number;
+  clientName: string;
+  cleanerName: string;
+  kindLabel: string;
+}) {
+  const admins = await fetchAdmins();
+  if (admins.length === 0) return;
+  const appUrl = await currentAppUrl();
+
+  const html = layout(
+    h1(`Photos added — ${opts.clientName}`) +
+      p(`${opts.cleanerName} has started adding photos to job #${opts.jobNumber}.`) +
+      section([
+        ["Job", `#${opts.jobNumber}`],
+        ["Client", opts.clientName],
+        ["Cleaner", opts.cleanerName],
+        ["First photo", opts.kindLabel],
+      ]) +
+      btn("View photos", `${appUrl}/admin/jobs/${opts.jobId}`)
+  );
+
+  for (const admin of admins) {
+    await deliver({
+      to: admin.email,
+      subject: `Photos added — ${opts.clientName} (#${opts.jobNumber})`,
+      html,
+      notification: { recipient: "ADMIN", key: "admin.job.photos_uploaded" },
+    }).catch((e) => console.error("sendAdminJobPhotos", admin.email, e));
+  }
+}
