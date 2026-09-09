@@ -11,6 +11,7 @@ const ZERO: AdminAttentionCounts = {
   leads: 0,
   payouts: 0,
   inventory: 0,
+  notifications: 0,
 };
 
 async function fetchAttentionCounts(): Promise<AdminAttentionCounts> {

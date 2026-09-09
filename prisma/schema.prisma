@@ -1382,6 +1382,51 @@ enum NotificationChannel {
 // Catalog of every notification the system can emit, with per-recipient,
 // per-channel enabled flag. Seeded from the Notification Catalog spec; admin
 // can toggle any row from Settings → Notifications.
+/// An event worth an admin's attention, kept in the app.
+///
+/// Distinct from NotificationSetting, which is a PREFERENCE ("email me about
+/// clock-outs"). This is the EVENT itself. Recorded whether or not the email
+/// was enabled or delivered, because "we never heard about it" has to be
+/// answerable by looking, and a toggle someone turned off two months ago is
+/// not an answer.
+///
+/// One row per event, not per admin: five admins share one notification and
+/// each marks their own copy read through NotificationRead.
+model Notification {
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String   @default("")
+  id             String   @id @default(cuid())
+  /// The catalog key this came from, e.g. "admin.clock.clocked_out".
+  notificationKey String
+  title          String
+  body           String?
+  /// Where to go to act on it. Relative path.
+  href           String?
+  /// Drives the colour, not the wording. INFO | WARN | ERROR.
+  severity       String   @default("INFO")
+  createdAt      DateTime @default(now())
+  reads          NotificationRead[]
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId])
+}
+
+/// Which admin has seen which notification. Per-person, so one admin reading
+/// it does not clear the badge for everyone else.
+model NotificationRead {
+  organizationId String       @default("")
+  id             String       @id @default(cuid())
+  notificationId String
+  userId         String
+  readAt         DateTime     @default(now())
+  notification   Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  @@unique([notificationId, userId])
+  @@index([notificationId])
+  @@index([organizationId])
+}
+
 model NotificationSetting {
   // Tenant owner. Required: a row that cannot name its organization is a row
   // no isolation rule can protect.

@@ -4,6 +4,7 @@ import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Bell,
   Menu,
   X,
   ChevronDown,
@@ -77,7 +78,8 @@ type Badge =
   | "documents"
   | "leads"
   | "payouts"
-  | "inventory";
+  | "inventory"
+  | "notifications";
 interface NavItem {
   href: string;
   label: string;
@@ -121,6 +123,12 @@ const NAV: { label: string; items: NavItem[] }[] = [
     label: "Overview",
     items: [
       { href: "/admin/dashboard", label: "Dashboard", Icon: LayoutDashboard },
+      {
+        href: "/admin/notifications",
+        label: "Notifications",
+        Icon: Bell,
+        badge: "notifications",
+      },
       {
         href: "/admin/analytics",
         label: "Analytics",
@@ -732,6 +740,7 @@ export default function Sidebar({
     leads: attention.leads,
     payouts: attention.payouts,
     inventory: attention.inventory,
+    notifications: attention.notifications,
   };
 
   return (

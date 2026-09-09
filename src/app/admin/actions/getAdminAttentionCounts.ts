@@ -6,6 +6,7 @@
 import { db } from "@/lib/org-db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
+import { countUnreadAdminNotifications } from "@/lib/admin-notifications";
 
 /**
  * Every count behind a sidebar attention badge, in ONE batched round trip
@@ -45,6 +46,8 @@ export interface AdminAttentionCounts {
   payouts: number;
   /** Cleaner supply requests waiting on a resolve. */
   inventory: number;
+  /** Notifications THIS admin has not opened yet. */
+  notifications: number;
 }
 
 // Module-private. The client-side fallback lives beside the hook in
@@ -58,6 +61,7 @@ const ZERO: AdminAttentionCounts = {
   leads: 0,
   payouts: 0,
   inventory: 0,
+  notifications: 0,
 };
 
 export async function getAdminAttentionCounts(): Promise<AdminAttentionCounts> {
@@ -73,6 +77,10 @@ export async function getAdminAttentionCounts(): Promise<AdminAttentionCounts> {
       role === "FIELD_LEAD";
     if (!isAdmin) return ZERO;
     const isOwnerAdmin = role === "OWNER" || role === "ADMIN";
+
+    // Per-VIEWER, unlike the status queues around it: one admin reading a
+    // notification must not clear the badge for everyone else.
+    const notifications = await countUnreadAdminNotifications(session.user.id);
 
     const [requests, applications, quotes, documents] = await Promise.all([
       // Unchanged from the retired getPendingRequestCount: `resolveJobRequest`
@@ -126,6 +134,7 @@ export async function getAdminAttentionCounts(): Promise<AdminAttentionCounts> {
       leads,
       payouts,
       inventory,
+      notifications,
     };
   } catch {
     return ZERO;

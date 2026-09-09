@@ -6,6 +6,7 @@ import { coverFor } from "@/lib/gift-cards/covers";
 import { BOOKING_DEPOSIT_USD } from "@/lib/job-billing";
 import { STORE_TZ } from "@/lib/timezone";
 import { currentAppUrl } from "@/lib/org-url";
+import { recordAdminNotification } from "@/lib/admin-notifications";
 
 /**
  * Identifies the catalog row that gates a given email send.
@@ -1118,6 +1119,15 @@ export async function sendAdminAiHandoff(opts: {
   lastMessage: string;
   reason: string;
 }) {
+  await recordAdminNotification({
+    key: "admin.ai.handoff",
+    title: `The assistant needs a human — ${opts.customerLabel}`,
+    // Deliberately not the customer's message: this row is a prompt to go and
+    // look, and the conversation page is where their words belong.
+    body: opts.reason,
+    href: `/admin/conversations/${opts.conversationId}`,
+    severity: "WARN",
+  });
   const admins = await fetchAdmins();
   if (admins.length === 0) return;
   const appUrl = await currentAppUrl();
@@ -1409,6 +1419,12 @@ export async function sendAdminClockedIn(opts: {
   clientName: string;
   cleanerName: string;
 }) {
+  await recordAdminNotification({
+    key: "admin.clock.clocked_in",
+    title: `${opts.cleanerName} clocked in`,
+    body: `${opts.clientName} · job #${opts.jobNumber}`,
+    href: `/admin/jobs/${opts.jobId}`,
+  });
   const admins = await fetchAdmins();
   if (admins.length === 0) return;
   const appUrl = await currentAppUrl();
@@ -1460,6 +1476,12 @@ export async function sendAdminClockedOut(opts: {
   cleanerName: string;
   durationMinutes: number;
 }) {
+  await recordAdminNotification({
+    key: "admin.clock.clocked_out",
+    title: `${opts.cleanerName} clocked out`,
+    body: `${opts.clientName} · job #${opts.jobNumber} · ${opts.durationMinutes} min`,
+    href: `/admin/jobs/${opts.jobId}`,
+  });
   const admins = await fetchAdmins();
   if (admins.length === 0) return;
   const appUrl = await currentAppUrl();
@@ -1489,6 +1511,12 @@ export async function sendAdminChecklistCompleted(opts: {
   cleanerName: string;
   itemCount: number;
 }) {
+  await recordAdminNotification({
+    key: "admin.checklist.completed",
+    title: `${opts.cleanerName} finished the checklist`,
+    body: `${opts.clientName} · job #${opts.jobNumber} · ${opts.itemCount} items`,
+    href: `/admin/jobs/${opts.jobId}`,
+  });
   const admins = await fetchAdmins();
   if (admins.length === 0) return;
   const appUrl = await currentAppUrl();
@@ -1913,6 +1941,15 @@ export async function sendAdminUnassignedEvent(opts: {
   clientName: string;
   startTime: string;
 }) {
+  await recordAdminNotification({
+    key: UNASSIGNED_KEY_MAP[opts.event],
+    title: `${UNASSIGNED_LABEL[opts.event]} — ${opts.clientName}`,
+    body: `Job #${opts.jobNumber} · ${fmtDate(opts.startTime)} ${fmtTime(opts.startTime)}`,
+    href: `/admin/jobs/${opts.jobId}`,
+    // A job sitting unassigned is the one that becomes a problem if nobody
+    // looks; somebody claiming one is good news.
+    severity: opts.event === "grabbed" ? "INFO" : "WARN",
+  });
   const admins = await fetchAdmins();
   if (admins.length === 0) return;
   const appUrl = await currentAppUrl();
@@ -3293,6 +3330,12 @@ export async function sendAdminJobPhotos(opts: {
   cleanerName: string;
   kindLabel: string;
 }) {
+  await recordAdminNotification({
+    key: "admin.job.photos_uploaded",
+    title: `Photos added — ${opts.clientName}`,
+    body: `${opts.cleanerName} started documenting job #${opts.jobNumber}`,
+    href: `/admin/jobs/${opts.jobId}`,
+  });
   const admins = await fetchAdmins();
   if (admins.length === 0) return;
   const appUrl = await currentAppUrl();
@@ -3338,6 +3381,15 @@ export async function sendAdminShiftDropped(opts: {
   hoursUntil: number;
   urgent: boolean;
 }) {
+  await recordAdminNotification({
+    key: opts.urgent ? "admin.shift.dropped_urgent" : "admin.shift.dropped",
+    title: opts.urgent
+      ? `Cover needed — ${opts.clientName} in ${Math.max(0, Math.round(opts.hoursUntil))}h`
+      : `${opts.cleanerName} dropped a shift`,
+    body: `${opts.clientName} · job #${opts.jobNumber}`,
+    href: `/admin/jobs/${opts.jobId}`,
+    severity: opts.urgent ? "ERROR" : "WARN",
+  });
   const admins = await fetchAdmins();
   if (admins.length === 0) return;
   const appUrl = await currentAppUrl();
