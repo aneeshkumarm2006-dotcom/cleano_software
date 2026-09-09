@@ -30,6 +30,31 @@ export type BillingResult =
  */
 const MIN_TRIAL_LEAD_MS = 48 * 60 * 60 * 1000;
 
+/**
+ * One Stripe Product per plan, with a deterministic id.
+ *
+ * The obvious thing — inline `product_data` on the checkout line — creates a
+ * BRAND NEW product every time somebody subscribes, so the Stripe account
+ * fills with hundreds of identical "Awer Starter" entries and the reporting
+ * built on top of them is meaningless. A fixed id means one product per plan,
+ * created on first use, with nothing to configure in the dashboard first.
+ */
+async function productIdFor(plan: OrgPlan): Promise<string> {
+  const id = `awer_${plan.toLowerCase()}`;
+  const stripe = getStripe();
+  try {
+    await stripe.products.retrieve(id);
+  } catch {
+    try {
+      await stripe.products.create({ id, name: `Awer ${PLANS[plan].label}` });
+    } catch {
+      // Lost a race with a concurrent checkout, which is fine: the product
+      // exists either way, and that is all the caller needs.
+    }
+  }
+  return id;
+}
+
 /** The workspace's Stripe customer, created on first use and remembered. */
 async function customerFor(
   orgId: string,
@@ -97,8 +122,18 @@ export async function startSubscriptionCheckout(input: {
     select: { stripeSubscriptionId: true, status: true, trialEndsAt: true },
   });
   if (!sub) return { ok: false, message: "This workspace has no subscription record." };
+  // Already paying: change the plan directly rather than bouncing them to the
+  // billing portal. The portal can only switch plans when products have been
+  // configured in the Stripe dashboard, so sending them there meant "Switch to
+  // this plan" could land on a page that cannot switch plans.
   if (sub.stripeSubscriptionId && sub.status !== "CANCELED") {
-    return openBillingPortal(input.orgId);
+    return changePlan({
+      subscriptionId: sub.stripeSubscriptionId,
+      orgId: input.orgId,
+      plan: input.plan,
+      interval: input.interval,
+      amount,
+    });
   }
 
   const customer = await customerFor(input.orgId);
@@ -120,11 +155,7 @@ export async function startSubscriptionCheckout(input: {
             currency: "usd",
             unit_amount: amount * 100,
             recurring: { interval: input.interval === "ANNUAL" ? "year" : "month" },
-            product_data: {
-              name: `Awer ${def.label}`,
-              description:
-                input.interval === "ANNUAL" ? "Billed yearly" : "Billed monthly",
-            },
+            product: await productIdFor(input.plan),
           },
         },
       ],
@@ -148,6 +179,62 @@ export async function startSubscriptionCheckout(input: {
   } catch (e) {
     console.error("[billing] checkout failed", e);
     return { ok: false, message: "Could not open the payment page. Nothing was charged." };
+  }
+}
+
+/**
+ * Move an existing subscription onto a different plan or billing cycle.
+ *
+ * Stripe prorates: moving up mid-month bills the difference now, moving down
+ * leaves a credit against the next invoice. That is the behaviour a customer
+ * expects, and doing it any other way means answering billing questions by
+ * hand forever.
+ *
+ * No checkout page and no redirect — the card is already on file, so the
+ * change simply happens and the caller is sent back to the settings page.
+ */
+async function changePlan(input: {
+  subscriptionId: string;
+  orgId: string;
+  plan: OrgPlan;
+  interval: BillingIntervalKey;
+  amount: number;
+}): Promise<BillingResult> {
+  const stripe = getStripe();
+  try {
+    const current = await stripe.subscriptions.retrieve(input.subscriptionId);
+    const item = current.items?.data?.[0];
+    if (!item) return { ok: false, message: "That subscription has nothing to change." };
+
+    await stripe.subscriptions.update(input.subscriptionId, {
+      items: [
+        {
+          id: item.id,
+          price_data: {
+            currency: "usd",
+            product: await productIdFor(input.plan),
+            recurring: { interval: input.interval === "ANNUAL" ? "year" : "month" },
+            unit_amount: input.amount * 100,
+          },
+        },
+      ],
+      proration_behavior: "create_prorations",
+      // The webhook reads these back to update our own row.
+      metadata: {
+        organizationId: input.orgId,
+        plan: input.plan,
+        interval: input.interval,
+      },
+    });
+
+    const base = await currentAppUrl();
+    return { ok: true, url: `${base}/admin/settings?tab=plan&plan=changed` };
+  } catch (e) {
+    console.error("[billing] plan change failed", e);
+    return {
+      ok: false,
+      message: "Could not change the plan just now. Nothing was charged or changed.",
+    };
   }
 }
 

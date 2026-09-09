@@ -5,6 +5,8 @@ import { getStripe } from "@/lib/stripe";
 import { platformDb } from "@/lib/platform-db";
 import { runAsOrg } from "@/lib/org-context";
 import { logActivity } from "@/lib/activity-log";
+import { sendBillingPaymentFailed } from "@/lib/email";
+import { PLANS } from "@/lib/plans";
 import type { BillingInterval, OrgPlan, SubscriptionStatus } from "@prisma/client";
 
 /**
@@ -105,7 +107,7 @@ async function applySubscription(sub: Stripe.Subscription): Promise<void> {
 
   const existing = await platformDb.subscription.findUnique({
     where: { organizationId },
-    select: { status: true },
+    select: { status: true, plan: true },
   });
 
   await platformDb.subscription.update({
@@ -133,6 +135,20 @@ async function applySubscription(sub: Stripe.Subscription): Promise<void> {
       select: { id: true, slug: true, name: true, timezone: true },
     });
     if (org) {
+      // Tell them their payment failed, in their own workspace and inbox.
+      // Only on the TRANSITION into PAST_DUE: Stripe retries a failed card
+      // several times over a couple of weeks, and a mail per retry turns a
+      // fixable problem into something they mute.
+      if (status === "PAST_DUE") {
+        await runAsOrg(org, () =>
+          sendBillingPaymentFailed({
+            // Falls back to the row's own plan when Stripe's metadata is thin,
+            // so the email never says "your undefined plan".
+            planLabel: PLANS[isPlan(plan) ? plan : (existing?.plan ?? "STARTER")].label,
+          }),
+        ).catch((e) => console.error("[billing] payment-failed notice", e));
+      }
+
       await runAsOrg(org, () =>
         logActivity({
           category: "PAYMENT",

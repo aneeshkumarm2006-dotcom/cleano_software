@@ -315,6 +315,15 @@ export const NOTIFICATION_CATALOG: CatalogEntry[] = [
   {
     recipient: "ADMIN",
     category: "Your Awer account",
+    key: "admin.billing.payment_failed",
+    label: "Awer payment failed",
+    trigger:
+      "A payment for your Awer subscription did not go through. Sent once when it first fails, not on every retry.",
+    channels: { EMAIL: true, SMS: false },
+  },
+  {
+    recipient: "ADMIN",
+    category: "Your Awer account",
     key: "admin.trial.ending",
     label: "Awer trial ending",
     trigger:

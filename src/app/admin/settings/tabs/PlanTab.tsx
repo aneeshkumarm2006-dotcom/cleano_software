@@ -245,7 +245,21 @@ export default function PlanTab({ plans, status }: Props) {
                     <button
                       type="button"
                       disabled={busy}
-                      onClick={() => go(() => startCheckout({ plan: p.key, interval }))}
+                      onClick={() => {
+                        // Switching an active subscription charges the
+                        // difference straight away. A card already on file
+                        // means one click would otherwise move real money
+                        // with nothing said first.
+                        if (
+                          status.paying &&
+                          !window.confirm(
+                            `Switch to ${p.label}${interval === "ANNUAL" ? ", billed yearly" : ""}? Stripe works out the difference for the rest of this period and charges or credits it.`,
+                          )
+                        ) {
+                          return;
+                        }
+                        go(() => startCheckout({ plan: p.key, interval }));
+                      }}
                       className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#008C9C] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#00707d] disabled:opacity-40">
                       {busy && <Loader2 size={15} className="animate-spin" />}
                       {status.paying ? "Switch to this plan" : "Choose this plan"}

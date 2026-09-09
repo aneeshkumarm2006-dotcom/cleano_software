@@ -3430,3 +3430,45 @@ export async function sendAdminShiftDropped(opts: {
     }).catch((e) => console.error("sendAdminShiftDropped", admin.email, e));
   }
 }
+
+/**
+ * The workspace's own subscription payment failed.
+ *
+ * Sent by us, not left to Stripe. Stripe's dunning emails only go out if
+ * somebody remembered to switch them on in the dashboard, and "we did not know
+ * our card had expired" is the one billing conversation guaranteed to end
+ * badly. Sent once, on the transition into PAST_DUE, not on every retry.
+ */
+export async function sendBillingPaymentFailed(opts: {
+  planLabel: string;
+}) {
+  await recordAdminNotification({
+    key: "admin.billing.payment_failed",
+    title: "Your Awer payment did not go through",
+    body: `${opts.planLabel} plan · update the card in Settings, Plan & Billing`,
+    href: "/admin/settings?tab=plan",
+    severity: "ERROR",
+  });
+
+  const admins = await fetchAdmins();
+  if (admins.length === 0) return;
+  const appUrl = await currentAppUrl();
+
+  const html = layout(
+    h1("Your Awer payment did not go through") +
+      p(
+        `We could not take the payment for your ${opts.planLabel} plan. This is usually an expired or replaced card, and it takes a minute to fix.`
+      ) +
+      btn("Update your card", `${appUrl}/admin/settings?tab=plan`) +
+      p("Your workspace is still running normally. Get in touch if anything looks wrong.")
+  );
+
+  for (const admin of admins) {
+    await deliver({
+      to: admin.email,
+      subject: "Your Awer payment did not go through",
+      html,
+      notification: { recipient: "ADMIN", key: "admin.billing.payment_failed" },
+    }).catch((e) => console.error("sendBillingPaymentFailed", admin.email, e));
+  }
+}
