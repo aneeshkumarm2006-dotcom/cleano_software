@@ -2057,6 +2057,7 @@ model Announcement {
   createdAt      DateTime               @default(now())
   updatedAt      DateTime               @updatedAt
   reactions      AnnouncementReaction[]
+  reads          AnnouncementRead[]
 
   @@index([createdAt])
   @@index([organizationId])
@@ -2064,6 +2065,27 @@ model Announcement {
 
 // One reaction per user per announcement (unique constraint) — picking a
 // different emoji replaces the previous one; picking the same one removes it.
+/// Who has actually seen an announcement.
+///
+/// Separate from AnnouncementReaction because reacting and reading are
+/// different facts: most people read without reacting, and treating a missing
+/// emoji as "never saw it" would tell an admin their notice was ignored when
+/// it was simply agreed with silently.
+model AnnouncementRead {
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String       @default("")
+  id             String       @id @default(cuid())
+  announcementId String
+  userId         String
+  readAt         DateTime     @default(now())
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+
+  @@unique([announcementId, userId])
+  @@index([announcementId])
+  @@index([organizationId])
+}
+
 model AnnouncementReaction {
   // Tenant owner. Required: a row that cannot name its organization is a row
   // no isolation rule can protect.

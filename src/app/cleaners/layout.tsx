@@ -12,6 +12,7 @@ import InstallPrompt from "@/components/InstallPrompt";
 import { InstallProvider } from "@/components/InstallContext";
 import PresenceHeartbeat from "@/components/PresenceHeartbeat";
 import CrewDoorMarker from "./CrewDoorMarker";
+import { countUnreadAnnouncements } from "@/lib/announcement-reads";
 
 // Installing to the home screen from inside the crew app must use the CREW
 // manifest, whose start_url is /cleaners/my-jobs. The root manifest starts at
@@ -55,10 +56,19 @@ export default async function CleanerLayout({
     redirect("/change-password");
   }
 
+  // Announcements the cleaner has never opened. Counted here so the badge is
+  // right on first paint: a notice nobody notices is the whole problem this
+  // is meant to solve, and a badge that appears a second later is missed.
+  const unreadAnnouncements = await countUnreadAnnouncements(userWithRole.id);
+
   return (
     <InstallProvider>
       <div className="cl-app-shell">
-        <CleanerSidebar user={userWithRole} signOutAction={signOut} />
+        <CleanerSidebar
+          user={userWithRole}
+          signOutAction={signOut}
+          unreadAnnouncements={unreadAnnouncements}
+        />
         <main className="cl-app-main" data-scroll-reset>
           <ScrollReset />
           <PullToRefresh />

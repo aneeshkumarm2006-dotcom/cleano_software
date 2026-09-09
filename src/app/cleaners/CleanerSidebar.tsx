@@ -18,6 +18,8 @@ const CHAT_UNREAD_POLL_MS = 30_000;
 interface Props {
   user: { name: string; email: string; role: string };
   signOutAction: () => Promise<void>;
+  /** Announcements this cleaner has never opened. Server-computed on render. */
+  unreadAnnouncements?: number;
 }
 
 function Svg({ children }: { children: React.ReactNode }) {
@@ -163,7 +165,7 @@ const NAV = [
   },
 ];
 
-export default function CleanerSidebar({ user, signOutAction }: Props) {
+export default function CleanerSidebar({ user, signOutAction, unreadAnnouncements = 0 }: Props) {
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -398,6 +400,11 @@ export default function CleanerSidebar({ user, signOutAction }: Props) {
                 className={`cl-snav-item${isActive(item.href) ? " active" : ""}`}>
                 {item.icon}
                 <span>{item.label}</span>
+                {item.href === "/cleaners/announcements" && unreadAnnouncements > 0 && (
+                  <span className="cl-snav-badge-count">
+                    {unreadAnnouncements > 99 ? "99+" : unreadAnnouncements}
+                  </span>
+                )}
                 {item.href === "/cleaners/chat" && chatUnread > 0 && (
                   <span className="cl-snav-badge-count">
                     {chatUnread > 99 ? "99+" : chatUnread}

@@ -17,6 +17,23 @@ export interface AnnouncementDTO {
   reactions: Record<string, number>;
   /** The calling user's current reaction, if any. */
   myReaction: string | null;
+  /** Has the caller seen this one? Drives the "New" marker. */
+  readByMe: boolean;
+  /** How many people have seen it. Everyone sees the number. */
+  readCount: number;
+  /**
+   * Who saw it and who reacted, with names and times. Admin-only and null for
+   * everyone else: a cleaner does not need a list of which colleagues have
+   * read the notice, and handing them one turns a noticeboard into a register.
+   */
+  audience: AnnouncementAudienceDTO | null;
+}
+
+export interface AnnouncementAudienceDTO {
+  reads: { name: string; at: string }[];
+  reactions: { name: string; emoji: string; at: string }[];
+  /** Team members who have not opened it yet. */
+  unread: string[];
 }
 
 export interface ReactionStateDTO {
@@ -92,13 +109,32 @@ export async function listAnnouncements(): Promise<Result<AnnouncementDTO[]>> {
 
   const announcements = await db.announcement.findMany({
     orderBy: [{ pinned: "desc" }, { createdAt: "desc" }],
-    include: { reactions: { select: { userId: true, emoji: true } } },
+    include: {
+      reactions: { select: { userId: true, emoji: true, createdAt: true } },
+      reads: { select: { userId: true, readAt: true } },
+    },
   });
+
+  // Names are resolved once for the whole page rather than per announcement:
+  // the alternative is a query per row per reader, which is how a noticeboard
+  // becomes the slowest page in the app.
+  const forAdmin = isAdminRole(a.role);
+  const names = new Map<string, string>();
+  let team: { id: string; name: string }[] = [];
+  if (forAdmin) {
+    team = await db.user.findMany({
+      where: { role: { not: "CLIENT" }, deletedAt: null },
+      select: { id: true, name: true },
+    });
+    for (const u of team) names.set(u.id, u.name);
+  }
+  const nameOf = (id: string) => names.get(id) ?? "Someone";
 
   return {
     success: true,
     data: announcements.map((an) => {
       const { reactions, myReaction } = countReactions(an.reactions, a.user.id);
+      const readerIds = new Set(an.reads.map((r) => r.userId));
       return {
         id: an.id,
         title: an.title,
@@ -108,9 +144,54 @@ export async function listAnnouncements(): Promise<Result<AnnouncementDTO[]>> {
         createdAt: an.createdAt.toISOString(),
         reactions,
         myReaction,
+        readByMe: readerIds.has(a.user.id),
+        readCount: an.reads.length,
+        audience: forAdmin
+          ? {
+              reads: an.reads
+                .map((r) => ({ name: nameOf(r.userId), at: r.readAt.toISOString() }))
+                .sort((x, y) => x.at.localeCompare(y.at)),
+              reactions: an.reactions
+                .map((r) => ({
+                  name: nameOf(r.userId),
+                  emoji: r.emoji,
+                  at: r.createdAt.toISOString(),
+                }))
+                .sort((x, y) => x.at.localeCompare(y.at)),
+              unread: team
+                .filter((u) => !readerIds.has(u.id))
+                .map((u) => u.name)
+                .sort(),
+            }
+          : null,
       };
     }),
   };
+}
+
+/**
+ * Record that the caller has seen these announcements.
+ *
+ * Idempotent by the unique pair, so opening the page twice does not move the
+ * timestamp: "when did they first see it" is the question an admin is
+ * actually asking, and a refresh must not answer it wrongly.
+ */
+export async function markAnnouncementsRead(
+  ids: string[]
+): Promise<Result<{ marked: number }>> {
+  const a = await requireUser();
+  if ("error" in a) return { success: false, error: a.error };
+  if (!canParticipate(a.role)) return { success: false, error: "Not authorized" };
+  if (ids.length === 0) return { success: true, data: { marked: 0 } };
+
+  const res = await db.announcementRead.createMany({
+    data: ids.slice(0, 200).map((announcementId) => ({
+      announcementId,
+      userId: a.user.id,
+    })),
+    skipDuplicates: true,
+  });
+  return { success: true, data: { marked: res.count } };
 }
 
 // ---- Writes ----------------------------------------------------------------
@@ -157,6 +238,10 @@ export async function createAnnouncement(input: {
       createdAt: created.createdAt.toISOString(),
       reactions: {},
       myReaction: null,
+      // Brand new: nobody has seen it, including its author.
+      readByMe: false,
+      readCount: 0,
+      audience: { reads: [], reactions: [], unread: [] },
     },
   };
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   MessageCircle,
   Sparkles,
@@ -16,6 +16,7 @@ import { initials } from "@/lib/avatar";
 import AdminModal from "@/components/ui/AdminModal";
 import {
   listAnnouncements,
+  markAnnouncementsRead,
   createAnnouncement,
   updateAnnouncement,
   deleteAnnouncement,
@@ -223,6 +224,13 @@ function AnnouncementCard({
           </div>
           <div className="an-time">{formatAgo(a.createdAt)}</div>
         </div>
+        {!a.readByMe ? (
+          <span
+            className="an-pinned-badge"
+            style={{ background: "var(--primary-5)", color: "var(--primary)", borderColor: "var(--primary)" }}>
+            New
+          </span>
+        ) : null}
         {a.pinned ? (
           <span className="an-pinned-badge">
             <Pin size={12} /> Pinned
@@ -277,7 +285,73 @@ function AnnouncementCard({
           })}
         </div>
       </div>
+      {a.audience ? <SeenBy a={a} /> : null}
     </article>
+  );
+}
+
+/**
+ * Who has actually seen it. Admin-only (the server sends `audience` to nobody
+ * else), and collapsed by default: the useful thing at a glance is the count
+ * and who is MISSING, not a roll-call of everyone who behaved normally.
+ */
+function SeenBy({ a }: { a: AnnouncementDTO }) {
+  const [open, setOpen] = useState(false);
+  const aud = a.audience!;
+  const when = (iso: string) =>
+    new Date(iso).toLocaleString("en-CA", {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+
+  return (
+    <div style={{ borderTop: "1px solid var(--border)", marginTop: 12, paddingTop: 10 }}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          background: "none", border: "none", padding: 0, cursor: "pointer",
+          font: "inherit", fontSize: 13, fontWeight: 600, color: "var(--primary)",
+        }}>
+        Seen by {aud.reads.length}
+        {aud.unread.length > 0 ? ` · ${aud.unread.length} not yet` : ""}
+      </button>
+
+      {open && (
+        <div style={{ marginTop: 8, fontSize: 13, display: "grid", gap: 8 }}>
+          {aud.reads.length > 0 && (
+            <div>
+              <div style={{ color: "var(--muted)", marginBottom: 2 }}>Read</div>
+              {aud.reads.map((r) => (
+                <div key={`${r.name}-${r.at}`} style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                  <span>{r.name}</span>
+                  <span style={{ color: "var(--muted)" }}>{when(r.at)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {aud.reactions.length > 0 && (
+            <div>
+              <div style={{ color: "var(--muted)", marginBottom: 2 }}>Reacted</div>
+              {aud.reactions.map((r) => (
+                <div key={`${r.name}-${r.at}`} style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                  <span>{r.emoji} {r.name}</span>
+                  <span style={{ color: "var(--muted)" }}>{when(r.at)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {aud.unread.length > 0 && (
+            <div>
+              <div style={{ color: "var(--muted)", marginBottom: 2 }}>Not seen yet</div>
+              <div>{aud.unread.join(", ")}</div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -298,6 +372,31 @@ export default function AnnouncementsClient({
     },
     { fallbackData: initial, refreshInterval: 30000 }
   );
+
+  // Mark what is on screen as seen, shortly after it appears.
+  //
+  // The delay is deliberate: a card that flashes past during a background
+  // refresh has not been read, and stamping it would tell an admin their
+  // notice landed when nobody looked. The ref keeps each id to one write, so
+  // the 30-second poll does not re-post the same list forever.
+  const marked = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const pending = (data ?? [])
+      .filter((a) => !a.readByMe && !marked.current.has(a.id))
+      .map((a) => a.id);
+    if (pending.length === 0) return;
+
+    const t = setTimeout(() => {
+      pending.forEach((id) => marked.current.add(id));
+      markAnnouncementsRead(pending)
+        .then(() => mutate())
+        .catch(() => {
+          // Let it retry on the next render rather than silently never marking.
+          pending.forEach((id) => marked.current.delete(id));
+        });
+    }, 1500);
+    return () => clearTimeout(t);
+  }, [data, mutate]);
 
   const items = data ?? initial;
   const pinnedCount = items.filter((a) => a.pinned).length;
