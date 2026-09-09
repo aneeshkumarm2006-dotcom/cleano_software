@@ -47,6 +47,10 @@ import { addJobNote } from "@/app/admin/actions/addJobNote";
 import { getJobSummary } from "@/app/admin/actions/getJobSummary";
 import { assignCleaners } from "@/app/admin/actions/assignCleaners";
 import { listAssignableCleaners } from "@/app/admin/actions/listAssignableCleaners";
+import {
+  applySeriesCancellation,
+  previewSeriesCancellation,
+} from "@/app/admin/actions/cancelSeries";
 import type { JobSummaryDTO } from "@/app/admin/actions/getJobSummary.types";
 import { cancelJobByAdmin } from "@/app/admin/actions/cancelJobByAdmin";
 import { resendReceipt } from "@/app/admin/actions/resendReceipt";
@@ -188,6 +192,11 @@ export default function CalendarJobActions({
   const [noteText, setNoteText] = useState("");
 
   const [cancelReason, setCancelReason] = useState("");
+  // Recurring cancellation scope. Defaults to "this" so the safe option is
+  // always the one already selected — the destructive choice has to be picked.
+  const [cancelScope, setCancelScope] = useState<"this" | "future" | "pause">("this");
+  const [pauseUntil, setPauseUntil] = useState("");
+  const [scopePlan, setScopePlan] = useState<{ siblings: number; resumesOn: string | null } | null>(null);
   const [refundDeposit, setRefundDeposit] = useState(false);
 
   const [photos, setPhotos] = useState<JobPhotoDTO[] | null>(null);
@@ -393,11 +402,38 @@ export default function CalendarJobActions({
       });
       return;
     }
+    // The rest of the schedule, if they asked for it. Separate call on
+    // purpose: cancelJobByAdmin above owns this occurrence's customer email,
+    // deposit refund and late fee, and running that logic per occurrence
+    // across a year of bookings is not what "cancel the rest" means.
+    let extra = 0;
+    if (cancelScope !== "this") {
+      const seriesRes = await applySeriesCancellation({
+        jobId,
+        scope: cancelScope,
+        pauseUntil: pauseUntil || null,
+        reason: cancelReason.trim() || undefined,
+      });
+      if (seriesRes.ok) extra = seriesRes.cancelled;
+      else {
+        setActionMessage({ type: "error", text: seriesRes.message });
+        return;
+      }
+    }
+
     setPanel("summary");
-    setActionMessage({ type: "success", text: "Booking cancelled." });
+    setActionMessage({
+      type: "success",
+      text:
+        extra > 0
+          ? `Booking cancelled, along with ${extra} upcoming ${extra === 1 ? "booking" : "bookings"}.`
+          : "Booking cancelled.",
+    });
+    setCancelScope("this");
+    setScopePlan(null);
     await reloadSummary();
     refreshEvents();
-  }, [jobId, refundDeposit, cancelReason, summary, reloadSummary, refreshEvents]);
+  }, [jobId, refundDeposit, cancelReason, summary, reloadSummary, refreshEvents, cancelScope, pauseUntil]);
 
   const handleMarkPaid = useCallback(async () => {
     if (!jobId) return;
@@ -614,6 +650,91 @@ export default function CalendarJobActions({
                 cleaner are notified, unless notifications are muted on this
                 booking.
               </p>
+              {summary?.isRecurring ? (
+                <div className="field" style={{ marginTop: 4 }}>
+                  <label className="label">This is a repeating booking</label>
+                  {(
+                    [
+                      ["this", "Cancel this booking only"],
+                      ["future", "Cancel this and all future bookings"],
+                      ["pause", "Pause the schedule until a date"],
+                    ] as const
+                  ).map(([value, label]) => (
+                    <label
+                      key={value}
+                      style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                      <input
+                        type="radio"
+                        name="cjd-cancel-scope"
+                        checked={cancelScope === value}
+                        onChange={() => {
+                          setCancelScope(value);
+                          setScopePlan(null);
+                        }}
+                      />
+                      <span>{label}</span>
+                    </label>
+                  ))}
+
+                  {cancelScope === "pause" ? (
+                    <div style={{ marginTop: 6 }}>
+                      <label className="label" htmlFor="cjd-pause-until">
+                        Resume after
+                      </label>
+                      <input
+                        id="cjd-pause-until"
+                        type="date"
+                        className="input"
+                        value={pauseUntil}
+                        onChange={(e) => {
+                          setPauseUntil(e.target.value);
+                          setScopePlan(null);
+                        }}
+                      />
+                    </div>
+                  ) : null}
+
+                  {/* The number, before the button. "Cancel all future
+                      bookings" on a weekly clean is somewhere between one job
+                      and forty, and nobody should learn which afterwards. */}
+                  {cancelScope !== "this" ? (
+                    <div style={{ marginTop: 8 }}>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        onClick={async () => {
+                          if (!jobId) return;
+                          const res = await previewSeriesCancellation({
+                            jobId,
+                            scope: cancelScope,
+                            pauseUntil: pauseUntil || null,
+                          });
+                          setScopePlan(
+                            res.ok
+                              ? { siblings: res.siblings, resumesOn: res.resumesOn }
+                              : null,
+                          );
+                          if (!res.ok) {
+                            setActionMessage({ type: "error", text: res.message });
+                          }
+                        }}>
+                        Check how many this affects
+                      </button>
+                      {scopePlan ? (
+                        <p className="cjd-note" style={{ marginTop: 6 }}>
+                          {scopePlan.siblings} other upcoming booking
+                          {scopePlan.siblings === 1 ? "" : "s"} will also be cancelled.
+                          {scopePlan.resumesOn
+                            ? ` The schedule resumes ${new Date(scopePlan.resumesOn).toLocaleDateString("en-CA", { month: "long", day: "numeric" })}.`
+                            : ""}
+                          {" "}Past and completed bookings are kept.
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
               <div className="field" style={{ marginTop: 4 }}>
                 <label className="label" htmlFor="cjd-cancel-reason">
                   Reason (optional)

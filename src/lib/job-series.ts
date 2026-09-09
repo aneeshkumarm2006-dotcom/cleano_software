@@ -208,3 +208,133 @@ export async function getSeriesInfo(jobId: string): Promise<{
 
   return { isSeries: members.length > 0, rootId, editableCount };
 }
+
+/** What a recurring cancellation should reach. */
+export type SeriesCancelScope =
+  /** Only the occurrence in front of the admin. */
+  | "this"
+  /** Every future occurrence — the series ends here. */
+  | "future"
+  /** Future occurrences up to a date; the schedule resumes after it. */
+  | "pause";
+
+export interface SeriesCancelPlan {
+  /** How many occurrences this scope would cancel, not counting this one. */
+  siblings: number;
+  /** Occurrences left untouched because they are completed, paid or already cancelled. */
+  protectedCount: number;
+  /** The first date the schedule runs again. Only meaningful for "pause". */
+  resumesOn: Date | null;
+}
+
+/**
+ * Which sibling occurrences a scope reaches.
+ *
+ * FUTURE only, always. A recurring cancellation must never touch work that has
+ * already happened: those jobs are payroll, invoices and customer history, and
+ * "cancel the rest of the schedule" has never meant "and erase the spring".
+ */
+async function futureSiblings(
+  jobId: string,
+  scope: SeriesCancelScope,
+  pauseUntil: Date | null,
+) {
+  const job = await db.job.findUnique({
+    where: { id: jobId },
+    select: { id: true, parentJobId: true, startTime: true },
+  });
+  if (!job || scope === "this") return { rootId: job ? seriesRootId(job) : jobId, rows: [] };
+
+  const rootId = seriesRootId(job);
+  const from = new Date();
+  const rows = await db.job.findMany({
+    where: {
+      deletedAt: null,
+      id: { not: jobId },
+      OR: [{ id: rootId }, { parentJobId: rootId }],
+      startTime: {
+        gt: from,
+        // A pause has a far edge; ending the series does not.
+        ...(scope === "pause" && pauseUntil ? { lte: pauseUntil } : {}),
+      },
+    },
+    select: { id: true, status: true, startTime: true },
+    orderBy: { startTime: "asc" },
+  });
+  return { rootId, rows };
+}
+
+/**
+ * What "cancel all future" or "pause until" would actually do, before doing it.
+ *
+ * Exists so the confirmation can say a number. "Cancel all future bookings" on
+ * a weekly clean is somewhere between one job and forty, and an admin should
+ * never find out which after pressing the button.
+ */
+export async function planSeriesCancellation(
+  jobId: string,
+  scope: SeriesCancelScope,
+  pauseUntil: Date | null = null,
+): Promise<SeriesCancelPlan> {
+  const { rootId, rows } = await futureSiblings(jobId, scope, pauseUntil);
+  const cancellable = rows.filter(
+    (r) => !(IMMUTABLE_STATUSES as readonly string[]).includes(r.status),
+  );
+
+  // For a pause, the useful thing to show is when the customer next sees us.
+  let resumesOn: Date | null = null;
+  if (scope === "pause" && pauseUntil) {
+    const next = await db.job.findFirst({
+      where: {
+        deletedAt: null,
+        startTime: { gt: pauseUntil },
+        status: { notIn: ["CANCELLED"] },
+        OR: [{ id: rootId }, { parentJobId: rootId }],
+      },
+      select: { startTime: true },
+      orderBy: { startTime: "asc" },
+    });
+    resumesOn = next?.startTime ?? null;
+  }
+
+  return {
+    siblings: cancellable.length,
+    protectedCount: rows.length - cancellable.length,
+    resumesOn,
+  };
+}
+
+/**
+ * Cancel the future of a recurring series.
+ *
+ * Returns how many occurrences were cancelled, NOT counting the one the admin
+ * was looking at — that one is cancelled by the normal single-job path, which
+ * owns the customer email, the refund rules and the fee policy. This function
+ * is deliberately only the extra reach.
+ */
+export async function cancelJobSeries(
+  jobId: string,
+  scope: SeriesCancelScope,
+  opts: { pauseUntil?: Date | null; reason?: string | null } = {},
+): Promise<{ cancelled: number; protectedCount: number }> {
+  const pauseUntil = opts.pauseUntil ?? null;
+  const { rows } = await futureSiblings(jobId, scope, pauseUntil);
+  const ids = rows
+    .filter((r) => !(IMMUTABLE_STATUSES as readonly string[]).includes(r.status))
+    .map((r) => r.id);
+  if (ids.length === 0) return { cancelled: 0, protectedCount: rows.length };
+
+  await db.job.updateMany({
+    where: { id: { in: ids } },
+    data: {
+      status: "CANCELLED",
+      cancellationReason:
+        opts.reason?.trim() ||
+        (scope === "pause"
+          ? "Recurring schedule paused"
+          : "Recurring schedule ended"),
+    },
+  });
+
+  return { cancelled: ids.length, protectedCount: rows.length - ids.length };
+}
