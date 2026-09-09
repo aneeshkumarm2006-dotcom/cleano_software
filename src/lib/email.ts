@@ -3318,3 +3318,63 @@ export async function sendAdminJobPhotos(opts: {
     }).catch((e) => console.error("sendAdminJobPhotos", admin.email, e));
   }
 }
+
+/**
+ * A cleaner has dropped an assigned shift.
+ *
+ * Two emails by design, not by accident. The standard one goes every time so
+ * there is always a record in the inbox; the urgent one goes as WELL when the
+ * job starts within a day, because a same-day gap needs to survive a full
+ * inbox and a normal drop does not. Whoever is on cover has minutes, not hours.
+ */
+export async function sendAdminShiftDropped(opts: {
+  jobId: string;
+  jobNumber: number;
+  clientName: string;
+  cleanerName: string;
+  startTime: string;
+  serviceType: string | null;
+  address: string | null;
+  hoursUntil: number;
+  urgent: boolean;
+}) {
+  const admins = await fetchAdmins();
+  if (admins.length === 0) return;
+  const appUrl = await currentAppUrl();
+
+  const when = `${fmtDate(opts.startTime)} at ${fmtTime(opts.startTime)}`;
+  const hours = Math.max(0, Math.round(opts.hoursUntil));
+  const title = opts.urgent
+    ? `Shift dropped in ${hours}h — ${opts.clientName}`
+    : `Shift dropped — ${opts.clientName}`;
+
+  const html = layout(
+    h1(title) +
+      p(
+        opts.urgent
+          ? `${opts.cleanerName} has dropped job #${opts.jobNumber}, which starts in about ${hours} hour${hours === 1 ? "" : "s"}. It needs cover.`
+          : `${opts.cleanerName} has dropped job #${opts.jobNumber}. It is back in the available pool for another cleaner to claim.`
+      ) +
+      section([
+        ["Cleaner", opts.cleanerName],
+        ["Client", opts.clientName],
+        ["Job", `#${opts.jobNumber}`],
+        ["When", when],
+        ["Service", opts.serviceType || "Not set"],
+        ["Address", opts.address || "Not set"],
+      ]) +
+      btn("Open job", `${appUrl}/admin/jobs/${opts.jobId}`)
+  );
+
+  for (const admin of admins) {
+    await deliver({
+      to: admin.email,
+      subject: opts.urgent ? `URGENT: ${title}` : title,
+      html,
+      notification: {
+        recipient: "ADMIN",
+        key: opts.urgent ? "admin.shift.dropped_urgent" : "admin.shift.dropped",
+      },
+    }).catch((e) => console.error("sendAdminShiftDropped", admin.email, e));
+  }
+}

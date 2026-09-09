@@ -288,6 +288,23 @@ export const NOTIFICATION_CATALOG: CatalogEntry[] = [
   },
   {
     recipient: "ADMIN",
+    category: "Unassigned booking",
+    key: "admin.shift.dropped",
+    label: "Cleaner dropped a shift",
+    trigger: "An assigned cleaner cancels their shift. Sent every time.",
+    channels: { EMAIL: true, SMS: false },
+  },
+  {
+    recipient: "ADMIN",
+    category: "Unassigned booking",
+    key: "admin.shift.dropped_urgent",
+    label: "Cleaner dropped a shift within 24 hours",
+    trigger:
+      "An assigned cleaner cancels less than 24 hours before the job starts. Sent IN ADDITION to the standard drop email, so a same-day gap is not one unread line among many.",
+    channels: { EMAIL: true, SMS: false },
+  },
+  {
+    recipient: "ADMIN",
     category: "Clock in / clock out",
     key: "admin.job.photos_uploaded",
     label: "Photos added to a job",

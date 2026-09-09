@@ -5,7 +5,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { createAssignmentInvites } from "@/lib/invites";
-import { sendProviderLastMinuteOpening } from "@/lib/email";
+import { sendAdminShiftDropped, sendProviderLastMinuteOpening } from "@/lib/email";
 import { LAST_MINUTE_CLAIM_BONUS_USD } from "@/lib/policy";
 import { applyStrike } from "@/lib/strikes";
 import {
@@ -32,6 +32,9 @@ export async function cancelShift(jobId: string): Promise<{ success: true; penal
         startTime: true,
         status: true,
         employeeId: true,
+        clientName: true,
+        location: true,
+        jobType: true,
         cleaners: { select: { id: true } },
       },
     });
@@ -120,6 +123,36 @@ export async function cancelShift(jobId: string): Promise<{ success: true; penal
         });
       }
     });
+
+    // Tell the admin team. This ran for years telling every OTHER cleaner
+    // about the opening while never telling the person responsible for
+    // covering it. Best-effort and after the transaction: a mail server
+    // having a bad afternoon must not stop a cleaner dropping a shift.
+    {
+      const canceller = await db.user
+        .findUnique({ where: { id: employeeId }, select: { name: true } })
+        .catch(() => null);
+      const details = {
+        jobId,
+        jobNumber: job.jobNumber,
+        clientName: job.clientName,
+        cleanerName: canceller?.name || "A cleaner",
+        startTime: job.startTime.toISOString(),
+        serviceType: job.jobType,
+        address: job.location,
+        hoursUntil: hoursUntilShift,
+      };
+      // Always the standard one, so there is a record every time.
+      await sendAdminShiftDropped({ ...details, urgent: false }).catch((e) =>
+        console.error("shift dropped email", e),
+      );
+      // And a second, louder one when there is barely time to cover it.
+      if (isLateCancel) {
+        await sendAdminShiftDropped({ ...details, urgent: true }).catch((e) =>
+          console.error("shift dropped urgent email", e),
+        );
+      }
+    }
 
     // Accountability strike for a late cancel (admin can excuse it).
     if (isLateCancel) {
