@@ -45,6 +45,8 @@ import { HOLD_LABEL, holdReasonText, ON_HOLD_STATUS } from "@/lib/job-hold";
 import { isAwaitingQuote } from "@/lib/quote-status";
 import { addJobNote } from "@/app/admin/actions/addJobNote";
 import { getJobSummary } from "@/app/admin/actions/getJobSummary";
+import { assignCleaners } from "@/app/admin/actions/assignCleaners";
+import { listAssignableCleaners } from "@/app/admin/actions/listAssignableCleaners";
 import type { JobSummaryDTO } from "@/app/admin/actions/getJobSummary.types";
 import { cancelJobByAdmin } from "@/app/admin/actions/cancelJobByAdmin";
 import { resendReceipt } from "@/app/admin/actions/resendReceipt";
@@ -164,6 +166,14 @@ export default function CalendarJobActions({
   useEffect(() => setMounted(true), []);
 
   const [summary, setSummary] = useState<JobSummaryDTO | null>(null);
+  // Assignment, done from the panel itself. The team list is fetched only when
+  // the picker is opened: a side panel that loads the whole roster before it
+  // can show a booking is a side panel that feels broken.
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [roster, setRoster] = useState<{ id: string; name: string; role: string }[] | null>(null);
+  const [assignIds, setAssignIds] = useState<string[]>([]);
+  const [assignBusy, setAssignBusy] = useState(false);
+  const [assignMsg, setAssignMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -259,6 +269,41 @@ export default function CalendarJobActions({
   }, [jobId]);
 
   // ── Cleaner actions (legacy set — see the component note) ─────────────────
+  const openAssign = useCallback(async () => {
+    setAssignMsg(null);
+    setAssignIds(summary?.cleaners.map((c) => c.id) ?? []);
+    setAssignOpen(true);
+    if (roster) return;
+    const res = await listAssignableCleaners();
+    if (res.success) setRoster(res.cleaners);
+    else setAssignMsg(res.error);
+  }, [summary, roster]);
+
+  const saveAssignment = useCallback(async () => {
+    if (!jobId) return;
+    setAssignBusy(true);
+    setAssignMsg(null);
+    const res = await assignCleaners({ jobId, cleanerIds: assignIds });
+    setAssignBusy(false);
+    if (!res.success) {
+      setAssignMsg(res.error);
+      return;
+    }
+    // Conflicts are reported, not enforced: the action already saved, and an
+    // admin double-booking someone knowingly is a normal Saturday.
+    const clashes = [
+      ...res.conflicts.map((c) => c.cleanerName),
+      ...res.categoryConflicts.map((c) => c.cleanerName),
+    ];
+    setAssignMsg(
+      clashes.length > 0
+        ? `Saved. Heads up: ${Array.from(new Set(clashes)).join(", ")} may be double-booked.`
+        : "Saved.",
+    );
+    setAssignOpen(false);
+    await reloadSummary();
+  }, [jobId, assignIds, reloadSummary]);
+
   const handleMarkArrived = useCallback(async () => {
     if (!jobId) return;
     setActionLoading("arrived");
@@ -707,6 +752,87 @@ export default function CalendarJobActions({
                     <span className="cjd-warn">Unassigned</span>
                   )}
                 </Row>
+
+                {/* Assign from here rather than opening the whole job. The
+                    panel stays a summary — this is the one edit an admin
+                    reaches for while looking at the day, and sending them to
+                    a full page for it was the reason the day took so long. */}
+                {canCancel ? (
+                  <Row k="">
+                    {!assignOpen ? (
+                      <button
+                        type="button"
+                        onClick={openAssign}
+                        style={{
+                          background: "none", border: "none", padding: 0,
+                          font: "inherit", fontWeight: 600, cursor: "pointer",
+                          color: "var(--primary)",
+                        }}>
+                        {summary && summary.cleaners.length > 0
+                          ? "Change cleaners"
+                          : "Assign a cleaner"}
+                      </button>
+                    ) : (
+                      <div style={{ display: "grid", gap: 8, width: "100%" }}>
+                        {roster === null ? (
+                          <span className="cjd-dim">Loading team…</span>
+                        ) : roster.length === 0 ? (
+                          <span className="cjd-dim">No cleaners on the team yet.</span>
+                        ) : (
+                          <div style={{ maxHeight: 200, overflowY: "auto", display: "grid", gap: 4 }}>
+                            {roster.map((c) => {
+                              const on = assignIds.includes(c.id);
+                              return (
+                                <label
+                                  key={c.id}
+                                  style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={on}
+                                    disabled={assignBusy}
+                                    onChange={() =>
+                                      setAssignIds((prev) =>
+                                        on ? prev.filter((id) => id !== c.id) : [...prev, c.id],
+                                      )
+                                    }
+                                  />
+                                  <span>{c.name}</span>
+                                  {c.role === "FIELD_LEAD" ? (
+                                    <span className="cjd-dim">· Field lead</span>
+                                  ) : null}
+                                </label>
+                              );
+                            })}
+                          </div>
+                        )}
+                        {summary ? (
+                          <span className="cjd-dim">
+                            {assignIds.length} of {summary.requiredCleaners} needed
+                          </span>
+                        ) : null}
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <button
+                            type="button"
+                            disabled={assignBusy}
+                            onClick={saveAssignment}
+                            className="btn btn-primary btn-sm">
+                            {assignBusy ? "Saving…" : "Save"}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={assignBusy}
+                            onClick={() => setAssignOpen(false)}
+                            className="btn btn-ghost btn-sm">
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {assignMsg ? (
+                      <div className="cjd-dim" style={{ marginTop: 6 }}>{assignMsg}</div>
+                    ) : null}
+                  </Row>
+                ) : null}
               </Section>
 
               {/* Money */}
