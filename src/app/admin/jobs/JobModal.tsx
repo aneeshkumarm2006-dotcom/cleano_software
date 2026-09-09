@@ -163,6 +163,7 @@ interface Job {
   paymentType?: string | null;
   discountAmount?: number | null;
   bedCount?: number | null;
+  requiredCleaners?: number | null;
   bathCount?: number | null;
   halfBathCount?: number | null;
   squareFootage?: number | null;
@@ -284,6 +285,8 @@ const formSchema = z.object({
   parking: z.union([z.coerce.number().min(0), z.literal("")]).optional(),
   notes: z.string().optional(),
   bedCount: z.union([z.coerce.number().int().min(0), z.literal("")]).optional(),
+  // At least one: a job needing zero cleaners is not a job.
+  requiredCleaners: z.union([z.coerce.number().int().min(1).max(20), z.literal("")]).optional(),
   bathCount: z.union([z.coerce.number().int().min(0), z.literal("")]).optional(),
   halfBathCount: z.union([z.coerce.number().int().min(0), z.literal("")]).optional(),
   squareFootage: z.union([z.coerce.number().int().min(0), z.literal("")]).optional(),
@@ -921,6 +924,7 @@ export default function JobModal({
           parking: job.parking || "",
           notes: job.notes || "",
           bedCount: job.bedCount ?? "",
+          requiredCleaners: job.requiredCleaners ?? 1,
           bathCount: job.bathCount ?? "",
           halfBathCount: job.halfBathCount ?? "",
           squareFootage: job.squareFootage ?? "",
@@ -1020,6 +1024,7 @@ export default function JobModal({
           parking: "",
           notes: "",
           bedCount: "",
+          requiredCleaners: 1,
           bathCount: "",
           halfBathCount: "",
           squareFootage: "",
@@ -1243,6 +1248,8 @@ export default function JobModal({
   // of a move, matching what saveJob does on the server.
   const sqftPriced = isSqftJobType(selectedJobType);
   const watchedSqft = Number(watch("squareFootage")) || 0;
+  // Watched so the under-staffed line updates as the admin picks the crew.
+  const requiredCleanersValue = Number(watch("requiredCleaners")) || 1;
   const watchedPrice = Number(watch("price")) || 0;
 
   // ── Customer-side hourly billing (Stage 8 / PDF #8) ────────────────────────
@@ -1597,6 +1604,7 @@ export default function JobModal({
       formData.append("parking", String(values.parking || ""));
       formData.append("notes", values.notes || "");
       formData.append("bedCount", String(values.bedCount || ""));
+      formData.append("requiredCleaners", String(values.requiredCleaners || ""));
       formData.append("bathCount", String(values.bathCount || ""));
       formData.append("halfBathCount", String(values.halfBathCount || ""));
       formData.append("squareFootage", String(values.squareFootage || ""));
@@ -2340,6 +2348,37 @@ export default function JobModal({
                       <Users className="w-4 h-4" />
                       Assign Cleaners
                     </h3>
+
+                    <div className="flex flex-wrap items-end gap-3">
+                      <div style={{ width: 150 }}>
+                        <label className="input-label" htmlFor="requiredCleaners">
+                          Cleaners needed
+                        </label>
+                        <input
+                          id="requiredCleaners"
+                          type="number"
+                          min={1}
+                          max={20}
+                          step={1}
+                          className="input"
+                          disabled={disableForm}
+                          {...register("requiredCleaners")}
+                        />
+                      </div>
+                      {/* Said out loud while the admin is still on the picker,
+                          rather than discovered on the day. The cleaner app
+                          already counts spots against this number, so a job
+                          left short here simply never fills. */}
+                      {requiredCleanersValue > selectedCleaners.length && (
+                        <p className="text-sm text-amber-700 pb-2">
+                          {selectedCleaners.length} of {requiredCleanersValue} assigned
+                          {" — "}
+                          {requiredCleanersValue - selectedCleaners.length} more
+                          {requiredCleanersValue - selectedCleaners.length === 1 ? " spot is" : " spots are"}
+                          {" "}open to cleaners.
+                        </p>
+                      )}
+                    </div>
 
                     {users.length === 0 ? (
                       <div className="bg-[#008C9C]/5 rounded-2xl p-6 text-center">

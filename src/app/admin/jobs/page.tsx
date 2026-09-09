@@ -130,6 +130,10 @@ export default async function JobsPage({
       billedActualHours: true,
       bedCount: true,
       bathCount: true,
+      // The edit modal renders a control for this, and a control that is
+      // rendered but not prefilled posts its default — which would silently
+      // reset a two-cleaner job to one on any quick edit.
+      requiredCleaners: true,
       halfBathCount: true,
       // Same reason as the four billing columns above: the edit modal renders a
       // property-type control, so a row that arrived without this would post a

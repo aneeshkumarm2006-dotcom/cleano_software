@@ -885,6 +885,13 @@ export async function saveJob(formData: FormData) {
       // `jobData.discountReason`, which was reading `undefined`.
       discountReason,
       squareFootage,
+      // Clamped rather than trusted: this number gates how many cleaners the
+      // job accepts, so a 0 would make it unclaimable and a huge one would
+      // leave it permanently short.
+      requiredCleaners: Math.min(
+        20,
+        Math.max(1, parseOptionalInt(formData.get("requiredCleaners")) ?? 1),
+      ),
       bedCount: parseOptionalInt(formData.get("bedCount")),
       bathCount: parseOptionalInt(formData.get("bathCount")),
       halfBathCount: parseOptionalInt(formData.get("halfBathCount")),

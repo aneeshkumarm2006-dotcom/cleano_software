@@ -83,6 +83,7 @@ interface Job {
   refundedAmount?: number | null;
   deletedAt?: string | null;
   bedCount?: number | null;
+  requiredCleaners?: number | null;
   bathCount?: number | null;
   profit?: number;
   profitPct?: number;
