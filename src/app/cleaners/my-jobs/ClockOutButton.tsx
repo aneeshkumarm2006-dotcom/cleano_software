@@ -7,6 +7,7 @@ import {
   CHECKLIST_GATE_HINT,
   pendingRequiredItems,
 } from "@/lib/job-checklist";
+import { shortStaffedNotice, type JobStaffing } from "@/lib/cleaner-jobs";
 import type { ClosingReport } from "@/lib/clock-out";
 import ClosingInventoryReport, {
   answeredCount,
@@ -32,6 +33,14 @@ interface ClockOutButtonProps {
    * two buttons. Passed in rather than fetched: the page has already ensured it.
    */
   checklistItems?: { id: string; title: string; isRequired: boolean; status: string; notes: string | null }[];
+  /**
+   * Crew head-count vs `requiredCleaners` (Sept 3 fix 4).
+   *
+   * Rendered beside the checklist gate below and deliberately NOT like it: the
+   * checklist block disables Confirm, this one never does. It records that the
+   * job is finishing short-handed and lets the cleaner finish it anyway.
+   */
+  staffing?: JobStaffing;
 }
 
 /**
@@ -46,6 +55,7 @@ export default function ClockOutButton({
   jobId,
   employeeProducts,
   checklistItems = [],
+  staffing,
 }: ClockOutButtonProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -111,6 +121,10 @@ export default function ClockOutButton({
   // gates nothing, so jobs with no configured template are unaffected.
   const outstandingRequired = pendingRequiredItems(checklistItems);
   const gateBlocked = outstandingRequired.length > 0;
+
+  // Advisory only — it changes the wording on Confirm, never its disabled state.
+  const isShort = !!staffing?.isShort;
+  const clockOutWord = isShort ? "clock out anyway" : "clock out";
 
   const modal = open ? (
     <div className="co-overlay" onClick={() => !loading && setOpen(false)}>
@@ -181,6 +195,24 @@ export default function ClockOutButton({
           </div>
         )}
 
+        {/* Short-staffed (Sept 3 fix 4). Same amber as the gate above and
+            deliberately NOT the same behaviour: this one disables nothing. */}
+        {staffing?.isShort && (
+          <div style={{
+            margin: "0 0 12px",
+            fontSize: 12.5,
+            lineHeight: 1.5,
+            color: "#b45309",
+            background: "#fffbeb",
+            border: "1px solid #fde68a",
+            borderRadius: 10,
+            padding: "10px 12px",
+          }}>
+            <strong>Short-staffed.</strong> {shortStaffedNotice(staffing)} You
+            can still clock out — the job is logged as finished short-handed.
+          </div>
+        )}
+
         {/* Footer. The confirm button IS the "No changes" fast path until the
             cleaner opens the report — one tap, from the sheet's first screen. */}
         <div className="co-footer">
@@ -206,9 +238,13 @@ export default function ClockOutButton({
                 </svg>
                 {editing
                   ? reported > 0
-                    ? `Save ${reported} update${reported === 1 ? "" : "s"} & clock out`
-                    : "Clock out"
-                  : "No changes — clock out"}
+                    ? `Save ${reported} update${reported === 1 ? "" : "s"} & ${clockOutWord}`
+                    : isShort
+                      ? "Clock out anyway"
+                      : "Clock out"
+                  : isShort
+                    ? "Clock out anyway"
+                    : "No changes — clock out"}
               </>
             )}
           </button>

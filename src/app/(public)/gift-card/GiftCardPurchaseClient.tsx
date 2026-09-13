@@ -6,6 +6,7 @@ import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-
 import { createGiftCardIntent } from "./actions/createGiftCardIntent";
 import { finalizeGiftCardPurchase } from "./actions/finalizeGiftCardPurchase";
 import type { GiftCardCover } from "@/lib/gift-cards/covers";
+import { storeDateKey } from "@/lib/timezone";
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
@@ -326,7 +327,10 @@ export default function GiftCardPurchaseClient({ tiers, covers, minJobPrice }: P
             <input
               type="date"
               value={scheduledDate}
-              min={new Date().toISOString().slice(0, 10)}
+              // The floor is the STORE's today, not UTC's: from 20:00 Montreal
+              // `toISOString()` has already rolled over, so a UTC-derived min
+              // forbade the day the buyer is actually living in.
+              min={storeDateKey()}
               onChange={(e) => setScheduledDate(e.target.value)}
               style={inputStyle}
             />

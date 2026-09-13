@@ -3,7 +3,7 @@ import { headers } from "next/headers";
 import { orgFromContext } from "@/lib/org-context";
 import {
   DEFAULT_ORG_SLUG,
-  orgSlugFromHost,
+  orgSlugFromRequestHeaders,
   originForSlug,
 } from "@/lib/tenant";
 
@@ -81,7 +81,10 @@ export async function currentAppUrl(): Promise<string> {
     // src/lib/org.ts: the proxy does not cover /api/* or dotted paths, so a
     // caller can supply that header itself. Here it would aim the links inside
     // an email at a workspace of the sender's choosing.
-    const slug = orgSlugFromHost(h.get("host"));
+    // Through the shared reader, so a link built while Next is rendering the
+    // page a server action redirected to still names this workspace: that
+    // self-fetch carries the server's internal origin in Host (lib/tenant).
+    const slug = orgSlugFromRequestHeaders(h);
     if (slug) return originForSlug(slug);
   } catch {
     // No request context at all — a script, or build-time prerendering.

@@ -37,6 +37,16 @@ interface SendSmsInput {
   to: string;
   body: string;
   notification?: SmsGate;
+  /**
+   * Send from THIS number instead of the workspace's usual sender.
+   *
+   * Only the phone-masking relay sets it. A masked conversation is defined by
+   * the proxy number both parties are texting, so a relayed message that went
+   * out from anything else would arrive from a number the recipient has never
+   * seen and could not reply to. Leaving it unset is every existing caller, and
+   * they keep the workspace sender exactly as before.
+   */
+  from?: string;
 }
 
 interface SendResult {
@@ -101,6 +111,14 @@ export async function sendSms(input: SendSmsInput): Promise<SendResult> {
   const to = normalizeE164(input.to);
   if (!to) return record({ sent: false, reason: "invalid-phone" });
 
+  // An explicit sender is refused rather than silently ignored: falling back to
+  // the workspace number would send a masked relay from the receptionist line,
+  // which is the one thing this feature exists to prevent.
+  const explicitFrom = input.from === undefined ? null : normalizeE164(input.from);
+  if (input.from !== undefined && !explicitFrom) {
+    return record({ sent: false, reason: "invalid-from" });
+  }
+
   // The account is the workspace's own when they have connected one, and the
   // platform's otherwise. Resolved per send rather than read from the
   // environment, so a company on their own Twilio bills their own account.
@@ -122,7 +140,11 @@ export async function sendSms(input: SendSmsInput): Promise<SendResult> {
   const params = new URLSearchParams();
   params.set("To", to);
   params.set("Body", input.body);
-  if (sender.messagingServiceSid)
+  // MessagingServiceSid beats From at Twilio, so it is deliberately NOT set
+  // alongside an explicit sender — a messaging service would quietly re-address
+  // the message to the pool's own number and break the masked thread.
+  if (explicitFrom) params.set("From", explicitFrom);
+  else if (sender.messagingServiceSid)
     params.set("MessagingServiceSid", sender.messagingServiceSid);
   else if (sender.from) params.set("From", sender.from);
   else return record({ sent: false, reason: "no-sender-number" });

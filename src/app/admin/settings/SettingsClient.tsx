@@ -58,6 +58,7 @@ import NotificationsTab, { NotificationSettingRow } from "./tabs/NotificationsTa
 import RetentionTab from "./tabs/RetentionTab";
 import AiAssistantTab from "./tabs/AiAssistantTab";
 import ConnectorsTab, { type TwilioStatus } from "./tabs/ConnectorsTab";
+import type { ProxyNumberRow } from "../actions/proxyNumbers";
 import PlanTab, { type PlanOption, type PlanStatus } from "./tabs/PlanTab";
 import SchedulingTab from "./tabs/SchedulingTab";
 import CalendarLabelsTab from "./tabs/CalendarLabelsTab";
@@ -123,6 +124,9 @@ interface SettingsClientProps {
   /** Live connector state, read server-side so the page shows what is true now. */
   twilio: TwilioStatus;
   twilioWebhookUrl: string;
+  twilioVoiceWebhookUrl: string;
+  /** The masked-number pool, for the Connectors tab. */
+  proxyNumbers: ProxyNumberRow[];
   plans: PlanOption[];
   planStatus: PlanStatus;
 }
@@ -219,6 +223,7 @@ const TAB_DATA_DEPS: Partial<Record<TabId, string[]>> = {
   serviceAreas: ["serviceAreas"],
   budgets: ["transactions", "budgets", "budgetCategories"],
   notifications: ["notificationSettings"],
+  connectors: ["proxyNumbers"],
 };
 
 /** Tabs that render straight from the `appSettings` rows. */
@@ -394,6 +399,8 @@ export default function SettingsClient({
   failedSections = [],
   twilio,
   twilioWebhookUrl,
+  twilioVoiceWebhookUrl,
+  proxyNumbers,
   plans,
   planStatus,
 }: SettingsClientProps) {
@@ -642,7 +649,12 @@ export default function SettingsClient({
             <AiAssistantTab settings={appSettings} />
           )}
           {activeTab === "connectors" && isAdmin && (
-            <ConnectorsTab twilio={twilio} webhookUrl={twilioWebhookUrl} />
+            <ConnectorsTab
+              twilio={twilio}
+              webhookUrl={twilioWebhookUrl}
+              voiceWebhookUrl={twilioVoiceWebhookUrl}
+              proxyNumbers={proxyNumbers}
+            />
           )}
           {activeTab === "plan" && isAdmin && (
             <PlanTab plans={plans} status={planStatus} />

@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/org-db";
 import { getSetting } from "@/lib/settings";
+import { jobStaffing } from "@/lib/cleaner-jobs";
 import ClockPageClient from "./ClockPageClient";
 
 type PageProps = { params: Promise<{ jobId: string }> };
@@ -44,6 +45,10 @@ export default async function ClockPage({ params }: PageProps) {
   }));
 
   const j = job as any;
+
+  // Crew head-count vs `requiredCleaners` (Sept 3 fix 4). The include above
+  // already carries the roster ids, and both scalars come free with the row.
+  const staffing = jobStaffing(job);
 
   const gpsEnabled = await getSetting("tracking.gpsEnabled");
 
@@ -114,6 +119,7 @@ export default async function ClockPage({ params }: PageProps) {
         startedAt: b.startedAt.toISOString(),
         endedAt: b.endedAt?.toISOString() ?? null,
       }))}
+      staffing={staffing}
     />
   );
 }

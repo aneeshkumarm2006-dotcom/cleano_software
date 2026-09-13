@@ -1,7 +1,7 @@
 import { db } from "@/lib/org-db";
 import { requireCleaner } from "@/lib/page-guards";
 import MyPayClient from "./MyPayClient";
-import { getEmployeeAvgRating } from "@/app/admin/actions/setEmployeeRating";
+import { getCleanerRatingSummary } from "@/lib/cleaner-rating.server";
 import { getCleanerEarnings } from "@/lib/cleaner-earnings";
 
 export default async function MyPayPage() {
@@ -14,7 +14,7 @@ export default async function MyPayPage() {
   // that payroll and My Income also use — My Pay no longer invents its own math.
   // Rag-wash credits are removed from the cleaner side for now (fix 5) — no
   // longer queried or passed to the client.
-  const [earnings, payouts, withdrawals, starRating] =
+  const [earnings, payouts, withdrawals, ratingSummary] =
     await Promise.all([
       getCleanerEarnings(userId, year, now),
       db.payout.findMany({
@@ -26,7 +26,11 @@ export default async function MyPayPage() {
         where: { employeeId: userId },
         orderBy: { createdAt: "desc" },
       }),
-      getEmployeeAvgRating(userId),
+      // The shared rating definition (@/lib/cleaner-rating) — the same call the
+      // dashboard's Performance tile makes. This page used to read a separate
+      // average and then floor it at 4.0 in the markup, so a cleaner sitting at
+      // 1.0 was told "Your Rating: 4.0 / 5.0" while the dashboard said 1.0.
+      getCleanerRatingSummary(userId),
     ]);
 
   // Reserved = withdrawals not rejected
@@ -101,7 +105,8 @@ export default async function MyPayPage() {
       availableBalance={availableBalance}
       currentPeriod={currentPeriod}
       year={year}
-      starRating={starRating}
+      starRating={ratingSummary.average}
+      ratingCount={ratingSummary.count}
     />
   );
 }

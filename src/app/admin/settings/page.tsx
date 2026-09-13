@@ -2,9 +2,11 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/org-db";
 import SettingsClient from "./SettingsClient";
 import { twilioConnectionStatus } from "@/lib/twilio-org";
+import { canStoreSecrets } from "@/lib/secret-box";
 import { getSetting } from "@/lib/settings";
 import { platformDb } from "@/lib/platform-db";
 import { cleanerSeatUsage } from "@/lib/plan-limits";
+import { reconcileSubscriptionFromStripe } from "@/lib/billing";
 import {
   ANNUAL_MONTHS_SAVED,
   PLANS,
@@ -19,6 +21,7 @@ import { seedNotificationCatalog } from "@/lib/notifications";
 import { requireStaff } from "@/lib/page-guards";
 import { getBudgetCategoryOptions } from "@/lib/budget-categories";
 import type { SettingsSectionFailure, SettingsUser } from "./types";
+import { listProxyNumbers, type ProxyNumberRow } from "../actions/proxyNumbers";
 
 // Allow bulk CSV import (processed by the importCsv server action) enough time.
 export const maxDuration = 60;
@@ -385,26 +388,65 @@ export default async function SettingsPage({
       unreadable: false,
       usingPlatform: false,
       smsNumber: null,
+      // Read straight from the environment rather than defaulted: it is the
+      // one field here that does not come from the platform database, so an
+      // unreachable database is no reason to guess at it — and guessing wrong
+      // either hides the "cannot store credentials" warning or invents it.
+      canStoreSecrets: canStoreSecrets(),
     }));
   const twilioForwardUrl = await getSetting("sms.forwardInboundUrl").catch(() => "");
-  const twilioWebhookUrl = `${await currentAppUrl()}/api/twilio/inbound`;
+  const appUrl = await currentAppUrl();
+  const twilioWebhookUrl = `${appUrl}/api/twilio/inbound`;
+  // Both legs of a masked number, because a pooled number needs the pair.
+  const twilioVoiceWebhookUrl = `${appUrl}/api/twilio/voice`;
+
+  // The masked-number pool. Loaded here rather than in the tab so an
+  // unreachable table names itself under `failures` — an empty list on the
+  // Connectors tab reads as "my numbers are gone", which is a worse lie than
+  // "this section could not be loaded".
+  let proxyNumbers: ProxyNumberRow[] = [];
+  if (isAdmin) {
+    proxyNumbers = await settledSection(
+      "proxyNumbers",
+      "Masked numbers",
+      async () => {
+        // The action reports failure instead of throwing, because its other
+        // caller is a button. Here it has to reach the degrade path.
+        const res = await listProxyNumbers();
+        if (!res.ok) throw new Error(res.message);
+        return res.numbers;
+      },
+      [],
+      failures
+    );
+  }
 
   // Plan and billing. Read straight from the platform rather than cached, so a
   // card added a moment ago on Stripe is reflected the next time this loads.
+  //
+  // Reconciled against Stripe first, because the row only learns its
+  // subscription id from a webhook and a missing webhook made this panel tell
+  // a workspace that had already paid three times that it had "No card on
+  // file". Never allowed to break the page: if Stripe cannot be reached the
+  // row is shown as it stands.
   const [subscription, seats] = await Promise.all([
-    platformDb.subscription
-      .findUnique({
-        where: { organizationId: orgId },
-        select: {
-          plan: true,
-          status: true,
-          interval: true,
-          trialEndsAt: true,
-          currentPeriodEnd: true,
-          cancelAtPeriodEnd: true,
-          stripeSubscriptionId: true,
-        },
-      })
+    reconcileSubscriptionFromStripe(orgId)
+      .catch(() => {})
+      .then(() =>
+        platformDb.subscription.findUnique({
+          where: { organizationId: orgId },
+          select: {
+            plan: true,
+            status: true,
+            interval: true,
+            trialEndsAt: true,
+            currentPeriodEnd: true,
+            cancelAtPeriodEnd: true,
+            stripeSubscriptionId: true,
+            stripeCustomerId: true,
+          },
+        }),
+      )
       .catch(() => null),
     cleanerSeatUsage().catch(() => null),
   ]);
@@ -429,6 +471,11 @@ export default async function SettingsPage({
     currentPeriodEnd: subscription?.currentPeriodEnd?.toISOString() ?? null,
     cancelAtPeriodEnd: subscription?.cancelAtPeriodEnd ?? false,
     paying: Boolean(subscription?.stripeSubscriptionId),
+    // The billing portal belongs to the CUSTOMER, not to the subscription, so
+    // it is reachable as soon as this workspace has one — including when our
+    // own subscription id was never written. That button being keyed off the
+    // id is why the only way to the portal was around the app.
+    canManageBilling: Boolean(subscription?.stripeCustomerId),
     cleanersUsed: seats?.used ?? 0,
     cleanerLimit: seats?.limit ?? null,
     monthsSaved: ANNUAL_MONTHS_SAVED,
@@ -439,6 +486,8 @@ export default async function SettingsPage({
       <SettingsClient
         twilio={{ ...twilioStatus, forwardUrl: twilioForwardUrl }}
         twilioWebhookUrl={twilioWebhookUrl}
+        twilioVoiceWebhookUrl={twilioVoiceWebhookUrl}
+        proxyNumbers={proxyNumbers}
         plans={plans}
         planStatus={planStatus}
         user={userWithRole}

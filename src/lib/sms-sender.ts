@@ -73,3 +73,51 @@ export async function orgForInboundNumber(to: string) {
     select: { id: true, slug: true, name: true, timezone: true },
   });
 }
+
+/** Which of a workspace's two kinds of number an inbound message arrived on. */
+export type InboundNumberKind = "receptionist" | "proxy";
+
+export interface InboundNumberMatch {
+  kind: InboundNumberKind;
+  org: NonNullable<Awaited<ReturnType<typeof orgForInboundNumber>>>;
+}
+
+/**
+ * The same question as `orgForInboundNumber`, but it also says WHICH number
+ * was reached — and that distinction is the whole point.
+ *
+ * A workspace now has two kinds of inbound number and they must never be
+ * confused. `Organization.smsNumber` is the receptionist's front door: texts to
+ * it are threaded into job chat or handed to the AI assistant. A `ProxyNumber`
+ * is one leg of a private cleaner-customer conversation, and a message arriving
+ * on one must be relayed and nothing else — routing it into job chat would file
+ * a cleaner's own words as if the customer had said them, and handing it to the
+ * assistant would answer a cleaner as though they were a prospect.
+ *
+ * Read through `platformDb` on purpose. There is no organization context yet —
+ * working out which one this is IS the question — so the row-level-security
+ * client would return nothing.
+ */
+export async function inboundNumberMatch(
+  to: string,
+): Promise<InboundNumberMatch | null> {
+  const number = to.trim();
+  if (!number) return null;
+
+  const receptionist = await orgForInboundNumber(number);
+  if (receptionist) return { kind: "receptionist", org: receptionist };
+
+  // A deactivated number stops routing rather than relaying to a pairing the
+  // admin has already taken out of service.
+  const proxy = await platformDb.proxyNumber.findFirst({
+    where: { phoneNumber: number, isActive: true },
+    select: { organizationId: true },
+  });
+  if (!proxy?.organizationId) return null;
+
+  const org = await platformDb.organization.findFirst({
+    where: { id: proxy.organizationId, status: "ACTIVE" },
+    select: { id: true, slug: true, name: true, timezone: true },
+  });
+  return org ? { kind: "proxy", org } : null;
+}

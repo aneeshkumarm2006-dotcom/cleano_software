@@ -25,6 +25,14 @@ export interface PlanStatus {
   cancelAtPeriodEnd: boolean;
   /** A Stripe subscription exists, so there is a card and a billing page. */
   paying: boolean;
+  /**
+   * This workspace has a Stripe customer, so the billing portal has something
+   * to show — its cards, its invoices, its subscriptions. Separate from
+   * `paying` on purpose: our subscription id comes from a webhook that may
+   * never have fired, and hiding the portal behind it left the only way to see
+   * what Stripe was charging outside the app entirely.
+   */
+  canManageBilling: boolean;
   cleanersUsed: number;
   cleanerLimit: number | null;
   monthsSaved: number;
@@ -271,14 +279,14 @@ export default function PlanTab({ plans, status }: Props) {
           })}
         </div>
 
-        {status.paying && (
+        {status.canManageBilling && (
           <div className="border-t border-gray-100 bg-gray-50/70 px-5 py-4">
             <button
               type="button"
               disabled={busy}
               onClick={() => go(openPortal)}
               className="text-sm font-semibold text-[#00707d] transition hover:underline disabled:opacity-40">
-              Change your card, see invoices, or cancel
+              Manage billing — change your card, see invoices, or cancel
             </button>
           </div>
         )}

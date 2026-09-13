@@ -26,12 +26,23 @@ import { simpleJobStatus } from "@/lib/metrics-shared";
 // reaches @/db and cannot be pulled into the browser bundle.
 import { PAY_BASIS_SHORT_LABEL, type PayBasisKind } from "@/lib/pay-basis";
 import { HOLD_LABEL, holdLabel, holdReasonText, isOnHold } from "@/lib/job-hold";
+import { jobStaffing, shortStaffedNotice } from "@/lib/cleaner-jobs";
+import { ConfirmActionModal } from "@/components/common/ConfirmActionModal";
 import { releaseJobHold } from "../../actions/releaseJobHold";
 import { createRatingToken } from "../../actions/createRatingToken";
 import { setAfterPhotosEnabled } from "../../actions/setAfterPhotoOverride";
 import { setJobPriorityLabel } from "../../actions/setJobPriorityLabel";
 import { submitRating } from "../../actions/submitRating";
 import { updateJobNotificationPrefs } from "../../actions/updateJobNotificationPrefs";
+import { setJobIssueStatus, type JobIssueDTO } from "../../actions/jobIssues";
+import {
+  JOB_ISSUE_STATUS_LABEL,
+  JOB_ISSUE_URGENCY_LABEL,
+  MAX_ISSUE_DESCRIPTION,
+  parseJobIssueStatus,
+  parseJobIssueUrgency,
+  type JobIssueStatus,
+} from "@/lib/job-issues";
 import {
   ArrowLeft, MapPin, KeyRound, Clock, DollarSign, Users,
   CheckCircle2, Package, Pencil, History, Activity,
@@ -77,7 +88,9 @@ import {
   ADDON_INCLUDED_LABEL,
   addOnAmountIsIncluded,
   addOnLineTotal,
+  checkCustomCleanerPay,
   computeJobMoney,
+  jobPayBasis,
   passThroughTotal,
   PRICING_MODE_HINT,
   PRICING_MODE_LABEL,
@@ -234,6 +247,10 @@ interface Job {
   /** `price` is the UNIT price; the line total is `price * quantity`. */
   addOns?: Array<{ id: string; name: string; price: number; quantity: number }>;
   employee: { id: string; name: string };
+  /** The lead's raw column — `employee.id` is "" for an unassigned job. */
+  employeeId?: string | null;
+  /** How many people the job was booked for (Sept 3 fix 4). */
+  requiredCleaners?: number | null;
   cleaners: Array<{ id: string; name: string }>;
   cancellationRequestedAt?: string | null;
   rescheduleRequestedAt?: string | null;
@@ -409,6 +426,14 @@ interface JobDetailViewProps {
    * than as "no checklist".
    */
   checklistSummary?: JobChecklistSummary | null;
+  /**
+   * What cleaners reported from this job (Sept 3 fix list, item 1). The same
+   * DTO the /admin/issues list renders, loaded through the same action. Empty
+   * for a viewer that action refuses — it is OWNER/ADMIN, this page is not.
+   */
+  jobIssues?: JobIssueDTO[];
+  /** userId → name for `JobIssueDTO.resolvedById`, resolved in page.tsx. */
+  issueResolverNames?: Record<string, string>;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -419,6 +444,179 @@ interface JobDetailViewProps {
  * control that writes — the pin is edited on the job form, the items in
  * Settings → Checklist Templates.
  */
+/**
+ * This job's reported issues, with the same two actions the /admin/issues list
+ * offers. Deliberately compact: the full list is where a queue gets worked,
+ * this is where an admin already on the job sees one exists and closes it.
+ */
+function JobIssuesCard({
+  issues,
+  resolverNames,
+}: {
+  issues: JobIssueDTO[];
+  resolverNames: Record<string, string>;
+}) {
+  const router = useRouter();
+  const [rows, setRows] = useState(issues);
+  const [resolving, setResolving] = useState<string | null>(null);
+  const [note, setNote] = useState('');
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // The prop is the server's word on this job, so a re-render after
+  // router.refresh has to win over whatever the last click patched in locally.
+  useEffect(() => { setRows(issues); }, [issues]);
+
+  const STATUS_TONE: Record<JobIssueStatus, { bg: string; color: string }> = {
+    OPEN:         { bg: 'rgba(180,83,9,0.12)',  color: '#b45309' },
+    ACKNOWLEDGED: { bg: 'rgba(0,140,156,0.10)', color: 'var(--primary)' },
+    RESOLVED:     { bg: 'rgba(5,150,105,0.12)', color: 'var(--emerald-800)' },
+  };
+
+  async function advance(id: string, next: JobIssueStatus, resolutionNote?: string) {
+    if (busyId) return;
+    setBusyId(id);
+    setError(null);
+    const result = await setJobIssueStatus(id, next, resolutionNote);
+    setBusyId(null);
+    if (!result.ok) { setError(result.message); return; }
+    const now = new Date().toISOString();
+    setRows(prev => prev.map(r => r.id === id ? {
+      ...r,
+      status: next,
+      statusLabel: JOB_ISSUE_STATUS_LABEL[next],
+      acknowledgedAt: r.acknowledgedAt ?? now,
+      resolvedAt: next === 'RESOLVED' ? now : null,
+      resolutionNote: next === 'RESOLVED' ? (resolutionNote?.trim() || null) : null,
+    } : r));
+    setResolving(null);
+    setNote('');
+    router.refresh();
+  }
+
+  // A job with no reported issues gets no card at all.
+  if (rows.length === 0) return null;
+
+  const openCount = rows.filter(r => parseJobIssueStatus(r.status) !== 'RESOLVED').length;
+
+  return (
+    <div className="dcard tab-panel-wide">
+      <div className="dcard-head">
+        <h3>Reported issues</h3>
+        {openCount > 0 && (
+          <span className="pill" style={{ background: 'rgba(180,83,9,0.12)', color: '#b45309' }}>
+            {openCount} open
+          </span>
+        )}
+      </div>
+
+      {error && (
+        <p style={{ margin: '0 0 10px', fontSize: 13, color: 'var(--error)' }}>{error}</p>
+      )}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {rows.map(issue => {
+          const status = parseJobIssueStatus(issue.status);
+          const urgency = parseJobIssueUrgency(issue.urgency);
+          const tone = STATUS_TONE[status];
+          const busy = busyId === issue.id;
+          return (
+            <div
+              key={issue.id}
+              style={{
+                border: '1px solid var(--primary-10)',
+                borderRadius: 12,
+                padding: '12px 14px',
+                display: 'flex', flexDirection: 'column', gap: 8,
+                background: urgency === 'URGENT' ? 'rgba(220,38,38,0.03)' : '#fff',
+              }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                {urgency === 'URGENT' && (
+                  <span className="pill" style={{ background: 'rgba(220,38,38,0.12)', color: 'var(--error)' }}>
+                    {JOB_ISSUE_URGENCY_LABEL.URGENT}
+                  </span>
+                )}
+                <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>
+                  {issue.categoryLabel}
+                </span>
+                <span className="pill" style={{ background: tone.bg, color: tone.color }}>
+                  {JOB_ISSUE_STATUS_LABEL[status]}
+                </span>
+                <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--primary-50)' }}>
+                  {issue.reportedByName} &middot; {fmtDateTime(issue.createdAt)}
+                </span>
+              </div>
+
+              <p style={{ margin: 0, fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+                {issue.description}
+              </p>
+
+              {issue.photoUrl && (
+                <a href={issue.photoUrl} target="_blank" rel="noopener noreferrer">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={issue.photoUrl}
+                    alt={`Photo attached to the ${issue.categoryLabel} report`}
+                    style={{ width: 88, height: 88, objectFit: 'cover', borderRadius: 10, border: '1px solid var(--primary-10)' }}
+                  />
+                </a>
+              )}
+
+              {status === 'RESOLVED' && (
+                <p style={{ margin: 0, fontSize: 12.5, color: 'var(--emerald-800)', lineHeight: 1.5 }}>
+                  Resolved by {(issue.resolvedById && resolverNames[issue.resolvedById]) || 'an admin'}
+                  {issue.resolvedAt ? ` on ${fmtDateTime(issue.resolvedAt)}` : ''}
+                  {issue.resolutionNote ? ` \u2014 ${issue.resolutionNote}` : '.'}
+                </p>
+              )}
+
+              {resolving === issue.id ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <textarea
+                    value={note}
+                    onChange={e => setNote(e.target.value)}
+                    maxLength={MAX_ISSUE_DESCRIPTION}
+                    rows={2}
+                    placeholder="What was done about it? (optional)"
+                    style={{
+                      width: '100%', fontFamily: 'inherit', fontSize: 13,
+                      padding: '8px 10px', borderRadius: 10,
+                      border: '1px solid var(--primary-10)', resize: 'vertical',
+                    }}
+                  />
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <Button type="button" variant="cleano" size="sm" disabled={busy}
+                      onClick={() => void advance(issue.id, 'RESOLVED', note)}>
+                      {busy ? 'Resolving\u2026' : 'Confirm resolved'}
+                    </Button>
+                    <Button type="button" variant="default" size="sm" disabled={busy}
+                      onClick={() => { setResolving(null); setNote(''); }}>
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : status !== 'RESOLVED' ? (
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {status === 'OPEN' && (
+                    <Button type="button" variant="default" size="sm" disabled={busy}
+                      onClick={() => void advance(issue.id, 'ACKNOWLEDGED')}>
+                      {busy ? 'Working\u2026' : 'Acknowledge'}
+                    </Button>
+                  )}
+                  <Button type="button" variant="cleano" size="sm" disabled={busy}
+                    onClick={() => { setResolving(issue.id); setNote(''); }}>
+                    Resolve
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function ChecklistCard({ summary }: { summary: JobChecklistSummary | null }) {
   const TIER_TONE: Record<string, { bg: string; color: string }> = {
     JOB:     { bg: '#ede9fe', color: '#5b21b6' },
@@ -720,6 +918,8 @@ export default function JobDetailView({
   jobRatings = [],
   gpsEnabled = true,
   checklistSummary = null,
+  jobIssues = [],
+  issueResolverNames = {},
 }: JobDetailViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -821,13 +1021,93 @@ export default function JobDetailView({
   const [payEditFor, setPayEditFor] = useState<string | null>(null);
   const [payEditValue, setPayEditValue] = useState("");
   const [paySaving, setPaySaving] = useState(false);
+  // Whatever setCleanerJobPay refused, said in place. It used to be an
+  // `alert()`, which is dismissed by reflex and never comes back — the wrong
+  // channel for the pay cap's refusal, which the admin has to act on.
+  const [payEditError, setPayEditError] = useState<string | null>(null);
+
+  // ── The per-cleaner pay cap, on the AFTER-CREATION path (fix list item #10) ─
+  //
+  // The creation form refuses a crew whose custom amounts add up to more than
+  // the job pays for. This editor writes the SAME `JobAssignment.payAmount`
+  // column and checked nothing, so the guarantee was one click from worthless:
+  // $150 + $150 on a $200 job saved silently and the Financials tab reported
+  // the −$100 afterwards.
+  //
+  // Same helper as the creation form and as `setCleanerJobPay` — never a second
+  // copy of the arithmetic. Computed inline rather than memoised, exactly like
+  // `money` further down: one pure pass over a handful of numbers.
+  const payCapCrew = Array.from(
+    new Set(
+      [job.employeeId, ...job.cleaners.map((c) => c.id)].filter(
+        (id): id is string => !!id
+      )
+    )
+  );
+  // Only an AGREED total caps anything — the same tri-state as the creation
+  // form (D2). On a PERCENTAGE job with automatic pay, `employeePay` is a
+  // save-time estimate, and capping to an estimate would refuse amounts the
+  // tier math itself would have produced.
+  const payCapTeamTotal =
+    job.employeePayIsManual || job.payType === 'FLAT' || job.payType === 'HOURLY'
+      ? (job.employeePay ?? null)
+      : null;
+  const payCapBasis = jobPayBasis(job);
+  function checkPayEdit(cleanerId: string, override: number | null) {
+    return checkCustomCleanerPay({
+      payBasis: payCapBasis,
+      teamTotal: payCapTeamTotal,
+      amounts: payCapCrew.map((id) =>
+        id === cleanerId ? override : (payOverrides[id] ?? null)
+      ),
+    });
+  }
+
+  // What the open editor would do to the crew's total, live on every keystroke.
+  // Null when no editor is open.
+  const payEditCheck = (() => {
+    if (!payEditFor) return null;
+    const raw = payEditValue.trim();
+    const typed = raw === '' ? NaN : Number(raw);
+    // A blank box means "use the automatic amount", not $0 — same reading the
+    // creation form's boxes get.
+    const next = Number.isFinite(typed) && typed > 0 ? typed : null;
+    const after = checkPayEdit(payEditFor, next);
+    const before = checkPayEdit(payEditFor, payOverrides[payEditFor] ?? null);
+    // Judged against the job's CURRENT overshoot, not against zero. A job that
+    // is already over budget — saved before this cap existed, or through the
+    // hole this fixes — has to stay correctable, and refusing a partial
+    // correction would be a worse bug than the one being closed. Whole cents,
+    // so an edit that moves the total nowhere cannot trip on a float.
+    const blocked =
+      after.overBudget &&
+      Math.round(after.overshoot * 100) > Math.round(before.overshoot * 100);
+    return { after, blocked };
+  })();
+  // The sentence, in the admin's own words: "the crew's agreed $150.00" reads
+  // as a mistake they can act on; "this job's $150.00" reads as the price,
+  // which it is not.
+  const payCapMessage =
+    payEditCheck?.blocked
+      ? `That would pay the crew $${payEditCheck.after.custom.toFixed(2)} — ` +
+        `$${payEditCheck.after.overshoot.toFixed(2)} more than ` +
+        `${payCapTeamTotal && payCapTeamTotal > 0 ? "the crew's agreed" : "this job's"} ` +
+        `$${payEditCheck.after.budget.toFixed(2)}. Lower another cleaner's ` +
+        `amount first, or raise the total on Edit job.`
+      : null;
 
   async function savePayOverride(cleanerId: string, clear = false) {
+    // Clearing can only ever lower the crew's total, so it is never capped.
+    if (!clear && payCapMessage) {
+      setPayEditError(payCapMessage);
+      return;
+    }
     setPaySaving(true);
+    setPayEditError(null);
     const amount = clear ? null : Number(payEditValue);
     const res = await setCleanerJobPay({ jobId: job.id, cleanerId, amount });
     setPaySaving(false);
-    if (!res.success) { alert(res.error); return; }
+    if (!res.success) { setPayEditError(res.error); return; }
     setPayEditFor(null);
     setPayEditValue("");
     router.refresh();
@@ -893,6 +1173,7 @@ export default function JobDetailView({
   const [isTogglingPayment, setIsTogglingPayment] = useState(false);
   const [isTogglingInvoice, setIsTogglingInvoice] = useState(false);
   const [isMarkingComplete, setIsMarkingComplete] = useState(false);
+  const [confirmShortComplete, setConfirmShortComplete] = useState(false);
   const [reviewLink, setReviewLink] = useState<string | null>(null);
   const [isSendingReview, setIsSendingReview] = useState(false);
   const [reviewCopied, setReviewCopied] = useState(false);
@@ -1117,12 +1398,31 @@ export default function JobDetailView({
     finally { setIsTogglingPayment(false); }
   };
 
+  // Crew head-count vs `requiredCleaners` (Sept 3 fix 4). One predicate, shared
+  // with both clock screens — never re-derived from the roster length here.
+  const staffing = jobStaffing({
+    requiredCleaners: job.requiredCleaners ?? 1,
+    employeeId: job.employeeId ?? null,
+    cleaners: job.cleaners,
+  });
+
   const handleMarkComplete = async () => {
     if (isMarkingComplete) return;
+    setConfirmShortComplete(false);
     setIsMarkingComplete(true);
     const result = await markJobComplete(job.id);
     if (result.success) setCurrentStatus("COMPLETED");
     setIsMarkingComplete(false);
+  };
+
+  // One click stays one click on a fully-staffed job. The confirm exists only
+  // to make an admin notice the crew was thin — it never refuses.
+  const requestMarkComplete = () => {
+    if (staffing.isShort) {
+      setConfirmShortComplete(true);
+      return;
+    }
+    void handleMarkComplete();
   };
 
   const handleGetReviewLink = async () => {
@@ -1767,27 +2067,45 @@ export default function JobDetailView({
                 </div>
                 <div style={{ textAlign: 'right', flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
                   {payEditFor === c.id ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ fontSize: 12 }}>$</span>
-                      <input
-                        type="number" step="0.01" min="0" autoFocus
-                        value={payEditValue}
-                        onChange={(e) => setPayEditValue(e.target.value)}
-                        style={{ width: 78, padding: '3px 6px', fontSize: 12, borderRadius: 6, border: '1px solid var(--primary-20)' }}
-                      />
-                      <button type="button" disabled={paySaving} onClick={() => savePayOverride(c.id)}
-                        style={{ fontSize: 11, padding: '3px 8px', borderRadius: 999, border: 'none', background: 'var(--primary)', color: '#fff', cursor: 'pointer' }}>
-                        {paySaving ? '…' : 'Save'}
-                      </button>
-                      <button type="button" disabled={paySaving} onClick={() => savePayOverride(c.id, true)}
-                        title="Clear the override and go back to the automatic rate-based amount"
-                        style={{ fontSize: 11, padding: '3px 8px', borderRadius: 999, border: '1px solid var(--primary-10)', background: 'transparent', cursor: 'pointer' }}>
-                        Reset
-                      </button>
-                      <button type="button" onClick={() => setPayEditFor(null)}
-                        style={{ fontSize: 11, padding: '3px 6px', border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--primary-50)' }}>
-                        ✕
-                      </button>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontSize: 12 }}>$</span>
+                        <input
+                          type="number" step="0.01" min="0" autoFocus
+                          value={payEditValue}
+                          onChange={(e) => { setPayEditValue(e.target.value); setPayEditError(null); }}
+                          aria-invalid={!!payCapMessage}
+                          style={{ width: 78, padding: '3px 6px', fontSize: 12, borderRadius: 6, border: `1px solid ${payCapMessage ? '#fca5a5' : 'var(--primary-20)'}` }}
+                        />
+                        {/* Over the cap the Save is DISABLED, not merely flagged:
+                            the server refuses the same amount (setCleanerJobPay),
+                            so an enabled button here would only promise a save
+                            that cannot happen. Reset stays live — clearing an
+                            override can only ever lower the crew's total. */}
+                        <button type="button" disabled={paySaving || !!payCapMessage} onClick={() => savePayOverride(c.id)}
+                          title={payCapMessage ?? undefined}
+                          style={{ fontSize: 11, padding: '3px 8px', borderRadius: 999, border: 'none', background: payCapMessage ? 'var(--primary-20)' : 'var(--primary)', color: '#fff', cursor: payCapMessage ? 'not-allowed' : 'pointer' }}>
+                          {paySaving ? '…' : 'Save'}
+                        </button>
+                        <button type="button" disabled={paySaving} onClick={() => savePayOverride(c.id, true)}
+                          title="Clear the override and go back to the automatic rate-based amount"
+                          style={{ fontSize: 11, padding: '3px 8px', borderRadius: 999, border: '1px solid var(--primary-10)', background: 'transparent', cursor: 'pointer' }}>
+                          Reset
+                        </button>
+                        <button type="button" onClick={() => { setPayEditFor(null); setPayEditError(null); }}
+                          style={{ fontSize: 11, padding: '3px 6px', border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--primary-50)' }}>
+                          ✕
+                        </button>
+                      </div>
+                      {/* The cap, said in place. A disabled button with no reason
+                          beside it is the same silent overshoot in a different
+                          costume — the admin has to be told which number is wrong
+                          and which two fields fix it. */}
+                      {(payCapMessage || payEditError) && (
+                        <div role="alert" style={{ maxWidth: 300, textAlign: 'left', fontSize: 11, lineHeight: 1.45, color: '#991b1b', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '5px 8px' }}>
+                          {payCapMessage ?? payEditError}
+                        </div>
+                      )}
                     </div>
                   ) : (
                     pay !== undefined && pay > 0 && (
@@ -1796,7 +2114,7 @@ export default function JobDetailView({
                         title={payOverrides[c.id] != null
                           ? 'Manual pay override for this cleaner — click to change'
                           : 'Pay for this job (incl. tip split). Click to set a custom amount.'}
-                        onClick={isAdmin ? () => { setPayEditFor(c.id); setPayEditValue(String(payOverrides[c.id] ?? pay.toFixed(2))); } : undefined}
+                        onClick={isAdmin ? () => { setPayEditFor(c.id); setPayEditValue(String(payOverrides[c.id] ?? pay.toFixed(2))); setPayEditError(null); } : undefined}
                       >
                         ${pay.toFixed(2)}
                         {/* Item 11: automatic vs manually overridden must be
@@ -2037,6 +2355,11 @@ export default function JobDetailView({
           before the admin has finished editing the job. Change what is
           generated by changing the job's Checklist field or the template. */}
       <ChecklistCard summary={checklistSummary} />
+
+      {/* Reported issues. Surfaced on the job an admin is already looking at,
+          not only on /admin/issues — "is anything wrong here" should not need
+          a second screen. Renders nothing when there is nothing. */}
+      <JobIssuesCard issues={jobIssues} resolverNames={issueResolverNames} />
 
       {/* Location — the job's own snapshot, enriched with whatever the saved
           address knows that the snapshot doesn't (item 2). Also carries the
@@ -3306,7 +3629,7 @@ export default function JobDetailView({
             {isAdmin && !["COMPLETED", "CANCELLED"].includes(currentStatus) && (
               <Button
                 variant="default" border={false}
-                onClick={handleMarkComplete}
+                onClick={requestMarkComplete}
                 disabled={isMarkingComplete}
                 className="rounded-xl px-4 py-2"
               >
@@ -3855,6 +4178,19 @@ export default function JobDetailView({
           message="It moves to Jobs → Archived, out of every list, count and report. You can restore it from there, or delete it permanently once archived."
         />
       )}
+
+      {/* Completing a short-staffed job (Sept 3 fix 4). Advisory: the confirm
+          only appears when the crew was under `requiredCleaners`, and its
+          confirm button does exactly what the one-click button used to. */}
+      <ConfirmActionModal
+        isOpen={confirmShortComplete}
+        onClose={() => setConfirmShortComplete(false)}
+        onConfirm={handleMarkComplete}
+        title="Complete a short-staffed job?"
+        message={`${shortStaffedNotice(staffing)} Completing it now closes the job, marks the crew's assignments complete and asks the customer to rate it.`}
+        confirmLabel="Complete anyway"
+        cancelLabel="Not yet"
+      />
 
       {/* Set rating (admin manual star rating, item 13) */}
       <Modal

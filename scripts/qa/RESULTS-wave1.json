@@ -1,0 +1,575 @@
+[
+ {
+  "agentId": "acd7905ef5567c62d",
+  "result": {
+   "dimension": "Issue reporting end-to-end (#1)",
+   "summary": "Tested by real clicks in my own headless chromium (scripts/qa/t-issues*.mjs) across cleaner1 and the owner account in zztestqa. The feature works end to end: all 9 required steps PASS. The cleaner job page rendered clean on ~8 loads with the JobIssue read live and no error boundary or console error. The form matches spec verbatim — 7 categories each with a hint line, 2 urgency options, photo marked optional. Both issues filed (normal + URGENT); the sidebar badge moved 1 -> 3 exactly matching the 2 I filed; /admin/issues Open/Acknowledged/Resolved (plus an All tab) all filter correctly; the admin job page carries a \"Reported issues\" card with inline actions; Acknowledge then Resolve-with-note both changed status and the badge dropped 3 -> 2 on resolve; the cleaner sees the resolution note. Three non-blocking findings: (1) the sidebar badge counts OPEN+ACKNOWLEDGED, so it reads \"Issues 3\" while the Open tab reads \"Open(2)\" — intentional per src/lib/job-issues.ts but it looks like a mismatch to an admin; (2) immediately after resolving, the card says \"Resolved by an admin\" instead of the resolver's name until reload; (3) the cleaner's issue log is capped at take:3, so a resolution note silently falls off the cleaner's page once 3 newer reports exist — I watched an existing report drop off after filing two more. No FAILs, nothing BLOCKED.",
+   "results": [
+    {
+     "item": "Cleaner job detail page renders with the JobIssue read live, no error boundary, no console error",
+     "status": "PASS",
+     "whatIDid": "Signed in as zztest-cleaner1@cleano.test at /cleanos/login, landed on /cleaners/my-jobs (3 assigned jobs), opened http://zztestqa.localhost:3006/cleaners/my-jobs/cmtumw4ry0011tvs43v4kw7vz. Loaded it ~8 separate times across four script runs, each time with harness watch() collecting console errors, pageerrors and 5xx responses.",
+     "whatISaw": "HTTP 200 every time, errorBoundary:false every time (harness regex for /Application error|Unhandled Runtime Error|something went wrong/i). Page rendered fully including the issue log section: rows like \"Safety RESOLVED 37m ago ZZTEST resolution - office called the client, hazard cleared, cleaner may proceed.\" Harness reported \"----- no console/pageerror/5xx captured -----\" on the cleaner runs. The JobIssue query is genuinely executing on this page — the rows it returns are what I filed. Structural note: there is no error.tsx anywhere in src/app/cleaners/my-jobs (the only one in the cleaners tree is src/app/cleaners/settings/error.tsx), so the status doc's warning about an unguarded read is structurally true, but the query is healthy and never took the page out.",
+     "expected": "Page renders, no error boundary, no console error",
+     "actual": "Page renders, no error boundary, no console error",
+     "severity": "none",
+     "file": "C:\\Users\\anees\\Downloads\\cleano-software-main\\cleano-software-main\\src\\app\\cleaners\\my-jobs\\[jobId]\\page.tsx"
+    },
+    {
+     "item": "Report-an-issue control: all SEVEN categories present, each with hint text (verbatim)",
+     "status": "PASS",
+     "whatIDid": "Clicked the control (button.cl-jd-issue-btn, label \"Report an issue\") on the job detail page, waited for .co-sheet, then read every [role=\"radio\"] inside [role=\"radiogroup\"][aria-label=\"Issue category\"], pulling .co-choice-label and .co-choice-hint from each. Screenshot: scripts/qa/shot-issues-form.png",
+     "whatISaw": "Sheet header: title \"Report an issue\", subtitle \"Tell the office what happened. It reaches them with the job attached.\" Legend \"WHAT'S THE PROBLEM?\". Exactly 7 options, each WITH a hint line, in this order: 1) \"Can't get in\" / \"No key, wrong code, nobody home.\" 2) \"Supplies or equipment\" / \"Something is missing, empty or broken.\" 3) \"Property damage\" / \"Damage you found, or damage that happened.\" 4) \"Job is bigger than booked\" / \"The place needs far more time than the booking allows.\" 5) \"Safety\" / \"A hazard, an injury, anything unsafe.\" 6) \"Problem with the client\" / \"Behaviour that needs the office to step in.\" 7) \"Something else\" / \"Anything the office should know about.\" None preselected (aria-checked=\"false\" on all 7).",
+     "expected": "7 categories matching spec (can't get in / supplies or equipment / property damage / job bigger than booked / safety / problem with the client / something else), each with a line of hint text",
+     "actual": "Exactly 7, wording matches spec, all 7 carry a hint line",
+     "severity": "none",
+     "file": "C:\\Users\\anees\\Downloads\\cleano-software-main\\cleano-software-main\\src\\app\\cleaners\\my-jobs\\[jobId]\\ReportIssueButton.tsx"
+    },
+    {
+     "item": "Urgency: exactly TWO options, verbatim wording, plus the URGENT consequence banner",
+     "status": "PASS",
+     "whatIDid": "Read every [role=\"radio\"] inside [role=\"radiogroup\"][aria-label=\"Urgency\"] in the open sheet, then clicked option 2 and re-read the fieldset. Screenshot: scripts/qa/shot-issues-form-urgent.png",
+     "whatISaw": "Legend \"HOW URGENT IS IT?\". Exactly 2 options, neither with a hint: \"Can wait\" (aria-checked=\"true\", i.e. the default) and \"I'm blocked right now\" (aria-checked=\"false\"). Selecting the second revealed an amber banner: \"The office is emailed straight away. Use this when you can't carry on with the job until someone answers.\" The office-side wording differs by design — the admin list prints \"URGENT — I'M BLOCKED\".",
+     "expected": "Two urgency options, roughly \"can wait\" and \"I'm blocked right now\"",
+     "actual": "Two options, exactly \"Can wait\" and \"I'm blocked right now\", NORMAL preselected",
+     "severity": "none",
+     "file": "C:\\Users\\anees\\Downloads\\cleano-software-main\\cleano-software-main\\src\\app\\cleaners\\my-jobs\\[jobId]\\ReportIssueButton.tsx"
+    },
+    {
+     "item": "Photo attachment offered and marked optional",
+     "status": "PASS",
+     "whatIDid": "Read the photo block of the open sheet: the .co-input-label text, the label.co-choice-row text, and counted input[type=\"file\"] inside .co-sheet.",
+     "whatISaw": "Label renders as \"PHOTO (OPTIONAL)\" (uppercased by CSS; source text is \"Photo (optional)\"). Below it a tappable row: \"Add a photo\" with hint \"Shrunk on your phone before it's sent.\" One input[type=\"file\"] present (accept=\"image/*\", capture=\"environment\", visually hidden behind the label). Footer buttons: \"Cancel\" and \"Send report\".",
+     "expected": "A photo attachment offered and explicitly marked optional",
+     "actual": "Offered, explicitly labelled \"Photo (optional)\", one file input wired up",
+     "severity": "none",
+     "file": "C:\\Users\\anees\\Downloads\\cleano-software-main\\cleano-software-main\\src\\app\\cleaners\\my-jobs\\[jobId]\\ReportIssueButton.tsx"
+    },
+    {
+     "item": "Submit issue #1: category \"Something else\", urgency \"can wait\", ZZTEST description",
+     "status": "PASS",
+     "whatIDid": "In the sheet clicked the radio containing \"Something else\", clicked urgency index 0, filled #issue-description with \"ZZTEST normal issue - QA dimension 1, category Something else, can wait.\", asserted the checked labels, clicked .co-btn-confirm (\"Send report\"), then waited for .co-sheet to detach (up to 180s) and reloaded the job page.",
+     "whatISaw": "Pre-send assertion read checked = [\"Something else\",\"Can wait\"]. Sheet closed cleanly (no error text, no stuck state). After reload the cleaner's own issue log showed a new row: \"Something else OPEN 1m ago\". No console error, no 5xx. Admin side later confirmed it as \"NORMAL Something else Open ... ZZTEST Cleaner One · #1 ZZTEST Client Alpha ZZTEST normal issue - QA dimension 1, category Something else, can wait.\"",
+     "expected": "No error; the issue appears on the job page as the cleaner's own report with a status",
+     "actual": "Submitted cleanly; appears as the cleaner's own report with status chip OPEN",
+     "severity": "none",
+     "file": "C:\\Users\\anees\\Downloads\\cleano-software-main\\cleano-software-main\\src\\app\\cleaners\\my-jobs\\[jobId]\\reportIssue.ts"
+    },
+    {
+     "item": "Submit issue #2 at URGENT level with \"ZZTEST URGENT\" description; confirm it is marked urgent",
+     "status": "PASS",
+     "whatIDid": "Reopened the sheet, picked category \"Safety\", clicked urgency index 1 (\"I'm blocked right now\"), filled the description \"ZZTEST URGENT - QA dimension 1, blocked right now, safety hazard on site.\", sent, waited for detach, reloaded, then verified the urgency marker as admin on /admin/issues.",
+     "whatISaw": "Pre-send assertion read checked = [\"Safety\",\"I'm blocked right now\"]. Sheet closed cleanly. Cleaner log row: \"Safety OPEN 1m ago\". On /admin/issues the card carries a red urgency chip reading verbatim \"URGENT — I'M BLOCKED\": full card text \"URGENT — I'M BLOCKED Safety Open 13m ago ZZTEST Cleaner One · #1 ZZTEST Client Alpha ZZTEST URGENT - QA dimension 1, blocked right now, safety hazard on site. Acknowledge Resolve\". The non-urgent one alongside it correctly reads \"NORMAL\".",
+     "expected": "Submits and is marked urgent",
+     "actual": "Submitted; marked \"URGENT — I'M BLOCKED\" on the admin surfaces, distinct from the NORMAL sibling",
+     "severity": "none",
+     "file": "C:\\Users\\anees\\Downloads\\cleano-software-main\\cleano-software-main\\src\\app\\admin\\issues\\IssuesClient.tsx"
+    },
+    {
+     "item": "Sidebar badge counting open issues — does the number match what I filed",
+     "status": "PASS",
+     "whatIDid": "Captured the badge BEFORE filing anything: signed in as zztest-owner@cleano.test, visited /admin/dashboard, read innerText of a[href=\"/admin/issues\"]. Filed my two issues as cleaner1, then signed in as owner again in a fresh browser and re-read the same selector on a freshly server-rendered /admin/dashboard.",
+     "whatISaw": "Baseline badge: \"Issues 1\" (tabs agreed: Open(1), Acknowledged(0), Resolved(1), All(2)). After filing my 2: \"Issues 3\" (tabs: Open(3), Acknowledged(0), Resolved(1), All(4)). Delta is exactly +2, matching the two reports I filed. Badge renders identically on the dashboard and on /admin/issues itself.",
+     "expected": "A sidebar badge counting open issues that reflects what I filed",
+     "actual": "Badge present, 1 -> 3, exact match for the 2 issues filed",
+     "severity": "none",
+     "file": "C:\\Users\\anees\\Downloads\\cleano-software-main\\cleano-software-main\\src\\app\\admin\\actions\\jobIssues.ts"
+    },
+    {
+     "item": "/admin/issues page with Open / Acknowledged / Resolved filters — all three work and issues land in the right one",
+     "status": "PASS",
+     "whatIDid": "As owner, loaded /admin/issues (HTTP 200, errorBoundary:false) and clicked each filter pill in turn — \"Open\", \"Acknowledged\", \"Resolved\", and the fourth \"All\" tab — reading aria-pressed and the rendered card list after each click. Screenshots scripts/qa/shot-issues-tab-{open,acknowledged,resolved,all}.png",
+     "whatISaw": "Four pills, each with a live count: Open(3), Acknowledged(0), Resolved(1), All(4) at that moment. Every click flipped aria-pressed to true on the clicked pill and re-filtered the list correctly. Open showed my 2 new reports plus the pre-existing one, each with \"Acknowledge\" and \"Resolve\" buttons. Acknowledged showed the empty state \"Nothing in this state.\" with zero cards. Resolved showed only the already-resolved one, with no action buttons. All showed all 4. My non-urgent and urgent reports both landed in Open, which is correct for freshly filed issues. Note the spec named three filters; there is a fourth \"All\" tab as well.",
+     "expected": "Open / Acknowledged / Resolved filters all work; my issues land in the right one",
+     "actual": "All three work (plus an extra All tab); both my issues correctly in Open",
+     "severity": "none",
+     "file": "C:\\Users\\anees\\Downloads\\cleano-software-main\\cleano-software-main\\src\\app\\admin\\issues\\IssuesClient.tsx"
+    },
+    {
+     "item": "A card on the job itself showing the issue",
+     "status": "PASS",
+     "whatIDid": "As owner, visited http://zztestqa.localhost:3006/admin/jobs/cmtumw4ry0011tvs43v4kw7vz and read the page text from the \"Reported issues\" heading onward. Screenshot: scripts/qa/shot-issues-adminjob-card.png",
+     "whatISaw": "HTTP 200, errorBoundary:false. A \"Reported issues\" section with an open counter (\"3 open\") and one card per issue, each showing urgency chip, category, status chip, reporter and timestamp, the description, and inline \"Acknowledge\"/\"Resolve\" buttons for non-resolved ones. Verbatim, my urgent one after resolution: \"Urgent — I'm blocked / Safety / Resolved / ZZTEST Cleaner One · Sep 10, 11:13 AM / ZZTEST URGENT - QA dimension 1, blocked right now, safety hazard on site. / Resolved by ZZTEST Owner on Sep 10, 11:35 AM — ZZTEST resolution - office called the client, hazard cleared, cleaner may proceed.\" My normal one: \"Something else / Open / ZZTEST Cleaner One · Sep 10, 11:12 AM / ZZTEST normal issue - QA dimension 1, category Something else, can wait. / Acknowledge / Resolve\".",
+     "expected": "The job page shows a card for the issue",
+     "actual": "Full \"Reported issues\" card block with per-issue cards, an open counter, inline lifecycle actions, and the resolution note with resolver name and timestamp",
+     "severity": "none",
+     "file": "C:\\Users\\anees\\Downloads\\cleano-software-main\\cleano-software-main\\src\\app\\admin\\jobs\\[id]\\JobDetailView.tsx"
+    },
+    {
+     "item": "Three-state lifecycle: Acknowledge, then Resolve with a note",
+     "status": "PASS",
+     "whatIDid": "On /admin/issues, filtered to Open, located the card containing \"ZZTEST URGENT - QA dimension 1\" and clicked its \"Acknowledge\" button; polled the tab counts until they settled, then read the Acknowledged tab. Then clicked \"Resolve\" on the same card, filled the revealed textarea with \"ZZTEST resolution - office called the client, hazard cleared, cleaner may proceed.\" and clicked \"Confirm resolved\"; polled again and read the Resolved tab. Screenshots scripts/qa/shot-issues-after-ack.png and shot-issues-after-resolve.png",
+     "whatISaw": "Before: \"URGENT — I'M BLOCKED Safety Open 15m ago ... Acknowledge Resolve\". After Acknowledge: tabs moved Open(3)->Open(2), Acknowledged(0)->Acknowledged(1); the card now reads \"...Safety Acknowledged 17m ago ...\" and only offers \"Resolve\". Clicking Resolve revealed one textarea with placeholder \"What was done about it? (optional)\" plus \"Confirm resolved\"/\"Cancel\". After confirming: Acknowledged(1)->Acknowledged(0), Resolved(1)->Resolved(2); card reads \"...Safety Resolved 22m ago ... Resolved by an admin just now — ZZTEST resolution - office called the client, hazard cleared, cle...\" and offers no further actions. Status changed correctly at both steps.",
+     "expected": "Status changes at each step of OPEN -> ACKNOWLEDGED -> RESOLVED, note captured",
+     "actual": "Both transitions applied and reflected in the status chip and tab counts; the resolution note was stored and is displayed",
+     "severity": "none",
+     "file": "C:\\Users\\anees\\Downloads\\cleano-software-main\\cleano-software-main\\src\\app\\admin\\actions\\jobIssues.ts"
+    },
+    {
+     "item": "Sidebar badge count drops as issues leave Open",
+     "status": "PASS",
+     "whatIDid": "Read the badge on a freshly server-rendered /admin/dashboard at three points: before Acknowledge, after Acknowledge, and after Resolve. Also compared the badge against the Open tab count at each point.",
+     "whatISaw": "Before: \"Issues 3\". After Acknowledge: still \"Issues 3\" (unchanged) even though the Open tab had dropped to Open(2). After Resolve: \"Issues 2\". So the badge only drops on RESOLVE, not on ACKNOWLEDGE. This is deliberate, not a defect — src/lib/job-issues.ts isOpenIssueStatus() returns true for anything that is not RESOLVED, with the comment \"ACKNOWLEDGED counts as open — an admin having read it is not the same as the cleaner's problem having gone away, and the sidebar badge would lie if it were.\" Reporting it as a PASS against the code's intent, with a caveat below.",
+     "expected": "Badge count drops as issues leave Open",
+     "actual": "Badge drops when an issue is RESOLVED (3 -> 2); it does not drop on ACKNOWLEDGE, by design",
+     "severity": "none",
+     "file": "C:\\Users\\anees\\Downloads\\cleano-software-main\\cleano-software-main\\src\\lib\\job-issues.ts"
+    },
+    {
+     "item": "Sidebar badge and the Open tab disagree while an issue is Acknowledged (cosmetic)",
+     "status": "PASS",
+     "whatIDid": "After acknowledging one issue, compared the sidebar badge next to the \"Issues\" nav entry with the count printed on the \"Open\" filter pill on /admin/issues in the same browser at the same moment.",
+     "whatISaw": "Sidebar read \"Issues 3\" while the Open pill read \"Open(2)\" and Acknowledged read \"Acknowledged(1)\". Both numbers are internally correct (badge = OPEN+ACKNOWLEDGED, pill = OPEN only), but an admin seeing a badge of 3 who clicks through to a screen defaulting to the Open tab counts 2 and has no on-screen explanation for the third. Not a functional break — recording it as an observation for the product owner, not a failure.",
+     "expected": "An admin can reconcile the badge number with what the page shows",
+     "actual": "Badge 3 vs Open(2); the difference is the acknowledged issue, which is only visible after switching tabs",
+     "severity": "minor",
+     "file": "C:\\Users\\anees\\Downloads\\cleano-software-main\\cleano-software-main\\src\\app\\admin\\Sidebar.tsx"
+    },
+    {
+     "item": "Resolver name shows as \"an admin\" until the page is reloaded (cosmetic)",
+     "status": "PASS",
+     "whatIDid": "Read the resolved card's text immediately after clicking \"Confirm resolved\", then re-read the same issue on a freshly loaded /admin/jobs/cmtumw4ry0011tvs43v4kw7vz.",
+     "whatISaw": "Immediately after resolving: \"Resolved by an admin just now — ZZTEST resolution - office called the client...\". The pre-existing issue resolved in an earlier session, on the same list, correctly read \"Resolved by ZZTEST Owner 15h ago\". After a reload my issue also read \"Resolved by ZZTEST Owner on Sep 10, 11:35 AM\". The DTO carries only resolvedById and the name is resolved server-side, so the optimistic client update has no name to print. Self-heals on refresh; the note itself is never wrong.",
+     "expected": "The card names the admin who resolved it",
+     "actual": "Says \"an admin\" until refresh, then the correct name",
+     "severity": "minor",
+     "file": "C:\\Users\\anees\\Downloads\\cleano-software-main\\cleano-software-main\\src\\app\\admin\\issues\\IssuesClient.tsx"
+    },
+    {
+     "item": "Cleaner sees the resolution note on the job page",
+     "status": "PASS",
+     "whatIDid": "Signed back in as cleaner1 in a fresh browser, opened /cleaners/my-jobs/cmtumw4ry0011tvs43v4kw7vz, read every .cl-jd-issue-log-row and every .cl-jd-issue-log-note. Screenshot: scripts/qa/shot-issues-cleaner-final.png",
+     "whatISaw": "HTTP 200, errorBoundary:false, no console errors. Rows: \"Can't get in OPEN 6m ago\", \"Safety RESOLVED 37m ago ZZTEST resolution - office called the client, hazard cleared, cleaner may proceed.\", \"Something else OPEN 38m ago\". The .cl-jd-issue-log-note selector returned exactly the note I typed as admin: \"ZZTEST resolution - office called the client, hazard cleared, cleaner may proceed.\" The status chip on that row reads RESOLVED.",
+     "expected": "Cleaner sees the admin's resolution note on the job page",
+     "actual": "Note is shown verbatim under the RESOLVED row",
+     "severity": "none",
+     "file": "C:\\Users\\anees\\Downloads\\cleano-software-main\\cleano-software-main\\src\\app\\cleaners\\my-jobs\\[jobId]\\page.tsx"
+    },
+    {
+     "item": "Cleaner's issue log is capped at 3, so older reports and their resolution notes fall off the page",
+     "status": "PASS",
+     "whatIDid": "Counted .cl-jd-issue-log-row before and after filing. Before filing my two issues the log had 2 rows (one OPEN \"Something else\" from 15h earlier, one RESOLVED \"Safety\" with its note). After filing 2 more I re-counted after a hard reload.",
+     "whatISaw": "Row count went 2 -> 3, not 2 -> 4. The 15h-old \"Something else\" report disappeared from the cleaner's own view. The query in the cleaner job page uses take: 3 on db.jobIssue.findMany scoped to reportedById, so only the 3 most recent reports per cleaner per job are ever shown. This is deliberate (the surrounding comments explain the reportedById scoping), but it means the step-9 guarantee — the cleaner sees the resolution note — silently expires: once a cleaner files 3 newer reports on the same job, the admin's resolution note on an older one is no longer reachable anywhere in the cleaner UI. Flagging as an observation for the product owner rather than a defect; it did not break anything I tested.",
+     "expected": "A cleaner can find the office's answer to a report they filed",
+     "actual": "Only the 3 most recent reports per job are shown; older ones and their resolution notes are dropped with no \"show more\"",
+     "severity": "minor",
+     "file": "C:\\Users\\anees\\Downloads\\cleano-software-main\\cleano-software-main\\src\\app\\cleaners\\my-jobs\\[jobId]\\page.tsx"
+    },
+    {
+     "item": "Form guards: empty description blocked, no-category submit folds to \"Something else\"",
+     "status": "PASS",
+     "whatIDid": "Opened the sheet and checked .co-btn-confirm's disabled state with (a) an empty description and (b) a whitespace-only description. Then, with no category selected at all, filled a real ZZTEST description and submitted, waited for detach, reloaded and read the resulting log row.",
+     "whatISaw": "(a) Send report disabled:true with an empty description. (b) Still disabled:true with \"   \" — the guard trims. With zero categories checked (checkedCount:0) the Send button was enabled and the submit was accepted; after reload the new row read \"Something else OPEN 1m ago\", i.e. the server folded the missing category to OTHER rather than rejecting the report, which is exactly the documented contract in src/lib/job-issues.ts parseJobIssueCategory.",
+     "expected": "Description required; a missing category does not lose the report",
+     "actual": "Description required (trimmed); missing category files under \"Something else\"",
+     "severity": "none",
+     "file": "C:\\Users\\anees\\Downloads\\cleano-software-main\\cleano-software-main\\src\\lib\\job-issues.ts"
+    },
+    {
+     "item": "Server log check during the issue flows",
+     "status": "PASS",
+     "whatIDid": "Tailed C:\\Users\\anees\\AppData\\Local\\Temp\\claude\\c--Users-anees-Downloads-cleano-software-main\\d73ff1cf-e9eb-4546-8223-be4d6e45ea90\\scratchpad\\dev.log during and after the runs, and collected all console/pageerror/5xx events through the harness watch() on every run.",
+     "whatISaw": "None of my issue-reporting requests produced a 5xx or a page error. Two unrelated console entries appeared across runs: one 401 on a background resource during the admin lifecycle run and one 429 (Too Many Requests) during two later runs — both on polling endpoints, likely other QA agents hitting the same dev server concurrently, and neither reproduced in the issue flows. dev.log also shows transient Prisma P1001 \"Can't reach database server at aws-1-ca-central-1.pooler.supabase.com:6543\" against getAdminAttentionCounts and getCurrentOrg, with one \"GET /admin/notifications 500\" — an intermittent DB-reachability blip from this machine, not triggered by and not affecting anything in my dimension. Flagging it only because it hit the very action that feeds the sidebar badge; countOpenJobIssues swallows the error and returns 0, so during such a blip the badge would silently read 0 rather than erroring. I did not observe a wrong badge value at any point.",
+     "expected": "No server errors attributable to issue reporting",
+     "actual": "No 5xx from any issue flow; unrelated intermittent P1001 DB-reachability noise in the log",
+     "severity": "minor",
+     "file": "C:\\Users\\anees\\Downloads\\cleano-software-main\\cleano-software-main\\src\\app\\admin\\actions\\jobIssues.ts"
+    }
+   ]
+  }
+ },
+ {
+  "agentId": "a072334d45f5db250",
+  "result": {
+   "dimension": "notification centre + catalog",
+   "summary": "All six checks in this dimension pass. /admin/notifications renders (HTTP 200, h1 \"Notifications\") and lists real in-app event records — 7 rows at the end of the run, including \"Issue reported\" and \"Urgent issue\" entries for ZZTEST job #1. I proved the \"written unconditionally\" claim by real clicking rather than by reading source: I turned the EMAIL toggle for \"Cleaner reported an issue\" (admin.job.issue_reported) OFF in Settings, confirmed it persisted \"Email — Off\" across a reload, then signed in as ZZTEST Cleaner One and filed a fresh NORMAL-urgency issue — and the in-app row \"Issue reported — ZZTEST Client Alpha · 1m ago · ZZTEST Cleaner One · Can't get in · job #1 — ZZTEST unconditional-inapp probe 1789054327810\" appeared in the centre anyway. I then restored the toggle to Email — On. The Settings → Notifications tab renders with three recipient tabs (Admin 86 / Customer 78 / Provider 43 = 207 notification keys, 331 individual channel toggles: 220 On, 111 Off). The documented risk in step 4 does NOT reproduce in this workspace: the \"Job issues\" category with admin.job.issue_reported and admin.job.issue_urgent was ALREADY present BEFORE I clicked Refresh catalog, and clicking Refresh catalog added nothing (counts identical 86/78/43 before and after) — the table was already fully seeded at the catalog's full 207 rows, so the empty-table-only auto-seed had nothing left to do. admin.clock.clocked_out (\"Booking clocked out\") is confirmed \"Email — On\". The only real complaint is speed: the Refresh catalog server action took 32.8s, 34.6s and 3.1min across three real clicks (all HTTP 200 in dev.log), and its success text is never readable because the component calls window.location.reload() the instant it lands. Full key-by-key dump: C:\\Users\\anees\\Downloads\\cleano-software-main\\cleano-software-main\\scripts\\qa\\keys-notif.txt",
+   "results": [
+    {
+     "item": "/admin/notifications renders and lists in-app notification records",
+     "status": "PASS",
+     "whatIDid": "Signed in as zztest-owner@cleano.test at /sign-in (landed /admin/dashboard), then navigated to http://zztestqa.localhost:3006/admin/notifications and read every ul > li. Re-loaded it 4 more times in a later pass (scripts/qa/t-notif5.mjs) to check stability.",
+     "whatISaw": "HTTP 200, no error boundary. h1 \"Notifications\", subtitle \"Everything worth knowing about, kept here even when the matching email is switched off.\" Rows actually listed at the end of the run (7): \"Issue reported — ZZTEST Client Alpha 2m ago ZZTEST Cleaner One · Something else · job #1 — ZZTEST guard probe...\", \"Issue reported — ZZTEST Client Alpha 16m ago ZZTEST Cleaner One · Can't get in · job #1 — ZZTEST unconditional-inapp probe 1789054327810\", \"ZZTEST Cleaner One clocked in 27m ago ZZTEST Client Alpha · job #1\", \"Urgent issue — ZZTEST Client Alpha 47m ago ... Safety · job #1\", \"Issue reported — ZZTEST Client Alpha 48m ago ... Something else · job #1\", \"Urgent issue — ZZTEST Client Alpha 16h ago ...\", \"Issue reported — ZZTEST Client Alpha 16h ago ...\". Issue rows link to href=/admin/jobs/cmtumw4ry0011tvs43v4kw7vz. Four consecutive reloads gave 6, 6, 7, 7 rows (a 7th arrived mid-run from other activity) — never the \"Nothing yet\" empty state. Zero console errors, pageerrors or 5xx captured.",
+     "expected": "Page renders and lists in-app notification records",
+     "actual": "Renders and lists them; both job-issue records and a clock-in record present",
+     "file": "src/app/admin/notifications/page.tsx",
+     "severity": "none"
+    },
+    {
+     "item": "In-app record exists for an already-filed job issue",
+     "status": "PASS",
+     "whatIDid": "On the first load of /admin/notifications, before touching anything, read the list contents.",
+     "whatISaw": "Two pre-existing rows, both for the seeded ZZTEST issues: \"Urgent issue — ZZTEST Client Alpha 15h ago ZZTEST Cleaner One · Safety · job #1 — ZZTEST URGENT - blocked right now, safety hazard reported by QA automation.\" and \"Issue reported — ZZTEST Client Alpha 15h ago ZZTEST Cleaner One · Something else · job #1 — ZZTEST issue one - non-urgent something else report filed by QA automation.\" Both hyperlink to /admin/jobs/cmtumw4ry0011tvs43v4kw7vz.",
+     "expected": "An in-app entry for a reported job issue",
+     "actual": "Two entries present (normal + urgent), with cleaner name, category and description",
+     "file": "src/app/admin/notifications/NotificationsClient.tsx",
+     "severity": "none"
+    },
+    {
+     "item": "In-app record is written UNCONDITIONALLY, regardless of the email toggle",
+     "status": "PASS",
+     "whatIDid": "This is the real test of the claim, done by clicking, not reading. (1) At /admin/settings?tab=notifications I clicked the Email button inside the li whose label is \"Cleaner reported an issue\" (admin.job.issue_reported); its title flipped from \"Email — On\" to \"Email — Off\". (2) Waited 45s for the server action, hard-reloaded the tab, and re-read the title to prove it persisted. (3) In a second browser context signed in as zztest-cleaner1@cleano.test at /cleanos/login, opened /cleaners/my-jobs/cmtumw4ry0011tvs43v4kw7vz, clicked .cl-jd-issue-btn (\"Report an issue\"), picked the first category row, urgency \"Can wait\" (NORMAL), typed \"ZZTEST unconditional-inapp probe 1789054327810\" into #issue-description and clicked \"Send report\". (4) Back in the admin context, reloaded /admin/notifications. (5) Restored the toggle to On. Script: scripts/qa/t-notif4.mjs",
+     "whatISaw": "Toggle before: \"Email — On\". After click: \"Email — Off\". After a full page reload: still \"Email — Off\" (so it really was persisted, not just optimistic). The cleaner's sheet closed after submit with no error text; dev.log shows POST /cleaners/my-jobs/cmtumw4ry0011tvs43v4kw7vz 200 in 37.7s. The admin centre then showed a NEW top row: \"Issue reported — ZZTEST Client Alpha 1m ago ZZTEST Cleaner One · Can't get in · job #1 — ZZTEST unconditional-inapp probe 1789054327810\" — count went from 5 to 6. Toggle restored and re-verified as \"Email — On\". Categories the sheet offered: Can't get in / Supplies or equipment / Property damage / Job is bigger than booked / Safety / Problem with the client / Something else.",
+     "expected": "In-app record still written with EMAIL disabled for that key",
+     "actual": "In-app record written; matches the claim",
+     "file": "src/app/cleaners/my-jobs/[jobId]/reportIssue.ts",
+     "severity": "none"
+    },
+    {
+     "item": "/admin/settings → Notifications tab renders; toggle categories listed",
+     "status": "PASS",
+     "whatIDid": "Navigated to http://zztestqa.localhost:3006/admin/settings?tab=notifications, waited for it to render, then clicked each of the three recipient tab buttons (Admin / Customer / Provider) and scraped every category card h3 and every li.",
+     "whatISaw": "HTTP 200, no error boundary. Header blurb \"Decide who gets notified, on which channel, for every event in the system. Changes save automatically.\" present, plus the \"Refresh catalog\" button. Recipient tabs read Admin 86, Customer 78, Provider 43. ADMIN categories (27): Account, General, New & modified booking, Canceled & postponed booking, Unassigned booking, Reminders, Booking fee charged, Payments / cards, Clock in / clock out, Job issues, Your Awer account, AI assistant, Rating & review, Gift card & referral, Payment processor, Schedule & settings, Booking reschedule fee charged & failed, Checklist, Invoice, Signup, Chat, Instant payouts, Chat (proposed), Documents / signatures (proposed), Provider reporting (proposed), Quotes, Gift cards. CUSTOMER categories (18): Account, New & modified booking, Canceled booking, Reminders, Completed booking, Booking fee charged & refund, Card declined, Rating & review, Gift card & referral, Quote, Checklist, Separate charge, Invoice, Chat (proposed), Reports, Quotes, Card holds, Gift cards. PROVIDER categories (16): Account, Drive, Unassigned booking, Reminders, Rating & review, Payments, Payment processor, Schedule & settings, Checklist, New & modified booking, Canceled booking, Clock in / clock out, Chat, Instant payouts, Chat (proposed), Provider reporting (proposed).",
+     "expected": "Notifications tab renders with toggle categories",
+     "actual": "Renders; 61 categories across 3 recipients",
+     "file": "src/app/admin/settings/tabs/NotificationsTab.tsx",
+     "severity": "none"
+    },
+    {
+     "item": "\"Job issues\" category present BEFORE Refresh catalog (documented empty-table-only seed claim)",
+     "status": "PASS",
+     "whatIDid": "Scraped every ADMIN category h3 on a freshly loaded /admin/settings?tab=notifications BEFORE touching the Refresh catalog button, specifically looking for \"Job issues\". Then clicked Refresh catalog and scraped all three recipients again to diff.",
+     "whatISaw": "\"Job issues\" was ALREADY there before any refresh, with both rows: \"Cleaner reported an issue\" (Email — On | SMS — Off) and \"Cleaner reported an urgent issue\" (Email — On | SMS — Off). After clicking Refresh catalog: categories added = [], categories removed = [], new items = [], and recipient counts identical before and after (Admin 86 / Customer 78 / Provider 43, 207 total = the full catalog). A later run re-confirmed jobIssues:true post-refresh. So the documented failure mode — no Job issues category until someone hits Refresh catalog — does NOT reproduce in the zztestqa workspace: the notificationSetting table is already fully seeded at 207 rows, so the empty-table-only auto-seed has nothing left to skip. Refresh catalog is therefore a no-op here (0 inserted), not a fix. I cannot tell from the UI whether it was seeded originally or by an earlier Refresh click.",
+     "expected": "Possibly missing Job issues until Refresh catalog is clicked",
+     "actual": "Job issues present before AND after; Refresh catalog inserted nothing",
+     "file": "src/lib/notifications/catalog.ts",
+     "severity": "none"
+    },
+    {
+     "item": "\"Refresh catalog\" button works when clicked",
+     "status": "PASS",
+     "whatIDid": "Clicked the \"Refresh catalog\" button three separate times across three script runs (scripts/qa/t-notif.mjs, t-notif2.mjs, t-notif3.mjs), each time polling the button label and the reseed message, logging POST requests, and cross-checking dev.log.",
+     "whatISaw": "The button label changes to \"Refreshing…\" with a spinning icon on click, and dev.log records the server action completing: \"POST /admin/settings?tab=notifications 200 in 32.8s\", \"POST /admin/settings?tab=notifications 200 in 34.6s\", \"POST /admin/settings?tab=notifications 200 in 3.1min\". So it does fire and does succeed. Two rough edges, both cosmetic: (a) it can sit on \"Refreshing…\" for over 3 minutes with no progress indication beyond the spinner — my 180s poll timed out on the third click before it landed; (b) the \"Catalog refreshed — N new, M total.\" confirmation is never actually readable, because handleReseed sets the message and then immediately calls window.location.reload(), which wipes it. I never once managed to capture that string on screen across three clicks. Neither is a functional failure, and the pace guidance says slow saves are expected on this machine, so I am not calling this a bug.",
+     "expected": "Click reseeds the catalog and reports the result",
+     "actual": "Reseeds successfully (HTTP 200) but takes 33s-3.1min, and the success message is destroyed by the immediate page reload",
+     "file": "src/app/admin/settings/tabs/NotificationsTab.tsx",
+     "severity": "minor"
+    },
+    {
+     "item": "Every notification toggle key and its on/off state",
+     "status": "PASS",
+     "whatIDid": "Scraped all 207 li rows across the Admin, Customer and Provider tabs, reading each channel button's title attribute (\"Email — On\" / \"SMS — Off\" / \"App / Push — On\"), then mapped every on-screen label back to its catalog key by (recipient, category, label). All 207 mapped with zero unmatched. Full dump written to scripts/qa/keys-notif.txt.",
+     "whatISaw": "207 notification keys / 331 individual channel toggles: 220 On, 111 Off. By channel — Email 170 On / 29 Off; SMS 5 On / 72 Off; App/Push 45 On / 10 Off. Admin 86 keys, Customer 78, Provider 43. Selected ADMIN states: admin.job.issue_reported Email On | SMS Off; admin.job.issue_urgent Email On | SMS Off; admin.clock.on_the_way Email Off | SMS Off; admin.clock.not_on_the_way Email Off | SMS Off; admin.clock.not_clocked_in Email On | SMS Off; admin.clock.clocked_in Email On | SMS Off; admin.clock.clocked_out Email On | SMS Off; admin.clock.late_arrival Email On | App/Push On; admin.job.photos_uploaded Email On | SMS Off; admin.booking.declined Email Off | SMS Off; admin.reminders.job Email Off | SMS Off; admin.reminders.cash_check Email Off | SMS Off; admin.giftcard.new_purchased Email Off | SMS Off; admin.invoice.skip Email Off; admin.invoice.end_recurring Email Off; admin.chat.new_message App/Push On. Six rows carry a PROPOSED badge: admin.chat.customer_provider_msg, admin.docs.signature_request, admin.docs.signed_completed, admin.report.monthly_generated, cust.chat.new_message, prov.chat.new_message_v2, prov.report.monthly_breakdown. Whole-file listing (270 lines, key :: channel states) at C:\\Users\\anees\\Downloads\\cleano-software-main\\cleano-software-main\\scripts\\qa\\keys-notif.txt",
+     "expected": "All toggle keys visible with readable state",
+     "actual": "All 207 keys enumerated with per-channel state",
+     "file": "src/lib/notifications/catalog.ts",
+     "severity": "none"
+    },
+    {
+     "item": "admin.clock.clocked_out has EMAIL enabled in the catalog",
+     "status": "PASS",
+     "whatIDid": "On the Admin recipient tab, opened the \"Clock in / clock out\" category card and read the title attribute of the Email button on the \"Booking clocked out\" row (label for key admin.clock.clocked_out). Checked both before and after clicking Refresh catalog.",
+     "whatISaw": "\"Booking clocked out\" => [\"Email — On\", \"SMS — Off\"], identical before and after the refresh. Its sibling rows for context: \"Booking clocked in\" Email — On | SMS — Off; \"Booking not clocked in\" Email — On | SMS — Off; \"Provider on the way\" Email — Off | SMS — Off; \"Provider not on the way\" Email — Off | SMS — Off. So clocked_out now matches clocked_in as documented.",
+     "expected": "admin.clock.clocked_out EMAIL = enabled",
+     "actual": "Email — On",
+     "file": "src/lib/notifications/catalog.ts",
+     "severity": "none"
+    },
+    {
+     "item": "Transient empty read of /admin/notifications (one occurrence, not reproducible)",
+     "status": "PASS",
+     "whatIDid": "During the t-notif4 run, one baseline read of /admin/notifications immediately after visit()+5s returned 0 ul > li elements, while the same page a minute later showed 6 rows including 16h-old records. I chased it with a dedicated 4-pass stability script (scripts/qa/t-notif5.mjs) using a 12s settle wait on each pass.",
+     "whatISaw": "Four consecutive passes all rendered content immediately and after settling: 6/6, 6/6, 7/7, 7/7 ul > li, empty:false every time, h1 \"Notifications\" every time. Never reproduced the zero read. Given the render times in dev.log (GET /admin/notifications 200 in 12.0s / 13.7s / 15.3s), the single 0 was almost certainly my script sampling the streamed page too early, not the centre dropping records. Recording it only so it is not mistaken for a new symptom if someone else sees it; I am not claiming a defect.",
+     "expected": "Notification centre always shows existing records",
+     "actual": "Always did across 6 measured loads; one early-sample read of 0 that I could not reproduce",
+     "file": "src/app/admin/notifications/page.tsx",
+     "severity": "none"
+    }
+   ]
+  }
+ },
+ {
+  "agentId": "ae45697de9e5679a0",
+  "result": {
+   "dimension": "Under-staffed job warnings (fix list #4)",
+   "summary": "Built a genuinely short-handed job by real clicking (job cmtumw4ry0011tvs43v4kw7vz \"ZZTEST Client Alpha\": Edit → Schedule & Team → Cleaners needed = 2, exactly one cleaner \"ZZTEST Cleaner One\" assigned, start moved to today 10:30 AM so the clock window was open) and drove it end to end as the cleaner, then repeated the admin half on a second short-handed job (cmtupslvr002rtvs4ogh6pc7a \"ZZTEST Cap OK Client\", released from hold).\n\nThe advisory contract holds where the controls exist. One wording — \"Only 1 of 2 cleaners is on this job — 1 spot was never filled.\" — appeared verbatim on the my-jobs clock-in confirm, the /clock screen's inline block, the clock-out sheet, the admin Complete-job modal, and in the JobLog. Nothing was ever disabled and no server call refused: the cleaner clocked in (11:32 AM), clocked out (12:04 PM, 0h 32m) and the job closed COMPLETED, and the Logs tab carries \"Finished short-staffed. Only 1 of 2 cleaners is on this job — 1 spot was never filled.\" beside the IN_PROGRESS → COMPLETED row. A fully-staffed control job (required 1 / 2 assigned) opened no modal at all on Mark Complete, so the confirm really is conditional.\n\nThe crew-size union rule is correct at the predicate: this job's lead AND its only roster member are the same person, and every surface said \"1 of 2\" — a sum would have said 2 of 2 and shown nothing.\n\nTwo real problems. (1) The mark-arrived surface is unreachable: cleaners get the read-only CleanerCalendarClient drawer (\"Read-only view — contact dispatch to make changes.\", no buttons), and the CalendarJobActions employee branch that holds the \"Mark arrived anyway\" confirm is only mounted by the admin CalendarPageClient, which never sees role EMPLOYEE — so that quarter of the claim cannot be exercised by any user. (2) On the very screen that says \"Only 1 of 2 cleaners\", the cleaner's Team card says \"Team 2 MEMBERS\" and lists the same person twice (lead + roster), because it uses cleaners.length + (employee ? 1 : 0) — the exact sum the shared predicate exists to avoid.\n\nSeparately (not staffing-caused): \"Complete anyway\" reported success (header control flipped to \"Get Review Link\") but the job still reads Scheduled on fresh loads and in the jobs list; the fully-staffed control job behaved identically, so the staffing rule is not what stopped it.\n\nAlso worth knowing for the \"both sides\" wording: the admin has no clock-in/clock-out control at all (clockIn/clockOut are imported only by the cleaner components), so on the admin side Mark Complete is the only staffing-aware clock/complete control.",
+   "results": [
+    {
+     "item": "Cleaner clock-in warning on /cleaners/my-jobs/<id> (ClockInButton)",
+     "status": "PASS",
+     "whatIDid": "Signed in as zztest-cleaner1, opened http://zztestqa.localhost:3006/cleaners/my-jobs/cmtumw4ry0011tvs43v4kw7vz (Cleaners needed 2, one cleaner assigned, start today 10:30 AM) and clicked button:has-text(\"Clock in\"), then clicked button:has-text(\"Clock in anyway\").",
+     "whatISaw": "(a) WARNING: first tap replaced the button with an amber block reading verbatim \"Short-staffed. Only 1 of 2 cleaners is on this job — 1 spot was never filled. Let your admin know if you need help.\" plus \"Not yet\" and \"Clock in anyway\". (b) ACTION: the Clock in button was reported disabled:false, \"Clock in anyway\" disabled:false, and after the second click the job moved to IN PROGRESS — \"Time summary. CLOCKED IN Sep 10, 11:32 AM\" and the Logs tab shows \"ZZTEST Cleaner One clocked in\" / \"Status changed from SCHEDULED to IN_PROGRESS\". Nothing was blocked; the UI just took ~3 min to catch up. Screenshot: C:\\Users\\anees\\Downloads\\cleano-software-main\\cleano-software-main\\scripts\\qa\\shot-staffing-clockin-warn-cmtumw.png",
+     "severity": "none",
+     "file": "C:\\Users\\anees\\Downloads\\cleano-software-main\\cleano-software-main\\src\\app\\cleaners\\my-jobs\\ClockInButton.tsx"
+    },
+    {
+     "item": "Cleaner clock-in warning on the /clock screen (ClockPageClient inline block)",
+     "status": "PASS",
+     "whatIDid": "As zztest-cleaner1 loaded http://zztestqa.localhost:3006/cleaners/my-jobs/cmtumw4ry0011tvs43v4kw7vz/clock and read the page before touching anything.",
+     "whatISaw": "(a) WARNING: rendered before any tap — \"Short-staffed. Only 1 of 2 cleaners is on this job — 1 spot was never filled. Let your admin know if you need help.\" sitting directly above \"On my way / Clock in\". (b) ACTION: the Clock in button reported count 1, disabled:false, label \"Clock in\" — no disabled state from the shortfall. The clock-in itself was exercised on the sibling my-jobs screen rather than twice on the same job. Screenshot: C:\\Users\\anees\\Downloads\\cleano-software-main\\cleano-software-main\\scripts\\qa\\shot-staffing-clockpage-cmtumw.png",
+     "severity": "none",
+     "file": "C:\\Users\\anees\\Downloads\\cleano-software-main\\cleano-software-main\\src\\app\\cleaners\\my-jobs\\[jobId]\\clock\\ClockPageClient.tsx"
+    },
+    {
+     "item": "Cleaner clock-out warning and short-handed completion (ClockOutButton sheet)",
+     "status": "PASS",
+     "whatIDid": "As zztest-cleaner1 on the same job (now IN PROGRESS) clicked \"Clock Out\", read the closing-inventory sheet, then clicked \"Clock out anyway\" and waited on the page for 4 minutes.",
+     "whatISaw": "(a) WARNING: the sheet carried \"Short-staffed. Only 1 of 2 cleaners is on this job — 1 spot was never filled. You can still clock out — the job is logged as finished short-handed.\" and the confirm button was relabelled from \"No changes — clock out\" to \"Clock out anyway\". (b) ACTION: confirm reported disabled:false and it went through — after ~204s the sheet closed and the page read \"Time summary. CLOCKED IN Sep 10, 11:32 AM CLOCKED OUT Sep 10, 12:04 PM TOTAL WORKED 0h 32m\", status chip COMPLETED, \"1 session logged. Clock back in if you need to return to this job.\" Screenshot: C:\\Users\\anees\\Downloads\\cleano-software-main\\cleano-software-main\\scripts\\qa\\shot-staffing-clockout-warn-cmtumw.png",
+     "severity": "none",
+     "file": "C:\\Users\\anees\\Downloads\\cleano-software-main\\cleano-software-main\\src\\app\\cleaners\\my-jobs\\ClockOutButton.tsx"
+    },
+    {
+     "item": "JobLog row recording a short-handed completion",
+     "status": "PASS",
+     "whatIDid": "After the clock-out, opened http://zztestqa.localhost:3006/admin/jobs/cmtumw4ry0011tvs43v4kw7vz?tab=logs as the owner and read the Activity timeline.",
+     "whatISaw": "Top row: \"Finished short-staffed. Only 1 of 2 cleaners is on this job — 1 spot was never filled. by ZZTEST Cleaner One — requiredCleaners: 1 → 2 — Sep 10 12:05 PM\", immediately above \"Status changed from IN_PROGRESS to COMPLETED\" (12:05 PM) and \"ZZTEST Cleaner One clocked out\" (12:04 PM). Screenshot: C:\\Users\\anees\\Downloads\\cleano-software-main\\cleano-software-main\\scripts\\qa\\shot-staffing-log3-cmtumw.png",
+     "severity": "none",
+     "file": "C:\\Users\\anees\\Downloads\\cleano-software-main\\cleano-software-main\\src\\app\\admin\\actions\\clockOut.ts"
+    },
+    {
+     "item": "Wording of the short-staffed log row's field diff",
+     "status": "FAIL",
+     "expected": "The generic field line under a log row reads oldValue → newValue as a change; for this audit row the two numbers are assigned vs required, not a before/after.",
+     "actual": "The timeline prints \"requiredCleaners: 1 → 2\", which reads as \"somebody raised the crew target from 1 to 2\" rather than \"1 of the 2 needed cleaners were on it\".",
+     "whatIDid": "Read the row rendered by the Activity timeline on /admin/jobs/cmtumw4ry0011tvs43v4kw7vz?tab=logs.",
+     "whatISaw": "\"Finished short-staffed. Only 1 of 2 cleaners is on this job — 1 spot was never filled. by ZZTEST Cleaner One  requiredCleaners: 1 → 2  Sep 10 12:05 PM\". The description sentence is unambiguous; only the auto-rendered diff line is misleading.",
+     "severity": "minor",
+     "file": "C:\\Users\\anees\\Downloads\\cleano-software-main\\cleano-software-main\\src\\app\\admin\\jobs\\[id]\\JobDetailView.tsx"
+    },
+    {
+     "item": "Admin Mark Complete confirm on a short-staffed job",
+     "status": "PASS",
+     "whatIDid": "As the owner opened http://zztestqa.localhost:3006/admin/jobs/cmtupslvr002rtvs4ogh6pc7a (Cleaners needed 2, one cleaner, released from hold → Scheduled) and clicked \"Mark Complete\".",
+     "whatISaw": "(a) WARNING: a modal titled \"Complete a short-staffed job?\" with body \"Only 1 of 2 cleaners is on this job — 1 spot was never filled. Completing it now closes the job, marks the crew's assignments complete and asks the customer to rate it.\" and buttons \"Not yet\" / \"Complete anyway\". (b) BLOCKING: nothing — Mark Complete reported disabled:false and \"Complete anyway\" disabled:false; the server returned success (the header control switched to the COMPLETED-only \"Get Review Link\" after ~84s). Screenshot: C:\\Users\\anees\\Downloads\\cleano-software-main\\cleano-software-main\\scripts\\qa\\shot-staffing-complete2-modal-cmtups.png",
+     "severity": "none",
+     "file": "C:\\Users\\anees\\Downloads\\cleano-software-main\\cleano-software-main\\src\\app\\admin\\jobs\\[id]\\JobDetailView.tsx"
+    },
+    {
+     "item": "Admin \"Complete anyway\" does not actually close the job (not staffing-caused)",
+     "status": "FAIL",
+     "expected": "After confirming \"Complete anyway\", markJobComplete sets the job to COMPLETED and the job reads Completed on reload.",
+     "actual": "The action reported success (button went \"Saving…\" for ~84s then the header offered \"Get Review Link\", which only renders for COMPLETED), but two fresh loads of /admin/jobs/cmtupslvr002rtvs4ogh6pc7a and the /admin/jobs table minutes later all still show \"Scheduled\", and the job's Logs tab contains only \"Released from hold…\" and \"Job created…\" — no completion.",
+     "whatIDid": "Clicked Mark Complete → \"Complete anyway\" on the short-staffed job, polled the same page for 5 minutes, then reloaded the job page and the jobs list. Repeated the click on the fully-staffed control job cmtuoasr90027tvs4n8qcqd8b.",
+     "whatISaw": "Jobs table after both attempts: \"Sep 10 8:00 PM ZZTEST Cap OK Client ZC — $200.00 — 60% — Scheduled\" and \"Sep 18 11:00 AM ZZTEST Client Alpha … Scheduled\". The fully-staffed control (no staffing modal at all) failed the same way, so the staffing rule is NOT what stopped it — the button was never disabled and the server never refused. Flagged here only because my dimension asks whether the action goes through. Screenshots: shot-staffing-complete3-cmtups.png, shot-staffing-complete3-logs-cmtups.png in C:\\Users\\anees\\Downloads\\cleano-software-main\\cleano-software-main\\scripts\\qa\\",
+     "severity": "minor",
+     "file": "C:\\Users\\anees\\Downloads\\cleano-software-main\\cleano-software-main\\src\\app\\admin\\actions\\markJobComplete.ts"
+    },
+    {
+     "item": "Control: no warning when the job is fully staffed",
+     "status": "PASS",
+     "whatIDid": "As the owner clicked \"Mark Complete\" on cmtuoasr90027tvs4n8qcqd8b (Cleaners needed = 1, two cleaners assigned — read from the Edit modal's #requiredCleaners field) and looked for the confirm.",
+     "whatISaw": "No modal at all: \"Complete a short-staffed job?\" text absent, \"Complete anyway\" count 0, \"Not yet\" count 0 — one click, exactly as on a fully-staffed job. The confirm really is conditional on the shortfall.",
+     "severity": "none",
+     "file": "C:\\Users\\anees\\Downloads\\cleano-software-main\\cleano-software-main\\src\\app\\admin\\jobs\\[id]\\JobDetailView.tsx"
+    },
+    {
+     "item": "Mark-arrived warning (\"Mark arrived anyway\")",
+     "status": "BLOCKED",
+     "expected": "A cleaner opening a short-staffed SCHEDULED job in the calendar drawer sees \"Mark arrived\", the first tap arms \"Short-staffed. … You can still start the job.\" and \"Mark arrived anyway\" still works.",
+     "actual": "There is no \"Mark arrived\" control anywhere a user can reach. As zztest-cleaner1 I opened /cleaners/calendar and clicked the short-staffed job's chip; the drawer opened showing \"ZZTEST Cap OK Client #5 · Clean clean Scheduled When Thu, Sep 10 · 8 PM (2h) Service Clean Cleaner pay $80 Team ZC ZZTEST\" and ended with \"Read-only view — contact dispatch to make changes.\" — button:has-text(\"Mark arrived\") count 0.",
+     "whatIDid": "Drove the cleaner calendar in the browser (chip click → drawer), then traced why: /cleaners/calendar re-exports /admin/calendar/page.tsx, which returns CleanerCalendarClient early for role EMPLOYEE (line ~21) and only renders CalendarPageClient (the one that mounts CalendarJobActions) for non-employees, passing isEmployee — which is therefore always false there.",
+     "whatISaw": "CleanerCalendarClient has no arrival action at all (its only relevant string is \"Read-only view — contact dispatch to make changes.\"), and the CalendarJobActions block holding requestMarkArrived / \"Mark arrived anyway\" lives inside `isEmployee ? … : …`, so it never renders. The shared predicate is wired there correctly in code, but no user can exercise it. Screenshot: C:\\Users\\anees\\Downloads\\cleano-software-main\\cleano-software-main\\scripts\\qa\\shot-staffing-arrived3-drawer-cmtups.png",
+     "severity": "major",
+     "file": "C:\\Users\\anees\\Downloads\\cleano-software-main\\cleano-software-main\\src\\app\\admin\\calendar\\page.tsx"
+    },
+    {
+     "item": "Crew size = distinct people (union of lead + roster, no double count)",
+     "status": "PASS",
+     "whatIDid": "Constructed exactly the double-count case: job cmtumw4ry0011tvs43v4kw7vz was saved from the Edit modal with a single cleaner, so saveJob's resolveJobLead stamped ZZTEST Cleaner One as employeeId AND left her as the only row in cleaners — the same person in both — with Cleaners needed = 2. Then read every warning surface.",
+     "whatISaw": "All four surfaces said \"Only 1 of 2 cleaners is on this job — 1 spot was never filled\" (clock-in confirm, /clock inline block, clock-out sheet, admin Complete modal), and the JobLog stored assigned=1 / required=2. A lead+roster sum would have counted her twice, produced 2 of 2 and shown no warning at all. The opposite direction (an admin-assigned lead who is NOT on the roster) could not be built through the UI: saveJob always makes the first roster member the lead.",
+     "severity": "none",
+     "file": "C:\\Users\\anees\\Downloads\\cleano-software-main\\cleano-software-main\\src\\lib\\cleaner-jobs.ts"
+    },
+    {
+     "item": "Cleaner job page Team card contradicts the staffing warning",
+     "status": "FAIL",
+     "expected": "On a job whose lead and only roster member are the same person, the Team card should say 1 member — the same distinct-people count the warning on that page uses.",
+     "actual": "The card reads \"Team 2 MEMBERS — LEAD ZZTEST Cleaner One — ZZTEST Cleaner One · You · Cleaner\": one human, listed twice, counted twice, on the same screen as \"Short-staffed. Only 1 of 2 cleaners is on this job\". The head-count is `job.cleaners.length + (job.employee ? 1 : 0)` — the lead+roster sum the shared predicate exists to replace.",
+     "whatIDid": "Read the Team card on http://zztestqa.localhost:3006/cleaners/my-jobs/cmtumw4ry0011tvs43v4kw7vz as zztest-cleaner1 while the short-staffed warning was on screen.",
+     "whatISaw": "Page text: \"… Team 2 MEMBERS LEAD ZZTEST Cleaner One Z ZZTEST Cleaner One You · Cleaner …\" with the amber \"Only 1 of 2 cleaners is on this job\" block a few hundred pixels above it. A cleaner reading \"2 members\" can reasonably conclude a teammate is coming, which is exactly the belief fix #4 exists to correct. Screenshot: C:\\Users\\anees\\Downloads\\cleano-software-main\\cleano-software-main\\scripts\\qa\\shot-staffing-clockin-warn-cmtumw.png",
+     "severity": "major",
+     "file": "C:\\Users\\anees\\Downloads\\cleano-software-main\\cleano-software-main\\src\\app\\cleaners\\my-jobs\\[jobId]\\page.tsx"
+    },
+    {
+     "item": "Admin-side clock-in / clock-out controls",
+     "status": "PASS",
+     "whatIDid": "Looked for admin clock controls on /admin/jobs/<id> and in the admin calendar drawer, and checked which components call the clockIn/clockOut actions.",
+     "whatISaw": "The admin job page offers only \"Edit job times\" (ClockTimeEditor → updateClockTimes) and \"Mark Complete\"; the admin calendar drawer's \"Complete job\" just routes to the job page. clockIn/clockOut are imported only by ClockInButton, ClockOutButton and ClockPageClient — all cleaner-side. So there is no admin clock-in/clock-out to warn on, and the only staffing-aware admin control is the Mark Complete confirm (verified above). Reported for completeness because the documented behaviour says clock-in/clock-out are read on both sides.",
+     "severity": "none",
+     "file": "C:\\Users\\anees\\Downloads\\cleano-software-main\\cleano-software-main\\src\\app\\admin\\jobs\\[id]\\JobDetailView.tsx"
+    },
+    {
+     "item": "Admin crew-picker advisory while setting up the shortfall",
+     "status": "PASS",
+     "whatIDid": "In the Edit modal (Step 2 of 3 — Schedule & Team) set \"Cleaners needed\" to 2 with one cleaner chip left in \"Assigned cleaners:\".",
+     "whatISaw": "An amber advisory appeared beside the field: \"1 of 2 assigned — 1 more spot is open to cleaners.\" No field was disabled and the save went through (the job then showed the shortfall everywhere downstream). Screenshot: C:\\Users\\anees\\Downloads\\cleano-software-main\\cleano-software-main\\scripts\\qa\\shot-staffing-prep-modal-cmtumw.png",
+     "severity": "none",
+     "file": "C:\\Users\\anees\\Downloads\\cleano-software-main\\cleano-software-main\\src\\app\\admin\\jobs\\JobModal.tsx"
+    }
+   ]
+  }
+ },
+ {
+  "agentId": "aac1b66ca0f2d9078",
+  "result": {
+   "dimension": "Phone masking & customer-phone visibility (fix list #6)",
+   "summary": "Drove a headless chromium through the whole masking feature in the zztestqa workspace via scripts/qa/t-masking.mjs (11 runs). The UI is all there and behaves as documented: the Connectors tab has a working \"Masked numbers\" pool (add / take out of service / remove-refusal) with both Twilio webhook URLs shown with Copy buttons; provider.maskCustomerPhone defaults OFF and provider.showCustomerPhone defaults ON; with masking OFF the cleaner sees the customer's real number as a tel: link and no text link; with masking ON and an EMPTY pool it falls back silently to old behaviour; and I additionally forced the two other branches by adding a pool number — the loud \"No company number is free for this job right now. Contact the office…\" message and the fully masked card (+15555550100 with call and text links plus \"the client's own number is not shared\"). The available-jobs list and its preview modal are clean — the real number is not in the DOM, the inline scripts, or the preview server-action response. ONE REAL FINDING: the customer's real number IS shipped to the cleaner's browser in the RSC flight payload even when it is not displayed at all (show OFF, mask ON) and even when the card says the number is not shared (mask ON with a pool) — the raw Prisma results of maskedNumberForJob, including {\"client\":{\"phone\":\"(514) 555-0200\"}} and the MaskedContact row with \"clientPhone\":\"+15145550200\", land in self.__next_f. That contradicts the design's explicit \"never sent to the browser at all — not hidden in the markup, not in a tel: link, not in the props\" claim, but the surrounding rows are dev-only debug serialization (D{\"time\":…} markers, $Y omitted-value markers, absolute server file paths), so it must be re-checked against a production build before being called a shipping leak. Settings were restored to defaults and verified twice.",
+   "results": [
+    {
+     "item": "Settings → Connectors → \"Masked numbers\": pool UI + add a number",
+     "status": "PASS",
+     "file": "src/app/admin/settings/tabs/ConnectorsTab.tsx",
+     "expected": "A Masked numbers card that lists the pool and lets an admin add a number they own in Twilio",
+     "actual": "Present and functional",
+     "whatIDid": "Signed in as zztest-owner, went to http://zztestqa.localhost:3006/admin/settings?tab=connectors, read the whole card, then typed +15555550100 into #proxy-number and \"ZZTEST masking pool 1\" into #proxy-label and clicked the card's Add button",
+     "whatISaw": "Card headed \"Masked numbers\" with badge \"Nothing to hand out\" while empty, body copy \"A pooled number is one you own in Twilio and lend to a cleaner for the length of a job: they call or text it, we relay both ways, and neither side ever holds the other's real number.\", and a form \"ADD A NUMBER YOU OWN IN TWILIO\" (#proxy-number placeholder \"+15145551234\", #proxy-label, Add button disabled while the number field is empty). After adding, the badge read \"1 in service\" and the row read \"+15555550100 / ZZTEST masking pool 1 · Idle / In service\" with \"Take out of service\" and a Remove (trash) button. Screenshot scripts/qa/shot-masking-pool.png",
+     "severity": "none"
+    },
+    {
+     "item": "Connectors → Masked numbers: Voice and Messaging webhook URLs ready to copy",
+     "status": "PASS",
+     "file": "src/app/admin/settings/tabs/ConnectorsTab.tsx",
+     "expected": "Both webhook addresses displayed with a copy control, pointing at this workspace's Twilio endpoints",
+     "actual": "Both shown, each with its own Copy button",
+     "whatIDid": "Read the grey footer block of the Masked numbers card and enumerated every button inside the card",
+     "whatISaw": "\"ON EACH POOLED NUMBER, POINT “A CALL COMES IN” HERE\" → http://zztestqa.localhost:3006/api/twilio/voice [Copy]; \"…AND “A MESSAGE COMES IN” HERE\" → http://zztestqa.localhost:3006/api/twilio/inbound [Copy]; footnote \"Both are HTTP POST, and both belong on every number in the pool — a number missing one of them relays half a conversation, which is harder to notice than one that relays none.\" Buttons inside the card: [\"Add\",\"Copy\",\"Copy\"]. The URLs are built from the request host, so on this dev box they carry the http://zztestqa.localhost:3006 origin — a real Twilio console would need the public https host",
+     "severity": "none"
+    },
+    {
+     "item": "Removing a pooled number that is carrying a live conversation",
+     "status": "PASS",
+     "file": "src/app/admin/actions/proxyNumbers.ts",
+     "expected": "Refused, with an explanation, per the card's own copy \"Removing it is permanent, so it is refused while anything is still live on it\"",
+     "actual": "Refused with a clear message; the number stayed in the pool",
+     "whatIDid": "After a MaskedContact pairing had been allocated on +15555550100, clicked its Remove (trash) button on the Connectors tab and read the role=\"status\" message",
+     "whatISaw": "\"This number is carrying 1 live conversation. Turn it off instead — that stops it being handed out again, and the conversations already on it keep working until they expire.\" The row stayed, still labelled \"1 live conversation\"",
+     "severity": "none"
+    },
+    {
+     "item": "Settings → Provider: provider.maskCustomerPhone exists and its default state",
+     "status": "PASS",
+     "file": "src/lib/settings/registry.ts",
+     "expected": "Setting present, default OFF/false",
+     "actual": "Present and UNCHECKED on first read — default OFF confirmed",
+     "whatIDid": "Went to /admin/settings?tab=provider and read every input[type=checkbox] with its surrounding label text",
+     "whatISaw": "Checkbox labelled \"Hide the customer's real number behind a company number\" → checked: false. Helper text: \"When on, the cleaner is given one of your own pooled numbers instead of the customer's. Calls and texts to it are relayed both ways, and the customer's real number is never sent to the cleaner's phone or their browser. Add at least one number under Settings → Connectors → Masked numbers — with an empty pool this does nothing and cleaners see whatever the setting above allows.\" I turned it ON during testing and set it back — final verified state is OFF",
+     "severity": "none"
+    },
+    {
+     "item": "Settings → Provider: provider.showCustomerPhone state",
+     "status": "PASS",
+     "file": "src/lib/settings/registry.ts",
+     "expected": "Setting present; registry default is true",
+     "actual": "Present and CHECKED (true)",
+     "whatIDid": "Same Provider tab read",
+     "whatISaw": "Checkbox labelled \"Cleaners can see the customer's phone number\" → checked: true, under the \"Provider Privacy\" card (\"What cleaners can see about the customer on a job. Changes are audit-logged.\"). Helper: \"When off, the customer's phone number is hidden from the cleaner on the job detail page.\" I flipped it OFF for the leak test and restored it — final verified state is ON",
+     "severity": "none"
+    },
+    {
+     "item": "Cleaner job detail: customer contact row with masking OFF",
+     "status": "PASS",
+     "file": "src/app/cleaners/my-jobs/[jobId]/page.tsx",
+     "expected": "Old behaviour: the customer's real phone with a call link, gated on showCustomerPhone",
+     "actual": "Real number shown as a call link; no text link",
+     "whatIDid": "Signed in as zztest-cleaner1 at /cleanos/login, opened http://zztestqa.localhost:3006/cleaners/my-jobs/cmtumw4ry0011tvs43v4kw7vz (ZZTEST Client Alpha) and read the .cl-jd-card containing h3 \"Client contact\", plus every a[href^=tel:] / a[href^=sms:] on the page",
+     "whatISaw": "Card text: \"Client contact / Phone / (514) 555-0200 / Use this to let the client know if you're running late or have a quick question about the job.\" Links on the whole page: exactly one — {href: \"tel:(514) 555-0200\", text: \"(514) 555-0200\"}. NO sms:/text link. (514) 555-0200 is ZZTEST Client Alpha's real number, confirmed on /admin/clients",
+     "severity": "none"
+    },
+    {
+     "item": "LEAK CHECK — cleaner job detail: real customer phone in the DOM / RSC flight when it is NOT displayed",
+     "status": "FAIL",
+     "file": "src/app/cleaners/my-jobs/[jobId]/page.tsx",
+     "expected": "Per src/lib/settings/registry.ts: \"the real number is never sent to the browser at all — not hidden in the markup, not in a tel: link, not in the props\", and per the masked card's own copy \"the client's own number is not shared\"",
+     "actual": "The real number reaches the browser in the RSC flight payload in EVERY masking configuration, including the two where it is not displayed at all",
+     "whatIDid": "On the cleaner's job detail page I dumped page.content(), the concatenated text of every <script> (the self.__next_f flight rows) and every text/json/js network response body, and searched for 8 spellings of (514) 555-0200 plus any JSON key containing \"phone\". Repeated under four configurations: (a) mask OFF/show ON, (b) mask ON/show ON/empty pool, (c) mask ON/show OFF/empty pool, (d) mask ON/show OFF/one pool number. Raw flight saved to scripts/qa/flight-masking.txt",
+     "whatISaw": "(c) mask ON + show OFF + empty pool: the page rendered NO \"Contact client.\" section at all and zero tel:/sms: links — yet the flight contained `146:[1,{\"id\":\"cmtuoasr9…\",\"startTime\":\"$D2026-09-18T15:00:00.000Z\",\"endTime\":null,\"clientId\":\"cmtumqx54000xtvs4x5chjn6n\",\"client\":{\"phone\":\"(514) 555-0200\"}}]` and `[1,{\"phone\":\"(514) 555-0101\"}]` (the cleaner's own number). (d) mask ON + one pool number: the card showed only +15555550100 and the line \"Calls and texts go through the company number — the client's own number is not shared\", while the flight carried BOTH `\"client\":{\"phone\":\"(514) 555-0200\"}` AND the whole MaskedContact row `{\"…jobId\":\"cmtuoasr9…\",\"proxyNumberId\":\"cmtvr32vf004ctvzsh3b1bpgu\",\"cleanerPhone\":\"+15145550101\",\"clientPhone\":\"+15145550200\",\"expiresAt\":\"$D2026-09-19T15:00:00.000Z\"}`. These are the verbatim Prisma results of maskedNumberForJob (job findFirst selecting client.phone, user findFirst selecting phone, the maskedContact create), serialized into self.__next_f. IMPORTANT CAVEAT: the adjacent rows are dev-only debug serialization — `1bb:D{\"time\":53282.15}` timing rows, React's `$Y` omitted-value markers, and absolute server paths (`[\"JobDetailPage\",\"C:\\\\Users\\\\anees\\\\Downloads\\\\cleano-software-main\\\\…\"]`) — so this is very likely the Next dev I/O debug channel and may not exist in a production build. I could not verify that here (the dev server must not be restarted). It still needs a prod-build re-check, because the feature's whole selling point is that the number never reaches the browser",
+     "severity": "major"
+    },
+    {
+     "item": "LEAK CHECK — /cleaners/available-jobs list and its preview modal",
+     "status": "PASS",
+     "file": "src/app/cleaners/available-jobs/getAvailableJobPreview.types.ts",
+     "expected": "No customer phone in the list, the modal, or the preview server-action response",
+     "actual": "Clean — zero hits in all three",
+     "whatIDid": "The board was empty for both ZZTEST cleaners, so as admin I created an unassigned job (#6, ZZTEST Client Alpha, Fri Sep 25 10:00 AM, notes \"ZZTEST masking preview probe\") to populate it. Then as zztest-cleaner1 I loaded /cleaners/available-jobs, dumped DOM + inline scripts, clicked .cl-preview-btn (\"Preview\"), waited for \"Loading job details…\" to clear, and dumped the modal DOM plus every captured server-action response body",
+     "whatISaw": "List row \"ZZTEST Client Alpha / JOB #6 / Fri, Sep 25 · 10:00 AM / EST. PAY $64.00 / House · 3bd · 2ba / 1234 ZZTEST Rue Sainte-Catherine / 1 spot remaining / Preview / Claim this job\". Modal: \"Job #6 / ZZTEST Client Alpha / When / Est. duration / Service / Property / Your est. pay $64.00 / Spots left 1 of 1 / ADDRESS 1234 ZZTEST Rue Sainte-Catherine, H3B 1A7 / Door and access codes are shown once the job is yours. / ADD-ONS / CHECKLIST / SPECIAL INSTRUCTIONS\". Searches: available-jobs DOM 126821 chars → 0 hits, 0 phone keys; inline scripts 102634 chars → 0 hits; modal DOM 132093 chars → 0 hits; preview server-action response (POST /cleaners/available-jobs) → 0 hits, 0 phone keys. No phone, no tel: link, no phone-ish JSON key anywhere",
+     "severity": "none"
+    },
+    {
+     "item": "maskCustomerPhone turned ON with an EMPTY pool — which fallback fires",
+     "status": "PASS",
+     "file": "src/lib/phone-masking.ts",
+     "expected": "Documented: falls back to today's behaviour when it cannot mask; the loud \"call the office\" case is reserved for an exhausted pool",
+     "actual": "Got the SILENT fallback (reason \"not-configured\"), which is the documented behaviour for an empty pool",
+     "whatIDid": "As admin ticked \"Hide the customer's real number behind a company number\" and saved (feedback \"Provider settings saved.\", re-read after reload confirmed maskCustomerPhone=true, showCustomerPhone=true). Waited well past the documented 30s settings cache (the cleaner sign-in and page load alone take minutes), then reloaded the cleaner's job detail page",
+     "whatISaw": "Identical to masking-off: \"Client contact / Phone / (514) 555-0200\", one link {href: \"tel:(514) 555-0200\"}, no sms link, no warning banner. So: silent fallback to old behaviour, NOT the \"contact the office\" message — correct, since an empty pool returns reason \"not-configured\", not \"no-free-number\". With showCustomerPhone additionally OFF the contact section disappeared entirely (no card, no links), which is also correct",
+     "severity": "none"
+    },
+    {
+     "item": "Exhausted-pool case — the one loud fallback",
+     "status": "PASS",
+     "file": "src/app/cleaners/my-jobs/[jobId]/page.tsx",
+     "expected": "When masking is on but no company number is free, tell the cleaner to call the office",
+     "actual": "Exact documented message, with no phone links",
+     "whatIDid": "Added one pool number (+15555550100) so job cmtuoasr9… allocated it, then opened a SECOND job for the same cleaner and the same client (cmtumw4ry0011tvs43v4kw7vz) — the one free number is already carrying that client's phone, so allocation returns \"no-free-number\"",
+     "whatISaw": "Contact card read: \"Client contact / No company number is free for this job right now. Contact the office if you need to reach the client.\" (amber role=\"status\" banner). tel:/sms: links on the page: none. The real number was not rendered anywhere on the page",
+     "severity": "none"
+    },
+    {
+     "item": "Masked display path — what the cleaner sees when a pool number IS available",
+     "status": "PASS",
+     "file": "src/app/cleaners/my-jobs/[jobId]/page.tsx",
+     "expected": "Company number with a call link and a text link, shown regardless of showCustomerPhone",
+     "actual": "Exactly that",
+     "whatIDid": "With maskCustomerPhone ON, showCustomerPhone OFF and +15555550100 in service, reloaded /cleaners/my-jobs/cmtuoasr90027tvs4n8qcqd8b",
+     "whatISaw": "\"Client contact / Phone / +15555550100 / Text / Send a text / Calls and texts go through the company number — the client's own number is not shared. / Use this to let the client know if you're running late…\" Links: [{href: \"tel:+15555550100\"}, {href: \"sms:+15555550100\", text: \"Send a text\"}] and nothing else. Note it correctly ignores showCustomerPhone=false, per the code comment. The rendered markup contains no real customer number (the only exposure is the flight-payload finding above)",
+     "severity": "none"
+    },
+    {
+     "item": "Provider tab: saving two changed checkboxes in one submit",
+     "status": "FAIL",
+     "file": "src/app/admin/settings/tabs/ProviderTab.tsx",
+     "expected": "One Save persists every changed setting on the tab",
+     "actual": "Twice in a row only one of the two flipped checkboxes persisted; it took a second Save to land the other",
+     "whatIDid": "Restoring state, I set showCustomerPhone→true and maskCustomerPhone→false in the same form and clicked Save, then reloaded the tab and re-read both checkboxes from the server. Repeated",
+     "whatISaw": "Run 1 — before {show:false, mask:true}, after reload {show:false, mask:true}: neither change stuck. Run 2 — before {show:false, mask:true}, after reload {show:false, mask:false}: only the mask flip stuck. Run 3 — before {show:false, mask:false}, after reload {show:true, mask:false}: the remaining flip stuck. NOT ISOLATED: runs 1-2 overlapped a burst of 500s on /api/presence/ping and 401s on the session endpoint, and dev.log showed intermittent Prisma P1001 \"Can't reach database server at aws-1-ca-central-1.pooler.supabase.com:6543\" around that window, so this may be database flakiness rather than the tab's three parallel updateAppSetting calls. Worth a clean re-test; it matters because these are exactly the two settings this feature is gated on",
+     "severity": "minor"
+    }
+   ]
+  }
+ },
+ {
+  "agentId": "a8e74c648fcb6b668",
+  "result": {
+   "refuted": false,
+   "reasoning": "Reproduced by clicking, independently of the original report. As zztest-cleaner1 on http://zztestqa.localhost:3006/cleaners/my-jobs/cmtumw4ry0011tvs43v4kw7vz (200), the Team card's .head-extra reads \"2 MEMBERS\" while its two .cl-jd-team-row entries hold .name values [\"ZZTEST Cleaner One\", \"ZZTEST Cleaner One\"] — one distinct human, listed and counted twice. Tapping button.cl-jd-clock armed the confirm in place (URL unchanged) and rendered \"Short-staffed. Only 1 of 2 cleaners is on this job — 1 spot was never filled.\" on the same page, 684px above the card. Screenshot scripts/qa/shot-verify-2-2-teamcard.png shows the card alone.\n\nEvery refutation angle failed. \"Two different people sharing a name\" is ruled out arithmetically: jobStaffing returns assigned=1, and assigned is the size of Set(cleaners ids) plus employeeId — a union of size 1 proves employeeId IS the single roster member; the roster row is additionally tagged \"You · Cleaner\" (c.id === session.user.id). Not a slow save or a stale frame: both numbers derive from one server-rendered job object in one request. Not a harness misread: I read .head-extra and .name via discrete locators and confirmed visually in the card screenshot. And the spec reading favors the reporter, not against — the admin view of the SAME job (/admin/jobs/cmtumw4ry0011tvs43v4kw7vz) reads \"Team 1 assigned\", so the cleaner page is the lone outlier.\n\nSeverity minor rather than major: it is a display contradiction, not a data or action defect — the amber warning still states the true count unambiguously, no control is mis-gated, and a cleaner seeing her own name twice has a strong tell. But it is real, reproducible, and squarely inside fix #4's purpose, since at rest (before any Clock in tap) \"2 MEMBERS\" is the only staffing signal on the page.",
+   "correctedSeverity": "minor",
+   "rootCause": "C:\\Users\\anees\\Downloads\\cleano-software-main\\cleano-software-main\\src\\app\\cleaners\\my-jobs\\[jobId]\\page.tsx line 806 computes the Team head-count as `job.cleaners.length + (job.employee ? 1 : 0)` — the lead+roster SUM, the exact arithmetic the shared predicate jobStaffing (src/lib/cleaner-jobs.ts:393, \"the UNION of the lead and the roster, never their sum\") exists to replace. The same file already has the correct value at line 143 (`const staffing = jobStaffing(job)`) and passes it to ClockInButton/ClockOutButton; the card just ignores it. The card body repeats the error: the Lead row renders job.employee.name and then `job.cleaners.map(...)` renders every roster member unfiltered (lines ~810-836), so a lead who is also in the M2M is printed twice. Fix in that one file: use `staffing.assigned` for the count, and either skip or lead-tag the roster row whose c.id === job.employeeId."
+  }
+ },
+ {
+  "agentId": "aa02ca9555f636d73",
+  "result": {
+   "refuted": false,
+   "reasoning": "Reproduced independently by clicking, not refuted. Signed in as zztest-owner@cleano.test, opened http://zztestqa.localhost:3006/admin/jobs/cmtumw4ry0011tvs43v4kw7vz?tab=logs (\"Activity · 18\"), read selector `.timeline .tline-item`. First row's DOM: `.tline-text` = \"Finished short-staffed. Only 1 of 2 cleaners is on this job — 1 spot was never filled.\"; `.tline-actor` nodes = [\"by ZZTEST Cleaner One\", \"requiredCleaners: 1 → 2\"]. Exactly as reported.\n\nThe decisive evidence is the adjacent row in the same list, rendered with the identical CSS class and arrow glyph: \"Status changed from IN_PROGRESS to COMPLETED | by ZZTEST Cleaner One | status: IN_PROGRESS → COMPLETED\". That one IS a genuine before/after, so the same visual grammar carries two different meanings one line apart, and the short-staffed line asserts a transition that never occurred — the job's requiredCleaners was 2 the entire time; the \"1\" is the crew head-count. The overview tab's STAFF panel confirms only ZZTEST Cleaner One is assigned.\n\nRefutation attempts that all failed: (1) not a harness artifact — real headless chromium via the proven harness, read textContent directly from the DOM, harness captured no console errors, pageerrors or 5xx; (2) not a slow save mistaken for a break — this is a static rendered row for a completed Sep 10 12:05 PM event, re-read across three separate script runs with identical output; (3) not a misread UI — I extracted the `.tline-actor` nodes programmatically rather than eyeballing a screenshot; (4) not a spec misunderstanding — I checked every oldValue writer in src/ (clockIn.ts:180 job.status, issueRefund.ts:145 alreadyRefunded, updateClockTimes.ts:262 in=/out=, toggleJobPaymentStatus.ts:102, resolveJobQuote.ts:133, hourly-pay.server.ts:175, sendJobQuote.ts:180, setRatingExcluded.ts:72, and ~12 more) and all of them place a genuine prior state in oldValue. clockOut.ts:317 is the sole writer in the codebase that stuffs two co-existing quantities into the before/after pair, so this is a violation of the schema's own established contract, not a matter of taste.\n\nSeverity is minor rather than major: the description sentence directly above the diff line is correct and unambiguous, there is no functional or data impact, nothing reads these two columns back programmatically (page.tsx:515 and api/admin/jobs/[id]/logs/route.ts:120 only pass them through for display), and blast radius is admin-only because NOTE_ADDED is filtered out of the customer activity feed (src/app/(customer)/(secured)/bookings/[id]/page.tsx:80). But it is a real defect, not a nit: an audit trail whose stated purpose (per the code comment at clockOut.ts:301-305) is to answer \"was this one finished short-handed?\" months later prints a false claim that somebody raised the crew target.\n\nScripts: scripts/qa/t-verify-0.mjs, t-verify-0b.mjs, t-verify-0c.mjs. Screenshots: scripts/qa/shot-verify-0-1.png, shot-verify-0-2-overview.png.\n\nUnrelated aside, outside this dimension and not counted as a finding: the button[aria-label=\"Next page of logs\"] re-rendered page 1's ten rows after a click despite 18 total logs, though that may simply be slower than my 4s wait.",
+   "correctedSeverity": "minor",
+   "rootCause": "C:\\Users\\anees\\Downloads\\cleano-software-main\\cleano-software-main\\src\\app\\admin\\actions\\clockOut.ts lines 313-321 writes the short-staffed audit row as `action: \"NOTE_ADDED\", field: \"requiredCleaners\", oldValue: String(args.staffing.assigned), newValue: String(args.staffing.required)`. `jobStaffing()` (src/lib/cleaner-jobs.ts:395-404) computes `assigned = crew.size` and `required = job.requiredCleaners` as one live snapshot, never a transition — so two co-existing quantities are being stored in a column pair whose entire contract across every other writer in the codebase is before/after. The generic renderer at src/app/admin/jobs/[id]/JobDetailView.tsx:3117-3118 (`{log.field}: {log.oldValue} → {log.newValue}`) is correct for its own contract and has no way to know this triple is not a change.\n\nFILE TO CHANGE: src/app/admin/actions/clockOut.ts — drop the `field`/`oldValue`/`newValue` triple from this NOTE_ADDED row (shortStaffedNotice() already states both numbers correctly in the description), or move the numbers out of the diff pair. Safe to remove: nothing reads those two columns back for logic, only for display. Alternative but weaker fix: special-case NOTE_ADDED in JobDetailView.tsx:3117 to suppress the arrow line."
+  }
+ },
+ {
+  "agentId": "a81669b9f0b022cfc",
+  "result": {
+   "refuted": true,
+   "correctedSeverity": "none",
+   "rootCause": "Not a defect in markJobComplete. The reporter read the derived pill from `simpleJobStatus()` (C:\\Users\\anees\\Downloads\\cleano-software-main\\cleano-software-main\\src\\lib\\metrics-shared.ts, lines 276-289), which deliberately returns \"SCHEDULED\" for any job whose `startTime` is still in the future EVEN WHEN `status === \"COMPLETED\"` — `const future = isFutureJob(j, now); ... if (!future && j.status === \"COMPLETED\") return \"COMPLETED\";`. Both jobs they tested are future-dated in the store timezone (America/Montreal, src\\lib\\timezone.ts STORE_TZ): \"now\" during the test was Sep 10 2026 3:30 PM EDT, cmtupslvr002rtvs4ogh6pc7a starts Sep 10 8:00 PM (4.5h ahead) and cmtuoasr90027tvs4n8qcqd8b starts Sep 18 11:00 AM (8 days ahead). No file needs to change for the reported item. If anything is worth a separate, cosmetic ticket it is that the job-detail header renders a blue \"Scheduled\" pill alongside \"Get Review Link\" and \"Payment outstanding. This job was completed but hasn't been paid.\" on the same screen — one screen contradicting itself for an admin-forced completion of a future job. That would be a change to simpleJobStatus() in src\\lib\\metrics-shared.ts, and it is by-design today (the code comment for Round 4 fix 1 states a future job must read Scheduled).",
+   "reasoning": "REFUTED — I reproduced the click myself and the action persists.\n\nMY OWN CLICK (script C:\\Users\\anees\\Downloads\\cleano-software-main\\cleano-software-main\\scripts\\qa\\t-verify-1.mjs, step `actrow`, own headless chromium via harness.mjs):\nJob cmtvudlmm005utvzs2npflr1a, /admin/jobs row \"Sep 10 1:30 PM ZZTEST Cap OK Client ZC — $200.00 — 100% — In Progress\" — a PAST-dated job (store clock at test time: 9/10/2026, 3:30 PM America/Montreal).\n- BEFORE: pills [\"In Progress\",\"Clocked in\",\"None\"], `button:has-text(\"Mark Complete\")` count 1, `Get Review Link` count 0, payWarning false, rating line null.\n- Clicked Mark Complete. Fully staffed, so no staffing modal (sawStaffingModal:false). Button sat on \"Saving…\" for 101,571 ms — same ~84-100s the reporter saw. Slow, not broken.\n- TWO fresh cache-busted loads (/admin/jobs/cmtvudlmm005utvzs2npflr1a?cb=…): pills [\"Completed\",\"Completed\",\"None\"], Mark Complete count 0, Get Review Link count 1, payWarning true, \"Rating link created — not yet sent\".\n- Jobs table after: \"Sep 10 1:30 PM ZZTEST Cap OK Client ZC — $200.00 — 100% — Completed\".\nSo markJobComplete writes COMPLETED and it survives reload.\n\nTHE REPORTER'S TWO JOBS ARE ALSO ALREADY COMPLETED IN THE DB. My cold recon load of both (no client state, server-rendered):\n- cmtupslvr002rtvs4ogh6pc7a: `Mark Complete` count 0, `Get Review Link` count 1, banner \"Payment outstanding. This job was completed but hasn't been paid.\", \"Rating link created — not yet sent\".\n- cmtuoasr90027tvs4n8qcqd8b: same, plus \"Rating requested\".\nThose three signals all read the RAW enum, not the derived pill: src\\app\\admin\\jobs\\[id]\\page.tsx line 381 passes `status: job.status`; JobDetailView.tsx line 3529 renders Mark Complete only when currentStatus is not COMPLETED/CANCELLED, line 3540 renders Get Review Link only when currentStatus === \"COMPLETED\" (currentStatus = useState(job.status), line 1098), and line 1653 `const showPayWarning = job.status === \"COMPLETED\" && !paymentReceived`. The rating token is minted only by `ensureRatingRequest`, called from exactly two places: clockOut.ts and markJobComplete.ts — and cmtups has no clock entries in its Logs, so it came from markJobComplete.\n\nThe reporter's OWN screenshot proves this: scripts\\qa\\shot-staffing-complete3-logs-cmtups.png shows, on one screen, the \"Scheduled\" pill AND \"Get Review Link\" AND \"Payment outstanding. This job was completed but hasn't been paid.\" AND \"Rating link created — not yet sent\". They read the pill and stopped.\n\nWHY THE PILL SAYS SCHEDULED: simpleJobStatus() gates the COMPLETED branch behind `!isFutureJob(j, now)`. Arithmetic checked in node: now = 2026-09-10T19:30Z; Sep 10 8:00 PM Montreal = 2026-09-11T00:00Z → future=true; Sep 18 11:00 AM → future=true; Sep 10 1:30 PM Montreal = 2026-09-10T17:30Z → future=false (which is why MY job's pill flipped and theirs did not). This is documented intent in the file (\"A future job is Scheduled; its payment shows in the payment column\").\n\nTWO OTHER PIECES OF THEIR EVIDENCE ALSO DISSOLVE:\n- \"the fully-staffed control failed the same way\" — right, because the common factor is the future start date, not staffing. Both code paths call the identical `handleMarkComplete` (JobDetailView.tsx line 1326; ConfirmActionModal onConfirm at line 4088).\n- \"the Logs tab contains no completion entry\" — markJobComplete.ts never writes a jobLog at all (grep of src\\app\\admin\\actions\\*.ts for `jobLog` does not list it), so its absence proves nothing.\nNo markJobComplete / ensureRatingRequest / advanceContactLifecycle errors in dev.log. Only noise captured was one 429 (many QA agents on the box at once), which explains the slow saves."
+  }
+ },
+ {
+  "agentId": "ae6df9d7ebcf9985d",
+  "result": {
+   "refuted": true,
+   "correctedSeverity": "none",
+   "reasoning": "REFUTED — one Save does persist both flipped checkboxes. The reporter read the tab back before the save had finished committing.\n\nMY RE-TEST (scripts/qa/t-verify-4b.mjs, slug verify-4b; full log at C:\\Users\\anees\\Downloads\\cleano-software-main\\cleano-software-main\\scripts\\qa\\verify-4b.log). Each run flipped BOTH boxes in one submit and did NOT reload until the tab printed its own verdict text:\n- Run 1: before {show:false,mask:true} -> typed {show:true,mask:false} -> feedback \"Provider settings saved.\" after 89s -> after hard reload of http://zztestqa.localhost:3006/admin/settings?tab=provider: {show:true,mask:false}. BOTH PERSISTED.\n- Run 2: before {show:true,mask:false} -> typed {show:false,mask:true} -> \"Provider settings saved.\" after 103s -> after reload {show:false,mask:true}. BOTH PERSISTED.\n- Run 3: before {show:false,mask:true} -> typed {show:true,mask:false} -> \"Provider settings saved.\" after 85s -> after reload {show:true,mask:false}. BOTH PERSISTED.\nSelectors: label:has-text(\"Cleaners can see the customer\") input[type=checkbox] and label:has-text(\"Hide the customer\") input[type=checkbox]; submit via form:has(label:has-text(\"Hide the customer\")) button[type=submit]. No console errors, no pageerrors, no 5xx captured.\n\nWHY THE REPORTER SAW WHAT THEY SAW — captured live. AppSetting.updatedAt is @updatedAt (prisma/schema.prisma:236), so row timestamps are authoritative. I sampled the two rows with a SELECT-only script (scripts/qa/db-verify-4.ts) while run 1's save was in flight:\n- Save clicked 19:33:50Z (target show=true, mask=false).\n- 19:34:21Z (31s in): showCustomerPhone already \"true\" (updatedAt 19:34:17), maskCustomerPhone still \"true\" with updatedAt 19:31:36 — i.e. the OLD value, not yet written.\n- 19:34:58Z: maskCustomerPhone now \"false\" (updatedAt 19:34:47). deactivatedMessage committed 19:35:14.\nRun 3 repeated it: one Save at 19:38:27 produced commits at 19:38:50, 19:39:19, 19:39:48. An earlier, more loaded window was worse — a single Save's writes landed at 19:22:45 (mask) and 19:26:34 (show), 3m49s apart.\nSo one Save fires three parallel server actions whose commits land 30s to ~4min apart on this box. Reload inside that window and you read exactly \"only one of the two flipped checkboxes persisted\"; save again and the straggler has since landed on its own — \"it took a second Save to land the other.\" That is the reporter's Run 2 and Run 3 verbatim, and their Run 1 (neither stuck) is just a reload taken before either had landed.\n\nTHE CODE CANNOT LOSE A WRITE SILENTLY. ProviderTab.handleSave awaits Promise.all of three updateAppSetting calls; each writes its OWN AppSetting row (@@unique([organizationId, key])). No shared row, no read-modify-write, no last-writer-wins between them. Save stays disabled showing \"Saving…\" and no message renders until all three settle. On failure updateAppSetting returns {success:false, error} and the tab renders it inline naming the key.\n\nDEV.LOG CORROBORATES: across the whole log there is exactly ONE setting-write failure — Error updating app setting \"provider.deactivatedMessage\" with Prisma P1017 \"Server has closed the connection\" inside writeAppSetting -> writeSetting -> updateAppSetting, during the reporter's 17:2x window. Neither provider.showCustomerPhone nor provider.maskCustomerPhone ever failed a write, in their window or mine. The 91 P1001s in the log (and one my own read-only script hit mid-session) confirm the Supabase pooler is genuinely flaky from this machine, and POST /admin/settings was logged at 18s to 3.1min per action — that latency, not a lost write, is the whole phenomenon.\n\nWorkspace left restored to the registry defaults: showCustomerPhone=true, maskCustomerPhone=false (verified in DB at 19:41:10Z).",
+   "rootCause": "No product defect; no file needs to change for this item. The observation is a read-too-early artifact of environment latency: ProviderTab.handleSave (src/app/admin/settings/tabs/ProviderTab.tsx:36-52) dispatches three independent server actions in Promise.all, and against the remote Supabase pooler from this machine their commits land 30s-4min apart, so any reload taken before the tab prints \"Provider settings saved.\" shows a partially-applied save. Waiting for that message yields both flips every time (3/3).\n\nOne genuine but separate weakness, worth logging on its own rather than as this item: those three writes are not atomic, so a real per-key failure (the observed P1017 on provider.deactivatedMessage) leaves the tab half-saved, and handleSave surfaces only results.find(r => !r.success) — the FIRST failing key — while the other failures go unnamed. If anyone wants that hardened, the file is src/app/admin/settings/tabs/ProviderTab.tsx (same pattern in every multi-write settings tab). It still reports an error rather than silently dropping data, and it did not cause the reported symptom."
+  }
+ },
+ {
+  "agentId": "a804222bcc6818703",
+  "result": {
+   "refuted": true,
+   "correctedSeverity": "none",
+   "rootCause": "Not a defect in this codebase. The rows are React's dev-only async I/O debug channel (`emitIOInfoChunk`), which exists only in Next's `react-server-dom-turbopack-server.*.development.js` bundles and serializes the resolved value of EVERY awaited Prisma query on the page. No file needs to change; `src/lib/phone-masking.ts` and `src/app/cleaners/my-jobs/[jobId]/page.tsx` are both clean — the real number never enters the element tree, the HTML, a tel:/sms: href, or any client component's props.",
+   "reasoning": "I reproduced the raw symptom, then proved it is a `next dev` artifact that cannot exist in a production build.\n\n1) DEV REPRO (real clicks, my own chromium, scripts/qa/t-verify-3c.mjs). Admin at http://zztestqa.localhost:3006/admin/settings?tab=provider — flipped \"Cleaners can see the customer's phone number\" OFF and \"Hide the customer's real number behind a company number\" ON, waited for \"Provider settings saved.\", reloaded and re-read the boxes: {\"step\":\"after reload\",\"show\":false,\"mask\":true}. Pool (Settings -> Connectors -> Masked numbers): \"+15555550100 ZZTEST masking pool 1 - 1 live conversation\". Then cleaner1 opened /cleaners/my-jobs/cmtuoasr90027tvs4n8qcqd8b. On-screen: \"Client contact / Phone +15555550100 / Text Send a text / Calls and texts go through the company number - the client's own number is not shared.\" Every link on the page: tel:+15555550100 and sms:+15555550100 only. Visible text contains no \"555-0200\". So the UI half of the claim is correct: nothing displays the real number. And the flight did contain it twice, exactly as reported.\n\n2) BUT THE HITS ARE NOT PROPS. In scripts/qa/v3c-flight-c-maskON-showOFF.txt the two hits are rows `14a:[1,{\"id\":\"cmtuoasr90027tvs4n8qcqd8b\",\"startTime\":\"$D2026-09-18T15:00:00.000Z\",\"endTime\":null,\"clientId\":\"cmtumqx54000xtvs4x5chjn6n\",\"client\":{\"phone\":\"(514) 555-0200\"}}]` and `15f:{...,\"cleanerPhone\":\"+15145550101\",\"clientPhone\":\"+15145550200\",...}`. I counted every reference to those row ids: each is referenced exactly ONCE, and only as the `value` of a React I/O debug node — `148:J{\"name\":\"Proxy.$transaction\",\"start\":40415.24,\"end\":40420.08,\"env\":\"Server\",\"stack\":\"$149\",\"owner\":\"$30\",\"value\":\"$@14a\"}` and `15e...:J{...,\"value\":\"$@15f\"}`. Element references (`\"$14a\"` / `\"$15f\"` inside the rendered tree) : ZERO. The same flight carries 34 `J{` I/O nodes and 174 `D{` debug rows, and the debug channel serializes every awaited Prisma result on the page, not just phones — the AppSetting rows themselves are there (`13e:[1,{...,\"key\":\"provider.showCustomerPhone\",\"value\":false,...}]`), plus user rows and the full job row. This is a generic Next dev channel, not something the masking feature emits.\n\n3) CONTROLLED DEV-vs-PROD EXPERIMENT (the check the reporter said still had to be done). I did NOT touch the app's dev server or its .next. I built a minimal Next app in the scratchpad (nextprobe) on the identical stack the repo uses (next 16.0.7, react/react-dom 19.1.0, installed fresh), whose server component awaits three promises shaped like maskedNumberForJob's queries and renders only the proxy number:\n- `next dev -p 3099`: the never-rendered values appear, in exactly the reported shape — `4b:{\"id\":\"cmtuoasr9zzprobe\",\"startTime\":\"$D2026-09-18T15:00:00.000Z\",\"endTime\":null,\"clientId\":\"cmtumqx54000xtvs4x5chjn6n\",\"client\":{\"phone\":\"(514) 555-0200\"}}` and `53:{...,\"clientPhone\":\"+15145550200\"}`, referenced only from `J{...,\"value\":\"$@4b\"}`. So the probe is a faithful analogue.\n- `next build` then `next start -p 3099` on the SAME code: 555-0200 -> 0 hits, 15145550200 -> 0 hits, 555-0101 -> 0 hits, clientId cmtumqx54 -> 0 hits, `D{` rows -> 0, `J{` rows -> 0, absolute server paths -> 0. The page still renders `tel:+15555550100` (2 hits). Flight size 4,751 bytes prod vs 22,491 bytes dev.\n(An earlier version of the probe showed why the value is present at all: React attaches the LEAF promise's resolved value, so `new Promise(r=>setTimeout(r,5))` serialized `\"$undefined\"`, while a promise that resolves WITH the row — as a Prisma query does — serializes the row.)\n\n4) CORROBORATION IN THE SHIPPED BUNDLES: node_modules/next/dist/compiled/react-server-dom-turbopack/cjs — `emitIOInfoChunk` appears 3 times in react-server-dom-turbopack-server.node.development.js and 0 times in ...server.node.production.js; `ioInfo` appears 20-44 times in every *.development.js and 0 times in every *.production.js (client and server, node/edge/browser). The machinery that emits these rows does not exist in a production build.\n\nSo: the reported ACTUAL (\"the real number reaches the browser in every masking configuration\") is true only of `next dev`, is Next.js's I/O debug serialization of all server-side awaits, and disappears entirely in `next build`. The feature's promise in src/lib/settings/registry.ts (\"not hidden in the markup, not in a tel: link, not in the props\") holds for every shipped configuration — I verified the markup, the links and the prop tree directly under mask ON + show OFF. Nothing in this repo produces the rows and nothing here can suppress them; the only \"fix\" would be to not run a dev server for real customers, which is already true.\n\nHousekeeping: I put the provider settings back exactly as I found them ({\"step\":\"restored\",\"show\":true,\"mask\":false}), killed only my own probe server on :3099, and left the app's dev server on :3006 running (netstat still shows it LISTENING). Artifacts: scripts/qa/t-verify-3.mjs, t-verify-3b.mjs, t-verify-3c.mjs, t-verify-3-restore.mjs, v3c-log.txt, v3c-flight-c-maskON-showOFF.txt, shot-verify-3-c-maskON-showOFF.png, shot-verify-3-connectors.png; probe under the scratchpad nextprobe/ (dev-page2.html vs prod-page.html)."
+  }
+ }
+]

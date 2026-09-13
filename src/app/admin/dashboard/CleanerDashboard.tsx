@@ -5,6 +5,8 @@ import {
   Calendar, Briefcase, ShieldAlert,
 } from "lucide-react";
 import { getStrikeSummary, STRIKE_THRESHOLD } from "@/lib/strikes";
+import { ratingCountLabel, EMPTY_RATING_SUMMARY } from "@/lib/cleaner-rating";
+import { getCleanerRatingSummary } from "@/lib/cleaner-rating.server";
 import { cleanerPayoutForJobs } from "@/lib/cleaner-pay-display";
 import { isCleanerLow } from "@/lib/inventory-thresholds";
 import { loadCleanerThresholdDefault } from "@/lib/inventory-thresholds.server";
@@ -74,7 +76,7 @@ export default async function CleanerDashboard({ userId, userName }: Props) {
     doneCount,
     recentJobs,
     employeeProducts,
-    ratings,
+    ratingSummary,
     kitThresholdDefault,
   ] = await Promise.all([
     // Next 6 upcoming jobs (list only — never the source of a count)
@@ -102,13 +104,11 @@ export default async function CleanerDashboard({ userId, userName }: Props) {
       where: { employeeId: userId },
       include: { product: true },
     }),
-    // Employee ratings
-    db.employeeRating.findMany({
-      // Excluded ratings are out of the cleaner's score (item 5).
-      where: { employeeId: userId, excludedAt: null },
-      orderBy: { createdAt: "desc" },
-      take: 30,
-    }).catch(() => []),
+    // Employee rating — the shared definition (@/lib/cleaner-rating), the same
+    // one My Pay reads. This tile used to average its own `take: 30` slice and
+    // print that capped length as the review count, so a cleaner with more
+    // ratings than that saw a different score here than on My Pay.
+    getCleanerRatingSummary(userId).catch(() => EMPTY_RATING_SUMMARY),
     // The admin's global refill floor. Without it this tile judged the kit
     // against the built-in 1 while My Inventory used the configured 2 — the
     // cleaner saw "Low" on their own page and "0 low items" on this one.
@@ -173,10 +173,9 @@ export default async function CleanerDashboard({ userId, userName }: Props) {
   const nextJob = upcomingJobs[0] ?? null;
   const nextJobMs = nextJob?.startTime ? new Date(nextJob.startTime).getTime() - now.getTime() : null;
 
-  // Rating
-  const avgRating = ratings.length > 0
-    ? ratings.reduce((s, r) => s + (r as any).rating, 0) / ratings.length
-    : null;
+  // Rating — already averaged, clamped and rounded by the shared helper, so
+  // this tile and My Pay print the same digits off the same number.
+  const avgRating = ratingSummary.average;
 
   const { g, firstName } = greeting(userName, now);
   const dateStr = fmtDate(now, { weekday: "long", month: "long", day: "numeric" });
@@ -355,7 +354,7 @@ export default async function CleanerDashboard({ userId, userName }: Props) {
             {avgRating !== null ? avgRating.toFixed(1) : "—"}
             <span style={{ fontSize: 16, color: "rgba(255,255,255,0.6)", fontFamily: "var(--font)" }}> / 5</span>
           </div>
-          <div className="cl-dash-perf-sub">{ratings.length > 0 ? `Based on ${ratings.length} review${ratings.length === 1 ? "" : "s"}` : "No reviews yet"}</div>
+          <div className="cl-dash-perf-sub">{ratingCountLabel(ratingSummary.count)}</div>
           {/* Real counts from db.job.count() — these used to be the lengths of
               take:4 / take:6 arrays, so they capped at 4 and 6. */}
           <div className="cl-dash-perf-mini-row">

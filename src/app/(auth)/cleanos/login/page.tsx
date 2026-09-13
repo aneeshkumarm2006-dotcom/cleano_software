@@ -26,12 +26,22 @@ function CleanerLoginInner() {
       ? localStorage.getItem(rememberedKey) ?? ""
       : "";
 
-  // Explain a wrong-role bounce from /api/post-signin.
+  // Explain a wrong-role bounce from /api/post-signin. Three cases pointing in
+  // different directions: `not_cleaner` is a non-cleaner who arrived here by
+  // mistake and whose next stop is the staff sign-in, `customer_account` is a
+  // customer who did — the staff remedy would only bounce them a second time,
+  // so they are pointed at the customer login link at the foot of this form —
+  // and `use_cleaner_login` is a cleaner who tried the staff door and belongs
+  // on this page; telling them they aren't a cleaner sends them into a loop.
   const errorParam = searchParams.get("error");
   const initialError =
-    errorParam === "not_cleaner" || errorParam === "use_cleaner_login"
+    errorParam === "not_cleaner"
       ? "That account isn't a cleaner account. If you're an admin, use the staff sign-in."
-      : null;
+      : errorParam === "customer_account"
+        ? "That's a customer account — use the customer login link below."
+        : errorParam === "use_cleaner_login"
+          ? "That's a cleaner account — this is the right place. Sign in below to see your jobs."
+          : null;
 
   const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState("");

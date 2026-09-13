@@ -20,6 +20,7 @@ import {
   resolveField,
   type BookingPageConfig,
 } from "@/lib/booking-page-config";
+import { addStoreDays, storeDateKey } from "@/lib/timezone";
 
 /** "14:30" → "2:30 PM", "09:00" → "9 AM" */
 function formatTimeLabel(t: string): string {
@@ -42,15 +43,14 @@ interface Props {
   bookingPage?: BookingPageConfig;
 }
 
+// Both bounds are civil dates on the STORE's calendar. `toISOString()` is
+// already tomorrow in UTC from 20:00 Montreal, which every evening pushed the
+// earliest bookable day a full day past the admin's lead-time rule.
 function earliestISO(leadDays: number) {
-  const d = new Date();
-  d.setDate(d.getDate() + Math.max(1, leadDays));
-  return d.toISOString().slice(0, 10);
+  return storeDateKey(addStoreDays(new Date(), Math.max(1, leadDays)));
 }
 function maxISO() {
-  const d = new Date();
-  d.setDate(d.getDate() + 90);
-  return d.toISOString().slice(0, 10);
+  return storeDateKey(addStoreDays(new Date(), 90));
 }
 
 export default function Step3Schedule({

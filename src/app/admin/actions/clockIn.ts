@@ -15,6 +15,7 @@ import {
   CLOCK_IN_BLOCKED_STATUSES,
   CLOCK_IN_EARLY_WINDOW_MIN,
   clockInOpensAt,
+  jobStaffing,
 } from "@/lib/cleaner-jobs";
 import { findOpenSession, syncClockMirrors } from "@/lib/work-sessions.server";
 import { fmtDateTime } from "@/lib/time";
@@ -244,7 +245,16 @@ export async function clockIn(jobId: string) {
     revalidatePath(`/admin/jobs/${jobId}`);
     revalidatePath("/admin/time-tracking");
 
-    return { success: true, minutesLate, penalty, resumed: isResume };
+    // Reported, never enforced (Sept 3 fix 4). A thin crew is a fact about the
+    // job, not a reason to refuse the shift — the callers turn this into a
+    // warning and the cleaner clocks in either way.
+    return {
+      success: true,
+      minutesLate,
+      penalty,
+      resumed: isResume,
+      staffing: jobStaffing(job),
+    };
   } catch (error) {
     console.error("Error clocking in:", error);
     return { success: false, error: "Failed to clock in" };

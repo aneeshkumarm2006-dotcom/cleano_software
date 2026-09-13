@@ -50,10 +50,11 @@ async function tenantFrom(): Promise<{ from: string; replyTo?: string }> {
 }
 
 function getResend() {
-  if (!process.env.RESEND_API_KEY) {
-    console.warn("[email] RESEND_API_KEY is not set — emails will be skipped");
-    return null;
-  }
+  // No warning here any more. It used to print "[email] RESEND_API_KEY is not
+  // set" and nothing else, which told an operator that SOME mail had been
+  // skipped but never which one, to whom, or about what. Only the caller has
+  // that context, so the caller logs it — see recordSkippedEmail().
+  if (!process.env.RESEND_API_KEY) return null;
   return new Resend(process.env.RESEND_API_KEY);
 }
 
@@ -118,8 +119,96 @@ function section(rows: [string, string][]) {
 function btn(label: string, href: string) {
   return `<a href="${href}" style="display:inline-block;margin-top:8px;padding:12px 28px;background:#00424a;color:#fff;border-radius:8px;text-decoration:none;font-size:15px;font-weight:600">${label}</a>`;
 }
+// Almost everything in these emails is a name or an amount this system wrote
+// itself. Free text a person typed on a phone is not, and it lands in the
+// middle of an HTML document — so it goes through here first.
+function esc(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
 
 // ── Send + log helper ──────────────────────────────────────────────────────
+
+/**
+ * Enough of an address to tell two recipients apart, never the whole thing.
+ *
+ * The full address belongs in the EmailLog row, which is tenant-scoped and
+ * behind RLS. stdout is neither: dev.log and the hosting provider's log drain
+ * are read by people with no business seeing a customer's email address.
+ */
+function maskAddress(addr: string): string {
+  const at = addr.lastIndexOf("@");
+  if (at <= 0) return "***";
+  return `${addr.slice(0, Math.min(2, at))}***${addr.slice(at)}`;
+}
+
+/**
+ * Record a send that never happened.
+ *
+ * The in-app feed already writes its row unconditionally, so the EVENT is
+ * checkable rather than guessable (see admin-notifications.ts). The EMAIL leg
+ * had no equivalent: with RESEND_API_KEY unset every send printed the same
+ * anonymous "key is not set" line and wrote nothing at all, so "we never heard
+ * the shift was dropped" could not be answered — which is the one question
+ * this whole subsystem exists to answer.
+ *
+ * One row per skipped send, on a path that makes no network call: a skip stays
+ * strictly cheaper than the send it stands in for, so this cannot amplify
+ * writes past what a configured RESEND_API_KEY already costs. When the caller
+ * has already opened its own EmailLog row we stamp that one rather than adding
+ * a second.
+ *
+ * Deliberately NOT used for the Settings → Notifications skip below. That one
+ * is a standing admin choice, so a row per suppressed email would pile up
+ * forever and tell the admin only what they configured themselves.
+ */
+async function recordSkippedEmail(
+  opts: {
+    to: string;
+    subject: string;
+    logId?: string;
+    notification?: NotificationGate;
+    jobId?: string;
+  },
+  reason: string,
+): Promise<void> {
+  const key = opts.notification?.key ?? null;
+  // Catalog key + masked recipient + job id answers "which notification, to
+  // whom, about what" from the log alone. The subject stays out of it on
+  // purpose: most of these carry the customer's name.
+  console.warn(
+    `[email] skipped (${reason}) — key=${key ?? "ungated"} to=${maskAddress(opts.to)}` +
+      (opts.jobId ? ` job=${opts.jobId}` : ""),
+  );
+
+  if (opts.logId) {
+    await db.emailLog
+      .update({ where: { id: opts.logId }, data: { status: "FAILED", error: reason } })
+      .catch(() => {});
+    return;
+  }
+
+  await db.emailLog
+    .create({
+      data: {
+        // OTHER + notificationKey is how /admin/logs titles a catalog-driven
+        // mail; the EmailKind enum only names the transactional ones.
+        kind: "OTHER",
+        recipient: opts.to,
+        subject: opts.subject,
+        status: "FAILED",
+        error: reason,
+        notificationKey: key,
+        jobId: opts.jobId ?? null,
+      },
+    })
+    // Never the reason a caller fails: this is bookkeeping about a send that
+    // already did not happen.
+    .catch(() => {});
+}
 
 async function deliver(opts: {
   to: string;
@@ -127,6 +216,13 @@ async function deliver(opts: {
   html: string;
   logId?: string;
   notification?: NotificationGate;
+  /**
+   * The job this mail is about. Used only for the EmailLog row, so a send that
+   * was skipped is still traceable to a record in /admin/logs instead of being
+   * one more anonymous failure. Optional: senders with no job (marketing,
+   * account mail) simply leave it off and stay identifiable by key + recipient.
+   */
+  jobId?: string;
   attachments?: Array<{ filename: string; content: Buffer | string }>;
   /** Extra SMTP headers, e.g. In-Reply-To/References for email threading. */
   headers?: Record<string, string>;
@@ -154,12 +250,7 @@ async function deliver(opts: {
   }
   const resend = getResend();
   if (!resend) {
-    if (opts.logId) {
-      await db.emailLog.update({
-        where: { id: opts.logId },
-        data: { status: "FAILED", error: "RESEND_API_KEY not configured" },
-      }).catch(() => {});
-    }
+    await recordSkippedEmail(opts, "RESEND_API_KEY not configured");
     return { ok: false, error: "RESEND_API_KEY not configured" };
   }
   try {
@@ -3363,6 +3454,96 @@ export async function sendAdminJobPhotos(opts: {
 }
 
 /**
+ * A cleaner has reported a problem on a job (Sept 3 fix list, item 1).
+ *
+ * The feed row is written FIRST and outside every toggle, because the toggles
+ * decide what gets sent, not what happened — an admin who turned issue emails
+ * off should still find the issue in the app rather than nowhere. Only the mail
+ * below is gated.
+ *
+ * Urgent means two emails, the same way a same-day shift drop does: the
+ * standard one always goes so there is a record in the inbox, and the second
+ * one goes as WELL when the cleaner is blocked on site, because that message
+ * has to survive a full inbox and a routine issue does not.
+ */
+export async function sendAdminJobIssue(opts: {
+  jobId: string;
+  jobNumber: number;
+  clientName: string;
+  cleanerName: string;
+  category: string;
+  urgency: "NORMAL" | "URGENT";
+  description: string;
+  photoUrl?: string | null;
+}): Promise<void> {
+  const urgent = opts.urgency === "URGENT";
+
+  await recordAdminNotification({
+    key: "admin.job.issue_reported",
+    title: urgent
+      ? `Urgent issue — ${opts.clientName}`
+      : `Issue reported — ${opts.clientName}`,
+    body: `${opts.cleanerName} · ${opts.category} · job #${opts.jobNumber} — ${opts.description}`,
+    href: `/admin/jobs/${opts.jobId}`,
+    severity: urgent ? "ERROR" : "WARN",
+  });
+
+  const admins = await fetchAdmins();
+  if (admins.length === 0) return;
+  const appUrl = await currentAppUrl();
+
+  const title = urgent
+    ? `Urgent issue — ${opts.clientName}`
+    : `Issue reported — ${opts.clientName}`;
+  // The description is typed by a cleaner on a phone; line breaks are how they
+  // separate "what happened" from "what I need".
+  const body = esc(opts.description).replace(/\n/g, "<br>");
+
+  const html = layout(
+    h1(title) +
+      p(
+        urgent
+          ? `${esc(opts.cleanerName)} is blocked on job #${opts.jobNumber} and needs the office now.`
+          : `${esc(opts.cleanerName)} reported a problem on job #${opts.jobNumber}.`
+      ) +
+      section([
+        ["Category", esc(opts.category)],
+        ["Urgency", urgent ? "Urgent — cleaner is blocked" : "Normal"],
+        ["Cleaner", esc(opts.cleanerName)],
+        ["Client", esc(opts.clientName)],
+        ["Job", `#${opts.jobNumber}`],
+      ]) +
+      p(body) +
+      btn("Open job", `${appUrl}/admin/jobs/${opts.jobId}`) +
+      (opts.photoUrl ? btn("View the photo", opts.photoUrl) : "")
+  );
+
+  for (const admin of admins) {
+    await deliver({
+      to: admin.email,
+      subject: `${title} (#${opts.jobNumber})`,
+      html,
+      jobId: opts.jobId,
+      notification: { recipient: "ADMIN", key: "admin.job.issue_reported" },
+    }).catch((e) => console.error("sendAdminJobIssue", admin.email, e));
+  }
+
+  if (!urgent) return;
+
+  // Second mail, its own toggle. The subject leads with the word an admin
+  // scanning an inbox reads before anything else.
+  for (const admin of admins) {
+    await deliver({
+      to: admin.email,
+      subject: `URGENT: ${opts.cleanerName} is blocked on job #${opts.jobNumber} — ${opts.clientName}`,
+      html,
+      jobId: opts.jobId,
+      notification: { recipient: "ADMIN", key: "admin.job.issue_urgent" },
+    }).catch((e) => console.error("sendAdminJobIssue urgent", admin.email, e));
+  }
+}
+
+/**
  * A cleaner has dropped an assigned shift.
  *
  * Two emails by design, not by accident. The standard one goes every time so
@@ -3423,6 +3604,7 @@ export async function sendAdminShiftDropped(opts: {
       to: admin.email,
       subject: opts.urgent ? `URGENT: ${title}` : title,
       html,
+      jobId: opts.jobId,
       notification: {
         recipient: "ADMIN",
         key: opts.urgent ? "admin.shift.dropped_urgent" : "admin.shift.dropped",

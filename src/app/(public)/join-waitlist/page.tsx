@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { joinWaitlist } from "../actions/joinWaitlist";
 import PremiumSelect from "@/components/ui/PremiumSelect";
 import DatePicker from "@/components/ui/DatePicker";
+import { storeDateKey } from "@/lib/timezone";
 
 const SERVICE_TYPES = [
   { value: "standard", label: "Standard Clean" },
@@ -186,7 +187,9 @@ export default function JoinWaitlistPage() {
                   name="preferredDate"
                   value={preferredDate}
                   onChange={setPreferredDate}
-                  min={new Date().toISOString().slice(0, 10)}
+                  // Store's today, not UTC's — after 20:00 Montreal a
+                  // UTC-derived floor rejects the customer's own today.
+                  min={storeDateKey()}
                   size="md"
                 />
               </div>

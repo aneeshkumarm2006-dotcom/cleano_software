@@ -99,6 +99,14 @@ export async function provisionOrganization(
   const trialEndsAt = trialEndFrom(now);
   const password = await hashPassword(input.password);
 
+  // Six sequential round-trips below (slug check, organization, subscription,
+  // owner lookup, owner, credential) against a pooled Supabase instance.
+  // Prisma's defaults -- maxWait 2s, timeout 5s -- are sized for a local
+  // database on a loopback socket; over the pooler they were being blown
+  // through on every real signup, so Prisma closed the transaction out from
+  // under this code and it failed with P2028. The ceiling is raised rather
+  // than the transaction split, because the atomicity is the point: a
+  // half-made workspace is worse than a signup that has to be retried.
   return platformDb.$transaction(async (tx) => {
     const clash = await tx.organization.findUnique({
       where: { slug },
@@ -166,5 +174,5 @@ export async function provisionOrganization(
       ownerId: owner.id,
       trialEndsAt,
     };
-  });
+  }, { maxWait: 10_000, timeout: 20_000 });
 }

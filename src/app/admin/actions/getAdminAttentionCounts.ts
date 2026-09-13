@@ -7,6 +7,7 @@ import { db } from "@/lib/org-db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { countUnreadAdminNotifications } from "@/lib/admin-notifications";
+import { countOpenJobIssues } from "@/app/admin/actions/jobIssues";
 
 /**
  * Every count behind a sidebar attention badge, in ONE batched round trip
@@ -46,6 +47,8 @@ export interface AdminAttentionCounts {
   payouts: number;
   /** Cleaner supply requests waiting on a resolve. */
   inventory: number;
+  /** Job issues cleaners reported that are still OPEN or ACKNOWLEDGED. */
+  issues: number;
   /** Notifications THIS admin has not opened yet. */
   notifications: number;
 }
@@ -61,6 +64,7 @@ const ZERO: AdminAttentionCounts = {
   leads: 0,
   payouts: 0,
   inventory: 0,
+  issues: 0,
   notifications: 0,
 };
 
@@ -112,17 +116,21 @@ export async function getAdminAttentionCounts(): Promise<AdminAttentionCounts> {
       }),
     ]);
 
-    // The three OWNER/ADMIN-only pages. Skipped entirely for OPS_MANAGER and
+    // The four OWNER/ADMIN-only pages. Skipped entirely for OPS_MANAGER and
     // FIELD_LEAD rather than computed-and-discarded — the cheapest query is the
     // one not sent, and nothing leaks.
     let leads = 0;
     let payouts = 0;
     let inventory = 0;
+    let issues = 0;
     if (isOwnerAdmin) {
-      [leads, payouts, inventory] = await Promise.all([
+      [leads, payouts, inventory, issues] = await Promise.all([
         db.lead.count({ where: { status: "NEW", deletedAt: null } }),
         db.payPeriod.count({ where: { status: "PENDING_APPROVAL" } }),
         db.inventoryRequest.count({ where: { status: "PENDING" } }),
+        // Already swallows its own failures and returns 0 — the outer catch
+        // here is the second net, not the first.
+        countOpenJobIssues(),
       ]);
     }
 
@@ -134,6 +142,7 @@ export async function getAdminAttentionCounts(): Promise<AdminAttentionCounts> {
       leads,
       payouts,
       inventory,
+      issues,
       notifications,
     };
   } catch {

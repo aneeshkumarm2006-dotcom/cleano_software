@@ -24,12 +24,18 @@ function PortalLoginInner() {
       ? localStorage.getItem(rememberedKey) ?? ""
       : "";
 
-  // If we just bounced a staff account out, show a banner explaining why.
+  // Explain a wrong-role bounce from /api/post-signin. The two cases point in
+  // opposite directions: `staff_account` is a non-client who arrived at this
+  // door by mistake and belongs on the crew sign-in, `use_customer_login` is a
+  // customer who tried the staff door and belongs here — telling them they
+  // aren't a customer sends them back into a loop.
   const errorParam = searchParams.get("error");
   const initialError =
     errorParam === "staff_account"
       ? "That's a staff account — use the crew sign-in link below."
-      : null;
+      : errorParam === "use_customer_login"
+        ? "That's a customer account — this is the right place. Sign in below to see your bookings."
+        : null;
   // Shown after a successful password reset (from /reset-password).
   const resetSuccess = searchParams.get("reset") === "success";
 

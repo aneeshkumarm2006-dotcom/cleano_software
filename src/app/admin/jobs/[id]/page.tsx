@@ -16,6 +16,7 @@ import { computeJobPayShares, type JobPayInput } from "@/lib/cleaner-earnings";
 import { resolveAmountDue } from "@/lib/job-billing";
 import { summarizeJobChecklist } from "@/lib/job-checklist.server";
 import { parseJobPhotoKind } from "@/lib/job-photos";
+import { listJobIssues } from "@/app/admin/actions/jobIssues";
 import JobDetailView from "./JobDetailView";
 import ScrollToTop from "./ScrollToTop";
 
@@ -135,6 +136,7 @@ export default async function JobPage({
     gpsEnabled,
     rateInputs,
     checklistSummary,
+    jobIssuesResult,
   ] = await Promise.all([
     // All users for the cleaner selector
     db.user.findMany({
@@ -220,6 +222,12 @@ export default async function JobPage({
     // generation stays where it has always been, on the cleaner opening the
     // job. Joins wave 2 rather than trailing it: it needs only the job id.
     summarizeJobChecklist(id),
+
+    // What cleaners reported from this job. Through the same action the /admin
+    // /issues list uses, so the two screens can never disagree about a row's
+    // shape — and it carries its own OWNER/ADMIN guard, which is why a lead
+    // viewing their own job simply gets no card rather than an error.
+    listJobIssues({ jobId: id }),
   ]);
 
   const totalLogs = job._count.logs;
@@ -468,6 +476,10 @@ export default async function JobPage({
     employee: job.employee
       ? { id: job.employee.id, name: job.employee.name }
       : { id: "", name: "Unassigned" },
+    // The raw lead column and the crew target (Sept 3 fix 4). `employee` above
+    // substitutes a blank id for an unassigned job, which is not a head-count.
+    employeeId: job.employeeId,
+    requiredCleaners: job.requiredCleaners,
     cleaners: job.cleaners.map((c) => ({ id: c.id, name: c.name })),
     cancellationRequestedAt: job.cancellationRequestedAt?.toISOString() ?? null,
     rescheduleRequestedAt: job.rescheduleRequestedAt?.toISOString() ?? null,
@@ -544,6 +556,18 @@ export default async function JobPage({
   // rating was set manually by an admin (customer ratings come through the
   // review-token flow without a staff rater).
   const staffById = new Map(users.map((u) => [u.id, u.name]));
+
+  // The issues, plus the names behind `resolvedById` — the DTO carries the id
+  // only, and `users` is already in hand from wave 2, so this costs no query.
+  const jobIssues = jobIssuesResult.ok ? jobIssuesResult.issues : [];
+  const issueResolverNames: Record<string, string> = {};
+  for (const issue of jobIssues) {
+    if (issue.resolvedById) {
+      issueResolverNames[issue.resolvedById] =
+        staffById.get(issue.resolvedById) ?? "an admin";
+    }
+  }
+
   const jobRatingsData = job.ratings.map((r) => ({
     id: r.id,
     employeeId: r.employeeId,
@@ -592,6 +616,8 @@ export default async function JobPage({
         jobRatings={jobRatingsData}
         gpsEnabled={gpsEnabled}
         checklistSummary={checklistSummary}
+        jobIssues={jobIssues}
+        issueResolverNames={issueResolverNames}
       />
     </>
   );

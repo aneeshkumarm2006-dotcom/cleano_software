@@ -848,6 +848,8 @@ model Job {
   invoices                       Invoice[]
   invoiceLineItems               InvoiceLineItem[]     @relation("InvoiceLineJobs")
   photos                         JobPhoto[]
+  issues                         JobIssue[]
+  maskedContacts                 MaskedContact[]
   reviewPhotos                   ReviewPhoto[]
   chatMessages                   JobChatMessage[]
   assignments                    JobAssignment[]
@@ -1997,6 +1999,49 @@ enum JobPhotoKind {
   AFTER
   ISSUE
   GENERAL
+}
+
+/// Something went wrong on a job and the cleaner said so (Sept 3 fix list, item
+/// 1 — "admin notified when a cleaner reports an issue", which had no feature
+/// behind it at all).
+///
+/// Separate from a `JobPhoto` with `kind = ISSUE` and from a `NOTE_ADDED` log
+/// row, because neither of those has a state: a photo is filed and forgotten,
+/// and a note is prose nobody owns. This has a status somebody has to move.
+model JobIssue {
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String    @default("")
+  id             String    @id @default(cuid())
+  jobId          String
+  /// The cleaner who filed it. Soft reference so deactivating a cleaner never
+  /// deletes the record of what they reported.
+  reportedById   String?
+  reportedByName String
+  /// Mirrors the TS unions in lib/job-issues.ts. Stored as text, not an enum,
+  /// so a new category is one line rather than a migration.
+  category       String
+  urgency        String    @default("NORMAL")
+  status         String    @default("OPEN")
+  description    String    @db.Text
+  /// Optional photo, uploaded through the normal job-photo path with kind ISSUE.
+  photoId        String?
+  photoUrl       String?
+  acknowledgedAt DateTime?
+  resolvedAt     DateTime?
+  resolvedById   String?
+  resolutionNote String?   @db.Text
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  job            Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId, createdAt])
+  @@index([organizationId, status, createdAt])
+  // The admin queue's default view filters by nothing but the workspace and
+  // orders by createdAt. The composite above cannot serve that — `status` sits
+  // between the two columns it needs — so without this it scans and sorts.
+  @@index([organizationId, createdAt])
+  @@index([organizationId])
 }
 
 enum JobChatSenderRole {
@@ -4072,4 +4117,70 @@ enum AiMessageAuthor {
   CUSTOMER
   ASSISTANT
   STAFF
+}
+
+// ── Phone masking (fix list #6) ───────────────────────────────────────────────
+//
+// Today a cleaner who has ever been assigned a job keeps that customer's real
+// mobile number forever. These two tables put a company number in between.
+//
+// Deliberately NOT `Organization.smsNumber`. That column is singular and is the
+// AI receptionist's front door — inbound texts to it are threaded into job chat
+// or handed to the assistant. Masking needs MANY numbers, because one number can
+// only carry one pairing per participant before an inbound message stops being
+// attributable to a conversation. So masking gets its own pool and the
+// receptionist number is left alone.
+
+/// One company number available to stand between a cleaner and a customer.
+model ProxyNumber {
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String          @default("")
+  id             String          @id @default(cuid())
+  /// E.164. Globally unique for the same reason `Organization.smsNumber` is:
+  /// Twilio tells us which number was dialled and nothing else useful, so this
+  /// column is the only way to know whose workspace an inbound call belongs to.
+  phoneNumber    String          @unique
+  label          String?
+  isActive       Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  contacts       MaskedContact[]
+
+  @@index([organizationId, isActive])
+  @@index([organizationId])
+}
+
+/// One live cleaner ↔ customer pairing, reachable through one proxy number.
+model MaskedContact {
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String      @default("")
+  id             String      @id @default(cuid())
+  jobId          String
+  /// Soft references: deactivating a cleaner or a client must not destroy the
+  /// record of who was reachable through which number.
+  cleanerId      String
+  clientId       String?
+  proxyNumberId  String
+  /// Both sides in E.164, snapshotted. If a client later edits their number the
+  /// live pairing still routes to the number the cleaner was actually given.
+  cleanerPhone   String
+  clientPhone    String
+  expiresAt      DateTime
+  lastUsedAt     DateTime?
+  createdAt      DateTime    @default(now())
+  job            Job         @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  proxyNumber    ProxyNumber @relation(fields: [proxyNumberId], references: [id], onDelete: Cascade)
+
+  /// THE constraint that makes reverse lookup possible. An inbound message
+  /// gives us only (To = proxy, From = one participant); if one proxy number
+  /// carried two pairings involving the same phone, "who did they mean?" would
+  /// have no answer. Allocation must therefore refuse to reuse a number whose
+  /// pairing for that participant is still live.
+  @@unique([proxyNumberId, cleanerPhone])
+  @@unique([proxyNumberId, clientPhone])
+  @@index([jobId, cleanerId])
+  @@index([organizationId, expiresAt])
+  @@index([organizationId])
 }

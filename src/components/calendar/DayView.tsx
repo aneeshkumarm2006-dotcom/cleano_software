@@ -33,6 +33,7 @@ import useColumnWidth from "./useColumnWidth";
 import ScheduleBlocks from "./ScheduleBlocks";
 import AvailabilityOverlay from "./AvailabilityOverlay";
 import { getCurrentTimeMeta } from "./time-utils";
+import { tzNow } from "@/lib/tz-calendar";
 import useDragSelection from "./useDragSelection";
 import { useCalendarOverlays } from "./CalendarOverlaysContext";
 
@@ -149,10 +150,18 @@ export const DayView: React.FC = () => {
   const [currentTime, setCurrentTime] = useState<Date | null>(null);
   const [currentDragRoomIndex, setCurrentDragRoomIndex] = useState<number>(-1);
 
-  // Take the first reading after mount, then update every second
+  // Take the first reading after mount, then update every second.
+  //
+  // `tzNow()` and not `new Date()`: `currentTime` is both the now-line's
+  // position (getHours/getMinutes in getCurrentTimeMeta) and the "is this
+  // column today" test, and both were reading the VIEWER's clock — a browser
+  // a day ahead of the store ringed the wrong column and drew the line at the
+  // wrong height. tzNow returns the store's wall clock floated into a local
+  // Date, the same shape the events already arrive in, so everything
+  // downstream stays as-is.
   useEffect(() => {
-    setCurrentTime(new Date());
-    const interval = setInterval(() => setCurrentTime(new Date()), 1000);
+    setCurrentTime(tzNow());
+    const interval = setInterval(() => setCurrentTime(tzNow()), 1000);
     return () => clearInterval(interval);
   }, []);
 

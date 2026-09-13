@@ -12,6 +12,7 @@ import {
   Settings,
 } from "lucide-react";
 import { CalendarConfigProvider } from "@/contexts/CalendarConfigContext";
+import { tzToday } from "@/lib/tz-calendar";
 
 // Paths are resolved against the current area (/admin or /cleaners) at render
 // time so this shared layout works under both /admin/calendar and
@@ -29,7 +30,9 @@ type MiniCalendarDay = {
 function CalendarLayoutContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [miniCalendarDate, setMiniCalendarDate] = useState(new Date());
+  // Store zone, not the viewer's — the mini month must agree with the grid
+  // beside it (see `tzToday`).
+  const [miniCalendarDate, setMiniCalendarDate] = useState(tzToday());
 
   const roleBase = pathname?.startsWith("/cleaners") ? "/cleaners" : "/admin";
   const menuItems = calendarMenuItems.map((m) => ({
@@ -105,7 +108,7 @@ function CalendarLayoutContent({ children }: { children: React.ReactNode }) {
     });
   };
 
-  const today = new Date();
+  const today = tzToday();
 
   return (
     <div className="h-full flex overflow-hidden">

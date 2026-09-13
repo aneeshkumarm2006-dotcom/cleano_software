@@ -1,7 +1,7 @@
 import { NextRequest, after } from "next/server";
 import { db } from "@/lib/org-db";
 import { runAsOrg } from "@/lib/org-context";
-import { orgForInboundNumber } from "@/lib/sms-sender";
+import { inboundNumberMatch, type InboundNumberMatch } from "@/lib/sms-sender";
 import { sendSms, toE164 } from "@/lib/sms";
 import { isJobChatOpenForClient } from "@/lib/jobChatActions";
 import { getAiAssistantConfig } from "@/lib/ai-assistant/knowledge";
@@ -10,6 +10,12 @@ import { logAiFailed } from "@/lib/ai-assistant/log";
 import { twilioForOrgId } from "@/lib/twilio-org";
 import { forwardInboundText } from "@/lib/sms-forward";
 import { isValidTwilioSignature } from "@/lib/twilio-signature";
+import { rateLimitHit } from "@/lib/rate-limit";
+import {
+  MASKED_TEXT_UNAVAILABLE,
+  maskedRelayBody,
+  resolveMaskedRoute,
+} from "@/lib/phone-masking";
 
 // Inbound leg of the job-specific chat SMS bridge (#11). Twilio POSTs here
 // (application/x-www-form-urlencoded) when a client texts a company's number.
@@ -24,8 +30,17 @@ import { isValidTwilioSignature } from "@/lib/twilio-signature";
 // cleaning companies can easily share a customer, and the same mobile number
 // would then land in whichever company's chat happened to be found first.
 //
+// TWO KINDS OF NUMBER now arrive here and they are handled by different halves
+// of this file. `Organization.smsNumber` is the receptionist's front door and is
+// everything described above. A `ProxyNumber` is one leg of a masked cleaner ↔
+// customer conversation (src/lib/phone-masking.ts): it is relayed to the other
+// party and stops there, because every branch below assumes the sender is the
+// customer and a cleaner's own message would be filed as if they had said it.
+//
 // Twilio setup: point the Messaging Service (or number) "A message comes in"
 // webhook (HTTP POST) at  https://<your-domain>/api/twilio/inbound
+// Point each masking number's own "A message comes in" webhook at the same URL,
+// and its "A call comes in" webhook at /api/twilio/voice.
 // Requires TWILIO_AUTH_TOKEN. Optionally set TWILIO_WEBHOOK_BASE_URL to the
 // exact public origin Twilio is configured with (e.g. https://app.cleano.com)
 // if the auto-detected origin ever mismatches behind proxies.
@@ -45,7 +60,7 @@ export const runtime = "nodejs";
  * the request-scoped org context is gone.
  */
 function aiFallback(
-  org: NonNullable<Awaited<ReturnType<typeof orgForInboundNumber>>>,
+  org: InboundNumberMatch["org"],
   phone: string,
   text: string,
   client: { id: string; name: string | null } | null,
@@ -67,6 +82,61 @@ function aiFallback(
     );
     return twiml();
   });
+}
+
+/**
+ * A text that arrived on a masked number, passed to the other party and
+ * nowhere else.
+ *
+ * Runs inside the workspace's org context. Deliberately terminal: none of the
+ * receptionist's machinery below runs for a proxy number, because every branch
+ * of it assumes the sender is the customer. Threading a CLEANER's message into
+ * job chat would put their words in the customer's mouth, and the assistant
+ * would answer a cleaner as though they were a prospect.
+ */
+async function relayMaskedText(
+  proxyNumber: string,
+  from: string,
+  text: string,
+): Promise<Response> {
+  const route = await resolveMaskedRoute(proxyNumber, from);
+
+  if (!route.ok) {
+    // Say so once rather than swallowing it — silence leaves a cleaner texting
+    // a void and retrying. The limiter is in-memory and per-instance, the same
+    // caveat it carries everywhere else; a second reply an hour later is a far
+    // cheaper failure than one reply per inbound message forever.
+    if (!rateLimitHit("masked-relay-unroutable", from, { max: 1, windowMs: 60 * 60_000 })) {
+      await sendSms({ to: from, from: proxyNumber, body: MASKED_TEXT_UNAVAILABLE });
+    }
+    return twiml();
+  }
+
+  // Only the sender's own name is looked up, and only their FIRST name is sent
+  // on — the recipient needs to know who is speaking, not who they are.
+  const senderName =
+    route.direction === "cleaner-to-client"
+      ? (
+          await db.user.findFirst({
+            where: { id: route.contact.cleanerId },
+            select: { name: true },
+          })
+        )?.name ?? null
+      : route.contact.clientId
+        ? (
+            await db.client.findFirst({
+              where: { id: route.contact.clientId },
+              select: { name: true },
+            })
+          )?.name ?? null
+        : null;
+
+  await sendSms({
+    to: route.to,
+    from: proxyNumber,
+    body: maskedRelayBody(senderName, route.direction, text),
+  });
+  return twiml();
 }
 
 function twiml(body = ""): Response {
@@ -98,8 +168,9 @@ export async function POST(req: NextRequest) {
   //
   // No match means a number we do not serve: accept and ignore, rather than
   // guessing a workspace and filing a stranger's message in it.
-  const org = await orgForInboundNumber(params.To ?? "");
-  if (!org) return twiml();
+  const match = await inboundNumberMatch(params.To ?? "");
+  if (!match) return twiml();
+  const org = match.org;
 
   const resolved = await twilioForOrgId(org.id);
   if (!resolved.ok) {
@@ -129,6 +200,19 @@ export async function POST(req: NextRequest) {
   const signature = req.headers.get("x-twilio-signature");
   if (!isValidTwilioSignature(url, params, signature, resolved.creds.authToken)) {
     return new Response("Invalid signature", { status: 403 });
+  }
+
+  // A masked number is a private line between one cleaner and one customer, so
+  // it is relayed and then STOPS — before the forward below and before every
+  // branch after it. Not even the migration relay gets a copy: that exists to
+  // keep a workspace's OTHER system fed with its receptionist traffic, and a
+  // masked conversation was never in that system to begin with.
+  if (match.kind === "proxy") {
+    const proxyNumber = params.To ?? "";
+    const sender = params.From ?? "";
+    const text = (params.Body ?? "").trim();
+    if (!sender || !text) return twiml();
+    return runAsOrg(org, () => relayMaskedText(proxyNumber, sender, text));
   }
 
   // Verified and ours. Pass a copy on to whatever the workspace is migrating

@@ -4,6 +4,7 @@ import { logActivity } from "@/lib/activity-log";
 import { db } from "@/lib/org-db";
 import { forEachOrganization, summarise } from "@/lib/cron-tenants";
 import { runLeadFollowUps } from "@/lib/ai-assistant/follow-up";
+import { releaseExpiredMaskedContacts } from "@/lib/phone-masking";
 import { sendReminder24h } from "@/lib/email";
 import { smsReminder } from "@/lib/sms";
 
@@ -108,13 +109,23 @@ export async function GET(req: NextRequest) {
       return { eligible: 0, sent: 0, completedSequence: 0, retiredAsClient: 0, skippedNoAddress: 0, failed: 0 };
     });
 
+    // ── Phone masking: hand expired numbers back to the pool ─────────
+    // Allocation sweeps as it goes, so an active workspace never leaks. This
+    // is for the one that stopped booking: without it, a company out of season
+    // holds every number it was ever lent, forever. Never throws — a stuck
+    // sweep must not cost anyone their reminders.
+    const maskedReleased = await releaseExpiredMaskedContacts().catch((e) => {
+      console.error("masked contact expiry sweep failed", e);
+      return 0;
+    });
+
     await logActivity({
       category: "CRON",
       action: "reminders",
       status: "SUCCESS",
-      message: `Reminders cron: sent ${sent}, skipped ${skipped}; lead follow-ups sent ${followUps.sent}/${followUps.eligible}`,
+      message: `Reminders cron: sent ${sent}, skipped ${skipped}; lead follow-ups sent ${followUps.sent}/${followUps.eligible}; masked numbers released ${maskedReleased}`,
     });
-    return { sent, skipped, followUps };
+    return { sent, skipped, followUps, maskedReleased };
   });
 
   return NextResponse.json({ ok: true, ...summarise(results) });

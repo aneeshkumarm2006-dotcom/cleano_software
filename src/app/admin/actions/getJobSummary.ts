@@ -3,14 +3,22 @@
 import { db } from "@/lib/org-db";
 import { getActor } from "@/lib/action-guards";
 import { computeJobMoney } from "@/lib/job-money";
-import { computeJobPayShares, type JobPayInput } from "@/lib/cleaner-earnings";
+import {
+  computeJobPayShares,
+  type JobPayInput,
+  type JobPayShare,
+} from "@/lib/cleaner-earnings";
 import { getCleanerRateInputs } from "@/lib/cleaner-rates";
 import { resolveAmountDue } from "@/lib/job-billing";
 import { getTaxRates } from "@/lib/tax.server";
 import { formatDate, formatTime } from "@/lib/timezone";
 import { formatAddressLine } from "@/lib/client-address";
 import { jobTypeLabel } from "@/lib/calendar-labels";
-import type { JobSummaryDTO, JobSummaryResult } from "./getJobSummary.types";
+import type {
+  JobSummaryDTO,
+  JobSummaryPayRow,
+  JobSummaryResult,
+} from "./getJobSummary.types";
 
 /**
  * Fetch-on-open payload for the calendar job drawer (client feedback item 8).
@@ -195,13 +203,45 @@ export async function getJobSummary(jobId: string): Promise<JobSummaryResult> {
             job as unknown as JobPayInput,
             await getCleanerRateInputs(participantIds)
           )
-        : new Map();
+        : new Map<string, JobPayShare>();
 
     // Assignment rows still carry the crew's CLOCK status for the row beside
     // each name — that part was always right.
     const assignmentByCleaner = new Map(
       job.assignments.map((a) => [a.cleanerId, a])
     );
+
+    // Everyone this job PAYS, in the order the drawer prints them (fix 11).
+    // Built off the SHARE MAP, not `job.cleaners`: `participantIds` above
+    // includes the LEAD, who is paid whether or not they are also on the
+    // roster — and the drawer, which only ever mapped the roster, showed that
+    // lead's pay nowhere. Each row carries the three components separately, the
+    // same presentation the job page's Financials tab uses.
+    const payRows: JobSummaryPayRow[] = [];
+    const pushPayRow = (id: string, name: string, isLead: boolean) => {
+      const share = payShares.get(id);
+      if (!share || payRows.some((r) => r.cleanerId === id)) return;
+      const assignment = assignmentByCleaner.get(id);
+      payRows.push({
+        cleanerId: id,
+        name,
+        status: assignment?.status ?? null,
+        isLead,
+        // Already rounded to cents by computeJobPayShares — rounding again here
+        // is how the drawer would start disagreeing with payroll by a cent.
+        amount: share.base,
+        tip: share.tip,
+        parking: share.parking,
+        total: share.total,
+        isOverride: assignment?.payAmount != null,
+        basis: share.basis,
+        basisLabel: share.basisLabel,
+      });
+    };
+    if (job.employeeId && job.employee) {
+      pushPayRow(job.employeeId, job.employee.name, true);
+    }
+    for (const c of job.cleaners) pushPayRow(c.id, c.name, false);
 
     const start = job.startTime;
     // Live rows exist where endTime equals startTime (the admin form's end
@@ -269,12 +309,13 @@ export async function getJobSummary(jobId: string): Promise<JobSummaryResult> {
         id: c.id,
         name: c.name,
         status: assignmentByCleaner.get(c.id)?.status ?? null,
-        // `base` — this cleaner's share of what the job is worth. Tips and
-        // transportation are their own rows in this drawer, so folding them in
-        // here would print them twice. Matches the Financials tab exactly.
-        pay: payShares.get(c.id)?.base ?? null,
+        // `total` — the whole payout, exactly as this cleaner's `payRows` entry
+        // states it. It used to be `base`, which silently disagreed with the job
+        // page's Team card by the cleaner's tip and parking share.
+        pay: payShares.get(c.id)?.total ?? null,
       })),
       leadEmployee: job.employee ?? null,
+      payRows,
 
       money,
       // The figure the drawer prints beside "Charge card" — what Stripe will

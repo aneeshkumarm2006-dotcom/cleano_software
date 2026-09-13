@@ -18,6 +18,14 @@ import Button from "@/components/ui/Button";
  * `formNoValidate` because this form has required fields and archiving must not
  * be blocked by an incomplete one. `useFormStatus().action` tells the two
  * submissions apart, so pressing Save no longer spins this button.
+ *
+ * It is rendered LAST in the footer and moved back to the left with `order` —
+ * see the note at the callsite. A form's default button (the one Enter presses
+ * from any text field) is the first submit button in tree order, and while this
+ * one held that spot, Enter archived the job instead of saving it, `formNoValidate`
+ * carrying it straight past the required fields. The confirm below is the second
+ * half of that: this is the one control on the page that destroys the booking
+ * being edited, and every other destructive control in the admin asks first.
  */
 export default function DeleteButton({
   action,
@@ -33,7 +41,19 @@ export default function DeleteButton({
       formAction={action}
       formNoValidate
       variant="destructive"
-      disabled={pending}>
+      disabled={pending}
+      // preventDefault on a submit button's click cancels the submission, so a
+      // cancelled confirm leaves the admin exactly where they were, with every
+      // edit they had typed still in the form.
+      onClick={(e) => {
+        if (
+          !window.confirm(
+            "Archive this job? It leaves Jobs, the calendar and the cleaners' schedules, and can be restored from Jobs → Archived. Unsaved edits on this form are discarded."
+          )
+        ) {
+          e.preventDefault();
+        }
+      }}>
       {archiving ? (
         <span className="flex items-center gap-2">
           <svg

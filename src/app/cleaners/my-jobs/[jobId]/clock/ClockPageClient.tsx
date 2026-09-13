@@ -17,6 +17,8 @@ import {
   pendingRequiredItems,
   requiredItemsSatisfied,
 } from "@/lib/job-checklist";
+import { shortStaffedNotice, type JobStaffing } from "@/lib/cleaner-jobs";
+import { AlertTriangle } from "lucide-react";
 import {
   activeSessionMinutes,
   breakMinutesWithin,
@@ -61,6 +63,12 @@ interface ClockPageClientProps {
   sessions?: { id: string; startedAt: string; endedAt: string | null }[];
   /** This cleaner's breaks, for the per-session active-time deduction. */
   breaks?: { startedAt: string; endedAt: string | null }[];
+  /**
+   * Crew head-count vs `requiredCleaners` (Sept 3 fix 4). ADVISORY on both
+   * halves of this screen: clock-in gets one confirm step, clock-out gets a
+   * notice and a reworded button. Neither ever refuses.
+   */
+  staffing?: JobStaffing;
 }
 
 function pad(n: number) {
@@ -173,6 +181,7 @@ export default function ClockPageClient({
   gpsEnabled = true,
   sessions = [],
   breaks = [],
+  staffing,
 }: ClockPageClientProps) {
   const router = useRouter();
   const [now, setNow] = useState(() => new Date());
@@ -204,6 +213,11 @@ export default function ClockPageClient({
   // The closing report: has the cleaner opened it, and what have they answered.
   const [coEditing, setCoEditing] = useState(false);
   const [coDrafts, setCoDrafts] = useState<Record<string, ClosingReportDraft>>({});
+
+  // Short-staffed confirm (Sept 3 fix 4). Armed by the first tap on Clock in,
+  // cleared by "Not yet". Never a reason the clock-in cannot happen.
+  const [shortConfirm, setShortConfirm] = useState(false);
+  const isShort = !!staffing?.isShort;
 
   // Checklist state (wired into the clock-out modal)
   const [checklistItems, setChecklistItems] = useState<JobChecklistItemDTO[]>([]);
@@ -392,6 +406,15 @@ export default function ClockPageClient({
     }
   }
 
+  /** First tap on a short-staffed job opens the notice; the next one goes. */
+  function requestClockIn() {
+    if (isShort && !shortConfirm) {
+      setShortConfirm(true);
+      return;
+    }
+    void handleClockIn();
+  }
+
   async function handleClockIn() {
     setLoading(true);
     setError(null);
@@ -464,6 +487,76 @@ export default function ClockPageClient({
               : "Tap the button when you arrive on site. Your shift starts the moment you clock in."}
           </p>
 
+          {/* Short-staffed (Sept 3 fix 4). An inline amber block rather than a
+              second sheet — this screen's only modal is the clock-out one, and
+              the warning belongs where the button is. It arms a confirm and
+              nothing more: "Clock in anyway" always works. */}
+          {isShort && staffing && !isLive && (!isDone || canResumeJob) && (
+            <div style={{
+              background: "#fffbeb",
+              border: "1px solid #fde68a",
+              borderRadius: 14,
+              padding: "14px 16px",
+              margin: "0 0 12px",
+              display: "flex",
+              flexDirection: "column",
+              gap: 10,
+              textAlign: "left",
+            }}>
+              <div style={{
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 8,
+                fontSize: 13,
+                lineHeight: 1.5,
+                color: "#b45309",
+              }}>
+                <AlertTriangle size={15} style={{ marginTop: 1, flexShrink: 0 }} />
+                <span>
+                  <strong>Short-staffed.</strong> {shortStaffedNotice(staffing)}{" "}
+                  Let your admin know if you need help.
+                </span>
+              </div>
+              {shortConfirm && (
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button
+                    onClick={() => setShortConfirm(false)}
+                    disabled={loading || isRefreshing}
+                    style={{
+                      background: "none",
+                      border: "1px solid var(--primary-10)",
+                      borderRadius: 999,
+                      padding: "7px 16px",
+                      fontSize: 13,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      color: "var(--primary-70)",
+                      fontFamily: "inherit",
+                    }}>
+                    Not yet
+                  </button>
+                  <button
+                    onClick={handleClockIn}
+                    disabled={loading || isRefreshing}
+                    style={{
+                      background: "#b45309",
+                      color: "#fff",
+                      border: 0,
+                      borderRadius: 999,
+                      padding: "7px 16px",
+                      fontSize: 13,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      fontFamily: "inherit",
+                      opacity: loading || isRefreshing ? 0.6 : 1,
+                    }}>
+                    {loading || isRefreshing ? "Clocking in…" : "Clock in anyway"}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           {!isDone ? (
             isLive ? (
               <>
@@ -521,16 +614,19 @@ export default function ClockPageClient({
                     {otwLoading ? "Sharing…" : "On my way"}
                   </button>
                 )}
-                <button
-                  className="clk-action"
-                  onClick={handleClockIn}
-                  disabled={loading || isRefreshing}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <polygon points="5 3 19 12 5 21 5 3" />
-                  </svg>
-                  {loading || isRefreshing ? "Clocking in…" : "Clock in"}
-                </button>
+                {/* Replaced by the amber block's own pair while it is armed. */}
+                {!shortConfirm && (
+                  <button
+                    className="clk-action"
+                    onClick={requestClockIn}
+                    disabled={loading || isRefreshing}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <polygon points="5 3 19 12 5 21 5 3" />
+                    </svg>
+                    {loading || isRefreshing ? "Clocking in…" : "Clock in"}
+                  </button>
+                )}
               </>
             )
           ) : (
@@ -539,10 +635,10 @@ export default function ClockPageClient({
                   nothing but a link away — a cleaner who had to go back had no
                   way to record it, and their second stretch was unpaid and
                   invisible. Hidden once the job is PAID or CANCELLED. */}
-              {canResumeJob && (
+              {canResumeJob && !shortConfirm && (
                 <button
                   className="clk-action"
-                  onClick={handleClockIn}
+                  onClick={requestClockIn}
                   disabled={loading || isRefreshing}>
                   <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="1 4 1 10 7 10" />
@@ -770,6 +866,24 @@ export default function ClockPageClient({
               />
             )}
 
+            {/* Short-staffed (Sept 3 fix 4). Same amber as the checklist gate
+                and deliberately unlike it: this disables nothing. */}
+            {staffing?.isShort && (
+              <div style={{
+                margin: "0 0 12px",
+                fontSize: 12.5,
+                lineHeight: 1.5,
+                color: "#b45309",
+                background: "#fffbeb",
+                border: "1px solid #fde68a",
+                borderRadius: 10,
+                padding: "10px 12px",
+              }}>
+                <strong>Short-staffed.</strong> {shortStaffedNotice(staffing)} You
+                can still clock out — the job is logged as finished short-handed.
+              </div>
+            )}
+
             <div className="co-footer">
               <button className="co-btn-ghost" onClick={() => !coLoading && setCoOpen(false)} disabled={coLoading}>Cancel</button>
               <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
@@ -786,9 +900,13 @@ export default function ClockPageClient({
                           ? "Submitting…"
                           : coEditing
                             ? coReported > 0
-                              ? `Save ${coReported} update${coReported === 1 ? "" : "s"} & clock out`
-                              : "Clock out"
-                            : "No changes — clock out"}
+                              ? `Save ${coReported} update${coReported === 1 ? "" : "s"} & clock out${isShort ? " anyway" : ""}`
+                              : isShort
+                                ? "Clock out anyway"
+                                : "Clock out"
+                            : isShort
+                              ? "Clock out anyway"
+                              : "No changes — clock out"}
                       </button>
                       {!allRequiredDone && (
                         <span style={{ fontSize: 11, color: "#dc2626", textAlign: "right" }}>

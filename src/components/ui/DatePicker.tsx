@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Calendar, ChevronLeft, ChevronRight } from "lucide-react";
+import { tzToday } from "@/lib/tz-calendar";
 
 interface DatePickerProps {
   value?: string;       // "YYYY-MM-DD"
@@ -62,8 +63,13 @@ export default function DatePicker({
   className = "",
   style,
 }: DatePickerProps) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  // The store's today, not the machine's. Every date this picker deals in is a
+  // civil "YYYY-MM-DD" (see `toISO`), and `new Date()` answered that question
+  // with the VIEWER's clock: on a machine running Asia/Calcutta the Today
+  // button wrote Sep 11 while the business was still on Sep 10 — an admin
+  // booking "today" booked tomorrow. `tzToday()` is already local-midnight, so
+  // the rest of this component (getFullYear/getMonth/getDate) is unchanged.
+  const today = tzToday();
 
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);

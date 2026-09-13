@@ -5,12 +5,16 @@ import { db } from "@/lib/org-db";
 import { revalidatePath } from "next/cache";
 import { getTaxRates } from "@/lib/tax.server";
 import {
+  checkCustomCleanerPay,
   computeJobMoney,
   isPricingMode,
+  jobPayBasis,
   passThroughTotal,
   resolvePassThroughBilling,
   resolvePricingMode,
   sumAddOns,
+  type CustomCleanerPayCheck,
+  type JobMoneyJob,
   type JobPricingMode,
 } from "@/lib/job-money";
 import {
@@ -31,6 +35,7 @@ import { formatPropertySize, parsePropertyCount } from "@/lib/property-size";
 import { isSqftJobType, moveInOutBasePrice } from "@/lib/service-pricing";
 import { tzWallClockToUtc, tzInputParts } from "@/lib/time";
 import { syncJobAssignments } from "@/lib/job-assignments";
+import { clearClockTrailForReschedule } from "@/lib/job-reschedule";
 import { requireOwnerAdmin } from "@/lib/page-guards";
 import { deleteJob as archiveJob } from "@/app/admin/actions/deleteJob";
 import { getServiceCatalog } from "@/lib/service-catalog.server";
@@ -91,6 +96,74 @@ async function applyManualPayouts(
       .updateMany({ where: { jobId, cleanerId }, data: { payAmount: amount } })
       .catch(() => {});
   }
+}
+
+/**
+ * The job shape `storedCrewPay` reads. Every money column `jobPayBasis` prices
+ * from is REQUIRED here for the reason setCleanerJobPay spells out beside its
+ * own select: forgetting one would not fail, it would quietly lower the ceiling
+ * (an add-on row nobody counted, an hourly line read off a stale `price`
+ * mirror) and start refusing pay the job can actually afford. The tax columns
+ * are absent on purpose — the basis is pre-tax and rate-independent.
+ */
+interface StoredCrewPayJob extends JobMoneyJob {
+  employeeId: string | null;
+  cleaners: readonly { id: string }[];
+  assignments: readonly { cleanerId: string; payAmount: number | null }[];
+  employeePay: number | null;
+  employeePayIsManual: boolean;
+  payType: string;
+}
+
+/**
+ * What a job ALREADY promises its crew per head, and how far over its ceiling
+ * that puts it — the "what are the OTHER cleaners' stored amounts" question
+ * setCleanerJobPay had to answer, asked here in the one shape both halves of
+ * this form use.
+ *
+ * It exists because a blank `payFor_<id>` box means "leave as-is" (see
+ * `applyManualPayouts`), so on an edit the stored rows are still in force even
+ * though nothing was typed for them. Reading them is what lets the cap see the
+ * whole promise instead of only the part the admin retyped.
+ *
+ * Restricted to the cleaners actually on the job, because that is exactly the
+ * population `computeJobPayShares` honours an override for (`participantIds`) —
+ * a CANCELLED row left behind as history pays nobody and must not inflate
+ * either side of the comparison.
+ */
+function storedCrewPay(job: StoredCrewPayJob): {
+  /** `JobAssignment.payAmount` per cleaner still on the job. */
+  byCleaner: Map<string, number>;
+  /** What those amounts come to against the job AS STORED. */
+  check: CustomCleanerPayCheck;
+} {
+  const crew = new Set(
+    [job.employeeId, ...job.cleaners.map((c) => c.id)].filter(
+      (id): id is string => !!id
+    )
+  );
+  const byCleaner = new Map<string, number>();
+  for (const a of job.assignments) {
+    if (a.payAmount != null && crew.has(a.cleanerId)) {
+      byCleaner.set(a.cleanerId, a.payAmount);
+    }
+  }
+  return {
+    byCleaner,
+    check: checkCustomCleanerPay({
+      payBasis: jobPayBasis(job),
+      // Only an AGREED total caps anything — the same tri-state saveJob, the
+      // creation form and setCleanerJobPay use. On a PERCENTAGE job with
+      // automatic pay, `employeePay` is a save-time estimate.
+      teamTotal:
+        job.employeePayIsManual ||
+        job.payType === "FLAT" ||
+        job.payType === "HOURLY"
+          ? job.employeePay
+          : null,
+      amounts: Array.from(byCleaner.values()),
+    }),
+  };
 }
 
 export default async function JobFormPage({
@@ -165,7 +238,14 @@ export default async function JobFormPage({
       where: { id: jobId },
       // `addOns` feeds the pricing-mode control's hint: this page has no add-on
       // editor, but the rows it is about to re-price live here (fix 2).
-      include: { cleaners: true, addOns: true },
+      // `assignments` carries the per-cleaner pay overrides the job already
+      // has, which prefill the crew picker's boxes — without them an edit shows
+      // blank ("leave as-is") for money that is very much still promised.
+      include: {
+        cleaners: true,
+        addOns: true,
+        assignments: { select: { cleanerId: true, payAmount: true } },
+      },
     });
 
     if (!existingJob) {
@@ -537,6 +617,24 @@ export default async function JobFormPage({
             subtotalAmount: true,
             price: true,
             addOns: { select: { name: true, price: true, quantity: true } },
+            // The rest of what the job is worth AS STORED, for the pay cap's
+            // baseline below. Same list, same reason as setCleanerJobPay's
+            // select: these are the columns `jobPayBasis` prices from, and a
+            // missing one quietly lowers a ceiling rather than failing.
+            discountAmount: true,
+            billingType: true,
+            billedHourlyRate: true,
+            billedEstimatedHours: true,
+            billedActualHours: true,
+            // Which total caps the crew as the job stands, and who is on it.
+            employeePay: true,
+            payType: true,
+            employeeId: true,
+            cleaners: { select: { id: true } },
+            // The overrides already promised per head. A blank `payFor_<id>`
+            // box means "leave as-is", so these stay in force across an edit
+            // and are part of what the cap has to weigh.
+            assignments: { select: { cleanerId: true, payAmount: true } },
             // D2 / D3 — same two questions the shared saveJob asks: is the
             // stored Employee pay an order, and has the card already been taken?
             employeePayIsManual: true,
@@ -547,6 +645,11 @@ export default async function JobFormPage({
             // note beside `jobData.paymentReceived` below.
             invoiceSent: true,
             stripePaymentIntentId: true,
+            // Also not pricing: the start the job had BEFORE this save, which
+            // is the only way the edit branch can tell a reschedule from a save
+            // that left the date alone. Read here because it must be the
+            // pre-update value — see the clock-trail block in the edit branch.
+            startTime: true,
           },
         })
       : null;
@@ -610,24 +713,26 @@ export default async function JobFormPage({
           ? price
           : moneyJob.subtotalAmount
         : null;
-    const taxes = computeJobMoney(
-      {
-        pricingMode,
-        bookingSource: moneyJob?.bookingSource ?? null,
-        subtotalAmount: overrideSubtotal,
-        price,
-        discountAmount,
-        isCashJob,
-        taxExempt,
-        addOns: moneyJob?.addOns ?? [],
-        // HOURLY: the base service line is rate × hours (step 8.2).
-        billingType,
-        billedHourlyRate,
-        billedEstimatedHours,
-        billedActualHours,
-      },
-      await getTaxRates()
-    );
+    // Hoisted rather than written inline, because the per-cleaner pay cap below
+    // has to ask `jobPayBasis` the same question off the same inputs — a cap
+    // measured against a different set of numbers than the ones being saved
+    // would be a cap against nothing.
+    const moneyInput = {
+      pricingMode,
+      bookingSource: moneyJob?.bookingSource ?? null,
+      subtotalAmount: overrideSubtotal,
+      price,
+      discountAmount,
+      isCashJob,
+      taxExempt,
+      addOns: moneyJob?.addOns ?? [],
+      // HOURLY: the base service line is rate × hours (step 8.2).
+      billingType,
+      billedHourlyRate,
+      billedEstimatedHours,
+      billedActualHours,
+    };
+    const taxes = computeJobMoney(moneyInput, await getTaxRates());
 
     // Cleaner pay model: PERCENTAGE (tier/split), FLAT (fixed payout as
     // entered), HOURLY (hourlyRate × hours when employeePay is left blank).
@@ -668,6 +773,91 @@ export default async function JobFormPage({
           : moneyJob
             ? moneyJob.employeePayIsManual
             : employeePay !== null;
+
+    // ── The per-cleaner pay cap (fix list item #10) ───────────────────────────
+    //
+    // The `payFor_<id>` amounts this form collects land on
+    // `JobAssignment.payAmount`, which `computeJobPayShares` honours verbatim —
+    // and nothing, anywhere, checked that they add up to something the job can
+    // afford. A $200 job could be saved promising two cleaners $150 each: the
+    // form took it, this action returned 200, and the overshoot only showed up
+    // afterwards as a −$100 net profit on the Financials tab. STATUS_SEPT_9 §#10
+    // has claimed the opposite since it was written.
+    //
+    // REFUSED, not warned. The crew picker warns and never blocks on
+    // availability and category clashes, because an admin knowingly booking a
+    // cleaner outside their hours is an allowed decision — a judgement call
+    // about a person. This is not that: it is an arithmetic claim about money
+    // that cannot be true, and the doc calls it a guarantee. The two escapes
+    // are one field away (lower an amount, raise the total), and refusing
+    // punishes nobody, which is the actual reason the staffing advisories don't.
+    //
+    // Thrown rather than returned, for the same reason step 8.4 above throws:
+    // this action redirects on success and has no error channel back to the
+    // form. CleanerSelector blocks the submit client-side so an admin should
+    // never reach this — it is the backstop for a post that skipped the browser.
+    //
+    // Placed here because this is the earliest line where BOTH halves are known
+    // (the job's value and whether Employee pay is an agreed team total), and
+    // it is still ahead of every write to the job itself.
+    // Only an agreed total caps anything. On a PERCENTAGE job with automatic
+    // pay, `employeePay` is a save-time estimate, and capping to an estimate
+    // would refuse amounts the tier math itself would have produced.
+    const agreedTeamTotal =
+      employeePayIsManual || payType === "FLAT" || payType === "HOURLY"
+        ? employeePay
+        : null;
+    //
+    // ## The edit-form hole this closes
+    //
+    // On an EDIT the amounts are only half submitted. A blank `payFor_<id>` box
+    // means "leave as-is" (see `applyManualPayouts`), so a cleaner who already
+    // has a stored override posts nothing — and reading that blank as `null`
+    // made the whole stored payroll invisible to this check. An admin could
+    // open `?edit=<id>` on a $200 job paying $70 + $50 and drop the price to
+    // $100: nothing was typed, so nothing was weighed, and $120 of crew pay
+    // stayed standing on a $100 job. Typing one cleaner's amount while another
+    // cleaner's stored one hid was the same bug from the other end.
+    //
+    // So a blank box falls back to what the job already stores, and the crew's
+    // REAL total is what gets judged. The form prefills those boxes too, which
+    // is the courtesy; this is the trust boundary.
+    const stored = moneyJob ? storedCrewPay(moneyJob) : null;
+    const customPay = checkCustomCleanerPay({
+      payBasis: jobPayBasis(moneyInput),
+      teamTotal: agreedTeamTotal,
+      amounts: cleanerIds.map((id) => {
+        const raw = formData.get(`payFor_${id}`);
+        const str = typeof raw === "string" ? raw.trim() : "";
+        return str === "" ? (stored?.byCleaner.get(id) ?? null) : Number(str);
+      }),
+    });
+    // Measured against the overshoot the job ALREADY has, exactly as
+    // setCleanerJobPay measures its own — so this refuses edits that make the
+    // gap wider and never an edit that leaves it alone or closes it. Two
+    // populations need that: jobs saved before this cap existed, and a job an
+    // admin is halfway through correcting. On a NEW job there is no baseline,
+    // so `0` keeps the creation path's behaviour exactly as it shipped.
+    // Whole cents on both sides, so an untouched re-save cannot trip on a float
+    // a fraction of a cent high.
+    const baselineOvershootCents = stored
+      ? Math.round(stored.check.overshoot * 100)
+      : 0;
+    if (
+      customPay.overBudget &&
+      Math.round(customPay.overshoot * 100) > baselineOvershootCents
+    ) {
+      const ceiling =
+        agreedTeamTotal !== null && agreedTeamTotal > 0
+          ? "the crew's agreed"
+          : "this job's";
+      throw new Error(
+        `Custom cleaner pay adds up to $${customPay.custom.toFixed(2)}, which is ` +
+          `$${customPay.overshoot.toFixed(2)} more than ${ceiling} ` +
+          `$${customPay.budget.toFixed(2)}. The crew cannot be paid more than the ` +
+          `total they come out of — lower the per-cleaner amounts, or raise it.`
+      );
+    }
 
     // D3 — tips and parking are customer-funded pass-throughs, so they ride
     // along on the card when it has not been charged yet, and are flagged for
@@ -758,6 +948,31 @@ export default async function JobFormPage({
       paymentType,
       discountAmount,
       squareFootage,
+      // How many cleaners the job needs (item #4). The form asks now — it never
+      // did, so every job created here was born needing exactly one, and a job
+      // created with two assigned cleaners read "2 of 1 assigned" on the
+      // calendar while every staffing warning downstream measured against a
+      // number the creating admin had never seen.
+      //
+      // Clamped rather than trusted, in the same words as the shared saveJob
+      // action: a 0 would make the job unclaimable and a huge one would leave
+      // it permanently short.
+      //
+      // Spread conditionally because on the ?edit=<id> path this object goes
+      // straight into db.job.update: a post that carries no field at all must
+      // leave a saved job's number alone rather than reset it to 1 — the exact
+      // trap `paymentReceived` above fell into.
+      ...(formData.get("requiredCleaners") !== null
+        ? {
+            requiredCleaners: Math.min(
+              20,
+              Math.max(
+                1,
+                parseInt(formData.get("requiredCleaners") as string, 10) || 1
+              )
+            ),
+          }
+        : {}),
       bedCount: formData.get("bedCount")
         ? parseInt(formData.get("bedCount") as string, 10)
         : null,
@@ -799,6 +1014,33 @@ export default async function JobFormPage({
               : undefined,
         },
       });
+
+      // Moved to a different time? Then its clock trail belongs to the old
+      // time, not the new one (see lib/job-reschedule) — the same rule the
+      // shared actions/saveJob applies, called through the same helper rather
+      // than reimplemented here. This page is a SECOND job-save implementation,
+      // and it was the one missing the call: an IN_PROGRESS job rescheduled
+      // from this form kept its clock-in, its open work session and its
+      // CLOCKED_IN assignment row, so Time Tracking showed a shift ticking up
+      // against a date a week out.
+      //
+      // Guarded on the form having actually POSTED a date: with no date fields
+      // submitted, jobData.startTime falls back to `new Date()`, which would
+      // read as a move on every save and end a live shift because somebody
+      // edited a note. `moneyJob.startTime` is the pre-update value.
+      //
+      // Runs BEFORE the assignment sync below, which throws on failure: the
+      // clear must not be skipped because an unrelated team change broke.
+      if (startDate && startTime && jobData.startTime && moneyJob?.startTime) {
+        if (moneyJob.startTime.getTime() !== jobData.startTime.getTime()) {
+          await clearClockTrailForReschedule(editingJobId).catch((e) =>
+            console.error(
+              "[admin/jobs/new] clearing the clock trail failed",
+              e
+            )
+          );
+        }
+      }
 
       // Keep per-cleaner JobAssignment rows in sync with the assigned team.
       if (cleanerIds.length > 0) {
@@ -914,6 +1156,12 @@ export default async function JobFormPage({
   // Source for pre-filling: editing wins, then duplicate, then blank
   const prefill = existingJob ?? duplicateSource;
   const selectedCleanerIds = prefill?.cleaners?.map((c) => c.id) || [];
+
+  // The per-cleaner pay the job being EDITED already promises, and how far over
+  // its ceiling that already puts it. Deliberately NOT taken from `prefill`:
+  // a duplicate is a new job, and silently copying one job's hand-split payroll
+  // onto another is a decision the admin did not make.
+  const storedPay = existingJob ? storedCrewPay(existingJob) : null;
 
   return (
     // Item 6 / Q1. This page used to return `max-w-[68rem] mx-auto pb-24` with
@@ -1100,6 +1348,21 @@ export default async function JobFormPage({
           <CleanerSelector
             users={usersForSelector}
             initialSelectedIds={selectedCleanerIds}
+            // The pay cap (item #10) measures the custom amounts against what
+            // the job is worth, and this page has no add-on editor — so the
+            // rows an edited job already owns have to be handed over, or the
+            // ceiling would come in low and refuse legitimate pay.
+            addOnTotal={sumAddOns(existingJob?.addOns)}
+            // "Cleaners needed" (item #4) lives inside the picker, so the
+            // shortfall is said while the admin is still choosing the crew.
+            // Prefilled from the job being edited or duplicated — a duplicate
+            // of a two-cleaner job needs two cleaners.
+            defaultRequiredCleaners={prefill?.requiredCleaners ?? 1}
+            // The overrides this job already has, so an edit's pay boxes show
+            // what the crew is actually promised instead of a blank that reads
+            // as "nothing". The cap was blind to them — see CleanerSelector.
+            initialCustomPay={Object.fromEntries(storedPay?.byCleaner ?? [])}
+            initialOvershoot={storedPay?.check.overshoot ?? 0}
           />
         </SectionCard>
 
@@ -1325,14 +1588,6 @@ export default async function JobFormPage({
               gap: 12,
             }}
           >
-            {/* No nested <form> here — see DeleteButton. It submits THIS form
-                to `archiveJobAction` via `formAction`, and the hidden `jobId`
-                at the top of the form is the id it archives. */}
-            {isEditing && existingJob && (
-              <div style={{ marginRight: "auto" }}>
-                <DeleteButton action={archiveJobAction} />
-              </div>
-            )}
             <Link
               href={
                 isEditing
@@ -1348,6 +1603,24 @@ export default async function JobFormPage({
               </Button>
             </Link>
             <SubmitButton isEditing={isEditing} />
+            {/* Archive comes LAST in the markup and is put back on the left
+                with `order`, which is not a styling preference — it is the fix.
+                A form's DEFAULT button, the one Enter presses from any text
+                field, is the FIRST submit button in tree order, and Archive was
+                it: an admin correcting a typo and hitting Enter soft-deleted the
+                booking, and `formNoValidate` (which Archive needs, so an
+                incomplete form cannot trap a job) meant it skipped every
+                required-field check on the way out. Save is the default now;
+                Archive only happens when it is deliberately clicked.
+
+                No nested <form> here either — see DeleteButton. It submits THIS
+                form to `archiveJobAction` via `formAction`, and the hidden
+                `jobId` at the top of the form is the id it archives. */}
+            {isEditing && existingJob && (
+              <div style={{ order: -1, marginRight: "auto" }}>
+                <DeleteButton action={archiveJobAction} />
+              </div>
+            )}
           </div>
         </div>
       </form>

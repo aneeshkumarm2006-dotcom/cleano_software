@@ -17,10 +17,32 @@ export interface AnnouncementDTO {
   reactions: Record<string, number>;
   /** The calling user's current reaction, if any. */
   myReaction: string | null;
-  /** Has the caller seen this one? Drives the "New" marker. */
+  /**
+   * Has the caller opened this announcement at all? Drives the "New" marker.
+   *
+   * Deliberately NOT tied to the latest edit. Re-flagging the whole crew
+   * because somebody fixed a typo is how a noticeboard teaches people to
+   * dismiss the badge without reading it, so an edit only re-flags when the
+   * admin explicitly asks for it (see `renotify` on updateAnnouncement).
+   */
   readByMe: boolean;
-  /** How many people have seen it. Everyone sees the number. */
+  /**
+   * How many people have seen the text that is on the card RIGHT NOW. Reads
+   * taken before the last edit are counted in `staleReadCount` instead: an
+   * admin who has just rewritten a notice must never be told "Seen by 3"
+   * about words nobody has opened.
+   */
   readCount: number;
+  /** Reads that predate the last edit — those people saw different wording. */
+  staleReadCount: number;
+  /**
+   * The caller's own read predates the last edit. Not a badge: it is what
+   * tells the client to re-stamp this person's read once they have the new
+   * text in front of them, so the register recovers as the crew comes back.
+   */
+  myReadStale: boolean;
+  /** When the text last changed, or null if it still reads as published. */
+  editedAt: string | null;
   /**
    * Who saw it and who reacted, with names and times. Admin-only and null for
    * everyone else: a cleaner does not need a list of which colleagues have
@@ -30,7 +52,8 @@ export interface AnnouncementDTO {
 }
 
 export interface AnnouncementAudienceDTO {
-  reads: { name: string; at: string }[];
+  /** `stale` = read before the last edit, so that person saw older wording. */
+  reads: { name: string; at: string; stale: boolean }[];
   reactions: { name: string; emoji: string; at: string }[];
   /** Team members who have not opened it yet. */
   unread: string[];
@@ -101,6 +124,26 @@ function countReactions(
 
 // ---- Reads -----------------------------------------------------------------
 
+/**
+ * When this announcement's text last changed, or null if it still says exactly
+ * what it said when it was published.
+ *
+ * `updatedAt` carries the answer. It is the only timestamp the row has, and
+ * the write paths below keep it truthful: togglePin and a save that leaves the
+ * wording alone both carry the previous value forward instead of letting
+ * @updatedAt stamp an edit that never happened. So a moved `updatedAt` means
+ * the words moved, which is the thing the read rows have to be measured
+ * against — a read is only evidence about the text that existed when it was
+ * taken.
+ */
+function revisedAt(an: { createdAt: Date; updatedAt: Date }): Date | null {
+  // Publishing writes both stamps from the same statement; a stray millisecond
+  // between them is not an edit.
+  return an.updatedAt.getTime() - an.createdAt.getTime() > 1000
+    ? an.updatedAt
+    : null;
+}
+
 /** All announcements, pinned first then newest, with the caller's reaction. */
 export async function listAnnouncements(): Promise<Result<AnnouncementDTO[]>> {
   const a = await requireUser();
@@ -135,6 +178,14 @@ export async function listAnnouncements(): Promise<Result<AnnouncementDTO[]>> {
     data: announcements.map((an) => {
       const { reactions, myReaction } = countReactions(an.reactions, a.user.id);
       const readerIds = new Set(an.reads.map((r) => r.userId));
+      // Split the register at the last edit. Everything after it is a read of
+      // the words currently on the card; everything before it is somebody who
+      // saw a version that no longer exists, and saying otherwise is the bug.
+      const rev = revisedAt(an);
+      const isStale = (readAt: Date) =>
+        rev !== null && readAt.getTime() < rev.getTime();
+      const staleReadCount = an.reads.filter((r) => isStale(r.readAt)).length;
+      const myRead = an.reads.find((r) => r.userId === a.user.id);
       return {
         id: an.id,
         title: an.title,
@@ -145,11 +196,18 @@ export async function listAnnouncements(): Promise<Result<AnnouncementDTO[]>> {
         reactions,
         myReaction,
         readByMe: readerIds.has(a.user.id),
-        readCount: an.reads.length,
+        readCount: an.reads.length - staleReadCount,
+        staleReadCount,
+        myReadStale: myRead ? isStale(myRead.readAt) : false,
+        editedAt: rev ? rev.toISOString() : null,
         audience: forAdmin
           ? {
               reads: an.reads
-                .map((r) => ({ name: nameOf(r.userId), at: r.readAt.toISOString() }))
+                .map((r) => ({
+                  name: nameOf(r.userId),
+                  at: r.readAt.toISOString(),
+                  stale: isStale(r.readAt),
+                }))
                 .sort((x, y) => x.at.localeCompare(y.at)),
               reactions: an.reactions
                 .map((r) => ({
@@ -175,6 +233,12 @@ export async function listAnnouncements(): Promise<Result<AnnouncementDTO[]>> {
  * Idempotent by the unique pair, so opening the page twice does not move the
  * timestamp: "when did they first see it" is the question an admin is
  * actually asking, and a refresh must not answer it wrongly.
+ *
+ * An EDIT is the exception. A stamp from before the rewrite answers a question
+ * about wording that no longer exists, so re-opening an edited card moves it
+ * forward — otherwise a reader who did come back and read the new text would
+ * be filed under "saw an earlier version" for good, and the register would
+ * never recover from a single typo fix.
  */
 export async function markAnnouncementsRead(
   ids: string[]
@@ -184,13 +248,34 @@ export async function markAnnouncementsRead(
   if (!canParticipate(a.role)) return { success: false, error: "Not authorized" };
   if (ids.length === 0) return { success: true, data: { marked: 0 } };
 
+  const wanted = ids.slice(0, 200);
   const res = await db.announcementRead.createMany({
-    data: ids.slice(0, 200).map((announcementId) => ({
+    data: wanted.map((announcementId) => ({
       announcementId,
       userId: a.user.id,
     })),
     skipDuplicates: true,
   });
+
+  // Only announcements that have actually been edited can hold a stamp worth
+  // moving, and almost none of them have been, so this costs one lookup and
+  // usually no writes at all.
+  const edited = (
+    await db.announcement.findMany({
+      where: { id: { in: wanted } },
+      select: { id: true, createdAt: true, updatedAt: true },
+    })
+  ).flatMap((an) => {
+    const rev = revisedAt(an);
+    return rev ? [{ id: an.id, rev }] : [];
+  });
+  for (const { id, rev } of edited) {
+    await db.announcementRead.updateMany({
+      where: { announcementId: id, userId: a.user.id, readAt: { lt: rev } },
+      data: { readAt: new Date() },
+    });
+  }
+
   return { success: true, data: { marked: res.count } };
 }
 
@@ -238,18 +323,46 @@ export async function createAnnouncement(input: {
       createdAt: created.createdAt.toISOString(),
       reactions: {},
       myReaction: null,
-      // Brand new: nobody has seen it, including its author.
+      // Brand new: nobody has seen it, including its author, and there is no
+      // earlier version anybody could have seen instead.
       readByMe: false,
       readCount: 0,
+      staleReadCount: 0,
+      myReadStale: false,
+      editedAt: null,
       audience: { reads: [], reactions: [], unread: [] },
     },
   };
 }
 
-/** Edit an announcement's title/body/pin. Admin only. */
+/**
+ * Edit an announcement's title/body/pin. Admin only.
+ *
+ * Two deliberate things here, both about keeping the read register honest
+ * across an edit.
+ *
+ * First, `updatedAt` is this row's "the words changed" marker (see revisedAt),
+ * so a save that does not actually change the wording — reopening the dialog
+ * and pressing Save, or flipping only the pin — carries the previous value
+ * forward rather than letting @updatedAt invent an edit. Otherwise every
+ * no-op save would quietly void a register that was still correct.
+ *
+ * Second, clearing the reads is the admin's call rather than ours. A rewritten
+ * shift policy and a fixed typo both count as "the text changed", and wiping
+ * the crew's read state for the second one is how people learn to swipe the
+ * badge away unread. So reads survive by default and are merely reported as
+ * predating the edit, and `renotify` is the explicit "make everyone look
+ * again".
+ */
 export async function updateAnnouncement(
   id: string,
-  input: { title?: string; body?: string; pinned?: boolean }
+  input: {
+    title?: string;
+    body?: string;
+    pinned?: boolean;
+    /** Clear the read register so the crew is flagged unread again. */
+    renotify?: boolean;
+  }
 ): Promise<Result<{ id: string }>> {
   const a = await requireUser();
   if ("error" in a) return { success: false, error: a.error };
@@ -258,14 +371,23 @@ export async function updateAnnouncement(
   const existing = await db.announcement.findUnique({ where: { id } });
   if (!existing) return { success: false, error: "Announcement not found" };
 
-  const data: { title?: string; body?: string; pinned?: boolean } = {};
+  const data: {
+    title?: string;
+    body?: string;
+    pinned?: boolean;
+    updatedAt?: Date;
+  } = {};
+  let textChanged = false;
   if (typeof input.title === "string") {
     const title = input.title.trim();
     if (!title) return { success: false, error: "Title is required" };
     if (title.length > 120) {
       return { success: false, error: "Title is too long (max 120 characters)" };
     }
-    data.title = title;
+    if (title !== existing.title) {
+      data.title = title;
+      textChanged = true;
+    }
   }
   if (typeof input.body === "string") {
     const body = input.body.trim();
@@ -273,11 +395,24 @@ export async function updateAnnouncement(
     if (body.length > 5000) {
       return { success: false, error: "Message is too long (max 5000 characters)" };
     }
-    data.body = body;
+    if (body !== existing.body) {
+      data.body = body;
+      textChanged = true;
+    }
   }
   if (typeof input.pinned === "boolean") data.pinned = input.pinned;
 
+  // Nothing anybody reads has moved, so neither does the marker.
+  if (!textChanged) data.updatedAt = existing.updatedAt;
+
   await db.announcement.update({ where: { id }, data });
+
+  if (input.renotify === true) {
+    // Start the register again: everyone is unread until they open the new
+    // text, and the badge comes back. Reactions are left alone — those were
+    // about the notice, not about one wording of it.
+    await db.announcementRead.deleteMany({ where: { announcementId: id } });
+  }
 
   return { success: true, data: { id } };
 }
@@ -309,7 +444,11 @@ export async function togglePin(id: string): Promise<Result<{ id: string; pinned
 
   const updated = await db.announcement.update({
     where: { id },
-    data: { pinned: !existing.pinned },
+    // Pinning moves the card, not the words on it, so the previous
+    // `updatedAt` is carried forward: it is the "text last changed" marker the
+    // read register is measured against, and a pin must not void reads that
+    // are still perfectly accurate.
+    data: { pinned: !existing.pinned, updatedAt: existing.updatedAt },
   });
 
   return { success: true, data: { id, pinned: updated.pinned } };

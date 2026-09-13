@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsx scripts/read-only-lookup.ts)",
+      "Bash(npx tsx scripts/read-only-lookup.ts:*)",
+      "Bash(npx tsx scripts/set-qa-admin-password.ts)",
+      "Bash(npx tsx scripts/set-qa-admin-password.ts:*)"
+    ]
+  }
+}

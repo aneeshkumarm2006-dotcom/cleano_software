@@ -13,7 +13,7 @@
 // an ad.
 import "server-only";
 
-import { open as openSecret } from "@/lib/secret-box";
+import { canStoreSecrets, open as openSecret } from "@/lib/secret-box";
 import { platformDb } from "@/lib/platform-db";
 import { orgFromContext } from "@/lib/org-context";
 import { getCurrentOrg } from "@/lib/org";
@@ -101,6 +101,16 @@ export async function twilioConnectionStatus(orgId: string): Promise<{
   /** Falling back to Awer's own Twilio account. */
   usingPlatform: boolean;
   smsNumber: string | null;
+  /**
+   * Whether this deployment can encrypt an auth token at all (SECRETS_KEY).
+   *
+   * connectTwilio refuses without it, so settings has to know BEFORE the form
+   * is offered: a card that takes a live auth token and only then admits it
+   * was never going to store it has already had the credential typed into it,
+   * and that token now needs rotating. Same flag, same reason, as
+   * readStripeStatus in admin/actions/stripeCredentials.ts.
+   */
+  canStoreSecrets: boolean;
 }> {
   const org = await platformDb.organization.findUnique({
     where: { id: orgId },
@@ -122,5 +132,6 @@ export async function twilioConnectionStatus(orgId: string): Promise<{
     unreadable,
     usingPlatform: !hasOwn && platformCreds() !== null,
     smsNumber: org?.smsNumber ?? null,
+    canStoreSecrets: canStoreSecrets(),
   };
 }

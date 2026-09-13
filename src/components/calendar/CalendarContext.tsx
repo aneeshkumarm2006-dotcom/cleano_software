@@ -26,6 +26,7 @@ import { useCalendarConfig } from "@/contexts/CalendarConfigContext";
 import { Toast } from "@/components/ui/Toast";
 import { mutate as swrMutate } from "swr";
 import { useCalendarData } from "@/hooks/useCalendarData";
+import { tzToday } from "@/lib/tz-calendar";
 
 type CalendarView = "month" | "week" | "day" | "list";
 
@@ -186,7 +187,9 @@ const CalendarContext = createContext<CalendarState | undefined>(undefined);
 
 export const CalendarProvider = ({
   children,
-  initialDate = new Date(),
+  // The store's today, never the viewer's — see `tzToday`. A browser east of
+  // Montréal opening the calendar with no `?date=` used to land on tomorrow.
+  initialDate = tzToday(),
   initialEvents = [],
   initialView = "month",
   initialListMode = false,
@@ -490,8 +493,11 @@ export const CalendarProvider = ({
     }
   }, [view]);
 
+  // "Today" is a civil-date question, and the answer is the STORE's. `new Date()`
+  // jumped a viewer in Asia/Calcutta to Sep 11 while Montréal — and the
+  // dashboard header — were still on Sep 10.
   const handleToday = useCallback(() => {
-    setCurrentDate(new Date());
+    setCurrentDate(tzToday());
   }, []);
 
   const handleAddEvent = useCallback(async (e: FormEvent) => {

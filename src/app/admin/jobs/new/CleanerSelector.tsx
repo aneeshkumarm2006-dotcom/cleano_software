@@ -3,7 +3,7 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import Input from "@/components/ui/Input";
-import { X, Search, Users } from "lucide-react";
+import { X, Search, Users, AlertTriangle } from "lucide-react";
 import Badge from "@/components/ui/Badge";
 import { checkAvailabilityBatch } from "../../actions/checkAvailability";
 import type { EmployeeAvailabilityStatus } from "../../actions/checkAvailability.types";
@@ -14,6 +14,8 @@ import {
   AvailabilityLink,
 } from "@/components/admin/AssignmentIndicators";
 import { categoryMismatchWarning } from "@/lib/service-permissions";
+import { checkCustomCleanerPay } from "@/lib/job-money";
+import { crewPayBudget, readJobFormMoney } from "./form-money";
 
 interface User {
   id: string;
@@ -29,6 +31,45 @@ interface User {
 interface CleanerSelectorProps {
   users: User[];
   initialSelectedIds?: string[];
+  /**
+   * Total of the add-on rows the job being edited already owns. This page has
+   * no add-on editor, so they are invisible to a DOM read — but they are part
+   * of what the job is worth, and therefore part of what it can pay a crew
+   * (item #10). Zero on a new job, which genuinely has none.
+   */
+  addOnTotal?: number;
+  /**
+   * How many cleaners the job needs. Prefilled from the job being edited or
+   * duplicated, 1 on a blank form — the same default the column carries.
+   */
+  defaultRequiredCleaners?: number;
+  /**
+   * The per-cleaner overrides the job being EDITED already has stored
+   * (`JobAssignment.payAmount`), keyed by cleaner id. Empty on a new job.
+   *
+   * These boxes used to start blank on an edit as well, and a blank box means
+   * "leave as-is" — so the cap below saw `null` for every cleaner who already
+   * had an override, and the form would happily drop a $100 job's price while
+   * $120 of crew pay stood untouched underneath it. Prefilling is the honest
+   * fix: the admin can SEE what the job already promises, which is the thing
+   * the cap is about to judge them on.
+   *
+   * Only the job being edited feeds this — never a duplicate. A duplicate is a
+   * NEW job, and carrying one job's hand-split payroll onto another without
+   * being asked is a decision, not a prefill.
+   */
+  initialCustomPay?: Record<string, number>;
+  /**
+   * How far over its ceiling those stored overrides ALREADY put this job, in
+   * dollars. 0 on a new job and on every job whose payroll currently fits.
+   *
+   * The cap refuses an edit that makes the overshoot WORSE, not one that merely
+   * arrives on a job that is already over — the same "corrections are never
+   * refused" rule setCleanerJobPay follows, and for the same reason: jobs
+   * written before this cap existed are still out there, and an admin changing
+   * such a job's address must not be held hostage to its payroll.
+   */
+  initialOvershoot?: number;
 }
 
 type StatusMap = Map<string, EmployeeAvailabilityStatus>;
@@ -36,8 +77,32 @@ type StatusMap = Map<string, EmployeeAvailabilityStatus>;
 export default function CleanerSelector({
   users,
   initialSelectedIds = [],
+  addOnTotal = 0,
+  defaultRequiredCleaners = 1,
+  initialCustomPay = {},
+  initialOvershoot = 0,
 }: CleanerSelectorProps) {
   const [searchTerm, setSearchTerm] = useState("");
+  // ── "Cleaners needed" (fix list item #4) ───────────────────────────────────
+  //
+  // This form did not ask, so every job created from it was born needing one
+  // cleaner: assign two and the calendar read "Professionals 2 of 1 assigned",
+  // and the whole staffing story downstream — open spots in the cleaner app,
+  // the shortfall clockOut logs, the amber warnings on the job — keyed off a
+  // number the creating admin was never shown. Only the Edit modal had the
+  // field, which is a poor place to learn that the job you just booked is
+  // considered fully staffed.
+  //
+  // Kept as a string so the box can be emptied while typing (a number state
+  // would snap a half-typed "" back to 1 under the cursor); the count read from
+  // it is clamped everywhere it is used, and the action clamps again server-side.
+  const [requiredCleaners, setRequiredCleaners] = useState(
+    String(defaultRequiredCleaners || 1),
+  );
+  const requiredCount = Math.min(
+    20,
+    Math.max(1, parseInt(requiredCleaners, 10) || 1),
+  );
   const [selectedCleaners, setSelectedCleaners] = useState<User[]>(() => {
     return users.filter((user) => initialSelectedIds.includes(user.id));
   });
@@ -71,6 +136,48 @@ export default function CleanerSelector({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const inputContainerRef = useRef<HTMLDivElement>(null);
 
+  // ── The per-cleaner pay cap (fix list item #10) ────────────────────────────
+  //
+  // The `payFor_<id>` boxes at the bottom of this component used to be
+  // write-only: nothing compared what they added up to against what the job was
+  // worth, so a $200 job could be saved promising two cleaners $150 each and
+  // the overshoot only ever surfaced afterwards, as a −$100 net profit on the
+  // Financials tab. These are the client half of the check — the amounts as
+  // typed, and the ceiling read off the money fields further down the form.
+  //
+  // This one BLOCKS, unlike the amber panel above it. An admin knowingly
+  // booking a cleaner outside their hours is an allowed decision, so those
+  // warnings never block; promising a crew more than the job collects is not
+  // the same kind of statement. STATUS_SEPT_9 §#10 calls it a *guarantee*, and
+  // a guarantee that can be clicked past is not one. Blocking here also costs
+  // nothing that cannot be undone in the same breath — lower an amount, or
+  // raise the job total — and punishes no third party, which is the actual
+  // reason the staffing advisories refuse to.
+  //
+  // Seeded from the overrides the job already has (see `initialCustomPay`), so
+  // an edit starts out telling the truth about what the crew is promised. A
+  // cleaner with no stored override keeps an empty box — "use the automatic
+  // amount" — and the save path still reads blank as "leave as-is", so an
+  // untouched edit re-posts only the amounts that were already there, at the
+  // values they already had.
+  const [customPay, setCustomPay] = useState<Record<string, string>>(() =>
+    Object.fromEntries(
+      Object.entries(initialCustomPay).map(([id, amount]) => [
+        id,
+        String(amount),
+      ])
+    )
+  );
+  const [payBudget, setPayBudget] = useState(0);
+  // Whether that ceiling is an agreed crew total or the job's own value, so the
+  // message below can name the right thing rather than call an Employee pay
+  // figure "what the job is worth".
+  const [budgetIsTeamTotal, setBudgetIsTeamTotal] = useState(false);
+  // The live boxes, so the cap can hang a native validation message on them and
+  // let the browser refuse the submit — no disabled button to reason about, and
+  // no second copy of "is this form OK" for someone to forget to update.
+  const payInputRefs = useRef(new Map<string, HTMLInputElement>());
+
   // Availability is evaluated by the shared server helper (checkAvailability),
   // the single source of truth: recurring weekly rules PLUS one-off blocked
   // dates. The form's date/time fields are already business wall clock, so they
@@ -91,6 +198,14 @@ export default function CleanerSelector({
       document.querySelector<HTMLInputElement>(`input[name="${name}"]`)?.value ?? "";
 
     const tick = () => {
+      // The crew's pay ceiling, re-read every tick and ABOVE the early return
+      // below: the money fields change independently of the schedule, and an
+      // admin who edits the price must not have to touch a date before the cap
+      // notices. An unchanged number bails out of setState, so this is free.
+      const budget = crewPayBudget(readJobFormMoney(), addOnTotal);
+      setPayBudget(budget.amount);
+      setBudgetIsTeamTotal(budget.fromTeamTotal);
+
       const startDate = read("startDate");
       const startTime = read("startTime");
       const endDate = read("endDate");
@@ -149,7 +264,7 @@ export default function CleanerSelector({
       generation++;
       clearInterval(interval);
     };
-  }, [userIds]);
+  }, [userIds, addOnTotal]);
 
   // Update dropdown position based on input position
   const updateDropdownPosition = () => {
@@ -244,6 +359,82 @@ export default function CleanerSelector({
     [selectedCleaners, warnFor]
   );
 
+  // The cap itself, from the same helper the server action uses so the two
+  // cannot disagree about the arithmetic. `crewPayBudget` has already picked
+  // WHICH total applies (an agreed team total, or what the job is worth), so
+  // the checker is handed one resolved number.
+  const payCheck = useMemo(
+    () =>
+      checkCustomCleanerPay({
+        payBasis: payBudget,
+        amounts: selectedCleaners.map((c) => {
+          const raw = (customPay[c.id] ?? "").trim();
+          // An EMPTIED box is not a cleared override. `applyManualPayouts`
+          // reads a blank `payFor_<id>` as "leave as-is", so a cleaner who
+          // already had a stored amount is still promised it — and the server
+          // half of this cap falls back to exactly that stored figure. Count
+          // it here too, or the two halves disagree about what the crew is
+          // owed: clearing a prefilled $70 box and typing $150 for the other
+          // cleaner looked fine on this form ($150 of $200) and then hit the
+          // server as $220, which threw the save onto a raw "Application
+          // error" page with the admin's edits lost. Clearing a box back to
+          // the automatic amount is done from the job detail page's Reset
+          // control, which is the surface that can actually express it.
+          if (raw === "") return initialCustomPay[c.id] ?? null;
+          const n = Number(raw);
+          return Number.isFinite(n) ? n : null;
+        }),
+      }),
+    [selectedCleaners, customPay, payBudget, initialCustomPay]
+  );
+
+  // Refuse the submit through the browser's own constraint validation. A custom
+  // message on any input is enough for the form to stop — and because the
+  // action is a server action reached by a normal submit, that stop happens
+  // before the round trip, not after a save the admin then has to undo. The
+  // panel below says the same thing in place, since a native bubble is easy to
+  // dismiss and never comes back on its own.
+  // What the ceiling IS, in the admin's own words — "the crew's agreed
+  // $150.00" reads as a mistake they can act on; "this job's $150.00" reads as
+  // the price, which it is not.
+  const budgetLabel = budgetIsTeamTotal
+    ? `the crew's agreed $${payCheck.budget.toFixed(2)}`
+    : `this job's $${payCheck.budget.toFixed(2)}`;
+
+  // Over budget is not the same question as "this edit is what put it there".
+  // A job saved before this cap existed can arrive already over; refusing every
+  // save on it would make its address, its notes and its schedule unreachable
+  // over a payroll figure the admin may not be the one to decide. So the block
+  // is on WORSENING the overshoot — which still refuses the two things that
+  // opened this hole (dropping the price under the stored payouts, and typing
+  // an amount while another cleaner's stored one hides) and refuses no
+  // correction. Whole cents on both sides, so an untouched edit cannot trip on
+  // a float a fraction of a cent high. Same shape as setCleanerJobPay's
+  // before/after comparison, and the server half of this check agrees.
+  const payBlocks =
+    payCheck.overBudget &&
+    Math.round(payCheck.overshoot * 100) >
+      Math.round(Math.max(0, initialOvershoot) * 100);
+
+  useEffect(() => {
+    const message = payBlocks
+      ? `Custom pay adds up to $${payCheck.custom.toFixed(2)} — $${payCheck.overshoot.toFixed(2)} more than ${budgetLabel}. Lower the amounts, or raise the total it comes out of.`
+      : "";
+    for (const el of payInputRefs.current.values()) {
+      el.setCustomValidity(message);
+    }
+  }, [payBlocks, payCheck, budgetLabel]);
+
+  // Adding or removing a cleaner changes the crew's cost, but it fires no
+  // `input` event — and PriceSummary, several sections below, only re-reads the
+  // form on one. Without this nudge its Net margin would keep counting a
+  // removed cleaner's custom amount until the admin happened to type somewhere
+  // else. Same trick EmployeePayModeField already uses to keep the pay box
+  // honest across an uncontrolled form.
+  useEffect(() => {
+    document.dispatchEvent(new Event("input", { bubbles: true }));
+  }, [selectedCleaners]);
+
   useEffect(() => {
     if (isDropdownOpen) {
       updateDropdownPosition();
@@ -284,6 +475,17 @@ export default function CleanerSelector({
   const handleSelectCleaner = (user: User) => {
     if (!selectedCleaners.find((c) => c.id === user.id)) {
       setSelectedCleaners([...selectedCleaners, user]);
+      // Putting back a cleaner who was removed in this same session restores
+      // the override the job still has stored for them. Their JobAssignment row
+      // is never deleted until the form is actually saved, so leaving the box
+      // blank would say "auto" while the save — and the server's cap — would
+      // still be looking at their stored amount.
+      const stored = initialCustomPay[user.id];
+      if (stored !== undefined) {
+        setCustomPay((prev) =>
+          user.id in prev ? prev : { ...prev, [user.id]: String(stored) }
+        );
+      }
     }
     setSearchTerm("");
     setIsDropdownOpen(false);
@@ -291,6 +493,16 @@ export default function CleanerSelector({
 
   const handleRemoveCleaner = (userId: string) => {
     setSelectedCleaners(selectedCleaners.filter((c) => c.id !== userId));
+    // Drop their custom amount too. It is submitted as `payFor_<id>` and read
+    // back per assigned cleaner, so a stray entry would post nothing — but it
+    // would keep counting toward the cap above, and refuse a submit over money
+    // nobody is being paid.
+    setCustomPay((prev) => {
+      if (!(userId in prev)) return prev;
+      const next = { ...prev };
+      delete next[userId];
+      return next;
+    });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -370,6 +582,42 @@ export default function CleanerSelector({
 
   return (
     <div className="space-y-3">
+      {/* Same control, same copy and same place as the Edit modal's — one job
+          form must not describe a job differently from the other. Above the
+          picker, because it is the question the picking is an answer to. */}
+      <div className="flex flex-wrap items-end gap-3">
+        <div style={{ width: 150 }}>
+          <label className="input-label" htmlFor="requiredCleaners">
+            Cleaners needed
+          </label>
+          <input
+            id="requiredCleaners"
+            name="requiredCleaners"
+            type="number"
+            min={1}
+            max={20}
+            step={1}
+            className="input"
+            value={requiredCleaners}
+            onChange={(e) => setRequiredCleaners(e.target.value)}
+          />
+        </div>
+        {/* Said out loud while the admin is still on the crew picker, rather
+            than discovered on the day. The cleaner app counts open spots
+            against this number, so a job left short here simply never fills. */}
+        {requiredCount > selectedCleaners.length && (
+          <p className="text-sm text-amber-700 pb-2">
+            {selectedCleaners.length} of {requiredCount} assigned
+            {" — "}
+            {requiredCount - selectedCleaners.length} more
+            {requiredCount - selectedCleaners.length === 1
+              ? " spot is"
+              : " spots are"}{" "}
+            open to cleaners.
+          </p>
+        )}
+      </div>
+
       <div className="relative" ref={inputContainerRef}>
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -463,11 +711,69 @@ export default function CleanerSelector({
                   min={0}
                   step="0.01"
                   placeholder="Auto"
-                  className="w-full pl-6 pr-2 py-1.5 text-sm bg-white border border-gray-200 rounded-lg outline-none focus:border-[#008C9C]"
+                  value={customPay[cleaner.id] ?? ""}
+                  onChange={(e) =>
+                    setCustomPay((prev) => ({
+                      ...prev,
+                      [cleaner.id]: e.target.value,
+                    }))
+                  }
+                  // Held so the cap can put a validation message on the box
+                  // itself; the cleanup keeps a removed cleaner's input out of
+                  // the map (React 19 ref cleanup).
+                  ref={(el) => {
+                    const map = payInputRefs.current;
+                    if (el) map.set(cleaner.id, el);
+                    return () => {
+                      map.delete(cleaner.id);
+                    };
+                  }}
+                  // Red where the arithmetic is wrong; `aria-invalid` only
+                  // where the browser will actually refuse the value, so a
+                  // screen reader is not told a field is rejected when it saves.
+                  aria-invalid={payBlocks || undefined}
+                  className={`w-full pl-6 pr-2 py-1.5 text-sm bg-white border rounded-lg outline-none ${
+                    payCheck.overBudget
+                      ? "border-red-400 focus:border-red-500"
+                      : "border-gray-200 focus:border-[#008C9C]"
+                  }`}
                 />
               </div>
             </div>
           ))}
+
+          {/* Red, not amber, and it means it: this is the one thing on the crew
+              picker that actually stops a save. See the note beside `customPay`
+              for why this warning blocks where the availability one above does
+              not. */}
+          {payCheck.overBudget && (
+            <p
+              role="alert"
+              className="flex items-start gap-2 rounded-xl bg-red-50 px-3 py-2 text-xs text-red-700">
+              <AlertTriangle className="w-3.5 h-3.5 mt-px flex-shrink-0" />
+              <span>
+                Custom pay adds up to{" "}
+                <strong>${payCheck.custom.toFixed(2)}</strong>, which is{" "}
+                <strong>${payCheck.overshoot.toFixed(2)}</strong> more than{" "}
+                {budgetIsTeamTotal ? "the crew's agreed" : "this job's"}{" "}
+                <strong>${payCheck.budget.toFixed(2)}</strong>.{" "}
+                {budgetIsTeamTotal
+                  ? "The per-cleaner amounts have to fit inside the Employee pay total"
+                  : "The crew can't be paid more than the job is worth"}{" "}
+                — lower the amounts, or raise the total they come out of.{" "}
+                {payBlocks ? (
+                  "This one does block the save."
+                ) : (
+                  <>
+                    This job was already over by{" "}
+                    <strong>${Math.max(0, initialOvershoot).toFixed(2)}</strong>{" "}
+                    before this edit, so the save is still allowed — it is only
+                    refused if you make the gap bigger.
+                  </>
+                )}
+              </span>
+            </p>
+          )}
         </div>
       )}
 

@@ -139,6 +139,14 @@ export async function GET(req: Request) {
 
   // Cleaner door — employees only.
   if (from === "cleaner") {
+    if (isClientRole(role)) {
+      // NOT `not_cleaner`: that message carries the *admin* remedy ("use the
+      // staff sign-in"), and a customer who follows it is bounced a second
+      // time. A customer standing at the cleaner door needs the customer
+      // login, so the case gets its own value — same reasoning as
+      // staff_account/use_customer_login and not_cleaner/use_cleaner_login.
+      return bounce(`/cleanos/login?error=customer_account`, "customer should use the portal login");
+    }
     if (!isCleanerRole(role)) {
       return bounce(`/cleanos/login?error=not_cleaner`, "not a cleaner account");
     }
@@ -160,7 +168,13 @@ export async function GET(req: Request) {
       return bounce(`/cleanos/login?error=use_cleaner_login`, "cleaner should use the cleaner login");
     }
     if (isClientRole(role)) {
-      return bounce(`/login?error=staff_account`, "customer should use the portal login");
+      // NOT `staff_account` — /login uses that for the opposite bounce (a
+      // non-client turned away from the portal door). Here the person IS a
+      // customer and has landed on the right page, so the two need distinct
+      // values or /login can only pick one message and it will be backwards
+      // for half of the people who see it. Same reasoning as
+      // not_cleaner/use_cleaner_login and not_applicant/use_applicant_login.
+      return bounce(`/login?error=use_customer_login`, "customer should use the portal login");
     }
     if (isApplicantRole(role)) {
       return bounce(`/applicant-login?error=use_applicant_login`, "applicant should use the applicant login");

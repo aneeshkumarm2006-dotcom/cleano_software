@@ -23,7 +23,19 @@ export async function previewSeriesCancellation(input: {
   scope: string;
   pauseUntil?: string | null;
 }): Promise<
-  | { ok: true; siblings: number; protectedCount: number; resumesOn: string | null }
+  | {
+      ok: true;
+      siblings: number;
+      protectedCount: number;
+      resumesOn: string | null;
+      /** The span the confirm would clear, this occurrence included. */
+      rangeStart: string | null;
+      rangeEnd: string | null;
+      /** The last booking left in the schedule, for a "pause". */
+      lastOccurrence: string | null;
+      /** A "pause" that reaches past every remaining booking — an ENDING. */
+      endsSeries: boolean;
+    }
   | { ok: false; message: string }
 > {
   const guard = await requireOwnerAdmin();
@@ -41,6 +53,10 @@ export async function previewSeriesCancellation(input: {
     siblings: plan.siblings,
     protectedCount: plan.protectedCount,
     resumesOn: plan.resumesOn?.toISOString() ?? null,
+    rangeStart: plan.rangeStart?.toISOString() ?? null,
+    rangeEnd: plan.rangeEnd?.toISOString() ?? null,
+    lastOccurrence: plan.lastOccurrence?.toISOString() ?? null,
+    endsSeries: plan.endsSeries,
   };
 }
 
@@ -58,6 +74,24 @@ export async function applySeriesCancellation(input: {
   const until = parseUntil(input.pauseUntil);
   if (scope === "pause" && !until) {
     return { ok: false, message: "Pick the date the schedule should resume after." };
+  }
+
+  // A pause whose resume date lies past every remaining booking is not a
+  // pause: it cancels the whole rest of the schedule and nothing ever brings
+  // it back, because occurrences are written once at creation and no cron
+  // tops them up (see SeriesCancelPlan.endsSeries). The drawer warns before
+  // the button, and this is the same answer on the server — so the schedule
+  // cannot be killed by a stale panel, a double-click or any other caller.
+  // Ending a schedule on purpose still has its own scope: "future".
+  if (scope === "pause") {
+    const plan = await planSeriesCancellation(input.jobId, scope, until);
+    if (plan.endsSeries) {
+      return {
+        ok: false,
+        message:
+          "That resume date is after the last booking in this schedule, so pausing would end it — nothing is generated after the last occurrence. Pick an earlier resume date, or choose “Cancel this and all future bookings” to end the schedule on purpose.",
+      };
+    }
   }
 
   const res = await cancelJobSeries(input.jobId, scope, {

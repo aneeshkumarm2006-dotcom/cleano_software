@@ -107,11 +107,16 @@ function ComposeModal({
     title: string;
     body: string;
     pinned: boolean;
+    renotify: boolean;
   }) => Promise<string | null>;
 }) {
   const [title, setTitle] = useState(editing?.title ?? "");
   const [body, setBody] = useState(editing?.body ?? "");
   const [pinned, setPinned] = useState(editing?.pinned ?? false);
+  // Off by default: a typo fix should not put the badge back on every phone.
+  // The "Seen by" line stays truthful either way, so this is only ever about
+  // whether the crew is asked to look again.
+  const [renotify, setRenotify] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -121,7 +126,12 @@ function ComposeModal({
     if (!valid || saving) return;
     setSaving(true);
     setError(null);
-    const err = await onSave({ title: title.trim(), body: body.trim(), pinned });
+    const err = await onSave({
+      title: title.trim(),
+      body: body.trim(),
+      pinned,
+      renotify,
+    });
     setSaving(false);
     if (err) {
       setError(err);
@@ -195,6 +205,28 @@ function ComposeModal({
           maxLength={5000}
         />
       </Field>
+      {editing ? (
+        <div style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+          <label
+            className="an-pin-toggle"
+            onClick={() => setRenotify((v) => !v)}>
+            <span className={`an-pin-check ${renotify ? "on" : ""}`}>
+              {renotify ? <Check size={12} /> : null}
+            </span>
+            Mark unread for everyone again
+          </label>
+          <p
+            style={{
+              fontSize: 12,
+              color: "var(--muted)",
+              margin: "6px 0 0 25px",
+              lineHeight: 1.45,
+            }}>
+            Leave this off for a typo fix — the crew keeps their place. Either
+            way, “Seen by” counts only people who have read the current text.
+          </p>
+        </div>
+      ) : null}
     </AdminModal>
   );
 }
@@ -222,7 +254,12 @@ function AnnouncementCard({
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <span className="an-author">{a.authorName}</span>
           </div>
-          <div className="an-time">{formatAgo(a.createdAt)}</div>
+          {/* Edited is shown to everyone, not just admins: a cleaner who read
+              the old wording deserves to know the notice has moved on. */}
+          <div className="an-time">
+            {formatAgo(a.createdAt)}
+            {a.editedAt ? ` · edited ${formatAgo(a.editedAt)}` : ""}
+          </div>
         </div>
         {!a.readByMe ? (
           <span
@@ -298,6 +335,10 @@ function AnnouncementCard({
 function SeenBy({ a }: { a: AnnouncementDTO }) {
   const [open, setOpen] = useState(false);
   const aud = a.audience!;
+  // Reads are split at the last edit, because "Seen by 3" next to text that
+  // was rewritten after all three of those reads is a lie the admin acts on.
+  const current = aud.reads.filter((r) => !r.stale);
+  const stale = aud.reads.filter((r) => r.stale);
   const when = (iso: string) =>
     new Date(iso).toLocaleString("en-CA", {
       month: "short",
@@ -315,16 +356,32 @@ function SeenBy({ a }: { a: AnnouncementDTO }) {
           background: "none", border: "none", padding: 0, cursor: "pointer",
           font: "inherit", fontSize: 13, fontWeight: 600, color: "var(--primary)",
         }}>
-        Seen by {aud.reads.length}
+        Seen by {current.length}
+        {stale.length > 0 ? ` · ${stale.length} saw an earlier version` : ""}
         {aud.unread.length > 0 ? ` · ${aud.unread.length} not yet` : ""}
       </button>
 
       {open && (
         <div style={{ marginTop: 8, fontSize: 13, display: "grid", gap: 8 }}>
-          {aud.reads.length > 0 && (
+          {current.length > 0 && (
             <div>
-              <div style={{ color: "var(--muted)", marginBottom: 2 }}>Read</div>
-              {aud.reads.map((r) => (
+              <div style={{ color: "var(--muted)", marginBottom: 2 }}>
+                {a.editedAt ? "Read since the edit" : "Read"}
+              </div>
+              {current.map((r) => (
+                <div key={`${r.name}-${r.at}`} style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                  <span>{r.name}</span>
+                  <span style={{ color: "var(--muted)" }}>{when(r.at)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {stale.length > 0 && (
+            <div>
+              <div style={{ color: "var(--muted)", marginBottom: 2 }}>
+                Saw an earlier version
+              </div>
+              {stale.map((r) => (
                 <div key={`${r.name}-${r.at}`} style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
                   <span>{r.name}</span>
                   <span style={{ color: "var(--muted)" }}>{when(r.at)}</span>
@@ -379,10 +436,15 @@ export default function AnnouncementsClient({
   // refresh has not been read, and stamping it would tell an admin their
   // notice landed when nobody looked. The ref keeps each id to one write, so
   // the 30-second poll does not re-post the same list forever.
+  //
+  // `myReadStale` is in here too: this person read the notice before it was
+  // rewritten, so the register has them down as having seen older wording.
+  // They are looking at the new text right now, so re-stamping it is how the
+  // count recovers without anybody being flagged unread.
   const marked = useRef<Set<string>>(new Set());
   useEffect(() => {
     const pending = (data ?? [])
-      .filter((a) => !a.readByMe && !marked.current.has(a.id))
+      .filter((a) => (!a.readByMe || a.myReadStale) && !marked.current.has(a.id))
       .map((a) => a.id);
     if (pending.length === 0) return;
 
@@ -409,10 +471,14 @@ export default function AnnouncementsClient({
     title: string;
     body: string;
     pinned: boolean;
+    renotify: boolean;
   }): Promise<string | null> {
+    const { renotify, ...content } = input;
     const res = editing
-      ? await updateAnnouncement(editing.id, input)
-      : await createAnnouncement(input);
+      ? // renotify only means anything to an existing post — a new one is
+        // unread for everybody already.
+        await updateAnnouncement(editing.id, { ...content, renotify })
+      : await createAnnouncement(content);
     if (!res.success) return res.error;
     await mutate();
     return null;

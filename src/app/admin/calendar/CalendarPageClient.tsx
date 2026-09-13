@@ -14,6 +14,7 @@ import { CalendarProvider } from "@/components/calendar/CalendarContext";
 import { useCalendarData } from "@/hooks/useCalendarData";
 import { useCalendar } from "@/components/calendar/CalendarContext";
 import CalendarJobActions from "@/components/calendar/CalendarJobActions";
+import { tzToday } from "@/lib/tz-calendar";
 
 const validViews = new Set(["month", "week", "day"]);
 
@@ -31,7 +32,10 @@ function readCalendarUrlState(params: URLSearchParams): {
   return {
     view:
       viewParam && validViews.has(viewParam) ? (viewParam as GridView) : "month",
-    date: parsed && !Number.isNaN(parsed.getTime()) ? parsed : new Date(),
+    // No `?date=` means "open on today", and today is the STORE's — a viewer
+    // whose machine has already rolled over (or not yet) must still land on
+    // the day the dashboard header names.
+    date: parsed && !Number.isNaN(parsed.getTime()) ? parsed : tzToday(),
     listMode: params.get("list") === "1",
   };
 }

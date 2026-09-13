@@ -2,38 +2,46 @@
 
 import { useEffect, useState } from "react";
 import { TrendingUp, DollarSign } from "lucide-react";
+import {
+  readCustomPayTotal,
+  readJobFormMoney,
+  type JobFormMoney,
+} from "./form-money";
+
+const EMPTY_MONEY: JobFormMoney = {
+  price: 0,
+  discount: 0,
+  tip: 0,
+  parking: 0,
+  employeePay: 0,
+  billedRate: 0,
+  billedEstimated: 0,
+  billedActual: 0,
+  billedHours: 0,
+  hourlyLine: 0,
+  finalPriceMode: false,
+  serviceLine: 0,
+  payType: "PERCENTAGE",
+  employeePayIsTeamTotal: false,
+};
 
 export default function PriceSummary() {
-  const [price, setPrice] = useState(0);
-  const [discount, setDiscount] = useState(0);
-  const [tip, setTip] = useState(0);
-  const [parking, setParking] = useState(0);
-  const [employeePay, setEmployeePay] = useState(0);
-  // Customer-side hourly billing (Stage 8). Subscribed by DOM id like every
-  // other field here, so an hourly job's Pre-tax line shows `rate × hours`
-  // rather than the empty Price box. Without this the summary read $0.00 on
-  // exactly the jobs PDF #8 is about.
-  const [billedRate, setBilledRate] = useState(0);
-  const [billedEstimated, setBilledEstimated] = useState(0);
-  const [billedActual, setBilledActual] = useState(0);
-  // Not money — the pricing mode (fix 2), mirrored into a hidden input by
-  // PricingModeField so this component can subscribe the same way it does to
-  // every other field. It changes what `price` MEANS, and therefore what this
-  // figure can honestly be called.
-  const [finalPriceMode, setFinalPriceMode] = useState(false);
+  // One object, read by `readJobFormMoney` — including Stage 8's billing fields
+  // (so an hourly job's Pre-tax line shows `rate × hours` rather than the empty
+  // Price box) and fix 2's pricing mode, which changes what `price` MEANS and
+  // therefore what this figure can honestly be called. The reading moved into
+  // form-money.ts when the per-cleaner pay cap started needing the same
+  // numbers; two surfaces disagreeing about what a job is worth would be worse
+  // than either being wrong alone.
+  const [money, setMoney] = useState<JobFormMoney>(EMPTY_MONEY);
+  // The `payFor_<id>` amounts from the crew picker, added up (fix list item
+  // #10). Without this the Net margin below was a straight lie on exactly the
+  // jobs that need it most: a $200 job paying two cleaners $150 each printed
+  // "$200.00", because it only ever looked at the Employee pay box — which is
+  // blank whenever the pay is set per person.
+  const [customPay, setCustomPay] = useState(0);
 
   useEffect(() => {
-    const fields = [
-      { id: "price", setter: setPrice },
-      { id: "discountAmount", setter: setDiscount },
-      { id: "totalTip", setter: setTip },
-      { id: "parking", setter: setParking },
-      { id: "employeePay", setter: setEmployeePay },
-      { id: "billedHourlyRate", setter: setBilledRate },
-      { id: "billedEstimatedHours", setter: setBilledEstimated },
-      { id: "billedActualHours", setter: setBilledActual },
-    ];
-
     // Delegated from `document`, not bound per input.
     //
     // This used to attach one listener per element on mount, which was fine
@@ -41,16 +49,12 @@ export default function PriceSummary() {
     // Stage 8's billing inputs do NOT: they are mounted only once the admin
     // picks Hourly, so a per-element binding taken at mount would never see
     // them and the summary would sit at $0.00 on exactly the jobs this stage is
-    // about. One listener on the document re-reads whatever is on screen now.
+    // about. The `payFor_<id>` boxes are the same — they appear only once a
+    // cleaner is assigned. One listener on the document re-reads whatever is on
+    // screen now.
     const readAll = () => {
-      for (const { id, setter } of fields) {
-        const el = document.getElementById(id) as HTMLInputElement | null;
-        setter(el ? parseFloat(el.value) || 0 : 0);
-      }
-      const modeEl = document.getElementById(
-        "pricingMode"
-      ) as HTMLInputElement | null;
-      setFinalPriceMode(modeEl?.value === "FINAL_PRICE");
+      setMoney(readJobFormMoney());
+      setCustomPay(readCustomPayTotal());
     };
 
     readAll();
@@ -58,26 +62,42 @@ export default function PriceSummary() {
     return () => document.removeEventListener("input", readAll, true);
   }, []);
 
-  // On an hourly job the Price box is left blank and the service line is
-  // `rate × hours` — actual when it has been measured, else the estimate. Same
-  // precedence as `billedHours()` on the server; kept inline because this
-  // component reads raw DOM strings rather than a job object.
-  const billedHours = billedActual > 0 ? billedActual : billedEstimated;
-  const hourlyLine =
-    billedRate > 0 && billedHours > 0
-      ? Math.round(billedRate * billedHours * 100) / 100
-      : 0;
-  const serviceLine = hourlyLine > 0 && !finalPriceMode ? hourlyLine : price;
+  const {
+    discount,
+    tip,
+    parking,
+    employeePay,
+    billedRate,
+    billedActual,
+    billedHours,
+    hourlyLine,
+    finalPriceMode,
+    serviceLine,
+  } = money;
 
   const subtotal = serviceLine - discount + tip + parking;
-  const margin = subtotal - employeePay;
+  // What the crew actually costs, not what the Employee pay box says.
+  //
+  // `computeJobPayShares` pays a per-cleaner override off the top and splits
+  // whatever is left of the team total between everyone else, flooring that
+  // remainder at zero — so the crew's cost is the LARGER of the two figures,
+  // never their sum. That is the same rule, one line of arithmetic instead of
+  // a share map.
+  //
+  // Still an under-estimate in one case this component cannot fix: when only
+  // SOME of the crew have a custom amount, the rest earn tier rates it has no
+  // way to look up from the browser. Under-stating is the honest direction —
+  // it never invents a cost — and it is strictly better than the $0 this line
+  // used to assume.
+  const crewPay = Math.max(employeePay, customPay);
+  const margin = subtotal - crewPay;
 
   if (
     serviceLine === 0 &&
     discount === 0 &&
     tip === 0 &&
     parking === 0 &&
-    employeePay === 0
+    crewPay === 0
   ) {
     return null;
   }
@@ -132,6 +152,17 @@ export default function PriceSummary() {
       {discount > 0 && (
         <div style={{ fontSize: 12, color: "var(--primary-50)" }}>
           −${discount.toFixed(2)} discount applied
+        </div>
+      )}
+      {/* Where the crew cost came from, whenever it is not just the Employee
+          pay box. Without it the margin moved for a reason living in a
+          different section of the form. */}
+      {customPay > 0 && (
+        <div style={{ fontSize: 12, color: "var(--primary-50)" }}>
+          Crew pay ${crewPay.toFixed(2)}
+          {customPay >= employeePay
+            ? " — custom per-cleaner amounts"
+            : ` — team total (custom amounts $${customPay.toFixed(2)})`}
         </div>
       )}
       {/* Says where the service line came from on an hourly job, so the

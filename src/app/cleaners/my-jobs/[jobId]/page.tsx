@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/org-db";
 import { getSetting } from "@/lib/settings";
+import { maskedNumberForJob } from "@/lib/phone-masking";
 import { jobTypeLabel } from "@/lib/calendar-labels";
 import { getServiceCatalogWithLabels } from "@/lib/service-catalog.server";
 import { fmtDate, fmtDateTime, fmtTime } from "@/lib/time";
@@ -15,13 +16,20 @@ import {
   CLOCK_IN_BLOCKED_STATUSES,
   CLOCK_IN_EARLY_WINDOW_MIN,
   clockInOpensAt,
+  jobStaffing,
 } from "@/lib/cleaner-jobs";
-import { Calendar, Users, Package, Zap, Camera, ClipboardList, ListChecks, MapPin, DollarSign, KeyRound, DoorOpen } from "lucide-react";
+import { Calendar, Users, Package, Zap, Camera, ClipboardList, ListChecks, MapPin, DollarSign, KeyRound, DoorOpen, TriangleAlert } from "lucide-react";
 import { formatAddressLine, resolveAddressParts } from "@/lib/client-address";
 import { addOnQuantity } from "@/lib/job-money";
 import { formatHours } from "@/lib/hourly-billing";
 import { propertyTypeLabel } from "@/lib/property-type";
 import { afterPhotosAllowed, photoExpectationLine } from "@/lib/job-photos";
+import {
+  isOpenIssueStatus,
+  jobIssueCategoryLabel,
+  JOB_ISSUE_STATUS_LABEL,
+  parseJobIssueStatus,
+} from "@/lib/job-issues";
 import { ensureJobChecklist, readJobChecklist } from "@/lib/job-checklist.server";
 import { CHECKLIST_NONE_CONFIGURED } from "@/lib/job-checklist";
 import {
@@ -37,12 +45,14 @@ import ClockOutButton from "../ClockOutButton";
 import CancelShiftButton from "../CancelShiftButton";
 import WhyThisPriceLink from "../WhyThisPriceLink";
 import PhotoGallery from "./PhotoGallery";
+import ReportIssueButton from "./ReportIssueButton";
 import JobChecklistPanel from "./JobChecklistPanel";
 import MapLinks from "./MapLinksClient";
 import JobChatThread, {
   CLEANER_QUICK_MESSAGES,
 } from "@/components/JobChatThread";
 import ScrollToTop from "./ScrollToTop";
+import JobLifeline from "./JobLifeline";
 import { cleanerPayoutForJobs } from "@/lib/cleaner-pay-display";
 import { isAwaitingQuote } from "@/lib/quote-status";
 import { sanitizeCleanerNotes } from "@/lib/cleaner-notes";
@@ -65,6 +75,22 @@ function jobTypeSlug(type: string | null) {
     case "F": return "Follow-up";
     default: return type.toUpperCase();
   }
+}
+
+/**
+ * Relative time for the issue log. Rendered on the server, which is accurate at
+ * load and goes stale on a page left open — acceptable for a three-row history
+ * that nobody watches, and it keeps this list out of a client component.
+ */
+function issueAgo(at: Date): string {
+  const mins = Math.floor((Date.now() - at.getTime()) / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `${days}d ago`;
+  return fmtDate(at, { month: "short", day: "numeric" });
 }
 
 export default async function JobDetailPage({ params }: PageProps) {
@@ -113,8 +139,52 @@ export default async function JobDetailPage({ params }: PageProps) {
     (await cleanerPayoutForJobs([job.id], session.user.id)).get(job.id) ?? 0;
   if (!isEmployee && !isCleaner) redirect("/cleaners/my-jobs");
 
+  // Crew head-count vs `requiredCleaners` (Sept 3 fix 4). Advisory only — both
+  // clock buttons below warn on it and neither is disabled by it.
+  const staffing = jobStaffing(job);
+
+  // The roster MINUS the lead, for the Team card's rows.
+  //
+  // `claimJob` stamps `employeeId` on a claimer who is already in `cleaners`,
+  // so on most jobs the lead is also in the M2M. The Team card renders the lead
+  // in its own row and then maps the roster, so without this filter the one
+  // person who claimed the job is printed twice — once as Lead, once as
+  // Cleaner. Same double-count `jobStaffing` exists to prevent, in row form:
+  // the card read "2 MEMBERS" and listed one human twice on the same screen as
+  // "Only 1 of 2 cleaners is on this job".
+  //
+  // Dropping the lead from the rows rather than the Lead row from the card
+  // keeps the lead visible AS the lead — the role is the point of that row —
+  // and leaves `teamRoster.length + (lead ? 1 : 0) === staffing.assigned`, so
+  // the head-count and the rows can never disagree again.
+  const teamRoster = job.cleaners.filter((c) => c.id !== job.employeeId);
+
   const showCustomerPhone = await getSetting("provider.showCustomerPhone");
   const gpsEnabled = await getSetting("tracking.gpsEnabled");
+  // Not rendered on this page — it is written to the device for error.tsx, so a
+  // cleaner whose job page has broken still has somebody to call. Same setting
+  // the customer portal's "Need help?" tiles use.
+  const officePhone = await getSetting("general.businessPhone");
+
+  // AUTHORIZATION: `maskedNumberForJob` does not check that this cleaner is on
+  // this job — the caller is the boundary, and here that is the
+  // `!isEmployee && !isCleaner` redirect above. Do not copy this call anywhere
+  // that has not already made that check.
+  const masked = await maskedNumberForJob(job.id, session.user.id);
+  const proxyNumber = masked.ok ? masked.proxyNumber : null;
+  // Masking is on but could not produce a number: the office meant this cleaner
+  // to have a way to call, so an empty card would read as a bug rather than as
+  // something somebody has to go and fix. Only these two reasons — an exhausted
+  // pool and an outright failure — are operational. Every other reason
+  // ("disabled", "not-configured", a missing number on either side, a cleaner
+  // and client sharing one number) is a normal state and falls back silently.
+  const maskedPoolEmpty =
+    !masked.ok && (masked.reason === "no-free-number" || masked.reason === "error");
+  // What the card showed before masking existed, kept exactly: the fallback for
+  // "we could not mask this" is today's behaviour and nothing else.
+  const contactCardUnmasked = Boolean(
+    showCustomerPhone && (job.client?.phone || job.client?.email)
+  );
 
   // This cleaner's kit, for the closing inventory report (Stage 3). Same shape
   // as the clock screen's, because both render the same component.
@@ -137,7 +207,7 @@ export default async function JobDetailPage({ params }: PageProps) {
   // THIS cleaner's own sessions (item 6). Every clock gate below asks about
   // them, not about the job-level pair — that pair is shared, so it used to
   // mean one teammate's clock-in decided what everyone else could do.
-  const [myWorkSessions, myBreaks, jobSessionCount] = await Promise.all([
+  const [myWorkSessions, myBreaks, jobSessionCount, myIssues] = await Promise.all([
     db.jobWorkSession.findMany({
       where: { jobId: job.id, cleanerId: session.user.id },
       orderBy: { startedAt: "asc" },
@@ -149,6 +219,21 @@ export default async function JobDetailPage({ params }: PageProps) {
     }),
     // Anyone's sessions on this job — the fallback below turns on it.
     db.jobWorkSession.count({ where: { jobId: job.id } }),
+    // What THIS cleaner has already reported on this job. Scoped to them, not
+    // to the job: a teammate's report is the office's business, and showing it
+    // here would leak one cleaner's account of a problem to another.
+    db.jobIssue.findMany({
+      where: { jobId: job.id, reportedById: session.user.id },
+      orderBy: { createdAt: "desc" },
+      take: 3,
+      select: {
+        id: true,
+        category: true,
+        status: true,
+        resolutionNote: true,
+        createdAt: true,
+      },
+    }),
   ]);
   const mySessions =
     myWorkSessions.length > 0
@@ -252,9 +337,42 @@ export default async function JobDetailPage({ params }: PageProps) {
     postalCode: job.postalCode ?? job.clientAddress?.postalCode ?? null,
   });
 
+  // Hoisted out of the hero so the offline strip below stores the SAME line the
+  // cleaner read here. Two call sites formatting one address is how the copy on
+  // the error screen quietly drifts from the copy on the page.
+  const addressLine = job.location
+    ? formatAddressLine({
+        address: address.street,
+        aptNumber: null,
+        city: address.city,
+        postalCode: address.postalCode,
+      })
+    : null;
+  // Enough to confirm this is the right job when the rest of the page is gone.
+  const whenLine =
+    [
+      job.jobDate
+        ? fmtDate(job.jobDate, { weekday: "short", month: "short", day: "numeric" })
+        : null,
+      job.startTime ? fmtTime(job.startTime) : null,
+    ]
+      .filter(Boolean)
+      .join(" · ") || null;
+
   return (
     <div className="cl-jd-shell">
       <ScrollToTop jobId={job.id} />
+      {/* Renders nothing. Parks the address / time / office number on this
+          device so error.tsx has something to show if this page ever throws —
+          the boundary is a client component and cannot query anything, least of
+          all when the reason it is showing is that the database is unreachable. */}
+      <JobLifeline
+        jobId={job.id}
+        address={addressLine}
+        aptLabel={address.aptLabel ?? null}
+        when={whenLine}
+        officePhone={officePhone || null}
+      />
       {/* Back */}
       <BackButton />
 
@@ -268,12 +386,7 @@ export default async function JobDetailPage({ params }: PageProps) {
                   below (round 4, fix 7). The job's own snapshot wins over the
                   saved address, because the snapshot is where this job is
                   actually being served. */}
-              {formatAddressLine({
-                address: address.street,
-                aptNumber: null,
-                city: address.city,
-                postalCode: address.postalCode,
-              })}
+              {addressLine}
             </div>
             {/* ROUND 4, FIX 7 (IMG-5). The unit used to ride at the tail of the
                 address line — "…, Montreal, QC, Canada, 23" — where a cleaner
@@ -513,6 +626,7 @@ export default async function JobDetailPage({ params }: PageProps) {
                 jobStartTime={job.startTime ?? null}
                 disabled={clockInTooEarly}
                 resume={hasWorkedBefore}
+                staffing={staffing}
               />
             )}
             {canClockOut && (
@@ -520,9 +634,59 @@ export default async function JobDetailPage({ params }: PageProps) {
                 jobId={job.id}
                 employeeProducts={employeeProducts}
                 checklistItems={checklistItems}
+                staffing={staffing}
               />
             )}
           </div>
+        </div>
+      )}
+
+      {/* Report an issue (Sept 3 fix list, item 1).
+
+          UNCONDITIONAL, and deliberately not inside `.cl-jd-track-action`:
+          that block is gated on `canClockIn || canClockOut`, so putting this
+          there would take it away the moment the cleaner finishes — which is
+          exactly when a "the client's cat got out" report gets written. */}
+      <div className="cl-jd-issue">
+        <span className="cl-jd-issue-icon">
+          <TriangleAlert size={22} />
+        </span>
+        <div className="cl-jd-issue-meta">
+          <strong>Something wrong?</strong>
+          <span>
+            Locked out, supplies missing, damage, or the place is far bigger than
+            booked — tell the office and it reaches them with this job attached.
+          </span>
+        </div>
+        <ReportIssueButton jobId={job.id} />
+      </div>
+
+      {/* What this cleaner has already filed here. Nothing renders when there
+          is nothing to show. */}
+      {myIssues.length > 0 && (
+        <div className="cl-jd-issue-log">
+          {myIssues.map((issue) => {
+            const status = parseJobIssueStatus(issue.status);
+            const open = isOpenIssueStatus(status);
+            return (
+              <div key={issue.id} className="cl-jd-issue-log-row">
+                <div className="cl-jd-issue-log-top">
+                  <span className="cl-jd-issue-log-cat">
+                    {jobIssueCategoryLabel(issue.category)}
+                  </span>
+                  <span className={`cl-jd-issue-chip${open ? " open" : " done"}`}>
+                    {JOB_ISSUE_STATUS_LABEL[status]}
+                  </span>
+                  <span className="cl-jd-issue-log-when">
+                    {issueAgo(issue.createdAt)}
+                  </span>
+                </div>
+                {status === "RESOLVED" && issue.resolutionNote && (
+                  <p className="cl-jd-issue-log-note">{issue.resolutionNote}</p>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -687,8 +851,11 @@ export default async function JobDetailPage({ params }: PageProps) {
               <Users size={20} />
             </span>
             <h3>Team</h3>
+            {/* DISTINCT people, from the same predicate the short-staffed
+                warning reads — not `cleaners.length + lead`, which counts a
+                lead who is also on the roster twice. */}
             <span className="head-extra">
-              {job.cleaners.length + (job.employee ? 1 : 0)} member{job.cleaners.length + (job.employee ? 1 : 0) === 1 ? "" : "s"}
+              {staffing.assigned} member{staffing.assigned === 1 ? "" : "s"}
             </span>
           </div>
           <div>
@@ -702,7 +869,7 @@ export default async function JobDetailPage({ params }: PageProps) {
                 <span className="cl-pill" style={{ marginLeft: "auto", background: "var(--cream)", color: "var(--primary-50)" }}>Unassigned</span>
               )}
             </div>
-            {job.cleaners.map((c: any) => (
+            {teamRoster.map((c: any) => (
               <div key={c.id} className="cl-jd-team-row">
                 <div
                   style={{
@@ -725,7 +892,7 @@ export default async function JobDetailPage({ params }: PageProps) {
       </div>
 
       {/* Contact Client */}
-      {showCustomerPhone && (job.client?.phone || job.client?.email) && (
+      {(proxyNumber || maskedPoolEmpty || contactCardUnmasked) && (
         <>
           <h2 className="cl-jd-section-title">Contact <em>client.</em></h2>
           <div className="cl-jd-card" style={{ marginBottom: 0 }}>
@@ -738,20 +905,65 @@ export default async function JobDetailPage({ params }: PageProps) {
               <h3>Client contact</h3>
             </div>
             <dl className="cl-jd-dl">
-              {job.client?.phone && (
-                <div className="cl-jd-dl-row featured">
-                  <dt>Phone</dt>
-                  <dd>
-                    <a href={`tel:${job.client.phone}`} style={{ color: "var(--primary)", textDecoration: "none", fontWeight: 600 }}>
-                      {job.client.phone}
-                    </a>
-                  </dd>
-                </div>
+              {/* Masked: the company number, and the client's own number never
+                  reaches this page's markup at all. Shown whether or not
+                  `showCustomerPhone` is on — masking is what makes handing a
+                  cleaner a way to call safe, so the setting that hides the real
+                  number has nothing to say about it. */}
+              {proxyNumber ? (
+                <>
+                  <div className="cl-jd-dl-row featured">
+                    <dt>Phone</dt>
+                    <dd>
+                      <a href={`tel:${proxyNumber}`} style={{ color: "var(--primary)", textDecoration: "none", fontWeight: 600 }}>
+                        {proxyNumber}
+                      </a>
+                    </dd>
+                  </div>
+                  <div className="cl-jd-dl-row">
+                    <dt>Text</dt>
+                    <dd>
+                      <a href={`sms:${proxyNumber}`} style={{ color: "var(--primary)", textDecoration: "none", fontWeight: 600 }}>
+                        Send a text
+                      </a>
+                    </dd>
+                  </div>
+                </>
+              ) : (
+                showCustomerPhone && job.client?.phone && (
+                  <div className="cl-jd-dl-row featured">
+                    <dt>Phone</dt>
+                    <dd>
+                      <a href={`tel:${job.client.phone}`} style={{ color: "var(--primary)", textDecoration: "none", fontWeight: 600 }}>
+                        {job.client.phone}
+                      </a>
+                    </dd>
+                  </div>
+                )
               )}
             </dl>
-            <p style={{ fontSize: 11, color: "var(--primary-40)", margin: "8px 0 0", lineHeight: 1.5 }}>
-              Use this to let the client know if you&apos;re running late or have a quick question about the job.
-            </p>
+            {proxyNumber && (
+              <p style={{ fontSize: 11, color: "var(--primary-40)", margin: "8px 0 0", lineHeight: 1.5 }}>
+                Calls and texts go through the company number — the client&apos;s own number is not shared.
+              </p>
+            )}
+            {maskedPoolEmpty && (
+              <p
+                role="status"
+                style={{
+                  fontSize: 12, lineHeight: 1.5, margin: "8px 0 0",
+                  color: "#b45309", background: "#fffbeb",
+                  border: "1px solid #fde68a", borderRadius: 10, padding: "10px 12px",
+                }}
+              >
+                No company number is free for this job right now. Contact the office if you need to reach the client.
+              </p>
+            )}
+            {(proxyNumber || contactCardUnmasked) && (
+              <p style={{ fontSize: 11, color: "var(--primary-40)", margin: "8px 0 0", lineHeight: 1.5 }}>
+                Use this to let the client know if you&apos;re running late or have a quick question about the job.
+              </p>
+            )}
           </div>
         </>
       )}

@@ -225,14 +225,57 @@ export interface SeriesCancelPlan {
   protectedCount: number;
   /** The first date the schedule runs again. Only meaningful for "pause". */
   resumesOn: Date | null;
+  /**
+   * The span a confirm would actually clear, INCLUDING the occurrence the
+   * admin is looking at — because that occurrence is part of what they are
+   * confirming.
+   *
+   * A bare count is still ambiguous: "12 bookings" is a fortnight of daily
+   * cleans or a year of monthly ones, and those are very different decisions.
+   * The two dates are what make the number concrete. Both are null when the
+   * job could not be read.
+   */
+  rangeStart: Date | null;
+  rangeEnd: Date | null;
+  /**
+   * The last booking the schedule still has on the books, NOT counting the
+   * occurrence in front of the admin (that one is cancelled either way).
+   * Only computed for "pause": it is the date that says which resume dates
+   * can still be paused TO. Null when this occurrence is the last one left.
+   */
+  lastOccurrence: Date | null;
+  /**
+   * True when the pause would leave nothing to come back to — every booking
+   * the series has left falls inside the pause window.
+   *
+   * A series here is a FIXED set of jobs, written once at creation (saveJob
+   * → recurrenceCount). Nothing tops it up afterwards: no cron generates
+   * occurrences, and the cadence is not even stored on the Job rows, so
+   * there is nothing to regenerate from. A pause reaching past the last
+   * occurrence is therefore not a pause at all — the schedule ENDS, and
+   * silently. That is the one outcome the admin has to be told about
+   * BEFORE confirming, not left to discover when the customer calls in
+   * the spring.
+   */
+  endsSeries: boolean;
 }
 
 /**
  * Which sibling occurrences a scope reaches.
  *
- * FUTURE only, always. A recurring cancellation must never touch work that has
- * already happened: those jobs are payroll, invoices and customer history, and
- * "cancel the rest of the schedule" has never meant "and erase the spring".
+ * FORWARD only, always, and forward FROM THE OCCURRENCE ON SCREEN. Two separate
+ * invariants, both of which this query has to hold:
+ *
+ *   1. "This and all future" is read off the booking the admin actually opened.
+ *      From occurrence 2 of four it means 2, 3 and 4 — occurrence 1 is earlier,
+ *      still upcoming, and still wanted. Anchoring on the clock instead made
+ *      every remaining occurrence "future", so the cancellation reached
+ *      BACKWARDS and took occurrence 1 with it.
+ *   2. A recurring cancellation must never touch work that has already
+ *      happened: those jobs are payroll, invoices and customer history, and
+ *      "cancel the rest of the schedule" has never meant "and erase the
+ *      spring". So opening a PAST occurrence still cannot reach back over the
+ *      visits between it and now.
  */
 async function futureSiblings(
   jobId: string,
@@ -243,17 +286,39 @@ async function futureSiblings(
     where: { id: jobId },
     select: { id: true, parentJobId: true, startTime: true },
   });
-  if (!job || scope === "this") return { rootId: job ? seriesRootId(job) : jobId, rows: [] };
+  // The start time of the occurrence in front of the admin. Distinct from the
+  // `anchor` window floor computed below: this one is what the cancel panel
+  // states as the near edge of the range, because that booking is cancelled
+  // too — even when it is in the past and the floor has moved up to now.
+  const anchorStart = job?.startTime ?? null;
+  if (!job || scope === "this")
+    return { rootId: job ? seriesRootId(job) : jobId, rows: [], anchorStart };
 
   const rootId = seriesRootId(job);
-  const from = new Date();
+  // Whichever of the two is LATER: the opened occurrence carries invariant 1,
+  // the clock carries invariant 2. For the normal case — an admin ending the
+  // schedule from an upcoming visit — the occurrence wins and earlier siblings
+  // are left scheduled.
+  //
+  // Both sides are absolute instants (`startTime` is a timestamp column stored
+  // in UTC, and the calendar drawer converts to the business timezone only for
+  // DISPLAY), so this comparison is instant-to-instant and needs no timezone
+  // conversion. Converting either side into the business timezone here would
+  // shift the boundary by the offset and start eating the neighbouring visit.
+  const now = new Date();
+  const anchor = job.startTime > now ? job.startTime : now;
   const rows = await db.job.findMany({
     where: {
       deletedAt: null,
       id: { not: jobId },
       OR: [{ id: rootId }, { parentJobId: rootId }],
       startTime: {
-        gt: from,
+        // Inclusive on purpose. A sibling standing at the IDENTICAL timestamp
+        // (same slot, second unit at the same address) is part of "this and all
+        // future" — it is not earlier than the booking on screen. The opened
+        // occurrence itself can't be swept up by that: `id: { not: jobId }`
+        // above has already excluded it.
+        gte: anchor,
         // A pause has a far edge; ending the series does not.
         ...(scope === "pause" && pauseUntil ? { lte: pauseUntil } : {}),
       },
@@ -261,7 +326,7 @@ async function futureSiblings(
     select: { id: true, status: true, startTime: true },
     orderBy: { startTime: "asc" },
   });
-  return { rootId, rows };
+  return { rootId, rows, anchorStart };
 }
 
 /**
@@ -276,13 +341,14 @@ export async function planSeriesCancellation(
   scope: SeriesCancelScope,
   pauseUntil: Date | null = null,
 ): Promise<SeriesCancelPlan> {
-  const { rootId, rows } = await futureSiblings(jobId, scope, pauseUntil);
+  const { rootId, rows, anchorStart } = await futureSiblings(jobId, scope, pauseUntil);
   const cancellable = rows.filter(
     (r) => !(IMMUTABLE_STATUSES as readonly string[]).includes(r.status),
   );
 
   // For a pause, the useful thing to show is when the customer next sees us.
   let resumesOn: Date | null = null;
+  let lastOccurrence: Date | null = null;
   if (scope === "pause" && pauseUntil) {
     const next = await db.job.findFirst({
       where: {
@@ -295,12 +361,42 @@ export async function planSeriesCancellation(
       orderBy: { startTime: "asc" },
     });
     resumesOn = next?.startTime ?? null;
+
+    // …and when nothing comes back, the useful fact is where the schedule
+    // stops. Same filter as the query above, read from the other end, so
+    // "resumes on" and "ends on" can never disagree with each other: if
+    // this date exists and the resume date is on or past it, the pause is
+    // an ending. The viewed occurrence is excluded because this action
+    // cancels it either way — it can never be what the series resumes to.
+    const last = await db.job.findFirst({
+      where: {
+        deletedAt: null,
+        id: { not: jobId },
+        startTime: { gt: new Date() },
+        status: { notIn: ["CANCELLED"] },
+        OR: [{ id: rootId }, { parentJobId: rootId }],
+      },
+      select: { startTime: true },
+      orderBy: { startTime: "desc" },
+    });
+    lastOccurrence = last?.startTime ?? null;
   }
+
+  // `rows` come back ordered by startTime, so the last survivor of the filter
+  // is the far edge. With no siblings left the range collapses onto the single
+  // occurrence being cancelled, which is exactly what the panel should say.
+  const lastCancellable = cancellable.length
+    ? cancellable[cancellable.length - 1].startTime
+    : null;
 
   return {
     siblings: cancellable.length,
     protectedCount: rows.length - cancellable.length,
     resumesOn,
+    rangeStart: anchorStart,
+    rangeEnd: lastCancellable ?? anchorStart,
+    lastOccurrence,
+    endsSeries: scope === "pause" && !!pauseUntil && resumesOn === null,
   };
 }
 

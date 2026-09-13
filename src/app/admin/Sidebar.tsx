@@ -42,6 +42,7 @@ import {
   Database,
   GraduationCap,
   Megaphone,
+  TriangleAlert,
   type LucideIcon,
 } from "lucide-react";
 import type { UnreadChatCount } from "@/lib/chatUnread";
@@ -79,6 +80,7 @@ type Badge =
   | "leads"
   | "payouts"
   | "inventory"
+  | "issues"
   | "notifications";
 interface NavItem {
   href: string;
@@ -155,6 +157,16 @@ const NAV: { label: string; items: NavItem[] }[] = [
         Icon: Briefcase,
         // Unread cleaner↔client messages across live jobs (CLN-P0-3-08).
         badge: "jobChat",
+      },
+      {
+        href: "/admin/issues",
+        label: "Issues",
+        Icon: TriangleAlert,
+        // Open + acknowledged — an admin having read it is not the problem
+        // having gone away (see `isOpenIssueStatus`).
+        badge: "issues",
+        // /admin/issues runs `requireOwnerAdmin`, as do the actions behind it.
+        adminOnly: true,
       },
       {
         href: "/admin/requests",
@@ -740,6 +752,7 @@ export default function Sidebar({
     leads: attention.leads,
     payouts: attention.payouts,
     inventory: attention.inventory,
+    issues: attention.issues,
     notifications: attention.notifications,
   };
 

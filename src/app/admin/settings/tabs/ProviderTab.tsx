@@ -9,6 +9,7 @@ import { SectionCard, Field, Feedback, Msg } from "./_shared";
 import { SETTINGS } from "@/lib/settings/registry";
 
 const SHOW_PHONE = SETTINGS["provider.showCustomerPhone"];
+const MASK_PHONE = SETTINGS["provider.maskCustomerPhone"];
 const DEACTIVATED = SETTINGS["provider.deactivatedMessage"];
 
 interface Props {
@@ -18,6 +19,9 @@ interface Props {
 export default function ProviderTab({ settings }: Props) {
   const [showPhone, setShowPhone] = useState<boolean>(
     getSetting<boolean>(settings, SHOW_PHONE.key, SHOW_PHONE.default)
+  );
+  const [maskPhone, setMaskPhone] = useState<boolean>(
+    getSetting<boolean>(settings, MASK_PHONE.key, MASK_PHONE.default)
   );
   const [deactivatedMsg, setDeactivatedMsg] = useState<string>(
     getSetting<string>(settings, DEACTIVATED.key, DEACTIVATED.default)
@@ -34,6 +38,11 @@ export default function ProviderTab({ settings }: Props) {
         key: SHOW_PHONE.key,
         category: SHOW_PHONE.category,
         value: showPhone,
+      }),
+      updateAppSetting({
+        key: MASK_PHONE.key,
+        category: MASK_PHONE.category,
+        value: maskPhone,
       }),
       updateAppSetting({
         key: DEACTIVATED.key,
@@ -65,6 +74,23 @@ export default function ProviderTab({ settings }: Props) {
           When off, the customer&rsquo;s phone number is hidden from the cleaner
           on the job detail page. (Customer email is already hidden from
           cleaners; booking-price visibility is a separate, pending setting.)
+        </p>
+
+        <label className="flex items-center gap-2 text-sm text-gray-700">
+          <input
+            type="checkbox"
+            checked={maskPhone}
+            onChange={(e) => setMaskPhone(e.target.checked)}
+          />
+          {MASK_PHONE.label}
+        </label>
+        <p style={{ fontSize: 12, color: "var(--primary-60)" }}>
+          When on, the cleaner is given one of your own pooled numbers instead of
+          the customer&rsquo;s. Calls and texts to it are relayed both ways, and
+          the customer&rsquo;s real number is never sent to the cleaner&rsquo;s
+          phone or their browser. Add at least one number under Settings &rarr;
+          Connectors &rarr; Masked numbers &mdash; with an empty pool this does
+          nothing and cleaners see whatever the setting above allows.
         </p>
 
         <Field label={DEACTIVATED.label}>

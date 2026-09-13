@@ -19,6 +19,11 @@ import {
   statusLabel,
   type InventoryFlagType,
 } from "@/lib/inventory-status";
+import {
+  jobStaffing,
+  shortStaffedNotice,
+  type JobStaffing,
+} from "@/lib/cleaner-jobs";
 import { snapshotBilledActualHours } from "@/lib/hourly-billing.server";
 import { snapshotHourlyEmployeePay } from "@/lib/hourly-pay.server";
 import {
@@ -228,6 +233,8 @@ async function finishClockOut(args: {
   sessionStartedAt: Date;
   sessionEndedAt: Date;
   notifyAdmin: boolean;
+  /** Crew head-count vs `requiredCleaners` (Sept 3 fix 4). Logged, never enforced. */
+  staffing: JobStaffing;
 }): Promise<{ jobCompleted: boolean }> {
   // Recompute the derived clock columns from the session rows. `anyOpen`
   // answers the question the old code never asked: is anybody else still
@@ -289,6 +296,50 @@ async function finishClockOut(args: {
           description: `Status changed from ${args.jobStatus} to ${nextStatus}`,
         },
       });
+
+      // The job just closed with fewer people on it than it was booked for
+      // (Sept 3 fix 4). Written beside the status flip so "was this one finished
+      // short-handed?" is a question the Activity timeline answers, instead of
+      // one somebody reconstructs from the roster months later. NOTE_ADDED
+      // rather than STATUS_CHANGED: it is an internal observation, and the
+      // customer portal's log allowlist deliberately excludes that action.
+      //
+      // A SNAPSHOT, NOT A TRANSITION. This used to be written as
+      // field `requiredCleaners`, oldValue = assigned, newValue = required —
+      // and the Activity timeline renders any row carrying all three as
+      // "field: old → new" (JobDetailView), so it came out as
+      // "requiredCleaners: 1 → 2": visually identical to the genuine
+      // "status: IN_PROGRESS → COMPLETED" row written immediately above it, and
+      // read as "somebody raised the crew target mid-job". Nobody raised
+      // anything. `jobStaffing` measures the head-count and the target at the
+      // same instant; neither number is the other's "before", so a before/after
+      // shape could only ever lie about them.
+      //
+      // So: no `oldValue`, and the pair lives in `newValue` as the single value
+      // it is — the same "1 of 2 assigned" idiom the crew picker already uses
+      // (JobModal). `field` stays as the grouping key a filter can count
+      // without parsing prose, which is what `logClockOutFailure` uses it for
+      // too; the sentence in `description` was always the honest version and is
+      // now the only thing the timeline draws.
+      //
+      // Best-effort — an audit row must never be the reason a cleaner cannot
+      // clock out, which is the same discipline the snapshots above follow.
+      if (args.staffing.isShort) {
+        await db.jobLog
+          .create({
+            data: {
+              jobId: args.jobId,
+              userId: args.userId,
+              action: "NOTE_ADDED",
+              field: "crewSize",
+              newValue: `${args.staffing.assigned} of ${args.staffing.required}`,
+              description: `Finished short-staffed. ${shortStaffedNotice(
+                args.staffing
+              )}`,
+            },
+          })
+          .catch((e) => console.error("short-staffed log", e));
+      }
     }
   }
 
@@ -538,6 +589,7 @@ export async function clockOut(
         clientName: job.clientName,
         jobStatus: job.status,
         paymentReceived: job.paymentReceived,
+        staffing: jobStaffing(job),
         userId,
         userName,
         sessionStartedAt: justClosed.startedAt,
@@ -950,6 +1002,7 @@ export async function clockOut(
         clientName: job.clientName,
         jobStatus: job.status,
         paymentReceived: job.paymentReceived,
+        staffing: jobStaffing(job),
         userId,
         userName,
         sessionStartedAt: openSession.startedAt,

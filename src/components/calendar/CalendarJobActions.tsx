@@ -16,8 +16,9 @@ import { formatDeposit, resolveDepositCredit } from "@/lib/booking-deposit";
 import { formatHours } from "@/lib/hourly-billing";
 import { propertyTypeLabel } from "@/lib/property-type";
 import { formatAddressLine } from "@/lib/client-address";
-import { storeInputParts, storeWallClockToUtc } from "@/lib/timezone";
+import { formatDate, storeInputParts, storeWallClockToUtc } from "@/lib/timezone";
 import { avatarColor, initials } from "@/lib/avatar";
+import { jobStaffing, shortStaffedNotice } from "@/lib/cleaner-jobs";
 import { statusMeta } from "./status-meta";
 import {
   AlertTriangle,
@@ -91,7 +92,8 @@ function Row({
   k,
   children,
 }: {
-  k: string;
+  /** ReactNode, not string — a key can carry a dim qualifier ("· Lead"). */
+  k: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -115,6 +117,79 @@ function Section({
       <div className="cjd-rows">{children}</div>
     </section>
   );
+}
+
+/** A day, in the store's timezone — "Sep 11, 2026". */
+function scopeDay(iso: string | null): string {
+  if (!iso) return "";
+  return formatDate(iso, { month: "short", day: "numeric", year: "numeric" });
+}
+
+/**
+ * Plain English for what a recurring cancel scope is about to destroy.
+ *
+ * Written as the panel's own voice — a sentence of fact, not an alarm — because
+ * the thing that makes this safe is that it is ALWAYS on screen and the confirm
+ * button waits for it, not that it shouts. It always leads with the count and
+ * the range, since "12 bookings" alone is a fortnight of daily cleans or a year
+ * of monthly ones and those are not the same decision.
+ */
+function cancelScopeStatement(
+  scope: "future" | "pause",
+  plan: {
+    siblings: number;
+    protectedCount: number;
+    resumesOn: string | null;
+    rangeStart: string | null;
+    rangeEnd: string | null;
+    lastOccurrence: string | null;
+    endsSeries: boolean;
+  },
+): string {
+  const parts: string[] = [];
+  const from = scopeDay(plan.rangeStart);
+  const to = scopeDay(plan.rangeEnd);
+
+  if (plan.siblings === 0) {
+    parts.push(
+      scope === "pause"
+        ? "No other bookings fall inside that window, so this cancels this booking only."
+        : "Nothing else is scheduled after this one, so this cancels this booking only.",
+    );
+  } else {
+    const total = plan.siblings + 1;
+    parts.push(
+      `This cancels ${total} bookings — this one and ${plan.siblings} more` +
+        (from && to ? (from === to ? `, on ${from}.` : `, from ${from} through ${to}.`) : "."),
+    );
+  }
+
+  if (scope === "pause") {
+    // The honest half of a pause. A resume date past the last booking has
+    // nothing behind it: a series is written once, at creation, and no cron
+    // tops it up — so "pause" would quietly mean "end, forever". Say that
+    // in as many words, and name the date that would still pause.
+    if (plan.endsSeries) {
+      parts.push(
+        plan.lastOccurrence
+          ? `This does not pause the schedule — it ENDS it. The last booking in it is ${scopeDay(plan.lastOccurrence)}, and nothing is generated after that, so the schedule would never come back. Pick a resume date before ${scopeDay(plan.lastOccurrence)} to pause instead, or choose “Cancel this and all future bookings” to end it on purpose.`
+          : "This does not pause the schedule — it ENDS it. There are no other bookings left to come back to, and none are generated automatically. Choose “Cancel this and all future bookings” if you mean to end it.",
+      );
+    } else if (plan.resumesOn) {
+      parts.push(`The schedule resumes ${scopeDay(plan.resumesOn)}.`);
+    }
+  }
+
+  if (plan.protectedCount > 0) {
+    parts.push(
+      `${plan.protectedCount} completed, paid or already-cancelled booking${
+        plan.protectedCount === 1 ? "" : "s"
+      } in that range ${plan.protectedCount === 1 ? "is" : "are"} left alone.`,
+    );
+  }
+
+  parts.push("Past and completed bookings are kept.");
+  return parts.join(" ");
 }
 
 /**
@@ -190,13 +265,31 @@ export default function CalendarJobActions({
 
   const [showNoteInput, setShowNoteInput] = useState(false);
   const [noteText, setNoteText] = useState("");
+  // Advisory confirm before "Mark arrived" flips the job to IN_PROGRESS on a
+  // job the crew is thin on (Sept 3 fix 4). Armed by the first tap; the second
+  // one always goes through.
+  const [arrivedShortConfirm, setArrivedShortConfirm] = useState(false);
 
   const [cancelReason, setCancelReason] = useState("");
   // Recurring cancellation scope. Defaults to "this" so the safe option is
   // always the one already selected — the destructive choice has to be picked.
   const [cancelScope, setCancelScope] = useState<"this" | "future" | "pause">("this");
   const [pauseUntil, setPauseUntil] = useState("");
-  const [scopePlan, setScopePlan] = useState<{ siblings: number; resumesOn: string | null } | null>(null);
+  // What the chosen scope would actually do, fetched from the server. Held as
+  // state rather than derived because only the server knows how far the series
+  // runs. `null` means "we cannot say yet" — and while we cannot say, the
+  // confirm button below stays disabled.
+  const [scopePlan, setScopePlan] = useState<{
+    siblings: number;
+    protectedCount: number;
+    resumesOn: string | null;
+    rangeStart: string | null;
+    rangeEnd: string | null;
+    lastOccurrence: string | null;
+    endsSeries: boolean;
+  } | null>(null);
+  const [scopePlanLoading, setScopePlanLoading] = useState(false);
+  const [scopePlanError, setScopePlanError] = useState<string | null>(null);
   const [refundDeposit, setRefundDeposit] = useState(false);
 
   const [photos, setPhotos] = useState<JobPhotoDTO[] | null>(null);
@@ -242,9 +335,83 @@ export default function CalendarJobActions({
     setShowNoteInput(false);
     setNoteText("");
     setCancelReason("");
+    // The destructive scope must be re-picked for every booking. Carrying
+    // "cancel this and all future" over from the last job would arrive at the
+    // next one already selected, which is the opposite of a deliberate choice.
+    setCancelScope("this");
+    setPauseUntil("");
+    setScopePlan(null);
+    setScopePlanError(null);
     setPhotos(null);
     setLightboxIdx(null);
+    setArrivedShortConfirm(false);
   }, [jobId]);
+
+  // ── The scope has to state itself before it can be confirmed ──────────────
+  // This used to sit behind a "check how many this affects" button, which an
+  // admin was free to never press — so "cancel this and all future bookings"
+  // could be confirmed having been told nothing about how many bookings that
+  // destroys. The panel now asks the server itself the moment a destructive
+  // scope is picked, and `scopePlan` gates the confirm control below.
+  //
+  // "This booking only" is deliberately NOT gated: it destroys exactly the one
+  // booking already named at the top of the panel, and making the safe choice
+  // wait on a round trip would only train people to click through the warning.
+  useEffect(() => {
+    if (panel !== "cancel" || !jobId || !summary?.isRecurring) return;
+    if (cancelScope === "this") {
+      setScopePlan(null);
+      setScopePlanError(null);
+      return;
+    }
+    // A pause has no shape until the resume date is picked; asking before then
+    // only fetches back the "pick a date" error the field itself already says.
+    if (cancelScope === "pause" && !pauseUntil) {
+      setScopePlan(null);
+      setScopePlanError(null);
+      return;
+    }
+
+    let stale = false;
+    setScopePlan(null);
+    setScopePlanError(null);
+    setScopePlanLoading(true);
+    previewSeriesCancellation({
+      jobId,
+      scope: cancelScope,
+      pauseUntil: pauseUntil || null,
+    })
+      .then((res) => {
+        if (stale) return;
+        if (res.ok) {
+          setScopePlan({
+            siblings: res.siblings,
+            protectedCount: res.protectedCount,
+            resumesOn: res.resumesOn,
+            rangeStart: res.rangeStart,
+            rangeEnd: res.rangeEnd,
+            lastOccurrence: res.lastOccurrence,
+            endsSeries: res.endsSeries,
+          });
+        } else {
+          setScopePlanError(res.message);
+        }
+      })
+      .catch(() => {
+        // Failing closed matters more than the wording: with no plan on screen
+        // the confirm button stays disabled, so a dropped request cannot end
+        // with a series cancelled silently.
+        if (!stale) setScopePlanError("Could not work out what this would cancel.");
+      })
+      .finally(() => {
+        if (!stale) setScopePlanLoading(false);
+      });
+    // Scope changes are rapid (three radios); a late answer for the scope the
+    // admin has already moved off would state the wrong number.
+    return () => {
+      stale = true;
+    };
+  }, [panel, jobId, summary?.isRecurring, cancelScope, pauseUntil]);
 
   const handleClose = useCallback(() => {
     setShowEventModal(false);
@@ -254,6 +421,7 @@ export default function CalendarJobActions({
     setNoteText("");
     setActionMessage(null);
     setLightboxIdx(null);
+    setArrivedShortConfirm(false);
   }, [setShowEventModal, setSelectedEvent]);
 
   // Escape closes the topmost layer first: lightbox → sub-panel → drawer. The
@@ -315,6 +483,7 @@ export default function CalendarJobActions({
 
   const handleMarkArrived = useCallback(async () => {
     if (!jobId) return;
+    setArrivedShortConfirm(false);
     setActionLoading("arrived");
     setActionMessage(null);
     try {
@@ -335,6 +504,26 @@ export default function CalendarJobActions({
       setActionLoading(null);
     }
   }, [jobId, refreshEvents, handleClose]);
+
+  // Crew head-count vs what the job was booked for. The SHARED predicate — the
+  // drawer must not grow its own `cleaners.length <` comparison, and the roster
+  // alone is not the crew: an admin-assigned lead need not be on it.
+  const staffing = summary
+    ? jobStaffing({
+        requiredCleaners: summary.requiredCleaners,
+        employeeId: summary.leadEmployee?.id ?? null,
+        cleaners: summary.cleaners,
+      })
+    : null;
+
+  /** First tap on a short-staffed job arms the warning; the next one fires. */
+  const requestMarkArrived = () => {
+    if (staffing?.isShort && !arrivedShortConfirm) {
+      setArrivedShortConfirm(true);
+      return;
+    }
+    void handleMarkArrived();
+  };
 
   const handleAddNote = useCallback(async () => {
     if (!jobId || !noteText.trim()) return;
@@ -387,6 +576,21 @@ export default function CalendarJobActions({
 
   const handleConfirmCancel = useCallback(async () => {
     if (!jobId) return;
+    // The button is already disabled without a plan; this is the same rule
+    // stated where the damage happens, so a keyboard activation or a stale
+    // render can never slip a series cancel through unstated.
+    if (summary?.isRecurring && cancelScope !== "this" && !scopePlan) return;
+    // …and a pause that would end the schedule is refused outright, BEFORE
+    // this occurrence is cancelled — the server refuses it too, but only
+    // after cancelJobByAdmin has already run, which would leave the admin
+    // with a cancelled booking and an error where a pause was meant.
+    if (summary?.isRecurring && cancelScope === "pause" && scopePlan?.endsSeries) {
+      setActionMessage({
+        type: "error",
+        text: "That resume date is after the last booking in this schedule, so pausing would end it. Pick an earlier resume date, or choose “Cancel this and all future bookings”.",
+      });
+      return;
+    }
     setActionLoading("cancel");
     setActionMessage(null);
     const res = await cancelJobByAdmin({
@@ -431,9 +635,10 @@ export default function CalendarJobActions({
     });
     setCancelScope("this");
     setScopePlan(null);
+    setScopePlanError(null);
     await reloadSummary();
     refreshEvents();
-  }, [jobId, refundDeposit, cancelReason, summary, reloadSummary, refreshEvents, cancelScope, pauseUntil]);
+  }, [jobId, refundDeposit, cancelReason, summary, reloadSummary, refreshEvents, cancelScope, pauseUntil, scopePlan]);
 
   const handleMarkPaid = useCallback(async () => {
     if (!jobId) return;
@@ -564,6 +769,29 @@ export default function CalendarJobActions({
 
   const paid = summary?.paymentReceived ?? !!meta.paymentReceived;
   const canCancel = !cancelled && status !== "COMPLETED";
+
+  // ── Cancel scope, resolved for this render ────────────────────────────────
+  // `cancelScope` only means anything on a repeating booking — a one-off is
+  // always "this booking only" whatever the radios happen to hold.
+  const seriesScope = summary?.isRecurring ? cancelScope : "this";
+  // Nothing is confirmable until the panel can say what it does. For "this"
+  // that is already true — the booking is named at the top of the panel — so
+  // only the two destructive scopes have to wait for their plan.
+  const scopeStated = seriesScope === "this" || !!scopePlan;
+  const scopeTotal = scopePlan ? scopePlan.siblings + 1 : 1;
+  // A pause that reaches past the last booking is an ENDING, not a pause:
+  // nothing regenerates a series here, so every remaining occurrence would
+  // be cancelled and none would ever come back. The panel says so above and
+  // the button refuses it — not to be precious, but because ending a
+  // schedule already has its own scope, and picking the other one by
+  // accident is unrecoverable.
+  const pauseWouldEndSeries = seriesScope === "pause" && !!scopePlan?.endsSeries;
+  // The button carries the count too, so the last thing read before the click
+  // is the size of it rather than a generic verb.
+  const cancelButtonLabel =
+    scopeStated && scopeTotal > 1
+      ? `Cancel ${scopeTotal} bookings`
+      : "Cancel booking";
   const showChargeButton =
     !!summary && !paid && !summary.isCashJob && summary.hasCardOnFile;
 
@@ -694,43 +922,34 @@ export default function CalendarJobActions({
                     </div>
                   ) : null}
 
-                  {/* The number, before the button. "Cancel all future
-                      bookings" on a weekly clean is somewhere between one job
-                      and forty, and nobody should learn which afterwards. */}
+                  {/* The number and the dates, unprompted and before the
+                      button works. "Cancel all future bookings" on a weekly
+                      clean is somewhere between one job and forty, and nobody
+                      should learn which afterwards. Kept as a note in the
+                      panel's own voice rather than an alert box: it is on
+                      screen every time, and an alarm that always fires stops
+                      being read. */}
+                  {/* …and when the "pause" is really an ending, that same
+                      sentence is escalated out of the panel's calm voice:
+                      this is the one case where the scope the admin picked
+                      and the outcome they would get are different things. */}
                   {cancelScope !== "this" ? (
-                    <div style={{ marginTop: 8 }}>
-                      <button
-                        type="button"
-                        className="btn btn-ghost btn-sm"
-                        onClick={async () => {
-                          if (!jobId) return;
-                          const res = await previewSeriesCancellation({
-                            jobId,
-                            scope: cancelScope,
-                            pauseUntil: pauseUntil || null,
-                          });
-                          setScopePlan(
-                            res.ok
-                              ? { siblings: res.siblings, resumesOn: res.resumesOn }
-                              : null,
-                          );
-                          if (!res.ok) {
-                            setActionMessage({ type: "error", text: res.message });
-                          }
-                        }}>
-                        Check how many this affects
-                      </button>
-                      {scopePlan ? (
-                        <p className="cjd-note" style={{ marginTop: 6 }}>
-                          {scopePlan.siblings} other upcoming booking
-                          {scopePlan.siblings === 1 ? "" : "s"} will also be cancelled.
-                          {scopePlan.resumesOn
-                            ? ` The schedule resumes ${new Date(scopePlan.resumesOn).toLocaleDateString("en-CA", { month: "long", day: "numeric" })}.`
-                            : ""}
-                          {" "}Past and completed bookings are kept.
-                        </p>
-                      ) : null}
-                    </div>
+                    <p
+                      className={pauseWouldEndSeries ? "cjd-msg warn" : "cjd-note"}
+                      aria-live="polite"
+                      style={{ marginTop: 8, marginBottom: 0 }}>
+                      {pauseWouldEndSeries ? <AlertTriangle size={14} /> : null}
+                      <span>
+                        {cancelScope === "pause" && !pauseUntil
+                          ? "Pick the resume date and this will say how many bookings it cancels."
+                          : scopePlanLoading
+                            ? "Working out what this cancels…"
+                            : scopePlan
+                              ? cancelScopeStatement(cancelScope, scopePlan)
+                              : scopePlanError ??
+                                "Could not work out what this would cancel."}
+                      </span>
+                    </p>
                   ) : null}
                 </div>
               ) : null}
@@ -1063,16 +1282,63 @@ export default function CalendarJobActions({
                 )}
               </Section>
 
-              {/* Cleaner pay — per provider, the way BookingKoala shows it. */}
-              {summary && summary.cleaners.length > 0 ? (
+              {/* Cleaner pay — per provider, the way BookingKoala shows it.
+                  Driven by `payRows`, so the LEAD is listed even when they are
+                  not also on the roster, and every row states the same
+                  components as the job page's Financials tab. There is
+                  deliberately no fallback to `summary.employeePay`: that column
+                  is a save-time estimate on a PERCENTAGE job and the imported
+                  provider payment on a BookingKoala one — never a payout (see
+                  getJobSummary and src/lib/cleaner-pay-display.ts). */}
+              {summary && summary.payRows.length > 0 ? (
                 <Section title="Cleaner pay">
-                  {summary.cleaners.map((c) => (
-                    <Row key={c.id} k={c.name}>
-                      {c.pay != null
-                        ? money(c.pay)
-                        : summary.employeePay != null
-                        ? `${money(summary.employeePay)} (job total)`
-                        : "—"}
+                  {summary.payRows.map((r) => (
+                    <Row
+                      key={r.cleanerId}
+                      k={
+                        <>
+                          {r.name}
+                          {r.isLead ? (
+                            <span className="cjd-dim"> · Lead</span>
+                          ) : null}
+                        </>
+                      }>
+                      {r.tip > 0 || r.parking > 0 ? (
+                        <>
+                          {money(r.amount)}
+                          {r.tip > 0 ? ` + ${money(r.tip)} tip` : ""}
+                          {r.parking > 0 ? ` + ${money(r.parking)} parking` : ""}
+                          {" = "}
+                          <strong>{money(r.total)}</strong>
+                        </>
+                      ) : (
+                        <strong>{money(r.total)}</strong>
+                      )}
+                      {/* Why this figure, per cleaner. An override is the
+                          admin's own typed amount and no rate touches it, so it
+                          says so instead of repeating the basis. */}
+                      {r.isOverride ? (
+                        <span
+                          style={{
+                            display: "block",
+                            width: "fit-content",
+                            marginTop: 2,
+                            background: "#fffbeb",
+                            color: "#92400e",
+                            borderRadius: 999,
+                            padding: "1px 7px",
+                            fontSize: 10,
+                            fontWeight: 600,
+                          }}>
+                          Manual amount
+                        </span>
+                      ) : r.basisLabel ? (
+                        <span
+                          className="cjd-dim"
+                          style={{ display: "block", fontSize: 10.5 }}>
+                          {r.basisLabel}
+                        </span>
+                      ) : null}
                     </Row>
                   ))}
                   {summary.payType && summary.payType !== "PERCENTAGE" ? (
@@ -1166,21 +1432,63 @@ export default function CalendarJobActions({
                 disabled={actionLoading === "cancel"}>
                 Keep booking
               </button>
+              {/* Held shut until the scope above has stated itself, so a
+                  series cannot be ended by someone who was never told how many
+                  bookings that is. `scopeStated` is already true for "this
+                  booking only" — the safe choice is never made to wait. */}
               <button
                 className="btn btn-sm cjd-danger"
                 onClick={handleConfirmCancel}
-                disabled={actionLoading === "cancel"}>
-                {actionLoading === "cancel" ? "Cancelling…" : "Cancel booking"}
+                disabled={
+                  actionLoading === "cancel" || !scopeStated || pauseWouldEndSeries
+                }
+                title={
+                  pauseWouldEndSeries
+                    ? "That resume date would end the schedule instead of pausing it — pick an earlier date, or choose “Cancel this and all future bookings”."
+                    : scopeStated
+                      ? undefined
+                      : "Waiting on the count of bookings this would cancel."
+                }>
+                {actionLoading === "cancel" ? "Cancelling…" : cancelButtonLabel}
               </button>
             </div>
           ) : isEmployee ? (
             // ── Cleaner set (unchanged behaviour) ──────────────────────────
+            <>
+            {/* Short-staffed (Sept 3 fix 4). Advisory: it delays the tap by one
+                confirm and nothing else — "Mark arrived anyway" always works. */}
+            {arrivedShortConfirm && staffing ? (
+              <div className="cjd-msg warn">
+                <AlertTriangle size={14} />
+                <span>
+                  <span className="cjd-warn">Short-staffed.</span>{" "}
+                  {shortStaffedNotice(staffing)} You can still start the job.
+                </span>
+              </div>
+            ) : null}
             <div className="cjd-actions grid">
               {(status === "SCHEDULED" || status === "CREATED") && (
+                arrivedShortConfirm ? (
+                  <>
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => setArrivedShortConfirm(false)}
+                      disabled={actionLoading === "arrived"}>
+                      Not yet
+                    </button>
+                    <button
+                      className="btn btn-primary btn-sm"
+                      onClick={handleMarkArrived}
+                      disabled={actionLoading === "arrived"}>
+                      <LogIn size={14} />
+                      {actionLoading === "arrived" ? "Saving…" : "Mark arrived anyway"}
+                    </button>
+                  </>
+                ) : (
                 <>
                   <button
                     className="btn btn-primary btn-sm"
-                    onClick={handleMarkArrived}
+                    onClick={requestMarkArrived}
                     disabled={actionLoading === "arrived"}>
                     <LogIn size={14} />
                     {actionLoading === "arrived" ? "Saving…" : "Mark arrived"}
@@ -1194,6 +1502,7 @@ export default function CalendarJobActions({
                     <HelpCircle size={14} /> Get help
                   </button>
                 </>
+                )
               )}
               {status === "IN_PROGRESS" && (
                 <>
@@ -1221,6 +1530,7 @@ export default function CalendarJobActions({
                 <ExternalLink size={14} /> Full job details
               </button>
             </div>
+            </>
           ) : (
             // ── Admin set (Q2 §6 — every one of these already existed on the
             //    job detail page; this is the surfacing) ────────────────────

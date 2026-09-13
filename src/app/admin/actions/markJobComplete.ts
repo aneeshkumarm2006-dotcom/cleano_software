@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { ensureRatingRequest } from "@/lib/rating";
 import { isAdminRole } from "@/lib/role-routing";
 import { advanceContactLifecycleForBooking } from "@/lib/crm";
+import { jobStaffing } from "@/lib/cleaner-jobs";
 
 export async function markJobComplete(jobId: string) {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -22,6 +23,10 @@ export async function markJobComplete(jobId: string) {
       clientId: true,
       status: true,
       paymentReceived: true,
+      // Crew head-count vs what the job was booked for (Sept 3 fix 4). The
+      // select carried the roster but not the target, so this action had no way
+      // to tell a full crew from half of one.
+      requiredCleaners: true,
       cleaners: { select: { id: true } },
     },
   });
@@ -62,5 +67,7 @@ export async function markJobComplete(jobId: string) {
 
   revalidatePath(`/admin/jobs/${jobId}`);
   revalidatePath("/admin/jobs");
-  return { success: true };
+  // Reported so the caller can say so afterwards — never a refusal. An admin
+  // closing out a job the crew was thin on is a normal Saturday.
+  return { success: true, staffing: jobStaffing(job) };
 }

@@ -1,6 +1,35 @@
 import type { JobMoney } from "@/lib/job-money";
 
 /**
+ * One PAID participant on the job (Sept 3 fix 11).
+ *
+ * Deliberately not the same list as `cleaners` below. That is the ROSTER, and
+ * the drawer rendered pay off it — so a LEAD (`Job.employeeId`) who is not also
+ * on the roster is paid by payroll and appeared on no admin surface at all.
+ * These rows come off the share map instead, carrying the same components the
+ * job page's Financials tab prints so the two cannot quote different figures.
+ */
+export interface JobSummaryPayRow {
+  cleanerId: string;
+  name: string;
+  /** Roster status ("ASSIGNED" | …) or null. Null for a lead who is not on the roster. */
+  status: string | null;
+  /** True when this row is the job's lead (Job.employeeId). */
+  isLead: boolean;
+  /** share.base — pay for the work itself. */
+  amount: number;
+  /** share.tip / share.parking — pass-throughs, shown separately so nothing is double-counted. */
+  tip: number;
+  parking: number;
+  /** share.total — amount + tip + parking. The number the cleaner actually sees. */
+  total: number;
+  /** True when JobAssignment.payAmount is set for this cleaner. */
+  isOverride: boolean;
+  basis: string | null;
+  basisLabel: string | null;
+}
+
+/**
  * The booking summary the calendar drawer renders (client feedback item 8).
  *
  * Shaped against the BookingKoala panel field list (OPEN-QUESTIONS Q2 §5):
@@ -81,8 +110,15 @@ export type JobSummaryDTO = {
   propertyType: string | null;
   /** Pinned checklist template (Stage 10). Null = resolve automatically. */
   checklistTemplateId: string | null;
+  /**
+   * The ROSTER — who is assigned. Drives the "Assigned to" row and the assign
+   * editor. `pay` is the participant's `share.total`, the same figure the
+   * matching `payRows` entry carries, so the two can never disagree.
+   */
   cleaners: { id: string; name: string; status: string | null; pay: number | null }[];
   leadEmployee: { id: string; name: string } | null;
+  /** Everyone the job pays — lead first, then the roster (Sept 3 fix 11). */
+  payRows: JobSummaryPayRow[];
 
   // ── Money ─────────────────────────────────────────────────────────────────
   money: JobMoney;

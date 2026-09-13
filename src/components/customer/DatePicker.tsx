@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from "lucide-react";
+import { tzToday } from "@/lib/tz-calendar";
 
 interface DatePickerProps {
   value: string; // YYYY-MM-DD
@@ -71,8 +72,10 @@ export default function DatePicker({
   const selected = fromISO(value);
   const minDate = fromISO(min ?? "");
   const maxDate = fromISO(max ?? "");
+  // Open on the store's current month, not the viewer's — the same reason the
+  // Today button below uses `tzToday()`.
   const [viewMonth, setViewMonth] = useState<Date>(
-    selected ?? minDate ?? new Date()
+    selected ?? minDate ?? tzToday()
   );
 
   useEffect(() => setMounted(true), []);
@@ -177,7 +180,10 @@ export default function DatePicker({
     setViewMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 1));
   }
   function pickToday() {
-    const t = new Date();
+    // "Today" is the STORE's civil date. `new Date()` here booked the viewer's
+    // day: a customer (or an admin) whose machine had already rolled past
+    // midnight picked tomorrow's slot without noticing.
+    const t = tzToday();
     if (isDisabled(t)) return;
     onChange(toISO(t));
     setViewMonth(new Date(t.getFullYear(), t.getMonth(), 1));
@@ -241,7 +247,7 @@ export default function DatePicker({
             const isSel = selected && isSameDay(d, selected);
             const oor = outOfRange(d);
             const blocked = isBlocked(d);
-            const today = isSameDay(d, new Date());
+            const today = isSameDay(d, tzToday());
             const cls = [
               "cl-dp-day",
               cell.muted ? "muted" : "",

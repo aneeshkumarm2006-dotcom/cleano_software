@@ -122,6 +122,70 @@ export function isPlatformPath(pathname: string): boolean {
   return PLATFORM_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
+/** The smallest shape both `NextRequest.headers` and `next/headers` satisfy. */
+type HeaderReader = { get(name: string): string | null | undefined };
+
+/** Addresses that can only be a machine talking to itself, never a tenant. */
+function isInternalHostname(hostname: string): boolean {
+  return (
+    hostname === "localhost" ||
+    hostname === "0.0.0.0" ||
+    hostname === "::" ||
+    hostname === "::1" ||
+    // Bare IPs and IPv6 literals — the same two shapes orgSlugFromHost treats
+    // as carrying no tenant label.
+    /^\d{1,3}(\.\d{1,3}){3}$/.test(hostname) ||
+    hostname.includes("[")
+  );
+}
+
+/**
+ * The host the BROWSER asked for, as opposed to the address the connection
+ * happened to land on.
+ *
+ * Normally the same value, and `host` is the one to trust. They come apart on
+ * exactly one kind of request — and it is one this app makes after every
+ * successful server action. When an action calls `redirect()`, Next does not
+ * hand the browser a 307: it renders the redirect target itself and streams it
+ * back as the action's result, by fetching that page over HTTP from its own
+ * INTERNAL origin (`__NEXT_PRIVATE_ORIGIN`, which `next dev` and a self-hosted
+ * `next start` both set to the address they bind — `http://localhost:3006`).
+ * The browser's headers ride along on that fetch, so `x-forwarded-host` still
+ * says `acme.useawer.com` while `host` now says `localhost:3006`.
+ *
+ * Reading `host` alone there resolved the request to the platform, and the
+ * proxy then answered "job created" with the body of Awer's own signup page:
+ * the address bar said /admin/jobs while the page said "Start your workspace",
+ * and only a manual reload put it right. Every server-action redirect on every
+ * tenant was affected, not just the one that was reported.
+ *
+ * The forwarded header is consulted ONLY when `host` is an internal address,
+ * which is the shape Next's self-fetch has and a shape no browser request for
+ * a workspace ever has. That is what keeps this from becoming a tenant selector
+ * a caller can set for itself: behind any proxy the Host header is the public
+ * domain, so the forwarded value is ignored outright; and anyone who can reach
+ * the origin directly to spoof `x-forwarded-host` can spoof `Host` instead, so
+ * it opens nothing that was not already open. (Next only fills the forwarded
+ * header in when it is absent — it never overwrites a caller's — which is
+ * precisely why the trust has to be this narrow.)
+ */
+export function publicHostFromHeaders(h: HeaderReader): string | null {
+  const host = h.get("host") ?? null;
+  const hostname = host
+    ? host.split(":")[0].trim().toLowerCase().replace(/\.$/, "")
+    : "";
+  if (hostname && !isInternalHostname(hostname)) return host;
+
+  // A forwarded-host header can carry a list; the first hop is the browser's.
+  const forwarded = h.get("x-forwarded-host")?.split(",")[0]?.trim();
+  return forwarded || host;
+}
+
+/** The organization this request is for, read off the host it asked for. */
+export function orgSlugFromRequestHeaders(h: HeaderReader): string {
+  return orgSlugFromHost(publicHostFromHeaders(h));
+}
+
 /**
  * The organization slug a host maps to. Never throws and never returns empty —
  * an unrecognised host falls back to the default rather than failing the

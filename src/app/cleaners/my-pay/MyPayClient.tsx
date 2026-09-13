@@ -10,6 +10,9 @@ import WithdrawModal from "./WithdrawModal";
 import PaymentHistory from "./PaymentHistory";
 import ProviderInvoiceView from "./ProviderInvoiceView";
 import { fmtDate } from "@/lib/time";
+// Pure module (no db) — the wording of the review count is shared with the
+// dashboard's Performance tile so both pages say the same thing.
+import { ratingCountLabel } from "@/lib/cleaner-rating";
 
 type PayPeriod = {
   startDate: string;
@@ -90,7 +93,9 @@ interface MyPayClientProps {
   availableBalance: number;
   currentPeriod: CurrentPeriod | null;
   year: number;
+  /** Already averaged/rounded by @/lib/cleaner-rating. null = no reviews yet. */
   starRating?: number | null;
+  ratingCount?: number;
   ragData?: RagData;
 }
 
@@ -135,6 +140,7 @@ export default function MyPayClient({
   currentPeriod,
   year,
   starRating,
+  ratingCount = 0,
 }: MyPayClientProps) {
   const [tab, setTab] = useState<Tab>("current");
   const [withdrawOpen, setWithdrawOpen] = useState(false);
@@ -217,26 +223,35 @@ export default function MyPayClient({
           </div>
         </div>
 
-        {/* Star Rating (read-only) */}
-        {starRating != null && (
-          <div className="mb-4 flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-2xl px-5 py-3">
-            <Star className="w-5 h-5 text-amber-400 fill-amber-400 flex-shrink-0" />
-            <div>
-              <p className="text-sm font-[600] text-amber-800">
-                Your Rating: {Math.min(5, Math.max(4, Math.round(starRating * 10) / 10)).toFixed(1)} / 5.0
-              </p>
-              <p className="text-xs text-amber-700/70">Based on customer feedback and performance</p>
-            </div>
-            <div className="flex gap-0.5 ml-auto">
-              {[1, 2, 3, 4, 5].map((s) => (
-                <Star
-                  key={s}
-                  className={`w-4 h-4 ${s <= Math.round(Math.min(5, Math.max(4, starRating))) ? "text-amber-400 fill-amber-400" : "text-amber-200 fill-amber-200"}`}
-                />
-              ))}
-            </div>
+        {/* Star Rating (read-only).
+            The number and the count are handed down already computed by
+            @/lib/cleaner-rating, so this block only formats. It used to floor
+            the value at 4.0 — Math.max(4, …) — which quietly turned a real 1.0
+            into "Your Rating: 4.0 / 5.0" while the dashboard's Performance tile
+            showed the honest 1.0. A cleaner's own page must not flatter them:
+            the same rating they are judged and paid on is the one shown here,
+            and with no reviews it says so instead of printing a number. */}
+        <div className="mb-4 flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-2xl px-5 py-3">
+          <Star className="w-5 h-5 text-amber-400 fill-amber-400 flex-shrink-0" />
+          <div>
+            <p className="text-sm font-[600] text-amber-800">
+              Your Rating: {starRating != null ? `${starRating.toFixed(1)} / 5.0` : "— / 5.0"}
+            </p>
+            <p className="text-xs text-amber-700/70">
+              {starRating != null
+                ? `${ratingCountLabel(ratingCount)} from customer feedback and performance`
+                : "No reviews yet — you'll see a score here once a job of yours is rated."}
+            </p>
           </div>
-        )}
+          <div className="flex gap-0.5 ml-auto">
+            {[1, 2, 3, 4, 5].map((s) => (
+              <Star
+                key={s}
+                className={`w-4 h-4 ${starRating != null && s <= Math.round(starRating) ? "text-amber-400 fill-amber-400" : "text-amber-200 fill-amber-200"}`}
+              />
+            ))}
+          </div>
+        </div>
 
         <div className="cl-pay-hero">
           <div

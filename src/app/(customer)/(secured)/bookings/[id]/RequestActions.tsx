@@ -6,11 +6,12 @@ import CustomerModal from "@/components/customer/Modal";
 import DatePicker from "@/components/customer/DatePicker";
 import { requestCancellation } from "../../../actions/requestCancellation";
 import { requestReschedule } from "../../../actions/requestReschedule";
+import { addStoreDays, storeDateKey } from "@/lib/timezone";
 
+/** Tomorrow on the STORE's calendar. Derived from UTC this read a day late
+ *  from 20:00 Montreal, flooring the reschedule picker at the day after next. */
 function tomorrowISO() {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  return d.toISOString().slice(0, 10);
+  return storeDateKey(addStoreDays(new Date(), 1));
 }
 
 export default function RequestActions({

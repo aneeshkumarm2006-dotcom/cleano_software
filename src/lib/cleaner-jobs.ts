@@ -355,3 +355,59 @@ export function clockInOpensAt(startTime: Date): Date {
  * which is the pure copy the UI reads.
  */
 export const CLOCK_IN_BLOCKED_STATUSES = ["CANCELLED", "PAID"] as const;
+
+// ── Under-staffed jobs (Sept 3 fix 4) ───────────────────────────────────────
+//
+// `requiredCleaners` was read at ASSIGNMENT time on every surface that hands out
+// work — the crew pickers, the claim board, the web-bookings queue — and nowhere
+// at the clock. So a two-person job whose second cleaner never turned up was
+// started and finished as though it were a one-person job, silently.
+//
+// One predicate, every surface, for the same reason `pendingRequiredItems` in
+// job-checklist.ts exists: two clock-out buttons, one rule.
+//
+// ADVISORY, exactly like the crew-picker indicators (see the header of
+// src/components/admin/AssignmentIndicators.tsx). Nothing here may disable a
+// button or refuse a save — a cleaner whose teammate no-showed still has to work
+// the job, and telling her she cannot clock in is worse than the understaffing.
+
+export interface JobStaffing {
+  assigned: number;
+  required: number;
+  /** `required - assigned`, floored at 0. */
+  short: number;
+  isShort: boolean;
+}
+
+/**
+ * Crew size is the number of DISTINCT people on the job — the UNION of the lead
+ * and the roster, never their sum.
+ *
+ * `claimJob` stamps `employeeId` on a claimer who is already in `cleaners`
+ * (claimJob.ts), so on most jobs the lead is also in the M2M and adding the two
+ * counts the same person twice. But an admin-assigned lead can sit outside the
+ * M2M entirely, so dropping `employeeId` undercounts instead. The union is the
+ * honest head-count, and it errs toward warning LESS — the right bias for
+ * something that only ever advises.
+ */
+export function jobStaffing(job: {
+  requiredCleaners: number;
+  employeeId?: string | null;
+  cleaners: { id: string }[];
+}): JobStaffing {
+  const crew = new Set(job.cleaners.map((c) => c.id).filter(Boolean));
+  if (job.employeeId) crew.add(job.employeeId);
+  const assigned = crew.size;
+  const required = job.requiredCleaners;
+  const short = Math.max(0, required - assigned);
+  return { assigned, required, short, isShort: short > 0 };
+}
+
+/** The one wording, so all five surfaces say the same sentence. */
+export function shortStaffedNotice(s: JobStaffing): string {
+  return (
+    `Only ${s.assigned} of ${s.required} cleaner${s.required === 1 ? "" : "s"} ` +
+    `${s.assigned === 1 ? "is" : "are"} on this job — ` +
+    `${s.short} spot${s.short === 1 ? " was" : "s were"} never filled.`
+  );
+}

@@ -493,6 +493,24 @@ export const SETTINGS = {
     default: true,
     validate: bool(),
   }),
+  // The other half of the setting above, and the reason it can be safely left
+  // on: with masking, "the cleaner can reach the customer" stops meaning "the
+  // cleaner keeps the customer's mobile number forever". A cleaner is handed a
+  // company number that routes to the customer for the life of the job, and the
+  // real number is never sent to the browser at all — not hidden in the markup,
+  // not in a tel: link, not in the props.
+  //
+  // Default FALSE, unlike everything else here, because it does nothing useful
+  // until a workspace has bought numbers into `ProxyNumber` — and the rule at
+  // the top of this file is that a default must equal today's behaviour, which
+  // is unmasked.
+  "provider.maskCustomerPhone": def({
+    key: "provider.maskCustomerPhone",
+    category: "provider",
+    label: "Hide the customer's real number behind a company number",
+    default: false,
+    validate: bool(),
+  }),
   // Shown full-screen when a deactivated cleaner (User.isActive = false) opens
   // the app. Editable, provider-facing.
   "provider.deactivatedMessage": def({

@@ -6,7 +6,8 @@ import {
   ORG_SLUG_HEADER,
   PLATFORM_ORG_SLUG,
   isPlatformPath,
-  orgSlugFromHost,
+  orgSlugFromRequestHeaders,
+  publicHostFromHeaders,
   workspaceOriginFor,
 } from '@/lib/tenant'
 
@@ -64,7 +65,10 @@ const PUBLIC_PREFIXES = [
  * proxy response, so the Host header it is.
  */
 function selfOrigin(request: NextRequest): string {
-  const host = request.headers.get('host')
+  // Same source as the org slug, for the same reason: on Next's own self-fetch
+  // the Host header is the internal origin, and a redirect built from it would
+  // walk the browser off the workspace it is signed in to.
+  const host = publicHostFromHeaders(request.headers)
   if (!host) return request.nextUrl.origin
   // A forwarded-proto header can carry a list; the first hop is the browser's.
   const forwarded = request.headers.get('x-forwarded-proto')?.split(',')[0].trim()
@@ -96,7 +100,12 @@ export async function proxy(request: NextRequest) {
   // Stamped on the request rather than resolved to a record here: proxy runs on
   // every request including static-ish ones, and server components can look the
   // organization up once, cached, only when they actually need it.
-  const orgSlug = orgSlugFromHost(request.headers.get('host'))
+  //
+  // Read through `orgSlugFromRequestHeaders`, not the Host header directly: on
+  // the self-fetch Next makes to render the page a server action redirected to,
+  // Host is the server's own internal origin and only `x-forwarded-host` still
+  // names the workspace. See the note on publicHostFromHeaders in lib/tenant.
+  const orgSlug = orgSlugFromRequestHeaders(request.headers)
   const headers = new Headers(request.headers)
   headers.set(ORG_SLUG_HEADER, orgSlug)
   // The gate in the root layout needs to know which path is being served, so it
@@ -144,7 +153,11 @@ export async function proxy(request: NextRequest) {
       request.nextUrl.protocol.replace(':', '') ||
       'https'
     const legacy = LEGACY_ORG_SLUG
-      ? workspaceOriginFor(LEGACY_ORG_SLUG, request.headers.get('host'), proto)
+      ? workspaceOriginFor(
+          LEGACY_ORG_SLUG,
+          publicHostFromHeaders(request.headers),
+          proto,
+        )
       : null
     if (legacy) {
       // 307, not 308. This redirect is meant to be switched off once those

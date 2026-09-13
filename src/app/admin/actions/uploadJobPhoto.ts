@@ -132,7 +132,11 @@ export async function uploadJobPhoto(formData: FormData) {
 
     // After-photos are allowed by default (item 21); this gate only fires
     // when an admin explicitly disabled them for this job. Admins bypass.
-    if (!isAdmin && !afterPhotosAllowed(job)) {
+    //
+    // So does an ISSUE photo: an after-photo policy is about documenting a
+    // finished clean, and it must never be the reason the office does not get
+    // to see the damage a cleaner is standing in front of.
+    if (!isAdmin && kind !== "ISSUE" && !afterPhotosAllowed(job)) {
       return {
         success: false,
         error:
@@ -175,7 +179,12 @@ export async function uploadJobPhoto(formData: FormData) {
     // before the insert, so zero means this upload is the transition — the
     // same rule the AI handoff uses, and the reason eight photos do not
     // become eight emails.
-    if (existingCount === 0) {
+    //
+    // Not for an ISSUE photo. "Photos added" is the wrong headline for a
+    // cleaner reporting a problem, and reportIssue.ts sends the mail that
+    // actually says what happened — two notifications for one event would
+    // train admins to skim past both.
+    if (existingCount === 0 && kind !== "ISSUE") {
       const cleanerName = (session.user as { name?: string }).name || "A cleaner";
       await sendAdminJobPhotos({
         jobId,

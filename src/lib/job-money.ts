@@ -458,6 +458,96 @@ export function jobPayBasis(job: JobMoneyJob): number {
   ).subtotalAmount;
 }
 
+// ── The per-cleaner pay cap (fix list item #10) ──────────────────────────────
+
+export interface CustomCleanerPayCheck {
+  /** Sum of the per-cleaner amounts the admin actually typed. */
+  custom: number;
+  /** The most those amounts are allowed to add up to. */
+  budget: number;
+  /** `custom - budget`, or 0 when the amounts fit. */
+  overshoot: number;
+  /** True when the crew has been promised more than the job pays for. */
+  overBudget: boolean;
+}
+
+/**
+ * THE cap on manual per-cleaner pay: the crew can never be promised more than
+ * the job pays for.
+ *
+ * `JobAssignment.payAmount` is a dollar figure an admin types per person, and
+ * `computeJobPayShares` honours it verbatim — an override comes off the top and
+ * whoever is left splits the remainder. That remainder is floored at zero,
+ * which is exactly where the hole was: two $150 amounts on a $200 job failed
+ * nowhere at all. The form took them, the save returned 200, and the Financials
+ * tab reported a −$100 net profit after the fact. STATUS_SEPT_9 §#10 has always
+ * claimed the opposite — *"a guarantee the crew can never be paid more than the
+ * agreed total"* — so this is that guarantee, finally written down.
+ *
+ * ## Which total
+ *
+ * When an admin has stated the crew's pay outright — a FLAT or HOURLY job's
+ * Employee pay, or a manual team total (D2) — that figure IS the agreed total
+ * and the per-person amounts have to fit inside it. That is the same invariant
+ * `computeJobPayShares` already half-implements with its remainder split; this
+ * catches the half it floors away instead of reporting.
+ *
+ * With no such figure the crew is paid out of the job itself, so the ceiling is
+ * `jobPayBasis` — the same "what is this job worth" number the PERCENTAGE tier
+ * split is computed from (base + add-ons, or the override total, discounts
+ * ignored per D5). Using the pay basis rather than the discounted subtotal is
+ * deliberate: a customer's discount already doesn't cut anybody's pay, so it
+ * must not silently cut what an admin is allowed to promise either.
+ *
+ * ## What is NOT in the budget
+ *
+ * Tips and parking. They are customer-funded pass-throughs that ride on top of
+ * every share (D3) and are never part of a `payAmount` override, so counting
+ * them would inflate the ceiling with money that was never the company's to
+ * spend — and would let a big tip quietly bankroll an overspend on the work.
+ *
+ * Compared in whole cents, so a $200.00 job accepts $150 + $50 exactly rather
+ * than tripping on a float that lands a fraction of a cent high.
+ */
+export function checkCustomCleanerPay(args: {
+  /** `jobPayBasis` for this job — what the work itself is worth. */
+  payBasis: number;
+  /**
+   * The crew's agreed TOTAL pay, when one has been stated (FLAT / HOURLY /
+   * manual team total). Pass null on a PERCENTAGE job with an automatic
+   * `employeePay`: that column is a save-time estimate, not an agreement, and
+   * capping to it would refuse pay the tier math itself would have produced.
+   */
+  teamTotal?: number | null;
+  /** The typed per-cleaner amounts. Blank fields ("use the automatic amount")
+   *  are null and contribute nothing. */
+  amounts: readonly (number | null | undefined)[];
+}): CustomCleanerPayCheck {
+  const custom = round2(
+    args.amounts.reduce<number>((sum, a) => {
+      const n = Number(a);
+      return Number.isFinite(n) && n > 0 ? sum + n : sum;
+    }, 0)
+  );
+  const stated = Number(args.teamTotal);
+  const budget = round2(
+    Number.isFinite(stated) && stated > 0
+      ? stated
+      : Math.max(0, Number(args.payBasis) || 0)
+  );
+  const overshootCents = Math.round(custom * 100) - Math.round(budget * 100);
+  // A job with no value yet (blank Price on a half-filled form) has no ceiling
+  // to breach — the admin has simply not said what the job is worth. Refusing
+  // there would fight anyone who fills the crew in before the price.
+  const overBudget = budget > 0 && custom > 0 && overshootCents > 0;
+  return {
+    custom,
+    budget,
+    overshoot: overBudget ? round2(overshootCents / 100) : 0,
+    overBudget,
+  };
+}
+
 // ── Customer-funded pass-throughs: tips and parking (decision D3) ────────────
 
 /**

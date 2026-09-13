@@ -14,7 +14,7 @@ import { headers } from "next/headers";
 import { db } from "@/db";
 import { scopedTo, type ScopedDb } from "@/lib/db-scoped";
 import { orgFromContext, type OrgContext } from "@/lib/org-context";
-import { DEFAULT_ORG_SLUG, orgSlugFromHost } from "@/lib/tenant";
+import { DEFAULT_ORG_SLUG, orgSlugFromRequestHeaders } from "@/lib/tenant";
 
 /**
  * Slug for this request. Falls back to the default outside a request context
@@ -43,9 +43,15 @@ export const getOrgSlug = cache(async (): Promise<string> => {
     // choice together.
     //
     // Nothing is lost by ignoring it: proxy.ts derives the value it stamps
-    // from this same host (proxy.ts:98), so on proxied paths the two always
-    // agreed anyway.
-    return orgSlugFromHost(h.get("host"));
+    // from this same host, through this same helper, so the two agree.
+    //
+    // `orgSlugFromRequestHeaders` rather than the raw Host header because the
+    // page Next renders to satisfy a server action's redirect() arrives over a
+    // self-fetch whose Host is the server's own internal origin — reading Host
+    // alone there rendered the freshly created job's list against the PLATFORM
+    // workspace. See publicHostFromHeaders in lib/tenant for why that one case
+    // may consult x-forwarded-host and no other may.
+    return orgSlugFromRequestHeaders(h);
   } catch {
     // No request context at all: scripts and build-time prerendering.
     return DEFAULT_ORG_SLUG;

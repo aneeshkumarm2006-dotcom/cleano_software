@@ -11,6 +11,7 @@ import {
   format,
   eventOverlapsDay,
 } from "@/components/calendar/utils";
+import { tzToday } from "@/lib/tz-calendar";
 import { statusMeta, isUnconfirmed, isCancelled } from "./status-meta";
 import CornerBadge from "./CornerBadge";
 import { avatarColor, initials, shortName } from "@/lib/avatar";
@@ -58,6 +59,12 @@ export const MonthView = () => {
     cells.push(new Date(d));
   }
 
+  // "Today" is the STORE's today, not the browser's. `new Date()` here lit up
+  // the viewer's date, so this machine (a day ahead of Montréal in the evening)
+  // ringed tomorrow's cell while the dashboard header said Thursday. tzToday()
+  // returns a local-midnight civil date, which is the same shape as `cells`.
+  const todayCell = tzToday();
+
   const goToDay = (date: Date) => {
     setCurrentDate(date);
     setView("day");
@@ -80,7 +87,7 @@ export const MonthView = () => {
       <div className="cal-month-grid">
         {cells.map((day, i) => {
           const inMonth = isSameMonth(day, monthStart);
-          const today = isSameDay(day, new Date());
+          const today = isSameDay(day, todayCell);
           const list = eventsFor(day);
           const activeCount = list.filter((e) => !isCancelled(e)).length;
           return (

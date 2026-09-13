@@ -23,9 +23,11 @@ function ApplicantLoginInner() {
   // account arriving from the invite flow.
   const errorParam = searchParams.get("error");
   const initialError =
-    errorParam === "not_applicant" || errorParam === "use_applicant_login"
+    errorParam === "not_applicant"
       ? "That account isn't an applicant portal account."
-      : null;
+      : errorParam === "use_applicant_login"
+        ? "That's an applicant account — this is the right place. Sign in below to track your application."
+        : null;
   const activated = searchParams.get("activated") === "1";
 
   const [email, setEmail] = useState("");

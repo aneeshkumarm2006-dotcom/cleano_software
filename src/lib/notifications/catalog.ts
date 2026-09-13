@@ -314,6 +314,24 @@ export const NOTIFICATION_CATALOG: CatalogEntry[] = [
   },
   {
     recipient: "ADMIN",
+    category: "Job issues",
+    key: "admin.job.issue_reported",
+    label: "Cleaner reported an issue",
+    trigger:
+      "A cleaner reports a problem on a job — no access, missing supplies, damage, safety, or anything else the office needs to handle. Sent every time.",
+    channels: { EMAIL: true, SMS: false },
+  },
+  {
+    recipient: "ADMIN",
+    category: "Job issues",
+    key: "admin.job.issue_urgent",
+    label: "Cleaner reported an urgent issue",
+    trigger:
+      "A cleaner marks the issue urgent — they are blocked right now. Sent IN ADDITION to the standard issue email, so a cleaner standing outside a locked door is not one unread line among many.",
+    channels: { EMAIL: true, SMS: false },
+  },
+  {
+    recipient: "ADMIN",
     category: "Your Awer account",
     key: "admin.billing.payment_failed",
     label: "Awer payment failed",
