@@ -89,6 +89,30 @@ export const auth = betterAuth({
     enabled: true,
     window: 60,
     max: 5,
+    /**
+     * `get-session` is a READ, and the blanket five does not belong on it.
+     *
+     * Observed in production on cleanocalgary.useawer.com/book: a run of 429s
+     * on /api/auth/get-session while a customer worked through the booking
+     * steps. The public booking page calls `authClient.useSession()` to
+     * prefill a signed-in client's name and email, and React remounts it more
+     * than five times a minute during a normal booking. So the limit was not
+     * refusing an attack, it was handing a signed-in customer a blank contact
+     * form and asking them to retype what we already know.
+     *
+     * Nothing is relaxed where brute force can win anything: sign-in, sign-up,
+     * password reset and the rest keep the five. This raises the bucket only
+     * for a request that arrives WITH a session cookie and returns what we
+     * already told that browser. There is no secret to guess here — a caller
+     * either holds a valid session or gets null, and repeating the question a
+     * hundred times reveals nothing the first answer did not.
+     *
+     * The real brute-force control remains the WAF rule noted above; this
+     * in-memory counter was never it.
+     */
+    customRules: {
+      "/get-session": { window: 60, max: 100 },
+    },
   },
   advanced: {
     /**
