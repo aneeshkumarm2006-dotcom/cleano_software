@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Trash2, ToggleLeft, ToggleRight, Loader2, Power, RotateCcw, Archive, ArchiveRestore } from "lucide-react";
 import DatePicker from "@/components/customer/DatePicker";
+import { storeDateKey } from "@/lib/timezone";
 import PremiumSelect from "@/components/ui/PremiumSelect";
 import { ConfirmDeleteModal } from "@/components/common/ConfirmDeleteModal";
 import { useRowSelection } from "@/components/common/useRowSelection";
@@ -207,7 +208,7 @@ export default function PromoCodesClient({ codes, archived = false }: { codes: P
               <DatePicker
                 value={expiresAt}
                 onChange={setExpiresAt}
-                min={new Date().toISOString().slice(0, 10)}
+                min={storeDateKey(new Date())}
                 placeholder="No expiry"
               />
             </div>

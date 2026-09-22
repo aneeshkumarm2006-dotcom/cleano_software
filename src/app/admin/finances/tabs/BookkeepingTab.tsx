@@ -21,6 +21,7 @@ import { ConfirmDeleteModal } from "@/components/common/ConfirmDeleteModal";
 import { createTransaction } from "../../actions/createTransaction";
 import { updateTransaction } from "../../actions/updateTransaction";
 import { deleteTransaction } from "../../actions/deleteTransaction";
+import { storeDateKey } from "@/lib/timezone";
 import {
   BudgetCategoryOption,
   TransactionRow,
@@ -56,7 +57,8 @@ interface FormState {
 function emptyForm(defaultCategoryId: string): FormState {
   return {
     id: null,
-    date: new Date().toISOString().slice(0, 10),
+    // Sept 10, item 6: the business's today, not UTC's and not the laptop's.
+    date: storeDateKey(new Date()),
     categoryId: defaultCategoryId,
     amount: "",
     description: "",

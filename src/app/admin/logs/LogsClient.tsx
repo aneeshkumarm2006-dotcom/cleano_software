@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { retryEmail } from "../actions/retryEmail";
 import { fmtDate, fmtTime, fmtDateTime } from "@/lib/time";
+import { tzToday } from "@/lib/tz-calendar";
 
 export interface LogRow {
   id: string;
@@ -127,7 +128,8 @@ interface RangeValue { preset: string; from: Date | null; to: Date | null; }
 // ─── Date-range picker (presets + calendar) ───
 function DateRange({ value, onChange }: { value: RangeValue; onChange: (v: RangeValue) => void }) {
   const [open, setOpen] = useState(false);
-  const [view, setView] = useState(() => new Date());
+  // Sept 10, item 6: the business's today, not UTC's and not the laptop's.
+  const [view, setView] = useState(() => tzToday());
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;

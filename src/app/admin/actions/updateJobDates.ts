@@ -4,7 +4,7 @@ import { db } from "@/lib/org-db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { clearClockTrailForReschedule } from "@/lib/job-reschedule";
+import { clearWorkTrailForReschedule } from "@/lib/job-reschedule";
 
 export async function updateJobDates(
   jobId: string,
@@ -55,7 +55,7 @@ export async function updateJobDates(
     // start rather than done unconditionally: dragging a job one pixel and
     // dropping it back is a no-op, and it must not end a cleaner's live shift.
     const moved = job.startTime?.getTime() !== startTime.getTime();
-    const cleared = moved ? await clearClockTrailForReschedule(jobId) : null;
+    const cleared = moved ? await clearWorkTrailForReschedule(jobId) : null;
 
     // Revalidate the calendar page to show updated data
     revalidatePath("/admin/calendar");

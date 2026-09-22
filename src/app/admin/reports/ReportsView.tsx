@@ -7,6 +7,7 @@ import { CPieChart, CLineChart } from "@/components/ui/Chart";
 import type { CpaReport } from "@/lib/cpa-meta";
 import { CHANNELS, PAID_CHANNELS, money, money2, pct } from "@/lib/cpa-meta";
 import { addAdSpend } from "../actions/adSpendActions";
+import { storeDateKey } from "@/lib/timezone";
 
 export default function ReportsView({ report }: { report: CpaReport }) {
   const router = useRouter();
@@ -145,7 +146,8 @@ function Stat({ icon: Icon, label, value, hint, emphasize }: { icon: typeof Doll
 }
 
 function SpendImportPanel({ onAdded }: { onAdded: () => void }) {
-  const today = new Date().toISOString().slice(0, 10);
+  // Sept 10, item 6: the business's today, not UTC's and not the laptop's.
+  const today = storeDateKey(new Date());
   const [channel, setChannel] = useState(PAID_CHANNELS[0].id);
   const [date, setDate] = useState(today);
   const [amount, setAmount] = useState("");

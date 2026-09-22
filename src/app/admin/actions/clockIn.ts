@@ -19,6 +19,7 @@ import {
 } from "@/lib/cleaner-jobs";
 import { findOpenSession, syncClockMirrors } from "@/lib/work-sessions.server";
 import { fmtDateTime } from "@/lib/time";
+import { recordAdminNotification } from "@/lib/admin-notifications";
 
 /** Minutes late that earns an accountability strike (subject to admin excuse). */
 const STRIKE_LATE_MIN = 45;
@@ -257,6 +258,18 @@ export async function clockIn(jobId: string) {
     };
   } catch (error) {
     console.error("Error clocking in:", error);
+    // Sept 10, item 4. Only the THROWN case is reported, never the refusals
+    // above it: "too early", "not assigned" and "already clocked in" are the
+    // rules working, and a feed that announces them would train the office to
+    // ignore it. This branch is the one where the cleaner did everything right
+    // and the software did not.
+    await recordAdminNotification({
+      key: "admin.clock.clock_in_failed",
+      title: `Clock-in failed — ${session.user.name ?? "a cleaner"}`,
+      body: error instanceof Error ? error.message.slice(0, 200) : "Unknown error",
+      href: `/admin/jobs/${jobId}`,
+      severity: "ERROR",
+    });
     return { success: false, error: "Failed to clock in" };
   }
 }

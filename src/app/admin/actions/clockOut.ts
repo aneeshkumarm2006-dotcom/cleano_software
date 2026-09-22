@@ -8,6 +8,7 @@ import { revalidatePath } from "next/cache";
 import type { Prisma } from "@prisma/client";
 import { projectWashables } from "@/lib/wash";
 import { notifyAdmins } from "@/lib/admin-alerts";
+import { recordAdminNotification } from "@/lib/admin-notifications";
 import { sendAdminClockedOut } from "@/lib/email";
 import { ensureRatingRequest } from "@/lib/rating";
 import { isCleanerLow } from "@/lib/inventory-thresholds";
@@ -203,6 +204,18 @@ async function logClockOutFailure(args: {
         `${args.summary} Open the job's Activity tab for the full record.`,
       relatedId: args.jobId,
       relatedType: "job",
+    });
+    // ...and in the notification feed as well (Sept 10, item 4, "admin should
+    // get notified when a cleaner ... fails clock-in/clock-out"). The Alert
+    // above lands on /admin/analytics, which nobody watches during a shift.
+    // A cleaner stuck on site is the most time-critical thing this app can
+    // report, so it belongs where the sidebar badge counts it.
+    await recordAdminNotification({
+      key: "admin.clock.clock_out_failed",
+      title: `Clock-out failed — ${who}`,
+      body: `Job #${job?.jobNumber ?? "?"} — ${detail}`,
+      href: `/admin/jobs/${args.jobId}`,
+      severity: "ERROR",
     });
   } catch (e) {
     console.error("clock-out failure alert", e);

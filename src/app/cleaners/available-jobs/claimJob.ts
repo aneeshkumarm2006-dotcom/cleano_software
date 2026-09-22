@@ -11,6 +11,7 @@ import {
 import { openForClaimFilter, quoteSettledFilter } from "@/lib/cleaner-jobs";
 import { isAwaitingQuote } from "@/lib/quote-status";
 import { isOnHold } from "@/lib/job-hold";
+import { sendAdminUnassignedEvent } from "@/lib/email";
 
 export async function claimJob(jobId: string) {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -32,6 +33,9 @@ export async function claimJob(jobId: string) {
       deletedAt: true,
       status: true,
       startTime: true,
+      // Both only so the admin's notice can name the job (Sept 10, item 4).
+      jobNumber: true,
+      clientName: true,
       employeeId: true,
       requiredCleaners: true,
       jobType: true,
@@ -204,6 +208,23 @@ export async function claimJob(jobId: string) {
       description: `${session.user.name} claimed this job`,
     },
   });
+
+  // The office has to hear that the board emptied (Sept 10, item 4). Until now
+  // a claim was invisible outside the cleaner's own app: the
+  // `admin.unassigned.grabbed` notice existed but fired only when an ADMIN
+  // assigned somebody from the job form. The case the PDF actually asks about,
+  // a cleaner taking the job themselves, reached nobody.
+  //
+  // Not awaited, matching the four other call sites: the claim is already
+  // committed, and a notice that fails must never tell a cleaner they missed a
+  // job they now hold.
+  sendAdminUnassignedEvent({
+    event: "grabbed",
+    jobId,
+    jobNumber: job.jobNumber,
+    clientName: job.clientName,
+    startTime: job.startTime.toISOString(),
+  }).catch((e) => console.error("claimJob admin notice", e));
 
   revalidatePath("/cleaners/available-jobs");
   revalidatePath("/cleaners/my-jobs");

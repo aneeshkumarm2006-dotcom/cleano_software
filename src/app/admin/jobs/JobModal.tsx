@@ -58,6 +58,12 @@ import {
   type SavedAddress,
 } from "@/lib/client-address";
 import { tzInputParts } from "@/lib/time";
+// Sept 10, item 6. This picker ran on the BROWSER's clock, so an admin in
+// Calgary saw Calgary's today and Calgary's "now" written onto a Montreal job.
+// `tzToday` / `storeTimeKey` are the same helpers the calendar views were moved
+// onto; the job form never got the same treatment.
+import { tzToday } from "@/lib/tz-calendar";
+import { storeTimeKey } from "@/lib/timezone";
 import { isSqftJobType, moveInOutBasePrice } from "@/lib/service-pricing";
 import {
   DEFAULT_SERVICE_CATALOG,
@@ -344,8 +350,11 @@ function CustomDatePicker({
   disabled,
 }: CustomDatePickerProps) {
   const [isOpen, setIsOpen] = useState(false);
+  // An empty picker opens on the BUSINESS's current month, not the viewer's.
+  // Two hours and thirty minutes of difference is enough to open on the wrong
+  // month on the last day of one.
   const [viewDate, setViewDate] = useState<Date>(
-    value ? new Date(`${value}T00:00:00`) : new Date()
+    value ? new Date(`${value}T00:00:00`) : tzToday()
   );
   const pickerRef = useRef<HTMLDivElement | null>(null);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
@@ -397,7 +406,10 @@ function CustomDatePicker({
     viewDate.getMonth() + 1,
     0
   ).getDate();
-  const today = new Date();
+  // "Today" is the business's today. This is the line behind the reported bug:
+  // at 1:15 PM in Calgary it is already 3:15 PM in Montreal, and on the wrong
+  // side of midnight the two are a whole day apart.
+  const today = tzToday();
 
   const handleSelectDay = (day: number) => {
     const isoDate = toISODate(viewDate.getFullYear(), viewDate.getMonth(), day);
@@ -709,7 +721,9 @@ function CustomTimePicker({
                 type="button"
                 className="flex-1 px-3 py-2 rounded-xl bg-[#008C9C] text-white text-sm font-[500] tracking-tight hover:bg-[#008C9C]/90"
                 onClick={() =>
-                  handleTimeSelect(new Date().toTimeString().slice(0, 5))
+                  // The business's clock, not the laptop's. Pressing Now in
+                  // Calgary used to stamp a Montreal job with 1:15 PM.
+                  handleTimeSelect(storeTimeKey(new Date()))
                 }>
                 Now
               </button>
@@ -771,6 +785,11 @@ export default function JobModal({
   const [selectedCleaners, setSelectedCleaners] = useState<string[]>([]);
   const [selectedJobType, setSelectedJobType] = useState<string>("");
   const [selectedFrequency, setSelectedFrequency] = useState<string>("ONE_TIME");
+  // Sept 10, item 8. "AUTO" is the configured table, which is what every job
+  // did before this existed, so an untouched form behaves exactly as it did.
+  const [recurringDiscountMode, setRecurringDiscountMode] =
+    useState<string>("AUTO");
+  const [recurringDiscountPct, setRecurringDiscountPct] = useState<string>("");
   const [selectedClientId, setSelectedClientId] = useState<string>("");
   // Which of the linked client's saved addresses this job uses (item 2).
   // NEW_ADDRESS means "the admin is typing one into Location / Apt below", and
@@ -1571,6 +1590,11 @@ export default function JobModal({
       formData.append("description", values.description || "");
       formData.append("jobType", selectedJobType);
       formData.append("frequency", selectedFrequency);
+      formData.append("recurringDiscountMode", recurringDiscountMode);
+      formData.append(
+        "recurringDiscountPercentOverride",
+        recurringDiscountMode === "CUSTOM" ? recurringDiscountPct : ""
+      );
       formData.append("startDate", values.startDate || "");
       formData.append("startTime", values.startTime || "");
       formData.append("price", String(values.price || ""));
@@ -2298,11 +2322,66 @@ export default function JobModal({
                           return hint ? (
                             <p className="mt-2 text-xs text-[#008C9C]/60 tracking-tight">
                               {hint}. The first cleaning is full price; future
-                              cleanings are auto-created and get any recurring
-                              discount configured for this service.
+                              cleanings are auto-created.
                             </p>
                           ) : null;
                         })()}
+
+                        {/* Sept 10, item 8. Not every recurring job should be
+                            discounted: a weekly commercial contract usually has
+                            it built into the agreed price already, and applying
+                            the table on top discounts it twice. */}
+                        {selectedFrequency !== "ONE_TIME" && (
+                          <div className="mt-3">
+                            <p className="text-[10px] uppercase tracking-wider text-[#008C9C]/50 font-[400]">
+                              Recurring discount
+                            </p>
+                            <div className="mt-1.5 flex flex-wrap gap-1.5">
+                              {[
+                                { v: "AUTO", label: "Use the configured discount" },
+                                { v: "NONE", label: "No discount" },
+                                { v: "CUSTOM", label: "Custom" },
+                              ].map((o) => (
+                                <button
+                                  key={o.v}
+                                  type="button"
+                                  disabled={disableForm}
+                                  aria-pressed={recurringDiscountMode === o.v}
+                                  onClick={() => setRecurringDiscountMode(o.v)}
+                                  className={`rounded-lg px-2.5 py-1.5 text-xs font-[500] transition ${
+                                    recurringDiscountMode === o.v
+                                      ? "bg-[#008C9C] text-white"
+                                      : "bg-[#008C9C]/5 text-[#008C9C]/80 hover:bg-[#008C9C]/10"
+                                  }`}>
+                                  {o.label}
+                                </button>
+                              ))}
+                            </div>
+                            {recurringDiscountMode === "CUSTOM" && (
+                              <input
+                                type="number"
+                                min={0}
+                                max={100}
+                                step="0.01"
+                                inputMode="decimal"
+                                value={recurringDiscountPct}
+                                onChange={(e) =>
+                                  setRecurringDiscountPct(e.target.value)
+                                }
+                                disabled={disableForm}
+                                placeholder="Discount %"
+                                className="mt-2 w-full px-3 py-2 rounded-xl bg-[#008C9C]/5 text-sm text-[#008C9C] focus:outline-none placeholder:text-[#008C9C]/40"
+                              />
+                            )}
+                            <p className="mt-1.5 text-xs text-[#008C9C]/60 tracking-tight">
+                              {recurringDiscountMode === "NONE"
+                                ? "Future cleanings are billed at full price. Use this when the discount is already in the agreed rate."
+                                : recurringDiscountMode === "CUSTOM"
+                                ? "Future cleanings use this percentage instead of the configured table."
+                                : "Future cleanings get whatever discount is configured for this service and frequency."}
+                            </p>
+                          </div>
+                        )}
                       </div>
                     )}
 
