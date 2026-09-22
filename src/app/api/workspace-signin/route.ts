@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 
 /**
- * Finish a sign-in that started on Awer's front door.
+ * Finish a sign-in that started on Bookmops' front door.
  *
  * `useawer.com` can work out which workspace someone belongs to (see
  * sign-in/discover.ts), but it cannot sign them in there. A session cookie is

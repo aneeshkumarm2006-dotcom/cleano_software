@@ -98,7 +98,7 @@ export async function twilioConnectionStatus(orgId: string): Promise<{
   connectedAt: Date | null;
   /** Stored credentials that no longer decrypt — needs reconnecting. */
   unreadable: boolean;
-  /** Falling back to Awer's own Twilio account. */
+  /** Falling back to Bookmops' own Twilio account. */
   usingPlatform: boolean;
   smsNumber: string | null;
   /**

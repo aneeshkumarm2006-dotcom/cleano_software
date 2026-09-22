@@ -8,7 +8,7 @@ import { sendTrialEnding } from "@/lib/email";
 import { PLANS } from "@/lib/plans";
 
 /**
- * The nightly pass over Awer's own subscriptions.
+ * The nightly pass over Bookmops' own subscriptions.
  *
  * Until this existed, trialEndsAt was written at signup and read by nothing:
  * a company could trial for thirty days and then use the platform free
@@ -77,7 +77,7 @@ export async function GET(req: NextRequest) {
             action: "subscription.trial.expired",
             status: "FAILED",
             message:
-              "The Awer free trial has ended and no payment method is on file. Choose a plan in Settings, Plan & Billing.",
+              "The Bookmops free trial has ended and no payment method is on file. Choose a plan in Settings, Plan & Billing.",
           }),
         ).catch(() => {});
         counts.expired++;

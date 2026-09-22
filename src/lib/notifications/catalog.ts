@@ -332,20 +332,20 @@ export const NOTIFICATION_CATALOG: CatalogEntry[] = [
   },
   {
     recipient: "ADMIN",
-    category: "Your Awer account",
+    category: "Your Bookmops account",
     key: "admin.billing.payment_failed",
-    label: "Awer payment failed",
+    label: "Bookmops payment failed",
     trigger:
-      "A payment for your Awer subscription did not go through. Sent once when it first fails, not on every retry.",
+      "A payment for your Bookmops subscription did not go through. Sent once when it first fails, not on every retry.",
     channels: { EMAIL: true, SMS: false },
   },
   {
     recipient: "ADMIN",
-    category: "Your Awer account",
+    category: "Your Bookmops account",
     key: "admin.trial.ending",
-    label: "Awer trial ending",
+    label: "Bookmops trial ending",
     trigger:
-      "Your free trial of Awer is within a week of running out and no card is on file yet. Sent once, not every day.",
+      "Your free trial of Bookmops is within a week of running out and no card is on file yet. Sent once, not every day.",
     channels: { EMAIL: true, SMS: false },
   },
   {

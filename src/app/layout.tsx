@@ -69,14 +69,14 @@ export default async function RootLayout({
   // redirect means nothing downstream runs at all.
   //
   // Two paths sit outside the gate. The notice itself, or it would redirect to
-  // itself forever; and signup, which belongs to Awer rather than to any one
+  // itself forever; and signup, which belongs to Bookmops rather than to any one
   // workspace -- a visitor creating a company must not be turned away because
   // the host they happened to arrive on has no workspace behind it.
   const path = (await headers()).get("x-awer-path") ?? "";
   const outsideTheGate =
     path.startsWith("/workspace-unavailable") ||
     path.startsWith("/get-started") ||
-    // Awer's own front page. It describes the product to a stranger and belongs
+    // Bookmops' own front page. It describes the product to a stranger and belongs
     // to no workspace, so a missing or suspended one must not hide it.
     path.startsWith("/welcome");
   if (!outsideTheGate) {

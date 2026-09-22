@@ -250,7 +250,7 @@ export function InventorySurface() {
 
         <p className="mk-inv-foot">
           <Sparkles size={13} strokeWidth={2.2} />
-          Reorder levels are yours to set. Awer just tells you before you run out.
+          Reorder levels are yours to set. Bookmops just tells you before you run out.
         </p>
       </div>
     </div>

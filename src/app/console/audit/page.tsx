@@ -4,10 +4,10 @@ import { recentAudit } from "@/lib/console/queries";
 
 import { Pill, TopBar, fmtDateTime } from "../ui";
 
-export const metadata = { title: "Audit log · Awer Console" };
+export const metadata = { title: "Audit log · Bookmops Console" };
 
 /**
- * Every action Awer staff have taken against a customer's account.
+ * Every action Bookmops staff have taken against a customer's account.
  *
  * Filtering is by link rather than by client-side state on purpose: an audit
  * view someone is reading should be a URL they can send to someone else.
@@ -68,7 +68,7 @@ export default async function AuditPage({
           <div className="grow">
             <h1>Audit log</h1>
             <p className="sub">
-              Every action Awer staff have taken against a customer&apos;s account. Entries are
+              Every action Bookmops staff have taken against a customer&apos;s account. Entries are
               written once and can never be edited or deleted — including by you.
             </p>
           </div>

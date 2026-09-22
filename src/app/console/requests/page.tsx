@@ -7,7 +7,7 @@ import { slugify } from "@/lib/provisioning";
 import { Pill, TopBar, fmtDate, fmtDateTime } from "../ui";
 import RequestCard from "./RequestCard";
 
-export const metadata = { title: "Access requests · Awer Console" };
+export const metadata = { title: "Access requests · Bookmops Console" };
 
 /** How long a request has been sitting, which is the only urgency this page has. */
 function waiting(since: Date): { text: string; late: boolean } {

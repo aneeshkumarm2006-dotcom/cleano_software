@@ -1,12 +1,12 @@
 /**
- * The Awer console's own look.
+ * The Bookmops console's own look.
  *
  * Deliberately a plain stylesheet scoped under `.awer-console` rather than
  * utility classes on every element: this is one self-contained operator surface
  * that must not drift when the customer-facing theme changes, and nothing here
  * may leak out of the console into a tenant's app.
  *
- * Colour: the existing Awer teal on a warm off-white. Status colour (good /
+ * Colour: the existing Bookmops teal on a warm off-white. Status colour (good /
  * warning / critical) is a separate scale from the brand, so "this account is in
  * trouble" never competes with "this button is ours".
  * Type: Montserrat for words, IBM Plex Mono with tabular figures for every

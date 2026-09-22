@@ -1,5 +1,5 @@
 // Send an inbound text on to a second system, so a workspace can move onto
-// Awer without switching anything off on the day it moves.
+// Bookmops without switching anything off on the day it moves.
 //
 // Twilio allows exactly ONE inbound URL per number or Messaging Service, so
 // "keep HubSpot fed while we take over the texting" cannot be configured in
@@ -50,7 +50,7 @@ export async function forwardInboundText(
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
         "X-Twilio-Signature": twilioSignature(url, params, authToken),
-        "User-Agent": "Awer-SMS-Relay/1",
+        "User-Agent": "Bookmops-SMS-Relay/1",
       },
       body,
       // A permitted hostname that redirects to an internal address would walk

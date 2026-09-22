@@ -12,7 +12,7 @@ import { PLANS } from "@/lib/plans";
 
 import { StatusPill, TopBar, ago, fmtDate, fmtDateTime, fmtMoney } from "./ui";
 
-export const metadata = { title: "Overview · Awer Console" };
+export const metadata = { title: "Overview · Bookmops Console" };
 
 /**
  * The page that decides whether the console is worth opening.
@@ -99,7 +99,7 @@ export default async function ConsoleOverview() {
             <div className="stat-n">{pending.length}</div>
           </div>
           <div className="stat">
-            <h3>Cleaners on Awer</h3>
+            <h3>Cleaners on Bookmops</h3>
             <div className="stat-n">{stats.cleaners.toLocaleString()}</div>
           </div>
           <div className="stat">
@@ -290,7 +290,7 @@ export default async function ConsoleOverview() {
               {audit.length === 0 ? (
                 <div className="body">
                   <p className="sub">
-                    Nothing recorded yet. Every action Awer staff take against a customer account
+                    Nothing recorded yet. Every action Bookmops staff take against a customer account
                     appears here.
                   </p>
                 </div>

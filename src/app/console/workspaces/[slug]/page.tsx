@@ -35,7 +35,7 @@ import {
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  return { title: `${slug} · Awer Console` };
+  return { title: `${slug} · Bookmops Console` };
 }
 
 /**
@@ -363,7 +363,7 @@ export default async function WorkspacePage({
               {audit.length === 0 ? (
                 <div className="body">
                   <p className="sub">
-                    No Awer staff member has changed anything on this account. Every plan change,
+                    No Bookmops staff member has changed anything on this account. Every plan change,
                     suspension and trial extension is recorded here permanently.
                   </p>
                 </div>

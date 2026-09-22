@@ -28,7 +28,7 @@ export interface ProvisionInput {
   password: string;
   plan: OrgPlan;
   timezone?: string;
-  /** Set when Awer staff create the workspace themselves, bypassing self-serve. */
+  /** Set when Bookmops staff create the workspace themselves, bypassing self-serve. */
   createdByStaff?: boolean;
 }
 

@@ -15,7 +15,7 @@ export default function ConsoleNotFound() {
           <div className="grow">
             <h1>No such workspace</h1>
             <p className="sub">
-              Nothing on Awer answers to that address. It may have been renamed, or the link may be
+              Nothing on Bookmops answers to that address. It may have been renamed, or the link may be
               older than the workspace.
             </p>
           </div>

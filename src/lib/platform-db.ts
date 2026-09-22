@@ -1,5 +1,5 @@
 /**
- * The database client for Awer's own console, and the guard that gates it.
+ * The database client for Bookmops' own console, and the guard that gates it.
  *
  * This is the ONLY client permitted to read across organizations. It connects
  * with credentials that bypass row-level security, because a console that
@@ -42,7 +42,7 @@ export type PlatformStaff = {
 };
 
 /**
- * The signed-in Awer staff member, or null.
+ * The signed-in Bookmops staff member, or null.
  *
  * Reads through the tenant-scoped client on purpose: staff sign in to the
  * platform workspace like anyone else, and the ordinary session rules apply to
@@ -68,7 +68,7 @@ export async function getPlatformStaff(): Promise<PlatformStaff | null> {
 
 export class NotPlatformStaffError extends Error {
   constructor() {
-    super("Not Awer staff.");
+    super("Not Bookmops staff.");
     this.name = "NotPlatformStaffError";
   }
 }
@@ -92,7 +92,7 @@ export async function requirePlatformStaff(
 }
 
 /**
- * Write down what staff did. Impersonation means Awer can see live customer
+ * Write down what staff did. Impersonation means Bookmops can see live customer
  * data, so every action against an account leaves a record.
  */
 export async function recordPlatformAction(

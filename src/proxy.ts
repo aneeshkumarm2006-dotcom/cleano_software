@@ -15,8 +15,8 @@ import {
 const PUBLIC_EXACT = new Set<string>([
   '/sign-in',
   '/sign-up',
-  '/welcome', // Awer's own marketing page
-  '/get-started', // a cleaning company creating its own workspace on Awer
+  '/welcome', // Bookmops' own marketing page
+  '/get-started', // a cleaning company creating its own workspace on Bookmops
   '/get-started/organization', // Organization tier: a request, not a signup
   '/cleanos/login', // cleaner sign-in
   '/applicant-login', // applicant portal sign-in (decision D4)
@@ -45,7 +45,7 @@ const PUBLIC_PREFIXES = [
   '/gift-card/', // gift card purchase + redemption flow
   '/api/auth/', // Better Auth endpoints
   '/api/post-signin', // role-aware redirect endpoint
-  '/api/workspace-signin', // finishes a sign-in that began on Awer's front door
+  '/api/workspace-signin', // finishes a sign-in that began on Bookmops' front door
   '/icon/', // PWA install icons (32/192/512) — Chrome fetches without a session
 ]
 
@@ -117,18 +117,18 @@ export async function proxy(request: NextRequest) {
   // anything inbound.
   const next = () => NextResponse.next({ request: { headers } })
 
-  // Awer's front door is not a cleaning company's application.
+  // Bookmops' front door is not a cleaning company's application.
   //
   // `useawer.com` used to BE TeamCleano, because they were the only company on
   // it. Now that anyone can sign up, a visitor arriving at the bare domain is a
   // prospective customer, and showing them another company's booking form — or
-  // worse, an admin panel backed by Awer's own workspace — is not something to
+  // worse, an admin panel backed by Bookmops' own workspace — is not something to
   // leave to chance. So the tenant application is kept off this host entirely.
   //
   // Runs BEFORE the public-route check on purpose: `/book`, `/login` and
   // `/careers` are public, but they are still a particular company's pages.
   // Marketing has one home. Left reachable on every company's subdomain it
-  // would be Awer's sales page sitting on a customer's address, and a search
+  // would be Bookmops' sales page sitting on a customer's address, and a search
   // engine would index one copy of it per company we ever sign up.
   if (orgSlug !== PLATFORM_ORG_SLUG && pathname.startsWith('/welcome')) {
     return redirectSamePath(request, '/')
@@ -182,13 +182,13 @@ export async function proxy(request: NextRequest) {
 
   // If no session cookie exists, redirect to the login door for that area:
   //   /admin/*     → staff sign-in (/sign-in)
-  //   /console/*   → staff sign-in (/sign-in) — Awer's own console
+  //   /console/*   → staff sign-in (/sign-in) — Bookmops' own console
   //   /cleaners/*  → cleaner sign-in (/cleanos/login)
   //   /applicant/* → applicant portal sign-in (/applicant-login), decision D4
   //   everything else (customer area, incl. "/") → customer sign-in (/login)
   if (!sessionCookie) {
     const isAdminArea = pathname.startsWith('/admin')
-    // Awer's own console uses the same staff door. It gives away nothing that
+    // Bookmops' own console uses the same staff door. It gives away nothing that
     // /sign-in doesn't: whether the account is platform staff is decided after
     // the password, by the console layout, not here.
     const isConsoleArea = pathname.startsWith('/console')

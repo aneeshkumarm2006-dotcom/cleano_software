@@ -23,7 +23,7 @@ import { chromium, type Browser, type Page } from "playwright";
 const BASE = process.env.CLICK_BASE ?? "http://teamcleano.localhost:3000";
 const PLATFORM = process.env.CLICK_PLATFORM ?? "http://localhost:3000";
 const PASSWORD = process.env.CLICK_PASSWORD ?? "StagingPass123!";
-// Awer's own staff live in a different workspace, seeded by a different script,
+// Bookmops' own staff live in a different workspace, seeded by a different script,
 // with a different password. Sharing one variable made the `all` run report a
 // failed console sign-in that was only ever the harness using the wrong key.
 const STAFF_PASSWORD = process.env.CLICK_STAFF_PASSWORD ?? "PlatformPass123!";

@@ -34,17 +34,17 @@ const check = (name: string, got: unknown, want: unknown) => {
 
   console.log("\nWHICH COMPANY DOES THIS ADDRESS BELONG TO?");
   // The whole point of the change: the bare domain is no longer a customer.
-  check("useawer.com -> Awer itself", orgSlugFromHost("useawer.com"), P);
-  check("www.useawer.com -> Awer itself", orgSlugFromHost("www.useawer.com"), P);
-  check("USEAWER.COM (shouting) -> Awer itself", orgSlugFromHost("USEAWER.COM"), P);
-  check("useawer.com. (trailing dot) -> Awer itself", orgSlugFromHost("useawer.com."), P);
+  check("useawer.com -> Bookmops itself", orgSlugFromHost("useawer.com"), P);
+  check("www.useawer.com -> Bookmops itself", orgSlugFromHost("www.useawer.com"), P);
+  check("USEAWER.COM (shouting) -> Bookmops itself", orgSlugFromHost("USEAWER.COM"), P);
+  check("useawer.com. (trailing dot) -> Bookmops itself", orgSlugFromHost("useawer.com."), P);
 
   check("teamcleano.useawer.com -> teamcleano", orgSlugFromHost("teamcleano.useawer.com"), "teamcleano");
   check("acme.useawer.com -> acme", orgSlugFromHost("acme.useawer.com"), "acme");
-  check("platform.useawer.com -> Awer itself", orgSlugFromHost("platform.useawer.com"), P);
+  check("platform.useawer.com -> Bookmops itself", orgSlugFromHost("platform.useawer.com"), P);
 
   console.log("\n  local development");
-  check("localhost:3000 -> Awer itself", orgSlugFromHost("localhost:3000"), P);
+  check("localhost:3000 -> Bookmops itself", orgSlugFromHost("localhost:3000"), P);
   check("teamcleano.localhost:3000 -> teamcleano", orgSlugFromHost("teamcleano.localhost:3000"), "teamcleano");
 
   console.log("\n  addresses that carry no company at all");
@@ -55,7 +55,7 @@ const check = (name: string, got: unknown, want: unknown) => {
 
   console.log("\nWHAT MAY BE SERVED ON AWER'S OWN FRONT DOOR?");
   for (const p of ["/get-started", "/get-started/organization", "/console", "/console/workspaces", "/sign-in", "/workspace-unavailable"]) {
-    check(`${p} — yes, it is Awer's`, isPlatformPath(p), true);
+    check(`${p} — yes, it is Bookmops'`, isPlatformPath(p), true);
   }
   console.log("\n  a company's application — kept off it");
   for (const p of ["/", "/admin", "/admin/dashboard", "/cleaners/dashboard", "/cleanos/login", "/login", "/bookings/abc", "/book", "/careers", "/rate/tok", "/sign-up", "/applicant-login"]) {

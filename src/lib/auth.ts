@@ -166,7 +166,7 @@ export const auth = betterAuth({
    * the schema, and EMPLOYEE is a STAFF role: it opens the cleaner app, with
    * that company's job list, client names, full street addresses and prices.
    * So a stranger could curl themselves a cleaner's account inside any
-   * customer's workspace — or inside Awer's own platform workspace, which is
+   * customer's workspace — or inside Bookmops' own platform workspace, which is
    * the one precondition setStaffRole checks before granting a platformRole.
    *
    * CLIENT is the customer portal: it shows the holder their own record and

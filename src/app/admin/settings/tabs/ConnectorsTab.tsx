@@ -76,7 +76,7 @@ function StatusPill({ twilio }: { twilio: TwilioStatus }) {
     : twilio.connected
       ? { dot: "bg-emerald-500", cls: "bg-emerald-50 text-emerald-700 ring-emerald-200", label: "Connected" }
       : twilio.usingPlatform
-        ? { dot: "bg-[#008C9C]", cls: "bg-[#008C9C]/8 text-[#00707d] ring-[#008C9C]/20", label: "Using Awer's account" }
+        ? { dot: "bg-[#008C9C]", cls: "bg-[#008C9C]/8 text-[#00707d] ring-[#008C9C]/20", label: "Using Bookmops' account" }
         : { dot: "bg-gray-400", cls: "bg-gray-100 text-gray-600 ring-gray-200", label: "Not set up" };
   return (
     <span
@@ -237,7 +237,7 @@ export default function ConnectorsTab({
             <p className="text-sm text-gray-500 mt-1 max-w-2xl">
               Where your text messages come from and go to. Connect your own Twilio account to keep
               your numbers, your bill and your sender registration — or leave this alone and texts
-              run on Awer&apos;s account.
+              run on Bookmops&apos;s account.
             </p>
           </div>
         </div>
@@ -253,7 +253,7 @@ export default function ConnectorsTab({
                   : twilio.connected
                     ? twilio.accountSid
                     : twilio.usingPlatform
-                      ? "Awer's shared account"
+                      ? "Bookmops' shared account"
                       : "None available"}
               </dd>
             </div>
@@ -292,7 +292,7 @@ export default function ConnectorsTab({
           )}
           {!twilio.smsNumber && !twilio.connected && (
             <p className="text-sm text-gray-500 mt-3">
-              On Awer&apos;s shared account a number is assigned by support. Connect your own Twilio
+              On Bookmops&apos;s shared account a number is assigned by support. Connect your own Twilio
               account below and you can choose one yourself.
             </p>
           )}
@@ -339,7 +339,7 @@ export default function ConnectorsTab({
                             {!n.sms
                               ? "Voice only — this number cannot receive texts"
                               : n.taken
-                                ? "Already the texting number of another Awer workspace"
+                                ? "Already the texting number of another Bookmops workspace"
                                 : n.messagingServiceSid
                                   ? `Sends through "${n.messagingServiceName ?? n.messagingServiceSid}"`
                                   : n.label}
@@ -522,7 +522,7 @@ export default function ConnectorsTab({
             </button>
           </div>
           <p className="text-xs leading-relaxed text-gray-500 mt-2.5 max-w-3xl">
-            Twilio only lets one address receive a text, so moving to Awer would normally switch
+            Twilio only lets one address receive a text, so moving to Bookmops would normally switch
             your old system off on the same day. Put its address here and every incoming text is
             stored here <em>and</em> passed on there, signed with your own Twilio credentials so it
             arrives looking exactly as it does today. Clear the field when you no longer need it.

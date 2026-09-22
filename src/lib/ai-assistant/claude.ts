@@ -2,7 +2,7 @@
 //
 // Raw fetch on purpose, matching how this codebase talks to Twilio: one
 // endpoint, one shape, no SDK dependency to version-chase. Everything here is
-// platform-level — ONE Anthropic key for the whole platform (set by Awer, not
+// platform-level — ONE Anthropic key for the whole platform (set by Bookmops, not
 // per tenant), the same way Twilio credentials work. Per-tenant spend control
 // lives in the daily message cap, not in per-tenant keys.
 //

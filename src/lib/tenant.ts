@@ -3,29 +3,29 @@
  *
  *   teamcleano.useawer.com  -> "teamcleano"
  *   acme.useawer.com        -> "acme"
- *   www.useawer.com         -> Awer itself
- *   useawer.com             -> Awer itself
+ *   www.useawer.com         -> Bookmops itself
+ *   useawer.com             -> Bookmops itself
  *
  * Pure functions only — no database, no request objects — so proxy.ts can use
  * this on every request without a query, and so the edge cases are testable.
  *
  * Every cleaning company, TeamCleano included, is addressed by its own label.
- * A host with no label is not a company at all: it is Awer's front door, where
- * a cleaning company finds the product and signs up. It resolves to Awer's own
+ * A host with no label is not a company at all: it is Bookmops' front door, where
+ * a cleaning company finds the product and signs up. It resolves to Bookmops' own
  * workspace, and proxy.ts keeps the tenant application off it.
  */
 
 /** Header that proxy.ts stamps on the request for server code to read. */
 export const ORG_SLUG_HEADER = "x-awer-org";
 
-/** The workspace Awer's own staff belong to. Not a cleaning company. */
+/** The workspace Bookmops' own staff belong to. Not a cleaning company. */
 export const PLATFORM_ORG_SLUG = "platform";
 
 /**
  * Org serving requests whose host carries no tenant label: `useawer.com`, its
  * `www`, a preview build URL, a bare IP.
  *
- * This is Awer's own workspace. It used to be TeamCleano — they predated
+ * This is Bookmops' own workspace. It used to be TeamCleano — they predated
  * multi-tenancy, so the bare domain WAS their app — and that is exactly what
  * had to stop: a cleaning company shopping for software would land on the
  * product's home page and be shown another company's booking form.
@@ -56,7 +56,7 @@ export const LEGACY_ORG_SLUG =
  * lists answer different questions: this one decides how a HOST resolves, the
  * other decides what a company may CLAIM at signup. Conflating them meant
  * `platform.useawer.com` silently resolved to the default workspace, which
- * would have left Awer's own staff with nowhere to sign in.
+ * would have left Bookmops' own staff with nowhere to sign in.
  */
 const INFRA_LABELS = new Set([
   "www", "api", "static", "assets", "cdn", "img", "mail", "smtp", "ftp",
@@ -94,30 +94,30 @@ export function isValidOrgSlug(slug: string): boolean {
 }
 
 /**
- * Paths that belong to Awer itself rather than to a cleaning company.
+ * Paths that belong to Bookmops itself rather than to a cleaning company.
  *
  * Deliberately an ALLOWLIST. The alternative — listing the tenant areas and
  * letting everything else through — means every route added from here on is
- * served on the front door by accident, quietly backed by Awer's own workspace.
+ * served on the front door by accident, quietly backed by Bookmops' own workspace.
  * Someone would eventually find `useawer.com/admin` showing an empty cleaning
  * company with a real "add a cleaner" button on it. Listing the few paths that
  * are genuinely ours fails the other way: a new route is kept off the front
  * door until someone decides otherwise.
  *
- * `/sign-in` is on the list because it is also the console door — Awer staff
+ * `/sign-in` is on the list because it is also the console door — Bookmops staff
  * sign in there. It gives nothing away: whether an account is platform staff is
  * decided after the password, by the console layout.
  */
 const PLATFORM_PATHS = [
-  "/welcome", // Awer's own marketing page, served as `/` on the front door
+  "/welcome", // Bookmops' own marketing page, served as `/` on the front door
   "/get-started", // a cleaning company creating its workspace
-  "/console", // Awer's own super-admin console
+  "/console", // Bookmops' own super-admin console
   "/sign-in", // staff door, shared with the console
   "/workspace-unavailable", // the suspended / unknown workspace notice
   "/design", // internal design reference
 ];
 
-/** Is this path Awer's own, as opposed to part of a company's application? */
+/** Is this path Bookmops' own, as opposed to part of a company's application? */
 export function isPlatformPath(pathname: string): boolean {
   return PLATFORM_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
@@ -154,7 +154,7 @@ function isInternalHostname(hostname: string): boolean {
  * says `acme.useawer.com` while `host` now says `localhost:3006`.
  *
  * Reading `host` alone there resolved the request to the platform, and the
- * proxy then answered "job created" with the body of Awer's own signup page:
+ * proxy then answered "job created" with the body of Bookmops' own signup page:
  * the address bar said /admin/jobs while the page said "Start your workspace",
  * and only a manual reload put it right. Every server-action redirect on every
  * tenant was affected, not just the one that was reported.

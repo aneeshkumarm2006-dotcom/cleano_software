@@ -1,7 +1,7 @@
 "use server";
 
 /**
- * The workspace's own Awer subscription. Owner/admin only, because it moves
+ * The workspace's own Bookmops subscription. Owner/admin only, because it moves
  * this company's money to us.
  *
  * Both actions return a URL rather than redirecting: Stripe is a different

@@ -28,7 +28,7 @@ interface SplitShellProps {
   badge?: string;
   /**
    * Wordmark in the top-left of the brand panel. Defaults to the cleaning
-   * company's own logo, which is right on a workspace host and wrong on Awer's.
+   * company's own logo, which is right on a workspace host and wrong on Bookmops'.
    */
   logo?: React.ReactNode;
   /**
@@ -36,7 +36,7 @@ interface SplitShellProps {
    *
    * This used to be the hardcoded string "Loved by 2,400+ Montréal homes",
    * which is one specific cleaning company's marketing. It was rendering on
-   * every page that uses this shell — including Awer's OWN signup page, so a
+   * every page that uses this shell — including Bookmops' OWN signup page, so a
    * cleaning company evaluating the product was shown a competitor's customer
    * count. Pass `null` to omit the line and its stars entirely.
    */

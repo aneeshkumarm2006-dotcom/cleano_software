@@ -3385,9 +3385,9 @@ export async function sendTrialEnding(opts: {
         : `in ${opts.daysLeft} days`;
 
   const html = layout(
-    h1(`Your Awer trial ends ${when}`) +
+    h1(`Your Bookmops trial ends ${when}`) +
       p(
-        `You have been trying Awer on the ${opts.planLabel} plan. To keep everything running without interruption, add a card and choose how you would like to be billed.`
+        `You have been trying Bookmops on the ${opts.planLabel} plan. To keep everything running without interruption, add a card and choose how you would like to be billed.`
       ) +
       section([
         ["Plan", opts.planLabel],
@@ -3400,7 +3400,7 @@ export async function sendTrialEnding(opts: {
   for (const admin of admins) {
     await deliver({
       to: admin.email,
-      subject: `Your Awer trial ends ${when}`,
+      subject: `Your Bookmops trial ends ${when}`,
       html,
       notification: { recipient: "ADMIN", key: "admin.trial.ending" },
     }).catch((e) => console.error("sendTrialEnding", admin.email, e));
@@ -3626,7 +3626,7 @@ export async function sendBillingPaymentFailed(opts: {
 }) {
   await recordAdminNotification({
     key: "admin.billing.payment_failed",
-    title: "Your Awer payment did not go through",
+    title: "Your Bookmops payment did not go through",
     body: `${opts.planLabel} plan · update the card in Settings, Plan & Billing`,
     href: "/admin/settings?tab=plan",
     severity: "ERROR",
@@ -3637,7 +3637,7 @@ export async function sendBillingPaymentFailed(opts: {
   const appUrl = await currentAppUrl();
 
   const html = layout(
-    h1("Your Awer payment did not go through") +
+    h1("Your Bookmops payment did not go through") +
       p(
         `We could not take the payment for your ${opts.planLabel} plan. This is usually an expired or replaced card, and it takes a minute to fix.`
       ) +
@@ -3648,7 +3648,7 @@ export async function sendBillingPaymentFailed(opts: {
   for (const admin of admins) {
     await deliver({
       to: admin.email,
-      subject: "Your Awer payment did not go through",
+      subject: "Your Bookmops payment did not go through",
       html,
       notification: { recipient: "ADMIN", key: "admin.billing.payment_failed" },
     }).catch((e) => console.error("sendBillingPaymentFailed", admin.email, e));

@@ -5,12 +5,12 @@ import { PLANS } from "@/lib/plans";
 
 import { Pill, TopBar, WarnIcon, fmtDate, fmtMoney } from "../ui";
 
-export const metadata = { title: "Billing · Awer Console" };
+export const metadata = { title: "Billing · Bookmops Console" };
 
 /**
  * The money side of every account.
  *
- * Everything here comes from the subscription records Awer holds. Invoice
+ * Everything here comes from the subscription records Bookmops holds. Invoice
  * history and card details live in Stripe and are deliberately not copied: two
  * systems holding the same numbers is how a console starts lying.
  */

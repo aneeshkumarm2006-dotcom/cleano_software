@@ -162,7 +162,7 @@ export default function ConsoleRail({
       <div className="brandmark">
         <div className="dot">A</div>
         <div>
-          <b>Awer</b>
+          <b>Bookmops</b>
           <span>Console</span>
         </div>
       </div>

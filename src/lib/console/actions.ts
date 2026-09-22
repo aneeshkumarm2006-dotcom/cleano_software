@@ -1,7 +1,7 @@
 "use server";
 
 /**
- * Everything the Awer console can change about a customer's account.
+ * Everything the Bookmops console can change about a customer's account.
  *
  * Rules that hold for every action in this file, without exception:
  *
@@ -9,7 +9,7 @@
  *      No action trusts that the page already checked.
  *   2. It writes a PlatformAuditLog row naming who did it and what changed.
  *      The record is written after the change succeeds, in the same request.
- *   3. It refuses to touch Awer's own platform workspace. Suspending ourselves
+ *   3. It refuses to touch Bookmops' own platform workspace. Suspending ourselves
  *      would lock the console out of the console.
  *   4. It returns a plain result object instead of throwing, so the UI can say
  *      what went wrong rather than showing an error page.
@@ -55,7 +55,7 @@ async function loadTarget(orgId: string) {
   });
   if (!org) return { error: "That workspace no longer exists." as const, org: null };
   if (org.slug === PLATFORM_ORG_SLUG) {
-    return { error: "Awer's own workspace cannot be changed from here." as const, org: null };
+    return { error: "Bookmops' own workspace cannot be changed from here." as const, org: null };
   }
   return { error: null, org };
 }
@@ -444,7 +444,7 @@ const MAX_FIELD = 120;
  *
  * The other two ways in both start with the company: they sign themselves up at
  * /get-started, or they ask for the Organization tier and someone approves it.
- * This is the third — Awer staff creating a workspace for a company that never
+ * This is the third — Bookmops staff creating a workspace for a company that never
  * filled anything in, which is what onboarding a customer won over the phone
  * actually looks like.
  *
@@ -816,7 +816,7 @@ export async function declineAccessRequest(
 }
 
 // ---------------------------------------------------------------------------
-// Awer's own staff
+// Bookmops' own staff
 // ---------------------------------------------------------------------------
 
 /**
@@ -860,17 +860,17 @@ export async function setStaffRole(
   ]);
   if (!user) return { ok: false, message: "That account no longer exists." };
 
-  // Platform access only ever belongs to an account in Awer's own workspace.
+  // Platform access only ever belongs to an account in Bookmops' own workspace.
   //
   // Without this, a mistyped or guessed id could hand the keys to every customer
-  // on Awer to a cleaner's or a customer's login -- an account nobody at Awer
+  // on Bookmops to a cleaner's or a customer's login -- an account nobody at Bookmops
   // controls. Staff get an account in the platform workspace first, and a role
   // second.
   if (!platformOrg || user.organizationId !== platformOrg.id) {
     return {
       ok: false,
       message:
-        "That account is not in Awer's own workspace, so it cannot be given platform access.",
+        "That account is not in Bookmops' own workspace, so it cannot be given platform access.",
     };
   }
 

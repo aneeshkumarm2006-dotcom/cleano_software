@@ -1,7 +1,7 @@
 /**
  * What a brand-new workspace still has to fill in before it can trade.
  *
- * Awer hands a new company an EMPTY workspace — no services priced for their
+ * Bookmops hands a new company an EMPTY workspace — no services priced for their
  * city, no postal codes they cover, no cleaners, no card processing. Every one
  * of those has a working default or an empty table behind it, so the app never
  * crashes; it just quietly behaves like somebody else's business. A company in
@@ -127,7 +127,7 @@ export async function readSetupChecklist(opts: {
     {
       id: "services",
       label: "The services you offer",
-      why: "Until you edit it, your booking page offers Awer's seven default services — including ones you may not sell.",
+      why: "Until you edit it, your booking page offers Bookmops' seven default services — including ones you may not sell.",
       state: has(SERVICE_CATALOG_KEY) ? "reviewed" : "using the defaults",
       done: has(SERVICE_CATALOG_KEY),
       blocking: false,
@@ -136,7 +136,7 @@ export async function readSetupChecklist(opts: {
     {
       id: "pricing",
       label: "Your prices",
-      why: "Quotes fall back to Awer's default rates, which were set for another city. Every online booking is priced from this.",
+      why: "Quotes fall back to Bookmops' default rates, which were set for another city. Every online booking is priced from this.",
       state: has(SERVICE_PRICING_KEY) ? "reviewed" : "using the defaults",
       done: has(SERVICE_PRICING_KEY),
       blocking: false,
@@ -172,7 +172,7 @@ export async function readSetupChecklist(opts: {
       href: "/admin/settings?tab=payments",
       // Connected-but-no-webhook is the failure nobody notices: the charge goes
       // through and Stripe's confirmation never comes back, so the job sits
-      // unpaid in Awer while the customer's card has already been debited.
+      // unpaid in Bookmops while the customer's card has already been debited.
       note:
         stripe.connected && !stripe.webhookConfigured
           ? "Connected, but no webhook secret yet — cards will charge and the job will never mark itself paid."

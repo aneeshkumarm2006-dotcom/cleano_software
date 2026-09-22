@@ -6,10 +6,10 @@ import { TopBar, ago, fmtMoney, renewalCell, workspaceState } from "../ui";
 import NewWorkspace from "./NewWorkspace";
 import WorkspaceTable, { type Row } from "./WorkspaceTable";
 
-export const metadata = { title: "Workspaces · Awer Console" };
+export const metadata = { title: "Workspaces · Bookmops Console" };
 
 /**
- * Every cleaning company on Awer.
+ * Every cleaning company on Bookmops.
  *
  * The presentational decisions — which pill, which wording, which tone — are
  * made here on the server and handed down as strings, so the client table has
@@ -74,7 +74,7 @@ export default async function WorkspacesPage() {
           <div className="grow">
             <h1>Workspaces</h1>
             <p className="sub">
-              Every cleaning company on Awer, what they use, and what each one is worth.
+              Every cleaning company on Bookmops, what they use, and what each one is worth.
             </p>
           </div>
           <NewWorkspace canEdit={canEdit} />

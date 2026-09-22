@@ -3,7 +3,7 @@ import { RESERVED_SLUGS, DEFAULT_ORG_SLUG, PLATFORM_ORG_SLUG } from "@/lib/tenan
 
 import { TopBar, WarnIcon } from "../ui";
 
-export const metadata = { title: "System health · Awer Console" };
+export const metadata = { title: "System health · Bookmops Console" };
 
 /**
  * The guarantees that hold the whole product up, read back from the database
@@ -109,7 +109,7 @@ export default async function HealthPage() {
                 <dl className="kv">
                   <dt>Workspace addresses</dt>
                   <dd className="mono">{stats.total} subdomains of useawer.com</dd>
-                  <dt>Awer&apos;s own</dt>
+                  <dt>Bookmops&apos;s own</dt>
                   <dd className="mono">{PLATFORM_ORG_SLUG}.useawer.com</dd>
                   <dt>Serves the bare domain</dt>
                   <dd className="mono">{DEFAULT_ORG_SLUG}</dd>
@@ -166,7 +166,7 @@ export default async function HealthPage() {
               <div className="body">
                 <p className="sub">
                   Uptime, response times, error rates, scheduled-job runs and the health of Stripe,
-                  Twilio, Resend and Cloudinary are not shown, because Awer does not record them
+                  Twilio, Resend and Cloudinary are not shown, because Bookmops does not record them
                   yet. They will appear once there is a real number behind each one — an invented
                   green tick is worse than a blank space.
                 </p>

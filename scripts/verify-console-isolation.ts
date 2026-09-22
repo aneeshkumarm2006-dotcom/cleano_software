@@ -1,5 +1,5 @@
 /**
- * Can a customer's admin see Awer's console, or anything in it?
+ * Can a customer's admin see Bookmops' console, or anything in it?
  *
  *   npm run dev            # in another terminal
  *   DATABASE_URL="$ELEVATED_URL" npx tsx scripts/verify-console-isolation.ts

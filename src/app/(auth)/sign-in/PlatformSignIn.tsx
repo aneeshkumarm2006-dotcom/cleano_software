@@ -10,11 +10,11 @@ import { Field, Input, PasswordInput, Button, Banner } from "@/components/custom
 import { discoverWorkspaces, type DiscoveredWorkspace } from "./discover";
 
 /**
- * Signing in at Awer's front door, where we do not yet know who you work for.
+ * Signing in at Bookmops' front door, where we do not yet know who you work for.
  *
  * Every other login in the product is on a company's own address, so the
  * workspace is already known from the host. Here it is not, and the person
- * arriving may be Awer staff or an admin who bookmarked the wrong thing.
+ * arriving may be Bookmops staff or an admin who bookmarked the wrong thing.
  *
  * The flow is: take email AND password, prove them centrally, and only then say
  * which workspace they belong to. Asking for the password first is what keeps
@@ -100,7 +100,7 @@ export default function PlatformSignIn() {
       image={BRAND_IMAGES.home}
       quoteHtml={"Software for<br/><em>cleaning<br/>companies.</em>"}
       quoteSub="Sign in and we will take you to your workspace."
-      badge="Awer">
+      badge="Bookmops">
       <header style={{ marginBottom: 36 }}>
         <p className="cl-eyebrow" style={{ marginBottom: 12 }}>
           Welcome back

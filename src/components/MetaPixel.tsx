@@ -9,7 +9,7 @@ import { usePathname } from "next/navigation";
  * Mounted from the root layout but gated to an explicit allowlist of public
  * funnel paths. That is the whole point of the allowlist: a cleaning company's
  * staff working inside the admin app, and their customers on a tenant booking
- * page, are not Awer's ad audience. Tracking them would leak one company's
+ * page, are not Bookmops' ad audience. Tracking them would leak one company's
  * activity into our advertising profile and bury the signups we actually pay
  * for under traffic that was never a conversion.
  *

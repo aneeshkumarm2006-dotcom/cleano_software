@@ -263,7 +263,7 @@ export default function SignupForm({
         </Field>
 
         <Field
-          label="Your address on Awer"
+          label="Your address on Bookmops"
           htmlFor="su-slug"
           error={
             error?.field === "slug"

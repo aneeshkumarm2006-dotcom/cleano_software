@@ -98,7 +98,7 @@ export async function connectTwilio(input: {
   };
 }
 
-/** Go back to Awer's Twilio account. */
+/** Go back to Bookmops' Twilio account. */
 export async function disconnectTwilio(): Promise<Result> {
   const guard = await requireOwnerAdmin();
   if (!guard.ok) return { ok: false, message: guard.error };
@@ -121,7 +121,7 @@ export async function disconnectTwilio(): Promise<Result> {
     message: "Disconnected the workspace's own Twilio account.",
   });
   revalidatePath("/admin/settings");
-  return { ok: true, message: "Disconnected. Texting falls back to Awer's account." };
+  return { ok: true, message: "Disconnected. Texting falls back to Bookmops' account." };
 }
 
 export interface TwilioTest {
@@ -169,7 +169,7 @@ export async function testTwilio(): Promise<TwilioTest> {
   checks.push({
     label: "Twilio account",
     pass: true,
-    detail: source === "workspace" ? `Using your own account (${accountSid}).` : "Using Awer's shared account.",
+    detail: source === "workspace" ? `Using your own account (${accountSid}).` : "Using Bookmops' shared account.",
   });
 
   if (!org?.smsNumber) {
@@ -372,7 +372,7 @@ export type TwilioNumberList =
 /**
  * The numbers in the workspace's OWN Twilio account, so it can pick one itself.
  *
- * Offered ONLY to a workspace running its own account. On Awer's shared account
+ * Offered ONLY to a workspace running its own account. On Bookmops' shared account
  * the numbers belong to the platform and to other tenants, and the number is
  * the routing key for every incoming text — listing them here would show one
  * company another company's numbers and let it capture their customer replies.
@@ -396,7 +396,7 @@ export async function listTwilioNumbers(): Promise<TwilioNumberList> {
   if (resolved.creds.source !== "workspace") {
     return {
       ok: false,
-      message: "Your workspace runs on Awer's shared account, so Awer assigns the number.",
+      message: "Your workspace runs on Bookmops' shared account, so Bookmops assigns the number.",
     };
   }
   const { accountSid, authToken } = resolved.creds;
@@ -464,7 +464,7 @@ export async function listTwilioNumbers(): Promise<TwilioNumberList> {
  * how an inbound text finds a workspace, so accepting a typed number would let
  * any admin redirect another company's customer replies into their own inbox.
  * Asking Twilio "is this number in the account you connected?" is the whole
- * reason a tenant can now do this without Awer staff.
+ * reason a tenant can now do this without Bookmops staff.
  */
 export async function claimTwilioNumber(input: { phoneNumber: string }): Promise<Result> {
   const guard = await requireOwnerAdmin();
@@ -523,7 +523,7 @@ export async function claimTwilioNumber(input: { phoneNumber: string }): Promise
     if (typeof e === "object" && e !== null && (e as { code?: string }).code === "P2002") {
       return {
         ok: false,
-        message: `${number} is already the texting number of another Awer workspace. Pick a different one, or contact support if that looks wrong.`,
+        message: `${number} is already the texting number of another Bookmops workspace. Pick a different one, or contact support if that looks wrong.`,
       };
     }
     return { ok: false, message: "Couldn't save the number. Nothing changed." };
@@ -565,6 +565,6 @@ export async function setSmsForwardUrl(input: { url: string }): Promise<Result> 
     ok: true,
     message: input.url.trim()
       ? "Saved. Every incoming text will be stored here and passed on there too."
-      : "Turned off. Incoming texts now stop with Awer.",
+      : "Turned off. Incoming texts now stop with Bookmops.",
   };
 }

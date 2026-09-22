@@ -26,7 +26,7 @@ const CHECKLIST_STOP: TourStop = {
 
 const STOPS: TourStop[] = [
   {
-    title: "Welcome to Awer",
+    title: "Welcome to Bookmops",
     body:
       "This is your whole operation in one place — bookings, the schedule, your cleaners, and the money. Two minutes here and you will know where everything lives. You can leave at any point with Escape, and pick it up again from the button on your dashboard.",
   },

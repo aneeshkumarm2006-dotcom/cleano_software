@@ -72,7 +72,7 @@ export default function RequestForm() {
           </h1>
           <p className="cl-subtitle">
             Someone will read this properly rather than send you a template. Expect a real reply
-            from a person at {companyName ? "Awer about " + companyName : "Awer"}.
+            from a person at {companyName ? "Bookmops about " + companyName : "Bookmops"}.
           </p>
         </header>
         <Banner kind="success">
@@ -227,7 +227,7 @@ export default function RequestForm() {
         {error?.field === "form" && <Banner kind="error">{error.message}</Banner>}
 
         <Button type="submit" variant="primary" block size="lg" loading={busy} disabled={busy}>
-          {busy ? "Sending…" : "Send this to Awer"}
+          {busy ? "Sending…" : "Send this to Bookmops"}
         </Button>
 
         <p className="cl-subtitle" style={{ fontSize: 12 }}>

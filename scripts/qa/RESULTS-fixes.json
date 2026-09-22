@@ -157,7 +157,7 @@
      "item": "2. Checkout/upgrade flow reaches a real Stripe Checkout page",
      "status": "PASS",
      "whatIDid": "Clicked \"Choose this plan\" on the Starter card (Monthly) and waited for the cross-origin redirect.",
-     "whatISaw": "Landed on https://checkout.stripe.com/c/pay/cs_test_b1FzCPeOTSGj6cHgqjNP3ANKlu… showing: \"Sandbox | Try Awer Starter | 28 days free | Then $49.00 per month starting October 10, 2026 | Awer Starter $49.00 / month after | Total after trial $49.00 | Total due today $0.00\", email prefilled zztest-owner@cleano.test, submit button \"Start trial\". The trial is correctly carried over via trial_end.",
+     "whatISaw": "Landed on https://checkout.stripe.com/c/pay/cs_test_b1FzCPeOTSGj6cHgqjNP3ANKlu… showing: \"Sandbox | Try Bookmops Starter | 28 days free | Then $49.00 per month starting October 10, 2026 | Bookmops Starter $49.00 / month after | Total after trial $49.00 | Total due today $0.00\", email prefilled zztest-owner@cleano.test, submit button \"Start trial\". The trial is correctly carried over via trial_end.",
      "severity": "none",
      "expected": "A real hosted Stripe Checkout session",
      "actual": "Real cs_test_ session, correct price and preserved trial",
@@ -189,7 +189,7 @@
      "item": "5. Plan switching (Starter <-> Professional) and annual vs monthly",
      "status": "FAIL",
      "whatIDid": "Read both interval tabs' prices, then clicked \"Choose this plan\" on Professional with Yearly selected, with a dialog listener attached; read the resulting Stripe page without paying.",
-     "whatISaw": "Prices shown are correct: Monthly — Starter \"$49/month\", Professional \"$149/month\"; Yearly — Starter \"$490/year · $40.83/month, billed yearly · 2 months free\", Professional \"$1490/year · $124.17/month, billed yearly · 2 months free\". But it did NOT switch: no confirm dialog fired (dialogs array empty) and the button still read \"Choose this plan\", not \"Switch to this plan\". It opened a NEW checkout: \"Try Awer Professional | 28 days free | Then $1,490.00 per year starting October 10, 2026 | Total due today $0.00\". Proration is mentioned nowhere on screen (no /prorat/i match on the Stripe page); the only sentence that mentions it lives in the window.confirm that never fires. changePlan()'s create_prorations path is unreachable dead code in this state.",
+     "whatISaw": "Prices shown are correct: Monthly — Starter \"$49/month\", Professional \"$149/month\"; Yearly — Starter \"$490/year · $40.83/month, billed yearly · 2 months free\", Professional \"$1490/year · $124.17/month, billed yearly · 2 months free\". But it did NOT switch: no confirm dialog fired (dialogs array empty) and the button still read \"Choose this plan\", not \"Switch to this plan\". It opened a NEW checkout: \"Try Bookmops Professional | 28 days free | Then $1,490.00 per year starting October 10, 2026 | Total due today $0.00\". Proration is mentioned nowhere on screen (no /prorat/i match on the Stripe page); the only sentence that mentions it lives in the window.confirm that never fires. changePlan()'s create_prorations path is unreachable dead code in this state.",
      "severity": "critical",
      "expected": "Existing subscription updated in place with proration",
      "actual": "A second, additional subscription is sold instead",
@@ -200,7 +200,7 @@
      "item": "6. HIGHEST VALUE — UI claims vs what the backend actually did",
      "status": "FAIL",
      "whatIDid": "Opened the real Stripe billing portal for this one workspace and read the CURRENT SUBSCRIPTIONS list, then compared it to what the app's plan tab says.",
-     "whatISaw": "Portal lists THREE live subscriptions for the single zztestqa workspace: \"Awer Starter $49.00 per month\", \"Awer Starter $490.00 per year\", \"Awer Starter $49.00 per month\" — each \"Free trial ends Oct 9\", each with \"Visa •••• 4242\", plus three duplicate saved payment methods. The app's plan tab simultaneously says \"29 days left on your free trial.\" and \"No card on file\". The UI's claim is the inverse of a false success: it denies a payment that really happened, and that denial is what makes the user click again and buy another subscription. On 2026-10-09 this customer gets charged $588/yr twice over. (Two of the three pre-date my session; I created the third with one honest click.)",
+     "whatISaw": "Portal lists THREE live subscriptions for the single zztestqa workspace: \"Bookmops Starter $49.00 per month\", \"Bookmops Starter $490.00 per year\", \"Bookmops Starter $49.00 per month\" — each \"Free trial ends Oct 9\", each with \"Visa •••• 4242\", plus three duplicate saved payment methods. The app's plan tab simultaneously says \"29 days left on your free trial.\" and \"No card on file\". The UI's claim is the inverse of a false success: it denies a payment that really happened, and that denial is what makes the user click again and buy another subscription. On 2026-10-09 this customer gets charged $588/yr twice over. (Two of the three pre-date my session; I created the third with one honest click.)",
      "severity": "critical",
      "expected": "One subscription per workspace; UI reflects Stripe",
      "actual": "3 concurrent subscriptions, ~$1,078/yr of duplicate billing, UI shows \"free trial, no card\""
@@ -225,7 +225,7 @@
      "item": "8. Missing SECRETS_KEY — does it affect this dimension?",
      "status": "PASS",
      "whatIDid": "Checked which Stripe account each path uses and confirmed the platform key is read straight from env.",
-     "whatISaw": "No. Awer's own subscription billing (src/lib/billing.ts, getStripe()) uses STRIPE_SECRET_KEY from .env.local and never touches encrypted per-org credentials — which is exactly why checkout worked. The missing SECRETS_KEY only disables the per-org Stripe connection on the Payments tab, which is the source of the setup-intent 409s above and is a different dimension.",
+     "whatISaw": "No. Bookmops' own subscription billing (src/lib/billing.ts, getStripe()) uses STRIPE_SECRET_KEY from .env.local and never touches encrypted per-org credentials — which is exactly why checkout worked. The missing SECRETS_KEY only disables the per-org Stripe connection on the Payments tab, which is the source of the setup-intent 409s above and is a different dimension.",
      "severity": "none"
     },
     {

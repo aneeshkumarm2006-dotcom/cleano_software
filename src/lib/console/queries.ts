@@ -1,5 +1,5 @@
 /**
- * Everything the Awer console reads.
+ * Everything the Bookmops console reads.
  *
  * This is the only module besides platform-db.ts that is allowed to see across
  * organizations, and it is read-only. It exists so the console's pages never
@@ -72,14 +72,14 @@ export type WorkspaceRow = {
 };
 
 /**
- * The workspaces Awer operates. Excludes Awer's own platform workspace.
+ * The workspaces Bookmops operates. Excludes Bookmops' own platform workspace.
  *
  * Cached per request: the rail wants counts, the page wants the table, and the
  * attention queue is derived from the same rows. One set of queries serves all
  * three rather than three sets that could disagree with each other.
  */
 /**
- * Nobody reads across companies without being Awer staff.
+ * Nobody reads across companies without being Bookmops staff.
  *
  * The console layout already redirects a non-staff visitor, and that is NOT
  * enough. Next renders a layout and its children in PARALLEL: the redirect
@@ -557,7 +557,7 @@ export async function isolationChecks(): Promise<IsolationCheck[]> {
     {
       label: "Organizations on record",
       ok: orgCount > 0,
-      detail: `${orgCount} including Awer's own`,
+      detail: `${orgCount} including Bookmops' own`,
     },
   ];
 }

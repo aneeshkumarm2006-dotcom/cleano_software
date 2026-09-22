@@ -7,7 +7,7 @@ import { PLANS } from "@/lib/plans";
 import RequestForm from "./RequestForm";
 
 export const metadata: Metadata = {
-  title: "Organization plan · Awer",
+  title: "Organization plan · Bookmops",
   description:
     "For cleaning companies above twenty cleaners. Tell us how you work and we will price it.",
 };
@@ -26,7 +26,7 @@ export default function OrganizationRequestPage() {
 
   return (
     <SplitShell
-      // Awer's own front door: its own mark, a neutral photo, and no
+      // Bookmops' own front door: its own mark, a neutral photo, and no
       // cleaning company's customer count. /admin-login.png is TeamCleano's
       // branded shot -- polo shirt and framed logo -- and belongs on their
       // workspace, not on the page where their competitors sign up.

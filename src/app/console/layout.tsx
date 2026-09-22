@@ -9,7 +9,7 @@ import ConsoleRail from "./ConsoleRail";
 import "./console.css";
 
 /**
- * Awer's own console: every customer's workspace, in one place.
+ * Bookmops' own console: every customer's workspace, in one place.
  *
  * Reachable at platform.useawer.com, which is a reserved slug precisely so no
  * customer can ever claim it. The gate here is the outer one; every action

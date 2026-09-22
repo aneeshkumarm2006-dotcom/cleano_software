@@ -30,7 +30,7 @@ import { InventorySurface, PayrollSurface, ReportsSurface } from "./Surfaces";
 import "./marketing.css";
 
 /**
- * Awer's front door — what `useawer.com` serves.
+ * Bookmops' front door — what `useawer.com` serves.
  *
  * Lives at /welcome and is rewritten onto `/` for the platform host, so the
  * address bar keeps saying `useawer.com` while the customer portal keeps its
@@ -71,7 +71,7 @@ const archivo = Archivo({
 });
 
 export const metadata: Metadata = {
-  title: "Awer · Software for cleaning companies",
+  title: "Bookmops · Software for cleaning companies",
   description:
     "Scheduling, crew, customers, invoicing and payroll for cleaning companies — on your own address. Thirty days free, no card.",
 };
@@ -88,7 +88,7 @@ const BOARD = [
 ];
 
 /**
- * What Awer replaces.
+ * What Bookmops replaces.
  *
  * This is the page's one honest piece of social proof. It names no customer and
  * invents no number — it names the six things every cleaning company is already
@@ -170,7 +170,7 @@ const MODULES = [
 
 /**
  * One job, from booked to paid. Numbered because it is a real sequence — this
- * is the order the work happens in, and each stage names the part of Awer that
+ * is the order the work happens in, and each stage names the part of Bookmops that
  * does it. A numbered list that is not a sequence is decoration in a uniform.
  */
 const STAGES = [
@@ -253,7 +253,7 @@ const FAQ = [
   },
   {
     q: "What does the address get me?",
-    a: "Your own workspace at yourcompany.useawer.com — your prices, your services, your booking rules and your crew. Another company on Awer cannot see any of it, and you cannot see theirs.",
+    a: "Your own workspace at yourcompany.useawer.com — your prices, your services, your booking rules and your crew. Another company on Bookmops cannot see any of it, and you cannot see theirs.",
   },
   {
     q: "Can I change the address later?",
@@ -305,16 +305,16 @@ export default function WelcomePage() {
         <span className="mk-ann-tag">New</span>
         {/* On a phone the long clause wrapped to three lines and left the dash
             stranded on one of its own. The offer is the part that matters. */}
-        <span className="mk-ann-long">Awer is open to cleaning companies everywhere &mdash;</span>
+        <span className="mk-ann-long">Bookmops is open to cleaning companies everywhere &mdash;</span>
         <b>{TRIAL_DAYS} days free, no card</b>
         <ArrowRight size={14} strokeWidth={2.6} aria-hidden="true" />
       </Link>
 
       <header className="mk-nav">
         <div className="mk-wrap mk-nav-in">
-          <Link href="/" className="mk-logo" aria-label="Awer home">
+          <Link href="/" className="mk-logo" aria-label="Bookmops home">
             <Mark />
-            Awer
+            Bookmops
           </Link>
           <nav className="mk-nav-links" aria-label="Sections">
             <a href="#showcase">Product</a>
@@ -356,7 +356,7 @@ export default function WelcomePage() {
                 <em className="mk-em"> One board.</em>
               </h1>
               <p className="mk-lead">
-                Awer runs the scheduling, the crew, the customers, the invoicing and the
+                Bookmops runs the scheduling, the crew, the customers, the invoicing and the
                 payroll for a cleaning company — at an address that belongs to you.
               </p>
               <div className="mk-hero-cta">
@@ -569,7 +569,7 @@ export default function WelcomePage() {
               <h2 className="mk-h2">One job, from booked to paid.</h2>
               <p className="mk-lead">
                 Most cleaning companies run on a calendar, a spreadsheet, a chat group and
-                an invoicing app that cannot see each other. Awer is one system, so the job
+                an invoicing app that cannot see each other. Bookmops is one system, so the job
                 a customer booked is the job a cleaner works and the job you bill.
               </p>
             </div>
@@ -611,7 +611,7 @@ export default function WelcomePage() {
               </p>
               <h2 className="mk-h2">Built inside a working cleaning company.</h2>
               <p className="mk-lead">
-                Awer was not designed on a whiteboard. Every screen in it exists because a
+                Bookmops was not designed on a whiteboard. Every screen in it exists because a
                 real crew needed it on a real Tuesday — a cleaner standing in a hallway
                 with no signal, an office trying to work out who was where, an owner
                 reconciling a pay period at eleven at night.
@@ -782,9 +782,9 @@ export default function WelcomePage() {
       <footer className="mk-foot">
         <div className="mk-wrap mk-foot-grid">
           <div className="mk-foot-brand">
-            <Link href="/" className="mk-logo" aria-label="Awer home">
+            <Link href="/" className="mk-logo" aria-label="Bookmops home">
               <Mark size={26} />
-              Awer
+              Bookmops
             </Link>
             <p>Scheduling, crew, customers, invoicing and payroll for cleaning companies.</p>
           </div>
@@ -809,7 +809,7 @@ export default function WelcomePage() {
           </nav>
         </div>
         <div className="mk-wrap mk-foot-base">
-          <span>&copy; {new Date().getFullYear()} Awer</span>
+          <span>&copy; {new Date().getFullYear()} Bookmops</span>
           <span>Made for people who clean for a living.</span>
         </div>
       </footer>

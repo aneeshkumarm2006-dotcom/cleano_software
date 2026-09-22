@@ -5,10 +5,10 @@ import { PLATFORM_ORG_SLUG } from "@/lib/tenant";
 import { TopBar, WarnIcon, ago } from "../ui";
 import StaffRow from "./StaffRow";
 
-export const metadata = { title: "Staff access · Awer Console" };
+export const metadata = { title: "Staff access · Bookmops Console" };
 
 /**
- * Who at Awer can see across customer accounts.
+ * Who at Bookmops can see across customer accounts.
  *
  * Deliberately separate from the role someone holds inside a cleaning company:
  * OWNER there means "owns this cleaning company", and one widened check would
@@ -28,7 +28,7 @@ export default async function StaffPage() {
           <div className="grow">
             <h1>Staff access</h1>
             <p className="sub">
-              People at Awer who can see across customer accounts. Separate from any role they hold
+              People at Bookmops who can see across customer accounts. Separate from any role they hold
               inside a workspace.
             </p>
           </div>
@@ -161,7 +161,7 @@ export default async function StaffPage() {
                     <span className="box">✓</span>The last owner cannot be demoted
                   </li>
                   <li className="done">
-                    <span className="box">✓</span>Awer&apos;s own workspace cannot be changed from
+                    <span className="box">✓</span>Bookmops&apos;s own workspace cannot be changed from
                     here
                   </li>
                 </ul>

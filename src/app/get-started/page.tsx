@@ -8,7 +8,7 @@ import { PLANS, TRIAL_DAYS } from "@/lib/plans";
 import SignupForm, { type PlanCard } from "./SignupForm";
 
 export const metadata: Metadata = {
-  title: "Start your workspace · Awer",
+  title: "Start your workspace · Bookmops",
   description:
     "Scheduling, crew, customers and invoicing for cleaning companies. Thirty days free, no card.",
 };
@@ -56,7 +56,7 @@ export default async function GetStartedPage({
 
   return (
     <SplitShell
-      // Awer's own front door: its own mark, a neutral photo, and no
+      // Bookmops' own front door: its own mark, a neutral photo, and no
       // cleaning company's customer count. /admin-login.png is TeamCleano's
       // branded shot -- polo shirt and framed logo -- and belongs on their
       // workspace, not on the page where their competitors sign up.
@@ -64,7 +64,7 @@ export default async function GetStartedPage({
       footNote={null}
       image={BRAND_IMAGES.home}
       quoteHtml={"Every job, every<br/>cleaner, <em>one<br/>place.</em>"}
-      quoteSub="Awer runs the scheduling, the crew, the customers and the invoicing for cleaning companies."
+      quoteSub="Bookmops runs the scheduling, the crew, the customers and the invoicing for cleaning companies."
       topRightLabel="Sign in →"
       topRightHref="/sign-in"
       badge={`${TRIAL_DAYS} days free`}

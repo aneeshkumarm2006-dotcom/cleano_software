@@ -1,25 +1,25 @@
 /**
- * Mail from Awer itself, as opposed to mail from a cleaning company.
+ * Mail from Bookmops itself, as opposed to mail from a cleaning company.
  *
  * Everything in lib/email.ts is a TENANT's mail: it writes to that company's
  * EmailLog, and every send is gated by their Settings → Notifications toggles.
  * Both are right for a booking confirmation and wrong for this. A new
  * workspace's owner must receive their own sign-in details whatever their
  * notification settings happen to say — they have never seen those settings,
- * because they cannot get in yet — and the send belongs to Awer, not to the
+ * because they cannot get in yet — and the send belongs to Bookmops, not to the
  * company being created.
  *
- * So this is a deliberately small, separate path: direct to Resend, Awer's own
+ * So this is a deliberately small, separate path: direct to Resend, Bookmops' own
  * sender, no tenant context required. It is used from the console, which runs
  * as platform staff and has no tenant to scope to in the first place.
  */
 import { Resend } from "resend";
 
 /**
- * Awer's own sender, distinct from EMAIL_FROM.
+ * Bookmops' own sender, distinct from EMAIL_FROM.
  *
  * EMAIL_FROM is the cleaning company's address — "Cleano <no-reply@cleano.ca>"
- * in production — and a welcome to Awer arriving from one of Awer's customers
+ * in production — and a welcome to Bookmops arriving from one of Bookmops' customers
  * would be a confusing first impression for the next one. Falls back to
  * EMAIL_FROM only so that an unconfigured environment still sends something
  * rather than nothing.
@@ -27,7 +27,7 @@ import { Resend } from "resend";
 const PLATFORM_FROM =
   process.env.PLATFORM_EMAIL_FROM ??
   process.env.EMAIL_FROM ??
-  "Awer <no-reply@useawer.com>";
+  "Bookmops <no-reply@useawer.com>";
 
 function esc(s: string): string {
   return s
@@ -65,7 +65,7 @@ async function send(opts: { to: string; subject: string; html: string }) {
  * path, so losing that browser tab locked the customer out of a workspace they
  * had just been sold. This password is single-use in practice: the account is
  * flagged `mustChangePassword`, so it buys exactly one sign-in and is then
- * replaced by one Awer never sees.
+ * replaced by one Bookmops never sees.
  */
 export async function sendWorkspaceCredentials(opts: {
   to: string;
@@ -83,12 +83,12 @@ export async function sendWorkspaceCredentials(opts: {
     ? `A new password for ${esc(opts.companyName)}`
     : `${esc(opts.companyName)} is ready`;
   const opener = opts.reissued
-    ? `Here is a new password for your Awer workspace. The previous one no longer works.`
-    : `Your Awer workspace is set up and waiting for you. Here is how to get in.`;
+    ? `Here is a new password for your Bookmops workspace. The previous one no longer works.`
+    : `Your Bookmops workspace is set up and waiting for you. Here is how to get in.`;
 
   const html = `
 <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:520px;margin:0 auto;padding:28px 24px;color:#0e1a1c">
-  <p style="margin:0 0 6px;font-size:12px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:#008C9C">Awer</p>
+  <p style="margin:0 0 6px;font-size:12px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:#008C9C">Bookmops</p>
   <h1 style="margin:0 0 14px;font-size:22px;font-weight:600">${heading}</h1>
   <p style="margin:0 0 18px;font-size:15px;line-height:1.6">Hi ${esc(first)}, ${opener}</p>
 
@@ -105,7 +105,7 @@ export async function sendWorkspaceCredentials(opts: {
 
   <p style="margin:0 0 20px;font-size:14px;line-height:1.6">
     You will be asked to choose your own password the first time you sign in, so this one
-    stops working straight away. Nobody at Awer can see what you replace it with.
+    stops working straight away. Nobody at Bookmops can see what you replace it with.
   </p>
 
   <a href="${esc(signIn)}" style="display:inline-block;background:#008C9C;color:#fff;text-decoration:none;padding:12px 22px;border-radius:9px;font-size:15px;font-weight:600">Sign in to ${esc(opts.companyName)}</a>
@@ -121,7 +121,7 @@ export async function sendWorkspaceCredentials(opts: {
     to: opts.to,
     subject: opts.reissued
       ? `Your new password for ${opts.companyName}`
-      : `${opts.companyName} is ready on Awer`,
+      : `${opts.companyName} is ready on Bookmops`,
     html,
   });
 }

@@ -202,8 +202,8 @@ const overflowAt = (page: Page) =>
     });
     await page.goto(URL_, { waitUntil: "networkidle" });
 
-    (await page.title()).startsWith("Awer")
-      ? ok("the page is titled for Awer, not for the tenant app")
+    (await page.title()).startsWith("Bookmops")
+      ? ok("the page is titled for Bookmops, not for the tenant app")
       : bad("wrong title", await page.title());
     errors.length === 0
       ? ok("no console errors, no failed requests")

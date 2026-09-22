@@ -60,7 +60,7 @@ export default function RequestCard({
           </dd>
         </dl>
         <p className="sub" style={{ marginTop: 10 }}>
-          Send these to {contact} yourself — Awer does not email them. This password is shown once
+          Send these to {contact} yourself — Bookmops does not email them. This password is shown once
           and is stored only as a hash; they are made to change it the first time they sign in.
         </p>
       </div>

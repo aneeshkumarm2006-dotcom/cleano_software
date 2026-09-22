@@ -10,14 +10,14 @@ import { PLANS } from "@/lib/plans";
 import type { BillingInterval, OrgPlan, SubscriptionStatus } from "@prisma/client";
 
 /**
- * Awer's OWN billing webhook: money coming from cleaning companies to us.
+ * Bookmops' OWN billing webhook: money coming from cleaning companies to us.
  *
  * Deliberately a different route, a different Stripe account and a different
  * signing secret from /api/stripe/webhook, which handles each company charging
  * its own customers. One route serving both would mean one leaked secret, or
  * one confused event, moving money in the wrong direction.
  *
- * Setup: in Awer's Stripe dashboard add an endpoint at
+ * Setup: in Bookmops' Stripe dashboard add an endpoint at
  *   https://<apex>/api/stripe/subscription
  * for checkout.session.completed, customer.subscription.updated,
  * customer.subscription.deleted, invoice.paid and invoice.payment_failed,
@@ -156,12 +156,12 @@ async function applySubscription(sub: Stripe.Subscription): Promise<void> {
           status: status === "PAST_DUE" || status === "CANCELED" ? "FAILED" : "SUCCESS",
           message:
             status === "ACTIVE"
-              ? "The Awer subscription is active."
+              ? "The Bookmops subscription is active."
               : status === "TRIALING"
-                ? "The Awer subscription is in its trial."
+                ? "The Bookmops subscription is in its trial."
                 : status === "PAST_DUE"
-                  ? "A payment for the Awer subscription failed. Update the card to avoid interruption."
-                  : "The Awer subscription has ended.",
+                  ? "A payment for the Bookmops subscription failed. Update the card to avoid interruption."
+                  : "The Bookmops subscription has ended.",
         }),
       ).catch(() => {});
     }

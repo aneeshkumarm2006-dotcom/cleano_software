@@ -35,7 +35,7 @@ export default function OrgUnavailable({
     "not-found": {
       title: "No workspace here",
       body: "There is no account at this address. Check the web address, or head to the main site to get started.",
-      action: "Go to Awer",
+      action: "Go to Bookmops",
     },
   }[reason];
 
@@ -60,7 +60,7 @@ export default function OrgUnavailable({
             opacity: 0.55,
           }}
         >
-          Awer
+          Bookmops
         </p>
         <h1 style={{ margin: "0 0 12px", fontSize: 26, fontWeight: 700 }}>
           {copy.title}

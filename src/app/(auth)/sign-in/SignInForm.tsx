@@ -108,7 +108,7 @@ function SignInInner({ isPlatform }: { isPlatform: boolean }) {
     <SplitShell
       // Two audiences, one route. On a workspace host this is that cleaning
       // company's own staff door and keeps their branding. On useawer.com it is
-      // Awer's door, and must not wear a customer's logo, photo or customer
+      // Bookmops' door, and must not wear a customer's logo, photo or customer
       // count -- /admin-login.png is TeamCleano's branded shot, and the foot
       // note is their marketing.
       logo={isPlatform ? <AwerLogo onDark /> : undefined}
@@ -121,15 +121,15 @@ function SignInInner({ isPlatform }: { isPlatform: boolean }) {
       }
       quoteSub={
         isPlatform
-          ? "Sign in to your Awer account."
+          ? "Sign in to your Bookmops account."
           : "Bookings, schedules, payments, and your team — all in one dashboard."
       }
-      // There is no cleaner app on Awer's front door -- cleaners sign in on
+      // There is no cleaner app on Bookmops' front door -- cleaners sign in on
       // their own company's address, and the proxy already refuses
       // /cleanos/login here.
       topRightLabel={isPlatform ? undefined : "Cleaner sign in →"}
       topRightHref={isPlatform ? undefined : "/cleanos/login"}
-      badge={isPlatform ? "Awer" : "Admin & staff"}>
+      badge={isPlatform ? "Bookmops" : "Admin & staff"}>
       <header style={{ marginBottom: 36 }}>
         <p className="cl-eyebrow" style={{ marginBottom: 12 }}>
           Welcome back

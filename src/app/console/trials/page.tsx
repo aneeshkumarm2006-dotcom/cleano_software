@@ -5,10 +5,10 @@ import { PLANS, TRIAL_DAYS } from "@/lib/plans";
 
 import { Pill, SeatMeter, TopBar, ago, daysUntil, fmtDate } from "../ui";
 
-export const metadata = { title: "Trials · Awer Console" };
+export const metadata = { title: "Trials · Bookmops Console" };
 
 /**
- * Who is trying Awer, and whether they are actually using it.
+ * Who is trying Bookmops, and whether they are actually using it.
  *
  * The interesting column is not the end date, it is whether they have booked a
  * job: a trial with real work in it converts, a trial with an empty calendar

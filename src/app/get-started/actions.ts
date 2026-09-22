@@ -108,7 +108,7 @@ export async function checkSlug(raw: string): Promise<SlugState> {
     return { ok: false, slug, reason: "Addresses need at least three characters." };
   }
   if (RESERVED_SLUGS.has(slug)) {
-    return { ok: false, slug, reason: `"${slug}" is reserved by Awer.` };
+    return { ok: false, slug, reason: `"${slug}" is reserved by Bookmops.` };
   }
   if (!isValidOrgSlug(slug)) {
     return { ok: false, slug, reason: "Letters, numbers and single hyphens only." };

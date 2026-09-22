@@ -1,5 +1,5 @@
 /**
- * Create the platform workspace and its first Awer staff account.
+ * Create the platform workspace and its first Bookmops staff account.
  *
  *   npx tsx scripts/seed-platform.ts --email you@awer.com --name "Your Name"
  *
@@ -31,7 +31,7 @@ function arg(name: string, fallback?: string): string {
     (await db.organization.create({
       data: {
         slug: PLATFORM_ORG_SLUG,
-        name: "Awer",
+        name: "Bookmops",
         status: "ACTIVE",
         plan: "ORGANIZATION",
       },

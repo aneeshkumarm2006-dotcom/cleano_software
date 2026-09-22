@@ -205,7 +205,7 @@ const TAB_SUBTITLES: Record<TabId, string> = {
   notifications: "Per-channel notification preferences.",
   aiAssistant: "AI replies to customer texts and emails, with human handoff.",
   connectors: "Outside services this workspace uses, and whether they are working.",
-  plan: "What this workspace pays Awer, and the card it is paid with.",
+  plan: "What this workspace pays Bookmops, and the card it is paid with.",
 };
 
 // Which server-side section each tab's content comes from. Only used to point
@@ -261,7 +261,7 @@ const TAB_GROUPS: { label: string; ids: TabId[] }[] = [
   },
   // Kept apart from "Money" on purpose: that group is the money this company
   // takes from its customers, this is the money it pays us.
-  { label: "Awer account", ids: ["plan"] },
+  { label: "Bookmops account", ids: ["plan"] },
 ];
 
 const TABS: TabDef[] = [

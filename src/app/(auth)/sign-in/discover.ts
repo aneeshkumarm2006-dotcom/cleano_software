@@ -9,10 +9,10 @@ import { originForSlug } from "@/lib/tenant";
 /**
  * "Which workspace do I belong to?", answered without telling strangers.
  *
- * Awer's front door has no idea which company a visitor works for, and the
+ * Bookmops' front door has no idea which company a visitor works for, and the
  * obvious design -- type your email, get sent to your workspace -- is a
  * cross-tenant enumeration oracle: anyone could probe addresses to learn which
- * cleaning companies use Awer and who works there. That is the exact class of
+ * cleaning companies use Bookmops and who works there. That is the exact class of
  * leak the whole tenancy model exists to prevent.
  *
  * So the password is asked for FIRST, on this page, and nothing is revealed

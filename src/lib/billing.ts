@@ -1,4 +1,4 @@
-// Awer's own billing: charging a cleaning company for using the platform.
+// Bookmops' own billing: charging a cleaning company for using the platform.
 //
 // Not to be confused with lib/stripe-org.ts, which is how a cleaning company
 // charges ITS customers on ITS OWN Stripe account. These two must never meet:
@@ -36,7 +36,7 @@ const MIN_TRIAL_LEAD_MS = 48 * 60 * 60 * 1000;
  *
  * The obvious thing — inline `product_data` on the checkout line — creates a
  * BRAND NEW product every time somebody subscribes, so the Stripe account
- * fills with hundreds of identical "Awer Starter" entries and the reporting
+ * fills with hundreds of identical "Bookmops Starter" entries and the reporting
  * built on top of them is meaningless. A fixed id means one product per plan,
  * created on first use, with nothing to configure in the dashboard first.
  */
@@ -47,7 +47,7 @@ async function productIdFor(plan: OrgPlan): Promise<string> {
     await stripe.products.retrieve(id);
   } catch {
     try {
-      await stripe.products.create({ id, name: `Awer ${PLANS[plan].label}` });
+      await stripe.products.create({ id, name: `Bookmops ${PLANS[plan].label}` });
     } catch {
       // Lost a race with a concurrent checkout, which is fine: the product
       // exists either way, and that is all the caller needs.

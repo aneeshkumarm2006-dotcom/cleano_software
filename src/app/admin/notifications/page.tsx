@@ -3,7 +3,7 @@ import { listAdminNotifications } from "@/lib/admin-notifications";
 
 import NotificationsClient from "./NotificationsClient";
 
-export const metadata = { title: "Notifications · Awer" };
+export const metadata = { title: "Notifications · Bookmops" };
 
 /**
  * What has happened that an admin should know about.

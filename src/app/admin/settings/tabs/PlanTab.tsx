@@ -122,9 +122,9 @@ export default function PlanTab({ plans, status }: Props) {
       <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
         <div className="p-5 border-b border-gray-100 space-y-4">
           <div>
-            <h3 className="text-[15px] font-semibold text-gray-900">Your Awer plan</h3>
+            <h3 className="text-[15px] font-semibold text-gray-900">Your Bookmops plan</h3>
             <p className="text-sm text-gray-500 mt-1 max-w-2xl">
-              What this workspace pays Awer. Separate from the payments you take from your own
+              What this workspace pays Bookmops. Separate from the payments you take from your own
               customers, which are set up under Payments.
             </p>
           </div>
