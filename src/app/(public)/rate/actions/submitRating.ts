@@ -8,6 +8,7 @@ import {
 } from "@/lib/email";
 import { POOR_RATING_FOLLOWUP_STARS, applyLateArrivalPenalty } from "@/lib/policy";
 import { maybeApplyLowRatingStrike } from "@/lib/strikes";
+import { ratedCleanerIds } from "@/lib/rating-crew";
 
 interface SubmitRatingInput {
   token: string;
@@ -52,11 +53,25 @@ export async function submitRating(input: SubmitRatingInput) {
     // A used token means the client is editing their previous rating.
     const isEdit = !!tokenRow.usedAt;
 
-    // Cleaners to rate: prefer the explicit cleaner on the token, fall back
-    // to all cleaners assigned to the job.
-    const cleanerIds = tokenRow.cleanerId
-      ? [tokenRow.cleanerId]
-      : tokenRow.job.cleaners.map((c) => c.id);
+    // Cleaners to rate: the token's named cleaner, else the whole crew.
+    // Through the shared rule (Sept 10, item 11) so this path and the customer
+    // portal cannot answer the same question differently again. Behaviour here
+    // is unchanged except that a legacy job whose lead never got an M2M row is
+    // no longer skipped.
+    const leadRole = tokenRow.job.employeeId
+      ? (
+          await db.user.findUnique({
+            where: { id: tokenRow.job.employeeId },
+            select: { role: true },
+          })
+        )?.role ?? null
+      : null;
+    const cleanerIds = ratedCleanerIds({
+      tokenCleanerId: tokenRow.cleanerId,
+      cleaners: tokenRow.job.cleaners,
+      employeeId: tokenRow.job.employeeId,
+      leadIsAdmin: leadRole === "ADMIN" || leadRole === "OWNER",
+    });
 
     if (cleanerIds.length === 0) {
       return {

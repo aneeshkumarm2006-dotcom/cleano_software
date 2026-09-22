@@ -58,9 +58,10 @@ import {
 import { fmtDate, fmtTime, tzWallClockToUtc } from "@/lib/time";
 import { addStoreDays, storeDateKey, storeWallClockToUtc } from "@/lib/timezone";
 import { allocateJobNumber } from "@/lib/job-number";
-import { clearClockTrailForReschedule } from "@/lib/job-reschedule";
+import { clearWorkTrailForReschedule } from "@/lib/job-reschedule";
 import {
   recurringDiscountPercent,
+  resolveRecurringDiscountPercent,
   recurrenceCount,
   nextOccurrence,
 } from "@/lib/booking-pricing";
@@ -136,6 +137,22 @@ export async function saveJob(formData: FormData) {
     }
 
     const frequencyRaw = (formData.get("frequency") as string) || "ONE_TIME";
+    // Sept 10, item 8. Absent means AUTO, which is what every job saved before
+    // this field existed means, so an old form posting nothing is unchanged.
+    const recurringDiscountModeRaw =
+      (formData.get("recurringDiscountMode") as string) || "AUTO";
+    const recurringDiscountMode = ["AUTO", "NONE", "CUSTOM"].includes(
+      recurringDiscountModeRaw
+    )
+      ? recurringDiscountModeRaw
+      : "AUTO";
+    const recurringDiscountCustomRaw = formData.get(
+      "recurringDiscountPercentOverride"
+    );
+    const recurringDiscountCustomPct =
+      recurringDiscountCustomRaw !== null && recurringDiscountCustomRaw !== ""
+        ? Number(recurringDiscountCustomRaw)
+        : null;
     const recurringFrequency = RECURRING_FREQUENCIES.includes(
       frequencyRaw as RecurringFrequency
     )
@@ -797,6 +814,13 @@ export async function saveJob(formData: FormData) {
     });
 
     const jobData: any = {
+      // Sept 10, item 8. Stored so the decision survives the save and rides the
+      // series: `SERIES_PROPAGATED_FIELDS` carries both, because a series is
+      // one agreement and occurrence 4 cannot be discounted on different terms
+      // from occurrence 1.
+      recurringDiscountMode,
+      recurringDiscountPercentOverride:
+        recurringDiscountMode === "CUSTOM" ? recurringDiscountCustomPct : null,
       // The job's LEAD CLEANER — the same meaning bulkAssignCleaner, claimJob
       // and the cleaner app's my-jobs query give this column. This used to be
       // `session.user.id`, which stamped the ACTING ADMIN onto every job saved
@@ -1003,8 +1027,8 @@ export async function saveJob(formData: FormData) {
       if (startDate && startTime && jobData.startTime && existingJob) {
         const movedTo = jobData.startTime.getTime();
         if (existingJob.startTime.getTime() !== movedTo) {
-          await clearClockTrailForReschedule(editingJobId).catch((e) =>
-            console.error("[saveJob] clearing the clock trail failed", e),
+          await clearWorkTrailForReschedule(editingJobId).catch((e) =>
+            console.error("[saveJob] clearing the work trail failed", e),
           );
         }
       }
@@ -1461,11 +1485,19 @@ export async function saveJob(formData: FormData) {
         const childUsesFixedPrice = usesFixedPrice && clientFixedPriceRecurring;
         const skipFrequencyDiscount =
           childUsesFixedPrice && !clientFixedPriceAllowFreqDiscount;
+        // Sept 10, item 8. The configured table is still the default; the
+        // admin's decision for THIS series is folded in on top of it, in one
+        // pure function so the form's preview and this generator cannot
+        // disagree about what the customer pays.
         const discountPct = skipFrequencyDiscount
           ? 0
-          : await recurringDiscountPercent(
-              recurringFrequency,
-              (formData.get("jobType") as string) || undefined
+          : resolveRecurringDiscountPercent(
+              recurringDiscountMode,
+              recurringDiscountCustomPct,
+              await recurringDiscountPercent(
+                recurringFrequency,
+                (formData.get("jobType") as string) || undefined
+              )
             );
         const recurringDiscount =
           basePrice > 0 && discountPct > 0

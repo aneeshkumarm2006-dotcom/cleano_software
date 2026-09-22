@@ -83,6 +83,12 @@ export const SERIES_PROPAGATED_FIELDS = [
   "taxExempt",
   "isFlexible",
   "requiredCleaners",
+  // Whether this series gets the frequency discount, and at what rate (Sept 10
+  // list, item 8). A series is ONE agreement: occurrence 4 must not be
+  // discounted on different terms from occurrence 1, which is the same reason
+  // `price` and `billingType` already propagate.
+  "recurringDiscountMode",
+  "recurringDiscountPercentOverride",
 ] as const;
 
 export type SeriesField = (typeof SERIES_PROPAGATED_FIELDS)[number];

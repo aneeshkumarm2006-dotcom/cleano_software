@@ -36,6 +36,7 @@ import {
   ITEM_TYPE_NAME,
   type ItemType,
 } from "@/lib/item-type";
+import BackToList from "@/components/common/BackToList";
 import type {
   AttentionTone,
   ItemAttentionState,
@@ -987,7 +988,8 @@ export default function ProductDetailView({
     <div className="relative h-full overflow-y-auto pb-8 px-4">
       <div className="relative z-10 max-w-[80rem] w-full mx-auto space-y-6">
         {/* Back Button */}
-        <Link href="/admin/inventory">
+        {/* Sept 10, item 14. */}
+        <BackToList href="/admin/inventory">
           <Button
             variant="default"
             size="sm"
@@ -996,7 +998,7 @@ export default function ProductDetailView({
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Inventory
           </Button>
-        </Link>
+        </BackToList>
 
         {/* Header */}
         <div className="w-full flex flex-col md:flex-row items-start justify-between gap-4 my-10">

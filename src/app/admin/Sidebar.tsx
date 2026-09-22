@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Bell,
   Menu,
@@ -87,6 +87,15 @@ interface NavItem {
   label: string;
   Icon: LucideIcon;
   badge?: Badge;
+  /**
+   * Where the PILL goes, when that is not where the row goes.
+   *
+   * Sept 10, item 12: "Jobs sidebar shows 1 notification, but admin cannot tell
+   * which job or action needs attention." The row still opens the full list,
+   * because that is what clicking Jobs should do. The count opens the filtered
+   * list of exactly the rows it is counting.
+   */
+  badgeHref?: string;
   exclude?: string[];
   // Extra paths that keep this item highlighted (e.g. the Messages entry
   // covers both /admin/chat and /admin/group-chat sub-tabs).
@@ -157,6 +166,7 @@ const NAV: { label: string; items: NavItem[] }[] = [
         Icon: Briefcase,
         // Unread cleaner↔client messages across live jobs (CLN-P0-3-08).
         badge: "jobChat",
+        badgeHref: "/admin/jobs?attention=chat",
       },
       {
         href: "/admin/issues",
@@ -518,6 +528,7 @@ export default function Sidebar({
   // without being re-created or re-subscribed when it changes.
   const collapsedRef = useRef<Record<string, boolean>>(collapsedSections);
   const pathname = usePathname();
+  const router = useRouter();
   const [chatUnread, setChatUnread] = useState(0);
   // Job chat (cleaner ↔ client) unread, shared with any list on the page.
   const { total: jobChatUnread } = useJobChatUnread("admin");
@@ -862,11 +873,36 @@ export default function Sidebar({
                       >
                         <Icon size={16} strokeWidth={1.7} />
                         <span className="anav-label">{item.label}</span>
-                        {badgeCount > 0 && (
-                          <span className="anav-count alert">
-                            {badgeCount > 99 ? "99+" : badgeCount}
-                          </span>
-                        )}
+                        {badgeCount > 0 &&
+                          (item.badgeHref ? (
+                            // A span, not a nested <a>: an anchor inside an
+                            // anchor is invalid and browsers un-nest it. Keyboard
+                            // users get the same behaviour through onKeyDown.
+                            <span
+                              role="link"
+                              tabIndex={0}
+                              aria-label={`${badgeCount} needing attention — open the filtered list`}
+                              title="Show only the ones that need attention"
+                              className="anav-count alert"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                router.push(item.badgeHref!);
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  router.push(item.badgeHref!);
+                                }
+                              }}>
+                              {badgeCount > 99 ? "99+" : badgeCount}
+                            </span>
+                          ) : (
+                            <span className="anav-count alert">
+                              {badgeCount > 99 ? "99+" : badgeCount}
+                            </span>
+                          ))}
                       </Link>
                     );
                   })}

@@ -28,6 +28,33 @@ export type GeneratePayPeriodResult =
  * Idempotent: an existing non-CANCELLED period for the week is left alone and
  * reported via `alreadyExists`, so a cron re-run never double-pays a job.
  */
+/**
+ * The jobs a pay period pays for.
+ *
+ * Exported because the per-cleaner breakdown on the payouts page (Sept 10,
+ * item 9) has to list EXACTLY the jobs this generator summed, or the expanded
+ * rows will not add up to the total printed above them. Two copies of a date
+ * window is how that goes wrong.
+ *
+ * `jobDate` is the money date; `startTime` is the fallback for rows that never
+ * got one.
+ */
+export function payPeriodJobsWhere(startDate: Date, rangeEnd: Date) {
+  return {
+    deletedAt: null,
+    status: { in: [...PAYABLE_JOB_STATUSES] },
+    OR: [
+      { jobDate: { gte: startDate, lte: rangeEnd } },
+      {
+        AND: [
+          { jobDate: null },
+          { startTime: { gte: startDate, lte: rangeEnd } },
+        ],
+      },
+    ],
+  };
+}
+
 export async function generatePayPeriodForWeek(
   week: PayPeriodRange,
   notes: string | null = null
@@ -60,19 +87,7 @@ export async function generatePayPeriodForWeek(
   });
 
   const jobs = await db.job.findMany({
-    where: {
-      deletedAt: null,
-      status: { in: [...PAYABLE_JOB_STATUSES] },
-      OR: [
-        { jobDate: { gte: startDate, lte: rangeEnd } },
-        {
-          AND: [
-            { jobDate: null },
-            { startTime: { gte: startDate, lte: rangeEnd } },
-          ],
-        },
-      ],
-    },
+    where: payPeriodJobsWhere(startDate, rangeEnd),
     select: JOB_PAY_SELECT,
   });
 

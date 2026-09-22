@@ -54,6 +54,7 @@ import {
 import { resolveJobRequest } from "../../actions/resolveJobRequest";
 import { fmtDate, fmtDateTime, fmtTime } from "@/lib/time";
 import { discountReasonLabel, isMissingReason } from "@/lib/discount-reasons";
+import BackToList from "@/components/common/BackToList";
 import {
   resolveClockEntry,
   formatWorkedDuration,
@@ -77,6 +78,7 @@ import { assignCleaners } from "../../actions/assignCleaners";
 import { ConfirmDeleteModal } from "@/components/common/ConfirmDeleteModal";
 import Modal from "@/components/ui/Modal";
 import { cancelJobByAdmin } from "../../actions/cancelJobByAdmin";
+import ScopePhotoUpload from "./ScopePhotoUpload";
 import { setCleanerJobPay } from "../../actions/setCleanerJobPay";
 import ClockTimeEditor from "./ClockTimeEditor";
 import RatingExclusionControl from "./RatingExclusionControl";
@@ -3109,6 +3111,8 @@ export default function JobDetailView({
       <div className="dcard">
         <div className="dcard-head">
           <h3>Job photos · {photos.length}</h3>
+          {/* Sept 10, item 7: the admin's own "areas to clean" photos. */}
+          <ScopePhotoUpload jobId={job.id} />
         </div>
         {photos.length === 0 ? (
           <div style={{ padding: '32px 0', textAlign: 'center', color: 'var(--primary-50)', fontSize: 14 }}>
@@ -3535,9 +3539,19 @@ export default function JobDetailView({
       <div className="relative z-10 max-w-[80rem] w-full mx-auto" style={{ paddingTop: 32 }}>
 
         {/* Back button */}
-        <a href={backUrl} className="jdetail-back">
-          <ArrowLeft size={14} /> {backLabel}
-        </a>
+        {/* Sept 10, item 14. An explicit `returnTo` (the calendar sends one)
+            still wins; otherwise this returns to the jobs list exactly as the
+            admin left it — page, search, filters and scroll — instead of to
+            page 1. */}
+        {returnToUrl ? (
+          <a href={backUrl} className="jdetail-back">
+            <ArrowLeft size={14} /> {backLabel}
+          </a>
+        ) : (
+          <BackToList href="/admin/jobs" className="jdetail-back">
+            <ArrowLeft size={14} /> {backLabel}
+          </BackToList>
+        )}
 
         {/* Header */}
         <div className="jdetail-head">

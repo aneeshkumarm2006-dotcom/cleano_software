@@ -13,6 +13,7 @@ import { jobTypeLabel } from "@/lib/calendar-labels";
 import { avatarColor, initials } from "@/lib/avatar";
 import type { PropertyType } from "@/lib/property-type";
 import { HOLD_LABEL } from "@/lib/job-hold";
+import BackToList from "@/components/common/BackToList";
 
 type TabKey = "history" | "payments" | "ratings";
 
@@ -192,9 +193,10 @@ export default function ClientDetailView({
 
   return (
     <div className="admin-font stack-24">
-      <a href="/admin/clients" className="link-muted" style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+      {/* Sept 10, item 14. */}
+      <BackToList href="/admin/clients" className="link-muted" style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13 }}>
         <ArrowLeft size={14} /> Back to Clients
-      </a>
+      </BackToList>
 
       {/* Header */}
       <div className="row-between" style={{ alignItems: "flex-start", flexWrap: "wrap", gap: 16 }}>

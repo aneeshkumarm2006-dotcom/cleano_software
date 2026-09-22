@@ -120,6 +120,47 @@ type FrequencyValue =
   | "HIGH_FREQUENCY";
 
 /**
+ * What an admin decided about THIS series' frequency discount.
+ *
+ * Sept 10 list, item 8. The configured table discounts by frequency and
+ * service category, with no way to say "not this one". A weekly commercial
+ * contract usually has the discount built into the agreed price already, so
+ * applying it again discounts it twice — the client's own example.
+ *
+ *   AUTO    the configured discount for this frequency and category.
+ *   NONE    no frequency discount at all. The price is the price.
+ *   CUSTOM  a percentage the admin states instead of the table's.
+ */
+export type RecurringDiscountMode = "AUTO" | "NONE" | "CUSTOM";
+
+/**
+ * Fold the admin's decision into the configured percentage.
+ *
+ * PURE, and the only place the three modes are interpreted, so the job form's
+ * preview and the series generator cannot disagree about what a job costs.
+ *
+ * Unknown or missing mode means AUTO, which is what every row created before
+ * this existed means — so nothing needs backfilling and nothing changes for a
+ * series the admin never made a decision about.
+ *
+ * A custom percentage is clamped to 0-100. A negative discount is a surcharge
+ * by another name, and this is not the field for that.
+ */
+export function resolveRecurringDiscountPercent(
+  mode: string | null | undefined,
+  customPercent: number | null | undefined,
+  configuredPercent: number
+): number {
+  if (mode === "NONE") return 0;
+  if (mode === "CUSTOM") {
+    const pct = Number(customPercent);
+    if (!Number.isFinite(pct)) return 0;
+    return Math.min(100, Math.max(0, pct));
+  }
+  return configuredPercent;
+}
+
+/**
  * Recurring discount % for the 2nd+ cleaning, resolved from the admin-config
  * per-service-category table (item 7). First cleaning is always full price.
  * Reads config from `pricing.serviceTypes`.

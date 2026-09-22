@@ -35,7 +35,7 @@ import { formatPropertySize, parsePropertyCount } from "@/lib/property-size";
 import { isSqftJobType, moveInOutBasePrice } from "@/lib/service-pricing";
 import { tzWallClockToUtc, tzInputParts } from "@/lib/time";
 import { syncJobAssignments } from "@/lib/job-assignments";
-import { clearClockTrailForReschedule } from "@/lib/job-reschedule";
+import { clearWorkTrailForReschedule } from "@/lib/job-reschedule";
 import { requireOwnerAdmin } from "@/lib/page-guards";
 import { deleteJob as archiveJob } from "@/app/admin/actions/deleteJob";
 import { getServiceCatalog } from "@/lib/service-catalog.server";
@@ -1033,9 +1033,9 @@ export default async function JobFormPage({
       // clear must not be skipped because an unrelated team change broke.
       if (startDate && startTime && jobData.startTime && moneyJob?.startTime) {
         if (moneyJob.startTime.getTime() !== jobData.startTime.getTime()) {
-          await clearClockTrailForReschedule(editingJobId).catch((e) =>
+          await clearWorkTrailForReschedule(editingJobId).catch((e) =>
             console.error(
-              "[admin/jobs/new] clearing the clock trail failed",
+              "[admin/jobs/new] clearing the work trail failed",
               e
             )
           );

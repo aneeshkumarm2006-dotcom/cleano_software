@@ -519,42 +519,42 @@ model Job {
   // Tenant owner. NULL means "not yet assigned" during the multi-tenant
   // migration, and on platform-level rows that belong to no organization.
   // Enforced NOT NULL + RLS once every row is backfilled.
-  organizationId                 String                @default("")
+  organizationId                   String                @default("")
   // Soft delete — set when bulk/single deleted; hidden from lists, recoverable
   // from the Archived view. Never hard-deleted.
-  deletedAt                      DateTime?
-  id                             String                @id @default(cuid())
+  deletedAt                        DateTime?
+  id                               String                @id @default(cuid())
   // Allocated per organization by allocateJobNumber(), not by a global
   // sequence: every company numbers its own jobs from 1. Existing jobs keep the
   // numbers they were given -- those appear on invoices, in emails and on
   // printed sheets, so renumbering them would break every historical reference.
-  jobNumber                      Int
-  employeeId                     String?
-  clientName                     String
-  clientId                       String?
-  location                       String?
-  aptNumber                      String?
+  jobNumber                        Int
+  employeeId                       String?
+  clientName                       String
+  clientId                         String?
+  location                         String?
+  aptNumber                        String?
   /// Part of the denormalized address snapshot beside `location`/`aptNumber`
   /// (client feedback item 3). Typed on the job forms; also pushed onto the
   /// matching ClientAddress row by the shared upsert, blanks-only. No
   /// transportation fee is derived from it — that stayed manual entry, on the
   /// `parking` column below (labelled "Transportation" in the UI).
-  postalCode                     String?
+  postalCode                       String?
   /// PROVENANCE, not the source of truth (awerfixes.pdf item 2, round 3).
   /// `location`/`aptNumber` above stay the denormalized snapshot taken when the
   /// job was booked, so history survives an address being edited or deleted;
   /// this FK only records WHICH saved address it came from, which is what lets
   /// the cleaner view read that address's accessNotes. Hence onDelete: SetNull
   /// — removing an address must never blank a finished job or its invoice.
-  clientAddressId                String?
-  description                    String?
-  jobType                        String?
-  jobDate                        DateTime?
-  startTime                      DateTime
-  endTime                        DateTime?
-  clockInTime                    DateTime?
-  clockOutTime                   DateTime?
-  status                         JobStatus             @default(CREATED)
+  clientAddressId                  String?
+  description                      String?
+  jobType                          String?
+  jobDate                          DateTime?
+  startTime                        DateTime
+  endTime                          DateTime?
+  clockInTime                      DateTime?
+  clockOutTime                     DateTime?
+  status                           JobStatus             @default(CREATED)
   /// WHY this job is on hold (awerfixesaug18.pdf fix 6, round 4).
   ///
   /// Only ever set alongside `status = CREATED`, which from this round on MEANS
@@ -570,9 +570,9 @@ model Job {
   /// existed", which `holdReasonText()` renders as "Pending admin review" —
   /// something an admin can act on. `releaseJobHold` clears it as it moves the
   /// job to SCHEDULED, so a released job carries no stale explanation.
-  holdReason                     String?
-  price                          Float?
-  employeePay                    Float?
+  holdReason                       String?
+  price                            Float?
+  employeePay                      Float?
   /// Is `employeePay` an authoritative MANUAL TEAM TOTAL, or a save-time
   /// estimate snapshot? (cleano_new_fixes.pdf fix 4, decision D2.)
   ///
@@ -585,21 +585,35 @@ model Job {
   ///         it is superseded silently by the live calculation.
   ///
   /// Defaults FALSE, which is exactly today's behaviour for every existing row.
-  employeePayIsManual            Boolean               @default(false)
-  totalTip                       Float?
-  parking                        Float?
-  paymentReceived                Boolean               @default(false)
-  invoiceSent                    Boolean               @default(false)
-  notes                          String?
-  paymentType                    PaymentType?
-  discountAmount                 Float?
+  employeePayIsManual              Boolean               @default(false)
+  totalTip                         Float?
+  parking                          Float?
+  paymentReceived                  Boolean               @default(false)
+  invoiceSent                      Boolean               @default(false)
+  notes                            String?
+  paymentType                      PaymentType?
+  discountAmount                   Float?
+  /// Whether this recurring series gets the frequency discount at all
+  /// (Sept 10 list, item 8). NULL or "AUTO" means the configured discount for
+  /// this frequency and service category, which is what every existing row
+  /// means and therefore needs no backfill. "NONE" means the agreed price
+  /// already has the discount built in — a weekly commercial contract, say —
+  /// so applying it again would discount it twice. "CUSTOM" means use
+  /// `recurringDiscountPercentOverride` instead of the configured table.
+  ///
+  /// Propagated across the series (`SERIES_PROPAGATED_FIELDS`): a series is one
+  /// agreement, so occurrence 4 cannot be discounted on different terms from
+  /// occurrence 1.
+  recurringDiscountMode            String?
+  /// The percentage "CUSTOM" means. Ignored in every other mode.
+  recurringDiscountPercentOverride Float?
   // Why a discount was applied (awer_fixes.pdf item 29). Free-form so an admin
   // can type a reason the preset list doesn't cover; the UI offers the presets
   // in src/lib/discount-reasons.ts. Null on historical discounts, which the UI
   // shows as "No reason assigned" rather than inventing one.
-  discountReason                 String?
-  bedCount                       Int?
-  bathCount                      Int?
+  discountReason                   String?
+  bedCount                         Int?
+  bathCount                        Int?
   // DEPRECATED (AWER round 3, fix 1). The rating premium moved INTO the
   // cleaner's rate: individualRate = tier base x the cleaner's multiplier,
   // resolved per cleaner from Settings -> `multipliers.ratings` in
@@ -607,24 +621,24 @@ model Job {
   // more (computeJobPayShares stopped multiplying by it). Kept rather than
   // dropped because live rows carry it and the jobs CSV importer still accepts
   // the column; writing it has NO effect on pay. Do not reintroduce a read.
-  payRateMultiplier              Float?                @default(1.0)
-  isFlexible                     Boolean               @default(false)
-  requiredCleaners               Int                   @default(1)
-  subtotalAmount                 Float                 @default(0)
-  gstAmount                      Float                 @default(0)
-  qstAmount                      Float                 @default(0)
-  tipAmount                      Float                 @default(0)
-  totalAmount                    Float                 @default(0)
-  stripeSetupIntentId            String?
-  stripePaymentIntentId          String?
+  payRateMultiplier                Float?                @default(1.0)
+  isFlexible                       Boolean               @default(false)
+  requiredCleaners                 Int                   @default(1)
+  subtotalAmount                   Float                 @default(0)
+  gstAmount                        Float                 @default(0)
+  qstAmount                        Float                 @default(0)
+  tipAmount                        Float                 @default(0)
+  totalAmount                      Float                 @default(0)
+  stripeSetupIntentId              String?
+  stripePaymentIntentId            String?
   // UNIQUE: the deposit intent is the booking's idempotency key. A retry that
   // presents the same intent must return the job it already paid for, and one
   // paid intent must never mint a second booking. Postgres allows many NULLs
   // under a UNIQUE index, so admin/imported jobs (no deposit) are unaffected,
   // as are recurring child jobs — only the first visit carries the deposit.
-  depositPaymentIntentId         String?               @unique
-  depositPaid                    Boolean               @default(false)
-  depositPaidAt                  DateTime?
+  depositPaymentIntentId           String?               @unique
+  depositPaid                      Boolean               @default(false)
+  depositPaidAt                    DateTime?
   /// WHAT THE DEPOSIT ACTUALLY WAS, in dollars (PDF #9, Stage 11).
   ///
   /// Before this column the deposit was the literal 20, re-typed in six places,
@@ -637,15 +651,15 @@ model Job {
   /// correct figure and no existing row changes value. Stored rather than
   /// re-derived from the setting, because the setting can be edited after a
   /// booking is taken and the job must still credit what it collected.
-  depositAmount                  Float?
+  depositAmount                    Float?
   /// Quote lifecycle for a booking that is priced AFTER review (PDF #9).
   /// NULL — every existing row — means "not a quote". See `enum QuoteStatus`
   /// above and `src/lib/quote-status.ts`.
-  quoteStatus                    QuoteStatus?
+  quoteStatus                      QuoteStatus?
   /// When the final price was emailed to the customer. Set alongside
   /// `quoteStatus = QUOTED`; NULL while a quote is still under review, so the
   /// admin panel can say "not sent yet" without reading the job log.
-  quotedAt                       DateTime?
+  quotedAt                         DateTime?
   /// The customer's own post-construction estimate, as entered in /book: hours
   /// of work and crew size (PDF #9, Stage 11).
   ///
@@ -655,8 +669,8 @@ model Job {
   /// staff the job. Persisted here as the customer's REQUEST, not as billing
   /// columns: what the customer is charged still lives in `price` /
   /// `billedHourlyRate` / `billed*Hours` like every other job.
-  pcHours                        Float?
-  pcCleaners                     Int?
+  pcHours                          Float?
+  pcCleaners                       Int?
   // The card this booking is attached to, captured when the booking was
   // confirmed. NULL means "no card was pinned" — every charge path falls back
   // to the client's current default, which is exactly the old behaviour, so
@@ -665,19 +679,19 @@ model Job {
   // Stores the Stripe `pm_` id rather than a ClientPaymentMethod row id: the
   // local mirror is deleted and recreated whenever it syncs from Stripe, so a
   // row id would dangle.
-  stripePaymentMethodId          String?
-  paymentFailedAt                DateTime?
-  paymentFailureReason           String?
-  paidAt                         DateTime?
-  refundedAmount                 Float                 @default(0)
-  isCashJob                      Boolean               @default(false)
+  stripePaymentMethodId            String?
+  paymentFailedAt                  DateTime?
+  paymentFailureReason             String?
+  paidAt                           DateTime?
+  refundedAmount                   Float                 @default(0)
+  isCashJob                        Boolean               @default(false)
   // Per-job sales-tax exemption (awer_fixes.pdf item 7). Applies to THIS job
   // only — never a global switch. When true, GST/QST are not added and the
   // total equals the discounted subtotal. Distinct from `isCashJob`, which is
   // a payment method that happens to also be untaxed: a job can be
   // card-paid AND tax-exempt. Cleaner pay is unaffected — it is always
   // calculated from the pre-tax job price.
-  taxExempt                      Boolean               @default(false)
+  taxExempt                        Boolean               @default(false)
   // Cleaner pay model for this job. PERCENTAGE (default) = existing tier/split
   // math. FLAT = cleaner is shown a fixed payout only (no % of job price).
   // HOURLY = cleaner is shown an hourly rate. employeePay stays the payout.
@@ -689,8 +703,8 @@ model Job {
   // no session rows the stored team total is split evenly, exactly as before.
   // See computeJobPayShares (src/lib/cleaner-earnings.ts) and
   // snapshotHourlyEmployeePay (src/lib/hourly-pay.server.ts).
-  payType                        JobPayType            @default(PERCENTAGE)
-  hourlyRate                     Float?
+  payType                          JobPayType            @default(PERCENTAGE)
+  hourlyRate                       Float?
   // ── Customer-side hourly billing (PDF #8, Stage 8) ────────────────────────
   // DO NOT confuse these with `payType`/`hourlyRate` two lines above: those are
   // what the CLEANER is paid, these are what the CUSTOMER is charged. Before
@@ -702,13 +716,13 @@ model Job {
   // `billedHourlyRate × (billedActualHours ?? billedEstimatedHours)`, computed
   // by `hourlyServiceAmount()` and applied inside `computeJobMoney`. A manual
   // FINAL_PRICE override still wins over both — see src/lib/hourly-billing.ts.
-  billingType                    JobBillingType        @default(FLAT)
+  billingType                      JobBillingType        @default(FLAT)
   /// Customer-facing $/hr. Deliberately NOT named `hourlyRate`.
-  billedHourlyRate               Float?
+  billedHourlyRate                 Float?
   /// What the admin quoted, in TOTAL CREW HOURS. Used until the job is worked.
   /// 30 means one cleaner for 30h or two for 15h — the crew size is already
   /// inside the number and is never multiplied in again.
-  billedEstimatedHours           Float?
+  billedEstimatedHours             Float?
   /// Snapshotted from JobWorkSession at final clock-out, rounded to 0.25h
   /// (decision D7), and editable by an admin afterwards.
   ///
@@ -719,57 +733,57 @@ model Job {
   /// src/lib/hourly-billing.ts; the measurement itself is
   /// `crewActiveMinutes` in src/lib/work-sessions.ts, which is the same
   /// per-cleaner figure `hourlyRate` above is paid from.
-  billedActualHours              Float?
+  billedActualHours                Float?
   /// Itemized vs Final-price-override (cleano_new_fixes.pdf fix 2). Nullable on
   /// purpose: NULL = "not stamped", and `resolvePricingMode()` falls back to the
   /// old `bookingSource` rule for those rows, so the column can roll out without
   /// repricing a single historical job. Everything written from the fix onward
   /// stamps it explicitly — the admin picks it on the job form, the importer and
   /// the web booking flow stamp FINAL_PRICE.
-  pricingMode                    JobPricingMode?
+  pricingMode                      JobPricingMode?
   // True when the price came from the client's customer-specific fixed price
   // (Client.fixedPrice) — shown as a badge on the job detail/list.
-  usesFixedPrice                 Boolean               @default(false)
+  usesFixedPrice                   Boolean               @default(false)
   // Per-booking notification mutes (admin-controlled, job detail page).
   // false = suppress client/provider notifications for THIS job only;
   // global NotificationSetting preferences are untouched.
-  notifyClient                   Boolean               @default(true)
-  notifyProvider                 Boolean               @default(true)
+  notifyClient                     Boolean               @default(true)
+  notifyProvider                   Boolean               @default(true)
   // Job chat switched off for THIS booking (CLN-P0-3-14). NULL = messaging on,
   // which is every existing row. Read-only, never invisible: the history stays
   // rendered, only the composer goes away, because 3-10/3-15 require the record
   // to survive. Admins are exempt — moderation is why the switch exists.
-  chatDisabledAt                 DateTime?
-  appliedPromoCode               String?
-  promoDiscountAmount            Float?
+  chatDisabledAt                   DateTime?
+  appliedPromoCode                 String?
+  promoDiscountAmount              Float?
   // Calendar priority badge override. null = follow the auto rule
   // (calendar.jobTypeLabels setting, keyed by jobType); "ROUTINE" | "IMPORTANT"
   // | "NONE" = an operations manager's explicit switch on the job detail page.
-  priorityLabel                  String?
-  cancellationRequestedAt        DateTime?
+  priorityLabel                    String?
+  cancellationRequestedAt          DateTime?
   // Customer-facing cancellation reason (shown in the portal, visible to both
   // admin and customer). Distinct from internal NOTE_ADDED audit logs.
-  cancellationReason             String?
+  cancellationReason               String?
   // Late-cancellation fee charged to the saved card when the customer
   // cancels within the 48h window (see CANCELLATION_FEE_USD in policy.ts).
   // `cancellationFeeChargedAt` makes the charge idempotent.
-  cancellationFeeChargedAt       DateTime?
-  cancellationFeePaymentIntentId String?
-  rescheduleRequestedAt          DateTime?
-  parentJobId                    String?
-  bookingSource                  String?
+  cancellationFeeChargedAt         DateTime?
+  cancellationFeePaymentIntentId   String?
+  rescheduleRequestedAt            DateTime?
+  parentJobId                      String?
+  bookingSource                    String?
   // External source's unique booking id (e.g. BookingKoala "Booking id") — the
   // idempotency key for imports, so concurrent same-time jobs aren't deduped away.
-  externalBookingId              String?
-  squareFootage                  Int?
-  halfBathCount                  Int?
+  externalBookingId                String?
+  squareFootage                    Int?
+  halfBathCount                    Int?
   /// Apartment/condo vs house (PDF #11, Stage 9). Property INFORMATION, in the
   /// same family as `bedCount`/`squareFootage` above — NOT a service category.
   /// `jobType` stays the answer to "what cleaning is this"; this answers "what
   /// kind of building". Nullable because "not recorded" is the honest state for
   /// every row written before this column and for a booking taken without it —
   /// see src/lib/property-type.ts, which is the only place the rules live.
-  propertyType                   PropertyType?
+  propertyType                     PropertyType?
   /// Per-job checklist override (PDF #10, Stage 10). NULL — every existing row
   /// — means "resolve automatically", which is the behaviour that already
   /// exists: address-scoped template → client-scoped template → the jobType /
@@ -781,89 +795,89 @@ model Job {
   ///
   /// onDelete: SetNull — deleting the template returns the job to automatic
   /// resolution rather than deleting the job.
-  checklistTemplateId            String?
+  checklistTemplateId              String?
   // Rag-wash projection — computed from job specs at completion.
   // `washCreditsAwarded` flips to true once credits are written to
   // the assigned cleaner ledger(s), making the award idempotent.
-  washProjectedRags              Int?
-  washProjectedPads              Int?
-  washCappedRags                 Int?
-  washCappedPads                 Int?
-  washActualRags                 Int?
-  washActualPads                 Int?
-  washCreditsAwarded             Boolean               @default(false)
+  washProjectedRags                Int?
+  washProjectedPads                Int?
+  washCappedRags                   Int?
+  washCappedPads                   Int?
+  washActualRags                   Int?
+  washActualPads                   Int?
+  washCreditsAwarded               Boolean               @default(false)
   // "On My Way" — set when the cleaner presses On My Way before clocking in.
   // Visible to admin; triggers the customer on-the-way notification. Clock-in
   // is still separate. onMyWayLat/Lng capture the cleaner's location at press
   // time (optional, only when the cleaner grants geolocation) for live ETA.
-  onMyWayAt                      DateTime?
-  onMyWayLat                     Float?
-  onMyWayLng                     Float?
-  onMyWayLocationAt              DateTime?
+  onMyWayAt                        DateTime?
+  onMyWayLat                       Float?
+  onMyWayLng                       Float?
+  onMyWayLocationAt                DateTime?
   // No-show + late-arrival event timestamps (admin action + clock-in watcher).
-  noShowAt                       DateTime?
-  lateArrivalAt                  DateTime?
+  noShowAt                         DateTime?
+  lateArrivalAt                    DateTime?
   // Stars deducted from this job's customer rating because the cleaner arrived
   // late (flat −0.5 past the 10-min grace; see src/lib/policy.ts). Column name
   // kept as the legacy "lateArrivalRatingCap" to avoid a migration.
-  lateArrivalRatingPenalty       Float?                @map("lateArrivalRatingCap")
+  lateArrivalRatingPenalty         Float?                @map("lateArrivalRatingCap")
   // Manager override for the Rag Wash review flag.
-  washReviewOverrideAt           DateTime?
-  washReviewOverrideBy           String?
+  washReviewOverrideAt             DateTime?
+  washReviewOverrideBy             String?
   // Card hold lifecycle. `holdPaymentIntentId` is set when admin (or the
   // booking flow) places a manual-capture PI for the full job price.
-  holdPaymentIntentId            String?
-  holdPlacedAt                   DateTime?
-  holdAmount                     Float?
-  holdCapturedAt                 DateTime?
-  holdReleasedAt                 DateTime?
-  holdCaptureFailedAt            DateTime?
-  holdCaptureFailReason          String?
+  holdPaymentIntentId              String?
+  holdPlacedAt                     DateTime?
+  holdAmount                       Float?
+  holdCapturedAt                   DateTime?
+  holdReleasedAt                   DateTime?
+  holdCaptureFailedAt              DateTime?
+  holdCaptureFailReason            String?
   // After-photos are ALLOWED by default (spec item 21) — this flag is now an
   // opt-out: admin sets it false on a specific job to block after-photos.
   // `afterPhotoOverrideAt` records an explicit admin re-allow.
-  afterPhotoConsent              Boolean               @default(true)
-  afterPhotoConsentAt            DateTime?
-  afterPhotoConsentVersion       String?
-  afterPhotoOverrideAt           DateTime?
+  afterPhotoConsent                Boolean               @default(true)
+  afterPhotoConsentAt              DateTime?
+  afterPhotoConsentVersion         String?
+  afterPhotoOverrideAt             DateTime?
   // SMS notification consent captured at booking time (default checked, admin
   // setting customer.smsOptInDefault). Existing rows default to true.
-  smsConsent                     Boolean               @default(true)
-  afterPhotoOverrideBy           String?
-  createdAt                      DateTime              @default(now())
-  updatedAt                      DateTime              @updatedAt
-  employee                       User?                 @relation("EmployeeJobs", fields: [employeeId], references: [id], onDelete: SetNull)
-  client                         Client?               @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  clientAddress                  ClientAddress?        @relation(fields: [clientAddressId], references: [id], onDelete: SetNull)
-  checklistTemplate              ChecklistTemplate?    @relation("JobChecklistTemplate", fields: [checklistTemplateId], references: [id], onDelete: SetNull)
-  parentJob                      Job?                  @relation("JobRecurrence", fields: [parentJobId], references: [id], onDelete: SetNull)
-  childJobs                      Job[]                 @relation("JobRecurrence")
-  productUsage                   JobProductUsage[]
-  inventoryFlags                 InventoryFlag[]
-  cleaners                       User[]                @relation("JobCleaners")
-  assignmentInvites              JobAssignmentInvite[]
-  logs                           JobLog[]
-  addOns                         JobAddOn[]
-  transactions                   Transaction[]
-  invoices                       Invoice[]
-  invoiceLineItems               InvoiceLineItem[]     @relation("InvoiceLineJobs")
-  photos                         JobPhoto[]
-  issues                         JobIssue[]
-  maskedContacts                 MaskedContact[]
-  reviewPhotos                   ReviewPhoto[]
-  chatMessages                   JobChatMessage[]
-  assignments                    JobAssignment[]
-  breaks                         JobBreak[]
-  workSessions                   JobWorkSession[]
-  checklists                     JobChecklist[]
-  ratings                        EmployeeRating[]
-  complaints                     Complaint[]
-  emailLogs                      EmailLog[]
-  ratingTokens                   JobRatingToken[]
-  strikes                        CleanerStrike[]
-  convertedFromLeads             Lead[]
-  convertedFromWaitlist          Waitlist[]
-  commissions                    Commission[]
+  smsConsent                       Boolean               @default(true)
+  afterPhotoOverrideBy             String?
+  createdAt                        DateTime              @default(now())
+  updatedAt                        DateTime              @updatedAt
+  employee                         User?                 @relation("EmployeeJobs", fields: [employeeId], references: [id], onDelete: SetNull)
+  client                           Client?               @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  clientAddress                    ClientAddress?        @relation(fields: [clientAddressId], references: [id], onDelete: SetNull)
+  checklistTemplate                ChecklistTemplate?    @relation("JobChecklistTemplate", fields: [checklistTemplateId], references: [id], onDelete: SetNull)
+  parentJob                        Job?                  @relation("JobRecurrence", fields: [parentJobId], references: [id], onDelete: SetNull)
+  childJobs                        Job[]                 @relation("JobRecurrence")
+  productUsage                     JobProductUsage[]
+  inventoryFlags                   InventoryFlag[]
+  cleaners                         User[]                @relation("JobCleaners")
+  assignmentInvites                JobAssignmentInvite[]
+  logs                             JobLog[]
+  addOns                           JobAddOn[]
+  transactions                     Transaction[]
+  invoices                         Invoice[]
+  invoiceLineItems                 InvoiceLineItem[]     @relation("InvoiceLineJobs")
+  photos                           JobPhoto[]
+  issues                           JobIssue[]
+  maskedContacts                   MaskedContact[]
+  reviewPhotos                     ReviewPhoto[]
+  chatMessages                     JobChatMessage[]
+  assignments                      JobAssignment[]
+  breaks                           JobBreak[]
+  workSessions                     JobWorkSession[]
+  checklists                       JobChecklist[]
+  ratings                          EmployeeRating[]
+  complaints                       Complaint[]
+  emailLogs                        EmailLog[]
+  ratingTokens                     JobRatingToken[]
+  strikes                          CleanerStrike[]
+  convertedFromLeads               Lead[]
+  convertedFromWaitlist            Waitlist[]
+  commissions                      Commission[]
 
   @@unique([organizationId, jobNumber])
   @@index([jobDate])
@@ -1397,18 +1411,18 @@ enum NotificationChannel {
 model Notification {
   // Tenant owner. Required: a row that cannot name its organization is a row
   // no isolation rule can protect.
-  organizationId String   @default("")
-  id             String   @id @default(cuid())
+  organizationId  String             @default("")
+  id              String             @id @default(cuid())
   /// The catalog key this came from, e.g. "admin.clock.clocked_out".
   notificationKey String
-  title          String
-  body           String?
+  title           String
+  body            String?
   /// Where to go to act on it. Relative path.
-  href           String?
+  href            String?
   /// Drives the colour, not the wording. INFO | WARN | ERROR.
-  severity       String   @default("INFO")
-  createdAt      DateTime @default(now())
-  reads          NotificationRead[]
+  severity        String             @default("INFO")
+  createdAt       DateTime           @default(now())
+  reads           NotificationRead[]
 
   @@index([organizationId, createdAt])
   @@index([organizationId])
@@ -1422,6 +1436,12 @@ model NotificationRead {
   notificationId String
   userId         String
   readAt         DateTime     @default(now())
+  /// Set when this person archives the notification (Sept 10 list, item 13).
+  /// The row is KEPT — the PDF asks for read history to survive — but a
+  /// dismissed notification drops out of the default feed and out of the
+  /// sidebar count. Per-person, like the read state above: one admin clearing
+  /// their own feed must not clear everyone else's.
+  dismissedAt    DateTime?
   notification   Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
 
   @@unique([notificationId, userId])
@@ -3228,9 +3248,9 @@ model ServiceArea {
 model Lead {
   // Tenant owner. Required: a row that cannot name its organization is a row
   // no isolation rule can protect.
-  organizationId String       @default("")
+  organizationId String     @default("")
   deletedAt      DateTime? // soft-delete (recoverable via Archived view)
-  id             String       @id @default(cuid())
+  id             String     @id @default(cuid())
   email          String
   name           String?
   phone          String?
@@ -3242,10 +3262,10 @@ model Lead {
   halfBathCount  Int?
   squareFootage  Int?
   preferredDate  DateTime?
-  isFlexible     Boolean      @default(false)
+  isFlexible     Boolean    @default(false)
   preferredSlot  String?
   payload        Json?
-  status         LeadStatus   @default(NEW)
+  status         LeadStatus @default(NEW)
   source         String?
 
   /// How many automatic follow-ups this lead has received (AI assistant
@@ -3867,12 +3887,12 @@ model Organization {
   ///
   /// The SID is an identifier and is stored in clear; the auth token is a
   /// credential and is encrypted at rest (lib/secret-box.ts).
-  twilioAccountSid    String?
-  twilioAuthTokenEnc  String?
+  twilioAccountSid   String?
+  twilioAuthTokenEnc String?
   /// Last four of the saved auth token, so settings can show WHICH token is in
   /// place without being able to show the token.
-  twilioTokenHint     String?
-  twilioConnectedAt   DateTime?
+  twilioTokenHint    String?
+  twilioConnectedAt  DateTime?
 
   subscription Subscription?
 

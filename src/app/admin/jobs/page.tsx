@@ -1,4 +1,5 @@
 import { auth } from "@/lib/auth";
+import { getJobChatUnread } from "@/lib/jobChatUnread";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/org-db";
@@ -46,6 +47,10 @@ export default async function JobsPage({
   const page = Number(params.page) || 1;
   const rowsPerPage = Number(params.rowsPerPage) || 10;
   const archived = params.archived === "1";
+  // Sept 10, item 12. The sidebar's Jobs pill counts unread job chat; clicking
+  // it used to open the whole list, leaving the admin to guess which of 800
+  // rows the "1" meant. It now arrives here.
+  const attention = (params.attention as string) || "";
 
   const baseWhere: any = {};
   if (!isAdmin) {
@@ -58,10 +63,22 @@ export default async function JobsPage({
   // date/client/cleaner filter moved the table but froze the cards. JobsView now
   // derives every card from the same `filteredJobs` list it renders, using the
   // canonical predicates in src/lib/metrics-shared.
-  const listWhere = {
+  const listWhere: any = {
     ...baseWhere,
     deletedAt: archived ? { not: null } : null,
   };
+
+  // Restricting to the exact rows the badge counted.
+  //
+  // `getJobChatUnread` re-derives the caller's role from the session and hands
+  // a non-admin EMPTY, so this parameter cannot widen what anyone can see: a
+  // cleaner arriving here with ?attention=chat gets an empty id list, and
+  // `baseWhere` still pins them to their own jobs either way. The filter can
+  // only ever narrow.
+  if (attention === "chat") {
+    const unread = await getJobChatUnread("admin");
+    listWhere.id = { in: Object.keys(unread.byJob) };
+  }
 
   const allJobs = await db.job.findMany({
     where: listWhere,

@@ -12,9 +12,19 @@ export const metadata = { title: "Notifications · Bookmops" };
  * whether or not the email was enabled or delivered, so "we never heard about
  * it" can be answered by looking rather than by guessing which toggle is off.
  */
-export default async function AdminNotificationsPage() {
+export default async function AdminNotificationsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ view?: string }>;
+}) {
   const session = await requireAdmin();
-  const items = await listAdminNotifications(session.user.id);
+  // The Archived view asks for the rows the default feed hides (item 13).
+  const view = (await searchParams).view;
+  const items = await listAdminNotifications(
+    session.user.id,
+    50,
+    view === "archived"
+  );
 
   return (
     <div className="h-full overflow-hidden overflow-y-auto p-8">
@@ -25,7 +35,7 @@ export default async function AdminNotificationsPage() {
           switched off.
         </p>
       </div>
-      <NotificationsClient initial={items} />
+      <NotificationsClient initial={items} archivedView={view === "archived"} />
     </div>
   );
 }

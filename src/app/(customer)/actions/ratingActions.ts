@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { sendCustomerPoorRatingFollowUp } from "@/lib/email";
 import { POOR_RATING_FOLLOWUP_STARS, applyLateArrivalPenalty } from "@/lib/policy";
 import { maybeApplyLowRatingStrike } from "@/lib/strikes";
+import { ratedCleanerIds } from "@/lib/rating-crew";
 
 export interface PendingRatingJob {
   token: string;
@@ -163,11 +164,25 @@ export async function submitCustomerRating(
     tokenRow.job.lateArrivalRatingPenalty
   );
 
-  const cleanerIds = tokenRow.cleanerId
-    ? [tokenRow.cleanerId]
-    : tokenRow.job.employeeId
-    ? [tokenRow.job.employeeId]
-    : tokenRow.job.cleaners.map((c) => c.id);
+  // Sept 10, item 11. This used to rate the LEAD and stop, so on a three-person
+  // job two cleaners' work vanished — and where `employeeId` still held the
+  // acting admin, the customer's stars were filed against an administrator and
+  // fed their pay tier. One shared rule now, the same one the public rating
+  // link uses.
+  const leadRole = tokenRow.job.employeeId
+    ? (
+        await db.user.findUnique({
+          where: { id: tokenRow.job.employeeId },
+          select: { role: true },
+        })
+      )?.role ?? null
+    : null;
+  const cleanerIds = ratedCleanerIds({
+    tokenCleanerId: tokenRow.cleanerId,
+    cleaners: tokenRow.job.cleaners,
+    employeeId: tokenRow.job.employeeId,
+    leadIsAdmin: leadRole === "ADMIN" || leadRole === "OWNER",
+  });
 
   if (cleanerIds.length === 0) {
     return { success: false, error: "No cleaners were assigned to this job" };

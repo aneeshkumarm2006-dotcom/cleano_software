@@ -6,6 +6,7 @@ import { Loader, Check, X, DollarSign } from "lucide-react";
 import Button from "@/components/ui/Button";
 import { ConfirmActionModal } from "@/components/common/ConfirmActionModal";
 import PayoutEditor from "./PayoutEditor";
+import PayoutJobsPanel from "./PayoutJobsPanel";
 import { approvePayPeriod } from "../actions/approvePayPeriod";
 import { completePayPeriod } from "../actions/completePayPeriod";
 import { cancelPayPeriod } from "../actions/cancelPayPeriod";
@@ -61,7 +62,13 @@ export default function PayPeriodDetail({ period, onError }: Props) {
       ) : (
         <div className="space-y-2">
           {period.payouts.map((pay) => (
-            <PayoutEditor key={pay.id} payout={pay} locked={locked} />
+            // Sept 10, item 9. The panel sits under the editor rather than
+            // inside it because the editor has two very different renders,
+            // locked and editable, and the breakdown is the same in both.
+            <div key={pay.id}>
+              <PayoutEditor payout={pay} locked={locked} />
+              <PayoutJobsPanel payoutId={pay.id} jobCount={pay.jobCount} />
+            </div>
           ))}
         </div>
       )}

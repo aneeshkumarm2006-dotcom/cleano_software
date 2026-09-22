@@ -51,6 +51,7 @@ import StrikesPanel from "./StrikesPanel";
 import type { StrikeLevel } from "@/lib/strikes-constants";
 import type { StrikeReason } from "@prisma/client";
 import { jobTypeLabel } from "@/lib/calendar-labels";
+import BackToList from "@/components/common/BackToList";
 
 type TabView = "overview" | "jobs" | "products" | "availability" | "accountability";
 
@@ -1740,7 +1741,9 @@ export default function EmployeeDetailView({
         <div className="rounded-2xl bg-[#008C9C]/5 p-5">
           {/* Back + Edit row */}
           <div className="flex items-center justify-between mb-5">
-            <Link href="/admin/employees">
+            {/* Sept 10, item 14: returns to the page, search and filters
+                the admin actually had, not to page 1. */}
+            <BackToList href="/admin/employees">
               <Button
                 variant="ghost"
                 size="sm"
@@ -1749,7 +1752,7 @@ export default function EmployeeDetailView({
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Back to Employees
               </Button>
-            </Link>
+            </BackToList>
             <Button
               variant="primary"
               size="md"

@@ -1028,6 +1028,13 @@ export async function submitBooking(input: SubmitBookingInput) {
                 create: photoUrls.map((url) => ({
                   url,
                   caption: BOOKING_PHOTO_CAPTION,
+                  // Sept 10, item 7. These are SCOPE photos — what the customer
+                  // wants looked at — so they belong in the same bucket as the
+                  // admin's "areas to clean", not in the GENERAL pile the
+                  // default would have put them in. That is what puts them in
+                  // front of the cleaner BEFORE they start rather than beside
+                  // the proof photos afterwards.
+                  kind: "BEFORE" as const,
                 })),
               },
             }
