@@ -3,7 +3,9 @@ import { headers } from "next/headers";
 import { redirect, notFound } from "next/navigation";
 import { db } from "@/lib/org-db";
 import InvoiceDetailView from "./InvoiceDetailView";
-import { DEFAULT_TAX_RATES } from "@/lib/tax";
+import { DEFAULT_TAX_RATES, taxRegistrationNumber } from "@/lib/tax";
+import { getSetting } from "@/lib/settings";
+import { getCurrentOrg } from "@/lib/org";
 
 export default async function InvoiceDetailPage({
   params,
@@ -53,11 +55,25 @@ export default async function InvoiceDetailPage({
     qstNumber?: string;
   } | null;
 
+  // The same value the PDF headers with, so the preview and the document a
+  // customer receives cannot disagree about who sent it.
+  const businessNameSetting = await getSetting("general.businessName").catch(
+    () => null,
+  );
+  const businessName =
+    (typeof businessNameSetting === "string" && businessNameSetting.trim()) ||
+    (await getCurrentOrg().catch(() => null))?.name ||
+    undefined;
+
   const taxConfigValue = {
     gstRate: raw?.gstRate ?? DEFAULT_TAX_RATES.gstRate,
     qstRate: raw?.qstRate ?? DEFAULT_TAX_RATES.qstRate,
-    gstNumber: raw?.gstNumber ?? "",
-    qstNumber: raw?.qstNumber ?? "",
+    // Normalised here rather than at the render, because every consumer of
+    // this object truthiness-checks the number. CleanoCalgary has no QST and
+    // typed "0" into the field to say so, which is a non-empty string, so
+    // their invoice header read "QST: 0".
+    gstNumber: taxRegistrationNumber(raw?.gstNumber) ?? "",
+    qstNumber: taxRegistrationNumber(raw?.qstNumber) ?? "",
   };
 
   const invoiceData = {
@@ -107,7 +123,11 @@ export default async function InvoiceDetailPage({
 
   return (
     <div className="h-full overflow-hidden overflow-y-auto p-8 print:!h-auto print:!overflow-visible print:!p-0">
-      <InvoiceDetailView invoice={invoiceData} taxConfig={taxConfigValue} />
+      <InvoiceDetailView
+        invoice={invoiceData}
+        taxConfig={taxConfigValue}
+        businessName={businessName}
+      />
     </div>
   );
 }

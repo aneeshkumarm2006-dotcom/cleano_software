@@ -168,3 +168,25 @@ export function taxLines(
   }
   return lines;
 }
+
+/**
+ * A tax registration number as it should be PRINTED, or null when there isn't
+ * one.
+ *
+ * CleanoCalgary has no QST, and whoever set the workspace up typed `0` into the
+ * QST Number field to say so. `"0"` is a non-empty string, so every truthiness
+ * check passed it through and their invoice header read `QST: 0`. Alberta has
+ * no provincial sales tax at all, so that line should not exist.
+ *
+ * Treats "0", "n/a", "none" and whitespace as "there isn't one", because those
+ * are what people actually type into a field they cannot leave blank.
+ */
+const NOT_A_NUMBER = new Set(["0", "00", "n/a", "na", "none", "-", "—"]);
+
+export function taxRegistrationNumber(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  if (NOT_A_NUMBER.has(trimmed.toLowerCase())) return null;
+  return trimmed;
+}

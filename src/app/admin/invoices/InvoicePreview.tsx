@@ -36,6 +36,11 @@ interface InvoiceData {
 
 interface InvoicePreviewProps {
   invoice: InvoiceData;
+  /**
+   * The company's own name. "Cleano" was hardcoded here and in the PDF, so a
+   * second workspace's invoices went out headed with another company's brand.
+   */
+  businessName?: string;
   taxConfig: {
     gstRate: number;
     qstRate: number;
@@ -44,7 +49,11 @@ interface InvoicePreviewProps {
   };
 }
 
-export default function InvoicePreview({ invoice, taxConfig }: InvoicePreviewProps) {
+export default function InvoicePreview({
+  invoice,
+  taxConfig,
+  businessName,
+}: InvoicePreviewProps) {
   return (
     <div className="bg-white rounded-2xl border border-[#008C9C]/10 overflow-hidden print:border-0 print:rounded-none">
       {/* Header */}
@@ -55,7 +64,9 @@ export default function InvoicePreview({ invoice, taxConfig }: InvoicePreviewPro
             <p className="text-white/70 text-sm mt-1">{invoice.invoiceNumber}</p>
           </div>
           <div className="text-right">
-            <h2 className="text-xl font-[300] tracking-tight">Cleano</h2>
+            <h2 className="text-xl font-[300] tracking-tight">
+              {businessName?.trim() || "Cleano"}
+            </h2>
             <p className="text-white/70 text-xs mt-1">Professional Cleaning Services</p>
             {taxConfig.gstNumber && (
               <p className="text-white/60 text-xs mt-1">GST: {taxConfig.gstNumber}</p>

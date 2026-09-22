@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/org-db";
 import { storeDateKey } from "@/lib/timezone";
 import InvoicesPageClient from "./InvoicesPageClient";
-import { DEFAULT_TAX_RATES } from "@/lib/tax";
+import { DEFAULT_TAX_RATES, taxRegistrationNumber } from "@/lib/tax";
 
 type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>;
 
@@ -58,8 +58,12 @@ export default async function InvoicesPage({
   const taxConfigValue = {
     gstRate: raw?.gstRate ?? DEFAULT_TAX_RATES.gstRate,
     qstRate: raw?.qstRate ?? DEFAULT_TAX_RATES.qstRate,
-    gstNumber: raw?.gstNumber ?? "",
-    qstNumber: raw?.qstNumber ?? "",
+    // Normalised here rather than at the render, because every consumer of
+    // this object truthiness-checks the number. CleanoCalgary has no QST and
+    // typed "0" into the field to say so, which is a non-empty string, so
+    // their invoice header read "QST: 0".
+    gstNumber: taxRegistrationNumber(raw?.gstNumber) ?? "",
+    qstNumber: taxRegistrationNumber(raw?.qstNumber) ?? "",
   };
 
   const invoiceRows = invoices.map((inv) => ({

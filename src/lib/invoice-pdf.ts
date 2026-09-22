@@ -8,6 +8,10 @@ import { db } from "@/lib/org-db";
 import { formatDate } from "@/lib/timezone";
 import { formatAddressLine, normalizeAddressKey } from "@/lib/client-address";
 import { resolveDepositCredit } from "@/lib/booking-deposit";
+import { taxRegistrationNumber } from "@/lib/tax";
+import { getSetting } from "@/lib/settings";
+import { getCurrentOrg } from "@/lib/org";
+import { orgFromContext } from "@/lib/org-context";
 
 const BRAND = "#008C9C";
 
@@ -63,8 +67,8 @@ export interface InvoicePdfData {
   brand: {
     name: string;
     tagline: string;
-    gstNumber: string;
-    qstNumber: string;
+    gstNumber: string | null;
+    qstNumber: string | null;
   };
 }
 
@@ -130,16 +134,51 @@ export async function loadInvoiceData(
   const serviceAddress =
     distinctAddresses.size === 1 ? [...distinctAddresses.values()][0] : null;
 
-  const gstSetting = await db.appSetting
-    .findFirst({ where: { key: "gstNumber" } })
+  // The registration numbers come from `tax.config`, which is what Settings →
+  // Money → Tax actually writes.
+  //
+  // This used to read two standalone `gstNumber` / `qstNumber` AppSetting keys.
+  // Those keys exist in NO workspace — checked all seven — so the PDF fell back
+  // to empty and no invoice this app has ever produced carried a registration
+  // number, including Montreal's, which has both saved correctly. A Canadian
+  // business customer needs the supplier's GST number on the invoice to claim
+  // their input tax credit, so an invoice without it is not just untidy.
+  //
+  // The legacy keys are still read as a fallback, in case an older workspace
+  // somewhere does have them.
+  const taxSetting = await db.appSetting
+    .findFirst({ where: { key: "tax.config" } })
     .catch(() => null);
-  const qstSetting = await db.appSetting
-    .findFirst({ where: { key: "qstNumber" } })
-    .catch(() => null);
+  const taxCfg = (taxSetting?.value ?? null) as {
+    gstNumber?: unknown;
+    qstNumber?: unknown;
+  } | null;
+
+  const legacy = async (key: string) => {
+    const row = await db.appSetting.findFirst({ where: { key } }).catch(() => null);
+    return row?.value;
+  };
+
   const gstNumber =
-    typeof gstSetting?.value === "string" ? gstSetting.value : "";
+    taxRegistrationNumber(taxCfg?.gstNumber) ??
+    taxRegistrationNumber(await legacy("gstNumber"));
   const qstNumber =
-    typeof qstSetting?.value === "string" ? qstSetting.value : "";
+    taxRegistrationNumber(taxCfg?.qstNumber) ??
+    taxRegistrationNumber(await legacy("qstNumber"));
+
+  // The company's own name, not the platform's. "Cleano" was typed in here as
+  // a literal, so a second workspace's invoices went out headed with another
+  // company's brand.
+  //
+  // Falls back to the workspace's own name rather than to "Cleano", because
+  // four of the seven workspaces have never set `general.businessName` and the
+  // platform workspace is not called Cleano at all. `orgFromContext` first:
+  // this also runs from the email cron, outside any request.
+  const businessName = await getSetting("general.businessName").catch(() => null);
+  const orgName =
+    orgFromContext()?.name ??
+    (await getCurrentOrg().catch(() => null))?.name ??
+    null;
 
   return {
     invoiceNumber: invoice.invoiceNumber,
@@ -169,7 +208,10 @@ export async function loadInvoiceData(
     depositApplied: invoice.job ? resolveDepositCredit(invoice.job) : 0,
     notes: invoice.notes,
     brand: {
-      name: "Cleano",
+      name:
+        (typeof businessName === "string" && businessName.trim()) ||
+        orgName ||
+        "Cleano",
       tagline: "Professional Cleaning Services",
       gstNumber,
       qstNumber,

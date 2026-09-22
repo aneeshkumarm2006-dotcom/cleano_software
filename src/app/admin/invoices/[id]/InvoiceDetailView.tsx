@@ -70,6 +70,7 @@ interface InvoiceData {
 
 interface InvoiceDetailViewProps {
   invoice: InvoiceData;
+  businessName?: string;
   taxConfig: {
     gstRate: number;
     qstRate: number;
@@ -81,6 +82,7 @@ interface InvoiceDetailViewProps {
 export default function InvoiceDetailView({
   invoice,
   taxConfig,
+  businessName,
 }: InvoiceDetailViewProps) {
   const router = useRouter();
   const printRef = useRef<HTMLDivElement>(null);
@@ -346,7 +348,11 @@ export default function InvoiceDetailView({
 
       {/* Printable Invoice Preview */}
       <div ref={printRef}>
-        <InvoicePreview invoice={invoice} taxConfig={taxConfig} />
+        <InvoicePreview
+          invoice={invoice}
+          taxConfig={taxConfig}
+          businessName={businessName}
+        />
       </div>
 
       <ConfirmActionModal
