@@ -2,7 +2,11 @@
 
 import { db } from "@/lib/org-db";
 
-import { getOrCreateStripeCustomer, requireStripeForCurrentOrg } from "@/lib/stripe-org";
+import {
+  getOrCreateStripeCustomer,
+  orgStripeStatus,
+  requireStripeForCurrentOrg,
+} from "@/lib/stripe-org";
 
 /**
  * Public action triggered by the /add-card/[token] page. Validates the
@@ -47,5 +51,8 @@ export async function createSetupIntentForToken(token: string) {
     clientSecret: setupIntent.client_secret,
     setupIntentId: setupIntent.id,
     customerName: client.name,
+    // Sent with the intent so the browser cannot mount Stripe.js against a
+    // different account than the one this SetupIntent lives in.
+    publishableKey: (await orgStripeStatus()).publishableKey,
   };
 }

@@ -16,6 +16,7 @@ import {
 } from "@/lib/booking-page-config";
 import { getTaxRates } from "@/lib/tax.server";
 import type { TaxRates } from "@/lib/tax";
+import { orgStripeStatus } from "@/lib/stripe-org";
 
 // The shape, its validation and the room enum all live in @/lib/addon-catalog.
 // They cannot live here: this file is `"use server"`, so it may only export
@@ -42,8 +43,23 @@ export async function getBookingConfig(): Promise<{
    * GST 5% + QST 9.975% however Calgary's settings were filled in.
    */
   taxRates: TaxRates;
+  /**
+   * THIS workspace's Stripe publishable key, for mounting the deposit form.
+   *
+   * It has to come from here for the same reason the tax rates do. The booking
+   * page used to call `loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY)`,
+   * which is a single build-time value shared by every tenant — so a workspace
+   * that connected its own Stripe account in Settings got a card form pointed
+   * at somebody else's account, or, when the variable was unset, no card form
+   * at all. The deposit PaymentIntent is already created against the correct
+   * account server-side (`stripeForCurrentOrg`), so the browser MUST confirm it
+   * with the matching key or Stripe simply cannot find the intent.
+   *
+   * Publishable keys are public by design; this is what they are for.
+   */
+  stripePublishableKey: string | null;
 }> {
-  const [minLeadDays, smsOptInDefault, pricingCfg, contentSetting, bookingPage, taxRates] =
+  const [minLeadDays, smsOptInDefault, pricingCfg, contentSetting, bookingPage, taxRates, stripeStatus] =
     await Promise.all([
       getSetting("scheduling.minLeadDays"),
       getSetting("customer.smsOptInDefault"),
@@ -51,10 +67,20 @@ export async function getBookingConfig(): Promise<{
       db.appSetting.findFirst({ where: { key: SERVICE_CONTENT_KEY } }),
       getSetting(BOOKING_PAGE_CONFIG_KEY),
       getTaxRates(),
+      orgStripeStatus().catch(() => null),
     ]);
   const frequencyDiscounts = pricingCfg.frequencyDiscounts;
   const serviceContent = normalizeServiceContent(contentSetting?.value);
-  const rest = { minLeadDays, smsOptInDefault, frequencyDiscounts, serviceContent, bookingPage, taxRates };
+  const stripePublishableKey = stripeStatus?.publishableKey ?? null;
+  const rest = {
+    minLeadDays,
+    smsOptInDefault,
+    frequencyDiscounts,
+    serviceContent,
+    bookingPage,
+    taxRates,
+    stripePublishableKey,
+  };
   try {
     const setting = await db.appSetting.findFirst({
       where: { key: "pricing.addOns" },

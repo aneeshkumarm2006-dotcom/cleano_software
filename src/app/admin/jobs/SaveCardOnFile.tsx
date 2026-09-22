@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { loadStripe } from "@stripe/stripe-js";
+import { useEffect, useMemo, useState } from "react";
+import { stripeFor } from "@/lib/stripe-browser";
 import {
   Elements,
   PaymentElement,
@@ -9,10 +9,6 @@ import {
   useElements,
 } from "@stripe/react-stripe-js";
 import { saveClientCardOnFile } from "../actions/saveClientCardOnFile";
-
-const stripePromise = loadStripe(
-  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!
-);
 
 interface Props {
   clientId: string;
@@ -36,6 +32,10 @@ export default function SaveCardOnFile({
   onSaved,
 }: Props) {
   const [clientSecret, setClientSecret] = useState<string | null>(null);
+  // This workspace's publishable key, returned alongside the SetupIntent so
+  // the two can never come from different Stripe accounts.
+  const [pubKey, setPubKey] = useState<string | null>(null);
+  const stripePromise = useMemo(() => stripeFor(pubKey), [pubKey]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -58,6 +58,7 @@ export default function SaveCardOnFile({
         if (cancelled) return;
         if (data.clientSecret) {
           setClientSecret(data.clientSecret);
+          setPubKey(data.publishableKey ?? null);
         } else {
           setError(data.error ?? "Could not initialize card form.");
         }
@@ -115,7 +116,7 @@ export default function SaveCardOnFile({
         </p>
       )}
 
-      {clientSecret && (
+      {clientSecret && stripePromise && (
         <Elements
           stripe={stripePromise}
           options={{ clientSecret, appearance: { theme: "stripe" } }}>
@@ -125,6 +126,16 @@ export default function SaveCardOnFile({
             onSaved={onSaved}
           />
         </Elements>
+      )}
+
+      {/* An intent exists but this workspace has no publishable key, so there
+          is nothing to mount the card field with. Previously this rendered an
+          empty <Elements> and an admin saw blank space. */}
+      {clientSecret && !stripePromise && (
+        <p style={{ fontSize: 13, color: "#dc2626", fontWeight: 600 }}>
+          This workspace has no Stripe publishable key saved. Add it in
+          Settings &rarr; Connectors before taking cards.
+        </p>
       )}
     </div>
   );

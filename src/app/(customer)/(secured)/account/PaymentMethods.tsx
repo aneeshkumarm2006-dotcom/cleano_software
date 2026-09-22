@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { loadStripe } from "@stripe/stripe-js";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { stripeFor } from "@/lib/stripe-browser";
 import {
   Elements,
   PaymentElement,
@@ -17,10 +17,6 @@ import {
   removeMyPaymentMethod,
   type CustomerPaymentMethod,
 } from "../../actions/paymentMethods";
-
-const stripePromise = loadStripe(
-  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!
-);
 
 function brandLabel(brand: string | null): string {
   if (!brand) return "Card";
@@ -105,6 +101,10 @@ export default function PaymentMethods() {
 
   const [adding, setAdding] = useState(false);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
+  // Returned with the SetupIntent so the key and the intent are always from
+  // the same Stripe account.
+  const [pubKey, setPubKey] = useState<string | null>(null);
+  const stripePromise = useMemo(() => stripeFor(pubKey), [pubKey]);
 
   const refresh = useCallback(async () => {
     const res = await listMyPaymentMethods();
@@ -130,6 +130,7 @@ export default function PaymentMethods() {
       return;
     }
     setClientSecret(res.clientSecret);
+    setPubKey(res.publishableKey ?? null);
     setAdding(true);
   }
 
@@ -334,7 +335,14 @@ export default function PaymentMethods() {
         </div>
       )}
 
-      {adding && clientSecret ? (
+      {adding && clientSecret && !stripePromise && (
+        <p style={{ color: "#b91c1c", fontSize: 13 }}>
+          We can&apos;t load the card form right now. Please contact us and
+          we&apos;ll add your card for you.
+        </p>
+      )}
+
+      {adding && clientSecret && stripePromise ? (
         <Elements stripe={stripePromise} options={{ clientSecret }}>
           <AddCardFields onSaved={handleSaved} onCancel={cancelAdd} />
         </Elements>

@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
-import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
+import { stripeFor } from "@/lib/stripe-browser";
 import {
   CreditCard,
   Loader2,
@@ -30,8 +30,6 @@ import {
   isQuotedService,
 } from "@/lib/booking-deposit";
 
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
-
 interface Props {
   draft: BookingDraft;
   basePrice: number;
@@ -46,6 +44,12 @@ interface Props {
    * Alberta booking.
    */
   taxRates: TaxRates;
+  /**
+   * This workspace's Stripe publishable key. Required, with no default, for
+   * the same reason as `taxRates`: the old default was a platform-wide value
+   * that quietly belonged to a different company.
+   */
+  stripePublishableKey: string | null;
 }
 
 export default function Step5Review({
@@ -55,7 +59,12 @@ export default function Step5Review({
   freqDiscounts = {},
   bookingPage = BOOKING_PAGE_DEFAULTS,
   taxRates,
+  stripePublishableKey,
 }: Props) {
+  const stripePromise = useMemo(
+    () => stripeFor(stripePublishableKey),
+    [stripePublishableKey],
+  );
   const breakdown = useMemo(() => {
     const addOnTotal = sumAddOns(draft.addOns.filter((a) => a.selected));
     // GROSS pre-tax subtotal. This is the figure a promo code is quoted
@@ -471,10 +480,22 @@ export default function Step5Review({
           <p style={{ color: "var(--red, #dc2626)", fontSize: 13 }}>{stripeError}</p>
         )}
 
-        {clientSecret && !stripeLoading && (
+        {clientSecret && !stripeLoading && stripePromise && (
           <Elements stripe={stripePromise} options={{ clientSecret, appearance: { theme: "stripe" } }}>
             <CardForm onChange={onChange} />
           </Elements>
+        )}
+
+        {/* A deposit was started but this workspace has no publishable key, so
+            there is nothing to mount the card field with. Previously this
+            rendered an empty <Elements> and the customer saw blank space above
+            a dead Confirm button. Say it plainly instead, and name the person
+            who can actually fix it, which is not the customer. */}
+        {clientSecret && !stripeLoading && !stripePromise && (
+          <p style={{ color: "var(--red, #dc2626)", fontSize: 13, margin: 0 }}>
+            This company can&apos;t take card payments online yet. Please
+            contact them directly and they&apos;ll book it for you.
+          </p>
         )}
 
         {/* Nothing loading, nothing wrong, and still no card form. That

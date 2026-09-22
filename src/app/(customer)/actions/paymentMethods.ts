@@ -5,7 +5,11 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 
-import { getOrCreateStripeCustomer, requireStripeForCurrentOrg } from "@/lib/stripe-org";
+import {
+  getOrCreateStripeCustomer,
+  orgStripeStatus,
+  requireStripeForCurrentOrg,
+} from "@/lib/stripe-org";
 import { logActivity } from "@/lib/activity-log";
 import { getCardRemovalBlock, notifyCardReplaced } from "@/lib/payment-methods";
 
@@ -164,7 +168,8 @@ export async function listMyPaymentMethods(): Promise<
  * an admin-emailed one-time link; this lets them do it from their account.
  */
 export async function createMySetupIntent(): Promise<
-  { success: true; clientSecret: string } | { success: false; error: string }
+  | { success: true; clientSecret: string; publishableKey: string | null }
+  | { success: false; error: string }
 > {
   const gate = await requireClient();
   if (!gate.ok) return { success: false, error: gate.error };
@@ -192,7 +197,14 @@ export async function createMySetupIntent(): Promise<
     if (!setupIntent.client_secret) {
       return { success: false, error: "Could not start card setup" };
     }
-    return { success: true, clientSecret: setupIntent.client_secret };
+    // Sent with the intent, never read from a build-time NEXT_PUBLIC_ value:
+    // that is one key for every workspace, and confirming an intent with
+    // another account's key is a 400 from Stripe and a blank card field here.
+    return {
+      success: true,
+      clientSecret: setupIntent.client_secret,
+      publishableKey: (await orgStripeStatus()).publishableKey,
+    };
   } catch (error) {
     console.error("createMySetupIntent failed", error);
     return { success: false, error: "Could not start card setup" };

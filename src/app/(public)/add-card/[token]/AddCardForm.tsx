@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { loadStripe } from "@stripe/stripe-js";
+import { useEffect, useMemo, useState } from "react";
+import { stripeFor } from "@/lib/stripe-browser";
 import {
   Elements,
   PaymentElement,
@@ -11,12 +11,11 @@ import {
 import { createSetupIntentForToken } from "./actions/createSetupIntent";
 import { finalizeCardSetup } from "./actions/finalizeCardSetup";
 
-const stripePromise = loadStripe(
-  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!
-);
-
 export default function AddCardForm({ token }: { token: string }) {
   const [clientSecret, setClientSecret] = useState<string | null>(null);
+  // Returned with the SetupIntent above, so the two always match.
+  const [pubKey, setPubKey] = useState<string | null>(null);
+  const stripePromise = useMemo(() => stripeFor(pubKey), [pubKey]);
   const [setupIntentId, setSetupIntentId] = useState<string | null>(null);
   const [customerName, setCustomerName] = useState<string>("");
   const [loading, setLoading] = useState(true);
@@ -31,6 +30,7 @@ export default function AddCardForm({ token }: { token: string }) {
           setError(r.error ?? "Could not initialize card form");
         } else {
           setClientSecret(r.clientSecret ?? null);
+          setPubKey(r.publishableKey ?? null);
           setSetupIntentId(r.setupIntentId ?? null);
           setCustomerName(r.customerName ?? "");
         }
@@ -63,7 +63,7 @@ export default function AddCardForm({ token }: { token: string }) {
     );
   }
 
-  if (error || !clientSecret || !setupIntentId) {
+  if (error || !clientSecret || !setupIntentId || !stripePromise) {
     return (
       <div
         style={{
@@ -76,7 +76,10 @@ export default function AddCardForm({ token }: { token: string }) {
           fontWeight: 600,
           textAlign: "center",
         }}>
-        {error ?? "Could not load card form"}
+        {error ??
+          (clientSecret && !stripePromise
+            ? "This company hasn't finished connecting Stripe, so the card form can't load. Please contact them."
+            : "Could not load card form")}
       </div>
     );
   }

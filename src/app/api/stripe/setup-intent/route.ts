@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   StripeNotConfigured,
   getOrCreateStripeCustomer,
+  orgStripeStatus,
   requireStripeForCurrentOrg,
 } from "@/lib/stripe-org";
 import { db } from "@/lib/org-db";
@@ -49,9 +50,17 @@ export async function POST(req: NextRequest) {
       usage: "off_session",
     });
 
+    // The publishable key travels WITH the intent, deliberately.
+    //
+    // The browser used to mount Stripe.js from a build-time NEXT_PUBLIC_
+    // variable, which is one value for every workspace, while this intent is
+    // created against this workspace's own account. When the two disagreed the
+    // card field silently failed to render. Returning them together makes it
+    // impossible for them to come from different accounts.
     return NextResponse.json({
       clientSecret: setupIntent.client_secret,
       customerId,
+      publishableKey: (await orgStripeStatus()).publishableKey,
     });
   } catch (err) {
     console.error("setup-intent error:", err);

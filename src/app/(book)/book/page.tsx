@@ -115,6 +115,14 @@ export default function BookPage() {
   // then anyway — the summary needs a server-computed base price, which lands
   // later than this does.
   const [taxRates, setTaxRates] = useState<TaxRates | null>(null);
+  // This workspace's Stripe publishable key, for mounting the deposit card
+  // field. Comes from the server for the same reason the tax rates do: the
+  // build-time NEXT_PUBLIC_ variable is one value for every tenant, and a
+  // workspace with its own Stripe account needs its own key or the browser
+  // cannot confirm the PaymentIntent the server just created.
+  const [stripePublishableKey, setStripePublishableKey] = useState<string | null>(
+    null
+  );
   // Per-service-category recurring discount table (item 7), for display.
   const [freqDiscounts, setFreqDiscounts] = useState<
     Record<string, Record<string, number>>
@@ -286,10 +294,11 @@ export default function BookPage() {
   // Load admin-managed add-on catalog on first mount.
   useEffect(() => {
     let cancelled = false;
-    getBookingConfig().then(({ addOns, minLeadDays, smsOptInDefault, frequencyDiscounts, serviceContent, bookingPage, taxRates }) => {
+    getBookingConfig().then(({ addOns, minLeadDays, smsOptInDefault, frequencyDiscounts, serviceContent, bookingPage, taxRates, stripePublishableKey }) => {
       if (cancelled) return;
       setMinLeadDays(minLeadDays);
       setTaxRates(taxRates);
+      setStripePublishableKey(stripePublishableKey);
       setFreqDiscounts(frequencyDiscounts);
       setServiceContent(serviceContent);
       setBookingPage(bookingPage);
@@ -1106,6 +1115,7 @@ export default function BookPage() {
                   freqDiscounts={freqDiscounts}
                   bookingPage={bookingPage}
                   taxRates={effectiveTaxRates}
+                  stripePublishableKey={stripePublishableKey}
                 />
                 <label
                   className="cl-check-row"

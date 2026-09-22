@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/lib/org-db";
-import { requireStripeForCurrentOrg } from "@/lib/stripe-org";
+import { orgStripeStatus, requireStripeForCurrentOrg } from "@/lib/stripe-org";
 import { generateGiftCardCode } from "@/lib/gift-cards/code";
 import { GIFT_CARD_COVERS } from "@/lib/gift-cards/covers";
 import { getSetting } from "@/lib/settings";
@@ -104,6 +104,10 @@ export async function createGiftCardIntent(input: CreateGiftCardInput) {
       success: true,
       giftCardId: giftCard.id,
       clientSecret: pi.client_secret,
+      // With the intent, not from a build-time NEXT_PUBLIC_ value: that is one
+      // key for every workspace, and Stripe 400s when the key and the intent
+      // belong to different accounts.
+      publishableKey: (await orgStripeStatus()).publishableKey,
     };
   } catch (err) {
     await db.giftCard.update({

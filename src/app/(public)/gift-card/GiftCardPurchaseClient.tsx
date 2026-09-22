@@ -1,14 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
-import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
+import { stripeFor } from "@/lib/stripe-browser";
 import { createGiftCardIntent } from "./actions/createGiftCardIntent";
 import { finalizeGiftCardPurchase } from "./actions/finalizeGiftCardPurchase";
 import type { GiftCardCover } from "@/lib/gift-cards/covers";
 import { storeDateKey } from "@/lib/timezone";
-
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
 interface Props {
   tiers: number[];
@@ -33,6 +31,9 @@ export default function GiftCardPurchaseClient({ tiers, covers, minJobPrice }: P
   // Flow state
   const [giftCardId, setGiftCardId] = useState<string | null>(null);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
+  // Returned with the PaymentIntent so key and intent always match.
+  const [pubKey, setPubKey] = useState<string | null>(null);
+  const stripePromise = useMemo(() => stripeFor(pubKey), [pubKey]);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -68,6 +69,7 @@ export default function GiftCardPurchaseClient({ tiers, covers, minJobPrice }: P
       }
       setGiftCardId(result.giftCardId ?? null);
       setClientSecret(result.clientSecret ?? null);
+      setPubKey(result.publishableKey ?? null);
     });
   }
 
@@ -95,7 +97,7 @@ export default function GiftCardPurchaseClient({ tiers, covers, minJobPrice }: P
   }
 
   // Step 2: Stripe Elements once we have a client secret
-  if (clientSecret && giftCardId) {
+  if (clientSecret && giftCardId && stripePromise) {
     return (
       <div
         style={{
