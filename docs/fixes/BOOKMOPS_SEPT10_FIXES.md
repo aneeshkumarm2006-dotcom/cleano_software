@@ -294,13 +294,14 @@ exactly 6 of them, the first being "$180 for one cleaner pays that cleaner
 $180", which is the client's sentence. Full sweep: the same 16 of 53 suites
 fail as before the change. tsc and build clean.
 
-### [~] 6. Timezone logic for job scheduling
+### [x] 6. Timezone logic for job scheduling
 
 Area: admin jobs, calendar, scheduling, timezone.
 Client evidence: admin in Calgary sees Montreal times shifted by two hours.
 
-The reported bug is fixed. A second, larger half is identified, sized, and
-deliberately not started. Read both parts before calling this closed.
+Closed 2026-09-22 in three passes: the reported bug, then the tenant clock
+everywhere a tenant can name itself, then the tenant clock on an ordinary
+browser request. All three are written up below, in the order they were done.
 
 #### Part 1, the reported bug: fixed 2026-09-22
 
@@ -399,16 +400,84 @@ client from the layout — and doing only the second would be worse than today,
 because the browser would then print Calgary's clock while the server-rendered
 half of the same screen printed Montreal's.
 
-So a CleanoCalgary admin still sees Montreal times on screen. That is the
-remaining work on this item, and it is the part that needs a design decision
-rather than more typing.
+So at the end of that pass a CleanoCalgary admin still saw Montreal times on
+screen. That is what the third pass closes.
 
-**Verified:** `npx tsx --conditions=react-server scripts/verify-tenant-timezone.ts`,
-12/12. It runs the real helpers inside real organization contexts and checks the
-two failures that would matter most: a loop over tenants leaking the previous
-one, and two tenants in flight at the same time. It also checks a near-midnight
-instant, where a wrong zone changes the DAY rather than the hour, which is what
-puts a job on the wrong day of a schedule.
+#### Part 2, second pass: the browser request, done 2026-09-22
+
+The blocker was stated above: a request resolves its organization
+asynchronously while every timezone helper is synchronous. The way past it is
+that **the lookup has already happened.** `getCurrentOrg()` is wrapped in
+React's per-request cache and is called by the root layout on every gated
+request, and again by `requireOrgId()` before any query runs. Nothing in this
+app formats a date it has not first fetched. So no new lookup was added: the
+zone is remembered the moment the host becomes an organization, and the
+synchronous helpers read what is already known.
+
+| Piece | Where | What it does |
+|---|---|---|
+| The holder | `src/lib/store-tz.server.ts` | One mutable box per request, from React's `cache()`. |
+| The write | `getCurrentOrg()` in `src/lib/org.ts` | `rememberRequestTz(org?.timezone)`, as a side effect of the one place a host becomes an organization. |
+| The read | `storeTz()` in `src/lib/timezone.ts` | Asks the announcement first, then the request, then the browser. |
+| The browser | `src/app/layout.tsx` | Stamps `window.__cleanoTz` in `<head>`, at parse time. |
+
+Three decisions inside that are worth keeping:
+
+- **A per-request holder, not a module variable.** A module variable is shared
+  by every request the server is handling at that moment, so two tenants
+  loading a page at the same second would take each other's clock. It would
+  happen under load and intermittently, which is the worst way for a bug of
+  this kind to show up. There is a test for exactly this.
+- **Not AsyncLocalStorage**, which the announcement path uses. A layout cannot
+  wrap its children in a call frame: Next hands the layout the page as an
+  already-built element and React renders it after the layout returns. There is
+  no frame to attach to.
+- **The browser half ships with the server half, not after it.** On its own it
+  would have been worse than the bug: the interactive half of a page would
+  print one clock while the server-rendered half printed the other, and
+  hydration would flip one of them in front of the user.
+
+Two smaller things were fixed in the same pass because they would have silently
+undone it:
+
+- **Frozen defaults.** Fifteen files read the deployment default directly, five
+  of them as `const TZ = STORE_TZ` at module scope — captured once, before any
+  request, and therefore the same value for every tenant on the deployment.
+  `email.ts`, `sms.ts`, `availability.ts`, `time.ts` and `pay-period.ts` were
+  the worst of them, because those are the files that write the times a
+  customer reads. All fifteen now call `storeTz()` at the point of use. There
+  is a test that asserts none of them regresses.
+- **An unusable zone.** `Organization.timezone` is an editable text column, and
+  every date on a page is formatted through an `Intl.DateTimeFormat` built from
+  it. One bad save would have thrown on every date rather than printing the
+  wrong hour, so a zone Intl does not recognise now falls back to the
+  deployment default. The value is also filtered before it is written into the
+  page's `<script>`.
+
+**The UI half of the PDF's request** ("UI should make timezone clear where
+needed, especially for admin scheduling and cleaner job views") is now two
+labels, both from `storeTzLabel()`, which reads "Eastern Time" / "Mountain
+Time" with the season stripped so it does not change under people twice a year:
+
+- the job form's time picker, under the **Now** button, since Now is the
+  control that raised the question in the first place;
+- the cleaner job page, under the start time.
+
+**Verified:** `scripts/verify-tenant-timezone.ts` 22/22 and
+`scripts/verify-sept10-fixes.ts` 169/169, plus `tsc` and `next build` clean.
+The first runs the real helpers inside real organization contexts and checks
+the failures that would matter most: a loop over tenants leaking the previous
+one, two tenants in flight at the same time, a near-midnight instant where a
+wrong zone changes the DAY rather than the hour, a remembered zone failing
+closed outside a request, and an unusable zone falling back instead of
+throwing. The second pins the wiring, which no behavioural test can see.
+
+**One limit, stated rather than left to be discovered.** The request half
+depends on the organization having been resolved before a date is formatted.
+Everything that reads data has been through `getCurrentOrg()`, so that holds
+across the app; a page that formats a date without touching the database at all
+would fall back to the deployment default. That is today's behaviour, not a
+regression, and there is no such page today.
 
 ---
 
@@ -628,7 +697,7 @@ the problem masking was built to solve, not current behaviour.
 
 ---
 
-## The migration, written and NOT applied
+## The migration, applied to production 2026-09-22
 
 `prisma/migrations/20260922120000_recurring_discount_override_and_notification_dismiss/`
 
@@ -644,7 +713,7 @@ NULL means AUTO and "not archived" respectively, which is what every existing
 row already does, so no row changes behaviour. Nothing is rewritten, so it is
 safe against a live database, and it reverses by dropping the three columns.
 
-**It must be applied BEFORE the code is deployed**, or the two features above
+It was applied BEFORE the code was deployed, per the standing rule, or the two features above
 will fault at runtime. Item 7 needed no migration after all: `JobPhotoKind`
 already had `BEFORE`.
 
@@ -665,15 +734,12 @@ first and the audit last:
    2026-09-22**, and the duplicate path was already correct.
 5. Item 4, diagnose before coding. **Done 2026-09-22**; it was code, plus
    one config item left for the Vercel batch.
-6. Item 6, the audit. **Part 1 done 2026-09-22**; part 2, the per-tenant
-   timezone, is sized above and awaiting a decision.
+6. Item 6, the audit. **Done 2026-09-22**, in three passes: the reported
+   device-clock bug, the tenant clock for anything that announces itself, and
+   the tenant clock on an ordinary browser request.
 
-P1 progress on 2026-09-22: **10, 11, 12 and 15 done**, **13 all but the archive
-column**. Left: 7, 8, 9, 14, plus the three migrations listed above.
-
-Then P1 in this order: 13 and 12 together (same surface, 13 is nearly done),
-then 15, 14, 11, 10, 9, 8, 7. Item 11 moved up now that its rule is settled.
-
-Rough shape, one person: **P0 about a week, P1 about a week and a half.**
-Items 7 and 8 need migrations, which per the standing rule are written and
-applied deliberately before any push, never as part of a deploy.
+**All 15 items are done as of 2026-09-22.** The migration above is applied to
+production. The only thing this list still leaves outside the code is
+`CRON_SECRET` in the Vercel batch, which item 4 needs before the time-window
+notices (12-hour unassigned, nobody clocked in, 48-hour customer reminder) will
+fire at all.

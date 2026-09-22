@@ -635,9 +635,12 @@ section("4 · booking: photos are required and validated", () => {
     "src/app/(book)/actions/submitBooking.ts",
     "new Set("
   );
+  // The wizard's gating rules moved out of book/page.tsx into book/blockers.ts
+  // (Sept 17, item 9) so the same rules that disable the button also produce
+  // the sentence explaining why. The rule itself is unchanged.
   has(
     "the step gate counts only photos that finished uploading",
-    "src/app/(book)/book/page.tsx",
+    "src/app/(book)/book/blockers.ts",
     "draft.photos.length < BOOKING_PHOTO_MIN"
   );
   // The public upload action's own limits.

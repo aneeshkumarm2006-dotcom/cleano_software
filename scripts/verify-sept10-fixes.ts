@@ -1022,5 +1022,81 @@ check(
   true
 );
 
+// ── Item 6 part 2: the tenant clock on an ordinary browser request ──────────
+//
+// The behaviour is exercised for real in scripts/verify-tenant-timezone.ts.
+// What that cannot see is the WIRING — the three places this depends on, each
+// of which is a plausible thing for a later refactor to tidy away without
+// noticing that a workspace's clock goes with it.
+
+const tzLib = read("src/lib/timezone.ts");
+const tzServer = read("src/lib/store-tz.server.ts");
+const orgLib = read("src/lib/org.ts");
+const rootLayout = read("src/app/layout.tsx");
+
+check(
+  "the request's zone is remembered where the host becomes an organization",
+  orgLib.includes("rememberRequestTz(org?.timezone)"),
+  true
+);
+check(
+  "...into a per-request holder, not a module variable two tenants would share",
+  tzServer.includes("const requestTzHolder = cache("),
+  true
+);
+check(
+  "an announcement is still asked first",
+  tzLib.includes('RESOLVER_ORDER: readonly StoreTzSource[] = ["context", "request"]'),
+  true
+);
+check(
+  "the page stamps the zone for the browser half",
+  rootLayout.includes("window.__cleanoTz=${JSON.stringify(pageTz)};"),
+  true
+);
+check(
+  "...filtered first, because it is a text column going into a <script>",
+  rootLayout.includes("test(rawTz) ? rawTz : STORE_TZ"),
+  true
+);
+check(
+  "...and the browser reads it on every call, not once at import",
+  tzLib.includes("function browserStoreTz()") && tzLib.includes("window.__cleanoTz"),
+  false
+);
+check(
+  "a zone Intl cannot use falls back instead of throwing on every date",
+  tzLib.includes("function isUsableTz("),
+  true
+);
+
+// Nothing may freeze the deployment default at import time any more: a
+// `const TZ = STORE_TZ` at module scope is read once, before any request, so
+// every tenant on the deployment would share whichever value it captured.
+const FROZEN_TZ_FILES = [
+  "src/lib/time.ts",
+  "src/lib/sms.ts",
+  "src/lib/email.ts",
+  "src/lib/availability.ts",
+  "src/lib/pay-period.ts",
+  "src/lib/payment-methods.ts",
+  "src/lib/ai-assistant/availability.ts",
+  "src/components/JobChatThread.tsx",
+  "src/app/admin/quotes/QuotesInboxClient.tsx",
+  "src/app/admin/recurring/RecurringClient.tsx",
+  "src/app/admin/web-bookings/WebBookingsPageClient.tsx",
+  "src/app/(customer)/(secured)/page.tsx",
+  "src/app/(customer)/(secured)/bookings/BookingsClient.tsx",
+  "src/app/(customer)/(secured)/bookings/[id]/page.tsx",
+  "src/app/api/cron/notifications/route.ts",
+];
+for (const file of FROZEN_TZ_FILES) {
+  check(
+    `${file} formats through storeTz(), not the frozen default`,
+    /timeZone:\s*(STORE_TZ|TZ|BUSINESS_TZ)\b/.test(read(file)),
+    false
+  );
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);
