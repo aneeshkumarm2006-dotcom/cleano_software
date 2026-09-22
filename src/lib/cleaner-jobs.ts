@@ -106,13 +106,73 @@ export function cleanerAssignedWhere(cleanerId: string): Prisma.JobWhereInput {
  */
 export function upcomingFilter(now: Date = new Date()): Prisma.JobWhereInput {
   return {
-    startTime: { gte: startOfDayTz(now) },
     clockOutTime: null,
     OR: [
-      // Not started yet → only a cancellation takes it off the schedule.
-      { startTime: { gt: now }, status: { not: "CANCELLED" } },
-      // Already under way today → the closing statuses still close it.
-      { status: { notIn: [...CLEANER_CLOSED_STATUSES] } },
+      // Today and later, in the business timezone. Unchanged from round 4.
+      {
+        startTime: { gte: startOfDayTz(now) },
+        OR: [
+          // Not started yet → only a cancellation takes it off the schedule.
+          { startTime: { gt: now }, status: { not: "CANCELLED" } },
+          // Already under way today → the closing statuses still close it.
+          { status: { notIn: [...CLEANER_CLOSED_STATUSES] } },
+        ],
+      },
+      // Last night's job, still inside its own service window (Sept 10, fix 2).
+      stillWithinServiceWindow(now),
+    ],
+  };
+}
+
+// ── Sept 10 list, fix 2: the job the calendar date stole ────────────────────
+//
+// A job scheduled for 11:55 PM could not be clocked into after midnight. The
+// clock-in action was never the problem: it has no date test in it at all, and
+// `CLOCK_IN_BLOCKED_STATUSES` blocks only CANCELLED and PAID. What blocked the
+// cleaner was this file. `upcomingFilter` required `startTime >= startOfDayTz`,
+// so at 12:01 AM the job stopped being upcoming, moved to Past, and took its
+// clock-in button with it — mid-shift, for a job the cleaner was standing in.
+//
+// The rule that replaces "which calendar day is it" is "is the job's own
+// service window still open". A job is still live when it has not been clocked
+// out, is not closed, and `now` has not yet passed its end plus a grace period.
+//
+// Prisma cannot add the grace to a column inside a `where`, so the comparison
+// is inverted: instead of `endTime + grace >= now` we ask `endTime >= now -
+// grace`, which is the same statement with the arithmetic moved to the side we
+// control. `endTime` is nullable, so a job without one is measured from its
+// start plus an assumed length.
+//
+// This is what makes overnight, commercial and post-construction work behave.
+
+/** How long past its scheduled end an unfinished job stays clockable. */
+export const SERVICE_WINDOW_GRACE_HOURS = 6;
+
+/** Assumed length of a job that carries no `endTime`. */
+export const ASSUMED_JOB_HOURS = 4;
+
+const HOUR_MS = 3_600_000;
+
+/**
+ * Fragment: the job started before today but its service window has not closed.
+ *
+ * Kept as one exported predicate because `upcomingFilter` and `pastFilter` must
+ * agree on it exactly. If they ever drift, a job appears in both lists at once,
+ * or in neither — which is how the original bug read to the cleaner.
+ */
+export function stillWithinServiceWindow(
+  now: Date = new Date()
+): Prisma.JobWhereInput {
+  const endFloor = new Date(now.getTime() - SERVICE_WINDOW_GRACE_HOURS * HOUR_MS);
+  const startFloor = new Date(endFloor.getTime() - ASSUMED_JOB_HOURS * HOUR_MS);
+
+  return {
+    startTime: { lt: startOfDayTz(now) },
+    clockOutTime: null,
+    status: { notIn: [...CLEANER_CLOSED_STATUSES] },
+    OR: [
+      { endTime: { gte: endFloor } },
+      { endTime: null, startTime: { gte: startFloor } },
     ],
   };
 }
@@ -136,9 +196,18 @@ export function doneFilter(now: Date = new Date()): Prisma.JobWhereInput {
   };
 }
 
-/** Fragment: jobs whose day has passed (business timezone). */
+/**
+ * Fragment: jobs whose day has passed (business timezone).
+ *
+ * The exact complement of `upcomingFilter`'s second arm (Sept 10, fix 2). Last
+ * night's unfinished job is upcoming until its service window closes, so it
+ * must not also be listed as past in the meantime.
+ */
 export function pastFilter(now: Date = new Date()): Prisma.JobWhereInput {
-  return { startTime: { lt: startOfDayTz(now) } };
+  return {
+    startTime: { lt: startOfDayTz(now) },
+    NOT: stillWithinServiceWindow(now),
+  };
 }
 
 /** Fragment: cancelled jobs (their own section — never mixed into upcoming). */

@@ -63,7 +63,11 @@ export default async function EmployeePage({
           // PAY can be computed with the same function payroll uses rather
           // than read off the stale `employeePay` column — see `totalPaid`.
           cleaners: { select: { id: true } },
-          assignments: { select: { cleanerId: true, payAmount: true } },
+          // `status` so a CANCELLED row (a cleaner who left the job) is not
+        // read as a live assignment by the pay math (Sept 10, items 3 + 5).
+        assignments: {
+          select: { cleanerId: true, payAmount: true, status: true },
+        },
           // Attributed revenue is the ACTIVE subtotal (fix 3), so the add-on
           // rows have to travel with the job.
           addOns: { select: { name: true, price: true, quantity: true } },

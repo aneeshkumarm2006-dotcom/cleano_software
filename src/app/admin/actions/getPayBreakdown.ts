@@ -18,6 +18,7 @@ import {
 import {
   EMPTY_PAY_SHARE,
   computeJobPayShares,
+  liveAssignments,
   type JobPayInput,
 } from "@/lib/cleaner-earnings";
 import { computeJobMoney, jobPayBasis } from "@/lib/job-money";
@@ -63,7 +64,11 @@ export async function getPayBreakdown(
         addOns: true,
         // Manual per-cleaner pay overrides — without these the number a cleaner
         // sees here would disagree with what payroll actually pays them.
-        assignments: { select: { cleanerId: true, payAmount: true } },
+        // `status` so a CANCELLED row (a cleaner who left the job) is not
+        // read as a live assignment by the pay math (Sept 10, items 3 + 5).
+        assignments: {
+          select: { cleanerId: true, payAmount: true, status: true },
+        },
         // THE CLOCK (round 4, fix 5). An HOURLY job is now settled from these
         // rows — each cleaner's own sessions × the rate — so a payload built
         // without them falls back to splitting the stored team total evenly and
@@ -126,7 +131,9 @@ export async function getPayBreakdown(
     const payBasis = jobPayBasis(job);
 
     const viewerRate = rateInputs.get(viewerId);
-    const hasOverride = job.assignments.some(
+    // Live rows only, the same set `computeJobPayShares` honours an override
+    // for. A cancelled row's stored amount is history, not a promise.
+    const hasOverride = liveAssignments(job).some(
       (a) => a.cleanerId === viewerId && a.payAmount != null
     );
     // D2 — the admin (or the BookingKoala CSV) stated the crew's total outright,

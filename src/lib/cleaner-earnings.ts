@@ -107,7 +107,18 @@ export interface JobPayInput {
    * a job's pay unevenly — e.g. a $100 FLAT job paid $70 / $30 instead of
    * $50 / $50. A null payAmount means "no override, use the normal rule".
    */
-  assignments?: { cleanerId: string; payAmount: number | null }[];
+  assignments?: {
+    cleanerId: string;
+    payAmount: number | null;
+    /**
+     * The row's live status. CANCELLED means the cleaner left this job, and a
+     * CANCELLED row survives `syncJobAssignments` on purpose, as history. It
+     * must never be read as an assignment (Sept 10, items 3 + 5). Optional so
+     * older callers still type-check; a row with no status is treated as live,
+     * which is what it was before this field existed.
+     */
+    status?: string | null;
+  }[];
   /**
    * Breaks taken on this job (item 26). Deducted from worked hours so paid
    * time reflects ACTIVE work.
@@ -175,7 +186,10 @@ export const JOB_PAY_SELECT = {
   clockInTime: true,
   clockOutTime: true,
   cleaners: { select: { id: true } },
-  assignments: { select: { cleanerId: true, payAmount: true } },
+  // `status` is selected because a CANCELLED row is kept as history and must
+  // not be paid (Sept 10, items 3 + 5). Without it the money path could not
+  // tell a live assignment from a dropped one.
+  assignments: { select: { cleanerId: true, payAmount: true, status: true } },
   breaks: { select: { cleanerId: true, startedAt: true, endedAt: true } },
   workSessions: {
     select: { cleanerId: true, startedAt: true, endedAt: true },
@@ -187,6 +201,24 @@ export const PAYABLE_JOB_STATUSES = ["COMPLETED", "PAID"] as const;
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+/** An assignment row that is no longer an assignment (Sept 10, items 3 + 5). */
+export const DEAD_ASSIGNMENT_STATUS = "CANCELLED";
+
+/**
+ * The job's assignment rows that still mean "this cleaner is on this job".
+ *
+ * One definition, used by both the head count and the per-cleaner override
+ * lookup, so a dropped cleaner cannot be excluded from the crew while their
+ * `payAmount` is still taken off the top.
+ */
+export function liveAssignments(
+  job: JobPayInput
+): NonNullable<JobPayInput["assignments"]> {
+  return (job.assignments ?? []).filter(
+    (a) => a.status !== DEAD_ASSIGNMENT_STATUS
+  );
 }
 
 /**
@@ -211,6 +243,21 @@ function round2(n: number): number {
  *
  * `rates` is optional so pure callers keep working; the role check is simply
  * skipped when it isn't supplied.
+ *
+ * GUARD 2 (Sept 10 list, items 3 + 5): a CANCELLED `JobAssignment` row is not
+ * an assignment. When a cleaner drops a shift, `cancelShift` disconnects them
+ * from `Job.cleaners` and sets their row to CANCELLED; `syncJobAssignments`
+ * then deletes every removed cleaner's row EXCEPT the cancelled ones, which it
+ * keeps deliberately as history. This function used to read every row it found,
+ * so that history stayed on the payroll forever. Two client-visible symptoms,
+ * one cause:
+ *
+ *   • the removed cleaner kept a pay line in the job's Financials tab, and
+ *   • a manual TEAM TOTAL was divided by a crew that included the ghost, so
+ *     $180 typed for one cleaner paid $90 (Sept 10 item 3).
+ *
+ * `Job.cleaners` is the live crew, so anyone genuinely still on the job is in
+ * `explicit` through that relation regardless of what their row says.
  */
 export function jobParticipantIds(
   job: JobPayInput,
@@ -219,7 +266,7 @@ export function jobParticipantIds(
   const explicit = new Set(
     [
       ...job.cleaners.map((c) => c.id),
-      ...(job.assignments ?? []).map((a) => a.cleanerId),
+      ...liveAssignments(job).map((a) => a.cleanerId),
     ].filter((id): id is string => !!id)
   );
 
@@ -486,9 +533,10 @@ export function computeJobPayShares(
   const manualTeamTotal = job.employeePayIsManual === true;
 
   // Manual per-cleaner overrides (JobAssignment.payAmount). An override always
-  // wins for that cleaner.
+  // wins for that cleaner. Read from the LIVE rows only: a dropped cleaner's
+  // stored amount must not come off the top of the crew's total.
   const overrideById = new Map<string, number>();
-  for (const a of job.assignments ?? []) {
+  for (const a of liveAssignments(job)) {
     if (a.payAmount != null && participantIds.includes(a.cleanerId)) {
       overrideById.set(a.cleanerId, a.payAmount);
     }
