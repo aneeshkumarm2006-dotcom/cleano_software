@@ -1,0 +1,11 @@
+-- Sept 17 list, item 21: record the cadence a recurring job runs on.
+--
+-- It was never stored. The form posted a frequency, job creation used it to
+-- generate the occurrences, and then discarded it — so nothing could show an
+-- admin what cadence a booking was on, or change it.
+--
+-- One nullable column, no default and no backfill. NULL means "not recorded",
+-- which is the truth for every existing job, and the form says so rather than
+-- guessing ONE_TIME over a series that is plainly weekly. Nothing is rewritten,
+-- so this is safe against a live database and reverses by dropping the column.
+ALTER TABLE "Job" ADD COLUMN "recurringFrequency" TEXT;

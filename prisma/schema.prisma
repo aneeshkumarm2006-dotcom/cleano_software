@@ -35,6 +35,14 @@ model User {
   // individual pay rate used by the split-job calculation (see src/lib/pay-tiers.ts):
   // Trainee = 30%, Standard = 40–45% (rating-based after 5 ratings), Field Lead = 46%.
   cleanerTier                  CleanerTier             @default(STANDARD)
+  timeLogRequests              TimeLogChangeRequest[]  @relation("TimeLogRequests")
+  /// This cleaner's usual $/hr, used to SEED the per-cleaner rate on a new
+  /// hourly job (Sept 17 list, item 22). Deliberately not read by any pay
+  /// calculation: what a job pays is decided on the job, so changing a profile
+  /// rate can never silently reprice work that has already been scheduled or
+  /// done. NULL falls back to the tier default in Settings, then to the job's
+  /// crew-wide rate.
+  defaultHourlyRate            Float?
   // Service categories this employee is allowed to work (awerfixes.pdf item 3).
   // EMPTY = ALL allowed, so existing cleaners are unaffected and admins opt IN
   // to restricting someone. Enforced hard on the cleaner side (available jobs,
@@ -771,6 +779,19 @@ model Job {
   cancellationFeePaymentIntentId   String?
   rescheduleRequestedAt            DateTime?
   parentJobId                      String?
+  /// The cadence this job's series runs on (Sept 17 list, item 21: "frequency
+  /// can only be selected when creating a job").
+  ///
+  /// It genuinely was creation-only: the form posted a frequency, saveJob used
+  /// it to generate the child occurrences, and then threw it away. The only
+  /// surviving trace was `parentJobId` linking the jobs together, so nothing
+  /// could show an admin what cadence a booking was on, let alone change it.
+  ///
+  /// NULL on every job created before this column, and on genuine one-offs.
+  /// Reading NULL as ONE_TIME is wrong for an existing recurring series, so
+  /// the form shows "not recorded" for those rather than guessing — see the
+  /// note in JobModal.
+  recurringFrequency               String?
   bookingSource                    String?
   // External source's unique booking id (e.g. BookingKoala "Booking id") — the
   // idempotency key for imports, so concurrent same-time jobs aren't deduped away.
@@ -796,6 +817,19 @@ model Job {
   /// onDelete: SetNull — deleting the template returns the job to automatic
   /// resolution rather than deleting the job.
   checklistTemplateId              String?
+  /// A checklist typed straight into THIS job, overriding every template
+  /// (Sept 17 list, item 18). NULL means "resolve a template as usual", which
+  /// is every job that pre-dates this column.
+  ///
+  /// Stored as JSON rather than rows because it has no life outside this job:
+  /// it is not shared, not versioned, and not referenced by anything. Rows
+  /// would mean a table, a relation and a cascade for a value that is only
+  /// ever read whole and written whole.
+  ///
+  /// Shape: [{ title, description, isRequired }]. Validated by
+  /// `parseCustomChecklist` in src/lib/job-checklist.ts on every read, because
+  /// a JSON column is only as trustworthy as the last thing that wrote it.
+  customChecklist                  Json?
   // Rag-wash projection — computed from job specs at completion.
   // `washCreditsAwarded` flips to true once credits are written to
   // the assigned cleaner ledger(s), making the award idempotent.
@@ -851,6 +885,7 @@ model Job {
   clientAddress                    ClientAddress?        @relation(fields: [clientAddressId], references: [id], onDelete: SetNull)
   checklistTemplate                ChecklistTemplate?    @relation("JobChecklistTemplate", fields: [checklistTemplateId], references: [id], onDelete: SetNull)
   parentJob                        Job?                  @relation("JobRecurrence", fields: [parentJobId], references: [id], onDelete: SetNull)
+  timeLogRequests                  TimeLogChangeRequest[]
   childJobs                        Job[]                 @relation("JobRecurrence")
   productUsage                     JobProductUsage[]
   inventoryFlags                   InventoryFlag[]
@@ -2545,6 +2580,17 @@ model EmployeeRating {
   rating         Float
   notes          String?
   ratedBy        String?
+  /// Where this rating came from (Sept 17 list, item 13: "rating source should
+  /// be clear: admin manual rating, customer job review, or imported/old
+  /// rating"). One of ADMIN, CUSTOMER, IMPORTED.
+  ///
+  /// NULL on every row written before this column existed, and deliberately not
+  /// backfilled: `jobId` already answers it for those — a rating attached to a
+  /// job came from that job's customer, one without came from an admin or an
+  /// import. `ratingSource()` in lib/rating-history.ts applies that rule, so a
+  /// legacy row reads correctly without a data migration that could get it
+  /// wrong in bulk.
+  source         String?
   // Set when the client edits their submitted rating (shown to admin).
   editedAt       DateTime?
   // Admin exclusion (AwerNewFixes.pdf item 5). An excluded rating is KEPT —
@@ -3092,6 +3138,17 @@ model JobAssignment {
   clockOutTime   DateTime?
   // This cleaner's pay for this job (same proportional-split math as payroll).
   payAmount      Float?
+  /// THIS cleaner's $/hr on THIS job (Sept 17 list, item 22: "job modal only
+  /// has one shared Cleaner hourly rate field, which does not work properly
+  /// for jobs with 2+ cleaners").
+  ///
+  /// NULL means "use the job's crew-wide `Job.hourlyRate`", which is what
+  /// every existing row does and what every existing job is paid from — so
+  /// this column can roll out without repricing a single job. It is only ever
+  /// set by an admin typing a figure into the per-cleaner row, never by a
+  /// default filling itself in: a default that wrote itself here would move
+  /// money on jobs nobody opened.
+  hourlyRate     Float?
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
   job            Job              @relation(fields: [jobId], references: [id], onDelete: Cascade)
@@ -3137,6 +3194,57 @@ model JobWorkSession {
   cleaner        User      @relation(fields: [cleanerId], references: [id], onDelete: Cascade)
 
   @@index([jobId, cleanerId])
+  @@index([cleanerId])
+  @@index([organizationId])
+}
+
+/// A cleaner asking for their own clock times to be corrected
+/// (Sept 17 list, item 19).
+///
+/// Cleaners miss a clock-in, clock out on the drive home, or the app drops a
+/// tap. `updateClockTimes` already lets an ADMIN fix that; what did not exist
+/// was a way for the cleaner to ask. The alternatives in the field are a text
+/// message the office loses or working the hours unpaid, and neither leaves a
+/// record anyone can audit.
+///
+/// A request NEVER changes payroll by itself. It is a proposal with a reason
+/// attached; approving it is what applies the change, and approval runs
+/// through `updateClockTimes` so a correction made this way is byte-identical
+/// to one an admin typed — same validation, same mirrors, same hourly pay
+/// re-snapshot, same job log.
+model TimeLogChangeRequest {
+  // Tenant owner. Required: a row that cannot name its organization is a row
+  // no isolation rule can protect.
+  organizationId String    @default("")
+  id             String    @id @default(cuid())
+  jobId          String
+  cleanerId      String
+  /// The JobWorkSession being corrected. Null for a legacy job whose times
+  /// live on the assignment or the job itself.
+  sessionId      String?
+  /// What the clock said when the request was made. Stored rather than looked
+  /// up later, because the whole point is to show what changed — and an admin
+  /// may have edited the session in the meantime.
+  originalStart  DateTime?
+  originalEnd    DateTime?
+  requestedStart DateTime?
+  requestedEnd   DateTime?
+  /// The cleaner's own words. Required: a correction with no reason is
+  /// indistinguishable from a cleaner rounding their hours up.
+  reason         String
+  /// PENDING | APPROVED | REJECTED. A decided request is never re-decided.
+  status         String    @default("PENDING")
+  decidedById    String?
+  decidedAt      DateTime?
+  /// The admin's reply, shown to the cleaner. Matters most on a rejection.
+  decisionNote   String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  job            Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  cleaner        User      @relation("TimeLogRequests", fields: [cleanerId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([jobId])
   @@index([cleanerId])
   @@index([organizationId])
 }
