@@ -36,6 +36,58 @@
 export const STORE_TZ =
   process.env.NEXT_PUBLIC_BUSINESS_TIMEZONE ?? "America/Montreal";
 
+// ── Per-tenant zones (Sept 10 list, item 6, part 2) ─────────────────────────
+//
+// `STORE_TZ` above is one value for the whole deployment. With a second tenant
+// that is wrong by construction: Cleano is in Montreal and CleanoCalgary is
+// two hours behind it, and a single constant cannot be right for both.
+//
+// `Organization.timezone` already exists and `OrgContext` already carries it.
+// What was missing is anything reading it. This is that.
+//
+// WHY A REGISTERED RESOLVER RATHER THAN AN IMPORT. This module is client-safe
+// on purpose — the same helpers run in server components, server actions, cron
+// routes and the browser — and the organization context is built on
+// `node:async_hooks`, which a browser cannot load. So the context registers
+// itself here instead of being imported from here. `org-context.ts` does that
+// at module load, which is the earliest moment it could matter, and a browser
+// never imports it at all.
+//
+// WHAT THIS COVERS, AND WHAT IT DOES NOT. Cron jobs, webhooks and scripts all
+// announce their organization with `runAsOrg`, so every date they format — the
+// times in a reminder email, an SMS, a generated invoice — now comes out in
+// that tenant's own clock. A normal browser request does NOT: it resolves its
+// organization asynchronously from the host, and these helpers are
+// synchronous, so there is nothing for them to read. That half is written up
+// in docs/fixes/BOOKMOPS_SEPT10_FIXES.md under item 6.
+//
+// The fallback is today's behaviour exactly, so nothing moves where no
+// organization has been announced.
+
+type StoreTzResolver = () => string | undefined;
+
+let resolveTenantTz: StoreTzResolver | null = null;
+
+/**
+ * Let the organization context answer "which zone are we in".
+ *
+ * Called once by `org-context.ts`. Not for general use: a second caller would
+ * silently replace the first, which is why this is named the way it is.
+ */
+export function __setStoreTzResolver(fn: StoreTzResolver): void {
+  resolveTenantTz = fn;
+}
+
+/** The zone to read and write wall clocks in, right now. */
+export function storeTz(): string {
+  try {
+    return resolveTenantTz?.() || STORE_TZ;
+  } catch {
+    // A resolver that throws must not take the page with it.
+    return STORE_TZ;
+  }
+}
+
 /** Locale for every store-facing date/time string. Pinned so the server and
  *  the browser can never disagree about month names or field order. */
 export const STORE_LOCALE = "en-US";
@@ -53,23 +105,36 @@ export interface StoreParts {
   second: number;
 }
 
-const PARTS_FMT = new Intl.DateTimeFormat("en-US", {
-  timeZone: STORE_TZ,
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-  hour: "2-digit",
-  minute: "2-digit",
-  second: "2-digit",
-  hour12: false,
-});
+// One formatter per zone, built once and kept. Constructing an
+// Intl.DateTimeFormat is expensive and this runs on every date the app prints;
+// the old code built it once for the only zone there was. A deployment serves a
+// handful of tenants, so the cache is small and never needs eviction.
+const PARTS_FMT_BY_TZ = new Map<string, Intl.DateTimeFormat>();
+
+function partsFmt(tz: string): Intl.DateTimeFormat {
+  let fmt = PARTS_FMT_BY_TZ.get(tz);
+  if (!fmt) {
+    fmt = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    });
+    PARTS_FMT_BY_TZ.set(tz, fmt);
+  }
+  return fmt;
+}
 
 const asDate = (d: Date | string | number): Date =>
   d instanceof Date ? d : new Date(d);
 
 /** Split an *instant* into its store wall-clock components. */
 export function storeParts(d: Date | string | number = new Date()): StoreParts {
-  const parts = PARTS_FMT.formatToParts(asDate(d));
+  const parts = partsFmt(storeTz()).formatToParts(asDate(d));
   const get = (type: string) =>
     Number(parts.find((p) => p.type === type)?.value ?? 0);
   return {
@@ -255,7 +320,7 @@ export function formatTime(
     minute: "2-digit",
     hour12: true,
     ...opts,
-    timeZone: STORE_TZ,
+    timeZone: storeTz(),
   });
 }
 
@@ -266,7 +331,7 @@ export function formatDate(
 ): string {
   return asDate(d).toLocaleDateString(STORE_LOCALE, {
     ...opts,
-    timeZone: STORE_TZ,
+    timeZone: storeTz(),
   });
 }
 
@@ -282,6 +347,6 @@ export function formatDateTime(
     minute: "2-digit",
     hour12: true,
     ...opts,
-    timeZone: STORE_TZ,
+    timeZone: storeTz(),
   });
 }

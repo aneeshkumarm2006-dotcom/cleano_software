@@ -1,5 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
+import { __setStoreTzResolver } from "@/lib/timezone";
+
 // Deliberately not marked "server-only". Operational scripts are one of the
 // main callers -- they have no request either, and they need to announce which
 // organization they are working on exactly the way cron does. node:async_hooks
@@ -27,6 +29,21 @@ export interface OrgContext {
 }
 
 const storage = new AsyncLocalStorage<OrgContext>();
+
+// Sept 10 list, item 6 part 2. `OrgContext` has always carried the tenant's
+// timezone and nothing read it, so a reminder email for CleanoCalgary printed
+// Montreal's clock.
+//
+// Registered here rather than imported there, because @/lib/timezone is
+// client-safe and this file is built on node:async_hooks, which a browser
+// cannot load. Doing it at module load means it is in place before any code
+// that could possibly need it: you cannot call `runAsOrg` without importing
+// this file.
+//
+// Returns undefined inside an ordinary request, where no organization has been
+// announced, and `storeTz()` then falls back to the deployment default exactly
+// as before.
+__setStoreTzResolver(() => storage.getStore()?.timezone);
 
 /**
  * Run `fn` as this organization.
