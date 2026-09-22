@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Bookmops Pro — Sign in</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&amp;display=swap">
+<style>
+body{margin:0;font-family:'Gontserrat','Montserrat',system-ui,sans-serif;background:#f3f6f9;color:#0e1a1c}
+a{color:#005a63;text-decoration:none}
+a:hover{color:#00707d}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; display: flex; flex-direction: column; background: #19356D;">
+
+  <div style="padding: 74px 28px 34px; display: flex; flex-direction: column; gap: 16px;">
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <div style="width: 38px; height: 38px; border-radius: 11px; background: #008C9C; display: flex; align-items: center; justify-content: center;">
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16"></path><path d="M12 20V10"></path><path d="M8.2 10h7.6l-1.1-4.3a1 1 0 0 0-1-.7H10.3a1 1 0 0 0-1 .7L8.2 10Z"></path></svg>
+      </div>
+      <span style="font-size: 19px; font-weight: 800; letter-spacing: 0.15em; color: #ffffff;">BOOKMOPS</span>
+      <span style="font-size: 10px; font-weight: 700; letter-spacing: 0.1em; color: #19356D; background: #CDE2FF; padding: 4px 8px; border-radius: 6px;">PRO</span>
+    </div>
+    <p style="margin: 0; font-size: 15px; line-height: 1.5; color: rgba(255,255,255,0.74); max-width: 290px;">Your shifts, your route and your pay, in one place.</p>
+  </div>
+
+  <div style="flex-grow: 1; background: #ffffff; border-radius: 28px 28px 0 0; padding: 32px 26px 0; display: flex; flex-direction: column; gap: 18px;">
+
+    <h1 style="margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.01em;">Sign in</h1>
+
+    <div style="display: flex; flex-direction: column; gap: 7px;">
+      <label for="pro-email" style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #005a63;">Work email</label>
+      <input id="pro-email" type="email" value="amara.k@cleano.ca" style="height: 52px; box-sizing: border-box; padding: 0 16px; font-family: inherit; font-size: 15px; color: #0e1a1c; background: #f3f6f9; border: 1px solid rgba(0,140,156,0.15); border-radius: 12px;">
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 7px;">
+      <label for="pro-pass" style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #005a63;">Password</label>
+      <div style="display: flex; align-items: center; gap: 8px; height: 52px; box-sizing: border-box; padding: 0 8px 0 16px; background: #f3f6f9; border: 1px solid rgba(0,140,156,0.15); border-radius: 12px;">
+        <input id="pro-pass" type="password" value="............" style="flex-grow: 1; min-width: 0; height: 100%; padding: 0; font-family: inherit; font-size: 15px; color: #0e1a1c; background: transparent; border: none; outline: none;">
+        <button type="button" aria-label="Show password" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; background: transparent; border: none; border-radius: 10px; cursor: pointer;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#005a63" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+        </button>
+      </div>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 11px; padding: 13px 15px; background: rgba(0,140,156,0.07); border: 1px solid rgba(0,140,156,0.15); border-radius: 13px;">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#005a63" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;"><path d="M20 6 9 17l-5-5"></path></svg>
+      <div style="flex-grow: 1; min-width: 0;">
+        <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #005a63;">Your company</div>
+        <div style="font-size: 14px; font-weight: 600; color: #0e1a1c; margin-top: 2px;">Cleano &middot; Montr&eacute;al</div>
+      </div>
+    </div>
+
+    <button type="button" style="height: 54px; font-family: inherit; font-size: 16px; font-weight: 700; color: #ffffff; background: #008C9C; border: none; border-radius: 14px; box-shadow: 0 4px 14px rgba(0,140,156,0.32); cursor: pointer;">Sign in</button>
+
+    <div style="display: flex; justify-content: center;">
+      <a href="#forgot" style="font-size: 14px; font-weight: 600; padding: 12px;">Forgot your password?</a>
+    </div>
+
+    <p style="margin: auto 0 30px; font-size: 12px; line-height: 1.55; color: rgba(14,26,28,0.65); text-align: center;">We find your company from your work email, so there is nothing to type in.</p>
+
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

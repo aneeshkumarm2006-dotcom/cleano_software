@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Bookmops — Rate your clean</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&amp;display=swap">
+<style>
+body{margin:0;font-family:'Gontserrat','Montserrat',system-ui,sans-serif;background:#ffffff;color:#0e1a1c}
+a{color:#005a63;text-decoration:none}
+a:hover{color:#00707d}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; display: flex; flex-direction: column; background: #ffffff;">
+
+  <div style="padding: 62px 20px 0; display: flex; justify-content: flex-end;">
+    <button type="button" aria-label="Close" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; background: #f3f6f9; border: none; border-radius: 13px; cursor: pointer;">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#19356D" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"></path></svg>
+    </button>
+  </div>
+
+  <div style="flex-grow: 1; overflow: hidden; padding: 6px 22px 0; display: flex; flex-direction: column; gap: 20px;">
+
+    <div style="display: flex; flex-direction: column; align-items: center; gap: 13px;">
+      <div style="width: 68px; height: 68px; border-radius: 50%; background: #008C9C; display: flex; align-items: center; justify-content: center; font-size: 23px; font-weight: 700; color: #ffffff;">AK</div>
+      <div style="text-align: center;">
+        <h1 style="margin: 0; font-size: 23px; font-weight: 700; letter-spacing: -0.025em;">How was your clean?</h1>
+        <p style="margin: 6px 0 0; font-size: 13.5px; color: rgba(14,26,28,0.65);">Amara K. &middot; Deep clean, 22 September</p>
+      </div>
+    </div>
+
+    <div style="display: flex; justify-content: center; gap: 8px;">
+      <button type="button" aria-label="Rate 1 star" style="width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; background: none; border: none; cursor: pointer; padding: 0;">
+        <svg width="38" height="38" viewBox="0 0 24 24" fill="#d97706" stroke="none"><path d="m12 3 2.6 5.6 6 .8-4.4 4.2 1.1 6.1L12 16.8 6.7 19.7l1.1-6.1L3.4 9.4l6-.8L12 3Z"></path></svg>
+      </button>
+      <button type="button" aria-label="Rate 2 stars" style="width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; background: none; border: none; cursor: pointer; padding: 0;">
+        <svg width="38" height="38" viewBox="0 0 24 24" fill="#d97706" stroke="none"><path d="m12 3 2.6 5.6 6 .8-4.4 4.2 1.1 6.1L12 16.8 6.7 19.7l1.1-6.1L3.4 9.4l6-.8L12 3Z"></path></svg>
+      </button>
+      <button type="button" aria-label="Rate 3 stars" style="width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; background: none; border: none; cursor: pointer; padding: 0;">
+        <svg width="38" height="38" viewBox="0 0 24 24" fill="#d97706" stroke="none"><path d="m12 3 2.6 5.6 6 .8-4.4 4.2 1.1 6.1L12 16.8 6.7 19.7l1.1-6.1L3.4 9.4l6-.8L12 3Z"></path></svg>
+      </button>
+      <button type="button" aria-label="Rate 4 stars" style="width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; background: none; border: none; cursor: pointer; padding: 0;">
+        <svg width="38" height="38" viewBox="0 0 24 24" fill="#d97706" stroke="none"><path d="m12 3 2.6 5.6 6 .8-4.4 4.2 1.1 6.1L12 16.8 6.7 19.7l1.1-6.1L3.4 9.4l6-.8L12 3Z"></path></svg>
+      </button>
+      <button type="button" aria-label="Rate 5 stars" style="width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; background: none; border: none; cursor: pointer; padding: 0;">
+        <svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="1.8" stroke-linejoin="round"><path d="m12 3 2.6 5.6 6 .8-4.4 4.2 1.1 6.1L12 16.8 6.7 19.7l1.1-6.1L3.4 9.4l6-.8L12 3Z"></path></svg>
+      </button>
+    </div>
+
+    <div>
+      <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #005a63; text-align: center;">What went well?</div>
+      <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 7px; margin-top: 12px;">
+        <button type="button" style="padding: 10px 15px; font-family: inherit; font-size: 13px; font-weight: 700; color: #ffffff; background: #008C9C; border: none; border-radius: 999px; cursor: pointer;">On time</button>
+        <button type="button" style="padding: 10px 15px; font-family: inherit; font-size: 13px; font-weight: 700; color: #ffffff; background: #008C9C; border: none; border-radius: 999px; cursor: pointer;">Thorough</button>
+        <button type="button" style="padding: 10px 15px; font-family: inherit; font-size: 13px; font-weight: 600; color: #0e1a1c; background: #ffffff; border: 1px solid rgba(0,140,156,0.22); border-radius: 999px; cursor: pointer;">Friendly</button>
+        <button type="button" style="padding: 10px 15px; font-family: inherit; font-size: 13px; font-weight: 600; color: #0e1a1c; background: #ffffff; border: 1px solid rgba(0,140,156,0.22); border-radius: 999px; cursor: pointer;">Great with the cat</button>
+        <button type="button" style="padding: 10px 15px; font-family: inherit; font-size: 13px; font-weight: 600; color: #0e1a1c; background: #ffffff; border: 1px solid rgba(0,140,156,0.22); border-radius: 999px; cursor: pointer;">Kept me posted</button>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      <label for="rate-note" style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #005a63;">Anything to add? Optional</label>
+      <textarea id="rate-note" rows="3" placeholder="Only Amara and the office will read this." style="font-family: inherit; font-size: 14px; line-height: 1.5; color: #0e1a1c; padding: 14px; background: #f3f6f9; border: 1px solid rgba(0,140,156,0.15); border-radius: 14px; resize: none;"></textarea>
+    </div>
+
+    <div>
+      <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #005a63;">Add a tip for Amara</div>
+      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 12px;">
+        <button type="button" style="height: 50px; font-family: inherit; font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; color: #0e1a1c; background: #ffffff; border: 1px solid rgba(0,140,156,0.22); border-radius: 13px; cursor: pointer;">$5</button>
+        <button type="button" style="height: 50px; font-family: inherit; font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; color: #ffffff; background: #008C9C; border: none; border-radius: 13px; cursor: pointer;">$10</button>
+        <button type="button" style="height: 50px; font-family: inherit; font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; color: #0e1a1c; background: #ffffff; border: 1px solid rgba(0,140,156,0.22); border-radius: 13px; cursor: pointer;">$20</button>
+        <button type="button" style="height: 50px; font-family: inherit; font-size: 13px; font-weight: 700; color: #0e1a1c; background: #ffffff; border: 1px solid rgba(0,140,156,0.22); border-radius: 13px; cursor: pointer;">Other</button>
+      </div>
+    </div>
+
+  </div>
+
+  <div style="flex-shrink: 0; padding: 16px 22px 32px;">
+    <button type="button" style="width: 100%; height: 54px; font-family: inherit; font-size: 16px; font-weight: 700; color: #ffffff; background: #008C9C; border: none; border-radius: 14px; box-shadow: 0 4px 14px rgba(0,140,156,0.32); cursor: pointer;">Send rating</button>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

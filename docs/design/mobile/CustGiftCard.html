@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Bookmops — Gift cards</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&amp;display=swap">
+<style>
+body{margin:0;font-family:'Gontserrat','Montserrat',system-ui,sans-serif;background:#ffffff;color:#0e1a1c}
+a{color:#005a63;text-decoration:none}
+a:hover{color:#00707d}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; display: flex; flex-direction: column; background: #ffffff;">
+
+  <div style="padding: 56px 16px 14px; flex-shrink: 0; display: flex; align-items: center; gap: 12px;">
+    <a href="CustAccount.dc.html" aria-label="Back" style="width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; background: #f3f6f9; border-radius: 12px; flex-shrink: 0;">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#19356D" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"></path></svg>
+    </a>
+    <h1 style="margin: 0; flex-grow: 1; font-size: 24px; font-weight: 700; letter-spacing: -0.03em;">Gift cards</h1>
+  </div>
+
+  <div style="flex-grow: 1; overflow: hidden; padding: 0 18px; display: flex; flex-direction: column; gap: 16px;">
+
+    <div style="position: relative; background: #19356D; border-radius: 20px; padding: 22px; overflow: hidden; box-shadow: 0 8px 16px rgba(16,33,61,0.14), 0 24px 48px rgba(16,33,61,0.16);">
+      <div style="position: absolute; right: -44px; top: -44px; width: 168px; height: 168px; border-radius: 50%; background: rgba(0,140,156,0.35);"></div>
+      <div style="position: absolute; right: 22px; bottom: -58px; width: 124px; height: 124px; border-radius: 50%; background: rgba(0,140,156,0.18);"></div>
+      <div style="position: relative;">
+        <div style="display: flex; align-items: center; gap: 9px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="#ffffff" stroke="none"><path d="M4 20h16"></path><path d="M12 20V10"></path><path d="M8.2 10h7.6l-1.1-4.3a1 1 0 0 0-1-.7H10.3a1 1 0 0 0-1 .7L8.2 10Z"></path></svg>
+          <span style="font-size: 12px; font-weight: 800; letter-spacing: 0.17em; color: #ffffff;">BOOKMOPS</span>
+        </div>
+        <div style="font-size: 42px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.04em; color: #ffffff; margin-top: 30px; line-height: 1;">$150</div>
+        <div style="font-size: 13px; color: rgba(255,255,255,0.65); margin-top: 8px;">About one deep clean of a two bedroom</div>
+      </div>
+    </div>
+
+    <div>
+      <div style="font-size: 10px; font-weight: 800; letter-spacing: 0.11em; color: rgba(14,26,28,0.42);">CHOOSE AN AMOUNT</div>
+      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 11px;">
+        <button type="button" style="height: 52px; font-family: inherit; font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; color: #0e1a1c; background: #ffffff; border: 1px solid rgba(25,53,109,0.15); border-radius: 13px; cursor: pointer;">$75</button>
+        <button type="button" style="height: 52px; font-family: inherit; font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; color: #ffffff; background: #008C9C; border: none; border-radius: 13px; cursor: pointer;">$150</button>
+        <button type="button" style="height: 52px; font-family: inherit; font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; color: #0e1a1c; background: #ffffff; border: 1px solid rgba(25,53,109,0.15); border-radius: 13px; cursor: pointer;">$250</button>
+        <button type="button" style="height: 52px; font-family: inherit; font-size: 13px; font-weight: 700; color: #0e1a1c; background: #ffffff; border: 1px solid rgba(25,53,109,0.15); border-radius: 13px; cursor: pointer;">Other</button>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 7px;">
+      <label for="gift-to" style="font-size: 10px; font-weight: 800; letter-spacing: 0.09em; color: #005a63;">WHO IS IT FOR</label>
+      <input id="gift-to" type="text" placeholder="Their name" style="height: 52px; box-sizing: border-box; padding: 0 15px; font-family: inherit; font-size: 15px; color: #0e1a1c; background: #f3f6f9; border: 1px solid rgba(25,53,109,0.1); border-radius: 13px;">
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 7px;">
+      <label for="gift-note" style="font-size: 10px; font-weight: 800; letter-spacing: 0.09em; color: #005a63;">A SHORT MESSAGE</label>
+      <textarea id="gift-note" rows="2" placeholder="Happy birthday, enjoy a clean home." style="font-family: inherit; font-size: 14.5px; line-height: 1.5; color: #0e1a1c; padding: 14px 15px; background: #f3f6f9; border: 1px solid rgba(25,53,109,0.1); border-radius: 13px; resize: none;"></textarea>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: #f3f6f9; border-radius: 15px;">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="#005a63" stroke="none" style="flex-shrink: 0;"><path d="M12 2.5a9.5 9.5 0 1 1 0 19 9.5 9.5 0 0 1 0-19ZM11 7v6h2V7h-2Zm0 8v2h2v-2h-2Z"></path></svg>
+      <span style="flex-grow: 1; font-size: 12.5px; line-height: 1.5; color: rgba(14,26,28,0.7);">Gift cards never expire and can be used on any service.</span>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 11px; padding-top: 2px;">
+      <div style="flex-grow: 1; height: 1px; background: rgba(25,53,109,0.12);"></div>
+      <span style="font-size: 11px; font-weight: 700; color: rgba(14,26,28,0.4);">or</span>
+      <div style="flex-grow: 1; height: 1px; background: rgba(25,53,109,0.12);"></div>
+    </div>
+
+    <a href="#redeem" style="display: flex; align-items: center; justify-content: center; height: 50px; font-size: 14.5px; font-weight: 700; color: #005a63; border: 1.5px solid #008C9C; border-radius: 14px;">Redeem a gift card</a>
+
+  </div>
+
+  <div style="flex-shrink: 0; padding: 16px 18px 32px; display: flex; align-items: center; gap: 15px;">
+    <div style="flex-shrink: 0;">
+      <div style="font-size: 10px; font-weight: 800; letter-spacing: 0.09em; color: #005a63;">TOTAL</div>
+      <div style="font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.03em; line-height: 1.15;">$150</div>
+    </div>
+    <button type="button" style="flex-grow: 1; height: 54px; font-family: inherit; font-size: 16px; font-weight: 700; color: #ffffff; background: #008C9C; border: none; border-radius: 14px; box-shadow: 0 4px 14px rgba(0,140,156,0.32); cursor: pointer;">Buy gift card</button>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

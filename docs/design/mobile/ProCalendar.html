@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Bookmops Pro — Calendar</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&amp;display=swap">
+<style>
+body{margin:0;font-family:'Gontserrat','Montserrat',system-ui,sans-serif;background:#f3f6f9;color:#0e1a1c}
+a{color:#005a63;text-decoration:none}
+a:hover{color:#00707d}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; display: flex; flex-direction: column; background: #f3f6f9;">
+
+  <div style="padding: 56px 16px 14px; flex-shrink: 0; display: flex; align-items: center; gap: 12px;">
+    <a href="ProMore.dc.html" aria-label="Back" style="width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; background: #ffffff; border: 1px solid rgba(25,53,109,0.1); border-radius: 12px; flex-shrink: 0;">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#19356D" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"></path></svg>
+    </a>
+    <h1 style="margin: 0; flex-grow: 1; font-size: 24px; font-weight: 700; letter-spacing: -0.03em;">Calendar</h1>
+  </div>
+
+  <div style="flex-grow: 1; overflow: hidden; padding: 0 16px; display: flex; flex-direction: column; gap: 14px;">
+
+    <div style="background: #ffffff; border: 1px solid rgba(25,53,109,0.1); border-radius: 19px; padding: 16px;">
+      <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 14px;">
+        <span style="flex-grow: 1; font-size: 16px; font-weight: 700; letter-spacing: -0.01em;">September 2026</span>
+        <button type="button" aria-label="Previous month" style="width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; background: #f3f6f9; border: none; border-radius: 10px; cursor: pointer;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#19356D" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"></path></svg>
+        </button>
+        <button type="button" aria-label="Next month" style="width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; background: #f3f6f9; border: none; border-radius: 10px; cursor: pointer;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#19356D" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
+        </button>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px;">
+        <div style="text-align: center; font-size: 9.5px; font-weight: 800; letter-spacing: 0.06em; color: rgba(14,26,28,0.4); padding-bottom: 7px;">M</div>
+        <div style="text-align: center; font-size: 9.5px; font-weight: 800; letter-spacing: 0.06em; color: rgba(14,26,28,0.4); padding-bottom: 7px;">T</div>
+        <div style="text-align: center; font-size: 9.5px; font-weight: 800; letter-spacing: 0.06em; color: rgba(14,26,28,0.4); padding-bottom: 7px;">W</div>
+        <div style="text-align: center; font-size: 9.5px; font-weight: 800; letter-spacing: 0.06em; color: rgba(14,26,28,0.4); padding-bottom: 7px;">T</div>
+        <div style="text-align: center; font-size: 9.5px; font-weight: 800; letter-spacing: 0.06em; color: rgba(14,26,28,0.4); padding-bottom: 7px;">F</div>
+        <div style="text-align: center; font-size: 9.5px; font-weight: 800; letter-spacing: 0.06em; color: rgba(14,26,28,0.22); padding-bottom: 7px;">S</div>
+        <div style="text-align: center; font-size: 9.5px; font-weight: 800; letter-spacing: 0.06em; color: rgba(14,26,28,0.22); padding-bottom: 7px;">S</div>
+
+        <div style="height: 42px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;"><span style="font-size: 13px; font-weight: 600; color: rgba(14,26,28,0.3);">8</span><span style="width: 4px; height: 4px;"></span></div>
+        <div style="height: 42px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;"><span style="font-size: 13px; font-weight: 600; color: rgba(14,26,28,0.3);">9</span><span style="width: 4px; height: 4px; border-radius: 50%; background: rgba(25,53,109,0.22);"></span></div>
+        <div style="height: 42px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;"><span style="font-size: 13px; font-weight: 600; color: rgba(14,26,28,0.3);">10</span><span style="width: 4px; height: 4px; border-radius: 50%; background: rgba(25,53,109,0.22);"></span></div>
+        <div style="height: 42px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;"><span style="font-size: 13px; font-weight: 600; color: rgba(14,26,28,0.3);">11</span><span style="width: 4px; height: 4px;"></span></div>
+        <div style="height: 42px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;"><span style="font-size: 13px; font-weight: 600; color: rgba(14,26,28,0.3);">12</span><span style="width: 4px; height: 4px; border-radius: 50%; background: rgba(25,53,109,0.22);"></span></div>
+        <div style="height: 42px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;"><span style="font-size: 13px; font-weight: 600; color: rgba(14,26,28,0.2);">13</span><span style="width: 4px; height: 4px;"></span></div>
+        <div style="height: 42px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;"><span style="font-size: 13px; font-weight: 600; color: rgba(14,26,28,0.2);">14</span><span style="width: 4px; height: 4px;"></span></div>
+
+        <div style="height: 42px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;"><span style="font-size: 13px; font-weight: 600;">15</span><span style="width: 4px; height: 4px; border-radius: 50%; background: #008C9C;"></span></div>
+        <div style="height: 42px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;"><span style="font-size: 13px; font-weight: 600;">16</span><span style="width: 4px; height: 4px; border-radius: 50%; background: #008C9C;"></span></div>
+        <div style="height: 42px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;"><span style="font-size: 13px; font-weight: 600;">17</span><span style="width: 4px; height: 4px;"></span></div>
+        <div style="height: 42px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;"><span style="font-size: 13px; font-weight: 600;">18</span><span style="width: 4px; height: 4px; border-radius: 50%; background: #008C9C;"></span></div>
+        <div style="height: 42px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;"><span style="font-size: 13px; font-weight: 600;">19</span><span style="width: 4px; height: 4px; border-radius: 50%; background: #008C9C;"></span></div>
+        <div style="height: 42px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;"><span style="font-size: 13px; font-weight: 600; color: rgba(14,26,28,0.32);">20</span><span style="width: 4px; height: 4px;"></span></div>
+        <div style="height: 42px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;"><span style="font-size: 13px; font-weight: 600; color: rgba(14,26,28,0.32);">21</span><span style="width: 4px; height: 4px;"></span></div>
+
+        <div style="height: 42px; border-radius: 12px; background: #19356D; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;"><span style="font-size: 13px; font-weight: 700; color: #ffffff;">22</span><span style="width: 4px; height: 4px; border-radius: 50%; background: #6ee7b7;"></span></div>
+        <div style="height: 42px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;"><span style="font-size: 13px; font-weight: 600;">23</span><span style="width: 4px; height: 4px; border-radius: 50%; background: #008C9C;"></span></div>
+        <div style="height: 42px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;"><span style="font-size: 13px; font-weight: 600;">24</span><span style="width: 4px; height: 4px; border-radius: 50%; background: #008C9C;"></span></div>
+        <div style="height: 42px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;"><span style="font-size: 13px; font-weight: 600;">25</span><span style="width: 4px; height: 4px; border-radius: 50%; background: #008C9C;"></span></div>
+        <div style="height: 42px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;"><span style="font-size: 13px; font-weight: 600;">26</span><span style="width: 4px; height: 4px; border-radius: 50%; background: #008C9C;"></span></div>
+        <div style="height: 42px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;"><span style="font-size: 13px; font-weight: 600; color: rgba(14,26,28,0.32);">27</span><span style="width: 4px; height: 4px;"></span></div>
+        <div style="height: 42px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;"><span style="font-size: 13px; font-weight: 600; color: rgba(14,26,28,0.32);">28</span><span style="width: 4px; height: 4px;"></span></div>
+
+        <div style="height: 42px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;"><span style="font-size: 13px; font-weight: 600;">29</span><span style="width: 4px; height: 4px; border-radius: 50%; background: #008C9C;"></span></div>
+        <div style="height: 42px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;"><span style="font-size: 13px; font-weight: 600;">30</span><span style="width: 4px; height: 4px;"></span></div>
+      </div>
+    </div>
+
+    <div style="display: flex; align-items: baseline; gap: 10px; padding-left: 4px;">
+      <span style="font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: #19356D;">Tue 22 Sep</span>
+      <span style="flex-grow: 1; font-size: 11px; font-weight: 600; color: rgba(14,26,28,0.42); font-variant-numeric: tabular-nums;">3 jobs &middot; 7h 30</span>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 9px;">
+      <div style="background: #ffffff; border: 1px solid rgba(25,53,109,0.1); border-radius: 15px; padding: 13px 15px; display: flex; align-items: center; gap: 13px;">
+        <span style="font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; color: #19356D; width: 46px; flex-shrink: 0;">9:00</span>
+        <span style="flex-grow: 1; min-width: 0; font-size: 14px; font-weight: 600;">4218 rue Saint-Denis</span>
+        <span style="font-size: 13.5px; font-weight: 700; font-variant-numeric: tabular-nums; color: #047857;">$96</span>
+      </div>
+      <div style="background: #ffffff; border: 1px solid rgba(25,53,109,0.1); border-radius: 15px; padding: 13px 15px; display: flex; align-items: center; gap: 13px;">
+        <span style="font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; color: #19356D; width: 46px; flex-shrink: 0;">13:30</span>
+        <span style="flex-grow: 1; min-width: 0; font-size: 14px; font-weight: 600;">1250 boul. Ren&eacute;-L&eacute;vesque</span>
+        <span style="font-size: 13.5px; font-weight: 700; font-variant-numeric: tabular-nums; color: #047857;">$64</span>
+      </div>
+      <div style="background: #ffffff; border: 1px solid rgba(25,53,109,0.1); border-radius: 15px; padding: 13px 15px; display: flex; align-items: center; gap: 13px;">
+        <span style="font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; color: #19356D; width: 46px; flex-shrink: 0;">16:15</span>
+        <span style="flex-grow: 1; min-width: 0; font-size: 14px; font-weight: 600;">77 av. Duluth Est</span>
+        <span style="font-size: 13.5px; font-weight: 700; font-variant-numeric: tabular-nums; color: #047857;">$48</span>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
