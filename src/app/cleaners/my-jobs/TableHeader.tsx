@@ -54,7 +54,7 @@ export function TableHeader({
       <span className="text-xs font-[400] text-gray-500 uppercase tracking-wider">
         {label}
       </span>
-      <span className="text-gray-400 group-hover:text-gray-600">
+      <span className="text-gray-500 group-hover:text-gray-600">
         {isActive ? (
           currentSortOrder === "asc" ? (
             <ArrowUp size={14} className="text-blue-600" />

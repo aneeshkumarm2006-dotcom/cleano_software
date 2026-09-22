@@ -63,12 +63,48 @@ export async function syncJobAssignments(
       },
     });
 
+    // Sept 17, item 22: "hourly rate should default from the cleaner employee
+    // profile". Read once for the whole crew rather than per cleaner.
+    //
+    // It SEEDS a new row and nothing else. Writing the figure onto the
+    // assignment, where an admin can see and change it, is the difference
+    // between a default and a silent repricing: if the profile rate were read
+    // at pay time instead, raising someone's rate today would quietly change
+    // what they are owed for work already scheduled — and for an HOURLY job,
+    // work already done but not yet paid.
+    let seedRates = new Map<string, number>();
+    if (ids.length > 0) {
+      const job = await db.job.findUnique({
+        where: { id: jobId },
+        select: { payType: true },
+      });
+      if (job?.payType === "HOURLY") {
+        const profiles = await db.user.findMany({
+          where: { id: { in: ids }, defaultHourlyRate: { not: null } },
+          select: { id: true, defaultHourlyRate: true },
+        });
+        seedRates = new Map(
+          profiles
+            .filter((u) => (u.defaultHourlyRate ?? 0) > 0)
+            .map((u) => [u.id, u.defaultHourlyRate as number]),
+        );
+      }
+    }
+
     for (const cleanerId of ids) {
+      const seed = seedRates.get(cleanerId);
       await db.jobAssignment.upsert({
         where: { jobId_cleanerId: { jobId, cleanerId } },
-        // Existing rows keep whatever live status they already reached.
+        // Existing rows keep whatever live status they already reached — and
+        // whatever rate an admin has already set on them. A re-save of the
+        // team must not push the profile rate back over a job-specific one.
         update: {},
-        create: { jobId, cleanerId, status: "ASSIGNED" },
+        create: {
+          jobId,
+          cleanerId,
+          status: "ASSIGNED",
+          ...(seed ? { hourlyRate: seed } : {}),
+        },
       });
     }
     return { ok: true };

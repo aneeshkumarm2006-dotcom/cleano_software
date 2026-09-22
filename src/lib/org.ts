@@ -14,6 +14,7 @@ import { headers } from "next/headers";
 import { db } from "@/db";
 import { scopedTo, type ScopedDb } from "@/lib/db-scoped";
 import { orgFromContext, type OrgContext } from "@/lib/org-context";
+import { rememberRequestTz } from "@/lib/store-tz.server";
 import { DEFAULT_ORG_SLUG, orgSlugFromRequestHeaders } from "@/lib/tenant";
 
 /**
@@ -61,7 +62,15 @@ export const getOrgSlug = cache(async (): Promise<string> => {
 /** The organization record, or null if the slug matches nothing. */
 export const getCurrentOrg = cache(async () => {
   const slug = await getOrgSlug();
-  return db.organization.findUnique({ where: { slug } });
+  const org = await db.organization.findUnique({ where: { slug } });
+  // Sept 10, item 6 part 2. This is the ONE place a request's host becomes an
+  // organization, so it is the one place that can tell the timezone helpers
+  // which tenant's clock they are on. Doing it as a side effect here rather
+  // than as a `primeStoreTz()` call in each layout means there is no entry
+  // point left to forget: anything that reads data has already been through
+  // here, and nothing formats a date it has not first fetched.
+  rememberRequestTz(org?.timezone);
+  return org;
 });
 
 /**

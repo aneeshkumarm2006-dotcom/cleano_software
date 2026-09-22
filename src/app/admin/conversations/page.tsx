@@ -81,9 +81,9 @@ export default async function ConversationsPage() {
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2 min-w-0">
                       {c.channel === "SMS" ? (
-                        <MessageSquare size={15} className="text-gray-400 shrink-0" />
+                        <MessageSquare size={15} className="text-gray-500 shrink-0" />
                       ) : (
-                        <Mail size={15} className="text-gray-400 shrink-0" />
+                        <Mail size={15} className="text-gray-500 shrink-0" />
                       )}
                       <span className="text-sm font-medium text-gray-900 truncate">{who}</span>
                       {c.needsHuman && (
@@ -97,7 +97,7 @@ export default async function ConversationsPage() {
                         </span>
                       )}
                     </div>
-                    <span className="text-xs text-gray-400 shrink-0">
+                    <span className="text-xs text-gray-500 shrink-0">
                       {fmt.format(c.lastMessageAt)}
                     </span>
                   </div>

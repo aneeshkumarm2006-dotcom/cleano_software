@@ -1,5 +1,15 @@
-// Quebec sales tax breakdown. GST is federal (5%), QST is provincial (9.975%).
-// Combined effective rate on a pre-tax subtotal is 14.975%.
+// Sales tax breakdown.
+//
+// The constants below are QUEBEC's statutory rates and are the SEED for a new
+// workspace, not the rule. Every workspace sets its own in Settings → Taxes,
+// and `getTaxRates()` in tax.server.ts reads them per tenant.
+//
+// Sept 17 list, item 7: "Calgary booking page shows GST 5% and QST 9.975% even
+// though QST is set to 0 in Calgary settings." The public booking page and
+// `computeBookingPrice` both called `calculateTax()`, which read these
+// constants and nothing else, so an Alberta customer was quoted AND CHARGED
+// Quebec provincial tax. That is why `calculateTax` now REQUIRES its rates:
+// there is no longer a way to call it and silently get Quebec's.
 
 export const GST_RATE = 0.05;
 export const QST_RATE = 0.09975;
@@ -22,9 +32,13 @@ export interface TaxRates {
   qstRate: number;
 }
 
+// Written out rather than derived. `QST_RATE * 100` is 9.975000000000001 in
+// binary floating point, and this value is the fallback that lands in the
+// admin's rate FIELD when a workspace has never saved its tax settings — so
+// the derived form put a 17-digit number in front of someone to edit.
 export const DEFAULT_TAX_RATES: TaxRates = {
-  gstRate: GST_RATE * 100,
-  qstRate: QST_RATE * 100,
+  gstRate: 5,
+  qstRate: 9.975,
 };
 
 /**
@@ -86,15 +100,71 @@ export function computeJobTaxes(
   };
 }
 
-export function calculateTax(subtotal: number): TaxBreakdown {
-  const sub = Math.max(0, subtotal);
-  const gstAmount = round2(sub * GST_RATE);
-  const qstAmount = round2(sub * QST_RATE);
-  const total = round2(sub + gstAmount + qstAmount);
+/**
+ * GST/QST on a pre-tax subtotal, at THIS workspace's rates.
+ *
+ * `rates` is required rather than defaulted. A default would have kept the
+ * exact bug this was changed for: every call site that forgot to pass one
+ * would go on charging Quebec's rates, and it would look correct in Montreal.
+ * Making it required turns each of those into a compile error instead.
+ *
+ * Delegates to `computeJobTaxes` so a booking and the job it becomes round the
+ * same way. They used to be two implementations of the same arithmetic.
+ */
+export function calculateTax(subtotal: number, rates: TaxRates): TaxBreakdown {
+  const t = computeJobTaxes(subtotal, rates, false);
   return {
-    subtotal: round2(sub),
-    gstAmount,
-    qstAmount,
-    total,
+    subtotal: t.subtotalAmount,
+    gstAmount: t.gstAmount,
+    qstAmount: t.qstAmount,
+    total: t.totalAmount,
   };
+}
+
+/** One tax row as a customer should see it. */
+export interface TaxLine {
+  key: "GST" | "QST";
+  /** "GST (5%)" — the rate is part of the label because it varies by workspace. */
+  label: string;
+  amount: number;
+}
+
+/** "5" / "9.975" / "0" — no trailing zeros, because a label reads better. */
+function formatRate(pct: number): string {
+  return String(Math.round(pct * 1000) / 1000);
+}
+
+/**
+ * The tax rows to SHOW, for this workspace's rates.
+ *
+ * A rate of zero produces no row at all, which is the PDF's rule outright: "if
+ * QST rate is 0, QST should not appear in the customer price breakdown". A
+ * "$0.00" line still tells an Alberta customer they are being assessed Quebec
+ * provincial tax, which is the complaint.
+ *
+ * The percentage is read off the rates rather than written into the markup.
+ * Every price breakdown in the app had "QST (9.975%)" typed into it as a
+ * string, so even once the arithmetic was per-tenant the screen would have
+ * gone on naming Quebec's rate.
+ */
+export function taxLines(
+  rates: TaxRates,
+  amounts: { gstAmount: number; qstAmount: number },
+): TaxLine[] {
+  const lines: TaxLine[] = [];
+  if (rates.gstRate > 0) {
+    lines.push({
+      key: "GST",
+      label: `GST (${formatRate(rates.gstRate)}%)`,
+      amount: amounts.gstAmount,
+    });
+  }
+  if (rates.qstRate > 0) {
+    lines.push({
+      key: "QST",
+      label: `QST (${formatRate(rates.qstRate)}%)`,
+      amount: amounts.qstAmount,
+    });
+  }
+  return lines;
 }

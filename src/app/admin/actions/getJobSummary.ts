@@ -89,6 +89,8 @@ export async function getJobSummary(jobId: string): Promise<JobSummaryResult> {
         // Pinned checklist template (Stage 10) — the calendar edit modal needs
         // it or it un-pins the job on save.
         checklistTemplateId: true,
+        customChecklist: true,
+        recurringFrequency: true,
         cleaners: { select: { id: true, name: true } },
         employee: { select: { id: true, name: true } },
         assignments: {
@@ -305,6 +307,10 @@ export async function getJobSummary(jobId: string): Promise<JobSummaryResult> {
       squareFootage: job.squareFootage,
       propertyType: job.propertyType,
       checklistTemplateId: job.checklistTemplateId,
+      // So the calendar's Edit opens the form with the job's own list on it
+      // rather than an empty editor that would clear it (Sept 17, item 18).
+      customChecklist: job.customChecklist,
+      recurringFrequency: job.recurringFrequency,
       cleaners: job.cleaners.map((c) => ({
         id: c.id,
         name: c.name,

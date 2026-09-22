@@ -45,7 +45,14 @@ import { resolveJobAddressId } from "@/lib/client-address-store";
 import { resolveJobClient } from "@/lib/client-capture";
 import { getServicePricingConfig } from "@/lib/booking-pricing";
 import { isSqftJobType, moveInOutBasePrice } from "@/lib/service-pricing";
-import { applyToJobSeries, seriesRootId, type SeriesUpdateResult } from "@/lib/job-series";
+import {
+  applyFrequencyChange,
+  applyToJobSeries,
+  seriesRootId,
+  type FrequencyChangeResult,
+  type SeriesFrequency,
+  type SeriesUpdateResult,
+} from "@/lib/job-series";
 import { AUTO_REASON, normalizeDiscountReason } from "@/lib/discount-reasons";
 import { createAssignmentInvites } from "@/lib/invites";
 import { getSetting } from "@/lib/settings";
@@ -65,6 +72,8 @@ import {
   recurrenceCount,
   nextOccurrence,
 } from "@/lib/booking-pricing";
+import { parseCustomChecklist } from "@/lib/job-checklist";
+import { Prisma } from "@prisma/client";
 
 // Admin recurring cadences (awer_fixes.pdf item 9 — daily, weekly, biweekly,
 // monthly). The pricing engine already understood MONTHLY; DAILY was added
@@ -158,6 +167,31 @@ export async function saveJob(formData: FormData) {
     )
       ? (frequencyRaw as RecurringFrequency)
       : null;
+    // Sept 17, item 18 — a checklist typed into this one job.
+    //
+    // The MARKER matters as much as the value. Without it an empty list from a
+    // form that does not carry the editor would be indistinguishable from an
+    // admin clearing the list, and every save from any other surface would
+    // silently wipe a custom checklist. Same reasoning as `cleanersSubmitted`.
+    const customChecklistSubmitted =
+      formData.get("customChecklistSubmitted") === "1";
+    let customChecklist: ReturnType<typeof parseCustomChecklist> | null = null;
+    if (customChecklistSubmitted) {
+      const raw = formData.get("customChecklist") as string | null;
+      let parsed: unknown = null;
+      if (raw) {
+        try {
+          parsed = JSON.parse(raw);
+        } catch {
+          // Unparseable is treated as "no list", not as an error: the admin's
+          // other edits are worth more than the list, and the editor rebuilds
+          // it from the job on the next open.
+          parsed = null;
+        }
+      }
+      customChecklist = parseCustomChecklist(parsed);
+    }
+
     const addOnsRaw = formData.get("addOns") as string | null;
     let addOns: Array<{ name: string; price: number; quantity: number }> = [];
     if (addOnsRaw) {
@@ -320,6 +354,7 @@ export async function saveJob(formData: FormData) {
               billedActualHours: true,
               propertyType: true,
               checklistTemplateId: true,
+        customChecklist: true,
             },
           })
         : null;
@@ -930,6 +965,22 @@ export async function saveJob(formData: FormData) {
       // jobs are generated" — and is in SERIES_PROPAGATED_FIELDS so an edit to
       // one occurrence can be applied to the rest.
       checklistTemplateId,
+      // Sept 17, item 21 — the cadence, recorded rather than discarded. Every
+      // occurrence of a series carries it (it rides the `...jobData` spread
+      // into each child), so opening ANY of them shows the right answer
+      // instead of only the parent knowing.
+      recurringFrequency: recurringFrequency ?? frequencyRaw ?? null,
+      // Sept 17, item 18. Only written when the form carried the editor, so a
+      // save from anywhere else cannot wipe the list. An EMPTY list is stored
+      // as null — "no custom checklist" and "a custom checklist with nothing
+      // on it" are the same thing, and null is the one the resolver already
+      // understands.
+      ...(customChecklist !== null
+        ? {
+            customChecklist:
+              customChecklist.length > 0 ? customChecklist : Prisma.DbNull,
+          }
+        : {}),
       // payRateMultiplier is deliberately NOT written (AWER round 3, fix 1).
       // No form field ever existed, so this used to reset every saved job to
       // 1.0 — and the column is now unread anyway. Do not substitute the
@@ -954,6 +1005,10 @@ export async function saveJob(formData: FormData) {
           jobNumber: true,
           employeeId: true,
           parentJobId: true,
+          // Sept 17, item 21 — the cadence this job is currently on, so a save
+          // can tell a real cadence CHANGE from a form that simply posted the
+          // value it was shown.
+          recurringFrequency: true,
           startTime: true,
           location: true,
           jobType: true,
@@ -1103,9 +1158,91 @@ export async function saveJob(formData: FormData) {
           // undefined = don't touch the siblings' teams. Propagating an empty
           // list from a save that never carried the picker would unassign the
           // whole series (new fix list item 2).
-          teamSubmitted ? cleanerIds : undefined
+          teamSubmitted ? cleanerIds : undefined,
+          // Add-ons ride with the price they contribute to (Sept 17, item 20).
+          // The edit path above rewrites the edited job's add-ons from this
+          // same list, so passing it here is what stops occurrence 4 being
+          // charged for a carpet clean its own line items never mention.
+          addOns
         );
       }
+
+      // Sept 17, item 21 — a real cadence change, applied to the series.
+      //
+      // Only when the admin ticked "apply to the whole series". Changing the
+      // frequency of ONE occurrence is meaningless: a cadence is a property of
+      // the series, and rewriting one visit's column while its siblings keep
+      // the old rhythm would leave the booking describing itself two ways.
+      //
+      // Only when it actually CHANGED, too. The form posts a frequency on
+      // every save, so acting on the value alone would rebuild the schedule
+      // every time somebody corrected a phone number.
+      let frequencyResult: FrequencyChangeResult | null = null;
+      const previousFrequency = existingJob?.recurringFrequency ?? null;
+      const nextFrequency = (frequencyRaw || "ONE_TIME") as SeriesFrequency;
+      if (
+        formData.get("applyToSeries") === "on" &&
+        existingJob &&
+        previousFrequency &&
+        previousFrequency !== nextFrequency
+      ) {
+        const rootId = seriesRootId({
+          id: editingJobId,
+          parentJobId: existingJob.parentJobId ?? null,
+        });
+        const weeklyHorizon = await getSetting("scheduling.recurringWeeklyHorizon");
+        frequencyResult = await applyFrequencyChange(
+          editingJobId,
+          rootId,
+          nextFrequency,
+          {
+            horizon: weeklyHorizon,
+            // The new occurrences inherit the job as just saved, minus the
+            // lead — `applyToJobSeries` drops it for the same reason: the lead
+            // is set from the crew list, not copied.
+            template: jobDataNoLead,
+            cleanerIds: teamSubmitted ? cleanerIds : undefined,
+            addOns,
+          },
+        );
+        await db.jobLog
+          .create({
+            data: {
+              jobId: editingJobId,
+              userId: session.user.id,
+              action: "UPDATED",
+              field: "recurringFrequency",
+              oldValue: previousFrequency,
+              newValue: nextFrequency,
+              description:
+                nextFrequency === "ONE_TIME"
+                  ? `Recurring schedule ended. ${frequencyResult.withdrawn} upcoming occurrence${frequencyResult.withdrawn === 1 ? "" : "s"} withdrawn; started, paid and past visits were left alone.`
+                  : `Cadence changed from ${previousFrequency} to ${nextFrequency}. ${frequencyResult.withdrawn} upcoming occurrence${frequencyResult.withdrawn === 1 ? "" : "s"} withdrawn and ${frequencyResult.created} created on the new rhythm; started, paid and past visits were left alone.`,
+            },
+          })
+          .catch((e) => console.error("frequency change log", e));
+      }
+
+      // Sept 17, item 20: "job history/logs should show whether the edit was
+      // applied to one booking or the recurring series."
+      //
+      // On the EDITED job, because that is the one an admin opens when they
+      // ask why the rest of the series moved. Best-effort: a missing log line
+      // must not fail a save that already succeeded.
+      await db.jobLog
+        .create({
+          data: {
+            jobId: editingJobId,
+            userId: session.user.id,
+            action: "UPDATED",
+            field: "seriesScope",
+            newValue: seriesResult ? "series" : "single",
+            description: seriesResult
+              ? `Edit applied to the whole recurring series — ${seriesResult.updated} other occurrence${seriesResult.updated === 1 ? "" : "s"} updated${seriesResult.skipped > 0 ? `, ${seriesResult.skipped} left alone because ${seriesResult.skipped === 1 ? "it is" : "they are"} completed, paid or cancelled` : ""}.`
+              : "Edit applied to this booking only. The rest of the series is unchanged.",
+          },
+        })
+        .catch((e) => console.error("series scope log", e));
 
       // ── Booking lifecycle notifications ──────────────────────────
       const sessionUserName = session.user.name ?? "Admin";

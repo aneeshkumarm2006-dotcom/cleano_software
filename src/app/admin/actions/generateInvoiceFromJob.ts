@@ -8,6 +8,7 @@ import { jobTypeLabel } from "@/lib/calendar-labels";
 import { isJobTaxExempt } from "@/lib/tax.server";
 import { computeJobMoney } from "@/lib/job-money";
 import { getServiceCatalogWithLabels } from "@/lib/service-catalog.server";
+import { DEFAULT_TAX_RATES } from "@/lib/tax";
 
 async function requireAdmin() {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -106,8 +107,8 @@ export async function generateInvoiceFromJob(jobId: string) {
       gstRate?: number;
       qstRate?: number;
     } | null;
-    const gstRate = raw?.gstRate ?? 5;
-    const qstRate = raw?.qstRate ?? 9.975;
+    const gstRate = raw?.gstRate ?? DEFAULT_TAX_RATES.gstRate;
+    const qstRate = raw?.qstRate ?? DEFAULT_TAX_RATES.qstRate;
 
     // Build line items
     const lineItems: Array<{

@@ -149,7 +149,7 @@ export default function StrikesPanel({
         </div>
       </div>
 
-      <p className="text-xs text-gray-400">
+      <p className="text-xs text-gray-500">
         Strikes roll off automatically {strikeWindowDays} days after they&apos;re
         applied. Excused and removed strikes stop counting immediately.
       </p>
@@ -213,7 +213,7 @@ export default function StrikesPanel({
       {/* Strike list */}
       <div className="space-y-2">
         {strikes.length === 0 ? (
-          <p className="text-sm text-gray-400 py-6 text-center">No strikes on record.</p>
+          <p className="text-sm text-gray-500 py-6 text-center">No strikes on record.</p>
         ) : (
           strikes.map((s) => {
             const badge = STATUS_BADGE[s.status];
@@ -230,11 +230,11 @@ export default function StrikesPanel({
                         {s.isAuto ? "Auto" : "Manual"}
                       </span>
                       {s.jobNumber != null && (
-                        <span className="text-[11px] text-gray-400">Job #{s.jobNumber}</span>
+                        <span className="text-[11px] text-gray-500">Job #{s.jobNumber}</span>
                       )}
                     </div>
                     <p className="text-sm text-gray-800 mt-1.5">{s.reason}</p>
-                    <p className="text-[11px] text-gray-400 mt-1">
+                    <p className="text-[11px] text-gray-500 mt-1">
                       Applied {fmt(s.createdAt)} · {isActive ? `resets ${fmt(s.expiresAt)}` : badge.label.toLowerCase()}
                     </p>
                     {s.adminNote && (

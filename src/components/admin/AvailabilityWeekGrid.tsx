@@ -123,7 +123,7 @@ export default function AvailabilityWeekGrid({
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
-          <tr className="text-left text-xs text-gray-400 uppercase tracking-wide">
+          <tr className="text-left text-xs text-gray-500 uppercase tracking-wide">
             <th className="py-2 pr-4 font-[600]">Cleaner</th>
             {columns.map((c) => (
               <th

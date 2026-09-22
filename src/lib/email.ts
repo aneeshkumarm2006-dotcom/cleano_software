@@ -4,7 +4,9 @@ import { getSetting } from "@/lib/settings";
 import { isNotificationEnabled } from "@/lib/notifications";
 import { coverFor } from "@/lib/gift-cards/covers";
 import { BOOKING_DEPOSIT_USD } from "@/lib/job-billing";
-import { STORE_TZ } from "@/lib/timezone";
+import { storeTz } from "@/lib/timezone";
+import { getTaxRates } from "@/lib/tax.server";
+import { taxLines } from "@/lib/tax";
 import { currentAppUrl } from "@/lib/org-url";
 import { recordAdminNotification } from "@/lib/admin-notifications";
 
@@ -58,12 +60,26 @@ function getResend() {
   return new Resend(process.env.RESEND_API_KEY);
 }
 
-// Store timezone — all customer/provider-facing times must render here, not in
-// the serverless UTC timezone. Single source of truth: src/lib/timezone.ts.
-const TZ = STORE_TZ;
-
 function fmt(n: number | null | undefined) {
   return `$${(n ?? 0).toFixed(2)}`;
+}
+
+/**
+ * The tax rows for a customer email, at THIS workspace's rates.
+ *
+ * Sept 17, item 7. Every customer email had the Quebec rates typed into it as
+ * row labels, so a Calgary booking confirmation told the customer they were
+ * being charged Quebec provincial tax. A rate of zero now produces no row.
+ */
+async function taxRows(amounts: {
+  gst: number | null | undefined;
+  qst: number | null | undefined;
+}): Promise<[string, string][]> {
+  const rates = await getTaxRates();
+  return taxLines(rates, {
+    gstAmount: amounts.gst ?? 0,
+    qstAmount: amounts.qst ?? 0,
+  }).map((line) => [line.label, fmt(line.amount)] as [string, string]);
 }
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-US", {
@@ -71,14 +87,14 @@ function fmtDate(iso: string) {
     month: "long",
     day: "numeric",
     year: "numeric",
-    timeZone: TZ,
+    timeZone: storeTz(),
   });
 }
 function fmtTime(iso: string) {
   return new Date(iso).toLocaleString("en-US", {
     hour: "numeric",
     minute: "2-digit",
-    timeZone: TZ,
+    timeZone: storeTz(),
   });
 }
 
@@ -340,8 +356,7 @@ export async function sendBookingConfirmation(opts: {
     ["Time", timeLine],
     ["Address", opts.address],
     ["Subtotal", fmt(opts.subtotal)],
-    ["GST (5%)", fmt(opts.gst)],
-    ["QST (9.975%)", fmt(opts.qst)],
+    ...(await taxRows(opts)),
     [quote ? "Estimated total" : "Total", fmt(opts.total)],
   ];
   if (opts.depositPaid) {
@@ -459,8 +474,7 @@ export async function sendReceipt(opts: {
         ["Service", opts.serviceType ?? "Cleaning"],
         ["Address", opts.address],
         ["Subtotal", fmt(opts.subtotal)],
-        ["GST (5%)", fmt(opts.gst)],
-        ["QST (9.975%)", fmt(opts.qst)],
+        ...(await taxRows(opts)),
         ["Total charged", fmt(opts.total)],
       ]) +
       p("You can also download a PDF receipt from your client portal.") +
@@ -2879,7 +2893,7 @@ export async function sendGiftCardPurchaserReceipt(opts: {
   scheduledDeliveryDate: string | null;
 }) {
   const sentLine = opts.scheduledDeliveryDate
-    ? `We'll deliver it to <strong>${opts.recipientName}</strong> (${opts.recipientEmail}) on <strong>${new Date(opts.scheduledDeliveryDate).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric", timeZone: TZ })}</strong>.`
+    ? `We'll deliver it to <strong>${opts.recipientName}</strong> (${opts.recipientEmail}) on <strong>${new Date(opts.scheduledDeliveryDate).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric", timeZone: storeTz() })}</strong>.`
     : `We've sent it to <strong>${opts.recipientName}</strong> (${opts.recipientEmail}) just now.`;
   const html = layout(
     h1(`Thanks for your gift card purchase`) +
@@ -2931,7 +2945,7 @@ export async function sendAdminGiftCardPurchased(opts: {
         ["To", `${opts.recipientName} (${opts.recipientEmail})`],
         ["Amount", `$${opts.amount.toFixed(2)}`],
         ["Delivery", opts.scheduledDeliveryDate
-          ? `Scheduled for ${new Date(opts.scheduledDeliveryDate).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: TZ })}`
+          ? `Scheduled for ${new Date(opts.scheduledDeliveryDate).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: storeTz() })}`
           : "Immediate"],
       ])
   );
@@ -3076,8 +3090,7 @@ export async function sendCustomerFinalQuote(opts: {
   if (opts.hourlyLine) rows.push(["Hourly", opts.hourlyLine]);
   rows.push(
     ["Subtotal", fmt(opts.subtotal)],
-    ["GST (5%)", fmt(opts.gst)],
-    ["QST (9.975%)", fmt(opts.qst)],
+    ...(await taxRows(opts)),
     ["Quoted total", fmt(opts.total)],
     ["Deposit already paid", `-${fmt(opts.depositAmount)}`],
     ["Balance due after the work", fmt(balance)]

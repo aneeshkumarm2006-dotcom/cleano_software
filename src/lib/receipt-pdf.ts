@@ -8,6 +8,7 @@ import {
   type AddOnLine,
 } from "@/lib/job-money";
 import { getTaxRates } from "@/lib/tax.server";
+import { taxLines, type TaxLine } from "@/lib/tax";
 import { resolveDepositCredit } from "@/lib/booking-deposit";
 import { formatAddressLine } from "@/lib/client-address";
 
@@ -35,6 +36,13 @@ export interface ReceiptData {
   subtotal: number;
   gstAmount: number;
   qstAmount: number;
+  /**
+   * The tax rows to print, at THIS workspace's rates (Sept 17, item 7). The
+   * receipt had Quebec's rates typed into its row labels, so an
+   * Alberta customer's receipt named Quebec's provincial tax on a line that
+   * read $0.00.
+   */
+  taxLines: TaxLine[];
   totalAmount: number;
   /**
    * Deposit collected at booking and credited against the total (Stage 11 / PDF
@@ -66,7 +74,8 @@ export async function loadReceiptData(jobId: string): Promise<ReceiptData | null
   // Reading `job.price` as the total was correct under web semantics and wrong
   // on every admin job, where `price` is the PRE-tax figure and the receipt
   // therefore printed a total that excluded the tax the customer was charged.
-  const money = computeJobMoney(job, await getTaxRates());
+  const taxRates = await getTaxRates();
+  const money = computeJobMoney(job, taxRates);
 
   return {
     jobId: job.id,
@@ -93,6 +102,7 @@ export async function loadReceiptData(jobId: string): Promise<ReceiptData | null
     subtotal: money.subtotalAmount,
     gstAmount: money.gstAmount,
     qstAmount: money.qstAmount,
+    taxLines: taxLines(taxRates, money),
     totalAmount: money.totalAmount,
     // `resolveDepositCredit`, so the receipt's credit is BYTE-IDENTICAL to the one
     // `resolveAmountDue` takes off at charge time. A receipt that credits a
@@ -313,17 +323,15 @@ export async function buildReceiptPdfBuffer(
         React.createElement(Text, null, "Subtotal"),
         React.createElement(Text, null, fmt(data.subtotal))
       ),
-      React.createElement(
-        View,
-        { style: styles.lineItemRow },
-        React.createElement(Text, null, "GST (5%)"),
-        React.createElement(Text, null, fmt(data.gstAmount))
-      ),
-      React.createElement(
-        View,
-        { style: styles.lineItemRow },
-        React.createElement(Text, null, "QST (9.975%)"),
-        React.createElement(Text, null, fmt(data.qstAmount))
+      // One row per tax this workspace actually charges, named from its own
+      // rate. A rate of zero prints nothing at all (Sept 17, item 7).
+      ...data.taxLines.map((line) =>
+        React.createElement(
+          View,
+          { style: styles.lineItemRow, key: line.key },
+          React.createElement(Text, null, line.label),
+          React.createElement(Text, null, fmt(line.amount))
+        )
       ),
       React.createElement(
         View,

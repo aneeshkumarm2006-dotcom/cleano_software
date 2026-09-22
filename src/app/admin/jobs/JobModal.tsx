@@ -63,7 +63,8 @@ import { tzInputParts } from "@/lib/time";
 // `tzToday` / `storeTimeKey` are the same helpers the calendar views were moved
 // onto; the job form never got the same treatment.
 import { tzToday } from "@/lib/tz-calendar";
-import { storeTimeKey } from "@/lib/timezone";
+import { storeTimeKey, storeTzLabel } from "@/lib/timezone";
+import { taxLines } from "@/lib/tax";
 import { isSqftJobType, moveInOutBasePrice } from "@/lib/service-pricing";
 import {
   DEFAULT_SERVICE_CATALOG,
@@ -183,6 +184,10 @@ interface Job {
   propertyType?: string | null;
   /** Pinned checklist template (Stage 10). Null/absent = resolve automatically. */
   checklistTemplateId?: string | null;
+  /** A checklist written for this job alone (Sept 17, item 18). */
+  customChecklist?: unknown;
+  /** The cadence this job's series runs on (Sept 17, item 21). */
+  recurringFrequency?: string | null;
   /** Per-job sales-tax exemption (item 7). */
   taxExempt?: boolean | null;
   isFlexible?: boolean | null;
@@ -734,6 +739,14 @@ function CustomTimePicker({
                 Clear
               </button>
             </div>
+            {/* Which clock this time will be read in (Sept 10, item 6: "UI
+                should make timezone clear where needed"). It sits under the
+                Now button because Now is the control that raised the question:
+                pressed in Calgary on a Montreal job, it stamps Montreal's
+                time, and without this line that looks like a bug. */}
+            <p className="px-1 pb-2 text-[11px] leading-tight text-[#008C9C]/70">
+              Times are {storeTzLabel()} — the business clock, not this device&apos;s.
+            </p>
             <div className="grid grid-cols-3 gap-1">
               {timeOptions.map((time) => (
                 <button
@@ -785,6 +798,9 @@ export default function JobModal({
   const [selectedCleaners, setSelectedCleaners] = useState<string[]>([]);
   const [selectedJobType, setSelectedJobType] = useState<string>("");
   const [selectedFrequency, setSelectedFrequency] = useState<string>("ONE_TIME");
+  // Whether the job told us its cadence, as opposed to us defaulting to
+  // ONE_TIME (Sept 17, item 21). Drives the note under the control.
+  const [frequencyKnown, setFrequencyKnown] = useState(true);
   // Sept 10, item 8. "AUTO" is the configured table, which is what every job
   // did before this existed, so an untouched form behaves exactly as it did.
   const [recurringDiscountMode, setRecurringDiscountMode] =
@@ -855,6 +871,12 @@ export default function JobModal({
   // A value PINS the job to one template. Component state for the same reason
   // as propertyType above — the empty string is a real, meaningful value.
   const [checklistTemplateId, setChecklistTemplateId] = useState<string>("");
+  // Sept 17, item 18 — a checklist written for THIS job, overriding templates.
+  // Position in the array is the order, so reordering is a reorder of the
+  // array and there is no sortOrder field to drift out of step with it.
+  const [customChecklist, setCustomChecklist] = useState<
+    { title: string; description: string; isRequired: boolean }[]
+  >([]);
   const [checklistOptions, setChecklistOptions] = useState<
     ChecklistTemplateOption[]
   >([]);
@@ -1000,6 +1022,24 @@ export default function JobModal({
         // hasn't been threaded) reads as Auto, which is the behaviour that
         // already existed.
         setChecklistTemplateId(job.checklistTemplateId ?? "");
+        // Null on every job created before the column existed. Left as
+        // ONE_TIME in that case rather than guessed at, and the note in the
+        // form says the cadence was not recorded — inventing "weekly" for a
+        // series that might be monthly would rebuild the schedule wrongly on
+        // the first save.
+        setSelectedFrequency(job.recurringFrequency ?? "ONE_TIME");
+        setFrequencyKnown(job.recurringFrequency != null);
+        setCustomChecklist(
+          Array.isArray(job.customChecklist)
+            ? (job.customChecklist as { title?: unknown; description?: unknown; isRequired?: unknown }[])
+                .filter((i) => i && typeof i.title === "string" && i.title.trim())
+                .map((i) => ({
+                  title: String(i.title),
+                  description: typeof i.description === "string" ? i.description : "",
+                  isRequired: i.isRequired !== false,
+                }))
+            : [],
+        );
         setPayIsManual(!!job.employeePayIsManual);
         setDiscountReason(job.discountReason ?? "");
         setApplyToSeries(false);
@@ -1642,6 +1682,22 @@ export default function JobModal({
       // the column. A form that doesn't render the control omits the key, and
       // saveJob preserves what is stored.
       formData.append("checklistTemplateId", checklistTemplateId);
+      // The marker tells saveJob this submission owns the custom checklist, so
+      // an empty list means "the admin cleared it" rather than "this form
+      // doesn't manage it" — the same reasoning as `cleanersSubmitted`.
+      formData.append("customChecklistSubmitted", "1");
+      formData.append(
+        "customChecklist",
+        JSON.stringify(
+          customChecklist
+            .map((i) => ({
+              title: i.title.trim(),
+              description: i.description.trim() || null,
+              isRequired: i.isRequired,
+            }))
+            .filter((i) => i.title),
+        ),
+      );
 
       // Resolve discount: convert percent to amount if needed.
       // If admin has touched the field, send an explicit value (including "0")
@@ -2286,8 +2342,12 @@ export default function JobModal({
                       />
                     </div>
 
-                    {/* Frequency — recurring bookings (creation only) */}
-                    {mode === "create" && (
+                    {/* Frequency. Sept 17, item 21: it used to be creation-only,
+                        so a weekly contract that moved to biweekly had to be
+                        deleted and rebooked. In EDIT mode a change only takes
+                        effect with "apply to the whole series" ticked below —
+                        a cadence belongs to the series, not to one visit. */}
+                    {(
                       <div>
                         <label className="input-label tracking-tight">
                           Frequency
@@ -2326,6 +2386,14 @@ export default function JobModal({
                             </p>
                           ) : null;
                         })()}
+
+                        {mode === "edit" && (
+                          <p className="mt-2 text-xs text-amber-700 tracking-tight">
+                            {!frequencyKnown
+                              ? "This booking pre-dates cadence tracking, so we don't know what it was set to. Picking one here records it; it only rebuilds the schedule if you also tick \u201Capply to the whole series\u201D."
+                              : "Changing this rebuilds the upcoming occurrences \u2014 but only with \u201Capply to the whole series\u201D ticked below. Visits that have started, been paid, or already happened are never touched."}
+                          </p>
+                        )}
 
                         {/* Sept 10, item 8. Not every recurring job should be
                             discounted: a weekly commercial contract usually has
@@ -3696,16 +3764,17 @@ export default function JobModal({
                         <span>$0.00</span>
                       </div>
                     ) : (
-                      <>
-                        <div className="flex justify-between text-sm text-[#008C9C]">
-                          <span>GST ({taxRates.gstRate}%)</span>
-                          <span>+${previewMoney.gstAmount.toFixed(2)}</span>
+                      // One row per tax this workspace charges. A rate of zero
+                      // prints nothing, so a Calgary job form no longer carries
+                      // a "QST (0%) +$0.00" line (Sept 17, item 7).
+                      taxLines(taxRates, previewMoney).map((line) => (
+                        <div
+                          key={line.key}
+                          className="flex justify-between text-sm text-[#008C9C]">
+                          <span>{line.label}</span>
+                          <span>+${line.amount.toFixed(2)}</span>
                         </div>
-                        <div className="flex justify-between text-sm text-[#008C9C]">
-                          <span>QST ({taxRates.qstRate}%)</span>
-                          <span>+${previewMoney.qstAmount.toFixed(2)}</span>
-                        </div>
-                      </>
+                      ))
                     )}
                     <div className="flex justify-between text-base font-[600] text-[#008C9C] border-t border-[#008C9C]/15 pt-2">
                       <span>Total</span>
@@ -3783,6 +3852,144 @@ export default function JobModal({
                           active. Saving returns it to automatic resolution.
                         </p>
                       )}
+
+                    {/* Sept 17, item 18 — a list for this job and no other.
+                        It BEATS the picker above, including a pin, so the
+                        notice below is not decoration: an admin who fills in
+                        both needs to know which one the cleaner will see.
+                        Works with no templates in the workspace at all, which
+                        is the other half of what the PDF asks for. */}
+                    <div className="pt-3 mt-1 border-t border-[#008C9C]/10 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[11px] uppercase tracking-wider text-[#008C9C]/50 font-[400]">
+                          Custom checklist for this job
+                        </p>
+                        <button
+                          type="button"
+                          disabled={disableForm}
+                          onClick={() =>
+                            setCustomChecklist((list) => [
+                              ...list,
+                              { title: "", description: "", isRequired: true },
+                            ])
+                          }
+                          className="text-[11px] font-[600] text-[#008C9C] hover:underline disabled:opacity-50">
+                          + Add item
+                        </button>
+                      </div>
+
+                      {customChecklist.length === 0 ? (
+                        <p className="text-[11px] text-[#008C9C]/60">
+                          Nothing yet. Add items here to write a checklist just
+                          for this job — the cleaner sees it as soon as they
+                          open the job, with nothing to press.
+                        </p>
+                      ) : (
+                        <>
+                          <p className="text-[11px] text-amber-700">
+                            This list replaces the checklist above for this job
+                            only.
+                          </p>
+                          <ul className="space-y-2">
+                            {customChecklist.map((item, i) => (
+                              <li key={i} className="flex items-start gap-2">
+                                <div className="flex flex-col gap-0.5 pt-1.5">
+                                  <button
+                                    type="button"
+                                    aria-label={`Move item ${i + 1} up`}
+                                    disabled={disableForm || i === 0}
+                                    onClick={() =>
+                                      setCustomChecklist((list) => {
+                                        const next = [...list];
+                                        [next[i - 1], next[i]] = [next[i], next[i - 1]];
+                                        return next;
+                                      })
+                                    }
+                                    className="text-[10px] leading-none text-[#008C9C]/60 disabled:opacity-25">
+                                    ▲
+                                  </button>
+                                  <button
+                                    type="button"
+                                    aria-label={`Move item ${i + 1} down`}
+                                    disabled={disableForm || i === customChecklist.length - 1}
+                                    onClick={() =>
+                                      setCustomChecklist((list) => {
+                                        const next = [...list];
+                                        [next[i], next[i + 1]] = [next[i + 1], next[i]];
+                                        return next;
+                                      })
+                                    }
+                                    className="text-[10px] leading-none text-[#008C9C]/60 disabled:opacity-25">
+                                    ▼
+                                  </button>
+                                </div>
+                                <div className="flex-1 space-y-1">
+                                  <input
+                                    type="text"
+                                    value={item.title}
+                                    disabled={disableForm}
+                                    placeholder="What needs doing"
+                                    aria-label={`Checklist item ${i + 1}`}
+                                    onChange={(e) =>
+                                      setCustomChecklist((list) =>
+                                        list.map((it, j) =>
+                                          j === i ? { ...it, title: e.target.value } : it,
+                                        ),
+                                      )
+                                    }
+                                    className="w-full px-3 py-2 rounded-lg bg-[#008C9C]/5 text-sm text-[#008C9C] focus:outline-none placeholder:text-[#008C9C]/40"
+                                  />
+                                  <input
+                                    type="text"
+                                    value={item.description}
+                                    disabled={disableForm}
+                                    placeholder="Extra detail (optional)"
+                                    aria-label={`Detail for item ${i + 1}`}
+                                    onChange={(e) =>
+                                      setCustomChecklist((list) =>
+                                        list.map((it, j) =>
+                                          j === i ? { ...it, description: e.target.value } : it,
+                                        ),
+                                      )
+                                    }
+                                    className="w-full px-3 py-1.5 rounded-lg bg-[#008C9C]/5 text-xs text-[#008C9C] focus:outline-none placeholder:text-[#008C9C]/40"
+                                  />
+                                  <label className="flex items-center gap-1.5 text-[11px] text-[#008C9C]/70">
+                                    <input
+                                      type="checkbox"
+                                      checked={item.isRequired}
+                                      disabled={disableForm}
+                                      onChange={(e) =>
+                                        setCustomChecklist((list) =>
+                                          list.map((it, j) =>
+                                            j === i
+                                              ? { ...it, isRequired: e.target.checked }
+                                              : it,
+                                          ),
+                                        )
+                                      }
+                                    />
+                                    Required
+                                  </label>
+                                </div>
+                                <button
+                                  type="button"
+                                  aria-label={`Remove item ${i + 1}`}
+                                  disabled={disableForm}
+                                  onClick={() =>
+                                    setCustomChecklist((list) =>
+                                      list.filter((_, j) => j !== i),
+                                    )
+                                  }
+                                  className="mt-1.5 text-[11px] text-[#008C9C]/50 hover:text-red-600 disabled:opacity-50">
+                                  ✕
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        </>
+                      )}
+                    </div>
                   </div>
 
                   {/* ROUND 4, FIX 8 — Delete lives here now, at the end of the

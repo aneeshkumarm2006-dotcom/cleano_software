@@ -18,9 +18,7 @@
 // maths happens inside the evaluator itself.
 
 import type { AvailabilityDay } from "@prisma/client";
-import { STORE_TZ } from "./timezone";
-
-const TZ = STORE_TZ;
+import { storeTz } from "./timezone";
 
 export type AvailabilityResult =
   | "AVAILABLE"
@@ -117,7 +115,7 @@ export function toMinutes(hhmm: string): number {
 export function dateKeyTz(d: Date): string {
   // en-CA renders as YYYY-MM-DD.
   return new Intl.DateTimeFormat("en-CA", {
-    timeZone: TZ,
+    timeZone: storeTz(),
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -127,7 +125,7 @@ export function dateKeyTz(d: Date): string {
 /** Business-timezone wall clock ("HH:MM") for an instant. */
 export function timeKeyTz(d: Date): string {
   const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: TZ,
+    timeZone: storeTz(),
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,

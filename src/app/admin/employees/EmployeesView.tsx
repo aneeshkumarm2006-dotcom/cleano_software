@@ -29,6 +29,7 @@ import BulkActionBar, { type BulkAction } from "@/components/common/BulkActionBa
 import { bulkSoftDelete, bulkRestore } from "@/lib/bulk/actions";
 import {
   bulkSetEmployeeActive,
+  previewEmployeeDeactivation,
   bulkSetCleanerTier,
   bulkSetFieldLead,
 } from "../actions/bulkEmployeeActions";
@@ -193,6 +194,38 @@ export default function EmployeesView({
     router.refresh();
   };
 
+  // Sept 17, item 23: "admin should see a warning before deactivating the
+  // cleaner showing how many future jobs will be affected."
+  //
+  // The count is asked for first rather than written into a fixed confirmation
+  // string, because the number IS the warning — "this will affect some jobs"
+  // is what the admin already assumed. The same predicate produces this count
+  // and does the unassigning, so the dialog cannot promise one thing and do
+  // another.
+  const deactivateSelected = async () => {
+    const preview = await previewEmployeeDeactivation(selectedIds);
+    if (!preview.success) throw new Error(preview.error);
+    const { jobCount, leftUnassigned } = preview.impact;
+
+    const who = selectedIds.length === 1 ? "this cleaner" : `these ${selectedIds.length} cleaners`;
+    const lines =
+      jobCount === 0
+        ? [`Deactivate ${who}? They have no upcoming jobs.`]
+        : [
+            `Deactivate ${who}?`,
+            "",
+            `They will be taken off ${jobCount} upcoming job${jobCount === 1 ? "" : "s"}.`,
+            leftUnassigned > 0
+              ? `${leftUnassigned} of those will have NOBODY assigned and will need reassigning.`
+              : "Every one of those jobs still has another cleaner on it.",
+            "",
+            "Past and completed jobs are not changed — they keep the cleaner for payroll and history.",
+          ];
+    if (!window.confirm(lines.join("\n"))) return;
+
+    await runBulk(() => bulkSetEmployeeActive(selectedIds, false));
+  };
+
   const applyTier = async (tier: CleanerTier) => {
     await runBulk(() => bulkSetCleanerTier(selectedIds, tier));
   };
@@ -245,7 +278,7 @@ export default function EmployeesView({
           key: "deactivate",
           label: "Deactivate",
           icon: <Power size={14} />,
-          onRun: () => runBulk(() => bulkSetEmployeeActive(selectedIds, false)),
+          onRun: deactivateSelected,
         },
         {
           key: "activate",

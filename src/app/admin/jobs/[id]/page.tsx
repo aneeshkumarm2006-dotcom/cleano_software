@@ -268,8 +268,12 @@ export default async function JobPage({
 
   // Current manual overrides, so the Team card can show which cleaners have one.
   const payOverrides: Record<string, number | null> = {};
+  // And each cleaner's own hourly rate on this job (Sept 17, item 22). Absent
+  // means they are on the job's crew-wide rate.
+  const cleanerHourlyRates: Record<string, number | null> = {};
   for (const a of job.assignments) {
     payOverrides[a.cleanerId] = a.payAmount ?? null;
+    cleanerHourlyRates[a.cleanerId] = a.hourlyRate ?? null;
   }
 
   // Per-cleaner rows for the Financials breakdown, so the total above is never
@@ -456,6 +460,10 @@ export default async function JobPage({
     // card, since it describes the place rather than the schedule or the money.
     propertyType: job.propertyType,
     checklistTemplateId: job.checklistTemplateId,
+    // Sept 17, item 18 — so reopening the form shows the list that is on the
+    // job rather than an empty editor that would clear it on the next save.
+    customChecklist: job.customChecklist,
+    recurringFrequency: job.recurringFrequency,
     depositPaid: job.depositPaid,
     // Stage 11 / PDF #9. `depositAmount` feeds the refund cap and the Payment
     // card; the four quote columns feed the Quote review panel and the guard that
@@ -610,6 +618,7 @@ export default async function JobPage({
         assignments={assignmentsData}
         payShares={payShares}
         payOverrides={payOverrides}
+        cleanerHourlyRates={cleanerHourlyRates}
         computedEmployeePay={computedEmployeePay}
         payRows={payRows}
         hasPayableParticipants={hasPayableParticipants}

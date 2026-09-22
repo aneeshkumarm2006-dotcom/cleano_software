@@ -23,7 +23,7 @@ import { bulkSetQuoteStatus } from "../actions/bulkSetQuoteStatus";
 import { useRowSelection } from "@/components/common/useRowSelection";
 import BulkActionBar, { BulkAction } from "@/components/common/BulkActionBar";
 import { bulkSoftDelete, bulkRestore } from "@/lib/bulk/actions";
-import { STORE_TZ } from "@/lib/timezone";
+import { storeTz } from "@/lib/timezone";
 import { jobTypeLabel } from "@/lib/calendar-labels";
 import type { QuotePageConfig } from "@/lib/quote-page-config";
 import QuoteFormTab from "./QuoteFormTab";
@@ -83,10 +83,10 @@ function StatusPill({ status }: { status: Status }) {
 }
 
 function dateShort(iso: string) {
-  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: STORE_TZ });
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: storeTz() });
 }
 function timeShort(iso: string) {
-  return new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: STORE_TZ });
+  return new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: storeTz() });
 }
 
 export default function QuotesInboxClient({
@@ -549,7 +549,7 @@ function QuoteDrawer({
                   </span>
                   <span className="q-v">
                     {new Date(quote.preferredDate).toLocaleDateString("en-US", {
-                      timeZone: STORE_TZ,
+                      timeZone: storeTz(),
                       weekday: "short",
                       month: "short",
                       day: "numeric",

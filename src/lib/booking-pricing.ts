@@ -1,5 +1,6 @@
 import { db } from "@/lib/org-db";
 import { calculateTax, TaxBreakdown } from "./tax";
+import { getTaxRates } from "./tax.server";
 import { sumAddOns } from "./job-money";
 import { normalizeJobType } from "./calendar-labels";
 import {
@@ -55,7 +56,10 @@ export async function computeBookingPrice(
   const discountAmount = input.discountAmount ?? 0;
 
   const preTax = Math.max(0, basePrice + addOnTotal + travelFee - discountAmount);
-  const tax = calculateTax(preTax);
+  // Sept 17, item 7. This is what a customer is actually CHARGED, and it read
+  // Quebec's statutory rates no matter whose booking page it was. An Alberta
+  // customer was billed 9.975% provincial tax on every booking.
+  const tax = calculateTax(preTax, await getTaxRates());
 
   return { basePrice, addOnTotal, travelFee, discountAmount, ...tax };
 }

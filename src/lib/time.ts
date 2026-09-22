@@ -7,17 +7,15 @@
 // New code should import from @/lib/timezone directly.
 
 import {
-  STORE_TZ,
   STORE_LOCALE,
   formatDate,
   formatDateTime,
   formatTime,
   startOfStoreDay,
   storeInputParts,
+  storeTz,
   storeWallClockToUtc,
 } from "./timezone";
-
-const TZ = STORE_TZ;
 
 export function fmtTime(date: Date | string): string {
   return formatTime(date);
@@ -38,7 +36,7 @@ export function fmtClockTz(d: Date): string {
     minute: "2-digit",
     second: "2-digit",
     hour12: true,
-    timeZone: TZ,
+    timeZone: storeTz(),
   }).formatToParts(d);
   const get = (type: string) => parts.find(p => p.type === type)?.value ?? "00";
   const dayPeriod = parts.find(p => p.type === "dayPeriod")?.value ?? "AM";

@@ -111,6 +111,12 @@ export interface JobPayInput {
     cleanerId: string;
     payAmount: number | null;
     /**
+     * THIS cleaner's $/hr on THIS job (Sept 17, item 22). NULL means "use the
+     * job's crew-wide `hourlyRate`", which is what every job did before this
+     * existed. Optional so older fixtures still typecheck.
+     */
+    hourlyRate?: number | null;
+    /**
      * The row's live status. CANCELLED means the cleaner left this job, and a
      * CANCELLED row survives `syncJobAssignments` on purpose, as history. It
      * must never be read as an assignment (Sept 10, items 3 + 5). Optional so
@@ -189,7 +195,13 @@ export const JOB_PAY_SELECT = {
   // `status` is selected because a CANCELLED row is kept as history and must
   // not be paid (Sept 10, items 3 + 5). Without it the money path could not
   // tell a live assignment from a dropped one.
-  assignments: { select: { cleanerId: true, payAmount: true, status: true } },
+  // `hourlyRate` so the per-cleaner rate reaches the math (Sept 17, item 22);
+  // `status` so a CANCELLED row is not read as a live assignment (Sept 10,
+  // items 3 + 5). A field missing here is a field the pay calculation silently
+  // treats as absent, which is how both of those bugs stayed hidden.
+  assignments: {
+    select: { cleanerId: true, payAmount: true, status: true, hourlyRate: true },
+  },
   breaks: { select: { cleanerId: true, startedAt: true, endedAt: true } },
   workSessions: {
     select: { cleanerId: true, startedAt: true, endedAt: true },
@@ -362,13 +374,39 @@ export function cleanerWorkedHours(
  * "0h clocked", so an admin sees it and either fixes the clock or types a
  * per-cleaner override — both of which win over this.
  */
+export interface HourlyClock {
+  /** The job's crew-wide rate, or 0 when it has none. */
+  rate: number;
+  hoursById: Map<string, number>;
+  /** This cleaner's own rate, falling back to the crew-wide one. */
+  rateFor(cleanerId: string): number;
+}
+
 export function hourlyClockedHours(
   job: JobPayInput,
   participantIds: readonly string[]
-): { rate: number; hoursById: Map<string, number> } | null {
+): HourlyClock | null {
   if (((job.payType as JobPayType) ?? "PERCENTAGE") !== "HOURLY") return null;
-  const rate = Number(job.hourlyRate);
-  if (!Number.isFinite(rate) || rate <= 0) return null;
+
+  // Sept 17, item 22. One rate for the whole crew "does not work properly for
+  // jobs with 2+ cleaners" — a trainee and a field lead on the same job were
+  // paid the same $/hr, so an admin either underpaid one or overpaid the other.
+  //
+  // Per-cleaner rates come off the LIVE assignment rows only, the same set
+  // everything else in this module honours an override from: a CANCELLED row
+  // is the record of a cleaner who left, and its stored rate is history rather
+  // than a promise (Sept 10, items 3 + 5).
+  const jobRate = Number(job.hourlyRate);
+  const jobRateUsable = Number.isFinite(jobRate) && jobRate > 0;
+  const rateById = new Map<string, number>();
+  for (const a of liveAssignments(job)) {
+    const r = Number(a.hourlyRate);
+    if (Number.isFinite(r) && r > 0) rateById.set(a.cleanerId, r);
+  }
+
+  // Nothing to multiply by from either source. Same meaning as before: the
+  // stored `employeePay` stands.
+  if (!jobRateUsable && rateById.size === 0) return null;
   if ((job.workSessions ?? []).length === 0) return null;
 
   const minutes = crewActiveMinutesByCleaner(job.workSessions, job.breaks);
@@ -376,7 +414,12 @@ export function hourlyClockedHours(
   for (const id of participantIds) {
     hoursById.set(id, (minutes.get(id) ?? 0) / 60);
   }
-  return { rate, hoursById };
+  const rate = jobRateUsable ? jobRate : 0;
+  return {
+    rate,
+    hoursById,
+    rateFor: (cleanerId: string) => rateById.get(cleanerId) ?? rate,
+  };
 }
 
 /**
@@ -396,7 +439,7 @@ export function hourlyTeamPayFromClock(
   const clock = hourlyClockedHours(job, participantIds);
   if (!clock) return null;
   let total = 0;
-  for (const hours of clock.hoursById.values()) total += hours * clock.rate;
+  for (const [id, hours] of clock.hoursById) total += hours * clock.rateFor(id);
   return round2(total);
 }
 
@@ -616,9 +659,12 @@ export function computeJobPayShares(
       // total: two cleaners who each worked 3h at $25 are paid $75 each, and the
       // $150 team figure is the CONSEQUENCE rather than the input.
       const hours = hourlyClock.hoursById.get(id) ?? 0;
-      base = hours * hourlyClock.rate;
+      // THIS cleaner's rate (Sept 17, item 22), falling back to the job's
+      // crew-wide one — which is every job that pre-dates per-cleaner rates.
+      const cleanerRate = hourlyClock.rateFor(id);
+      base = hours * cleanerRate;
       basis = "HOURLY_CLOCK";
-      basisDetail = { hours, rate: hourlyClock.rate };
+      basisDetail = { hours, rate: cleanerRate };
     } else if (payType === "FLAT" || payType === "HOURLY" || manualTeamTotal) {
       // employeePay is an agreed TEAM TOTAL — a manual amount too. Untouched by
       // any rate. `manualTeamTotal` is decision D2: on a PERCENTAGE job an admin

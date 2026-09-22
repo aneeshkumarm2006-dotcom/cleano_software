@@ -192,7 +192,7 @@ export default function LandingPageManager({
                 URL Slug
               </label>
               <div className="flex items-center gap-1">
-                <span className="text-sm text-gray-400">/p/</span>
+                <span className="text-sm text-gray-500">/p/</span>
                 <Input
                   name="slug"
                   placeholder="my-landing-page"

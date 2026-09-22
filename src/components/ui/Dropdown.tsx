@@ -76,7 +76,7 @@ export default function Dropdown({
           {selectedOption?.label || placeholder}
         </span>
         <ChevronDown
-          className={`w-3 h-3 text-gray-400 transition-transform duration-200 ${
+          className={`w-3 h-3 text-gray-500 transition-transform duration-200 ${
             isOpen ? "rotate-180" : ""
           }`}
         />

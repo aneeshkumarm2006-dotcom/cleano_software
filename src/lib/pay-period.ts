@@ -10,7 +10,7 @@
 // business-timezone wall-clock boundaries, so a job stored at 2026-07-13T03:00Z
 // (Sunday 11pm in Toronto) is correctly counted in the week that CONTAINS it.
 
-import { STORE_TZ } from "./timezone";
+import { STORE_TZ, storeTz } from "./timezone";
 
 /** @deprecated Import `STORE_TZ` from `@/lib/timezone` instead. */
 export const BUSINESS_TZ = STORE_TZ;
@@ -34,7 +34,7 @@ interface Civil {
 // Wall-clock fields of an instant in the business timezone.
 function civilInTz(d: Date): Civil {
   const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: BUSINESS_TZ,
+    timeZone: storeTz(),
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -159,7 +159,7 @@ export function parseBusinessDate(value: unknown): Date | null {
 export function formatPayPeriodRange(range: PayPeriodRange): string {
   const fmt = (d: Date, withYear: boolean) =>
     d.toLocaleDateString("en-US", {
-      timeZone: BUSINESS_TZ,
+      timeZone: storeTz(),
       month: "short",
       day: "numeric",
       ...(withYear ? { year: "numeric" as const } : {}),

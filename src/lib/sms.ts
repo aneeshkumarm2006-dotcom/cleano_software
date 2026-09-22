@@ -20,13 +20,9 @@
 import { isNotificationEnabled } from "./notifications";
 import type { Recipient } from "./notifications/catalog";
 import { logActivity } from "./activity-log";
-import { STORE_TZ } from "./timezone";
+import { storeTz } from "./timezone";
 import { senderForCurrentOrg } from "@/lib/sms-sender";
 import { twilioForCurrentOrg } from "@/lib/twilio-org";
-
-// Store timezone — customer-facing times must render here, not serverless UTC.
-// Single source of truth: src/lib/timezone.ts.
-const TZ = STORE_TZ;
 
 export interface SmsGate {
   recipient: Recipient;
@@ -190,7 +186,7 @@ export function smsBookingConfirmation(opts: {
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
-    timeZone: TZ,
+    timeZone: storeTz(),
   });
   return sendSms({
     to: opts.to,
@@ -220,7 +216,7 @@ export function smsReminder(opts: {
     weekday: "short",
     hour: "numeric",
     minute: "2-digit",
-    timeZone: TZ,
+    timeZone: storeTz(),
   });
   return sendSms({
     to: opts.to,

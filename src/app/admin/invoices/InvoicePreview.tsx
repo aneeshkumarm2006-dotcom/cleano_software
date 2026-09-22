@@ -1,5 +1,7 @@
 "use client";
 
+import { taxLines } from "@/lib/tax";
+
 interface LineItem {
   id: string;
   description: string;
@@ -178,14 +180,16 @@ export default function InvoicePreview({ invoice, taxConfig }: InvoicePreviewPro
                 <span>-${invoice.discountAmount.toFixed(2)}</span>
               </div>
             )}
-            <div className="flex justify-between text-sm text-[#008C9C]/70">
-              <span>GST ({taxConfig.gstRate}%)</span>
-              <span>${invoice.gstAmount.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between text-sm text-[#008C9C]/70">
-              <span>QST ({taxConfig.qstRate}%)</span>
-              <span>${invoice.qstAmount.toFixed(2)}</span>
-            </div>
+            {/* A rate of zero prints no row at all (Sept 17, item 7): a
+                Calgary invoice should not carry a QST line. */}
+            {taxLines(taxConfig, invoice).map((line) => (
+              <div
+                key={line.key}
+                className="flex justify-between text-sm text-[#008C9C]/70">
+                <span>{line.label}</span>
+                <span>${line.amount.toFixed(2)}</span>
+              </div>
+            ))}
             <div className="border-t-2 border-[#008C9C]/10 pt-3 flex justify-between">
               <span className="text-base font-[400] text-[#008C9C]">Total</span>
               <span className="text-xl font-[400] text-[#008C9C]">

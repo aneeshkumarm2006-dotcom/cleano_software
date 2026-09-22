@@ -5,6 +5,7 @@ import { db } from "@/lib/org-db";
 import FinancesPageClient from "./FinancesPageClient";
 import { formatDate } from "@/lib/timezone";
 import { getBudgetCategoryOptions } from "@/lib/budget-categories";
+import { DEFAULT_TAX_RATES } from "@/lib/tax";
 
 export default async function FinancesPage() {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -44,8 +45,8 @@ export default async function FinancesPage() {
     qstNumber?: string;
   } | null;
   const taxConfigValue = {
-    gstRate: raw?.gstRate ?? 5,
-    qstRate: raw?.qstRate ?? 9.975,
+    gstRate: raw?.gstRate ?? DEFAULT_TAX_RATES.gstRate,
+    qstRate: raw?.qstRate ?? DEFAULT_TAX_RATES.qstRate,
     gstNumber: raw?.gstNumber ?? "",
     qstNumber: raw?.qstNumber ?? "",
   };

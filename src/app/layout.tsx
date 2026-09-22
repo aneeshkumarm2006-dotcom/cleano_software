@@ -4,6 +4,7 @@ import "./globals.css";
 import "./customer.css";
 import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
 import { getCurrentOrg } from "@/lib/org";
+import { STORE_TZ } from "@/lib/timezone";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import MetaPixel from "@/components/MetaPixel";
@@ -79,8 +80,9 @@ export default async function RootLayout({
     // Bookmops' own front page. It describes the product to a stranger and belongs
     // to no workspace, so a missing or suspended one must not hide it.
     path.startsWith("/welcome");
+  let org: Awaited<ReturnType<typeof getCurrentOrg>> = null;
   if (!outsideTheGate) {
-    const org = await getCurrentOrg();
+    org = await getCurrentOrg();
     const blocked = !org
       ? "not-found"
       : org.status === "SUSPENDED"
@@ -97,6 +99,30 @@ export default async function RootLayout({
     }
   }
 
+  // Sept 10, item 6 part 2 — the browser half of the tenant clock.
+  //
+  // The server now formats in the workspace's own zone, but a client component
+  // has no way to ask: it runs in a browser, where neither the organization
+  // context nor the request cache exists. Leaving it out would have been worse
+  // than the bug it fixes — the server-rendered half of a page would print
+  // Calgary's clock while the interactive half printed Montreal's, on the same
+  // screen, and hydration would flip one of them in front of the user.
+  //
+  // So the answer is stamped on the page. It is a plain global rather than a
+  // context provider because `storeTz()` is a synchronous function called from
+  // module-level helpers all over the app, not a hook — nothing there can
+  // subscribe to a provider. It sits in <head> so it runs at parse time, long
+  // before hydration, and `storeTz()` reads it on each call rather than at
+  // import, so load order cannot matter.
+  //
+  // Filtered rather than escaped: `Organization.timezone` is an editable text
+  // column, and this value is written into a <script> tag. An IANA zone name
+  // is letters, digits, underscore, plus, minus and slash, so anything else is
+  // not a zone and does not belong in the page. A rejected value falls back to
+  // the deployment default, which is exactly where this file stood before.
+  const rawTz = org?.timezone ?? STORE_TZ;
+  const pageTz = /^[A-Za-z0-9_+\-/]{1,64}$/.test(rawTz) ? rawTz : STORE_TZ;
+
   return (
     <html lang="en" className={montserrat.variable}>
       <head>
@@ -104,6 +130,11 @@ export default async function RootLayout({
             hydrates, so a listener attached in a component effect misses it
             and no install button ever appears. Capture it here at parse time
             and stash it; InstallProvider picks up the stashed event on mount. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `window.__cleanoTz=${JSON.stringify(pageTz)};`,
+          }}
+        />
         <script
           dangerouslySetInnerHTML={{
             __html: `(function(){window.__cleanoInstallEvent=null;window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();window.__cleanoInstallEvent=e;});window.addEventListener('appinstalled',function(){window.__cleanoInstallEvent=null;});})();`,

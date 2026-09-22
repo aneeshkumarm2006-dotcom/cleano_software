@@ -1,5 +1,6 @@
 import { db } from "@/lib/org-db";
 import { getSettings } from "@/lib/settings";
+import { CUSTOMER_RATED_BY } from "@/lib/rating-history";
 
 // Reviews + settings change at runtime, so render per request.
 export const dynamic = "force-dynamic";
@@ -27,7 +28,27 @@ export default async function ReviewsPage() {
   const ratings = enabled
     ? await db.employeeRating.findMany({
         // A rating an admin pulled never appears as a public review (item 5).
-        where: { rating: { gte: threshold }, notes: { not: null }, excludedAt: null },
+        //
+        // Nor does one an admin WROTE (Sept 17, item 13: "customer-facing
+        // users should not see internal admin rating notes"). This page
+        // published any note at or above the threshold as a testimonial, and
+        // 41 of the 49 noted ratings in production are admin entries — so it
+        // was showing "Admin manual override" over five stars under a client's
+        // name. Now that those notes are a real sentence an admin types about
+        // a cleaner, the same query would publish the office's reasoning.
+        //
+        // Proof, not absence of proof: a row is shown only when it SAYS it came
+        // from a customer, or pre-dates the column and carries one of the two
+        // customer markers. Anything unrecognised stays off a public page.
+        where: {
+          rating: { gte: threshold },
+          notes: { not: null },
+          excludedAt: null,
+          OR: [
+            { source: "CUSTOMER" },
+            { source: null, ratedBy: { in: [...CUSTOMER_RATED_BY] } },
+          ],
+        },
         orderBy: { createdAt: "desc" },
         take: 30,
         include: { job: { include: { client: { select: { name: true } } } } },

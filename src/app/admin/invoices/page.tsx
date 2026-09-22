@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/org-db";
 import { storeDateKey } from "@/lib/timezone";
 import InvoicesPageClient from "./InvoicesPageClient";
+import { DEFAULT_TAX_RATES } from "@/lib/tax";
 
 type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>;
 
@@ -55,8 +56,8 @@ export default async function InvoicesPage({
   } | null;
 
   const taxConfigValue = {
-    gstRate: raw?.gstRate ?? 5,
-    qstRate: raw?.qstRate ?? 9.975,
+    gstRate: raw?.gstRate ?? DEFAULT_TAX_RATES.gstRate,
+    qstRate: raw?.qstRate ?? DEFAULT_TAX_RATES.qstRate,
     gstNumber: raw?.gstNumber ?? "",
     qstNumber: raw?.qstNumber ?? "",
   };

@@ -660,14 +660,33 @@ body {
   --primary-15:    rgba(0,140,156,0.15);
   --primary-20:    rgba(0,140,156,0.20);
   --primary-30:    rgba(0,140,156,0.30);
-  /* Bumped up from 0.40/0.50/0.60 for readability — teal at low opacity on
-     white failed contrast (faint amounts, "No card on file", secondary labels
-     across many admin pages). These tokens are text/icon/border only, never a
-     background fill, so darkening them is safe app-wide. */
-  --primary-40:    rgba(0,140,156,0.62);
-  --primary-50:    rgba(0,140,156,0.70);
-  --primary-60:    rgba(0,140,156,0.78);
-  --primary-70:    rgba(0,140,156,0.82);
+  /* SOLID, not alpha over #008C9C (Sept 17 list, item 24: "make light/faint
+     text darker across the app where readability is poor").
+   *
+   * An earlier pass raised the alpha on this ramp and got as far as it could:
+   * as the note below records, alpha over #008C9C tops out at 4.01:1 on white
+   * at alpha 1.0, so NO value in an alpha ramp reaches AA. The ramp itself had
+   * to change. These are now darkened teals of the same hue, and every step
+   * clears 4.5:1 on white AND on --cream, which is the darker of the two
+   * surfaces they sit on:
+   *
+   *     token          hex       on #fff   on --cream
+   *     --primary-40   #007785    5.28       4.87
+   *     --primary-50   #00707d    5.81       5.36
+   *     --primary-60   #006975    6.41       5.91
+   *     --primary-70   #00626d    7.08       6.52
+   *
+   * The ramp still reads as a ramp — 40 is visibly lighter than 70 — so
+   * placeholders and secondary labels keep looking secondary, which is the
+   * other half of what the PDF asks for.
+   *
+   * Safe app-wide because these are text/icon/border tokens and never a
+   * background fill (checked: no `background: var(--primary-40..70)` anywhere).
+   * The fill ramp is --primary-5..30 and is untouched. */
+  --primary-40:    #007785;
+  --primary-50:    #00707d;
+  --primary-60:    #006975;
+  --primary-70:    #00626d;
   --primary-light: #33b1c0;
   --primary-hover: #00707d;
   /* The one teal that passes WCAG AA as small text. The --primary-40..70 steps

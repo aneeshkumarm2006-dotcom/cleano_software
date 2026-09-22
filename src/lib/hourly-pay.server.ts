@@ -87,6 +87,22 @@ export interface HourlyPayResult {
  *   * write anything when the job has no work sessions. Nothing was clocked, so
  *     the save-time estimate is still the best answer and stays.
  */
+/**
+ * "at $25.00/h", or "at 2 different rates" when the crew is not on one.
+ *
+ * Sept 17, item 22: an hourly job can now pay each cleaner their own rate, so
+ * the log line that used to name THE rate has to say when there isn't one.
+ */
+function rateLine(
+  clock: { rateFor(id: string): number },
+  participantIds: readonly string[],
+): string {
+  const rates = new Set(participantIds.map((id) => clock.rateFor(id)));
+  if (rates.size === 0) return "";
+  if (rates.size === 1) return `at $${[...rates][0].toFixed(2)}/h`;
+  return `at ${rates.size} different per-cleaner rates`;
+}
+
 export async function snapshotHourlyEmployeePay(
   jobId: string
 ): Promise<HourlyPayResult> {
@@ -176,7 +192,10 @@ export async function snapshotHourlyEmployeePay(
         newValue: employeePay.toFixed(2),
         description:
           `Cleaner pay recalculated from the clock: ${crewHours}h across the crew ` +
-          `at $${clock.rate.toFixed(2)}/h → $${employeePay.toFixed(2)}` +
+          // Per-cleaner rates (Sept 17, item 22) mean there may be no single
+          // "$/h" to quote here, and printing the crew-wide one next to a total
+          // it did not produce is worse than not printing it.
+          `${rateLine(clock, participantIds)} → $${employeePay.toFixed(2)}` +
           (overrides > 0
             ? `, including ${overrides} manual per-cleaner amount${overrides === 1 ? "" : "s"}.`
             : "."),

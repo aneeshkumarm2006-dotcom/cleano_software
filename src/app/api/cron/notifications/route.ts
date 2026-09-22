@@ -29,7 +29,7 @@ import {
   sendCustomerCardExpiring,
   sendAdminCardExpiring,
 } from "@/lib/email";
-import { STORE_TZ } from "@/lib/timezone";
+import { storeTz } from "@/lib/timezone";
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -798,7 +798,7 @@ export async function GET(req: NextRequest) {
           weekday: "long",
           month: "long",
           day: "numeric",
-          timeZone: STORE_TZ,
+          timeZone: storeTz(),
         });
 
         if (client.email) {

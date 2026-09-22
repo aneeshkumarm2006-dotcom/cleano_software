@@ -7,6 +7,7 @@
 // WHOLE series at once.
 
 import { db } from "@/lib/org-db";
+import { allocateJobNumber } from "@/lib/job-number";
 
 /**
  * Fields that propagate when an admin chooses "apply to the whole series".
@@ -89,6 +90,11 @@ export const SERIES_PROPAGATED_FIELDS = [
   // `price` and `billingType` already propagate.
   "recurringDiscountMode",
   "recurringDiscountPercentOverride",
+  // The cadence the series runs on (Sept 17, item 21). A series is ONE
+  // agreement, so occurrence 4 cannot be on a different cadence from
+  // occurrence 1 — and without this, changing the frequency on one job would
+  // leave every sibling still claiming the old one.
+  "recurringFrequency",
 ] as const;
 
 export type SeriesField = (typeof SERIES_PROPAGATED_FIELDS)[number];
@@ -132,7 +138,18 @@ export async function applyToJobSeries(
   editedJobId: string,
   rootId: string,
   data: Record<string, unknown>,
-  cleanerIds?: string[]
+  cleanerIds?: string[],
+  /**
+   * Add-ons for the series (Sept 17, item 20: the change should apply "when
+   * editing date/time, cleaner assignment, price, ADD-ONS, notes, checklist,
+   * address details, frequency settings, or job scope").
+   *
+   * A relation, so it cannot ride along in `updateMany` — the same reason the
+   * cleaner team is handled separately below. `undefined` means the save did
+   * not carry the add-on editor and the siblings' own add-ons are left alone;
+   * an EMPTY ARRAY means the admin cleared them, which must propagate.
+   */
+  addOns?: { name: string; price: number; quantity: number }[]
 ): Promise<SeriesUpdateResult> {
   const payload: Record<string, unknown> = {};
   for (const field of SERIES_PROPAGATED_FIELDS) {
@@ -179,6 +196,26 @@ export async function applyToJobSeries(
         },
       });
       await syncJobAssignments(j.id, cleanerIds);
+    }
+  }
+
+  // Add-ons, for the same reason and in the same way (Sept 17, item 20). The
+  // price they contribute already propagates through `price` above, so a
+  // series whose add-ons did NOT follow the edit showed occurrence 4 charging
+  // for a carpet clean its line items never mentioned.
+  if (addOns) {
+    for (const j of editable) {
+      await db.jobAddOn.deleteMany({ where: { jobId: j.id } });
+      if (addOns.length > 0) {
+        await db.jobAddOn.createMany({
+          data: addOns.map((a) => ({
+            jobId: j.id,
+            name: a.name,
+            price: a.price,
+            quantity: a.quantity,
+          })),
+        });
+      }
     }
   }
 
@@ -439,4 +476,191 @@ export async function cancelJobSeries(
   });
 
   return { cancelled: ids.length, protectedCount: rows.length - ids.length };
+}
+
+// ── Changing the cadence of a live series (Sept 17 list, item 21) ──────────
+
+/** Cadences the job form offers. ONE_TIME ends the series. */
+export type SeriesFrequency =
+  | "ONE_TIME"
+  | "DAILY"
+  | "WEEKLY"
+  | "BIWEEKLY"
+  | "MONTHLY"
+  | "QUARTERLY"
+  | "TWICE_WEEKLY"
+  | "HIGH_FREQUENCY";
+
+export interface FrequencyChangeImpact {
+  /** Upcoming occurrences that would be withdrawn. */
+  removable: number;
+  /** Occurrences left alone because they are started, settled or past. */
+  kept: number;
+}
+
+/**
+ * Occurrences a cadence change may touch.
+ *
+ * Deliberately narrow. A job is only movable when it has NOT started, is not
+ * settled, and is in the future — so a shift somebody has clocked into, a
+ * visit that has been paid, and anything that already happened all stay
+ * exactly where they are. That is the PDF's "past completed jobs should stay
+ * unchanged", read strictly: the risk here is withdrawing a booking a customer
+ * has already been told about, so the bar for touching one is high.
+ */
+export async function movableFutureOccurrences(
+  rootId: string,
+  excludeJobId: string,
+  now: Date = new Date(),
+): Promise<{ id: string; startTime: Date }[]> {
+  const rows = await db.job.findMany({
+    where: {
+      deletedAt: null,
+      id: { not: excludeJobId },
+      OR: [{ id: rootId }, { parentJobId: rootId }],
+      startTime: { gt: now },
+      status: { notIn: [...IMMUTABLE_STATUSES] },
+      clockInTime: null,
+      workSessions: { none: {} },
+    },
+    select: { id: true, startTime: true },
+    orderBy: { startTime: "asc" },
+  });
+  return rows;
+}
+
+/** What a cadence change would do, without doing it. For the confirmation. */
+export async function previewFrequencyChange(
+  editedJobId: string,
+  rootId: string,
+  now: Date = new Date(),
+): Promise<FrequencyChangeImpact> {
+  const [movable, total] = await Promise.all([
+    movableFutureOccurrences(rootId, editedJobId, now),
+    db.job.count({
+      where: {
+        deletedAt: null,
+        id: { not: editedJobId },
+        OR: [{ id: rootId }, { parentJobId: rootId }],
+      },
+    }),
+  ]);
+  return { removable: movable.length, kept: total - movable.length };
+}
+
+export interface FrequencyChangeResult {
+  withdrawn: number;
+  created: number;
+  kept: number;
+}
+
+/**
+ * Put a series onto a new cadence.
+ *
+ * WITHDRAWN, NOT DELETED. The occurrences this replaces are soft-deleted
+ * (`deletedAt`), the same state the Jobs list's Archived view already shows.
+ * Hard-deleting them would destroy assignment rows, invites, chat and logs for
+ * bookings that were real — and a cadence change is an edit, not a purge. If
+ * the admin got it wrong, the old occurrences are still there to look at.
+ *
+ * Only `movableFutureOccurrences` are touched, so nothing started, settled or
+ * past is affected.
+ *
+ * The new occurrences are generated FROM the edited job, which stays put: it
+ * is the visit the admin had open and is usually the next one due. Everything
+ * after it is rebuilt on the new rhythm.
+ */
+export async function applyFrequencyChange(
+  editedJobId: string,
+  rootId: string,
+  frequency: SeriesFrequency,
+  opts: {
+    /** How many occurrences to generate ahead, from the same setting creation uses. */
+    horizon: number;
+    /** Fields the new occurrences inherit from the edited job. */
+    template: Record<string, unknown>;
+    cleanerIds?: string[];
+    addOns?: { name: string; price: number; quantity: number }[];
+    now?: Date;
+  },
+): Promise<FrequencyChangeResult> {
+  const now = opts.now ?? new Date();
+  const movable = await movableFutureOccurrences(rootId, editedJobId, now);
+
+  if (movable.length > 0) {
+    await db.job.updateMany({
+      where: { id: { in: movable.map((j) => j.id) } },
+      data: { deletedAt: now },
+    });
+  }
+
+  if (frequency === "ONE_TIME") {
+    // The series ends here. The edited job stands alone, which is exactly what
+    // "change it to one-time" means, and nothing new is generated.
+    return { withdrawn: movable.length, created: 0, kept: 0 };
+  }
+
+  const { nextOccurrence, recurrenceCount } = await import("@/lib/booking-pricing");
+  const count = recurrenceCount(frequency, opts.horizon);
+  const edited = await db.job.findUnique({
+    where: { id: editedJobId },
+    select: { id: true, startTime: true, endTime: true, parentJobId: true },
+  });
+  if (!edited?.startTime) return { withdrawn: movable.length, created: 0, kept: 0 };
+
+  // The duration of the edited visit, carried onto each new one. Reading it
+  // off the job rather than assuming a fixed length keeps a four-hour deep
+  // clean four hours long at every occurrence.
+  const durationMs =
+    edited.endTime && edited.startTime
+      ? edited.endTime.getTime() - edited.startTime.getTime()
+      : null;
+
+  let cursor = edited.startTime;
+  let created = 0;
+  for (let i = 0; i < count; i++) {
+    cursor = nextOccurrence(cursor, frequency as Exclude<SeriesFrequency, "ONE_TIME">);
+    const start = new Date(cursor);
+    // `any` for the same reason saveJob's own child block uses it: the payload
+    // is assembled from a template object the type system cannot narrow, and
+    // `jobNumber` is allocated one row at a time just below.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const childData: any = {
+      ...opts.template,
+        parentJobId: rootId,
+        startTime: start,
+        endTime: durationMs != null ? new Date(start.getTime() + durationMs) : null,
+        jobDate: start,
+        status: "SCHEDULED",
+        recurringFrequency: frequency,
+        // Per-occurrence facts never carry over from the visit being copied.
+        clockInTime: null,
+        clockOutTime: null,
+        paymentReceived: false,
+        paidAt: null,
+        ...(opts.addOns && opts.addOns.length > 0
+          ? {
+              addOns: {
+                create: opts.addOns.map((a) => ({
+                  name: a.name,
+                  price: a.price,
+                  quantity: a.quantity,
+                })),
+              },
+            }
+          : {}),
+        ...(opts.cleanerIds && opts.cleanerIds.length > 0
+          ? { cleaners: { connect: opts.cleanerIds.map((id) => ({ id })) } }
+          : {}),
+    };
+    childData.jobNumber = await allocateJobNumber();
+    const child = await db.job.create({ data: childData, select: { id: true } });
+    created++;
+    if (opts.cleanerIds && opts.cleanerIds.length > 0) {
+      const { syncJobAssignments } = await import("@/lib/job-assignments");
+      await syncJobAssignments(child.id, opts.cleanerIds);
+    }
+  }
+
+  return { withdrawn: movable.length, created, kept: 0 };
 }

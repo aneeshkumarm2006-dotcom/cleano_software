@@ -16,11 +16,19 @@
   --primary-hover: #00707D;
   --primary-light: #007580;
   --primary-deep:  #003940;
-  --primary-90: rgba(0,140,156, 0.9);
-  --primary-70: rgba(0,140,156, 0.7);
-  --primary-60: rgba(0,140,156, 0.6);
-  --primary-50: rgba(0,140,156, 0.5);
-  --primary-40: rgba(0,140,156, 0.4);
+  /* Sept 17 list, item 24. This ramp was alpha over #008C9C and the faintest
+   * steps were unreadable on white: 0.4 alpha is about 1.7:1, which is the
+   * "barely readable" helper text and placeholders the PDF reports on the
+   * booking page. Alpha could not fix it — #008C9C is only 4.01:1 at full
+   * opacity — so the steps are darkened teals of the same hue instead, each
+   * clearing 4.5:1 on white and on --cream. Same values as the admin ramp in
+   * globals.css, so the two apps no longer disagree about what "secondary"
+   * looks like. --primary-5..20 stay alpha; those are fills and borders. */
+  --primary-90: #005a63;
+  --primary-70: #00626d;
+  --primary-60: #006975;
+  --primary-50: #00707d;
+  --primary-40: #007785;
   --primary-20: rgba(0,140,156, 0.2);
   --primary-15: rgba(0,140,156, 0.15);
   --primary-10: rgba(0,140,156, 0.1);

@@ -10,9 +10,12 @@ import Modal from "@/components/ui/Modal";
 import PremiumSelect from "@/components/ui/PremiumSelect";
 import { EmployeeModal } from "../EmployeeModal";
 import { assignKit } from "../../actions/assignKit";
-import { setEmployeeRating } from "../../actions/setEmployeeRating";
+import RatingHistoryPanel, {
+  type RatingHistoryRow,
+} from "./RatingHistoryPanel";
 import { resolveInventoryRequest } from "../../actions/resolveInventoryRequest";
 import { setCleanerTier } from "../../actions/setCleanerTier";
+import { setCleanerDefaultHourlyRate } from "../../actions/setCleanerDefaultHourlyRate";
 import { setFieldLead } from "../../actions/setFieldLead";
 import { setCleanerProductQuantity } from "../../actions/setCleanerProductQuantity";
 import { setEmployeeServiceCategories } from "../../actions/setEmployeeServiceCategories";
@@ -91,6 +94,8 @@ interface Employee {
   phone: string | null;
   role: "OWNER" | "ADMIN" | "EMPLOYEE";
   lastSeenAt: string | null;
+  /** Their usual $/hr. Seeds new hourly jobs only (Sept 17, item 22). */
+  defaultHourlyRate?: number | null;
 }
 
 interface Job {
@@ -240,15 +245,8 @@ interface EmployeeDetailViewProps {
   } | null;
 }
 
-interface RecentRatingDTO {
-  id: string;
-  rating: number;
-  notes: string | null;
-  createdAt: string;
-  /** Set when the client edited their submitted rating. */
-  editedAt: string | null;
-  clientName: string | null;
-}
+// The rating row shape lives with the panel that renders it.
+type RecentRatingDTO = RatingHistoryRow;
 
 interface StrikeDTO {
   id: string;
@@ -595,7 +593,7 @@ function VoidChequeAdminCard({
             {opening ? "Opening…" : "View / Download"}
           </Button>
           {err && <p className="text-xs mt-2 text-red-500">{err}</p>}
-          <p className="text-xs text-gray-400 mt-2">
+          <p className="text-xs text-gray-500 mt-2">
             Opens a link that expires in 5 minutes. Every view is recorded in the
             activity log.
           </p>
@@ -648,9 +646,6 @@ export default function EmployeeDetailView({
     type: "success" | "error";
     text: string;
   } | null>(null);
-  const [ratingEdit, setRatingEdit] = useState<string>(starRating != null ? starRating.toFixed(1) : "");
-  const [ratingSaving, setRatingSaving] = useState(false);
-  const [ratingMsg, setRatingMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [tier, setTier] = useState<CleanerTier>(cleanerTier);
   const [tierSaving, setTierSaving] = useState(false);
   const [tierMsg, setTierMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -694,6 +689,30 @@ export default function EmployeeDetailView({
     const res = await setFieldLead(employee.id, next || null);
     setLeadSaving(false);
     if (!res.success) setLeadId(prev);
+  }
+
+  // Sept 17, item 22. Seeds the per-cleaner rate on NEW hourly jobs. It is not
+  // read by any pay calculation, which is what lets an admin change it without
+  // wondering what it does to work already scheduled.
+  const [defaultRate, setDefaultRate] = useState<string>(
+    employee.defaultHourlyRate != null ? String(employee.defaultHourlyRate) : "",
+  );
+  const [rateSaving, setRateSaving] = useState(false);
+  const [rateMsg, setRateMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  async function handleSaveDefaultRate() {
+    setRateSaving(true);
+    setRateMsg(null);
+    const res = await setCleanerDefaultHourlyRate(
+      employee.id,
+      defaultRate.trim() === "" ? null : Number(defaultRate),
+    );
+    setRateSaving(false);
+    setRateMsg(
+      res.success
+        ? { type: "success", text: "Saved. It applies to new hourly jobs." }
+        : { type: "error", text: res.error },
+    );
   }
 
   async function handleSetTier(next: CleanerTier) {
@@ -927,7 +946,7 @@ export default function EmployeeDetailView({
                   {Math.min(5, Math.max(1, Math.round(starRating * 10) / 10)).toFixed(1)}
                 </span>
               ) : (
-                <span className="text-sm text-gray-400">No rating yet</span>
+                <span className="text-sm text-gray-500">No rating yet</span>
               )}
               {starRating != null && (
                 <div className="flex gap-0.5">
@@ -940,69 +959,14 @@ export default function EmployeeDetailView({
                 </div>
               )}
             </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="number"
-                min="1.0"
-                max="5.0"
-                step="0.1"
-                value={ratingEdit}
-                onChange={(e) => setRatingEdit(e.target.value)}
-                placeholder="1.0 – 5.0"
-                className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm w-28 focus:outline-none focus:ring-1 focus:ring-[#008C9C]"
-              />
-              <button
-                onClick={async () => {
-                  const val = parseFloat(ratingEdit);
-                  if (isNaN(val) || val < 1 || val > 5) {
-                    setRatingMsg({ type: "error", text: "Must be between 1.0 and 5.0" });
-                    return;
-                  }
-                  setRatingSaving(true);
-                  setRatingMsg(null);
-                  const res = await setEmployeeRating(employee.id, val);
-                  setRatingSaving(false);
-                  if (res.success) {
-                    setRatingMsg({ type: "success", text: "Rating updated." });
-                  } else {
-                    setRatingMsg({ type: "error", text: res.error ?? "Failed" });
-                  }
-                }}
-                disabled={ratingSaving}
-                className="px-3 py-1.5 text-sm bg-[#008C9C] text-white rounded-lg hover:bg-[#008C9C]/90 disabled:opacity-50">
-                {ratingSaving ? "Saving…" : "Set"}
-              </button>
-            </div>
-            {ratingMsg && (
-              <p className={`text-xs mt-2 ${ratingMsg.type === "success" ? "text-green-600" : "text-red-500"}`}>
-                {ratingMsg.text}
-              </p>
-            )}
-            <p className="text-xs text-gray-400 mt-2">Admin override. Customer ratings also update this average.</p>
-            {recentRatings.length > 0 && (
-              <div className="mt-4 pt-4 border-t border-gray-100">
-                <h4 className="text-xs font-[600] text-gray-500 uppercase tracking-wide mb-2">Recent Ratings</h4>
-                <div className="space-y-2">
-                  {recentRatings.map((r) => (
-                    <div key={r.id} className="flex items-start justify-between gap-3 text-sm">
-                      <div className="min-w-0">
-                        <span className="font-[600] text-amber-500">{r.rating.toFixed(1)} ★</span>
-                        {r.editedAt && (
-                          <span className="ml-1.5 text-[11px] text-gray-400 italic" title={`Edited ${new Date(r.editedAt).toLocaleString()}`}>
-                            (edited)
-                          </span>
-                        )}
-                        {r.clientName && <span className="ml-1.5 text-xs text-gray-500">· {r.clientName}</span>}
-                        {r.notes && <p className="text-xs text-gray-500 italic truncate">&quot;{r.notes}&quot;</p>}
-                      </div>
-                      <span className="text-xs text-gray-400 whitespace-nowrap">
-                        {new Date(r.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            {/* Sept 17, item 13. Was a number box and a flat list: it could
+                show THAT an admin had intervened and never why, and a customer
+                review and an admin correction were indistinguishable rows. */}
+            <RatingHistoryPanel
+              employeeId={employee.id}
+              rows={recentRatings}
+              activeCount={ratingCount}
+            />
           </Card>
 
           {/* Payroll Tier */}
@@ -1010,6 +974,46 @@ export default function EmployeeDetailView({
             <div className="flex items-center gap-2 mb-3">
               <DollarSign className="w-4 h-4 text-[#008C9C]" />
               <h3 className="text-sm font-[600] text-gray-800">Payroll Tier</h3>
+            </div>
+            {/* Sept 17, item 22 — their usual hourly rate. Lives beside the
+                tier because it is the same kind of fact: what this person is
+                normally worth, as opposed to what one job pays. */}
+            <div className="mb-4 pb-4 border-b border-gray-100">
+              <label
+                htmlFor="default-hourly-rate"
+                className="block text-xs font-[600] text-gray-500 uppercase tracking-wide mb-1.5">
+                Default hourly rate
+              </label>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-500">$</span>
+                <input
+                  id="default-hourly-rate"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={defaultRate}
+                  onChange={(e) => { setDefaultRate(e.target.value); setRateMsg(null); }}
+                  placeholder="—"
+                  className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm w-24 focus:outline-none focus:ring-1 focus:ring-[#008C9C]"
+                />
+                <span className="text-xs text-gray-500">/h</span>
+                <button
+                  type="button"
+                  onClick={handleSaveDefaultRate}
+                  disabled={rateSaving}
+                  className="px-3 py-1.5 text-sm bg-[#008C9C] text-white rounded-lg hover:bg-[#008C9C]/90 disabled:opacity-50">
+                  {rateSaving ? "Saving…" : "Save"}
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 mt-1.5">
+                Fills in this cleaner&apos;s rate when they&apos;re put on a new
+                hourly job. Jobs already booked keep the rate they have.
+              </p>
+              {rateMsg && (
+                <p className={`text-xs mt-1 ${rateMsg.type === "success" ? "text-green-600" : "text-red-500"}`}>
+                  {rateMsg.text}
+                </p>
+              )}
             </div>
             <div className="flex items-center gap-2 mb-3">
               {(["TRAINEE", "STANDARD", "FIELD_LEAD"] as CleanerTier[]).map((t) => (
@@ -1031,7 +1035,7 @@ export default function EmployeeDetailView({
               <span className="font-[600] text-gray-800">{tierRatePct}</span> of job price.
             </p>
             {tier === "TRAINEE" && (
-              <p className="text-xs text-gray-400 mt-1">
+              <p className="text-xs text-gray-500 mt-1">
                 Trainees always work paired with a Field Lead; take-home comes from the split-job calculation.
               </p>
             )}
@@ -1040,7 +1044,7 @@ export default function EmployeeDetailView({
                 {tierMsg.text}
               </p>
             )}
-            <p className="text-xs text-gray-400 mt-2">
+            <p className="text-xs text-gray-500 mt-2">
               Set manually by admin. There is no automatic promotion.
             </p>
           </Card>
@@ -1078,7 +1082,7 @@ export default function EmployeeDetailView({
                 {catMsg.text}
               </p>
             )}
-            <p className="text-xs text-gray-400 mt-2">
+            <p className="text-xs text-gray-500 mt-2">
               Admins can still assign this employee to any job — a mismatch only
               shows a warning.
             </p>
@@ -1119,9 +1123,9 @@ export default function EmployeeDetailView({
                   </div>
                 </div>
               ) : (
-                <p className="text-sm text-gray-400">No group activity this week.</p>
+                <p className="text-sm text-gray-500">No group activity this week.</p>
               )}
-              <p className="text-xs text-gray-400 mt-2">
+              <p className="text-xs text-gray-500 mt-2">
                 2% of group revenue at ≤4.5★, 3% above 4.5★. Based on the team average,
                 not personal rating. Paid out with each pay period.
               </p>
@@ -1129,7 +1133,7 @@ export default function EmployeeDetailView({
           ) : (
             <Card variant="default" className="p-5">
               <div className="flex items-center gap-2 mb-3">
-                <Briefcase className="w-4 h-4 text-gray-400" />
+                <Briefcase className="w-4 h-4 text-gray-500" />
                 <h3 className="text-sm font-[600] text-gray-800">Field Lead Group</h3>
               </div>
               <select
@@ -1144,7 +1148,7 @@ export default function EmployeeDetailView({
                   </option>
                 ))}
               </select>
-              <p className="text-xs text-gray-400 mt-2">
+              <p className="text-xs text-gray-500 mt-2">
                 The Field Lead this cleaner reports to. Counts toward that lead&apos;s
                 weekly group-revenue bonus.
               </p>

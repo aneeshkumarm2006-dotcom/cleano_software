@@ -10,6 +10,7 @@ import { fmtDate } from "@/lib/time";
 import { isJobTaxExempt } from "@/lib/tax.server";
 import { getServiceCatalogWithLabels } from "@/lib/service-catalog.server";
 import { currentAppUrl } from "@/lib/org-url";
+import { DEFAULT_TAX_RATES } from "@/lib/tax";
 
 async function requireAdmin() {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -85,8 +86,8 @@ export async function createInvoice(params: CreateInvoiceParams) {
       gstRate?: number;
       qstRate?: number;
     } | null;
-    const gstRate = raw?.gstRate ?? 5;
-    const qstRate = raw?.qstRate ?? 9.975;
+    const gstRate = raw?.gstRate ?? DEFAULT_TAX_RATES.gstRate;
+    const qstRate = raw?.qstRate ?? DEFAULT_TAX_RATES.qstRate;
 
     // Selected jobs become the leading line items of a consolidated invoice.
     const jobIds = Array.from(new Set((params.jobIds ?? []).filter(Boolean)));

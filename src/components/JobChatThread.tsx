@@ -23,7 +23,7 @@ import {
   hideJobChatMessage,
   unhideJobChatMessage,
 } from "@/app/admin/actions/jobChatModeration";
-import { STORE_TZ } from "@/lib/timezone";
+import { storeTz } from "@/lib/timezone";
 
 interface JobChatThreadProps {
   jobId: string;
@@ -54,7 +54,7 @@ function timeOnly(iso: string) {
   return new Date(iso).toLocaleTimeString("en-US", {
     hour: "numeric",
     minute: "2-digit",
-    timeZone: STORE_TZ,
+    timeZone: storeTz(),
   });
 }
 

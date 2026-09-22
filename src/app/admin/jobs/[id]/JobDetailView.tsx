@@ -80,6 +80,7 @@ import Modal from "@/components/ui/Modal";
 import { cancelJobByAdmin } from "../../actions/cancelJobByAdmin";
 import ScopePhotoUpload from "./ScopePhotoUpload";
 import { setCleanerJobPay } from "../../actions/setCleanerJobPay";
+import { setCleanerHourlyRate } from "../../actions/setCleanerHourlyRate";
 import ClockTimeEditor from "./ClockTimeEditor";
 import RatingExclusionControl from "./RatingExclusionControl";
 import { issueRefund } from "../../actions/issueRefund";
@@ -99,6 +100,7 @@ import {
   resolvePassThroughBilling,
   type JobPricingMode,
 } from "@/lib/job-money";
+import { taxLines } from "@/lib/tax";
 import { formatHours, hourlyLineLabel } from "@/lib/hourly-billing";
 import { formatPropertySize } from "@/lib/property-size";
 import {
@@ -384,6 +386,12 @@ interface JobDetailViewProps {
   payShares?: Record<string, number>;
   /** Manual per-cleaner pay overrides (JobAssignment.payAmount). */
   payOverrides?: Record<string, number | null>;
+  /**
+   * Per-cleaner hourly rates (JobAssignment.hourlyRate), Sept 17 item 22.
+   * A cleaner missing from this map is on the job's crew-wide rate, which is
+   * every cleaner on every job that pre-dates the column.
+   */
+  cleanerHourlyRates?: Record<string, number | null>;
   /**
    * The job's LIVE labour cost from computeJobPayShares (pre-tip), computed in
    * page.tsx. THE number the Financials tab prints — `job.employeePay` is a
@@ -914,6 +922,7 @@ export default function JobDetailView({
   assignments = [],
   payShares = {},
   payOverrides = {},
+  cleanerHourlyRates = {},
   computedEmployeePay = 0,
   payRows = [],
   hasPayableParticipants = false,
@@ -1097,6 +1106,26 @@ export default function JobDetailView({
         `$${payEditCheck.after.budget.toFixed(2)}. Lower another cleaner's ` +
         `amount first, or raise the total on Edit job.`
       : null;
+
+  // Sept 17, item 22. Kept separate from the pay-override editor above on
+  // purpose: an AMOUNT replaces the clock, a RATE is multiplied by it, and on
+  // this screen "$25" must not be able to mean either.
+  const [rateEditFor, setRateEditFor] = useState<string | null>(null);
+  const [rateEditValue, setRateEditValue] = useState("");
+  const [rateSaving, setRateSaving] = useState(false);
+  const [rateError, setRateError] = useState<string | null>(null);
+
+  async function saveHourlyRate(cleanerId: string, clear = false) {
+    setRateSaving(true);
+    setRateError(null);
+    const rate = clear ? null : Number(rateEditValue);
+    const res = await setCleanerHourlyRate({ jobId: job.id, cleanerId, rate });
+    setRateSaving(false);
+    if (!res.success) { setRateError(res.error); return; }
+    setRateEditFor(null);
+    setRateEditValue("");
+    router.refresh();
+  }
 
   async function savePayOverride(cleanerId: string, clear = false) {
     // Clearing can only ever lower the crew's total, so it is never capped.
@@ -2133,6 +2162,62 @@ export default function JobDetailView({
                       </span>
                     )
                   )}
+
+                  {/* Sept 17, item 22 — this cleaner's own $/hr on this job.
+                      Only on an hourly job, because on any other pay type
+                      there is nothing for a rate to multiply. Sits under the
+                      amount rather than beside it: the amount is the answer,
+                      the rate is one of its two inputs, and the clocked hours
+                      above are the other. */}
+                  {job.payType === 'HOURLY' && (
+                    rateEditFor === c.id ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontSize: 12 }}>$</span>
+                          <input
+                            type="number" step="0.01" min="0" autoFocus
+                            value={rateEditValue}
+                            onChange={(e) => { setRateEditValue(e.target.value); setRateError(null); }}
+                            aria-label={`Hourly rate for ${c.name}`}
+                            style={{ width: 70, padding: '3px 6px', fontSize: 12, borderRadius: 6, border: '1px solid var(--primary-20)' }}
+                          />
+                          <span style={{ fontSize: 11, color: 'var(--primary-50)' }}>/h</span>
+                          <button type="button" disabled={rateSaving} onClick={() => saveHourlyRate(c.id)}
+                            style={{ fontSize: 11, padding: '3px 8px', borderRadius: 999, border: 'none', background: 'var(--primary)', color: '#fff', cursor: 'pointer' }}>
+                            {rateSaving ? '…' : 'Save'}
+                          </button>
+                          <button type="button" disabled={rateSaving} onClick={() => saveHourlyRate(c.id, true)}
+                            title="Clear this cleaner's own rate and go back to the job's rate"
+                            style={{ fontSize: 11, padding: '3px 8px', borderRadius: 999, border: '1px solid var(--primary-10)', background: 'transparent', cursor: 'pointer' }}>
+                            Reset
+                          </button>
+                          <button type="button" onClick={() => { setRateEditFor(null); setRateError(null); }}
+                            style={{ fontSize: 11, padding: '3px 6px', border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--primary-50)' }}>
+                            ✕
+                          </button>
+                        </div>
+                        {rateError && (
+                          <div role="alert" style={{ maxWidth: 300, textAlign: 'left', fontSize: 11, lineHeight: 1.45, color: '#991b1b', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '5px 8px' }}>
+                            {rateError}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <span
+                        style={{ fontSize: 11.5, color: 'var(--primary-70)', cursor: isAdmin ? 'pointer' : 'default' }}
+                        title={cleanerHourlyRates[c.id] != null
+                          ? "This cleaner's own rate on this job — click to change"
+                          : "The job's rate for the whole crew. Click to give this cleaner their own."}
+                        onClick={isAdmin ? () => { setRateEditFor(c.id); setRateEditValue(String(cleanerHourlyRates[c.id] ?? job.hourlyRate ?? '')); setRateError(null); } : undefined}
+                      >
+                        ${(cleanerHourlyRates[c.id] ?? job.hourlyRate ?? 0).toFixed(2)}/h
+                        <span style={{ marginLeft: 4, fontSize: 10, color: cleanerHourlyRates[c.id] != null ? '#92400e' : 'var(--primary-60)', background: cleanerHourlyRates[c.id] != null ? '#fffbeb' : 'var(--primary-5)', border: `1px solid ${cleanerHourlyRates[c.id] != null ? '#fde68a' : 'var(--primary-10)'}`, borderRadius: 999, padding: '1px 5px' }}>
+                          {cleanerHourlyRates[c.id] != null ? 'own rate' : 'job rate'}
+                        </span>
+                      </span>
+                    )
+                  )}
+
                   {isAdmin && (
                     <button
                       type="button"
@@ -2793,16 +2878,17 @@ export default function JobDetailView({
                 <span className="finrow-value">$0.00</span>
               </div>
             ) : (
-              <>
-                <div className="finrow">
-                  <span className="finrow-label">GST ({taxRates.gstRate}%)</span>
-                  <span className="finrow-value">+${displayGst.toFixed(2)}</span>
-                </div>
-                <div className="finrow">
-                  <span className="finrow-label">QST ({taxRates.qstRate}%)</span>
-                  <span className="finrow-value">+${displayQst.toFixed(2)}</span>
-                </div>
-              </>
+              // One row per tax this workspace charges; a rate of zero prints
+              // nothing (Sept 17, item 7). The AMOUNTS stay the display figures
+              // computed above, which already account for a price override.
+              taxLines(taxRates, { gstAmount: displayGst, qstAmount: displayQst }).map(
+                (line) => (
+                  <div className="finrow" key={line.key}>
+                    <span className="finrow-label">{line.label}</span>
+                    <span className="finrow-value">+${line.amount.toFixed(2)}</span>
+                  </div>
+                )
+              )
             )}
             <div className="finrow">
               <span className="finrow-label"><strong>Total with tax</strong></span>

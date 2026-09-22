@@ -57,6 +57,12 @@ export interface ChecklistScopedJob extends ChecklistTriggerJob {
   clientAddressId: string | null;
   /** `Job.checklistTemplateId` — the per-job pin. */
   checklistTemplateId: string | null;
+  /**
+   * `Job.customChecklist` — items typed into this one job (Sept 17, item 18).
+   * Beats every template including the pin, because it is the most specific
+   * statement there is: an admin wrote this list for this visit.
+   */
+  customChecklist?: unknown;
 }
 
 /**
@@ -65,6 +71,8 @@ export interface ChecklistScopedJob extends ChecklistTriggerJob {
  * with no provenance.
  */
 export type ChecklistResolutionTier =
+  /** `Job.customChecklist` — items typed into this one job (Sept 17, item 18). */
+  | "CUSTOM"
   /** `Job.checklistTemplateId` — an admin pinned this one job. */
   | "JOB"
   /** A template scoped to this job's saved address. */
@@ -173,6 +181,7 @@ export function resolveChecklistTemplates<T extends ChecklistScopedTemplate>(
 
 /** One line of plain English per tier, for the admin job panel. */
 export const CHECKLIST_TIER_HINT: Record<ChecklistResolutionTier, string> = {
+  CUSTOM: "Written for this job only — no template is used.",
   JOB: "Pinned to this job by an admin — overrides every automatic rule.",
   ADDRESS: "Custom checklist for this customer at this location.",
   CLIENT: "Custom checklist for this customer, at all of their locations.",
@@ -182,6 +191,7 @@ export const CHECKLIST_TIER_HINT: Record<ChecklistResolutionTier, string> = {
 
 /** Short badge label per tier. */
 export const CHECKLIST_TIER_LABEL: Record<ChecklistResolutionTier, string> = {
+  CUSTOM: "Custom for this job",
   JOB: "Pinned to this job",
   ADDRESS: "Location checklist",
   CLIENT: "Customer checklist",

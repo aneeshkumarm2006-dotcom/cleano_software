@@ -110,6 +110,10 @@ export type JobSummaryDTO = {
   propertyType: string | null;
   /** Pinned checklist template (Stage 10). Null = resolve automatically. */
   checklistTemplateId: string | null;
+  /** A checklist written for this job alone (Sept 17, item 18). */
+  customChecklist: unknown;
+  /** The cadence this job's series runs on (Sept 17, item 21). */
+  recurringFrequency: string | null;
   /**
    * The ROSTER — who is assigned. Drives the "Assigned to" row and the assign
    * editor. `pay` is the participant's `share.total`, the same figure the

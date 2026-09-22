@@ -620,7 +620,7 @@ export default function CleanerSelector({
 
       <div className="relative" ref={inputContainerRef}>
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
           <Input
             id="cleaner-search"
             type="text"
@@ -704,7 +704,7 @@ export default function CleanerSelector({
             <div key={cleaner.id} className="flex items-center justify-between gap-3">
               <span className="text-sm text-gray-700 truncate">{cleaner.name}</span>
               <div className="relative w-32 shrink-0">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
                 <input
                   type="number"
                   name={`payFor_${cleaner.id}`}

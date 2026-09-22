@@ -215,7 +215,7 @@ export default function NotificationsClient({
                         {reasonOf(n.key)}
                       </span>
                       {n.read ? (
-                        <span className="text-[11px] text-gray-400">Read</span>
+                        <span className="text-[11px] text-gray-500">Read</span>
                       ) : (
                         <button
                           type="button"

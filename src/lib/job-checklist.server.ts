@@ -15,6 +15,7 @@ import {
   type ChecklistScopedJob,
 } from "@/lib/checklist-triggers";
 import {
+  parseCustomChecklist,
   resolveChecklistAction,
   type ChecklistItemShape,
 } from "@/lib/job-checklist";
@@ -114,6 +115,24 @@ export interface ExpectedChecklist {
 export async function resolveExpectedChecklist(
   job: ChecklistScopedJob
 ): Promise<ExpectedChecklist> {
+  // Sept 17, item 18. A list typed into this one job wins outright: no
+  // template lookup, no service-type default, no pin. The PDF asks for exactly
+  // that ("if a job has a one-off custom checklist, it should override the
+  // default service-type checklist for that job"), and it is also the only way
+  // the list can work "even if no checklist template already exists".
+  //
+  // Checked BEFORE the query, so a workspace with no templates at all still
+  // gets its custom list rather than falling through to NO_TEMPLATES.
+  const custom = parseCustomChecklist(job.customChecklist);
+  if (custom.length > 0) {
+    return {
+      items: custom,
+      templates: [],
+      tier: "CUSTOM",
+      pinnedUnavailable: false,
+    };
+  }
+
   const candidates = await db.checklistTemplate.findMany({
     where: { isActive: true },
     include: { items: { orderBy: { sortOrder: "asc" } } },
@@ -174,6 +193,7 @@ export async function ensureJobChecklist(
         clientId: true,
         clientAddressId: true,
         checklistTemplateId: true,
+        customChecklist: true,
         cleaners: { select: { id: true } },
         addOns: { select: { name: true } },
       },
@@ -414,6 +434,7 @@ export async function summarizeJobChecklist(
         clientId: true,
         clientAddressId: true,
         checklistTemplateId: true,
+        customChecklist: true,
         addOns: { select: { name: true } },
         checklists: {
           orderBy: { createdAt: "asc" },

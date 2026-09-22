@@ -4,6 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Check, Sparkles } from "lucide-react";
 import { BookingDraft, EMPTY_DRAFT } from "./types";
+import {
+  maxReachableStep,
+  stepBlockers,
+  stepRequirementsMet,
+} from "./blockers";
 import Step1PostalCode from "./steps/Step1PostalCode";
 import Step2Property from "./steps/Step2Property";
 import Step3Schedule from "./steps/Step3Schedule";
@@ -15,7 +20,7 @@ import { submitBooking } from "../actions/submitBooking";
 import { getBookingConfig } from "../actions/getBookingConfig";
 import { getMyAddresses } from "../../(customer)/actions/clientAddresses";
 import type { SavedAddress } from "@/lib/client-address";
-import { calculateTax } from "@/lib/tax";
+import { calculateTax, taxLines, type TaxRates } from "@/lib/tax";
 import { addOnLineTotal, sumAddOns } from "@/lib/job-money";
 import { isValidEmail, isValidPhone } from "@/lib/validation";
 import { AFTER_PHOTO_CONSENT_TEXT } from "@/lib/policy";
@@ -69,80 +74,6 @@ interface StoredDraft {
   draft: BookingDraft;
 }
 
-/**
- * What a given step requires before the wizard may move past it. Pure, and
- * module-level, so the same rule gates the Continue button, the browser's
- * Forward button, and a restored session — rather than the first of those
- * having a rule the other two can walk around.
- */
-function stepRequirementsMet(
-  s: number,
-  draft: BookingDraft,
-  agree: boolean,
-  bookingPage: BookingPageConfig = BOOKING_PAGE_DEFAULTS
-): boolean {
-  switch (s) {
-    case 0:
-      return draft.postalCovered === true;
-    case 1:
-      if (!(draft.address.trim() && draft.serviceType && draft.frequency))
-        return false;
-      // Square footage gates Continue when the admin config marks it required
-      // for this service. It is pinned required for Move-in/out, which is
-      // priced per square foot and cannot be quoted without it.
-      if (
-        isFieldRequired(bookingPage, "property", "squareFootage", draft.serviceType) &&
-        !(draft.squareFootage > 0)
-      )
-        return false;
-      // Photos gate Continue the same way (PDF #9, Stage 11). Pinned required for
-      // post-construction, which is quoted FROM the photos — a deposit taken with
-      // none is a payment for a quote nobody can produce. Counted against
-      // `draft.photos`, which only ever holds URLs that finished uploading.
-      if (
-        isFieldRequired(bookingPage, "property", "photos", draft.serviceType) &&
-        draft.photos.length < BOOKING_PHOTO_MIN
-      )
-        return false;
-      return true;
-    case 2:
-      return !!(
-        draft.date &&
-        (draft.isFlexible || (draft.timeSlot && draft.timeSlotValid !== false))
-      );
-    case 3:
-      return !!(
-        draft.name.trim() &&
-        isValidEmail(draft.email) &&
-        isValidPhone(draft.phone)
-      );
-    case 4:
-      // A card is required only when there is a deposit to charge. A workspace
-      // that charges none has no card step at all, and the server re-checks the
-      // amount before creating anything, so this cannot be used to skip a real
-      // deposit by setting a flag in the browser.
-      return agree && (!!draft.stripeCardReady || !!draft.depositWaived);
-    default:
-      return false;
-  }
-}
-
-/**
- * The furthest step a draft actually justifies being on: the first step whose
- * own requirements aren't met. Step 4's requirements (terms ticked, card ready)
- * gate submission, not arrival, so they are deliberately not consulted here.
- */
-function maxReachableStep(
-  draft: BookingDraft,
-  agree: boolean,
-  bookingPage: BookingPageConfig = BOOKING_PAGE_DEFAULTS
-): number {
-  for (let i = 0; i < LAST_STEP; i++) {
-    if (!stepRequirementsMet(i, draft, agree, bookingPage)) return i;
-  }
-  return LAST_STEP;
-}
-
 export default function BookPage() {
   const session = authClient.useSession();
   const loggedInUser = session.data?.session
@@ -178,6 +109,12 @@ export default function BookPage() {
     setCanLeaveToReferrer(window.history.length > 1);
   }, []);
   const [minLeadDays, setMinLeadDays] = useState(1);
+  // This workspace's sales tax rates (Sept 17, item 7). NULL until the config
+  // arrives, and NOT seeded with the Quebec defaults: seeding them is what
+  // showed a Calgary customer 9.975% QST. Nothing priced is on screen before
+  // then anyway — the summary needs a server-computed base price, which lands
+  // later than this does.
+  const [taxRates, setTaxRates] = useState<TaxRates | null>(null);
   // Per-service-category recurring discount table (item 7), for display.
   const [freqDiscounts, setFreqDiscounts] = useState<
     Record<string, Record<string, number>>
@@ -349,9 +286,10 @@ export default function BookPage() {
   // Load admin-managed add-on catalog on first mount.
   useEffect(() => {
     let cancelled = false;
-    getBookingConfig().then(({ addOns, minLeadDays, smsOptInDefault, frequencyDiscounts, serviceContent, bookingPage }) => {
+    getBookingConfig().then(({ addOns, minLeadDays, smsOptInDefault, frequencyDiscounts, serviceContent, bookingPage, taxRates }) => {
       if (cancelled) return;
       setMinLeadDays(minLeadDays);
+      setTaxRates(taxRates);
       setFreqDiscounts(frequencyDiscounts);
       setServiceContent(serviceContent);
       setBookingPage(bookingPage);
@@ -706,8 +644,18 @@ export default function BookPage() {
       ? Math.min(draft.promoDiscount, grossSubtotal)
       : 0;
   const subtotal = grossSubtotal - promoDiscount;
-  const tax = calculateTax(subtotal);
+  // Zero until the workspace's own rates land, so the page can never quote a
+  // rate this workspace does not charge.
+  const effectiveTaxRates: TaxRates = taxRates ?? { gstRate: 0, qstRate: 0 };
+  const tax = calculateTax(subtotal, effectiveTaxRates);
+  const summaryTaxLines = taxLines(effectiveTaxRates, tax);
   const showSummary = step >= 1 && (effectiveBase > 0);
+
+  // Sept 17, item 9. The reasons the button below is disabled, from the same
+  // rules that disable it — so the two can never disagree about what is
+  // missing. Empty when nothing is missing, which is when the button is live.
+  const blockers = stepBlockers(step, draft, agree, bookingPage);
+  const blockedFields = new Set(blockers.map((b) => b.field));
 
   if (submitted) {
     return (
@@ -1046,10 +994,22 @@ export default function BookPage() {
                   <strong>−${promoDiscount.toFixed(2)}</strong>
                 </div>
               ) : null}
-              <div className="cl-summary-row">
-                <span>Taxes (GST + QST)</span>
-                <strong>${(tax.gstAmount + tax.qstAmount).toFixed(2)}</strong>
-              </div>
+              {/* Named from the rates this workspace actually charges. "Taxes
+                  (GST + QST)" was typed in, so an Alberta customer was told
+                  they were paying Quebec provincial tax — and they were. A
+                  rate set to zero produces no line at all. */}
+              {summaryTaxLines.length > 0 ? (
+                <div className="cl-summary-row">
+                  <span>
+                    Taxes ({summaryTaxLines.map((l) => l.key).join(" + ")})
+                  </span>
+                  <strong>
+                    ${summaryTaxLines
+                      .reduce((sum, l) => sum + l.amount, 0)
+                      .toFixed(2)}
+                  </strong>
+                </div>
+              ) : null}
               <div className="cl-summary-total">
                 <span className="cl-summary-total-label">
                   {isPC ? "Estimated total" : "Total"}
@@ -1145,6 +1105,7 @@ export default function BookPage() {
                   onChange={patch}
                   freqDiscounts={freqDiscounts}
                   bookingPage={bookingPage}
+                  taxRates={effectiveTaxRates}
                 />
                 <label
                   className="cl-check-row"
@@ -1168,7 +1129,27 @@ export default function BookPage() {
                 </label>
                 <label
                   className="cl-check-row"
-                  style={{ alignItems: "flex-start", marginTop: 16 }}>
+                  style={{
+                    alignItems: "flex-start",
+                    marginTop: 16,
+                    // Pointed at while it is the thing holding the booking up,
+                    // so the sentence below and the control it names are not at
+                    // opposite ends of a phone screen (Sept 17, item 9).
+                    //
+                    // Deliberately the page's own accent, not red. This box is
+                    // unticked because nobody has ticked it yet, which is not a
+                    // mistake, and an error colour on arrival reads as an
+                    // accusation. It clears the instant the box is ticked.
+                    ...(blockedFields.has("terms")
+                      ? {
+                          borderRadius: 10,
+                          padding: 10,
+                          margin: "16px -10px 0",
+                          background: "var(--primary-05, rgba(0,140,156,0.05))",
+                          border: "1px solid var(--primary-15, rgba(0,140,156,0.15))",
+                        }
+                      : {}),
+                  }}>
                   <input
                     type="checkbox"
                     className="cl-check"
@@ -1195,12 +1176,55 @@ export default function BookPage() {
               </div>
             ) : null}
 
+            {/* WHY the button is grey (Sept 17, item 9).
+                Shown in place rather than on click, because the complaint is
+                that the button looks broken — an explanation that only appears
+                after you press a disabled button never appears at all, since a
+                disabled button does not take the press. */}
+            {step > 0 && blockers.length > 0 ? (
+              <div
+                role="status"
+                style={{
+                  marginTop: 32,
+                  padding: "14px 16px",
+                  borderRadius: 12,
+                  background: "var(--primary-05, rgba(0,140,156,0.05))",
+                  border: "1px solid var(--primary-15, rgba(0,140,156,0.15))",
+                }}>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: "var(--ink)",
+                  }}>
+                  {step === LAST_STEP
+                    ? blockers.length === 1
+                      ? "One thing left before you can confirm:"
+                      : "A few things left before you can confirm:"
+                    : "To continue:"}
+                </p>
+                <ul
+                  style={{
+                    margin: "8px 0 0",
+                    paddingLeft: 18,
+                    fontSize: 13,
+                    lineHeight: 1.6,
+                    color: "var(--ink-soft)",
+                  }}>
+                  {blockers.map((b) => (
+                    <li key={b.field}>{b.message}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
             {step > 0 ? (
               <div
                 style={{
                   display: "flex",
                   gap: 12,
-                  marginTop: 40,
+                  marginTop: 24,
                   paddingTop: 24,
                   borderTop: "1px solid var(--primary-10)",
                 }}>

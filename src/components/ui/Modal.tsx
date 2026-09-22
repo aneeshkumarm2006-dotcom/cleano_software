@@ -57,7 +57,7 @@ export default function Modal({
               onClick={onClose}
               size="sm"
               variant="ghost"
-              className="text-gray-400 hover:text-neutral-950"
+              className="text-gray-500 hover:text-neutral-950"
             />
           </div>
         )}

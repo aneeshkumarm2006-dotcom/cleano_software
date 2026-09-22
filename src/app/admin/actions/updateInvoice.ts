@@ -8,6 +8,7 @@ import { InvoiceStatus } from "@prisma/client";
 import { sendInvoiceEmail } from "@/lib/email";
 import { syncJobsForInvoiceStatus } from "@/lib/invoice-sync";
 import { currentAppUrl } from "@/lib/org-url";
+import { DEFAULT_TAX_RATES } from "@/lib/tax";
 
 async function requireAdmin() {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -57,8 +58,8 @@ export async function updateInvoice(params: UpdateInvoiceParams) {
         gstRate?: number;
         qstRate?: number;
       } | null;
-      const gstRate = raw?.gstRate ?? 5;
-      const qstRate = raw?.qstRate ?? 9.975;
+      const gstRate = raw?.gstRate ?? DEFAULT_TAX_RATES.gstRate;
+      const qstRate = raw?.qstRate ?? DEFAULT_TAX_RATES.qstRate;
 
       // Preserve existing job links across the delete+recreate: an edit payload
       // that doesn't carry jobId (the current UI) must not strip a consolidated

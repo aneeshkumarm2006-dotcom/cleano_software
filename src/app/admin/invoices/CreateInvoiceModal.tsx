@@ -1,5 +1,7 @@
 "use client";
 
+import { taxLines } from "@/lib/tax";
+
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { X, Plus, Trash2, Loader } from "lucide-react";
@@ -429,14 +431,15 @@ export default function CreateInvoiceModal({
                 <span>-${discount.toFixed(2)}</span>
               </div>
             )}
-            <div className="flex justify-between text-sm text-[#008C9C]/70">
-              <span>GST ({taxConfig.gstRate}%)</span>
-              <span>${gstAmount.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between text-sm text-[#008C9C]/70">
-              <span>QST ({taxConfig.qstRate}%)</span>
-              <span>${qstAmount.toFixed(2)}</span>
-            </div>
+            {/* A rate of zero prints no row (Sept 17, item 7). */}
+            {taxLines(taxConfig, { gstAmount, qstAmount }).map((line) => (
+              <div
+                key={line.key}
+                className="flex justify-between text-sm text-[#008C9C]/70">
+                <span>{line.label}</span>
+                <span>${line.amount.toFixed(2)}</span>
+              </div>
+            ))}
             <div className="border-t border-[#008C9C]/10 pt-2 flex justify-between text-base font-[400] text-[#008C9C]">
               <span>Total</span>
               <span>${totalAmount.toFixed(2)}</span>

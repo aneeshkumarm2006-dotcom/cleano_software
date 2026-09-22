@@ -85,6 +85,7 @@ export async function getAvailableJobPreview(
         clientId: true,
         clientAddressId: true,
         checklistTemplateId: true,
+        customChecklist: true,
         requiredCleaners: true,
         notes: true,
         addOns: { select: { name: true, quantity: true } },

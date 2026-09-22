@@ -20,7 +20,7 @@ import {
   type BookingPageConfig,
 } from "@/lib/booking-page-config";
 import { formatAddressLine } from "@/lib/client-address";
-import { calculateTax } from "@/lib/tax";
+import { calculateTax, taxLines, type TaxRates } from "@/lib/tax";
 import { addOnLineTotal, sumAddOns } from "@/lib/job-money";
 import { normalizeJobType } from "@/lib/calendar-labels";
 import { propertyTypeLabel } from "@/lib/property-type";
@@ -40,6 +40,12 @@ interface Props {
   freqDiscounts?: Record<string, Record<string, number>>;
   /** Admin-editable field layout (item 17) — source of frequency labels. */
   bookingPage?: BookingPageConfig;
+  /**
+   * This workspace's sales tax rates (Sept 17, item 7). Required, with no
+   * default: a default is what let this screen quote Quebec's rates on an
+   * Alberta booking.
+   */
+  taxRates: TaxRates;
 }
 
 export default function Step5Review({
@@ -48,6 +54,7 @@ export default function Step5Review({
   onChange,
   freqDiscounts = {},
   bookingPage = BOOKING_PAGE_DEFAULTS,
+  taxRates,
 }: Props) {
   const breakdown = useMemo(() => {
     const addOnTotal = sumAddOns(draft.addOns.filter((a) => a.selected));
@@ -64,7 +71,7 @@ export default function Step5Review({
     // GST/QST are charged on what the customer actually pays. Subtracting it
     // from the taxed total instead quotes a total the booking never gets
     // charged — the same class of bug as not applying it at all.
-    const tax = calculateTax(subtotal - promoDiscount);
+    const tax = calculateTax(subtotal - promoDiscount, taxRates);
     return {
       addOnTotal,
       subtotal: Math.round(subtotal * 100) / 100,
@@ -72,8 +79,10 @@ export default function Step5Review({
       gstAmount: tax.gstAmount,
       qstAmount: tax.qstAmount,
       total: tax.total,
+      // Only the rows this workspace actually charges (Sept 17, item 7).
+      lines: taxLines(taxRates, tax),
     };
-  }, [draft, basePrice]);
+  }, [draft, basePrice, taxRates]);
 
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   // True when this company charges no deposit at all, which makes the whole
@@ -147,7 +156,17 @@ export default function Step5Review({
   // went back and switched to post-construction would pay against a stale $20
   // intent and have their booking rejected at submit.
   useEffect(() => {
-    if (!draft.email || !draft.name) return;
+    if (!draft.email || !draft.name) {
+      // Sept 17, item 9. This used to return in silence: no spinner, no error,
+      // no card form, and a Confirm button greyed out for a reason that
+      // appeared nowhere on the page. It is only reachable from a restored
+      // session, which is exactly the case nobody tests by hand.
+      setStripeLoading(false);
+      setStripeError(
+        "We need your name and email before we can take the deposit. Go back to the contact step and add them.",
+      );
+      return;
+    }
     setStripeLoading(true);
     setStripeError(null);
     fetch("/api/stripe/charge-deposit", {
@@ -332,8 +351,12 @@ export default function Step5Review({
           {breakdown.promoDiscount > 0 ? (
             <Row dt={`Promo (${draft.promoCode})`} dd={`-$${breakdown.promoDiscount.toFixed(2)}`} />
           ) : null}
-          <Row dt="GST (5%)" dd={`$${breakdown.gstAmount.toFixed(2)}`} />
-          <Row dt="QST (9.975%)" dd={`$${breakdown.qstAmount.toFixed(2)}`} />
+          {/* Was two fixed rows naming Quebec's rates, printed whatever this
+              workspace charges. Calgary sets its provincial rate to 0 and
+              still got the row, with a real amount in it. */}
+          {breakdown.lines.map((line) => (
+            <Row key={line.key} dt={line.label} dd={`$${line.amount.toFixed(2)}`} />
+          ))}
           <RowBorder
             total
             dt={
@@ -452,6 +475,18 @@ export default function Step5Review({
           <Elements stripe={stripePromise} options={{ clientSecret, appearance: { theme: "stripe" } }}>
             <CardForm onChange={onChange} />
           </Elements>
+        )}
+
+        {/* Nothing loading, nothing wrong, and still no card form. That
+            combination should be impossible, and when it happened the customer
+            saw an empty box above a dead button. Saying so is better than
+            leaving them to guess, and it names the state so a support message
+            about it is actionable (Sept 17, item 9). */}
+        {!clientSecret && !stripeLoading && !stripeError && (
+          <p style={{ color: "var(--primary-70)", fontSize: 13, margin: 0 }}>
+            The payment form didn&apos;t load. Reload the page, and if it still
+            doesn&apos;t appear, contact us and we&apos;ll book it for you.
+          </p>
         )}
 
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8, color: "var(--primary-50)", fontSize: 12 }}>

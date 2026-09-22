@@ -16,7 +16,7 @@ import DatePicker from "@/components/customer/DatePicker";
 import { requestCancellation } from "../../actions/requestCancellation";
 import { requestReschedule } from "../../actions/requestReschedule";
 import JobChatUnreadPill from "@/components/JobChatUnread";
-import { addStoreDays, storeDateKey, STORE_TZ } from "@/lib/timezone";
+import { addStoreDays, storeDateKey, storeTz } from "@/lib/timezone";
 
 /** Tomorrow on the STORE's calendar. Derived from UTC this read a day late
  *  from 20:00 Montreal, flooring the reschedule picker at the day after next. */
@@ -59,7 +59,7 @@ function formatTime(iso: string) {
   return new Date(iso).toLocaleString("en-US", {
     hour: "numeric",
     minute: "2-digit",
-    timeZone: STORE_TZ,
+    timeZone: storeTz(),
   });
 }
 

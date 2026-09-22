@@ -7,7 +7,7 @@ import "server-only";
 
 import { getSetting } from "@/lib/settings";
 import { getBlockedDates } from "@/lib/blocked-dates";
-import { STORE_TZ } from "@/lib/timezone";
+import { storeTz } from "@/lib/timezone";
 
 const HORIZON_DAYS = 14;
 const MAX_LISTED = 8;
@@ -25,13 +25,13 @@ export async function buildAvailabilitySummary(): Promise<string> {
     const blockedSet = new Set(blocked);
 
     const dayKey = new Intl.DateTimeFormat("en-CA", {
-      timeZone: STORE_TZ,
+      timeZone: storeTz(),
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
     });
     const dayLabel = new Intl.DateTimeFormat("en-CA", {
-      timeZone: STORE_TZ,
+      timeZone: storeTz(),
       weekday: "long",
       month: "long",
       day: "numeric",

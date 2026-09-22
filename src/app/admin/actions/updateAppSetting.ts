@@ -10,6 +10,12 @@ import {
   writeSetting,
   invalidateSetting,
 } from "@/lib/settings";
+import { platformDb } from "@/lib/platform-db";
+import { requireOrgId } from "@/lib/org";
+import { isValidTimeZone } from "@/lib/timezone";
+
+/** The one setting that also has to land on the Organization row. */
+const TIMEZONE_KEY = "general.timezone";
 
 interface UpdateAppSettingParams {
   key: string;
@@ -55,6 +61,32 @@ export async function updateAppSetting(params: UpdateAppSettingParams) {
     const { key, category, value } = params;
     if (!key || !category) {
       return { success: false, error: "Key and category are required" };
+    }
+
+    // The workspace clock. Two settings used to claim this job and only one of
+    // them did it: `general.timezone` is the control the admin has, and its own
+    // help text calls it "the source of truth for date and time handling" —
+    // but every date in the app is formatted from `Organization.timezone`,
+    // which is set once at workspace creation and never again. So an admin
+    // could pick their timezone, be told it saved, and watch nothing move.
+    //
+    // Saving it here writes BOTH, so there is one control and one source of
+    // truth (Sept 17, item 6).
+    if (key === TIMEZONE_KEY) {
+      if (!isValidTimeZone(value)) {
+        return {
+          success: false,
+          error: `"${String(value)}" is not a timezone this app can use. Pick one from the list.`,
+        };
+      }
+      const orgId = await requireOrgId();
+      // platformDb, the same way an admin saves their Stripe or Twilio
+      // credentials: the Organization row is a fact ABOUT the workspace and
+      // sits outside the tenant-scoped tables.
+      await platformDb.organization.update({
+        where: { id: orgId },
+        data: { timezone: value },
+      });
     }
 
     // Registry-governed settings: validate + audit through the spine.

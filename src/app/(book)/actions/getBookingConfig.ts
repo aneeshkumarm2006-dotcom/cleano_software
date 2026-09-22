@@ -14,6 +14,8 @@ import {
   BOOKING_PAGE_CONFIG_KEY,
   type BookingPageConfig,
 } from "@/lib/booking-page-config";
+import { getTaxRates } from "@/lib/tax.server";
+import type { TaxRates } from "@/lib/tax";
 
 // The shape, its validation and the room enum all live in @/lib/addon-catalog.
 // They cannot live here: this file is `"use server"`, so it may only export
@@ -32,18 +34,27 @@ export async function getBookingConfig(): Promise<{
   serviceContent: ServiceContentConfig;
   /** Admin-editable field layout for the booking flow (item 17). */
   bookingPage: BookingPageConfig;
+  /**
+   * This workspace's sales tax rates (Sept 17, item 7).
+   *
+   * Sent to the browser rather than assumed there. The booking page used to
+   * compute its own tax from the Quebec constants, so Calgary's page quoted
+   * GST 5% + QST 9.975% however Calgary's settings were filled in.
+   */
+  taxRates: TaxRates;
 }> {
-  const [minLeadDays, smsOptInDefault, pricingCfg, contentSetting, bookingPage] =
+  const [minLeadDays, smsOptInDefault, pricingCfg, contentSetting, bookingPage, taxRates] =
     await Promise.all([
       getSetting("scheduling.minLeadDays"),
       getSetting("customer.smsOptInDefault"),
       getServicePricingConfig(),
       db.appSetting.findFirst({ where: { key: SERVICE_CONTENT_KEY } }),
       getSetting(BOOKING_PAGE_CONFIG_KEY),
+      getTaxRates(),
     ]);
   const frequencyDiscounts = pricingCfg.frequencyDiscounts;
   const serviceContent = normalizeServiceContent(contentSetting?.value);
-  const rest = { minLeadDays, smsOptInDefault, frequencyDiscounts, serviceContent, bookingPage };
+  const rest = { minLeadDays, smsOptInDefault, frequencyDiscounts, serviceContent, bookingPage, taxRates };
   try {
     const setting = await db.appSetting.findFirst({
       where: { key: "pricing.addOns" },

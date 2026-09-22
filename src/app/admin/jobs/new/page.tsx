@@ -465,6 +465,7 @@ export default async function JobFormPage({
               billedActualHours: true,
               propertyType: true,
               checklistTemplateId: true,
+        customChecklist: true,
             },
           })
         : null;

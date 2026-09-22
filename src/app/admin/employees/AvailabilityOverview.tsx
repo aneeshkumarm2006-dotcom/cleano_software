@@ -52,14 +52,14 @@ export default function AvailabilityOverview({
         <span className="flex items-center gap-2">
           <Calendar className="w-4 h-4 text-[#008C9C]" />
           <span className="text-sm font-[600] text-gray-800">{title}</span>
-          <span className="text-xs text-gray-400">
+          <span className="text-xs text-gray-500">
             {rows.length} cleaner{rows.length === 1 ? "" : "s"}
           </span>
         </span>
         {open ? (
-          <ChevronUp className="w-4 h-4 text-gray-400" />
+          <ChevronUp className="w-4 h-4 text-gray-500" />
         ) : (
-          <ChevronDown className="w-4 h-4 text-gray-400" />
+          <ChevronDown className="w-4 h-4 text-gray-500" />
         )}
       </button>
 

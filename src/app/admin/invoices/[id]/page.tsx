@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { redirect, notFound } from "next/navigation";
 import { db } from "@/lib/org-db";
 import InvoiceDetailView from "./InvoiceDetailView";
+import { DEFAULT_TAX_RATES } from "@/lib/tax";
 
 export default async function InvoiceDetailPage({
   params,
@@ -53,8 +54,8 @@ export default async function InvoiceDetailPage({
   } | null;
 
   const taxConfigValue = {
-    gstRate: raw?.gstRate ?? 5,
-    qstRate: raw?.qstRate ?? 9.975,
+    gstRate: raw?.gstRate ?? DEFAULT_TAX_RATES.gstRate,
+    qstRate: raw?.qstRate ?? DEFAULT_TAX_RATES.qstRate,
     gstNumber: raw?.gstNumber ?? "",
     qstNumber: raw?.qstNumber ?? "",
   };

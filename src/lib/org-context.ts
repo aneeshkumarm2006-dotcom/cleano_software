@@ -40,10 +40,13 @@ const storage = new AsyncLocalStorage<OrgContext>();
 // that could possibly need it: you cannot call `runAsOrg` without importing
 // this file.
 //
+// This is the "context" source, and it is asked FIRST. An announcement is
+// deliberate — a cron iteration, a webhook, a platform admin acting on another
+// workspace — so it outranks whatever host the request happened to arrive on.
+//
 // Returns undefined inside an ordinary request, where no organization has been
-// announced, and `storeTz()` then falls back to the deployment default exactly
-// as before.
-__setStoreTzResolver(() => storage.getStore()?.timezone);
+// announced, and `storeTz()` falls through to the request itself.
+__setStoreTzResolver("context", () => storage.getStore()?.timezone);
 
 /**
  * Run `fn` as this organization.

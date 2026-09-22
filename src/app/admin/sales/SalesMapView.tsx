@@ -102,7 +102,7 @@ export default function SalesMapView({
                     {salesTypeLabel(area.type)}
                   </p>
                   {area.address && (
-                    <p className="text-xs text-gray-400 mt-1">{area.address}</p>
+                    <p className="text-xs text-gray-500 mt-1">{area.address}</p>
                   )}
                   {area.notes && (
                     <p className="text-xs text-gray-500 mt-1">{area.notes}</p>

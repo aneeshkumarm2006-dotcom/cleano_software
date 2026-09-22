@@ -1255,8 +1255,20 @@ export default function CalendarJobActions({
                         −{money(summary.money.discountRecorded)}
                       </Row>
                     ) : null}
-                    {summary.money.exempt ? null : (
-                      <Row k="GST + QST">
+                    {/* Named from the taxes actually charged (Sept 17, item
+                        7). "GST + QST" was fixed text, so an Alberta workspace
+                        read as if it were collecting Quebec provincial tax.
+                        Off the AMOUNTS rather than the rates because this
+                        panel's payload carries the money, not the settings. */}
+                    {summary.money.exempt ||
+                    summary.money.gstAmount + summary.money.qstAmount <= 0 ? null : (
+                      <Row
+                        k={[
+                          summary.money.gstAmount > 0 ? "GST" : null,
+                          summary.money.qstAmount > 0 ? "QST" : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" + ")}>
                         {money(
                           summary.money.gstAmount + summary.money.qstAmount
                         )}
@@ -1740,6 +1752,8 @@ export default function CalendarJobActions({
             // Same trap again (Stage 10): without this the modal opens every
             // job on "Auto" and un-pins a deliberately pinned checklist on save.
             checklistTemplateId: summary.checklistTemplateId,
+            customChecklist: summary.customChecklist,
+            recurringFrequency: summary.recurringFrequency,
             taxExempt: summary.taxExempt,
             cleaners: summary.cleaners.map((c) => ({ id: c.id, name: c.name })),
             addOns: summary.money.addOnLines.map((l, i) => ({

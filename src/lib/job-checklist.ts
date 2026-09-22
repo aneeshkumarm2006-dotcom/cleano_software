@@ -26,6 +26,50 @@ export interface ChecklistItemShape {
   sortOrder: number;
 }
 
+/** How many one-off items a single job may carry. */
+export const CUSTOM_CHECKLIST_MAX_ITEMS = 60;
+export const CUSTOM_CHECKLIST_TITLE_MAX = 120;
+export const CUSTOM_CHECKLIST_DESC_MAX = 400;
+
+/**
+ * Read a job's one-off checklist out of its JSON column (Sept 17, item 18).
+ *
+ * Returns [] for anything that is not a usable list, which is the same answer
+ * as "this job has no custom checklist" — so a column corrupted by hand, or
+ * written by an older shape, degrades to the template behaviour rather than
+ * throwing inside a cleaner's job page.
+ *
+ * Validated on every READ rather than trusted from the write. A JSON column is
+ * only as trustworthy as the last thing that touched it, and this one is read
+ * on the cleaner's screen where a crash costs someone their shift.
+ */
+export function parseCustomChecklist(raw: unknown): ChecklistItemShape[] {
+  if (!Array.isArray(raw)) return [];
+  const out: ChecklistItemShape[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object") continue;
+    const e = entry as Record<string, unknown>;
+    const title = typeof e.title === "string" ? e.title.trim() : "";
+    if (!title) continue;
+    const description =
+      typeof e.description === "string" && e.description.trim()
+        ? e.description.trim().slice(0, CUSTOM_CHECKLIST_DESC_MAX)
+        : null;
+    out.push({
+      title: title.slice(0, CUSTOM_CHECKLIST_TITLE_MAX),
+      description,
+      // Anything not explicitly false is required. A one-off list is written
+      // because the job needs those things done.
+      isRequired: e.isRequired !== false,
+      // Position in the array IS the order, so reordering in the form is a
+      // reorder of the array and needs no separate field to drift from it.
+      sortOrder: out.length,
+    });
+    if (out.length >= CUSTOM_CHECKLIST_MAX_ITEMS) break;
+  }
+  return out;
+}
+
 export interface ChecklistItemProgress {
   status: string;
   notes: string | null;

@@ -67,7 +67,15 @@ export async function getPayBreakdown(
         // `status` so a CANCELLED row (a cleaner who left the job) is not
         // read as a live assignment by the pay math (Sept 10, items 3 + 5).
         assignments: {
-          select: { cleanerId: true, payAmount: true, status: true },
+          select: {
+            cleanerId: true,
+            payAmount: true,
+            status: true,
+            // This cleaner's own $/hr on this job (Sept 17, item 22). Without
+            // it this modal quotes a cleaner the crew rate while payroll pays
+            // them theirs.
+            hourlyRate: true,
+          },
         },
         // THE CLOCK (round 4, fix 5). An HOURLY job is now settled from these
         // rows — each cleaner's own sessions × the rate — so a payload built

@@ -25,6 +25,7 @@ import {
   storeWeekday,
 } from "@/lib/timezone";
 import { doneJobsWhere, upcomingJobsWhere } from "@/lib/cleaner-jobs";
+import { ratingSource } from "@/lib/rating-history";
 
 export default async function EmployeePage({
   params,
@@ -449,12 +450,34 @@ export default async function EmployeePage({
   const ratingCount = await db.employeeRating.count({
     where: { employeeId: id, excludedAt: null },
   });
+  // Sept 17, item 13: the rating HISTORY, not just the ratings that count.
+  //
+  // Excluded rows are included here and marked, which is the whole point of
+  // excluding rather than deleting — "why did her average jump?" is answered by
+  // the row that was pulled and the reason on it. `ratingCount` above still
+  // counts only the active ones, because that is what feeds pay.
   const recentRatingRows = await db.employeeRating.findMany({
-    where: { employeeId: id, excludedAt: null },
+    where: { employeeId: id },
     orderBy: { createdAt: "desc" },
-    take: 10,
-    include: { job: { select: { clientName: true } } },
+    take: 25,
+    include: { job: { select: { clientName: true, jobNumber: true } } },
   });
+  // Who typed it in, and who pulled it. One query for both rather than a
+  // relation, because `ratedBy` and `excludedById` are plain id columns.
+  const raterIds = Array.from(
+    new Set(
+      recentRatingRows
+        .flatMap((r) => [r.ratedBy, r.excludedById])
+        .filter((v): v is string => !!v),
+    ),
+  );
+  const raters = raterIds.length
+    ? await db.user.findMany({
+        where: { id: { in: raterIds } },
+        select: { id: true, name: true },
+      })
+    : [];
+  const raterName = new Map(raters.map((u) => [u.id, u.name]));
   const recentRatings = recentRatingRows.map((r) => ({
     id: r.id,
     rating: r.rating,
@@ -462,6 +485,13 @@ export default async function EmployeePage({
     createdAt: r.createdAt.toISOString(),
     editedAt: r.editedAt?.toISOString() ?? null,
     clientName: r.job?.clientName ?? null,
+    jobId: r.jobId,
+    jobNumber: r.job?.jobNumber ?? null,
+    source: ratingSource(r),
+    ratedByName: r.ratedBy ? raterName.get(r.ratedBy) ?? null : null,
+    excludedAt: r.excludedAt?.toISOString() ?? null,
+    excludedReason: r.excludedReason,
+    excludedByName: r.excludedById ? raterName.get(r.excludedById) ?? null : null,
   }));
 
   // Field Lead group: list of possible leads (for assignment) + this cleaner's
@@ -565,6 +595,7 @@ export default async function EmployeePage({
         phone: employee.phone,
         role: employee.role as "OWNER" | "ADMIN" | "EMPLOYEE",
         lastSeenAt: employee.lastSeenAt?.toISOString() ?? null,
+        defaultHourlyRate: employee.defaultHourlyRate,
       }}
       starRating={starRating}
       cleanerTier={employee.cleanerTier}

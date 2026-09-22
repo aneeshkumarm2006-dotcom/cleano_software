@@ -631,7 +631,7 @@ export function EmployeeModal({
                     />
                     Active account
                   </label>
-                  <p className="text-xs text-gray-400 mt-1">
+                  <p className="text-xs text-gray-500 mt-1">
                     When off, this cleaner is signed out of the app and sees the
                     deactivated notice (edit its wording in Settings &rarr;
                     Provider).
@@ -644,7 +644,7 @@ export function EmployeeModal({
               {mode === "edit" && (
                 <div className="w-full">
                   <label className="text-sm text-gray-700 flex items-center gap-2 mb-2">
-                    <Shield className="w-4 h-4 text-gray-400" />
+                    <Shield className="w-4 h-4 text-gray-500" />
                     Service categories
                   </label>
                   <div className="max-h-44 overflow-y-auto space-y-1 p-2 rounded-xl bg-gray-50">
@@ -662,7 +662,7 @@ export function EmployeeModal({
                       </label>
                     ))}
                   </div>
-                  <p className="text-xs text-gray-400 mt-1">
+                  <p className="text-xs text-gray-500 mt-1">
                     {serviceCategories.length === 0
                       ? "No restriction — this employee can work every service category."
                       : "This employee only sees and can only claim jobs in the ticked categories. Admins can still assign them anything."}

@@ -14,7 +14,7 @@ import {
   Camera,
 } from "lucide-react";
 import { jobTypeLabel } from "@/lib/calendar-labels";
-import { STORE_TZ } from "@/lib/timezone";
+import { storeTz } from "@/lib/timezone";
 import {
   QUOTE_STATUS_LABEL,
   QUOTE_STATUS_TONE,
@@ -264,7 +264,7 @@ function BookingRow({ job }: { job: WebJob }) {
         : "numeric",
     hour: "numeric",
     minute: "2-digit",
-    timeZone: STORE_TZ,
+    timeZone: storeTz(),
   });
 
   return (

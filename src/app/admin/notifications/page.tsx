@@ -1,7 +1,10 @@
 import { requireAdmin } from "@/lib/page-guards";
 import { listAdminNotifications } from "@/lib/admin-notifications";
 
+import { listTimeLogRequests } from "../actions/decideTimeLogChange";
+
 import NotificationsClient from "./NotificationsClient";
+import TimeLogRequestsPanel from "./TimeLogRequestsPanel";
 
 export const metadata = { title: "Notifications · Bookmops" };
 
@@ -15,16 +18,22 @@ export const metadata = { title: "Notifications · Bookmops" };
 export default async function AdminNotificationsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string }>;
+  searchParams: Promise<{ view?: string; timelog?: string }>;
 }) {
   const session = await requireAdmin();
   // The Archived view asks for the rows the default feed hides (item 13).
-  const view = (await searchParams).view;
+  const params = await searchParams;
+  const view = params.view;
   const items = await listAdminNotifications(
     session.user.id,
     50,
     view === "archived"
   );
+  // Sept 17, item 19. Waiting requests only by default: they are the ones
+  // somebody is waiting on. `?timelog=all` opens the history the PDF asks to
+  // be kept.
+  const timelogHistory = params.timelog === "all";
+  const timeLogRequests = await listTimeLogRequests(timelogHistory);
 
   return (
     <div className="h-full overflow-hidden overflow-y-auto p-8">
@@ -35,6 +44,10 @@ export default async function AdminNotificationsPage({
           switched off.
         </p>
       </div>
+      <TimeLogRequestsPanel
+        rows={timeLogRequests}
+        showingHistory={timelogHistory}
+      />
       <NotificationsClient initial={items} archivedView={view === "archived"} />
     </div>
   );

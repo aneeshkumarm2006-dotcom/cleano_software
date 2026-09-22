@@ -282,7 +282,7 @@ export default function BookingKoalaImportButton({
                 <p className="font-medium text-gray-900">
                   {committed ? "Import complete" : "Dry-run preview"}
                 </p>
-                <span className="text-[11px] text-gray-400">
+                <span className="text-[11px] text-gray-500">
                   {counts.parsedCount} rows parsed · {counts.droppedCount} skipped (unreadable/blank date)
                 </span>
               </div>
@@ -460,7 +460,7 @@ export default function BookingKoalaImportButton({
                     <tbody>
                       {fullData.records.map((rec, i) => (
                         <tr key={i} className="border-t border-gray-50">
-                          <td className="px-2 py-1 text-gray-400 sticky left-0 bg-white">{i + 2}</td>
+                          <td className="px-2 py-1 text-gray-500 sticky left-0 bg-white">{i + 2}</td>
                           {fullData.headers.map((h) => (
                             <td key={h} className="px-2 py-1 text-gray-700">{rec[h]}</td>
                           ))}
@@ -557,7 +557,7 @@ export default function BookingKoalaImportButton({
                   }}
                 />
               </div>
-              <p className="mt-1.5 text-[11px] text-gray-400">
+              <p className="mt-1.5 text-[11px] text-gray-500">
                 Please keep this window open — it sends rows in small batches so the
                 server never times out.
               </p>

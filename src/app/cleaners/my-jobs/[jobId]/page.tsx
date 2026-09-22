@@ -7,6 +7,7 @@ import { maskedNumberForJob } from "@/lib/phone-masking";
 import { jobTypeLabel } from "@/lib/calendar-labels";
 import { getServiceCatalogWithLabels } from "@/lib/service-catalog.server";
 import { fmtDate, fmtDateTime, fmtTime } from "@/lib/time";
+import { storeTzLabel } from "@/lib/timezone";
 
 // Photo upload (uploadJobPhoto) runs as a server action off this page. Give it
 // well beyond the default so a large HEIC photo on a slow phone connection has
@@ -56,6 +57,8 @@ import JobLifeline from "./JobLifeline";
 import { cleanerPayoutForJobs } from "@/lib/cleaner-pay-display";
 import { isAwaitingQuote } from "@/lib/quote-status";
 import { sanitizeCleanerNotes } from "@/lib/cleaner-notes";
+import { listMyTimeLogRequests } from "../../actions/timeLogRequests";
+import TimeLogRequestControl from "./TimeLogRequestControl";
 
 type PageProps = {
   params: Promise<{ jobId: string }>;
@@ -211,7 +214,10 @@ export default async function JobDetailPage({ params }: PageProps) {
     db.jobWorkSession.findMany({
       where: { jobId: job.id, cleanerId: session.user.id },
       orderBy: { startedAt: "asc" },
-      select: { startedAt: true, endedAt: true },
+      // `id` so a correction request can name the exact session it is about
+      // (Sept 17, item 19) rather than the admin having to guess which of a
+      // resumed job's stretches the cleaner meant.
+      select: { id: true, startedAt: true, endedAt: true },
     }),
     db.jobBreak.findMany({
       where: { jobId: job.id, cleanerId: session.user.id },
@@ -251,6 +257,9 @@ export default async function JobDetailPage({ params }: PageProps) {
             jobWithClock.clockOutTime
           );
   const sessionSummary = summariseSessions(mySessions, myBreaks);
+  // This cleaner's own correction requests on this job (Sept 17, item 19), so
+  // the control can show a pending one rather than letting them file a second.
+  const timeLogRequests = await listMyTimeLogRequests(job.id);
   /** Active minutes across every session, breaks removed. */
   const duration = sessionSummary.count > 0 ? sessionSummary.activeMinutes : null;
 
@@ -444,6 +453,14 @@ export default async function JobDetailPage({ params }: PageProps) {
               <div className="lbl">Start time</div>
               <div className="val">
                 {fmtTime(job.startTime)}
+                {/* Which clock (Sept 10, item 6). A cleaner working across a
+                    provincial border, or reading this on a phone that picked up
+                    the wrong zone while travelling, otherwise has no way to
+                    tell whose 9 AM this is. The job's own, always. */}
+                <span
+                  style={{ display: "block", fontSize: 11, fontWeight: 400, opacity: 0.65 }}>
+                  {storeTzLabel()}
+                </span>
               </div>
             </div>
           )}
@@ -743,6 +760,32 @@ export default async function JobDetailPage({ params }: PageProps) {
               </div>
             )}
           </div>
+          {/* Sept 17, item 19 — asking for a correction. Placed under the
+              times it corrects, and only once the shift is FINISHED: while
+              the clock is still running the cleaner should clock out, not
+              file a request about a time that has not happened yet. */}
+          {!sessionSummary.isOpen && (
+            <TimeLogRequestControl
+              jobId={job.id}
+              // `myWorkSessions`, not `mySessions`: the latter falls back to a
+              // synthesised pair for a legacy job with no session rows, and
+              // that pair has no id to correct. Null is the right answer there
+              // — the request targets the assignment row instead, which is the
+              // shape `updateClockTimes` already handles.
+              sessionId={myWorkSessions[myWorkSessions.length - 1]?.id ?? null}
+              currentStart={
+                sessionSummary.firstStartedAt
+                  ? new Date(sessionSummary.firstStartedAt).toISOString()
+                  : null
+              }
+              currentEnd={
+                sessionSummary.lastEndedAt
+                  ? new Date(sessionSummary.lastEndedAt).toISOString()
+                  : null
+              }
+              history={timeLogRequests}
+            />
+          )}
         </>
       )}
 

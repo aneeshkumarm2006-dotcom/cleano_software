@@ -1,5 +1,5 @@
 import { db } from "@/lib/org-db";
-import { STORE_TZ } from "@/lib/timezone";
+import { storeTz } from "@/lib/timezone";
 
 /**
  * Guards around removing a saved card.
@@ -178,7 +178,7 @@ export async function notifyCardReplaced(opts: {
           weekday: "long",
           month: "long",
           day: "numeric",
-          timeZone: STORE_TZ,
+          timeZone: storeTz(),
         }),
       });
       await db.emailLog.update({

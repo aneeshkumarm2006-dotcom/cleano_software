@@ -6,12 +6,39 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import type { CleanerTier } from "@/lib/pay-tiers";
 import { checkCleanerSeats } from "@/lib/plan-limits";
+import {
+  previewCleanerDeactivation,
+  unassignFutureJobs,
+  type DeactivationImpact,
+} from "@/lib/cleaner-deactivation";
 
 const VALID_TIERS: CleanerTier[] = ["TRAINEE", "STANDARD", "FIELD_LEAD"];
 
 type Result =
   | { success: true; count: number }
   | { success: false; error: string };
+
+/**
+ * What switching these cleaners off would do to the schedule.
+ *
+ * Read-only, and separate from the write so the admin can be shown the damage
+ * before agreeing to it (Sept 17, item 23). Admin-gated like everything else
+ * here: how many jobs a cleaner is booked on is not public.
+ */
+export async function previewEmployeeDeactivation(
+  ids: string[],
+): Promise<
+  { success: true; impact: DeactivationImpact } | { success: false; error: string }
+> {
+  const gate = await requireAdmin();
+  if (!gate.ok) return { success: false, error: gate.error };
+  try {
+    return { success: true, impact: await previewCleanerDeactivation(sanitizeIds(ids)) };
+  } catch (e) {
+    console.error("previewEmployeeDeactivation", e);
+    return { success: false, error: "Couldn't check which jobs would be affected" };
+  }
+}
 
 async function requireAdmin(): Promise<
   { ok: true } | { ok: false; error: string }
@@ -68,7 +95,22 @@ export async function bulkSetEmployeeActive(
       where: { id: { in: cleanIds }, role: { not: "CLIENT" } },
       data: { isActive },
     });
+
+    // Sept 17, item 23. Switching someone off used to lock them out of the app
+    // and nothing more, so every job they were already booked on still showed
+    // them as crew — the calendar read as covered right up to the morning of
+    // the clean. Upcoming jobs only; past jobs keep them for payroll.
+    //
+    // AFTER the access change and deliberately not inside it: the lockout is
+    // the thing the admin asked for and must land even if the schedule cannot
+    // be tidied. `unassignFutureJobs` never throws for the same reason.
+    if (!isActive) {
+      await unassignFutureJobs(cleanIds);
+    }
+
     revalidatePath("/admin/employees");
+    revalidatePath("/admin/jobs");
+    revalidatePath("/admin/calendar");
     return { success: true, count: res.count };
   } catch (e) {
     console.error("bulkSetEmployeeActive", e);

@@ -6,6 +6,7 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { normalizeAllowedCategories } from "@/lib/service-permissions";
 import { checkCleanerSeats, takesASeat } from "@/lib/plan-limits";
+import { unassignFutureJobs } from "@/lib/cleaner-deactivation";
 
 type State = {
   message: string;
@@ -99,11 +100,25 @@ export async function updateEmployee(
       },
     });
 
+    // Sept 17, item 23. The same rule as the bulk action: a cleaner switched
+    // off here comes off every job that has not happened yet, and stays on the
+    // ones that have. Keyed on the TRANSITION, not on the final state, so
+    // saving an already-inactive cleaner's phone number does not re-run it.
+    let unassigned = 0;
+    if (!isActive && before?.isActive) {
+      unassigned = (await unassignFutureJobs([employeeId])).jobsChanged;
+      revalidatePath("/admin/jobs");
+      revalidatePath("/admin/calendar");
+    }
+
     revalidatePath("/admin/employees");
     revalidatePath(`/admin/employees/${employeeId}`);
     if (allowedServiceCategories) revalidatePath("/cleaners/available-jobs");
     return {
-      message: "Employee updated successfully!",
+      message:
+        unassigned > 0
+          ? `Employee updated. They were taken off ${unassigned} upcoming job${unassigned === 1 ? "" : "s"} — past jobs are unchanged.`
+          : "Employee updated successfully!",
       error: "",
     };
   } catch (error) {

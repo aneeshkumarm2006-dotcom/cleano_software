@@ -27,6 +27,7 @@ import { PLANS, trialEndFrom } from "@/lib/plans";
 import { ProvisioningError, provisionOrganization, slugify } from "@/lib/provisioning";
 import { PLATFORM_ORG_SLUG, isValidOrgSlug, originForSlug } from "@/lib/tenant";
 import { sendWorkspaceCredentials } from "@/lib/platform-email";
+import { isValidTimeZone } from "@/lib/timezone";
 
 export type ActionResult = { ok: true; message: string } | { ok: false; message: string };
 
@@ -488,6 +489,17 @@ export async function createWorkspace(
   // Allowlist rather than `in`, for the reason given at the top of this file.
   if (!VALID_PLANS.includes(plan)) {
     return { ok: false, message: "Pick a plan." };
+  }
+  // A free-text timezone field is how CleanoCalgary's workspace ended up with
+  // "Toronto" in it — not an IANA zone at all, so every date in that workspace
+  // fell back to the deployment default and the tenant clock could not work
+  // for the one tenant it was built for. Refused here rather than papered over
+  // later: a zone nobody can resolve is not a zone (Sept 17, item 6).
+  if (timezone && !isValidTimeZone(timezone)) {
+    return {
+      ok: false,
+      message: `"${timezone}" is not a timezone. Use an IANA name like "America/Edmonton".`,
+    };
   }
 
   const slug = slugify(input?.slug || companyName);

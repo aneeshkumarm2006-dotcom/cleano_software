@@ -75,9 +75,9 @@ export default function ConversationThread({
       <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 min-w-0">
           {conversation.channel === "SMS" ? (
-            <MessageSquare size={16} className="text-gray-400 shrink-0" />
+            <MessageSquare size={16} className="text-gray-500 shrink-0" />
           ) : (
-            <Mail size={16} className="text-gray-400 shrink-0" />
+            <Mail size={16} className="text-gray-500 shrink-0" />
           )}
           <div className="min-w-0">
             <div className="text-sm font-semibold text-gray-900 truncate">{who}</div>

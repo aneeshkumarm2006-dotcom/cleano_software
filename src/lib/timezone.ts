@@ -45,47 +45,114 @@ export const STORE_TZ =
 // `Organization.timezone` already exists and `OrgContext` already carries it.
 // What was missing is anything reading it. This is that.
 //
-// WHY A REGISTERED RESOLVER RATHER THAN AN IMPORT. This module is client-safe
-// on purpose — the same helpers run in server components, server actions, cron
-// routes and the browser — and the organization context is built on
-// `node:async_hooks`, which a browser cannot load. So the context registers
-// itself here instead of being imported from here. `org-context.ts` does that
-// at module load, which is the earliest moment it could matter, and a browser
-// never imports it at all.
+// WHY REGISTERED RESOLVERS RATHER THAN IMPORTS. This module is client-safe on
+// purpose — the same helpers run in server components, server actions, cron
+// routes and the browser — and neither place the answer comes from can be
+// imported here. The organization context is built on `node:async_hooks`,
+// which a browser cannot load; the request-scoped answer is built on React's
+// per-request cache, which only exists in the server build. So each one
+// registers itself, and a browser loads neither.
 //
-// WHAT THIS COVERS, AND WHAT IT DOES NOT. Cron jobs, webhooks and scripts all
-// announce their organization with `runAsOrg`, so every date they format — the
-// times in a reminder email, an SMS, a generated invoice — now comes out in
-// that tenant's own clock. A normal browser request does NOT: it resolves its
-// organization asynchronously from the host, and these helpers are
-// synchronous, so there is nothing for them to read. That half is written up
-// in docs/fixes/BOOKMOPS_SEPT10_FIXES.md under item 6.
+// THE THREE PLACES AN ANSWER COMES FROM, in the order they are asked:
 //
-// The fallback is today's behaviour exactly, so nothing moves where no
-// organization has been announced.
+//   1. `runAsOrg` — cron jobs, webhooks and scripts announce their tenant
+//      outright. It wins, because announcing is the whole point of it: a
+//      platform admin acting on another workspace inside a request must get
+//      that workspace's clock, not the one they are signed in to.
+//   2. The REQUEST — resolved from the host and remembered for the render.
+//      See `store-tz.server.ts`.
+//   3. The BROWSER — the server stamps the answer on `window` before any of
+//      our script runs, so a client component formats in the same zone as the
+//      server-rendered half of the same page. The alternative was worse than
+//      doing nothing: one page printing two clocks.
+//
+// The fallback is the deployment default, which is today's behaviour exactly,
+// so nothing moves where no answer is available.
 
 type StoreTzResolver = () => string | undefined;
 
-let resolveTenantTz: StoreTzResolver | null = null;
+/** Who is answering. The order of this list IS the precedence above. */
+type StoreTzSource = "context" | "request";
+const RESOLVER_ORDER: readonly StoreTzSource[] = ["context", "request"];
+
+const resolvers = new Map<StoreTzSource, StoreTzResolver>();
 
 /**
- * Let the organization context answer "which zone are we in".
+ * Let a server-side source answer "which zone are we in".
  *
- * Called once by `org-context.ts`. Not for general use: a second caller would
- * silently replace the first, which is why this is named the way it is.
+ * Keyed rather than a single slot, because there are two sources and module
+ * load order does not decide which of them is right — the list above does. Not
+ * for general use, hence the name.
  */
-export function __setStoreTzResolver(fn: StoreTzResolver): void {
-  resolveTenantTz = fn;
+export function __setStoreTzResolver(
+  source: StoreTzSource,
+  fn: StoreTzResolver,
+): void {
+  resolvers.set(source, fn);
+}
+
+/** What the server stamped on the page, in a browser. Undefined anywhere else. */
+function browserStoreTz(): string | undefined {
+  if (typeof window === "undefined") return undefined;
+  const tz = (window as unknown as { __cleanoTz?: unknown }).__cleanoTz;
+  return typeof tz === "string" && tz.length > 0 ? tz : undefined;
+}
+
+// A zone name that Intl does not recognise makes `new Intl.DateTimeFormat`
+// throw a RangeError, and every date on the page is formatted through one. An
+// organization's timezone is an editable text column, so one bad save would
+// otherwise take the whole workspace down rather than printing the wrong hour.
+// Checked once per distinct string: a deployment has a handful.
+const TZ_IS_USABLE = new Map<string, boolean>();
+
+/**
+ * Is this a zone `Intl` actually knows?
+ *
+ * Exported because the two places a workspace's zone is SET — the platform
+ * console when a workspace is created, and Settings → General — must refuse a
+ * value the rest of the app cannot use. CleanoCalgary's row said "Toronto",
+ * which is not an IANA zone at all, so the guard below was carrying a live
+ * tenant rather than covering a hypothetical.
+ */
+export function isValidTimeZone(tz: unknown): tz is string {
+  return typeof tz === "string" && tz.length > 0 && isUsableTz(tz);
+}
+
+function isUsableTz(tz: string): boolean {
+  let ok = TZ_IS_USABLE.get(tz);
+  if (ok === undefined) {
+    try {
+      new Intl.DateTimeFormat("en-US", { timeZone: tz });
+      ok = true;
+    } catch {
+      ok = false;
+    }
+    TZ_IS_USABLE.set(tz, ok);
+  }
+  return ok;
 }
 
 /** The zone to read and write wall clocks in, right now. */
 export function storeTz(): string {
-  try {
-    return resolveTenantTz?.() || STORE_TZ;
-  } catch {
-    // A resolver that throws must not take the page with it.
-    return STORE_TZ;
+  // Server sources first, in the documented order, then the browser. Only one
+  // of the two can ever exist — resolvers are never registered in a browser,
+  // and `window` is never defined on the server — so the order costs nothing
+  // and keeps the precedence above true rather than incidental.
+  const answer = serverStoreTz() ?? browserStoreTz();
+  if (answer && answer !== STORE_TZ && isUsableTz(answer)) return answer;
+  return STORE_TZ;
+}
+
+function serverStoreTz(): string | undefined {
+  for (const source of RESOLVER_ORDER) {
+    try {
+      const tz = resolvers.get(source)?.();
+      if (tz) return tz;
+    } catch {
+      // A resolver that throws must not take the page with it.
+    }
   }
+  return undefined;
 }
 
 /** Locale for every store-facing date/time string. Pinned so the server and
@@ -333,6 +400,32 @@ export function formatDate(
     ...opts,
     timeZone: storeTz(),
   });
+}
+
+/**
+ * "Eastern Time" / "Mountain Time" — the clock this page's times are on.
+ *
+ * For labelling a form, so an admin in Calgary editing a Montreal job can see
+ * which clock the time they type will be read in (Sept 10, item 6: "UI should
+ * make timezone clear where needed"). The season is stripped: "Eastern
+ * Daylight Time" is precise, nobody schedules by it, and keeping it would make
+ * the label change under people twice a year for no reason.
+ */
+export function storeTzLabel(d: Date | string | number = new Date()): string {
+  const tz = storeTz();
+  try {
+    const name = new Intl.DateTimeFormat(STORE_LOCALE, {
+      timeZone: tz,
+      timeZoneName: "long",
+    })
+      .formatToParts(asDate(d))
+      .find((p) => p.type === "timeZoneName")?.value;
+    if (name) return name.replace(/\b(Standard|Daylight|Summer)\s+/i, "");
+  } catch {
+    // Falls through to the city name below.
+  }
+  // "America/Argentina/Buenos_Aires" -> "Buenos Aires". Never empty.
+  return tz.split("/").pop()?.replace(/_/g, " ") || tz;
 }
 
 /** "Aug 12, 9:30 AM" */

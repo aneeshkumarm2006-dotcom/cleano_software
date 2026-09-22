@@ -14,6 +14,7 @@ import { getServicePricingConfig } from "@/lib/booking-pricing";
 import { getServiceCatalog } from "@/lib/service-catalog.server";
 import { serviceOptions } from "@/lib/service-catalog";
 import { activeSubtotal } from "@/lib/job-money";
+import { startOfStoreDay } from "@/lib/timezone";
 
 type SearchParams = Promise<{
   [key: string]: string | string[] | undefined;
@@ -78,6 +79,17 @@ export default async function JobsPage({
   if (attention === "chat") {
     const unread = await getJobChatUnread("admin");
     listWhere.id = { in: Object.keys(unread.byJob) };
+  }
+
+  // Sept 17, item 23. Deactivating a cleaner can leave upcoming jobs with
+  // nobody on them, and the notification about it has to land somewhere an
+  // admin can act. Narrows, like the filter above: a non-admin still carries
+  // `baseWhere.employeeId`, and a job with no lead cannot match it.
+  if (attention === "unassigned") {
+    listWhere.employeeId = null;
+    listWhere.cleaners = { none: {} };
+    listWhere.startTime = { gte: startOfStoreDay() };
+    listWhere.status = { notIn: ["COMPLETED", "CANCELLED", "PAID"] };
   }
 
   const allJobs = await db.job.findMany({
@@ -157,6 +169,7 @@ export default async function JobsPage({
       // blank and quietly erase the job's type on a quick edit (Stage 9).
       propertyType: true,
       checklistTemplateId: true,
+        customChecklist: true,
       cleaners: { select: { id: true, name: true } },
       addOns: { select: { id: true, name: true, price: true, quantity: true } },
       productUsage: { select: { quantity: true, product: { select: { costPerUnit: true } } } },

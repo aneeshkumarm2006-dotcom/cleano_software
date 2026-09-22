@@ -282,7 +282,7 @@ export default function ImportCsvButton({ entity, label, triggerClassName }: Imp
                       const ok = r.errors.length === 0;
                       return (
                         <tr key={r.index} className="border-t border-gray-50">
-                          <td className="px-2 py-1.5 text-gray-400">{r.index}</td>
+                          <td className="px-2 py-1.5 text-gray-500">{r.index}</td>
                           <td className="px-2 py-1.5 text-gray-800">
                             {r.display || "—"}
                           </td>
@@ -299,7 +299,7 @@ export default function ImportCsvButton({ entity, label, triggerClassName }: Imp
                   </tbody>
                 </table>
                 {preview.length > 100 && (
-                  <div className="px-2 py-1.5 text-[11px] text-gray-400 border-t border-gray-50">
+                  <div className="px-2 py-1.5 text-[11px] text-gray-500 border-t border-gray-50">
                     …and {preview.length - 100} more rows
                   </div>
                 )}

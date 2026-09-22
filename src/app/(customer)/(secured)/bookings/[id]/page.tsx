@@ -22,7 +22,9 @@ import { Banner } from "@/components/customer/Field";
 import RequestActions from "./RequestActions";
 import JobChatThread from "@/components/JobChatThread";
 import BookingPaymentMethod from "./BookingPaymentMethod";
-import { STORE_TZ } from "@/lib/timezone";
+import { storeTz } from "@/lib/timezone";
+import { getTaxRates } from "@/lib/tax.server";
+import { taxLines } from "@/lib/tax";
 
 function formatPrice(n: number | null | undefined) {
   return `$${(n ?? 0).toFixed(2)}`;
@@ -42,7 +44,7 @@ function formatTime(iso: string) {
   return new Date(iso).toLocaleString("en-US", {
     hour: "numeric",
     minute: "2-digit",
-    timeZone: STORE_TZ,
+    timeZone: storeTz(),
   });
 }
 function formatLongDate(iso: string) {
@@ -51,7 +53,7 @@ function formatLongDate(iso: string) {
     month: "long",
     day: "numeric",
     year: "numeric",
-    timeZone: STORE_TZ,
+    timeZone: storeTz(),
   });
 }
 
@@ -130,6 +132,9 @@ export default async function BookingDetailPage({
     "general.businessPhone",
     "customer.providerRatingThreshold",
   ]);
+
+  // This workspace's own rates, for the price rows below (Sept 17, item 7).
+  const taxRates = await getTaxRates();
 
   // #66: show an assigned cleaner's average rating to the customer only when it
   // meets the configured threshold (and they have at least 3 ratings).
@@ -438,15 +443,19 @@ export default async function BookingDetailPage({
                   dd={formatPrice(job.subtotalAmount)}
                 />
               ) : null}
-              {job.gstAmount > 0 ? (
-                <DetailRow dt="GST (5%)" dd={formatPrice(job.gstAmount)} />
-              ) : null}
-              {job.qstAmount > 0 ? (
-                <DetailRow
-                  dt="QST (9.975%)"
-                  dd={formatPrice(job.qstAmount)}
-                />
-              ) : null}
+              {/* Named from the rates this workspace charges, not from two
+                  strings typed into the page (Sept 17, item 7). Still hidden
+                  when the amount is zero, which is how a tax-exempt or cash
+                  job has always read here. */}
+              {taxLines(taxRates, job)
+                .filter((line) => line.amount > 0)
+                .map((line) => (
+                  <DetailRow
+                    key={line.key}
+                    dt={line.label}
+                    dd={formatPrice(line.amount)}
+                  />
+                ))}
               <div className="cl-dlist-row with-border total">
                 <dt>Total</dt>
                 <dd>{formatPrice(job.price)}</dd>
