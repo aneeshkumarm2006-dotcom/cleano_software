@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/org-db";
 import EmployeeDetailView from "./EmployeeDetailView";
+import { getTierHourlyRates } from "@/lib/pay-tiers.server";
 import { jobRevenue } from "@/lib/metrics";
 import { computeJobPayShares, type JobPayInput } from "@/lib/cleaner-earnings";
 import { getCleanerRateInputs } from "@/lib/cleaner-rates";
@@ -586,8 +587,13 @@ export default async function EmployeePage({
       }
     : null;
 
+  // Default hourly rates by payroll tier (Sept 17, item 22). Read here so the
+  // profile can say what a BLANK rate field actually resolves to.
+  const tierRates = await getTierHourlyRates();
+
   return (
     <EmployeeDetailView
+      tierRates={tierRates}
       employee={{
         id: employee.id,
         name: employee.name,

@@ -316,8 +316,12 @@ ok("...and says the customer list overrides the service default",
 
 // The admin's per-job view — the gap step 10.5 exists to close.
 const detail = read("src/app/admin/jobs/[id]/JobDetailView.tsx");
+// Matched on the props rather than the one-line JSX it used to be. The card
+// gained jobId/jobType/clientName when "save this checklist as a template" was
+// added to it, so the call is now multi-line; what this test is actually about
+// is that the resolved summary still reaches the card.
 ok("the job detail page shows the resolved checklist",
-  detail.includes("<ChecklistCard summary={checklistSummary} />"));
+  detail.includes("<ChecklistCard") && detail.includes("summary={checklistSummary}"));
 ok("...and it is read-only (no generate button)",
   !detail.includes("generateJobChecklist"));
 

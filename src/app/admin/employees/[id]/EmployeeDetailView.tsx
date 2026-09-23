@@ -16,6 +16,12 @@ import RatingHistoryPanel, {
 import { resolveInventoryRequest } from "../../actions/resolveInventoryRequest";
 import { setCleanerTier } from "../../actions/setCleanerTier";
 import { setCleanerDefaultHourlyRate } from "../../actions/setCleanerDefaultHourlyRate";
+import {
+  NO_TIER_HOURLY_RATES,
+  defaultHourlyRateFor,
+  hourlyRateSource,
+  type TierHourlyRates,
+} from "@/lib/pay-tiers";
 import { setFieldLead } from "../../actions/setFieldLead";
 import { setCleanerProductQuantity } from "../../actions/setCleanerProductQuantity";
 import { setEmployeeServiceCategories } from "../../actions/setEmployeeServiceCategories";
@@ -206,6 +212,8 @@ interface EmployeeDetailViewProps {
   };
   starRating?: number | null;
   cleanerTier?: CleanerTier;
+  /** This workspace's default hourly rate per tier (Settings → Provider). */
+  tierRates?: TierHourlyRates;
   /** Service categories this employee may work. Empty = all (item 3). */
   allowedServiceCategories?: string[];
   ratingCount?: number;
@@ -633,6 +641,7 @@ export default function EmployeeDetailView({
   strikeSummary,
   strikeWindowDays,
   voidCheque = null,
+  tierRates = NO_TIER_HOURLY_RATES,
 }: EmployeeDetailViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -697,6 +706,12 @@ export default function EmployeeDetailView({
   const [defaultRate, setDefaultRate] = useState<string>(
     employee.defaultHourlyRate != null ? String(employee.defaultHourlyRate) : "",
   );
+  // What this cleaner would get if the field above were left blank: their
+  // tier's default from Settings, or nothing.
+  const inheritedRate =
+    hourlyRateSource({ defaultHourlyRate: null, cleanerTier: tier }, tierRates) === "tier"
+      ? defaultHourlyRateFor({ defaultHourlyRate: null, cleanerTier: tier }, tierRates)
+      : null;
   const [rateSaving, setRateSaving] = useState(false);
   const [rateMsg, setRateMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
@@ -993,7 +1008,9 @@ export default function EmployeeDetailView({
                   step="0.01"
                   value={defaultRate}
                   onChange={(e) => { setDefaultRate(e.target.value); setRateMsg(null); }}
-                  placeholder="—"
+                  placeholder={
+                    tierRates[tier] > 0 ? tierRates[tier].toFixed(2) : "—"
+                  }
                   className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm w-24 focus:outline-none focus:ring-1 focus:ring-[#008C9C]"
                 />
                 <span className="text-xs text-gray-500">/h</span>
@@ -1009,6 +1026,17 @@ export default function EmployeeDetailView({
                 Fills in this cleaner&apos;s rate when they&apos;re put on a new
                 hourly job. Jobs already booked keep the rate they have.
               </p>
+              {/* What blank actually means here. Leaving the field empty is not
+                  "no rate" once the workspace has tier defaults — it is "use
+                  the Standard rate" — and an admin cannot see that from an
+                  empty box. */}
+              {defaultRate.trim() === "" && (
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {inheritedRate != null
+                    ? `Blank means they inherit $${inheritedRate.toFixed(2)}/h from the ${TIER_LABEL[tier]} tier.`
+                    : "Blank means the job's own hourly rate is used. Set tier defaults in Settings → Provider."}
+                </p>
+              )}
               {rateMsg && (
                 <p className={`text-xs mt-1 ${rateMsg.type === "success" ? "text-green-600" : "text-red-500"}`}>
                   {rateMsg.text}

@@ -167,3 +167,51 @@ export const CHECKLIST_STALE_HINT =
 /** Copy shown when no template matches this job at all. */
 export const CHECKLIST_NONE_CONFIGURED =
   "No checklist configured for this job type.";
+
+/** A template name is a label a human will pick from a list, so it has a shape. */
+export const TEMPLATE_NAME_MAX = 80;
+
+export type TemplateNameCheck =
+  | { ok: true; name: string }
+  | { ok: false; error: string };
+
+/**
+ * Validate the name for a template saved out of one job's one-off checklist.
+ *
+ * Rejects the empty string and whitespace, because an unnamed template is
+ * indistinguishable from every other unnamed template in the picker, and the
+ * picker is the only place it will ever be seen again.
+ */
+export function checkTemplateName(raw: unknown): TemplateNameCheck {
+  if (typeof raw !== "string") {
+    return { ok: false, error: "Give the template a name." };
+  }
+  const name = raw.trim().replace(/\s+/g, " ");
+  if (!name) return { ok: false, error: "Give the template a name." };
+  if (name.length > TEMPLATE_NAME_MAX) {
+    return {
+      ok: false,
+      error: `That name is too long. Keep it under ${TEMPLATE_NAME_MAX} characters.`,
+    };
+  }
+  return { ok: true, name };
+}
+
+/**
+ * Turn a job's one-off checklist into template items.
+ *
+ * `sortOrder` is assigned from the array position rather than preserved from
+ * anywhere, because the one-off list has no sort column: its order IS its array
+ * order, and a template that reordered the steps would not be the checklist the
+ * admin just approved.
+ */
+export function templateItemsFrom(
+  items: ChecklistItemShape[],
+): { title: string; description: string | null; isRequired: boolean; sortOrder: number }[] {
+  return items.map((it, i) => ({
+    title: it.title,
+    description: it.description ?? null,
+    isRequired: it.isRequired,
+    sortOrder: i,
+  }));
+}

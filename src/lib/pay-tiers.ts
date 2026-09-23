@@ -297,3 +297,64 @@ export function rateExplanation(c: CleanerRateInput): string {
     individualRate(c)
   )} (rating ${c.avgRating.toFixed(2)})`;
 }
+
+/* ---------------------- default hourly rates by tier ---------------------- */
+//
+// Separate from everything above on purpose. The rates above are PERCENTAGE
+// splits of a job's price and are the heart of split-job payroll. These are
+// flat dollars-per-hour and only ever act as a DEFAULT when an hourly job is
+// being set up. The two never meet, and conflating them would be the kind of
+// mistake that pays somebody 40% of an hour.
+
+export interface TierHourlyRates {
+  TRAINEE: number;
+  STANDARD: number;
+  FIELD_LEAD: number;
+}
+
+/** What every workspace has today: no tier defaults at all. */
+export const NO_TIER_HOURLY_RATES: TierHourlyRates = {
+  TRAINEE: 0,
+  STANDARD: 0,
+  FIELD_LEAD: 0,
+};
+
+/**
+ * The hourly rate to PREFILL for this cleaner, or null when we have none.
+ *
+ * Order, most specific first:
+ *   1. the rate on their own profile — somebody chose that number for them
+ *   2. their tier's default from Settings
+ *   3. nothing, and the caller falls back to the job's crew-wide rate
+ *
+ * Returns null rather than 0 for "no answer". Zero is a real rate an admin can
+ * legitimately type (an unpaid shadow shift), so using it as the empty value
+ * would make "we don't know" and "they earn nothing" the same number.
+ */
+export function defaultHourlyRateFor(
+  cleaner: { defaultHourlyRate?: number | null; cleanerTier?: CleanerTier | null },
+  rates: TierHourlyRates = NO_TIER_HOURLY_RATES,
+): number | null {
+  const own = cleaner.defaultHourlyRate;
+  if (typeof own === "number" && Number.isFinite(own) && own > 0) return own;
+
+  const tier = cleaner.cleanerTier ?? "STANDARD";
+  const byTier = rates[tier];
+  if (typeof byTier === "number" && Number.isFinite(byTier) && byTier > 0) {
+    return byTier;
+  }
+  return null;
+}
+
+/** Where a prefilled rate came from, so the form can say so. */
+export function hourlyRateSource(
+  cleaner: { defaultHourlyRate?: number | null; cleanerTier?: CleanerTier | null },
+  rates: TierHourlyRates = NO_TIER_HOURLY_RATES,
+): "profile" | "tier" | "none" {
+  const own = cleaner.defaultHourlyRate;
+  if (typeof own === "number" && Number.isFinite(own) && own > 0) return "profile";
+  const tier = cleaner.cleanerTier ?? "STANDARD";
+  const byTier = rates[tier];
+  if (typeof byTier === "number" && Number.isFinite(byTier) && byTier > 0) return "tier";
+  return "none";
+}

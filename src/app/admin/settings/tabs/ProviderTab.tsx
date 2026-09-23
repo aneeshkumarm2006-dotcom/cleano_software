@@ -7,6 +7,7 @@ import { updateAppSetting } from "../../actions/updateAppSetting";
 import { AppSettingRecord, getSetting } from "../types";
 import { SectionCard, Field, Feedback, Msg } from "./_shared";
 import { SETTINGS } from "@/lib/settings/registry";
+import TierRatesSection from "./TierRatesSection";
 
 const SHOW_PHONE = SETTINGS["provider.showCustomerPhone"];
 const MASK_PHONE = SETTINGS["provider.maskCustomerPhone"];
@@ -57,6 +58,7 @@ export default function ProviderTab({ settings }: Props) {
   }
 
   return (
+    <>
     <SectionCard
       title="Provider Privacy"
       description="What cleaners can see about the customer on a job. Changes are audit-logged."
@@ -113,5 +115,7 @@ export default function ProviderTab({ settings }: Props) {
         </Button>
       </form>
     </SectionCard>
+    <TierRatesSection settings={settings} />
+    </>
   );
 }

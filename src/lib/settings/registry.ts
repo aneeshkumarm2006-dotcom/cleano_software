@@ -486,6 +486,47 @@ export const SETTINGS = {
   // Whether the assigned cleaner can see the customer's phone number on the
   // job. Default true = current behavior. Email/price visibility are handled
   // separately (price is a pending product decision).
+  // ── Default hourly rates by payroll tier (Sept 17 list, item 22) ─────
+  //
+  // Item 22 shipped the per-cleaner hourly rate and the per-profile default.
+  // The half it left was this: an office taking on five trainees had to type
+  // the same number onto five profiles, and the number they typed drifted.
+  //
+  // These are DEFAULTS FOR NEW WORK ONLY. They prefill a rate when an hourly
+  // job is set up; they never reach back into a job whose rate is already
+  // snapshotted on its assignment row. Repricing finished work from a settings
+  // change is exactly the behaviour `JobAssignment.hourlyRate` exists to
+  // prevent, and a settings screen is the last place anyone would look for it.
+  //
+  // Defaults are 0, meaning "no tier default", which is what every workspace
+  // has today. Zero therefore changes nothing until somebody sets a number.
+  "provider.hourlyRateTrainee": def({
+    key: "provider.hourlyRateTrainee",
+    category: "provider",
+    label: "Default hourly rate — Trainee",
+    default: 0,
+    validate: moneyRange(0, 500),
+    audit: true,
+    sensitive: true,
+  }),
+  "provider.hourlyRateStandard": def({
+    key: "provider.hourlyRateStandard",
+    category: "provider",
+    label: "Default hourly rate — Standard",
+    default: 0,
+    validate: moneyRange(0, 500),
+    audit: true,
+    sensitive: true,
+  }),
+  "provider.hourlyRateFieldLead": def({
+    key: "provider.hourlyRateFieldLead",
+    category: "provider",
+    label: "Default hourly rate — Field Lead",
+    default: 0,
+    validate: moneyRange(0, 500),
+    audit: true,
+    sensitive: true,
+  }),
   "provider.showCustomerPhone": def({
     key: "provider.showCustomerPhone",
     category: "provider",
