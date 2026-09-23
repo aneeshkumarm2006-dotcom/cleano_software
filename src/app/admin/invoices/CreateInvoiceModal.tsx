@@ -194,10 +194,10 @@ export default function CreateInvoiceModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
       <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-xl mx-4">
-        <div className="flex items-center justify-between p-6 border-b border-[#008C9C]/10">
-          <h2 className="text-xl font-[350] text-[#008C9C]">New Invoice</h2>
-          <button onClick={onClose} className="p-2 hover:bg-[#008C9C]/5 rounded-xl">
-            <X className="w-5 h-5 text-[#008C9C]/60" />
+        <div className="flex items-center justify-between p-6 border-b border-[var(--primary)]/10">
+          <h2 className="text-xl font-[350] text-[var(--primary)]">New Invoice</h2>
+          <button onClick={onClose} className="p-2 hover:bg-[var(--primary)]/5 rounded-xl">
+            <X className="w-5 h-5 text-[var(--primary)]/60" />
           </button>
         </div>
 
@@ -210,7 +210,7 @@ export default function CreateInvoiceModal({
 
           {/* Client */}
           <div>
-            <label className="input-label !text-[#008C9C]/70 block mb-1.5">Client</label>
+            <label className="input-label !text-[var(--primary)]/70 block mb-1.5">Client</label>
             <PremiumSelect
               value={clientId}
               onChange={(v) => {
@@ -229,7 +229,7 @@ export default function CreateInvoiceModal({
 
           {/* Due Date */}
           <div>
-            <label className="input-label !text-[#008C9C]/70 block mb-1.5">Due Date</label>
+            <label className="input-label !text-[var(--primary)]/70 block mb-1.5">Due Date</label>
             <DatePicker
               value={dueDate}
               onChange={setDueDate}
@@ -240,21 +240,21 @@ export default function CreateInvoiceModal({
           {/* Jobs to consolidate (optional) */}
           {clientId && (
             <div>
-              <label className="input-label !text-[#008C9C]/70 block mb-1.5">
+              <label className="input-label !text-[var(--primary)]/70 block mb-1.5">
                 Include jobs{selectedJobIds.length > 0 ? ` (${selectedJobIds.length} selected)` : ""}
               </label>
               {jobsLoading ? (
-                <p className="text-xs text-[#008C9C]/50">Loading jobs…</p>
+                <p className="text-xs text-[var(--primary)]/50">Loading jobs…</p>
               ) : clientJobs.length === 0 ? (
-                <p className="text-xs text-[#008C9C]/50">
+                <p className="text-xs text-[var(--primary)]/50">
                   No unpaid jobs for this client — use line items below.
                 </p>
               ) : (
-                <div className="max-h-44 overflow-y-auto rounded-2xl border border-[#008C9C]/10 divide-y divide-[#008C9C]/5">
+                <div className="max-h-44 overflow-y-auto rounded-2xl border border-[var(--primary)]/10 divide-y divide-[var(--primary)]/5">
                   {clientJobs.map((j) => (
                     <label
                       key={j.id}
-                      className="flex items-center gap-3 px-3 py-2 text-sm cursor-pointer hover:bg-[#008C9C]/5">
+                      className="flex items-center gap-3 px-3 py-2 text-sm cursor-pointer hover:bg-[var(--primary)]/5">
                       <input
                         type="checkbox"
                         checked={selectedJobIds.includes(j.id)}
@@ -266,7 +266,7 @@ export default function CreateInvoiceModal({
                           )
                         }
                       />
-                      <span className="flex-1 text-[#008C9C]">
+                      <span className="flex-1 text-[var(--primary)]">
                         Job #{j.jobNumber}
                         {j.jobType ? ` · ${jobTypeLabel(j.jobType)}` : ""} ·{" "}
                         {fmtDate(j.startTime, { month: "short", day: "numeric", year: "numeric" })}
@@ -274,12 +274,12 @@ export default function CreateInvoiceModal({
                           <span className="ml-2 text-[11px] text-amber-600">already invoiced</span>
                         )}
                       </span>
-                      <span className="text-[#008C9C]/70">${j.amount.toFixed(2)}</span>
+                      <span className="text-[var(--primary)]/70">${j.amount.toFixed(2)}</span>
                     </label>
                   ))}
                 </div>
               )}
-              <p className="text-[11px] text-[#008C9C]/50 mt-1">
+              <p className="text-[11px] text-[var(--primary)]/50 mt-1">
                 Selected jobs become line items; marking this invoice paid marks every included job paid.
               </p>
             </div>
@@ -288,10 +288,10 @@ export default function CreateInvoiceModal({
           {/* Line Items */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="input-label !text-[#008C9C]/70">Line Items</label>
+              <label className="input-label !text-[var(--primary)]/70">Line Items</label>
               <button
                 onClick={addLineItem}
-                className="text-xs text-[#008C9C] hover:text-[#008C9C]/80 flex items-center gap-1">
+                className="text-xs text-[var(--primary)] hover:text-[var(--primary)]/80 flex items-center gap-1">
                 <Plus className="w-3.5 h-3.5" /> Add Item
               </button>
             </div>
@@ -334,7 +334,7 @@ export default function CreateInvoiceModal({
                       step="0.01"
                     />
                   </div>
-                  <div className="w-24 text-right text-sm text-[#008C9C]/70 pt-2">
+                  <div className="w-24 text-right text-sm text-[var(--primary)]/70 pt-2">
                     ${(li.quantity * li.unitPrice).toFixed(2)}
                   </div>
                   {lineItems.length > 1 && (
@@ -352,10 +352,10 @@ export default function CreateInvoiceModal({
           {/* Discount */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="input-label !text-[#008C9C]/70">
+              <label className="input-label !text-[var(--primary)]/70">
                 Discount
               </label>
-              <div className="flex bg-[#008C9C]/5 rounded-xl p-0.5">
+              <div className="flex bg-[var(--primary)]/5 rounded-xl p-0.5">
                 <button
                   type="button"
                   onClick={() => {
@@ -364,8 +364,8 @@ export default function CreateInvoiceModal({
                   }}
                   className={`px-3 py-1 text-xs rounded-lg transition-colors ${
                     discountMode === "percent"
-                      ? "bg-[#008C9C] text-white"
-                      : "text-[#008C9C]/60"
+                      ? "bg-[var(--primary)] text-white"
+                      : "text-[var(--primary)]/60"
                   }`}>
                   %
                 </button>
@@ -377,8 +377,8 @@ export default function CreateInvoiceModal({
                   }}
                   className={`px-3 py-1 text-xs rounded-lg transition-colors ${
                     discountMode === "amount"
-                      ? "bg-[#008C9C] text-white"
-                      : "text-[#008C9C]/60"
+                      ? "bg-[var(--primary)] text-white"
+                      : "text-[var(--primary)]/60"
                   }`}>
                   $
                 </button>
@@ -401,7 +401,7 @@ export default function CreateInvoiceModal({
             {selectedClient &&
               (selectedClient.discountPercent ?? 0) > 0 &&
               !discountTouched && (
-                <p className="text-[11px] text-[#008C9C]/60 mt-1">
+                <p className="text-[11px] text-[var(--primary)]/60 mt-1">
                   Auto-applied from client default ({selectedClient.discountPercent}%)
                 </p>
               )}
@@ -409,19 +409,19 @@ export default function CreateInvoiceModal({
 
           {/* Notes */}
           <div>
-            <label className="input-label !text-[#008C9C]/70 block mb-1.5">Notes</label>
+            <label className="input-label !text-[var(--primary)]/70 block mb-1.5">Notes</label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Optional notes..."
               rows={2}
-              className="w-full px-3 py-2 text-sm bg-[#008C9C]/5 text-[#008C9C] rounded-2xl border-0 outline-none resize-none placeholder:text-[#008C9C]/40"
+              className="w-full px-3 py-2 text-sm bg-[var(--primary)]/5 text-[var(--primary)] rounded-2xl border-0 outline-none resize-none placeholder:text-[var(--primary)]/40"
             />
           </div>
 
           {/* Totals */}
-          <div className="bg-[#008C9C]/5 rounded-2xl p-4 space-y-2">
-            <div className="flex justify-between text-sm text-[#008C9C]/70">
+          <div className="bg-[var(--primary)]/5 rounded-2xl p-4 space-y-2">
+            <div className="flex justify-between text-sm text-[var(--primary)]/70">
               <span>Subtotal</span>
               <span>${subtotal.toFixed(2)}</span>
             </div>
@@ -435,19 +435,19 @@ export default function CreateInvoiceModal({
             {taxLines(taxConfig, { gstAmount, qstAmount }).map((line) => (
               <div
                 key={line.key}
-                className="flex justify-between text-sm text-[#008C9C]/70">
+                className="flex justify-between text-sm text-[var(--primary)]/70">
                 <span>{line.label}</span>
                 <span>${line.amount.toFixed(2)}</span>
               </div>
             ))}
-            <div className="border-t border-[#008C9C]/10 pt-2 flex justify-between text-base font-[400] text-[#008C9C]">
+            <div className="border-t border-[var(--primary)]/10 pt-2 flex justify-between text-base font-[400] text-[var(--primary)]">
               <span>Total</span>
               <span>${totalAmount.toFixed(2)}</span>
             </div>
           </div>
         </div>
 
-        <div className="flex gap-3 p-6 border-t border-[#008C9C]/10">
+        <div className="flex gap-3 p-6 border-t border-[var(--primary)]/10">
           <Button
             variant="default"
             size="md"

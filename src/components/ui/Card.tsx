@@ -37,9 +37,9 @@ const VARIANT_CLASSES = {
   cleano_light_bordered_high: "bg-[#3E7596]/20 border-[#3E7596]/20",
   cleano_light_bordered: "bg-[#3E7596]/10 border-[#3E7596]/10",
   cleano_light_lighter: "bg-[#3E7596]/5 text-[#3E7596] hover:bg-[#3E7596]/10",
-  cleano_dark: "bg-[#008C9C]/10 text-[#008C9C] hover:bg-[#008C9C]/30",
-  cleano_dark_lighter: "bg-[#008C9C]/5 text-[#008C9C] hover:bg-[#008C9C]/10",
-  cleano_dark_solid: "bg-[#008C9C]/4 text-white",
+  cleano_dark: "bg-[var(--primary)]/10 text-[var(--primary)] hover:bg-[var(--primary)]/30",
+  cleano_dark_lighter: "bg-[var(--primary)]/5 text-[var(--primary)] hover:bg-[var(--primary)]/10",
+  cleano_dark_solid: "bg-[var(--primary)]/4 text-white",
   cleano_light_solid: "bg-[#3E7596]/40 text-white",
   error: "bg-red-50/50 border-red-100",
   ghost: "bg-transparent border-none",
@@ -47,7 +47,7 @@ const VARIANT_CLASSES = {
   alert: "bg-amber-50/50 border-amber-100 text-amber-600",
   glassy: "bg-white/10 border-white/10",
   glassy_high: "bg-white/20 border-white/20 backdrop-blur-[3px]",
-  glassy_dark: "bg-[#008C9C]/10 border-[#008C9C]/5",
+  glassy_dark: "bg-[var(--primary)]/10 border-[var(--primary)]/5",
 } as const;
 
 function Card({

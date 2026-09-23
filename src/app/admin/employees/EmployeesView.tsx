@@ -97,9 +97,9 @@ interface EmployeesViewProps {
 
 function RolePill({ role }: { role: string }) {
   const cfg: Record<string, { bg: string; color: string; label: string }> = {
-    OWNER:    { bg: "#e0f2f1", color: "#008C9C", label: "Owner" },
+    OWNER:    { bg: "#e0f2f1", color: "var(--primary)", label: "Owner" },
     ADMIN:    { bg: "#e0e7ff", color: "#4338ca", label: "Admin" },
-    EMPLOYEE: { bg: "#f1f5f9", color: "#475569", label: "Employee" },
+    EMPLOYEE: { bg: "var(--slate-100)", color: "#475569", label: "Employee" },
   };
   const c = cfg[role] ?? cfg.EMPLOYEE;
   return (
@@ -122,14 +122,14 @@ function AStatCard({ icon: Icon, label, value, hint, warn }: {
   icon: React.ElementType; label: string; value: string; hint?: string; warn?: boolean;
 }) {
   return (
-    <div className="astat" style={warn ? { borderLeft: "3px solid #d97706" } : {}}>
-      <div className="astat-head" style={warn ? { color: "#92400e" } : {}}>
+    <div className="astat" style={warn ? { borderLeft: "3px solid var(--amber-600)" } : {}}>
+      <div className="astat-head" style={warn ? { color: "var(--amber-800)" } : {}}>
         <span>{label}</span>
-        <span className="astat-icon" style={warn ? { background: "#fffbeb", color: "#d97706" } : {}}>
+        <span className="astat-icon" style={warn ? { background: "var(--amber-50)", color: "var(--amber-600)" } : {}}>
           <Icon size={15} />
         </span>
       </div>
-      <div className="astat-value" style={warn ? { color: "#92400e" } : {}}>{value}</div>
+      <div className="astat-value" style={warn ? { color: "var(--amber-800)" } : {}}>{value}</div>
       {hint && <div className="astat-delta">{hint}</div>}
     </div>
   );
@@ -510,7 +510,7 @@ export default function EmployeesView({
                       </td>
                       <td className="num">
                         {e.activeJobsCount > 0 ? (
-                          <span style={{ fontWeight: 600, color: "#059669" }}>{e.activeJobsCount}</span>
+                          <span style={{ fontWeight: 600, color: "var(--emerald-600)" }}>{e.activeJobsCount}</span>
                         ) : <span style={{ color: "var(--primary-40)" }}>—</span>}
                       </td>
                       <td className="num" style={{ fontWeight: 600, color: "var(--ink)" }}>
@@ -562,7 +562,7 @@ export default function EmployeesView({
                     {e.completedJobsCount} done · {e.activeJobsCount} active
                   </div>
                   {e.unpaidJobs > 0 && (
-                    <div style={{ fontSize: 12, color: "#d97706", fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}>
+                    <div style={{ fontSize: 12, color: "var(--amber-600)", fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}>
                       <AlertTriangle size={12} />
                       {e.unpaidJobs} unpaid
                     </div>
@@ -660,7 +660,7 @@ export default function EmployeesView({
           #emp-mobile  { display: flex !important; }
         }
         .atable tr.row-selected td { background: var(--primary-05, #f0fdfa); }
-        .jcard.row-selected { outline: 2px solid var(--primary-40, #008C9C); outline-offset: -1px; }
+        .jcard.row-selected { outline: 2px solid var(--primary-40, var(--primary)); outline-offset: -1px; }
         .bulk-menu {
           background: #fff;
           border: 1px solid var(--primary-10, #e2e8f0);
@@ -694,7 +694,7 @@ export default function EmployeesView({
           padding: 8px 10px;
           cursor: pointer;
         }
-        .bulk-menu-item:hover { background: var(--primary-05, #f1f5f9); }
+        .bulk-menu-item:hover { background: var(--primary-05, var(--slate-100)); }
         .bulk-menu-empty {
           font-size: 12px;
           color: var(--primary-50, #64748b);

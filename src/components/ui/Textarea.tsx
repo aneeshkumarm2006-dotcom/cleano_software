@@ -32,7 +32,7 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
         "bg-transparent border-0 hover:bg-gray-50 focus:bg-white focus:border focus:border-neutral-950/70 rounded-md",
       outline:
         "bg-white border border-gray-300 hover:border-gray-400 focus:border-neutral-950/70",
-      form: "bg-[#008C9C]/4 hover:bg-[#008C9C]/7 focus:bg-[#008C9C]/8 text-[#008C9C] placeholder:text-[#008C9C]/40",
+      form: "bg-[var(--primary)]/4 hover:bg-[var(--primary)]/7 focus:bg-[var(--primary)]/8 text-[var(--primary)] placeholder:text-[var(--primary)]/40",
     }[variant];
 
     const errorClasses = error

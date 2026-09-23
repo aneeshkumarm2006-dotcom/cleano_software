@@ -64,8 +64,8 @@ export function Feedback({ msg }: { msg: NonNullable<Msg> }) {
     <div
       style={{
         padding: "12px 16px", borderRadius: 12, fontSize: 13,
-        background: msg.type === "success" ? "rgba(0,140,156,0.08)" : "#fee2e2",
-        color: msg.type === "success" ? "var(--primary)" : "#dc2626",
+        background: msg.type === "success" ? "rgba(0,140,156,0.08)" : "var(--danger-soft)",
+        color: msg.type === "success" ? "var(--primary)" : "var(--error)",
       }}>
       {msg.text}
     </div>
@@ -78,10 +78,10 @@ export function Feedback({ msg }: { msg: NonNullable<Msg> }) {
  * (the shared `Input` component defaults to a neutral grey border).
  */
 export const themedInputClass =
-  "w-full px-4 py-2.5 rounded-xl border border-transparent bg-[#008C9C]/5 text-sm text-[#008C9C] placeholder:text-[#008C9C]/40 focus:outline-none focus:ring-2 focus:ring-[#008C9C]/20";
+  "w-full px-4 py-2.5 rounded-xl border border-transparent bg-[var(--primary)]/5 text-sm text-[var(--primary)] placeholder:text-[var(--primary)]/40 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20";
 
 /**
  * Themed select that matches Cleano teal palette.
  */
 export const themedSelectClass =
-  "w-full px-4 py-2.5 rounded-xl border border-transparent bg-[#008C9C]/5 text-sm text-[#008C9C] focus:outline-none focus:ring-2 focus:ring-[#008C9C]/20";
+  "w-full px-4 py-2.5 rounded-xl border border-transparent bg-[var(--primary)]/5 text-sm text-[var(--primary)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20";

@@ -67,8 +67,8 @@ const ORDER: Status[] = ["NEW", "CONTACTED", "CONVERTED", "ARCHIVED"];
 
 const STATUS: Record<Status, { label: string; dot: string; bg: string; fg: string }> = {
   NEW: { label: "New", dot: "#2f6fae", bg: "var(--blue-100)", fg: "var(--blue-800)" },
-  CONTACTED: { label: "Contacted", dot: "#d97706", bg: "var(--amber-50)", fg: "var(--amber-800)" },
-  CONVERTED: { label: "Converted", dot: "#059669", bg: "var(--emerald-100)", fg: "var(--emerald-800)" },
+  CONTACTED: { label: "Contacted", dot: "var(--amber-600)", bg: "var(--amber-50)", fg: "var(--amber-800)" },
+  CONVERTED: { label: "Converted", dot: "var(--emerald-600)", bg: "var(--emerald-100)", fg: "var(--emerald-800)" },
   ARCHIVED: { label: "Archived", dot: "#64748b", bg: "var(--slate-100)", fg: "var(--slate-700)" },
 };
 

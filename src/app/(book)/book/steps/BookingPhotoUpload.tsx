@@ -415,7 +415,7 @@ export default function BookingPhotoUpload({
       )}
 
       {short && !busy && (
-        <p style={{ margin: 0, fontSize: 12.5, color: "var(--error-text, #dc2626)" }}>
+        <p style={{ margin: 0, fontSize: 12.5, color: "var(--error-text, var(--error))" }}>
           Please add at least {BOOKING_PHOTO_MIN} photos so we can quote the job
           accurately.
         </p>

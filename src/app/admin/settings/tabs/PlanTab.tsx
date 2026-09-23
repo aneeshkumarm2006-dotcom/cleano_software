@@ -92,7 +92,7 @@ function StateBanner({ status }: { status: PlanStatus }) {
       ? "bg-red-50 text-red-800 ring-red-200"
       : tone === "warn"
         ? "bg-amber-50 text-amber-900 ring-amber-200"
-        : "bg-[#008C9C]/8 text-[#00707d] ring-[#008C9C]/20";
+        : "bg-[var(--primary)]/8 text-[var(--primary-50)] ring-[var(--primary)]/20";
 
   return (
     <div className={`rounded-xl px-4 py-3 text-sm font-medium ring-1 ring-inset ${cls}`} role="status">
@@ -175,7 +175,7 @@ export default function PlanTab({ plans, status }: Props) {
                 onClick={() => setInterval(i)}
                 aria-pressed={interval === i}
                 className={`rounded-[10px] px-3 py-1.5 text-sm font-semibold transition ${
-                  interval === i ? "bg-[#008C9C] text-white" : "text-gray-600 hover:bg-gray-50"
+                  interval === i ? "bg-[var(--primary)] text-white" : "text-gray-600 hover:bg-gray-50"
                 }`}>
                 {i === "MONTHLY" ? "Monthly" : "Yearly"}
               </button>
@@ -191,12 +191,12 @@ export default function PlanTab({ plans, status }: Props) {
               <div
                 key={p.key}
                 className={`flex flex-col rounded-xl border p-4 ${
-                  current ? "border-[#008C9C] ring-1 ring-[#008C9C]/20" : "border-gray-200"
+                  current ? "border-[var(--primary)] ring-1 ring-[var(--primary)]/20" : "border-gray-200"
                 }`}>
                 <div className="flex items-center justify-between gap-2">
                   <div className="font-semibold text-gray-900">{p.label}</div>
                   {current && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-[#008C9C]/10 px-2 py-0.5 text-[11px] font-semibold text-[#00707d]">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-[var(--primary)]/10 px-2 py-0.5 text-[11px] font-semibold text-[var(--primary-50)]">
                       <Check size={11} strokeWidth={3} />
                       Current
                     </span>
@@ -228,7 +228,7 @@ export default function PlanTab({ plans, status }: Props) {
                 <ul className="space-y-1.5 text-sm text-gray-600 flex-1">
                   {p.highlights.map((h) => (
                     <li key={h} className="flex gap-2">
-                      <Check size={14} className="mt-0.5 shrink-0 text-[#008C9C]" />
+                      <Check size={14} className="mt-0.5 shrink-0 text-[var(--primary)]" />
                       <span>{h}</span>
                     </li>
                   ))}
@@ -268,7 +268,7 @@ export default function PlanTab({ plans, status }: Props) {
                         }
                         go(() => startCheckout({ plan: p.key, interval }));
                       }}
-                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#008C9C] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#00707d] disabled:opacity-40">
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--primary)] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-50)] disabled:opacity-40">
                       {busy && <Loader2 size={15} className="animate-spin" />}
                       {status.paying ? "Switch to this plan" : "Choose this plan"}
                     </button>
@@ -285,7 +285,7 @@ export default function PlanTab({ plans, status }: Props) {
               type="button"
               disabled={busy}
               onClick={() => go(openPortal)}
-              className="text-sm font-semibold text-[#00707d] transition hover:underline disabled:opacity-40">
+              className="text-sm font-semibold text-[var(--primary-50)] transition hover:underline disabled:opacity-40">
               Manage billing — change your card, see invoices, or cancel
             </button>
           </div>

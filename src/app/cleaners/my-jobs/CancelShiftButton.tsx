@@ -54,7 +54,7 @@ export default function CancelShiftButton({ jobId, shiftStartTime }: Props) {
       borderRadius: 14, padding: "16px 20px", display: "flex", flexDirection: "column", gap: 10,
     }}>
       {isLateCancellation && (
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 13, color: "#b91c1c" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 13, color: "var(--danger)" }}>
           <AlertTriangle size={15} style={{ marginTop: 1, flexShrink: 0 }} />
           <span>
             <strong>Late cancellation:</strong> A 1-star penalty will be applied.
@@ -80,7 +80,7 @@ export default function CancelShiftButton({ jobId, shiftStartTime }: Props) {
           onClick={handleConfirm}
           disabled={loading}
           style={{
-            background: "#dc2626", color: "#fff", border: 0, borderRadius: 999,
+            background: "var(--error)", color: "#fff", border: 0, borderRadius: 999,
             padding: "7px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer",
             fontFamily: "inherit", opacity: loading ? 0.6 : 1,
           }}>

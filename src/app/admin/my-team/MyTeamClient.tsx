@@ -62,7 +62,7 @@ function JobRow({ job }: { job: TeamJobDTO }) {
   return (
     <div
       className={`flex flex-wrap items-start gap-x-3 gap-y-1.5 px-3 py-2.5 rounded-xl ${
-        job.isMine ? "bg-[#008C9C]/[0.06]" : ""
+        job.isMine ? "bg-[var(--primary)]/[0.06]" : ""
       }`}>
       <span className="text-xs font-[600] text-gray-800 tabular-nums min-w-[112px]">
         {time}

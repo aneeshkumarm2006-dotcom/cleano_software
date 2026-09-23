@@ -87,12 +87,12 @@ export default function BookingPaymentMethod({ jobId }: { jobId: string }) {
       </p>
 
       {error && (
-        <p style={{ fontSize: 13.5, color: "#b91c1c", margin: "0 0 14px" }}>
+        <p style={{ fontSize: 13.5, color: "var(--danger)", margin: "0 0 14px" }}>
           {error}
         </p>
       )}
       {notice && (
-        <p style={{ fontSize: 13.5, color: "#047857", margin: "0 0 14px" }}>
+        <p style={{ fontSize: 13.5, color: "var(--emerald-700)", margin: "0 0 14px" }}>
           {notice}
         </p>
       )}

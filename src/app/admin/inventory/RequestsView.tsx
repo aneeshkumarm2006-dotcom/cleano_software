@@ -77,10 +77,10 @@ export default function RequestsView({ requests }: Props) {
         className={`flex items-center justify-between gap-3 p-3 rounded-xl ${
           req.status === "PENDING"
             ? "bg-amber-50 border border-amber-200"
-            : "bg-[#008C9C]/5"
+            : "bg-[var(--primary)]/5"
         }`}>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-[400] text-[#008C9C]">
+          <p className="text-sm font-[400] text-[var(--primary)]">
             {req.productId ? (
               <Link
                 href={`/admin/inventory/${req.productId}`}
@@ -93,13 +93,13 @@ export default function RequestsView({ requests }: Props) {
                 {req.isKit ? " (kit)" : ""}
               </>
             )}
-            <span className="text-[#008C9C]/60">
+            <span className="text-[var(--primary)]/60">
               {" "}
               · {req.quantity}
               {req.unit ? ` ${req.unit}` : ""}
             </span>
           </p>
-          <p className="text-xs text-[#008C9C]/60 truncate">
+          <p className="text-xs text-[var(--primary)]/60 truncate">
             <Link
               href={`/admin/employees/${req.employeeId}?tab=products`}
               className="hover:underline inline-flex items-center gap-0.5">
@@ -149,10 +149,10 @@ export default function RequestsView({ requests }: Props) {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-[350] tracking-tight text-[#008C9C]">
+          <h2 className="text-lg font-[350] tracking-tight text-[var(--primary)]">
             Refill &amp; Equipment Requests
           </h2>
-          <p className="text-sm text-[#008C9C]/70 mt-1">
+          <p className="text-sm text-[var(--primary)]/70 mt-1">
             Approve or reject stock requests from cleaners
           </p>
         </div>
@@ -164,10 +164,10 @@ export default function RequestsView({ requests }: Props) {
       {/* Pending */}
       <Card variant="default" className="p-6">
         <div className="flex items-center gap-2 mb-4">
-          <div className="p-2 bg-[#008C9C]/10 rounded-lg">
-            <ClipboardList className="w-4 h-4 text-[#008C9C]" />
+          <div className="p-2 bg-[var(--primary)]/10 rounded-lg">
+            <ClipboardList className="w-4 h-4 text-[var(--primary)]" />
           </div>
-          <h3 className="text-sm font-[350] text-[#008C9C]/80">
+          <h3 className="text-sm font-[350] text-[var(--primary)]/80">
             Pending requests
           </h3>
         </div>
@@ -181,7 +181,7 @@ export default function RequestsView({ requests }: Props) {
           </div>
         )}
         {pending.length === 0 ? (
-          <p className="text-sm text-[#008C9C]/60 py-4 text-center">
+          <p className="text-sm text-[var(--primary)]/60 py-4 text-center">
             No pending requests
           </p>
         ) : (
@@ -199,7 +199,7 @@ export default function RequestsView({ requests }: Props) {
           <button
             type="button"
             onClick={() => setShowResolved((v) => !v)}
-            className="flex items-center gap-2 mb-4 text-sm font-[350] text-[#008C9C]/80">
+            className="flex items-center gap-2 mb-4 text-sm font-[350] text-[var(--primary)]/80">
             <ClipboardList className="w-4 h-4" />
             {showResolved ? "Hide" : "Show"} resolved ({resolved.length})
           </button>

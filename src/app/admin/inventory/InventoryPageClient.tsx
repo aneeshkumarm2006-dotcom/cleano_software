@@ -359,7 +359,7 @@ export default function InventoryPageClient({
                     height: 18,
                     padding: "0 5px",
                     borderRadius: 9,
-                    background: "var(--error, #dc2626)",
+                    background: "var(--error, var(--error))",
                     color: "#fff",
                     fontSize: 11,
                     fontWeight: 600,
@@ -456,14 +456,14 @@ export default function InventoryPageClient({
       {activeTab === "settings" && (
         <Card variant="default" className="p-8 max-w-2xl">
           <div className="flex items-center gap-2 mb-2">
-            <div className="p-2 bg-[#008C9C]/10 rounded-lg">
-              <Settings className="w-4 h-4 text-[#008C9C]" />
+            <div className="p-2 bg-[var(--primary)]/10 rounded-lg">
+              <Settings className="w-4 h-4 text-[var(--primary)]" />
             </div>
-            <h2 className="text-lg font-[350] tracking-tight text-[#008C9C]">
+            <h2 className="text-lg font-[350] tracking-tight text-[var(--primary)]">
               Inventory Settings
             </h2>
           </div>
-          <p className="text-sm text-[#008C9C]/70 mb-6">
+          <p className="text-sm text-[var(--primary)]/70 mb-6">
             Refill thresholds, per-job usage rules, units, suppliers and kit
             templates are configured in Settings. Changes there drive the low-stock
             alerts and forecasts shown across this hub.

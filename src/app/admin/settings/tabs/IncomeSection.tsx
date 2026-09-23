@@ -77,9 +77,9 @@ export default function IncomeSection({ employeeId }: IncomeSectionProps) {
           marginBottom: 20,
           paddingBottom: 10,
           borderBottomWidth: 1,
-          borderBottomColor: "#008C9C",
+          borderBottomColor: "var(--primary)",
         },
-        title: { fontSize: 18, color: "#008C9C" },
+        title: { fontSize: 18, color: "var(--primary)" },
         meta: { fontSize: 9, color: "#666" },
         section: { marginBottom: 14 },
         sectionTitle: {
@@ -97,7 +97,7 @@ export default function IncomeSection({ employeeId }: IncomeSectionProps) {
           borderRadius: 6,
         },
         kpiLabel: { fontSize: 8, color: "#666", marginBottom: 3 },
-        kpiValue: { fontSize: 14, color: "#008C9C" },
+        kpiValue: { fontSize: 14, color: "var(--primary)" },
         tableHeader: {
           flexDirection: "row",
           paddingVertical: 6,
@@ -121,7 +121,7 @@ export default function IncomeSection({ employeeId }: IncomeSectionProps) {
           flexDirection: "row",
           paddingVertical: 8,
           borderTopWidth: 1,
-          borderTopColor: "#008C9C",
+          borderTopColor: "var(--primary)",
           marginTop: 8,
           fontSize: 12,
         },
@@ -147,7 +147,7 @@ export default function IncomeSection({ employeeId }: IncomeSectionProps) {
                 </Text>
               </View>
               <View>
-                <Text style={{ fontSize: 14, color: "#008C9C" }}>Cleano</Text>
+                <Text style={{ fontSize: 14, color: "var(--primary)" }}>Cleano</Text>
                 <Text style={styles.meta}>Annual Income Statement</Text>
               </View>
             </View>
@@ -245,7 +245,7 @@ export default function IncomeSection({ employeeId }: IncomeSectionProps) {
   if (loading) {
     return (
       <SectionCard title="My Income" icon={DollarSign}>
-        <p className="text-sm text-[#008C9C]/60">Loading income...</p>
+        <p className="text-sm text-[var(--primary)]/60">Loading income...</p>
       </SectionCard>
     );
   }

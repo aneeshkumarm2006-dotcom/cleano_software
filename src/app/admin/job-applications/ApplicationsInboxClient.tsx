@@ -101,9 +101,9 @@ const ORDER: Status[] = [
 const STATUS: Record<Status, { label: string; dot: string; bg: string; fg: string }> = {
   NEW: { label: "New", dot: "#2f6fae", bg: "var(--blue-100)", fg: "var(--blue-800)" },
   CONTACTED: { label: "Contacted", dot: "#7c3aed", bg: "#ede9fe", fg: "#5b21b6" },
-  INTERVIEWING: { label: "Interviewing", dot: "#d97706", bg: "var(--amber-50)", fg: "var(--amber-800)" },
-  HIRED: { label: "Hired", dot: "#059669", bg: "var(--emerald-100)", fg: "var(--emerald-800)" },
-  REJECTED: { label: "Rejected", dot: "#dc2626", bg: "var(--error-bg)", fg: "var(--error-text)" },
+  INTERVIEWING: { label: "Interviewing", dot: "var(--amber-600)", bg: "var(--amber-50)", fg: "var(--amber-800)" },
+  HIRED: { label: "Hired", dot: "var(--emerald-600)", bg: "var(--emerald-100)", fg: "var(--emerald-800)" },
+  REJECTED: { label: "Rejected", dot: "var(--error)", bg: "var(--error-bg)", fg: "var(--error-text)" },
   ARCHIVED: { label: "Archived", dot: "#64748b", bg: "var(--slate-100)", fg: "var(--slate-700)" },
 };
 
@@ -436,7 +436,7 @@ export default function ApplicationsInboxClient({
               className="pill"
               title="Applications that share a name, email, or phone with another entry"
               style={{ background: "var(--amber-50)", color: "var(--amber-800)", fontSize: 11.5 }}>
-              <span className="pill-dot" style={{ background: "#d97706" }} />
+              <span className="pill-dot" style={{ background: "var(--amber-600)" }} />
               {dupExtra} possible duplicate{dupExtra === 1 ? "" : "s"}
             </span>
           )}
@@ -759,8 +759,8 @@ export default function ApplicationsInboxClient({
                   borderRadius: 10,
                   fontSize: 13,
                   background:
-                    hireMsg.kind === "error" ? "#fee2e2" : "rgba(0,140,156,0.08)",
-                  color: hireMsg.kind === "error" ? "#dc2626" : "var(--primary)",
+                    hireMsg.kind === "error" ? "var(--danger-soft)" : "rgba(0,140,156,0.08)",
+                  color: hireMsg.kind === "error" ? "var(--error)" : "var(--primary)",
                 }}>
                 {hireMsg.kind === "password" ? (
                   <>

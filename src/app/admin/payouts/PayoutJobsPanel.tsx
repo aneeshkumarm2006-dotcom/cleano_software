@@ -69,7 +69,7 @@ export default function PayoutJobsPanel({
       {open && (
         <div className="pt-1">
           {loading && (
-            <p className="flex items-center gap-2 py-3 text-xs text-[#008C9C]/60">
+            <p className="flex items-center gap-2 py-3 text-xs text-[var(--primary)]/60">
               <Loader className="h-3 w-3 animate-spin" /> Working out the breakdown…
             </p>
           )}
@@ -77,7 +77,7 @@ export default function PayoutJobsPanel({
           {error && <p className="py-3 text-xs text-red-600">{error}</p>}
 
           {rows && rows.length === 0 && (
-            <p className="py-3 text-xs text-[#008C9C]/60">
+            <p className="py-3 text-xs text-[var(--primary)]/60">
               No jobs in this period paid this cleaner.
             </p>
           )}
@@ -86,7 +86,7 @@ export default function PayoutJobsPanel({
             <div className="overflow-x-auto">
               <table className="w-full min-w-[720px] text-xs">
                 <thead>
-                  <tr className="text-left text-[10px] uppercase tracking-wider text-[#008C9C]/50">
+                  <tr className="text-left text-[10px] uppercase tracking-wider text-[var(--primary)]/50">
                     <th className="py-2 pr-3 font-medium">Job</th>
                     <th className="py-2 pr-3 font-medium">Date</th>
                     <th className="py-2 pr-3 font-medium">Service</th>
@@ -98,9 +98,9 @@ export default function PayoutJobsPanel({
                     <th className="py-2 font-medium">How it was paid</th>
                   </tr>
                 </thead>
-                <tbody className="text-[#008C9C]">
+                <tbody className="text-[var(--primary)]">
                   {rows.map((r) => (
-                    <tr key={r.jobId} className="border-t border-[#008C9C]/10">
+                    <tr key={r.jobId} className="border-t border-[var(--primary)]/10">
                       <td className="py-2 pr-3">
                         <Link
                           href={`/admin/jobs/${r.jobId}`}
@@ -129,12 +129,12 @@ export default function PayoutJobsPanel({
                       <td className="py-2 pr-3 text-right font-semibold tabular-nums">
                         {money(r.total)}
                       </td>
-                      <td className="py-2 text-[#008C9C]/70">{r.basisLabel}</td>
+                      <td className="py-2 text-[var(--primary)]/70">{r.basisLabel}</td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr className="border-t-2 border-[#008C9C]/20 font-semibold">
+                  <tr className="border-t-2 border-[var(--primary)]/20 font-semibold">
                     <td className="py-2 pr-3" colSpan={7}>
                       These jobs come to
                     </td>
@@ -143,7 +143,7 @@ export default function PayoutJobsPanel({
                   </tr>
                 </tfoot>
               </table>
-              <p className="pt-2 text-[10px] text-[#008C9C]/50">
+              <p className="pt-2 text-[10px] text-[var(--primary)]/50">
                 Computed with the same function payroll used, so these lines are the
                 Base figure above. Adjustments, deductions and reimbursements are
                 entered on the payout itself and are not job-level.

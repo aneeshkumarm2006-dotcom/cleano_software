@@ -76,7 +76,7 @@ function StatusPill({ twilio }: { twilio: TwilioStatus }) {
     : twilio.connected
       ? { dot: "bg-emerald-500", cls: "bg-emerald-50 text-emerald-700 ring-emerald-200", label: "Connected" }
       : twilio.usingPlatform
-        ? { dot: "bg-[#008C9C]", cls: "bg-[#008C9C]/8 text-[#00707d] ring-[#008C9C]/20", label: "Using Bookmops' account" }
+        ? { dot: "bg-[var(--primary)]", cls: "bg-[var(--primary)]/8 text-[var(--primary-50)] ring-[var(--primary)]/20", label: "Using Bookmops' account" }
         : { dot: "bg-gray-400", cls: "bg-gray-100 text-gray-600 ring-gray-200", label: "Not set up" };
   return (
     <span
@@ -310,7 +310,7 @@ export default function ConnectorsTab({
                   type="button"
                   disabled={busy}
                   onClick={loadNumbers}
-                  className="text-sm font-semibold text-[#00707d] transition hover:underline disabled:opacity-40">
+                  className="text-sm font-semibold text-[var(--primary-50)] transition hover:underline disabled:opacity-40">
                   {busy ? "Loading…" : numbers ? "Refresh" : "Show my Twilio numbers"}
                 </button>
               </div>
@@ -357,7 +357,7 @@ export default function ConnectorsTab({
                             onClick={() =>
                               run(() => claimTwilioNumber({ phoneNumber: n.phoneNumber }))
                             }
-                            className="shrink-0 rounded-lg border border-[#008C9C]/25 bg-[#008C9C]/5 px-3 py-1.5 text-xs font-semibold text-[#00707d] transition hover:bg-[#008C9C]/10 disabled:opacity-40 disabled:cursor-not-allowed">
+                            className="shrink-0 rounded-lg border border-[var(--primary)]/25 bg-[var(--primary)]/5 px-3 py-1.5 text-xs font-semibold text-[var(--primary-50)] transition hover:bg-[var(--primary)]/10 disabled:opacity-40 disabled:cursor-not-allowed">
                             Use this number
                           </button>
                         )}
@@ -427,7 +427,7 @@ export default function ConnectorsTab({
                 type="button"
                 disabled={busy || !sid.trim() || !token.trim() || !twilio.canStoreSecrets}
                 onClick={() => run(() => connectTwilio({ accountSid: sid, authToken: token }))}
-                className="inline-flex items-center gap-2 rounded-xl bg-[#008C9C] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#00707d] disabled:opacity-40 disabled:cursor-not-allowed">
+                className="inline-flex items-center gap-2 rounded-xl bg-[var(--primary)] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-50)] disabled:opacity-40 disabled:cursor-not-allowed">
                 {busy && <Loader2 size={15} className="animate-spin" />}
                 {busy ? (reachesTwilio ? "Checking with Twilio…" : "Checking…") : "Connect Twilio"}
               </button>
@@ -449,7 +449,7 @@ export default function ConnectorsTab({
                   setTest(await testTwilio());
                 })
               }
-              className="inline-flex items-center gap-2 rounded-xl border border-[#008C9C]/25 bg-[#008C9C]/5 px-4 py-2.5 text-sm font-semibold text-[#00707d] transition hover:bg-[#008C9C]/10 disabled:opacity-40">
+              className="inline-flex items-center gap-2 rounded-xl border border-[var(--primary)]/25 bg-[var(--primary)]/5 px-4 py-2.5 text-sm font-semibold text-[var(--primary-50)] transition hover:bg-[var(--primary)]/10 disabled:opacity-40">
               {busy && <Loader2 size={15} className="animate-spin" />}
               {busy ? "Testing…" : "Test connection"}
             </button>
@@ -458,7 +458,7 @@ export default function ConnectorsTab({
           {msg && (
             <div
               className={`rounded-xl px-4 py-3 text-sm ${
-                msg.ok ? "bg-[#008C9C]/8 text-[#00707d]" : "bg-red-50 text-red-700"
+                msg.ok ? "bg-[var(--primary)]/8 text-[var(--primary-50)]" : "bg-red-50 text-red-700"
               }`}
               role="status">
               {msg.text}
@@ -608,7 +608,7 @@ export default function ConnectorsTab({
                   type="button"
                   disabled={poolBusy}
                   onClick={() => runPool(() => setProxyNumberActive(n.id, !n.isActive))}
-                  className="shrink-0 rounded-lg border border-[#008C9C]/25 bg-[#008C9C]/5 px-3 py-1.5 text-xs font-semibold text-[#00707d] transition hover:bg-[#008C9C]/10 disabled:opacity-40 disabled:cursor-not-allowed">
+                  className="shrink-0 rounded-lg border border-[var(--primary)]/25 bg-[var(--primary)]/5 px-3 py-1.5 text-xs font-semibold text-[var(--primary-50)] transition hover:bg-[var(--primary)]/10 disabled:opacity-40 disabled:cursor-not-allowed">
                   {n.isActive ? "Take out of service" : "Put back in service"}
                 </button>
                 <button
@@ -663,7 +663,7 @@ export default function ConnectorsTab({
                   }
                 )
               }
-              className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-[#008C9C] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#00707d] disabled:opacity-40 disabled:cursor-not-allowed">
+              className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-[var(--primary)] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-50)] disabled:opacity-40 disabled:cursor-not-allowed">
               {poolBusy && <Loader2 size={15} className="animate-spin" />}
               {poolBusy ? "Saving…" : "Add"}
             </button>
@@ -671,7 +671,7 @@ export default function ConnectorsTab({
           {poolMsg && (
             <div
               className={`mt-3 rounded-xl px-4 py-3 text-sm ${
-                poolMsg.ok ? "bg-[#008C9C]/8 text-[#00707d]" : "bg-red-50 text-red-700"
+                poolMsg.ok ? "bg-[var(--primary)]/8 text-[var(--primary-50)]" : "bg-red-50 text-red-700"
               }`}
               role="status">
               {poolMsg.text}

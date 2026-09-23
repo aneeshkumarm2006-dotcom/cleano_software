@@ -53,7 +53,7 @@ export default function SaveChecklistTemplate({
 
   if (saved) {
     return (
-      <p style={{ margin: "10px 0 0", fontSize: 12.5, color: "#047857" }}>
+      <p style={{ margin: "10px 0 0", fontSize: 12.5, color: "var(--emerald-700)" }}>
         {saved}
       </p>
     );
@@ -141,7 +141,7 @@ export default function SaveChecklistTemplate({
       )}
 
       {error && (
-        <p role="alert" style={{ margin: 0, fontSize: 12.5, color: "#b91c1c" }}>
+        <p role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--danger)" }}>
           {error}
         </p>
       )}

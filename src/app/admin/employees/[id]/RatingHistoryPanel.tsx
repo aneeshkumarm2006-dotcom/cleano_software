@@ -107,7 +107,7 @@ export default function RatingHistoryPanel({ employeeId, rows, activeCount }: Pr
             setAdding((a) => !a);
             setMsg(null);
           }}
-          className="text-xs font-[600] text-[#008C9C] hover:underline">
+          className="text-xs font-[600] text-[var(--primary)] hover:underline">
           {adding ? "Cancel" : "Add rating"}
         </button>
       </div>
@@ -124,7 +124,7 @@ export default function RatingHistoryPanel({ employeeId, rows, activeCount }: Pr
               onChange={(e) => setNewRating(e.target.value)}
               placeholder="1.0 – 5.0"
               aria-label="Rating"
-              className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm w-28 focus:outline-none focus:ring-1 focus:ring-[#008C9C]"
+              className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm w-28 focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
             />
             <span className="text-xs text-gray-500">stars</span>
           </div>
@@ -137,7 +137,7 @@ export default function RatingHistoryPanel({ employeeId, rows, activeCount }: Pr
             rows={2}
             placeholder="Why? This is the only record of the reason once the score moves."
             aria-label="Reason"
-            className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-[#008C9C]"
+            className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
           />
           <div className="flex items-center justify-between">
             <span className="text-[11px] text-gray-500">
@@ -157,7 +157,7 @@ export default function RatingHistoryPanel({ employeeId, rows, activeCount }: Pr
                   "Rating added.",
                 )
               }
-              className="px-3 py-1.5 text-sm bg-[#008C9C] text-white rounded-lg hover:bg-[#008C9C]/90 disabled:opacity-50">
+              className="px-3 py-1.5 text-sm bg-[var(--primary)] text-white rounded-lg hover:bg-[var(--primary)]/90 disabled:opacity-50">
               {pending ? "Saving…" : "Add"}
             </button>
           </div>
@@ -222,7 +222,7 @@ export default function RatingHistoryPanel({ employeeId, rows, activeCount }: Pr
                           {" · "}
                           <Link
                             href={`/admin/jobs/${r.jobId}`}
-                            className="text-[#008C9C] hover:underline">
+                            className="text-[var(--primary)] hover:underline">
                             Job #{r.jobNumber}
                           </Link>
                         </>
@@ -247,7 +247,7 @@ export default function RatingHistoryPanel({ employeeId, rows, activeCount }: Pr
                     <button
                       type="button"
                       onClick={() => beginEdit(r)}
-                      className="text-[11px] text-[#008C9C] hover:underline">
+                      className="text-[11px] text-[var(--primary)] hover:underline">
                       Edit
                     </button>
                     {/* "Delete" is an exclusion, which the PDF allows outright:
@@ -295,7 +295,7 @@ export default function RatingHistoryPanel({ employeeId, rows, activeCount }: Pr
                       value={editRatingValue}
                       onChange={(e) => setEditRatingValue(e.target.value)}
                       aria-label="Corrected rating"
-                      className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm w-28 focus:outline-none focus:ring-1 focus:ring-[#008C9C]"
+                      className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm w-28 focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
                     />
                     <textarea
                       value={editNote}
@@ -303,7 +303,7 @@ export default function RatingHistoryPanel({ employeeId, rows, activeCount }: Pr
                       rows={2}
                       aria-label="Note"
                       placeholder="Note"
-                      className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-[#008C9C]"
+                      className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
                     />
                     <div className="flex items-center gap-2">
                       <button
@@ -320,7 +320,7 @@ export default function RatingHistoryPanel({ employeeId, rows, activeCount }: Pr
                             "Rating corrected.",
                           )
                         }
-                        className="px-3 py-1.5 text-sm bg-[#008C9C] text-white rounded-lg hover:bg-[#008C9C]/90 disabled:opacity-50">
+                        className="px-3 py-1.5 text-sm bg-[var(--primary)] text-white rounded-lg hover:bg-[var(--primary)]/90 disabled:opacity-50">
                         {pending ? "Saving…" : "Save"}
                       </button>
                       <button

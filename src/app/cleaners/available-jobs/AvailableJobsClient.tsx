@@ -461,7 +461,7 @@ export default function AvailableJobsClient({ jobs }: { jobs: AvailableJob[] }) 
         </div>
 
         {errors[job.id] && (
-          <p style={{ fontSize: 12, color: "#dc2626", margin: 0 }}>{errors[job.id]}</p>
+          <p style={{ fontSize: 12, color: "var(--error)", margin: 0 }}>{errors[job.id]}</p>
         )}
 
         {/* Two actions (item 8): look before you leap. Preview is

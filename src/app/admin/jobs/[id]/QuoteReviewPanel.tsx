@@ -132,7 +132,7 @@ export default function QuoteReviewPanel({
 
   const tone = QUOTE_STATUS_TONE[quoteStatus];
   const toneColor =
-    tone === "ok" ? "#16a34a" : tone === "critical" ? "#dc2626" : "#b45309";
+    tone === "ok" ? "#16a34a" : tone === "critical" ? "var(--error)" : "var(--amber-700)";
 
   // Live preview of the service line the admin is about to send. Pre-tax, and
   // labelled as such — the taxed total is computed server-side from the live
@@ -322,7 +322,7 @@ export default function QuoteReviewPanel({
               padding: "10px 12px",
               borderRadius: 8,
               background: "rgba(220,38,38,0.06)",
-              color: "#b91c1c",
+              color: "var(--danger)",
               fontSize: 12.5,
             }}>
             <AlertTriangle size={14} />
@@ -566,7 +566,7 @@ export default function QuoteReviewPanel({
                 borderRadius: 9,
                 border: "1px solid rgba(220,38,38,0.3)",
                 background: declining ? "rgba(220,38,38,0.1)" : "#fff",
-                color: "#b91c1c",
+                color: "var(--danger)",
                 fontSize: 13,
                 fontWeight: 600,
                 cursor: busy ? "not-allowed" : "pointer",
@@ -665,7 +665,7 @@ export default function QuoteReviewPanel({
                   padding: "8px 16px",
                   borderRadius: 9,
                   border: "none",
-                  background: "#b91c1c",
+                  background: "var(--danger)",
                   color: "#fff",
                   fontSize: 13,
                   fontWeight: 600,
@@ -686,7 +686,7 @@ export default function QuoteReviewPanel({
             padding: "10px 12px",
             borderRadius: 8,
             background: "rgba(220,38,38,0.07)",
-            color: "#b91c1c",
+            color: "var(--danger)",
             fontSize: 12.5,
             lineHeight: 1.5,
           }}>

@@ -175,9 +175,9 @@ function ComposeModal({
         <div
           style={{
             fontSize: 13,
-            color: "#dc2626",
-            background: "#fef2f2",
-            border: "1px solid #fecaca",
+            color: "var(--error)",
+            background: "var(--error-bg)",
+            border: "1px solid var(--error-border)",
             borderRadius: 8,
             padding: "8px 12px",
             marginBottom: 12,
@@ -570,9 +570,9 @@ export default function AnnouncementsClient({
         <div
           style={{
             fontSize: 13,
-            color: "#dc2626",
-            background: "#fef2f2",
-            border: "1px solid #fecaca",
+            color: "var(--error)",
+            background: "var(--error-bg)",
+            border: "1px solid var(--error-border)",
             borderRadius: 8,
             padding: "8px 12px",
             marginBottom: 16,

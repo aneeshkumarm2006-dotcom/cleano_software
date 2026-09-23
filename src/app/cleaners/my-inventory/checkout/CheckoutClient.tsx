@@ -235,7 +235,7 @@ export default function CheckoutClient({ locations }: CheckoutClientProps) {
         <div
           className={`px-4 py-3 rounded-xl text-sm ${
             feedback.type === "success"
-              ? "bg-[#008C9C]/10 text-[#008C9C] border border-[#008C9C]/15"
+              ? "bg-[var(--primary)]/10 text-[var(--primary)] border border-[var(--primary)]/15"
               : "bg-red-50 text-red-700 border border-red-200"
           }`}>
           {feedback.text}
@@ -340,9 +340,9 @@ export default function CheckoutClient({ locations }: CheckoutClientProps) {
                   // Stock status is shown, never enforced (fix list item 19).
                   const status =
                     p.available <= 0
-                      ? { label: "Out of stock", color: "#b91c1c", bg: "#fee2e2" }
+                      ? { label: "Out of stock", color: "var(--danger)", bg: "var(--danger-soft)" }
                       : p.available <= (p.minStock ?? 0)
-                      ? { label: "Low stock", color: "#b45309", bg: "#fef3c7" }
+                      ? { label: "Low stock", color: "var(--amber-700)", bg: "var(--warning-soft)" }
                       : { label: "In stock", color: "#15803d", bg: "#dcfce7" };
                   return (
                     <div key={p.productId} className="cl-co-prod-row">
@@ -420,7 +420,7 @@ export default function CheckoutClient({ locations }: CheckoutClientProps) {
               </div>
             )}
             {hasOverLimit && (
-              <p style={{ fontSize: 12, color: "#b45309" }}>
+              <p style={{ fontSize: 12, color: "var(--amber-700)" }}>
                 Some items are above the recorded locker count. You can still
                 take them — the difference is flagged for admin to reconcile.
               </p>

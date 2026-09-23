@@ -66,12 +66,12 @@ function money2(n: number): string {
 // statuses, with Paid visually distinct).
 const STATUS_PILL: Record<string, { label: string; bg: string; color: string; dot: string }> = {
   // Fix 6 — the one label, amber because a hold is something to act on.
-  ON_HOLD: { label: HOLD_LABEL, bg: "#fef3c7", color: "#92400e", dot: "#d97706" },
-  SCHEDULED: { label: "Scheduled", bg: "#dbeafe", color: "#1e40af", dot: "#3b82f6" },
-  IN_PROGRESS: { label: "In Progress", bg: "#fef3c7", color: "#92400e", dot: "#f59e0b" },
-  COMPLETED: { label: "Completed", bg: "#d1fae5", color: "#065f46", dot: "#10b981" },
-  PAID: { label: "Paid", bg: "#059669", color: "#ffffff", dot: "#a7f3d0" },
-  CANCELLED: { label: "Cancelled", bg: "#fee2e2", color: "#991b1b", dot: "#ef4444" },
+  ON_HOLD: { label: HOLD_LABEL, bg: "var(--warning-soft)", color: "var(--amber-800)", dot: "var(--amber-600)" },
+  SCHEDULED: { label: "Scheduled", bg: "var(--blue-100)", color: "var(--blue-800)", dot: "#3b82f6" },
+  IN_PROGRESS: { label: "In Progress", bg: "var(--warning-soft)", color: "var(--amber-800)", dot: "#f59e0b" },
+  COMPLETED: { label: "Completed", bg: "var(--emerald-100)", color: "var(--emerald-800)", dot: "#10b981" },
+  PAID: { label: "Paid", bg: "var(--emerald-600)", color: "#ffffff", dot: "var(--emerald-200)" },
+  CANCELLED: { label: "Cancelled", bg: "var(--danger-soft)", color: "var(--danger)", dot: "#ef4444" },
 };
 function StatusPill({ status }: { status: string }) {
   const c = STATUS_PILL[status] || { label: status, bg: "#f3f4f6", color: "#374151", dot: "#9ca3af" };

@@ -20,12 +20,12 @@ interface Props {
 }
 
 const STATUS_STYLE: Record<ClockStatus, { bg: string; color: string }> = {
-  NOT_STARTED: { bg: "#f1f5f9", color: "#475569" },
-  ON_THE_WAY: { bg: "#fffbeb", color: "#b45309" },
+  NOT_STARTED: { bg: "var(--slate-100)", color: "#475569" },
+  ON_THE_WAY: { bg: "var(--amber-50)", color: "var(--amber-700)" },
   CLOCKED_IN: { bg: "#dcfce7", color: "#15803d" },
   CLOCKED_OUT: { bg: "#eff6ff", color: "#1d4ed8" },
   COMPLETED: { bg: "#eff6ff", color: "#1d4ed8" },
-  CANCELLED: { bg: "#fee2e2", color: "#b91c1c" },
+  CANCELLED: { bg: "var(--danger-soft)", color: "var(--danger)" },
 };
 
 /**
@@ -164,18 +164,18 @@ export default function TimeTrackingClient({ cleaners }: Props) {
 
       {entries.length === 0 && loaded && !loading && !error ? (
         <div className="text-center py-12">
-          <div className="w-16 h-16 bg-[#008C9C]/5 rounded-full flex items-center justify-center mx-auto mb-3">
-            <Timer className="w-8 h-8 text-[#008C9C]/40" />
+          <div className="w-16 h-16 bg-[var(--primary)]/5 rounded-full flex items-center justify-center mx-auto mb-3">
+            <Timer className="w-8 h-8 text-[var(--primary)]/40" />
           </div>
-          <p className="text-sm font-[350] text-[#008C9C]/70">
+          <p className="text-sm font-[350] text-[var(--primary)]/70">
             No clock activity yet
           </p>
-          <p className="text-xs font-[350] text-[#008C9C]/60 mt-1">
+          <p className="text-xs font-[350] text-[var(--primary)]/60 mt-1">
             Clock-ins appear here as soon as cleaners start their jobs
           </p>
         </div>
       ) : (
-        <div className="border border-[#008C9C]/10 rounded-xl divide-y divide-[#008C9C]/10 overflow-x-auto">
+        <div className="border border-[var(--primary)]/10 rounded-xl divide-y divide-[var(--primary)]/10 overflow-x-auto">
           {entries.map((e) => {
             const style = STATUS_STYLE[e.status];
             return (
@@ -197,7 +197,7 @@ export default function TimeTrackingClient({ cleaners }: Props) {
                       }}>
                       {CLOCK_STATUS_LABEL[e.status]}
                     </span>
-                    <span className="text-sm text-[#008C9C] inline-flex items-center gap-1 truncate">
+                    <span className="text-sm text-[var(--primary)] inline-flex items-center gap-1 truncate">
                       <Users className="w-3.5 h-3.5 flex-shrink-0" />
                       {e.cleanerName}
                     </span>
@@ -212,7 +212,7 @@ export default function TimeTrackingClient({ cleaners }: Props) {
                       </Badge>
                     )}
                   </div>
-                  <div className="text-xs text-[#008C9C]/60 mt-1">
+                  <div className="text-xs text-[var(--primary)]/60 mt-1">
                     <Link
                       href={`/admin/jobs/${e.jobId}`}
                       className="hover:underline">
@@ -237,8 +237,8 @@ export default function TimeTrackingClient({ cleaners }: Props) {
                       {e.sessions.map((s, i) => (
                         <div
                           key={s.id}
-                          className="text-[11px] text-[#008C9C]/70 tabular-nums flex items-center gap-2 flex-wrap">
-                          <span className="text-[#008C9C]/50">Session {i + 1}</span>
+                          className="text-[11px] text-[var(--primary)]/70 tabular-nums flex items-center gap-2 flex-wrap">
+                          <span className="text-[var(--primary)]/50">Session {i + 1}</span>
                           <span className="font-[500]">
                             {fmtTime(s.startedAt)} →{" "}
                             {s.endedAt ? fmtTime(s.endedAt) : "now"}
@@ -265,7 +265,7 @@ export default function TimeTrackingClient({ cleaners }: Props) {
                   )}
                 </div>
 
-                <div className="text-xs text-[#008C9C]/70 flex-shrink-0 tabular-nums">
+                <div className="text-xs text-[var(--primary)]/70 flex-shrink-0 tabular-nums">
                   <div>
                     In: {e.clockInTime ? fmtTime(e.clockInTime) : "—"}
                   </div>
@@ -281,7 +281,7 @@ export default function TimeTrackingClient({ cleaners }: Props) {
                       derived, and the server refuses to write them directly). */}
                   <div className="mt-1">
                     {e.sessions.length > 1 ? (
-                      <span className="text-[11px] text-[#008C9C]/50">
+                      <span className="text-[11px] text-[var(--primary)]/50">
                         Edit per session
                       </span>
                     ) : (
@@ -308,14 +308,14 @@ export default function TimeTrackingClient({ cleaners }: Props) {
                   {/* Item 26: ACTIVE time is the headline, because that is what
                       payroll pays. Break time is shown beneath so the elapsed
                       figure is still auditable. */}
-                  <div className="text-sm font-[500] text-[#008C9C] tabular-nums">
+                  <div className="text-sm font-[500] text-[var(--primary)] tabular-nums">
                     {e.activeMinutes !== null
                       ? formatWorkedDuration(e.activeMinutes)
                       : e.openMinutes !== null
                       ? formatWorkedDuration(e.openMinutes)
                       : "—"}
                   </div>
-                  <div className="text-[11px] text-[#008C9C]/50">
+                  <div className="text-[11px] text-[var(--primary)]/50">
                     {e.activeMinutes !== null
                       ? "active"
                       : e.openMinutes !== null

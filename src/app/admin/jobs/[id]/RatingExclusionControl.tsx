@@ -88,7 +88,7 @@ export default function RatingExclusionControl({
           setError(null);
           setOpen(true);
         }}
-        style={{ ...linkStyle, color: "#b91c1c" }}>
+        style={{ ...linkStyle, color: "var(--danger)" }}>
         Exclude rating
       </button>
 
@@ -130,12 +130,12 @@ export default function RatingExclusionControl({
           {error && (
             <div
               style={{
-                background: "#fef2f2",
-                border: "1px solid #fecaca",
+                background: "var(--error-bg)",
+                border: "1px solid var(--error-border)",
                 borderRadius: 10,
                 padding: "10px 14px",
                 fontSize: 13,
-                color: "#b91c1c",
+                color: "var(--danger)",
               }}>
               {error}
             </div>

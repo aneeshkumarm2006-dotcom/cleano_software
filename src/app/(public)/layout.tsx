@@ -14,10 +14,10 @@ export default async function PublicLayout({
       <header className="border-b border-gray-100">
         <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-[#008C9C] flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-[var(--primary)] flex items-center justify-center">
               <span className="text-white text-sm font-[500]">{initial}</span>
             </div>
-            <span className="text-lg font-[400] text-[#008C9C]">{businessName}</span>
+            <span className="text-lg font-[400] text-[var(--primary)]">{businessName}</span>
           </div>
         </div>
       </header>

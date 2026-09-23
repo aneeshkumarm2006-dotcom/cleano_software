@@ -33,9 +33,9 @@ const SERVICE_LABELS: Record<string, string> = {
 };
 
 const STATUS_COLORS: Record<Status, { bg: string; fg: string; dot: string; label: string }> = {
-  WAITING:   { bg: "rgba(217,119,6,0.12)",   fg: "#92400e", dot: "#d97706", label: "Waiting" },
+  WAITING:   { bg: "rgba(217,119,6,0.12)",   fg: "var(--amber-800)", dot: "var(--amber-600)", label: "Waiting" },
   NOTIFIED:  { bg: "rgba(2,132,199,0.10)",   fg: "#075985", dot: "#0284c7", label: "Notified" },
-  CONVERTED: { bg: "rgba(5,150,105,0.10)",   fg: "#065f46", dot: "#10b981", label: "Converted" },
+  CONVERTED: { bg: "rgba(5,150,105,0.10)",   fg: "var(--emerald-800)", dot: "#10b981", label: "Converted" },
   EXPIRED:   { bg: "rgba(148,163,184,0.18)", fg: "#475569", dot: "#94a3b8", label: "Expired" },
   CANCELLED: { bg: "rgba(148,163,184,0.18)", fg: "#475569", dot: "#94a3b8", label: "Cancelled" },
 };
@@ -234,7 +234,7 @@ export default function WaitlistPageClient({ entries, archived }: { entries: Ent
       </div>
 
       {error && (
-        <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 12, padding: "12px 16px", fontSize: 13, color: "#b91c1c" }}>
+        <div style={{ background: "var(--error-bg)", border: "1px solid var(--error-border)", borderRadius: 12, padding: "12px 16px", fontSize: 13, color: "var(--danger)" }}>
           {error}
         </div>
       )}
@@ -427,7 +427,7 @@ export default function WaitlistPageClient({ entries, archived }: { entries: Ent
               #wl-mobile  { display: flex !important; }
             }
             .atable tbody tr.row-selected { background: var(--primary-05, #f0fdff); }
-            .jcard.row-selected { outline: 2px solid var(--primary-40, #008C9C); outline-offset: -1px; }
+            .jcard.row-selected { outline: 2px solid var(--primary-40, var(--primary)); outline-offset: -1px; }
           `}</style>
         </>
       )}

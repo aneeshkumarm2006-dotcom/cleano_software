@@ -31,10 +31,10 @@ export const CalendarConfigProvider = ({
 }) => {
   // Default per-type colors (aligned with the app palette so events stay visible)
   const defaultEventTypes: Record<string, any> = {
-    "R - Residential": { color: "#008C9C" }, // teal (app primary family)
-    "C - Commercial": { color: "#008C9C" }, // amber
-    "PC - Post Construction": { color: "#008C9C" }, // violet
-    "F - Follow-up": { color: "#008C9C" }, // green
+    "R - Residential": { color: "var(--primary)" }, // teal (app primary family)
+    "C - Commercial": { color: "var(--primary)" }, // amber
+    "PC - Post Construction": { color: "var(--primary)" }, // violet
+    "F - Follow-up": { color: "var(--primary)" }, // green
   };
 
   const [config, setConfig] = useState<ICalendarConfig | null>({

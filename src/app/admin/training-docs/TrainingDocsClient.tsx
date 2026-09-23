@@ -176,8 +176,8 @@ export default function TrainingDocsClient({
             style={{
               display: "flex", alignItems: "center", gap: 10,
               padding: "10px 14px", borderRadius: 12, marginBottom: 18,
-              background: "var(--amber-50)", border: "1px solid var(--amber-200, #fde68a)",
-              color: "var(--amber-800, #92400e)", fontSize: 13,
+              background: "var(--amber-50)", border: "1px solid var(--amber-200, var(--amber-200))",
+              color: "var(--amber-800, var(--amber-800))", fontSize: 13,
             }}>
             <Eye size={16} />
             <span>
@@ -556,7 +556,7 @@ function AdminManagementView({
                           className="pill"
                           style={
                             m.isRequired
-                              ? { background: "var(--amber-50)", color: "var(--amber-800, #92400e)" }
+                              ? { background: "var(--amber-50)", color: "var(--amber-800, var(--amber-800))" }
                               : { background: "var(--primary-5)", color: "var(--primary-60)" }
                           }>
                           {m.isRequired ? "Required" : "Optional"}

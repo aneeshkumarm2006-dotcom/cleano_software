@@ -64,14 +64,14 @@ function AStatCard({ icon: Icon, label, value, hint, warn }: {
   icon: React.ElementType; label: string; value: string; hint?: string; warn?: boolean;
 }) {
   return (
-    <div className="astat" style={warn ? { borderLeft: "3px solid #d97706" } : {}}>
-      <div className="astat-head" style={warn ? { color: "#92400e" } : {}}>
+    <div className="astat" style={warn ? { borderLeft: "3px solid var(--amber-600)" } : {}}>
+      <div className="astat-head" style={warn ? { color: "var(--amber-800)" } : {}}>
         <span>{label}</span>
-        <span className="astat-icon" style={warn ? { background: "#fffbeb", color: "#d97706" } : {}}>
+        <span className="astat-icon" style={warn ? { background: "var(--amber-50)", color: "var(--amber-600)" } : {}}>
           <Icon size={15} />
         </span>
       </div>
-      <div className="astat-value" style={warn ? { color: "#92400e" } : {}}>{value}</div>
+      <div className="astat-value" style={warn ? { color: "var(--amber-800)" } : {}}>{value}</div>
       {hint && <div className="astat-delta">{hint}</div>}
     </div>
   );
@@ -272,10 +272,10 @@ export default function ClientsPageClient({
       </div>
 
       {errorMsg && (
-        <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 12, padding: "12px 16px", fontSize: 13, color: "#b91c1c", display: "flex", gap: 10, alignItems: "center" }}>
+        <div style={{ background: "var(--error-bg)", border: "1px solid var(--error-border)", borderRadius: 12, padding: "12px 16px", fontSize: 13, color: "var(--danger)", display: "flex", gap: 10, alignItems: "center" }}>
           <AlertTriangle size={14} />
           <span style={{ flex: 1 }}>{errorMsg}</span>
-          <button type="button" onClick={() => setErrorMsg(null)} style={{ fontSize: 12, color: "#b91c1c", cursor: "pointer", textDecoration: "underline", background: "none", border: 0 }}>dismiss</button>
+          <button type="button" onClick={() => setErrorMsg(null)} style={{ fontSize: 12, color: "var(--danger)", cursor: "pointer", textDecoration: "underline", background: "none", border: 0 }}>dismiss</button>
         </div>
       )}
 
@@ -435,7 +435,7 @@ export default function ClientsPageClient({
                       </td>
                       <td className="num">
                         {c.unpaidJobs > 0 ? (
-                          <span style={{ fontWeight: 600, color: "#d97706" }}>{c.unpaidJobs}</span>
+                          <span style={{ fontWeight: 600, color: "var(--amber-600)" }}>{c.unpaidJobs}</span>
                         ) : <span style={{ color: "var(--primary-40)" }}>—</span>}
                       </td>
                       <td>
@@ -489,7 +489,7 @@ export default function ClientsPageClient({
                   </div>
                 </div>
                 {c.unpaidJobs > 0 && (
-                  <div style={{ marginTop: 8, fontSize: 12, color: "#d97706", fontWeight: 600 }}>
+                  <div style={{ marginTop: 8, fontSize: 12, color: "var(--amber-600)", fontWeight: 600 }}>
                     {c.unpaidJobs} unpaid job{c.unpaidJobs !== 1 ? "s" : ""}
                   </div>
                 )}
@@ -521,7 +521,7 @@ export default function ClientsPageClient({
           #cl-mobile  { display: flex !important; }
         }
         .atable tbody tr.row-selected { background: var(--primary-05, #f0fdff); }
-        .jcard.row-selected { outline: 2px solid var(--primary-40, #008C9C); outline-offset: -1px; }
+        .jcard.row-selected { outline: 2px solid var(--primary-40, var(--primary)); outline-offset: -1px; }
       `}</style>
 
       <ClientModal

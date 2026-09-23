@@ -193,7 +193,7 @@ export default function TimeLogRequestControl({
           </label>
 
           {error && (
-            <p role="alert" style={{ fontSize: 12, color: "#b91c1c", margin: 0 }}>
+            <p role="alert" style={{ fontSize: 12, color: "var(--danger)", margin: 0 }}>
               {error}
             </p>
           )}

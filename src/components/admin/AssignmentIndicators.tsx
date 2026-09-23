@@ -98,7 +98,7 @@ export function AvailabilityLink({
       href={href}
       target="_blank"
       rel="noreferrer"
-      className="inline-flex items-center gap-1.5 text-xs text-[#008C9C] hover:underline">
+      className="inline-flex items-center gap-1.5 text-xs text-[var(--primary)] hover:underline">
       <CalendarClock className="w-3.5 h-3.5" aria-hidden="true" />
       See all availability →
     </a>

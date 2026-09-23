@@ -32,7 +32,7 @@ export default function CustomerModal({
     if (!open) return;
     document.body.style.overflow = "hidden";
     prevBg.current = document.documentElement.style.background;
-    document.documentElement.style.background = "#0e1a1c";
+    document.documentElement.style.background = "var(--ink)";
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
     }

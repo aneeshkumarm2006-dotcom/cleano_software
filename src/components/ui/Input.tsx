@@ -57,7 +57,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
       // "barely readable" field the PDF's p.3 screenshot circles. #005a63 is the
       // one teal in the palette that passes as small text (7.95:1), and the
       // placeholder at 0.85 of it measures 5.5:1. Same visual family, legible.
-      form: "bg-[#008C9C]/5 hover:bg-[#008C9C]/8 focus:bg-[#008C9C]/8 border-transparent !text-[#005a63] placeholder:text-[#005a63]/85",
+      form: "bg-[var(--primary)]/5 hover:bg-[var(--primary)]/8 focus:bg-[var(--primary)]/8 border-transparent !text-[#005a63] placeholder:text-[#005a63]/85",
     }[variant];
 
     const errorClasses = error

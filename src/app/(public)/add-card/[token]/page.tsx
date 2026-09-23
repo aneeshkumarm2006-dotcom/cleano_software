@@ -38,7 +38,7 @@ export default async function AddCardPage({
               fontSize: 12,
               letterSpacing: "0.12em",
               textTransform: "uppercase",
-              color: "#008C9C",
+              color: "var(--primary)",
               fontWeight: 700,
             }}>
             Cleano
@@ -62,10 +62,10 @@ export default async function AddCardPage({
           <div
             style={{
               padding: 24,
-              background: "#fef2f2",
-              border: "1px solid #fecaca",
+              background: "var(--error-bg)",
+              border: "1px solid var(--error-border)",
               borderRadius: 14,
-              color: "#991b1b",
+              color: "var(--danger)",
               fontSize: 14,
               fontWeight: 600,
               textAlign: "center",

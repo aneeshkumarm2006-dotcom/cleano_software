@@ -287,7 +287,7 @@ export default function SavedAddressManager({
                   background: "transparent",
                   border: "1px solid rgba(220,38,38,0.2)",
                   cursor: "pointer",
-                  color: "#dc2626",
+                  color: "var(--error)",
                 }}>
                 <Trash2 size={12} />
               </button>
@@ -334,7 +334,7 @@ export default function SavedAddressManager({
 
           <div style={{ marginBottom: 10 }}>
             <label style={labelStyle}>
-              Street address <span style={{ color: "#dc2626" }}>*</span>
+              Street address <span style={{ color: "var(--error)" }}>*</span>
             </label>
             <input
               value={form.address}
@@ -505,7 +505,7 @@ export default function SavedAddressManager({
             Set as default address
           </label>
 
-          {error && <p style={{ color: "#dc2626", fontSize: 12, marginBottom: 8 }}>{error}</p>}
+          {error && <p style={{ color: "var(--error)", fontSize: 12, marginBottom: 8 }}>{error}</p>}
 
           <div style={{ display: "flex", gap: 8 }}>
             <button
@@ -552,7 +552,7 @@ export default function SavedAddressManager({
 
       {!showAdd && (
         <>
-          {error && <p style={{ color: "#dc2626", fontSize: 12, marginBottom: 8 }}>{error}</p>}
+          {error && <p style={{ color: "var(--error)", fontSize: 12, marginBottom: 8 }}>{error}</p>}
           <button
             onClick={openAdd}
             style={{

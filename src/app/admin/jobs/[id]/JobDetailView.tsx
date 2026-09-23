@@ -479,7 +479,7 @@ function JobIssuesCard({
   useEffect(() => { setRows(issues); }, [issues]);
 
   const STATUS_TONE: Record<JobIssueStatus, { bg: string; color: string }> = {
-    OPEN:         { bg: 'rgba(180,83,9,0.12)',  color: '#b45309' },
+    OPEN:         { bg: 'rgba(180,83,9,0.12)',  color: 'var(--amber-700)' },
     ACKNOWLEDGED: { bg: 'rgba(0,140,156,0.10)', color: 'var(--primary)' },
     RESOLVED:     { bg: 'rgba(5,150,105,0.12)', color: 'var(--emerald-800)' },
   };
@@ -515,7 +515,7 @@ function JobIssuesCard({
       <div className="dcard-head">
         <h3>Reported issues</h3>
         {openCount > 0 && (
-          <span className="pill" style={{ background: 'rgba(180,83,9,0.12)', color: '#b45309' }}>
+          <span className="pill" style={{ background: 'rgba(180,83,9,0.12)', color: 'var(--amber-700)' }}>
             {openCount} open
           </span>
         )}
@@ -674,7 +674,7 @@ function ChecklistCard({
       </div>
 
       {summary.pinnedUnavailable && (
-        <p style={{ margin: '0 0 10px', fontSize: 13, color: '#b45309' }}>
+        <p style={{ margin: '0 0 10px', fontSize: 13, color: 'var(--amber-700)' }}>
           This job is pinned to a checklist template that has been deleted or
           deactivated. It is resolving automatically instead — re-pin it from the
           job form, or reactivate the template in Settings.
@@ -746,7 +746,7 @@ function ChecklistCard({
                   {g.drifted && (
                     <span
                       className="pill"
-                      style={{ background: '#fef3c7', color: '#92400e' }}
+                      style={{ background: 'var(--warning-soft)', color: 'var(--amber-800)' }}
                       title="The job changed after this checklist was created. The cleaner keeps their progress and is warned; it rebuilds by itself once nothing has been ticked.">
                       Out of date
                     </span>
@@ -770,13 +770,13 @@ function StatusPill({ status, title }: { status: string; title?: string }) {
   const map: Record<string, { label: string; bg: string; color: string; dot: string }> = {
     // Round 4, fix 6 — same entry, same wording and same amber as the Jobs
     // list and the Dashboard. Four screens used to render this enum four ways.
-    ON_HOLD:     { label: HOLD_LABEL,    bg: '#fef3c7', color: '#92400e', dot: '#d97706' },
-    SCHEDULED:   { label: 'Scheduled',   bg: '#dbeafe', color: '#1e40af', dot: '#3b82f6' },
-    IN_PROGRESS: { label: 'In Progress', bg: '#fef3c7', color: '#92400e', dot: '#f59e0b' },
-    COMPLETED:   { label: 'Completed',   bg: '#d1fae5', color: '#065f46', dot: '#10b981' },
+    ON_HOLD:     { label: HOLD_LABEL,    bg: 'var(--warning-soft)', color: 'var(--amber-800)', dot: 'var(--amber-600)' },
+    SCHEDULED:   { label: 'Scheduled',   bg: 'var(--blue-100)', color: 'var(--blue-800)', dot: '#3b82f6' },
+    IN_PROGRESS: { label: 'In Progress', bg: 'var(--warning-soft)', color: 'var(--amber-800)', dot: '#f59e0b' },
+    COMPLETED:   { label: 'Completed',   bg: 'var(--emerald-100)', color: 'var(--emerald-800)', dot: '#10b981' },
     // emerald-700, not 600: white on #059669 is 3.77:1 at 11px, below AA.
-    PAID:        { label: 'Paid',        bg: '#047857', color: '#ffffff', dot: '#a7f3d0' },
-    CANCELLED:   { label: 'Cancelled',   bg: '#fee2e2', color: '#991b1b', dot: '#ef4444' },
+    PAID:        { label: 'Paid',        bg: 'var(--emerald-700)', color: '#ffffff', dot: 'var(--emerald-200)' },
+    CANCELLED:   { label: 'Cancelled',   bg: 'var(--danger-soft)', color: 'var(--danger)', dot: '#ef4444' },
   };
   const c = map[status] || { label: status, bg: '#f3f4f6', color: '#374151', dot: '#9ca3af' };
   return (
@@ -797,8 +797,8 @@ const TYPE_PILL_COLORS: Record<string, { bg: string; color: string }> = {
   MOVE_IN:           { bg: '#dcfce7',           color: '#166534' },
   MOVE_OUT:          { bg: '#dcfce7',           color: '#166534' },
   MOVE_IN_OUT:       { bg: '#dcfce7',           color: '#166534' },
-  COMMERCIAL:        { bg: '#dbeafe',           color: '#1e40af' },
-  POST_CONSTRUCTION: { bg: '#fef3c7',           color: '#92400e' },
+  COMMERCIAL:        { bg: 'var(--blue-100)',           color: 'var(--blue-800)' },
+  POST_CONSTRUCTION: { bg: 'var(--warning-soft)',           color: 'var(--amber-800)' },
   AIRBNB:            { bg: '#ffe4e6',           color: '#9f1239' },
   FOLLOW_UP:         { bg: '#f3f4f6',           color: '#374151' },
 };
@@ -844,7 +844,7 @@ function PricingModePill({ mode, explicit }: { mode: JobPricingMode; explicit: b
   return (
     <span
       className="pill"
-      style={override ? { background: '#e0f2fe', color: '#075985' } : { background: '#f1f5f9', color: '#334155' }}
+      style={override ? { background: '#e0f2fe', color: '#075985' } : { background: 'var(--slate-100)', color: 'var(--slate-700)' }}
       title={`${PRICING_MODE_HINT[mode]}${explicit ? '' : ' (inferred from this booking’s source — no mode has been set on it yet)'}`}
     >
       {PRICING_MODE_LABEL[mode]}
@@ -857,10 +857,10 @@ function PricingModePill({ mode, explicit }: { mode: JobPricingMode; explicit: b
 const CLEANER_STATUS_STYLES: Record<string, { label: string; bg: string; color: string; dot: string }> = {
   ASSIGNED:    { label: 'Assigned',    bg: '#f3f4f6', color: '#374151', dot: '#9ca3af' },
   ON_THE_WAY:  { label: 'On the way',  bg: '#e0f2fe', color: '#075985', dot: '#0284c7' },
-  CLOCKED_IN:  { label: 'Clocked in',  bg: '#fef3c7', color: '#92400e', dot: '#f59e0b' },
-  CLOCKED_OUT: { label: 'Clocked out', bg: '#dbeafe', color: '#1e40af', dot: '#3b82f6' },
-  COMPLETED:   { label: 'Completed',   bg: '#d1fae5', color: '#065f46', dot: '#10b981' },
-  CANCELLED:   { label: 'Cancelled',   bg: '#fee2e2', color: '#991b1b', dot: '#ef4444' },
+  CLOCKED_IN:  { label: 'Clocked in',  bg: 'var(--warning-soft)', color: 'var(--amber-800)', dot: '#f59e0b' },
+  CLOCKED_OUT: { label: 'Clocked out', bg: 'var(--blue-100)', color: 'var(--blue-800)', dot: '#3b82f6' },
+  COMPLETED:   { label: 'Completed',   bg: 'var(--emerald-100)', color: 'var(--emerald-800)', dot: '#10b981' },
+  CANCELLED:   { label: 'Cancelled',   bg: 'var(--danger-soft)', color: 'var(--danger)', dot: '#ef4444' },
 };
 
 function CleanerStatusPill({ status }: { status: string }) {
@@ -1809,7 +1809,7 @@ export default function JobDetailView({
           the button steps aside rather than offering a shortcut that
           `releaseJobHold` would (correctly) refuse. */}
       {isOnHold(job) && (
-        <div className="dcard" style={{ borderLeft: '3px solid var(--amber-600, #d97706)' }}>
+        <div className="dcard" style={{ borderLeft: '3px solid var(--amber-600, var(--amber-600))' }}>
           <div className="dcard-head">
             <h3 style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--amber-800)' }}>
               <PauseCircle size={16} /> {HOLD_LABEL}
@@ -2024,20 +2024,20 @@ export default function JobDetailView({
                           ) : (() => {
                             const open = openShiftMinutes(entry);
                             return open !== null ? (
-                              <span style={{ fontWeight: 600, color: '#b45309' }}>
+                              <span style={{ fontWeight: 600, color: 'var(--amber-700)' }}>
                                 {formatWorkedDuration(open)} elapsed
                                 {isStaleOpenShift(entry) ? ' — check clock-out' : ''}
                               </span>
                             ) : null;
                           })()}
                           {brk.minutes > 0 && (
-                            <span style={{ color: '#b45309' }}>
+                            <span style={{ color: 'var(--amber-700)' }}>
                               {formatWorkedDuration(brk.minutes)} break
                               {brk.count > 1 ? ` (${brk.count})` : ''}
                             </span>
                           )}
                           {brk.isOnBreak && (
-                            <span style={{ fontWeight: 600, color: '#b45309' }}>
+                            <span style={{ fontWeight: 600, color: 'var(--amber-700)' }}>
                               On break now
                             </span>
                           )}
@@ -2154,7 +2154,7 @@ export default function JobDetailView({
                           costume — the admin has to be told which number is wrong
                           and which two fields fix it. */}
                       {(payCapMessage || payEditError) && (
-                        <div role="alert" style={{ maxWidth: 300, textAlign: 'left', fontSize: 11, lineHeight: 1.45, color: '#991b1b', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '5px 8px' }}>
+                        <div role="alert" style={{ maxWidth: 300, textAlign: 'left', fontSize: 11, lineHeight: 1.45, color: 'var(--danger)', background: 'var(--error-bg)', border: '1px solid var(--error-border)', borderRadius: 8, padding: '5px 8px' }}>
                           {payCapMessage ?? payEditError}
                         </div>
                       )}
@@ -2172,7 +2172,7 @@ export default function JobDetailView({
                         {/* Item 11: automatic vs manually overridden must be
                             explicit, not inferred from a missing badge. */}
                         {payOverrides[c.id] != null ? (
-                          <span style={{ marginLeft: 4, fontSize: 10, color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 999, padding: '1px 5px' }}>
+                          <span style={{ marginLeft: 4, fontSize: 10, color: 'var(--amber-800)', background: 'var(--amber-50)', border: '1px solid var(--amber-200)', borderRadius: 999, padding: '1px 5px' }}>
                             custom
                           </span>
                         ) : (
@@ -2218,7 +2218,7 @@ export default function JobDetailView({
                           </button>
                         </div>
                         {rateError && (
-                          <div role="alert" style={{ maxWidth: 300, textAlign: 'left', fontSize: 11, lineHeight: 1.45, color: '#991b1b', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '5px 8px' }}>
+                          <div role="alert" style={{ maxWidth: 300, textAlign: 'left', fontSize: 11, lineHeight: 1.45, color: 'var(--danger)', background: 'var(--error-bg)', border: '1px solid var(--error-border)', borderRadius: 8, padding: '5px 8px' }}>
                             {rateError}
                           </div>
                         )}
@@ -2232,7 +2232,7 @@ export default function JobDetailView({
                         onClick={isAdmin ? () => { setRateEditFor(c.id); setRateEditValue(String(cleanerHourlyRates[c.id] ?? job.hourlyRate ?? '')); setRateError(null); } : undefined}
                       >
                         ${(cleanerHourlyRates[c.id] ?? job.hourlyRate ?? 0).toFixed(2)}/h
-                        <span style={{ marginLeft: 4, fontSize: 10, color: cleanerHourlyRates[c.id] != null ? '#92400e' : 'var(--primary-60)', background: cleanerHourlyRates[c.id] != null ? '#fffbeb' : 'var(--primary-5)', border: `1px solid ${cleanerHourlyRates[c.id] != null ? '#fde68a' : 'var(--primary-10)'}`, borderRadius: 999, padding: '1px 5px' }}>
+                        <span style={{ marginLeft: 4, fontSize: 10, color: cleanerHourlyRates[c.id] != null ? 'var(--amber-800)' : 'var(--primary-60)', background: cleanerHourlyRates[c.id] != null ? 'var(--amber-50)' : 'var(--primary-5)', border: `1px solid ${cleanerHourlyRates[c.id] != null ? 'var(--amber-200)' : 'var(--primary-10)'}`, borderRadius: 999, padding: '1px 5px' }}>
                           {cleanerHourlyRates[c.id] != null ? 'own rate' : 'job rate'}
                         </span>
                       </span>
@@ -2350,14 +2350,14 @@ export default function JobDetailView({
                         textTransform: 'uppercase',
                         borderRadius: 999,
                         padding: '2px 8px',
-                        background: r.excludedAt ? '#fee2e2' : '#dcfce7',
-                        color: r.excludedAt ? '#b91c1c' : '#15803d',
+                        background: r.excludedAt ? 'var(--danger-soft)' : '#dcfce7',
+                        color: r.excludedAt ? 'var(--danger)' : '#15803d',
                       }}>
                       {r.excludedAt ? 'Excluded' : 'Active'}
                     </span>
                   </div>
                   {r.excludedAt && (
-                    <div style={{ fontSize: 12, color: '#b91c1c', marginTop: 3 }}>
+                    <div style={{ fontSize: 12, color: 'var(--danger)', marginTop: 3 }}>
                       Excluded {fmtDate(r.excludedAt, { month: 'short', day: 'numeric' })}
                       {r.excludedByName ? ` by ${r.excludedByName}` : ''}
                       {r.excludedReason ? ` — ${r.excludedReason}` : ''}
@@ -2670,7 +2670,7 @@ export default function JobDetailView({
                 className="pill"
                 style={
                   payIsManual
-                    ? { background: '#fffbeb', color: '#92400e' }
+                    ? { background: 'var(--amber-50)', color: 'var(--amber-800)' }
                     : { background: 'var(--primary-10)', color: 'var(--primary-800)' }
                 }
                 title={paySourceLabel}>
@@ -2827,8 +2827,8 @@ export default function JobDetailView({
                           fontWeight: 600,
                           borderRadius: 999,
                           padding: '1px 7px',
-                          background: isMissingReason(job) ? 'var(--primary-5)' : '#fffbeb',
-                          color: isMissingReason(job) ? 'var(--primary-60)' : '#92400e',
+                          background: isMissingReason(job) ? 'var(--primary-5)' : 'var(--amber-50)',
+                          color: isMissingReason(job) ? 'var(--primary-60)' : 'var(--amber-800)',
                         }}>
                         {reason}
                       </span>
@@ -2954,7 +2954,7 @@ export default function JobDetailView({
                 <span className="finrow-label" style={{ fontSize: 12, color: 'var(--primary-60)' }}>
                   {r.name}
                   {r.isOverride && (
-                    <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 600, borderRadius: 999, padding: '1px 7px', background: '#fffbeb', color: '#92400e' }}>
+                    <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 600, borderRadius: 999, padding: '1px 7px', background: 'var(--amber-50)', color: 'var(--amber-800)' }}>
                       Manual amount
                     </span>
                   )}
@@ -3039,10 +3039,10 @@ export default function JobDetailView({
                     to collect it instead. */}
                 {passThroughUncollected > 0 && (
                   <div className="finrow" style={{ paddingLeft: 18 }}>
-                    <span className="finrow-label" style={{ fontSize: 12, color: '#92400e' }}>
+                    <span className="finrow-label" style={{ fontSize: 12, color: 'var(--amber-800)' }}>
                       ${passThroughUncollected.toFixed(2)} not collected on card — added after payment. Collect separately; the crew is still owed it.
                     </span>
-                    <span className="finrow-value" style={{ fontSize: 12, color: '#92400e' }}>—</span>
+                    <span className="finrow-value" style={{ fontSize: 12, color: 'var(--amber-800)' }}>—</span>
                   </div>
                 )}
               </>
@@ -3306,7 +3306,7 @@ export default function JobDetailView({
           <h3>Activity · {logTotal}</h3>
         </div>
         {logsError && (
-          <div role="alert" style={{ padding: '8px 0', color: 'var(--red-600, #dc2626)', fontSize: 13 }}>
+          <div role="alert" style={{ padding: '8px 0', color: 'var(--red-600, var(--error))', fontSize: 13 }}>
             {logsError} — try that page again.
           </div>
         )}
@@ -3324,11 +3324,11 @@ export default function JobDetailView({
                 const failed = log.action === 'CLOCK_OUT_FAILED';
                 return (
                 <div key={log.id} className="tline-item">
-                  <div className="tline-dot" style={failed ? { color: '#b45309', background: '#fffbeb', borderColor: '#fde68a' } : undefined}>
+                  <div className="tline-dot" style={failed ? { color: 'var(--amber-700)', background: 'var(--amber-50)', borderColor: 'var(--amber-200)' } : undefined}>
                     {getActionIcon(log.action)}
                   </div>
                   <div>
-                    <div className="tline-text" style={failed ? { color: '#b45309', fontWeight: 600 } : undefined}>{log.description}</div>
+                    <div className="tline-text" style={failed ? { color: 'var(--amber-700)', fontWeight: 600 } : undefined}>{log.description}</div>
                     {log.user && <div className="tline-actor">by {log.user.name}</div>}
                     {log.field && log.oldValue && log.newValue && (
                       <div className="tline-actor">{log.field}: {log.oldValue} → {log.newValue}</div>
@@ -3493,7 +3493,7 @@ export default function JobDetailView({
                           letterSpacing: '0.08em',
                           textTransform: 'uppercase',
                           background: 'rgba(220, 38, 38, 0.10)',
-                          color: '#b91c1c',
+                          color: 'var(--danger)',
                           padding: '3px 8px',
                           borderRadius: 6,
                         }}
@@ -3855,15 +3855,15 @@ export default function JobDetailView({
           const rt = job.ratingTokens?.[0];
           if (!rt) return null;
           let label: string;
-          let bg = '#f1f5f9', border = '#cbd5e1', color = '#334155', dot = '#64748b';
+          let bg = 'var(--slate-100)', border = '#cbd5e1', color = 'var(--slate-700)', dot = '#64748b';
           if (rt.usedAt && rt.ratingStars != null) {
             label = `Customer rated ${rt.ratingStars} ★`;
-            bg = '#ecfdf5'; border = '#6ee7b7'; color = '#065f46'; dot = '#10b981';
+            bg = 'var(--emerald-50)'; border = '#6ee7b7'; color = 'var(--emerald-800)'; dot = '#10b981';
           } else if (rt.ratherNotAnswer) {
             label = 'Customer declined to rate ("Rather not answer")';
           } else if (rt.emailSentAt) {
             label = 'Rating requested — awaiting customer response';
-            bg = '#fffbeb'; border = '#fcd34d'; color = '#92400e'; dot = '#f59e0b';
+            bg = 'var(--amber-50)'; border = '#fcd34d'; color = 'var(--amber-800)'; dot = '#f59e0b';
           } else {
             label = 'Rating link created — not yet sent';
           }
@@ -3911,7 +3911,7 @@ export default function JobDetailView({
           return (
             <div
               className="banner"
-              style={{ background: '#fffbeb', borderColor: '#fcd34d', color: '#92400e' }}>
+              style={{ background: 'var(--amber-50)', borderColor: '#fcd34d', color: 'var(--amber-800)' }}>
               <Camera size={16} style={{ flex: '0 0 auto', color: '#f59e0b' }} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <strong>After-photos are turned off for this job.</strong>{' '}
@@ -3936,7 +3936,7 @@ export default function JobDetailView({
 
         {/* Review link banner */}
         {reviewLink && (
-          <div className="banner" style={{ background: '#ecfdf5', borderColor: '#6ee7b7', color: '#065f46' }}>
+          <div className="banner" style={{ background: 'var(--emerald-50)', borderColor: '#6ee7b7', color: 'var(--emerald-800)' }}>
             <Star size={16} style={{ flex: '0 0 auto', color: '#10b981' }} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <strong>Review link ready.</strong> Share this with the client:
@@ -3982,7 +3982,7 @@ export default function JobDetailView({
                       height: 18,
                       padding: '0 6px',
                       borderRadius: 999,
-                      background: '#dc2626',
+                      background: 'var(--error)',
                       color: '#fff',
                       fontSize: 10.5,
                       fontWeight: 700,
@@ -4077,7 +4077,7 @@ export default function JobDetailView({
             </div>
 
             {requestError && (
-              <div style={{ marginTop: 14, fontSize: 13, color: "#dc2626", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 10, padding: "8px 12px" }}>
+              <div style={{ marginTop: 14, fontSize: 13, color: "var(--error)", background: "var(--error-bg)", border: "1px solid var(--error-border)", borderRadius: 10, padding: "8px 12px" }}>
                 {requestError}
               </div>
             )}
@@ -4092,7 +4092,7 @@ export default function JobDetailView({
                   padding: "10px 22px",
                   borderRadius: 999,
                   border: 0,
-                  background: requestModal.decision === "approve" ? "var(--primary-deep)" : "#b91c1c",
+                  background: requestModal.decision === "approve" ? "var(--primary-deep)" : "var(--danger)",
                   color: "#fff",
                   fontSize: 14,
                   fontWeight: 600,
@@ -4237,13 +4237,13 @@ export default function JobDetailView({
             </div>
 
             {assignError && (
-              <div style={{ margin: "0 28px 12px", fontSize: 13, color: "#dc2626", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 10, padding: "8px 12px" }}>
+              <div style={{ margin: "0 28px 12px", fontSize: 13, color: "var(--error)", background: "var(--error-bg)", border: "1px solid var(--error-border)", borderRadius: 10, padding: "8px 12px" }}>
                 {assignError}
               </div>
             )}
 
             {assignConflicts.length > 0 && (
-              <div style={{ margin: "0 28px 12px", fontSize: 13, color: "#92400e", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 10, padding: "8px 12px" }}>
+              <div style={{ margin: "0 28px 12px", fontSize: 13, color: "var(--amber-800)", background: "var(--amber-50)", border: "1px solid var(--amber-200)", borderRadius: 10, padding: "8px 12px" }}>
                 <strong>Assigned — please review:</strong>
                 <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
                   {assignConflicts.map((m, i) => <li key={i}>{m}</li>)}
@@ -4324,7 +4324,7 @@ export default function JobDetailView({
         onClose={() => !ratingSubmitting && setRatingTarget(null)}
         title={ratingTarget ? `Rate ${ratingTarget.name}` : "Set rating"}>
         <div className="space-y-4">
-          <p className="text-sm text-[#008C9C]/70">
+          <p className="text-sm text-[var(--primary)]/70">
             Set a manual star rating for this cleaner on this job. It counts
             toward their running average and pay tier.
           </p>
@@ -4348,9 +4348,9 @@ export default function JobDetailView({
             ))}
           </div>
           <div>
-            <label className="block text-xs font-semibold text-[#008C9C]/70 mb-1">Note (optional)</label>
+            <label className="block text-xs font-semibold text-[var(--primary)]/70 mb-1">Note (optional)</label>
             <textarea
-              className="w-full rounded-xl border border-[#008C9C]/15 bg-[#008C9C]/5 px-3 py-2 text-sm outline-none focus:bg-white focus:border-[#008C9C]/40"
+              className="w-full rounded-xl border border-[var(--primary)]/15 bg-[var(--primary)]/5 px-3 py-2 text-sm outline-none focus:bg-white focus:border-[var(--primary)]/40"
               rows={2}
               value={ratingNote}
               onChange={(e) => setRatingNote(e.target.value)}
@@ -4377,13 +4377,13 @@ export default function JobDetailView({
       {/* Cancel cleaning */}
       <Modal isOpen={showCancelModal} onClose={() => !isCancelling && setShowCancelModal(false)} title="Cancel cleaning?">
         <div className="space-y-4">
-          <p className="text-sm text-[#008C9C]/70">
+          <p className="text-sm text-[var(--primary)]/70">
             This sets the job status to <strong>Cancelled</strong> and logs the change. The customer&apos;s saved card is not charged.
           </p>
           <div>
-            <label className="block text-xs font-semibold text-[#008C9C]/70 mb-1">Reason (optional)</label>
+            <label className="block text-xs font-semibold text-[var(--primary)]/70 mb-1">Reason (optional)</label>
             <textarea
-              className="w-full rounded-xl border border-[#008C9C]/15 bg-[#008C9C]/5 px-3 py-2 text-sm outline-none focus:bg-white focus:border-[#008C9C]/40"
+              className="w-full rounded-xl border border-[var(--primary)]/15 bg-[var(--primary)]/5 px-3 py-2 text-sm outline-none focus:bg-white focus:border-[var(--primary)]/40"
               rows={2}
               value={cancelReason}
               onChange={(e) => setCancelReason(e.target.value)}
@@ -4391,7 +4391,7 @@ export default function JobDetailView({
             />
           </div>
           {depositRemaining > 0 && (
-            <label className="flex items-center gap-2 text-sm text-[#008C9C] cursor-pointer">
+            <label className="flex items-center gap-2 text-sm text-[var(--primary)] cursor-pointer">
               <input
                 type="checkbox"
                 checked={refundDepositOnCancel}
@@ -4419,7 +4419,7 @@ export default function JobDetailView({
       {/* Refund modal */}
       <Modal isOpen={showRefundModal} onClose={() => !isRefunding && setShowRefundModal(false)} title="Issue refund">
         <div className="space-y-4">
-          <p className="text-sm text-[#008C9C]/70">
+          <p className="text-sm text-[var(--primary)]/70">
             {job.stripePaymentIntentId
               ? `Refundable: $${refundCap.toFixed(2)} (already refunded $${refundedSoFar.toFixed(2)}).`
               : depositRemaining > 0
@@ -4427,7 +4427,7 @@ export default function JobDetailView({
               : "Nothing left to refund."}
           </p>
           <div>
-            <label className="block text-xs font-semibold text-[#008C9C]/70 mb-1">Amount ($)</label>
+            <label className="block text-xs font-semibold text-[var(--primary)]/70 mb-1">Amount ($)</label>
             <input
               type="number"
               step="0.01"
@@ -4435,13 +4435,13 @@ export default function JobDetailView({
               max={refundCap}
               value={refundAmount}
               onChange={(e) => setRefundAmount(e.target.value)}
-              className="w-full rounded-xl border border-[#008C9C]/15 bg-[#008C9C]/5 px-3 py-2 text-sm outline-none focus:bg-white focus:border-[#008C9C]/40"
+              className="w-full rounded-xl border border-[var(--primary)]/15 bg-[var(--primary)]/5 px-3 py-2 text-sm outline-none focus:bg-white focus:border-[var(--primary)]/40"
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-[#008C9C]/70 mb-1">Reason (optional)</label>
+            <label className="block text-xs font-semibold text-[var(--primary)]/70 mb-1">Reason (optional)</label>
             <textarea
-              className="w-full rounded-xl border border-[#008C9C]/15 bg-[#008C9C]/5 px-3 py-2 text-sm outline-none focus:bg-white focus:border-[#008C9C]/40"
+              className="w-full rounded-xl border border-[var(--primary)]/15 bg-[var(--primary)]/5 px-3 py-2 text-sm outline-none focus:bg-white focus:border-[var(--primary)]/40"
               rows={2}
               value={refundReason}
               onChange={(e) => setRefundReason(e.target.value)}
@@ -4563,7 +4563,7 @@ function ChargeButton({
           type="button"
           onClick={() => { setResult(null); setOpen(true); }}
           disabled={busy}
-          style={{ fontSize: compact ? 12 : 13, fontWeight: 600, background: '#d97706', color: '#fff', border: 0, borderRadius: 8, padding: compact ? '4px 12px' : '8px 16px', cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.6 : 1 }}
+          style={{ fontSize: compact ? 12 : 13, fontWeight: 600, background: 'var(--amber-600)', color: '#fff', border: 0, borderRadius: 8, padding: compact ? '4px 12px' : '8px 16px', cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.6 : 1 }}
         >
           {busy ? 'Charging…' : `Charge · $${cardAmount.toFixed(2)}`}
         </button>
@@ -4571,26 +4571,26 @@ function ChargeButton({
 
       <Modal isOpen={open} onClose={() => !busy && setOpen(false)} title="Charge client?">
         <div className="space-y-4">
-          <p className="text-sm text-[#008C9C]/70">
+          <p className="text-sm text-[var(--primary)]/70">
             This will charge the client&apos;s saved card via Stripe. The customer will receive a receipt email automatically.
           </p>
           {giftCardCredit > 0 && (
-            <div className="rounded-xl bg-[#008C9C]/5 px-4 py-3 space-y-1">
-              <div className="flex items-center justify-between text-sm text-[#008C9C]/70">
+            <div className="rounded-xl bg-[var(--primary)]/5 px-4 py-3 space-y-1">
+              <div className="flex items-center justify-between text-sm text-[var(--primary)]/70">
                 <span>Amount due</span>
                 <span>${amountDue.toFixed(2)}</span>
               </div>
-              <div className="flex items-center justify-between text-sm text-[#008C9C]/70">
+              <div className="flex items-center justify-between text-sm text-[var(--primary)]/70">
                 <span>Gift card credit applied</span>
                 <span>−${giftCardCredit.toFixed(2)}</span>
               </div>
             </div>
           )}
-          <div className="rounded-xl bg-[#008C9C]/5 px-4 py-3 flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wide text-[#008C9C]/70">
+          <div className="rounded-xl bg-[var(--primary)]/5 px-4 py-3 flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wide text-[var(--primary)]/70">
               {giftCardCredit > 0 ? "Charged to card" : "Amount"}
             </span>
-            <span className="text-lg font-semibold text-[#008C9C]">${cardAmount.toFixed(2)}</span>
+            <span className="text-lg font-semibold text-[var(--primary)]">${cardAmount.toFixed(2)}</span>
           </div>
           {result && !result.ok && (
             <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
@@ -4643,7 +4643,7 @@ function SendAddCardLinkButton({ jobId }: { jobId: string }) {
         <span
           style={{
             fontSize: 11,
-            color: msg.ok ? "var(--primary)" : "#dc2626",
+            color: msg.ok ? "var(--primary)" : "var(--error)",
             fontWeight: 600,
           }}>
           {msg.text}
@@ -4685,7 +4685,7 @@ function ResendReceiptButton({ jobId }: { jobId: string }) {
         <span
           style={{
             fontSize: 11,
-            color: msg.ok ? "var(--primary)" : "#dc2626",
+            color: msg.ok ? "var(--primary)" : "var(--error)",
             fontWeight: 600,
           }}>
           {msg.text}

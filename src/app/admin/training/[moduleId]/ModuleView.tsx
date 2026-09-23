@@ -144,7 +144,7 @@ export default function ModuleView({
 
       <div>
         <div className="flex items-center gap-2 flex-wrap">
-          <h1 className="text-3xl !font-light tracking-tight text-[#008C9C]">
+          <h1 className="text-3xl !font-light tracking-tight text-[var(--primary)]">
             {m.title}
           </h1>
           {m.isRequired && (
@@ -166,7 +166,7 @@ export default function ModuleView({
           )}
         </div>
         {m.description && (
-          <p className="text-sm text-[#008C9C]/70 !font-light mt-2 max-w-3xl">
+          <p className="text-sm text-[var(--primary)]/70 !font-light mt-2 max-w-3xl">
             {m.description}
           </p>
         )}
@@ -195,13 +195,13 @@ export default function ModuleView({
           </div>
           <div className="flex items-center justify-between gap-4 mt-4 flex-wrap">
             <div className="flex-1 min-w-[12rem]">
-              <div className="h-2 bg-[#008C9C]/10 rounded-full overflow-hidden">
+              <div className="h-2 bg-[var(--primary)]/10 rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-[#008C9C] transition-all duration-300"
+                  className="h-full bg-[var(--primary)] transition-all duration-300"
                   style={{ width: `${watchedPct}%` }}
                 />
               </div>
-              <p className="text-xs text-[#008C9C]/70 mt-1">
+              <p className="text-xs text-[var(--primary)]/70 mt-1">
                 {watchedPct}% watched
               </p>
             </div>
@@ -218,7 +218,7 @@ export default function ModuleView({
         </Card>
       ) : (
         <Card variant="ghost" className="p-8">
-          <p className="text-sm text-[#008C9C]/60 text-center">
+          <p className="text-sm text-[var(--primary)]/60 text-center">
             No video for this module.
           </p>
         </Card>

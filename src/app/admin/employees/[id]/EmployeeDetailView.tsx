@@ -368,20 +368,20 @@ function AssignedProductRow({
 
   if (editing) {
     return (
-      <div className="p-3 rounded-xl bg-white border border-[#008C9C]/30 space-y-2">
+      <div className="p-3 rounded-xl bg-white border border-[var(--primary)]/30 space-y-2">
         <div className="flex items-center justify-between gap-2">
-          <p className="text-sm font-[400] text-[#008C9C]">{item.productName}</p>
+          <p className="text-sm font-[400] text-[var(--primary)]">{item.productName}</p>
           <button
             type="button"
             aria-label="Cancel"
             onClick={close}
             disabled={saving}
-            className="text-[#008C9C]/50 hover:text-[#008C9C]">
+            className="text-[var(--primary)]/50 hover:text-[var(--primary)]">
             <X className="w-4 h-4" />
           </button>
         </div>
         <div className="flex items-center gap-2">
-          <label className="text-xs text-[#008C9C]/60 shrink-0">Set to</label>
+          <label className="text-xs text-[var(--primary)]/60 shrink-0">Set to</label>
           <input
             type="number"
             min={0}
@@ -390,10 +390,10 @@ function AssignedProductRow({
             value={qty}
             disabled={saving}
             onChange={(e) => setQty(e.target.value)}
-            className="w-24 px-2 py-1.5 rounded-lg border border-[#008C9C]/20 text-sm text-[#003C46] focus:outline-none focus:border-[#008C9C]"
+            className="w-24 px-2 py-1.5 rounded-lg border border-[var(--primary)]/20 text-sm text-[#003C46] focus:outline-none focus:border-[var(--primary)]"
           />
-          <span className="text-xs text-[#008C9C]/60">{item.unit}</span>
-          <span className="text-xs text-[#008C9C]/40 ml-auto">
+          <span className="text-xs text-[var(--primary)]/60">{item.unit}</span>
+          <span className="text-xs text-[var(--primary)]/40 ml-auto">
             was {item.quantity} {item.unit}
           </span>
         </div>
@@ -404,22 +404,22 @@ function AssignedProductRow({
           disabled={saving}
           onChange={(e) => setReason(e.target.value)}
           placeholder="Reason (optional) — e.g. cycle count, restocked van"
-          className="w-full px-2 py-1.5 rounded-lg border border-[#008C9C]/20 text-sm text-[#003C46] placeholder:text-[#008C9C]/40 focus:outline-none focus:border-[#008C9C]"
+          className="w-full px-2 py-1.5 rounded-lg border border-[var(--primary)]/20 text-sm text-[#003C46] placeholder:text-[var(--primary)]/40 focus:outline-none focus:border-[var(--primary)]"
         />
         {/* Only offered when the count is going DOWN — see the same control on
             the Cleaner Inventory tab. */}
         {removed > 0 && (
-          <label className="flex items-start gap-2 text-xs text-[#008C9C] cursor-pointer">
+          <label className="flex items-start gap-2 text-xs text-[var(--primary)] cursor-pointer">
             <input
               type="checkbox"
               checked={returnToWarehouse}
               disabled={saving}
               onChange={(e) => setReturnToWarehouse(e.target.checked)}
-              className="mt-0.5 w-4 h-4 accent-[#008C9C]"
+              className="mt-0.5 w-4 h-4 accent-[var(--primary)]"
             />
             <span>
               Return the {removed} {item.unit} removed to warehouse stock
-              <span className="block text-[11px] text-[#008C9C]/50">
+              <span className="block text-[11px] text-[var(--primary)]/50">
                 Off by default — tick only if the units physically came back.
               </span>
             </span>
@@ -453,7 +453,7 @@ function AssignedProductRow({
             Cancel
           </Button>
         </div>
-        <p className="text-[11px] text-[#008C9C]/50">
+        <p className="text-[11px] text-[var(--primary)]/50">
           Saved to the product&rsquo;s stock history with your name and the change
           amount.{" "}
           {returnToWarehouse && removed > 0
@@ -471,19 +471,19 @@ function AssignedProductRow({
       className={`flex items-center justify-between p-3 rounded-xl ${
         item.attention.tone === "critical"
           ? "bg-red-50 border border-red-200"
-          : "bg-[#008C9C]/5"
+          : "bg-[var(--primary)]/5"
       }`}>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-[400] text-[#008C9C] truncate">
+        <p className="text-sm font-[400] text-[var(--primary)] truncate">
           {item.productName}
         </p>
-        <p className="text-xs text-[#008C9C]/60">
+        <p className="text-xs text-[var(--primary)]/60">
           {item.quantity} {item.unit}
         </p>
         {/* Tools carry when their condition was last reported; a count alone
             says nothing about whether the thing still works (PDF #4). */}
         {equipment && item.statusUpdatedAt && (
-          <p className="text-[11px] text-[#008C9C]/50 truncate">
+          <p className="text-[11px] text-[var(--primary)]/50 truncate">
             Condition reported {fmtDateTime(item.statusUpdatedAt)}
             {item.statusNotes ? ` · “${item.statusNotes}”` : ""}
           </p>
@@ -504,7 +504,7 @@ function AssignedProductRow({
             {item.attention.label}
           </Badge>
         )}
-        <span className="text-sm font-[400] text-[#008C9C]">
+        <span className="text-sm font-[400] text-[var(--primary)]">
           ${(item.quantity * item.costPerUnit).toFixed(2)}
         </span>
         <Button
@@ -568,7 +568,7 @@ function VoidChequeAdminCard({
   return (
     <Card variant="default" className="p-5">
       <div className="flex items-center gap-2 mb-3">
-        <Banknote className="w-4 h-4 text-[#008C9C]" />
+        <Banknote className="w-4 h-4 text-[var(--primary)]" />
         <h3 className="text-sm font-[600] text-gray-800">Payroll Documents</h3>
       </div>
       {file ? (
@@ -887,19 +887,19 @@ export default function EmployeeDetailView({
       <div className="h-full flex flex-col justify-between">
         <span
           className={`app-title-small ${
-            variant === "warning" ? "text-yellow-700" : "!text-[#008C9C]/70"
+            variant === "warning" ? "text-yellow-700" : "!text-[var(--primary)]/70"
           }`}>
           {label}
         </span>
         <div>
           <p
             className={`h2-title ${
-              variant === "warning" ? "text-yellow-700" : "text-[#008C9C]"
+              variant === "warning" ? "text-yellow-700" : "text-[var(--primary)]"
             }`}>
             {value}
           </p>
           {subValue && (
-            <p className="text-xs text-[#008C9C]/60 mt-0.5">{subValue}</p>
+            <p className="text-xs text-[var(--primary)]/60 mt-0.5">{subValue}</p>
           )}
         </div>
       </div>
@@ -987,7 +987,7 @@ export default function EmployeeDetailView({
           {/* Payroll Tier */}
           <Card variant="default" className="p-5">
             <div className="flex items-center gap-2 mb-3">
-              <DollarSign className="w-4 h-4 text-[#008C9C]" />
+              <DollarSign className="w-4 h-4 text-[var(--primary)]" />
               <h3 className="text-sm font-[600] text-gray-800">Payroll Tier</h3>
             </div>
             {/* Sept 17, item 22 — their usual hourly rate. Lives beside the
@@ -1011,14 +1011,14 @@ export default function EmployeeDetailView({
                   placeholder={
                     tierRates[tier] > 0 ? tierRates[tier].toFixed(2) : "—"
                   }
-                  className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm w-24 focus:outline-none focus:ring-1 focus:ring-[#008C9C]"
+                  className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm w-24 focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
                 />
                 <span className="text-xs text-gray-500">/h</span>
                 <button
                   type="button"
                   onClick={handleSaveDefaultRate}
                   disabled={rateSaving}
-                  className="px-3 py-1.5 text-sm bg-[#008C9C] text-white rounded-lg hover:bg-[#008C9C]/90 disabled:opacity-50">
+                  className="px-3 py-1.5 text-sm bg-[var(--primary)] text-white rounded-lg hover:bg-[var(--primary)]/90 disabled:opacity-50">
                   {rateSaving ? "Saving…" : "Save"}
                 </button>
               </div>
@@ -1051,8 +1051,8 @@ export default function EmployeeDetailView({
                   disabled={tierSaving}
                   className={`px-3 py-1.5 text-sm rounded-lg border transition-colors disabled:opacity-50 ${
                     tier === t
-                      ? "bg-[#008C9C] text-white border-[#008C9C]"
-                      : "bg-white text-gray-700 border-gray-200 hover:border-[#008C9C]"
+                      ? "bg-[var(--primary)] text-white border-[var(--primary)]"
+                      : "bg-white text-gray-700 border-gray-200 hover:border-[var(--primary)]"
                   }`}>
                   {TIER_LABEL[t]}
                 </button>
@@ -1081,7 +1081,7 @@ export default function EmployeeDetailView({
               restriction, which is where every cleaner starts. */}
           <Card variant="default" className="p-5">
             <div className="flex items-center gap-2 mb-3">
-              <ShieldAlert className="w-4 h-4 text-[#008C9C]" />
+              <ShieldAlert className="w-4 h-4 text-[var(--primary)]" />
               <h3 className="text-sm font-[600] text-gray-800">Service Categories</h3>
             </div>
             <div className="space-y-1 mb-3">
@@ -1094,7 +1094,7 @@ export default function EmployeeDetailView({
                     checked={categories.includes(cat.key)}
                     onChange={() => handleToggleCategory(cat.key)}
                     disabled={catSaving}
-                    className="accent-[#008C9C]"
+                    className="accent-[var(--primary)]"
                   />
                   {cat.label}
                 </label>
@@ -1120,7 +1120,7 @@ export default function EmployeeDetailView({
           {tier === "FIELD_LEAD" ? (
             <Card variant="default" className="p-5">
               <div className="flex items-center gap-2 mb-3">
-                <Briefcase className="w-4 h-4 text-[#008C9C]" />
+                <Briefcase className="w-4 h-4 text-[var(--primary)]" />
                 <h3 className="text-sm font-[600] text-gray-800">Weekly Group Bonus</h3>
               </div>
               {weeklyBonus ? (
@@ -1145,7 +1145,7 @@ export default function EmployeeDetailView({
                     <span className="text-gray-600">
                       Bonus ({Math.round(weeklyBonus.bonusRate * 100)}%)
                     </span>
-                    <span className="font-[600] text-[#008C9C]">
+                    <span className="font-[600] text-[var(--primary)]">
                       ${weeklyBonus.bonusAmount.toFixed(2)}
                     </span>
                   </div>
@@ -1168,7 +1168,7 @@ export default function EmployeeDetailView({
                 value={leadId}
                 onChange={(e) => handleSetLead(e.target.value)}
                 disabled={leadSaving}
-                className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-[#008C9C] disabled:opacity-50">
+                className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--primary)] disabled:opacity-50">
                 <option value="">— No Field Lead —</option>
                 {fieldLeadOptions.map((fl) => (
                   <option key={fl.id} value={fl.id}>
@@ -1252,26 +1252,26 @@ export default function EmployeeDetailView({
   const JobsTab = () => (
     <div className="space-y-6">
       {/* Upcoming Jobs */}
-      <h2 className="text-lg font-[350] tracking-tight text-[#008C9C]">
+      <h2 className="text-lg font-[350] tracking-tight text-[var(--primary)]">
         Upcoming Jobs
       </h2>
       {upcomingJobs.length === 0 ? (
         <Card variant="ghost" className="p-8">
           <div className="text-center">
-            <div className="w-12 h-12 bg-[#008C9C]/5 rounded-2xl flex items-center justify-center mx-auto mb-3">
-              <Calendar className="w-6 h-6 text-[#008C9C]/40" />
+            <div className="w-12 h-12 bg-[var(--primary)]/5 rounded-2xl flex items-center justify-center mx-auto mb-3">
+              <Calendar className="w-6 h-6 text-[var(--primary)]/40" />
             </div>
-            <p className="text-sm text-[#008C9C]/60">No upcoming jobs</p>
+            <p className="text-sm text-[var(--primary)]/60">No upcoming jobs</p>
           </div>
         </Card>
       ) : (
         <Card variant="default" className="p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <div className="p-2 bg-[#008C9C]/10 rounded-lg">
-                <Calendar className="w-4 h-4 text-[#008C9C]" />
+              <div className="p-2 bg-[var(--primary)]/10 rounded-lg">
+                <Calendar className="w-4 h-4 text-[var(--primary)]" />
               </div>
-              <h3 className="text-sm font-[350] text-[#008C9C]/80">
+              <h3 className="text-sm font-[350] text-[var(--primary)]/80">
                 Scheduled Jobs
               </h3>
             </div>
@@ -1283,12 +1283,12 @@ export default function EmployeeDetailView({
             {upcomingJobs.map((job) => (
               <div
                 key={job.id}
-                className="flex items-center justify-between p-3 rounded-xl bg-[#008C9C]/5">
+                className="flex items-center justify-between p-3 rounded-xl bg-[var(--primary)]/5">
                 <div className="flex-1">
-                  <p className="text-sm font-[400] text-[#008C9C]">
+                  <p className="text-sm font-[400] text-[var(--primary)]">
                     {job.clientName}
                   </p>
-                  <p className="text-xs text-[#008C9C]/60">
+                  <p className="text-xs text-[var(--primary)]/60">
                     {fmtDate(job.startTime)} at {fmtTime(job.startTime)}
                   </p>
                 </div>
@@ -1307,8 +1307,8 @@ export default function EmployeeDetailView({
                       actual pay. The number is right; only the label was
                       missing. */}
                   {job.price && (
-                    <span className="text-sm font-[400] text-[#008C9C]">
-                      <span className="text-[#008C9C]/60 mr-1">Job value</span>
+                    <span className="text-sm font-[400] text-[var(--primary)]">
+                      <span className="text-[var(--primary)]/60 mr-1">Job value</span>
                       ${job.price.toFixed(2)}
                     </span>
                   )}
@@ -1328,14 +1328,14 @@ export default function EmployeeDetailView({
       )}
 
       {/* Recent Jobs */}
-      <h2 className="input-label !text-[#008C9C]/70 !mb-2">Recent Jobs</h2>
+      <h2 className="input-label !text-[var(--primary)]/70 !mb-2">Recent Jobs</h2>
       {recentJobs.length === 0 ? (
         <Card variant="ghost" className="p-8">
           <div className="text-center">
-            <div className="w-12 h-12 bg-[#008C9C]/5 rounded-2xl flex items-center justify-center mx-auto mb-3">
-              <History className="w-6 h-6 text-[#008C9C]/40" />
+            <div className="w-12 h-12 bg-[var(--primary)]/5 rounded-2xl flex items-center justify-center mx-auto mb-3">
+              <History className="w-6 h-6 text-[var(--primary)]/40" />
             </div>
-            <p className="text-sm text-[#008C9C]/60">No recent jobs</p>
+            <p className="text-sm text-[var(--primary)]/60">No recent jobs</p>
           </div>
         </Card>
       ) : (
@@ -1344,12 +1344,12 @@ export default function EmployeeDetailView({
             {recentJobs.map((job) => (
               <div
                 key={job.id}
-                className="flex items-center justify-between p-3 rounded-xl bg-[#008C9C]/2">
+                className="flex items-center justify-between p-3 rounded-xl bg-[var(--primary)]/2">
                 <div className="flex-1">
-                  <p className="app-title-small text-[#008C9C]">
+                  <p className="app-title-small text-[var(--primary)]">
                     {job.clientName}
                   </p>
-                  <p className="app-subtitle !text-[#008C9C]/60">
+                  <p className="app-subtitle !text-[var(--primary)]/60">
                     {new Date(job.startTime).toLocaleDateString("en-US")}
                   </p>
                 </div>
@@ -1369,8 +1369,8 @@ export default function EmployeeDetailView({
                       actual pay. The number is right; only the label was
                       missing. */}
                   {job.price && (
-                    <span className="text-sm font-[400] text-[#008C9C]">
-                      <span className="text-[#008C9C]/60 mr-1">Job value</span>
+                    <span className="text-sm font-[400] text-[var(--primary)]">
+                      <span className="text-[var(--primary)]/60 mr-1">Job value</span>
                       ${job.price.toFixed(2)}
                     </span>
                   )}
@@ -1396,7 +1396,7 @@ export default function EmployeeDetailView({
     <div className="space-y-6">
       {/* Assign Starter Kit */}
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-[350] tracking-tight text-[#008C9C]">
+        <h2 className="text-lg font-[350] tracking-tight text-[var(--primary)]">
           Products & Inventory
         </h2>
         <Button
@@ -1413,13 +1413,13 @@ export default function EmployeeDetailView({
       {/* What a kit edit moved into the warehouse — said here because the
           number it changed lives on a different screen (PDF #6). */}
       {kitNotice && (
-        <div className="flex items-start justify-between gap-3 rounded-xl border border-[#008C9C]/20 bg-[#008C9C]/5 px-4 py-3">
-          <p className="text-xs text-[#008C9C]">{kitNotice}</p>
+        <div className="flex items-start justify-between gap-3 rounded-xl border border-[var(--primary)]/20 bg-[var(--primary)]/5 px-4 py-3">
+          <p className="text-xs text-[var(--primary)]">{kitNotice}</p>
           <button
             type="button"
             aria-label="Dismiss"
             onClick={() => setKitNotice(null)}
-            className="text-[#008C9C]/50 hover:text-[#008C9C]">
+            className="text-[var(--primary)]/50 hover:text-[var(--primary)]">
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
@@ -1430,10 +1430,10 @@ export default function EmployeeDetailView({
         <Card variant="default" className="p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <div className="p-2 bg-[#008C9C]/10 rounded-lg">
-                <Package className="w-4 h-4 text-[#008C9C]" />
+              <div className="p-2 bg-[var(--primary)]/10 rounded-lg">
+                <Package className="w-4 h-4 text-[var(--primary)]" />
               </div>
-              <h3 className="text-sm font-[350] text-[#008C9C]/80">
+              <h3 className="text-sm font-[350] text-[var(--primary)]/80">
                 Equipment Requests
               </h3>
             </div>
@@ -1451,15 +1451,15 @@ export default function EmployeeDetailView({
               <div
                 key={req.id}
                 className={`flex items-center justify-between gap-3 p-3 rounded-xl ${
-                  req.status === "PENDING" ? "bg-amber-50 border border-amber-200" : "bg-[#008C9C]/5"
+                  req.status === "PENDING" ? "bg-amber-50 border border-amber-200" : "bg-[var(--primary)]/5"
                 }`}>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-[400] text-[#008C9C]">
+                  <p className="text-sm font-[400] text-[var(--primary)]">
                     {req.itemName}
                     {req.isKit ? " (kit)" : ""}
-                    <span className="text-[#008C9C]/60"> · {req.quantity}{req.unit ? ` ${req.unit}` : ""}</span>
+                    <span className="text-[var(--primary)]/60"> · {req.quantity}{req.unit ? ` ${req.unit}` : ""}</span>
                   </p>
-                  <p className="text-xs text-[#008C9C]/60 truncate">
+                  <p className="text-xs text-[var(--primary)]/60 truncate">
                     {new Date(req.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                     {req.reason ? ` · ${req.reason}` : ""}
                   </p>
@@ -1502,10 +1502,10 @@ export default function EmployeeDetailView({
       {forecast.length > 0 && (
         <Card variant="default" className="p-6">
           <div className="flex items-center gap-2 mb-4">
-            <div className="p-2 bg-[#008C9C]/10 rounded-lg">
-              <TrendingDown className="w-4 h-4 text-[#008C9C]" />
+            <div className="p-2 bg-[var(--primary)]/10 rounded-lg">
+              <TrendingDown className="w-4 h-4 text-[var(--primary)]" />
             </div>
-            <h3 className="text-sm font-[350] text-[#008C9C]/80">
+            <h3 className="text-sm font-[350] text-[var(--primary)]/80">
               Inventory Forecast ({upcomingJobCount} upcoming job{upcomingJobCount !== 1 ? "s" : ""})
             </h3>
           </div>
@@ -1514,13 +1514,13 @@ export default function EmployeeDetailView({
               <div
                 key={item.productId}
                 className={`flex items-center justify-between p-3 rounded-xl ${
-                  item.needsRefill ? "bg-red-50 border border-red-200" : "bg-[#008C9C]/5"
+                  item.needsRefill ? "bg-red-50 border border-red-200" : "bg-[var(--primary)]/5"
                 }`}>
                 <div className="flex-1">
-                  <p className={`text-sm font-[400] ${item.needsRefill ? "text-red-700" : "text-[#008C9C]"}`}>
+                  <p className={`text-sm font-[400] ${item.needsRefill ? "text-red-700" : "text-[var(--primary)]"}`}>
                     {item.productName}
                   </p>
-                  <p className={`text-xs ${item.needsRefill ? "text-red-500" : "text-[#008C9C]/60"}`}>
+                  <p className={`text-xs ${item.needsRefill ? "text-red-500" : "text-[var(--primary)]/60"}`}>
                     Has {item.currentQuantity} {item.unit} &middot; Needs {item.projectedUsage} {item.unit} for upcoming jobs
                   </p>
                 </div>
@@ -1546,25 +1546,25 @@ export default function EmployeeDetailView({
       )}
 
       {/* Most Used Products */}
-      <h2 className="text-lg font-[350] tracking-tight text-[#008C9C]">
+      <h2 className="text-lg font-[350] tracking-tight text-[var(--primary)]">
         Most Used Products
       </h2>
       {topProducts.length === 0 ? (
         <Card variant="ghost" className="p-8">
           <div className="text-center">
-            <div className="w-12 h-12 bg-[#008C9C]/5 rounded-2xl flex items-center justify-center mx-auto mb-3">
-              <Package className="w-6 h-6 text-[#008C9C]/40" />
+            <div className="w-12 h-12 bg-[var(--primary)]/5 rounded-2xl flex items-center justify-center mx-auto mb-3">
+              <Package className="w-6 h-6 text-[var(--primary)]/40" />
             </div>
-            <p className="text-sm text-[#008C9C]/60">No usage data yet</p>
+            <p className="text-sm text-[var(--primary)]/60">No usage data yet</p>
           </div>
         </Card>
       ) : (
         <Card variant="default" className="p-6">
           <div className="flex items-center gap-2 mb-4">
-            <div className="p-2 bg-[#008C9C]/10 rounded-lg">
-              <Package className="w-4 h-4 text-[#008C9C]" />
+            <div className="p-2 bg-[var(--primary)]/10 rounded-lg">
+              <Package className="w-4 h-4 text-[var(--primary)]" />
             </div>
-            <h3 className="text-sm font-[350] text-[#008C9C]/80">
+            <h3 className="text-sm font-[350] text-[var(--primary)]/80">
               Product Usage
             </h3>
           </div>
@@ -1572,12 +1572,12 @@ export default function EmployeeDetailView({
             {topProducts.map((product, idx) => (
               <div
                 key={idx}
-                className="flex items-center justify-between p-3 rounded-xl bg-[#008C9C]/5">
+                className="flex items-center justify-between p-3 rounded-xl bg-[var(--primary)]/5">
                 <div className="flex-1">
-                  <p className="text-sm font-[400] text-[#008C9C]">
+                  <p className="text-sm font-[400] text-[var(--primary)]">
                     {product.name}
                   </p>
-                  <p className="text-xs text-[#008C9C]/60">
+                  <p className="text-xs text-[var(--primary)]/60">
                     {product.quantity} {product.unit}
                   </p>
                 </div>
@@ -1591,26 +1591,26 @@ export default function EmployeeDetailView({
       )}
 
       {/* Assigned Inventory */}
-      <h2 className="text-lg font-[350] tracking-tight text-[#008C9C]">
+      <h2 className="text-lg font-[350] tracking-tight text-[var(--primary)]">
         Assigned Inventory
       </h2>
       {assignedProducts.length === 0 ? (
         <Card variant="ghost" className="p-8">
           <div className="text-center">
-            <div className="w-12 h-12 bg-[#008C9C]/5 rounded-2xl flex items-center justify-center mx-auto mb-3">
-              <Briefcase className="w-6 h-6 text-[#008C9C]/40" />
+            <div className="w-12 h-12 bg-[var(--primary)]/5 rounded-2xl flex items-center justify-center mx-auto mb-3">
+              <Briefcase className="w-6 h-6 text-[var(--primary)]/40" />
             </div>
-            <p className="text-sm text-[#008C9C]/60">No inventory assigned</p>
+            <p className="text-sm text-[var(--primary)]/60">No inventory assigned</p>
           </div>
         </Card>
       ) : (
         <Card variant="default" className="p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <div className="p-2 bg-[#008C9C]/10 rounded-lg">
-                <Briefcase className="w-4 h-4 text-[#008C9C]" />
+              <div className="p-2 bg-[var(--primary)]/10 rounded-lg">
+                <Briefcase className="w-4 h-4 text-[var(--primary)]" />
               </div>
-              <h3 className="text-sm font-[350] text-[#008C9C]/80">
+              <h3 className="text-sm font-[350] text-[var(--primary)]/80">
                 Current Inventory
               </h3>
             </div>
@@ -1654,10 +1654,10 @@ export default function EmployeeDetailView({
     return (
       <div className="space-y-6">
         <div>
-          <h2 className="text-lg font-[350] tracking-tight text-[#008C9C] mb-2">
+          <h2 className="text-lg font-[350] tracking-tight text-[var(--primary)] mb-2">
             Weekly Availability
           </h2>
-          <p className="text-sm text-[#008C9C]/60">
+          <p className="text-sm text-[var(--primary)]/60">
             Days and hours {employee.name} is typically available.
           </p>
         </div>
@@ -1665,10 +1665,10 @@ export default function EmployeeDetailView({
         {availability.length === 0 ? (
           <Card variant="ghost" className="p-8">
             <div className="text-center">
-              <div className="w-12 h-12 bg-[#008C9C]/5 rounded-2xl flex items-center justify-center mx-auto mb-3">
-                <Calendar className="w-6 h-6 text-[#008C9C]/40" />
+              <div className="w-12 h-12 bg-[var(--primary)]/5 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                <Calendar className="w-6 h-6 text-[var(--primary)]/40" />
               </div>
-              <p className="text-sm text-[#008C9C]/60">
+              <p className="text-sm text-[var(--primary)]/60">
                 {employee.name} hasn't entered availability yet.
               </p>
             </div>
@@ -1684,11 +1684,11 @@ export default function EmployeeDetailView({
                   return (
                     <div
                       key={day}
-                      className="grid grid-cols-[120px_1fr] gap-3 items-center p-3 rounded-xl bg-[#008C9C]/5">
-                      <span className="text-sm font-[400] text-[#008C9C]/60">
+                      className="grid grid-cols-[120px_1fr] gap-3 items-center p-3 rounded-xl bg-[var(--primary)]/5">
+                      <span className="text-sm font-[400] text-[var(--primary)]/60">
                         {label}
                       </span>
-                      <span className="text-xs text-[#008C9C]/50">
+                      <span className="text-xs text-[var(--primary)]/50">
                         Unavailable
                       </span>
                     </div>
@@ -1700,17 +1700,17 @@ export default function EmployeeDetailView({
                     className={`grid grid-cols-[120px_1fr_auto] gap-3 items-center p-3 rounded-xl ${
                       hasConflict
                         ? "bg-yellow-50 border border-yellow-200"
-                        : "bg-[#008C9C]/5"
+                        : "bg-[var(--primary)]/5"
                     }`}>
                     <span
                       className={`text-sm font-[400] ${
-                        hasConflict ? "text-yellow-700" : "text-[#008C9C]"
+                        hasConflict ? "text-yellow-700" : "text-[var(--primary)]"
                       }`}>
                       {label}
                     </span>
                     <span
                       className={`text-sm ${
-                        hasConflict ? "text-yellow-700" : "text-[#008C9C]/80"
+                        hasConflict ? "text-yellow-700" : "text-[var(--primary)]/80"
                       }`}>
                       {slot.startTime} – {slot.endTime}
                     </span>
@@ -1742,10 +1742,10 @@ export default function EmployeeDetailView({
                   key={c.jobId}
                   className="flex items-center justify-between p-3 rounded-xl bg-white">
                   <div className="flex-1">
-                    <p className="text-sm font-[400] text-[#008C9C]">
+                    <p className="text-sm font-[400] text-[var(--primary)]">
                       {c.clientName}
                     </p>
-                    <p className="text-xs text-[#008C9C]/60">
+                    <p className="text-xs text-[var(--primary)]/60">
                       {fmtDate(c.startTime)} at {fmtTime(c.startTime)} · {c.reason}
                     </p>
                   </div>
@@ -1770,7 +1770,7 @@ export default function EmployeeDetailView({
     <div className="relative h-full overflow-y-auto py-8 px-4">
       <div className="relative z-10 max-w-[80rem] w-full mx-auto space-y-6">
         {/* Header Card */}
-        <div className="rounded-2xl bg-[#008C9C]/5 p-5">
+        <div className="rounded-2xl bg-[var(--primary)]/5 p-5">
           {/* Back + Edit row */}
           <div className="flex items-center justify-between mb-5">
             {/* Sept 10, item 14: returns to the page, search and filters
@@ -1798,17 +1798,17 @@ export default function EmployeeDetailView({
 
           {/* Employee identity */}
           <div className="flex items-start gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-[#008C9C]/10 flex items-center justify-center shrink-0">
-              <User className="w-7 h-7 text-[#008C9C]" />
+            <div className="w-14 h-14 rounded-2xl bg-[var(--primary)]/10 flex items-center justify-center shrink-0">
+              <User className="w-7 h-7 text-[var(--primary)]" />
             </div>
             <div>
               <div className="flex items-center gap-3 flex-wrap">
-                <h1 className="text-3xl !font-light tracking-tight text-[#008C9C]">
+                <h1 className="text-3xl !font-light tracking-tight text-[var(--primary)]">
                   {employee.name}
                 </h1>
                 {getRoleBadge(employee.role)}
               </div>
-              <div className="flex flex-col sm:flex-row gap-4 text-[#008C9C]/70 mt-2">
+              <div className="flex flex-col sm:flex-row gap-4 text-[var(--primary)]/70 mt-2">
                 <div className="flex items-center gap-2">
                   <Mail className="w-4 h-4" />
                   <span className="text-sm">{employee.email}</span>
@@ -1853,7 +1853,7 @@ export default function EmployeeDetailView({
         </div>
 
         {/* Tabs */}
-        <div className="flex items-center gap-2 bg-[#008C9C]/5 rounded-2xl p-1 w-fit overflow-x-auto">
+        <div className="flex items-center gap-2 bg-[var(--primary)]/5 rounded-2xl p-1 w-fit overflow-x-auto">
           {MENU_ITEMS.map((item) => {
             const isActive = activeView === item.id;
             return (
@@ -1908,7 +1908,7 @@ export default function EmployeeDetailView({
         }}
         title="Assign Starter Kit">
         <div className="space-y-4">
-          <p className="text-sm text-[#008C9C]/70">
+          <p className="text-sm text-[var(--primary)]/70">
             Select a kit template to assign products to {employee.name}.
             Warehouse stock will be deducted accordingly.
           </p>
@@ -1930,8 +1930,8 @@ export default function EmployeeDetailView({
           />
 
           {selectedKit && (
-            <div className="bg-[#008C9C]/5 rounded-xl p-4 space-y-2">
-              <h4 className="text-sm font-[400] text-[#008C9C]">Kit Contents:</h4>
+            <div className="bg-[var(--primary)]/5 rounded-xl p-4 space-y-2">
+              <h4 className="text-sm font-[400] text-[var(--primary)]">Kit Contents:</h4>
               {selectedKit.items.map((item) => {
                 const hasStock = item.warehouseStock >= item.quantity;
                 return (
@@ -1940,10 +1940,10 @@ export default function EmployeeDetailView({
                     className={`flex items-center justify-between text-xs p-2 rounded-lg ${
                       hasStock ? "bg-white" : "bg-red-50"
                     }`}>
-                    <span className={hasStock ? "text-[#008C9C]" : "text-red-600"}>
+                    <span className={hasStock ? "text-[var(--primary)]" : "text-red-600"}>
                       {item.productName}
                     </span>
-                    <span className={hasStock ? "text-[#008C9C]/70" : "text-red-500"}>
+                    <span className={hasStock ? "text-[var(--primary)]/70" : "text-red-500"}>
                       {item.quantity} {item.unit}
                       {!hasStock && ` (only ${item.warehouseStock} in stock)`}
                     </span>

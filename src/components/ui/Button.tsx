@@ -54,33 +54,33 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 
     const variantClasses = {
       default:
-        "bg-[#008C9C]/3 text-[#008C9C] hover:bg-[#008C9C]/10 border-[#008C9C]/3",
+        "bg-[var(--primary)]/3 text-[var(--primary)] hover:bg-[var(--primary)]/10 border-[var(--primary)]/3",
       light:
-        "bg-[#008C9C]/2 text-[#008C9C] hover:bg-[#008C9C]/4 border-[#008C9C]/2",
+        "bg-[var(--primary)]/2 text-[var(--primary)] hover:bg-[var(--primary)]/4 border-[var(--primary)]/2",
       selected:
-        "bg-[#59B8BC]/15 text-[#008C9C] hover:bg-[#59B8BC]/20 border-[#59B8BC]/5",
+        "bg-[#59B8BC]/15 text-[var(--primary)] hover:bg-[#59B8BC]/20 border-[#59B8BC]/5",
       secondary: "bg-gray-100 text-gray-700 hover:bg-gray-200",
       ghost:
-        "bg-transparent text-[#008C9C] hover:bg-[#008C9C]/2 border-transparent",
+        "bg-transparent text-[var(--primary)] hover:bg-[var(--primary)]/2 border-transparent",
       outline:
-        "border-[#008C9C]/10 hover:border-[#008C9C]/20 focus:border-[#3E7596] text-[#008C9C]",
+        "border-[var(--primary)]/10 hover:border-[var(--primary)]/20 focus:border-[#3E7596] text-[var(--primary)]",
       destructive: "bg-red-100 text-red-700 hover:bg-red-200 border-red-200/50",
       recorder:
         "bg-red-200/50 text-red-700 hover:bg-red-200 border-red-200/50 backdrop-blur-[3px]",
       blue: "bg-blue-100 text-blue-800 hover:bg-blue-200 border-blue-100",
       simple: "bg-gray-50 text-gray-700 hover:bg-gray-100 border-gray-100",
       primary:
-        "bg-[#D7F0F1] text-[#008C9C] hover:bg-[#D7F0F1]/80  border-[#D7F0F1]/5",
+        "bg-[#D7F0F1] text-[var(--primary)] hover:bg-[#D7F0F1]/80  border-[#D7F0F1]/5",
       cleano:
-        "bg-[#008C9C]/10 text-[#008C9C] hover:bg-[#008C9C]/20 border-[#008C9C]/2 backdrop-blur-[3px]",
+        "bg-[var(--primary)]/10 text-[var(--primary)] hover:bg-[var(--primary)]/20 border-[var(--primary)]/2 backdrop-blur-[3px]",
       tdo: "bg-purple-100 text-purple-900 hover:bg-purple-200 border-purple-200/20",
       none: "bg-transparent text-gray-700 border-transparent",
       dentitek:
         "bg-[#173f38]/85 text-white hover:bg-[#173f38]/95 border-[#173f38]/20",
       cancel:
-        "text-[#008C9C]/80 bg-white hover:bg-gray-50 border-gray-200 backdrop-blur-[3px]",
+        "text-[var(--primary)]/80 bg-white hover:bg-gray-50 border-gray-200 backdrop-blur-[3px]",
       action:
-        "text-white bg-[#008C9C]/90 hover:bg-[#008C9C] backdrop-blur-[3px] border-transparent",
+        "text-white bg-[var(--primary)]/90 hover:bg-[var(--primary)] backdrop-blur-[3px] border-transparent",
       pro: "bg-[#b788bf]/40 text-[#59385e] hover:bg-[#b788bf]/60 border-[#b788bf]/2 backdrop-blur-[3px]",
     }[variant];
 

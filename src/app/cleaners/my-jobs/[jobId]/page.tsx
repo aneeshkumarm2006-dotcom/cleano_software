@@ -1005,8 +1005,8 @@ export default async function JobDetailPage({ params }: PageProps) {
                 role="status"
                 style={{
                   fontSize: 12, lineHeight: 1.5, margin: "8px 0 0",
-                  color: "#b45309", background: "#fffbeb",
-                  border: "1px solid #fde68a", borderRadius: 10, padding: "10px 12px",
+                  color: "var(--amber-700)", background: "var(--amber-50)",
+                  border: "1px solid var(--amber-200)", borderRadius: 10, padding: "10px 12px",
                 }}
               >
                 No company number is free for this job right now. Contact the office if you need to reach the client.
@@ -1158,7 +1158,7 @@ export default async function JobDetailPage({ params }: PageProps) {
                 // A neutral policy statement, not an error the cleaner caused.
                 border: "1px solid #cbd5e1",
                 background: "#f8fafc",
-                color: "#334155",
+                color: "var(--slate-700)",
               }}>
               <Camera size={16} style={{ flex: "0 0 auto", marginTop: 1 }} />
               <span>

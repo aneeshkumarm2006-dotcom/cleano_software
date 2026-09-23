@@ -51,12 +51,12 @@ interface CalJob {
 type StatusMeta = { label: string; color: string; tint: string };
 const STATUS: Record<string, StatusMeta> = {
   // Round 4, fix 6 — one label, one colour, shared with the admin calendar.
-  CREATED: { label: HOLD_LABEL, color: "#d97706", tint: "rgba(217,119,6,0.11)" },
-  SCHEDULED: { label: "Scheduled", color: "#008C9C", tint: "rgba(0,140,156,0.09)" },
-  IN_PROGRESS: { label: "In progress", color: "#d97706", tint: "rgba(217,119,6,0.11)" },
-  COMPLETED: { label: "Completed", color: "#059669", tint: "rgba(5,150,105,0.11)" },
+  CREATED: { label: HOLD_LABEL, color: "var(--amber-600)", tint: "rgba(217,119,6,0.11)" },
+  SCHEDULED: { label: "Scheduled", color: "var(--primary)", tint: "rgba(0,140,156,0.09)" },
+  IN_PROGRESS: { label: "In progress", color: "var(--amber-600)", tint: "rgba(217,119,6,0.11)" },
+  COMPLETED: { label: "Completed", color: "var(--emerald-600)", tint: "rgba(5,150,105,0.11)" },
   PAID: { label: "Paid", color: "#15803d", tint: "rgba(21,128,61,0.11)" },
-  CANCELLED: { label: "Cancelled", color: "#dc2626", tint: "rgba(220,38,38,0.08)" },
+  CANCELLED: { label: "Cancelled", color: "var(--error)", tint: "rgba(220,38,38,0.08)" },
 };
 const meta = (s: string): StatusMeta => STATUS[s] ?? STATUS.SCHEDULED;
 const unconfirmed = (j: CalJob) => j.status === "CREATED";
@@ -469,7 +469,7 @@ export default function CleanerCalendarClient({ jobs }: { jobs: CalJob[] }) {
               className={`cal-ovchip${showCancelled ? " on" : ""}`}
               aria-pressed={showCancelled}
               onClick={() => setShowCancelled((v) => !v)}>
-              <span className="cal-ovchip-box" style={{ background: showCancelled ? "#dc2626" : "transparent" }}>
+              <span className="cal-ovchip-box" style={{ background: showCancelled ? "var(--error)" : "transparent" }}>
                 {showCancelled ? <Check size={11} strokeWidth={3} /> : null}
               </span>
               Show cancelled ({cancelledCount})

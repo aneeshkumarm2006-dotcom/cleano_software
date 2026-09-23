@@ -144,7 +144,7 @@ export default function RetentionKpiClient() {
         </div>
         <div className="dcard k-ring">
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
-            <RingChart used={data?.retainedCount ?? 0} total={data?.startingCount || 1} size={140} strokeWidth={12} usedColor="#059669" remainingColor="var(--cream-deep)" />
+            <RingChart used={data?.retainedCount ?? 0} total={data?.startingCount || 1} size={140} strokeWidth={12} usedColor="var(--emerald-600)" remainingColor="var(--cream-deep)" />
             <div style={{ textAlign: "center" }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>Retention</div>
               <div style={{ fontSize: 12, color: "var(--primary-60)" }}>{data?.retainedCount ?? 0}/{data?.startingCount ?? 0} clients</div>

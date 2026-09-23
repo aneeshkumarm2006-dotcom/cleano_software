@@ -213,7 +213,7 @@ export default function PromoCodesClient({ codes, archived = false }: { codes: P
               />
             </div>
           </div>
-          {formError && <p style={{ fontSize: 13, color: "#b91c1c", marginTop: 12 }}>{formError}</p>}
+          {formError && <p style={{ fontSize: 13, color: "var(--danger)", marginTop: 12 }}>{formError}</p>}
           <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
             <button type="submit" disabled={creating} className="btn btn-primary" style={{ display: "flex", alignItems: "center", gap: 6 }}>
               {creating && <Loader2 size={14} className="animate-spin" />}
@@ -285,7 +285,7 @@ export default function PromoCodesClient({ codes, archived = false }: { codes: P
                     <td>
                       <span style={{
                         display: "inline-block",
-                        background: c.isActive ? "#dcfce7" : "#f1f5f9",
+                        background: c.isActive ? "#dcfce7" : "var(--slate-100)",
                         color: c.isActive ? "#15803d" : "#475569",
                         fontSize: 11, fontWeight: 600, borderRadius: 20, padding: "2px 10px",
                       }}>
@@ -302,7 +302,7 @@ export default function PromoCodesClient({ codes, archived = false }: { codes: P
                             disabled={busyId === c.id}
                             onClick={() => handleToggle(c.id)}>
                             {c.isActive
-                              ? <ToggleRight size={16} style={{ color: "#008C9C" }} />
+                              ? <ToggleRight size={16} style={{ color: "var(--primary)" }} />
                               : <ToggleLeft size={16} />}
                           </button>
                           <button

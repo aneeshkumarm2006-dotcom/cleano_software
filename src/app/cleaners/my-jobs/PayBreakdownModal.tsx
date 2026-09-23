@@ -73,12 +73,12 @@ export default function PayBreakdownModal({
 
       {data && (
         <div className="space-y-4">
-          <div className="rounded-2xl bg-[#008C9C]/10 px-4 py-4 flex items-center justify-between">
+          <div className="rounded-2xl bg-[var(--primary)]/10 px-4 py-4 flex items-center justify-between">
             <div className="flex flex-col">
               <span className="text-sm font-[500] text-gray-900">Your pay</span>
               <span className="text-xs text-gray-500">{data.clientName}</span>
             </div>
-            <span className="text-xl font-[500] text-[#008C9C]">
+            <span className="text-xl font-[500] text-[var(--primary)]">
               ${data.totalEmployeePay.toFixed(2)}
             </span>
           </div>
@@ -116,7 +116,7 @@ export default function PayBreakdownModal({
                   : "Rating bonus"
               }
               value={`+${Math.round((boost.multiplier - 1) * 100)}%`}
-              valueClass="text-[#008C9C]"
+              valueClass="text-[var(--primary)]"
             />
           )}
 

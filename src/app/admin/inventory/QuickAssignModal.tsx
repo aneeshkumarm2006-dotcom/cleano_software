@@ -144,7 +144,7 @@ export default function QuickAssignModal({
         {/* Cleaner + mode */}
         <div className="grid gap-3 md:grid-cols-2">
           <div>
-            <label className="text-[10px] uppercase tracking-wider text-[#008C9C]/60 font-[400]">
+            <label className="text-[10px] uppercase tracking-wider text-[var(--primary)]/60 font-[400]">
               Cleaner
             </label>
             <Select
@@ -158,7 +158,7 @@ export default function QuickAssignModal({
             />
           </div>
           <div>
-            <label className="text-[10px] uppercase tracking-wider text-[#008C9C]/60 font-[400]">
+            <label className="text-[10px] uppercase tracking-wider text-[var(--primary)]/60 font-[400]">
               Mode
             </label>
             <div className="flex gap-2 mt-1">
@@ -175,8 +175,8 @@ export default function QuickAssignModal({
                   onClick={() => switchMode(value)}
                   className={`flex-1 rounded-xl px-3 py-2 text-xs font-[500] transition-colors ${
                     mode === value
-                      ? "bg-[#008C9C] text-white"
-                      : "bg-[#008C9C]/5 text-[#008C9C]"
+                      ? "bg-[var(--primary)] text-white"
+                      : "bg-[var(--primary)]/5 text-[var(--primary)]"
                   }`}>
                   {label}
                 </button>
@@ -185,7 +185,7 @@ export default function QuickAssignModal({
           </div>
         </div>
 
-        <p className="text-xs text-[#008C9C]/70 bg-[#008C9C]/5 rounded-xl px-3 py-2">
+        <p className="text-xs text-[var(--primary)]/70 bg-[var(--primary)]/5 rounded-xl px-3 py-2">
           {mode === "FROM_LOCKER" ? (
             <>
               Enter <strong>how much to hand over</strong>. It is added to the
@@ -201,7 +201,7 @@ export default function QuickAssignModal({
 
         {mode === "FROM_LOCKER" && (
           <div>
-            <label className="text-[10px] uppercase tracking-wider text-[#008C9C]/60 font-[400]">
+            <label className="text-[10px] uppercase tracking-wider text-[var(--primary)]/60 font-[400]">
               Take from
             </label>
             {locations.length === 0 ? (
@@ -222,7 +222,7 @@ export default function QuickAssignModal({
         {/* Product search */}
         <div className="relative">
           <Search
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-[#008C9C]/40"
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--primary)]/40"
             size={15}
           />
           <Input
@@ -236,9 +236,9 @@ export default function QuickAssignModal({
         </div>
 
         {/* Every product in the database, with a quantity field each */}
-        <div className="border border-[#008C9C]/10 rounded-xl divide-y divide-[#008C9C]/10 max-h-[38vh] overflow-y-auto">
+        <div className="border border-[var(--primary)]/10 rounded-xl divide-y divide-[var(--primary)]/10 max-h-[38vh] overflow-y-auto">
           {filtered.length === 0 ? (
-            <p className="text-xs text-[#008C9C]/50 text-center py-6">
+            <p className="text-xs text-[var(--primary)]/50 text-center py-6">
               No products match your search.
             </p>
           ) : (
@@ -250,8 +250,8 @@ export default function QuickAssignModal({
                   key={p.id}
                   className="flex items-center gap-3 px-3 py-2">
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm text-[#008C9C] truncate">{p.name}</div>
-                    <div className="text-[11px] text-[#008C9C]/50">
+                    <div className="text-sm text-[var(--primary)] truncate">{p.name}</div>
+                    <div className="text-[11px] text-[var(--primary)]/50">
                       Cleaner holds {held} {p.unit}
                       {mode === "FROM_LOCKER" && (
                         <>
@@ -276,7 +276,7 @@ export default function QuickAssignModal({
                     disabled={saving}
                     className="!w-24 text-center"
                   />
-                  <span className="text-[11px] text-[#008C9C]/50 w-10">
+                  <span className="text-[11px] text-[var(--primary)]/50 w-10">
                     {p.unit}
                   </span>
                 </div>
@@ -286,7 +286,7 @@ export default function QuickAssignModal({
         </div>
 
         <div>
-          <label className="text-[10px] uppercase tracking-wider text-[#008C9C]/60 font-[400]">
+          <label className="text-[10px] uppercase tracking-wider text-[var(--primary)]/60 font-[400]">
             Note (optional)
           </label>
           <Input
@@ -315,7 +315,7 @@ export default function QuickAssignModal({
         )}
 
         <div className="flex items-center justify-between gap-3 pt-1">
-          <span className="text-xs text-[#008C9C]/60">
+          <span className="text-xs text-[var(--primary)]/60">
             {entered.length === 0
               ? "No quantities entered"
               : `${entered.length} product${entered.length === 1 ? "" : "s"} to save`}

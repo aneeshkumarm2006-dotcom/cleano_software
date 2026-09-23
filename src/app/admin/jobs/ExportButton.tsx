@@ -24,7 +24,7 @@ interface ExportButtonProps {
   };
 }
 
-const BRAND = "#008C9C";
+const BRAND = "var(--primary)";
 
 function formatMoney(v: number | string) {
   if (v === "" || v === null || v === undefined) return "-";
@@ -369,7 +369,7 @@ export default function ExportButton({ filters }: ExportButtonProps) {
   };
 
   const dateInputClass =
-    "h-[42px] w-full px-3 rounded-xl bg-[#008C9C]/5 text-sm text-[#008C9C] border-0 focus:outline-none focus:ring-1 focus:ring-[#008C9C]/20";
+    "h-[42px] w-full px-3 rounded-xl bg-[var(--primary)]/5 text-sm text-[var(--primary)] border-0 focus:outline-none focus:ring-1 focus:ring-[var(--primary)]/20";
 
   return (
     <>
@@ -412,7 +412,7 @@ export default function ExportButton({ filters }: ExportButtonProps) {
         subheader="Choose a date range. Leave empty to export all jobs.">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
           <div className="flex flex-col">
-            <label className="text-[11px] uppercase tracking-wider text-[#008C9C]/50 font-[400] mb-1.5">
+            <label className="text-[11px] uppercase tracking-wider text-[var(--primary)]/50 font-[400] mb-1.5">
               Start Date
             </label>
             <DatePicker
@@ -423,7 +423,7 @@ export default function ExportButton({ filters }: ExportButtonProps) {
             />
           </div>
           <div className="flex flex-col">
-            <label className="text-[11px] uppercase tracking-wider text-[#008C9C]/50 font-[400] mb-1.5">
+            <label className="text-[11px] uppercase tracking-wider text-[var(--primary)]/50 font-[400] mb-1.5">
               End Date
             </label>
             <DatePicker

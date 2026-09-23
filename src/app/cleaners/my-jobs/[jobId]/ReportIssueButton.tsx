@@ -293,9 +293,9 @@ export default function ReportIssueButton({ jobId }: { jobId: string }) {
                   marginTop: 10,
                   fontSize: 12.5,
                   lineHeight: 1.5,
-                  color: "#b45309",
-                  background: "#fffbeb",
-                  border: "1px solid #fde68a",
+                  color: "var(--amber-700)",
+                  background: "var(--amber-50)",
+                  border: "1px solid var(--amber-200)",
                   borderRadius: 10,
                   padding: "10px 12px",
                 }}>

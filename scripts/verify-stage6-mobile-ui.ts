@@ -379,8 +379,12 @@ ok("the cart's bare number box has an accessible name", CART.includes("aria-labe
 
 // Stage 6 is a UI fix. None of the behaviour Stages 1–5 built may have moved.
 ok("Save count still requires a reason", MY_INV.includes("editBusy || !editReason.trim()"));
+// Same rule, counted through the token. The Pier palette moved every
+// component off literal hexes and onto --error, so counting #dc2626 now
+// counts zero of them and would pass for the wrong reason.
 ok("the destructive Report confirm is still the only red button",
-  (MY_INV.match(/#dc2626/g) ?? []).length === 1);
+  (MY_INV.match(/var\(--error\)/g) ?? []).length === 1 &&
+  !MY_INV.includes("#dc2626"));
 ok("equipment still gets Update condition, never Request refill",
   MY_INV.includes("openCondition(item)") && MY_INV.includes("Update condition"));
 ok("the attention count is still server-computed",

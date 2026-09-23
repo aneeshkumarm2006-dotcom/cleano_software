@@ -309,7 +309,7 @@ export default function DocumentsTab({ documents, users }: DocumentsTabProps) {
         </Button>
       }>
       {documents.length === 0 ? (
-        <p className="text-sm text-[#008C9C]/60">No documents yet.</p>
+        <p className="text-sm text-[var(--primary)]/60">No documents yet.</p>
       ) : (
         <div className="space-y-2">
           {documents.map((doc) => {
@@ -321,27 +321,27 @@ export default function DocumentsTab({ documents, users }: DocumentsTabProps) {
             return (
               <div
                 key={doc.id}
-                className="flex items-start justify-between gap-3 p-4 border border-[#008C9C]/10 rounded-xl bg-white hover:bg-[#008C9C]/3 transition-colors">
+                className="flex items-start justify-between gap-3 p-4 border border-[var(--primary)]/10 rounded-xl bg-white hover:bg-[var(--primary)]/3 transition-colors">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="text-sm font-[400] text-[#008C9C]">
+                    <h3 className="text-sm font-[400] text-[var(--primary)]">
                       {doc.title}
                     </h3>
-                    <span className="text-xs bg-[#008C9C]/10 text-[#008C9C] px-2 py-0.5 rounded-full">
+                    <span className="text-xs bg-[var(--primary)]/10 text-[var(--primary)] px-2 py-0.5 rounded-full">
                       v{doc.version}
                     </span>
                     {doc.fileUrl && (
-                      <span className="text-xs bg-[#3E7596]/20 text-[#008C9C] px-2 py-0.5 rounded-full">
+                      <span className="text-xs bg-[#3E7596]/20 text-[var(--primary)] px-2 py-0.5 rounded-full">
                         File
                       </span>
                     )}
                   </div>
                   {doc.description && (
-                    <p className="text-xs text-[#008C9C]/60 mt-1">
+                    <p className="text-xs text-[var(--primary)]/60 mt-1">
                       {doc.description}
                     </p>
                   )}
-                  <div className="flex items-center gap-4 mt-2 text-xs text-[#008C9C]/60 flex-wrap">
+                  <div className="flex items-center gap-4 mt-2 text-xs text-[var(--primary)]/60 flex-wrap">
                     {doc.dueDate && (
                       <span className="flex items-center gap-1">
                         <Clock className="w-3 h-3" />
@@ -351,7 +351,7 @@ export default function DocumentsTab({ documents, users }: DocumentsTabProps) {
                     <button
                       type="button"
                       onClick={() => setStatusDocId(doc.id)}
-                      className="flex items-center gap-1 text-[#008C9C] hover:underline">
+                      className="flex items-center gap-1 text-[var(--primary)] hover:underline">
                       <CheckCircle2 className="w-3 h-3" />
                       {signed}/{total} signed
                     </button>
@@ -462,8 +462,8 @@ export default function DocumentsTab({ documents, users }: DocumentsTabProps) {
                 }
                 className={`px-4 py-2 rounded-xl text-sm ${
                   draft.contentMode === "TEXT"
-                    ? "bg-[#008C9C]/90 text-white"
-                    : "bg-[#008C9C]/5 text-[#008C9C] hover:bg-[#008C9C]/10"
+                    ? "bg-[var(--primary)]/90 text-white"
+                    : "bg-[var(--primary)]/5 text-[var(--primary)] hover:bg-[var(--primary)]/10"
                 }`}>
                 Text
               </button>
@@ -474,8 +474,8 @@ export default function DocumentsTab({ documents, users }: DocumentsTabProps) {
                 }
                 className={`px-4 py-2 rounded-xl text-sm ${
                   draft.contentMode === "FILE"
-                    ? "bg-[#008C9C]/90 text-white"
-                    : "bg-[#008C9C]/5 text-[#008C9C] hover:bg-[#008C9C]/10"
+                    ? "bg-[var(--primary)]/90 text-white"
+                    : "bg-[var(--primary)]/5 text-[var(--primary)] hover:bg-[var(--primary)]/10"
                 }`}>
                 File URL (PDF)
               </button>
@@ -533,12 +533,12 @@ export default function DocumentsTab({ documents, users }: DocumentsTabProps) {
               {ROLES.map((role) => (
                 <label
                   key={role}
-                  className="flex items-center gap-2 text-sm text-[#008C9C] select-none">
+                  className="flex items-center gap-2 text-sm text-[var(--primary)] select-none">
                   <input
                     type="checkbox"
                     checked={draft.assignRoles.includes(role)}
                     onChange={() => toggleRoleInDraft(role)}
-                    className="accent-[#008C9C]"
+                    className="accent-[var(--primary)]"
                   />
                   {ROLE_LABELS[role]}
                 </label>
@@ -547,22 +547,22 @@ export default function DocumentsTab({ documents, users }: DocumentsTabProps) {
           )}
 
           {draft.assignMode === "USERS" && (
-            <div className="max-h-48 overflow-y-auto space-y-1 p-2 rounded-xl bg-[#008C9C]/5">
+            <div className="max-h-48 overflow-y-auto space-y-1 p-2 rounded-xl bg-[var(--primary)]/5">
               {users.length === 0 ? (
-                <p className="text-xs text-[#008C9C]/60">No users found.</p>
+                <p className="text-xs text-[var(--primary)]/60">No users found.</p>
               ) : (
                 users.map((u) => (
                   <label
                     key={u.id}
-                    className="flex items-center gap-2 text-sm text-[#008C9C] select-none px-2 py-1 rounded hover:bg-white/40 cursor-pointer">
+                    className="flex items-center gap-2 text-sm text-[var(--primary)] select-none px-2 py-1 rounded hover:bg-white/40 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={draft.assignUserIds.includes(u.id)}
                       onChange={() => toggleUserInDraft(u.id)}
-                      className="accent-[#008C9C]"
+                      className="accent-[var(--primary)]"
                     />
                     <span className="flex-1">{u.name}</span>
-                    <span className="text-xs text-[#008C9C]/50">
+                    <span className="text-xs text-[var(--primary)]/50">
                       {ROLE_LABELS[u.role] ?? u.role}
                     </span>
                   </label>
@@ -620,12 +620,12 @@ export default function DocumentsTab({ documents, users }: DocumentsTabProps) {
                 {ROLES.map((role) => (
                   <label
                     key={role}
-                    className="flex items-center gap-2 text-sm text-[#008C9C] select-none">
+                    className="flex items-center gap-2 text-sm text-[var(--primary)] select-none">
                     <input
                       type="checkbox"
                       checked={assignRoles.includes(role)}
                       onChange={() => toggleAssignRole(role)}
-                      className="accent-[#008C9C]"
+                      className="accent-[var(--primary)]"
                     />
                     {ROLE_LABELS[role]}
                   </label>
@@ -634,19 +634,19 @@ export default function DocumentsTab({ documents, users }: DocumentsTabProps) {
             )}
 
             {assignMode === "USERS" && (
-              <div className="max-h-48 overflow-y-auto space-y-1 p-2 rounded-xl bg-[#008C9C]/5">
+              <div className="max-h-48 overflow-y-auto space-y-1 p-2 rounded-xl bg-[var(--primary)]/5">
                 {users.map((u) => (
                   <label
                     key={u.id}
-                    className="flex items-center gap-2 text-sm text-[#008C9C] select-none px-2 py-1 rounded hover:bg-white/40 cursor-pointer">
+                    className="flex items-center gap-2 text-sm text-[var(--primary)] select-none px-2 py-1 rounded hover:bg-white/40 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={assignUserIds.includes(u.id)}
                       onChange={() => toggleAssignUser(u.id)}
-                      className="accent-[#008C9C]"
+                      className="accent-[var(--primary)]"
                     />
                     <span className="flex-1">{u.name}</span>
-                    <span className="text-xs text-[#008C9C]/50">
+                    <span className="text-xs text-[var(--primary)]/50">
                       {ROLE_LABELS[u.role] ?? u.role}
                     </span>
                   </label>
@@ -654,7 +654,7 @@ export default function DocumentsTab({ documents, users }: DocumentsTabProps) {
               </div>
             )}
 
-            <p className="text-xs text-[#008C9C]/60">
+            <p className="text-xs text-[var(--primary)]/60">
               Existing signers will not be re-assigned. Only new users will
               receive a pending signature.
             </p>
@@ -690,7 +690,7 @@ export default function DocumentsTab({ documents, users }: DocumentsTabProps) {
         {statusDoc && (
           <div className="space-y-3">
             {statusDoc.signatures.length === 0 ? (
-              <p className="text-sm text-[#008C9C]/60">
+              <p className="text-sm text-[var(--primary)]/60">
                 No employees assigned yet.
               </p>
             ) : (
@@ -712,10 +712,10 @@ export default function DocumentsTab({ documents, users }: DocumentsTabProps) {
                   <tbody className="divide-y divide-gray-50">
                     {statusDoc.signatures.map((s) => (
                       <tr key={s.id} className="hover:bg-gray-50/50">
-                        <td className="px-4 py-2 text-[#008C9C]">
+                        <td className="px-4 py-2 text-[var(--primary)]">
                           {s.employee.name}
                         </td>
-                        <td className="px-4 py-2 text-[#008C9C]/80">
+                        <td className="px-4 py-2 text-[var(--primary)]/80">
                           {s.status === "SIGNED" ? (
                             <span className="text-green-700">Signed</span>
                           ) : s.status === "PENDING" ? (
@@ -724,7 +724,7 @@ export default function DocumentsTab({ documents, users }: DocumentsTabProps) {
                             s.status.toLowerCase()
                           )}
                         </td>
-                        <td className="px-4 py-2 text-[#008C9C]/80">
+                        <td className="px-4 py-2 text-[var(--primary)]/80">
                           {formatDate(s.signedAt) ?? "—"}
                         </td>
                       </tr>

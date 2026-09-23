@@ -89,7 +89,7 @@ export default function WithdrawModal({
         {success ? (
           <div style={{ textAlign: "center", padding: "16px 0 8px" }}>
             <div style={{ width: 56, height: 56, borderRadius: "50%", background: "rgba(5,150,105,0.10)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
-              <CheckCircle2 className="w-7 h-7" style={{ color: "#059669" }} />
+              <CheckCircle2 className="w-7 h-7" style={{ color: "var(--emerald-600)" }} />
             </div>
             <p style={{ fontSize: 17, fontWeight: 600, color: "var(--ink)", marginBottom: 6 }}>
               Withdrawal request submitted
@@ -155,7 +155,7 @@ export default function WithdrawModal({
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "var(--primary-70)", marginBottom: 8 }}>
                     <span>Processing fee (5%)</span>
-                    <span style={{ color: "#dc2626" }}>-${feeAmt.toFixed(2)}</span>
+                    <span style={{ color: "var(--error)" }}>-${feeAmt.toFixed(2)}</span>
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 600, color: "var(--ink)", paddingTop: 8, borderTop: "1px solid var(--primary-10)" }}>
                     <span>You&apos;ll receive</span>
@@ -180,7 +180,7 @@ export default function WithdrawModal({
             </div>
 
             {error && (
-              <div style={{ padding: "12px 16px", borderRadius: 12, fontSize: 13, background: "#fee2e2", color: "#dc2626", marginBottom: 8 }}>
+              <div style={{ padding: "12px 16px", borderRadius: 12, fontSize: 13, background: "var(--danger-soft)", color: "var(--error)", marginBottom: 8 }}>
                 {error}
               </div>
             )}

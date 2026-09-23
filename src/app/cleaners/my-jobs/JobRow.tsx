@@ -107,7 +107,7 @@ export function JobRow({ job, isMainEmployee, missingEquipment = [], cleanerPay 
               </span>
             )}
             {instantPayoutEligible && (
-              <span className="cl-pill" style={{ background: "#fef3c7", color: "#b45309" }}>Instant payout</span>
+              <span className="cl-pill" style={{ background: "var(--warning-soft)", color: "var(--amber-700)" }}>Instant payout</span>
             )}
             <JobChatUnreadPill jobId={job.id} scope="cleaner" />
 

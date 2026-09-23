@@ -77,7 +77,7 @@ export default function PendingInvitesPanel({
             ? "1px solid #f59e0b"
             : "1px solid var(--primary-10)",
           borderRadius: 10,
-          background: invite.isLastMinute ? "#fffbeb" : "#fff",
+          background: invite.isLastMinute ? "var(--amber-50)" : "#fff",
           display: "flex",
           gap: 12,
           alignItems: "center",
@@ -118,7 +118,7 @@ export default function PendingInvitesPanel({
               fontSize: 11,
               color: invite.isLastMinute
                 ? minutesUntil(invite.expiresAt) <= 2
-                  ? "#dc2626"
+                  ? "var(--error)"
                   : "var(--primary-50)"
                 : "var(--primary-50)",
               fontWeight: 600,
@@ -143,8 +143,8 @@ export default function PendingInvitesPanel({
               fontSize: 13,
               fontWeight: 600,
               background: "#fff",
-              color: "#dc2626",
-              border: "1px solid #fecaca",
+              color: "var(--error)",
+              border: "1px solid var(--error-border)",
               borderRadius: 8,
               cursor: busy === invite.id ? "default" : "pointer",
             }}>

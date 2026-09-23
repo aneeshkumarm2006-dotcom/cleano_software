@@ -82,7 +82,7 @@ export default function StripeConnectionSection() {
   return (
     <SectionCard icon={CreditCard} title="Stripe account">
       {loading ? (
-        <p className="text-sm text-[#008C9C]/60">Checking…</p>
+        <p className="text-sm text-[var(--primary)]/60">Checking…</p>
       ) : (
         <>
           {/* State in words and shape, not colour alone. */}
@@ -137,7 +137,7 @@ export default function StripeConnectionSection() {
           </div>
 
           {status && !status.canStoreSecrets && (
-            <p className="text-sm mb-4" style={{ color: "#92400e" }}>
+            <p className="text-sm mb-4" style={{ color: "var(--amber-800)" }}>
               This deployment has no SECRETS_KEY set, so credentials cannot be stored
               securely and saving is disabled. Your administrator can generate one with{" "}
               <code>openssl rand -hex 32</code>.
@@ -154,7 +154,7 @@ export default function StripeConnectionSection() {
                 value={secretKey}
                 onChange={(e) => setSecretKey(e.target.value)}
               />
-              <p className="text-sm text-[#008C9C]/60 mt-1">
+              <p className="text-sm text-[var(--primary)]/60 mt-1">
                 From Stripe → Developers → API keys. It is encrypted before it is stored
                 and never shown again.
               </p>
@@ -169,7 +169,7 @@ export default function StripeConnectionSection() {
                 value={publishableKey}
                 onChange={(e) => setPublishableKey(e.target.value)}
               />
-              <p className="text-sm text-[#008C9C]/60 mt-1">
+              <p className="text-sm text-[var(--primary)]/60 mt-1">
                 Safe to share — it is what the card form in your customers&rsquo; browsers
                 uses. Must be from the same Stripe mode as the secret key.
               </p>
@@ -184,7 +184,7 @@ export default function StripeConnectionSection() {
                 value={webhookSecret}
                 onChange={(e) => setWebhookSecret(e.target.value)}
               />
-              <p className="text-sm text-[#008C9C]/60 mt-1">
+              <p className="text-sm text-[var(--primary)]/60 mt-1">
                 Add an endpoint in Stripe pointing at this workspace&rsquo;s own address,
                 then paste its signing secret here. Leave blank to keep the one already
                 saved.

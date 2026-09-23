@@ -166,7 +166,7 @@ export default function TimePicker({
   const border = error
     ? "1.5px solid #f87171"
     : open
-    ? "1.5px solid #008C9C"
+    ? "1.5px solid var(--primary)"
     : "1px solid rgba(0,140,156,0.16)";
   const boxShadow = open ? "0 0 0 3px rgba(0,140,156,0.11)" : "none";
 
@@ -202,7 +202,7 @@ export default function TimePicker({
           padding: "8px 10px",
           borderRadius: 8,
           border: 0,
-          background: active ? "#008C9C" : "transparent",
+          background: active ? "var(--primary)" : "transparent",
           color: active ? "#fff" : "#111",
           fontSize: 13,
           fontWeight: active ? 700 : 400,

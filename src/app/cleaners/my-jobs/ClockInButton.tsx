@@ -60,8 +60,8 @@ export default function ClockInButton({
     return (
       <div
         style={{
-          background: "#fffbeb",
-          border: "1px solid #fde68a",
+          background: "var(--amber-50)",
+          border: "1px solid var(--amber-200)",
           borderRadius: 14,
           padding: "14px 16px",
           display: "flex",
@@ -75,7 +75,7 @@ export default function ClockInButton({
             gap: 8,
             fontSize: 13,
             lineHeight: 1.5,
-            color: "#b45309",
+            color: "var(--amber-700)",
           }}>
           <AlertTriangle size={15} style={{ marginTop: 1, flexShrink: 0 }} />
           <span>
@@ -107,7 +107,7 @@ export default function ClockInButton({
             onClick={handleClockIn}
             disabled={loading}
             style={{
-              background: "#b45309",
+              background: "var(--amber-700)",
               color: "#fff",
               border: 0,
               borderRadius: 999,
@@ -139,7 +139,7 @@ export default function ClockInButton({
             : "Clock in"}
       </button>
       {error && (
-        <span style={{ fontSize: 11, color: "#dc2626", marginLeft: 8 }}>
+        <span style={{ fontSize: 11, color: "var(--error)", marginLeft: 8 }}>
           {error}
         </span>
       )}

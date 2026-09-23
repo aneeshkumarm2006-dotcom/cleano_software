@@ -111,7 +111,7 @@ export default function TimeLogRequestsPanel({
               ? "/admin/notifications"
               : "/admin/notifications?timelog=all"
           }
-          className="text-xs font-[600] text-[#008C9C] hover:underline whitespace-nowrap">
+          className="text-xs font-[600] text-[var(--primary)] hover:underline whitespace-nowrap">
           {showingHistory ? "Only waiting" : "History"}
         </Link>
       </div>
@@ -150,7 +150,7 @@ export default function TimeLogRequestsPanel({
                       {r.jobNumber != null && (
                         <Link
                           href={`/admin/jobs/${r.jobId}`}
-                          className="text-xs text-[#008C9C] hover:underline">
+                          className="text-xs text-[var(--primary)] hover:underline">
                           Job #{r.jobNumber}
                           {r.clientName ? ` · ${r.clientName}` : ""}
                         </Link>
@@ -188,7 +188,7 @@ export default function TimeLogRequestsPanel({
                         type="button"
                         disabled={pending}
                         onClick={() => decide(r.id, true)}
-                        className="px-3 py-1.5 text-xs font-[600] rounded-lg bg-[#008C9C] text-white hover:bg-[#008C9C]/90 disabled:opacity-50">
+                        className="px-3 py-1.5 text-xs font-[600] rounded-lg bg-[var(--primary)] text-white hover:bg-[var(--primary)]/90 disabled:opacity-50">
                         {pending ? "…" : "Approve"}
                       </button>
                       <button
@@ -218,7 +218,7 @@ export default function TimeLogRequestsPanel({
                       onChange={(e) => setNote(e.target.value)}
                       placeholder="Why not? The cleaner sees this."
                       aria-label="Reason for rejecting"
-                      className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-[#008C9C]"
+                      className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
                     />
                     <button
                       type="button"

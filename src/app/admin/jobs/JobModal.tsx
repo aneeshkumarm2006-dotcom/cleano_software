@@ -450,20 +450,20 @@ function CustomDatePicker({
         type="button"
         disabled={disabled}
         onClick={() => !disabled && setIsOpen((prev) => !prev)}
-        className={`w-full px-4 py-3 rounded-2xl border border-[#008C9C]/15 bg-[#008C9C]/5 flex items-center justify-between text-left transition-all tracking-tight ${
+        className={`w-full px-4 py-3 rounded-2xl border border-[var(--primary)]/15 bg-[var(--primary)]/5 flex items-center justify-between text-left transition-all tracking-tight ${
           disabled
             ? "opacity-60 cursor-not-allowed"
-            : "hover:border-[#008C9C]/40"
+            : "hover:border-[var(--primary)]/40"
         }`}>
         <div className="flex items-center gap-3 overflow-hidden">
-          <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center border border-[#008C9C]/15">
-            <Calendar className="w-4 h-4 text-[#008C9C]" />
+          <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center border border-[var(--primary)]/15">
+            <Calendar className="w-4 h-4 text-[var(--primary)]" />
           </div>
           <div className="flex flex-col leading-tight">
-            <span className="text-xs text-[#008C9C]/70">Selected date</span>
+            <span className="text-xs text-[var(--primary)]/70">Selected date</span>
             <span
               className={`text-sm font-[450] ${
-                value ? "text-[#008C9C]" : "text-[#008C9C]/50"
+                value ? "text-[var(--primary)]" : "text-[var(--primary)]/50"
               }`}>
               {value
                 ? new Date(`${value}T00:00:00`).toLocaleDateString("en-US", {
@@ -476,17 +476,17 @@ function CustomDatePicker({
             </span>
           </div>
         </div>
-        <ChevronDown className="w-4 h-4 text-[#008C9C]/60 flex-shrink-0" />
+        <ChevronDown className="w-4 h-4 text-[var(--primary)]/60 flex-shrink-0" />
       </button>
 
       {isOpen && (
         <div
-          className="fixed z-[9999] w-full max-w-sm rounded-2xl bg-white shadow-xl border border-[#008C9C]/10 p-4"
+          className="fixed z-[9999] w-full max-w-sm rounded-2xl bg-white shadow-xl border border-[var(--primary)]/10 p-4"
           style={{ top: dropdownPosition.top, left: dropdownPosition.left }}>
           <div className="flex items-center justify-between mb-3">
             <button
               type="button"
-              className="p-2 rounded-lg hover:bg-[#008C9C]/10 text-[#008C9C]"
+              className="p-2 rounded-lg hover:bg-[var(--primary)]/10 text-[var(--primary)]"
               onClick={() =>
                 setViewDate(
                   new Date(viewDate.getFullYear(), viewDate.getMonth() - 1, 1)
@@ -494,12 +494,12 @@ function CustomDatePicker({
               }>
               <ChevronLeft className="w-4 h-4" />
             </button>
-            <p className="text-sm font-[600] text-[#008C9C] tracking-tight">
+            <p className="text-sm font-[600] text-[var(--primary)] tracking-tight">
               {monthLabel}
             </p>
             <button
               type="button"
-              className="p-2 rounded-lg hover:bg-[#008C9C]/10 text-[#008C9C]"
+              className="p-2 rounded-lg hover:bg-[var(--primary)]/10 text-[var(--primary)]"
               onClick={() =>
                 setViewDate(
                   new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 1)
@@ -509,7 +509,7 @@ function CustomDatePicker({
             </button>
           </div>
 
-          <div className="grid grid-cols-7 text-[11px] text-[#008C9C]/60 mb-2 tracking-tight">
+          <div className="grid grid-cols-7 text-[11px] text-[var(--primary)]/60 mb-2 tracking-tight">
             {/* Keyed by POSITION, not by the label. Sunday and Saturday are both
                 "S" and Tuesday and Thursday are both "T", so keying on the
                 letter gave React two pairs of colliding keys and it logged
@@ -545,10 +545,10 @@ function CustomDatePicker({
                   onClick={() => handleSelectDay(day)}
                   className={`h-10 rounded-xl text-sm font-[450] transition-all tracking-tight ${
                     isSelected
-                      ? "bg-[#008C9C] text-white shadow-sm"
-                      : "hover:bg-[#008C9C]/10 text-[#008C9C]"
+                      ? "bg-[var(--primary)] text-white shadow-sm"
+                      : "hover:bg-[var(--primary)]/10 text-[var(--primary)]"
                   } ${
-                    isToday && !isSelected ? "border border-[#008C9C]/30" : ""
+                    isToday && !isSelected ? "border border-[var(--primary)]/30" : ""
                   }`}>
                   {day}
                 </button>
@@ -559,13 +559,13 @@ function CustomDatePicker({
           <div className="flex items-center justify-between mt-3 gap-2">
             <button
               type="button"
-              className="flex-1 px-3 py-2 rounded-xl bg-[#008C9C]/10 text-[#008C9C] text-sm font-[500] tracking-tight hover:bg-[#008C9C]/15"
+              className="flex-1 px-3 py-2 rounded-xl bg-[var(--primary)]/10 text-[var(--primary)] text-sm font-[500] tracking-tight hover:bg-[var(--primary)]/15"
               onClick={handleToday}>
               Today
             </button>
             <button
               type="button"
-              className="flex-1 px-3 py-2 rounded-xl bg-white border border-[#008C9C]/20 text-[#008C9C]/80 text-sm font-[500] tracking-tight hover:border-[#008C9C]/40"
+              className="flex-1 px-3 py-2 rounded-xl bg-white border border-[var(--primary)]/20 text-[var(--primary)]/80 text-sm font-[500] tracking-tight hover:border-[var(--primary)]/40"
               onClick={handleClear}>
               Clear
             </button>
@@ -669,17 +669,17 @@ function CustomTimePicker({
       <label className="input-label tracking-tight">{label}</label>
       <div
         onClick={() => { if (!disabled) inputRef.current?.focus(); }}
-        className={`w-full px-4 py-3 rounded-2xl border border-[#008C9C]/15 bg-[#008C9C]/5 flex items-center justify-between text-left transition-all tracking-tight ${
+        className={`w-full px-4 py-3 rounded-2xl border border-[var(--primary)]/15 bg-[var(--primary)]/5 flex items-center justify-between text-left transition-all tracking-tight ${
           disabled
             ? "opacity-60 cursor-not-allowed"
-            : "hover:border-[#008C9C]/40 cursor-text"
+            : "hover:border-[var(--primary)]/40 cursor-text"
         }`}>
         <div className="flex items-center gap-3 overflow-hidden flex-1">
-          <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center border border-[#008C9C]/15 flex-shrink-0">
-            <Calendar className="w-4 h-4 text-[#008C9C]" />
+          <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center border border-[var(--primary)]/15 flex-shrink-0">
+            <Calendar className="w-4 h-4 text-[var(--primary)]" />
           </div>
           <div className="flex flex-col leading-tight flex-1 min-w-0">
-            <span className="text-xs text-[#008C9C]/70">Selected time</span>
+            <span className="text-xs text-[var(--primary)]/70">Selected time</span>
             <input
               ref={inputRef}
               type="text"
@@ -708,23 +708,23 @@ function CustomTimePicker({
                 }
               }}
               className={`text-sm font-[450] bg-transparent border-0 outline-none p-0 w-full ${
-                value ? "text-[#008C9C]" : "text-[#008C9C]/50"
+                value ? "text-[var(--primary)]" : "text-[var(--primary)]/50"
               }`}
             />
           </div>
         </div>
-        <ChevronDown className="w-4 h-4 text-[#008C9C]/60 flex-shrink-0" />
+        <ChevronDown className="w-4 h-4 text-[var(--primary)]/60 flex-shrink-0" />
       </div>
 
       {isOpen && (
         <div
-          className="fixed z-[9999] w-full max-w-sm rounded-2xl bg-white shadow-xl border border-[#008C9C]/10 max-h-64 overflow-y-auto"
+          className="fixed z-[9999] w-full max-w-sm rounded-2xl bg-white shadow-xl border border-[var(--primary)]/10 max-h-64 overflow-y-auto"
           style={{ top: dropdownPosition.top, left: dropdownPosition.left }}>
           <div className="p-2">
             <div className="flex gap-2 mb-2">
               <button
                 type="button"
-                className="flex-1 px-3 py-2 rounded-xl bg-[#008C9C] text-white text-sm font-[500] tracking-tight hover:bg-[#008C9C]/90"
+                className="flex-1 px-3 py-2 rounded-xl bg-[var(--primary)] text-white text-sm font-[500] tracking-tight hover:bg-[var(--primary)]/90"
                 onClick={() =>
                   // The business's clock, not the laptop's. Pressing Now in
                   // Calgary used to stamp a Montreal job with 1:15 PM.
@@ -734,7 +734,7 @@ function CustomTimePicker({
               </button>
               <button
                 type="button"
-                className="flex-1 px-3 py-2 rounded-xl bg-white border border-[#008C9C]/20 text-[#008C9C]/80 text-sm font-[500] tracking-tight hover:border-[#008C9C]/40"
+                className="flex-1 px-3 py-2 rounded-xl bg-white border border-[var(--primary)]/20 text-[var(--primary)]/80 text-sm font-[500] tracking-tight hover:border-[var(--primary)]/40"
                 onClick={handleClear}>
                 Clear
               </button>
@@ -744,7 +744,7 @@ function CustomTimePicker({
                 Now button because Now is the control that raised the question:
                 pressed in Calgary on a Montreal job, it stamps Montreal's
                 time, and without this line that looks like a bug. */}
-            <p className="px-1 pb-2 text-[11px] leading-tight text-[#008C9C]/70">
+            <p className="px-1 pb-2 text-[11px] leading-tight text-[var(--primary)]/70">
               Times are {storeTzLabel()} — the business clock, not this device&apos;s.
             </p>
             <div className="grid grid-cols-3 gap-1">
@@ -755,8 +755,8 @@ function CustomTimePicker({
                   onClick={() => handleTimeSelect(time)}
                   className={`px-3 py-2 rounded-lg text-sm font-[450] tracking-tight transition-all ${
                     value === time
-                      ? "bg-[#008C9C] text-white"
-                      : "bg-[#008C9C]/5 text-[#008C9C] hover:bg-[#008C9C]/10"
+                      ? "bg-[var(--primary)] text-white"
+                      : "bg-[var(--primary)]/5 text-[var(--primary)] hover:bg-[var(--primary)]/10"
                   }`}>
                   {formatTimeDisplay(time)}
                 </button>
@@ -1901,10 +1901,10 @@ export default function JobModal({
             {/* Header */}
             <div className="w-full flex items-start justify-between gap-1 mb-6">
               <div>
-                <h1 className="text-2xl font-[350] tracking-tight text-[#008C9C]">
+                <h1 className="text-2xl font-[350] tracking-tight text-[var(--primary)]">
                   {mode === "create" ? "Create New Job" : "Edit Job"}
                 </h1>
-                <p className="text-sm text-[#008C9C]/60 mt-1">
+                <p className="text-sm text-[var(--primary)]/60 mt-1">
                   Step {currentStep} of 3 — {STEPS[currentStep - 1].title}
                 </p>
               </div>
@@ -1933,10 +1933,10 @@ export default function JobModal({
                       disabled={disableForm}
                       className={`flex items-center gap-2 px-3 py-2 rounded-xl transition-all ${
                         isActive
-                          ? "bg-[#008C9C] text-white"
+                          ? "bg-[var(--primary)] text-white"
                           : isCompleted
-                          ? "bg-[#008C9C]/10 text-[#008C9C] hover:bg-[#008C9C]/20"
-                          : "bg-[#008C9C]/5 text-[#008C9C]/40"
+                          ? "bg-[var(--primary)]/10 text-[var(--primary)] hover:bg-[var(--primary)]/20"
+                          : "bg-[var(--primary)]/5 text-[var(--primary)]/40"
                       }`}>
                       {isCompleted ? (
                         <Check className="w-4 h-4" />
@@ -1950,7 +1950,7 @@ export default function JobModal({
                     {index < STEPS.length - 1 && (
                       <div
                         className={`flex-1 h-[2px] mx-2 rounded-full ${
-                          isCompleted ? "bg-[#008C9C]/30" : "bg-[#008C9C]/10"
+                          isCompleted ? "bg-[var(--primary)]/30" : "bg-[var(--primary)]/10"
                         }`}
                       />
                     )}
@@ -2043,7 +2043,7 @@ export default function JobModal({
                       Client Name <span className="text-red-500">*</span>
                     </label>
                     <div className="relative">
-                      <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/50" />
+                      <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[var(--primary)]/50" />
                       <Input
                         variant="form"
                         type="text"
@@ -2114,7 +2114,7 @@ export default function JobModal({
                     </div>
                   </div>
                   {!selectedClientId && (
-                    <p className="-mt-2 text-xs text-[#008C9C]/70">
+                    <p className="-mt-2 text-xs text-[var(--primary)]/70">
                       No customer linked — an email or phone finds the existing
                       contact, or creates one, so this booking can receive
                       receipts and reminders.
@@ -2134,12 +2134,12 @@ export default function JobModal({
                           border={false}
                           type="button"
                           disabled={disableForm}
-                          className="w-full h-[44px] px-4 py-3 flex items-center !justify-between bg-[#008C9C]/5">
-                          <span className="text-sm font-[350] text-[#008C9C]">
+                          className="w-full h-[44px] px-4 py-3 flex items-center !justify-between bg-[var(--primary)]/5">
+                          <span className="text-sm font-[350] text-[var(--primary)]">
                             {serviceChoices.find((t) => t.value === selectedJobType)
                               ?.label || "Select type"}
                           </span>
-                          <ChevronDown className="w-4 h-4 text-[#008C9C]/50" />
+                          <ChevronDown className="w-4 h-4 text-[var(--primary)]/50" />
                         </Button>
                       }
                       options={serviceChoices.map((type) => ({
@@ -2172,7 +2172,7 @@ export default function JobModal({
                           { value: NEW_ADDRESS, label: "+ Type a new address" },
                         ]}
                       />
-                      <p className="mt-1.5 text-xs text-[#008C9C]/70">
+                      <p className="mt-1.5 text-xs text-[var(--primary)]/70">
                         Pick a saved address, or choose “Type a new address” and
                         fill Location below — it’s added to this client’s
                         address book when you save.
@@ -2188,7 +2188,7 @@ export default function JobModal({
                               null;
                         const size = picked ? formatPropertySize(picked) : null;
                         return size ? (
-                          <p className="mt-1 text-xs text-[#008C9C]">
+                          <p className="mt-1 text-xs text-[var(--primary)]">
                             Property on file: {size} — pre-filled below, edit if
                             it has changed.
                           </p>
@@ -2203,7 +2203,7 @@ export default function JobModal({
                       Location
                     </label>
                     <div className="relative">
-                      <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/50" />
+                      <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[var(--primary)]/50" />
                       <Input
                         variant="form"
                         type="text"
@@ -2266,7 +2266,7 @@ export default function JobModal({
                       Transportation
                     </label>
                     <div className="relative">
-                      <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/50" />
+                      <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[var(--primary)]/50" />
                       <Input
                         variant="form"
                         type="number"
@@ -2307,7 +2307,7 @@ export default function JobModal({
                 <div className="space-y-6">
                   {/* Date & Time Section */}
                   <div className="space-y-4">
-                    <h3 className="text-sm font-[400] text-[#008C9C] uppercase tracking-tight flex items-center gap-2">
+                    <h3 className="text-sm font-[400] text-[var(--primary)] uppercase tracking-tight flex items-center gap-2">
                       <Calendar className="w-4 h-4" />
                       Schedule
                     </h3>
@@ -2360,13 +2360,13 @@ export default function JobModal({
                               border={false}
                               type="button"
                               disabled={disableForm}
-                              className="w-full h-[44px] px-4 py-3 flex items-center !justify-between bg-[#008C9C]/5">
-                              <span className="text-sm font-[350] text-[#008C9C]">
+                              className="w-full h-[44px] px-4 py-3 flex items-center !justify-between bg-[var(--primary)]/5">
+                              <span className="text-sm font-[350] text-[var(--primary)]">
                                 {frequencies.find(
                                   (f) => f.value === selectedFrequency
                                 )?.label || "One-time"}
                               </span>
-                              <ChevronDown className="w-4 h-4 text-[#008C9C]/50" />
+                              <ChevronDown className="w-4 h-4 text-[var(--primary)]/50" />
                             </Button>
                           }
                           options={frequencies.map((f) => ({
@@ -2380,7 +2380,7 @@ export default function JobModal({
                             (f) => f.value === selectedFrequency
                           )?.hint;
                           return hint ? (
-                            <p className="mt-2 text-xs text-[#008C9C]/60 tracking-tight">
+                            <p className="mt-2 text-xs text-[var(--primary)]/60 tracking-tight">
                               {hint}. The first cleaning is full price; future
                               cleanings are auto-created.
                             </p>
@@ -2401,7 +2401,7 @@ export default function JobModal({
                             the table on top discounts it twice. */}
                         {selectedFrequency !== "ONE_TIME" && (
                           <div className="mt-3">
-                            <p className="text-[10px] uppercase tracking-wider text-[#008C9C]/50 font-[400]">
+                            <p className="text-[10px] uppercase tracking-wider text-[var(--primary)]/50 font-[400]">
                               Recurring discount
                             </p>
                             <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -2418,8 +2418,8 @@ export default function JobModal({
                                   onClick={() => setRecurringDiscountMode(o.v)}
                                   className={`rounded-lg px-2.5 py-1.5 text-xs font-[500] transition ${
                                     recurringDiscountMode === o.v
-                                      ? "bg-[#008C9C] text-white"
-                                      : "bg-[#008C9C]/5 text-[#008C9C]/80 hover:bg-[#008C9C]/10"
+                                      ? "bg-[var(--primary)] text-white"
+                                      : "bg-[var(--primary)]/5 text-[var(--primary)]/80 hover:bg-[var(--primary)]/10"
                                   }`}>
                                   {o.label}
                                 </button>
@@ -2438,10 +2438,10 @@ export default function JobModal({
                                 }
                                 disabled={disableForm}
                                 placeholder="Discount %"
-                                className="mt-2 w-full px-3 py-2 rounded-xl bg-[#008C9C]/5 text-sm text-[#008C9C] focus:outline-none placeholder:text-[#008C9C]/40"
+                                className="mt-2 w-full px-3 py-2 rounded-xl bg-[var(--primary)]/5 text-sm text-[var(--primary)] focus:outline-none placeholder:text-[var(--primary)]/40"
                               />
                             )}
-                            <p className="mt-1.5 text-xs text-[#008C9C]/60 tracking-tight">
+                            <p className="mt-1.5 text-xs text-[var(--primary)]/60 tracking-tight">
                               {recurringDiscountMode === "NONE"
                                 ? "Future cleanings are billed at full price. Use this when the discount is already in the agreed rate."
                                 : recurringDiscountMode === "CUSTOM"
@@ -2460,7 +2460,7 @@ export default function JobModal({
                         className={`rounded-xl px-3 py-2.5 border ${
                           applyToSeries
                             ? "bg-amber-50 border-amber-200"
-                            : "bg-[#008C9C]/5 border-transparent"
+                            : "bg-[var(--primary)]/5 border-transparent"
                         }`}>
                         <label className="flex items-start gap-2 cursor-pointer">
                           <input
@@ -2471,10 +2471,10 @@ export default function JobModal({
                             className="mt-0.5"
                           />
                           <span className="text-xs">
-                            <span className="font-[500] text-[#008C9C]">
+                            <span className="font-[500] text-[var(--primary)]">
                               Apply changes to the whole recurring series
                             </span>
-                            <span className="block text-[#008C9C]/60 mt-0.5">
+                            <span className="block text-[var(--primary)]/60 mt-0.5">
                               {applyToSeries
                                 ? `Updates this and ${seriesInfo.editableCount} other occurrence${
                                     seriesInfo.editableCount === 1 ? "" : "s"
@@ -2528,9 +2528,9 @@ export default function JobModal({
                     </div>
 
                     {users.length === 0 ? (
-                      <div className="bg-[#008C9C]/5 rounded-2xl p-6 text-center">
-                        <Users className="w-8 h-8 text-[#008C9C]/30 mx-auto mb-2" />
-                        <p className="text-sm text-[#008C9C]/60">
+                      <div className="bg-[var(--primary)]/5 rounded-2xl p-6 text-center">
+                        <Users className="w-8 h-8 text-[var(--primary)]/30 mx-auto mb-2" />
+                        <p className="text-sm text-[var(--primary)]/60">
                           No team members available
                         </p>
                       </div>
@@ -2556,10 +2556,10 @@ export default function JobModal({
                         renderItem={(item, isSelected) => (
                           <>
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-[400] text-[#008C9C]">
+                              <p className="text-sm font-[400] text-[var(--primary)]">
                                 {item.name}
                               </p>
-                              <p className="text-xs text-[#008C9C]/60">
+                              <p className="text-xs text-[var(--primary)]/60">
                                 {(item as { email?: string }).email}
                               </p>
                             </div>
@@ -2569,14 +2569,14 @@ export default function JobModal({
                             />
                             <StatusIndicator status={statuses.get(item.id)} />
                             {isSelected && (
-                              <Check className="w-4 h-4 text-[#008C9C]" />
+                              <Check className="w-4 h-4 text-[var(--primary)]" />
                             )}
                           </>
                         )}
                         renderSelectedItem={(item) => (
                           <div className="flex items-center gap-2">
-                            <div className="w-6 h-6 rounded-full bg-[#008C9C]/20 flex items-center justify-center">
-                              <span className="text-xs font-[500] text-[#008C9C]">
+                            <div className="w-6 h-6 rounded-full bg-[var(--primary)]/20 flex items-center justify-center">
+                              <span className="text-xs font-[500] text-[var(--primary)]">
                                 {item.name.charAt(0).toUpperCase()}
                               </span>
                             </div>
@@ -2584,7 +2584,7 @@ export default function JobModal({
                               warning={categoryWarnFor(item as User)}
                             />
                             <StatusIndicator status={statuses.get(item.id)} />
-                            <span className="text-sm font-[350] text-[#008C9C]">
+                            <span className="text-sm font-[350] text-[var(--primary)]">
                               {item.name}
                             </span>
                           </div>
@@ -2626,7 +2626,7 @@ export default function JobModal({
                 <div className="space-y-6">
                   {/* Pricing Section */}
                   <div className="space-y-4">
-                    <h3 className="text-sm font-[400] text-[#008C9C] uppercase tracking-tight flex items-center gap-2">
+                    <h3 className="text-sm font-[400] text-[var(--primary)] uppercase tracking-tight flex items-center gap-2">
                       <DollarSign className="w-4 h-4" />
                       Pricing & Payment
                     </h3>
@@ -2657,13 +2657,13 @@ export default function JobModal({
                               onClick={() => changePricingMode(m)}
                               className={`text-left px-4 py-3 rounded-xl transition-colors ${
                                 active
-                                  ? "bg-[#008C9C]/15 ring-1 ring-[#008C9C]/40"
-                                  : "bg-[#008C9C]/5 hover:bg-[#008C9C]/10"
+                                  ? "bg-[var(--primary)]/15 ring-1 ring-[var(--primary)]/40"
+                                  : "bg-[var(--primary)]/5 hover:bg-[var(--primary)]/10"
                               } disabled:opacity-60`}>
-                              <span className="block text-sm font-[600] text-[#008C9C] tracking-tight">
+                              <span className="block text-sm font-[600] text-[var(--primary)] tracking-tight">
                                 {PRICING_MODE_LABEL[m]}
                               </span>
-                              <span className="block text-xs text-[#008C9C]/60 tracking-tight mt-0.5">
+                              <span className="block text-xs text-[var(--primary)]/60 tracking-tight mt-0.5">
                                 {PRICING_MODE_HINT[m]}
                               </span>
                             </button>
@@ -2700,13 +2700,13 @@ export default function JobModal({
                               onClick={() => setBillingType(b)}
                               className={`text-left px-4 py-3 rounded-xl transition-colors ${
                                 active
-                                  ? "bg-[#008C9C]/15 ring-1 ring-[#008C9C]/40"
-                                  : "bg-[#008C9C]/5 hover:bg-[#008C9C]/10"
+                                  ? "bg-[var(--primary)]/15 ring-1 ring-[var(--primary)]/40"
+                                  : "bg-[var(--primary)]/5 hover:bg-[var(--primary)]/10"
                               } disabled:opacity-60`}>
-                              <span className="block text-sm font-[600] text-[#008C9C] tracking-tight">
+                              <span className="block text-sm font-[600] text-[var(--primary)] tracking-tight">
                                 {BILLING_TYPE_LABEL[b]}
                               </span>
-                              <span className="block text-xs text-[#008C9C]/60 tracking-tight mt-0.5">
+                              <span className="block text-xs text-[var(--primary)]/60 tracking-tight mt-0.5">
                                 {BILLING_TYPE_HINT[b]}
                               </span>
                             </button>
@@ -2716,9 +2716,9 @@ export default function JobModal({
                     </div>
 
                     {billingType === "HOURLY" && (
-                      <div className="grid grid-cols-2 gap-4 p-4 rounded-2xl bg-[#008C9C]/5">
+                      <div className="grid grid-cols-2 gap-4 p-4 rounded-2xl bg-[var(--primary)]/5">
                         <div className="col-span-2">
-                          <p className="text-xs text-[#008C9C]/70 tracking-tight">
+                          <p className="text-xs text-[var(--primary)]/70 tracking-tight">
                             The customer&apos;s rate and hours. What the cleaner
                             is paid is set separately, under{" "}
                             <strong>Pay type</strong> below.
@@ -2730,7 +2730,7 @@ export default function JobModal({
                             Customer hourly rate
                           </label>
                           <div className="relative">
-                            <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/50" />
+                            <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[var(--primary)]/50" />
                             <Input
                               variant="form"
                               type="number"
@@ -2762,7 +2762,7 @@ export default function JobModal({
                             placeholder="0"
                             border={false}
                           />
-                          <p className="mt-1.5 text-[11px] tracking-tight text-[#008C9C]/60">
+                          <p className="mt-1.5 text-[11px] tracking-tight text-[var(--primary)]/60">
                             Total job hours across all cleaners — 2 cleaners ×
                             15h is 30.
                           </p>
@@ -2791,7 +2791,7 @@ export default function JobModal({
                             placeholder="0"
                             border={false}
                           />
-                          <p className="mt-1.5 text-[11px] tracking-tight text-[#008C9C]/60">
+                          <p className="mt-1.5 text-[11px] tracking-tight text-[var(--primary)]/60">
                             {actualHoursEditable
                               ? `Every cleaner's clocked time added up, to the nearest ${BILLED_HOURS_INCREMENT}h. Edit to correct it.`
                               : "Filled in automatically when the crew clocks out — every cleaner's time added up."}
@@ -2800,17 +2800,17 @@ export default function JobModal({
 
                         <div className="flex items-end">
                           <div className="w-full px-4 py-3 rounded-xl bg-white">
-                            <div className="text-[11px] text-[#008C9C]/60 tracking-tight">
+                            <div className="text-[11px] text-[var(--primary)]/60 tracking-tight">
                               Service total{" "}
                               {hourlyUsesActual ? "(actual hours)" : "(estimate)"}
                             </div>
-                            <div className="text-lg font-[600] text-[#008C9C] tracking-tight">
+                            <div className="text-lg font-[600] text-[var(--primary)] tracking-tight">
                               {hourlyDerivedPrice === null
                                 ? "—"
                                 : `$${hourlyDerivedPrice.toFixed(2)}`}
                             </div>
                             {hourlyDerivedPrice !== null && (
-                              <div className="text-[11px] text-[#008C9C]/60 tracking-tight">
+                              <div className="text-[11px] text-[var(--primary)]/60 tracking-tight">
                                 {formatHours(
                                   hourlyUsesActual
                                     ? Number(watchedBilledActual) || 0
@@ -2824,7 +2824,7 @@ export default function JobModal({
                         </div>
 
                         {pricingMode === "FINAL_PRICE" && (
-                          <p className="col-span-2 text-xs text-[#854d0e] bg-[#fef3c7] rounded-lg px-3 py-2">
+                          <p className="col-span-2 text-xs text-[#854d0e] bg-[var(--warning-soft)] rounded-lg px-3 py-2">
                             This job is on a final price override, so the
                             override total below wins over the hourly
                             calculation. Switch to itemized pricing to bill
@@ -2844,14 +2844,14 @@ export default function JobModal({
                               : "Price"}
                         </label>
                         <div className="relative">
-                          <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/50" />
+                          <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[var(--primary)]/50" />
                           {/* On an hourly job the price is DERIVED, so the box
                               shows the calculation rather than accepting a
                               number that the save would immediately overwrite.
                               An override is the escape hatch, and it keeps its
                               own editable field. */}
                           {billingType === "HOURLY" && pricingMode !== "FINAL_PRICE" ? (
-                            <div className="w-full pl-11 px-4 py-3 rounded-2xl bg-[#008C9C]/5 text-sm text-[#005a63] tracking-tight">
+                            <div className="w-full pl-11 px-4 py-3 rounded-2xl bg-[var(--primary)]/5 text-sm text-[#005a63] tracking-tight">
                               {hourlyDerivedPrice === null
                                 ? "Enter a rate and hours above"
                                 : hourlyDerivedPrice.toFixed(2)}
@@ -2887,7 +2887,7 @@ export default function JobModal({
                           Employee Pay
                         </label>
                         <div className="relative">
-                          <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/50" />
+                          <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[var(--primary)]/50" />
                           <Input
                             variant="form"
                             type="number"
@@ -2908,7 +2908,7 @@ export default function JobModal({
                         </div>
                         {payIsManual && String(watch("employeePay") || "") !== "" ? (
                           <div className="mt-1.5 flex items-center justify-between gap-2">
-                            <span className="text-[11px] font-[600] tracking-tight text-[#92400e] bg-[#fffbeb] rounded-full px-2 py-0.5">
+                            <span className="text-[11px] font-[600] tracking-tight text-[var(--amber-800)] bg-[var(--amber-50)] rounded-full px-2 py-0.5">
                               Manual — team total, split evenly
                             </span>
                             <button
@@ -2920,12 +2920,12 @@ export default function JobModal({
                                   shouldDirty: true,
                                 });
                               }}
-                              className="text-[11px] tracking-tight text-[#008C9C] underline underline-offset-2 disabled:opacity-60">
+                              className="text-[11px] tracking-tight text-[var(--primary)] underline underline-offset-2 disabled:opacity-60">
                               Clear — use automatic calculation
                             </button>
                           </div>
                         ) : (
-                          <p className="mt-1.5 text-[11px] tracking-tight text-[#008C9C]/60">
+                          <p className="mt-1.5 text-[11px] tracking-tight text-[var(--primary)]/60">
                             Leave blank for the automatic tier calculation on the
                             job&apos;s active value (base + add-ons).
                           </p>
@@ -2938,12 +2938,12 @@ export default function JobModal({
                           cleaner (decision D6). */}
                       <div>
                         <label className="input-label tracking-tight">
-                          Pay type <span className="font-[400] text-[#008C9C]/60">(cleaner)</span>
+                          Pay type <span className="font-[400] text-[var(--primary)]/60">(cleaner)</span>
                         </label>
                         <select
                           {...register("payType")}
                           disabled={disableForm}
-                          className="w-full px-4 py-3 rounded-xl bg-[#008C9C]/5 text-sm tracking-tight outline-none focus:bg-white"
+                          className="w-full px-4 py-3 rounded-xl bg-[var(--primary)]/5 text-sm tracking-tight outline-none focus:bg-white"
                         >
                           <option value="PERCENTAGE">Percentage (tier split)</option>
                           <option value="FLAT">Flat rate</option>
@@ -2957,7 +2957,7 @@ export default function JobModal({
                             Cleaner hourly rate
                           </label>
                           <div className="relative">
-                            <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/50" />
+                            <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[var(--primary)]/50" />
                             <Input
                               variant="form"
                               type="number"
@@ -2979,7 +2979,7 @@ export default function JobModal({
                           Total Tip
                         </label>
                         <div className="relative">
-                          <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/50" />
+                          <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[var(--primary)]/50" />
                           <Input
                             variant="form"
                             type="number"
@@ -3004,7 +3004,7 @@ export default function JobModal({
                           <label className="input-label tracking-tight">
                             Discount
                           </label>
-                          <div className="flex bg-[#008C9C]/5 rounded-lg p-0.5">
+                          <div className="flex bg-[var(--primary)]/5 rounded-lg p-0.5">
                             <button
                               type="button"
                               onClick={() => {
@@ -3014,8 +3014,8 @@ export default function JobModal({
                               disabled={disableForm}
                               className={`px-2 py-0.5 text-[11px] rounded-md transition-colors ${
                                 discountMode === "percent"
-                                  ? "bg-[#008C9C] text-white"
-                                  : "text-[#008C9C]/60"
+                                  ? "bg-[var(--primary)] text-white"
+                                  : "text-[var(--primary)]/60"
                               }`}>
                               %
                             </button>
@@ -3028,15 +3028,15 @@ export default function JobModal({
                               disabled={disableForm}
                               className={`px-2 py-0.5 text-[11px] rounded-md transition-colors ${
                                 discountMode === "amount"
-                                  ? "bg-[#008C9C] text-white"
-                                  : "text-[#008C9C]/60"
+                                  ? "bg-[var(--primary)] text-white"
+                                  : "text-[var(--primary)]/60"
                               }`}>
                               $
                             </button>
                           </div>
                         </div>
                         <div className="relative">
-                          <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/50" />
+                          <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[var(--primary)]/50" />
                           <Input
                             variant="form"
                             type="number"
@@ -3060,7 +3060,7 @@ export default function JobModal({
                               (c) => c.id === selectedClientId
                             );
                             return linked && (linked.discountPercent ?? 0) > 0 ? (
-                              <p className="text-[11px] text-[#008C9C]/60 mt-1">
+                              <p className="text-[11px] text-[var(--primary)]/60 mt-1">
                                 From client default ({linked.discountPercent}%)
                               </p>
                             ) : null;
@@ -3087,7 +3087,7 @@ export default function JobModal({
                               }
                               onChange={(e) => setDiscountReason(e.target.value)}
                               disabled={disableForm}
-                              className="flex-1 min-w-[10rem] px-4 py-3 rounded-xl bg-[#008C9C]/5 text-sm text-[#008C9C] focus:outline-none">
+                              className="flex-1 min-w-[10rem] px-4 py-3 rounded-xl bg-[var(--primary)]/5 text-sm text-[var(--primary)] focus:outline-none">
                               <option value="">Select a reason…</option>
                               {DISCOUNT_REASONS.map((r) => (
                                 <option key={r} value={r}>
@@ -3115,7 +3115,7 @@ export default function JobModal({
                             )}
                           </div>
                           {!discountReason && (
-                            <p className="text-[11px] text-[#008C9C]/60 mt-1">
+                            <p className="text-[11px] text-[var(--primary)]/60 mt-1">
                               Optional, but it appears in job details and
                               reporting — blank shows as &quot;{NO_REASON_LABEL}&quot;.
                             </p>
@@ -3136,7 +3136,7 @@ export default function JobModal({
                           className={`flex items-start gap-2 rounded-xl px-3 py-2.5 cursor-pointer border ${
                             isFlexible
                               ? "bg-amber-50 border-amber-200"
-                              : "bg-[#008C9C]/5 border-transparent"
+                              : "bg-[var(--primary)]/5 border-transparent"
                           }`}>
                           <input
                             type="checkbox"
@@ -3146,10 +3146,10 @@ export default function JobModal({
                             className="mt-0.5"
                           />
                           <span className="text-xs">
-                            <span className="font-[500] text-[#008C9C]">
+                            <span className="font-[500] text-[var(--primary)]">
                               Flexible — any time on this day
                             </span>
-                            <span className="block text-[#008C9C]/60 mt-0.5">
+                            <span className="block text-[var(--primary)]/60 mt-0.5">
                               {isFlexible
                                 ? "The cleaner can do this job whenever suits on the day, so they are never counted late — no penalty, no strike."
                                 : "Fixed start: the cleaner is expected at the scheduled time, and arriving late is recorded."}
@@ -3168,7 +3168,7 @@ export default function JobModal({
                           className={`flex items-start gap-2 rounded-xl px-3 py-2.5 cursor-pointer border ${
                             taxExempt
                               ? "bg-amber-50 border-amber-200"
-                              : "bg-[#008C9C]/5 border-transparent"
+                              : "bg-[var(--primary)]/5 border-transparent"
                           }`}>
                           <input
                             type="checkbox"
@@ -3178,10 +3178,10 @@ export default function JobModal({
                             className="mt-0.5"
                           />
                           <span className="text-xs">
-                            <span className="font-[500] text-[#008C9C]">
+                            <span className="font-[500] text-[var(--primary)]">
                               Exempt this job from sales tax
                             </span>
-                            <span className="block text-[#008C9C]/60 mt-0.5">
+                            <span className="block text-[var(--primary)]/60 mt-0.5">
                               {taxExempt
                                 ? "Taxes EXCLUDED — no GST/QST on this job. Cleaner pay is unaffected (always calculated before tax)."
                                 : "Taxes INCLUDED — GST/QST are added to this job's total."}
@@ -3222,15 +3222,15 @@ export default function JobModal({
                                 onClick={() => setPropertyType(p)}
                                 className={`flex-1 basis-28 min-w-0 h-[44px] px-3 rounded-xl text-sm font-[500] border transition-colors disabled:opacity-50 ${
                                   active
-                                    ? "bg-[#008C9C] text-white border-[#008C9C]"
-                                    : "bg-[#008C9C]/5 text-[#008C9C] border-transparent hover:bg-[#008C9C]/10"
+                                    ? "bg-[var(--primary)] text-white border-[var(--primary)]"
+                                    : "bg-[var(--primary)]/5 text-[var(--primary)] border-transparent hover:bg-[var(--primary)]/10"
                                 }`}>
                                 {p ? PROPERTY_TYPE_LABEL[p] : "Not specified"}
                               </button>
                             );
                           })}
                         </div>
-                        <p className="text-[11px] text-[#008C9C]/60 mt-1">
+                        <p className="text-[11px] text-[var(--primary)]/60 mt-1">
                           {propertyType
                             ? PROPERTY_TYPE_HINT[propertyType]
                             : "Saved as job information and shown to the crew before they arrive. It doesn't change the price."}
@@ -3306,7 +3306,7 @@ export default function JobModal({
                           placeholder="e.g. 1200"
                           border={false}
                         />
-                        <p className="text-[11px] text-[#008C9C]/60 mt-1">
+                        <p className="text-[11px] text-[var(--primary)]/60 mt-1">
                           {billingType === "HOURLY" ? (
                             "Saved as job information. This job is billed by the hour, so square footage doesn't set its price."
                           ) : sqftPriced ? (
@@ -3340,13 +3340,13 @@ export default function JobModal({
                               border={false}
                               type="button"
                               disabled={disableForm}
-                              className="w-full h-[44px] px-4 py-3 flex items-center !justify-between bg-[#008C9C]/5">
-                              <span className="text-sm font-[350] text-[#008C9C]">
+                              className="w-full h-[44px] px-4 py-3 flex items-center !justify-between bg-[var(--primary)]/5">
+                              <span className="text-sm font-[350] text-[var(--primary)]">
                                 {selectedPaymentType
                                   ? selectedPaymentType.replace("_", " ")
                                   : "Select payment type"}
                               </span>
-                              <ChevronDown className="w-4 h-4 text-[#008C9C]/50" />
+                              <ChevronDown className="w-4 h-4 text-[var(--primary)]/50" />
                             </Button>
                           }
                           options={[
@@ -3394,8 +3394,8 @@ export default function JobModal({
                             style={{
                               marginTop: 12,
                               padding: 12,
-                              background: "#fef3c7",
-                              border: "1px solid #fde68a",
+                              background: "var(--warning-soft)",
+                              border: "1px solid var(--amber-200)",
                               borderRadius: 10,
                               fontSize: 12.5,
                               color: "#854d0e",
@@ -3434,7 +3434,7 @@ export default function JobModal({
 
                   {/* Add-Ons Section */}
                   <div className="space-y-3">
-                    <h3 className="text-sm font-[400] text-[#008C9C] uppercase tracking-tight flex items-center gap-2">
+                    <h3 className="text-sm font-[400] text-[var(--primary)] uppercase tracking-tight flex items-center gap-2">
                       <Briefcase className="w-4 h-4" />
                       Add-Ons
                     </h3>
@@ -3445,7 +3445,7 @@ export default function JobModal({
                         a silently inert picker is what made an admin think the
                         add-on hadn't saved. */}
                     {pricingMode === "FINAL_PRICE" && (
-                      <p className="text-xs text-[#854d0e] bg-[#fef3c7] rounded-lg px-3 py-2">
+                      <p className="text-xs text-[#854d0e] bg-[var(--warning-soft)] rounded-lg px-3 py-2">
                         This job is on a final price override, so add-ons are{" "}
                         {ADDON_INCLUDED_LABEL} — pick them to record the scope;
                         they will not change the total.
@@ -3453,7 +3453,7 @@ export default function JobModal({
                     )}
                     {addOnCatalog.length > 0 && (
                       <div className="space-y-2">
-                        <p className="text-xs text-[#008C9C]/60">
+                        <p className="text-xs text-[var(--primary)]/60">
                           Quick add from your configured add-ons:
                         </p>
                         {/* Icon cards (spec item 22) — icon + name + price,
@@ -3494,14 +3494,14 @@ export default function JobModal({
                                 }
                                 className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border text-center transition-colors ${
                                   already
-                                    ? "bg-[#008C9C]/10 border-[#008C9C] text-[#008C9C]"
-                                    : "bg-white border-[#008C9C]/20 text-[#008C9C] hover:border-[#008C9C]/50"
+                                    ? "bg-[var(--primary)]/10 border-[var(--primary)] text-[var(--primary)]"
+                                    : "bg-white border-[var(--primary)]/20 text-[var(--primary)] hover:border-[var(--primary)]/50"
                                 }`}>
                                 <Icon className="w-5 h-5" />
                                 <span className="text-xs font-[450] leading-tight">
                                   {cat.name}
                                 </span>
-                                <span className="text-[11px] text-[#008C9C]/70">
+                                <span className="text-[11px] text-[var(--primary)]/70">
                                   ${cat.price.toFixed(2)}
                                 </span>
                                 {already && (
@@ -3523,7 +3523,7 @@ export default function JobModal({
                           return (
                             <div
                               key={a.rowId}
-                              className="flex flex-wrap items-center gap-2 p-3 rounded-xl bg-[#008C9C]/5">
+                              className="flex flex-wrap items-center gap-2 p-3 rounded-xl bg-[var(--primary)]/5">
                               <Input
                                 variant="form"
                                 size="md"
@@ -3537,7 +3537,7 @@ export default function JobModal({
                                 border={false}
                               />
                               {isCustom && (
-                                <span className="text-[10px] font-[600] uppercase tracking-wide px-2 py-0.5 rounded-full bg-[#008C9C]/10 text-[#008C9C]">
+                                <span className="text-[10px] font-[600] uppercase tracking-wide px-2 py-0.5 rounded-full bg-[var(--primary)]/10 text-[var(--primary)]">
                                   custom
                                 </span>
                               )}
@@ -3568,10 +3568,10 @@ export default function JobModal({
                                       quantity: Math.max(1, a.quantity - 1),
                                     })
                                   }
-                                  className="w-7 h-7 rounded-full bg-white text-[#008C9C] disabled:opacity-40">
+                                  className="w-7 h-7 rounded-full bg-white text-[var(--primary)] disabled:opacity-40">
                                   −
                                 </button>
-                                <span className="w-6 text-center text-sm text-[#008C9C]">
+                                <span className="w-6 text-center text-sm text-[var(--primary)]">
                                   {a.quantity}
                                 </span>
                                 <button
@@ -3588,11 +3588,11 @@ export default function JobModal({
                                       ),
                                     })
                                   }
-                                  className="w-7 h-7 rounded-full bg-white text-[#008C9C] disabled:opacity-40">
+                                  className="w-7 h-7 rounded-full bg-white text-[var(--primary)] disabled:opacity-40">
                                   +
                                 </button>
                               </div>
-                              <span className="text-sm font-[500] text-[#008C9C] w-20 text-right">
+                              <span className="text-sm font-[500] text-[var(--primary)] w-20 text-right">
                                 ${addOnLineTotal(a).toFixed(2)}
                               </span>
                               <button
@@ -3611,10 +3611,10 @@ export default function JobModal({
                       </div>
                     )}
                     <div className="space-y-2 pt-1">
-                      <p className="text-xs font-[600] text-[#008C9C]">
+                      <p className="text-xs font-[600] text-[var(--primary)]">
                         Custom extra charge
                       </p>
-                      <p className="text-xs text-[#008C9C]/60">
+                      <p className="text-xs text-[var(--primary)]/60">
                         Not in your catalog? Add a one-off charge to this job. It
                         is billed and taxed like any other add-on.
                       </p>
@@ -3671,12 +3671,12 @@ export default function JobModal({
                       admin could not see what a job would actually bill until
                       after saving it. Driven by the same helper the job detail
                       page, the receipt and the charge path use. */}
-                  <div className="space-y-2 p-4 rounded-xl bg-[#008C9C]/5">
-                    <h3 className="text-sm font-[400] text-[#008C9C] uppercase tracking-tight">
+                  <div className="space-y-2 p-4 rounded-xl bg-[var(--primary)]/5">
+                    <h3 className="text-sm font-[400] text-[var(--primary)] uppercase tracking-tight">
                       Total
                     </h3>
                     {previewMoney.addOnsIncludedInSubtotal && (
-                      <p className="text-xs text-[#008C9C]/60">
+                      <p className="text-xs text-[var(--primary)]/60">
                         This booking&apos;s add-ons are already inside its
                         service total, so they are itemised here rather than
                         added.
@@ -3688,12 +3688,12 @@ export default function JobModal({
                         total is the one they typed or the one the parts add up
                         to. Plus the escape hatch back to itemized. */}
                     {previewTotalsDiffer && (
-                      <div className="space-y-1 pb-2 mb-1 border-b border-[#008C9C]/15">
-                        <div className="flex justify-between text-xs text-[#008C9C]/60">
+                      <div className="space-y-1 pb-2 mb-1 border-b border-[var(--primary)]/15">
+                        <div className="flex justify-between text-xs text-[var(--primary)]/60">
                           <span>Calculated from items</span>
                           <span>${previewItemizedTotal.toFixed(2)}</span>
                         </div>
-                        <div className="flex justify-between text-xs font-[600] text-[#008C9C]">
+                        <div className="flex justify-between text-xs font-[600] text-[var(--primary)]">
                           <span>Active override total</span>
                           <span>${previewMoney.subtotalAmount.toFixed(2)}</span>
                         </div>
@@ -3707,19 +3707,19 @@ export default function JobModal({
                           type="button"
                           disabled={disableForm}
                           onClick={() => changePricingMode("ITEMIZED", true)}
-                          className="text-xs font-[600] text-[#008C9C] underline underline-offset-2 disabled:opacity-60">
+                          className="text-xs font-[600] text-[var(--primary)] underline underline-offset-2 disabled:opacity-60">
                           Recalculate from items (${previewItemizedTotal.toFixed(2)})
                         </button>
                       </div>
                     )}
-                    <div className="flex justify-between text-sm text-[#008C9C]">
+                    <div className="flex justify-between text-sm text-[var(--primary)]">
                       <span>
                         Base price
                         {/* Says WHERE the base came from on an hourly job, so
                             the figure is never a number with no origin. */}
                         {previewMoney.hourlyServiceAmount !== null &&
                           pricingMode !== "FINAL_PRICE" && (
-                            <span className="ml-2 font-[400] text-xs text-[#008C9C]/60">
+                            <span className="ml-2 font-[400] text-xs text-[var(--primary)]/60">
                               {formatHours(
                                 hourlyUsesActual
                                   ? Number(watchedBilledActual) || 0
@@ -3733,7 +3733,7 @@ export default function JobModal({
                       <span>${previewMoney.basePrice.toFixed(2)}</span>
                     </div>
                     {previewMoney.addOnTotal > 0 && (
-                      <div className="flex justify-between text-sm text-[#008C9C]">
+                      <div className="flex justify-between text-sm text-[var(--primary)]">
                         <span>Add-ons &amp; extra charges</span>
                         <span>
                           {previewMoney.addOnsIncludedInSubtotal ? "" : "+"}$
@@ -3742,16 +3742,16 @@ export default function JobModal({
                       </div>
                     )}
                     {previewMoney.discountApplied > 0 && (
-                      <div className="flex justify-between text-sm text-[#008C9C]">
+                      <div className="flex justify-between text-sm text-[var(--primary)]">
                         <span>Discount</span>
                         <span>−${previewMoney.discountApplied.toFixed(2)}</span>
                       </div>
                     )}
-                    <div className="flex justify-between text-sm font-[600] text-[#008C9C] border-t border-[#008C9C]/15 pt-2">
+                    <div className="flex justify-between text-sm font-[600] text-[var(--primary)] border-t border-[var(--primary)]/15 pt-2">
                       <span>
                         Subtotal
                         {pricingMode === "FINAL_PRICE" && (
-                          <span className="ml-2 font-[400] text-xs text-[#008C9C]/60">
+                          <span className="ml-2 font-[400] text-xs text-[var(--primary)]/60">
                             override total — active
                           </span>
                         )}
@@ -3770,13 +3770,13 @@ export default function JobModal({
                       taxLines(taxRates, previewMoney).map((line) => (
                         <div
                           key={line.key}
-                          className="flex justify-between text-sm text-[#008C9C]">
+                          className="flex justify-between text-sm text-[var(--primary)]">
                           <span>{line.label}</span>
                           <span>+${line.amount.toFixed(2)}</span>
                         </div>
                       ))
                     )}
-                    <div className="flex justify-between text-base font-[600] text-[#008C9C] border-t border-[#008C9C]/15 pt-2">
+                    <div className="flex justify-between text-base font-[600] text-[var(--primary)] border-t border-[var(--primary)]/15 pt-2">
                       <span>Total</span>
                       <span>${previewMoney.totalAmount.toFixed(2)}</span>
                     </div>
@@ -3784,7 +3784,7 @@ export default function JobModal({
 
                   {/* Notes Section */}
                   <div className="space-y-4">
-                    <h3 className="text-sm font-[400] text-[#008C9C] uppercase tracking-tight flex items-center gap-2">
+                    <h3 className="text-sm font-[400] text-[var(--primary)] uppercase tracking-tight flex items-center gap-2">
                       <FileText className="w-4 h-4" />
                       Additional Notes
                     </h3>
@@ -3793,7 +3793,7 @@ export default function JobModal({
                       size="md"
                       {...register("notes")}
                       disabled={disableForm}
-                      className="w-full px-4 py-3 min-h-[120px] bg-[#008C9C]/5 border-0 focus:ring-1 focus:ring-[#008C9C]/20 rounded-2xl tracking-tight placeholder:tracking-tight"
+                      className="w-full px-4 py-3 min-h-[120px] bg-[var(--primary)]/5 border-0 focus:ring-1 focus:ring-[var(--primary)]/20 rounded-2xl tracking-tight placeholder:tracking-tight"
                       placeholder="Any additional notes or special requirements..."
                       rows={4}
                     />
@@ -3809,7 +3809,7 @@ export default function JobModal({
                       checklist over the service-type default, so pinning is
                       for the one-off exception. */}
                   <div className="space-y-3">
-                    <h3 className="text-sm font-[400] text-[#008C9C] uppercase tracking-tight flex items-center gap-2">
+                    <h3 className="text-sm font-[400] text-[var(--primary)] uppercase tracking-tight flex items-center gap-2">
                       <Check className="w-4 h-4" />
                       Checklist
                     </h3>
@@ -3822,7 +3822,7 @@ export default function JobModal({
                       searchable={checklistOptions.length > 8}
                       size="md"
                     />
-                    <p className="text-[11px] text-[#008C9C]/60">
+                    <p className="text-[11px] text-[var(--primary)]/60">
                       {checklistFieldHint(checklistOptions, checklistTemplateId)}
                     </p>
                     {/* An empty picker has two very different causes and the
@@ -3834,7 +3834,7 @@ export default function JobModal({
                       </p>
                     ) : (
                       checklistOptions.length === 0 && (
-                        <p className="text-[11px] text-[#008C9C]/60">
+                        <p className="text-[11px] text-[var(--primary)]/60">
                           No active checklist templates yet — add one in Settings
                           &rarr; Checklists.
                         </p>
@@ -3859,9 +3859,9 @@ export default function JobModal({
                         both needs to know which one the cleaner will see.
                         Works with no templates in the workspace at all, which
                         is the other half of what the PDF asks for. */}
-                    <div className="pt-3 mt-1 border-t border-[#008C9C]/10 space-y-2">
+                    <div className="pt-3 mt-1 border-t border-[var(--primary)]/10 space-y-2">
                       <div className="flex items-center justify-between gap-2">
-                        <p className="text-[11px] uppercase tracking-wider text-[#008C9C]/50 font-[400]">
+                        <p className="text-[11px] uppercase tracking-wider text-[var(--primary)]/50 font-[400]">
                           Custom checklist for this job
                         </p>
                         <button
@@ -3873,13 +3873,13 @@ export default function JobModal({
                               { title: "", description: "", isRequired: true },
                             ])
                           }
-                          className="text-[11px] font-[600] text-[#008C9C] hover:underline disabled:opacity-50">
+                          className="text-[11px] font-[600] text-[var(--primary)] hover:underline disabled:opacity-50">
                           + Add item
                         </button>
                       </div>
 
                       {customChecklist.length === 0 ? (
-                        <p className="text-[11px] text-[#008C9C]/60">
+                        <p className="text-[11px] text-[var(--primary)]/60">
                           Nothing yet. Add items here to write a checklist just
                           for this job — the cleaner sees it as soon as they
                           open the job, with nothing to press.
@@ -3905,7 +3905,7 @@ export default function JobModal({
                                         return next;
                                       })
                                     }
-                                    className="text-[10px] leading-none text-[#008C9C]/60 disabled:opacity-25">
+                                    className="text-[10px] leading-none text-[var(--primary)]/60 disabled:opacity-25">
                                     ▲
                                   </button>
                                   <button
@@ -3919,7 +3919,7 @@ export default function JobModal({
                                         return next;
                                       })
                                     }
-                                    className="text-[10px] leading-none text-[#008C9C]/60 disabled:opacity-25">
+                                    className="text-[10px] leading-none text-[var(--primary)]/60 disabled:opacity-25">
                                     ▼
                                   </button>
                                 </div>
@@ -3937,7 +3937,7 @@ export default function JobModal({
                                         ),
                                       )
                                     }
-                                    className="w-full px-3 py-2 rounded-lg bg-[#008C9C]/5 text-sm text-[#008C9C] focus:outline-none placeholder:text-[#008C9C]/40"
+                                    className="w-full px-3 py-2 rounded-lg bg-[var(--primary)]/5 text-sm text-[var(--primary)] focus:outline-none placeholder:text-[var(--primary)]/40"
                                   />
                                   <input
                                     type="text"
@@ -3952,9 +3952,9 @@ export default function JobModal({
                                         ),
                                       )
                                     }
-                                    className="w-full px-3 py-1.5 rounded-lg bg-[#008C9C]/5 text-xs text-[#008C9C] focus:outline-none placeholder:text-[#008C9C]/40"
+                                    className="w-full px-3 py-1.5 rounded-lg bg-[var(--primary)]/5 text-xs text-[var(--primary)] focus:outline-none placeholder:text-[var(--primary)]/40"
                                   />
-                                  <label className="flex items-center gap-1.5 text-[11px] text-[#008C9C]/70">
+                                  <label className="flex items-center gap-1.5 text-[11px] text-[var(--primary)]/70">
                                     <input
                                       type="checkbox"
                                       checked={item.isRequired}
@@ -3981,7 +3981,7 @@ export default function JobModal({
                                       list.filter((_, j) => j !== i),
                                     )
                                   }
-                                  className="mt-1.5 text-[11px] text-[#008C9C]/50 hover:text-red-600 disabled:opacity-50">
+                                  className="mt-1.5 text-[11px] text-[var(--primary)]/50 hover:text-red-600 disabled:opacity-50">
                                   ✕
                                 </button>
                               </li>
@@ -4013,7 +4013,7 @@ export default function JobModal({
                       this block is inside the <form>, and the shared Button
                       submits by default. */}
                   {mode === "edit" && onDelete && (
-                    <div className="pt-2 border-t border-[#008C9C]/10">
+                    <div className="pt-2 border-t border-[var(--primary)]/10">
                       {showDeleteConfirm ? (
                         <div className="rounded-2xl p-4 flex items-start gap-3 bg-red-50 border border-red-200">
                           <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
@@ -4233,13 +4233,13 @@ function ClientSearchPicker({
 
       {selected ? (
         <div
-          className="w-full flex items-center justify-between gap-2 px-4 py-2.5 rounded-xl bg-[#008C9C]/5 border border-[#008C9C]/10"
+          className="w-full flex items-center justify-between gap-2 px-4 py-2.5 rounded-xl bg-[var(--primary)]/5 border border-[var(--primary)]/10"
           style={{ minHeight: 44 }}>
           <div className="flex-1 min-w-0">
-            <div className="text-sm font-[450] text-[#008C9C] truncate">
+            <div className="text-sm font-[450] text-[var(--primary)] truncate">
               {selected.name}
             </div>
-            <div className="text-xs text-[#008C9C]/60 truncate">
+            <div className="text-xs text-[var(--primary)]/60 truncate">
               {selected.email ?? "—"}
               {selected.address ? ` · ${selected.address}` : ""}
             </div>
@@ -4251,7 +4251,7 @@ function ClientSearchPicker({
               onClear();
               setQuery("");
             }}
-            className="text-xs text-[#008C9C]/70 hover:text-[#008C9C] px-2 py-1">
+            className="text-xs text-[var(--primary)]/70 hover:text-[var(--primary)] px-2 py-1">
             Change
           </button>
         </div>
@@ -4267,14 +4267,14 @@ function ClientSearchPicker({
             }}
             onFocus={() => setOpen(true)}
             placeholder="Search clients by name, email, phone, or address…"
-            className="w-full h-[44px] px-4 py-3 rounded-xl bg-[#008C9C]/5 text-sm text-[#008C9C] placeholder:text-[#008C9C]/50 outline-none focus:bg-[#008C9C]/10"
+            className="w-full h-[44px] px-4 py-3 rounded-xl bg-[var(--primary)]/5 text-sm text-[var(--primary)] placeholder:text-[var(--primary)]/50 outline-none focus:bg-[var(--primary)]/10"
           />
           {open && (
             <div
-              className="absolute left-0 right-0 mt-1 z-30 rounded-xl bg-white border border-[#008C9C]/10 shadow-lg"
+              className="absolute left-0 right-0 mt-1 z-30 rounded-xl bg-white border border-[var(--primary)]/10 shadow-lg"
               style={{ maxHeight: 280, overflowY: "auto" }}>
               {filtered.length === 0 ? (
-                <div className="px-4 py-3 text-sm text-[#008C9C]/60">
+                <div className="px-4 py-3 text-sm text-[var(--primary)]/60">
                   No matches. Enter the name below to create a new client.
                 </div>
               ) : (
@@ -4287,11 +4287,11 @@ function ClientSearchPicker({
                       setQuery("");
                       setOpen(false);
                     }}
-                    className="w-full text-left px-4 py-2.5 hover:bg-[#008C9C]/5 flex flex-col gap-0.5 border-b border-[#008C9C]/5 last:border-b-0">
-                    <span className="text-sm font-[450] text-[#008C9C]">
+                    className="w-full text-left px-4 py-2.5 hover:bg-[var(--primary)]/5 flex flex-col gap-0.5 border-b border-[var(--primary)]/5 last:border-b-0">
+                    <span className="text-sm font-[450] text-[var(--primary)]">
                       {c.name}
                     </span>
-                    <span className="text-xs text-[#008C9C]/60 truncate">
+                    <span className="text-xs text-[var(--primary)]/60 truncate">
                       {c.email ?? "—"}
                       {c.address ? ` · ${c.address}` : ""}
                       {c.defaultPaymentMethodId ? " · 💳 card on file" : ""}

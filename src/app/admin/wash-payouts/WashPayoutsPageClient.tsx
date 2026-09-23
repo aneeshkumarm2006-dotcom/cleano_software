@@ -262,7 +262,7 @@ export default function WashPayoutsPageClient({
                         padding: "8px 12px",
                         borderRadius: 10,
                         background: claimable > 0 ? "rgba(16, 185, 129, 0.08)" : "var(--primary-5)",
-                        color: claimable > 0 ? "#047857" : "var(--primary-60)",
+                        color: claimable > 0 ? "var(--emerald-700)" : "var(--primary-60)",
                         fontSize: 12,
                         fontWeight: 600,
                       }}>
@@ -364,7 +364,7 @@ export default function WashPayoutsPageClient({
                       style={{
                         ...td,
                         fontVariantNumeric: "tabular-nums",
-                        color: "#b91c1c",
+                        color: "var(--danger)",
                         fontWeight: 700,
                       }}>
                       {j.actualRags ?? 0}
@@ -430,9 +430,9 @@ const td: React.CSSProperties = {
 
 function StatusPill({ status }: { status: Status }) {
   const map = {
-    PENDING: { bg: "rgba(234, 179, 8, 0.14)", color: "#b45309", icon: <Clock size={12} /> },
-    COMPLETED: { bg: "rgba(16, 185, 129, 0.14)", color: "#047857", icon: <CheckCircle2 size={12} /> },
-    FAILED: { bg: "rgba(220, 38, 38, 0.12)", color: "#b91c1c", icon: <XCircle size={12} /> },
+    PENDING: { bg: "rgba(234, 179, 8, 0.14)", color: "var(--amber-700)", icon: <Clock size={12} /> },
+    COMPLETED: { bg: "rgba(16, 185, 129, 0.14)", color: "var(--emerald-700)", icon: <CheckCircle2 size={12} /> },
+    FAILED: { bg: "rgba(220, 38, 38, 0.12)", color: "var(--danger)", icon: <XCircle size={12} /> },
   } as const;
   const cfg = map[status];
   return (

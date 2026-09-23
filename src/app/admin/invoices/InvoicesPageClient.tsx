@@ -76,15 +76,15 @@ interface InvoicesPageClientProps {
 }
 
 const STATUS_CONFIG: Record<string, { label: string; bg: string; color: string }> = {
-  DRAFT:     { label: "Draft",     bg: "#f1f5f9", color: "#475569" },
+  DRAFT:     { label: "Draft",     bg: "var(--slate-100)", color: "#475569" },
   SENT:      { label: "Sent",      bg: "#eff6ff", color: "#1d4ed8" },
   PAID:      { label: "Paid",      bg: "#dcfce7", color: "#15803d" },
-  OVERDUE:   { label: "Overdue",   bg: "#fffbeb", color: "#d97706" },
-  CANCELLED: { label: "Cancelled", bg: "#fee2e2", color: "#b91c1c" },
+  OVERDUE:   { label: "Overdue",   bg: "var(--amber-50)", color: "var(--amber-600)" },
+  CANCELLED: { label: "Cancelled", bg: "var(--danger-soft)", color: "var(--danger)" },
 };
 
 function StatusPill({ status }: { status: string }) {
-  const c = STATUS_CONFIG[status] ?? { label: status, bg: "#f1f5f9", color: "#475569" };
+  const c = STATUS_CONFIG[status] ?? { label: status, bg: "var(--slate-100)", color: "#475569" };
   return (
     <span style={{ display: "inline-block", background: c.bg, color: c.color, fontSize: 11, fontWeight: 600, borderRadius: 20, padding: "2px 10px" }}>
       {c.label}
@@ -96,8 +96,8 @@ function StatusIcon({ status }: { status: string }) {
   switch (status) {
     case "SENT":      return <Send size={12} style={{ color: "#1d4ed8" }} />;
     case "PAID":      return <CheckCircle2 size={12} style={{ color: "#15803d" }} />;
-    case "OVERDUE":   return <Clock size={12} style={{ color: "#d97706" }} />;
-    case "CANCELLED": return <XCircle size={12} style={{ color: "#b91c1c" }} />;
+    case "OVERDUE":   return <Clock size={12} style={{ color: "var(--amber-600)" }} />;
+    case "CANCELLED": return <XCircle size={12} style={{ color: "var(--danger)" }} />;
     default:          return <FileText size={12} style={{ color: "#94a3b8" }} />;
   }
 }
@@ -263,23 +263,23 @@ export default function InvoicesPageClient({ invoices, clients, taxConfig, archi
           <div className="astat-value">${stats.pending.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
           <div className="astat-delta">sent / overdue</div>
         </div>
-        <div className="astat" style={stats.overdue > 0 ? { borderLeft: "3px solid #d97706" } : {}}>
-          <div className="astat-head" style={stats.overdue > 0 ? { color: "#92400e" } : {}}>
+        <div className="astat" style={stats.overdue > 0 ? { borderLeft: "3px solid var(--amber-600)" } : {}}>
+          <div className="astat-head" style={stats.overdue > 0 ? { color: "var(--amber-800)" } : {}}>
             <span>Overdue</span>
-            <span className="astat-icon" style={stats.overdue > 0 ? { background: "#fffbeb", color: "#d97706" } : {}}>
+            <span className="astat-icon" style={stats.overdue > 0 ? { background: "var(--amber-50)", color: "var(--amber-600)" } : {}}>
               <AlertTriangle size={15} />
             </span>
           </div>
-          <div className="astat-value" style={stats.overdue > 0 ? { color: "#92400e" } : {}}>{stats.overdue}</div>
+          <div className="astat-value" style={stats.overdue > 0 ? { color: "var(--amber-800)" } : {}}>{stats.overdue}</div>
           <div className="astat-delta">{stats.overdue > 0 ? "needs attention" : "all clear"}</div>
         </div>
       </div>
 
       {errorMsg && (
-        <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 12, padding: "12px 16px", fontSize: 13, color: "#b91c1c", display: "flex", gap: 10, alignItems: "center" }}>
+        <div style={{ background: "var(--error-bg)", border: "1px solid var(--error-border)", borderRadius: 12, padding: "12px 16px", fontSize: 13, color: "var(--danger)", display: "flex", gap: 10, alignItems: "center" }}>
           <AlertTriangle size={14} />
           <span style={{ flex: 1 }}>{errorMsg}</span>
-          <button type="button" onClick={() => setErrorMsg(null)} style={{ fontSize: 12, color: "#b91c1c", cursor: "pointer", textDecoration: "underline", background: "none", border: 0 }}>dismiss</button>
+          <button type="button" onClick={() => setErrorMsg(null)} style={{ fontSize: 12, color: "var(--danger)", cursor: "pointer", textDecoration: "underline", background: "none", border: 0 }}>dismiss</button>
         </div>
       )}
 
@@ -404,7 +404,7 @@ export default function InvoicesPageClient({ invoices, clients, taxConfig, archi
                       </td>
                       <td><span style={{ fontSize: 12, color: "var(--primary-70)" }}>{new Date(inv.createdAt).toLocaleDateString("en-US")}</span></td>
                       <td>
-                        <span style={{ fontSize: 12, color: inv.displayStatus === "OVERDUE" ? "#d97706" : "var(--primary-70)" }}>
+                        <span style={{ fontSize: 12, color: inv.displayStatus === "OVERDUE" ? "var(--amber-600)" : "var(--primary-70)" }}>
                           {inv.dueDate ? new Date(inv.dueDate).toLocaleDateString("en-US") : "—"}
                         </span>
                       </td>
@@ -510,7 +510,7 @@ export default function InvoicesPageClient({ invoices, clients, taxConfig, archi
           #inv-mobile  { display: flex !important; }
         }
         .atable tbody tr.row-selected { background: var(--primary-05, #f0fdff); }
-        .jcard.row-selected { outline: 2px solid var(--primary-40, #008C9C); outline-offset: -1px; }
+        .jcard.row-selected { outline: 2px solid var(--primary-40, var(--primary)); outline-offset: -1px; }
       `}</style>
 
       <CreateInvoiceModal

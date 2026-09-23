@@ -106,7 +106,7 @@ export default function AiAssistantTab({ settings }: Props) {
               "- Free parking must be available, or a parking fee applies.\n" +
               "- We bring all supplies; unscented products on request."
             }
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#008C9C]"
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
           />
           <p className="text-xs text-gray-500 mt-1">
             Your services, service areas, deposits, cancellation policy and FAQ

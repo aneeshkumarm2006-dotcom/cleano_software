@@ -350,7 +350,7 @@ export default function AvailabilityTab({ employeeId }: AvailabilityTabProps) {
                       background: "rgba(220,38,38,0.04)",
                       border: "1px solid rgba(220,38,38,0.12)",
                     }}>
-                    <CalendarOff size={14} style={{ color: "#dc2626", flexShrink: 0 }} />
+                    <CalendarOff size={14} style={{ color: "var(--error)", flexShrink: 0 }} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--ink)" }}>
                         {prettyDate(e.date)}
@@ -368,7 +368,7 @@ export default function AvailabilityTab({ employeeId }: AvailabilityTabProps) {
                         borderRadius: 8,
                         background: "transparent",
                         border: "1px solid rgba(220,38,38,0.2)",
-                        color: "#dc2626",
+                        color: "var(--error)",
                         cursor: "pointer",
                         flexShrink: 0,
                       }}>

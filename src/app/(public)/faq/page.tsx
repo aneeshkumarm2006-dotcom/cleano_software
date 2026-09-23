@@ -38,7 +38,7 @@ export default async function FaqPage({
               fontSize: 12,
               letterSpacing: "0.12em",
               textTransform: "uppercase",
-              color: "#008C9C",
+              color: "var(--primary)",
               fontWeight: 700,
             }}>
             Cleano

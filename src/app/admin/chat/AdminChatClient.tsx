@@ -376,7 +376,7 @@ export default function AdminChatClient({ initialList }: AdminChatClientProps) {
                     <div className="thread-role">
                       Employee
                       {chat?.otherOnline ? (
-                        <span style={{ color: "#059669", marginLeft: 8 }}>· Active now</span>
+                        <span style={{ color: "var(--emerald-600)", marginLeft: 8 }}>· Active now</span>
                       ) : (
                         <span style={{ color: "var(--primary-50)", marginLeft: 8 }}>· Offline</span>
                       )}
@@ -442,8 +442,8 @@ export default function AdminChatClient({ initialList }: AdminChatClientProps) {
                 <div className="chat-composer">
                   {sendError && (
                     <div style={{
-                      fontSize: 12, color: "#dc2626",
-                      background: "#fef2f2", border: "1px solid #fecaca",
+                      fontSize: 12, color: "var(--error)",
+                      background: "var(--error-bg)", border: "1px solid var(--error-border)",
                       borderRadius: 8, padding: "6px 12px", marginBottom: 10,
                     }}>
                       Failed to send: {sendError}

@@ -43,9 +43,9 @@ const SERVICE_LABELS: Record<string, string> = {
 };
 
 const STATUS_COLORS: Record<Status, { bg: string; fg: string; dot: string; label: string }> = {
-  NEW:         { bg: "rgba(217,119,6,0.12)",   fg: "#92400e", dot: "#d97706", label: "New" },
+  NEW:         { bg: "rgba(217,119,6,0.12)",   fg: "var(--amber-800)", dot: "var(--amber-600)", label: "New" },
   CONTACTED:   { bg: "rgba(2,132,199,0.10)",   fg: "#075985", dot: "#0284c7", label: "Contacted" },
-  CONVERTED:   { bg: "rgba(5,150,105,0.10)",   fg: "#065f46", dot: "#10b981", label: "Converted" },
+  CONVERTED:   { bg: "rgba(5,150,105,0.10)",   fg: "var(--emerald-800)", dot: "#10b981", label: "Converted" },
   DEAD:        { bg: "rgba(148,163,184,0.18)", fg: "#475569", dot: "#94a3b8", label: "Dead" },
   OUT_OF_AREA: { bg: "rgba(249,115,22,0.12)",  fg: "#9a3412", dot: "#f97316", label: "Out of area" },
 };
@@ -573,7 +573,7 @@ export default function LeadsPageClient({ leads, archived = false }: { leads: Le
               #ld-mobile  { display: flex !important; }
             }
             .atable tbody tr.row-selected { background: var(--primary-05, #f0fdff); }
-            .jcard.row-selected { outline: 2px solid var(--primary-40, #008C9C); outline-offset: -1px; }
+            .jcard.row-selected { outline: 2px solid var(--primary-40, var(--primary)); outline-offset: -1px; }
           `}</style>
         </>
       )}

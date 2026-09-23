@@ -23,7 +23,7 @@ export default function Icon({ id }: { id: string }) {
         style={{
           width: "100%",
           height: "100%",
-          background: "#008C9C",
+          background: "#0e7f8d",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",

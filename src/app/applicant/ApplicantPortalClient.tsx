@@ -229,8 +229,8 @@ export default function ApplicantPortalClient({
                       height: 20,
                       borderRadius: "50%",
                       flexShrink: 0,
-                      background: item.done ? "var(--emerald-100, #d1fae5)" : "#f1f5f9",
-                      color: item.done ? "var(--emerald-800, #065f46)" : "#94a3b8",
+                      background: item.done ? "var(--emerald-100, var(--emerald-100))" : "var(--slate-100)",
+                      color: item.done ? "var(--emerald-800, var(--emerald-800))" : "#94a3b8",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
@@ -319,7 +319,7 @@ export default function ApplicantPortalClient({
                 style={{
                   marginTop: 10,
                   fontSize: 12.5,
-                  color: uploadMsg.ok ? "var(--emerald-800, #065f46)" : "var(--error-text, #dc2626)",
+                  color: uploadMsg.ok ? "var(--emerald-800, var(--emerald-800))" : "var(--error-text, var(--error))",
                 }}>
                 {uploadMsg.text}
               </p>
@@ -385,7 +385,7 @@ export default function ApplicantPortalClient({
               onChange={(e) => setDraft(e.target.value)}
             />
             {sendError ? (
-              <p style={{ marginTop: 8, fontSize: 12.5, color: "var(--error-text, #dc2626)" }}>
+              <p style={{ marginTop: 8, fontSize: 12.5, color: "var(--error-text, var(--error))" }}>
                 {sendError}
               </p>
             ) : null}

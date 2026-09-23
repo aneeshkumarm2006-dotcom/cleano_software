@@ -38,8 +38,8 @@ export default function ForecastCard({
     <Card variant="default" className="p-6">
       <div className="flex items-start justify-between mb-4">
         <div>
-          <h3 className="text-sm font-[400] text-[#008C9C]">{employeeName}</h3>
-          <p className="text-xs text-[#008C9C]/60 mt-0.5">
+          <h3 className="text-sm font-[400] text-[var(--primary)]">{employeeName}</h3>
+          <p className="text-xs text-[var(--primary)]/60 mt-0.5">
             {upcomingJobCount} upcoming job{upcomingJobCount !== 1 ? "s" : ""}
           </p>
         </div>
@@ -82,12 +82,12 @@ export default function ForecastCard({
               className={`p-3 rounded-xl ${
                 item.needsRefill
                   ? "bg-red-50 border border-red-200"
-                  : "bg-[#008C9C]/5"
+                  : "bg-[var(--primary)]/5"
               }`}>
               <div className="flex items-center justify-between mb-2">
                 <span
                   className={`text-sm font-[350] ${
-                    item.needsRefill ? "text-red-700" : "text-[#008C9C]"
+                    item.needsRefill ? "text-red-700" : "text-[var(--primary)]"
                   }`}>
                   {item.productName}
                 </span>
@@ -125,7 +125,7 @@ export default function ForecastCard({
                 />
               </div>
 
-              <div className="flex items-center justify-between text-xs text-[#008C9C]/50">
+              <div className="flex items-center justify-between text-xs text-[var(--primary)]/50">
                 <span>
                   Has: {item.currentQuantity} {item.unit}
                 </span>

@@ -29,11 +29,11 @@ interface GiftCard {
 }
 
 const STATUS_TINT: Record<Status, { bg: string; fg: string }> = {
-  PENDING_PAYMENT: { bg: "#f1f5f9", fg: "#475569" },
+  PENDING_PAYMENT: { bg: "var(--slate-100)", fg: "#475569" },
   ACTIVE:          { bg: "#dcfce7", fg: "#166534" },
-  REDEEMED:        { bg: "#dbeafe", fg: "#1e40af" },
-  REFUNDED:        { bg: "#fef3c7", fg: "#854d0e" },
-  CANCELLED:       { bg: "#fee2e2", fg: "#991b1b" },
+  REDEEMED:        { bg: "var(--blue-100)", fg: "var(--blue-800)" },
+  REFUNDED:        { bg: "var(--warning-soft)", fg: "#854d0e" },
+  CANCELLED:       { bg: "var(--danger-soft)", fg: "var(--danger)" },
 };
 
 const FILTERS: Array<{ value: Status | "ALL"; label: string }> = [
@@ -347,7 +347,7 @@ export default function GiftCardsAdminClient({ cards, archived = false }: { card
           #gc-mobile  { display: flex !important; }
         }
         .atable tbody tr.row-selected td { background: var(--primary-05, #f0fdff); }
-        .jcard.row-selected { outline: 2px solid var(--primary-40, #008C9C); outline-offset: -1px; }
+        .jcard.row-selected { outline: 2px solid var(--primary-40, var(--primary)); outline-offset: -1px; }
       `}</style>
     </div>
   );

@@ -9,7 +9,7 @@ interface ProfitLossChartProps {
 export default function ProfitLossChart({ data }: ProfitLossChartProps) {
   if (data.length === 0) {
     return (
-      <p className="text-sm text-[#008C9C]/60 text-center py-8">
+      <p className="text-sm text-[var(--primary)]/60 text-center py-8">
         No profit/loss data yet
       </p>
     );

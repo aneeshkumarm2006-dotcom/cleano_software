@@ -96,7 +96,7 @@ export default function GeneralTab({ settings }: Props) {
           <select
             value={currencyValue}
             onChange={(e) => setCurrencyValue(e.target.value)}
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#008C9C]">
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--primary)]">
             <option value="CAD">CAD — Canadian dollar</option>
             <option value="USD">USD — US dollar</option>
           </select>

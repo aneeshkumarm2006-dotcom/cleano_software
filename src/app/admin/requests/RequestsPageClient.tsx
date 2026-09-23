@@ -96,7 +96,7 @@ export default function RequestsPageClient({ jobs }: { jobs: JobRow[] }) {
       </header>
 
       {error && (
-        <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 12, padding: "12px 16px", fontSize: 13, color: "#b91c1c" }}>
+        <div style={{ background: "var(--error-bg)", border: "1px solid var(--error-border)", borderRadius: 12, padding: "12px 16px", fontSize: 13, color: "var(--danger)" }}>
           {error}
         </div>
       )}

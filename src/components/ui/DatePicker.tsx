@@ -184,13 +184,13 @@ export default function DatePicker({
   const border = error
     ? "1.5px solid #f87171"
     : open
-    ? "1.5px solid #008C9C"
+    ? "1.5px solid var(--primary)"
     : "1px solid rgba(0,140,156,0.16)";
   const boxShadow = open ? "0 0 0 3px rgba(0,140,156,0.11)" : "none";
 
   const NAV_BTN: React.CSSProperties = {
     width: 30, height: 30, borderRadius: 8, border: 0,
-    background: "rgba(0,140,156,0.06)", color: "#008C9C",
+    background: "rgba(0,140,156,0.06)", color: "var(--primary)",
     cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
     flexShrink: 0,
   };
@@ -318,8 +318,8 @@ export default function DatePicker({
                       border: isT && !isS ? "1.5px solid rgba(0,140,156,0.28)" : 0,
                       fontSize: 13,
                       fontWeight: isS ? 700 : isT ? 600 : 400,
-                      background: isS ? "#008C9C" : "transparent",
-                      color: isS ? "#fff" : isD ? "rgba(0,140,156,0.22)" : isT ? "#008C9C" : "#1a1a1a",
+                      background: isS ? "var(--primary)" : "transparent",
+                      color: isS ? "#fff" : isD ? "rgba(0,140,156,0.22)" : isT ? "var(--primary)" : "#1a1a1a",
                       cursor: isD ? "not-allowed" : "pointer",
                       fontFamily: "inherit",
                       transition: "background .1s, color .1s",
@@ -361,7 +361,7 @@ export default function DatePicker({
                 style={{
                   fontSize: 12,
                   fontWeight: 600,
-                  color: "#008C9C",
+                  color: "var(--primary)",
                   background: "none",
                   border: 0,
                   cursor: "pointer",

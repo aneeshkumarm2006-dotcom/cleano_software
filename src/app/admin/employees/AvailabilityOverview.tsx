@@ -50,7 +50,7 @@ export default function AvailabilityOverview({
         onClick={() => setOpen((o) => !o)}
         className="w-full flex items-center justify-between gap-2 text-left">
         <span className="flex items-center gap-2">
-          <Calendar className="w-4 h-4 text-[#008C9C]" />
+          <Calendar className="w-4 h-4 text-[var(--primary)]" />
           <span className="text-sm font-[600] text-gray-800">{title}</span>
           <span className="text-xs text-gray-500">
             {rows.length} cleaner{rows.length === 1 ? "" : "s"}

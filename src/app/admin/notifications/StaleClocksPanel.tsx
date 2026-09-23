@@ -103,7 +103,7 @@ function Row({
             {row.jobNumber != null && (
               <Link
                 href={`/admin/jobs/${row.jobId}`}
-                className="text-xs text-[#008C9C] hover:underline">
+                className="text-xs text-[var(--primary)] hover:underline">
                 Job #{row.jobNumber}
                 {row.clientName ? ` · ${row.clientName}` : ""}
               </Link>
@@ -135,14 +135,14 @@ function Row({
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
                 aria-label={`Finish date for ${row.cleanerName ?? "this cleaner"}`}
-                className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-[#008C9C]"
+                className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
               />
               <input
                 type="time"
                 value={time}
                 onChange={(e) => setTime(e.target.value)}
                 aria-label={`Finish time for ${row.cleanerName ?? "this cleaner"}`}
-                className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-[#008C9C]"
+                className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
               />
             </div>
           </label>
@@ -150,7 +150,7 @@ function Row({
             type="button"
             disabled={pending}
             onClick={submit}
-            className="px-3 py-1.5 text-xs font-[600] rounded-lg bg-[#008C9C] text-white hover:bg-[#008C9C]/90 disabled:opacity-50">
+            className="px-3 py-1.5 text-xs font-[600] rounded-lg bg-[var(--primary)] text-white hover:bg-[var(--primary)]/90 disabled:opacity-50">
             {pending ? "…" : "Close clock"}
           </button>
         </div>

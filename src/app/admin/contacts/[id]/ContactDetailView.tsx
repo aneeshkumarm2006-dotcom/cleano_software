@@ -24,11 +24,11 @@ const EVENT_ICON: Record<ContactActivityType, typeof Mail> = {
 };
 
 const JOB_PILL: Record<string, { bg: string; fg: string }> = {
-  completed: { bg: "rgba(5,150,105,0.10)", fg: "#065f46" },
+  completed: { bg: "rgba(5,150,105,0.10)", fg: "var(--emerald-800)" },
   paid: { bg: "rgba(5,150,105,0.18)", fg: "#064e3b" },
   scheduled: { bg: "rgba(2,132,199,0.10)", fg: "#075985" },
-  inprogress: { bg: "rgba(217,119,6,0.12)", fg: "#92400e" },
-  created: { bg: "rgba(100,116,139,0.12)", fg: "#334155" },
+  inprogress: { bg: "rgba(217,119,6,0.12)", fg: "var(--amber-800)" },
+  created: { bg: "rgba(100,116,139,0.12)", fg: "var(--slate-700)" },
   cancelled: { bg: "rgba(148,163,184,0.18)", fg: "#64748b" },
 };
 
@@ -367,7 +367,7 @@ function BookingsTab({ rows }: { rows: BookingRow[] }) {
                   <td><span className="pill" style={{ background: pill.bg, color: pill.fg }}>{b.status}</span></td>
                   <td className="num" style={{ fontWeight: 600 }}>{money(b.amount)}</td>
                   <td>{b.paid
-                    ? <span className="pill" style={{ background: "rgba(5,150,105,0.12)", color: "#065f46" }}>Paid</span>
+                    ? <span className="pill" style={{ background: "rgba(5,150,105,0.12)", color: "var(--emerald-800)" }}>Paid</span>
                     : <span className="pill" style={{ background: "var(--amber-50)", color: "var(--amber-800)" }}>Unpaid</span>}</td>
                 </tr>
               );

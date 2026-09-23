@@ -25,7 +25,7 @@ export default function WhyThisPriceLink({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className={`inline-flex items-center gap-1 text-xs text-[#008C9C] hover:text-[#008C9C]/80 underline decoration-dotted underline-offset-2 transition-colors ${className}`}>
+        className={`inline-flex items-center gap-1 text-xs text-[var(--primary)] hover:text-[var(--primary)]/80 underline decoration-dotted underline-offset-2 transition-colors ${className}`}>
         <Info className="w-3 h-3" />
         Pay details
       </button>

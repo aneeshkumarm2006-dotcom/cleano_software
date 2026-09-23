@@ -129,14 +129,14 @@ export default function AvailabilityWeekGrid({
               <th
                 key={c.key}
                 className={`py-2 pr-3 font-[600] ${
-                  c.date?.isSelected ? "text-[#008C9C]" : ""
+                  c.date?.isSelected ? "text-[var(--primary)]" : ""
                 }`}>
                 {onSelectDay && c.date ? (
                   <button
                     type="button"
                     onClick={() => onSelectDay(c.date!.dateKey)}
                     title={`See ${c.label} in the day view`}
-                    className="uppercase tracking-wide hover:text-[#008C9C]">
+                    className="uppercase tracking-wide hover:text-[var(--primary)]">
                     {c.label}
                     {c.date.isToday && <span aria-hidden> •</span>}
                   </button>
@@ -163,7 +163,7 @@ export default function AvailabilityWeekGrid({
                   {linkProfiles ? (
                     <Link
                       href={`/admin/employees/${row.employeeId}?tab=availability`}
-                      className="text-[#008C9C] hover:underline font-[500]">
+                      className="text-[var(--primary)] hover:underline font-[500]">
                       {row.employeeName}
                     </Link>
                   ) : (
@@ -207,7 +207,7 @@ export default function AvailabilityWeekGrid({
                       // red text and the "struck through in the grid" the stage
                       // asks for was invisible exactly where it mattered most.
                       className={`py-2 pr-3 whitespace-nowrap text-xs ${
-                        c.date?.isSelected ? "bg-[#008C9C]/[0.05]" : ""
+                        c.date?.isSelected ? "bg-[var(--primary)]/[0.05]" : ""
                       } ${blocked ? "line-through" : ""}`}>
                       {blocked ? (
                         <span

@@ -334,7 +334,7 @@ export default function CommissionManager({
                     <tr key={t.repId}>
                       <td style={{ fontWeight: 600 }}>{t.repName}</td>
                       <td>{t.entries}</td>
-                      <td style={{ color: t.pending ? "var(--amber-700, #b45309)" : undefined, fontWeight: t.pending ? 600 : 400 }}>
+                      <td style={{ color: t.pending ? "var(--amber-700, var(--amber-700))" : undefined, fontWeight: t.pending ? 600 : 400 }}>
                         {commissionMoney(t.pending)}
                       </td>
                       <td>{commissionMoney(t.paid)}</td>

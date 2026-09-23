@@ -391,10 +391,10 @@ export function ProductModal({
             {/* Header */}
             <div className="w-full flex items-start justify-between gap-1 mb-8">
               <div>
-                <h1 className="text-3xl font-[350] tracking-tight text-[#008C9C] max-w-[40rem]">
+                <h1 className="text-3xl font-[350] tracking-tight text-[var(--primary)] max-w-[40rem]">
                   {mode === "create" ? "Add New Product" : "Edit Product"}
                 </h1>
-                <p className="text-sm text-[#008C9C]/80">
+                <p className="text-sm text-[var(--primary)]/80">
                   {mode === "create"
                     ? "Add a new product to your inventory"
                     : "Update product details"}
@@ -517,7 +517,7 @@ export function ProductModal({
                     rows={3}
                   />
                 </div>
-                <p className="text-xs text-[#008C9C]/60 mt-1">
+                <p className="text-xs text-[var(--primary)]/60 mt-1">
                   Optional description for internal reference
                 </p>
               </div>
@@ -534,14 +534,14 @@ export function ProductModal({
                   id="product-item-type"
                   {...register("itemType")}
                   disabled={disableForm}
-                  className="w-full px-4 py-3 rounded-xl border border-[#008C9C]/15 bg-white text-[#003C46] text-sm focus:outline-none focus:border-[#008C9C] focus:ring-2 focus:ring-[#008C9C]/10">
+                  className="w-full px-4 py-3 rounded-xl border border-[var(--primary)]/15 bg-white text-[#003C46] text-sm focus:outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/10">
                   {ITEM_TYPES.map((t) => (
                     <option key={t} value={t}>
                       {ITEM_TYPE_NAME[t]}
                     </option>
                   ))}
                 </select>
-                <p className="text-xs text-[#008C9C]/60 mt-1">
+                <p className="text-xs text-[var(--primary)]/60 mt-1">
                   {ITEM_TYPE_DESCRIPTION[itemType]}
                 </p>
               </div>
@@ -554,13 +554,13 @@ export function ProductModal({
                 <select
                   {...register("category")}
                   disabled={disableForm}
-                  className="w-full px-4 py-3 rounded-xl border border-[#008C9C]/15 bg-white text-[#003C46] text-sm focus:outline-none focus:border-[#008C9C] focus:ring-2 focus:ring-[#008C9C]/10">
+                  className="w-full px-4 py-3 rounded-xl border border-[var(--primary)]/15 bg-white text-[#003C46] text-sm focus:outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/10">
                   <option value="LIQUID_SPRAY">Liquid spray (Windex, all-purpose, CLR…)</option>
                   <option value="MOP_LIQUID">Mop-based liquid (floor cleaner, Murphy Oil…)</option>
                   <option value="DISPOSABLE">Disposable (sponges, gloves, paper towels…)</option>
                   <option value="OTHER">Other</option>
                 </select>
-                <p className="text-xs text-[#008C9C]/60 mt-1">
+                <p className="text-xs text-[var(--primary)]/60 mt-1">
                   Determines how cleaners log usage at clock-out.
                 </p>
               </div>
@@ -584,7 +584,7 @@ export function ProductModal({
                       }
                     }}
                     disabled={disableForm}
-                    className="w-full px-4 py-3 rounded-xl border border-[#008C9C]/15 bg-white text-[#003C46] text-sm focus:outline-none focus:border-[#008C9C] focus:ring-2 focus:ring-[#008C9C]/10">
+                    className="w-full px-4 py-3 rounded-xl border border-[var(--primary)]/15 bg-white text-[#003C46] text-sm focus:outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/10">
                     {UNIT_PRESETS.map((u) => (
                       <option key={u} value={u}>
                         {u}
@@ -594,7 +594,7 @@ export function ProductModal({
                   </select>
                   {customUnit && (
                     <div className="relative mt-2">
-                      <Hash className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/50" />
+                      <Hash className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[var(--primary)]/50" />
                       <Input
                         variant="form"
                         type="text"
@@ -620,7 +620,7 @@ export function ProductModal({
                     Cost Per Unit <span className="text-red-500 ml-1">*</span>
                   </label>
                   <div className="relative">
-                    <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/50" />
+                    <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[var(--primary)]/50" />
                     <Input
                       variant="form"
                       type="number"
@@ -669,7 +669,7 @@ export function ProductModal({
                       {errors.stockLevel.message}
                     </p>
                   )}
-                  <p className="text-xs text-[#008C9C]/60 mt-1">
+                  <p className="text-xs text-[var(--primary)]/60 mt-1">
                     {stockFloor < 0
                       ? `Currently ${stockFloor} — more has been handed out than the warehouse had on record. Save the rest of your edits and it stays as it is, or type the count you actually have.`
                       : "Current quantity in warehouse"}
@@ -701,7 +701,7 @@ export function ProductModal({
                       {errors.minStock.message}
                     </p>
                   )}
-                  <p className="text-xs text-[#008C9C]/60 mt-1">
+                  <p className="text-xs text-[var(--primary)]/60 mt-1">
                     Warehouse/locker stock. Below this, <strong>Cleano needs to
                     purchase more</strong>.
                   </p>
@@ -712,7 +712,7 @@ export function ProductModal({
                   {isEquipment ? (
                     /* Deliberately not zeroed on save — the stored value is left
                        alone so switching the type back restores what was there. */
-                    <div className="w-full px-4 py-3 rounded-xl border border-dashed border-[#008C9C]/20 bg-[#008C9C]/3">
+                    <div className="w-full px-4 py-3 rounded-xl border border-dashed border-[var(--primary)]/20 bg-[var(--primary)]/3">
                       <p className="text-sm text-[#003C46]/70">
                         Not used for reusable equipment
                       </p>
@@ -739,7 +739,7 @@ export function ProductModal({
                       )}
                     </>
                   )}
-                  <p className="text-xs text-[#008C9C]/60 mt-1">
+                  <p className="text-xs text-[var(--primary)]/60 mt-1">
                     {isEquipment ? (
                       <>
                         A cleaner needs one scraper, not two — tools report a{" "}
@@ -759,7 +759,7 @@ export function ProductModal({
               <div>
                 <label className="input-label">Purchase link</label>
                 <div className="relative">
-                  <Link2 className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/50" />
+                  <Link2 className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[var(--primary)]/50" />
                   <Input
                     variant="form"
                     type="url"
@@ -778,7 +778,7 @@ export function ProductModal({
                     {errors.purchaseUrl.message}
                   </p>
                 ) : (
-                  <p className="text-xs text-[#008C9C]/60 mt-1">
+                  <p className="text-xs text-[var(--primary)]/60 mt-1">
                     The exact link to buy this product again. Must start with
                     http:// or https://
                   </p>
@@ -793,14 +793,14 @@ export function ProductModal({
                     type="button"
                     onClick={addLink}
                     disabled={disableForm || links.length >= MAX_PRODUCT_LINKS}
-                    className="inline-flex items-center gap-1 text-xs text-[#008C9C] disabled:text-[#008C9C]/40">
+                    className="inline-flex items-center gap-1 text-xs text-[var(--primary)] disabled:text-[var(--primary)]/40">
                     <Plus className="w-3.5 h-3.5" />
                     Add link
                   </button>
                 </div>
 
                 {links.length === 0 ? (
-                  <p className="text-xs text-[#008C9C]/60 mt-1">
+                  <p className="text-xs text-[var(--primary)]/60 mt-1">
                     Optional. Alternate suppliers, spec sheets, or bulk-order pages.
                   </p>
                 ) : (
@@ -814,7 +814,7 @@ export function ProductModal({
                           disabled={disableForm}
                           onChange={(e) => updateLink(i, { label: e.target.value })}
                           placeholder="Label (e.g. Costco)"
-                          className="w-1/3 px-3 py-2.5 rounded-xl border border-[#008C9C]/15 bg-white text-[#003C46] text-sm placeholder:text-[#008C9C]/40 focus:outline-none focus:border-[#008C9C]"
+                          className="w-1/3 px-3 py-2.5 rounded-xl border border-[var(--primary)]/15 bg-white text-[#003C46] text-sm placeholder:text-[var(--primary)]/40 focus:outline-none focus:border-[var(--primary)]"
                         />
                         <input
                           type="url"
@@ -823,14 +823,14 @@ export function ProductModal({
                           disabled={disableForm}
                           onChange={(e) => updateLink(i, { url: e.target.value })}
                           placeholder="https://…"
-                          className="flex-1 px-3 py-2.5 rounded-xl border border-[#008C9C]/15 bg-white text-[#003C46] text-sm placeholder:text-[#008C9C]/40 focus:outline-none focus:border-[#008C9C]"
+                          className="flex-1 px-3 py-2.5 rounded-xl border border-[var(--primary)]/15 bg-white text-[#003C46] text-sm placeholder:text-[var(--primary)]/40 focus:outline-none focus:border-[var(--primary)]"
                         />
                         <button
                           type="button"
                           aria-label="Remove link"
                           onClick={() => removeLink(i)}
                           disabled={disableForm}
-                          className="p-2.5 rounded-xl text-[#008C9C]/50 hover:text-red-600 hover:bg-red-50">
+                          className="p-2.5 rounded-xl text-[var(--primary)]/50 hover:text-red-600 hover:bg-red-50">
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
@@ -841,7 +841,7 @@ export function ProductModal({
                   <p className="my-1 text-xs text-red-600">{linkError}</p>
                 )}
                 {links.length >= MAX_PRODUCT_LINKS && (
-                  <p className="text-xs text-[#008C9C]/60 mt-1">
+                  <p className="text-xs text-[var(--primary)]/60 mt-1">
                     Maximum of {MAX_PRODUCT_LINKS} additional links.
                   </p>
                 )}
@@ -866,7 +866,7 @@ export function ProductModal({
                       border={false}
                     />
                   </div>
-                  <p className="text-xs text-[#008C9C]/60 mt-1">
+                  <p className="text-xs text-[var(--primary)]/60 mt-1">
                     Optional. Saved to the stock history when the warehouse count
                     changes.
                   </p>

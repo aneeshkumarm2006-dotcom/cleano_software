@@ -1429,7 +1429,7 @@ export default async function JobFormPage({
                   type="checkbox"
                   name="isCashJob"
                   defaultChecked={(prefill as any)?.isCashJob === true}
-                  className="w-4 h-4 rounded accent-[#008C9C]"
+                  className="w-4 h-4 rounded accent-[var(--primary)]"
                 />
                 <span style={{ fontSize: 14, color: "var(--ink)" }}>
                   Cash job <span style={{ color: "var(--primary-50)", fontWeight: 400 }}>— no Stripe charge, no tax, manual payment received</span>
@@ -1451,7 +1451,7 @@ export default async function JobFormPage({
                   type="checkbox"
                   name="taxExempt"
                   defaultChecked={(prefill as any)?.taxExempt === true}
-                  className="w-4 h-4 rounded accent-[#008C9C]"
+                  className="w-4 h-4 rounded accent-[var(--primary)]"
                 />
                 <span style={{ fontSize: 14, color: "var(--ink)" }}>
                   Exempt this job from sales tax <span style={{ color: "var(--primary-50)", fontWeight: 400 }}>— no GST/QST on this job. Cleaner pay is unaffected (always calculated before tax).</span>
@@ -1469,7 +1469,7 @@ export default async function JobFormPage({
                   type="checkbox"
                   name="isFlexible"
                   defaultChecked={(prefill as any)?.isFlexible === true}
-                  className="w-4 h-4 rounded accent-[#008C9C]"
+                  className="w-4 h-4 rounded accent-[var(--primary)]"
                 />
                 <span style={{ fontSize: 14, color: "var(--ink)" }}>
                   Flexible — any time on this day <span style={{ color: "var(--primary-50)", fontWeight: 400 }}>— the cleaner can do it whenever suits, so they are never counted late. Leave unticked if the client is opening the door at a set time.</span>

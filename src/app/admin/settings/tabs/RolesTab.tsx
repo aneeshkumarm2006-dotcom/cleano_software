@@ -70,17 +70,17 @@ export default function RolesTab() {
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left border-b border-[#008C9C]/10">
-              <th className="py-3 pr-3 text-xs font-[350] text-[#008C9C]/70 uppercase tracking-wide">
+            <tr className="text-left border-b border-[var(--primary)]/10">
+              <th className="py-3 pr-3 text-xs font-[350] text-[var(--primary)]/70 uppercase tracking-wide">
                 Feature
               </th>
-              <th className="py-3 pr-3 text-xs font-[350] text-[#008C9C]/70 uppercase tracking-wide text-center">
+              <th className="py-3 pr-3 text-xs font-[350] text-[var(--primary)]/70 uppercase tracking-wide text-center">
                 Owner
               </th>
-              <th className="py-3 pr-3 text-xs font-[350] text-[#008C9C]/70 uppercase tracking-wide text-center">
+              <th className="py-3 pr-3 text-xs font-[350] text-[var(--primary)]/70 uppercase tracking-wide text-center">
                 Admin
               </th>
-              <th className="py-3 text-xs font-[350] text-[#008C9C]/70 uppercase tracking-wide text-center">
+              <th className="py-3 text-xs font-[350] text-[var(--primary)]/70 uppercase tracking-wide text-center">
                 Employee
               </th>
             </tr>
@@ -89,8 +89,8 @@ export default function RolesTab() {
             {PERMISSIONS.map((row) => (
               <tr
                 key={row.feature}
-                className="border-b border-[#008C9C]/5 last:border-0">
-                <td className="py-3 pr-3 text-sm text-[#008C9C]">
+                className="border-b border-[var(--primary)]/5 last:border-0">
+                <td className="py-3 pr-3 text-sm text-[var(--primary)]">
                   {row.feature}
                 </td>
                 <td className="py-3 pr-3 text-center">
@@ -113,8 +113,8 @@ export default function RolesTab() {
 
 function PermIcon({ allowed }: { allowed: boolean }) {
   return allowed ? (
-    <Check className="w-4 h-4 text-[#008C9C] inline-block" />
+    <Check className="w-4 h-4 text-[var(--primary)] inline-block" />
   ) : (
-    <X className="w-4 h-4 text-[#008C9C]/20 inline-block" />
+    <X className="w-4 h-4 text-[var(--primary)]/20 inline-block" />
   );
 }

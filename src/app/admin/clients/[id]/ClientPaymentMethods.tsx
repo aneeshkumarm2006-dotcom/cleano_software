@@ -31,9 +31,9 @@ const MSG_STYLE: Record<
   NonNullable<Msg>["type"],
   { bg: string; fg: string }
 > = {
-  success: { bg: "rgba(5,150,105,0.10)", fg: "#065f46" },
-  error: { bg: "#fee2e2", fg: "#991b1b" },
-  warn: { bg: "#fffbeb", fg: "#92400e" },
+  success: { bg: "rgba(5,150,105,0.10)", fg: "var(--emerald-800)" },
+  error: { bg: "var(--danger-soft)", fg: "var(--danger)" },
+  warn: { bg: "var(--amber-50)", fg: "var(--amber-800)" },
 };
 
 function brandLabel(brand: string | null): string {
@@ -154,9 +154,9 @@ export default function ClientPaymentMethods({
         {!loading && !synced && (
           <span
             className="pill"
-            style={{ background: "#fffbeb", color: "#92400e" }}
+            style={{ background: "var(--amber-50)", color: "var(--amber-800)" }}
             title="Stripe could not be reached — showing the last known cards.">
-            <span className="pill-dot" style={{ background: "#d97706" }} />
+            <span className="pill-dot" style={{ background: "var(--amber-600)" }} />
             Not synced with Stripe
           </span>
         )}
@@ -223,7 +223,7 @@ export default function ClientPaymentMethods({
                         {pm.isExpired && (
                           <span
                             className="pill"
-                            style={{ background: "#fee2e2", color: "#991b1b" }}>
+                            style={{ background: "var(--danger-soft)", color: "var(--danger)" }}>
                             <AlertTriangle size={9} />
                             Expired
                           </span>
@@ -231,7 +231,7 @@ export default function ClientPaymentMethods({
                         {pm.upcomingBookings > 0 && (
                           <span
                             className="pill"
-                            style={{ background: "#fef3c7", color: "#92400e" }}
+                            style={{ background: "var(--warning-soft)", color: "var(--amber-800)" }}
                             title="Upcoming bookings are pinned to this card and will be charged on it. It can't be removed until they're completed or cancelled.">
                             {pm.upcomingBookings} upcoming booking
                             {pm.upcomingBookings === 1 ? "" : "s"}
@@ -276,7 +276,7 @@ export default function ClientPaymentMethods({
                           borderRadius: 8,
                           background: "transparent",
                           border: "1px solid rgba(220,38,38,0.2)",
-                          color: "#dc2626",
+                          color: "var(--error)",
                           cursor: busy ? "not-allowed" : "pointer",
                         }}>
                         <Trash2 size={12} />

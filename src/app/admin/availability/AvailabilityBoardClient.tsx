@@ -49,7 +49,7 @@ function DayRow({ row }: { row: AvailabilityBoardRowDTO }) {
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-2.5 rounded-xl hover:bg-black/[0.02] border-t border-gray-100 first:border-t-0">
       <Link
         href={`/admin/employees/${row.employeeId}?tab=availability`}
-        className="text-sm font-[500] text-[#008C9C] hover:underline min-w-[160px]">
+        className="text-sm font-[500] text-[var(--primary)] hover:underline min-w-[160px]">
         {row.employeeName}
       </Link>
       <Badge variant={AVAILABILITY_RESULT_TONE[row.day.result]} size="xs">

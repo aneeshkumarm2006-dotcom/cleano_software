@@ -457,8 +457,8 @@ export default function PhotoUpload({
                 aria-pressed={active}
                 className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
                   active
-                    ? "bg-[#008C9C] text-white border-[#008C9C]"
-                    : "bg-white text-neutral-950/70 border-neutral-950/15 hover:border-[#008C9C]/40"
+                    ? "bg-[var(--primary)] text-white border-[var(--primary)]"
+                    : "bg-white text-neutral-950/70 border-neutral-950/15 hover:border-[var(--primary)]/40"
                 }`}>
                 {JOB_PHOTO_KIND_LABEL[k]}
                 {kindCounts.get(k) ? (
@@ -477,7 +477,7 @@ export default function PhotoUpload({
         {...getRootProps()}
         className={`relative rounded-2xl border-2 border-dashed transition-colors p-6 text-center ${
           isDragActive
-            ? "border-[#008C9C] bg-[#008C9C]/5"
+            ? "border-[var(--primary)] bg-[var(--primary)]/5"
             : "border-neutral-950/15 bg-neutral-950/2"
         } ${
           uploading || remainingSlots === 0
@@ -486,8 +486,8 @@ export default function PhotoUpload({
         }`}>
         <input {...getInputProps()} />
         <div className="flex flex-col items-center gap-2">
-          <div className="p-3 rounded-full bg-[#008C9C]/10">
-            <ImagePlus className="w-6 h-6 text-[#008C9C]" />
+          <div className="p-3 rounded-full bg-[var(--primary)]/10">
+            <ImagePlus className="w-6 h-6 text-[var(--primary)]" />
           </div>
           <p className="text-sm font-[400] text-neutral-950">
             {isDragActive
@@ -610,7 +610,7 @@ export default function PhotoUpload({
                       handleKindChange(p.id, e.target.value as JobPhotoKind)
                     }
                     disabled={uploading || p.status === "uploading"}
-                    className="w-full text-sm rounded-lg border border-neutral-950/10 px-2 py-1.5 bg-white focus:outline-none focus:border-[#008C9C]/40">
+                    className="w-full text-sm rounded-lg border border-neutral-950/10 px-2 py-1.5 bg-white focus:outline-none focus:border-[var(--primary)]/40">
                     {JOB_PHOTO_KINDS.map((k) => (
                       <option key={k} value={k}>
                         {JOB_PHOTO_KIND_LABEL[k]}
@@ -625,7 +625,7 @@ export default function PhotoUpload({
                     }
                     placeholder="Add a caption (optional)"
                     disabled={uploading || p.status === "uploading"}
-                    className="w-full text-sm rounded-lg border border-neutral-950/10 px-2 py-1.5 focus:outline-none focus:border-[#008C9C]/40"
+                    className="w-full text-sm rounded-lg border border-neutral-950/10 px-2 py-1.5 focus:outline-none focus:border-[var(--primary)]/40"
                   />
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-neutral-950/60 truncate max-w-[60%]">
@@ -634,7 +634,7 @@ export default function PhotoUpload({
                     <span className="text-neutral-950/50">
                       {(p.file.size / 1024 / 1024).toFixed(2)} MB
                       {p.compressed && (
-                        <span className="ml-1 text-[#008C9C]/70">
+                        <span className="ml-1 text-[var(--primary)]/70">
                           (from {(p.originalSize / 1024 / 1024).toFixed(2)} MB)
                         </span>
                       )}

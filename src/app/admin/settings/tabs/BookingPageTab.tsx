@@ -284,7 +284,7 @@ export default function BookingPageTab({ settings }: BookingPageTabProps) {
         <button
           type="button"
           onClick={handleResetAll}
-          className="inline-flex items-center gap-1.5 text-sm text-[#008C9C] hover:underline">
+          className="inline-flex items-center gap-1.5 text-sm text-[var(--primary)] hover:underline">
           <RotateCcw className="w-4 h-4" />
           Reset everything to defaults
         </button>
@@ -325,8 +325,8 @@ function ScopeChip({
         fontWeight: 500,
         cursor: "pointer",
         border: `1px solid ${active ? "transparent" : "rgba(0,140,156,0.25)"}`,
-        background: active ? "#008C9C" : "rgba(0,140,156,0.05)",
-        color: active ? "#fff" : "#008C9C",
+        background: active ? "var(--primary)" : "rgba(0,140,156,0.05)",
+        color: active ? "#fff" : "var(--primary)",
       }}>
       {label}
     </button>
@@ -374,7 +374,7 @@ function moveBtnStyle(disabled: boolean): React.CSSProperties {
     borderRadius: 6,
     border: "1px solid rgba(0,140,156,0.2)",
     background: "#fff",
-    color: "#008C9C",
+    color: "var(--primary)",
     cursor: disabled ? "not-allowed" : "pointer",
     opacity: disabled ? 0.35 : 1,
   };
@@ -410,7 +410,7 @@ function VisibilityToggle({
         whiteSpace: "nowrap",
         border: "1px solid rgba(0,140,156,0.2)",
         background: visible ? "rgba(0,140,156,0.08)" : "#fff",
-        color: visible ? "#008C9C" : "#94a3b8",
+        color: visible ? "var(--primary)" : "#94a3b8",
         cursor: disabled ? "not-allowed" : "pointer",
         opacity: disabled ? 0.6 : 1,
       }}>
@@ -467,7 +467,7 @@ function FieldRow({
               padding: "2px 7px",
               borderRadius: 6,
               background: "rgba(0,140,156,0.1)",
-              color: "#008C9C",
+              color: "var(--primary)",
             }}>
             {field.key}
           </code>
@@ -477,8 +477,8 @@ function FieldRow({
                 fontSize: 11,
                 padding: "2px 8px",
                 borderRadius: 999,
-                background: "#fef3c7",
-                color: "#92400e",
+                background: "var(--warning-soft)",
+                color: "var(--amber-800)",
                 fontWeight: 600,
               }}>
               Overridden
@@ -503,7 +503,7 @@ function FieldRow({
               <button
                 type="button"
                 onClick={onReset}
-                className="inline-flex items-center gap-1 text-xs text-[#008C9C] hover:underline">
+                className="inline-flex items-center gap-1 text-xs text-[var(--primary)] hover:underline">
                 <RotateCcw className="w-3 h-3" />
                 Reset
               </button>
@@ -545,7 +545,7 @@ function FieldRow({
             alignItems: "center",
             gap: 8,
             fontSize: 12.5,
-            color: locked ? "#94a3b8" : "var(--primary-70, #008C9C)",
+            color: locked ? "#94a3b8" : "var(--primary-70, var(--primary))",
             cursor: locked ? "not-allowed" : "pointer",
           }}>
           <input

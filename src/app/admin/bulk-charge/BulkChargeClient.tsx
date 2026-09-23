@@ -225,12 +225,12 @@ export default function BulkChargeClient({ jobs }: Props) {
             <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Batch complete</h3>
             {batch.failed === 0
               ? <CheckCircle size={18} style={{ color: "#15803d" }} />
-              : <XCircle size={18} style={{ color: "#dc2626" }} />}
+              : <XCircle size={18} style={{ color: "var(--error)" }} />}
           </div>
           <p style={{ marginTop: 0, fontSize: 13, color: "var(--primary-70)" }}>
             Charged {fmtAmount(batch.totalCharged)} across {batch.succeeded} of {batch.attempted} jobs.{" "}
             {batch.failed > 0 && (
-              <span style={{ color: "#dc2626", fontWeight: 600 }}>{batch.failed} failed.</span>
+              <span style={{ color: "var(--error)", fontWeight: 600 }}>{batch.failed} failed.</span>
             )}
           </p>
           <ul style={{ marginTop: 12, fontSize: 13, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 4 }}>
@@ -240,7 +240,7 @@ export default function BulkChargeClient({ jobs }: Props) {
                 {r.success ? (
                   <span style={{ color: "var(--primary)", fontWeight: 600 }}>Charged {fmtAmount(r.amount ?? 0)}</span>
                 ) : (
-                  <span style={{ color: "#dc2626" }}>{r.error}</span>
+                  <span style={{ color: "var(--error)" }}>{r.error}</span>
                 )}
               </li>
             ))}

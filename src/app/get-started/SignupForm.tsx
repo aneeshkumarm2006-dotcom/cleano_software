@@ -202,7 +202,7 @@ export default function SignupForm({
                     font: "inherit",
                     color: "inherit",
                     background: active ? "var(--primary-5, #f4f7fb)" : "transparent",
-                    border: `1.5px solid ${active ? "var(--primary-deep, #19356D)" : "var(--border, #dfe3ea)"}`,
+                    border: `1.5px solid ${active ? "var(--primary-deep, var(--chrome))" : "var(--border, #dfe3ea)"}`,
                   }}
                 >
                   <div

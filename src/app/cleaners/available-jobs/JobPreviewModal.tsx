@@ -232,7 +232,7 @@ export default function JobPreviewModal({
               type="button"
               onClick={() => onClaim(data.id)}
               disabled={claiming}
-              className="px-4 py-2 rounded-xl text-sm text-white bg-[#008C9C] hover:bg-[#008C9C]/90 disabled:opacity-50">
+              className="px-4 py-2 rounded-xl text-sm text-white bg-[var(--primary)] hover:bg-[var(--primary)]/90 disabled:opacity-50">
               {claiming ? "Claiming…" : "Claim this job"}
             </button>
           </div>

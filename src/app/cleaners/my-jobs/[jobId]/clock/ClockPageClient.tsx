@@ -493,8 +493,8 @@ export default function ClockPageClient({
               nothing more: "Clock in anyway" always works. */}
           {isShort && staffing && !isLive && (!isDone || canResumeJob) && (
             <div style={{
-              background: "#fffbeb",
-              border: "1px solid #fde68a",
+              background: "var(--amber-50)",
+              border: "1px solid var(--amber-200)",
               borderRadius: 14,
               padding: "14px 16px",
               margin: "0 0 12px",
@@ -509,7 +509,7 @@ export default function ClockPageClient({
                 gap: 8,
                 fontSize: 13,
                 lineHeight: 1.5,
-                color: "#b45309",
+                color: "var(--amber-700)",
               }}>
                 <AlertTriangle size={15} style={{ marginTop: 1, flexShrink: 0 }} />
                 <span>
@@ -539,7 +539,7 @@ export default function ClockPageClient({
                     onClick={handleClockIn}
                     disabled={loading || isRefreshing}
                     style={{
-                      background: "#b45309",
+                      background: "var(--amber-700)",
                       color: "#fff",
                       border: 0,
                       borderRadius: 999,
@@ -579,7 +579,7 @@ export default function ClockPageClient({
                   {breakBusy ? "…" : onBreak ? "End break" : "Start break"}
                 </button>
                 {breakError ? (
-                  <p style={{ color: "#b91c1c", fontSize: 13, marginTop: 8 }}>
+                  <p style={{ color: "var(--danger)", fontSize: 13, marginTop: 8 }}>
                     {breakError}
                   </p>
                 ) : null}
@@ -785,13 +785,13 @@ export default function ClockPageClient({
                         <h3>Job checklist</h3>
                         <p>{doneItems} of {totalItems} complete</p>
                       </div>
-                      <span style={{ marginLeft: "auto", fontSize: 13, fontWeight: 700, color: pct === 100 ? "#059669" : "var(--primary-60)" }}>
+                      <span style={{ marginLeft: "auto", fontSize: 13, fontWeight: 700, color: pct === 100 ? "var(--emerald-600)" : "var(--primary-60)" }}>
                         {pct}%
                       </span>
                     </div>
                     {/* Progress bar */}
                     <div style={{ height: 4, background: "rgba(0,140,156,0.08)", borderRadius: 2, margin: "0 0 14px", overflow: "hidden" }}>
-                      <div style={{ height: "100%", background: pct === 100 ? "#059669" : "var(--primary)", borderRadius: 2, width: `${pct}%`, transition: "width 0.3s" }} />
+                      <div style={{ height: "100%", background: pct === 100 ? "var(--emerald-600)" : "var(--primary)", borderRadius: 2, width: `${pct}%`, transition: "width 0.3s" }} />
                     </div>
                     {/* Items */}
                     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -815,7 +815,7 @@ export default function ClockPageClient({
                             <span style={{
                               width: 20, height: 20, borderRadius: 5, flexShrink: 0, marginTop: 1,
                               border: done ? "none" : "1.5px solid rgba(0,140,156,0.3)",
-                              background: done ? "#059669" : "transparent",
+                              background: done ? "var(--emerald-600)" : "transparent",
                               display: "flex", alignItems: "center", justifyContent: "center",
                             }}>
                               {done && (
@@ -828,7 +828,7 @@ export default function ClockPageClient({
                               <div style={{ fontSize: 13, fontWeight: 500, color: done ? "rgba(0,140,156,0.5)" : "var(--ink)", textDecoration: done ? "line-through" : "none", lineHeight: 1.3 }}>
                                 {item.title}
                                 {item.isRequired && !done && (
-                                  <span style={{ color: "#dc2626", marginLeft: 3, fontSize: 10, verticalAlign: "super" }}>*</span>
+                                  <span style={{ color: "var(--error)", marginLeft: 3, fontSize: 10, verticalAlign: "super" }}>*</span>
                                 )}
                               </div>
                               {item.description && (
@@ -840,7 +840,7 @@ export default function ClockPageClient({
                       })}
                     </div>
                     {pendingRequired.length > 0 && (
-                      <p style={{ fontSize: 11, color: "#dc2626", marginTop: 10, lineHeight: 1.4 }}>
+                      <p style={{ fontSize: 11, color: "var(--error)", marginTop: 10, lineHeight: 1.4 }}>
                         {pendingRequired.length} required item{pendingRequired.length !== 1 ? "s" : ""} still pending. Complete them to clock out.
                       </p>
                     )}
@@ -873,9 +873,9 @@ export default function ClockPageClient({
                 margin: "0 0 12px",
                 fontSize: 12.5,
                 lineHeight: 1.5,
-                color: "#b45309",
-                background: "#fffbeb",
-                border: "1px solid #fde68a",
+                color: "var(--amber-700)",
+                background: "var(--amber-50)",
+                border: "1px solid var(--amber-200)",
                 borderRadius: 10,
                 padding: "10px 12px",
               }}>
@@ -909,7 +909,7 @@ export default function ClockPageClient({
                               : "No changes — clock out"}
                       </button>
                       {!allRequiredDone && (
-                        <span style={{ fontSize: 11, color: "#dc2626", textAlign: "right" }}>
+                        <span style={{ fontSize: 11, color: "var(--error)", textAlign: "right" }}>
                           {CHECKLIST_GATE_HINT}
                         </span>
                       )}

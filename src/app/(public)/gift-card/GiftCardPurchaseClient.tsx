@@ -83,7 +83,7 @@ export default function GiftCardPurchaseClient({ tiers, covers, minJobPrice }: P
           borderRadius: 16,
           textAlign: "center",
         }}>
-        <h2 style={{ margin: 0, fontSize: 22, color: "#008C9C" }}>
+        <h2 style={{ margin: 0, fontSize: 22, color: "var(--primary)" }}>
           Gift card on its way
         </h2>
         <p style={{ marginTop: 12, fontSize: 14, color: "#3a5a62", lineHeight: 1.6 }}>
@@ -106,7 +106,7 @@ export default function GiftCardPurchaseClient({ tiers, covers, minJobPrice }: P
           borderRadius: 16,
           padding: 28,
         }}>
-        <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#008C9C" }}>
+        <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "var(--primary)" }}>
           Pay ${amount.toFixed(2)}
         </h2>
         <p style={{ marginTop: 8, fontSize: 13, color: "#3a5a62" }}>
@@ -123,7 +123,7 @@ export default function GiftCardPurchaseClient({ tiers, covers, minJobPrice }: P
           </Elements>
         </div>
         {error && (
-          <p style={{ marginTop: 12, color: "#dc2626", fontSize: 13, fontWeight: 600 }}>
+          <p style={{ marginTop: 12, color: "var(--error)", fontSize: 13, fontWeight: 600 }}>
             {error}
           </p>
         )}
@@ -161,9 +161,9 @@ export default function GiftCardPurchaseClient({ tiers, covers, minJobPrice }: P
                 padding: "16px 12px",
                 fontSize: 18,
                 fontWeight: 700,
-                background: amount === t ? "#008C9C" : "#fff",
+                background: amount === t ? "var(--primary)" : "#fff",
                 color: amount === t ? "#fff" : "#0a1f24",
-                border: amount === t ? "2px solid #008C9C" : "1px solid rgba(0,140,156,0.18)",
+                border: amount === t ? "2px solid var(--primary)" : "1px solid rgba(0,140,156,0.18)",
                 borderRadius: 10,
                 cursor: "pointer",
                 transition: "all 120ms ease",
@@ -193,7 +193,7 @@ export default function GiftCardPurchaseClient({ tiers, covers, minJobPrice }: P
                 padding: 0,
                 border:
                   coverKey === c.key
-                    ? "2px solid #008C9C"
+                    ? "2px solid var(--primary)"
                     : "1px solid rgba(0,140,156,0.18)",
                 borderRadius: 10,
                 overflow: "hidden",
@@ -365,7 +365,7 @@ export default function GiftCardPurchaseClient({ tiers, covers, minJobPrice }: P
       </label>
 
       {error && (
-        <p style={{ marginBottom: 12, color: "#dc2626", fontSize: 13, fontWeight: 600 }}>
+        <p style={{ marginBottom: 12, color: "var(--error)", fontSize: 13, fontWeight: 600 }}>
           {error}
         </p>
       )}
@@ -380,7 +380,7 @@ export default function GiftCardPurchaseClient({ tiers, covers, minJobPrice }: P
           fontSize: 15,
           fontWeight: 700,
           color: "#fff",
-          background: canSubmit ? "#008C9C" : "#7daab0",
+          background: canSubmit ? "var(--primary)" : "#7daab0",
           border: "none",
           borderRadius: 10,
           cursor: canSubmit ? "pointer" : "default",
@@ -448,7 +448,7 @@ function PayForm({
           fontSize: 15,
           fontWeight: 700,
           color: "#fff",
-          background: busy ? "#7daab0" : "#008C9C",
+          background: busy ? "#7daab0" : "var(--primary)",
           border: "none",
           borderRadius: 10,
           cursor: busy ? "default" : "pointer",
@@ -468,7 +468,7 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
         fontWeight: 700,
         letterSpacing: "0.12em",
         textTransform: "uppercase",
-        color: "#008C9C",
+        color: "var(--primary)",
       }}>
       {children}
     </h2>
@@ -509,7 +509,7 @@ function Field({
           letterSpacing: "0.02em",
         }}>
         {label}
-        {required && <span style={{ color: "#dc2626" }}> *</span>}
+        {required && <span style={{ color: "var(--error)" }}> *</span>}
       </span>
       {children}
     </label>

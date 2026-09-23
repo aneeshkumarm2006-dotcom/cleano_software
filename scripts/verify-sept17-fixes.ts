@@ -928,9 +928,25 @@ check(
     contrast("#006975", WHITE) < contrast("#00626d", WHITE),
   true
 );
-// The fill ramp is a different job and must stay alpha, or borders and tinted
-// backgrounds turn into solid teal blocks.
-check("the fill ramp is untouched", globals.includes("--primary-10:    rgba(0,140,156,0.10)"), true);
+// The fill ramp is a different job and must stay ALPHA, or borders and tinted
+// backgrounds turn into solid teal blocks. That is the whole point of this
+// check, and it is unchanged.
+//
+// What did change: the Pier palette moved the accent from #008C9C to #0e7f8d,
+// and a fill ramp that is alpha over the OLD accent while every border and
+// button paints the new one is exactly the split this check exists to catch.
+// So it now asserts the property (alpha, not solid) and that the ramp tracks
+// the accent, rather than pinning one hex that was only ever incidental.
+check(
+  "the fill ramp is still alpha, not solid",
+  /--primary-10:\s*rgba\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*0?\.\d+\s*\)/.test(globals),
+  true
+);
+check(
+  "the fill ramp is alpha over the current accent",
+  globals.includes("--primary-10:    rgba(14,127,141,0.10)"),
+  true
+);
 
 for (const dir of ["src/app/admin", "src/app/cleaners", "src/components"]) {
   check(

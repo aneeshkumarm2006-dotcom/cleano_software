@@ -165,7 +165,7 @@ export default function SmartSearch<T extends SmartSearchItem>({
 
     return (
       <>
-        <span className={`${itemTextSize} font-[350] text-[#008C9C]`}>
+        <span className={`${itemTextSize} font-[350] text-[var(--primary)]`}>
           {item.name}
         </span>
         {isSelected && (
@@ -186,7 +186,7 @@ export default function SmartSearch<T extends SmartSearchItem>({
     }[size];
 
     return (
-      <span className={`${itemTextSize} font-[350] text-[#008C9C]`}>
+      <span className={`${itemTextSize} font-[350] text-[var(--primary)]`}>
         {item.name}
       </span>
     );
@@ -197,7 +197,7 @@ export default function SmartSearch<T extends SmartSearchItem>({
     isOpen && searchQuery.trim() && dropdownPosition ? (
       <div
         ref={dropdownRef}
-        className="fixed max-h-60 overflow-y-auto rounded-2xl bg-white border border-[#008C9C]/10 shadow-lg z-[9999]"
+        className="fixed max-h-60 overflow-y-auto rounded-2xl bg-white border border-[var(--primary)]/10 shadow-lg z-[9999]"
         style={{
           top: `${dropdownPosition.top}px`,
           left: `${dropdownPosition.left}px`,
@@ -211,8 +211,8 @@ export default function SmartSearch<T extends SmartSearchItem>({
                 key={item.id}
                 className={`flex items-center justify-between gap-2 ${
                   sizeClasses.dropdownItem
-                } cursor-pointer transition-colors border-b border-[#008C9C]/5 last:border-b-0 ${
-                  isSelected ? "bg-[#008C9C]/5" : "hover:bg-[#008C9C]/3"
+                } cursor-pointer transition-colors border-b border-[var(--primary)]/5 last:border-b-0 ${
+                  isSelected ? "bg-[var(--primary)]/5" : "hover:bg-[var(--primary)]/3"
                 }`}
                 onClick={() => handleItemClick(item.id)}>
                 {renderItem
@@ -226,7 +226,7 @@ export default function SmartSearch<T extends SmartSearchItem>({
             <p
               className={`${
                 sizeClasses.dropdownItem.split(" ")[1]
-              } text-[#008C9C]/60`}>
+              } text-[var(--primary)]/60`}>
               {emptyMessage}
             </p>
           </div>
@@ -239,7 +239,7 @@ export default function SmartSearch<T extends SmartSearchItem>({
       {/* Search Input */}
       <div ref={containerRef} className="relative">
         <SearchIcon
-          className={`absolute ${sizeClasses.icon} top-1/2 -translate-y-1/2 z-10 text-[#008C9C]/50`}
+          className={`absolute ${sizeClasses.icon} top-1/2 -translate-y-1/2 z-10 text-[var(--primary)]/50`}
         />
         <Input
           ref={inputRef}
@@ -267,7 +267,7 @@ export default function SmartSearch<T extends SmartSearchItem>({
       {/* Selected Items */}
       {selectedIds.length > 0 && (
         <div className="space-y-2">
-          <p className={`${sizeClasses.label} font-[350] text-[#008C9C]/70`}>
+          <p className={`${sizeClasses.label} font-[350] text-[var(--primary)]/70`}>
             {selectedLabel}
           </p>
           <div className="flex flex-wrap gap-2">
@@ -277,7 +277,7 @@ export default function SmartSearch<T extends SmartSearchItem>({
               return (
                 <div
                   key={itemId}
-                  className={`flex items-center gap-2 ${sizeClasses.selectedBadge} rounded-2xl bg-[#008C9C]/10`}>
+                  className={`flex items-center gap-2 ${sizeClasses.selectedBadge} rounded-2xl bg-[var(--primary)]/10`}>
                   {renderSelectedItem
                     ? renderSelectedItem(item)
                     : defaultRenderSelectedItem(item)}
@@ -285,7 +285,7 @@ export default function SmartSearch<T extends SmartSearchItem>({
                     type="button"
                     onClick={() => handleRemoveItem(itemId)}
                     disabled={disabled}
-                    className="text-[#008C9C]/60 hover:text-[#008C9C] transition-colors disabled:opacity-50 cursor-pointer">
+                    className="text-[var(--primary)]/60 hover:text-[var(--primary)] transition-colors disabled:opacity-50 cursor-pointer">
                     <X
                       className={sizeClasses.icon
                         .split(" ")

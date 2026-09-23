@@ -541,8 +541,8 @@ export default function SettingsClient({
                 borderRadius: 12,
                 fontSize: 13,
                 marginBottom: 16,
-                background: "#fee2e2",
-                color: "#b91c1c",
+                background: "var(--danger-soft)",
+                color: "var(--danger)",
               }}>
               <strong>
                 {activeFailures.map((f) => f.label).join(", ")} could not be

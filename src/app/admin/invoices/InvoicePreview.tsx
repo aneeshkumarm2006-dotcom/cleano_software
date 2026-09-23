@@ -55,9 +55,9 @@ export default function InvoicePreview({
   businessName,
 }: InvoicePreviewProps) {
   return (
-    <div className="bg-white rounded-2xl border border-[#008C9C]/10 overflow-hidden print:border-0 print:rounded-none">
+    <div className="bg-white rounded-2xl border border-[var(--primary)]/10 overflow-hidden print:border-0 print:rounded-none">
       {/* Header */}
-      <div className="bg-[#008C9C] text-white p-8 print:p-6">
+      <div className="bg-[var(--primary)] text-white p-8 print:p-6">
         <div className="flex justify-between items-start">
           <div>
             <h1 className="text-2xl font-[300] tracking-tight">INVOICE</h1>
@@ -82,27 +82,27 @@ export default function InvoicePreview({
         {/* Billing & Date Info */}
         <div className="flex justify-between mb-8">
           <div>
-            <h3 className="text-xs uppercase tracking-wider text-[#008C9C]/40 mb-2">
+            <h3 className="text-xs uppercase tracking-wider text-[var(--primary)]/40 mb-2">
               Bill To
             </h3>
-            <p className="text-sm font-[400] text-[#008C9C]">{invoice.client.name}</p>
+            <p className="text-sm font-[400] text-[var(--primary)]">{invoice.client.name}</p>
             {invoice.client.address && (
-              <p className="text-sm text-[#008C9C]/70 mt-0.5">{invoice.client.address}</p>
+              <p className="text-sm text-[var(--primary)]/70 mt-0.5">{invoice.client.address}</p>
             )}
             {invoice.client.email && (
-              <p className="text-sm text-[#008C9C]/70 mt-0.5">{invoice.client.email}</p>
+              <p className="text-sm text-[var(--primary)]/70 mt-0.5">{invoice.client.email}</p>
             )}
             {invoice.client.phone && (
-              <p className="text-sm text-[#008C9C]/70 mt-0.5">{invoice.client.phone}</p>
+              <p className="text-sm text-[var(--primary)]/70 mt-0.5">{invoice.client.phone}</p>
             )}
           </div>
           <div className="text-right">
             <div className="space-y-1.5">
               <div>
-                <span className="text-xs uppercase tracking-wider text-[#008C9C]/40">
+                <span className="text-xs uppercase tracking-wider text-[var(--primary)]/40">
                   Date Issued
                 </span>
-                <p className="text-sm text-[#008C9C]">
+                <p className="text-sm text-[var(--primary)]">
                   {new Date(invoice.createdAt).toLocaleDateString("en-US", {
                     year: "numeric",
                     month: "long",
@@ -112,10 +112,10 @@ export default function InvoicePreview({
               </div>
               {invoice.dueDate && (
                 <div>
-                  <span className="text-xs uppercase tracking-wider text-[#008C9C]/40">
+                  <span className="text-xs uppercase tracking-wider text-[var(--primary)]/40">
                     Due Date
                   </span>
-                  <p className="text-sm text-[#008C9C]">
+                  <p className="text-sm text-[var(--primary)]">
                     {new Date(invoice.dueDate).toLocaleDateString("en-US", {
                       year: "numeric",
                       month: "long",
@@ -146,30 +146,30 @@ export default function InvoicePreview({
         <div className="mb-8">
           <table className="w-full">
             <thead>
-              <tr className="border-b-2 border-[#008C9C]/10">
-                <th className="text-left py-3 text-xs uppercase tracking-wider text-[#008C9C]/40 font-[350]">
+              <tr className="border-b-2 border-[var(--primary)]/10">
+                <th className="text-left py-3 text-xs uppercase tracking-wider text-[var(--primary)]/40 font-[350]">
                   Description
                 </th>
-                <th className="text-center py-3 text-xs uppercase tracking-wider text-[#008C9C]/40 font-[350] w-20">
+                <th className="text-center py-3 text-xs uppercase tracking-wider text-[var(--primary)]/40 font-[350] w-20">
                   Qty
                 </th>
-                <th className="text-right py-3 text-xs uppercase tracking-wider text-[#008C9C]/40 font-[350] w-28">
+                <th className="text-right py-3 text-xs uppercase tracking-wider text-[var(--primary)]/40 font-[350] w-28">
                   Unit Price
                 </th>
-                <th className="text-right py-3 text-xs uppercase tracking-wider text-[#008C9C]/40 font-[350] w-28">
+                <th className="text-right py-3 text-xs uppercase tracking-wider text-[var(--primary)]/40 font-[350] w-28">
                   Amount
                 </th>
               </tr>
             </thead>
             <tbody>
               {invoice.lineItems.map((item) => (
-                <tr key={item.id} className="border-b border-[#008C9C]/5">
-                  <td className="py-3 text-sm text-[#008C9C]">{item.description}</td>
-                  <td className="py-3 text-sm text-[#008C9C]/70 text-center">{item.quantity}</td>
-                  <td className="py-3 text-sm text-[#008C9C]/70 text-right">
+                <tr key={item.id} className="border-b border-[var(--primary)]/5">
+                  <td className="py-3 text-sm text-[var(--primary)]">{item.description}</td>
+                  <td className="py-3 text-sm text-[var(--primary)]/70 text-center">{item.quantity}</td>
+                  <td className="py-3 text-sm text-[var(--primary)]/70 text-right">
                     ${item.unitPrice.toFixed(2)}
                   </td>
-                  <td className="py-3 text-sm text-[#008C9C] text-right font-[400]">
+                  <td className="py-3 text-sm text-[var(--primary)] text-right font-[400]">
                     ${item.amount.toFixed(2)}
                   </td>
                 </tr>
@@ -181,7 +181,7 @@ export default function InvoicePreview({
         {/* Totals */}
         <div className="flex justify-end">
           <div className="w-72 space-y-2">
-            <div className="flex justify-between text-sm text-[#008C9C]/70">
+            <div className="flex justify-between text-sm text-[var(--primary)]/70">
               <span>Subtotal</span>
               <span>${invoice.subtotal.toFixed(2)}</span>
             </div>
@@ -196,14 +196,14 @@ export default function InvoicePreview({
             {taxLines(taxConfig, invoice).map((line) => (
               <div
                 key={line.key}
-                className="flex justify-between text-sm text-[#008C9C]/70">
+                className="flex justify-between text-sm text-[var(--primary)]/70">
                 <span>{line.label}</span>
                 <span>${line.amount.toFixed(2)}</span>
               </div>
             ))}
-            <div className="border-t-2 border-[#008C9C]/10 pt-3 flex justify-between">
-              <span className="text-base font-[400] text-[#008C9C]">Total</span>
-              <span className="text-xl font-[400] text-[#008C9C]">
+            <div className="border-t-2 border-[var(--primary)]/10 pt-3 flex justify-between">
+              <span className="text-base font-[400] text-[var(--primary)]">Total</span>
+              <span className="text-xl font-[400] text-[var(--primary)]">
                 ${invoice.totalAmount.toFixed(2)}
               </span>
             </div>
@@ -219,15 +219,15 @@ export default function InvoicePreview({
 
         {/* Notes */}
         {invoice.notes && (
-          <div className="mt-8 pt-6 border-t border-[#008C9C]/10">
-            <h3 className="text-xs uppercase tracking-wider text-[#008C9C]/40 mb-2">Notes</h3>
-            <p className="text-sm text-[#008C9C]/70 whitespace-pre-wrap">{invoice.notes}</p>
+          <div className="mt-8 pt-6 border-t border-[var(--primary)]/10">
+            <h3 className="text-xs uppercase tracking-wider text-[var(--primary)]/40 mb-2">Notes</h3>
+            <p className="text-sm text-[var(--primary)]/70 whitespace-pre-wrap">{invoice.notes}</p>
           </div>
         )}
 
         {/* Footer */}
-        <div className="mt-8 pt-6 border-t border-[#008C9C]/10 text-center">
-          <p className="text-xs text-[#008C9C]/40">
+        <div className="mt-8 pt-6 border-t border-[var(--primary)]/10 text-center">
+          <p className="text-xs text-[var(--primary)]/40">
             Thank you for your business. Payment is due{" "}
             {invoice.dueDate
               ? `by ${new Date(invoice.dueDate).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`

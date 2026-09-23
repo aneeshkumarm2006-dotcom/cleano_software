@@ -281,7 +281,7 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
             />
           </Field>
         </div>
-        <p className="text-sm text-[#008C9C]/60 mt-3">
+        <p className="text-sm text-[var(--primary)]/60 mt-3">
           Example: 2 bed + 1 full bath = <strong>${examplePrice.toFixed(2)}</strong>
         </p>
       </SectionCard>
@@ -304,10 +304,10 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
         }>
         <div className="space-y-3">
           {addOns.length === 0 && (
-            <p className="text-sm text-[#008C9C]/60">No add-ons configured.</p>
+            <p className="text-sm text-[var(--primary)]/60">No add-ons configured.</p>
           )}
           {addOns.map((addon) => (
-            <div key={addon.id} className="rounded-xl border border-[#008C9C]/10 p-3 space-y-3">
+            <div key={addon.id} className="rounded-xl border border-[var(--primary)]/10 p-3 space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-[2fr_1fr_1.4fr_auto] gap-3 items-end">
                 <Field label="Name">
                   <Input
@@ -335,7 +335,7 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
                     onChange={(e) =>
                       updateAddOn(addon.id, { roomType: e.target.value as RoomType })
                     }
-                    className="w-full px-3 py-2 rounded-xl border border-[#008C9C]/15 bg-white text-[#003C46] text-sm focus:outline-none focus:border-[#008C9C] focus:ring-2 focus:ring-[#008C9C]/10">
+                    className="w-full px-3 py-2 rounded-xl border border-[var(--primary)]/15 bg-white text-[#003C46] text-sm focus:outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/10">
                     {ROOM_OPTIONS.map((opt) => (
                       <option key={opt.value} value={opt.value}>
                         {opt.label}
@@ -357,7 +357,7 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
                   because of the "air" in it. Picking a key is the escape hatch;
                   "Auto" clears it and restores the guess. */}
               <div>
-                <span className="text-[11px] font-semibold uppercase tracking-wide text-[#008C9C]/60">
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--primary)]/60">
                   Icon
                 </span>
                 <div className="flex flex-wrap gap-1.5 mt-1.5 items-center">
@@ -366,8 +366,8 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
                     onClick={() => updateAddOn(addon.id, { icon: undefined })}
                     className={`px-3 h-9 rounded-xl text-xs font-medium border transition-colors ${
                       !addon.icon
-                        ? "bg-[#008C9C] text-white border-[#008C9C]"
-                        : "bg-white text-[#008C9C]/70 border-[#008C9C]/15 hover:border-[#008C9C]/40"
+                        ? "bg-[var(--primary)] text-white border-[var(--primary)]"
+                        : "bg-white text-[var(--primary)]/70 border-[var(--primary)]/15 hover:border-[var(--primary)]/40"
                     }`}
                     title="Guess the icon from the add-on's name">
                     Auto
@@ -385,8 +385,8 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
                         onClick={() => updateAddOn(addon.id, { icon: key })}
                         className={`w-9 h-9 rounded-xl border flex items-center justify-center transition-colors ${
                           on
-                            ? "bg-[#008C9C] text-white border-[#008C9C]"
-                            : "bg-white text-[#008C9C]/70 border-[#008C9C]/15 hover:border-[#008C9C]/40"
+                            ? "bg-[var(--primary)] text-white border-[var(--primary)]"
+                            : "bg-white text-[var(--primary)]/70 border-[var(--primary)]/15 hover:border-[var(--primary)]/40"
                         }`}>
                         <Ic className="w-4 h-4" />
                       </button>
@@ -397,7 +397,7 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
 
               {/* Customer pop-up (item 17) — shown when the customer SELECTS
                   this add-on during booking. */}
-              <div className="rounded-xl bg-[#008C9C]/5 p-3 space-y-2">
+              <div className="rounded-xl bg-[var(--primary)]/5 p-3 space-y-2">
                 <label className="flex items-center gap-2 text-sm text-[#003C46]">
                   <input
                     type="checkbox"
@@ -405,7 +405,7 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
                     onChange={(e) =>
                       updateAddOn(addon.id, { popupEnabled: e.target.checked || undefined })
                     }
-                    className="accent-[#008C9C]"
+                    className="accent-[var(--primary)]"
                   />
                   Show a message when a customer selects this
                 </label>
@@ -431,7 +431,7 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
                           updateAddOn(addon.id, { popupMessage: e.target.value || undefined })
                         }
                         placeholder="e.g. Couch cleaning is quoted per piece. We'll confirm the exact price before your visit."
-                        className="w-full px-3 py-2 rounded-xl border border-[#008C9C]/15 bg-white text-[#003C46] text-sm focus:outline-none focus:border-[#008C9C] focus:ring-2 focus:ring-[#008C9C]/10"
+                        className="w-full px-3 py-2 rounded-xl border border-[var(--primary)]/15 bg-white text-[#003C46] text-sm focus:outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/10"
                       />
                     </Field>
                     <div className="flex items-center justify-between gap-3">
@@ -444,11 +444,11 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
                               popupRequestPhoto: e.target.checked || undefined,
                             })
                           }
-                          className="accent-[#008C9C]"
+                          className="accent-[var(--primary)]"
                         />
                         Tell them we&apos;ll ask for a photo
                       </label>
-                      <span className="text-[11px] text-[#008C9C]/50">
+                      <span className="text-[11px] text-[var(--primary)]/50">
                         {(addon.popupMessage ?? "").length}/{ADDON_POPUP_MESSAGE_MAX}
                       </span>
                     </div>
@@ -462,7 +462,7 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
                 )}
               </div>
               <div>
-                <span className="text-[11px] font-semibold uppercase tracking-wide text-[#008C9C]/60">
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--primary)]/60">
                   Shows for service
                 </span>
                 <div className="flex flex-wrap gap-2 mt-1.5 items-center">
@@ -479,15 +479,15 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
                         }}
                         className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
                           on
-                            ? "bg-[#008C9C] text-white border-[#008C9C]"
-                            : "bg-white text-[#008C9C]/70 border-[#008C9C]/15 hover:border-[#008C9C]/40"
+                            ? "bg-[var(--primary)] text-white border-[var(--primary)]"
+                            : "bg-white text-[var(--primary)]/70 border-[var(--primary)]/15 hover:border-[var(--primary)]/40"
                         }`}>
                         {s.label}
                       </button>
                     );
                   })}
                   {(!addon.services || addon.services.length === 0) && (
-                    <span className="text-xs text-[#008C9C]/50">All services (none selected)</span>
+                    <span className="text-xs text-[var(--primary)]/50">All services (none selected)</span>
                   )}
                 </div>
               </div>
@@ -515,7 +515,7 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
             />
           </Field>
         </div>
-        <p className="text-sm text-[#008C9C]/60 mt-3">
+        <p className="text-sm text-[var(--primary)]/60 mt-3">
           A booking that computes below <strong>${svc.minJobPrice.toFixed(2)}</strong> is
           charged this minimum. Applies to the customer booking page only.
         </p>
@@ -564,7 +564,7 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
             />
           </Field>
         </div>
-        <p className="text-sm text-[#008C9C]/60 mt-3">
+        <p className="text-sm text-[var(--primary)]/60 mt-3">
           Example: 1,200 sq ft ={" "}
           <strong>
             $
@@ -627,7 +627,7 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
         {/* The deposit every OTHER service charges. Hardcoded at $20 while one
             company used the product; $20 is a fair hold on a small flat and
             nothing at all on a large job, and every company prices differently. */}
-        <div className="mt-4 pt-4 border-t border-[#008C9C]/10">
+        <div className="mt-4 pt-4 border-t border-[var(--primary)]/10">
           <Field label="Standard booking deposit ($)">
             <Input
               variant="form"
@@ -639,7 +639,7 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
               onChange={(e) => setStandardDeposit(parseFloat(e.target.value) || 0)}
             />
           </Field>
-          <p className="text-sm text-[#008C9C]/60 mt-2">
+          <p className="text-sm text-[var(--primary)]/60 mt-2">
             Charged when a customer books any service other than
             post-construction, and credited against the final invoice.
             {standardDeposit === 0 ? (
@@ -656,7 +656,7 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
             )}
           </p>
         </div>
-        <div className="mt-4 pt-4 border-t border-[#008C9C]/10">
+        <div className="mt-4 pt-4 border-t border-[var(--primary)]/10">
           <Field label="Post-construction deposit ($)">
             <Input
               variant="form"
@@ -668,7 +668,7 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
               onChange={(e) => setPcDeposit(parseFloat(e.target.value) || 0)}
             />
           </Field>
-          <p className="text-sm text-[#008C9C]/60 mt-2">
+          <p className="text-sm text-[var(--primary)]/60 mt-2">
             Charged when the customer submits a post-construction request, before
             anyone has seen the space, and credited against the final quote. Every
             other service charges the{" "}
@@ -677,7 +677,7 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
             they actually charged.
           </p>
         </div>
-        <p className="text-sm text-[#008C9C]/60 mt-3">
+        <p className="text-sm text-[var(--primary)]/60 mt-3">
           {svc.postConstruction.minHours}h × 1 cleaner ={" "}
           <strong>
             ${(svc.postConstruction.minHours * svc.postConstruction.hourlyRate).toFixed(2)}
@@ -699,13 +699,13 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
           <table className="w-full text-sm border-collapse">
             <thead>
               <tr>
-                <th className="text-left font-medium text-[#008C9C] py-2 pr-3 whitespace-nowrap">
+                <th className="text-left font-medium text-[var(--primary)] py-2 pr-3 whitespace-nowrap">
                   Service
                 </th>
                 {FREQ_DISCOUNT_KEYS.map((f) => (
                   <th
                     key={f}
-                    className="text-center font-medium text-[#008C9C]/70 py-2 px-1 whitespace-nowrap">
+                    className="text-center font-medium text-[var(--primary)]/70 py-2 px-1 whitespace-nowrap">
                     {FREQ_LABELS[f] ?? f}
                   </th>
                 ))}
@@ -713,7 +713,7 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
             </thead>
             <tbody>
               {DISCOUNTABLE_CATEGORIES.map((cat) => (
-                <tr key={cat} className="border-t border-[#008C9C]/10">
+                <tr key={cat} className="border-t border-[var(--primary)]/10">
                   <td className="py-2 pr-3 font-medium text-[#0F172A] whitespace-nowrap">
                     {CATEGORY_LABELS[cat] ?? cat}
                   </td>
@@ -729,9 +729,9 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
                           onChange={(e) =>
                             updateFreqDiscount(cat, f, parseFloat(e.target.value) || 0)
                           }
-                          className="w-16 rounded-lg border border-[#008C9C]/20 bg-white py-1.5 pl-2 pr-5 text-right text-[#0F172A] focus:border-[#008C9C] focus:outline-none"
+                          className="w-16 rounded-lg border border-[var(--primary)]/20 bg-white py-1.5 pl-2 pr-5 text-right text-[#0F172A] focus:border-[var(--primary)] focus:outline-none"
                         />
-                        <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-[#008C9C]/50">
+                        <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-[var(--primary)]/50">
                           %
                         </span>
                       </div>
@@ -742,7 +742,7 @@ export default function PricingRulesTab({ settings }: PricingRulesTabProps) {
             </tbody>
           </table>
         </div>
-        <p className="text-sm text-[#008C9C]/60 mt-3">
+        <p className="text-sm text-[var(--primary)]/60 mt-3">
           Airbnb turnovers apply the discount to every visit; all other services
           apply it from the 2nd cleaning onward.
         </p>

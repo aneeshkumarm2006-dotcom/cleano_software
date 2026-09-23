@@ -187,15 +187,25 @@ function StatusPill({ status, title }: { status: string; title?: string }) {
     // waiting on somebody here, unlike Scheduled which is waiting on the date.
     // The REASON rides on `title` — the PDF's "visible on hover" — and the pill
     // itself stays two words, because a pill is a chip, not a sentence.
-    ON_HOLD:     { label: HOLD_LABEL,    bg: '#fef3c7', color: '#92400e', dot: '#d97706' },
-    SCHEDULED:   { label: 'Scheduled',   bg: '#dbeafe', color: '#1e40af', dot: '#3b82f6' },
-    IN_PROGRESS: { label: 'In Progress', bg: '#fef3c7', color: '#92400e', dot: '#f59e0b' },
-    COMPLETED:   { label: 'Completed',   bg: '#d1fae5', color: '#065f46', dot: '#10b981' },
-    // emerald-700, not 600: white on #059669 is 3.77:1 at 11px, below AA.
-    PAID:        { label: 'Paid',        bg: '#047857', color: '#ffffff', dot: '#a7f3d0' },
-    CANCELLED:   { label: 'Cancelled',   bg: '#fee2e2', color: '#991b1b', dot: '#ef4444' },
+    ON_HOLD:     { label: HOLD_LABEL,    bg: 'var(--warning-soft)', color: 'var(--amber-800)', dot: 'var(--amber-600)' },
+    SCHEDULED:   { label: 'Scheduled',   bg: 'var(--info-soft)', color: 'var(--info)', dot: 'var(--info)' },
+    // The accent, not amber. ON_HOLD above was already amber, so an amber
+    // IN_PROGRESS gave two different states the SAME pill — same background,
+    // same text colour, differing only in a 6px dot of a neighbouring amber.
+    // In a table you scan, that is one state wearing two names. The accent is
+    // also the honest colour here: this is the job happening right now.
+    IN_PROGRESS: { label: 'In Progress', bg: 'var(--primary-10)', color: 'var(--primary-70)', dot: 'var(--primary)' },
+    COMPLETED:   { label: 'Completed',   bg: 'var(--emerald-100)', color: 'var(--emerald-800)', dot: 'var(--emerald-600)' },
+    // emerald-700, not 600: white on the lighter green is 3.77:1 at 11px,
+    // below AA. Paid stays the one solid pill on the row because it is the
+    // terminal money state — the weight is the point, not an inconsistency.
+    PAID:        { label: 'Paid',        bg: 'var(--emerald-700)', color: '#ffffff', dot: 'var(--emerald-200)' },
+    // Neutral, not red. A cancelled job is an ended state, not a fault, and it
+    // needs nobody. Painting it red made it shout louder than Overdue, which
+    // genuinely does need somebody. Red now means "a person must act".
+    CANCELLED:   { label: 'Cancelled',   bg: 'var(--neutral-soft)', color: 'var(--ink-2)', dot: 'var(--ink-3)' },
   };
-  const c = map[status] || { label: status, bg: '#f3f4f6', color: '#374151', dot: '#9ca3af' };
+  const c = map[status] || { label: status, bg: 'var(--neutral-soft)', color: 'var(--ink-2)', dot: 'var(--ink-3)' };
   return (
     <span className="pill" style={{ background: c.bg, color: c.color }} title={title}>
       <span className="pill-dot" style={{ background: c.dot }} />
@@ -225,8 +235,8 @@ const TYPE_PILL_COLORS: Record<string, { bg: string; color: string }> = {
   MOVE_IN:           { bg: '#dcfce7',           color: '#166534' },
   MOVE_OUT:          { bg: '#dcfce7',           color: '#166534' },
   MOVE_IN_OUT:       { bg: '#dcfce7',           color: '#166534' },
-  COMMERCIAL:        { bg: '#dbeafe',           color: '#1e40af' },
-  POST_CONSTRUCTION: { bg: '#fef3c7',           color: '#92400e' },
+  COMMERCIAL:        { bg: 'var(--blue-100)',           color: 'var(--blue-800)' },
+  POST_CONSTRUCTION: { bg: 'var(--warning-soft)',           color: 'var(--amber-800)' },
   AIRBNB:            { bg: '#ffe4e6',           color: '#9f1239' },
   FOLLOW_UP:         { bg: '#f3f4f6',           color: '#374151' },
 };

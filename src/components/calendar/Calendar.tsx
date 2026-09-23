@@ -570,7 +570,7 @@ const Calendar = React.forwardRef<CalendarRef, CalendarProps>(({ hideNewJobButto
                   className="cal-ovchip-box"
                   style={
                     overlays.availability
-                      ? { background: "#dc2626", borderColor: "#dc2626" }
+                      ? { background: "var(--error)", borderColor: "var(--error)" }
                       : undefined
                   }>
                   {overlays.availability ? <Check size={11} /> : null}

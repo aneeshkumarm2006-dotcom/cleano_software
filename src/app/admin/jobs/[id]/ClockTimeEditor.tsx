@@ -238,12 +238,12 @@ export default function ClockTimeEditor({
           {error && (
             <div
               style={{
-                background: "#fef2f2",
-                border: "1px solid #fecaca",
+                background: "var(--error-bg)",
+                border: "1px solid var(--error-border)",
                 borderRadius: 10,
                 padding: "10px 14px",
                 fontSize: 13,
-                color: "#b91c1c",
+                color: "var(--danger)",
               }}>
               {error}
             </div>
@@ -252,12 +252,12 @@ export default function ClockTimeEditor({
           {warning && (
             <div
               style={{
-                background: "#fffbeb",
-                border: "1px solid #fde68a",
+                background: "var(--amber-50)",
+                border: "1px solid var(--amber-200)",
                 borderRadius: 10,
                 padding: "10px 14px",
                 fontSize: 13,
-                color: "#92400e",
+                color: "var(--amber-800)",
                 display: "flex",
                 gap: 8,
               }}>
@@ -275,7 +275,7 @@ export default function ClockTimeEditor({
                 className="btn btn-ghost"
                 onClick={() => (confirmDelete ? removeSession() : setConfirmDelete(true))}
                 disabled={saving}
-                style={{ marginRight: "auto", color: "#b91c1c" }}>
+                style={{ marginRight: "auto", color: "var(--danger)" }}>
                 <Trash2 size={13} style={{ marginRight: 5, verticalAlign: -2 }} />
                 {confirmDelete ? "Confirm delete" : "Delete session"}
               </button>

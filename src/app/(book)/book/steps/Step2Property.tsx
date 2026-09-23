@@ -258,7 +258,7 @@ export default function Step2Property({
                 style={{
                   marginTop: 6,
                   fontSize: 12.5,
-                  color: draft.postalCovered === false ? "#dc2626" : "var(--primary-60)",
+                  color: draft.postalCovered === false ? "var(--error)" : "var(--primary-60)",
                 }}>
                 {postalNotice}
               </p>
@@ -509,8 +509,8 @@ export default function Step2Property({
             </div>
             {isAirbnb && airbnbDiscount > 0 && (
               <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", borderRadius: 12, background: "rgba(5,150,105,0.08)", border: "1px solid rgba(5,150,105,0.2)" }}>
-                <span style={{ fontSize: 18, color: "#059669", fontWeight: 700 }}>−{airbnbDiscount}%</span>
-                <span style={{ fontSize: 13, color: "#065f46" }}>
+                <span style={{ fontSize: 18, color: "var(--emerald-600)", fontWeight: 700 }}>−{airbnbDiscount}%</span>
+                <span style={{ fontSize: 13, color: "var(--emerald-800)" }}>
                   Recurring Airbnb discount applied to every visit.
                 </span>
               </div>

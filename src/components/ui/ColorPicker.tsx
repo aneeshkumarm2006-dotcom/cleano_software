@@ -31,7 +31,7 @@ export default function ColorPicker({
     // Row 2 - Reds and oranges
     [
       "#7F1D1D",
-      "#DC2626",
+      "var(--error)",
       "#EF4444",
       "#F87171",
       "#FCA5A5",
@@ -42,7 +42,7 @@ export default function ColorPicker({
     // Row 3 - Yellows and greens
     [
       "#A16207",
-      "#D97706",
+      "var(--amber-600)",
       "#F59E0B",
       "#FBBF24",
       "#65A30D",

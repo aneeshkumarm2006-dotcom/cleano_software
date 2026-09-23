@@ -167,7 +167,7 @@ export default function CustomerTab({ settings }: Props) {
             value={reasonsText}
             onChange={(e) => setReasonsText(e.target.value)}
             rows={6}
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#008C9C]"
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
           />
         </Field>
         <p style={{ fontSize: 12, color: "var(--primary-60)" }}>
@@ -226,7 +226,7 @@ export default function CustomerTab({ settings }: Props) {
             value={blockedMsg}
             onChange={(e) => setBlockedMsg(e.target.value)}
             rows={3}
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#008C9C]"
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
           />
         </Field>
         <p style={{ fontSize: 12, color: "var(--primary-60)" }}>

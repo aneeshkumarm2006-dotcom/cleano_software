@@ -74,7 +74,7 @@ function AddCardFields({
     <form onSubmit={handleSubmit} style={{ marginTop: 16 }}>
       <PaymentElement options={{ layout: "tabs" }} />
       {error && (
-        <p style={{ marginTop: 12, fontSize: 13, color: "#991b1b" }}>{error}</p>
+        <p style={{ marginTop: 12, fontSize: 13, color: "var(--danger)" }}>{error}</p>
       )}
       <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
         <button type="submit" className="cl-btn cl-btn-primary" disabled={busy}>
@@ -194,8 +194,8 @@ export default function PaymentMethods() {
           style={{
             padding: "10px 12px",
             borderRadius: 10,
-            background: "#fee2e2",
-            color: "#991b1b",
+            background: "var(--danger-soft)",
+            color: "var(--danger)",
             fontSize: 13,
             marginBottom: 16,
           }}>
@@ -240,7 +240,7 @@ export default function PaymentMethods() {
                 }}>
                 <CreditCard
                   size={16}
-                  style={{ color: "#008C9C", flexShrink: 0 }}
+                  style={{ color: "var(--primary)", flexShrink: 0 }}
                 />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div
@@ -263,9 +263,9 @@ export default function PaymentMethods() {
                           padding: "2px 8px",
                           borderRadius: 999,
                           background: "rgba(0,140,156,0.12)",
-                          color: "#008C9C",
+                          color: "var(--primary)",
                         }}>
-                        <Star size={9} style={{ fill: "#008C9C" }} />
+                        <Star size={9} style={{ fill: "var(--primary)" }} />
                         Default
                       </span>
                     )}
@@ -278,8 +278,8 @@ export default function PaymentMethods() {
                           fontSize: 11,
                           padding: "2px 8px",
                           borderRadius: 999,
-                          background: "#fee2e2",
-                          color: "#991b1b",
+                          background: "var(--danger-soft)",
+                          color: "var(--danger)",
                         }}>
                         <AlertTriangle size={9} />
                         Expired
@@ -320,7 +320,7 @@ export default function PaymentMethods() {
                     style={{
                       fontSize: 12,
                       padding: "6px 11px",
-                      color: "#991b1b",
+                      color: "var(--danger)",
                       display: "inline-flex",
                       alignItems: "center",
                       gap: 5,
@@ -336,7 +336,7 @@ export default function PaymentMethods() {
       )}
 
       {adding && clientSecret && !stripePromise && (
-        <p style={{ color: "#b91c1c", fontSize: 13 }}>
+        <p style={{ color: "var(--danger)", fontSize: 13 }}>
           We can&apos;t load the card form right now. Please contact us and
           we&apos;ll add your card for you.
         </p>

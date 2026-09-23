@@ -76,10 +76,10 @@ export default function ActivityView({ cleaners, products }: Props) {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-[350] tracking-tight text-[#008C9C]">
+          <h2 className="text-lg font-[350] tracking-tight text-[var(--primary)]">
             Inventory Activity
           </h2>
-          <p className="text-sm text-[#008C9C]/70 mt-1">
+          <p className="text-sm text-[var(--primary)]/70 mt-1">
             Assignments, pickups, adjustments, reported issues and job usage —
             newest first
           </p>
@@ -110,18 +110,18 @@ export default function ActivityView({ cleaners, products }: Props) {
 
       {entries.length === 0 && !loading && !error ? (
         <div className="text-center py-12">
-          <div className="w-16 h-16 bg-[#008C9C]/5 rounded-full flex items-center justify-center mx-auto mb-3">
-            <Activity className="w-8 h-8 text-[#008C9C]/40" />
+          <div className="w-16 h-16 bg-[var(--primary)]/5 rounded-full flex items-center justify-center mx-auto mb-3">
+            <Activity className="w-8 h-8 text-[var(--primary)]/40" />
           </div>
-          <p className="text-sm font-[350] text-[#008C9C]/70">
+          <p className="text-sm font-[350] text-[var(--primary)]/70">
             No inventory activity yet
           </p>
-          <p className="text-xs font-[350] text-[#008C9C]/60 mt-1">
+          <p className="text-xs font-[350] text-[var(--primary)]/60 mt-1">
             Assignments, pickups and job usage will appear here
           </p>
         </div>
       ) : (
-        <div className="border border-[#008C9C]/10 rounded-xl divide-y divide-[#008C9C]/10">
+        <div className="border border-[var(--primary)]/10 rounded-xl divide-y divide-[var(--primary)]/10">
           {entries.map((e) => {
             const isCompany = e.cleanerId === null;
             const up = e.quantityChange > 0;
@@ -142,20 +142,20 @@ export default function ActivityView({ cleaners, products }: Props) {
                       {e.action}
                       {e.actionDerived ? " ·" : ""}
                     </Badge>
-                    <span className="text-sm text-[#008C9C] truncate inline-flex items-center gap-1">
+                    <span className="text-sm text-[var(--primary)] truncate inline-flex items-center gap-1">
                       <Package className="w-3.5 h-3.5 flex-shrink-0" />
                       {e.productName}
                     </span>
                     {/* PDF #1: history carries previous status → new status. */}
                     {e.newStatus && (
-                      <span className="text-xs font-[500] text-[#008C9C]/80 whitespace-nowrap">
+                      <span className="text-xs font-[500] text-[var(--primary)]/80 whitespace-nowrap">
                         {e.previousStatus
                           ? `${statusLabel(e.previousStatus)} → ${statusLabel(e.newStatus)}`
                           : statusLabel(e.newStatus)}
                       </span>
                     )}
                   </div>
-                  <div className="text-xs text-[#008C9C]/60 mt-1 inline-flex items-center gap-1 flex-wrap">
+                  <div className="text-xs text-[var(--primary)]/60 mt-1 inline-flex items-center gap-1 flex-wrap">
                     <User className="w-3 h-3" />
                     {isCompany ? "Company stock" : e.cleanerName ?? "Unknown"}
                     {e.byName && e.byName !== e.cleanerName && (
@@ -164,7 +164,7 @@ export default function ActivityView({ cleaners, products }: Props) {
                     <span>· {fmtDateTime(e.at)}</span>
                   </div>
                   {e.note && (
-                    <p className="text-xs text-[#008C9C]/50 mt-1 italic break-words">
+                    <p className="text-xs text-[var(--primary)]/50 mt-1 italic break-words">
                       {e.note}
                     </p>
                   )}
@@ -181,7 +181,7 @@ export default function ActivityView({ cleaners, products }: Props) {
                       new one. `previous` is derived (new − change) so it can
                       never disagree with the delta above it — the same reading
                       the product's Stock History already shows. */}
-                  <div className="text-[11px] text-[#008C9C]/50 tabular-nums">
+                  <div className="text-[11px] text-[var(--primary)]/50 tabular-nums">
                     {e.newQuantity - e.quantityChange} → {e.newQuantity}{" "}
                     {e.unit ?? ""}
                   </div>

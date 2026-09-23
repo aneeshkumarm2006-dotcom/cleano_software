@@ -41,10 +41,10 @@ const STATUS: Record<
   DocStatus,
   { label: string; dot: string; bg: string; fg: string }
 > = {
-  PENDING: { label: "Pending", dot: "#d97706", bg: "var(--amber-50)", fg: "var(--amber-800)" },
-  SIGNED: { label: "Signed", dot: "#059669", bg: "var(--emerald-100)", fg: "var(--emerald-800)" },
+  PENDING: { label: "Pending", dot: "var(--amber-600)", bg: "var(--amber-50)", fg: "var(--amber-800)" },
+  SIGNED: { label: "Signed", dot: "var(--emerald-600)", bg: "var(--emerald-100)", fg: "var(--emerald-800)" },
   EXPIRED: { label: "Expired", dot: "#64748b", bg: "var(--slate-100)", fg: "var(--slate-700)" },
-  REVOKED: { label: "Revoked", dot: "#dc2626", bg: "var(--error-bg)", fg: "var(--error-text)" },
+  REVOKED: { label: "Revoked", dot: "var(--error)", bg: "var(--error-bg)", fg: "var(--error-text)" },
 };
 
 function formatDate(value: string | null) {

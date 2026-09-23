@@ -178,10 +178,10 @@ export default function ClientModal({
         <div className="px-6 md:px-8 py-6 md:py-8">
           <div className="flex items-start justify-between mb-6">
             <div>
-              <h1 className="text-2xl font-[350] tracking-tight text-[#008C9C]">
+              <h1 className="text-2xl font-[350] tracking-tight text-[var(--primary)]">
                 {mode === "create" ? "New Client" : "Edit Client"}
               </h1>
-              <p className="text-sm text-[#008C9C]/60 mt-1">
+              <p className="text-sm text-[var(--primary)]/60 mt-1">
                 {mode === "create"
                   ? "Add a new client to your roster"
                   : "Update client information"}
@@ -212,7 +212,7 @@ export default function ClientModal({
                 Name <span className="text-red-500">*</span>
               </label>
               <div className="relative">
-                <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/50" />
+                <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[var(--primary)]/50" />
                 <Input
                   variant="form"
                   size="md"
@@ -229,7 +229,7 @@ export default function ClientModal({
             <div>
               <label className="input-label tracking-tight">Email</label>
               <div className="relative">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/50" />
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[var(--primary)]/50" />
                 <Input
                   variant="form"
                   type="email"
@@ -247,7 +247,7 @@ export default function ClientModal({
             <div>
               <label className="input-label tracking-tight">Secondary email</label>
               <div className="relative">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/30" />
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[var(--primary)]/30" />
                 <Input
                   variant="form"
                   type="email"
@@ -265,7 +265,7 @@ export default function ClientModal({
             <div>
               <label className="input-label tracking-tight">Phone</label>
               <div className="relative">
-                <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/50" />
+                <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[var(--primary)]/50" />
                 <Input
                   variant="form"
                   size="md"
@@ -282,7 +282,7 @@ export default function ClientModal({
             <div>
               <label className="input-label tracking-tight">Secondary phone</label>
               <div className="relative">
-                <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/30" />
+                <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[var(--primary)]/30" />
                 <Input
                   variant="form"
                   size="md"
@@ -299,7 +299,7 @@ export default function ClientModal({
             <div>
               <label className="input-label tracking-tight">Company</label>
               <div className="relative">
-                <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/50" />
+                <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[var(--primary)]/50" />
                 <Input
                   variant="form"
                   size="md"
@@ -316,7 +316,7 @@ export default function ClientModal({
             <div>
               <label className="input-label tracking-tight">Address</label>
               <div className="relative">
-                <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/50" />
+                <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[var(--primary)]/50" />
                 <Input
                   variant="form"
                   size="md"
@@ -334,7 +334,7 @@ export default function ClientModal({
               <div>
                 <label className="input-label tracking-tight">Apt / Unit</label>
                 <div className="relative">
-                  <Hash className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/50" />
+                  <Hash className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[var(--primary)]/50" />
                   <Input
                     variant="form"
                     size="md"
@@ -393,7 +393,7 @@ export default function ClientModal({
                 Default Discount (%)
               </label>
               <div className="relative">
-                <Percent className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/50" />
+                <Percent className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[var(--primary)]/50" />
                 <Input
                   variant="form"
                   type="number"
@@ -409,7 +409,7 @@ export default function ClientModal({
                   border={false}
                 />
               </div>
-              <p className="text-[11px] text-[#008C9C]/50 mt-1">
+              <p className="text-[11px] text-[var(--primary)]/50 mt-1">
                 Auto-applied to this client&apos;s jobs and invoices. Leave 0
                 for none.
               </p>
@@ -420,7 +420,7 @@ export default function ClientModal({
                 Fixed price ($)
               </label>
               <div className="relative">
-                <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[#008C9C]/50" />
+                <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 z-10 text-[var(--primary)]/50" />
                 <Input
                   variant="form"
                   type="number"
@@ -435,25 +435,25 @@ export default function ClientModal({
                   border={false}
                 />
               </div>
-              <p className="text-[11px] text-[#008C9C]/50 mt-1">
+              <p className="text-[11px] text-[var(--primary)]/50 mt-1">
                 New bookings for this client default to this total instead of
                 the standard price. Leave empty for none.
               </p>
 
               {fixedPrice.trim() !== "" && parseFloat(fixedPrice) > 0 && (
                 <div className="mt-3 space-y-2">
-                  <label className="flex items-center gap-2 text-sm text-[#008C9C] cursor-pointer select-none">
+                  <label className="flex items-center gap-2 text-sm text-[var(--primary)] cursor-pointer select-none">
                     <input
                       type="checkbox"
                       checked={fixedPriceRecurring}
                       onChange={(e) => setFixedPriceRecurring(e.target.checked)}
                       disabled={submitting}
-                      className="w-4 h-4 rounded accent-[#008C9C]"
+                      className="w-4 h-4 rounded accent-[var(--primary)]"
                     />
                     <span>Apply to recurring bookings</span>
                   </label>
                   {fixedPriceRecurring && (
-                    <label className="flex items-center gap-2 text-sm text-[#008C9C] cursor-pointer select-none pl-6">
+                    <label className="flex items-center gap-2 text-sm text-[var(--primary)] cursor-pointer select-none pl-6">
                       <input
                         type="checkbox"
                         checked={fixedPriceAllowFreqDiscount}
@@ -461,11 +461,11 @@ export default function ClientModal({
                           setFixedPriceAllowFreqDiscount(e.target.checked)
                         }
                         disabled={submitting}
-                        className="w-4 h-4 rounded accent-[#008C9C]"
+                        className="w-4 h-4 rounded accent-[var(--primary)]"
                       />
                       <span>
                         Allow frequency discounts on top{" "}
-                        <span className="text-[#008C9C]/50 font-[400]">
+                        <span className="text-[var(--primary)]/50 font-[400]">
                           — weekly/biweekly discount stacks on the fixed price
                         </span>
                       </span>

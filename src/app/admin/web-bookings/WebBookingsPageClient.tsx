@@ -217,12 +217,12 @@ function FilterStat({
         border: active
           ? "1.5px solid var(--primary)"
           : warn && value > 0
-          ? "1px solid #fde68a"
+          ? "1px solid var(--amber-200)"
           : undefined,
         background: active
           ? "var(--primary-5)"
           : warn && value > 0
-          ? "#fffbeb"
+          ? "var(--amber-50)"
           : undefined,
       }}>
       <div className="astat-head">
@@ -271,10 +271,10 @@ function BookingRow({ job }: { job: WebJob }) {
     <article className="jcard">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <div className="flex items-center gap-2 text-[10px] uppercase tracking-wide text-[#008C9C]/60 font-medium">
+          <div className="flex items-center gap-2 text-[10px] uppercase tracking-wide text-[var(--primary)]/60 font-medium">
             <span>Job #{job.jobNumber}</span>
             {job.parentJobId ? (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-[#008C9C]/5 text-[#008C9C] normal-case">
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-[var(--primary)]/5 text-[var(--primary)] normal-case">
                 <RotateCw className="w-3 h-3" /> recurring
               </span>
             ) : null}
@@ -291,46 +291,46 @@ function BookingRow({ job }: { job: WebJob }) {
                 style={{
                   background:
                     quoteTone === "critical"
-                      ? "#fef2f2"
+                      ? "var(--error-bg)"
                       : quoteTone === "ok"
-                      ? "#ecfdf5"
-                      : "#fffbeb",
+                      ? "var(--emerald-50)"
+                      : "var(--amber-50)",
                   color:
                     quoteTone === "critical"
-                      ? "#b91c1c"
+                      ? "var(--danger)"
                       : quoteTone === "ok"
-                      ? "#047857"
-                      : "#b45309",
+                      ? "var(--emerald-700)"
+                      : "var(--amber-700)",
                 }}>
                 <HardHat className="w-3 h-3" />
                 {QUOTE_STATUS_LABEL[quoteStatus]}
               </span>
             ) : null}
             {quoteStatus && job.bookingPhotoCount > 0 ? (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-[#008C9C]/5 text-[#008C9C] normal-case">
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-[var(--primary)]/5 text-[var(--primary)] normal-case">
                 <Camera className="w-3 h-3" /> {job.bookingPhotoCount}
               </span>
             ) : null}
           </div>
-          <div className="text-lg font-medium text-[#008C9C] mt-0.5">
+          <div className="text-lg font-medium text-[var(--primary)] mt-0.5">
             {startStr}
           </div>
           {job.location ? (
-            <div className="text-xs text-[#008C9C]/60 mt-1">{job.location}</div>
+            <div className="text-xs text-[var(--primary)]/60 mt-1">{job.location}</div>
           ) : null}
           {job.jobType ? (
-            <div className="text-xs text-[#008C9C]/70 mt-1">{jobTypeLabel(job.jobType)}</div>
+            <div className="text-xs text-[var(--primary)]/70 mt-1">{jobTypeLabel(job.jobType)}</div>
           ) : null}
         </div>
         <div className="flex flex-col items-end gap-1">
           {job.price !== null ? (
-            <div className="text-lg font-medium text-[#008C9C]">
+            <div className="text-lg font-medium text-[var(--primary)]">
               ${job.price.toFixed(2)}
               {/* An unreviewed quote's price is the CUSTOMER'S own estimate, not
                   ours. Labelling it is the difference between an admin reading
                   this list as prices and reading it as requests. */}
               {job.quoteStatus === "PENDING_REVIEW" ? (
-                <span className="block text-[10px] font-normal text-[#008C9C]/60 text-right">
+                <span className="block text-[10px] font-normal text-[var(--primary)]/60 text-right">
                   estimate
                 </span>
               ) : null}
@@ -349,7 +349,7 @@ function BookingRow({ job }: { job: WebJob }) {
         </div>
       </div>
 
-      <div className="text-xs text-[#008C9C]/70">
+      <div className="text-xs text-[var(--primary)]/70">
         {job.client ? (
           <span>
             {job.client.name}
@@ -357,18 +357,18 @@ function BookingRow({ job }: { job: WebJob }) {
             {job.client.phone ? ` · ${job.client.phone}` : ""}
           </span>
         ) : (
-          <span className="text-[#008C9C]/40">No client linked</span>
+          <span className="text-[var(--primary)]/40">No client linked</span>
         )}
       </div>
 
-      <div className="flex flex-wrap gap-2 items-center pt-3 border-t border-[#008C9C]/10">
+      <div className="flex flex-wrap gap-2 items-center pt-3 border-t border-[var(--primary)]/10">
         <div className="flex items-center gap-2 text-xs">
-          <Users className="w-3.5 h-3.5 text-[#008C9C]/60" />
-          <span className="text-[#008C9C]/70">
+          <Users className="w-3.5 h-3.5 text-[var(--primary)]/60" />
+          <span className="text-[var(--primary)]/70">
             Cleaners: {job.cleaners.length} / {job.requiredCleaners}
           </span>
           {job.cleaners.length > 0 ? (
-            <span className="text-[#008C9C] font-medium">
+            <span className="text-[var(--primary)] font-medium">
               {job.cleaners.map((c) => c.name).join(", ")}
             </span>
           ) : null}
@@ -392,7 +392,7 @@ function BookingRow({ job }: { job: WebJob }) {
         <div className="flex-1" />
         <Link
           href={`/admin/jobs/${job.id}`}
-          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs bg-[#008C9C] text-white hover:bg-[#00707D]">
+          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs bg-[var(--primary)] text-white hover:bg-[var(--primary-50)]">
           <ExternalLink className="w-3.5 h-3.5" />{" "}
           {/* A quote can't be assigned yet, so the CTA names what the admin is
               actually here to do: price it. */}

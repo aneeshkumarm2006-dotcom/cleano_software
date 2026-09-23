@@ -165,8 +165,8 @@ export default function PhotoGallery({
                     }}
                     className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
                       active
-                        ? "bg-[#008C9C] text-white border-[#008C9C]"
-                        : "bg-white text-neutral-950/70 border-neutral-950/15 hover:border-[#008C9C]/40"
+                        ? "bg-[var(--primary)] text-white border-[var(--primary)]"
+                        : "bg-white text-neutral-950/70 border-neutral-950/15 hover:border-[var(--primary)]/40"
                     }`}>
                     {k === "ALL" ? "All" : JOB_PHOTO_KIND_LABEL[k as JobPhotoKind]}
                     <span className="ml-1.5 opacity-70">{n}</span>

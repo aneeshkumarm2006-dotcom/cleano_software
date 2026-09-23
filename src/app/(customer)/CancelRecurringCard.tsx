@@ -71,14 +71,14 @@ export default function CancelRecurringCard({ frequencyLabel }: Props) {
                 }}
               />
               {error && (
-                <p style={{ color: "#b91c1c", fontSize: 13 }}>{error}</p>
+                <p style={{ color: "var(--danger)", fontSize: 13 }}>{error}</p>
               )}
               <div style={{ display: "flex", gap: 10 }}>
                 <button
                   onClick={submit}
                   disabled={busy}
                   className="cl-btn cl-btn-primary"
-                  style={{ background: "#b91c1c", borderColor: "#b91c1c" }}>
+                  style={{ background: "var(--danger)", borderColor: "var(--danger)" }}>
                   {busy ? "Cancelling…" : "Cancel recurring service"}
                 </button>
                 <button

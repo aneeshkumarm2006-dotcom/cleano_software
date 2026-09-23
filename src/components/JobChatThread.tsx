@@ -428,9 +428,9 @@ export default function JobChatThread({
             <div
               style={{
                 fontSize: 12,
-                color: "#dc2626",
-                background: "#fef2f2",
-                border: "1px solid #fecaca",
+                color: "var(--error)",
+                background: "var(--error-bg)",
+                border: "1px solid var(--error-border)",
                 borderRadius: 8,
                 padding: "6px 12px",
                 marginBottom: 10,

@@ -22,7 +22,7 @@ import {
  */
 const TONE: Record<string, { dot: string; cls: string }> = {
   URGENT: { dot: "bg-red-500", cls: "border-red-200 bg-red-50/40" },
-  NORMAL: { dot: "bg-[#008C9C]", cls: "border-gray-200 bg-white" },
+  NORMAL: { dot: "bg-[var(--primary)]", cls: "border-gray-200 bg-white" },
 };
 
 const STATUS_CHIP: Record<JobIssueStatus, string> = {
@@ -130,8 +130,8 @@ export default function IssuesClient({
               aria-pressed={active}
               className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${
                 active
-                  ? "border-[#008C9C] bg-[#008C9C] text-white"
-                  : "border-neutral-950/15 bg-white text-neutral-950/70 hover:border-[#008C9C]/40"
+                  ? "border-[var(--primary)] bg-[var(--primary)] text-white"
+                  : "border-neutral-950/15 bg-white text-neutral-950/70 hover:border-[var(--primary)]/40"
               }`}>
               {t === "ALL" ? "All" : JOB_ISSUE_STATUS_LABEL[t]}
               <span className={active ? "ml-1.5 opacity-80" : "ml-1.5 opacity-60"}>
@@ -195,7 +195,7 @@ export default function IssuesClient({
                       {issue.reportedByName} ·{" "}
                       <Link
                         href={`/admin/jobs/${issue.jobId}`}
-                        className="text-[#008C9C] hover:underline">
+                        className="text-[var(--primary)] hover:underline">
                         #{issue.jobNumber} {issue.clientName}
                       </Link>
                     </p>
@@ -232,14 +232,14 @@ export default function IssuesClient({
                           maxLength={MAX_ISSUE_DESCRIPTION}
                           rows={2}
                           placeholder="What was done about it? (optional)"
-                          className="w-full rounded-lg border border-gray-200 p-2 text-sm focus:border-[#008C9C]/40 focus:outline-none"
+                          className="w-full rounded-lg border border-gray-200 p-2 text-sm focus:border-[var(--primary)]/40 focus:outline-none"
                         />
                         <div className="flex gap-2">
                           <button
                             type="button"
                             disabled={busy}
                             onClick={() => void advance(issue, "RESOLVED", note)}
-                            className="rounded-full bg-[#008C9C] px-3 py-1.5 text-sm text-white disabled:opacity-60">
+                            className="rounded-full bg-[var(--primary)] px-3 py-1.5 text-sm text-white disabled:opacity-60">
                             {busy ? "Resolving…" : "Confirm resolved"}
                           </button>
                           <button
@@ -262,7 +262,7 @@ export default function IssuesClient({
                               type="button"
                               disabled={busy}
                               onClick={() => void advance(issue, "ACKNOWLEDGED")}
-                              className="rounded-full border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:border-[#008C9C]/40 disabled:opacity-60">
+                              className="rounded-full border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:border-[var(--primary)]/40 disabled:opacity-60">
                               {busy ? "Working…" : "Acknowledge"}
                             </button>
                           )}
@@ -273,7 +273,7 @@ export default function IssuesClient({
                               setResolving(issue.id);
                               setNote("");
                             }}
-                            className="rounded-full bg-[#008C9C] px-3 py-1.5 text-sm text-white disabled:opacity-60">
+                            className="rounded-full bg-[var(--primary)] px-3 py-1.5 text-sm text-white disabled:opacity-60">
                             Resolve
                           </button>
                         </div>

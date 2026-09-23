@@ -210,8 +210,8 @@ export default async function CleanerDashboard({ userId, userName }: Props) {
             padding: "12px 14px", borderRadius: 12, marginBottom: 16,
             fontSize: 13.5, lineHeight: 1.5,
             border: `1px solid ${strikeSummary.level === "REVIEW" ? "#fdba74" : "#fcd34d"}`,
-            background: strikeSummary.level === "REVIEW" ? "#fff7ed" : "#fffbeb",
-            color: strikeSummary.level === "REVIEW" ? "#9a3412" : "#92400e",
+            background: strikeSummary.level === "REVIEW" ? "#fff7ed" : "var(--amber-50)",
+            color: strikeSummary.level === "REVIEW" ? "#9a3412" : "var(--amber-800)",
           }}>
           <ShieldAlert size={16} style={{ flex: "0 0 auto", marginTop: 1 }} />
           <div style={{ minWidth: 0 }}>

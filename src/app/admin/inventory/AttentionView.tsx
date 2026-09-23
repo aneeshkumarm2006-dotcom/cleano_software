@@ -169,13 +169,13 @@ export default function AttentionView({ flags }: Props) {
   if (flags.length === 0) {
     return (
       <div className="text-center py-12">
-        <div className="w-16 h-16 bg-[#008C9C]/5 rounded-full flex items-center justify-center mx-auto mb-3">
-          <Check className="w-8 h-8 text-[#008C9C]/40" />
+        <div className="w-16 h-16 bg-[var(--primary)]/5 rounded-full flex items-center justify-center mx-auto mb-3">
+          <Check className="w-8 h-8 text-[var(--primary)]/40" />
         </div>
-        <p className="text-sm font-[350] text-[#008C9C]/70">
+        <p className="text-sm font-[350] text-[var(--primary)]/70">
           Nothing needs attention
         </p>
-        <p className="text-xs font-[350] text-[#008C9C]/60 mt-1">
+        <p className="text-xs font-[350] text-[var(--primary)]/60 mt-1">
           Items cleaners report as low, empty, missing, damaged or needing
           service — at clock-out or from their own inventory — appear here.
         </p>
@@ -187,10 +187,10 @@ export default function AttentionView({ flags }: Props) {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-[350] tracking-tight text-[#008C9C]">
+          <h2 className="text-lg font-[350] tracking-tight text-[var(--primary)]">
             Needs Attention
           </h2>
-          <p className="text-sm text-[#008C9C]/70 mt-1">
+          <p className="text-sm text-[var(--primary)]/70 mt-1">
             What cleaners have reported — newest first. Resolve it, dismiss it,
             or send a restock.
           </p>
@@ -201,7 +201,7 @@ export default function AttentionView({ flags }: Props) {
       </div>
 
       {notice && (
-        <div className="text-xs text-[#008C9C] bg-[#008C9C]/5 border border-[#008C9C]/15 rounded-xl px-3 py-2">
+        <div className="text-xs text-[var(--primary)] bg-[var(--primary)]/5 border border-[var(--primary)]/15 rounded-xl px-3 py-2">
           {notice}
         </div>
       )}
@@ -210,13 +210,13 @@ export default function AttentionView({ flags }: Props) {
       <div className="flex flex-col lg:flex-row gap-2">
         <div className="flex-1">
           <div className="relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#008C9C] z-10 w-4 h-4" />
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--primary)] z-10 w-4 h-4" />
             <Input
               placeholder="Search cleaner, product or note..."
               value={search}
               size="md"
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-10 h-[42px] py-3 placeholder:!text-[#008C9C]/40 placeholder:!font-[350]"
+              className="pl-10 h-[42px] py-3 placeholder:!text-[var(--primary)]/40 placeholder:!font-[350]"
               variant="form"
               border={false}
             />
@@ -254,7 +254,7 @@ export default function AttentionView({ flags }: Props) {
         />
       </div>
 
-      <div className="border border-[#008C9C]/10 rounded-xl divide-y divide-[#008C9C]/10">
+      <div className="border border-[var(--primary)]/10 rounded-xl divide-y divide-[var(--primary)]/10">
         {filtered.map((flag) => {
           const expanded = openId === flag.id;
           return (
@@ -267,14 +267,14 @@ export default function AttentionView({ flags }: Props) {
                     </Badge>
                     <Link
                       href={`/admin/inventory/${flag.productId}`}
-                      className="text-sm text-[#008C9C] hover:underline truncate">
+                      className="text-sm text-[var(--primary)] hover:underline truncate">
                       {flag.productName}
                     </Link>
-                    <span className="text-xs text-[#008C9C]/60">
+                    <span className="text-xs text-[var(--primary)]/60">
                       · {flag.quantity} {flag.unit} held
                     </span>
                   </div>
-                  <div className="text-xs text-[#008C9C]/60 mt-1 flex items-center gap-1 flex-wrap">
+                  <div className="text-xs text-[var(--primary)]/60 mt-1 flex items-center gap-1 flex-wrap">
                     <Link
                       href={`/admin/employees/${flag.employeeId}?tab=products`}
                       className="hover:underline">
@@ -296,7 +296,7 @@ export default function AttentionView({ flags }: Props) {
                     <span>· {fmtDateTime(flag.createdAt)}</span>
                   </div>
                   {flag.notes && (
-                    <p className="text-xs text-[#008C9C]/50 mt-1 italic break-words whitespace-pre-line">
+                    <p className="text-xs text-[var(--primary)]/50 mt-1 italic break-words whitespace-pre-line">
                       {flag.notes}
                     </p>
                   )}
@@ -312,7 +312,7 @@ export default function AttentionView({ flags }: Props) {
               </div>
 
               {expanded && (
-                <div className="mt-3 rounded-xl border border-[#008C9C]/15 bg-[#008C9C]/[0.03] p-3 space-y-3">
+                <div className="mt-3 rounded-xl border border-[var(--primary)]/15 bg-[var(--primary)]/[0.03] p-3 space-y-3">
                   <input
                     type="text"
                     value={note}
@@ -320,7 +320,7 @@ export default function AttentionView({ flags }: Props) {
                     disabled={busy}
                     onChange={(e) => setNote(e.target.value)}
                     placeholder="What did you do? (optional — kept on the flag)"
-                    className="w-full px-3 py-2 rounded-lg border border-[#008C9C]/20 text-sm text-[#003C46] placeholder:text-[#008C9C]/50 focus:outline-none focus:border-[#008C9C]"
+                    className="w-full px-3 py-2 rounded-lg border border-[var(--primary)]/20 text-sm text-[#003C46] placeholder:text-[var(--primary)]/50 focus:outline-none focus:border-[var(--primary)]"
                   />
                   <div className="flex flex-wrap items-center gap-2">
                     <button
@@ -353,9 +353,9 @@ export default function AttentionView({ flags }: Props) {
                         disabled={busy}
                         onChange={(e) => setRestockQty(e.target.value)}
                         aria-label={`Restock quantity for ${flag.productName}`}
-                        className="w-20 px-2 py-1.5 rounded-lg border border-[#008C9C]/20 text-sm text-[#003C46] focus:outline-none focus:border-[#008C9C]"
+                        className="w-20 px-2 py-1.5 rounded-lg border border-[var(--primary)]/20 text-sm text-[#003C46] focus:outline-none focus:border-[var(--primary)]"
                       />
-                      <span className="text-xs text-[#008C9C]/60">{flag.unit}</span>
+                      <span className="text-xs text-[var(--primary)]/60">{flag.unit}</span>
                       <button
                         type="button"
                         disabled={busy}
@@ -368,7 +368,7 @@ export default function AttentionView({ flags }: Props) {
                     </span>
                   </div>
                   {error && <p className="text-xs text-red-600">{error}</p>}
-                  <p className="text-[11px] text-[#008C9C]/50">
+                  <p className="text-[11px] text-[var(--primary)]/50">
                     A restock request goes to the Requests tab for approval and
                     leaves this flag open until the cleaner has the item.
                   </p>
@@ -380,8 +380,8 @@ export default function AttentionView({ flags }: Props) {
       </div>
 
       {filtered.length === 0 && (
-        <div className="text-center py-10 text-sm text-[#008C9C]/60 flex flex-col items-center gap-2">
-          <AlertTriangle className="w-5 h-5 text-[#008C9C]/40" />
+        <div className="text-center py-10 text-sm text-[var(--primary)]/60 flex flex-col items-center gap-2">
+          <AlertTriangle className="w-5 h-5 text-[var(--primary)]/40" />
           No flags match your filters
         </div>
       )}

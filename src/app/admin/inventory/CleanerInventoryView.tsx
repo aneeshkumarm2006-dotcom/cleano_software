@@ -209,13 +209,13 @@ export default function CleanerInventoryView({
   if (cleaners.length === 0) {
     return (
       <div className="text-center py-12">
-        <div className="w-16 h-16 bg-[#008C9C]/5 rounded-full flex items-center justify-center mx-auto mb-3">
-          <Users className="w-8 h-8 text-[#008C9C]/40" />
+        <div className="w-16 h-16 bg-[var(--primary)]/5 rounded-full flex items-center justify-center mx-auto mb-3">
+          <Users className="w-8 h-8 text-[var(--primary)]/40" />
         </div>
-        <p className="text-sm font-[350] text-[#008C9C]/70">
+        <p className="text-sm font-[350] text-[var(--primary)]/70">
           No cleaner-assigned stock yet
         </p>
-        <p className="text-xs font-[350] text-[#008C9C]/60 mt-1">
+        <p className="text-xs font-[350] text-[var(--primary)]/60 mt-1">
           Assign products to cleaners to see their field inventory here
         </p>
         {/* Without this the empty state was a dead end — the only way to assign
@@ -237,10 +237,10 @@ export default function CleanerInventoryView({
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-[350] tracking-tight text-[#008C9C]">
+          <h2 className="text-lg font-[350] tracking-tight text-[var(--primary)]">
             Cleaner Inventory
           </h2>
-          <p className="text-sm text-[#008C9C]/70 mt-1">
+          <p className="text-sm text-[var(--primary)]/70 mt-1">
             {canEdit
               ? "Stock currently assigned to crew in the field — set a count to correct it"
               : "Stock currently assigned to crew in the field"}
@@ -271,13 +271,13 @@ export default function CleanerInventoryView({
       {/* A warehouse return moves a number on a different tab, so it gets said
           out loud here rather than being left for the admin to go and find. */}
       {notice && (
-        <div className="flex items-start justify-between gap-3 rounded-xl border border-[#008C9C]/20 bg-[#008C9C]/5 px-4 py-3">
-          <p className="text-xs text-[#008C9C]">{notice}</p>
+        <div className="flex items-start justify-between gap-3 rounded-xl border border-[var(--primary)]/20 bg-[var(--primary)]/5 px-4 py-3">
+          <p className="text-xs text-[var(--primary)]">{notice}</p>
           <button
             type="button"
             aria-label="Dismiss"
             onClick={() => setNotice(null)}
-            className="text-[#008C9C]/50 hover:text-[#008C9C]">
+            className="text-[var(--primary)]/50 hover:text-[var(--primary)]">
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
@@ -287,13 +287,13 @@ export default function CleanerInventoryView({
       <div className="flex flex-col lg:flex-row gap-2">
         <div className="flex-1">
           <div className="relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#008C9C] z-10 w-4 h-4" />
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--primary)] z-10 w-4 h-4" />
             <Input
               placeholder="Search by cleaner or product..."
               value={search}
               size="md"
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-10 h-[42px] py-3 placeholder:!text-[#008C9C]/40 placeholder:!font-[350]"
+              className="pl-10 h-[42px] py-3 placeholder:!text-[var(--primary)]/40 placeholder:!font-[350]"
               variant="form"
               border={false}
             />
@@ -320,11 +320,11 @@ export default function CleanerInventoryView({
               <div className="min-w-0">
                 <Link
                   href={`/admin/employees/${c.employeeId}?tab=products`}
-                  className="text-sm font-[500] text-[#008C9C] hover:underline inline-flex items-center gap-1">
+                  className="text-sm font-[500] text-[var(--primary)] hover:underline inline-flex items-center gap-1">
                   {c.employeeName}
                   <ArrowUpRight className="w-3.5 h-3.5" />
                 </Link>
-                <p className="text-xs text-[#008C9C]/60 mt-0.5">
+                <p className="text-xs text-[var(--primary)]/60 mt-0.5">
                   {c.itemCount} item{c.itemCount !== 1 ? "s" : ""} ·{" "}
                   {c.totalUnits} units · ${c.totalValue.toFixed(2)}
                 </p>
@@ -356,9 +356,9 @@ export default function CleanerInventoryView({
                   return (
                     <div
                       key={i.productId}
-                      className="p-3 rounded-xl bg-white border border-[#008C9C]/30 space-y-2">
+                      className="p-3 rounded-xl bg-white border border-[var(--primary)]/30 space-y-2">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-sm font-[400] text-[#008C9C] truncate">
+                        <span className="text-sm font-[400] text-[var(--primary)] truncate">
                           {i.productName}
                         </span>
                         <button
@@ -366,12 +366,12 @@ export default function CleanerInventoryView({
                           aria-label="Cancel"
                           onClick={closeEditor}
                           disabled={saving}
-                          className="text-[#008C9C]/50 hover:text-[#008C9C]">
+                          className="text-[var(--primary)]/50 hover:text-[var(--primary)]">
                           <X className="w-4 h-4" />
                         </button>
                       </div>
                       <div className="flex items-center gap-2">
-                        <label className="text-xs text-[#008C9C]/60 shrink-0">
+                        <label className="text-xs text-[var(--primary)]/60 shrink-0">
                           Set to
                         </label>
                         <input
@@ -382,10 +382,10 @@ export default function CleanerInventoryView({
                           value={qty}
                           disabled={saving}
                           onChange={(e) => setQty(e.target.value)}
-                          className="w-24 px-2 py-1.5 rounded-lg border border-[#008C9C]/20 text-sm text-[#003C46] focus:outline-none focus:border-[#008C9C]"
+                          className="w-24 px-2 py-1.5 rounded-lg border border-[var(--primary)]/20 text-sm text-[#003C46] focus:outline-none focus:border-[var(--primary)]"
                         />
-                        <span className="text-xs text-[#008C9C]/60">{i.unit}</span>
-                        <span className="text-xs text-[#008C9C]/40 ml-auto">
+                        <span className="text-xs text-[var(--primary)]/60">{i.unit}</span>
+                        <span className="text-xs text-[var(--primary)]/40 ml-auto">
                           was {i.quantity}
                         </span>
                       </div>
@@ -396,25 +396,25 @@ export default function CleanerInventoryView({
                         disabled={saving}
                         onChange={(e) => setReason(e.target.value)}
                         placeholder="Reason (optional) — e.g. cycle count, restocked van"
-                        className="w-full px-2 py-1.5 rounded-lg border border-[#008C9C]/20 text-sm text-[#003C46] placeholder:text-[#008C9C]/40 focus:outline-none focus:border-[#008C9C]"
+                        className="w-full px-2 py-1.5 rounded-lg border border-[var(--primary)]/20 text-sm text-[#003C46] placeholder:text-[var(--primary)]/40 focus:outline-none focus:border-[var(--primary)]"
                       />
                       {/* PDF #6: "warehouse stock should not be affected unless
                           admin specifically chooses to return the item". Only
                           offered when the count is going DOWN — a checkbox that
                           does nothing is worse than no checkbox. */}
                       {unitsRemovedFromKit(qty, i.quantity) > 0 && (
-                        <label className="flex items-start gap-2 text-xs text-[#008C9C] cursor-pointer">
+                        <label className="flex items-start gap-2 text-xs text-[var(--primary)] cursor-pointer">
                           <input
                             type="checkbox"
                             checked={returnToWarehouse}
                             disabled={saving}
                             onChange={(e) => setReturnToWarehouse(e.target.checked)}
-                            className="mt-0.5 w-4 h-4 accent-[#008C9C]"
+                            className="mt-0.5 w-4 h-4 accent-[var(--primary)]"
                           />
                           <span>
                             Return the {unitsRemovedFromKit(qty, i.quantity)} {i.unit}{" "}
                             removed to warehouse stock
-                            <span className="block text-[11px] text-[#008C9C]/50">
+                            <span className="block text-[11px] text-[var(--primary)]/50">
                               Off by default — tick only if the units physically
                               came back.
                             </span>
@@ -449,7 +449,7 @@ export default function CleanerInventoryView({
                           Cancel
                         </Button>
                       </div>
-                      <p className="text-[11px] text-[#008C9C]/50">
+                      <p className="text-[11px] text-[var(--primary)]/50">
                         Recorded in the product&rsquo;s stock history with your name
                         and the change amount.{" "}
                         {returnToWarehouse && unitsRemovedFromKit(qty, i.quantity) > 0
@@ -469,13 +469,13 @@ export default function CleanerInventoryView({
                     className={`flex items-center justify-between gap-2 p-3 rounded-xl transition-colors ${
                       alert
                         ? "bg-red-50 border border-red-200"
-                        : "bg-[#008C9C]/5"
+                        : "bg-[var(--primary)]/5"
                     }`}>
                     <div className="min-w-0">
                       <Link
                         href={`/admin/inventory/${i.productId}`}
                         className={`text-sm font-[400] hover:underline ${
-                          alert ? "text-red-700" : "text-[#008C9C]"
+                          alert ? "text-red-700" : "text-[var(--primary)]"
                         }`}>
                         {i.productName}
                       </Link>
@@ -485,7 +485,7 @@ export default function CleanerInventoryView({
                           Stage 3 the same is true of a bottle reported empty,
                           whose count no longer moves at all. */}
                       {i.lastReport && (
-                        <p className="text-[11px] text-[#008C9C]/50 truncate mt-0.5">
+                        <p className="text-[11px] text-[var(--primary)]/50 truncate mt-0.5">
                           Reported{" "}
                           {i.lastReport.previousStatus
                             ? `${statusLabel(i.lastReport.previousStatus)} → `
@@ -496,17 +496,17 @@ export default function CleanerInventoryView({
                         </p>
                       )}
                       {!i.lastReport && equipment && i.statusUpdatedAt && (
-                        <p className="text-[11px] text-[#008C9C]/50 truncate mt-0.5">
+                        <p className="text-[11px] text-[var(--primary)]/50 truncate mt-0.5">
                           Condition reported {fmtDateTime(i.statusUpdatedAt)}
                         </p>
                       )}
                       {i.statusNotes && (
-                        <p className="text-[11px] text-[#008C9C]/50 truncate mt-0.5">
+                        <p className="text-[11px] text-[var(--primary)]/50 truncate mt-0.5">
                           “{i.statusNotes}”
                         </p>
                       )}
                       {i.lastChange && (
-                        <p className="text-[11px] text-[#008C9C]/50 truncate mt-0.5">
+                        <p className="text-[11px] text-[var(--primary)]/50 truncate mt-0.5">
                           {i.lastChange.delta >= 0 ? "+" : ""}
                           {i.lastChange.delta} {i.unit} ·{" "}
                           {fmtDateTime(i.lastChange.at)}
@@ -548,7 +548,7 @@ export default function CleanerInventoryView({
                       )}
                       <span
                         className={`text-sm ${
-                          alert ? "text-red-700 font-[500]" : "text-[#008C9C]/70"
+                          alert ? "text-red-700 font-[500]" : "text-[var(--primary)]/70"
                         }`}>
                         {i.quantity} {i.unit}
                       </span>
@@ -558,7 +558,7 @@ export default function CleanerInventoryView({
                           aria-label={`Set ${i.productName} quantity for ${c.employeeName}`}
                           title="Set quantity"
                           onClick={() => openEditor(c.employeeId, i)}
-                          className="p-1.5 rounded-lg text-[#008C9C]/60 hover:text-[#008C9C] hover:bg-[#008C9C]/10">
+                          className="p-1.5 rounded-lg text-[var(--primary)]/60 hover:text-[var(--primary)] hover:bg-[var(--primary)]/10">
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
                       )}
@@ -572,7 +572,7 @@ export default function CleanerInventoryView({
       </div>
 
       {filtered.length === 0 && (
-        <div className="text-center py-10 text-sm text-[#008C9C]/60">
+        <div className="text-center py-10 text-sm text-[var(--primary)]/60">
           No cleaners match your filters
         </div>
       )}

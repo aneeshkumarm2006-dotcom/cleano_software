@@ -72,7 +72,7 @@ export default function JoinWaitlistPage() {
         <div style={{ maxWidth: 480, width: "100%", textAlign: "center" }}>
           <div style={{
             width: 72, height: 72, borderRadius: "50%",
-            background: "linear-gradient(135deg, #059669, #10b981)",
+            background: "linear-gradient(135deg, var(--emerald-600), #10b981)",
             display: "flex", alignItems: "center", justifyContent: "center",
             margin: "0 auto 28px", boxShadow: "0 8px 24px rgba(5,150,105,0.25)",
           }}>
@@ -88,7 +88,7 @@ export default function JoinWaitlistPage() {
             {successData.name ? `You're on the list, ${successData.name.split(" ")[0]}!` : "You're on the list!"}
           </h1>
           <p style={{ fontSize: 15, color: "rgba(0,140,156,0.65)", lineHeight: 1.6, margin: "0 0 8px" }}>
-            We&rsquo;ll reach out to <strong style={{ color: "#008C9C" }}>{successData.email}</strong> as soon as a slot opens up
+            We&rsquo;ll reach out to <strong style={{ color: "var(--primary)" }}>{successData.email}</strong> as soon as a slot opens up
             {successData.date ? ` on or near ${new Date(successData.date + "T12:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric" })}` : ""}.
           </p>
           <p style={{ fontSize: 13, color: "rgba(0,140,156,0.45)", lineHeight: 1.5, margin: 0 }}>
@@ -98,7 +98,7 @@ export default function JoinWaitlistPage() {
           <div style={{ display: "flex", gap: 12, justifyContent: "center", marginTop: 32, flexWrap: "wrap" }}>
             <a href="/" style={{
               display: "inline-flex", alignItems: "center", height: 44, padding: "0 24px",
-              borderRadius: 12, background: "#008C9C", color: "#fff",
+              borderRadius: 12, background: "var(--primary)", color: "#fff",
               fontSize: 14, fontWeight: 600, textDecoration: "none",
               fontFamily: "inherit",
             }}>
@@ -106,7 +106,7 @@ export default function JoinWaitlistPage() {
             </a>
             <a href="/book" style={{
               display: "inline-flex", alignItems: "center", height: 44, padding: "0 24px",
-              borderRadius: 12, background: "#fff", color: "#008C9C",
+              borderRadius: 12, background: "#fff", color: "var(--primary)",
               border: "1.5px solid rgba(0,140,156,0.2)",
               fontSize: 14, fontWeight: 600, textDecoration: "none",
               fontFamily: "inherit",
@@ -126,10 +126,10 @@ export default function JoinWaitlistPage() {
         display: "flex", alignItems: "center", justifyContent: "space-between",
         padding: "20px 32px", maxWidth: 760, margin: "0 auto",
       }}>
-        <a href="/" style={{ fontFamily: "var(--font-app)", fontSize: 20, fontWeight: 400, color: "#008C9C", textDecoration: "none", letterSpacing: "-0.01em" }}>
+        <a href="/" style={{ fontFamily: "var(--font-app)", fontSize: 20, fontWeight: 400, color: "var(--primary)", textDecoration: "none", letterSpacing: "-0.01em" }}>
           Cleano
         </a>
-        <a href="/book" style={{ fontSize: 13, color: "#008C9C", textDecoration: "none", fontWeight: 600, opacity: 0.7 }}>
+        <a href="/book" style={{ fontSize: 13, color: "var(--primary)", textDecoration: "none", fontWeight: 600, opacity: 0.7 }}>
           Book a cleaning →
         </a>
       </header>
@@ -149,7 +149,7 @@ export default function JoinWaitlistPage() {
             letterSpacing: "-0.025em", margin: "0 0 14px",
           }}>
             Booked up? Join the{" "}
-            <em style={{ fontStyle: "normal", color: "#008C9C" }}>waitlist.</em>
+            <em style={{ fontStyle: "normal", color: "var(--primary)" }}>waitlist.</em>
           </h1>
           <p style={{ fontSize: 15, color: "rgba(0,140,156,0.6)", lineHeight: 1.6, margin: 0 }}>
             Leave your details and we&rsquo;ll reach out the moment a slot opens up on your preferred date.
@@ -247,9 +247,9 @@ export default function JoinWaitlistPage() {
 
             {error && (
               <div style={{
-                background: "#fef2f2", border: "1px solid #fecaca",
+                background: "var(--error-bg)", border: "1px solid var(--error-border)",
                 borderRadius: 10, padding: "12px 16px",
-                fontSize: 13, color: "#b91c1c",
+                fontSize: 13, color: "var(--danger)",
               }}>
                 {error}
               </div>
@@ -260,7 +260,7 @@ export default function JoinWaitlistPage() {
               disabled={isPending}
               style={{
                 width: "100%", height: 52, borderRadius: 14,
-                background: isPending ? "rgba(0,140,156,0.5)" : "#008C9C",
+                background: isPending ? "rgba(0,140,156,0.5)" : "var(--primary)",
                 color: "#fff", fontSize: 15, fontWeight: 600,
                 fontFamily: "inherit", border: 0, cursor: isPending ? "not-allowed" : "pointer",
                 transition: "background .15s",

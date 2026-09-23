@@ -114,9 +114,9 @@ export default function FaqManager() {
           style={{
             fontSize: 12.5,
             lineHeight: 1.5,
-            color: "#92400e",
-            background: "#fffbeb",
-            border: "1px solid #fde68a",
+            color: "var(--amber-800)",
+            background: "var(--amber-50)",
+            border: "1px solid var(--amber-200)",
             borderRadius: 10,
             padding: "10px 12px",
             marginBottom: 14,
@@ -367,7 +367,7 @@ export default function FaqManager() {
               }}
               rows={3}
               placeholder="Answer"
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#008C9C]"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
             />
 
             {showFrench && (
@@ -392,7 +392,7 @@ export default function FaqManager() {
                   }}
                   rows={3}
                   placeholder="Réponse (FR) — laissez vide pour utiliser l'anglais"
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#008C9C]"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
                 />
               </div>
             )}
@@ -494,7 +494,7 @@ export default function FaqManager() {
           rows={3}
           placeholder="Answer"
           style={{ marginTop: 8 }}
-          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#008C9C]"
+          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
         />
         <Button
           type="button"
@@ -515,7 +515,7 @@ export default function FaqManager() {
       </div>
 
       {error && (
-        <p style={{ fontSize: 12.5, color: "#dc2626", marginTop: 10 }}>{error}</p>
+        <p style={{ fontSize: 12.5, color: "var(--error)", marginTop: 10 }}>{error}</p>
       )}
       {notice && (
         <p style={{ fontSize: 12.5, color: "var(--primary)", marginTop: 10 }}>{notice}</p>

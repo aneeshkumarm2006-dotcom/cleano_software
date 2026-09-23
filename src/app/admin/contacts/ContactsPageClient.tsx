@@ -305,7 +305,7 @@ export default function ContactsPageClient({
             </label>
           </div>
           {cError && (
-            <div style={{ background: "#fee2e2", color: "#dc2626", padding: "10px 14px", borderRadius: 10, fontSize: 13 }}>
+            <div style={{ background: "var(--danger-soft)", color: "var(--error)", padding: "10px 14px", borderRadius: 10, fontSize: 13 }}>
               {cError}
             </div>
           )}
@@ -493,7 +493,7 @@ export default function ContactsPageClient({
               #contacts-mobile { display: flex !important; }
             }
             .atable tbody tr.row-selected { background: var(--primary-05, #f0fdff); }
-            .jcard.row-selected { outline: 2px solid var(--primary-40, #008C9C); outline-offset: -1px; }
+            .jcard.row-selected { outline: 2px solid var(--primary-40, var(--primary)); outline-offset: -1px; }
           `}</style>
         </>
       )}

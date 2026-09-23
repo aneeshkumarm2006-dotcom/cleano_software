@@ -274,7 +274,7 @@ export default function ProductDetailView({
               ? "text-red-600"
               : variant === "warning"
               ? "text-yellow-700"
-              : "!text-[#008C9C]/70"
+              : "!text-[var(--primary)]/70"
           }`}>
           {label}
         </span>
@@ -284,7 +284,7 @@ export default function ProductDetailView({
               ? "text-red-600"
               : variant === "warning"
               ? "text-yellow-700"
-              : "text-[#008C9C]"
+              : "text-[var(--primary)]"
           }`}>
           {value}
         </p>
@@ -299,10 +299,10 @@ export default function ProductDetailView({
       <div className="w-1/2 grid grid-cols-1 gap-12">
         <Card variant="ghost" className="!p-0">
           <div className="flex items-center gap-2 mb-4">
-            <div className="p-2 bg-[#008C9C]/10 rounded-lg">
-              <Archive className="w-4 h-4 text-[#008C9C]" />
+            <div className="p-2 bg-[var(--primary)]/10 rounded-lg">
+              <Archive className="w-4 h-4 text-[var(--primary)]" />
             </div>
-            <h3 className="text-sm font-[350] text-[#008C9C]/80">
+            <h3 className="text-sm font-[350] text-[var(--primary)]/80">
               Stock Details
             </h3>
           </div>
@@ -310,8 +310,8 @@ export default function ProductDetailView({
             {/* What kind of thing this is — decides whether the thresholds
                 beside it apply at all (inventory fixes PDF #1 + #4). */}
             {product.itemType && (
-              <div className="col-span-2 flex justify-between items-center gap-3 p-3 rounded-xl bg-[#008C9C]/2">
-                <span className="input-label !text-[#008C9C]/70">Item Type</span>
+              <div className="col-span-2 flex justify-between items-center gap-3 p-3 rounded-xl bg-[var(--primary)]/2">
+                <span className="input-label !text-[var(--primary)]/70">Item Type</span>
                 <div className="text-right">
                   <Badge
                     variant={
@@ -321,38 +321,38 @@ export default function ProductDetailView({
                     className="px-2 py-1">
                     {ITEM_TYPE_NAME[product.itemType]}
                   </Badge>
-                  <p className="text-xs text-[#008C9C]/50 mt-1">
+                  <p className="text-xs text-[var(--primary)]/50 mt-1">
                     {ITEM_TYPE_DESCRIPTION[product.itemType]}
                   </p>
                 </div>
               </div>
             )}
-            <div className="flex justify-between items-center p-3 rounded-xl bg-[#008C9C]/2">
-              <span className="input-label !text-[#008C9C]/70">
+            <div className="flex justify-between items-center p-3 rounded-xl bg-[var(--primary)]/2">
+              <span className="input-label !text-[var(--primary)]/70">
                 Warehouse Stock
               </span>
-              <span className="app-title-small text-[#008C9C]">
+              <span className="app-title-small text-[var(--primary)]">
                 {product.stockLevel} {product.unit}
               </span>
             </div>
-            <div className="flex justify-between items-center p-3 rounded-xl bg-[#008C9C]/2">
-              <span className="input-label !text-[#008C9C]/70">
+            <div className="flex justify-between items-center p-3 rounded-xl bg-[var(--primary)]/2">
+              <span className="input-label !text-[var(--primary)]/70">
                 Min. Threshold
               </span>
-              <span className="app-title-small text-[#008C9C]">
+              <span className="app-title-small text-[var(--primary)]">
                 {product.minStock} {product.unit}
               </span>
             </div>
-            <div className="flex justify-between items-center p-3 rounded-xl bg-[#008C9C]/2">
-              <span className="input-label !text-[#008C9C]/70">
+            <div className="flex justify-between items-center p-3 rounded-xl bg-[var(--primary)]/2">
+              <span className="input-label !text-[var(--primary)]/70">
                 Assigned to Employees
               </span>
-              <span className="app-title-small text-[#008C9C]">
+              <span className="app-title-small text-[var(--primary)]">
                 {totalAssigned} {product.unit}
               </span>
             </div>
-            <div className="flex justify-between items-center p-3 rounded-xl bg-[#008C9C]/5">
-              <span className="input-label !text-[#008C9C]/70">Status</span>
+            <div className="flex justify-between items-center p-3 rounded-xl bg-[var(--primary)]/5">
+              <span className="input-label !text-[var(--primary)]/70">Status</span>
               {isLowStock ? (
                 <Badge variant="error" size="sm" className="px-2 py-1">
                   Low Stock
@@ -365,7 +365,7 @@ export default function ProductDetailView({
             </div>
           </div>
           {product.stockUpdatedAt && (
-            <p className="text-xs text-[#008C9C]/50 mt-3">
+            <p className="text-xs text-[var(--primary)]/50 mt-3">
               Count last updated {fmtDateTime(product.stockUpdatedAt)}
               {product.stockUpdatedByName
                 ? ` by ${product.stockUpdatedByName}`
@@ -374,7 +374,7 @@ export default function ProductDetailView({
               <button
                 type="button"
                 onClick={() => updateView("history")}
-                className="text-[#008C9C] underline underline-offset-2">
+                className="text-[var(--primary)] underline underline-offset-2">
                 View stock history
               </button>
             </p>
@@ -384,25 +384,25 @@ export default function ProductDetailView({
         {/* Pricing Card */}
         <Card variant="ghost" className="!p-0">
           <div className="flex items-center gap-2 mb-4">
-            <div className="p-2 bg-[#008C9C]/10 rounded-lg">
-              <DollarSign className="w-4 h-4 text-[#008C9C]" />
+            <div className="p-2 bg-[var(--primary)]/10 rounded-lg">
+              <DollarSign className="w-4 h-4 text-[var(--primary)]" />
             </div>
-            <h3 className="input-label !text-[#008C9C]/70">Pricing</h3>
+            <h3 className="input-label !text-[var(--primary)]/70">Pricing</h3>
           </div>
           <div className="space-y-3">
-            <div className="flex justify-between items-center p-3 rounded-xl bg-[#008C9C]/2">
-              <span className="input-label !text-[#008C9C]/70">
+            <div className="flex justify-between items-center p-3 rounded-xl bg-[var(--primary)]/2">
+              <span className="input-label !text-[var(--primary)]/70">
                 Cost per Unit
               </span>
-              <span className="app-title-small text-[#008C9C]">
+              <span className="app-title-small text-[var(--primary)]">
                 ${product.costPerUnit.toFixed(2)} / {product.unit}
               </span>
             </div>
-            <div className="flex justify-between items-center p-3 rounded-xl bg-[#008C9C]/2">
-              <span className="input-label !text-[#008C9C]/70">
+            <div className="flex justify-between items-center p-3 rounded-xl bg-[var(--primary)]/2">
+              <span className="input-label !text-[var(--primary)]/70">
                 Total Inventory Value
               </span>
-              <span className="app-title-small text-[#008C9C]">
+              <span className="app-title-small text-[var(--primary)]">
                 ${totalValue.toFixed(2)}
               </span>
             </div>
@@ -430,13 +430,13 @@ export default function ProductDetailView({
           noreferrer" so the new tab can never reach back through window.opener. */}
       {purchaseLinks.length > 0 && (
         <>
-          <h2 className="input-label !text-[#008C9C]/70">Where to buy</h2>
+          <h2 className="input-label !text-[var(--primary)]/70">Where to buy</h2>
           <Card variant="default" className="p-6">
             <div className="flex items-center gap-2 mb-4">
-              <div className="p-2 bg-[#008C9C]/10 rounded-lg">
-                <ShoppingCart className="w-4 h-4 text-[#008C9C]" />
+              <div className="p-2 bg-[var(--primary)]/10 rounded-lg">
+                <ShoppingCart className="w-4 h-4 text-[var(--primary)]" />
               </div>
-              <h3 className="text-sm font-[350] text-[#008C9C]/80">
+              <h3 className="text-sm font-[350] text-[var(--primary)]/80">
                 Purchase links
               </h3>
             </div>
@@ -447,12 +447,12 @@ export default function ProductDetailView({
                   href={l.href}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center justify-between gap-3 p-3 rounded-xl bg-[#008C9C]/5 hover:bg-[#008C9C]/10 transition-colors">
+                  className="flex items-center justify-between gap-3 p-3 rounded-xl bg-[var(--primary)]/5 hover:bg-[var(--primary)]/10 transition-colors">
                   <div className="min-w-0">
-                    <p className="text-sm font-[400] text-[#008C9C] truncate">
+                    <p className="text-sm font-[400] text-[var(--primary)] truncate">
                       {l.label}
                     </p>
-                    <p className="text-xs text-[#008C9C]/60 truncate">{l.href}</p>
+                    <p className="text-xs text-[var(--primary)]/60 truncate">{l.href}</p>
                   </div>
                   <span className="flex items-center gap-2 shrink-0">
                     {l.isPrimary && (
@@ -460,7 +460,7 @@ export default function ProductDetailView({
                         Primary
                       </Badge>
                     )}
-                    <ExternalLink className="w-4 h-4 text-[#008C9C]/60" />
+                    <ExternalLink className="w-4 h-4 text-[var(--primary)]/60" />
                   </span>
                 </a>
               ))}
@@ -472,9 +472,9 @@ export default function ProductDetailView({
       {/* Description */}
       {product.description && (
         <>
-          <h2 className="input-label !text-[#008C9C]/70">Description</h2>
+          <h2 className="input-label !text-[var(--primary)]/70">Description</h2>
           <Card variant="cleano_light" className="p-6">
-            <p className="text-sm text-[#008C9C]/80 whitespace-pre-wrap leading-relaxed">
+            <p className="text-sm text-[var(--primary)]/80 whitespace-pre-wrap leading-relaxed">
               {product.description}
             </p>
           </Card>
@@ -490,10 +490,10 @@ export default function ProductDetailView({
         <Card variant="default" className="p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <div className="p-2 bg-[#008C9C]/10 rounded-lg">
-                <TrendingUp className="w-4 h-4 text-[#008C9C]" />
+              <div className="p-2 bg-[var(--primary)]/10 rounded-lg">
+                <TrendingUp className="w-4 h-4 text-[var(--primary)]" />
               </div>
-              <h3 className="text-sm font-[350] text-[#008C9C]/80">
+              <h3 className="text-sm font-[350] text-[var(--primary)]/80">
                 Usage in Jobs
               </h3>
             </div>
@@ -506,12 +506,12 @@ export default function ProductDetailView({
             {jobUsage.map((usage) => (
               <div
                 key={usage.id}
-                className="flex items-center justify-between p-3 rounded-xl bg-[#008C9C]/5">
+                className="flex items-center justify-between p-3 rounded-xl bg-[var(--primary)]/5">
                 <div className="flex-1">
-                  <p className="text-sm font-[400] text-[#008C9C]">
+                  <p className="text-sm font-[400] text-[var(--primary)]">
                     {usage.job.clientName}
                   </p>
-                  <p className="text-xs text-[#008C9C]/60">
+                  <p className="text-xs text-[var(--primary)]/60">
                     {usage.job.employee.name} •{" "}
                     {new Date(usage.createdAt).toLocaleDateString("en-US")}
                   </p>
@@ -536,10 +536,10 @@ export default function ProductDetailView({
       ) : (
         <Card variant="ghost" className="p-8">
           <div className="text-center">
-            <div className="w-12 h-12 bg-[#008C9C]/5 rounded-2xl flex items-center justify-center mx-auto mb-3">
-              <History className="w-6 h-6 text-[#008C9C]/40" />
+            <div className="w-12 h-12 bg-[var(--primary)]/5 rounded-2xl flex items-center justify-center mx-auto mb-3">
+              <History className="w-6 h-6 text-[var(--primary)]/40" />
             </div>
-            <p className="text-sm text-[#008C9C]/60">
+            <p className="text-sm text-[var(--primary)]/60">
               No usage recorded for this product
             </p>
           </div>
@@ -555,19 +555,19 @@ export default function ProductDetailView({
       <Card variant="cleano_light" className="p-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <p className="input-label !text-[#008C9C]/70">Current warehouse count</p>
-            <p className="text-2xl font-[350] text-[#008C9C]">
+            <p className="input-label !text-[var(--primary)]/70">Current warehouse count</p>
+            <p className="text-2xl font-[350] text-[var(--primary)]">
               {product.stockLevel} {product.unit}
             </p>
           </div>
           {product.stockUpdatedAt && (
             <div className="text-right">
-              <p className="input-label !text-[#008C9C]/70">Last updated</p>
-              <p className="text-sm text-[#008C9C]">
+              <p className="input-label !text-[var(--primary)]/70">Last updated</p>
+              <p className="text-sm text-[var(--primary)]">
                 {fmtDateTime(product.stockUpdatedAt)}
               </p>
               {product.stockUpdatedByName && (
-                <p className="text-xs text-[#008C9C]/60">
+                <p className="text-xs text-[var(--primary)]/60">
                   by {product.stockUpdatedByName}
                 </p>
               )}
@@ -579,13 +579,13 @@ export default function ProductDetailView({
       {changeHistory.length === 0 ? (
         <Card variant="ghost" className="p-8">
           <div className="text-center">
-            <div className="w-12 h-12 bg-[#008C9C]/5 rounded-2xl flex items-center justify-center mx-auto mb-3">
-              <Clock className="w-6 h-6 text-[#008C9C]/40" />
+            <div className="w-12 h-12 bg-[var(--primary)]/5 rounded-2xl flex items-center justify-center mx-auto mb-3">
+              <Clock className="w-6 h-6 text-[var(--primary)]/40" />
             </div>
-            <p className="text-sm text-[#008C9C]/60">
+            <p className="text-sm text-[var(--primary)]/60">
               No stock changes recorded yet
             </p>
-            <p className="text-xs text-[#008C9C]/50 mt-1">
+            <p className="text-xs text-[var(--primary)]/50 mt-1">
               Adjustments to the count will appear here with who changed it and why
             </p>
           </div>
@@ -593,10 +593,10 @@ export default function ProductDetailView({
       ) : (
         <Card variant="default" className="p-6">
           <div className="flex items-center gap-2 mb-4">
-            <div className="p-2 bg-[#008C9C]/10 rounded-lg">
-              <Clock className="w-4 h-4 text-[#008C9C]" />
+            <div className="p-2 bg-[var(--primary)]/10 rounded-lg">
+              <Clock className="w-4 h-4 text-[var(--primary)]" />
             </div>
-            <h3 className="text-sm font-[350] text-[#008C9C]/80">
+            <h3 className="text-sm font-[350] text-[var(--primary)]/80">
               Recent stock changes
             </h3>
           </div>
@@ -606,7 +606,7 @@ export default function ProductDetailView({
               return (
                 <div
                   key={c.id}
-                  className="flex items-center justify-between gap-3 p-3 rounded-xl bg-[#008C9C]/5">
+                  className="flex items-center justify-between gap-3 p-3 rounded-xl bg-[var(--primary)]/5">
                   <div className="flex items-start gap-3 min-w-0">
                     <div
                       className={`p-1.5 rounded-lg shrink-0 ${
@@ -619,26 +619,26 @@ export default function ProductDetailView({
                       )}
                     </div>
                     <div className="min-w-0">
-                      <p className="text-sm font-[400] text-[#008C9C]">
+                      <p className="text-sm font-[400] text-[var(--primary)]">
                         {/* previous → new, plus the signed delta. `previous` is
                             derived (new − change) so it can never disagree. */}
                         {c.newQuantity - c.quantityChange} → {c.newQuantity}{" "}
                         {c.unit || product.unit}
-                        <span className="text-[#008C9C]/60">
+                        <span className="text-[var(--primary)]/60">
                           {" "}
                           ({up ? "+" : ""}
                           {c.quantityChange})
                         </span>
                         {c.employeeName ? (
-                          <span className="text-[#008C9C]/60">
+                          <span className="text-[var(--primary)]/60">
                             {" "}
                             · {c.employeeName}&rsquo;s kit
                           </span>
                         ) : (
-                          <span className="text-[#008C9C]/60"> · warehouse</span>
+                          <span className="text-[var(--primary)]/60"> · warehouse</span>
                         )}
                       </p>
-                      <p className="text-xs text-[#008C9C]/60 truncate">
+                      <p className="text-xs text-[var(--primary)]/60 truncate">
                         {fmtDateTime(c.createdAt)}
                         {c.changedByName ? ` · by ${c.changedByName}` : ""}
                         {c.reason ? ` · ${c.reason}` : ""}
@@ -660,13 +660,13 @@ export default function ProductDetailView({
       {employeeAssignments.length === 0 ? (
         <Card variant="ghost" className="p-8">
           <div className="text-center">
-            <div className="w-12 h-12 bg-[#008C9C]/5 rounded-2xl flex items-center justify-center mx-auto mb-3">
-              <Users className="w-6 h-6 text-[#008C9C]/40" />
+            <div className="w-12 h-12 bg-[var(--primary)]/5 rounded-2xl flex items-center justify-center mx-auto mb-3">
+              <Users className="w-6 h-6 text-[var(--primary)]/40" />
             </div>
-            <p className="text-sm font-[350] text-[#008C9C]/70">
+            <p className="text-sm font-[350] text-[var(--primary)]/70">
               No assignments found
             </p>
-            <p className="text-xs font-[350] text-[#008C9C]/60 mt-1">
+            <p className="text-xs font-[350] text-[var(--primary)]/60 mt-1">
               This product is not currently assigned to any employees
             </p>
           </div>
@@ -677,7 +677,7 @@ export default function ProductDetailView({
           <div className="flex flex-col lg:flex-row gap-2">
             <div className="flex-1">
               <div className="relative">
-                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-[#008C9C]/60 z-10 w-4 h-4" />
+                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-[var(--primary)]/60 z-10 w-4 h-4" />
                 <Input
                   placeholder="Search by employee name, email, or notes..."
                   value={searchTerm}
@@ -686,7 +686,7 @@ export default function ProductDetailView({
                     setSearchTerm(e.target.value);
                     setPage(1);
                   }}
-                  className="pl-10 h-[42px] py-3 placeholder:!text-[#008C9C]/40 placeholder:!font-[350]"
+                  className="pl-10 h-[42px] py-3 placeholder:!text-[var(--primary)]/40 placeholder:!font-[350]"
                   variant="form"
                   border={false}
                 />
@@ -724,7 +724,7 @@ export default function ProductDetailView({
             <div className="hidden lg:block overflow-x-auto rounded-t-2xl">
               <div className="min-w-max">
                 {/* Header */}
-                <div className="flex bg-[#008C9C]/5 rounded-t-2xl">
+                <div className="flex bg-[var(--primary)]/5 rounded-t-2xl">
                   {[
                     { label: "Employee", className: "w-[200px] text-left" },
                     { label: "Email", className: "w-[250px] text-left" },
@@ -742,30 +742,30 @@ export default function ProductDetailView({
                   ].map((col) => (
                     <div
                       key={col.label}
-                      className={`p-4 text-xs font-[350] !text-[#008C9C]/40 uppercase !tracking-wider ${col.className}`}>
+                      className={`p-4 text-xs font-[350] !text-[var(--primary)]/40 uppercase !tracking-wider ${col.className}`}>
                       {col.label}
                     </div>
                   ))}
                 </div>
 
                 {/* Rows */}
-                <div className="divide-y divide-[#008C9C]/4">
+                <div className="divide-y divide-[var(--primary)]/4">
                   {paginatedAssignments.length === 0 ? (
-                    <div className="p-8 text-center text-sm font-[350] text-[#008C9C]/70">
+                    <div className="p-8 text-center text-sm font-[350] text-[var(--primary)]/70">
                       No assignments found matching your search
                     </div>
                   ) : (
                     paginatedAssignments.map((assignment) => (
                       <div
                         key={assignment.id}
-                        className="flex items-center hover:bg-[#008C9C]/1 transition-colors">
+                        className="flex items-center hover:bg-[var(--primary)]/1 transition-colors">
                         <div className="w-[200px] p-4">
                           <p className="app-title-small truncate">
                             {assignment.employee.name}
                           </p>
                         </div>
                         <div className="w-[250px] p-4">
-                          <p className="app-title-small !text-[#008C9C]/50 truncate">
+                          <p className="app-title-small !text-[var(--primary)]/50 truncate">
                             {assignment.employee.email}
                           </p>
                         </div>
@@ -787,7 +787,7 @@ export default function ProductDetailView({
                           </Badge>
                         </div>
                         <div className="w-[120px] p-4">
-                          <p className="app-title-small text-[#008C9C]">
+                          <p className="app-title-small text-[var(--primary)]">
                             $
                             {(
                               assignment.quantity * product.costPerUnit
@@ -795,14 +795,14 @@ export default function ProductDetailView({
                           </p>
                         </div>
                         <div className="w-[140px] p-4">
-                          <p className="app-title-small !text-[#008C9C]/50">
+                          <p className="app-title-small !text-[var(--primary)]/50">
                             {new Date(
                               assignment.assignedAt
                             ).toLocaleDateString("en-US")}
                           </p>
                         </div>
                         <div className="w-[200px] p-4">
-                          <p className="app-title-small !text-[#008C9C]/40 truncate">
+                          <p className="app-title-small !text-[var(--primary)]/40 truncate">
                             {assignment.notes || "-"}
                           </p>
                         </div>
@@ -823,7 +823,7 @@ export default function ProductDetailView({
 
                 {/* Footer Totals */}
                 {paginatedAssignments.length > 0 && (
-                  <div className="flex bg-[#008C9C]/5 border-t border-[#008C9C]/10">
+                  <div className="flex bg-[var(--primary)]/5 border-t border-[var(--primary)]/10">
                     <div className="w-[200px] p-4">
                       <p className="app-title-small">Total Assigned</p>
                     </div>
@@ -856,10 +856,10 @@ export default function ProductDetailView({
                   <div className="space-y-3">
                     <div className="flex items-start justify-between">
                       <div>
-                        <p className="text-sm font-[400] text-[#008C9C]">
+                        <p className="text-sm font-[400] text-[var(--primary)]">
                           {assignment.employee.name}
                         </p>
-                        <p className="text-xs text-[#008C9C]/60 mt-0.5">
+                        <p className="text-xs text-[var(--primary)]/60 mt-0.5">
                           {assignment.employee.email}
                         </p>
                       </div>
@@ -874,17 +874,17 @@ export default function ProductDetailView({
                         </Badge>
                       </div>
                     </div>
-                    <div className="flex items-center justify-between text-xs text-[#008C9C]/60">
+                    <div className="flex items-center justify-between text-xs text-[var(--primary)]/60">
                       <span>
                         {new Date(assignment.assignedAt).toLocaleDateString("en-US")}
                       </span>
-                      <span className="text-sm font-[400] text-[#008C9C]">
+                      <span className="text-sm font-[400] text-[var(--primary)]">
                         $
                         {(assignment.quantity * product.costPerUnit).toFixed(2)}
                       </span>
                     </div>
                     {assignment.notes && (
-                      <p className="text-xs text-[#008C9C]/50">
+                      <p className="text-xs text-[var(--primary)]/50">
                         {assignment.notes}
                       </p>
                     )}
@@ -903,8 +903,8 @@ export default function ProductDetailView({
 
             {/* Pagination */}
             {totalAssignments > 0 && (
-              <div className="flex items-center justify-between p-2 px-3 bg-[#008C9C]/4 rounded-b-2xl">
-                <div className="text-xs text-[#008C9C]/70 font-[350]">
+              <div className="flex items-center justify-between p-2 px-3 bg-[var(--primary)]/4 rounded-b-2xl">
+                <div className="text-xs text-[var(--primary)]/70 font-[350]">
                   Showing {startIndex + 1} to{" "}
                   {Math.min(endIndex, totalAssignments)} of {totalAssignments}{" "}
                   assignments
@@ -950,7 +950,7 @@ export default function ProductDetailView({
                           size="md"
                           onClick={() => goToPage(pageNum)}
                           className="px-3 min-w-8 rounded-xl">
-                          <span className="text-sm font-[350] text-[#008C9C]">
+                          <span className="text-sm font-[350] text-[var(--primary)]">
                             {pageNum}
                           </span>
                         </Button>
@@ -1004,7 +1004,7 @@ export default function ProductDetailView({
         <div className="w-full flex flex-col md:flex-row items-start justify-between gap-4 my-10">
           <div className="flex-1">
             <div className="flex items-center gap-3 flex-wrap">
-              <h1 className="text-3xl !font-light tracking-tight text-[#008C9C]">
+              <h1 className="text-3xl !font-light tracking-tight text-[var(--primary)]">
                 {product.name}
               </h1>
               {isLowStock && (
@@ -1015,14 +1015,14 @@ export default function ProductDetailView({
               )}
             </div>
             {product.description && (
-              <p className="text-sm text-[#008C9C]/60 mt-2">
+              <p className="text-sm text-[var(--primary)]/60 mt-2">
                 {product.description}
               </p>
             )}
           </div>
           <div className="text-right">
-            <p className="text-sm text-[#008C9C]/60 !mb-2">Cost per unit</p>
-            <p className="text-xl font-[350] text-[#008C9C]">
+            <p className="text-sm text-[var(--primary)]/60 !mb-2">Cost per unit</p>
+            <p className="text-xl font-[350] text-[var(--primary)]">
               ${product.costPerUnit.toFixed(2)} / {product.unit}
             </p>
           </div>
@@ -1047,7 +1047,7 @@ export default function ProductDetailView({
         </div>
 
         {/* Tabs */}
-        <div className="flex items-center gap-2 bg-[#008C9C]/5 rounded-2xl p-1 w-fit overflow-x-auto">
+        <div className="flex items-center gap-2 bg-[var(--primary)]/5 rounded-2xl p-1 w-fit overflow-x-auto">
           {MENU_ITEMS.map((item) => {
             const isActive = activeView === item.id;
             return (

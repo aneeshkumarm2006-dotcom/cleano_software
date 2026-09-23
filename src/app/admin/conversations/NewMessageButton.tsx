@@ -67,7 +67,7 @@ export default function NewMessageButton() {
                     onClick={() => setChannel(c)}
                     className={`px-3 py-1.5 rounded-lg text-sm font-medium border ${
                       channel === c
-                        ? "border-[#008C9C] text-[#008C9C] bg-[#008C9C]/5"
+                        ? "border-[var(--primary)] text-[var(--primary)] bg-[var(--primary)]/5"
                         : "border-gray-200 text-gray-500 hover:bg-gray-50"
                     }`}>
                     {c === "SMS" ? "Text message" : "Email"}
@@ -98,7 +98,7 @@ export default function NewMessageButton() {
                 maxLength={1200}
                 placeholder="Your message…"
                 required
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#008C9C]"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
               />
               <p className="text-xs text-gray-500">
                 If they reply, the AI assistant will answer for you (when it's

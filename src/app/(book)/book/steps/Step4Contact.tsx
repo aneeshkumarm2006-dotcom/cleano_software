@@ -18,7 +18,7 @@ interface Props {
 }
 
 const errorStyle: React.CSSProperties = {
-  color: "#dc2626",
+  color: "var(--error)",
   fontSize: 13,
   marginTop: 4,
   display: "block",

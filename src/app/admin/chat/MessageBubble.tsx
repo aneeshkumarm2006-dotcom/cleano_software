@@ -18,8 +18,8 @@ export default function MessageBubble({ message, isMine }: MessageBubbleProps) {
       <div
         className={`max-w-[75%] rounded-2xl px-4 py-2 ${
           isMine
-            ? "bg-[#008C9C] text-white"
-            : "bg-[#008C9C]/8 text-[#008C9C]"
+            ? "bg-[var(--primary)] text-white"
+            : "bg-[var(--primary)]/8 text-[var(--primary)]"
         }`}>
         {!isMine && (
           <div className="text-[10px] font-[400] opacity-70 mb-0.5">
@@ -31,7 +31,7 @@ export default function MessageBubble({ message, isMine }: MessageBubbleProps) {
         </div>
         <div
           className={`text-[9px] mt-0.5 ${
-            isMine ? "text-white/50 text-right" : "text-[#008C9C]/40"
+            isMine ? "text-white/50 text-right" : "text-[var(--primary)]/40"
           }`}>
           {formatTime(message.createdAt)}
         </div>

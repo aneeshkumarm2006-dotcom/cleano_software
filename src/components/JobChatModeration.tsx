@@ -158,7 +158,7 @@ export default function JobChatModeration({ jobId }: { jobId: string }) {
       )}
 
       {error && (
-        <p style={{ fontSize: 12, color: "#dc2626", margin: "8px 0 0" }}>{error}</p>
+        <p style={{ fontSize: 12, color: "var(--error)", margin: "8px 0 0" }}>{error}</p>
       )}
     </div>
   );

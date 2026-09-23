@@ -225,7 +225,7 @@ export default function SuppliersTab({
         </div>
       }>
       {suppliers.length === 0 ? (
-        <p className="text-sm text-[#008C9C]/60">No suppliers yet.</p>
+        <p className="text-sm text-[var(--primary)]/60">No suppliers yet.</p>
       ) : (
         <div className="space-y-2">
           {suppliers.map((s) => {
@@ -233,7 +233,7 @@ export default function SuppliersTab({
             return (
               <div
                 key={s.id}
-                className="border border-[#008C9C]/10 rounded-xl overflow-hidden bg-white">
+                className="border border-[var(--primary)]/10 rounded-xl overflow-hidden bg-white">
                 <div className="flex items-center justify-between p-3 gap-2">
                   <div className="flex items-start gap-2 flex-1 min-w-0">
                     <button
@@ -243,19 +243,19 @@ export default function SuppliersTab({
                       aria-label={isOpen ? `Collapse ${s.name}` : `Expand ${s.name}`}
                       className="pt-0.5">
                       {isOpen ? (
-                        <ChevronDown className="w-4 h-4 text-[#008C9C]/60" />
+                        <ChevronDown className="w-4 h-4 text-[var(--primary)]/60" />
                       ) : (
-                        <ChevronRight className="w-4 h-4 text-[#008C9C]/60" />
+                        <ChevronRight className="w-4 h-4 text-[var(--primary)]/60" />
                       )}
                     </button>
                     <div className="min-w-0">
                       <button
                         type="button"
                         onClick={() => setExpanded(isOpen ? null : s.id)}
-                        className="text-sm font-[400] text-[#008C9C] text-left">
+                        className="text-sm font-[400] text-[var(--primary)] text-left">
                         {s.name}
                         {!s.isActive && (
-                          <span className="ml-2 text-xs text-[#008C9C]/40">
+                          <span className="ml-2 text-xs text-[var(--primary)]/40">
                             (inactive)
                           </span>
                         )}
@@ -266,13 +266,13 @@ export default function SuppliersTab({
                             href={s.website}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-xs text-[#008C9C] underline underline-offset-2 hover:text-[#006b78]">
+                            className="text-xs text-[var(--primary)] underline underline-offset-2 hover:text-[#006b78]">
                             {s.website}
                           </a>
                         </div>
                       )}
                       {(s.contact || s.email || s.phone) && (
-                        <div className="text-xs text-[#008C9C]/60">
+                        <div className="text-xs text-[var(--primary)]/60">
                           {[s.contact, s.email, s.phone]
                             .filter(Boolean)
                             .join(" · ")}
@@ -298,9 +298,9 @@ export default function SuppliersTab({
                 </div>
 
                 {isOpen && (
-                  <div className="border-t border-[#008C9C]/10 p-4 bg-[#008C9C]/3">
+                  <div className="border-t border-[var(--primary)]/10 p-4 bg-[var(--primary)]/3">
                     {products.length === 0 ? (
-                      <p className="text-xs text-[#008C9C]/60">
+                      <p className="text-xs text-[var(--primary)]/60">
                         No products to price.
                       </p>
                     ) : (
@@ -308,16 +308,16 @@ export default function SuppliersTab({
                       <table className="w-full text-sm">
                         <thead>
                           <tr className="text-left">
-                            <th className="py-2 pr-2 text-xs font-[350] text-[#008C9C]/70 uppercase tracking-wide">
+                            <th className="py-2 pr-2 text-xs font-[350] text-[var(--primary)]/70 uppercase tracking-wide">
                               Product
                             </th>
-                            <th className="py-2 pr-2 text-xs font-[350] text-[#008C9C]/70 uppercase tracking-wide">
+                            <th className="py-2 pr-2 text-xs font-[350] text-[var(--primary)]/70 uppercase tracking-wide">
                               Price ($)
                             </th>
-                            <th className="py-2 pr-2 text-xs font-[350] text-[#008C9C]/70 uppercase tracking-wide">
+                            <th className="py-2 pr-2 text-xs font-[350] text-[var(--primary)]/70 uppercase tracking-wide">
                               Unit
                             </th>
-                            <th className="py-2 text-xs font-[350] text-[#008C9C]/70 uppercase tracking-wide text-right">
+                            <th className="py-2 text-xs font-[350] text-[var(--primary)]/70 uppercase tracking-wide text-right">
                               Actions
                             </th>
                           </tr>
@@ -334,8 +334,8 @@ export default function SuppliersTab({
                             return (
                               <tr
                                 key={p.id}
-                                className="border-t border-[#008C9C]/10">
-                                <td className="py-2 pr-2 text-sm text-[#008C9C]">
+                                className="border-t border-[var(--primary)]/10">
+                                <td className="py-2 pr-2 text-sm text-[var(--primary)]">
                                   {p.name}
                                 </td>
                                 <td className="py-2 pr-2">
@@ -486,14 +486,14 @@ export default function SuppliersTab({
               }
             />
           </Field>
-          <label className="flex items-center gap-2 text-sm text-[#008C9C] select-none">
+          <label className="flex items-center gap-2 text-sm text-[var(--primary)] select-none">
             <input
               type="checkbox"
               checked={draft.isActive}
               onChange={(e) =>
                 setDraft((prev) => ({ ...prev, isActive: e.target.checked }))
               }
-              className="accent-[#008C9C]"
+              className="accent-[var(--primary)]"
             />
             Active
           </label>

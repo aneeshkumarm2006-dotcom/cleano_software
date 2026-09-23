@@ -444,7 +444,7 @@ export default function BookingKoalaImportButton({
                   <Table2 size={14} />
                   Preview all data ({fullData.records.length} rows · {fullData.headers.length} columns)
                 </span>
-                <span className="text-xs text-[#008C9C]">{showFullData ? "Hide" : "Show"}</span>
+                <span className="text-xs text-[var(--primary)]">{showFullData ? "Hide" : "Show"}</span>
               </button>
               {showFullData && (
                 <div className="mt-2 max-h-80 overflow-auto rounded-lg border border-gray-100">

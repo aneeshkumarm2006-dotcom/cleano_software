@@ -37,13 +37,13 @@ export default function ForecastView({ employees }: ForecastViewProps) {
   if (employees.length === 0) {
     return (
       <div className="text-center py-12">
-        <div className="w-16 h-16 bg-[#008C9C]/5 rounded-full flex items-center justify-center mx-auto mb-3">
-          <TrendingDown className="w-8 h-8 text-[#008C9C]/40" />
+        <div className="w-16 h-16 bg-[var(--primary)]/5 rounded-full flex items-center justify-center mx-auto mb-3">
+          <TrendingDown className="w-8 h-8 text-[var(--primary)]/40" />
         </div>
-        <p className="text-sm font-[350] text-[#008C9C]/70">
+        <p className="text-sm font-[350] text-[var(--primary)]/70">
           No forecast data available
         </p>
-        <p className="text-xs font-[350] text-[#008C9C]/60 mt-1">
+        <p className="text-xs font-[350] text-[var(--primary)]/60 mt-1">
           Assign products to employees to see forecasts. Projections come from
           reported usage on completed jobs, so they build up as work is logged.
         </p>
@@ -55,10 +55,10 @@ export default function ForecastView({ employees }: ForecastViewProps) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-[350] tracking-tight text-[#008C9C]">
+          <h2 className="text-lg font-[350] tracking-tight text-[var(--primary)]">
             Inventory Forecast
           </h2>
-          <p className="text-sm text-[#008C9C]/70 mt-1">
+          <p className="text-sm text-[var(--primary)]/70 mt-1">
             Projected usage based on upcoming jobs and inventory rules
           </p>
         </div>

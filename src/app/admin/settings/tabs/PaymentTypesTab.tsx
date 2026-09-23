@@ -70,7 +70,7 @@ export default function PaymentTypesTab({ settings }: PaymentTypesTabProps) {
           <div
             key={k}
             className="grid grid-cols-[160px_1fr] items-center gap-3">
-            <span className="text-xs text-[#008C9C]/60 font-mono uppercase tracking-wide">
+            <span className="text-xs text-[var(--primary)]/60 font-mono uppercase tracking-wide">
               {k}
             </span>
             <Input

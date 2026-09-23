@@ -54,9 +54,9 @@ export default function PayPeriodDetail({ period, onError }: Props) {
   };
 
   return (
-    <div className="p-5 bg-[#008C9C]/2">
+    <div className="p-5 bg-[var(--primary)]/2">
       {period.payouts.length === 0 ? (
-        <p className="text-sm text-[#008C9C]/60 text-center py-6">
+        <p className="text-sm text-[var(--primary)]/60 text-center py-6">
           No payouts in this period
         </p>
       ) : (
@@ -128,7 +128,7 @@ export default function PayPeriodDetail({ period, onError }: Props) {
       </div>
 
       {(period.approvedAt || period.paidAt) && (
-        <div className="mt-4 pt-4 border-t border-[#008C9C]/10 text-xs text-[#008C9C]/60 space-y-1">
+        <div className="mt-4 pt-4 border-t border-[var(--primary)]/10 text-xs text-[var(--primary)]/60 space-y-1">
           {period.approvedAt && (
             <p>
               Approved {new Date(period.approvedAt).toLocaleDateString("en-US")}

@@ -328,7 +328,7 @@ export default function MyPayClient({
                       </div>
                       <div>
                         <div className="cl-block-stat-label">Deductions</div>
-                        <div className="cl-block-stat-val" style={{ color: "#dc2626" }}>-${currentPeriod.deductions.toFixed(2)}</div>
+                        <div className="cl-block-stat-val" style={{ color: "var(--error)" }}>-${currentPeriod.deductions.toFixed(2)}</div>
                       </div>
                     </>
                   )}

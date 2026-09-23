@@ -103,7 +103,7 @@ export default function PremiumSelect({
   const border = error
     ? "1.5px solid #f87171"
     : open
-    ? "1.5px solid #008C9C"
+    ? "1.5px solid var(--primary)"
     : "1px solid rgba(0,140,156,0.16)";
   const boxShadow = open ? "0 0 0 3px rgba(0,140,156,0.11)" : "none";
 
@@ -242,7 +242,7 @@ export default function PremiumSelect({
                         color: opt.disabled
                           ? "rgba(0,140,156,0.28)"
                           : active
-                          ? "#008C9C"
+                          ? "var(--primary)"
                           : "#111",
                         fontFamily: "inherit",
                         textAlign: "left",
@@ -262,7 +262,7 @@ export default function PremiumSelect({
                       {active && (
                         <Check
                           size={13}
-                          style={{ color: "#008C9C", flexShrink: 0 }}
+                          style={{ color: "var(--primary)", flexShrink: 0 }}
                         />
                       )}
                     </button>

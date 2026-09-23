@@ -735,7 +735,7 @@ export default function CleanerSelector({
                   className={`w-full pl-6 pr-2 py-1.5 text-sm bg-white border rounded-lg outline-none ${
                     payCheck.overBudget
                       ? "border-red-400 focus:border-red-500"
-                      : "border-gray-200 focus:border-[#008C9C]"
+                      : "border-gray-200 focus:border-[var(--primary)]"
                   }`}
                 />
               </div>

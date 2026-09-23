@@ -415,7 +415,7 @@ export default function Step5Review({
             </span>
           </div>
           {promoMsg && !promoMsg.ok && (
-            <p style={{ fontSize: 13, color: "var(--red, #dc2626)" }}>{promoMsg.text}</p>
+            <p style={{ fontSize: 13, color: "var(--red, var(--error))" }}>{promoMsg.text}</p>
           )}
           <button
             type="button"
@@ -477,7 +477,7 @@ export default function Step5Review({
         )}
 
         {stripeError && (
-          <p style={{ color: "var(--red, #dc2626)", fontSize: 13 }}>{stripeError}</p>
+          <p style={{ color: "var(--red, var(--error))", fontSize: 13 }}>{stripeError}</p>
         )}
 
         {clientSecret && !stripeLoading && stripePromise && (
@@ -492,7 +492,7 @@ export default function Step5Review({
             a dead Confirm button. Say it plainly instead, and name the person
             who can actually fix it, which is not the customer. */}
         {clientSecret && !stripeLoading && !stripePromise && (
-          <p style={{ color: "var(--red, #dc2626)", fontSize: 13, margin: 0 }}>
+          <p style={{ color: "var(--red, var(--error))", fontSize: 13, margin: 0 }}>
             This company can&apos;t take card payments online yet. Please
             contact them directly and they&apos;ll book it for you.
           </p>

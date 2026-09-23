@@ -15,7 +15,7 @@ const POLL_MS = 18_000;
 const cleanerIcon = L.divIcon({
   html: `<div style="
     width: 20px; height: 20px;
-    background: #008C9C;
+    background: var(--primary);
     border: 3px solid white;
     border-radius: 50%;
     box-shadow: 0 2px 6px rgba(0,0,0,0.35);

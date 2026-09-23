@@ -104,12 +104,12 @@ interface RatingEntry {
 const STATUS_PILLS: Record<string, { bg: string; fg: string; dot: string; label: string }> = {
   // Round 4, fix 6 — "Created" was the raw enum leaking into a customer-facing
   // admin screen. Same word and same amber as every other surface now.
-  CREATED:     { bg: "rgba(217,119,6,0.12)",   fg: "#92400e", dot: "#d97706", label: HOLD_LABEL },
-  SCHEDULED:   { bg: "rgba(217,119,6,0.12)",   fg: "#92400e", dot: "#d97706", label: "Scheduled" },
+  CREATED:     { bg: "rgba(217,119,6,0.12)",   fg: "var(--amber-800)", dot: "var(--amber-600)", label: HOLD_LABEL },
+  SCHEDULED:   { bg: "rgba(217,119,6,0.12)",   fg: "var(--amber-800)", dot: "var(--amber-600)", label: "Scheduled" },
   IN_PROGRESS: { bg: "rgba(2,132,199,0.10)",   fg: "#075985", dot: "#0284c7", label: "In Progress" },
-  COMPLETED:   { bg: "rgba(5,150,105,0.10)",   fg: "#065f46", dot: "#10b981", label: "Completed" },
-  PAID:        { bg: "rgba(5,150,105,0.18)",   fg: "#065f46", dot: "#059669", label: "Paid" },
-  CANCELLED:   { bg: "rgba(220,38,38,0.10)",   fg: "#991b1b", dot: "#dc2626", label: "Cancelled" },
+  COMPLETED:   { bg: "rgba(5,150,105,0.10)",   fg: "var(--emerald-800)", dot: "#10b981", label: "Completed" },
+  PAID:        { bg: "rgba(5,150,105,0.18)",   fg: "var(--emerald-800)", dot: "var(--emerald-600)", label: "Paid" },
+  CANCELLED:   { bg: "rgba(220,38,38,0.10)",   fg: "var(--danger)", dot: "var(--error)", label: "Cancelled" },
 };
 
 function StatusPill({ status }: { status: string }) {
@@ -140,14 +140,14 @@ function AStatCard({ icon: Icon, label, value, hint, warn }: {
   icon: React.ElementType; label: string; value: string; hint?: string; warn?: boolean;
 }) {
   return (
-    <div className="astat" style={warn ? { borderLeft: "3px solid #d97706" } : {}}>
-      <div className="astat-head" style={warn ? { color: "#92400e" } : {}}>
+    <div className="astat" style={warn ? { borderLeft: "3px solid var(--amber-600)" } : {}}>
+      <div className="astat-head" style={warn ? { color: "var(--amber-800)" } : {}}>
         <span>{label}</span>
-        <span className="astat-icon" style={warn ? { background: "#fffbeb", color: "#d97706" } : {}}>
+        <span className="astat-icon" style={warn ? { background: "var(--amber-50)", color: "var(--amber-600)" } : {}}>
           <Icon size={15} />
         </span>
       </div>
-      <div className="astat-value" style={warn ? { color: "#92400e" } : {}}>{value}</div>
+      <div className="astat-value" style={warn ? { color: "var(--amber-800)" } : {}}>{value}</div>
       {hint && <div className="astat-delta">{hint}</div>}
     </div>
   );
@@ -210,8 +210,8 @@ export default function ClientDetailView({
             <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
               <h1 className="display" style={{ fontSize: "clamp(24px,3vw,36px)" }}>{client.name}</h1>
               {client.discountPercent > 0 && (
-                <span className="pill" style={{ background: "#fffbeb", color: "#92400e" }}>
-                  <span className="pill-dot" style={{ background: "#d97706" }} />
+                <span className="pill" style={{ background: "var(--amber-50)", color: "var(--amber-800)" }}>
+                  <span className="pill-dot" style={{ background: "var(--amber-600)" }} />
                   {client.discountPercent}% discount
                 </span>
               )}
@@ -445,7 +445,7 @@ export default function ClientDetailView({
                                   View job
                                 </a>
                               </td>
-                              <td className="num" style={{ fontWeight: 600, color: "#059669" }}>
+                              <td className="num" style={{ fontWeight: 600, color: "var(--emerald-600)" }}>
                                 +${(j.price || 0).toFixed(0)}
                               </td>
                               <td>
@@ -483,7 +483,7 @@ export default function ClientDetailView({
           <div className="stack-16">
             {/* Rating hero */}
             <div style={{
-              background: "linear-gradient(135deg, #00707D 0%, #008C9C 60%, #007a88 100%)",
+              background: "linear-gradient(135deg, var(--primary-50) 0%, var(--primary) 60%, #007a88 100%)",
               borderRadius: 16, padding: "28px 32px",
               display: "flex", alignItems: "center", gap: 24, flexWrap: "wrap",
             }}>

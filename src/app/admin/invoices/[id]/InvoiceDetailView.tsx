@@ -162,7 +162,7 @@ export default function InvoiceDetailView({
       <div className="flex flex-col md:flex-row items-start justify-between gap-4 print:hidden">
         <div>
           <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-3xl !font-light tracking-tight text-[#008C9C]">
+            <h1 className="text-3xl !font-light tracking-tight text-[var(--primary)]">
               {invoice.invoiceNumber}
             </h1>
             {/* Derived, so this badge says the same thing the list's pill does
@@ -171,7 +171,7 @@ export default function InvoiceDetailView({
                 is a function of what it is, not of how late it is. */}
             {getStatusBadge(invoiceDisplayStatus(invoice))}
           </div>
-          <p className="text-sm text-[#008C9C]/60 mt-1">
+          <p className="text-sm text-[var(--primary)]/60 mt-1">
             Created {new Date(invoice.createdAt).toLocaleDateString("en-US", {
               weekday: "short",
               year: "numeric",
@@ -195,7 +195,7 @@ export default function InvoiceDetailView({
             href={`/api/invoices/${invoice.id}/pdf`}
             target="_blank"
             rel="noopener"
-            className="inline-flex items-center gap-2 rounded-2xl px-6 py-3 text-sm font-medium bg-[#008C9C]/5 text-[#008C9C] hover:bg-[#008C9C]/10">
+            className="inline-flex items-center gap-2 rounded-2xl px-6 py-3 text-sm font-medium bg-[var(--primary)]/5 text-[var(--primary)] hover:bg-[var(--primary)]/10">
             <FileText className="w-4 h-4" />
             Download PDF
           </a>
@@ -253,34 +253,34 @@ export default function InvoiceDetailView({
         {/* Client Info */}
         <Card variant="cleano_light" className="p-6">
           <div className="flex items-center gap-2 mb-4">
-            <div className="p-2 bg-[#008C9C]/10 rounded-lg">
-              <FileText className="w-4 h-4 text-[#008C9C]" />
+            <div className="p-2 bg-[var(--primary)]/10 rounded-lg">
+              <FileText className="w-4 h-4 text-[var(--primary)]" />
             </div>
-            <h3 className="text-sm font-[350] text-[#008C9C]/80">Client</h3>
+            <h3 className="text-sm font-[350] text-[var(--primary)]/80">Client</h3>
           </div>
           <div className="space-y-2">
-            <div className="flex justify-between items-center p-3 rounded-xl bg-[#008C9C]/2">
-              <span className="text-sm text-[#008C9C]/70">Name</span>
-              <Link href={`/admin/clients/${invoice.client.id}`} className="text-sm font-[400] text-[#008C9C] hover:underline">
+            <div className="flex justify-between items-center p-3 rounded-xl bg-[var(--primary)]/2">
+              <span className="text-sm text-[var(--primary)]/70">Name</span>
+              <Link href={`/admin/clients/${invoice.client.id}`} className="text-sm font-[400] text-[var(--primary)] hover:underline">
                 {invoice.client.name}
               </Link>
             </div>
             {invoice.client.email && (
-              <div className="flex justify-between items-center p-3 rounded-xl bg-[#008C9C]/2">
-                <span className="text-sm text-[#008C9C]/70">Email</span>
-                <span className="text-sm text-[#008C9C]">{invoice.client.email}</span>
+              <div className="flex justify-between items-center p-3 rounded-xl bg-[var(--primary)]/2">
+                <span className="text-sm text-[var(--primary)]/70">Email</span>
+                <span className="text-sm text-[var(--primary)]">{invoice.client.email}</span>
               </div>
             )}
             {invoice.client.phone && (
-              <div className="flex justify-between items-center p-3 rounded-xl bg-[#008C9C]/2">
-                <span className="text-sm text-[#008C9C]/70">Phone</span>
-                <span className="text-sm text-[#008C9C]">{invoice.client.phone}</span>
+              <div className="flex justify-between items-center p-3 rounded-xl bg-[var(--primary)]/2">
+                <span className="text-sm text-[var(--primary)]/70">Phone</span>
+                <span className="text-sm text-[var(--primary)]">{invoice.client.phone}</span>
               </div>
             )}
             {invoice.client.address && (
-              <div className="flex justify-between items-center p-3 rounded-xl bg-[#008C9C]/2">
-                <span className="text-sm text-[#008C9C]/70">Address</span>
-                <span className="text-sm text-[#008C9C] text-right max-w-[200px]">{invoice.client.address}</span>
+              <div className="flex justify-between items-center p-3 rounded-xl bg-[var(--primary)]/2">
+                <span className="text-sm text-[var(--primary)]/70">Address</span>
+                <span className="text-sm text-[var(--primary)] text-right max-w-[200px]">{invoice.client.address}</span>
               </div>
             )}
           </div>
@@ -289,24 +289,24 @@ export default function InvoiceDetailView({
         {/* Invoice Details */}
         <Card variant="cleano_light" className="p-6">
           <div className="flex items-center gap-2 mb-4">
-            <div className="p-2 bg-[#008C9C]/10 rounded-lg">
-              <DollarSign className="w-4 h-4 text-[#008C9C]" />
+            <div className="p-2 bg-[var(--primary)]/10 rounded-lg">
+              <DollarSign className="w-4 h-4 text-[var(--primary)]" />
             </div>
-            <h3 className="text-sm font-[350] text-[#008C9C]/80">Details</h3>
+            <h3 className="text-sm font-[350] text-[var(--primary)]/80">Details</h3>
           </div>
           <div className="space-y-2">
             {invoice.dueDate && (
-              <div className="flex justify-between items-center p-3 rounded-xl bg-[#008C9C]/2">
-                <span className="text-sm text-[#008C9C]/70">Due Date</span>
-                <span className="text-sm text-[#008C9C]">
+              <div className="flex justify-between items-center p-3 rounded-xl bg-[var(--primary)]/2">
+                <span className="text-sm text-[var(--primary)]/70">Due Date</span>
+                <span className="text-sm text-[var(--primary)]">
                   {new Date(invoice.dueDate).toLocaleDateString("en-US")}
                 </span>
               </div>
             )}
             {invoice.sentAt && (
-              <div className="flex justify-between items-center p-3 rounded-xl bg-[#008C9C]/2">
-                <span className="text-sm text-[#008C9C]/70">Sent</span>
-                <span className="text-sm text-[#008C9C]">
+              <div className="flex justify-between items-center p-3 rounded-xl bg-[var(--primary)]/2">
+                <span className="text-sm text-[var(--primary)]/70">Sent</span>
+                <span className="text-sm text-[var(--primary)]">
                   {new Date(invoice.sentAt).toLocaleDateString("en-US")}
                 </span>
               </div>
@@ -320,17 +320,17 @@ export default function InvoiceDetailView({
               </div>
             )}
             {invoice.job && (
-              <div className="flex justify-between items-center p-3 rounded-xl bg-[#008C9C]/2">
-                <span className="text-sm text-[#008C9C]/70">Linked Job</span>
-                <Link href={`/admin/jobs/${invoice.job.id}`} className="text-sm text-[#008C9C] hover:underline flex items-center gap-1">
+              <div className="flex justify-between items-center p-3 rounded-xl bg-[var(--primary)]/2">
+                <span className="text-sm text-[var(--primary)]/70">Linked Job</span>
+                <Link href={`/admin/jobs/${invoice.job.id}`} className="text-sm text-[var(--primary)] hover:underline flex items-center gap-1">
                   <Briefcase className="w-3.5 h-3.5" />
                   {invoice.job.jobType || "Job"}{invoice.job.jobDate ? ` · ${new Date(invoice.job.jobDate).toLocaleDateString("en-US")}` : ""}
                 </Link>
               </div>
             )}
-            <div className="flex justify-between items-center p-3 rounded-xl bg-[#008C9C]/10">
-              <span className="text-sm font-[400] text-[#008C9C]">Total</span>
-              <span className="text-lg font-[400] text-[#008C9C]">
+            <div className="flex justify-between items-center p-3 rounded-xl bg-[var(--primary)]/10">
+              <span className="text-sm font-[400] text-[var(--primary)]">Total</span>
+              <span className="text-lg font-[400] text-[var(--primary)]">
                 ${invoice.totalAmount.toFixed(2)}
               </span>
             </div>
@@ -341,8 +341,8 @@ export default function InvoiceDetailView({
       {/* Notes */}
       {invoice.notes && (
         <Card variant="cleano_light" className="p-6 print:hidden">
-          <h3 className="text-sm font-[350] text-[#008C9C]/80 mb-2">Notes</h3>
-          <p className="text-sm text-[#008C9C]/70 whitespace-pre-wrap">{invoice.notes}</p>
+          <h3 className="text-sm font-[350] text-[var(--primary)]/80 mb-2">Notes</h3>
+          <p className="text-sm text-[var(--primary)]/70 whitespace-pre-wrap">{invoice.notes}</p>
         </Card>
       )}
 

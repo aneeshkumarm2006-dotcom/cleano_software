@@ -24,7 +24,7 @@ import {
 const TONE: Record<string, { dot: string; cls: string }> = {
   ERROR: { dot: "bg-red-500", cls: "border-red-200 bg-red-50/40" },
   WARN: { dot: "bg-amber-500", cls: "border-amber-200 bg-amber-50/40" },
-  INFO: { dot: "bg-[#008C9C]", cls: "border-gray-200 bg-white" },
+  INFO: { dot: "bg-[var(--primary)]", cls: "border-gray-200 bg-white" },
 };
 
 /**
@@ -137,7 +137,7 @@ export default function NotificationsClient({
               aria-pressed={tab === t}
               className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
                 tab === t
-                  ? "bg-[#008C9C] text-white"
+                  ? "bg-[var(--primary)] text-white"
                   : "text-gray-600 hover:text-gray-900"
               }`}>
               {t === "unread" ? `Unread${unreadCount ? ` (${unreadCount})` : ""}` : "All"}
@@ -155,7 +155,7 @@ export default function NotificationsClient({
           type="button"
           onClick={markAll}
           disabled={unreadCount === 0 || pending}
-          className="rounded-xl border border-[#008C9C]/25 px-3 py-1.5 text-sm font-medium text-[#005a63] transition hover:border-[#008C9C]/50 disabled:cursor-not-allowed disabled:opacity-40">
+          className="rounded-xl border border-[var(--primary)]/25 px-3 py-1.5 text-sm font-medium text-[#005a63] transition hover:border-[var(--primary)]/50 disabled:cursor-not-allowed disabled:opacity-40">
           Mark all as read
         </button>
       </div>
@@ -189,7 +189,7 @@ export default function NotificationsClient({
                       : undefined
                   }
                   className={`flex gap-3 rounded-xl border p-4 transition ${tone.cls} ${
-                    n.href ? "cursor-pointer hover:border-[#008C9C]/40" : ""
+                    n.href ? "cursor-pointer hover:border-[var(--primary)]/40" : ""
                   } ${n.read ? "opacity-60" : ""}`}>
                   <span
                     aria-hidden

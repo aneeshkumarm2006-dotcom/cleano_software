@@ -35,7 +35,7 @@ export default function GiftCardRedeemClient({
           borderRadius: 16,
           textAlign: "center",
         }}>
-        <h2 style={{ margin: 0, fontSize: 20, color: "#008C9C" }}>
+        <h2 style={{ margin: 0, fontSize: 20, color: "var(--primary)" }}>
           ${done.amount.toFixed(2)} added to your account
         </h2>
         <p style={{ marginTop: 10, fontSize: 14, color: "#3a5a62" }}>
@@ -52,7 +52,7 @@ export default function GiftCardRedeemClient({
             padding: "10px 18px",
             fontSize: 14,
             fontWeight: 700,
-            background: "#008C9C",
+            background: "var(--primary)",
             color: "#fff",
             borderRadius: 10,
             textDecoration: "none",
@@ -100,7 +100,7 @@ export default function GiftCardRedeemClient({
         }}
       />
       {error && (
-        <p style={{ marginTop: 12, color: "#dc2626", fontSize: 13, fontWeight: 600 }}>
+        <p style={{ marginTop: 12, color: "var(--error)", fontSize: 13, fontWeight: 600 }}>
           {error}
         </p>
       )}
@@ -115,7 +115,7 @@ export default function GiftCardRedeemClient({
           fontSize: 15,
           fontWeight: 700,
           color: "#fff",
-          background: pending || code.length < 6 ? "#7daab0" : "#008C9C",
+          background: pending || code.length < 6 ? "#7daab0" : "var(--primary)",
           border: "none",
           borderRadius: 10,
           cursor: pending || code.length < 6 ? "default" : "pointer",
@@ -124,7 +124,7 @@ export default function GiftCardRedeemClient({
       </button>
       <p style={{ marginTop: 12, fontSize: 12, color: "#6b7d80", lineHeight: 1.5 }}>
         Don't have a Cleano account yet?{" "}
-        <a href="/setup" style={{ color: "#008C9C" }}>
+        <a href="/setup" style={{ color: "var(--primary)" }}>
           Create one
         </a>{" "}
         with the same email the gift card was sent to.

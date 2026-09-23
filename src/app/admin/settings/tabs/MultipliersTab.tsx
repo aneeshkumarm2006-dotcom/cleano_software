@@ -130,7 +130,7 @@ export default function MultipliersTab({ settings }: MultipliersTabProps) {
               className="grid grid-cols-[130px_150px_1fr] items-center gap-3">
               <div className="flex items-center gap-2">
                 <Star className="w-4 h-4 fill-[#3E7596] text-[#3E7596]" />
-                <span className="text-sm font-medium text-[#008C9C] tabular-nums">
+                <span className="text-sm font-medium text-[var(--primary)] tabular-nums">
                   {step}
                 </span>
               </div>
@@ -147,7 +147,7 @@ export default function MultipliersTab({ settings }: MultipliersTabProps) {
                 }
               />
               {/* The money consequence, visible before Save is pressed. */}
-              <span className="text-xs tabular-nums text-[#008C9C]/70">
+              <span className="text-xs tabular-nums text-[var(--primary)]/70">
                 {!valid ? (
                   `Enter ${MIN_RATING_MULTIPLIER.toFixed(2)}–${MAX_RATING_MULTIPLIER.toFixed(2)}`
                 ) : (

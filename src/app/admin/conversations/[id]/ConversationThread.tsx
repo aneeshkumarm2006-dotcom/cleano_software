@@ -98,7 +98,7 @@ export default function ConversationThread({
                   {" · "}
                   <Link
                     href={`/admin/clients/${conversation.clientId}`}
-                    className="text-[#008C9C] hover:underline">
+                    className="text-[var(--primary)] hover:underline">
                     View client
                   </Link>
                 </>
@@ -173,7 +173,7 @@ export default function ConversationThread({
             }
             className={`inline-flex items-center gap-1 text-xs font-semibold rounded-full px-2.5 py-1 border disabled:opacity-50 ${
               conversation.aiEnabled
-                ? "text-[#008C9C] bg-[#008C9C]/5 border-[#008C9C]/30 hover:bg-[#008C9C]/10"
+                ? "text-[var(--primary)] bg-[var(--primary)]/5 border-[var(--primary)]/30 hover:bg-[var(--primary)]/10"
                 : "text-gray-500 bg-gray-100 border-gray-200 hover:bg-gray-200"
             }`}>
             <Bot size={13} />
@@ -224,7 +224,7 @@ export default function ConversationThread({
           rows={3}
           maxLength={1200}
           placeholder={`Reply to ${who} as your team…`}
-          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#008C9C]"
+          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
         />
         <div className="flex items-center justify-between gap-3">
           <p className="text-xs text-gray-500">

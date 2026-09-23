@@ -92,7 +92,7 @@ export default function TierRatesSection({
                     setMsg(null);
                   }}
                   placeholder="—"
-                  className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm w-full focus:outline-none focus:ring-1 focus:ring-[#008C9C]"
+                  className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm w-full focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
                 />
                 <span className="text-xs text-gray-500">/h</span>
               </div>

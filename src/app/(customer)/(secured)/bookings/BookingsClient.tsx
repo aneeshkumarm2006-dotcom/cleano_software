@@ -411,7 +411,7 @@ function BookingCard({
               padding: "3px 8px",
               borderRadius: 999,
               background: "rgba(5,150,105,0.12)",
-              color: "#047857",
+              color: "var(--emerald-700)",
               letterSpacing: "0.04em",
             }}
             title={`A ${formatDeposit(

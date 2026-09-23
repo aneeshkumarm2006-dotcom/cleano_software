@@ -116,7 +116,7 @@ export default function LandingPageManager({
                         ? { background: "var(--emerald-100)", color: "var(--emerald-800)" }
                         : { background: "var(--slate-100)", color: "var(--slate-700)" }
                     }>
-                    <span className="pill-dot" style={{ background: page.isPublished ? "#059669" : "#94a3b8" }} />
+                    <span className="pill-dot" style={{ background: page.isPublished ? "var(--emerald-600)" : "#94a3b8" }} />
                     {page.isPublished ? "Published" : "Draft"}
                   </span>
                 </div>

@@ -1003,7 +1003,7 @@ export default function MyInventoryClient({ items, catalog = [] }: MyInventoryCl
                   fontSize: 13.5,
                   fontWeight: 600,
                   fontFamily: "inherit",
-                  background: "#dc2626",
+                  background: "var(--error)",
                   color: "#fff",
                   border: "none",
                   borderRadius: 10,

@@ -124,7 +124,7 @@ function PropertyRow({ p, onEdit }: { p: PropertyDef; onEdit: () => void }) {
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <span style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>{p.label}</span>
           {p.isSystem ? <span className="lock-badge"><Lock size={11} /> System</span> : null}
-          {p.isRequired ? <span className="tagchip" style={{ background: "rgba(220,38,38,0.08)", color: "#b91c1c" }}>Required</span> : null}
+          {p.isRequired ? <span className="tagchip" style={{ background: "rgba(220,38,38,0.08)", color: "var(--danger)" }}>Required</span> : null}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 3, flexWrap: "wrap" }}>
           <span style={{ fontFamily: "var(--font-mono)", fontSize: 11.5, color: "var(--primary-60)" }}>{p.internalName}</span>

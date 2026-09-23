@@ -211,9 +211,9 @@ export default function DesignGalleryPage() {
                   onChange={setSel1}
                   options={[
                     { value: "upcoming", label: "Upcoming", dot: "var(--primary)" },
-                    { value: "inprogress", label: "In progress", dot: "#d97706" },
-                    { value: "completed", label: "Completed", dot: "#059669" },
-                    { value: "cancelled", label: "Cancelled", dot: "#dc2626", disabled: true },
+                    { value: "inprogress", label: "In progress", dot: "var(--amber-600)" },
+                    { value: "completed", label: "Completed", dot: "var(--emerald-600)" },
+                    { value: "cancelled", label: "Cancelled", dot: "var(--error)", disabled: true },
                   ]}
                 />
               </div>

@@ -85,7 +85,7 @@ export default function ServiceContentTab({ settings }: ServiceContentTabProps) 
                 value={entry.text}
                 onChange={(e) => update(s.value, { text: e.target.value })}
                 placeholder={`e.g. A ${s.label.toLowerCase()} covers all bedrooms, bathrooms, the kitchen and common areas — dusting, vacuuming, mopping, and sanitising surfaces.`}
-                className="w-full px-4 py-2.5 rounded-xl border border-transparent bg-[#008C9C]/5 text-sm text-[#008C9C] placeholder:text-[#008C9C]/40 focus:outline-none focus:ring-2 focus:ring-[#008C9C]/20"
+                className="w-full px-4 py-2.5 rounded-xl border border-transparent bg-[var(--primary)]/5 text-sm text-[var(--primary)] placeholder:text-[var(--primary)]/40 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20"
               />
             </Field>
 
@@ -137,12 +137,12 @@ function ImagePicker({
         <img
           src={imageUrl}
           alt="Service graphic"
-          className="w-40 h-28 object-cover rounded-xl border border-[#008C9C]/15"
+          className="w-40 h-28 object-cover rounded-xl border border-[var(--primary)]/15"
         />
         <button
           type="button"
           onClick={onRemove}
-          className="inline-flex items-center gap-1.5 text-sm text-[#dc2626] hover:underline">
+          className="inline-flex items-center gap-1.5 text-sm text-[var(--error)] hover:underline">
           <Trash2 className="w-4 h-4" />
           Remove
         </button>
@@ -167,7 +167,7 @@ function ImagePicker({
         type="button"
         disabled={uploading}
         onClick={() => inputRef.current?.click()}
-        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-dashed border-[#008C9C]/30 bg-[#008C9C]/5 text-sm text-[#008C9C] hover:bg-[#008C9C]/10 disabled:opacity-60">
+        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-dashed border-[var(--primary)]/30 bg-[var(--primary)]/5 text-sm text-[var(--primary)] hover:bg-[var(--primary)]/10 disabled:opacity-60">
         {uploading ? (
           <Loader2 className="w-4 h-4 animate-spin" />
         ) : (

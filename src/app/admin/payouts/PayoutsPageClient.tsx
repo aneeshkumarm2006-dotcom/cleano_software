@@ -48,12 +48,12 @@ export type PayPeriodRow = {
 };
 
 const STATUS_PILL: Record<PayPeriodRow["status"], { bg: string; color: string }> = {
-  DRAFT:            { bg: "#f1f5f9", color: "#475569" },
-  PENDING_APPROVAL: { bg: "#fffbeb", color: "#d97706" },
+  DRAFT:            { bg: "var(--slate-100)", color: "#475569" },
+  PENDING_APPROVAL: { bg: "var(--amber-50)", color: "var(--amber-600)" },
   APPROVED:         { bg: "#eff6ff", color: "#1d4ed8" },
   PAID:             { bg: "#dcfce7", color: "#15803d" },
-  CANCELLED:        { bg: "#fee2e2", color: "#b91c1c" },
-  REJECTED:         { bg: "#fee2e2", color: "#b91c1c" },
+  CANCELLED:        { bg: "var(--danger-soft)", color: "var(--danger)" },
+  REJECTED:         { bg: "var(--danger-soft)", color: "var(--danger)" },
 };
 
 function formatDate(iso: string) {
@@ -144,14 +144,14 @@ export default function PayoutsPageClient({
           <div className="astat-head"><span>Paid this year</span><span className="astat-icon"><DollarSign size={15} /></span></div>
           <div className="astat-value">${stats.paidThisYear.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
         </div>
-        <div className="astat" style={stats.drafts > 0 ? { borderLeft: "3px solid #d97706" } : {}}>
-          <div className="astat-head" style={stats.drafts > 0 ? { color: "#92400e" } : {}}>
+        <div className="astat" style={stats.drafts > 0 ? { borderLeft: "3px solid var(--amber-600)" } : {}}>
+          <div className="astat-head" style={stats.drafts > 0 ? { color: "var(--amber-800)" } : {}}>
             <span>Draft periods</span>
-            <span className="astat-icon" style={stats.drafts > 0 ? { background: "#fffbeb", color: "#d97706" } : {}}>
+            <span className="astat-icon" style={stats.drafts > 0 ? { background: "var(--amber-50)", color: "var(--amber-600)" } : {}}>
               <AlertTriangle size={15} />
             </span>
           </div>
-          <div className="astat-value" style={stats.drafts > 0 ? { color: "#92400e" } : {}}>{stats.drafts}</div>
+          <div className="astat-value" style={stats.drafts > 0 ? { color: "var(--amber-800)" } : {}}>{stats.drafts}</div>
           <div className="astat-delta">{stats.drafts > 0 ? "needs attention" : "none pending"}</div>
         </div>
         <div className="astat">
@@ -162,10 +162,10 @@ export default function PayoutsPageClient({
       </div>
 
       {errorMsg && (
-        <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 12, padding: "12px 16px", fontSize: 13, color: "#b91c1c", display: "flex", gap: 10, alignItems: "center" }}>
+        <div style={{ background: "var(--error-bg)", border: "1px solid var(--error-border)", borderRadius: 12, padding: "12px 16px", fontSize: 13, color: "var(--danger)", display: "flex", gap: 10, alignItems: "center" }}>
           <AlertTriangle size={14} />
           <span style={{ flex: 1 }}>{errorMsg}</span>
-          <button type="button" onClick={() => setErrorMsg(null)} style={{ fontSize: 12, color: "#b91c1c", cursor: "pointer", textDecoration: "underline", background: "none", border: 0 }}>dismiss</button>
+          <button type="button" onClick={() => setErrorMsg(null)} style={{ fontSize: 12, color: "var(--danger)", cursor: "pointer", textDecoration: "underline", background: "none", border: 0 }}>dismiss</button>
         </div>
       )}
 
@@ -199,7 +199,7 @@ export default function PayoutsPageClient({
             Pay periods run Monday–Sunday. The range snaps to the week that
             contains the start date; one period per week.
           </p>
-          {createError && <p style={{ fontSize: 13, color: "#b91c1c", marginTop: 12 }}>{createError}</p>}
+          {createError && <p style={{ fontSize: 13, color: "var(--danger)", marginTop: 12 }}>{createError}</p>}
           {createSuccess && (
             <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#15803d", marginTop: 12 }}>
               <Check size={14} /> Pay period created successfully
@@ -244,7 +244,7 @@ export default function PayoutsPageClient({
                         <span style={{ display: "flex", alignItems: "center", gap: 4 }}><DollarSign size={12} /> ${p.totalFinal.toFixed(2)}</span>
                         {p.shortfallCount > 0 && (
                           <span
-                            style={{ display: "flex", alignItems: "center", gap: 4, color: "#b91c1c", fontWeight: 600 }}
+                            style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--danger)", fontWeight: 600 }}
                             title="Deductions exceeded earnings on one or more payouts. Those payouts are floored at $0.00 — review before approving.">
                             <AlertTriangle size={12} />
                             ${p.totalShortfall.toFixed(2)} not recovered

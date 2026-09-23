@@ -978,7 +978,7 @@ export default function BookPage() {
                 </div>
               )}
               {airbnbDiscountPct > 0 && (
-                <div className="cl-summary-row" style={{ color: "#059669" }}>
+                <div className="cl-summary-row" style={{ color: "var(--emerald-600)" }}>
                   <span>Airbnb discount (−{airbnbDiscountPct}%)</span>
                   <strong>−${(effectiveBase * airbnbDiscountPct / 100).toFixed(2)}</strong>
                 </div>
@@ -1002,7 +1002,7 @@ export default function BookPage() {
                 </div>
               ) : null}
               {promoDiscount > 0 ? (
-                <div className="cl-summary-row" style={{ color: "#059669" }}>
+                <div className="cl-summary-row" style={{ color: "var(--emerald-600)" }}>
                   <span>Promo ({draft.promoCode})</span>
                   <strong>−${promoDiscount.toFixed(2)}</strong>
                 </div>

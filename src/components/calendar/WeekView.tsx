@@ -118,7 +118,7 @@ const SelectionPreview: React.FC<{
     previews.push(
       <div
         key={dayIndex}
-        className="absolute z-40 pointer-events-none bg-[#008C9C]/[0.08]"
+        className="absolute z-40 pointer-events-none bg-[var(--primary)]/[0.08]"
         style={{
           left: `${(dayIndex / 7) * 100}%`,
           width: `${100 / 7}%`,
@@ -599,7 +599,7 @@ export const WeekView: React.FC = () => {
                         className={`absolute left-0 right-0 z-20 transition-colors duration-200 ${
                           isDraggingSelection
                             ? "cursor-crosshair"
-                            : "cursor-pointer hover:bg-[#008C9C]/[0.05]"
+                            : "cursor-pointer hover:bg-[var(--primary)]/[0.05]"
                         }`}
                         style={{
                           top: `${hourIndex * zoomLevel + (minutes * zoomLevel) / 60}px`,

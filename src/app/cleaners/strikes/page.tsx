@@ -90,13 +90,13 @@ export default async function CleanerStrikesPage() {
             summary.level === "REVIEW"
               ? "#fff7ed"
               : summary.level === "WARNING"
-                ? "#fffbeb"
+                ? "var(--amber-50)"
                 : "#fff",
           color:
             summary.level === "REVIEW"
               ? "#9a3412"
               : summary.level === "WARNING"
-                ? "#92400e"
+                ? "var(--amber-800)"
                 : "var(--primary-70)",
         }}>
         {summary.level === "OK" ? (

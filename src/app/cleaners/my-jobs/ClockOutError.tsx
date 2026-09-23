@@ -46,8 +46,8 @@ export function ClockOutErrorNotice({
 }) {
   const saved = isSaved(state);
   const palette = saved
-    ? { color: "#b45309", background: "#fffbeb", border: "#fde68a" }
-    : { color: "#dc2626", background: "#fef2f2", border: "#fecaca" };
+    ? { color: "var(--amber-700)", background: "var(--amber-50)", border: "var(--amber-200)" }
+    : { color: "var(--error)", background: "var(--error-bg)", border: "var(--error-border)" };
 
   return (
     <div
@@ -106,7 +106,7 @@ export function isClockOutFieldError(
 export const clockOutFieldStyle = (flagged: boolean) =>
   flagged
     ? {
-        border: "1.5px solid #dc2626",
+        border: "1.5px solid var(--error)",
         borderRadius: 12,
         background: "rgba(220,38,38,0.03)",
       }
@@ -115,7 +115,7 @@ export const clockOutFieldStyle = (flagged: boolean) =>
 /** The same sentence, repeated where the cleaner is about to fix it. */
 export function ClockOutFieldNote({ state }: { state: ClockOutErrorState }) {
   return (
-    <div style={{ fontSize: 11.5, color: "#dc2626", marginTop: 6, lineHeight: 1.4 }}>
+    <div style={{ fontSize: 11.5, color: "var(--error)", marginTop: 6, lineHeight: 1.4 }}>
       {state.error}
     </div>
   );

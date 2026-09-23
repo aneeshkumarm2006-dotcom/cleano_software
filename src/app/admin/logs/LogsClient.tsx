@@ -53,13 +53,13 @@ interface Counts {
 const CATEGORY_META: Record<string, { color: string; label: string }> = {
   EMAIL: { color: "#0284c7", label: "Email" },
   SMS: { color: "#7c3aed", label: "SMS" },
-  AI: { color: "#008C9C", label: "AI Assistant" },
-  PAYMENT: { color: "#059669", label: "Payment" },
-  REFUND: { color: "#d97706", label: "Refund" },
+  AI: { color: "var(--primary)", label: "AI Assistant" },
+  PAYMENT: { color: "var(--emerald-600)", label: "Payment" },
+  REFUND: { color: "var(--amber-600)", label: "Refund" },
   DEPOSIT: { color: "#0d9488", label: "Deposit" },
   WEBHOOK: { color: "#6366f1", label: "Webhook" },
   AUTH: { color: "#be185d", label: "Auth" },
-  BOOKING: { color: "#008C9C", label: "Booking" },
+  BOOKING: { color: "var(--primary)", label: "Booking" },
   ADMIN: { color: "#64748b", label: "Admin" },
   CRON: { color: "#9333ea", label: "Cron" },
   SYSTEM: { color: "#475569", label: "System" },
@@ -73,9 +73,9 @@ const STATUS_META: Record<
   string,
   { bg: string; fg: string; dot: string; label: string }
 > = {
-  SUCCESS: { bg: "var(--emerald-100)", fg: "var(--emerald-800)", dot: "#059669", label: "Success" },
-  FAILED: { bg: "var(--error-bg)", fg: "var(--error-text)", dot: "#dc2626", label: "Failed" },
-  PENDING: { bg: "var(--amber-50)", fg: "var(--amber-800)", dot: "#d97706", label: "Pending" },
+  SUCCESS: { bg: "var(--emerald-100)", fg: "var(--emerald-800)", dot: "var(--emerald-600)", label: "Success" },
+  FAILED: { bg: "var(--error-bg)", fg: "var(--error-text)", dot: "var(--error)", label: "Failed" },
+  PENDING: { bg: "var(--amber-50)", fg: "var(--amber-800)", dot: "var(--amber-600)", label: "Pending" },
   SKIPPED: { bg: "var(--slate-100)", fg: "var(--slate-700)", dot: "#94a3b8", label: "Skipped" },
 };
 

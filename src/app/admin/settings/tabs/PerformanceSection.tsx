@@ -16,7 +16,7 @@ function StarRow({ value }: { value: number }) {
           className={`w-5 h-5 ${
             i < filled
               ? "fill-[#3E7596] text-[#3E7596]"
-              : "text-[#008C9C]/20"
+              : "text-[var(--primary)]/20"
           }`}
         />
       ))}
@@ -27,7 +27,7 @@ function StarRow({ value }: { value: number }) {
 function TrendChart({ data }: { data: PerformanceData["trend90Day"] }) {
   if (data.length === 0) {
     return (
-      <p className="text-xs text-[#008C9C]/50 italic">
+      <p className="text-xs text-[var(--primary)]/50 italic">
         No ratings yet in the last 90 days.
       </p>
     );
@@ -65,14 +65,14 @@ function TrendChart({ data }: { data: PerformanceData["trend90Day"] }) {
           y1={scaleY(4)}
           x2={width - padX}
           y2={scaleY(4)}
-          stroke="#008C9C"
+          stroke="var(--primary)"
           strokeOpacity="0.1"
           strokeDasharray="3 3"
         />
         <path
           d={path}
           fill="none"
-          stroke="#008C9C"
+          stroke="var(--primary)"
           strokeWidth="1.5"
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -83,11 +83,11 @@ function TrendChart({ data }: { data: PerformanceData["trend90Day"] }) {
             cx={scaleX(i)}
             cy={scaleY(p.average)}
             r="2.5"
-            fill="#008C9C"
+            fill="var(--primary)"
           />
         ))}
       </svg>
-      <div className="flex justify-between text-[10px] text-[#008C9C]/50 mt-1">
+      <div className="flex justify-between text-[10px] text-[var(--primary)]/50 mt-1">
         <span>{new Date(data[0].date).toLocaleDateString("en-US")}</span>
         <span>Latest: {last.average.toFixed(2)}★</span>
       </div>
@@ -137,7 +137,7 @@ export default function PerformanceSection({
   if (loading) {
     return (
       <SectionCard title="Performance" icon={Award}>
-        <p className="text-sm text-[#008C9C]/60">Loading performance...</p>
+        <p className="text-sm text-[var(--primary)]/60">Loading performance...</p>
       </SectionCard>
     );
   }

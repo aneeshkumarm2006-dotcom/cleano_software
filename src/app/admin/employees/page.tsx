@@ -170,7 +170,7 @@ export default async function EmployeesPage({
         <Link
           href={AVAILABILITY_VIEW_PATH}
           className="dcard flex items-center gap-3 px-5 py-4 hover:bg-black/[0.02]">
-          <CalendarClock className="w-4 h-4 text-[#008C9C] shrink-0" />
+          <CalendarClock className="w-4 h-4 text-[var(--primary)] shrink-0" />
           <span className="text-sm font-[600] text-gray-800">
             Availability overview
           </span>
@@ -178,7 +178,7 @@ export default async function EmployeesPage({
             Everyone&apos;s hours by week or by day, filtered by service,
             group and date.
           </span>
-          <span className="ml-auto text-xs text-[#008C9C]">Open →</span>
+          <span className="ml-auto text-xs text-[var(--primary)]">Open →</span>
         </Link>
       )}
     </div>

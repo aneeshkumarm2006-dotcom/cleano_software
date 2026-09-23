@@ -70,7 +70,7 @@ export default function ChecklistTemplateField({
       {/* A job editing form left open while an admin retires the pinned
           template would otherwise silently reset to Auto on save. Say so. */}
       {defaultValue && !templates.some((t) => t.id === defaultValue) && (
-        <p style={{ marginTop: 4, fontSize: 12, color: "var(--warning, #b45309)" }}>
+        <p style={{ marginTop: 4, fontSize: 12, color: "var(--warning, var(--amber-700))" }}>
           The checklist this job was pinned to is no longer active. Saving will
           return the job to automatic resolution.
         </p>

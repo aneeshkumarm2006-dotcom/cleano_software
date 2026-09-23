@@ -39,10 +39,10 @@ const STATUS_PILL: Record<
   WithdrawalRow["status"],
   { bg: string; color: string; label: string }
 > = {
-  PENDING: { bg: "#fffbeb", color: "#d97706", label: "Requested" },
+  PENDING: { bg: "var(--amber-50)", color: "var(--amber-600)", label: "Requested" },
   APPROVED: { bg: "#eff6ff", color: "#1d4ed8", label: "Approved" },
   COMPLETED: { bg: "#dcfce7", color: "#15803d", label: "Paid" },
-  REJECTED: { bg: "#fee2e2", color: "#b91c1c", label: "Rejected" },
+  REJECTED: { bg: "var(--danger-soft)", color: "var(--danger)", label: "Rejected" },
 };
 
 function formatDate(iso: string) {
@@ -150,11 +150,11 @@ export default function WithdrawalsPanel({
       {error && (
         <div
           style={{
-            background: "#fef2f2",
-            borderBottom: "1px solid #fecaca",
+            background: "var(--error-bg)",
+            borderBottom: "1px solid var(--error-border)",
             padding: "10px 20px",
             fontSize: 13,
-            color: "#b91c1c",
+            color: "var(--danger)",
             display: "flex",
             gap: 8,
             alignItems: "center",
@@ -257,7 +257,7 @@ export default function WithdrawalsPanel({
                     <button
                       type="button"
                       className="btn btn-ghost"
-                      style={{ color: "#b91c1c" }}
+                      style={{ color: "var(--danger)" }}
                       disabled={busy}
                       onClick={() => run(w, "REJECT")}>
                       <X size={14} /> Reject

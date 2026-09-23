@@ -87,10 +87,10 @@ export default function HistoryClient({
               Back
             </Button>
             <h1 className="text-3xl font-[400] text-gray-900 flex items-center gap-2">
-              <History className="w-7 h-7 text-[#008C9C]" />
+              <History className="w-7 h-7 text-[var(--primary)]" />
               Pickup History
             </h1>
-            <p className="text-sm text-[#008C9C]/70 mt-1">
+            <p className="text-sm text-[var(--primary)]/70 mt-1">
               All inventory pickups you have made
             </p>
           </div>
@@ -102,7 +102,7 @@ export default function HistoryClient({
           <p className="text-xs uppercase tracking-wide text-[#005a63]">
             Pickups
           </p>
-          <p className="text-2xl font-[400] text-[#008C9C] mt-1">
+          <p className="text-2xl font-[400] text-[var(--primary)] mt-1">
             {totalPickups}
           </p>
         </Card>
@@ -110,7 +110,7 @@ export default function HistoryClient({
           <p className="text-xs uppercase tracking-wide text-[#005a63]">
             Items Picked Up
           </p>
-          <p className="text-2xl font-[400] text-[#008C9C] mt-1">
+          <p className="text-2xl font-[400] text-[var(--primary)] mt-1">
             {totalItems}
           </p>
         </Card>
@@ -119,7 +119,7 @@ export default function HistoryClient({
       <Card variant="default" className="p-5">
         <div className="flex items-end gap-3 flex-wrap">
           <div className="flex-1 min-w-[140px]">
-            <label className="text-xs font-[350] text-[#008C9C]/70 uppercase tracking-wide mb-2 block">
+            <label className="text-xs font-[350] text-[var(--primary)]/70 uppercase tracking-wide mb-2 block">
               From
             </label>
             <DatePicker
@@ -130,7 +130,7 @@ export default function HistoryClient({
             />
           </div>
           <div className="flex-1 min-w-[140px]">
-            <label className="text-xs font-[350] text-[#008C9C]/70 uppercase tracking-wide mb-2 block">
+            <label className="text-xs font-[350] text-[var(--primary)]/70 uppercase tracking-wide mb-2 block">
               To
             </label>
             <DatePicker
@@ -215,7 +215,7 @@ export default function HistoryClient({
                           minute: "2-digit",
                         })}
                       </div>
-                      <div className="flex items-center gap-2 mt-1 text-[#008C9C]">
+                      <div className="flex items-center gap-2 mt-1 text-[var(--primary)]">
                         <MapPin className="w-4 h-4" />
                         <span className="font-[400]">{c.location.name}</span>
                       </div>

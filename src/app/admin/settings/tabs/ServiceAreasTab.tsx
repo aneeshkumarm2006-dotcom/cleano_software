@@ -144,16 +144,16 @@ export default function ServiceAreasTab({
         {msg && <Feedback msg={msg} />}
 
         {sorted.length === 0 ? (
-          <div className="text-sm text-[#008C9C]/60 py-8 text-center">
+          <div className="text-sm text-[var(--primary)]/60 py-8 text-center">
             No service areas yet. Add postal prefixes you cover (e.g. H1, H2,
             H3 for Montreal) to enable public bookings.
           </div>
         ) : (
-          <div className="rounded-2xl bg-[#008C9C]/5 overflow-hidden">
+          <div className="rounded-2xl bg-[var(--primary)]/5 overflow-hidden">
             <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left text-[10px] uppercase tracking-wide text-[#008C9C]/60">
+                <tr className="text-left text-[10px] uppercase tracking-wide text-[var(--primary)]/60">
                   <th className="px-4 py-3">Prefix</th>
                   <th className="px-4 py-3">Zone</th>
                   <th className="px-4 py-3">Travel Fee</th>
@@ -161,9 +161,9 @@ export default function ServiceAreasTab({
                   <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#008C9C]/10">
+              <tbody className="divide-y divide-[var(--primary)]/10">
                 {sorted.map((area) => (
-                  <tr key={area.id} className="text-[#008C9C]">
+                  <tr key={area.id} className="text-[var(--primary)]">
                     <td className="px-4 py-3 font-mono font-medium">
                       {area.prefix}
                     </td>
@@ -276,7 +276,7 @@ export default function ServiceAreasTab({
             />
           </Field>
 
-          <label className="flex items-center gap-2 text-sm text-[#008C9C]">
+          <label className="flex items-center gap-2 text-sm text-[var(--primary)]">
             <input
               type="checkbox"
               checked={draft.isActive}

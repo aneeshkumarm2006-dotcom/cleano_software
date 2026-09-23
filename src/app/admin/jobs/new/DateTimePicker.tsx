@@ -67,7 +67,7 @@ export function ControlledTimePicker({
         boxSizing: "border-box",
       }}
       onFocus={(e) => {
-        e.currentTarget.style.border = "1.5px solid #008C9C";
+        e.currentTarget.style.border = "1.5px solid var(--primary)";
         e.currentTarget.style.boxShadow = "0 0 0 3px rgba(0,140,156,0.11)";
       }}
       onBlur={(e) => {

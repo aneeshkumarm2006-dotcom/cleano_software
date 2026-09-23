@@ -225,9 +225,9 @@ export default function BudgetsTab({
         title="Budget categories"
         description="Add your own categories, rename them, or retire ones you no longer use. Budgets, bookkeeping and Budget vs Actuals all read from this list."
         icon={Tags}>
-        <div className="rounded-2xl border border-[#008C9C]/10 bg-white overflow-hidden">
+        <div className="rounded-2xl border border-[var(--primary)]/10 bg-white overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-[#008C9C]/5 text-[#008C9C]/70 text-[10px] uppercase tracking-wider">
+            <thead className="bg-[var(--primary)]/5 text-[var(--primary)]/70 text-[10px] uppercase tracking-wider">
               <tr>
                 <th className="text-left px-4 py-3 font-[500]">Category</th>
                 <th className="text-left px-4 py-3 font-[500]">Type</th>
@@ -238,7 +238,7 @@ export default function BudgetsTab({
             </thead>
             <tbody>
               {live.map((c, i) => (
-                <tr key={c.id} className="border-t border-[#008C9C]/5">
+                <tr key={c.id} className="border-t border-[var(--primary)]/5">
                   {editingId === c.id ? (
                     <td colSpan={5} className="px-4 py-3">
                       <form
@@ -272,7 +272,7 @@ export default function BudgetsTab({
                         <button
                           type="button"
                           onClick={() => setEditingId(null)}
-                          className="p-2 rounded-lg hover:bg-[#008C9C]/10 text-[#008C9C]/70"
+                          className="p-2 rounded-lg hover:bg-[var(--primary)]/10 text-[var(--primary)]/70"
                           aria-label="Cancel">
                           <X className="w-4 h-4" />
                         </button>
@@ -286,10 +286,10 @@ export default function BudgetsTab({
                     </td>
                   ) : (
                     <>
-                      <td className="px-4 py-3 text-[#008C9C]/80">
+                      <td className="px-4 py-3 text-[var(--primary)]/80">
                         {c.name}
                         {c.isDefault && (
-                          <span className="ml-2 text-[10px] uppercase tracking-wide text-[#008C9C]/40">
+                          <span className="ml-2 text-[10px] uppercase tracking-wide text-[var(--primary)]/40">
                             Default
                           </span>
                         )}
@@ -299,12 +299,12 @@ export default function BudgetsTab({
                           className={`text-[11px] px-2 py-0.5 rounded-full ${
                             c.kind === "REVENUE"
                               ? "bg-green-50 text-green-700"
-                              : "bg-[#008C9C]/8 text-[#008C9C]/70"
+                              : "bg-[var(--primary)]/8 text-[var(--primary)]/70"
                           }`}>
                           {KIND_LABEL[c.kind]}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-xs text-[#008C9C]/60">
+                      <td className="px-4 py-3 text-xs text-[var(--primary)]/60">
                         {usageLabel(c)}
                       </td>
                       <td className="px-4 py-3 text-right">
@@ -319,7 +319,7 @@ export default function BudgetsTab({
                               )
                             }
                             disabled={busy || i === 0}
-                            className="p-1.5 rounded-lg hover:bg-[#008C9C]/10 text-[#008C9C]/70 disabled:opacity-30"
+                            className="p-1.5 rounded-lg hover:bg-[var(--primary)]/10 text-[var(--primary)]/70 disabled:opacity-30"
                             aria-label={`Move ${c.name} up`}>
                             <ChevronUp className="w-3.5 h-3.5" />
                           </button>
@@ -333,7 +333,7 @@ export default function BudgetsTab({
                               )
                             }
                             disabled={busy || i === live.length - 1}
-                            className="p-1.5 rounded-lg hover:bg-[#008C9C]/10 text-[#008C9C]/70 disabled:opacity-30"
+                            className="p-1.5 rounded-lg hover:bg-[var(--primary)]/10 text-[var(--primary)]/70 disabled:opacity-30"
                             aria-label={`Move ${c.name} down`}>
                             <ChevronDown className="w-3.5 h-3.5" />
                           </button>
@@ -345,7 +345,7 @@ export default function BudgetsTab({
                             type="button"
                             onClick={() => startEdit(c)}
                             disabled={busy}
-                            className="p-1.5 rounded-lg hover:bg-[#008C9C]/10 text-[#008C9C]/70"
+                            className="p-1.5 rounded-lg hover:bg-[var(--primary)]/10 text-[var(--primary)]/70"
                             aria-label={`Rename ${c.name}`}>
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
@@ -364,10 +364,10 @@ export default function BudgetsTab({
                 </tr>
               ))}
               {live.length === 0 && (
-                <tr className="border-t border-[#008C9C]/5">
+                <tr className="border-t border-[var(--primary)]/5">
                   <td
                     colSpan={5}
-                    className="px-4 py-6 text-center text-xs text-[#008C9C]/50">
+                    className="px-4 py-6 text-center text-xs text-[var(--primary)]/50">
                     No categories yet — add one below.
                   </td>
                 </tr>
@@ -380,7 +380,7 @@ export default function BudgetsTab({
           <div className="flex-1 min-w-[200px]">
             <label
               htmlFor="new-budget-category"
-              className="text-xs text-[#008C9C]/70 uppercase tracking-wide mb-1 block">
+              className="text-xs text-[var(--primary)]/70 uppercase tracking-wide mb-1 block">
               New category
             </label>
             <input
@@ -395,7 +395,7 @@ export default function BudgetsTab({
           <div>
             <label
               htmlFor="new-budget-category-kind"
-              className="text-xs text-[#008C9C]/70 uppercase tracking-wide mb-1 block">
+              className="text-xs text-[var(--primary)]/70 uppercase tracking-wide mb-1 block">
               Type
             </label>
             <select
@@ -417,14 +417,14 @@ export default function BudgetsTab({
             Add
           </Button>
         </form>
-        <p className="text-xs text-[#008C9C]/50">
+        <p className="text-xs text-[var(--primary)]/50">
           Income categories add to revenue on the P&amp;L, income statement and
           tax figures; expense categories subtract.
         </p>
 
         {pendingDelete && (
           <div className="rounded-2xl border border-red-200 bg-red-50/60 p-4 space-y-3">
-            <p className="text-sm text-[#008C9C]">
+            <p className="text-sm text-[var(--primary)]">
               {deleteArchives ? (
                 <>
                   <strong>{pendingDelete.name}</strong> will be{" "}
@@ -465,17 +465,17 @@ export default function BudgetsTab({
         )}
 
         {archived.length > 0 && (
-          <div className="rounded-2xl border border-[#008C9C]/10 bg-[#008C9C]/[0.03] p-4 space-y-2">
-            <h4 className="text-xs uppercase tracking-wider text-[#008C9C]/60">
+          <div className="rounded-2xl border border-[var(--primary)]/10 bg-[var(--primary)]/[0.03] p-4 space-y-2">
+            <h4 className="text-xs uppercase tracking-wider text-[var(--primary)]/60">
               Archived — history only
             </h4>
             {archived.map((c) => (
               <div
                 key={c.id}
                 className="flex items-center justify-between gap-3 text-sm">
-                <span className="text-[#008C9C]/70">
+                <span className="text-[var(--primary)]/70">
                   {c.name}
-                  <span className="ml-2 text-xs text-[#008C9C]/45">
+                  <span className="ml-2 text-xs text-[var(--primary)]/45">
                     {usageLabel(c)}
                   </span>
                 </span>
@@ -492,7 +492,7 @@ export default function BudgetsTab({
                     )
                   }
                   disabled={busy}
-                  className="inline-flex items-center gap-1.5 text-xs text-[#008C9C] hover:underline">
+                  className="inline-flex items-center gap-1.5 text-xs text-[var(--primary)] hover:underline">
                   <ArchiveRestore className="w-3.5 h-3.5" />
                   Restore
                 </button>

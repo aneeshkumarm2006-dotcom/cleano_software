@@ -89,7 +89,7 @@ export default function SaveCardOnFile({
           fontWeight: 700,
           letterSpacing: "0.08em",
           textTransform: "uppercase",
-          color: "#008C9C",
+          color: "var(--primary)",
           marginBottom: 6,
         }}>
         Save card on file
@@ -111,7 +111,7 @@ export default function SaveCardOnFile({
         </p>
       )}
       {error && (
-        <p style={{ fontSize: 13, color: "#dc2626", fontWeight: 600 }}>
+        <p style={{ fontSize: 13, color: "var(--error)", fontWeight: 600 }}>
           {error}
         </p>
       )}
@@ -132,7 +132,7 @@ export default function SaveCardOnFile({
           is nothing to mount the card field with. Previously this rendered an
           empty <Elements> and an admin saw blank space. */}
       {clientSecret && !stripePromise && (
-        <p style={{ fontSize: 13, color: "#dc2626", fontWeight: 600 }}>
+        <p style={{ fontSize: 13, color: "var(--error)", fontWeight: 600 }}>
           This workspace has no Stripe publishable key saved. Add it in
           Settings &rarr; Connectors before taking cards.
         </p>
@@ -203,7 +203,7 @@ function Inner({
     <div>
       <PaymentElement options={{ layout: "tabs" }} />
       {err && (
-        <p style={{ marginTop: 8, fontSize: 12, color: "#dc2626", fontWeight: 600 }}>
+        <p style={{ marginTop: 8, fontSize: 12, color: "var(--error)", fontWeight: 600 }}>
           {err}
         </p>
       )}
@@ -217,7 +217,7 @@ function Inner({
           fontSize: 13,
           fontWeight: 700,
           color: "#fff",
-          background: busy ? "#7daab0" : "#008C9C",
+          background: busy ? "#7daab0" : "var(--primary)",
           border: "none",
           borderRadius: 8,
           cursor: busy ? "default" : "pointer",

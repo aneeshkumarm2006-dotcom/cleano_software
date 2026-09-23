@@ -99,7 +99,7 @@ function BuyLink({
       onClick={(e) => e.stopPropagation()}
       title="Open purchase link"
       aria-label="Open purchase link"
-      className="shrink-0 text-[#008C9C]/50 hover:text-[#008C9C]">
+      className="shrink-0 text-[var(--primary)]/50 hover:text-[var(--primary)]">
       <ExternalLink className="w-3.5 h-3.5" />
     </a>
   );
@@ -555,7 +555,7 @@ export default function InventoryView({
         {/* Search */}
         <div className="flex-1">
           <div className="relative">
-            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-[#008C9C] z-10 w-4 h-4" />
+            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-[var(--primary)] z-10 w-4 h-4" />
             <Input
               placeholder="Search by product name, description, or ID..."
               value={searchTerm}
@@ -565,7 +565,7 @@ export default function InventoryView({
                 onPageChange(1);
                 updateURLParams({ search: e.target.value, page: 1 });
               }}
-              className="pl-10 h-[42px] py-3 placeholder:!text-[#008C9C]/40 placeholder:!font-[350]"
+              className="pl-10 h-[42px] py-3 placeholder:!text-[var(--primary)]/40 placeholder:!font-[350]"
               variant="form"
               border={false}
             />
@@ -667,7 +667,7 @@ export default function InventoryView({
       {isLoading ? (
         <div className="bg-white rounded-2xl">
           <div className="text-center py-12">
-            <Loader className="w-4 h-4 animate-spin text-[#008C9C] mx-auto mb-2" />
+            <Loader className="w-4 h-4 animate-spin text-[var(--primary)] mx-auto mb-2" />
             <span className="app-subtitle">Loading products...</span>
           </div>
         </div>
@@ -676,13 +676,13 @@ export default function InventoryView({
           {totalFilteredProducts === 0 ? (
             <div className="bg-white rounded-2xl">
               <div className="text-center py-12">
-                <div className="w-16 h-16 bg-[#008C9C]/5 rounded-full flex items-center justify-center mx-auto mb-3">
-                  <Package className="w-8 h-8 text-[#008C9C]/40" />
+                <div className="w-16 h-16 bg-[var(--primary)]/5 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <Package className="w-8 h-8 text-[var(--primary)]/40" />
                 </div>
-                <p className="text-sm font-[350] text-[#008C9C]/70">
+                <p className="text-sm font-[350] text-[var(--primary)]/70">
                   No products found
                 </p>
-                <p className="text-xs font-[350] text-[#008C9C]/60 mt-1">
+                <p className="text-xs font-[350] text-[var(--primary)]/60 mt-1">
                   Products in your inventory will appear here
                 </p>
               </div>
@@ -693,7 +693,7 @@ export default function InventoryView({
               <div className="hidden md:block overflow-x-auto rounded-t-2xl">
                 <div className="min-w-max">
                   {/* Header */}
-                  <div className="flex bg-[#008C9C]/5 rounded-t-2xl">
+                  <div className="flex bg-[var(--primary)]/5 rounded-t-2xl">
                     <div className="w-[48px] p-4 flex items-center justify-center">
                       <input
                         type="checkbox"
@@ -718,17 +718,17 @@ export default function InventoryView({
                     ].map((col) => (
                       <div
                         key={col.label}
-                        className={`${col.className} p-4 text-left text-xs font-[350] !text-[#008C9C]/40 uppercase tracking-wide`}>
+                        className={`${col.className} p-4 text-left text-xs font-[350] !text-[var(--primary)]/40 uppercase tracking-wide`}>
                         {col.label}
                       </div>
                     ))}
                   </div>
                   {/* Rows */}
-                  <div className="divide-y divide-[#008C9C]/4">
+                  <div className="divide-y divide-[var(--primary)]/4">
                     {paginatedProducts.map((product) => (
                       <div
                         key={product.id}
-                        className="flex items-center hover:bg-[#008C9C]/1 transition-colors">
+                        className="flex items-center hover:bg-[var(--primary)]/1 transition-colors">
                         {/* Select */}
                         <div
                           className="w-[48px] p-4 flex items-center justify-center"
@@ -745,14 +745,14 @@ export default function InventoryView({
                         {/* Product Name */}
                         <div className="w-[220px] p-4">
                           <div className="flex items-center gap-1.5 min-w-0">
-                            <p className="text-sm font-[350] text-[#008C9C] truncate">
+                            <p className="text-sm font-[350] text-[var(--primary)] truncate">
                               {product.name}
                             </p>
                             <BuyLink product={product} />
                           </div>
                           <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
                             <ItemTypeChip itemType={product.itemType} />
-                            <p className="text-xs text-[#008C9C]/50 font-[350] truncate">
+                            <p className="text-xs text-[var(--primary)]/50 font-[350] truncate">
                               ${product.costPerUnit.toFixed(2)} / {product.unit}
                             </p>
                           </div>
@@ -760,18 +760,18 @@ export default function InventoryView({
 
                         {/* Description */}
                         <div className="w-[260px] p-4">
-                          <p className="text-sm font-[350] text-[#008C9C]/100 truncate">
+                          <p className="text-sm font-[350] text-[var(--primary)]/100 truncate">
                             {product.description || "-"}
                           </p>
                         </div>
 
                         {/* Stock Level */}
                         <div className="w-[150px] p-4">
-                          <p className="text-sm font-[350] text-[#008C9C]/100 truncate">
+                          <p className="text-sm font-[350] text-[var(--primary)]/100 truncate">
                             {product.stockLevel} {product.unit}
                           </p>
                           {product.stockUpdatedAt && (
-                            <p className="text-xs text-[#008C9C]/50 font-[350] truncate mt-0.5">
+                            <p className="text-xs text-[var(--primary)]/50 font-[350] truncate mt-0.5">
                               Updated {fmtDateTime(product.stockUpdatedAt)}
                               {product.stockUpdatedByName
                                 ? ` by ${product.stockUpdatedByName}`
@@ -782,7 +782,7 @@ export default function InventoryView({
 
                         {/* Min Stock */}
                         <div className="w-[150px] p-4">
-                          <p className="text-sm font-[350] text-[#008C9C]/100 truncate">
+                          <p className="text-sm font-[350] text-[var(--primary)]/100 truncate">
                             {product.minStock} {product.unit}
                           </p>
                         </div>
@@ -794,7 +794,7 @@ export default function InventoryView({
                               {product.totalAssigned} {product.unit}
                             </Badge>
                           ) : (
-                            <p className="text-sm font-[350] text-[#008C9C]/100">
+                            <p className="text-sm font-[350] text-[var(--primary)]/100">
                               0
                             </p>
                           )}
@@ -802,7 +802,7 @@ export default function InventoryView({
 
                         {/* Employees */}
                         <div className="w-[150px] p-4">
-                          <p className="text-sm font-[350] text-[#008C9C]/100 truncate">
+                          <p className="text-sm font-[350] text-[var(--primary)]/100 truncate">
                             {product.employeeCount > 0
                               ? product.employeeCount
                               : "-"}
@@ -861,27 +861,27 @@ export default function InventoryView({
                         />
                         <div>
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            <p className="text-sm font-[400] text-[#008C9C]">
+                            <p className="text-sm font-[400] text-[var(--primary)]">
                               {product.name}
                             </p>
                             <BuyLink product={product} />
                             <ItemTypeChip itemType={product.itemType} />
                           </div>
-                          <p className="text-xs text-[#008C9C]/70 mt-1">
+                          <p className="text-xs text-[var(--primary)]/70 mt-1">
                             {product.description || "No description"}
                           </p>
                         </div>
                       </div>
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-xs text-[#008C9C]/50">
+                          <p className="text-xs text-[var(--primary)]/50">
                             Stock Level
                           </p>
-                          <p className="text-sm font-[350] text-[#008C9C]">
+                          <p className="text-sm font-[350] text-[var(--primary)]">
                             {product.stockLevel} {product.unit}
                           </p>
                           {product.stockUpdatedAt && (
-                            <p className="text-xs text-[#008C9C]/50 font-[350] mt-0.5">
+                            <p className="text-xs text-[var(--primary)]/50 font-[350] mt-0.5">
                               Updated {fmtDateTime(product.stockUpdatedAt)}
                               {product.stockUpdatedByName
                                 ? ` by ${product.stockUpdatedByName}`
@@ -924,8 +924,8 @@ export default function InventoryView({
 
               {/* Pagination */}
               {totalFilteredProducts > 0 && (
-                <div className="flex items-center justify-between p-2 px-3 bg-[#008C9C]/4 rounded-b-2xl">
-                  <div className="text-xs text-[#008C9C]/70 font-[350]">
+                <div className="flex items-center justify-between p-2 px-3 bg-[var(--primary)]/4 rounded-b-2xl">
+                  <div className="text-xs text-[var(--primary)]/70 font-[350]">
                     Showing {startIndex + 1} to{" "}
                     {Math.min(endIndex, totalFilteredProducts)} of {totalFilteredProducts}{" "}
                     products
@@ -973,7 +973,7 @@ export default function InventoryView({
                               size="md"
                               onClick={() => goToPage(pageNum)}
                               className="px-3 min-w-8 rounded-xl">
-                              <span className="text-sm font-[350] text-[#008C9C]">
+                              <span className="text-sm font-[350] text-[var(--primary)]">
                                 {pageNum}
                               </span>
                             </Button>

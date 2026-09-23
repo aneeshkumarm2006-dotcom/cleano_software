@@ -105,20 +105,20 @@ export default function IncomeStatementTab({
     }, [transactions, categories, catIndex, period]);
 
   const selectCls =
-    "px-4 py-2 rounded-xl border border-transparent bg-[#008C9C]/5 text-sm text-[#008C9C] focus:outline-none focus:ring-2 focus:ring-[#008C9C]/20";
+    "px-4 py-2 rounded-xl border border-transparent bg-[var(--primary)]/5 text-sm text-[var(--primary)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20";
 
   return (
     <Card variant="default" className="p-6">
       <div className="flex items-start justify-between gap-4 mb-5">
         <div className="flex items-start gap-2">
-          <div className="p-2 bg-[#008C9C]/10 rounded-lg">
-            <FileBarChart className="w-4 h-4 text-[#008C9C]" />
+          <div className="p-2 bg-[var(--primary)]/10 rounded-lg">
+            <FileBarChart className="w-4 h-4 text-[var(--primary)]" />
           </div>
           <div>
-            <h2 className="text-sm font-[350] text-[#008C9C]/80">
+            <h2 className="text-sm font-[350] text-[var(--primary)]/80">
               Income Statement
             </h2>
-            <p className="text-xs text-[#008C9C]/60 mt-1">
+            <p className="text-xs text-[var(--primary)]/60 mt-1">
               Automated profit & loss by period.
             </p>
           </div>
@@ -136,45 +136,45 @@ export default function IncomeStatementTab({
         />
       </div>
 
-      <div className="rounded-2xl border border-[#008C9C]/10 bg-white overflow-hidden">
+      <div className="rounded-2xl border border-[var(--primary)]/10 bg-white overflow-hidden">
         <table className="w-full text-sm">
           <tbody>
-            <tr className="bg-[#008C9C]/5">
-              <td className="px-5 py-3 text-xs uppercase tracking-wider text-[#008C9C]/70 font-[500]">
+            <tr className="bg-[var(--primary)]/5">
+              <td className="px-5 py-3 text-xs uppercase tracking-wider text-[var(--primary)]/70 font-[500]">
                 Revenue
               </td>
               <td className="px-5 py-3"></td>
             </tr>
-            <tr className="border-t border-[#008C9C]/5">
-              <td className="px-5 py-3 text-[#008C9C]/80 pl-8">Total Revenue</td>
-              <td className="px-5 py-3 text-right text-[#008C9C] font-[500]">
+            <tr className="border-t border-[var(--primary)]/5">
+              <td className="px-5 py-3 text-[var(--primary)]/80 pl-8">Total Revenue</td>
+              <td className="px-5 py-3 text-right text-[var(--primary)] font-[500]">
                 {formatCurrency(revenueTotal)}
               </td>
             </tr>
-            <tr className="bg-[#008C9C]/5 border-t border-[#008C9C]/10">
-              <td className="px-5 py-3 text-xs uppercase tracking-wider text-[#008C9C]/70 font-[500]">
+            <tr className="bg-[var(--primary)]/5 border-t border-[var(--primary)]/10">
+              <td className="px-5 py-3 text-xs uppercase tracking-wider text-[var(--primary)]/70 font-[500]">
                 Expenses
               </td>
               <td className="px-5 py-3"></td>
             </tr>
             {expenseLines.map((line) => (
-              <tr key={line.id} className="border-t border-[#008C9C]/5">
-                <td className="px-5 py-3 text-[#008C9C]/80 pl-8">{line.name}</td>
-                <td className="px-5 py-3 text-right text-[#008C9C]/80">
+              <tr key={line.id} className="border-t border-[var(--primary)]/5">
+                <td className="px-5 py-3 text-[var(--primary)]/80 pl-8">{line.name}</td>
+                <td className="px-5 py-3 text-right text-[var(--primary)]/80">
                   {formatCurrency(line.amount)}
                 </td>
               </tr>
             ))}
-            <tr className="border-t border-[#008C9C]/10 bg-[#008C9C]/5">
-              <td className="px-5 py-3 text-[#008C9C] font-[500]">
+            <tr className="border-t border-[var(--primary)]/10 bg-[var(--primary)]/5">
+              <td className="px-5 py-3 text-[var(--primary)] font-[500]">
                 Total Expenses
               </td>
-              <td className="px-5 py-3 text-right text-[#008C9C] font-[500]">
+              <td className="px-5 py-3 text-right text-[var(--primary)] font-[500]">
                 {formatCurrency(expenseTotal)}
               </td>
             </tr>
-            <tr className="border-t border-[#008C9C]/15">
-              <td className="px-5 py-4 text-[#008C9C] font-[500] text-base">
+            <tr className="border-t border-[var(--primary)]/15">
+              <td className="px-5 py-4 text-[var(--primary)] font-[500] text-base">
                 Net Income
               </td>
               <td
@@ -190,12 +190,12 @@ export default function IncomeStatementTab({
 
       {rows.length > 1 && (
         <div className="mt-5">
-          <h3 className="text-xs uppercase tracking-wider text-[#008C9C]/70 mb-2">
+          <h3 className="text-xs uppercase tracking-wider text-[var(--primary)]/70 mb-2">
             Monthly Breakdown
           </h3>
-          <div className="rounded-2xl border border-[#008C9C]/10 bg-white overflow-x-auto">
+          <div className="rounded-2xl border border-[var(--primary)]/10 bg-white overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-[#008C9C]/5 text-[#008C9C]/70 text-[10px] uppercase tracking-wider">
+              <thead className="bg-[var(--primary)]/5 text-[var(--primary)]/70 text-[10px] uppercase tracking-wider">
                 <tr>
                   <th className="text-left px-5 py-3 font-[500]">Month</th>
                   <th className="text-right px-5 py-3 font-[500]">Revenue</th>
@@ -207,12 +207,12 @@ export default function IncomeStatementTab({
                 {rows.map((r) => {
                   const net = r.revenue - r.expenses;
                   return (
-                    <tr key={r.month} className="border-t border-[#008C9C]/5">
-                      <td className="px-5 py-3 text-[#008C9C]/80">{r.month}</td>
-                      <td className="px-5 py-3 text-right text-[#008C9C]/80">
+                    <tr key={r.month} className="border-t border-[var(--primary)]/5">
+                      <td className="px-5 py-3 text-[var(--primary)]/80">{r.month}</td>
+                      <td className="px-5 py-3 text-right text-[var(--primary)]/80">
                         {formatCurrency(r.revenue)}
                       </td>
-                      <td className="px-5 py-3 text-right text-[#008C9C]/80">
+                      <td className="px-5 py-3 text-right text-[var(--primary)]/80">
                         {formatCurrency(r.expenses)}
                       </td>
                       <td
