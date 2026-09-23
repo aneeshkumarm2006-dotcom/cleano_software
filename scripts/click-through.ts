@@ -136,7 +136,7 @@ const ADMIN = [
   "/admin/invoices", "/admin/finances", "/admin/sales", "/admin/kpi",
   "/admin/reports", "/admin/analytics", "/admin/my-team", "/admin/employees",
   "/admin/time-tracking", "/admin/payouts", "/admin/wash-payouts",
-  "/admin/availability", "/admin/recurring", "/admin/web-bookings",
+  "/admin/availability", "/admin/web-bookings",
   "/admin/inventory", "/admin/inventory/kits", "/admin/inventory/rag-wash",
   "/admin/gift-cards", "/admin/promo-codes", "/admin/bulk-charge",
   "/admin/properties", "/admin/documents", "/admin/training",

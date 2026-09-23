@@ -557,6 +557,20 @@ export const NOTIFICATION_CATALOG: CatalogEntry[] = [
     // when a cleaner finishes" read as a broken trigger rather than a default.
     channels: { EMAIL: true, SMS: false },
   },
+  {
+    recipient: "ADMIN",
+    category: "Clock in / clock out",
+    key: "admin.clock.left_running",
+    label: "Clock left running",
+    trigger:
+      "A cleaner clocked in and never clocked out, and the session has been open longer than a full shift.",
+    // ON by default, and email rather than in-app only. Nothing in this app
+    // ever closes a session, and an open one counts its hours up to NOW — so
+    // the figure grows every day nobody looks. Eighteen were open in production
+    // when this shipped, the oldest for thirty-four days, because there was no
+    // way at all to find out.
+    channels: { EMAIL: true, SMS: false },
+  },
   // Booking reschedule fee
   {
     recipient: "ADMIN",

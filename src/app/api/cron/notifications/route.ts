@@ -12,6 +12,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAuthorizedCron } from "@/lib/cron-auth";
 import { sweepPastScheduledJobs } from "@/lib/job-sweep";
+import { listStaleClocks } from "@/lib/stale-clock.server";
+import { sendAdminClockLeftRunning } from "@/lib/email";
 import { logActivity } from "@/lib/activity-log";
 import { notifyAdmins } from "@/lib/admin-alerts";
 import { db } from "@/lib/org-db";
@@ -54,6 +56,8 @@ interface DispatchCounts {
   invite_unconfirmed_alert: number;
   /** Unconfirmed invites whose cleaner had since been taken off the job. */
   invite_unconfirmed_skipped: number;
+  /** Clocks a cleaner started and never stopped. */
+  clock_left_running: number;
   skipped: number;
 }
 
@@ -116,6 +120,7 @@ export async function GET(req: NextRequest) {
       invite_broadcast_expired: 0,
       invite_unconfirmed_alert: 0,
       invite_unconfirmed_skipped: 0,
+      clock_left_running: 0,
       skipped: 0,
     };
 
@@ -128,6 +133,40 @@ export async function GET(req: NextRequest) {
       console.error("job sweep failed", e);
       return { completed: 0, paid: 0 };
     });
+
+    // ─── Clocks nobody stopped ────────────────────────────────────────
+    // Runs AFTER the job sweep, which is the order that matters: the sweep
+    // closes the JOB, and a job can finish with its session still open. So
+    // this has to look at sessions in their own right, not at job status.
+    //
+    // It only reports. Nothing here writes `endedAt`, because the right end
+    // time is a fact about a day nobody here witnessed — see the note at the
+    // top of stale-clock.ts. Keyed per session so two cleaners on one job
+    // each get their own notice, and each one is sent once.
+    try {
+      for (const row of await listStaleClocks(now)) {
+        const log = await ensureNotSent(
+          "admin.clock.left_running",
+          row.jobId,
+          `admins:${row.sessionId}`,
+        );
+        if (!log) {
+          counts.skipped++;
+          continue;
+        }
+        await sendAdminClockLeftRunning({
+          jobId: row.jobId,
+          jobNumber: row.jobNumber,
+          clientName: row.clientName,
+          cleanerName: row.cleanerName ?? "A cleaner",
+          openFor: row.openFor,
+          startedAt: row.startedAt,
+        }).catch((e) => console.error("clock left running", row.sessionId, e));
+        counts.clock_left_running++;
+      }
+    } catch (e) {
+      console.error("stale clock sweep failed", e);
+    }
 
     // ─── Unassigned booking deadlines (admin) ─────────────────────────
     // Three windows: ~12h, ~4h, ~1h out. 10-minute window each to overlap

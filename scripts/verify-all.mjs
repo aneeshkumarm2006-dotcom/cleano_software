@@ -87,7 +87,6 @@ const ADMIN = [
   ["invoices", "/admin/invoices"],
   ["invoices-detail", `/admin/invoices/${ID.INVOICE}`],
   ["bulk-charge", "/admin/bulk-charge"],
-  ["recurring", "/admin/recurring"],
   ["properties", "/admin/properties"],
   ["logs", "/admin/logs"],
   ["settings", "/admin/settings"],

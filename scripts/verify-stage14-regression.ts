@@ -239,7 +239,6 @@ const MONEY_PAGES = [
   "src/app/admin/gift-cards/page.tsx",
   "src/app/admin/web-bookings/page.tsx",
   "src/app/admin/wash-payouts/page.tsx",
-  "src/app/admin/recurring/page.tsx",
   "src/app/admin/promo-codes/page.tsx",
   "src/app/admin/inventory/page.tsx",
   "src/app/admin/inventory/[id]/page.tsx",

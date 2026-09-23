@@ -1083,7 +1083,6 @@ const FROZEN_TZ_FILES = [
   "src/lib/ai-assistant/availability.ts",
   "src/components/JobChatThread.tsx",
   "src/app/admin/quotes/QuotesInboxClient.tsx",
-  "src/app/admin/recurring/RecurringClient.tsx",
   "src/app/admin/web-bookings/WebBookingsPageClient.tsx",
   "src/app/(customer)/(secured)/page.tsx",
   "src/app/(customer)/(secured)/bookings/BookingsClient.tsx",

@@ -1608,6 +1608,57 @@ export async function sendAdminClockedOut(opts: {
   }
 }
 
+/**
+ * Admin email for a clock nobody stopped.
+ *
+ * Deliberately states the CONSEQUENCE rather than just the fact. "A session is
+ * open" is ignorable; "this is currently being counted as 34 days of work" is
+ * not, and the second one is the true statement, because an open session is
+ * measured to now.
+ */
+export async function sendAdminClockLeftRunning(opts: {
+  jobId: string;
+  jobNumber: number | null;
+  clientName: string | null;
+  cleanerName: string;
+  openFor: string;
+  startedAt: string;
+}) {
+  const who = opts.cleanerName;
+  const job = opts.jobNumber != null ? `#${opts.jobNumber}` : "a job";
+  await recordAdminNotification({
+    key: "admin.clock.left_running",
+    title: `${who}'s clock is still running`,
+    body: `${opts.clientName ?? "A client"} · job ${job} · open ${opts.openFor}`,
+    href: `/admin/notifications`,
+  });
+  const admins = await fetchAdmins();
+  if (admins.length === 0) return;
+  const appUrl = await currentAppUrl();
+  const html = layout(
+    h1(`${who} never clocked out`) +
+      p(
+        `They clocked in on job ${job} for <strong>${opts.clientName ?? "a client"}</strong> and the clock is still going.`,
+      ) +
+      p(
+        `Until someone closes it this counts as <strong>${opts.openFor}</strong> of work, and it is the figure payroll reads.`,
+      ) +
+      section([
+        ["Clocked in", opts.startedAt],
+        ["Open for", opts.openFor],
+      ]) +
+      btn("Close the clock", `${appUrl}/admin/notifications`)
+  );
+  for (const admin of admins) {
+    await deliver({
+      to: admin.email,
+      subject: `Clock still running — ${who} on ${job}`,
+      html,
+      notification: { recipient: "ADMIN", key: "admin.clock.left_running" },
+    }).catch((e) => console.error("sendAdminClockLeftRunning", admin.email, e));
+  }
+}
+
 /** Admin email when a job checklist is fully completed. */
 export async function sendAdminChecklistCompleted(opts: {
   jobId: string;

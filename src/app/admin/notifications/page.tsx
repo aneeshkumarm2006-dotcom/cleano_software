@@ -5,6 +5,8 @@ import { listTimeLogRequests } from "../actions/decideTimeLogChange";
 
 import NotificationsClient from "./NotificationsClient";
 import TimeLogRequestsPanel from "./TimeLogRequestsPanel";
+import StaleClocksPanel from "./StaleClocksPanel";
+import { listStaleClocksForAdmin } from "../actions/closeStaleClock";
 
 export const metadata = { title: "Notifications · Bookmops" };
 
@@ -35,6 +37,12 @@ export default async function AdminNotificationsPage({
   const timelogHistory = params.timelog === "all";
   const timeLogRequests = await listTimeLogRequests(timelogHistory);
 
+  // Clocks nobody stopped. Above the requests queue because these have been
+  // wrong for longer and nobody is chasing them: a cleaner chases their own
+  // time-log request, while a session left running has no advocate, which is
+  // how one of them reached thirty-four days.
+  const staleClocks = await listStaleClocksForAdmin();
+
   return (
     <div className="h-full overflow-hidden overflow-y-auto p-8">
       <div className="mb-6">
@@ -44,6 +52,7 @@ export default async function AdminNotificationsPage({
           switched off.
         </p>
       </div>
+      <StaleClocksPanel rows={staleClocks} />
       <TimeLogRequestsPanel
         rows={timeLogRequests}
         showingHistory={timelogHistory}
