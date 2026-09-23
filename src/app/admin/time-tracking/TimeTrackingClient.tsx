@@ -36,7 +36,14 @@ export default function TimeTrackingClient({ cleaners }: Props) {
   const [entries, setEntries] = useState<ClockActivityEntry[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
-  const [loading, setLoading] = useState(false);
+  // True on the first paint, because the effect below fetches immediately.
+  // Starting false meant the very first frame had loading=false and zero rows,
+  // which rendered the EMPTY state: two big zeros and "No clock activity yet"
+  // for the twelve seconds the fetch takes. An admin glancing at that read
+  // "nobody is working" while three clocks were running.
+  const [loading, setLoading] = useState(true);
+  /** False until the first response lands, whatever it contains. */
+  const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cleanerId, setCleanerId] = useState("");
   const [filter, setFilter] = useState<"all" | "open">("all");
@@ -59,6 +66,7 @@ export default function TimeTrackingClient({ cleaners }: Props) {
 
       if (requestId !== requestRef.current) return;
       setLoading(false);
+      setLoaded(true);
 
       if (!res.success) {
         setError(res.error);
@@ -122,8 +130,12 @@ export default function TimeTrackingClient({ cleaners }: Props) {
             <span className="astat-label">Currently clocked in</span>
             <div className="astat-icon"><Clock size={15} /></div>
           </div>
-          <div className="astat-value">{totals.openShifts}</div>
-          <div className="astat-delta">Open shifts right now</div>
+          <div className="astat-value">
+            {loaded ? totals.openShifts : <span className="astat-skeleton" aria-hidden="true" />}
+          </div>
+          <div className="astat-delta">
+            {loaded ? "Open shifts right now" : "Checking…"}
+          </div>
         </div>
         <button
           type="button"
@@ -135,16 +147,22 @@ export default function TimeTrackingClient({ cleaners }: Props) {
             <span className="astat-label">Missed clock-outs</span>
             <div className="astat-icon"><AlertTriangle size={15} /></div>
           </div>
-          <div className="astat-value">{totals.staleShifts}</div>
+          <div className="astat-value">
+            {loaded ? totals.staleShifts : <span className="astat-skeleton" aria-hidden="true" />}
+          </div>
           <div className="astat-delta">
-            {totals.staleShifts > 0 ? "Review before payroll" : "None outstanding"}
+            {!loaded
+              ? "Checking…"
+              : totals.staleShifts > 0
+                ? "Review before payroll"
+                : "None outstanding"}
           </div>
         </button>
       </div>
 
       {error && <p className="text-xs text-red-600">{error}</p>}
 
-      {entries.length === 0 && !loading && !error ? (
+      {entries.length === 0 && loaded && !loading && !error ? (
         <div className="text-center py-12">
           <div className="w-16 h-16 bg-[#008C9C]/5 rounded-full flex items-center justify-center mx-auto mb-3">
             <Timer className="w-8 h-8 text-[#008C9C]/40" />

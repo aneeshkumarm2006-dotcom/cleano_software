@@ -58,6 +58,13 @@ const read = (p: string) => readFileSync(p, "utf8");
   })());
   const ws = read("src/lib/workspace-name.ts");
   check("the fallback is the platform, never a tenant", ws.includes('PLATFORM_NAME = "Bookmops"'));
+  // The platform's own Organization row is named "Awer". Without this the
+  // marketing page at /welcome would have been titled for it — which is what
+  // verify-marketing-page caught.
+  check(
+    "the platform host resolves to the platform name, not its row name",
+    ws.includes("PLATFORM_ORG_SLUG") && ws.includes("return PLATFORM_NAME;"),
+  );
 }
 
 /* 4. One company's marketing on every tenant's pages --------------------- */

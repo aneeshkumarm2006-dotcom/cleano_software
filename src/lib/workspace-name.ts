@@ -18,6 +18,7 @@ import "server-only";
 import { getSetting } from "@/lib/settings";
 import { getCurrentOrg } from "@/lib/org";
 import { orgFromContext } from "@/lib/org-context";
+import { PLATFORM_ORG_SLUG } from "@/lib/tenant";
 
 /** The platform. Not a cleaning company. */
 export const PLATFORM_NAME = "Bookmops";
@@ -26,12 +27,19 @@ export async function workspaceName(): Promise<string> {
   // Context first: this also runs from crons and scripts, outside a request.
   const ctx = orgFromContext();
 
+  // The platform's own host is not a cleaning company, whatever its
+  // Organization row happens to be called. That row is named "Awer", so
+  // without this the marketing page at /welcome would have been titled for it
+  // — caught by verify-marketing-page, which asserts the opposite.
+  const org = await getCurrentOrg().catch(() => null);
+  if (ctx?.slug === PLATFORM_ORG_SLUG || org?.slug === PLATFORM_ORG_SLUG) {
+    return PLATFORM_NAME;
+  }
+
   const setting = await getSetting("general.businessName").catch(() => null);
   if (typeof setting === "string" && setting.trim()) return setting.trim();
 
   if (ctx?.name?.trim()) return ctx.name.trim();
-
-  const org = await getCurrentOrg().catch(() => null);
   if (org?.name?.trim()) return org.name.trim();
 
   return PLATFORM_NAME;

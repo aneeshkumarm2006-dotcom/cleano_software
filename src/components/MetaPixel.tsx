@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
+import { isTrackedPath, TRACKED_PATHS } from "@/lib/meta-pixel-paths";
 
 /**
  * Meta's pixel, on the marketing funnel only.
@@ -18,18 +19,16 @@ import { usePathname } from "next/navigation";
  * changes nothing.
  */
 
-/** Public, unauthenticated funnel pages. Prefix match. */
-const TRACKED_PATHS = ["/welcome", "/get-started"];
+// The allowlist lives in @/lib/meta-pixel-paths so it can be tested: this file
+// imports next/navigation and cannot load outside a browser runtime.
+// Re-exported as well, because existing call sites import it from here.
+export { isTrackedPath, TRACKED_PATHS };
 
 declare global {
   interface Window {
     fbq?: ((...args: unknown[]) => void) & { queue?: unknown[]; loaded?: boolean };
     _fbq?: unknown;
   }
-}
-
-export function isTrackedPath(pathname: string): boolean {
-  return TRACKED_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
 /** Fire a Meta standard event. A no-op when the pixel never loaded. */

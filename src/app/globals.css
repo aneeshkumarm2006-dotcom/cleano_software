@@ -7382,6 +7382,24 @@ a.q-v.link:hover { text-decoration: underline; }
    line height so the Contact / Email / Phone columns read across as one band. */
 .dup-table tbody td { padding-top: 6px; padding-bottom: 6px; }
 
+/* A stat that has not arrived yet. Shaped like the number it will become, so
+   the card does not resize when the real value lands (CLS). */
+.astat-skeleton {
+  display: inline-block;
+  width: 1.6em; height: 0.72em;
+  border-radius: 6px;
+  background: var(--primary-10, rgba(0, 140, 156, 0.10));
+  animation: astat-pulse 1.4s ease-in-out infinite;
+  vertical-align: middle;
+}
+@keyframes astat-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .astat-skeleton { animation: none; }
+}
+
 /* The cleaner's job filters, collapsed on a phone.
    Desktop keeps everything visible: there was never a space problem there. */
 .cl-filters-toggle { display: none; }
