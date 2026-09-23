@@ -7467,6 +7467,8 @@ a.q-v.link:hover { text-decoration: underline; }
 .cv-tag.need { background: #fef3c7; color: #92400e; }
 .cv-tag.muted { background: #eef2f4; color: #46606a; }
 .cv-tag.new { background: #d1fae5; color: #047857; }
+.cv-tag.who { background: var(--primary-10, rgba(0,140,156,.10)); color: var(--primary-70, #00626d); }
+.cv-tag.done { background: #eef2f4; color: #64748b; }
 .cv-none { padding: 24px 16px; font-size: 13px; color: var(--ink-soft, #46606a); text-align: center; }
 
 /* ── nothing open yet ─────────────────────────────────────────────────── */
@@ -7498,6 +7500,31 @@ a.q-v.link:hover { text-decoration: underline; }
   padding: 13px 20px; display: flex; flex-wrap: wrap;
   align-items: center; justify-content: space-between; gap: 12px;
 }
+/* Owner picker and Close, in the thread header. */
+.cv-assign select {
+  font: inherit; font-size: 12px; font-weight: 600;
+  border: 1px solid var(--line, #dde6e8); border-radius: 999px;
+  padding: 5px 10px; background: #fff; color: var(--ink-soft, #46606a);
+  min-height: 32px; cursor: pointer; max-width: 170px;
+}
+.cv-assign select:focus-visible { outline: 2px solid var(--primary, #008C9C); outline-offset: 1px; }
+.cv-hdr-btn {
+  font: inherit; font-size: 12px; font-weight: 600;
+  border: 1px solid var(--line, #dde6e8); border-radius: 999px;
+  padding: 5px 12px; background: #fff; color: var(--ink-soft, #46606a);
+  min-height: 32px; cursor: pointer; white-space: nowrap;
+}
+.cv-hdr-btn:hover:not(:disabled) { background: #f8fafb; }
+.cv-hdr-btn.primary {
+  background: var(--primary, #008C9C); border-color: var(--primary, #008C9C); color: #fff;
+}
+.cv-hdr-btn.primary:hover:not(:disabled) { background: var(--primary-70, #00626d); }
+.cv-hdr-btn:disabled { opacity: .5; cursor: default; }
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
 .cv-msgs {
   flex: 1; overflow-y: auto; min-height: 0;
   padding: 20px; display: flex; flex-direction: column; gap: 16px;

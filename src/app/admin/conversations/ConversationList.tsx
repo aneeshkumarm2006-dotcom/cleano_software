@@ -23,42 +23,72 @@ export interface ThreadRow {
   lastMessageAt: string;
   needsHuman: boolean;
   aiEnabled: boolean;
+  status: "OPEN" | "CLOSED";
+  assignedToId: string | null;
+  assignedToName: string | null;
 }
 
-type View = "needs" | "ai" | "all";
+/**
+ * The five views people actually live in.
+ *
+ * Deliberately not HubSpot's eight. Spam, Trash and Sent are concepts a
+ * cleaning office does not have, and every extra tab is another place a
+ * conversation can hide.
+ */
+type View = "mine" | "unassigned" | "needs" | "open" | "closed";
 
 const fmt = new Intl.DateTimeFormat("en-CA", { month: "short", day: "numeric" });
 
-export default function ConversationList({ rows }: { rows: ThreadRow[] }) {
+export default function ConversationList({
+  rows,
+  meId,
+}: {
+  rows: ThreadRow[];
+  meId: string;
+}) {
   // The open thread, read from the route rather than held in state, so a deep
   // link and a click land in exactly the same place.
   const activeId = useSelectedLayoutSegment();
-  const [view, setView] = useState<View>("needs");
+  const [view, setView] = useState<View>("mine");
   const [q, setQ] = useState("");
 
+  const open = useMemo(() => rows.filter((r) => r.status === "OPEN"), [rows]);
   const counts = useMemo(
     () => ({
-      needs: rows.filter((r) => r.needsHuman).length,
-      ai: rows.filter((r) => !r.needsHuman && r.aiEnabled).length,
-      all: rows.length,
+      mine: open.filter((r) => r.assignedToId === meId).length,
+      unassigned: open.filter((r) => !r.assignedToId).length,
+      needs: open.filter((r) => r.needsHuman).length,
+      open: open.length,
+      closed: rows.length - open.length,
     }),
-    [rows],
+    [rows, open, meId],
   );
 
-  // Start on whichever view has something in it. Opening the inbox on an empty
-  // "Needs a person" tab hides every conversation behind a click.
-  const effectiveView: View = counts.needs === 0 && view === "needs" ? "all" : view;
+  // Land on the first view that has something in it. Opening the inbox on an
+  // empty tab hides every conversation behind a click, and "Mine" is empty for
+  // everyone until assignment is actually used.
+  const effectiveView: View =
+    counts[view] > 0
+      ? view
+      : counts.mine > 0
+        ? "mine"
+        : counts.unassigned > 0
+          ? "unassigned"
+          : counts.open > 0
+            ? "open"
+            : view;
 
   const shown = useMemo(() => {
     const term = q.trim().toLowerCase();
     return rows
-      .filter((r) =>
-        effectiveView === "needs"
-          ? r.needsHuman
-          : effectiveView === "ai"
-            ? !r.needsHuman && r.aiEnabled
-            : true,
-      )
+      .filter((r) => {
+        if (effectiveView === "closed") return r.status === "CLOSED";
+        if (r.status === "CLOSED") return false;
+        if (effectiveView === "mine") return r.assignedToId === meId;
+        if (effectiveView === "unassigned") return !r.assignedToId;
+        if (effectiveView === "needs") return r.needsHuman;
+        return true;
+      })
       .filter(
         (r) =>
           !term ||
@@ -66,7 +96,7 @@ export default function ConversationList({ rows }: { rows: ThreadRow[] }) {
           (r.subject ?? "").toLowerCase().includes(term) ||
           (r.preview ?? "").toLowerCase().includes(term),
       );
-  }, [rows, effectiveView, q]);
+  }, [rows, effectiveView, q, meId]);
 
   return (
     <aside className="cv-list" aria-label="Conversations">
@@ -90,9 +120,11 @@ export default function ConversationList({ rows }: { rows: ThreadRow[] }) {
 
       <div className="cv-views" role="tablist" aria-label="Filter conversations">
         {([
+          ["mine", "Mine", counts.mine],
+          ["unassigned", "Unassigned", counts.unassigned],
           ["needs", "Needs a person", counts.needs],
-          ["ai", "AI handling", counts.ai],
-          ["all", "All", counts.all],
+          ["open", "All open", counts.open],
+          ["closed", "Closed", counts.closed],
         ] as const).map(([id, label, n]) => (
           <button
             key={id}
@@ -111,9 +143,15 @@ export default function ConversationList({ rows }: { rows: ThreadRow[] }) {
           <p className="cv-none">
             {q
               ? "Nothing matches that search."
-              : effectiveView === "needs"
-                ? "Nobody is waiting on a person."
-                : "No conversations yet. When the assistant is on (Settings → AI Assistant), texts and emails appear here."}
+              : effectiveView === "mine"
+                ? "Nothing is assigned to you."
+                : effectiveView === "unassigned"
+                  ? "Everything open has an owner."
+                  : effectiveView === "needs"
+                    ? "Nobody is waiting on a person."
+                    : effectiveView === "closed"
+                      ? "Nothing has been closed yet."
+                      : "No conversations yet. When the assistant is on (Settings → AI Assistant), texts and emails appear here."}
           </p>
         ) : (
           shown.map((r) => (
@@ -133,8 +171,20 @@ export default function ConversationList({ rows }: { rows: ThreadRow[] }) {
                 {r.subject && <span className="cv-thr-sub">{r.subject}</span>}
                 {r.preview && <span className="cv-thr-prev">{r.preview}</span>}
                 <span className="cv-tags">
-                  {r.needsHuman && <span className="cv-tag need">Needs a person</span>}
-                  {!r.aiEnabled && <span className="cv-tag muted">AI muted</span>}
+                  {r.status === "CLOSED" && <span className="cv-tag done">Closed</span>}
+                  {r.status === "OPEN" && r.needsHuman && (
+                    <span className="cv-tag need">Needs a person</span>
+                  )}
+                  {/* Who owns it, on the row — the whole point of assignment is
+                      seeing it without opening the thread. */}
+                  {r.assignedToName && (
+                    <span className="cv-tag who">
+                      {r.assignedToId === meId ? "You" : r.assignedToName}
+                    </span>
+                  )}
+                  {r.status === "OPEN" && !r.assignedToId && (
+                    <span className="cv-tag muted">Unassigned</span>
+                  )}
                   {!r.isClient && <span className="cv-tag new">New contact</span>}
                 </span>
               </span>

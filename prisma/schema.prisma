@@ -4198,11 +4198,31 @@ model AiConversation {
   /// In-Reply-To so our replies land in the customer's original thread.
   lastEmailMessageId String?
 
+  /// Who owns answering this. NULL means nobody has picked it up.
+  ///
+  /// A SOFT reference, matching `TimeLogChangeRequest.decidedById`: the name is
+  /// resolved by a separate query rather than a foreign key, so a staff member
+  /// leaving cannot cascade into customer conversations. The cost is that a
+  /// stale id resolves to nothing, which the UI reads as unassigned — the safe
+  /// direction for a queue.
+  assignedToId String?
+
+  /// Open until somebody says it is finished.
+  ///
+  /// `needsHuman` is a FLAG the assistant raises; this is the lifecycle. Before
+  /// it existed, a conversation that had been dealt with looked exactly like a
+  /// live one forever, so the inbox could be read but never cleared.
+  status   AiConversationStatus @default(OPEN)
+  closedAt DateTime?
+
   lastMessageAt DateTime @default(now())
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   messages AiMessage[]
+
+  @@index([assignedToId])
+  @@index([organizationId, status])
 
   @@index([organizationId, lastMessageAt])
   @@index([organizationId, needsHuman, lastMessageAt])
@@ -4234,6 +4254,11 @@ model AiMessage {
 enum AiChannel {
   SMS
   EMAIL
+}
+
+enum AiConversationStatus {
+  OPEN
+  CLOSED
 }
 
 enum AiMessageDirection {

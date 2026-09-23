@@ -31,9 +31,10 @@ export default async function ConversationsLayout({
   if (role !== "OWNER" && role !== "ADMIN") redirect("/admin/dashboard");
 
   const conversations = await db.aiConversation.findMany({
-    // Anyone waiting on a person first, then most recent. The list view below
-    // can filter to those, which is what the old page could only describe.
-    orderBy: [{ needsHuman: "desc" }, { lastMessageAt: "desc" }],
+    // Open before closed, then anyone waiting on a person, then most recent.
+    // The views below can filter to any of those, which is what the old page
+    // could only describe in prose.
+    orderBy: [{ status: "asc" }, { needsHuman: "desc" }, { lastMessageAt: "desc" }],
     take: 200,
     include: {
       messages: {
@@ -55,6 +56,21 @@ export default async function ConversationsLayout({
     : [];
   const clientName = new Map(clients.map((c) => [c.id, c.name]));
 
+  // Owners, resolved separately because `assignedToId` is a soft reference.
+  // A stale id simply resolves to nothing, which reads as unassigned.
+  const ownerIds = [
+    ...new Set(conversations.map((c) => c.assignedToId).filter((x): x is string => !!x)),
+  ];
+  const owners = ownerIds.length
+    ? await db.user.findMany({
+        where: { id: { in: ownerIds } },
+        select: { id: true, name: true },
+      })
+    : [];
+  const ownerName = new Map(owners.map((u) => [u.id, u.name]));
+
+
+
   const rows: ThreadRow[] = conversations.map((c) => {
     const last = c.messages[0];
     return {
@@ -69,12 +85,15 @@ export default async function ConversationsLayout({
       lastMessageAt: c.lastMessageAt.toISOString(),
       needsHuman: c.needsHuman,
       aiEnabled: c.aiEnabled,
+      status: c.status,
+      assignedToId: c.assignedToId,
+      assignedToName: c.assignedToId ? ownerName.get(c.assignedToId) ?? null : null,
     };
   });
 
   return (
     <div className="cv-shell">
-      <ConversationList rows={rows} />
+      <ConversationList rows={rows} meId={session.user.id} />
       <div className="cv-pane">{children}</div>
     </div>
   );

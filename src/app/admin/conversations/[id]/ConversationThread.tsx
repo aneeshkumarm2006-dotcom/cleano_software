@@ -6,9 +6,11 @@ import Link from "next/link";
 import { Bot, Check, Mail, MessageSquare } from "lucide-react";
 import Button from "@/components/ui/Button";
 import {
+  assignAiConversation,
   replyToAiConversation,
   resolveAiConversation,
   setAiConversationEnabled,
+  setAiConversationStatus,
 } from "../../actions/aiConversations";
 
 interface Message {
@@ -28,14 +30,21 @@ interface Conversation {
   subject: string | null;
   clientId: string | null;
   clientName: string | null;
+  assignedToId: string | null;
+  status: "OPEN" | "CLOSED";
 }
 
 export default function ConversationThread({
   conversation,
   messages,
+  staff,
+  meId,
 }: {
   conversation: Conversation;
   messages: Message[];
+  /** Who can own a conversation in this workspace. */
+  staff: { id: string; name: string | null }[];
+  meId: string;
 }) {
   const router = useRouter();
   const [reply, setReply] = useState("");
@@ -97,8 +106,57 @@ export default function ConversationThread({
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          {conversation.needsHuman && (
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Who owns answering this.
+              `needsHuman` said a person was needed and nothing said WHICH, so
+              two admins could answer the same customer or both assume the
+              other had. */}
+          <label className="cv-assign">
+            <span className="sr-only">Assign this conversation</span>
+            <select
+              id="cv-assign"
+              value={conversation.assignedToId ?? ""}
+              disabled={busy}
+              onChange={(e) =>
+                run(() => assignAiConversation(conversation.id, e.target.value || null))
+              }>
+              <option value="">Unassigned</option>
+              {staff.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.id === meId ? `${u.name ?? "You"} (you)` : u.name ?? "Unnamed"}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          {conversation.assignedToId !== meId && (
+            <button
+              type="button"
+              disabled={busy}
+              className="cv-hdr-btn"
+              onClick={() => run(() => assignAiConversation(conversation.id, meId))}>
+              Take it
+            </button>
+          )}
+
+          {/* Open until somebody says otherwise. Without this a handled
+              conversation looked identical to a live one forever. */}
+          <button
+            type="button"
+            disabled={busy}
+            className={`cv-hdr-btn ${conversation.status === "CLOSED" ? "" : "primary"}`}
+            onClick={() =>
+              run(() =>
+                setAiConversationStatus(
+                  conversation.id,
+                  conversation.status === "CLOSED" ? "OPEN" : "CLOSED",
+                ),
+              )
+            }>
+            {conversation.status === "CLOSED" ? "Reopen" : "Close"}
+          </button>
+
+          {conversation.needsHuman && conversation.status === "OPEN" && (
             <button
               type="button"
               disabled={busy}

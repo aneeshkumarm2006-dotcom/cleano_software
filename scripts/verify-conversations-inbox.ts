@@ -28,7 +28,7 @@ const read = (p: string) => readFileSync(p, "utf8");
   const layout = read("src/app/admin/conversations/layout.tsx");
   check("the list is a layout, so it survives navigation", layout.includes("ConversationsLayout"));
   check("the guard moved with it", layout.includes('role !== "OWNER"'));
-  check("it renders the list beside its children", layout.includes("<ConversationList rows={rows} />"));
+  check("it renders the list beside its children", layout.includes("<ConversationList rows={rows}"));
 
   const page = read("src/app/admin/conversations/page.tsx");
   // The query and guard live in the layout now; this file only fills the pane.
@@ -42,12 +42,14 @@ const read = (p: string) => readFileSync(p, "utf8");
   // The old page said "Conversations that need a person are listed first" in
   // prose. Sorting is not a control.
   check("needs-a-person is a view with a count", list.includes('"Needs a person"'));
-  check("so is AI handling", list.includes('"AI handling"'));
+  // "AI handling" was replaced by the queue views in verify-conversation-queue:
+  // who owns it matters more than whether the assistant is talking.
+  check("so is All open", list.includes('"All open"'));
   check("the open thread comes from the route, not state", list.includes("useSelectedLayoutSegment"));
   check("the active row is marked for assistive tech", list.includes('aria-current={activeId === r.id ? "page" : undefined}'));
   check("search covers name, subject and body", list.includes("r.preview ?? \"\""));
   // Opening on an empty tab would hide every conversation behind a click.
-  check("an empty needs-view falls back to All", list.includes("counts.needs === 0 && view === \"needs\""));
+  check("it lands on a view with something in it", list.includes("counts[view] > 0"));
 }
 
 /* ---- the messages: one card, not three materials ---------------------- */

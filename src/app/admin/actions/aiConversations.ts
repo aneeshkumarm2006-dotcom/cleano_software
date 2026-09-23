@@ -235,3 +235,85 @@ export async function resolveAiConversation(
   revalidatePath("/admin/conversations");
   return { success: true };
 }
+
+/**
+ * Give a conversation an owner, or take it off someone.
+ *
+ * Before this, `needsHuman` said a person was needed and nothing said WHICH
+ * person — so two admins could answer the same customer, or both assume the
+ * other had. Assignment is the smallest change that turns a list you read into
+ * a queue you can clear.
+ */
+export async function assignAiConversation(
+  conversationId: string,
+  /** A staff user id, or null to put it back in Unassigned. */
+  assignedToId: string | null,
+): Promise<Result> {
+  const guard = await requireOwnerAdmin();
+  if ("error" in guard) return { success: false, error: guard.error };
+
+  const convo = await db.aiConversation.findUnique({
+    where: { id: conversationId },
+    select: { id: true },
+  });
+  if (!convo) return { success: false, error: "Conversation not found." };
+
+  // Checked against THIS workspace's staff. `db` is org-scoped, so an id from
+  // another company finds nothing and is refused rather than stored.
+  if (assignedToId) {
+    const staff = await db.user.findUnique({
+      where: { id: assignedToId },
+      select: { id: true, deletedAt: true },
+    });
+    if (!staff || staff.deletedAt) {
+      return { success: false, error: "That person is not on your team." };
+    }
+  }
+
+  await db.aiConversation.update({
+    where: { id: conversationId },
+    data: { assignedToId },
+  });
+  revalidatePath(`/admin/conversations/${conversationId}`);
+  revalidatePath("/admin/conversations");
+  return { success: true };
+}
+
+/**
+ * Close a conversation, or reopen it.
+ *
+ * Closing also clears `needsHuman`: the flag means "the assistant wants a
+ * person", and a thread somebody has just finished with does not. Leaving both
+ * set is how a cleared inbox fills straight back up.
+ */
+export async function setAiConversationStatus(
+  conversationId: string,
+  status: "OPEN" | "CLOSED",
+): Promise<Result> {
+  const guard = await requireOwnerAdmin();
+  if ("error" in guard) return { success: false, error: guard.error };
+
+  if (status !== "OPEN" && status !== "CLOSED") {
+    return { success: false, error: "Unknown status." };
+  }
+
+  const convo = await db.aiConversation.findUnique({
+    where: { id: conversationId },
+    select: { id: true },
+  });
+  if (!convo) return { success: false, error: "Conversation not found." };
+
+  await db.aiConversation.update({
+    where: { id: conversationId },
+    data:
+      status === "CLOSED"
+        ? { status, closedAt: new Date(), needsHuman: false }
+        : // Reopening does NOT re-raise needsHuman. That flag belongs to the
+          // assistant; a person reopening a thread is not the assistant asking
+          // for help.
+          { status, closedAt: null },
+  });
+  revalidatePath(`/admin/conversations/${conversationId}`);
+  revalidatePath("/admin/conversations");
+  return { success: true };
+}
