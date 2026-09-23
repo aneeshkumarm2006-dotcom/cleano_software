@@ -1080,6 +1080,19 @@ export default function BookPage() {
             )}
           </header>
 
+          {/* Progress, on the one screen size where the step list beside this
+              is hidden. A five-step form that never says which step you are on
+              or how many are left reads as open-ended, which is the worst
+              thing a booking form can be. */}
+          <div className="cl-book-rail" aria-hidden="true">
+            {STEP_LABELS.map((label, i) => (
+              <span key={label} className={`cl-book-seg ${i <= step ? "on" : ""}`} />
+            ))}
+          </div>
+          <p className="cl-book-railtxt">
+            Step {step + 1} of {STEP_LABELS.length} · {STEP_HINTS[step]}
+          </p>
+
           <div className="cl-book-body cl-fade-up">
             {step === 0 && (
               <Step1PostalCode

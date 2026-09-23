@@ -907,11 +907,15 @@ export default function JobsView({
           hint={hasActiveFilters || searchTerm || tab !== 'all' ? 'Matching filters' : undefined}
         />
         <AStatCard icon={CheckCircle2} label="Completed" value={stats.completedJobs} />
+        {/* "Total revenue $0.00" beside "$6,439.60 scheduled" reads as a
+            broken number rather than a true one. The value is right; the word
+            was wrong — this counts money actually IN, and naming it that makes
+            zero a fact instead of a fault. */}
         <AStatCard
           icon={DollarSign}
-          label="Total revenue"
+          label="Collected"
           value={`$${stats.totalRevenue.toFixed(2)}`}
-          hint="Completed & paid only"
+          hint="Completed and paid"
         />
         <AStatCard
           icon={Wallet}
@@ -921,9 +925,11 @@ export default function JobsView({
         />
         <AStatCard
           icon={AlertTriangle}
-          label="Pending payment"
+          label="Awaiting payment"
           value={stats.pendingPayment}
-          hint={stats.pendingPayment > 0 ? `${stats.pendingPayment} job${stats.pendingPayment === 1 ? '' : 's'}` : undefined}
+          hint={stats.pendingPayment > 0
+            ? `${stats.pendingPayment} job${stats.pendingPayment === 1 ? '' : 's'} done, not paid`
+            : 'Nothing outstanding'}
         />
       </div>
       {/* .astat-grid is 4-up by default; this page has 5 cards. Scoped so the
@@ -1167,12 +1173,15 @@ export default function JobsView({
                     <th>Date</th>
                     <th>Client</th>
                     <th>Type</th>
-                    <th>Cleaners</th>
-                    <th className="num">Time</th>
+                    {/* Cleaners, Time and Pay type were three separate columns
+                        and all three were almost entirely dashes, while Status
+                        was squeezed onto two lines and the table scrolled
+                        sideways at 1440px. They are one fact about a job — who
+                        is on it, how they are paid, how long it took — so they
+                        are now one cell. */}
+                    <th>Crew &amp; pay</th>
                     <th className="num">Price</th>
-                    <th className="num">Discount</th>
-                    <th className="num">Profit</th>
-                    <th>Pay type</th>
+                    <th className="num">Margin</th>
                     <th>Status</th>
                     <th>Payment</th>
                     <th className="col-actions" />
@@ -1203,8 +1212,30 @@ export default function JobsView({
                         {job.location && <div className="col-client-sub">{job.location.split(',')[0]}</div>}
                       </td>
                       <td><TypePill type={job.jobType} /></td>
-                      <td><AvatarStack cleaners={job.cleaners} /></td>
-                      <td className="num">{formatTimeSpent(job.timeSpentMs)}</td>
+                      <td>
+                        <div className="row" style={{ gap: 6, alignItems: 'center' }}>
+                          {job.cleaners.length > 0
+                            ? <AvatarStack cleaners={job.cleaners} />
+                            : <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>Unassigned</span>
+                          }
+                          {job.isCashJob && <CashPill />}
+                          {/* Only when there is a pay type to name. An
+                              assigned crew with none rendered "ZC —", and a
+                              dash beside an avatar reads as a broken value
+                              rather than an absent one. */}
+                          {!job.isCashJob && job.cleaners.length > 0 && (() => {
+                            const label = payTypeLabel(job.paymentType);
+                            return label && label !== '—' ? (
+                              <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{label}</span>
+                            ) : null;
+                          })()}
+                        </div>
+                        {(job.timeSpentMs ?? 0) > 0 && (
+                          <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 2 }}>
+                            {formatTimeSpent(job.timeSpentMs)} worked
+                          </div>
+                        )}
+                      </td>
                       {/* The ACTIVE value of the job (fix 3): base + add-ons,
                           or the override total. `job.price` is only the base
                           service line, so this column used to read $128 on a
@@ -1212,12 +1243,16 @@ export default function JobsView({
                       <td className="num col-price">
                         {job.price !== null ? `$${activeSubtotal(job).toFixed(2)}` : '—'}
                         {job.usesFixedPrice && <span style={{ marginLeft: 6 }}><FixedPricePill /></span>}
-                      </td>
-                      <td className="num">
-                        {(job.discountAmount || 0) > 0
-                          ? <span style={{ color: 'var(--amber-700)', fontWeight: 600 }}>−${job.discountAmount!.toFixed(2)}</span>
-                          : <span style={{ color: 'var(--ink-soft)' }}>—</span>
-                        }
+                        {/* A discount only means anything beside the price it
+                            came off, so it is the struck-through original
+                            rather than a column of its own. */}
+                        {(job.discountAmount || 0) > 0 && job.price !== null && (
+                          <div
+                            style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 2, textDecoration: 'line-through' }}
+                            title={`$${job.discountAmount!.toFixed(2)} off`}>
+                            ${(activeSubtotal(job) + (job.discountAmount || 0)).toFixed(2)}
+                          </div>
+                        )}
                       </td>
                       <td className="num">
                         {typeof job.profitPct === 'number' && (job.price || 0) > 0 && job.profitKnown !== false
@@ -1234,12 +1269,6 @@ export default function JobsView({
                         }
                       </td>
                       <td>
-                        {job.isCashJob
-                          ? <CashPill />
-                          : <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{payTypeLabel(job.paymentType)}</span>
-                        }
-                      </td>
-                      <td>
                         <JobStatusPill job={job} />
                         {/* Fix 6 — the reason INLINE, not only on hover. The
                             PDF's complaint is that a held job explained
@@ -1250,7 +1279,7 @@ export default function JobsView({
                             title={holdReasonText(job.holdReason)}
                             style={{
                               marginTop: 4, fontSize: 11, lineHeight: 1.3,
-                              color: 'var(--amber-700)', maxWidth: 170,
+                              color: 'var(--amber-700)', maxWidth: 150,
                               overflow: 'hidden', textOverflow: 'ellipsis',
                               display: '-webkit-box', WebkitLineClamp: 2,
                               WebkitBoxOrient: 'vertical',

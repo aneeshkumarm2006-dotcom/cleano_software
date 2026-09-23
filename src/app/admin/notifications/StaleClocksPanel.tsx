@@ -165,13 +165,50 @@ function Row({
   );
 }
 
-export default function StaleClocksPanel({ rows }: { rows: StaleClockRow[] }) {
+export default function StaleClocksPanel({
+  rows,
+  compact = false,
+}: {
+  rows: StaleClockRow[];
+  /**
+   * One line pointing at Time tracking, instead of the whole queue.
+   *
+   * The queue's home is Time tracking — a clock still running is work in
+   * progress, and that is the page an admin is on when they deal with it.
+   * Notifications keeps the entry point because that is where an admin
+   * arrives from the email, but repeating the full editor on both pages
+   * would be two places to fix the same thing.
+   */
+  compact?: boolean;
+}) {
   const [closed, setClosed] = useState<Record<string, string>>({});
   const remaining = rows.filter((r) => !closed[r.sessionId]);
 
   // Nothing running late: say nothing at all rather than adding an empty box to
   // every visit to this page.
   if (rows.length === 0) return null;
+
+  if (compact) {
+    const worst = rows[0];
+    return (
+      <Link
+        href="/admin/time-tracking"
+        className="mb-8 flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 hover:bg-amber-100">
+        <span className="text-xs font-[600] px-1.5 py-0.5 rounded-full bg-amber-200 text-amber-900">
+          {rows.length}
+        </span>
+        <span className="text-sm text-amber-900">
+          <strong>
+            {rows.length === 1 ? "A clock is" : `${rows.length} clocks are`} still running.
+          </strong>{" "}
+          The longest has been open {worst.openFor} and counts as that much work.
+        </span>
+        <span className="ml-auto text-xs font-[600] text-amber-900 whitespace-nowrap">
+          Close them in Time tracking →
+        </span>
+      </Link>
+    );
+  }
 
   return (
     <section className="mb-8 rounded-xl border border-gray-200 bg-white">

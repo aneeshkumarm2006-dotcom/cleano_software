@@ -18,6 +18,8 @@ import { TableLoadingOverlay } from "./TableLoadingOverlay";
 import { JobsLoadingProvider } from "./JobsLoadingContext";
 import { ClearLoadingOnMount } from "./ClearLoadingOnMount";
 import { JobRow } from "./JobRow";
+import NextJobCard from "./NextJobCard";
+import { serviceLabelMap } from "@/lib/service-catalog";
 import { Calendar } from "lucide-react";
 import PendingInvitesPanel from "./PendingInvitesPanel";
 import { cleanerPayoutForJobs } from "@/lib/cleaner-pay-display";
@@ -34,7 +36,9 @@ export default async function MyJobsPage({
   const session = await requireCleaner();
 
   // Same service list the admin forms use (item 20).
-  const serviceOptionList = serviceOptions(await getServiceCatalog());
+  const catalog = await getServiceCatalog();
+  const serviceOptionList = serviceOptions(catalog);
+  const serviceLabels = serviceLabelMap(catalog);
 
   // Parse search params (allow-list everything that reaches the query)
   const params = await searchParams;
@@ -170,6 +174,14 @@ export default async function MyJobsPage({
 
   // Status filtering happens in the query, so pagination math is exact.
   const filteredJobs = jobs;
+
+  // The default view is "upcoming, everything, no search" — a cleaner opening
+  // the app rather than looking something up. Only then is promoting the first
+  // job an answer to the question they actually asked.
+  const isDefaultView = !search && jobType === "all" && status === "upcoming";
+  // `orderBy` already sorts upcoming work soonest-first, so the head of the
+  // list IS the next job; re-sorting here could disagree with the list below.
+  const nextJob = isDefaultView ? filteredJobs[0] : null;
 
   // Check if there are more pages
   const hasNextPage = filteredJobs.length > perPage;
@@ -421,6 +433,14 @@ export default async function MyJobsPage({
 
         <PendingInvitesPanel invites={pendingInvites} />
 
+        {/* The next job, lifted out of the list.
+            Only on the default view: once a cleaner has filtered or searched,
+            they are looking for a particular job, and promoting the first
+            result would answer a question they did not ask. */}
+        {isDefaultView && nextJob && (
+          <NextJobCard job={nextJob} serviceLabels={serviceLabels} />
+        )}
+
         {/* Filters */}
         <JobsFilters serviceOptions={serviceOptionList} />
 
@@ -450,7 +470,9 @@ export default async function MyJobsPage({
             </div>
           ) : (
             <div className="cl-jobs2-list">
-              {filteredJobs.map((job) => (
+              {/* The hero IS the first row, so showing both printed the same
+                  job twice, one above the other. */}
+              {filteredJobs.filter((job) => job.id !== nextJob?.id).map((job) => (
                 <JobRow
                   key={job.id}
                   job={job}

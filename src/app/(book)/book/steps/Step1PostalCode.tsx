@@ -7,6 +7,10 @@ import { Input, Button, Banner } from "@/components/customer/Field";
 import { checkServiceArea } from "../../actions/checkServiceArea";
 import { saveLead } from "../../actions/saveLead";
 import {
+  STANDARD_BOOKING_DEPOSIT_USD,
+  formatDeposit,
+} from "@/lib/booking-deposit";
+import {
   BOOKING_PAGE_DEFAULTS,
   resolveField,
   type BookingPageConfig,
@@ -172,9 +176,45 @@ export default function Step1PostalCode({
         )
       ) : null}
 
-      <div style={{ fontSize: 12, color: "var(--primary-50)" }}>
-        Try <code>H2X 1Y4</code> (downtown), <code>H1V 1A1</code> (travel fee),
-        or <code>K1A 0B1</code> (out of area).
+      {/* This was three sample postal codes — "Try H2X 1Y4 (downtown)" — which
+          is demo scaffolding that shipped to real customers, and they are
+          MONTREAL codes, so a Calgary customer was invited to try another
+          province.
+
+          What replaces it is what the empty two thirds of this screen should
+          always have been doing: a stranger who has typed nothing yet needs to
+          know what they are agreeing to before they will type anything. */}
+      <div className="cl-book-next">
+        <p className="cl-book-next-title">What happens next</p>
+
+        <div className="cl-book-step">
+          <span className="cl-book-stepn">2</span>
+          <div>
+            <div className="t">Tell us about your home</div>
+            <div className="s">Size, rooms, and anything that needs extra care.</div>
+          </div>
+        </div>
+        <div className="cl-book-step">
+          <span className="cl-book-stepn">3</span>
+          <div>
+            <div className="t">Pick a day that suits you</div>
+            <div className="s">Real availability, not a callback request.</div>
+          </div>
+        </div>
+        <div className="cl-book-step">
+          <span className="cl-book-stepn">4</span>
+          <div>
+            <div className="t">See the price before you book</div>
+            <div className="s">Tax included. No quote visit, no surprises.</div>
+          </div>
+        </div>
+
+        <div className="cl-book-trust">
+          <span className="cl-book-chip">
+            {formatDeposit(STANDARD_BOOKING_DEPOSIT_USD)} deposit, not the full price
+          </span>
+          <span className="cl-book-chip">Your card is saved, charged after the clean</span>
+        </div>
       </div>
     </div>
   );

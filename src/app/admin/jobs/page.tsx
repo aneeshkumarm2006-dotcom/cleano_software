@@ -265,7 +265,12 @@ export default async function JobsPage({
     // a real workspace, because pay is set after the work, not before it.
     const hasCrew = job.cleaners.length > 0;
     const payRecorded = (job.employeePay ?? 0) > 0;
-    const profitKnown = revenue > 0 && (!hasCrew || payRecorded);
+    // A job with NO crew is not a 100% margin, it is a job nobody has been
+    // put on yet — the cost simply has not happened. Only a FINISHED job with
+    // no crew genuinely cost nothing. Seen on screen: two scheduled jobs with
+    // an empty crew cell both reading 100%.
+    const settled = job.status === "COMPLETED" || job.status === "PAID" || job.status === "CANCELLED";
+    const profitKnown = revenue > 0 && (payRecorded || (!hasCrew && settled));
 
     const timeSpentMs =
       job.endTime && job.startTime

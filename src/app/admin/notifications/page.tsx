@@ -52,7 +52,7 @@ export default async function AdminNotificationsPage({
           switched off.
         </p>
       </div>
-      <StaleClocksPanel rows={staleClocks} />
+      <StaleClocksPanel rows={staleClocks} compact />
       <TimeLogRequestsPanel
         rows={timeLogRequests}
         showingHistory={timelogHistory}

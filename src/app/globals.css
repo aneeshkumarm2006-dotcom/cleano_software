@@ -7382,6 +7382,46 @@ a.q-v.link:hover { text-decoration: underline; }
    line height so the Contact / Email / Phone columns read across as one band. */
 .dup-table tbody td { padding-top: 6px; padding-bottom: 6px; }
 
+/* ── The cleaner's next job ────────────────────────────────────────────
+   Lifted out of the list because every row looked the same, so today's
+   nine o'clock read exactly like one three weeks out. */
+.cl-next { margin-bottom: 4px; }
+.cl-next-eyebrow {
+  display: flex; align-items: baseline; gap: 6px;
+  font-size: 11px; font-weight: 700; letter-spacing: .07em;
+  text-transform: uppercase; color: var(--primary-70, #00626d);
+  margin-bottom: 8px;
+}
+.cl-next-eyebrow span { font-weight: 500; letter-spacing: 0; text-transform: none;
+  font-size: 12px; color: var(--ink-soft, #46606a); }
+.cl-next-card {
+  background: linear-gradient(158deg, #0d3d46, #0a6270 62%, #088395);
+  color: #fff; border-radius: 18px; padding: 18px;
+  box-shadow: 0 10px 24px rgba(0, 60, 70, .18);
+}
+.cl-next-when { font-size: 30px; font-weight: 700; letter-spacing: -.02em; line-height: 1.1; }
+.cl-next-whensub { display: flex; align-items: center; gap: 5px;
+  font-size: 12.5px; color: rgba(255,255,255,.78); margin-top: 4px; }
+.cl-next-who { font-size: 17px; font-weight: 600; margin-top: 13px; }
+.cl-next-where { display: flex; align-items: center; gap: 5px;
+  font-size: 12.5px; color: rgba(255,255,255,.82); margin-top: 3px; }
+.cl-next-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 11px; }
+.cl-next-chip {
+  font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+  background: rgba(255,255,255,.16); padding: 3px 9px; border-radius: 999px;
+}
+.cl-next-cta { display: flex; gap: 8px; margin-top: 15px; }
+.cl-next-btn {
+  flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  /* 44px minimum touch target. */
+  min-height: 44px; padding: 12px; border-radius: 12px;
+  font-weight: 700; font-size: 14px; text-decoration: none;
+  background: #fff; color: var(--primary-70, #00626d);
+}
+.cl-next-btn.ghost { flex: 0 0 46%; background: rgba(255,255,255,.14); color: #fff; }
+.cl-next-btn:active { transform: scale(.985); }
+@media (prefers-reduced-motion: reduce) { .cl-next-btn:active { transform: none; } }
+
 /* A stat that has not arrived yet. Shaped like the number it will become, so
    the card does not resize when the real value lands (CLS). */
 .astat-skeleton {
