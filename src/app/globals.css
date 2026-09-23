@@ -7382,6 +7382,222 @@ a.q-v.link:hover { text-decoration: underline; }
    line height so the Contact / Email / Phone columns read across as one band. */
 .dup-table tbody td { padding-top: 6px; padding-bottom: 6px; }
 
+/* ══ Conversations: a three-pane inbox ═══════════════════════════════════
+   The list was a page and a thread was a different page, so one conversation
+   sat in a ~990px card with the rest of a 3420px window empty, and answering
+   two customers meant two route changes. The list is a layout now. */
+.cv-shell {
+  display: grid;
+  grid-template-columns: 330px minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+  background: #fff;
+}
+.cv-pane { min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
+
+/* ── the list ─────────────────────────────────────────────────────────── */
+.cv-list {
+  display: flex; flex-direction: column; min-width: 0;
+  border-right: 1px solid var(--line, #dde6e8);
+  background: #fff;
+}
+.cv-list-head { padding: 16px 16px 12px; border-bottom: 1px solid rgba(0,140,156,.08); }
+.cv-list-title { display: flex; align-items: center; gap: 10px; }
+.cv-list-title h1 { font-size: 18px; font-weight: 700; margin: 0; color: var(--ink, #0d1b21); }
+.cv-list-title > *:last-child { margin-left: auto; }
+.cv-search {
+  display: flex; align-items: center; gap: 8px; margin-top: 11px;
+  border: 1px solid var(--line, #dde6e8); border-radius: 9px;
+  padding: 0 11px; background: #f8fafb; color: var(--primary-50, #00707d);
+}
+.cv-search input {
+  flex: 1; border: 0; background: transparent; padding: 9px 0;
+  font: inherit; font-size: 13px; color: var(--ink, #0d1b21); min-width: 0;
+}
+.cv-search input:focus { outline: none; }
+.cv-search:focus-within { border-color: var(--primary, #008C9C); }
+
+.cv-views { display: flex; gap: 4px; padding: 10px 14px; flex-wrap: wrap;
+  border-bottom: 1px solid rgba(0,140,156,.08); }
+.cv-view {
+  font: inherit; font-size: 12px; padding: 6px 11px; border-radius: 999px;
+  border: 1px solid transparent; background: transparent;
+  color: var(--ink-soft, #46606a); cursor: pointer; min-height: 32px;
+}
+.cv-view.on {
+  background: var(--primary-10, rgba(0,140,156,.10));
+  color: var(--primary-70, #00626d); font-weight: 700;
+  border-color: var(--primary-15, rgba(0,140,156,.15));
+}
+.cv-view b { font-variant-numeric: tabular-nums; }
+
+.cv-threads { flex: 1; overflow-y: auto; min-height: 0; }
+.cv-thr {
+  display: flex; gap: 11px; padding: 13px 16px; text-decoration: none;
+  border-bottom: 1px solid rgba(0,140,156,.07);
+  border-left: 3px solid transparent; color: inherit;
+}
+.cv-thr:hover { background: #f8fafb; }
+.cv-thr.on { background: var(--primary-5, rgba(0,140,156,.05)); border-left-color: var(--primary, #008C9C); }
+.cv-thr.flag { border-left-color: #d97706; }
+.cv-thr.flag.on { border-left-color: var(--primary, #008C9C); }
+.cv-ch {
+  width: 31px; height: 31px; border-radius: 9px; flex: none;
+  display: grid; place-items: center;
+}
+.cv-ch.mail { background: #e0f2fe; color: #075985; }
+.cv-ch.sms { background: #d1fae5; color: #047857; }
+.cv-thr-main { min-width: 0; flex: 1; display: block; }
+.cv-thr-top { display: flex; align-items: baseline; gap: 8px; }
+.cv-thr-who {
+  font-size: 13px; font-weight: 600; color: var(--ink, #0d1b21);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.cv-thr-when { margin-left: auto; font-size: 11px; color: var(--ink-soft, #46606a); flex: none; }
+.cv-thr-sub, .cv-thr-prev {
+  display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px;
+}
+.cv-thr-sub { font-size: 12px; color: var(--ink, #0d1b21); }
+.cv-thr-prev { font-size: 12px; color: var(--ink-soft, #46606a); }
+.cv-tags { display: flex; gap: 5px; margin-top: 6px; flex-wrap: wrap; }
+.cv-tag {
+  font-size: 9.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  padding: 2px 7px; border-radius: 999px;
+}
+.cv-tag.need { background: #fef3c7; color: #92400e; }
+.cv-tag.muted { background: #eef2f4; color: #46606a; }
+.cv-tag.new { background: #d1fae5; color: #047857; }
+.cv-none { padding: 24px 16px; font-size: 13px; color: var(--ink-soft, #46606a); text-align: center; }
+
+/* ── nothing open yet ─────────────────────────────────────────────────── */
+.cv-blank {
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; text-align: center; padding: 32px; gap: 6px;
+  background: #f8fafb;
+}
+.cv-blank-mark {
+  width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--primary-10, rgba(0,140,156,.10)); color: var(--primary, #008C9C);
+  margin-bottom: 6px;
+}
+.cv-blank-h { font-size: 15px; font-weight: 600; color: var(--ink, #0d1b21); margin: 0; }
+.cv-blank-s { font-size: 13px; color: var(--ink-soft, #46606a); margin: 0; max-width: 46ch; }
+
+/* ── the conversation + its rail ──────────────────────────────────────── */
+.cv-convo {
+  flex: 1; min-height: 0; position: relative;
+  display: grid; grid-template-columns: minmax(0, 1fr) auto;
+}
+/* With the rail closed, the thread takes ALL the room. Without this the
+   reopen button kept its grid column and the thread grew by the button's
+   width instead of the rail's — measured 722px where 1034 was available. */
+.cv-convo:has(.cv-ctx-reopen) { grid-template-columns: minmax(0, 1fr); }
+.cv-thread { display: flex; flex-direction: column; min-width: 0; background: #f8fafb; }
+.cv-thread-head {
+  background: #fff; border-bottom: 1px solid var(--line, #dde6e8);
+  padding: 13px 20px; display: flex; flex-wrap: wrap;
+  align-items: center; justify-content: space-between; gap: 12px;
+}
+.cv-msgs {
+  flex: 1; overflow-y: auto; min-height: 0;
+  padding: 20px; display: flex; flex-direction: column; gap: 16px;
+}
+.cv-m { max-width: 74%; display: flex; flex-direction: column; gap: 5px; }
+.cv-m.in { align-self: flex-start; }
+.cv-m.out { align-self: flex-end; align-items: flex-end; }
+.cv-m-meta {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 11px; color: var(--ink-soft, #46606a);
+}
+.cv-botchip {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 9.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  background: var(--primary-10, rgba(0,140,156,.10)); color: var(--primary-70, #00626d);
+  padding: 2px 7px; border-radius: 999px;
+}
+/* One card. No fills, no coloured rails. */
+.cv-bub {
+  padding: 12px 15px; border-radius: 12px; font-size: 13.5px; line-height: 1.6;
+  background: #fff; border: 1px solid var(--line, #dde6e8);
+  color: var(--ink, #0d1b21); white-space: pre-wrap;
+  box-shadow: 0 1px 2px rgba(13,27,33,.04);
+}
+/* The customer's own words get the only emphasis: they are what you answer. */
+.cv-m.in .cv-bub { border-color: #cbd9dd; }
+.cv-m-note { font-size: 11.5px; font-style: italic; color: var(--ink-soft, #46606a); margin-top: 6px; }
+
+.cv-composer {
+  background: #fff; border-top: 1px solid var(--line, #dde6e8);
+  padding: 13px 20px 15px; display: flex; flex-direction: column; gap: 9px;
+}
+
+/* ── lead details ─────────────────────────────────────────────────────── */
+.cv-ctx {
+  width: 312px; flex: none; overflow-y: auto;
+  background: #fff; border-left: 1px solid var(--line, #dde6e8);
+}
+.cv-ctx-top { display: flex; align-items: center; gap: 8px; padding: 14px 16px 0; }
+.cv-ctx-h {
+  font-size: 10px; letter-spacing: .11em; text-transform: uppercase;
+  color: var(--ink-soft, #46606a); font-weight: 700; margin-bottom: 10px;
+}
+.cv-ctx-top .cv-ctx-h { margin: 0; }
+.cv-ctx-close, .cv-ctx-reopen {
+  border: 1px solid var(--line, #dde6e8); background: #fff; border-radius: 8px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  color: var(--ink-soft, #46606a); cursor: pointer; font: inherit;
+}
+.cv-ctx-close { margin-left: auto; width: 30px; height: 30px; flex: none; }
+.cv-ctx-reopen {
+  /* Floats over the thread rather than taking a column of its own. */
+  position: absolute; top: 12px; right: 16px; z-index: 2;
+  padding: 7px 12px; font-size: 12px; font-weight: 600;
+  min-height: 34px; white-space: nowrap;
+  box-shadow: 0 1px 3px rgba(13,27,33,.10);
+}
+.cv-ctx-close:hover, .cv-ctx-reopen:hover { background: #f8fafb; }
+.cv-ctx-sec { padding: 14px 16px; border-bottom: 1px solid rgba(0,140,156,.07); }
+.cv-who { display: flex; gap: 11px; align-items: center; }
+.cv-avatar {
+  width: 38px; height: 38px; border-radius: 50%; flex: none;
+  background: var(--primary-15, rgba(0,140,156,.15)); color: var(--primary-70, #00626d);
+  display: grid; place-items: center; font-size: 13px; font-weight: 700;
+}
+.cv-who-nm { font-size: 14px; font-weight: 700; color: var(--ink, #0d1b21); }
+.cv-who-sub {
+  font-size: 12px; color: var(--ink-soft, #46606a);
+  overflow-wrap: anywhere;
+}
+.cv-ctx-banner {
+  margin: 0; border: 1px solid #f5c99a; background: #fffaf2; border-radius: 10px;
+  padding: 10px 12px; font-size: 12px; color: #92400e; line-height: 1.5;
+}
+.cv-kv { margin: 0; }
+.cv-kv > div {
+  display: flex; justify-content: space-between; gap: 12px;
+  font-size: 12.5px; padding: 4px 0;
+}
+.cv-kv dt { color: var(--ink-soft, #46606a); }
+.cv-kv dd { margin: 0; font-weight: 600; text-align: right; overflow-wrap: anywhere; }
+.cv-acts { display: flex; flex-direction: column; gap: 7px; }
+.cv-act {
+  display: block; text-decoration: none; text-align: left;
+  border: 1px solid var(--line, #dde6e8); border-radius: 9px;
+  padding: 9px 12px; font-size: 12.5px; font-weight: 600;
+  color: var(--ink-soft, #46606a); background: #fff; min-height: 38px;
+}
+.cv-act:hover { background: #f8fafb; color: var(--primary-70, #00626d); }
+
+/* Narrow: the rail stops being a column and the list gives way to the thread. */
+@media (max-width: 1180px) {
+  .cv-convo { grid-template-columns: minmax(0, 1fr); }
+  .cv-ctx { width: auto; border-left: 0; border-top: 1px solid var(--line, #dde6e8); }
+}
+@media (max-width: 900px) {
+  .cv-shell { grid-template-columns: minmax(0, 1fr); }
+  .cv-list { border-right: 0; border-bottom: 1px solid var(--line, #dde6e8); max-height: 42vh; }
+}
+
 /* ── The cleaner's next job ────────────────────────────────────────────
    Lifted out of the list because every row looked the same, so today's
    nine o'clock read exactly like one three weeks out. */

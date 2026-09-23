@@ -70,9 +70,9 @@ export default function ConversationThread({
   });
 
   return (
-    <div className="space-y-4">
+    <div className="cv-thread">
       {/* header */}
-      <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+      <div className="cv-thread-head">
         <div className="flex items-center gap-2 min-w-0">
           {conversation.channel === "SMS" ? (
             <MessageSquare size={16} className="text-gray-500 shrink-0" />
@@ -125,42 +125,41 @@ export default function ConversationThread({
       </div>
 
       {/* thread */}
-      <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
+      {/* One card for every message.
+          These were three different materials — grey fill, teal tint, solid
+          teal — for one conversation. Who sent it is carried by the label above
+          the card and by which side it sits on, which is something you read
+          rather than a colour you have to learn. */}
+      <div className="cv-msgs">
         {messages.map((m) => (
           <div
             key={m.id}
-            className={`flex ${m.author === "CUSTOMER" ? "justify-start" : "justify-end"}`}>
-            <div
-              className={`max-w-[80%] rounded-2xl px-3.5 py-2 text-sm whitespace-pre-wrap ${
-                m.author === "CUSTOMER"
-                  ? "bg-gray-100 text-gray-900"
-                  : m.author === "ASSISTANT"
-                    ? "bg-[#008C9C]/10 text-gray-900"
-                    : "bg-[#008C9C] text-white"
-              }`}>
-              <div className="text-[11px] font-semibold opacity-70 mb-0.5">
-                {m.author === "CUSTOMER" ? who : m.author === "ASSISTANT" ? "AI assistant" : "You"}
-                {" · "}
+            className={`cv-m ${m.author === "CUSTOMER" ? "in" : "out"}`}>
+            <div className="cv-m-meta">
+              {m.author === "ASSISTANT" && (
+                <span className="cv-botchip">
+                  <Bot size={10} aria-hidden="true" /> AI replied
+                </span>
+              )}
+              <span>
+                {m.author === "CUSTOMER" ? who : m.author === "ASSISTANT" ? "" : "You"}
+                {m.author === "ASSISTANT" ? "" : " · "}
                 {fmt.format(new Date(m.createdAt))}
-              </div>
+              </span>
+            </div>
+            <div className="cv-bub">
               {m.body}
               {m.internalNote && (
-                <div className="text-[11px] italic opacity-60 mt-1">
-                  Internal note: {m.internalNote}
-                </div>
+                <div className="cv-m-note">Internal note: {m.internalNote}</div>
               )}
             </div>
           </div>
         ))}
-        {messages.length === 0 && (
-          <p className="text-sm text-gray-500 text-center py-6">No messages yet.</p>
-        )}
+        {messages.length === 0 && <p className="cv-none">No messages yet.</p>}
       </div>
 
       {/* reply box */}
-      <form
-        onSubmit={handleSend}
-        className="bg-white border border-gray-200 rounded-xl p-4 space-y-2">
+      <form onSubmit={handleSend} className="cv-composer">
         <textarea
           value={reply}
           onChange={(e) => setReply(e.target.value)}
