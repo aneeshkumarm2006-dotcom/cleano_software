@@ -453,16 +453,20 @@ exactly as before" in each case, so no job is repriced, no checklist changes
 and no rating moves. The new table starts empty, and an empty request queue is
 today's behaviour. All five reverse by dropping what they added.
 
-## One thing that needs a person, not code
+## The one thing that needed a person, not code — now done
 
-**CleanoCalgary's workspace timezone is the string `"Toronto"`**, which is not
-an IANA zone at all. `Intl` refuses it, so every date in that workspace falls
-back to the deployment default and the tenant clock built for item 6 cannot
+**CleanoCalgary's workspace timezone was the string `"Toronto"`**, which is not
+an IANA zone at all. `Intl` refuses it, so every date in that workspace fell
+back to the deployment default and the tenant clock built for item 6 could not
 work for the one tenant it was built for.
 
-The guard added on 2026-09-22 is what stops that throwing on every date rather
-than printing the wrong hour, so nothing is broken — it is just wrong by two
-hours. The row needs to say `America/Edmonton`.
+**Corrected in production on 2026-09-22 to `America/Edmonton`.** All seven
+workspaces now hold a zone `Intl` can resolve. Nothing was rescheduled: that
+workspace has no jobs, so the change only affects dates entered from now on.
+
+The guard added on 2026-09-22 is what stopped that throwing on every date
+rather than printing the wrong hour, and it stays as the net for the next
+workspace someone types a city name into.
 
 Two code changes went in alongside it so it cannot happen again: the platform
 console now refuses a zone `Intl` cannot resolve when a workspace is created,
