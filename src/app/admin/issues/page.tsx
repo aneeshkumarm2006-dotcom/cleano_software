@@ -4,7 +4,7 @@ import { listJobIssues } from "@/app/admin/actions/jobIssues";
 
 import IssuesClient from "./IssuesClient";
 
-export const metadata = { title: "Issues · Bookmops" };
+export const metadata = { title: "Issues" };
 
 /**
  * What cleaners have reported from the field.

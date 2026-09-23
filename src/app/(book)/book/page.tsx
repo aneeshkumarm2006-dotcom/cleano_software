@@ -123,6 +123,9 @@ export default function BookPage() {
   const [stripePublishableKey, setStripePublishableKey] = useState<string | null>(
     null
   );
+  // Who the customer is buying from. The brand panel that carries this is
+  // hidden on a phone, which is where most of these bookings are made.
+  const [businessName, setBusinessName] = useState("");
   // Per-service-category recurring discount table (item 7), for display.
   const [freqDiscounts, setFreqDiscounts] = useState<
     Record<string, Record<string, number>>
@@ -294,11 +297,12 @@ export default function BookPage() {
   // Load admin-managed add-on catalog on first mount.
   useEffect(() => {
     let cancelled = false;
-    getBookingConfig().then(({ addOns, minLeadDays, smsOptInDefault, frequencyDiscounts, serviceContent, bookingPage, taxRates, stripePublishableKey }) => {
+    getBookingConfig().then(({ addOns, minLeadDays, smsOptInDefault, frequencyDiscounts, serviceContent, bookingPage, taxRates, stripePublishableKey, businessName }) => {
       if (cancelled) return;
       setMinLeadDays(minLeadDays);
       setTaxRates(taxRates);
       setStripePublishableKey(stripePublishableKey);
+      setBusinessName(businessName);
       setFreqDiscounts(frequencyDiscounts);
       setServiceContent(serviceContent);
       setBookingPage(bookingPage);
@@ -1054,6 +1058,11 @@ export default function BookPage() {
 
         <main className="cl-book-main">
           <header className="cl-book-header">
+            {/* Mobile only: on a wide screen the brand panel beside this
+                already says it, and repeating it would be noise. */}
+            {businessName && (
+              <span className="cl-book-brandline">{businessName}</span>
+            )}
             {isLoggedInClient && loggedInUser?.email ? (
               <Link
                 href="/"

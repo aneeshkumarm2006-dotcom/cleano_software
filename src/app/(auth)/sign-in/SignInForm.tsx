@@ -112,7 +112,6 @@ function SignInInner({ isPlatform }: { isPlatform: boolean }) {
       // count -- /admin-login.png is TeamCleano's branded shot, and the foot
       // note is their marketing.
       logo={isPlatform ? <AwerLogo onDark /> : undefined}
-      footNote={isPlatform ? null : undefined}
       image={isPlatform ? BRAND_IMAGES.home : "/admin-login.png"}
       quoteHtml={
         isPlatform

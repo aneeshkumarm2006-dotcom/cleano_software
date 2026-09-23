@@ -10,7 +10,7 @@ import {
 } from "@/lib/strikes";
 
 export const metadata = {
-  title: "My strikes · Cleano",
+  title: "My strikes",
 };
 
 const STATUS_PILL: Record<string, { cls: string; label: string }> = {

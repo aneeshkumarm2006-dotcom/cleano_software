@@ -2,7 +2,7 @@ import { db } from "@/lib/org-db";
 import AddCardForm from "./AddCardForm";
 
 export const metadata = {
-  title: "Add a Card · Cleano",
+  title: "Add a Card",
 };
 
 export default async function AddCardPage({

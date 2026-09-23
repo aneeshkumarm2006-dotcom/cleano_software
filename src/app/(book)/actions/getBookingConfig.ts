@@ -17,6 +17,7 @@ import {
 import { getTaxRates } from "@/lib/tax.server";
 import type { TaxRates } from "@/lib/tax";
 import { orgStripeStatus } from "@/lib/stripe-org";
+import { workspaceName } from "@/lib/workspace-name";
 
 // The shape, its validation and the room enum all live in @/lib/addon-catalog.
 // They cannot live here: this file is `"use server"`, so it may only export
@@ -58,8 +59,16 @@ export async function getBookingConfig(): Promise<{
    * Publishable keys are public by design; this is what they are for.
    */
   stripePublishableKey: string | null;
+  /**
+   * Who the customer is buying from.
+   *
+   * The booking page carries the company name in a left-hand panel that is
+   * hidden below 900px, so on a phone — where most bookings happen — the first
+   * screen a paying customer saw had no company name or logo anywhere on it.
+   */
+  businessName: string;
 }> {
-  const [minLeadDays, smsOptInDefault, pricingCfg, contentSetting, bookingPage, taxRates, stripeStatus] =
+  const [minLeadDays, smsOptInDefault, pricingCfg, contentSetting, bookingPage, taxRates, stripeStatus, businessName] =
     await Promise.all([
       getSetting("scheduling.minLeadDays"),
       getSetting("customer.smsOptInDefault"),
@@ -68,6 +77,7 @@ export async function getBookingConfig(): Promise<{
       getSetting(BOOKING_PAGE_CONFIG_KEY),
       getTaxRates(),
       orgStripeStatus().catch(() => null),
+      workspaceName().catch(() => ""),
     ]);
   const frequencyDiscounts = pricingCfg.frequencyDiscounts;
   const serviceContent = normalizeServiceContent(contentSetting?.value);
@@ -80,6 +90,7 @@ export async function getBookingConfig(): Promise<{
     bookingPage,
     taxRates,
     stripePublishableKey,
+    businessName,
   };
   try {
     const setting = await db.appSetting.findFirst({

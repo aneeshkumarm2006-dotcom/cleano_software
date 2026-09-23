@@ -3,7 +3,7 @@ import AnnouncementsClient from "@/app/admin/announcements/AnnouncementsClient";
 import { listAnnouncements } from "@/app/admin/announcements/announcements";
 
 export const metadata = {
-  title: "Announcements · Cleano",
+  title: "Announcements",
 };
 
 // Cleaner-facing announcements: read-only feed + reactions. Publishing,

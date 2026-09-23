@@ -4,7 +4,7 @@ import { EMPLOYEE_ROLES } from "@/lib/metrics";
 import TrainingDocsClient from "./TrainingDocsClient";
 
 export const metadata = {
-  title: "Training & Documents · Cleano",
+  title: "Training & Documents",
 };
 
 /**

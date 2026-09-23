@@ -1,7 +1,7 @@
 import GiftCardRedeemClient from "./GiftCardRedeemClient";
 
 export const metadata = {
-  title: "Redeem a Gift Card · Cleano",
+  title: "Redeem a Gift Card",
 };
 
 export default async function GiftCardRedeemPage({

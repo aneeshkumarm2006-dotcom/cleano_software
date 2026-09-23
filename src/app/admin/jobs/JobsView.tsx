@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { Fragment, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   Search, Filter, Briefcase, CheckCircle2, DollarSign,
@@ -87,6 +87,8 @@ interface Job {
   bathCount?: number | null;
   profit?: number;
   profitPct?: number;
+  /** False when the crew's pay has not been recorded yet. */
+  profitKnown?: boolean;
   timeSpentMs?: number;
   cleaners: Array<{ id: string; name: string }>;
   // Fix 3 — the columns the ACTIVE value of the job is computed from. Required,
@@ -338,7 +340,12 @@ function profitClass(pct: number | undefined): string {
 }
 
 const TABS = [
-  { id: 'all',        label: 'All' },
+  // NOT "All". This tab deliberately excludes cancelled work (see
+  // jobMatchesTab), which is the right behaviour and the wrong word: a row of
+  // identical pills reading "All 40" beside "Cancelled 31" cannot be read as
+  // anything but a contradiction, and the number an admin then distrusts is
+  // the one on every stat card above it.
+  { id: 'all',        label: 'Active' },
   { id: 'upcoming',   label: 'Upcoming' },
   // Round 4, fix 6. On-hold work left Upcoming (it is not scheduled work — PDF
   // p5) and this is where it went, sitting beside Upcoming rather than at the
@@ -348,8 +355,13 @@ const TABS = [
   { id: 'completed',  label: 'Completed' },
   { id: 'overdue',    label: 'Overdue' },
   { id: 'cancelled',  label: 'Cancelled' },
-  { id: 'discounted', label: 'Discounted' },
-  { id: 'free',       label: 'Free' },
+  // Everything above is a STATE a job is in, and they are mutually exclusive.
+  // These two are properties that cut ACROSS those states — a discounted job is
+  // also upcoming or completed — so their counts deliberately overlap the ones
+  // to their left. Rendered identically they read as more states that refuse to
+  // add up, so they are divided off.
+  { id: 'discounted', label: 'Discounted', aspect: true },
+  { id: 'free',       label: 'Free', aspect: true },
 ] as const;
 type TabId = (typeof TABS)[number]['id'];
 
@@ -923,16 +935,25 @@ export default function JobsView({
       {/* Segmented tabs */}
       <div style={{ marginBottom: 18 }}>
         <div className="atabs">
-          {TABS.map(t => (
-            <button
-              key={t.id}
-              type="button"
-              className={`atab ${tab === t.id ? 'active' : ''}`}
-              onClick={() => { setTab(t.id); onPageChange(1); }}
-            >
-              {t.label}
-              <span className="atab-count">{tabCounts[t.id]}</span>
-            </button>
+          {TABS.map((t, i) => (
+            <Fragment key={t.id}>
+              {/* The seam between "what state is this job in" and "what is
+                  true about it regardless of state". */}
+              {'aspect' in t && !('aspect' in TABS[i - 1]) && (
+                <span className="atab-divider" aria-hidden="true" />
+              )}
+              <button
+                type="button"
+                className={`atab ${tab === t.id ? 'active' : ''}`}
+                onClick={() => { setTab(t.id); onPageChange(1); }}
+                title={'aspect' in t
+                  ? 'Counts overlap the tabs on the left — a discounted job is also upcoming or completed.'
+                  : undefined}
+              >
+                {t.label}
+                <span className="atab-count">{tabCounts[t.id]}</span>
+              </button>
+            </Fragment>
           ))}
         </div>
       </div>
@@ -1199,9 +1220,17 @@ export default function JobsView({
                         }
                       </td>
                       <td className="num">
-                        {typeof job.profitPct === 'number' && (job.price || 0) > 0
+                        {typeof job.profitPct === 'number' && (job.price || 0) > 0 && job.profitKnown !== false
                           ? <span className={`profit-pct ${profitClass(job.profitPct)}`}>{job.profitPct.toFixed(0)}%</span>
-                          : <span style={{ color: 'var(--ink-soft)' }}>—</span>
+                          : (
+                            <span
+                              style={{ color: 'var(--ink-soft)' }}
+                              title={job.profitKnown === false
+                                ? "This job has a crew but no pay recorded yet, so the margin isn't known."
+                                : undefined}>
+                              —
+                            </span>
+                          )
                         }
                       </td>
                       <td>

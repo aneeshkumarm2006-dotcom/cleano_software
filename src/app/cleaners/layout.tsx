@@ -13,6 +13,7 @@ import { InstallProvider } from "@/components/InstallContext";
 import PresenceHeartbeat from "@/components/PresenceHeartbeat";
 import CrewDoorMarker from "./CrewDoorMarker";
 import { countUnreadAnnouncements } from "@/lib/announcement-reads";
+import { workspaceName } from "@/lib/workspace-name";
 
 // Installing to the home screen from inside the crew app must use the CREW
 // manifest, whose start_url is /cleaners/my-jobs. The root manifest starts at
@@ -60,6 +61,9 @@ export default async function CleanerLayout({
   // right on first paint: a notice nobody notices is the whole problem this
   // is meant to solve, and a badge that appears a second later is missed.
   const unreadAnnouncements = await countUnreadAnnouncements(userWithRole.id);
+  // The card offers to install THIS company's app, not the platform's and not
+  // another tenant's; it said "Install Cleano" to every workspace.
+  const appName = await workspaceName();
 
   return (
     <InstallProvider>
@@ -74,7 +78,7 @@ export default async function CleanerLayout({
           <PullToRefresh />
           <div className="cl-app-main-inner">{children}</div>
         </main>
-        <InstallPrompt />
+        <InstallPrompt appName={appName} />
         <PresenceHeartbeat />
         {/* Remembers this device as a crew device so an expired session on an
             already-installed "/" shortcut still lands on the crew login. */}

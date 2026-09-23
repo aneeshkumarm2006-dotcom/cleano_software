@@ -7,7 +7,7 @@ import { PLANS } from "@/lib/plans";
 import RequestForm from "./RequestForm";
 
 export const metadata: Metadata = {
-  title: "Organization plan · Bookmops",
+  title: "Organization plan",
   description:
     "For cleaning companies above twenty cleaners. Tell us how you work and we will price it.",
 };

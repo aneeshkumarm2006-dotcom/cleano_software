@@ -387,6 +387,27 @@ export default async function JobDetailPage({ params }: PageProps) {
 
       {/* Hero */}
       <header className="cl-jd-hero">
+        {/* WHICH job, before HOW to get there.
+            The four navigation buttons used to render above this, so a cleaner
+            opening a job met Waze, Google Maps, Apple Maps and Copy before the
+            customer's name. Nobody taps a map for a job they have not yet
+            identified, and on a phone the name was below the fold. */}
+        <h1>{job.clientName}</h1>
+        {jobTypeLabel(job.jobType, serviceLabels) && (
+          <div className="job-type">{jobTypeLabel(job.jobType, serviceLabels)}</div>
+        )}
+        <div className="pills">
+          <span className={`cl-pill ${statusSlug}`}>{job.status.replace("_", " ")}</span>
+          {job.jobType && (
+            <span className="cl-pill">{jobTypeSlug(job.jobType)}</span>
+          )}
+          {/* The number the OFFICE uses. This printed the tail of the row's
+              internal id — "JOB #B35AOS" — so a cleaner ringing in about job
+              #33 quoted a string nobody on the other end could look up. */}
+          {job.jobNumber != null && (
+            <span className="cl-pill">JOB #{job.jobNumber}</span>
+          )}
+        </div>
         {job.location && (
           <>
             <div className="loc">
@@ -425,17 +446,6 @@ export default async function JobDetailPage({ params }: PageProps) {
             <span>{job.clientAddress.accessNotes}</span>
           </div>
         )}
-        <h1>{job.clientName}</h1>
-        {jobTypeLabel(job.jobType, serviceLabels) && (
-          <div className="job-type">{jobTypeLabel(job.jobType, serviceLabels)}</div>
-        )}
-        <div className="pills">
-          <span className={`cl-pill ${statusSlug}`}>{job.status.replace("_", " ")}</span>
-          {job.jobType && (
-            <span className="cl-pill">{jobTypeSlug(job.jobType)}</span>
-          )}
-          <span className="cl-pill">JOB #{job.id.slice(-6).toUpperCase()}</span>
-        </div>
 
         <div className="cl-jd-quick">
           {job.jobDate && (

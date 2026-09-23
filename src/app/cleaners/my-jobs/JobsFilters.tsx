@@ -99,6 +99,7 @@ export function JobsFilters({
   };
 
   const hasActiveFilters = search || status !== "upcoming" || jobType !== "all";
+  const [open, setOpen] = useState<boolean>(Boolean(hasActiveFilters));
 
   const statusOptions = [
     { value: "upcoming", label: "Upcoming" },
@@ -127,8 +128,31 @@ export function JobsFilters({
     { value: "100", label: "100" },
   ];
 
+  const summary = [
+    statusOptions.find((o) => o.value === status)?.label ?? "Upcoming",
+    jobType !== "all" ? jobTypeOptions.find((o) => o.value === jobType)?.label : null,
+    search ? `"${search}"` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
   return (
-    <div className="cl-toolbar">
+    <>
+      {/* On a phone the toolbar came BEFORE the work: a search box and three
+          dropdowns filled the screen, so a cleaner opening the app to see
+          their next job saw controls instead and had to scroll past them. It
+          collapses to one line now, and opens when tapped. Nothing is hidden
+          on a wide screen, where there was room for it all along. */}
+      <button
+        type="button"
+        className="cl-filters-toggle"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}>
+        <span className="cl-filters-summary">{summary}</span>
+        <span className="cl-filters-action">{open ? "Done" : "Filter"}</span>
+      </button>
+
+    <div className={`cl-toolbar ${open ? "is-open" : ""}`}>
       {/* Search */}
       <div className="cl-toolbar-field" style={{ flex: "1" }}>
         <label style={{ display: "block", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--primary-50)", marginBottom: 6 }}>
@@ -193,8 +217,9 @@ export function JobsFilters({
         />
       </div>
 
-      {/* Per Page */}
-      <div className="cl-toolbar-field">
+      {/* Per Page — desktop only. Choosing a page size is a table setting, and
+          a cleaner scrolling a phone has no use for it. */}
+      <div className="cl-toolbar-field cl-desktop-only">
         <label style={{ display: "block", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--primary-50)", marginBottom: 6 }}>
           Per page
         </label>
@@ -220,5 +245,6 @@ export function JobsFilters({
         </div>
       )}
     </div>
+    </>
   );
 }

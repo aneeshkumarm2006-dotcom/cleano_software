@@ -4,6 +4,7 @@ import "./globals.css";
 import "./customer.css";
 import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
 import { getCurrentOrg } from "@/lib/org";
+import { workspaceName } from "@/lib/workspace-name";
 import { STORE_TZ } from "@/lib/timezone";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -25,19 +26,38 @@ const montserrat = Montserrat({
   display: "swap",
 });
 
-export const metadata: Metadata = {
-  title: "Cleano",
-  description: "Cleano — bookings, jobs, and crew workspace.",
-  applicationName: "Cleano",
-  appleWebApp: {
-    capable: true,
-    title: "Cleano",
-    statusBarStyle: "black-translucent",
-  },
-  formatDetection: {
-    telephone: false,
-  },
-};
+/**
+ * The browser tab, per workspace.
+ *
+ * This was a static `title: "Cleano"`, so every tenant's tab said the name of
+ * ONE of them. CleanoCalgary's staff worked all day in a window labelled
+ * Cleano, and the installed PWA took that name on their home screen too.
+ *
+ * A `template` here means a page only has to name itself — `title: "Issues"` —
+ * and the workspace supplies the rest. Fourteen pages had the product name
+ * typed into their own title, half saying "Cleano" and half "Bookmops", which
+ * is how the same app ended up with two names in the tab bar.
+ *
+ * Falls back to "Bookmops", the platform, rather than to any one customer:
+ * this also renders on the front door and the console, which belong to no
+ * workspace at all.
+ */
+export async function generateMetadata(): Promise<Metadata> {
+  const name = await workspaceName();
+  return {
+    title: { default: name, template: `%s · ${name}` },
+    description: `${name} — bookings, jobs, and crew workspace.`,
+    applicationName: name,
+    appleWebApp: {
+      capable: true,
+      title: name,
+      statusBarStyle: "black-translucent",
+    },
+    formatDetection: {
+      telephone: false,
+    },
+  };
+}
 
 export const viewport: Viewport = {
   // Navy, matching the app's top bar (--primary-deep). It was teal, so the OS

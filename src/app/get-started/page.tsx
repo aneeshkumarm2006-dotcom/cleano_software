@@ -8,7 +8,7 @@ import { PLANS, TRIAL_DAYS } from "@/lib/plans";
 import SignupForm, { type PlanCard } from "./SignupForm";
 
 export const metadata: Metadata = {
-  title: "Start your workspace · Bookmops",
+  title: "Start your workspace",
   description:
     "Scheduling, crew, customers and invoicing for cleaning companies. Thirty days free, no card.",
 };

@@ -259,6 +259,13 @@ export default async function JobsPage({
     const costs = (job.employeePay || 0) + productCost;
     const profit = revenue - costs;
     const profitPct = revenue > 0 ? (profit / revenue) * 100 : 0;
+    // "No cost recorded" is not "no cost". A job with a crew on it and no pay
+    // figure yet has an UNKNOWN margin, and printing 100% turned missing
+    // payroll data into the best-looking number on the page — on most rows of
+    // a real workspace, because pay is set after the work, not before it.
+    const hasCrew = job.cleaners.length > 0;
+    const payRecorded = (job.employeePay ?? 0) > 0;
+    const profitKnown = revenue > 0 && (!hasCrew || payRecorded);
 
     const timeSpentMs =
       job.endTime && job.startTime
@@ -322,6 +329,7 @@ export default async function JobsPage({
       billedActualHours: job.billedActualHours,
       profit,
       profitPct,
+      profitKnown,
       timeSpentMs,
       cleaners: job.cleaners.map((c) => ({ id: c.id, name: c.name })),
       addOns: job.addOns.map((a) => ({

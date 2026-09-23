@@ -8,7 +8,7 @@ import TimeLogRequestsPanel from "./TimeLogRequestsPanel";
 import StaleClocksPanel from "./StaleClocksPanel";
 import { listStaleClocksForAdmin } from "../actions/closeStaleClock";
 
-export const metadata = { title: "Notifications · Bookmops" };
+export const metadata = { title: "Notifications" };
 
 /**
  * What has happened that an admin should know about.

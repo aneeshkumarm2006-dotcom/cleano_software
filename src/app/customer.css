@@ -503,6 +503,22 @@
   color: var(--primary-70);
 }
 .cl-book-body { flex: 1; padding: 16px 48px 64px; max-width: 880px; width: 100%; }
+
+/* The company's name, on the one screen size where the brand panel that
+   normally carries it is hidden. A stranger about to enter a card needs to
+   know who they are paying. */
+.cl-book-brandline { display: none; }
+
+@media (max-width: 900px) {
+  .cl-book-header { justify-content: space-between; }
+  .cl-book-brandline {
+    display: block;
+    font-weight: 700;
+    font-size: 16px;
+    letter-spacing: -0.01em;
+    color: var(--primary-80, #005a66);
+  }
+}
 @media (max-width: 600px) {
   .cl-book-header { padding: 20px 24px; }
   .cl-book-body { padding: 8px 24px 56px; }

@@ -3,7 +3,7 @@ import AnnouncementsClient from "./AnnouncementsClient";
 import { listAnnouncements } from "./announcements";
 
 export const metadata = {
-  title: "Announcements · Cleano",
+  title: "Announcements",
 };
 
 export default async function AnnouncementsPage() {

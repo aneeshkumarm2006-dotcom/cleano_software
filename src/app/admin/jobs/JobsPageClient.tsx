@@ -67,6 +67,8 @@ export interface Job {
   checklistTemplateId: string | null;
   profit: number;
   profitPct: number;
+  /** False when the crew's pay has not been recorded yet. */
+  profitKnown?: boolean;
   timeSpentMs: number;
   cleaners: Array<{ id: string; name: string }>;
   addOns: Array<{ id: string; name: string; price: number; quantity: number }>;

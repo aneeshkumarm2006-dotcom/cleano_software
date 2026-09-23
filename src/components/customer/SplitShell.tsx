@@ -34,11 +34,16 @@ interface SplitShellProps {
   /**
    * The line along the bottom of the brand panel, with its stars.
    *
-   * This used to be the hardcoded string "Loved by 2,400+ Montréal homes",
-   * which is one specific cleaning company's marketing. It was rendering on
-   * every page that uses this shell — including Bookmops' OWN signup page, so a
-   * cleaning company evaluating the product was shown a competitor's customer
-   * count. Pass `null` to omit the line and its stars entirely.
+   * This was the hardcoded string "Loved by 2,400+ Montréal homes" — one
+   * specific cleaning company's marketing, rendering on every page that uses
+   * this shell. Three callers were given `null` to opt out, which left SIX
+   * still inheriting it: customer login, password setup, reset, change,
+   * applicant invite and the rating form. Every tenant's customers were shown
+   * another company's review count and another city.
+   *
+   * It now defaults to NOTHING. A number of homes served is a claim about a
+   * real business, and the app does not know one for a workspace it was handed
+   * this morning. A workspace with a genuine figure passes it in.
    */
   footNote?: React.ReactNode;
   children: React.ReactNode;
@@ -53,7 +58,7 @@ export default function SplitShell({
   topRightHref,
   badge,
   logo,
-  footNote = "Loved by 2,400+ Montréal homes",
+  footNote = null,
   children,
 }: SplitShellProps) {
   return (

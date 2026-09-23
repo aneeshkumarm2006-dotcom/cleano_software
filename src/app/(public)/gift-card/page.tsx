@@ -3,7 +3,7 @@ import { GIFT_CARD_COVERS, MIN_JOB_PRICE_USD } from "@/lib/gift-cards/covers";
 import { getSetting } from "@/lib/settings";
 
 export const metadata = {
-  title: "Buy a Gift Card · Cleano",
+  title: "Buy a Gift Card",
   description:
     "Send a Cleano cleaning service gift card to someone you appreciate.",
 };

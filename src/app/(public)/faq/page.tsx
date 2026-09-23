@@ -5,7 +5,7 @@ import FaqAccordion from "@/components/FaqAccordion";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "FAQ · Cleano",
+  title: "FAQ",
   description: "Frequently asked questions about Cleano cleaning services.",
 };
 

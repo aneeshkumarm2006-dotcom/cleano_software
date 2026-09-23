@@ -6,7 +6,7 @@ import { CUSTOMER_RATED_BY } from "@/lib/rating-history";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Reviews · Cleano",
+  title: "Reviews",
   description: "See what Cleano customers say about our cleaning services.",
 };
 
