@@ -16,7 +16,7 @@ import Link from "next/link";
 
 import { closeStaleClock } from "../actions/closeStaleClock";
 import type { StaleClockRow } from "@/lib/stale-clock.server";
-import { storeInputParts, storeWallClockToUtc } from "@/lib/timezone";
+import { storeInputParts, storeTz, storeWallClockToUtc } from "@/lib/timezone";
 
 const fmt = (iso: string) =>
   new Date(iso).toLocaleString("en-US", {
@@ -24,6 +24,11 @@ const fmt = (iso: string) =>
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
+    // The JOB's clock, not the browser's. Without this the label read one
+    // timezone while the date/time inputs beside it — which go through
+    // storeInputParts — read another, so "clocked in 10:50 AM" sat next to a
+    // prefilled finish of 04:20 AM and neither was wrong on its own.
+    timeZone: storeTz(),
   });
 
 const SEVERITY_STYLE: Record<string, string> = {

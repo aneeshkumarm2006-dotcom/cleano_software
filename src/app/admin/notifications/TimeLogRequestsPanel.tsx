@@ -16,6 +16,7 @@ import {
   decideTimeLogChange,
   type TimeLogRequestRow,
 } from "../actions/decideTimeLogChange";
+import { storeTz } from "@/lib/timezone";
 
 const fmt = (iso: string | null) =>
   iso
@@ -24,6 +25,9 @@ const fmt = (iso: string | null) =>
         day: "numeric",
         hour: "numeric",
         minute: "2-digit",
+        // The JOB's clock. The cleaner typed these times in it and an admin in
+        // another province must judge the request against the same one.
+        timeZone: storeTz(),
       })
     : "none";
 

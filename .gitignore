@@ -56,3 +56,7 @@ scripts/shots-cleaner/
 # accounts.json holds a login password for the throwaway test users. Never
 # commit a credential file, even for accounts that have since been deleted.
 _bt/accounts.json
+
+# Playwright MCP session artifacts and review screenshots
+.playwright-mcp/
+shots/
