@@ -1,17 +1,23 @@
 // The typed client the mobile apps use to call /api/v1: one factory per area,
 // composed here. It knows nothing about screens or state.
+import { announcementsApi } from "./announcements";
+import { availabilityApi } from "./availability";
 import { availableApi } from "./available";
+import { calendarApi } from "./calendar";
 import { clockApi } from "./clock";
 import { devicesApi } from "./devices";
+import { documentsApi } from "./documents";
+import { issuesApi } from "./issues";
 import { jobsApi } from "./jobs";
+import { kitApi } from "./kit";
 import { meApi } from "./me";
+import { messagesApi } from "./messages";
+import { onMyWayApi } from "./on-my-way";
 import { payApi } from "./pay";
 import { photosApi } from "./photos";
-import { issuesApi } from "./issues";
-import { onMyWayApi } from "./on-my-way";
-import { messagesApi } from "./messages";
-import { announcementsApi } from "./announcements";
 import { type ClientOptions, makeRequest } from "./request";
+import { strikesApi } from "./strikes";
+import { trainingApi } from "./training";
 
 export { createPlatformClient, type PlatformClient } from "./platform";
 export { ApiError, type ClientOptions, type Request } from "./request";
@@ -30,6 +36,12 @@ export function createClient(options: ClientOptions) {
     ...onMyWayApi(request),
     ...messagesApi(request),
     ...announcementsApi(request),
+    ...kitApi(request),
+    ...availabilityApi(request),
+    ...calendarApi(request),
+    ...trainingApi(request),
+    ...documentsApi(request),
+    ...strikesApi(request),
   };
 }
 

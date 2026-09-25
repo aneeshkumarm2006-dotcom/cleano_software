@@ -4,8 +4,9 @@ import { View } from "react-native";
 
 import { MenuGroup } from "@/components/MenuList";
 import { ScreenHeader } from "@/components/ScreenHeader";
-import { useAnnouncements, useMe, useTeamChannels, useToday } from "@/data/queries";
+import { useAnnouncements, useDocuments, useKit, useMe, useTeamChannels, useToday, useTraining } from "@/data/queries";
 import { useSession } from "@/data/session";
+import { kitCounts } from "@/features/kit/display";
 
 function initials(name: string): string {
   return name
@@ -25,6 +26,12 @@ export default function More() {
   const announcements = useAnnouncements();
   const teamUnread = teamChannels.data?.items.reduce((sum, c) => sum + c.unreadCount, 0);
   const announcementsUnread = announcements.data?.pages[0]?.unreadCount;
+  const kit = useKit();
+  const training = useTraining();
+  const documents = useDocuments();
+  const { low, tools } = kitCounts(kit.data);
+  const toSign = documents.data?.items.filter((d) => d.status === "PENDING").length ?? 0;
+  const trainingDone = training.data ? training.data.completed >= training.data.total : false;
 
   return (
     <Screen header={<ScreenHeader title="More" />} bottomInset={TAB_BAR_HEIGHT}>
@@ -49,9 +56,15 @@ export default function More() {
       <MenuGroup
         title="My work"
         items={[
-          { key: "kit", label: "My kit", icon: "kit", soon: true },
-          { key: "availability", label: "Availability", icon: "availability", soon: true },
-          { key: "calendar", label: "Calendar", icon: "jobs", soon: true },
+          {
+            key: "kit",
+            label: "My kit",
+            icon: "kit",
+            onPress: () => router.push("/kit"),
+            status: low > 0 ? `${low} low` : tools > 0 ? `${tools} to fix` : undefined,
+          },
+          { key: "availability", label: "Availability", icon: "availability", onPress: () => router.push("/availability") },
+          { key: "calendar", label: "Calendar", icon: "jobs", onPress: () => router.push("/calendar") },
         ]}
       />
       <MenuGroup
@@ -65,8 +78,22 @@ export default function More() {
       <MenuGroup
         title="My record"
         items={[
-          { key: "training", label: "Training", icon: "training", soon: true },
-          { key: "documents", label: "Documents", icon: "document", soon: true },
+          {
+            key: "training",
+            label: "Training",
+            icon: "training",
+            onPress: () => router.push("/training"),
+            status: training.data && training.data.total > 0 ? `${training.data.completed}/${training.data.total}` : undefined,
+            statusTone: trainingDone ? "success" : "warning",
+          },
+          {
+            key: "documents",
+            label: "Documents",
+            icon: "document",
+            onPress: () => router.push("/documents"),
+            status: toSign > 0 ? `${toSign} to sign` : undefined,
+          },
+          { key: "strikes", label: "My standing", icon: "standing", onPress: () => router.push("/strikes") },
         ]}
       />
       <MenuGroup

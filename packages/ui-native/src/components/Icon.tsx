@@ -56,6 +56,19 @@ const GLYPHS = {
   pin: "pin",
   compose: "create",
   image: "image",
+  tick: "checkmark",
+  add: "add",
+  sign: "create",
+  play: "play-circle",
+  download: "download",
+  external: "open",
+  pickup: "bag-handle",
+  restock: "refresh-circle",
+  flag: "flag",
+  tool: "construct",
+  standing: "shield-checkmark",
+  expand: "chevron-down",
+  collapse: "chevron-up",
 } as const satisfies Record<string, ComponentProps<typeof Ionicons>["name"]>;
 
 export type IconName = keyof typeof GLYPHS;
