@@ -16,6 +16,7 @@ import {
   findCategoryConflicts,
   resolveJobLead,
   syncJobAssignments,
+  unassignableCrewIds,
   validateTraineePairing,
   type CategoryConflict,
 } from "@/lib/job-assignments";
@@ -44,6 +45,15 @@ export async function assignCleaners(input: {
   const role = (session.user as { role?: string }).role;
   if (role !== "OWNER" && role !== "ADMIN") {
     return { success: false, error: "Not authorized" };
+  }
+
+  if (
+    typeof input?.jobId !== "string" ||
+    !Array.isArray(input.cleanerIds) ||
+    input.cleanerIds.length > 100 ||
+    input.cleanerIds.some((id) => typeof id !== "string" || !id)
+  ) {
+    return { success: false, error: "Invalid request" };
   }
 
   // Trainees must be paired with a Field Lead (never assigned solo).
@@ -84,6 +94,18 @@ export async function assignCleaners(input: {
 
     const previousIds = new Set(job.cleaners.map((c) => c.id));
     const newlyAdded = input.cleanerIds.filter((id) => !previousIds.has(id));
+
+    // Only people who can actually work it go ON the crew. Checked for the
+    // newly added only: someone already on the job who has since been
+    // switched off stays until an admin takes them off, and re-saving the
+    // rest of the team must not fail because of them.
+    if ((await unassignableCrewIds(newlyAdded)).length > 0) {
+      return {
+        success: false,
+        error:
+          "Someone in that list can't be assigned — they're switched off, archived, or not a cleaner here. Refresh and pick again.",
+      };
+    }
     const justGotFirstCleaner =
       job.cleaners.length === 0 && input.cleanerIds.length > 0;
 

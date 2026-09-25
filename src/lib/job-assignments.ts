@@ -7,7 +7,7 @@
 // job-level clockInTime/clockOutTime/onMyWayAt fields instead.
 
 import { db } from "@/lib/org-db";
-import type { JobCleanerStatus } from "@prisma/client";
+import type { JobCleanerStatus, Prisma } from "@prisma/client";
 import { notifyAdmins } from "@/lib/admin-alerts";
 import {
   availabilityWarning,
@@ -144,6 +144,35 @@ export async function setAssignmentProgress(
   } catch (e) {
     console.error("setAssignmentProgress failed", jobId, cleanerId, e);
   }
+}
+
+/**
+ * Who may be put on a job's crew: a cleaner or field lead of THIS company who
+ * is switched on and not archived. The same roles the Team card's picker
+ * lists (listAssignableCleaners), plus the two states it doesn't filter.
+ *
+ * The assign actions take raw user ids from the client and connect them
+ * straight onto `Job.cleaners`, so the picker was the only thing standing
+ * between a job and an arbitrary id: an owner's, a customer's, a switched-off
+ * cleaner's. `db` is the organization-scoped client, so an id from another
+ * company simply isn't found.
+ */
+export const ASSIGNABLE_CREW_WHERE = {
+  role: { in: ["EMPLOYEE", "FIELD_LEAD"] as ("EMPLOYEE" | "FIELD_LEAD")[] },
+  isActive: true,
+  deletedAt: null,
+} satisfies Prisma.UserWhereInput;
+
+/** The ids in `ids` that may NOT be assigned (see ASSIGNABLE_CREW_WHERE). */
+export async function unassignableCrewIds(ids: string[]): Promise<string[]> {
+  const unique = Array.from(new Set(ids));
+  if (unique.length === 0) return [];
+  const ok = await db.user.findMany({
+    where: { id: { in: unique }, ...ASSIGNABLE_CREW_WHERE },
+    select: { id: true },
+  });
+  const okIds = new Set(ok.map((u) => u.id));
+  return unique.filter((id) => !okIds.has(id));
 }
 
 /**
