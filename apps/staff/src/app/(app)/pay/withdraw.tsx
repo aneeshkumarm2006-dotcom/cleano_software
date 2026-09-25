@@ -140,7 +140,7 @@ function Flow({ pay, currency, bottom }: { pay: PayResponse; currency: string; b
             Request sent
           </Text>
           <Text variant="body" color="ink2" align="center">
-            {w.netCents != null ? `You'll receive ${money(w.netCents)}.` : `You asked for ${money(w.amountCents)}.`}
+            {`You'll receive ${money(w.netCents ?? w.amountCents)}.`}
             {pay.withdrawal.timing ? ` ${pay.withdrawal.timing}` : ""}
           </Text>
         </View>
@@ -154,6 +154,7 @@ function Flow({ pay, currency, bottom }: { pay: PayResponse; currency: string; b
 
   if (step.kind === "confirm") {
     const fee = feeCents(step.amountCents, feeBasisPoints);
+    const net = step.amountCents - fee;
     return (
       <ScrollView contentContainerStyle={{ padding: space[4], paddingTop: space[1], gap: space[4], paddingBottom: bottom + space[6] }} keyboardShouldPersistTaps="handled">
         <Text variant="title" accessibilityRole="header">
@@ -161,11 +162,14 @@ function Flow({ pay, currency, bottom }: { pay: PayResponse; currency: string; b
         </Text>
         <Card padding={4}>
           <View style={{ gap: space[3] }}>
-            <MoneyLine label="Taken from your balance" value={money(step.amountCents)} />
+            <MoneyLine label="Amount requested" value={money(step.amountCents)} />
             {feeBasisPoints > 0 ? <MoneyLine label={`Processing fee (${percentText(feeBasisPoints)})`} value={`−${money(fee)}`} tone="danger" /> : null}
             <View style={{ height: 1, backgroundColor: color.line }} />
-            <MoneyLine label="You'll receive" value={money(step.amountCents - fee)} strong />
+            <MoneyLine label="You'll receive" value={money(net)} strong />
           </View>
+        </Card>
+        <Card padding={4}>
+          <MoneyLine label="Left to withdraw after this" value={money(Math.max(0, available - net))} />
         </Card>
         {step.note ? (
           <Text variant="small" color="ink2">

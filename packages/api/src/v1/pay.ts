@@ -99,7 +99,8 @@ export const PayResponse = z.object({
   balance: z.object({
     /**
      * What the cleaner may withdraw right now: PAID payouts minus every
-     * withdrawal that isn't REJECTED, never below zero. The SAME formula
+     * withdrawal that isn't REJECTED, each at its stored amount (after the
+     * fee; see Withdrawal), never below zero. The SAME formula
      * POST /pay/withdrawals checks against.
      */
     availableCents: Cents,
@@ -145,10 +146,20 @@ export type PayoutsResponse = z.infer<typeof PayoutsResponse>;
 
 export const Withdrawal = z.object({
   id: z.string(),
-  /** Taken from the available balance. */
+  /**
+   * The stored Withdrawal.amount: what came off the available balance and
+   * what reaches the cleaner. The web records a request at the amount AFTER
+   * the instant fee (WithdrawModal sends the net to requestWithdrawal), and
+   * v1 records it the same way, so both see the same rows.
+   */
   amountCents: Cents,
-  /** The fee, and what reaches the cleaner. Null on rows older than the fee. */
+  /**
+   * The fee taken from what was asked for. The row doesn't store it (the web
+   * keeps only the net), so it is set on the POST answer and null on rows
+   * read back.
+   */
   feeCents: Cents.nullable(),
+  /** What reaches the cleaner: the same as `amountCents`. */
   netCents: Cents.nullable(),
   status: openEnum(WITHDRAWAL_STATUSES),
   requestedAt: Instant,
@@ -173,27 +184,38 @@ export type WithdrawalsResponse = z.infer<typeof WithdrawalsResponse>;
  * Access as GET /pay. The amount only: how it's paid out is the office's
  * decision (paymentMethod stays null until they process it).
  *
+ * The fee works exactly as it does on the web today: the person asks for
+ * `amountCents`, the fee comes out of that, and the withdrawal is recorded,
+ * and taken off the available balance, at the net.
+ *
  * THE SERVER RE-VALIDATES THE AMOUNT; the app's check is only for the person.
  * Inside ONE database transaction, holding a lock that serialises the caller's
  * withdrawals (a per-employee advisory lock, or SERIALIZABLE isolation with a
  * retry), it must:
  *   1. recompute the available balance from the caller's own rows: PAID
  *      payouts through summarisePayouts (clamped, so a legacy negative payout
- *      can't shrink it), minus every PENDING, APPROVED and COMPLETED
- *      withdrawal;
+ *      can't shrink it), minus the stored amount of every PENDING, APPROVED
+ *      and COMPLETED withdrawal;
  *   2. refuse `amountCents` below `minimumCents` (400 AMOUNT_TOO_SMALL) or
  *      above that balance (409 INSUFFICIENT_BALANCE, with the balance in the
- *      message);
+ *      message). The check is on the amount asked for, before the fee, as
+ *      the web's WithdrawModal checks it;
  *   3. compute the fee from the SERVER's rate, never the app's. If that rate
  *      isn't `expectedFeeBasisPoints` (the rate the person was shown and
  *      agreed to), refuse with 409 FEE_CHANGED rather than charge a fee they
  *      never saw. The rate is an integer from 0 to 10000. The fee rounds half
  *      up to the cent, round(amountCents × rate ÷ 10000), exactly as the app
- *      shows it, and the net must be at least 1 cent (else 400
- *      AMOUNT_TOO_SMALL);
- *   4. create the Withdrawal (PENDING) and the office alert.
+ *      and the web's modal show it, and the net, amountCents − fee, must be at
+ *      least 1 cent (else 400 AMOUNT_TOO_SMALL);
+ *   4. create the Withdrawal (PENDING) as the web's requestWithdrawal does:
+ *      `amount` = the net, in dollars, `paymentMethod` null, the note in
+ *      `notes`. So the web's admin screens and its balance read this row
+ *      exactly as they read one made on the web, and the available balance
+ *      goes down by the net. Then the office alert, naming the net amount as
+ *      the web's does.
  * Per-person rate limit: 5 an hour (429). Each request emails the cleaner and
- * the office, and every retry of a new request carries a new key.
+ * the office (with the net amount, as the web's emails do), and every retry
+ * of a new request carries a new key.
  * Without the lock, two requests sent together would each see the whole
  * balance and both succeed; web requestWithdrawal has that race today.
  * The confirmation emails to the cleaner and the office are effects, flushed
@@ -201,7 +223,10 @@ export type WithdrawalsResponse = z.infer<typeof WithdrawalsResponse>;
  * response; the same key with a different body answers 422.
  */
 export const WithdrawalRequest = z.object({
-  /** What to take from the available balance, before the fee. */
+  /**
+   * What the person asks for, before the fee. Checked against the available
+   * balance; the net after the fee is what's recorded and taken off it.
+   */
   amountCents: z.number().int().positive(),
   /** The fee rate on the confirmation the person agreed to. */
   expectedFeeBasisPoints: z.number().int().min(0).max(10_000),
@@ -213,7 +238,7 @@ export type WithdrawalRequest = z.infer<typeof WithdrawalRequest>;
 
 export const WithdrawalResponse = z.object({
   withdrawal: Withdrawal,
-  /** The balance left after this request, computed in the same transaction. */
+  /** The balance left after this request (the balance before, less the net), computed in the same transaction. */
   availableCents: Cents,
 });
 export type WithdrawalResponse = z.infer<typeof WithdrawalResponse>;
