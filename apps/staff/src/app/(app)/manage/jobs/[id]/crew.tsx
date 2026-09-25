@@ -1,5 +1,5 @@
 import { ApiError } from "@bookmops/api/client";
-import type { Candidate, ManagerJobResponse } from "@bookmops/api/v1";
+import { type Candidate, crewWarningsHash, type ManagerJobResponse } from "@bookmops/api/v1";
 import { Button, Card, Checkbox, Pill, space, Text } from "@bookmops/ui-native";
 import * as Haptics from "expo-haptics";
 import { useLocalSearchParams } from "expo-router";
@@ -27,7 +27,10 @@ const AVAILABILITY: Record<string, { label: string; tone: "success" | "warning" 
  * time, as the web's bulk assign, and can't remove anyone. The web's
  * warnings (outside their hours, a day off, a service they aren't approved
  * for) are shown on each person and again before saving; they warn, they
- * don't block, exactly as on the web. A crew of trainees alone is refused.
+ * don't block, exactly as on the web. The save carries the fingerprint of
+ * the warnings shown (crewWarningsHash), so if they've changed since, the
+ * server refuses, the screen reloads, and the office sees the new ones
+ * before saving again. A crew of trainees alone is refused.
  */
 export default function CrewScreen() {
   return (
@@ -102,8 +105,8 @@ function CandidateText({ c }: { c: Candidate }) {
         <Pill label={c.dayOff ? "Day off" : a.label} tone={c.dayOff ? "danger" : a.tone} />
       </View>
       {c.warnings.map((w) => (
-        <Text key={w} variant="small" color="warning">
-          {w}
+        <Text key={`${w.code}:${w.message}`} variant="small" color="warning">
+          {w.message}
         </Text>
       ))}
     </View>
@@ -111,11 +114,15 @@ function CandidateText({ c }: { c: Candidate }) {
 }
 
 const spoken = (c: Candidate) =>
-  [c.name, c.tier === "TRAINEE" ? "trainee" : null, c.dayOff ? "day off" : (AVAILABILITY[c.availability]?.label ?? null), ...c.warnings]
+  [c.name, c.tier === "TRAINEE" ? "trainee" : null, c.dayOff ? "day off" : (AVAILABILITY[c.availability]?.label ?? null), ...c.warnings.map((w) => w.message)]
     .filter(Boolean)
     .join(", ");
 
-/** What a refusal means here: a crew changed underneath is reloaded, not just reported. */
+/** The fingerprint of the warnings shown for these people, as the server computes it. */
+const shownHash = (people: readonly Candidate[]) =>
+  crewWarningsHash(people.flatMap((c) => c.warnings.map((w) => ({ cleanerId: c.id, code: w.code }))));
+
+/** What a refusal means here: a crew or its warnings changed underneath is reloaded, not just reported. */
 function useRefusal(onStale: () => void) {
   const [error, setError] = useState<string | null>(null);
   return {
@@ -124,7 +131,7 @@ function useRefusal(onStale: () => void) {
     fail: (e: unknown) => {
       setError(errorText(e));
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
-      if (e instanceof ApiError && e.code === "CREW_CHANGED") onStale();
+      if (e instanceof ApiError && (e.code === "CREW_CHANGED" || e.code === "WARNINGS_CHANGED")) onStale();
     },
   };
 }
@@ -151,7 +158,8 @@ function SetCrew({
   const removed = current.filter((id) => !picked.includes(id));
   const dirty = added.length + removed.length > 0;
   const name = (id: string) => byId.get(id)?.name ?? job.crew.find((c) => c.id === id)?.name ?? "Someone";
-  const warnings = added.flatMap((id) => byId.get(id)?.warnings ?? []);
+  const addedPeople = added.map((id) => byId.get(id)).filter((c): c is Candidate => !!c);
+  const warnings = addedPeople.flatMap((c) => c.warnings.map((w) => w.message));
   const traineesOnly = picked.length > 0 && picked.every((id) => byId.get(id)?.tier === "TRAINEE");
 
   function toggle(id: string, on: boolean) {
@@ -175,7 +183,7 @@ function SetCrew({
       destructive: removed.length > 0 && added.length === 0,
     });
     if (!ok) return;
-    const body = { cleanerIds: [...picked], expectedCrewIds: current, acknowledgedWarnings: warnings.length > 0 };
+    const body = { cleanerIds: [...picked], expectedCrewIds: current, acknowledgedWarningsHash: shownHash(addedPeople) };
     setCrew.mutate(
       { ...body, clientEventId: key.for(body) },
       {
@@ -245,11 +253,11 @@ function AddOne({
     refusal.clear();
     const ok = await confirm({
       title: `Add ${c.name} to this job?`,
-      message: c.warnings.length ? `Heads up:\n${c.warnings.map((w) => `• ${w}`).join("\n")}` : undefined,
+      message: c.warnings.length ? `Heads up:\n${c.warnings.map((w) => `• ${w.message}`).join("\n")}` : undefined,
       confirmLabel: c.warnings.length ? "Add anyway" : "Add",
     });
     if (!ok) return;
-    const body = { cleanerId: c.id, acknowledgedWarnings: c.warnings.length > 0 };
+    const body = { cleanerId: c.id, acknowledgedWarningsHash: shownHash([c]) };
     setAdding(c.id);
     add.mutate(
       { ...body, clientEventId: key.for(body) },

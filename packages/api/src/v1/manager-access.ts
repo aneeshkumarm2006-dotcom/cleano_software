@@ -10,10 +10,14 @@
 // Every rule is the web's, with where it comes from (apps/web/src/…):
 //
 //   capability        OWNER ADMIN OPS_MGR FIELD_LEAD  web source
-//   TEAM_VIEW           ✓     ✓     ✓      group      app/admin/dashboard/page.tsx (today's and in-progress
+//   TEAM_VIEW           ✓     ✓   today*    group      app/admin/dashboard/page.tsx (today's and in-progress
 //                                                      work, company-wide, for every admin role);
 //                                                      app/admin/actions/_calendarScope.ts (a FIELD_LEAD sees
-//                                                      their group only, never money)
+//                                                      their group only, never money). *An OPS_MANAGER is
+//                                                      company-wide for TODAY only, as the dashboard; on any
+//                                                      other date, their own jobs only, as the calendar
+//                                                      (_calendarScope.ts CALENDAR_ALL_ROLES leaves them out,
+//                                                      so getJobsForDay gives them SELF). See dayScopeFor
 //   JOB_CONTACT         ✓     ✓     ✓       —         app/admin/actions/getJobSummary.ts (OWNER, ADMIN,
 //                                                      OPS_MANAGER); a lead sees what My Team shows:
 //                                                      client first name and area, never the street
@@ -99,9 +103,10 @@ export function can(role: string | null | undefined, capability: ManagerCapabili
 }
 
 /**
- * Whose work a role sees on TEAM_VIEW screens. GROUP is the caller's Field
- * Lead group (`User.fieldLeadId`, resolved server-side by fieldLeadGroupIds in
- * apps/web/src/lib/field-lead-group.server.ts; the request never names one).
+ * Whose work a role sees on TEAM_VIEW screens, on TODAY. GROUP is the
+ * caller's Field Lead group (`User.fieldLeadId`, resolved server-side by
+ * fieldLeadGroupIds in apps/web/src/lib/field-lead-group.server.ts; the
+ * request never names one). For any other date, use dayScopeFor.
  */
 export type TeamScope = "COMPANY" | "GROUP";
 
@@ -109,6 +114,23 @@ export function teamScopeFor(role: string | null | undefined): TeamScope | null 
   if (role === "OWNER" || role === "ADMIN" || role === "OPS_MANAGER") return "COMPANY";
   if (role === "FIELD_LEAD") return "GROUP";
   return null;
+}
+
+/**
+ * Whose work a role sees for one company day. OWN is the web's calendar SELF
+ * scope (_calendarScope.ts calendarScopeFilter): jobs the caller leads
+ * (Job.employeeId) or is on (Job.cleaners).
+ *   OWNER, ADMIN   COMPANY on every date;
+ *   OPS_MANAGER    COMPANY today (the dashboard), OWN on any other date (the
+ *                  calendar). "Today" is the company's zone, decided by the
+ *                  server, never the phone;
+ *   FIELD_LEAD     GROUP on every date.
+ */
+export type DayScope = TeamScope | "OWN";
+
+export function dayScopeFor(role: string | null | undefined, isToday: boolean): DayScope | null {
+  if (role === "OPS_MANAGER" && !isToday) return "OWN";
+  return teamScopeFor(role);
 }
 
 /** The roles the cleaner endpoints (v1Route `access: "staff"`) admit. */
@@ -137,10 +159,17 @@ export function appSideFor(role: string | null | undefined): "crew" | "office" |
 //  2. COMPANY. Every id (job, person, request, withdrawal, conversation,
 //     message) is looked up with the session's organizationId in the query.
 //     Another company's id answers 404, exactly like one that doesn't exist.
-//  3. FIELD_LEAD SCOPE. Where TEAM_VIEW is the capability, a FIELD_LEAD sees
-//     jobs matching fieldLeadScopedJobsWhere(fieldLeadGroupIds(caller)) and
-//     people in that group only; anything outside it answers 404. An empty
-//     group fails closed (the lead's own jobs only), as on the web.
+//  3. SCOPE. Where TEAM_VIEW is the capability, a job is in view by
+//     dayScopeFor(role, the job is on today in the company's zone):
+//       - a FIELD_LEAD sees jobs matching
+//         fieldLeadScopedJobsWhere(fieldLeadGroupIds(caller)) and people in
+//         that group only. An empty group fails closed (the lead's own jobs
+//         only), as on the web. Someone outside the group who is on a group
+//         job appears by name only (manager-team.ts CrewMember
+//         `outsideGroup`);
+//       - an OPS_MANAGER sees every job on today, and on any other date only
+//         the jobs they lead or are on.
+//     A job out of view answers 404, for reads and crew changes alike.
 //  4. NO MONEY. No manager response carries a price, a client charge, a
 //     payment state, a cleaner's pay or tier percentage, whatever the role.
 //     The web shows OWNER and ADMIN those; the phone doesn't need them. The

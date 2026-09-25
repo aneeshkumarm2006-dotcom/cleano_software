@@ -215,7 +215,13 @@ export function TeamDayView({
         <Empty
           icon="jobs"
           title="No jobs this day"
-          detail={data.scope === "GROUP" ? "Nobody in your group is booked this day." : "Nothing is booked for this day."}
+          detail={
+            data.scope === "GROUP"
+              ? "Nobody in your group is booked this day."
+              : data.scope === "OWN"
+                ? "You're not on any jobs this day."
+                : "Nothing is booked for this day."
+          }
         />
       ) : (
         <View style={{ gap: space[3] }}>

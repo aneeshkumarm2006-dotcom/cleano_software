@@ -14,7 +14,9 @@ export const CREW_STATE: Record<CrewState, { label: string; tone: PillTone }> = 
   DONE: { label: "Done", tone: "success" },
 };
 
-export function crewState(state: string): { label: string; tone: PillTone } {
+/** A crew member's state in words. Null is a field lead's view of someone outside their group. */
+export function crewState(state: string | null): { label: string; tone: PillTone } {
+  if (state === null) return { label: "Not in your group", tone: "neutral" };
   return CREW_STATE[state as CrewState] ?? { label: "Unknown", tone: "neutral" };
 }
 

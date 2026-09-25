@@ -149,17 +149,19 @@ function JobBody({ job, timeZone }: { job: ManagerJobResponse; timeZone: string 
                       {c.isLead ? " · lead" : ""}
                     </Text>
                     <Text variant="small" color="ink2" numeral>
-                      {[
-                        c.tier === "TRAINEE" ? "Trainee" : null,
-                        c.clockedInAt ? `In ${clockTime(c.clockedInAt, timeZone)}` : null,
-                        c.clockedOutAt ? `out ${clockTime(c.clockedOutAt, timeZone)}` : null,
-                        c.minutesLate ? `${c.minutesLate} min late` : null,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ") || "Not clocked in"}
+                      {c.outsideGroup
+                        ? "Another group's cleaner"
+                        : [
+                            c.tier === "TRAINEE" ? "Trainee" : null,
+                            c.clockedInAt ? `In ${clockTime(c.clockedInAt, timeZone)}` : null,
+                            c.clockedOutAt ? `out ${clockTime(c.clockedOutAt, timeZone)}` : null,
+                            c.minutesLate ? `${c.minutesLate} min late` : null,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ") || "Not clocked in"}
                     </Text>
                   </View>
-                  <Pill label={s.label} tone={s.tone} />
+                  {c.outsideGroup ? null : <Pill label={s.label} tone={s.tone} />}
                 </View>
               );
             })}

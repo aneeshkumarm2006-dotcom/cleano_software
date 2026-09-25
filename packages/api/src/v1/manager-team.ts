@@ -42,19 +42,42 @@ export const AVAILABILITY_RESULTS = ["AVAILABLE", "UNAVAILABLE", "OUTSIDE_HOURS"
 /** A cleaner's seniority tier: drives dispatch and trainee pairing, never shown as pay. */
 export const CLEANER_TIERS = ["TRAINEE", "STANDARD", "FIELD_LEAD"] as const;
 
+/**
+ * The web's crew-change warnings, by kind: availabilityWarning (a day off, not
+ * available that day, outside their hours) and categoryMismatchWarning (not
+ * approved for this service). A code the app doesn't know is shown by its
+ * message and hashed as sent (crewWarningsHash), so it is a plain string on
+ * the wire, never mapped to UNKNOWN.
+ */
+export const CREW_WARNING_CODES = ["DAY_OFF", "UNAVAILABLE", "OUTSIDE_HOURS", "CATEGORY_NOT_APPROVED"] as const;
+
 /** One clock event on a job, for the office's record of it. */
 export const CLOCK_EVENT_KINDS = ["CLOCK_IN", "CLOCK_OUT", "BREAK_START", "BREAK_END"] as const;
 
 // ---- The day ------------------------------------------------------------------
 
+/**
+ * One person on a job.
+ *
+ * For a FIELD_LEAD, a job in their group can have people from outside it on
+ * the crew (another lead's cleaner, a cleaner in no group). Those people DO
+ * appear, so the lead knows who else is coming, but by name only:
+ * `outsideGroup` is true, and `tier`, `state`, `assignment`, `clockedInAt`,
+ * `clockedOutAt` and `minutesLate` are all null. Nothing about their clock,
+ * their lateness or their pay reaches the lead, and they are left out of
+ * TeamDayResponse `people`. For every other role `outsideGroup` is false and
+ * the fields are filled as described.
+ */
 export const CrewMember = z.object({
   id: z.string(),
   name: z.string(),
   /** The job's lead (Job.employeeId). */
   isLead: z.boolean(),
-  tier: openEnum(CLEANER_TIERS),
-  state: openEnum(CREW_STATES),
-  assignment: openEnum(ASSIGNMENT_STATUSES),
+  /** A FIELD_LEAD's view of someone outside their group: name only. */
+  outsideGroup: z.boolean(),
+  tier: openEnum(CLEANER_TIERS).nullable(),
+  state: openEnum(CREW_STATES).nullable(),
+  assignment: openEnum(ASSIGNMENT_STATUSES).nullable(),
   /** The current (or last) session's start, while clocked in, on a break, or done. */
   clockedInAt: Instant.nullable(),
   clockedOutAt: Instant.nullable(),
@@ -89,6 +112,11 @@ export const TeamJob = z.object({
     name: z.string(),
   }),
   service: z.object({ category: z.string(), label: z.string() }),
+  /**
+   * Job-level, computed over the whole crew (outside-group people included),
+   * since the job being short or late is the lead's business even when the
+   * person isn't.
+   */
   staffing: z.object({
     /** Job.requiredCleaners. */
     required: z.number().int(),
@@ -107,18 +135,28 @@ export type TeamJob = z.infer<typeof TeamJob>;
  * company's zone. Serves the Today tab (polled every 60 s while on screen)
  * and the Schedule tab (one day at a time).
  *
- * Access: TEAM_VIEW. Scope: COMPANY, or the caller's GROUP for a FIELD_LEAD
- * (rule 3). Jobs are those getJobsForDay would return for the day in the
- * company's zone, less archived (deletedAt) jobs; CANCELLED jobs are left
- * out. `date` more than 400 days from today answers 400.
+ * Access: TEAM_VIEW. Scope: dayScopeFor(role, date is today) in
+ * ./manager-access.ts (rule 3):
+ *   COMPANY  OWNER and ADMIN on every date, and OPS_MANAGER on today;
+ *   OWN      OPS_MANAGER on any other date: only jobs they lead or are on,
+ *            exactly the web's calendar for them (getJobsForDay SELF scope);
+ *   GROUP    FIELD_LEAD, on every date.
+ * The server decides which date is today, in the company's zone; `scope` in
+ * the answer says which rule applied, so the app can say so. Jobs are those
+ * getJobsForDay would return for the day in the company's zone, less
+ * archived (deletedAt) jobs; CANCELLED jobs are left out. `date` more than
+ * 400 days from today answers 400.
  *
  * `people` is one line per person with work that day (a person on two jobs
  * appears once, at their most pressing state: LATE, ON_BREAK, CLOCKED_IN,
- * NOT_STARTED, DONE), for the "who is where" summary.
+ * NOT_STARTED, DONE), for the "who is where" summary. It never includes a
+ * FIELD_LEAD's outside-group crew.
  */
+export const TEAM_DAY_SCOPES = ["COMPANY", "GROUP", "OWN"] as const;
+
 export const TeamDayResponse = z.object({
   date: LocalDate,
-  scope: openEnum(["COMPANY", "GROUP"] as const),
+  scope: openEnum(TEAM_DAY_SCOPES),
   jobs: z.array(TeamJob),
   people: z.array(
     z.object({
@@ -167,7 +205,10 @@ export const JobIssueRecord = z.object({
 /**
  * GET /api/v1/manager/jobs/:id — one job for the office.
  *
- * Access: TEAM_VIEW, and the job in the caller's scope (else 404).
+ * Access: TEAM_VIEW, and the job in view (else 404): in the caller's
+ * group for a FIELD_LEAD; for an OPS_MANAGER, on today or one of their own
+ * (rule 3), so a link to another day's job from an alert or a push answers
+ * 404 for them unless they're on it.
  *
  * Sections the caller's role can't see are NULL, never empty, so the app
  * can tell "none" from "not yours to see":
@@ -202,6 +243,14 @@ export type ManagerJobResponse = z.infer<typeof ManagerJobResponse>;
 
 // ---- Who could work it ------------------------------------------------------------
 
+/** One warning on a candidate: its kind, and the web's own line, ready to show. */
+export const CrewWarning = z.object({
+  /** One of CREW_WARNING_CODES, as sent (a newer one included). */
+  code: z.string(),
+  message: z.string(),
+});
+export type CrewWarning = z.infer<typeof CrewWarning>;
+
 export const Candidate = z.object({
   id: z.string(),
   name: z.string(),
@@ -212,18 +261,19 @@ export const Candidate = z.object({
   /** True when the conflict is a one-off blocked date (a day off). */
   dayOff: z.boolean(),
   /**
-   * The web's own warning lines, ready to show, or empty: availabilityWarning
-   * (outside hours, day off) and categoryMismatchWarning (not approved for
-   * this service). Advisory: the office may override, as on the web.
+   * The web's warnings, or empty: availabilityWarning (outside hours, day
+   * off) and categoryMismatchWarning (not approved for this service).
+   * Advisory: the office may override, as on the web, once it has seen them
+   * (`acknowledgedWarningsHash`).
    */
-  warnings: z.array(z.string()),
+  warnings: z.array(CrewWarning),
 });
 export type Candidate = z.infer<typeof Candidate>;
 
 /**
  * GET /api/v1/manager/jobs/:id/candidates — who could be put on this job.
  *
- * Access: CREW_SET or CREW_ADD (else 403), and the job in scope (else 404).
+ * Access: CREW_SET or CREW_ADD (else 403), and the job in view (else 404).
  * Everyone listAssignableCleaners would list (EMPLOYEE and FIELD_LEAD, active,
  * not deleted, this company), evaluated against the job's window with
  * evaluateEmployeesAvailability (recurring availability plus days off) and
@@ -246,9 +296,40 @@ export const CREW_REFUSALS = [
   "JOB_CLOSED",
   /** 409: the crew changed since the caller loaded it (`expectedCrewIds`). */
   "CREW_CHANGED",
-  /** 409: the office hasn't confirmed the warnings it was shown (`acknowledgedWarnings`). */
-  "WARNINGS_NOT_ACKNOWLEDGED",
+  /** 409: the warnings now aren't the ones the office confirmed (`acknowledgedWarningsHash`). */
+  "WARNINGS_CHANGED",
 ] as const;
+
+/**
+ * The fingerprint of a set of crew warnings, for `acknowledgedWarningsHash`:
+ * the warnings for the people a change ADDS (someone already on the job
+ * isn't re-warned), each as `code:cleanerId`, deduplicated and sorted, then
+ * hashed. The app hashes the warnings it showed (Candidate `warnings`, codes
+ * as sent); the server recomputes them inside the transaction and hashes
+ * them with this same function, so the two can't disagree on the method.
+ * No warnings is crewWarningsHash([]), which the app sends when it showed
+ * none.
+ *
+ * A change detector, not a secret or a signature (cyrb53, 53 bits): the
+ * warnings are advisory and the office may override them anyway; what it
+ * guarantees is that the office overrides the warnings it was actually shown.
+ */
+export function crewWarningsHash(warnings: readonly { cleanerId: string; code: string }[]): string {
+  const text = [...new Set(warnings.map((w) => `${w.code}:${w.cleanerId}`))].sort().join("\n");
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return `w1-${(4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(16)}`;
+}
+
+/** The longest `acknowledgedWarningsHash` accepted. */
+const WARNINGS_HASH_MAX = 32;
 
 /**
  * PUT /api/v1/manager/jobs/:id/crew — set who is on the job: assign,
@@ -259,14 +340,20 @@ export const CREW_REFUSALS = [
  * EMPLOYEE or FIELD_LEAD of this company, else 400 (no hint which id).
  *
  * The server does exactly what assignCleaners does, in one transaction:
+ *   - first locks the job row (`SELECT … FOR UPDATE`, with the company in
+ *     the WHERE), so two crew changes to one job run one after the other;
+ *   - then, under that lock, reads the crew on record and refuses when it
+ *     isn't `expectedCrewIds` (409 CREW_CHANGED), so two managers can't
+ *     overwrite each other unseen. Compared inside the transaction, never
+ *     read beforehand;
  *   - refuses a trainee-only crew (409 TRAINEE_UNPAIRED, the web's message);
- *   - refuses when the crew on record isn't `expectedCrewIds` (409
- *     CREW_CHANGED), so two managers can't overwrite each other unseen;
- *   - recomputes the availability and category warnings; if there are any
- *     and `acknowledgedWarnings` isn't true, refuses with 409
- *     WARNINGS_NOT_ACKNOWLEDGED (the app always shows them first, so this
- *     only catches a stale screen). With it true they are overridden, as the
- *     web allows, and each is written to the JobLog ("… overridden — …");
+ *   - recomputes the availability and category warnings for the people
+ *     being added and hashes them with crewWarningsHash; if that isn't
+ *     `acknowledgedWarningsHash`, refuses with 409 WARNINGS_CHANGED (a
+ *     warning appeared, went away, or changed since the screen was loaded;
+ *     the app reloads and shows the ones that apply now). When they match,
+ *     the warnings are overridden, as the web allows, and each is written to
+ *     the JobLog ("… overridden — …");
  *   - sets the crew, keeps the lead a real member (resolveJobLead), syncs the
  *     JobAssignment rows, and writes the JobLog line with the actor.
  * Effects (after commit, never on a replay): the client's "booking confirmed"
@@ -280,7 +367,8 @@ export const SetCrewRequest = z.object({
   cleanerIds: z.array(z.string().min(1).max(64)).max(20),
   /** The crew the caller saw, in any order. */
   expectedCrewIds: z.array(z.string().min(1).max(64)).max(20),
-  acknowledgedWarnings: z.boolean(),
+  /** crewWarningsHash of the warnings the office was shown for the people it adds. */
+  acknowledgedWarningsHash: z.string().min(1).max(WARNINGS_HASH_MAX),
   clientEventId: z.uuid(),
 });
 export type SetCrewRequest = z.infer<typeof SetCrewRequest>;
@@ -297,18 +385,22 @@ export type CrewChangeResponse = z.infer<typeof CrewChangeResponse>;
  * the web's bulk "Assign cleaner" does for one job. Idempotent on
  * `clientEventId`; adding someone already on it changes nothing.
  *
- * Access: CREW_ADD (OWNER, ADMIN, OPS_MANAGER; bulkAssignCleaner.ts). No
- * unassigning here: the web gives OPS_MANAGER no way to remove anyone.
- * The cleaner must be an active EMPLOYEE or FIELD_LEAD of this company (else
- * 404). A trainee answers 409 TRAINEE_NEEDS_CREW with the web's message.
- * Warnings and `acknowledgedWarnings` work as for PUT …/crew. Connects the
+ * Access: CREW_ADD (OWNER, ADMIN, OPS_MANAGER; bulkAssignCleaner.ts), and
+ * the job in view (rule 3: an OPS_MANAGER adds to today's jobs, or to their
+ * own on another day). No unassigning here: the web gives OPS_MANAGER no way
+ * to remove anyone. The cleaner must be an active EMPLOYEE or FIELD_LEAD of
+ * this company (else 404). A trainee answers 409 TRAINEE_NEEDS_CREW with the
+ * web's message. The job row is locked as for PUT …/crew, and the warnings
+ * (the cleaner's own, unless they're already on it) and
+ * `acknowledgedWarningsHash` work the same way. Connects the
  * cleaner, sets them as lead if the job has none, upserts their
  * JobAssignment (ASSIGNED), and writes the JobLog line with any overrides.
  * No emails: the web's bulk path sends none, and this is that path.
  */
 export const AddCleanerRequest = z.object({
   cleanerId: z.string().min(1).max(64),
-  acknowledgedWarnings: z.boolean(),
+  /** crewWarningsHash of the warnings the office was shown for this cleaner. */
+  acknowledgedWarningsHash: z.string().min(1).max(WARNINGS_HASH_MAX),
   clientEventId: z.uuid(),
 });
 export type AddCleanerRequest = z.infer<typeof AddCleanerRequest>;
