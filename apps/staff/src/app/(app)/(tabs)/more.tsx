@@ -1,9 +1,10 @@
 import { Button, Card, color, radius, Screen, space, TAB_BAR_HEIGHT, Text } from "@bookmops/ui-native";
+import { router } from "expo-router";
 import { View } from "react-native";
 
 import { MenuGroup } from "@/components/MenuList";
 import { ScreenHeader } from "@/components/ScreenHeader";
-import { useMe, useToday } from "@/data/queries";
+import { useAnnouncements, useMe, useTeamChannels, useToday } from "@/data/queries";
 import { useSession } from "@/data/session";
 
 function initials(name: string): string {
@@ -20,6 +21,10 @@ export default function More() {
   const today = useToday();
   const { signOut } = useSession();
   const person = me.data?.person;
+  const teamChannels = useTeamChannels();
+  const announcements = useAnnouncements();
+  const teamUnread = teamChannels.data?.items.reduce((sum, c) => sum + c.unreadCount, 0);
+  const announcementsUnread = announcements.data?.pages[0]?.unreadCount;
 
   return (
     <Screen header={<ScreenHeader title="More" />} bottomInset={TAB_BAR_HEIGHT}>
@@ -52,9 +57,9 @@ export default function More() {
       <MenuGroup
         title="Messages"
         items={[
-          { key: "office", label: "Office chat", icon: "chat", soon: true, count: today.data?.unread.office },
-          { key: "team", label: "Team chat", icon: "team", soon: true },
-          { key: "announcements", label: "Announcements", icon: "announcements", soon: true },
+          { key: "office", label: "Office chat", icon: "chat", count: today.data?.unread.office, onPress: () => router.push("/chat") },
+          { key: "team", label: "Team chat", icon: "team", count: teamUnread, onPress: () => router.push("/team") },
+          { key: "announcements", label: "Announcements", icon: "announcements", count: announcementsUnread, onPress: () => router.push("/announcements") },
         ]}
       />
       <MenuGroup

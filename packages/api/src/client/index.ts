@@ -9,6 +9,8 @@ import { payApi } from "./pay";
 import { photosApi } from "./photos";
 import { issuesApi } from "./issues";
 import { onMyWayApi } from "./on-my-way";
+import { messagesApi } from "./messages";
+import { announcementsApi } from "./announcements";
 import { type ClientOptions, makeRequest } from "./request";
 
 export { createPlatformClient, type PlatformClient } from "./platform";
@@ -26,6 +28,8 @@ export function createClient(options: ClientOptions) {
     ...photosApi(request),
     ...issuesApi(request),
     ...onMyWayApi(request),
+    ...messagesApi(request),
+    ...announcementsApi(request),
   };
 }
 

@@ -12,3 +12,5 @@ export * from "./pay";
 export * from "./photos";
 export * from "./issues";
 export * from "./on-my-way";
+export * from "./messages";
+export * from "./announcements";

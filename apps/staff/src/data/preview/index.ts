@@ -10,6 +10,8 @@ import { previewPayApi } from "./pay";
 import { previewPhotosApi } from "./photos";
 import { previewIssuesApi } from "./issues";
 import { previewOnMyWayApi } from "./on-my-way";
+import { previewMessagesApi } from "./messages";
+import { previewAnnouncementsApi } from "./announcements";
 
 export const previewSource: DataSource = {
   ...previewJobsApi,
@@ -20,4 +22,6 @@ export const previewSource: DataSource = {
   ...previewPhotosApi,
   ...previewIssuesApi,
   ...previewOnMyWayApi,
+  ...previewMessagesApi,
+  ...previewAnnouncementsApi,
 };
