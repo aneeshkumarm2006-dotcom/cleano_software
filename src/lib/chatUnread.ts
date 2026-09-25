@@ -2,7 +2,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { db } from "@/lib/org-db";
 import type { Prisma } from "@prisma/client";
-import { isAdminRole } from "@/lib/role-routing";
+import { isOwnerAdminRole } from "@/lib/role-routing";
 
 /**
  * Staff-chat unread count + the newest unread message, for whichever side of
@@ -41,7 +41,11 @@ export async function readUnreadChatCount(): Promise<UnreadChatCount> {
     if (!session) return { count: 0 };
     const user = session.user as { id: string; role?: string };
 
-    if (isAdminRole(user.role)) {
+    // The office inbox's count is every cleaner's unread messages and the
+    // newest one's text, so it is the office's alone (OWNER/ADMIN, as in
+    // src/app/admin/chat/actions.ts). An OPS_MANAGER or FIELD_LEAD gets the
+    // count for their own conversation below, like any other staff member.
+    if (isOwnerAdminRole(user.role)) {
       const where: Prisma.ChatMessageWhereInput = {
         senderRole: "EMPLOYEE",
         readByAdminAt: null,

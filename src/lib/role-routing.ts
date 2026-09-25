@@ -18,6 +18,16 @@ export function isAdminRole(role: string | null | undefined): boolean {
   return !!role && ADMIN_ROLES.includes(role as AppRole);
 }
 
+// The two roles that run the company outright. Same pair `requireOwnerAdmin`
+// (page-guards.ts) redirects on, as a predicate for server actions that can't
+// redirect. Deliberately narrower than ADMIN_ROLES: an OPS_MANAGER or
+// FIELD_LEAD is in the admin app without being the office.
+const OWNER_ADMIN_ROLES: AppRole[] = ["OWNER", "ADMIN"];
+
+export function isOwnerAdminRole(role: string | null | undefined): boolean {
+  return !!role && OWNER_ADMIN_ROLES.includes(role as AppRole);
+}
+
 // Everyone who works for the company, as opposed to its customers (CLIENT) and
 // people who have only applied (APPLICANT). An allow-list on purpose: the
 // checks it replaces said "anyone who is not a CLIENT", which let an APPLICANT
