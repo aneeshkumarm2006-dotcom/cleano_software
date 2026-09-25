@@ -1,0 +1,19 @@
+{
+  "name": "@bookmops/core",
+  "version": "0.0.0",
+  "private": true,
+  "sideEffects": false,
+  "exports": {
+    "./validation": "./src/validation/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "@bookmops/eslint-config": "*",
+    "@bookmops/typescript-config": "*",
+    "eslint": "^9",
+    "typescript": "^5"
+  }
+}

@@ -16,7 +16,7 @@
 // button waited on something else. This returns the reasons, and "may proceed"
 // is now "there are no reasons not to". One rule set, and it is pure, so the
 // whole of it is testable without a browser.
-import { isValidEmail, isValidPhone } from "@/lib/validation";
+import { isValidEmail, isValidPhone } from "@bookmops/core/validation";
 import { BOOKING_PHOTO_MIN } from "@/lib/booking-deposit";
 import {
   BOOKING_PAGE_DEFAULTS,

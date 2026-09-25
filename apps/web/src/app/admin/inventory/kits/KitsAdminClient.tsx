@@ -7,7 +7,7 @@ import {
   removeFromCleanerKit,
 } from "../../actions/assignToCleanerKit";
 import { avatarColor, initials } from "@/lib/avatar";
-import { parseQuantityInput } from "@/lib/quantity-input";
+import { parseQuantityInput } from "@bookmops/core/validation";
 
 interface KitItem {
   employeeProductId: string;

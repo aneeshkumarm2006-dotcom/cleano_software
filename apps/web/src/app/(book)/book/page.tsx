@@ -22,7 +22,7 @@ import { getMyAddresses } from "../../(customer)/actions/clientAddresses";
 import type { SavedAddress } from "@/lib/client-address";
 import { calculateTax, taxLines, type TaxRates } from "@/lib/tax";
 import { addOnLineTotal, sumAddOns } from "@/lib/job-money";
-import { isValidEmail, isValidPhone } from "@/lib/validation";
+import { isValidEmail, isValidPhone } from "@bookmops/core/validation";
 import { AFTER_PHOTO_CONSENT_TEXT } from "@/lib/policy";
 import {
   BOOKING_PHOTO_MIN,

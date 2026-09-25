@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Minus, Plus, Trash2 } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
-import { parseQuantityInput } from "@/lib/quantity-input";
+import { parseQuantityInput } from "@bookmops/core/validation";
 import type { LocationProductEntry } from "@/app/admin/actions/getLocationProducts.types";
 
 interface CartItemProps {

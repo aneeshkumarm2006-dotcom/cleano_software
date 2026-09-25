@@ -19,7 +19,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { parseQuantityInput, isUsableQuantity } from "../src/lib/quantity-input";
+import { parseQuantityInput, isUsableQuantity } from "@bookmops/core/validation";
 
 let pass = 0;
 let fail = 0;
@@ -260,11 +260,11 @@ ok("openDamage does not seed a 1", /setDamageQty\(""\)/.test(MY_INV) && !/setDam
 check("parseQuantityInput is the only quantity rule",
   (MY_INV.match(/parseQuantityInput\(/g) ?? []).length, 4);
 for (const [label, src] of [["MyInventoryClient", MY_INV], ["CartItem", CART], ["KitsAdminClient", KITS]] as const) {
-  ok(`${label} imports the shared rule`, src.includes('from "@/lib/quantity-input"'));
+  ok(`${label} imports the shared rule`, src.includes('from "@bookmops/core/validation"'));
   ok(`${label} hand-rolls no second digit regex`, !src.includes("/^\\d+$/"));
 }
 // The module must stay pure — a client component imports it.
-const QTY_SRC = read("src/lib/quantity-input.ts");
+const QTY_SRC = read("../../packages/core/src/validation/quantity-input.ts");
 check("quantity-input.ts imports nothing", QTY_SRC.match(/^\s*import\s/gm), null);
 
 // Numeric keypad on a phone, but a text field so bad input can be reported.

@@ -24,7 +24,7 @@ import {
   type LiquidLevel,
 } from "@/lib/inventory-status";
 import type { ItemType } from "@/lib/item-type";
-import { parseQuantityInput } from "@/lib/quantity-input";
+import { parseQuantityInput } from "@bookmops/core/validation";
 import { addMyInventoryItem } from "./addMyInventoryItem";
 
 interface PendingRequest {

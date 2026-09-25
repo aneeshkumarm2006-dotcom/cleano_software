@@ -21,7 +21,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { Field, Input, Textarea } from "@/components/customer/Field";
-import { isValidEmail, isValidPhone } from "@/lib/validation";
+import { isValidEmail, isValidPhone } from "@bookmops/core/validation";
 import {
   isFullWidthQuoteField,
   visibleQuoteFields,
