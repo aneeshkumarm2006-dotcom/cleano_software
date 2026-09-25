@@ -10,6 +10,7 @@ import { documentsApi } from "./documents";
 import { issuesApi } from "./issues";
 import { jobsApi } from "./jobs";
 import { kitApi } from "./kit";
+import { managerApi } from "./manager";
 import { meApi } from "./me";
 import { messagesApi } from "./messages";
 import { onMyWayApi } from "./on-my-way";
@@ -42,6 +43,7 @@ export function createClient(options: ClientOptions) {
     ...trainingApi(request),
     ...documentsApi(request),
     ...strikesApi(request),
+    ...managerApi(request),
   };
 }
 

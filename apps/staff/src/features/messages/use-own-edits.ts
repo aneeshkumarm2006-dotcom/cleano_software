@@ -94,6 +94,29 @@ export function useOwnMessageEdits(channelId: string, source: DataSource) {
     [channelId, source, put, settle],
   );
 
+  /**
+   * The office removing someone else's message (TEAM_MODERATE). The same
+   * overlay as a delete of one's own; only the endpoint differs.
+   */
+  const moderate = useCallback(
+    async (id: string) => {
+      if (busy.current.has(id)) return;
+      busy.current.add(id);
+      put(id, { body: "", editedAt: null, deleted: true });
+      try {
+        await source.moderateTeamMessage(channelId, id);
+        await settle(id, (m) => ({ ...m, body: "", deleted: true }));
+      } catch (e) {
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+        Alert.alert("The message wasn't removed", why(e, "Check your connection and try again."));
+      } finally {
+        put(id, null);
+        busy.current.delete(id);
+      }
+    },
+    [channelId, source, put, settle],
+  );
+
   /** The server's messages with any change still in flight shown on top. */
   const apply = useCallback(
     (server: readonly TeamMessage[]): readonly TeamMessage[] =>
@@ -107,5 +130,5 @@ export function useOwnMessageEdits(channelId: string, source: DataSource) {
     [overlay],
   );
 
-  return { edit, remove, apply };
+  return { edit, remove, moderate, apply };
 }

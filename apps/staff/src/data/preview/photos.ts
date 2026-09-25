@@ -68,7 +68,7 @@ const attached = new Map<string, JobPhoto>();
 export const previewPhotosApi = {
   createJobPhotoUpload: (body) => {
     // Shaped like the server's: the company's folder, the job, the person, a random name.
-    const key = `preview/${previewMe.company.id}/jobs/${body.jobId}/${previewMe.person.id}/${randomUUID()}`;
+    const key = `preview/${previewMe().company.id}/jobs/${body.jobId}/${previewMe().person.id}/${randomUUID()}`;
     signed.set(key, body.jobId);
     const timestamp = Math.floor(Date.now() / 1000);
     return delay(

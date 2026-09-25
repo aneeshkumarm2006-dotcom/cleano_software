@@ -3,7 +3,9 @@
 // Replaces, for the phone, the cleaner side of the web's
 // `admin/announcements/announcements.ts` (listAnnouncements,
 // markAnnouncementsRead, reactToAnnouncement). Publishing, editing, pinning
-// and the read register are office-only and are not in v1.
+// and the read register are office-only and are not in v1: the manager side
+// of the app reads announcements here like everyone else, and publishes them
+// from the web console.
 import { z } from "zod";
 
 import { Instant, openEnum, page } from "./common";
@@ -54,7 +56,8 @@ export type Announcement = z.infer<typeof Announcement>;
 /**
  * GET /api/v1/announcements?cursor= — pinned first, then newest.
  *
- * Server: staff only (canParticipate: never a CLIENT). Carries only the
+ * Server: every staff role, the office roles included (canParticipate: never
+ * a CLIENT or APPLICANT). Carries only the
  * caller's own read and reaction state; NEVER the admin `audience` (who read
  * it, who reacted, who hasn't), nor read counts: a cleaner does not get a
  * register of their colleagues. Reading the list marks nothing read.
