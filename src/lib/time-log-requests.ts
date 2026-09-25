@@ -115,8 +115,16 @@ function sameInstant(a: Date | null, b: Date | null): boolean {
 }
 
 /** Only a pending request can be decided. Prevents a double approval. */
+/**
+ * The states a decision may move a request out of. A list, not a comparison,
+ * because the decision is written as a conditional update on exactly this set
+ * — that is what stops two admins who opened the same request from both
+ * applying it.
+ */
+export const DECIDABLE_TIME_LOG_STATUSES: readonly TimeLogRequestStatus[] = ["PENDING"];
+
 export function canDecide(status: string): boolean {
-  return status === "PENDING";
+  return (DECIDABLE_TIME_LOG_STATUSES as readonly string[]).includes(status);
 }
 
 /** "8:45 AM → 9:15 AM", for the admin's list and the cleaner's history. */
