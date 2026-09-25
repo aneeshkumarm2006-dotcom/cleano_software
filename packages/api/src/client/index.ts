@@ -5,6 +5,7 @@ import { jobsApi } from "./jobs";
 import { meApi } from "./me";
 import { type ClientOptions, makeRequest } from "./request";
 
+export { createPlatformClient, type PlatformClient } from "./platform";
 export { ApiError, type ClientOptions, type Request } from "./request";
 
 export function createClient(options: ClientOptions) {

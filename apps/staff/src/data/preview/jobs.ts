@@ -93,7 +93,8 @@ export function previewJob(id: string): JobDetailResponse {
 
 export const previewJobsApi = {
   me: () => delay(previewMe),
+  changePassword: () => delay({ ok: true as const }),
   today: () => delay(previewToday),
   jobs: (scope) => delay({ items: scope === "past" ? previewPast : previewUpcoming, nextCursor: null }),
   job: (id) => delay(previewJob(id)),
-} satisfies Pick<DataSource, "me" | "today" | "jobs" | "job">;
+} satisfies Pick<DataSource, "me" | "changePassword" | "today" | "jobs" | "job">;

@@ -1,6 +1,7 @@
 import { TabBarButton, TabBarShell } from "@bookmops/ui-native";
 import { TabList, TabSlot, Tabs, TabTrigger } from "expo-router/ui";
 
+import { SyncNotice } from "@/components/SyncNotice";
 import { useToday } from "@/data/queries";
 
 /**
@@ -14,6 +15,7 @@ export default function TabsLayout() {
   return (
     <Tabs>
       <TabSlot />
+      <SyncNotice />
       <TabList asChild>
         <TabBarShell>
           <TabTrigger name="today" href="/" asChild>

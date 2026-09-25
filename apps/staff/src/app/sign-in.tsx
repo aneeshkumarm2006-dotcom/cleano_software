@@ -1,4 +1,6 @@
-import { Button, color, Icon, radius, space, Text, TextField } from "@bookmops/ui-native";
+import type { Workspace } from "@bookmops/api/v1";
+import { Button, Card, color, Icon, radius, space, Text, TextField } from "@bookmops/ui-native";
+import { Link } from "expo-router";
 import { useRef, useState } from "react";
 import { KeyboardAvoidingView, Platform, ScrollView, type TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -7,44 +9,47 @@ import { useSession } from "@/data/session";
 
 /**
  * Sign in. The company is found from the work email (docs/architecture/
- * API_V1.md §2), so there is no company field to fill in.
- *
- * Real sign-in lands with the API's auth endpoints. Until then, a development
- * build offers "Explore with sample data" so every screen can be reviewed on a
- * simulator; a release build shows no such button.
+ * API_V1.md §2), so there is no company field. Someone who works for more
+ * than one company picks which one after their password is checked.
  */
 export default function SignIn() {
   const insets = useSafeAreaInsets();
-  const { startPreview } = useSession();
+  const { signIn, signInTo, startPreview } = useSession();
   const passwordRef = useRef<TextInput>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [notice, setNotice] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [choices, setChoices] = useState<Workspace[] | null>(null);
 
-  function submit() {
-    setNotice("Signing in from the app is almost ready. For now, sign in on the web.");
+  async function submit() {
+    if (busy || !email.trim() || !password) return;
+    setBusy(true);
+    setError(null);
+    const result = await signIn(email, password);
+    setBusy(false);
+    if (result.ok) return;
+    if ("choose" in result) setChoices(result.choose);
+    else setError(result.error);
+  }
+
+  async function choose(workspace: Workspace) {
+    setBusy(true);
+    setError(null);
+    const result = await signInTo(workspace, email.trim().toLowerCase(), password);
+    setBusy(false);
+    if (!result.ok && "error" in result) setError(result.error);
   }
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: color.chrome }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <ScrollView
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ flexGrow: 1 }}
-        showsVerticalScrollIndicator={false}
-      >
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={false}>
         <View style={{ paddingTop: insets.top + space[10], paddingHorizontal: space[6], paddingBottom: space[8], gap: space[3] }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: space[3] }}>
-            <View
-              style={{
-                width: 40,
-                height: 40,
-                borderRadius: radius.md,
-                backgroundColor: color.accent,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Icon name="check" size={22} color="onChrome" />
+            <View style={{ width: 40, height: 40, borderRadius: radius.md, backgroundColor: color.accent, alignItems: "center", justifyContent: "center" }}>
+              <Text variant="heading" color="onChrome">
+                B
+              </Text>
             </View>
             <Text variant="eyebrow" color="onChrome" style={{ fontSize: 15, letterSpacing: 2 }}>
               Bookmops
@@ -72,50 +77,84 @@ export default function SignIn() {
             gap: space[5],
           }}
         >
-          <Text variant="title" accessibilityRole="header">
-            Sign in
-          </Text>
+          {choices ? (
+            <>
+              <View style={{ gap: space[1] }}>
+                <Text variant="title" accessibilityRole="header">
+                  Which company?
+                </Text>
+                <Text variant="body" color="ink2">
+                  You work for more than one. Pick the one you're working for now.
+                </Text>
+              </View>
+              {choices.map((w) => (
+                <Card key={w.orgId} padding={4} onPress={busy ? undefined : () => choose(w)} accessibilityLabel={`Sign in to ${w.name}`}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: space[3] }}>
+                    <Icon name="team" size={22} color="accentText" />
+                    <Text variant="subheading" style={{ flex: 1 }}>
+                      {w.name}
+                    </Text>
+                    <Icon name="forward" size={18} color="ink3" />
+                  </View>
+                </Card>
+              ))}
+              <Button label="Back" variant="secondary" size="md" onPress={() => setChoices(null)} disabled={busy} />
+            </>
+          ) : (
+            <>
+              <Text variant="title" accessibilityRole="header">
+                Sign in
+              </Text>
+              <TextField
+                label="Work email"
+                value={email}
+                onChangeText={setEmail}
+                autoCapitalize="none"
+                autoComplete="email"
+                keyboardType="email-address"
+                textContentType="username"
+                returnKeyType="next"
+                editable={!busy}
+                onSubmitEditing={() => passwordRef.current?.focus()}
+              />
+              <TextField
+                ref={passwordRef}
+                label="Password"
+                value={password}
+                onChangeText={setPassword}
+                secret
+                autoComplete="current-password"
+                textContentType="password"
+                returnKeyType="go"
+                editable={!busy}
+                onSubmitEditing={submit}
+              />
+              <Button label="Sign in" onPress={submit} loading={busy} disabled={!email.trim() || !password} />
+              <Link href={{ pathname: "/forgot-password", params: { email } }} asChild>
+                <Text variant="bodyStrong" color="accentText" align="center" accessibilityRole="link" style={{ paddingVertical: space[2] }}>
+                  Forgot your password?
+                </Text>
+              </Link>
+            </>
+          )}
 
-          <TextField
-            label="Work email"
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            autoComplete="email"
-            keyboardType="email-address"
-            textContentType="username"
-            returnKeyType="next"
-            onSubmitEditing={() => passwordRef.current?.focus()}
-          />
-          <TextField
-            ref={passwordRef}
-            label="Password"
-            value={password}
-            onChangeText={setPassword}
-            secret
-            autoComplete="current-password"
-            textContentType="password"
-            returnKeyType="go"
-            onSubmitEditing={submit}
-          />
-
-          <Button label="Sign in" onPress={submit} disabled={!email.trim() || !password} />
-
-          {notice ? (
+          {error ? (
             <View
-              accessibilityLiveRegion="polite"
-              style={{ flexDirection: "row", gap: space[2], padding: space[3], borderRadius: radius.md, backgroundColor: color.warningSoft }}
+              accessibilityLiveRegion="assertive"
+              style={{ flexDirection: "row", gap: space[2], padding: space[3], borderRadius: radius.md, backgroundColor: color.dangerSoft }}
             >
-              <Icon name="info" size={18} color="warning" />
-              <Text variant="small" color="warning" style={{ flex: 1 }}>
-                {notice}
+              <Icon name="warning" size={18} color="danger" />
+              <Text variant="small" color="danger" style={{ flex: 1 }}>
+                {error}
               </Text>
             </View>
           ) : null}
 
-          <Text variant="small" color="ink3" align="center">
-            We find your company from your work email, so there is nothing else to type in.
-          </Text>
+          {!choices ? (
+            <Text variant="small" color="ink3" align="center">
+              We find your company from your work email, so there is nothing else to type in.
+            </Text>
+          ) : null}
 
           {/* `__DEV__ &&` first, so a release build drops this branch at compile time. */}
           {__DEV__ && startPreview ? (

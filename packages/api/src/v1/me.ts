@@ -24,3 +24,16 @@ export const MeResponse = z.object({
   mustChangePassword: z.boolean(),
 });
 export type MeResponse = z.infer<typeof MeResponse>;
+
+/**
+ * POST /api/v1/me/password — choose a new password.
+ *
+ * The server must: verify `currentPassword` against the caller's own account;
+ * enforce the same length rules as the web; clear `mustChangePassword`; and
+ * end every OTHER session the caller holds (this device stays signed in).
+ */
+export const ChangePasswordRequest = z.object({
+  currentPassword: z.string().min(1).max(200),
+  newPassword: z.string().min(8).max(200),
+});
+export const ChangePasswordResponse = z.object({ ok: z.literal(true) });

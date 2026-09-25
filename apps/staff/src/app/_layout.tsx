@@ -65,6 +65,7 @@ function Routes() {
           Every signed-in screen lives under (app)/, guarded as one. */}
       <Stack.Protected guard={!signedIn}>
         <Stack.Screen name="sign-in" />
+        <Stack.Screen name="forgot-password" />
       </Stack.Protected>
       <Stack.Protected guard={signedIn}>
         <Stack.Screen name="(app)" />
