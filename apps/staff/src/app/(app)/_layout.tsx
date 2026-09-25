@@ -27,8 +27,9 @@ export default function SignedInLayout() {
   if (me.data?.mustChangePassword) return <MustChangePassword />;
   // The first open after this build is installed: nothing on record yet, so
   // wait for /me rather than show one side's screens and then swap. With no
-  // signal it falls through to the cleaner app, as before.
-  if (!role && me.isPending) return <Starting />;
+  // signal the query is paused, not fetching, and it falls through to the
+  // cleaner app, as before.
+  if (!role && me.isPending && me.fetchStatus === "fetching") return <Starting />;
   if (role && !side) return <NotForThisApp />;
   return (
     <OutboxProvider>
