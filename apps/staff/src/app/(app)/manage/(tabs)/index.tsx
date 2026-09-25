@@ -1,9 +1,10 @@
-import { Screen, TAB_BAR_HEIGHT } from "@bookmops/ui-native";
+import { IconButton, Screen, TAB_BAR_HEIGHT } from "@bookmops/ui-native";
+import { router } from "expo-router";
 
 import { Guarded } from "@/components/Guarded";
 import { LoadError, Loading } from "@/components/QueryState";
 import { ScreenHeader } from "@/components/ScreenHeader";
-import { useMe, useTeamDay } from "@/data/queries";
+import { useAlerts, useMe, useTeamDay } from "@/data/queries";
 import { useLive } from "@/features/messages/use-live";
 import { TeamDayView } from "@/features/manage/TeamDay";
 import { longDate } from "@/lib/format";
@@ -23,12 +24,14 @@ function TeamToday() {
   const live = useLive();
   const now = useNow();
   const day = useTeamDay(null, live);
+  const alerts = useAlerts();
   const tz = me.data?.company.timezone;
 
   const header = (
     <ScreenHeader
       eyebrow={tz ? longDate(now.toISOString(), tz) : " "}
       title="Team today"
+      actions={<IconButton icon="notifications" label="Alerts" count={alerts.data?.pages[0]?.unreadCount} onPress={() => router.push("/manage/alerts")} />}
     />
   );
 

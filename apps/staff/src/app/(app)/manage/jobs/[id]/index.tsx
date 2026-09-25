@@ -253,7 +253,7 @@ function JobBody({ job, timeZone }: { job: ManagerJobResponse; timeZone: string 
           {job.issues.map((i) => {
             const s = issueStatus(i.status);
             return (
-              <IssueLink key={i.id} title={issueCategory(i.category)} detail={`${i.reportedBy} · ${i.note}`} urgent={i.urgency === "URGENT"} status={s} />
+              <IssueLink key={i.id} id={i.id} title={issueCategory(i.category)} detail={`${i.reportedBy} · ${i.note}`} urgent={i.urgency === "URGENT"} status={s} />
             );
           })}
         </>
@@ -269,18 +269,22 @@ function JobBody({ job, timeZone }: { job: ManagerJobResponse; timeZone: string 
 }
 
 function IssueLink({
+  id,
   title,
   detail,
   urgent,
   status,
 }: {
+  id: string;
   title: string;
   detail: string;
   urgent: boolean;
   status: ReturnType<typeof issueStatus>;
 }) {
+  const role = useStaffRole();
+  const open = role.can("ISSUES") ? () => router.push({ pathname: "/manage/issues/[id]", params: { id } }) : undefined;
   return (
-    <Card padding={4} accessible accessibilityLabel={`${urgent ? "Urgent. " : ""}${title}. ${status.label}. ${detail}`}>
+    <Card padding={4} onPress={open} accessible accessibilityLabel={`${urgent ? "Urgent. " : ""}${title}. ${status.label}. ${detail}`}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: space[2] }}>
         <Text variant="bodyStrong" style={{ flex: 1 }}>
           {title}

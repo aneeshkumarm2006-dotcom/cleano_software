@@ -4,6 +4,7 @@ import { router } from "expo-router";
 import { MenuGroup, type MenuItem } from "@/components/MenuList";
 import { ProfileCard } from "@/components/ProfileCard";
 import { ScreenHeader } from "@/components/ScreenHeader";
+import { useAlerts, useIssues } from "@/data/queries";
 import { useStaffRole } from "@/data/role";
 import { useSession } from "@/data/session";
 
@@ -17,7 +18,21 @@ export default function ManagerMore() {
   const role = useStaffRole();
   const { signOut } = useSession();
 
+  const alerts = useAlerts();
+  const issues = useIssues("open");
   const office: MenuItem[] = [
+    { key: "alerts", label: "Alerts", icon: "notifications", count: alerts.data?.pages[0]?.unreadCount, onPress: () => router.push("/manage/alerts") },
+    ...(role.can("ISSUES")
+      ? [
+          {
+            key: "problems",
+            label: "Problem reports",
+            icon: "warning" as const,
+            status: issues.data?.pages[0]?.openCount ? `${issues.data.pages[0].openCount} open` : undefined,
+            onPress: () => router.push({ pathname: "/manage/alerts", params: { show: "problems" } }),
+          },
+        ]
+      : []),
     { key: "announcements", label: "Announcements", icon: "announcements", onPress: () => router.push("/announcements") },
   ];
 
