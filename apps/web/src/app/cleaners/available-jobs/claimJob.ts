@@ -2,6 +2,7 @@
 
 import { db } from "@/lib/org-db";
 import { auth } from "@/lib/auth";
+import { isStaffRole } from "@/lib/role-routing";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import {
@@ -18,7 +19,7 @@ export async function claimJob(jobId: string) {
   if (!session?.user) return { success: false, error: "Not authenticated" };
 
   const role = (session.user as any).role;
-  if (!role || role === "CLIENT") return { success: false, error: "Not authorized" };
+  if (!isStaffRole(role)) return { success: false, error: "Not authorized" };
 
   if (typeof jobId !== "string" || jobId.length === 0 || jobId.length > 64) {
     return { success: false, error: "Job not found" };

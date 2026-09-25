@@ -2,6 +2,7 @@
 
 import { db } from "@/lib/org-db";
 import { auth } from "@/lib/auth";
+import { isStaffRole } from "@/lib/role-routing";
 import { headers } from "next/headers";
 import { claimableJobsWhere } from "@/lib/cleaner-jobs";
 import {
@@ -42,7 +43,9 @@ export async function getAvailableJobPreview(
   if (!session?.user) return { success: false, error: "Not authenticated" };
 
   const role = (session.user as { role?: string }).role;
-  if (!role || role === "CLIENT") {
+  // Client names, street addresses and prices: staff only. This used to
+  // refuse only CLIENT, which let an APPLICANT read all of it.
+  if (!isStaffRole(role)) {
     return { success: false, error: "Not authorized" };
   }
   if (typeof jobId !== "string" || jobId.length === 0 || jobId.length > 64) {

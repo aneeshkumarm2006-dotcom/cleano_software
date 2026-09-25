@@ -4,6 +4,7 @@ import { db } from "@/lib/org-db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import type { CheckoutHistoryEntry } from "./getCheckoutHistory.types";
+import { isStaffRole } from "@/lib/role-routing";
 
 interface GetCheckoutHistoryInput {
   startDate?: string;
@@ -23,6 +24,9 @@ export async function getCheckoutHistory(
 
   if (!session?.user) {
     return { success: false, error: "Not authenticated" };
+  }
+  if (!isStaffRole((session.user as { role?: string }).role)) {
+    return { success: false, error: "Not authorized" };
   }
 
   try {

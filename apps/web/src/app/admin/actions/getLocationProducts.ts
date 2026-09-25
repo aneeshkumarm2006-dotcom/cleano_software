@@ -4,6 +4,7 @@ import { db } from "@/lib/org-db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import type { LocationProductEntry } from "./getLocationProducts.types";
+import { isStaffRole } from "@/lib/role-routing";
 
 export async function getLocationProducts(
   locationId: string
@@ -21,6 +22,9 @@ export async function getLocationProducts(
 
   if (!session?.user) {
     return { success: false, error: "Not authenticated" };
+  }
+  if (!isStaffRole((session.user as { role?: string }).role)) {
+    return { success: false, error: "Not authorized" };
   }
 
   if (!locationId) {

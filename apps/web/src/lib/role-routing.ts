@@ -18,6 +18,17 @@ export function isAdminRole(role: string | null | undefined): boolean {
   return !!role && ADMIN_ROLES.includes(role as AppRole);
 }
 
+// Everyone who works for the company, as opposed to its customers (CLIENT) and
+// people who have only applied (APPLICANT). An allow-list on purpose: the
+// checks it replaces said "anyone who is not a CLIENT", which let an APPLICANT
+// claim real jobs and read their client addresses, and would have let in any
+// role added later. A missing or unknown role is not staff.
+const STAFF_ROLES: AppRole[] = ["OWNER", "ADMIN", "OPS_MANAGER", "FIELD_LEAD", "EMPLOYEE"];
+
+export function isStaffRole(role: string | null | undefined): boolean {
+  return !!role && STAFF_ROLES.includes(role as AppRole);
+}
+
 export function isCleanerRole(role: string | null | undefined): boolean {
   return role === "EMPLOYEE";
 }

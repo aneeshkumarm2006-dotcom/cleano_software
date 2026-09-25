@@ -3,6 +3,7 @@
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { db } from "@/lib/org-db";
+import { endSessionsOfSwitchedOffUsers } from "@/lib/session-revocation";
 import { revalidatePath } from "next/cache";
 import { JobApplicationStatus } from "@prisma/client";
 
@@ -53,6 +54,7 @@ export async function bulkSetApplicationStatus(
         where: { id: { in: userIds }, role: "APPLICANT" },
         data: { isActive: !blocked },
       });
+      if (blocked) await endSessionsOfSwitchedOffUsers(userIds);
     }
 
     revalidatePath("/admin/job-applications");

@@ -6,6 +6,8 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import type { CleanerTier } from "@bookmops/core/pay";
 import { checkCleanerSeats } from "@/lib/plan-limits";
+import { endSessionsOfSwitchedOffUsers } from "@/lib/session-revocation";
+import { refuseUnsafeSwitchOff } from "@/lib/switch-off-rules";
 import {
   previewCleanerDeactivation,
   unassignFutureJobs,
@@ -41,7 +43,7 @@ export async function previewEmployeeDeactivation(
 }
 
 async function requireAdmin(): Promise<
-  { ok: true } | { ok: false; error: string }
+  { ok: true; userId: string; role: string } | { ok: false; error: string }
 > {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) return { ok: false, error: "Not authenticated" };
@@ -49,7 +51,7 @@ async function requireAdmin(): Promise<
   if (role !== "OWNER" && role !== "ADMIN" && role !== "OPS_MANAGER") {
     return { ok: false, error: "Not authorized" };
   }
-  return { ok: true };
+  return { ok: true, userId: session.user.id, role };
 }
 
 function sanitizeIds(ids: string[]): string[] {
@@ -70,6 +72,11 @@ export async function bulkSetEmployeeActive(
   const cleanIds = sanitizeIds(ids);
   if (cleanIds.length === 0)
     return { success: false, error: "Nothing selected" };
+
+  if (!isActive) {
+    const refused = await refuseUnsafeSwitchOff({ id: gate.userId, role: gate.role }, cleanIds);
+    if (refused) return { success: false, error: refused };
+  }
 
   try {
     // Switching people back on is the bulk equivalent of hiring them, so it is
@@ -105,6 +112,9 @@ export async function bulkSetEmployeeActive(
     // the thing the admin asked for and must land even if the schedule cannot
     // be tidied. `unassignFutureJobs` never throws for the same reason.
     if (!isActive) {
+      // Switched off means signed out, on every device. Only people the
+      // update actually switched off lose their sessions; see the helper.
+      await endSessionsOfSwitchedOffUsers(cleanIds);
       await unassignFutureJobs(cleanIds);
     }
 

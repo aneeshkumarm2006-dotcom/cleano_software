@@ -1,7 +1,7 @@
 "use server";
 
 import { headers } from "next/headers";
-import { verifyPassword } from "better-auth/crypto";
+import { hashPassword, verifyPassword } from "better-auth/crypto";
 
 import { platformDb } from "@/lib/platform-db";
 import { originForSlug } from "@/lib/tenant";
@@ -59,8 +59,27 @@ const ATTEMPTS = new Map<string, { n: number; resetAt: number }>();
 const WINDOW_MS = 60_000;
 const MAX_ATTEMPTS = 8;
 
+/**
+ * A hash nobody's password matches, checked when an email has no account.
+ *
+ * Without it the answer's timing said what the message would not: an unknown
+ * email came back in milliseconds, a known one only after a scrypt check per
+ * workspace. Checking something either way makes "no such account" and "wrong
+ * password" take the same time. Built once, lazily, from a random secret.
+ */
+let dummyHash: Promise<string> | undefined;
+function hashNobodyHas(): Promise<string> {
+  dummyHash ??= hashPassword(crypto.randomUUID());
+  return dummyHash;
+}
+
 function rateLimited(key: string): boolean {
   const now = Date.now();
+  // Keys now include emails, which a caller chooses, so expired windows are
+  // dropped rather than left to grow the map without bound.
+  if (ATTEMPTS.size > 5_000) {
+    for (const [k, v] of ATTEMPTS) if (v.resetAt < now) ATTEMPTS.delete(k);
+  }
   const hit = ATTEMPTS.get(key);
   if (!hit || hit.resetAt < now) {
     ATTEMPTS.set(key, { n: 1, resetAt: now + WINDOW_MS });
@@ -79,7 +98,9 @@ export async function discoverWorkspaces(
 
   const h = await headers();
   const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-  if (rateLimited(ip)) {
+  // Per address AND per email. Per address alone let one attacker spread
+  // guesses for a single person's password across many addresses.
+  if (rateLimited(`ip:${ip}`) || rateLimited(`email:${email}`)) {
     return { ok: false, error: "Too many attempts. Wait a minute and try again." };
   }
 
@@ -100,6 +121,9 @@ export async function discoverWorkspaces(
     where: {
       email,
       isActive: true,
+      // Archived people are refused at sign-in, so listing their workspace
+      // would only lead them to a door that will not open.
+      deletedAt: null,
       organizationId: { in: orgs.map((o) => o.id) },
     },
     select: {
@@ -112,6 +136,7 @@ export async function discoverWorkspaces(
   });
 
   const matched: DiscoveredWorkspace[] = [];
+  let checked = 0;
   for (const user of candidates) {
     const org = byId.get(user.organizationId);
     if (!org) continue;
@@ -120,6 +145,7 @@ export async function discoverWorkspaces(
     // match in one says nothing about the other.
     for (const account of user.accounts) {
       if (!account.password) continue;
+      checked++;
       if (await verifyPassword({ hash: account.password, password })) {
         matched.push({
           slug: org.slug,
@@ -130,6 +156,8 @@ export async function discoverWorkspaces(
       }
     }
   }
+
+  if (checked === 0) await verifyPassword({ hash: await hashNobodyHas(), password });
 
   if (matched.length === 0) return REFUSED;
   return { ok: true, workspaces: matched };

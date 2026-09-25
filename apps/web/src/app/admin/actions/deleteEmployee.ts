@@ -1,6 +1,8 @@
 "use server";
 
 import { db } from "@/lib/org-db";
+import { endSessionsOfSwitchedOffUsers } from "@/lib/session-revocation";
+import { refuseUnsafeSwitchOff } from "@/lib/switch-off-rules";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
@@ -112,6 +114,11 @@ export async function deleteEmployee(employeeId: string): Promise<{
     if (employeeId === session?.user?.id) {
       return { success: false, error: "You cannot delete your own account." };
     }
+    const refused = await refuseUnsafeSwitchOff(
+      { id: session!.user.id, role: actorRole },
+      [employeeId],
+    );
+    if (refused) return { success: false, error: refused };
 
     // Commission rows are money owed to this person, so `Commission.salesRepId`
     // is ON DELETE RESTRICT rather than the cascade most User relations use
@@ -179,6 +186,10 @@ export async function deleteEmployee(employeeId: string): Promise<{
         await tx.user.delete({ where: { id: employeeId } });
       }
     });
+
+    // An archived person keeps their row, so their sessions have to be ended
+    // explicitly. (A hard delete already took them with it: Session cascades.)
+    await endSessionsOfSwitchedOffUsers([employeeId]);
 
     revalidatePath("/admin/employees");
     revalidatePath("/admin/jobs");

@@ -8,6 +8,7 @@ import {
   alertIfTraineeLeftUnpaired,
   resolveJobLead,
 } from "@/lib/job-assignments";
+import { isStaffRole } from "@/lib/role-routing";
 
 /**
  * Cleaner responds to a job-assignment invite from /my-jobs.
@@ -23,6 +24,9 @@ export async function respondToJobInvite(input: {
 }) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) return { success: false, error: "Not authenticated" };
+  if (!isStaffRole((session.user as { role?: string }).role)) {
+    return { success: false, error: "Not authorized" };
+  }
 
   const invite = await db.jobAssignmentInvite.findUnique({
     where: { id: input.inviteId },

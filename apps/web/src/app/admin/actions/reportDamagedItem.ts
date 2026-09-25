@@ -15,6 +15,7 @@ import {
   type EquipmentCondition,
 } from "@bookmops/core/inventory";
 import { adjustWarehouseStock, pickSourceLocationId } from "@/lib/stock.server";
+import { isStaffRole } from "@/lib/role-routing";
 
 /**
  * The condition a reported issue puts a REUSABLE tool into (Stage 2, PDF #4).
@@ -59,6 +60,9 @@ export async function reportDamagedItem(input: {
 }) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) return { success: false, error: "Not authenticated" };
+  if (!isStaffRole((session.user as { role?: string }).role)) {
+    return { success: false, error: "Not authorized" };
+  }
 
   const rawQty = Number(input.quantity ?? 1);
   if (!Number.isFinite(rawQty) || rawQty <= 0) {

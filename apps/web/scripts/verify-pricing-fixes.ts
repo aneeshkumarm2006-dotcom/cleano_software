@@ -77,6 +77,7 @@ import {
   isApplicantRole,
   isCleanerRole,
   isClientRole,
+  isStaffRole,
 } from "../src/lib/role-routing";
 
 let pass = 0,
@@ -2021,11 +2022,21 @@ check(
 // can't be called directly here (redirect() throws outside a request, same
 // reasoning Stage 1 used for the settings guard), so this asserts the guard
 // text itself — a regression there is a deleted line.
+// requireStaff is now an allow-list (isStaffRole) rather than "not CLIENT and
+// not APPLICANT": the stricter form, which also refuses a missing or unknown
+// role. What this check exists to protect is unchanged, so it asserts the same
+// outcome both ways: the guard uses the allow-list, and the allow-list refuses
+// APPLICANT and CLIENT.
 has(
   "requireStaff excludes APPLICANT (not just CLIENT) from /calendar, /training, /documents, /chat",
   "src/lib/page-guards.ts",
-  "isClientRole(role) || isApplicantRole(role)"
+  "if (!isStaffRole(role)) redirect(homeForRole(role));"
 );
+check("…because the staff allow-list refuses APPLICANT", isStaffRole("APPLICANT"), false);
+check("…and CLIENT", isStaffRole("CLIENT"), false);
+check("…and a missing role", isStaffRole(undefined), false);
+check("…and admits every staff role",
+  ["OWNER", "ADMIN", "OPS_MANAGER", "FIELD_LEAD", "EMPLOYEE"].every((r) => isStaffRole(r)), true);
 has(
   "a dedicated requireApplicant guard exists for /applicant/*",
   "src/lib/page-guards.ts",

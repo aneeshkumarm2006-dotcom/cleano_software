@@ -7,6 +7,8 @@ import { revalidatePath } from "next/cache";
 import { normalizeAllowedCategories } from "@bookmops/core/services";
 import { checkCleanerSeats, takesASeat } from "@/lib/plan-limits";
 import { unassignFutureJobs } from "@/lib/cleaner-deactivation";
+import { endSessionsOfSwitchedOffUsers } from "@/lib/session-revocation";
+import { refuseOwnerPromotion, refuseUnsafeSwitchOff } from "@/lib/switch-off-rules";
 
 type State = {
   message: string;
@@ -82,6 +84,16 @@ export async function updateEmployee(
       where: { id: employeeId },
       select: { role: true, isActive: true, deletedAt: true },
     });
+    // Taking access or ownership away, and granting ownership, are guarded:
+    // a switch-off is now a real lockout (see lib/switch-off-rules.ts).
+    const actor = { id: session!.user.id, role: actorRole };
+    const losesAccessOrOwnership =
+      (!isActive && before?.isActive) || (before?.role === "OWNER" && role !== "OWNER");
+    const refused =
+      refuseOwnerPromotion(actor, role, before?.role) ??
+      (losesAccessOrOwnership ? await refuseUnsafeSwitchOff(actor, [employeeId]) : null);
+    if (refused) return { message: "", error: refused };
+
     if (takesASeat(before, { role, isActive })) {
       const seats = await checkCleanerSeats(1);
       if (!seats.ok) return { message: "", error: seats.message };
@@ -104,6 +116,11 @@ export async function updateEmployee(
     // off here comes off every job that has not happened yet, and stays on the
     // ones that have. Keyed on the TRANSITION, not on the final state, so
     // saving an already-inactive cleaner's phone number does not re-run it.
+    // Switched off means signed out, on every device. Run on every save of an
+    // inactive person, not only the transition: it is cheap, and it also ends
+    // any session that outlived an earlier switch-off.
+    if (!isActive) await endSessionsOfSwitchedOffUsers([employeeId]);
+
     let unassigned = 0;
     if (!isActive && before?.isActive) {
       unassigned = (await unassignFutureJobs([employeeId])).jobsChanged;

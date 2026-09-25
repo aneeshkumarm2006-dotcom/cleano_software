@@ -63,7 +63,10 @@ async function requireUser(): Promise<
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) return { error: "Not authenticated" };
   const user = session.user as SessionUser;
-  return { user, role: (user.role as AppRole | undefined) ?? "EMPLOYEE" };
+  // No role means no access. This used to default to EMPLOYEE, which would
+  // have handed chat to any session that reached here without one.
+  if (!user.role) return { error: "Not authorized" };
+  return { user, role: user.role as AppRole };
 }
 
 // Can participate in group chat: any staff member (everyone but clients).
@@ -172,8 +175,11 @@ const DEFAULT_CHANNEL_NAME = "All Cleaners";
 /**
  * Lazily returns the single default group channel, creating it if none exists.
  * Idempotent — safe to call on every read.
+ *
+ * Not exported: every export of a "use server" file is a public endpoint, and
+ * this one does no auth check of its own. Its callers here do.
  */
-export async function ensureDefaultChannel() {
+async function ensureDefaultChannel() {
   const existing = await db.groupChannel.findFirst({
     where: { isDefault: true },
   });

@@ -5,6 +5,7 @@ import { headers } from "next/headers";
 import { db } from "@/lib/org-db";
 import { revalidatePath } from "next/cache";
 import { hashPassword, verifyPassword } from "better-auth/crypto";
+import { endOtherSessions } from "@/lib/session-revocation";
 
 interface UpdateUserSettingsParams {
   name: string;
@@ -104,6 +105,10 @@ export async function updateUserPassword(params: UpdateUserPasswordParams) {
         password: hashedPassword,
       },
     });
+
+    // Anyone else signed in with the old password is signed out; this device
+    // stays signed in.
+    await endOtherSessions(session.user.id, session.session.token);
 
     return { success: true };
   } catch (error) {

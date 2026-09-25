@@ -7,6 +7,7 @@ import type {
   LocationStockEntry,
   ProductLocationStock,
 } from "./getLocationStock.types";
+import { isStaffRole } from "@/lib/role-routing";
 
 export async function getLocationStock(
   productIds?: string[]
@@ -20,6 +21,9 @@ export async function getLocationStock(
 
   if (!session?.user) {
     return { success: false, error: "Not authenticated" };
+  }
+  if (!isStaffRole((session.user as { role?: string }).role)) {
+    return { success: false, error: "Not authorized" };
   }
 
   try {
