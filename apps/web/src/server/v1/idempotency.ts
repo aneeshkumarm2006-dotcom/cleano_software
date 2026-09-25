@@ -13,13 +13,13 @@
 // row-level security.
 import "server-only";
 
-import { createHash } from "node:crypto";
-
 import { Prisma } from "@prisma/client";
 
 import { db } from "@/lib/org-db";
 
 import { V1Error } from "./http";
+
+export { canonicalJson, requestHash } from "./request-hash";
 
 /** How long an answer is kept: longer than any correction window. */
 export const IDEMPOTENCY_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -31,20 +31,6 @@ const KEY_RE = /^[A-Za-z0-9_-]{8,100}$/;
 
 export function isValidKey(key: string | null): key is string {
   return !!key && KEY_RE.test(key);
-}
-
-/** JSON with object keys sorted, so the same body always hashes the same. */
-export function canonicalJson(value: unknown): string {
-  if (value === null || typeof value !== "object") return JSON.stringify(value) ?? "null";
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
-  const entries = Object.entries(value as Record<string, unknown>)
-    .filter(([, v]) => v !== undefined)
-    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-  return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${canonicalJson(v)}`).join(",")}}`;
-}
-
-export function requestHash(route: string, params: unknown, body: unknown): string {
-  return createHash("sha256").update(`${route}\n${canonicalJson(params)}\n${canonicalJson(body)}`).digest("hex");
 }
 
 export type Claim =
