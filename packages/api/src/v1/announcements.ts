@@ -75,8 +75,11 @@ export type AnnouncementsResponse = z.infer<typeof AnnouncementsResponse>;
  * Unknown ids, and ids of another company's announcements, are ignored, not an
  * error; at most 200 per call.
  */
+/** How many ids one mark-read call takes. */
+export const MARK_READ_MAX = 200;
+
 export const MarkAnnouncementsReadRequest = z.object({
-  ids: z.array(z.string().min(1).max(64)).min(1).max(200),
+  ids: z.array(z.string().min(1).max(64)).min(1).max(MARK_READ_MAX),
 });
 export type MarkAnnouncementsReadRequest = z.infer<typeof MarkAnnouncementsReadRequest>;
 

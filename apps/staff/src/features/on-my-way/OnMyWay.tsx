@@ -98,14 +98,16 @@ export function OnMyWay({
           : ""),
       [
         { text: "Cancel", style: "cancel" },
-        { text: "Send", onPress: () => void send(perm) },
+        { text: "Send", onPress: () => void send() },
       ],
     );
   }
 
-  async function send(perm: Location.LocationPermissionResponse | null) {
+  async function send() {
     let coords: { lat: number; lng: number; accuracyM: number } | undefined;
-    if (askForLocation && perm) {
+    // Read again at the tap: the permission can change while the alert is up.
+    const perm = askForLocation ? await Location.getForegroundPermissionsAsync().catch(() => null) : null;
+    if (perm) {
       setLocating(true);
       coords = await locateOnce(perm);
       setLocating(false);

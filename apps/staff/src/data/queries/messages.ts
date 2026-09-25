@@ -15,10 +15,12 @@ export const THREAD_POLL_MS = 5_000;
 export const CHANNELS_POLL_MS = 15_000;
 
 export const messageKeys = {
-  office: ["chat", "office"] as const,
+  // No key is a prefix of another, so invalidating a header never also
+  // throws away (and refetches) the conversation under it.
+  office: ["chat", "office", "summary"] as const,
   officeMessages: ["chat", "office", "messages"] as const,
   teamChannels: ["team", "channels"] as const,
-  teamChannel: (channelId: string) => ["team", "channel", channelId] as const,
+  teamChannel: (channelId: string) => ["team", "channel", channelId, "summary"] as const,
   teamMessages: (channelId: string) => ["team", "channel", channelId, "messages"] as const,
   directory: ["team", "directory"] as const,
 };

@@ -60,11 +60,14 @@ function Flow({ pay, currency, bottom }: { pay: PayResponse; currency: string; b
   const [serverError, setServerError] = useState<string | null>(null);
   const withdraw = useRequestWithdrawal();
   /**
-   * The idempotency key for the request being confirmed. Made when the person
-   * reaches the confirmation, kept through every retry of THAT request, and
-   * dropped when they change it or the server gives a definite answer.
+   * The idempotency key, tied to the request it was made for. Kept until the
+   * server gives a definite answer, even if the person goes back and comes
+   * again with the same amount and note: when the outcome of the last send is
+   * unknown, sending the same request again must reuse its key, or a request
+   * that did land would be made a second time. A different request gets a
+   * new key.
    */
-  const key = useRef<string | null>(null);
+  const key = useRef<{ id: string; fingerprint: string } | null>(null);
 
   const available = pay.balance.availableCents;
   const { minimumCents, feeBasisPoints } = pay.withdrawal;
@@ -86,13 +89,14 @@ function Flow({ pay, currency, bottom }: { pay: PayResponse; currency: string; b
     setTouched(true);
     setServerError(null);
     if (problem || cents == null) return;
-    key.current = randomUUID();
     setStep({ kind: "confirm", amountCents: cents, note: note.trim() });
   }
 
   function send(amountCents: number, sentNote: string) {
     setServerError(null);
-    const clientEventId = key.current ?? (key.current = randomUUID());
+    const fingerprint = `${amountCents}|${feeBasisPoints}|${sentNote}`;
+    if (key.current?.fingerprint !== fingerprint) key.current = { id: randomUUID(), fingerprint };
+    const clientEventId = key.current.id;
     withdraw.mutate(
       { amountCents, expectedFeeBasisPoints: feeBasisPoints, clientEventId, ...(sentNote ? { note: sentNote } : {}) },
       {
@@ -185,7 +189,6 @@ function Flow({ pay, currency, bottom }: { pay: PayResponse; currency: string; b
           variant="secondary"
           disabled={withdraw.isPending}
           onPress={() => {
-            key.current = null;
             setServerError(null);
             setStep({ kind: "form" });
           }}

@@ -12,12 +12,15 @@ import { randomUUID } from "expo-crypto";
 import * as Haptics from "expo-haptics";
 import { useCallback } from "react";
 
+import { onSignOut } from "@/data/sign-out";
+
 import { pendingStore } from "./pending";
 
 type Page<M> = { items: M[]; nextCursor: string | null };
 
 /** In flight in this process, so a double tap on Try again sends once. */
 const inFlight = new Set<string>();
+onSignOut(() => inFlight.clear());
 
 export function useThreadSender<M extends { id: string }>({
   owner,

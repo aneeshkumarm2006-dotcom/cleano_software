@@ -1,4 +1,4 @@
-import type { Announcement } from "@bookmops/api/v1";
+import { type Announcement, MARK_READ_MAX } from "@bookmops/api/v1";
 import { Button, color, IconButton, space, Text } from "@bookmops/ui-native";
 import { router } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -46,10 +46,13 @@ export default function Announcements() {
     const due = items.filter((a) => (!a.readByMe || a.myReadStale) && !sent.current.has(a.id)).map((a) => a.id);
     if (due.length === 0) return;
     const t = setTimeout(() => {
-      for (const id of due) sent.current.add(id);
-      mark(due.slice(0, 200), {
+      // The endpoint takes 200 at a time. Only what is actually sent counts
+      // as sent; the rest go when the list refreshes after this batch.
+      const batch = due.slice(0, MARK_READ_MAX);
+      for (const id of batch) sent.current.add(id);
+      mark(batch, {
         onError: () => {
-          for (const id of due) sent.current.delete(id);
+          for (const id of batch) sent.current.delete(id);
         },
       });
     }, SEEN_AFTER_MS);
