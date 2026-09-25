@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/org-db";
+import { endSessionsOfSwitchedOffUsers } from "@/lib/session-revocation";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
@@ -37,6 +38,7 @@ export async function updateApplicationStatus(input: {
       where: { id: application.userId, role: "APPLICANT" },
       data: { isActive: !blocked },
     });
+    if (blocked) await endSessionsOfSwitchedOffUsers([application.userId]);
   }
 
   revalidatePath("/admin/job-applications");

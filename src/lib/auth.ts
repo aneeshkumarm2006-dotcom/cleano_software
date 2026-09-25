@@ -1,5 +1,6 @@
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
+import { APIError } from "better-auth/api";
 import { customSession } from "better-auth/plugins"
 import { cache } from "react";
 import { headers as nextHeaders } from "next/headers";
@@ -7,6 +8,27 @@ import { headers as nextHeaders } from "next/headers";
 import { db } from "@/lib/org-db";
 import { requestOrigin } from "@/lib/org-url";
 import { sendAccountEmail } from "@/lib/email";
+
+/**
+ * What a switched-off person is told when they try to sign in: the same words
+ * the cleaner and applicant apps used to show on their "deactivated" screens,
+ * which they now never reach. The cleaner wording is the company's own
+ * (Settings → `provider.deactivatedMessage`). Imported lazily because the
+ * settings module sits downstream of this one.
+ */
+async function switchedOffMessage(role: string | null | undefined): Promise<string> {
+  if (role === "APPLICANT") {
+    return "Your application is no longer active. If you have questions, please reach out to us.";
+  }
+  try {
+    const { getSetting } = await import("@/lib/settings");
+    const configured = await getSetting("provider.deactivatedMessage");
+    if (typeof configured === "string" && configured.trim()) return configured;
+  } catch (e) {
+    console.error("deactivated message setting", e);
+  }
+  return "This account has been switched off. Contact your office.";
+}
 
 // better-auth doesn't ship a "role" on the user object passed to email hooks
 // — fetch it once so the email goes to the right catalog row (customer vs
@@ -220,9 +242,45 @@ export const auth = betterAuth({
         before: async (user) => ({ data: { ...user, role: "CLIENT" } }),
       },
     },
+    /**
+     * A switched-off or deleted person cannot get a session.
+     *
+     * `isActive` used to be read by the cleaner layout and nothing else, so a
+     * switched-off cleaner could sign in, skip the page, and call any server
+     * action directly. Refusing the session here closes that at the source:
+     * every guard downstream starts from a session, and there is none. Their
+     * existing sessions are ended when they are switched off
+     * (lib/session-revocation.ts); this stops them making new ones.
+     *
+     * Thrown, not `return false`: false surfaces as a generic "failed to
+     * create session", and the person deserves to know why.
+     */
+    session: {
+      create: {
+        before: async (session) => {
+          // Reads through `db`, outside better-auth's own transaction. That
+          // works because the Prisma adapter's `transaction` option is off:
+          // turn it on and sign-up's hook would no longer see its own
+          // uncommitted user, and every sign-up would be refused.
+          const person = await db.user.findUnique({
+            where: { id: session.userId },
+            select: { isActive: true, deletedAt: true, role: true },
+          });
+          if (!person || !person.isActive || person.deletedAt) {
+            throw new APIError("FORBIDDEN", {
+              message: await switchedOffMessage(person?.role),
+              code: "ACCOUNT_INACTIVE",
+            });
+          }
+        },
+      },
+    },
   },
   emailAndPassword: {
     enabled: true,
+    // A reset is what someone does after losing a phone or a password. Every
+    // session they had — including the one on the lost phone — ends with it.
+    revokeSessionsOnPasswordReset: true,
     sendResetPassword: async ({ user, url }) => {
       const role = await roleOf(user.id);
       sendAccountEmail({
@@ -275,9 +333,14 @@ export const auth = betterAuth({
         // company, or a stranger who signed up for a free trial — a working
         // cleaner's role in every other workspace, since every guard downstream
         // checks the role and never the membership.
+        //
+        // It also refuses a switched-off or deleted person. Their sessions are
+        // ended when they are switched off, but one minted before that rule
+        // existed would otherwise live out its thirty days; reading two more
+        // columns on a query that runs anyway retires it on its next request.
         const userProfile = await db.user.findUnique({
           where: { id: session.user.id },
-          select: { role: true },
+          select: { role: true, isActive: true, deletedAt: true },
         });
         //
         // Returning null really does mean "no session" here. The plugin's
@@ -287,7 +350,9 @@ export const auth = betterAuth({
         // future version ever stopped honouring it, the fallback would be a
         // session carrying no role at all, and every isXRole() guard still
         // refuses that.
-        if (!userProfile) return null as unknown as typeof session;
+        if (!userProfile || !userProfile.isActive || userProfile.deletedAt) {
+          return null as unknown as typeof session;
+        }
 
         return {
           ...session,

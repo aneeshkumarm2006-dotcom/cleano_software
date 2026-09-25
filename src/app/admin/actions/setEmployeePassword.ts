@@ -7,6 +7,7 @@ import { hashPassword } from "better-auth/crypto";
 import { revalidatePath } from "next/cache";
 import { logActivity } from "@/lib/activity-log";
 import { makeTempPassword } from "@/lib/bookingkoala/core";
+import { endAllSessionsOf } from "@/lib/session-revocation";
 
 /**
  * Admin sets/resets a staff member's (cleaner's) password from the UI. The
@@ -28,9 +29,14 @@ export async function setEmployeePassword(input: {
 
   const target = await db.user.findUnique({
     where: { id: input.userId },
-    select: { id: true, name: true, email: true },
+    select: { id: true, name: true, email: true, role: true },
   });
   if (!target) return { success: false, error: "User not found" };
+  // Setting someone's password is signing in as them. An admin must not be
+  // able to do that to an owner.
+  if (target.role === "OWNER" && role !== "OWNER") {
+    return { success: false, error: "Only an owner can set an owner's password." };
+  }
 
   let password = (input.password ?? "").trim();
   if (password) {
@@ -58,6 +64,10 @@ export async function setEmployeePassword(input: {
     // Admin-set a known password to hand over → clear the forced-reset flag so
     // it stays active (don't force the cleaner to immediately change it).
     await db.user.update({ where: { id: target.id }, data: { mustChangePassword: false } });
+
+    // The old password stops working everywhere, including on any device that
+    // was already signed in with it.
+    await endAllSessionsOf(target.id);
 
     await logActivity({
       category: "AUTH",

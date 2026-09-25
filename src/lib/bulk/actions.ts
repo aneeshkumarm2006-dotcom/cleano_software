@@ -5,6 +5,8 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { logActivity } from "@/lib/activity-log";
+import { endSessionsOfSwitchedOffUsers } from "@/lib/session-revocation";
+import { refuseUnsafeSwitchOff } from "@/lib/switch-off-rules";
 
 // Entities that support soft-delete bulk actions. Value = Prisma model delegate
 // key on `db`; path = what to revalidate after a change.
@@ -28,7 +30,7 @@ export type BulkEntity = keyof typeof ENTITIES;
 type Result = { success: true; count: number } | { success: false; error: string };
 
 async function requireStaff(): Promise<
-  | { ok: true; userId: string; userLabel: string | null }
+  | { ok: true; userId: string; userLabel: string | null; role: string }
   | { ok: false; error: string }
 > {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -42,6 +44,7 @@ async function requireStaff(): Promise<
     ok: true,
     userId: session.user.id,
     userLabel: session.user.email ?? session.user.name ?? null,
+    role,
   };
 }
 
@@ -59,12 +62,20 @@ export async function bulkSoftDelete(entity: BulkEntity, ids: string[]): Promise
   const cleanIds = sanitizeIds(ids);
   if (cleanIds.length === 0) return { success: false, error: "Nothing selected" };
 
+  // Archiving a person takes their access away, so it follows the same rules
+  // as switching them off.
+  if (entity === "employee") {
+    const refused = await refuseUnsafeSwitchOff({ id: gate.userId, role: gate.role }, cleanIds);
+    if (refused) return { success: false, error: refused };
+  }
+
   try {
     const delegate = (db as unknown as Record<string, any>)[cfg.model];
     const res = await delegate.updateMany({
       where: { id: { in: cleanIds }, deletedAt: null },
       data: { deletedAt: new Date() },
     });
+    if (entity === "employee") await endSessionsOfSwitchedOffUsers(cleanIds);
     // Who archived what, kept outside the archived rows themselves.
     await logActivity({
       category: "ADMIN",

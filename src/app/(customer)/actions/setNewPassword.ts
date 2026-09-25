@@ -8,6 +8,7 @@ import { sendAccountEmail } from "@/lib/email";
 import { logActivity } from "@/lib/activity-log";
 import { notifyAdmins } from "@/lib/admin-alerts";
 import { isCleanerRole } from "@/lib/role-routing";
+import { endOtherSessions } from "@/lib/session-revocation";
 
 /**
  * Sets a new password for the signed-in customer and clears the
@@ -31,6 +32,20 @@ export async function setNewPassword(input: {
       return { success: false, error: "Passwords don't match." };
 
     const userId = session.user.id;
+
+    // This is the forced first-login change, and it asks for no current
+    // password — so it may only run when a change is actually due. Otherwise
+    // anyone holding a stolen session could set a password, and (now that it
+    // ends other sessions) sign the real owner out. A voluntary change goes
+    // through updateUserPassword, which checks the current password.
+    const due = await db.user.findUnique({
+      where: { id: userId },
+      select: { mustChangePassword: true },
+    });
+    if (!due?.mustChangePassword) {
+      return { success: false, error: "Your password doesn't need changing here. Use your profile settings." };
+    }
+
     const hashed = await hashPassword(password);
 
     const account = await db.account.findFirst({
@@ -48,6 +63,10 @@ export async function setNewPassword(input: {
     // Setting a fresh hash above already retires the temporary password;
     // clearing the flag completes the deactivation so it can never be reused.
     await db.user.update({ where: { id: userId }, data: { mustChangePassword: false } });
+
+    // Whoever else knew the old password — the temporary one an admin set is
+    // the usual case — is signed out. This device stays signed in.
+    await endOtherSessions(userId, session.session.token);
 
     const role = (session.user as { role?: string }).role;
     const isCleaner = isCleanerRole(role);
