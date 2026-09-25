@@ -3,7 +3,13 @@ import { z } from "zod";
 import { openEnum } from "./common";
 import { ROLES } from "./enums";
 
-/** GET /api/v1/me — who is signed in, and for which company. */
+/**
+ * GET /api/v1/me — who is signed in, and for which company.
+ *
+ * Server: every staff role (OWNER, ADMIN, OPS_MANAGER, FIELD_LEAD, EMPLOYEE).
+ * The app picks its side from `role` with appSideFor (./manager-access.ts),
+ * and signs out any other role, saying why.
+ */
 export const MeResponse = z.object({
   person: z.object({
     id: z.string(),

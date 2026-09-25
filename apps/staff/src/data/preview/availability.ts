@@ -9,7 +9,7 @@ import { delay } from "./delay";
 import { previewMe } from "./jobs";
 import { once } from "./replay";
 
-const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: previewMe.company.timezone }).format(new Date());
+const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: previewMe().company.timezone }).format(new Date());
 
 let week: WeekDay[] = [
   { day: "MONDAY", available: true, start: "08:00", end: "17:00" },

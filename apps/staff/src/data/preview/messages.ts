@@ -7,6 +7,7 @@
 // (same clientEventId) goes through. An edit to text containing "#fail"
 // always fails, to show it being rolled back.
 import { ApiError } from "@bookmops/api/client";
+import { can } from "@bookmops/api/v1";
 import type {
   DirectoryEntry,
   OfficeMessage,
@@ -17,8 +18,11 @@ import type {
 
 import type { DataSource } from "../source";
 import { delay } from "./delay";
+import { previewPerson, previewRole } from "./role";
 
 const ME = { id: "preview-cleaner", name: "Amara Diallo" };
+/** Who is signed in to the preview: team messages are "mine" by sender, whoever that is. */
+const withMe = (m: TeamMessage): TeamMessage => ({ ...m, fromMe: m.senderId === previewPerson().id });
 const PAGE = 20;
 
 function minutesAgo(m: number): string {
@@ -124,7 +128,7 @@ export const previewMessagesApi = {
     if (!channels.some((c) => c.id === channelId)) {
       return Promise.reject(new ApiError("This conversation isn't available.", 404, "NOT_FOUND", false));
     }
-    return delay(pageOf([...(teamRows.get(channelId) ?? [])].reverse(), cursor));
+    return delay(pageOf([...(teamRows.get(channelId) ?? [])].reverse().map(withMe), cursor));
   },
 
   sendTeamMessage: async (channelId, req) => {
@@ -134,13 +138,14 @@ export const previewMessagesApi = {
     const existing = rows.find((m) => m.clientEventId === req.clientEventId);
     if (existing) return existing;
     maybeFail(req);
+    const me = previewPerson();
     const message: TeamMessage = {
       id: `t-${req.clientEventId}`,
       channelId,
       clientEventId: req.clientEventId,
       fromMe: true,
-      senderId: ME.id,
-      senderName: ME.name,
+      senderId: me.id,
+      senderName: me.name,
       body: req.body.trim(),
       createdAt: new Date().toISOString(),
       editedAt: null,
@@ -156,7 +161,7 @@ export const previewMessagesApi = {
     const rows = teamRows.get(channelId);
     const i = rows?.findIndex((m) => m.id === messageId) ?? -1;
     // Only the sender's own message; anyone else's is "not found", as on the server.
-    if (!rows || i < 0 || !rows[i]!.fromMe) throw new ApiError("This message isn't available.", 404, "NOT_FOUND", false);
+    if (!rows || i < 0 || rows[i]!.senderId !== previewPerson().id) throw new ApiError("This message isn't available.", 404, "NOT_FOUND", false);
     const edit = editsSeen.get(req.clientEventId);
     if (edit) return edit;
     if (rows[i]!.deleted) throw new ApiError("This message was deleted, so it can't be edited.", 409, "MESSAGE_DELETED", false);
@@ -171,8 +176,19 @@ export const previewMessagesApi = {
     await delay(null, 400);
     const rows = teamRows.get(channelId);
     const i = rows?.findIndex((m) => m.id === messageId) ?? -1;
-    if (!rows || i < 0 || !rows[i]!.fromMe) throw new ApiError("This message isn't available.", 404, "NOT_FOUND", false);
+    if (!rows || i < 0 || rows[i]!.senderId !== previewPerson().id) throw new ApiError("This message isn't available.", 404, "NOT_FOUND", false);
     // Soft, and the same answer again for a message already deleted.
+    rows[i] = { ...rows[i]!, body: "", deleted: true };
+    return { id: messageId };
+  },
+
+  // The office removing anyone's message (TEAM_MODERATE), as the web's moderation.
+  moderateTeamMessage: async (channelId, messageId) => {
+    await delay(null, 400);
+    if (!can(previewRole(), "TEAM_MODERATE")) throw new ApiError("Your role can't do this. Ask an admin.", 403, "FORBIDDEN", false);
+    const rows = teamRows.get(channelId);
+    const i = rows?.findIndex((m) => m.id === messageId) ?? -1;
+    if (!rows || i < 0) throw new ApiError("This message isn't available.", 404, "NOT_FOUND", false);
     rows[i] = { ...rows[i]!, body: "", deleted: true };
     return { id: messageId };
   },
@@ -209,6 +225,7 @@ export const previewMessagesApi = {
   | "sendTeamMessage"
   | "editTeamMessage"
   | "deleteTeamMessage"
+  | "moderateTeamMessage"
   | "markChannelRead"
   | "teamDirectory"
   | "openDirect"
@@ -277,7 +294,8 @@ const readAt = new Map<string, number>([
 
 function unreadIn(channelId: string): number {
   const since = readAt.get(channelId) ?? 0;
-  return (teamRows.get(channelId) ?? []).filter((m) => !m.fromMe && new Date(m.createdAt).getTime() > since).length;
+  const me = previewPerson().id;
+  return (teamRows.get(channelId) ?? []).filter((m) => m.senderId !== me && new Date(m.createdAt).getTime() > since).length;
 }
 
 const directory: DirectoryEntry[] = [

@@ -265,9 +265,12 @@ export const POST = v1Route(
    - `PASSWORD_CHANGE_REQUIRED` if a change is pending, except on `/me`,
      change-password, and sign-out.
 10. **Role.** `access` is an **allow-list**, and a missing or unknown role is
-    403. For `staff`, the list is `EMPLOYEE` and `FIELD_LEAD` for now. The
-    manager and admin roles are added with their endpoints, pending the
-    field-lead decision in §12.
+    403. For `staff`, the list is `EMPLOYEE` and `FIELD_LEAD`. Manager routes
+    (`/api/v1/manager/*`) use `{ capability: X }`, resolved by
+    `capabilitiesFor(role)` in `packages/api/src/v1/manager-access.ts`, the
+    same function the app reads, so the two can't drift. `/me`, device
+    registration, change-password, team chat and announcements admit every
+    staff role (`OWNER`, `ADMIN`, `OPS_MANAGER` too).
 11. **User rate limit,** per company and user.
 12. **Validation.** Body and query against the schema. Field errors answer 400.
 13. **Idempotency** (§6).
@@ -299,6 +302,9 @@ them:
   | Withdrawal request | 5 an hour | Emails the cleaner and the office |
   | Claim a job | 10 a minute | Races other cleaners for the same job |
   | Upload sign | 60 an hour | Each one is storage the company pays for |
+  | Crew change (manager) | 60 an hour | Emails the client, invites cleaners |
+  | Office chat reply (manager) | 10 a minute | Emails the cleaner when they're away |
+  | Withdrawal decision (manager) | 60 an hour | "Mark paid" emails the cleaner |
 
   A replayed idempotency key is not counted again.
 - **No redirects.** A v1 route answers, or fails with the envelope; it never
@@ -498,6 +504,7 @@ Built in this order. Each ships with its service extraction and its checks.
 | 5 | `GET /jobs/available` · `GET /jobs/available/:id` · `POST /jobs/available/:id/claim` | available-jobs loader, `getAvailableJobPreview`, `claimJob` |
 | 6 | `GET /pay` · `POST /pay/withdrawals` | my-pay loader, `requestWithdrawal`. This moves money, so it's idempotent and gets its own security review. |
 | 7 | availability, kit and inventory, chat, announcements, training, documents | the matching actions |
+| 8 | `GET /manager/team/day` · `GET /manager/jobs/:id` · `…/candidates` · `PUT …/crew` · `POST …/cleaners` · approvals (`/manager/approvals/*`, `/manager/withdrawals*`, `/manager/kit-requests*`) · `/manager/alerts*` · `/manager/late-arrivals` · `/manager/issues*` · `/manager/chat/conversations*` · `DELETE /manager/team/channels/:id/messages/:id` | dashboard and calendar loaders, `assignCleaners`, `bulkAssignCleaner`, `decideTimeLogChange`, `processWithdrawal`, `resolveInventoryRequest`, `setJobIssueStatus`, admin chat, `deleteGroupMessage` |
 
 All paths are under `/api/v1`. Notes on the endpoints:
 - **Push tokens are per company,** registered after sign-in and removed on
@@ -627,7 +634,10 @@ The fix follows the same shape as §5:
    work. They affect the live web app, and most are High.
 2. **Offline times beyond five minutes:** office approval (recommended), or
    apply and flag (§6).
-3. **Field leads in Bookmops Pro:** cleaner screens, manager screens, or both.
-   This sets the `staff` allow-list and the manager endpoints.
+3. **Field leads in Bookmops Pro:** decided, **both, according to the
+   permissions.** A field lead gets the cleaner screens and exactly the
+   manager screens the web lets a field lead use (the matrix in
+   `packages/api/src/v1/manager-access.ts`: their group's day, clock-time
+   approvals, alerts). Nothing more.
 4. **Minimum-version policy:** who raises `minSupportedVersion`, and how much
    notice cleaners get before a forced update.

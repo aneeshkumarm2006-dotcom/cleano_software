@@ -8,6 +8,7 @@ import type { JobDetailResponse, JobSummary, MeResponse, TodayResponse } from "@
 
 import type { DataSource } from "../source";
 import { delay } from "./delay";
+import { previewPerson, previewRole } from "./role";
 
 const TZ = "America/Toronto";
 
@@ -31,11 +32,14 @@ function job(id: string, startH: number, lengthH: number, over: Partial<JobSumma
   };
 }
 
-export const previewMe: MeResponse = {
-  person: { id: "preview-cleaner", name: "Amara Diallo", email: "amara@example.com", role: "EMPLOYEE" },
-  company: { id: "preview-co", name: "Sample Cleaning Co.", slug: "sample", timezone: TZ, currency: "CAD" },
-  mustChangePassword: false,
-};
+/** Whoever the preview is signed in as (./role.ts), in the sample company. */
+export function previewMe(): MeResponse {
+  return {
+    person: { ...previewPerson(), role: previewRole() },
+    company: { id: "preview-co", name: "Sample Cleaning Co.", slug: "sample", timezone: TZ, currency: "CAD" },
+    mustChangePassword: false,
+  };
+}
 
 const upcoming: JobSummary[] = [
   job("j1", 0.8, 3),
@@ -92,7 +96,7 @@ export function previewJob(id: string): JobDetailResponse {
 }
 
 export const previewJobsApi = {
-  me: () => delay(previewMe),
+  me: () => delay(previewMe()),
   changePassword: () => delay({ ok: true as const }),
   today: () => delay(previewToday),
   jobs: (scope) => delay({ items: scope === "past" ? previewPast : previewUpcoming, nextCursor: null }),

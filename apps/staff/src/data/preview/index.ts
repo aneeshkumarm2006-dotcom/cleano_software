@@ -12,6 +12,7 @@ import { previewDocumentsApi } from "./documents";
 import { previewIssuesApi } from "./issues";
 import { previewJobsApi } from "./jobs";
 import { previewKitApi } from "./kit";
+import { previewManagerApi } from "./manager";
 import { previewMessagesApi } from "./messages";
 import { previewOnMyWayApi } from "./on-my-way";
 import { previewPayApi } from "./pay";
@@ -36,4 +37,7 @@ export const previewSource: DataSource = {
   ...previewTrainingApi,
   ...previewDocumentsApi,
   ...previewStrikesApi,
+  ...previewManagerApi,
 };
+
+export { setPreviewRole } from "./role";
