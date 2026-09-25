@@ -28,7 +28,8 @@ const MAX_PER_PICK = 20;
 
 /**
  * Before and after photos for a job. Take or choose them, watch them send,
- * and delete your own. Photos go straight to storage from the phone; a failed
+ * and delete your own. When the office has turned photos off for the job,
+ * the photos already on it are still shown, and nothing can be added. Photos go straight to Cloudinary from the phone; a failed
  * one stays here with its reason until it's sent or removed.
  */
 export default function Photos() {
@@ -98,18 +99,18 @@ function PhotosBody({
   const [open, setOpen] = useState<JobPhoto | null>(null);
   const [picking, setPicking] = useState(false);
 
-  // After-photos off: everything is filed as before, and the choice isn't offered.
-  const effectivePhase: PhotoPhase = policy.afterPhotosAllowed ? phase : "BEFORE";
+  // Photos off for this job: nothing is offered, before or after.
+  const adding = policy.canAdd && policy.photosAllowed;
   const room = Math.max(0, policy.maxPhotos - total - uploads.items.length);
   const failed = uploads.items.filter((i) => i.step === "failed" && i.canRetry).length;
 
   async function add(from: "camera" | "library") {
-    if (picking || room === 0) return;
+    if (!adding || picking || room === 0) return;
     setPicking(true);
     try {
       const assets = await pickPhotos(from, Math.min(room, MAX_PER_PICK));
       if (assets?.length) {
-        uploads.add(assets, effectivePhase, policy.maxBytes);
+        uploads.add(assets, phase, policy.maxBytes);
         void Haptics.selectionAsync().catch(() => {});
       }
     } catch {
@@ -137,28 +138,24 @@ function PhotosBody({
     ]);
   }
 
-  const takeLabel = effectivePhase === "AFTER" ? "Take an after photo" : "Take a before photo";
+  const takeLabel = phase === "AFTER" ? "Take an after photo" : "Take a before photo";
 
   return (
     <>
-      <ScrollView contentContainerStyle={{ padding: space[4], paddingTop: space[1], gap: space[5], paddingBottom: (policy.canAdd ? 120 : space[6]) + bottom }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ padding: space[4], paddingTop: space[1], gap: space[5], paddingBottom: (adding ? 120 : space[6]) + bottom }} showsVerticalScrollIndicator={false}>
         <Text variant="body" color="ink2" numeral>
           {total} of {policy.maxPhotos} on this job
         </Text>
 
-        {!policy.afterPhotosAllowed ? (
-          <Notice icon="info" text="After photos are off for this job. An admin turned them off, so just take before photos." />
-        ) : null}
-
-        {policy.canAdd ? (
-          policy.afterPhotosAllowed ? (
-            <View style={{ gap: space[2] }}>
-              <Segmented label="What these photos show" options={PHASES} value={phase} onChange={setPhase} />
-              <Text variant="small" color="ink2">
-                {JOB_PHOTO_KIND_HINT[effectivePhase]}
-              </Text>
-            </View>
-          ) : null
+        {!policy.photosAllowed ? (
+          <Notice icon="info" text="The office has turned photos off for this job. To show them a problem, use Something wrong? on the job, which can take a photo." />
+        ) : policy.canAdd ? (
+          <View style={{ gap: space[2] }}>
+            <Segmented label="What these photos show" options={PHASES} value={phase} onChange={setPhase} />
+            <Text variant="small" color="ink2">
+              {JOB_PHOTO_KIND_HINT[phase]}
+            </Text>
+          </View>
         ) : (
           <Notice icon="lock" text={policy.closedReason ?? "Photos can't be added to this job any more."} />
         )}
@@ -181,7 +178,7 @@ function PhotosBody({
           <Empty
             icon="camera"
             title="No photos yet"
-            detail={policy.canAdd ? "Take before photos when you arrive, and after photos when you're done." : undefined}
+            detail={adding ? "Take before photos when you arrive, and after photos when you're done." : undefined}
           />
         ) : (
           <PhotoGrid photos={items} timeZone={timeZone} onOpen={setOpen} />
@@ -190,7 +187,7 @@ function PhotosBody({
         {hasMore ? <Button label="Show more photos" variant="secondary" size="md" loading={loadingMore} onPress={onLoadMore} /> : null}
       </ScrollView>
 
-      {policy.canAdd ? (
+      {adding ? (
         <View
           style={{
             position: "absolute",

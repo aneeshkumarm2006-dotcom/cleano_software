@@ -25,6 +25,12 @@ export interface ThreadMessage {
   /** For a failed message: the id to retry or discard it by, and why. */
   pendingId?: string;
   error?: string | null;
+  /** The server's id, on a message the person may edit or delete. */
+  editableId?: string;
+  /** When it was last edited, or null. */
+  editedAt?: string | null;
+  /** Deleted: shown as "Message deleted", with no body. */
+  deleted?: boolean;
 }
 
 export type ThreadRow =

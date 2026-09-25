@@ -16,6 +16,9 @@
 // connection posts the message once (API_V1.md §6). The server stores the id
 // on the message and returns it to its sender, which is how the app matches a
 // message it is still showing as "sending" to the one the server saved.
+//
+// In team chat a person can edit and delete their own messages. Office chat
+// has neither.
 import { z } from "zod";
 
 import { Instant, openEnum, page } from "./common";
@@ -191,14 +194,23 @@ export const TeamMessage = z.object({
   senderId: z.string(),
   /** As stored when it was sent; no contact details. */
   senderName: z.string(),
+  /** Empty when `deleted`: a deleted message's text is never sent. */
   body: z.string(),
   createdAt: Instant,
+  /** When its sender last edited it; null if never. */
+  editedAt: Instant.nullable(),
+  /**
+   * Its sender deleted it (or the office removed it). Shown to everyone as
+   * "Message deleted", in its place in the conversation.
+   */
+  deleted: z.boolean(),
 });
 export type TeamMessage = z.infer<typeof TeamMessage>;
 
 /**
- * GET /api/v1/team/channels/:channelId/messages?cursor= — newest first,
- * soft-deleted messages left out.
+ * GET /api/v1/team/channels/:channelId/messages?cursor= — newest first.
+ * Soft-deleted messages are included, with `deleted: true` and an empty
+ * body, so everyone sees where one was.
  *
  * Server: canAccessChannel, else 404. Does not move the read cursor.
  */
@@ -214,6 +226,45 @@ export type TeamMessagesResponse = z.infer<typeof TeamMessagesResponse>;
  * over MESSAGE_BODY_MAX.
  */
 export const SendTeamMessageResponse = TeamMessage;
+
+/**
+ * PATCH /api/v1/team/channels/:channelId/messages/:messageId — edit the
+ * caller's own message. Body: EditTeamMessageRequest (the same rules as a
+ * send). Idempotent on `clientEventId`, also sent as the Idempotency-Key: a
+ * retry of the same edit returns the same message. Response: the updated
+ * TeamMessage.
+ *
+ * Server:
+ *   - canAccessChannel (else 404), and the channel is active;
+ *   - the message is in this channel and the CALLER sent it: anyone else's
+ *     message answers 404, the same as one that doesn't exist, so an edit
+ *     can't be used to probe ids. An office admin calling v1 as staff is no
+ *     exception;
+ *   - trims, refuses empty or over MESSAGE_BODY_MAX (400), as a send does;
+ *   - a deleted message can't be edited (409 `MESSAGE_DELETED`);
+ *   - sets `body` and `editedAt` to now, and nothing else: not the sender,
+ *     the time it was sent, or anyone's read cursor;
+ *   - counts against the team chat send limit (API_V1.md §4).
+ * Needs `editedAt DateTime?` on GroupMessage (a schema change, staging
+ * first). The web's chat doesn't show "edited" yet.
+ */
+export const EditTeamMessageRequest = SendMessageRequest;
+export type EditTeamMessageRequest = z.infer<typeof EditTeamMessageRequest>;
+export const EditTeamMessageResponse = TeamMessage;
+
+/**
+ * DELETE /api/v1/team/channels/:channelId/messages/:messageId — delete the
+ * caller's own message. No body. Response: `{ id }`.
+ *
+ * Server: canAccessChannel (else 404); the message is in this channel and
+ * the CALLER sent it, else 404, as for an edit. The delete is soft: it sets
+ * `deletedAt`, as the web's moderation does, and from then on the message
+ * is served to everyone with `deleted: true` and no body. Deleting a message
+ * that is already deleted answers the same `{ id }` again, so a retry is
+ * harmless.
+ */
+export const DeleteTeamMessageResponse = z.object({ id: z.string() });
+export type DeleteTeamMessageResponse = z.infer<typeof DeleteTeamMessageResponse>;
 
 /**
  * POST /api/v1/team/channels/:channelId/read — no body. Idempotent by nature.

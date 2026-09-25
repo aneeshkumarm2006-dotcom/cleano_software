@@ -82,9 +82,10 @@ const paidCents = PAYOUTS.filter((p) => p.status === "PAID").reduce((s, p) => s 
 
 const withdrawals: Withdrawal[] = [
   {
+    // Asked for $600.00; stored, as the web stores it, at $570.00 after the fee.
     id: "w-2",
-    amountCents: 60000,
-    feeCents: 3000,
+    amountCents: 57000,
+    feeCents: null,
     netCents: 57000,
     status: "COMPLETED",
     requestedAt: instant(monday - 8, 16),
@@ -93,8 +94,8 @@ const withdrawals: Withdrawal[] = [
   },
   {
     id: "w-1",
-    amountCents: 90000,
-    feeCents: 4500,
+    amountCents: 85500,
+    feeCents: null,
     netCents: 85500,
     status: "COMPLETED",
     requestedAt: instant(monday - 15, 10),
@@ -104,7 +105,10 @@ const withdrawals: Withdrawal[] = [
 ];
 const replays = new Map<string, WithdrawalResponse>();
 
-/** Paid in, minus every withdrawal the office hasn't declined. The server's own formula. */
+/**
+ * Paid in, minus every withdrawal the office hasn't declined at its stored
+ * amount, which is the net after the fee. The server's own formula.
+ */
 function available(): number {
   const reserved = withdrawals.filter((w) => w.status !== "REJECTED").reduce((s, w) => s + w.amountCents, 0);
   return Math.max(0, paidCents - reserved);
@@ -189,19 +193,25 @@ export const previewPayApi = {
     if (body.amountCents > balance) {
       throw new ApiError(`That's more than your available balance ($${(balance / 100).toFixed(2)}).`, 409, "INSUFFICIENT_BALANCE", false);
     }
+    // The balance check is on what was asked for; the row is stored at the net.
     const feeCents = Math.round((body.amountCents * FEE_BPS) / 10_000);
-    const withdrawal: Withdrawal = {
+    const netCents = body.amountCents - feeCents;
+    if (netCents < 1) {
+      throw new ApiError("That's too small to send once the fee is taken.", 400, "AMOUNT_TOO_SMALL", false);
+    }
+    const stored: Withdrawal = {
       id: `w-${withdrawals.length + 1}`,
-      amountCents: body.amountCents,
-      feeCents,
-      netCents: body.amountCents - feeCents,
+      amountCents: netCents,
+      feeCents: null,
+      netCents,
       status: "PENDING",
       requestedAt: new Date().toISOString(),
       processedAt: null,
       note: body.note ?? null,
     };
-    withdrawals.unshift(withdrawal);
-    const res = { withdrawal, availableCents: available() };
+    withdrawals.unshift(stored);
+    // Only the answer to the request knows the fee; the row doesn't keep it.
+    const res = { withdrawal: { ...stored, feeCents }, availableCents: available() };
     replays.set(body.clientEventId, res);
     return res;
   },

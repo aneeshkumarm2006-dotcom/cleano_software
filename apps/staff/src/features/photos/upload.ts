@@ -1,6 +1,6 @@
 // Getting a photo off the phone: pick or take it, shrink it, and send it
-// straight to storage through a signed URL. Shared by the photos screen and
-// the issue report.
+// straight to Cloudinary as a signed form POST. Shared by the photos screen
+// and the issue report.
 //
 // Every photo is re-encoded as a JPEG before it leaves the phone. That does
 // three jobs at once: it shrinks a 4 MB camera photo to a few hundred KB (the
@@ -15,10 +15,17 @@ import { Alert, Linking } from "react-native";
 /** The longest edge a photo is sent at: plenty for a record, far less data. */
 const MAX_EDGE = 1920;
 const JPEG_QUALITY = 0.75;
-const PUT_TIMEOUT_MS = 120_000;
+const UPLOAD_TIMEOUT_MS = 120_000;
 
 /**
- * Development builds only: the sample data's signed URLs point here, and the
+ * The only place a photo is ever sent: Cloudinary's image upload API, for
+ * whichever cloud the server names. A ticket pointing anywhere else is
+ * refused, so a bad answer can't send a client's home somewhere new.
+ */
+const CLOUDINARY_UPLOAD = /^https:\/\/api\.cloudinary\.com\/v1_1\/[A-Za-z0-9_-]+\/image\/upload$/;
+
+/**
+ * Development builds only: the sample data's tickets point here, and the
  * uploader simulates the transfer instead of sending anything.
  */
 export const PREVIEW_UPLOAD_ORIGIN = __DEV__ ? "https://preview.invalid/upload" : "";
@@ -38,7 +45,7 @@ export class UploadError extends Error {
     message: string,
     /** Worth trying again as is (a dropped connection) rather than starting over. */
     readonly retryable: boolean,
-    /** The signed URL is no good any more; ask for a new one before retrying. */
+    /** The signature is no good any more; ask for a new ticket before retrying. */
     readonly needsNewTicket = false,
   ) {
     super(message);
@@ -120,61 +127,95 @@ export async function preparePhoto(asset: Pick<ImagePicker.ImagePickerAsset, "ur
 
 // ── Sending ─────────────────────────────────────────────────────────────────
 
-/** Headers a signed PUT must never carry from us: the session stays with the API. */
-const NEVER_SEND = new Set(["cookie", "authorization"]);
+/** What Cloudinary answers an upload with; only these parts are read. */
+interface CloudinaryReply {
+  public_id?: unknown;
+  error?: { message?: unknown };
+}
 
 /**
- * PUT the photo to its signed URL, reporting progress from 0 to 1. The
- * session is never sent to storage: no cookies, no auth header.
+ * Send the photo to Cloudinary as the ticket's signed form, reporting progress
+ * from 0 to 1, and resolve with the stored asset's public_id. The form carries
+ * the ticket's fields exactly as given, then the file, and nothing else: the
+ * session is never sent to Cloudinary, no cookies, no auth header.
  */
-export function putPhoto(ticket: UploadTicket, photo: PreparedPhoto, onProgress: (fraction: number) => void): Promise<void> {
-  if (ticket.method !== "PUT") {
+export function uploadPhoto(ticket: UploadTicket, photo: PreparedPhoto, onProgress: (fraction: number) => void): Promise<string> {
+  if (ticket.method !== "MULTIPART_POST") {
     return Promise.reject(new UploadError("This version of the app can't send photos any more. Please update it.", false));
   }
   // Expiry isn't judged here: the phone's clock may be wrong. The queue ages a
-  // ticket on the monotonic clock, and storage's own 403 is the final word.
+  // ticket on the monotonic clock, and Cloudinary's own refusal is the final word.
   if (__DEV__ && PREVIEW_UPLOAD_ORIGIN && ticket.uploadUrl.startsWith(PREVIEW_UPLOAD_ORIGIN)) {
-    return simulatePut(onProgress);
+    return simulateUpload(ticket.key, onProgress);
   }
+  if (!CLOUDINARY_UPLOAD.test(ticket.uploadUrl)) {
+    return Promise.reject(new UploadError("The photo couldn't be sent: the upload address wasn't one the app uses. Try again later.", false));
+  }
+
+  const form = new FormData();
+  for (const [name, value] of Object.entries(ticket.fields)) form.append(name, value);
+  // React Native's FormData reads the file from disk by its uri as it sends.
+  form.append(ticket.fileField, { uri: photo.uri, name: "photo.jpg", type: photo.contentType } as unknown as Blob);
 
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open("PUT", ticket.uploadUrl);
+    xhr.open("POST", ticket.uploadUrl);
     xhr.withCredentials = false;
-    xhr.timeout = PUT_TIMEOUT_MS;
-    let hasType = false;
-    for (const [name, value] of Object.entries(ticket.headers)) {
-      if (NEVER_SEND.has(name.toLowerCase())) continue;
-      if (name.toLowerCase() === "content-type") hasType = true;
-      xhr.setRequestHeader(name, value);
-    }
-    if (!hasType) xhr.setRequestHeader("Content-Type", photo.contentType);
+    xhr.timeout = UPLOAD_TIMEOUT_MS;
+    // No headers of our own: the form sets its own Content-Type and boundary.
 
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable && e.total > 0) onProgress(Math.min(1, e.loaded / e.total));
     };
     xhr.onload = () => {
+      const reply = readReply(xhr.responseText);
       if (xhr.status >= 200 && xhr.status < 300) {
+        if (typeof reply?.public_id !== "string" || reply.public_id !== ticket.key) {
+          reject(new UploadError("The photo was sent, but storage didn't confirm it. Try again.", true, true));
+          return;
+        }
         onProgress(1);
-        resolve();
-      } else if (xhr.status === 403 || xhr.status === 401) {
-        // A signature that no longer holds: expired, or the clock drifted.
-        reject(new UploadError("The upload link ran out. Trying again gets a new one.", true, true));
-      } else if (xhr.status === 413 || xhr.status === 400) {
-        reject(new UploadError("Storage wouldn't take this photo. Try a different one.", false));
-      } else {
-        reject(new UploadError("The photo didn't send. Try again in a moment.", true));
+        resolve(reply.public_id);
+        return;
       }
+      reject(refusal(xhr.status, reply));
     };
     xhr.onerror = () => reject(new UploadError("The photo didn't send. Check your signal and try again.", true));
     xhr.ontimeout = () => reject(new UploadError("Sending took too long. Check your signal and try again.", true));
-    xhr.send(photo.blob);
+    xhr.send(form);
   });
+}
+
+function readReply(text: string): CloudinaryReply | null {
+  try {
+    const parsed: unknown = JSON.parse(text);
+    return parsed && typeof parsed === "object" ? (parsed as CloudinaryReply) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Cloudinary's refusal, as something the cleaner can act on. */
+function refusal(status: number, reply: CloudinaryReply | null): UploadError {
+  const said = typeof reply?.error?.message === "string" ? reply.error.message.slice(0, 160) : "";
+  // A signature that no longer holds: over an hour old ("Stale request"), or
+  // the clock drifted. A new ticket fixes it.
+  if (status === 401 || /stale request|signature/i.test(said)) {
+    return new UploadError("The upload link ran out. Trying again gets a new one.", true, true);
+  }
+  if (status === 400 || status === 413) {
+    const why = said ? ` Storage said: ${said.replace(/\.?$/, ".")}` : "";
+    return new UploadError(`Storage wouldn't take this photo.${why} Try a different one.`, false);
+  }
+  if (status === 420 || status === 429) {
+    return new UploadError("Storage is busy right now. Try again in a minute.", true);
+  }
+  return new UploadError("The photo didn't send. Try again in a moment.", true);
 }
 
 let simulated = 0;
 /** Development only: a believable transfer, and every fourth one fails once. */
-function simulatePut(onProgress: (fraction: number) => void): Promise<void> {
+function simulateUpload(publicId: string, onProgress: (fraction: number) => void): Promise<string> {
   const n = ++simulated;
   return new Promise((resolve, reject) => {
     let f = 0;
@@ -186,7 +227,7 @@ function simulatePut(onProgress: (fraction: number) => void): Promise<void> {
         reject(new UploadError("The photo didn't send. Check your signal and try again.", true));
       } else if (f >= 1) {
         clearInterval(id);
-        resolve();
+        resolve(publicId);
       }
     }, 180);
   });

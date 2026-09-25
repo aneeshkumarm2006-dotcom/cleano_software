@@ -1,12 +1,13 @@
 import { Button, color, Icon, radius, space, Text } from "@bookmops/ui-native";
+import * as Haptics from "expo-haptics";
 import { type ReactNode, useMemo } from "react";
-import { ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Platform, View } from "react-native";
+import { ActionSheetIOS, ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Platform, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Empty, LoadError, Loading } from "@/components/QueryState";
 
 import { Composer } from "./Composer";
-import { MessageBubble } from "./MessageBubble";
+import { MessageBubble, type OwnMessageActions } from "./MessageBubble";
 import { buildRows, type ThreadMessage, type ThreadRow } from "./thread";
 import { useKeyboardVisible } from "./use-live";
 
@@ -19,6 +20,16 @@ export interface ThreadQuery {
   isFetchingNextPage: boolean;
   isFetchNextPageError: boolean;
   fetchNextPage: () => unknown;
+}
+
+/** Team chat: changing the person's own sent messages. */
+export interface OwnMessages {
+  /** The message in the composer being edited, or null. */
+  editing: ThreadMessage | null;
+  startEdit: (message: ThreadMessage) => void;
+  saveEdit: (text: string) => void;
+  cancelEdit: () => void;
+  remove: (message: ThreadMessage) => void;
 }
 
 /**
@@ -43,6 +54,7 @@ export function ThreadView({
   onSend,
   onRetry,
   onDiscard,
+  own,
 }: {
   header: ReactNode;
   query: ThreadQuery;
@@ -57,6 +69,8 @@ export function ThreadView({
   onSend: (text: string) => boolean;
   onRetry: (pendingId: string) => void;
   onDiscard: (pendingId: string) => void;
+  /** Team chat only. Office chat messages can't be edited or deleted. */
+  own?: OwnMessages;
 }) {
   const insets = useSafeAreaInsets();
   const keyboard = useKeyboardVisible();
@@ -71,6 +85,42 @@ export function ThreadView({
       { text: "Try again", onPress: () => onRetry(id) },
     ]);
   }
+
+  const ownActions = useMemo<OwnMessageActions | undefined>(() => {
+    if (!own) return undefined;
+    const confirmDelete = (m: ThreadMessage) =>
+      Alert.alert("Delete this message?", "Everyone in the conversation will see “Message deleted” in its place.", [
+        { text: "Cancel", style: "cancel" },
+        { text: "Delete", style: "destructive", onPress: () => own.remove(m) },
+      ]);
+    return {
+      onEdit: own.startEdit,
+      onDelete: confirmDelete,
+      onOptions: (m) => {
+        void Haptics.selectionAsync().catch(() => {});
+        if (Platform.OS === "ios") {
+          ActionSheetIOS.showActionSheetWithOptions(
+            { options: ["Edit", "Delete", "Cancel"], destructiveButtonIndex: 1, cancelButtonIndex: 2 },
+            (i) => {
+              if (i === 0) own.startEdit(m);
+              else if (i === 1) confirmDelete(m);
+            },
+          );
+        } else {
+          Alert.alert(
+            "Your message",
+            undefined,
+            [
+              { text: "Cancel", style: "cancel" },
+              { text: "Delete", style: "destructive", onPress: () => confirmDelete(m) },
+              { text: "Edit", onPress: () => own.startEdit(m) },
+            ],
+            { cancelable: true },
+          );
+        }
+      },
+    };
+  }, [own]);
 
   // A refresh that fails while messages are already on screen keeps them,
   // and says so quietly; only a first load that fails takes the whole space.
@@ -104,6 +154,7 @@ export function ThreadView({
               namesAbove={namesAbove}
               timeZone={timeZone}
               onFailedPress={onFailedPress}
+              own={ownActions}
             />
           )
         }
@@ -150,7 +201,14 @@ export function ThreadView({
             </Text>
           </View>
         ) : null}
-        <Composer placeholder={placeholder} onSend={onSend} bottomPadding={keyboard ? space[3] : insets.bottom + space[3]} />
+        <Composer
+          placeholder={placeholder}
+          onSend={onSend}
+          bottomPadding={keyboard ? space[3] : insets.bottom + space[3]}
+          editing={own?.editing ? { key: own.editing.key, body: own.editing.body } : null}
+          onSaveEdit={own?.saveEdit}
+          onCancelEdit={own?.cancelEdit}
+        />
       </KeyboardAvoidingView>
     </View>
   );

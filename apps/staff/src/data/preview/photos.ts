@@ -1,7 +1,8 @@
 // Sample job photos for development builds, held in memory so adding and
-// deleting a photo actually sticks. Uploads go to PREVIEW_UPLOAD_ORIGIN, which
-// the uploader recognises in development builds and simulates (with progress,
-// and a failure now and then so retry can be seen) instead of sending.
+// deleting a photo actually sticks. Tickets point at PREVIEW_UPLOAD_ORIGIN
+// instead of Cloudinary; the uploader recognises it in development builds and
+// simulates the form POST (with progress, and a failure now and then so retry
+// can be seen) instead of sending.
 import { ApiError } from "@bookmops/api/client";
 import type { JobPhoto, JobPhotosResponse, PhotoPolicy } from "@bookmops/api/v1";
 import { randomUUID } from "expo-crypto";
@@ -47,31 +48,47 @@ function photosOf(jobId: string): JobPhoto[] {
   return p;
 }
 
+/** The sample job whose photos the office has turned off. */
+const PHOTOS_OFF_JOB = "j2";
+
 const POLICY: PhotoPolicy = {
   canAdd: true,
   closedReason: null,
-  // j2 shows what a job with after-photos turned off looks like.
-  afterPhotosAllowed: true,
+  // j2 shows what a job with photos turned off looks like.
+  photosAllowed: true,
   maxPhotos: 200,
   maxBytes: 10 * 1024 * 1024,
 };
 
-/** Keys signed in this session, so attach can check them as the server would. */
+/** Public ids signed in this session, so attach can check them as the server would. */
 const signed = new Map<string, string>();
 /** Attach is idempotent on clientEventId, as the server's is. */
 const attached = new Map<string, JobPhoto>();
 
 export const previewPhotosApi = {
   createJobPhotoUpload: (body) => {
-    const key = `${previewMe.company.id}/jobs/${body.jobId}/${previewMe.person.id}/${randomUUID()}.jpg`;
+    // Shaped like the server's: the company's folder, the job, the person, a random name.
+    const key = `preview/${previewMe.company.id}/jobs/${body.jobId}/${previewMe.person.id}/${randomUUID()}`;
     signed.set(key, body.jobId);
-    return delay({
-      uploadUrl: `${PREVIEW_UPLOAD_ORIGIN}/${encodeURIComponent(key)}`,
-      method: "PUT" as const,
-      headers: { "Content-Type": body.contentType },
-      key,
-      expiresAt: new Date(Date.now() + 15 * 60_000).toISOString(),
-    }, 200);
+    const timestamp = Math.floor(Date.now() / 1000);
+    return delay(
+      {
+        uploadUrl: PREVIEW_UPLOAD_ORIGIN,
+        method: "MULTIPART_POST" as const,
+        fields: {
+          api_key: "preview",
+          timestamp: String(timestamp),
+          public_id: key,
+          allowed_formats: "jpg,png,heic,heif,webp",
+          overwrite: "false",
+          signature: "preview",
+        },
+        fileField: "file",
+        key,
+        expiresAt: new Date((timestamp + 60 * 60) * 1000).toISOString(),
+      },
+      200,
+    );
   },
   jobPhotos: (jobId) => {
     const items = photosOf(jobId);
@@ -79,7 +96,7 @@ export const previewPhotosApi = {
       items,
       nextCursor: null,
       total: items.length,
-      policy: { ...POLICY, afterPhotosAllowed: jobId !== "j2" },
+      policy: jobId === PHOTOS_OFF_JOB ? { ...POLICY, canAdd: false, photosAllowed: false } : POLICY,
     };
     return delay(res);
   },
@@ -90,9 +107,9 @@ export const previewPhotosApi = {
       await delay(null, 200);
       throw new ApiError("That photo didn't reach us. Try again.", 404, "NOT_FOUND", false);
     }
-    if (body.phase === "AFTER" && jobId === "j2") {
+    if (jobId === PHOTOS_OFF_JOB) {
       await delay(null, 200);
-      throw new ApiError("After-photos are off for this job.", 409, "AFTER_PHOTOS_OFF", false);
+      throw new ApiError("The office has turned photos off for this job.", 409, "PHOTOS_OFF", false);
     }
     const p = photo(`ph-${body.clientEventId.slice(0, 8)}`, { kind: body.phase, takenAt: new Date().toISOString() });
     photos.set(jobId, [p, ...photosOf(jobId)]);

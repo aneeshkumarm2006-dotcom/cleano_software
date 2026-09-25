@@ -294,7 +294,7 @@ them:
   | Endpoint | Limit | Why |
   |---|---|---|
   | Office chat send | 10 a minute | Emails the office when no one is online |
-  | Team chat send | 20 a minute | Fans out to every member |
+  | Team chat send or edit | 20 a minute | Fans out to every member |
   | Issue report | 10 an hour | URGENT reports email the office at once |
   | Withdrawal request | 5 an hour | Emails the cleaner and the office |
   | Claim a job | 10 a minute | Races other cleaners for the same job |
@@ -305,8 +305,9 @@ them:
   redirects. The app sends the session as a header and refuses a redirect,
   since some platforms carry custom headers to the new host.
 - **Only stored URLs go out.** A URL in a response (photo, attachment,
-  upload) is https on the company's own storage. Photo reads are signed and
-  short-lived. A URL a client once sent in is never passed on to other people.
+  upload) is https on the company's own storage. Photos are read from
+  Cloudinary (res.cloudinary.com); signed, short-lived delivery is
+  recommended. An upload ticket points only at api.cloudinary.com. A URL a client once sent in is never passed on to other people.
 
 Every request is logged as structured data: request id, company, user, route,
 app version, status, error code, duration.
@@ -493,7 +494,7 @@ Built in this order. Each ships with its service extraction and its checks.
 | 1 | `GET /meta` · `POST /auth/workspaces` · `POST /auth/forgot-password` · `GET /me` · `POST /devices`, `DELETE /devices/:id` (push tokens) | platform discovery, layout checks |
 | 2 | `GET /jobs?scope=today\|upcoming\|past&cursor=` · `GET /jobs/:id` | my-jobs and job-detail loaders |
 | 3 | `POST /jobs/:id/clock-in` · `…/clock-out` · `…/breaks` · `…/breaks/:id/end` | `clockIn`, `clockOut`, `startJobBreak`, `endJobBreak` |
-| 4 | `POST /uploads` (signed URL) · `POST /jobs/:id/photos` (attach by key) · `…/on-my-way` · `…/issues` · checklist | `uploadJobPhoto`, `markOnMyWay`, `reportJobIssue`, checklist actions |
+| 4 | `POST /uploads` (signed Cloudinary upload) · `POST /jobs/:id/photos` (attach by key) · `…/on-my-way` · `…/issues` · checklist | `uploadJobPhoto`, `markOnMyWay`, `reportJobIssue`, checklist actions |
 | 5 | `GET /jobs/available` · `GET /jobs/available/:id` · `POST /jobs/available/:id/claim` | available-jobs loader, `getAvailableJobPreview`, `claimJob` |
 | 6 | `GET /pay` · `POST /pay/withdrawals` | my-pay loader, `requestWithdrawal`. This moves money, so it's idempotent and gets its own security review. |
 | 7 | availability, kit and inventory, chat, announcements, training, documents | the matching actions |
@@ -501,10 +502,16 @@ Built in this order. Each ships with its service extraction and its checks.
 All paths are under `/api/v1`. Notes on the endpoints:
 - **Push tokens are per company,** registered after sign-in and removed on
   sign-out.
-- **Uploads never pass through a function.** The app gets a short-lived signed
-  URL, uploads directly, then attaches the upload by key. The server checks
-  that the key's prefix matches the company, job, and user, and checks the size
-  and content type. Photos also queue offline.
+- **Uploads never pass through a function.** Photos go to Cloudinary, where
+  the web already keeps them. The server signs the upload's parameters with
+  the Cloudinary API secret (the public_id it chose, a fresh timestamp, the
+  allowed formats); the app POSTs the file and those fields as a multipart
+  form straight to `https://api.cloudinary.com/v1_1/<cloud>/image/upload`,
+  then attaches the asset by its public_id. The server checks that the
+  public_id's prefix matches the company, job, and user, and checks the
+  asset's format and size through the Admin API before attaching it. The
+  full rules are in `packages/api/src/v1/photos.ts`. Photos also queue
+  offline.
 - Lists use **cursor pagination** from the start.
 
 ---

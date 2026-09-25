@@ -34,7 +34,7 @@ export const MAX_ISSUE_NOTE = 2000;
  *   - for `photoKey`, apply every check of POST /jobs/:id/photos (this
  *     company, this job, this caller's prefix; the object exists) and attach
  *     it as an ISSUE photo in the same transaction as the report. ISSUE photos
- *     are exempt from the after-photo switch and don't send the "photos added"
+ *     are exempt from the job's photo switch and don't send the "photos added"
  *     email, as on the web;
  *   - write the job-log line and email the office, as the web does. URGENT is
  *     emailed straight away.

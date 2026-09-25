@@ -9,7 +9,7 @@ import {
 import { json, type Request, seg } from "./request";
 
 export const photosApi = (request: Request) => ({
-  /** Sign an upload for a job photo. The file itself goes straight to storage. */
+  /** Sign an upload for a job photo. The file itself goes straight to Cloudinary. */
   createJobPhotoUpload: (body: UploadRequest) => request("/api/v1/uploads", UploadTicket, json("POST", body)),
   jobPhotos: (jobId: string, cursor?: string | null) =>
     request(`/api/v1/jobs/${seg(jobId)}/photos${cursor ? `?cursor=${seg(cursor)}` : ""}`, JobPhotosResponse),
