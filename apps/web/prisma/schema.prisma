@@ -116,6 +116,9 @@ model User {
   // minted via "Invite to portal" from a JobApplication.
   jobApplication               JobApplication?
   applicantInviteTokens        ApplicantInviteToken[]
+  // Mobile API v1 (docs/architecture/API_V1.md §6, §7).
+  idempotencyRecords           IdempotencyRecord[]
+  pushDevices                  PushDevice[]
 
   @@unique([organizationId, email])
   // Present in the database since an earlier migration but never declared here,
@@ -141,15 +144,21 @@ model Account {
 }
 
 model Session {
-  id        String   @id @default(cuid())
-  userId    String
-  createdAt DateTime @default(now())
-  expiresAt DateTime
-  ipAddress String?
-  token     String   @unique
-  updatedAt DateTime @updatedAt
-  userAgent String?
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id            String    @id @default(cuid())
+  userId        String
+  createdAt     DateTime  @default(now())
+  expiresAt     DateTime
+  ipAddress     String?
+  token         String    @unique
+  updatedAt     DateTime  @updatedAt
+  userAgent     String?
+  /// When this session last made an authenticated /api/v1 request (API_V1.md
+  /// §6). An offline clock event claims "I had no signal from occurredAt
+  /// until now"; a successful request in between disproves it. Written only
+  /// by the v1 wrapper, at most every few seconds. better-auth neither reads
+  /// nor writes it.
+  lastRequestAt DateTime?
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Verification {
@@ -3182,16 +3191,24 @@ model JobAssignment {
 model JobWorkSession {
   // Tenant owner. Required: a row that cannot name its organization is a row
   // no isolation rule can protect.
-  organizationId String    @default("")
-  id             String    @id @default(cuid())
-  jobId          String
-  cleanerId      String
-  startedAt      DateTime  @default(now())
-  endedAt        DateTime?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-  job            Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  cleaner        User      @relation(fields: [cleanerId], references: [id], onDelete: Cascade)
+  organizationId   String    @default("")
+  id               String    @id @default(cuid())
+  jobId            String
+  cleanerId        String
+  startedAt        DateTime  @default(now())
+  endedAt          DateTime?
+  /// Audit for a session opened or closed from the phone (API_V1.md §6): the
+  /// event's id, and when the server received it. `startedAt`/`endedAt` are
+  /// the times that were APPLIED, which may be the phone's claimed time or
+  /// the received time. NULL for anything the web wrote.
+  clientEventId    String?
+  receivedAt       DateTime?
+  endClientEventId String?
+  endReceivedAt    DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  job              Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  cleaner          User      @relation(fields: [cleanerId], references: [id], onDelete: Cascade)
 
   @@index([jobId, cleanerId])
   @@index([cleanerId])
@@ -3238,11 +3255,28 @@ model TimeLogChangeRequest {
   decidedAt      DateTime?
   /// The admin's reply, shown to the cleaner. Matters most on a rejection.
   decisionNote   String?
+  /// Who raised it. CLEANER: typed by the cleaner (the web form). PHONE: made
+  /// by the server from a clock event the phone sent, whose claimed time could
+  /// not be applied as sent (API_V1.md §6) -- the event was applied at the
+  /// time the server received it, and this carries the phone's time for the
+  /// office to approve. Existing rows are CLEANER.
+  source         String    @default("CLEANER")
+  /// PHONE only: CLOCK_IN | CLOCK_OUT | BREAK_START | BREAK_END.
+  eventKind      String?
+  /// PHONE only: the event's id, so the same tap never raises two requests.
+  clientEventId  String?
+  /// PHONE only: when the phone says the tap happened, and when it arrived.
+  occurredAt     DateTime?
+  receivedAt     DateTime?
+  /// PHONE only, break events: the break the correction applies to. Approval
+  /// moves that break's start or end (requestedStart / requestedEnd).
+  breakId        String?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
   job            Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
   cleaner        User      @relation("TimeLogRequests", fields: [cleanerId], references: [id], onDelete: Cascade)
 
+  @@unique([organizationId, clientEventId])
   @@index([status, createdAt])
   @@index([jobId])
   @@index([cleanerId])
@@ -3258,19 +3292,75 @@ model TimeLogChangeRequest {
 model JobBreak {
   // Tenant owner. Required: a row that cannot name its organization is a row
   // no isolation rule can protect.
-  organizationId String    @default("")
-  id             String    @id @default(cuid())
-  jobId          String
-  cleanerId      String
-  startedAt      DateTime  @default(now())
-  endedAt        DateTime?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-  job            Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  cleaner        User      @relation(fields: [cleanerId], references: [id], onDelete: Cascade)
+  organizationId   String    @default("")
+  id               String    @id @default(cuid())
+  jobId            String
+  cleanerId        String
+  startedAt        DateTime  @default(now())
+  endedAt          DateTime?
+  /// Same audit as JobWorkSession's: set only for breaks the phone sent.
+  clientEventId    String?
+  receivedAt       DateTime?
+  endClientEventId String?
+  endReceivedAt    DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  job              Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  cleaner          User      @relation(fields: [cleanerId], references: [id], onDelete: Cascade)
 
   @@index([jobId, cleanerId])
   @@index([cleanerId])
+  @@index([organizationId])
+}
+
+/// One retried mutation from the mobile API, remembered so a retry is applied
+/// once (API_V1.md §6). Scoped to (company, person, key): one person's key can
+/// never collide with, or replay, another's.
+///
+/// IN_FLIGHT while the first request runs; DONE with the stored answer after.
+/// A retry of a DONE key gets that answer back and fires nothing; the same key
+/// with a different body is refused (422); a key still IN_FLIGHT answers 409.
+/// Kept for `expiresAt` (at least the correction window), then reusable.
+model IdempotencyRecord {
+  organizationId String   @default("")
+  id             String   @id @default(cuid())
+  userId         String
+  key            String
+  /// "POST /api/v1/jobs/:jobId/clock-in", for the logs and for a key reused
+  /// on a different route (which is a different body, so 422).
+  route          String
+  /// sha256 of the route, path parameters and canonical body.
+  requestHash    String
+  state          String   @default("IN_FLIGHT")
+  statusCode     Int?
+  responseBody   Json?
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId, key])
+  @@index([expiresAt])
+  @@index([organizationId])
+}
+
+/// A phone registered for push notifications (API_V1.md §7). Per company: a
+/// token belongs to the person who most recently registered it here, and is
+/// removed when they sign out.
+model PushDevice {
+  organizationId String   @default("")
+  id             String   @id @default(cuid())
+  userId         String
+  token          String
+  /// ios | android
+  platform       String
+  appVersion     String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, token])
+  @@index([userId])
   @@index([organizationId])
 }
 
