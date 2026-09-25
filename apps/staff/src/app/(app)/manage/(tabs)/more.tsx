@@ -11,8 +11,7 @@ import { useSession } from "@/data/session";
 const ROLE_NAME: Record<string, string> = { OWNER: "Owner", ADMIN: "Admin", OPS_MANAGER: "Manager" };
 
 /**
- * The manager's More: the office's other queues, the account, and a pointer
- * to what stays on the web console.
+ * The manager's More: alerts and problem reports, and the account.
  */
 export default function ManagerMore() {
   const role = useStaffRole();
@@ -33,7 +32,6 @@ export default function ManagerMore() {
           },
         ]
       : []),
-    { key: "announcements", label: "Announcements", icon: "announcements", onPress: () => router.push("/announcements") },
   ];
 
   return (

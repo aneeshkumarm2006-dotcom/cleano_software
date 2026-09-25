@@ -1,4 +1,5 @@
 import { color, space, Text } from "@bookmops/ui-native";
+import type { Href } from "expo-router";
 import type { ReactNode } from "react";
 import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -11,6 +12,7 @@ export function ThreadHeader({
   title,
   subtitle,
   online,
+  fallback = "/",
 }: {
   /** The avatar or icon block for who the conversation is with. */
   badge: ReactNode;
@@ -18,6 +20,8 @@ export function ThreadHeader({
   subtitle?: string | null;
   /** A green dot before the subtitle, when someone is there now. */
   online?: boolean;
+  /** Where back goes when there's nothing to go back to. */
+  fallback?: Href;
 }) {
   const insets = useSafeAreaInsets();
   return (
@@ -34,7 +38,7 @@ export function ThreadHeader({
         borderBottomColor: color.line,
       }}
     >
-      <BackButton fallback="/" />
+      <BackButton fallback={fallback} />
       {badge}
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text variant="subheading" accessibilityRole="header" numberOfLines={1}>

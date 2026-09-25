@@ -6,6 +6,7 @@ import { View } from "react-native";
 
 import { LoadError, Loading } from "@/components/QueryState";
 import { messageKeys, useMarkChannelRead, useMe, useTeamChannel, useTeamMessages } from "@/data/queries";
+import { useStaffRole } from "@/data/role";
 import { useSource } from "@/data/session";
 import { Avatar } from "@/features/messages/MessageBubble";
 import { ThreadHeader } from "@/features/messages/ThreadHeader";
@@ -39,6 +40,8 @@ function toMessage(m: TeamMessage): ThreadMessage {
     // The server decides in the end (only the sender, else 404); this only
     // decides what to offer.
     editableId: m.fromMe && !m.deleted ? m.id : undefined,
+    // Offered only where the role may moderate (ThreadView's onModerate).
+    removableId: !m.fromMe && !m.deleted ? m.id : undefined,
   };
 }
 
@@ -47,7 +50,8 @@ function toMessage(m: TeamMessage): ThreadMessage {
  * server's call (the web's canAccessChannel): a channel this cleaner isn't in
  * answers "not found", and this screen shows that as an error with retry.
  * The person can edit and delete their own sent messages; unsent ones keep
- * Try again and Delete.
+ * Try again and Delete. An office role that may moderate (OWNER, ADMIN,
+ * OPS_MANAGER, as the web's group chat) can also remove anyone's message.
  */
 export default function TeamConversation() {
   const { channelId } = useLocalSearchParams<{ channelId: string }>();
@@ -73,7 +77,12 @@ export default function TeamConversation() {
   // Deleted meanwhile (from another phone, or by the office): the edit ends.
   if (editingId && !editing) setEditingId(null);
 
-  const { edit, remove } = edits;
+  const { edit, remove, moderate } = edits;
+  const role = useStaffRole();
+  const onModerate = useMemo(
+    () => (role.can("TEAM_MODERATE") ? (m: ThreadMessage) => void (m.removableId && moderate(m.removableId)) : undefined),
+    [role, moderate],
+  );
   const own = useMemo<OwnMessages>(
     () => ({
       editing,
@@ -157,6 +166,7 @@ export default function TeamConversation() {
       onRetry={retry}
       onDiscard={discard}
       own={own}
+      onModerate={onModerate}
     />
   );
 }

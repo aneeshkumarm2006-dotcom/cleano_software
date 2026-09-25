@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Empty, LoadError, Loading } from "@/components/QueryState";
 
 import { Composer } from "./Composer";
-import { MessageBubble, type OwnMessageActions } from "./MessageBubble";
+import { MessageBubble, type ModerationActions, type OwnMessageActions } from "./MessageBubble";
 import { buildRows, type ThreadMessage, type ThreadRow } from "./thread";
 import { useKeyboardVisible } from "./use-live";
 
@@ -55,6 +55,7 @@ export function ThreadView({
   onRetry,
   onDiscard,
   own,
+  onModerate,
 }: {
   header: ReactNode;
   query: ThreadQuery;
@@ -71,6 +72,8 @@ export function ThreadView({
   onDiscard: (pendingId: string) => void;
   /** Team chat only. Office chat messages can't be edited or deleted. */
   own?: OwnMessages;
+  /** Team chat, for a role that may moderate: remove someone else's message. */
+  onModerate?: (message: ThreadMessage) => void;
 }) {
   const insets = useSafeAreaInsets();
   const keyboard = useKeyboardVisible();
@@ -122,6 +125,19 @@ export function ThreadView({
     };
   }, [own]);
 
+  const moderation = useMemo<ModerationActions | undefined>(() => {
+    if (!onModerate) return undefined;
+    return {
+      onRemove: (m) => {
+        void Haptics.selectionAsync().catch(() => {});
+        Alert.alert("Remove this message?", `${m.senderName}'s message is replaced by “Message deleted” for everyone in the conversation.`, [
+          { text: "Cancel", style: "cancel" },
+          { text: "Remove", style: "destructive", onPress: () => onModerate(m) },
+        ]);
+      },
+    };
+  }, [onModerate]);
+
   // A refresh that fails while messages are already on screen keeps them,
   // and says so quietly; only a first load that fails takes the whole space.
   const staleBanner = query.isError && messages.length > 0;
@@ -155,6 +171,7 @@ export function ThreadView({
               timeZone={timeZone}
               onFailedPress={onFailedPress}
               own={ownActions}
+              moderate={moderation}
             />
           )
         }
