@@ -29,15 +29,17 @@ export default function DocumentScreen() {
   const log = useLogDocumentAccess(id);
   const tz = me.data?.company.timezone;
 
-  // One OPEN per visit, as the web logs one per page load; a refetch is not a visit.
-  const logged = useRef(false);
+  // One OPEN per visit, as the web logs one per page load; a refetch is not a
+  // visit. Remembered per document, so a screen reused for another id logs it.
+  const logged = useRef<string | null>(null);
   useEffect(() => {
-    if (logged.current || !doc.data) return;
-    logged.current = true;
+    if (logged.current === id || doc.data?.id !== id) return;
+    logged.current = id;
     log("OPEN");
-  }, [doc.data, log]);
+  }, [id, doc.data, log]);
 
-  if (doc.data && tz) return <Reader doc={doc.data} timeZone={tz} onDownload={() => log("DOWNLOAD")} />;
+  // Keyed by document, so a half-drawn signature or a tick never carries over to another.
+  if (doc.data && tz) return <Reader key={doc.data.id} doc={doc.data} timeZone={tz} onDownload={() => log("DOWNLOAD")} />;
   return (
     <Page header={<BackHeader title="Document" />}>
       {doc.isError ? <LoadError error={doc.error} onRetry={() => doc.refetch()} /> : <Loading label="Loading the document" />}
@@ -84,6 +86,7 @@ function Reader({ doc, timeZone, onDownload }: { doc: DocumentDetail; timeZone: 
           void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
         },
         onError: (e) => {
+          key.failed(e);
           if (e instanceof ApiError && e.code === "DOCUMENT_CHANGED") {
             // The query refetches the new version; they agree to that one, not this.
             setAgreed(false);

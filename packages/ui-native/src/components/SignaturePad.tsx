@@ -30,10 +30,14 @@ export interface SignaturePadProps {
 
 const MAX_STROKES = 64;
 const MAX_POINTS = 2000;
+/** Points across every stroke, as the server allows. */
+const MAX_TOTAL_POINTS = 10_000;
 /** Points closer than this to the last one are dropped: smoother, and smaller to send. */
 const MIN_STEP = 2;
 
 const round = (n: number) => Math.round(n * 10) / 10;
+
+const INK = { stroke: color.ink, strokeWidth: 2.6, strokeLinecap: "round", strokeLinejoin: "round", fill: "none" } as const;
 
 function toPath(stroke: readonly SignaturePoint[]): string {
   if (stroke.length === 1) {
@@ -50,11 +54,16 @@ function toPath(stroke: readonly SignaturePoint[]): string {
  */
 export function SignaturePad({ onChange, onDrawingChange, height = 170, label }: SignaturePadProps) {
   const [width, setWidth] = useState(0);
+  // Finished strokes change only when a finger lifts or the pad is cleared;
+  // the stroke being drawn is its own state, so a move redraws that one line
+  // and not the whole signature.
   const [strokes, setStrokes] = useState<SignaturePoint[][]>([]);
+  const [live, setLive] = useState<SignaturePoint[] | null>(null);
   // The stroke being drawn lives in a ref (every move event) and is copied to
   // state as it grows, so the drawing follows the finger.
   const current = useRef<SignaturePoint[] | null>(null);
   const done = useRef<SignaturePoint[][]>([]);
+  const points = useRef(0);
   // The responder is made once, so it reads the latest size and callbacks here.
   const size = useRef({ width: 0, height });
   const handlers = useRef({ onChange, onDrawingChange });
@@ -63,9 +72,11 @@ export function SignaturePad({ onChange, onDrawingChange, height = 170, label }:
     handlers.current = { onChange, onDrawingChange };
   });
 
+  // Clamped to the size the signature reports (whole points), so no point
+  // lands a fraction outside the pad the server checks it against.
   const clamp = (x: number, y: number): SignaturePoint => [
-    round(Math.min(Math.max(x, 0), size.current.width)),
-    round(Math.min(Math.max(y, 0), size.current.height)),
+    round(Math.min(Math.max(x, 0), Math.round(size.current.width))),
+    round(Math.min(Math.max(y, 0), Math.round(size.current.height))),
   ];
 
   const responder = useMemo(
@@ -76,19 +87,19 @@ export function SignaturePad({ onChange, onDrawingChange, height = 170, label }:
         // Once signing, keep the gesture: a scroll view must not steal it.
         onPanResponderTerminationRequest: () => false,
         onPanResponderGrant: (e) => {
-          if (done.current.length >= MAX_STROKES) return;
+          if (done.current.length >= MAX_STROKES || points.current >= MAX_TOTAL_POINTS) return;
           handlers.current.onDrawingChange?.(true);
           current.current = [clamp(e.nativeEvent.locationX, e.nativeEvent.locationY)];
-          setStrokes([...done.current, current.current]);
+          setLive(current.current);
         },
         onPanResponderMove: (e) => {
           const stroke = current.current;
-          if (!stroke || stroke.length >= MAX_POINTS) return;
+          if (!stroke || stroke.length >= MAX_POINTS || points.current + stroke.length >= MAX_TOTAL_POINTS) return;
           const p = clamp(e.nativeEvent.locationX, e.nativeEvent.locationY);
           const last = stroke[stroke.length - 1]!;
           if (Math.hypot(p[0] - last[0], p[1] - last[1]) < MIN_STEP) return;
           stroke.push(p);
-          setStrokes([...done.current, [...stroke]]);
+          setLive([...stroke]);
         },
         onPanResponderRelease: () => finish(),
         onPanResponderTerminate: () => finish(),
@@ -101,8 +112,10 @@ export function SignaturePad({ onChange, onDrawingChange, height = 170, label }:
     handlers.current.onDrawingChange?.(false);
     const stroke = current.current;
     current.current = null;
+    setLive(null);
     if (!stroke) return;
     done.current = [...done.current, stroke];
+    points.current += stroke.length;
     setStrokes(done.current);
     const { width: w, height: h } = size.current;
     handlers.current.onChange({ width: Math.round(w), height: Math.round(h), strokes: done.current });
@@ -111,11 +124,19 @@ export function SignaturePad({ onChange, onDrawingChange, height = 170, label }:
   function clear() {
     done.current = [];
     current.current = null;
+    points.current = 0;
     setStrokes([]);
+    setLive(null);
     onChange(null);
   }
 
-  const empty = strokes.length === 0;
+  const empty = strokes.length === 0 && !live;
+  // Built again only when a stroke is finished: the same elements otherwise,
+  // so React skips them while the live stroke follows the finger.
+  const finished = useMemo(
+    () => strokes.map((s, i) => <Path key={i} d={toPath(s)} {...INK} />),
+    [strokes],
+  );
 
   return (
     <View style={{ gap: space[2] }}>
@@ -153,9 +174,8 @@ export function SignaturePad({ onChange, onDrawingChange, height = 170, label }:
         </View>
         {width > 0 ? (
           <Svg width={width} height={height} pointerEvents="none">
-            {strokes.map((s, i) => (
-              <Path key={i} d={toPath(s)} stroke={color.ink} strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" fill="none" />
-            ))}
+            {finished}
+            {live ? <Path key="live" d={toPath(live)} {...INK} /> : null}
           </Svg>
         ) : null}
       </View>

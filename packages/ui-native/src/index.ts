@@ -13,11 +13,13 @@ export {
   addDays,
   dateKey,
   daysBetween,
+  MONTH_NAMES,
   MonthGrid,
   monthGridRange,
   type MonthGridProps,
   monthTitle,
   parseDateKey,
+  WEEKDAY_NAMES,
   weekdayIndex,
 } from "./components/MonthGrid";
 export { ProgressRing, type ProgressRingProps } from "./components/ProgressRing";

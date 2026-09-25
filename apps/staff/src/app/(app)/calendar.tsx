@@ -1,7 +1,7 @@
 import type { JobSummary } from "@bookmops/api/v1";
 import { Button, Card, color, IconButton, MonthGrid, monthGridRange, monthTitle, parseDateKey, radius, space, Text } from "@bookmops/ui-native";
 import { router } from "expo-router";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { View } from "react-native";
 
 import { LoadError, Loading } from "@/components/QueryState";
@@ -51,6 +51,14 @@ function Month({ timeZone, currency }: { timeZone: string; currency: string }) {
     return map;
   }, [jobs.data, jobs.isPlaceholderData, timeZone]);
   const marked = useMemo(() => new Set(byDay.keys()), [byDay]);
+  // Stable while the jobs are, so the memoised grid isn't redrawn every minute.
+  const describe = useCallback(
+    (key: string) => {
+      const n = byDay.get(key)?.length ?? 0;
+      return n ? `${n} ${n === 1 ? "job" : "jobs"}` : "no jobs";
+    },
+    [byDay],
+  );
   const dayJobs = byDay.get(selected) ?? [];
 
   function shift(dir: 1 | -1) {
@@ -85,10 +93,7 @@ function Month({ timeZone, currency }: { timeZone: string; currency: string }) {
           selected={selected}
           marked={marked}
           onSelect={setSelected}
-          describe={(key) => {
-            const n = byDay.get(key)?.length ?? 0;
-            return n ? `${n} ${n === 1 ? "job" : "jobs"}` : "no jobs";
-          }}
+          describe={describe}
         />
       </View>
 

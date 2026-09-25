@@ -132,7 +132,10 @@ function Editor({
           setMessage("Saved. The office will only offer you work in these hours.");
           void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
         },
-        onError: (e) => setError(errorText(e)),
+        onError: (e) => {
+          key.failed(e);
+          setError(errorText(e));
+        },
       },
     );
   }

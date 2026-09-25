@@ -57,8 +57,10 @@ export function monthGridRange(year: number, month: number): { from: string; to:
 }
 
 const WEEKDAYS = ["M", "T", "W", "T", "F", "S", "S"] as const;
-const WEEKDAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] as const;
-const MONTH_NAMES = [
+/** Monday first, as `weekdayIndex` counts. The one list the apps write dates from. */
+export const WEEKDAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] as const;
+/** January first: `MONTH_NAMES[month - 1]`. The one list the apps write dates from. */
+export const MONTH_NAMES = [
   "January",
   "February",
   "March",
@@ -120,6 +122,9 @@ export const MonthGrid = memo(function MonthGrid({
     ...Array.from({ length: count }, (_, i) => dateKey(year, month, i + 1)),
   ];
   while (cells.length % 7) cells.push(null);
+  // A day is read out with its year only when it isn't this year's.
+  const todayYear = today ? parseDateKey(today)?.year : undefined;
+  const showYear = todayYear != null && todayYear !== year;
   const weeks: (string | null)[][] = [];
   for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
 
@@ -140,6 +145,7 @@ export const MonthGrid = memo(function MonthGrid({
                 key={key}
                 dateKey={key}
                 weekday={i}
+                showYear={showYear}
                 isToday={key === today}
                 isSelected={key === selected || key === range?.from || key === range?.to}
                 inRange={!!range && key > range.from && key < range.to}
@@ -161,6 +167,7 @@ export const MonthGrid = memo(function MonthGrid({
 function Day({
   dateKey: key,
   weekday,
+  showYear,
   isToday,
   isSelected,
   inRange,
@@ -171,6 +178,7 @@ function Day({
 }: {
   dateKey: string;
   weekday: number;
+  showYear: boolean;
   isToday: boolean;
   isSelected: boolean;
   inRange: boolean;
@@ -181,7 +189,7 @@ function Day({
 }) {
   const p = parseDateKey(key)!;
   const label = [
-    `${WEEKDAY_NAMES[weekday]} ${p.day} ${MONTH_NAMES[p.month - 1]}`,
+    `${WEEKDAY_NAMES[weekday]} ${p.day} ${MONTH_NAMES[p.month - 1]}${showYear ? ` ${p.year}` : ""}`,
     isToday ? "today" : null,
     extra ?? null,
   ]

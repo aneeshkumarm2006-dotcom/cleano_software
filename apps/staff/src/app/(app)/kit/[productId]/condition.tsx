@@ -40,7 +40,10 @@ export default function Condition() {
           void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
           goBack();
         },
-        onError: (e) => setError(errorText(e)),
+        onError: (e) => {
+          key.failed(e);
+          setError(errorText(e));
+        },
       },
     );
   }

@@ -36,13 +36,13 @@ export default function Strikes() {
       ) : strikes.isError ? (
         <LoadError error={strikes.error} onRetry={() => strikes.refetch()} />
       ) : (
-        <Record data={strikes.data} timeZone={tz} />
+        <StrikeRecord data={strikes.data} timeZone={tz} />
       )}
     </Page>
   );
 }
 
-function Record({ data, timeZone }: { data: StrikesResponse; timeZone: string }) {
+function StrikeRecord({ data, timeZone }: { data: StrikesResponse; timeZone: string }) {
   const standing = STANDING[data.level] ?? STANDING.OK!;
   const active = data.items.filter((s) => s.status === "ACTIVE");
   const past = data.items.filter((s) => s.status !== "ACTIVE");

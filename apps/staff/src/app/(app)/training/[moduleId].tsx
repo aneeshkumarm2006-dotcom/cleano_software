@@ -83,7 +83,10 @@ function Module({
           progressKey.done();
           void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
         },
-        onError: (e) => setError(errorText(e)),
+        onError: (e) => {
+          progressKey.failed(e);
+          setError(errorText(e));
+        },
       },
     );
   }
@@ -108,7 +111,10 @@ function Module({
             res.passed ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Warning,
           ).catch(() => {});
         },
-        onError: (e) => setError(errorText(e)),
+        onError: (e) => {
+          quizKey.failed(e);
+          setError(errorText(e));
+        },
       },
     );
   }

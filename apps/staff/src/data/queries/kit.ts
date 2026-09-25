@@ -21,7 +21,9 @@ export const kitKeys = {
 
 export function useKit() {
   const source = useSource();
-  return useQuery({ queryKey: kitKeys.kit, queryFn: () => source.kit() });
+  // Every screen of the kit reads this one query; the cleaner's own changes
+  // update it directly, so a minute between refetches is only the office's.
+  return useQuery({ queryKey: kitKeys.kit, queryFn: () => source.kit(), staleTime: 60_000 });
 }
 
 /** One item, read from the kit already loaded. */

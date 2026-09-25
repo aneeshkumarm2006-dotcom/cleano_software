@@ -13,7 +13,7 @@ import {
   Text,
 } from "@bookmops/ui-native";
 import * as Haptics from "expo-haptics";
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Modal, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -76,16 +76,21 @@ export function DaysOffSheet({
     onClose();
   }
 
-  function pick(day: string) {
-    setError(null);
-    // First tap, or a tap before the start: begin again from here.
-    if (!from || to || day < from) {
-      setFrom(day);
-      setTo(null);
-      return;
-    }
-    setTo(day === from ? null : day);
-  }
+  // Stable until the span changes, so the memoised grid redraws only then.
+  const pick = useCallback(
+    (day: string) => {
+      setError(null);
+      // First tap, or a tap before the start: begin again from here.
+      if (!from || to || day < from) {
+        setFrom(day);
+        setTo(null);
+        return;
+      }
+      setTo(day === from ? null : day);
+    },
+    [from, to],
+  );
+  const range = useMemo(() => (from && end ? { from, to: end } : null), [from, end]);
 
   function shiftMonth(dir: 1 | -1) {
     setMonth((m) => {
@@ -107,7 +112,10 @@ export function DaysOffSheet({
           onBooked(rangeLabel(from, end));
           reset();
         },
-        onError: (e) => setError(errorText(e)),
+        onError: (e) => {
+          key.failed(e);
+          setError(errorText(e));
+        },
       },
     );
   }
@@ -144,7 +152,7 @@ export function DaysOffSheet({
               month={month.month}
               today={today}
               minDate={today}
-              range={from ? { from, to: end! } : null}
+              range={range}
               onSelect={pick}
             />
           </View>

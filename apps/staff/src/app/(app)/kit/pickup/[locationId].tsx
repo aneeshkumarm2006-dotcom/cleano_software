@@ -52,7 +52,10 @@ export default function Pickup() {
           void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
           setResult(res);
         },
-        onError: (e) => setError(errorText(e)),
+        onError: (e) => {
+          key.failed(e);
+          setError(errorText(e));
+        },
       },
     );
   }

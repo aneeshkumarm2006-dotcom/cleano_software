@@ -29,6 +29,9 @@ export function useJobsBetween(from: string, to: string, enabled = true) {
       return items;
     },
     enabled,
+    // A month's jobs change when the office books or moves one, not by the
+    // second; the cleaner's own claims and clock-outs refresh "jobs" anyway.
+    staleTime: 60_000,
     // Keep last month on screen while the next one loads, rather than a spinner.
     placeholderData: keepPreviousData,
   });

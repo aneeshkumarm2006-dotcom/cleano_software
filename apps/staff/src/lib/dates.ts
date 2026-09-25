@@ -4,13 +4,14 @@
 // month names, so "4 Sep" reads the same on every phone whatever its locale
 // or zone. Date keys ("2026-10-12") are wall-calendar days and are never
 // shifted by a zone at all.
-import { parseDateKey, weekdayIndex } from "@bookmops/ui-native";
+import { MONTH_NAMES as MONTHS, parseDateKey, WEEKDAY_NAMES, weekdayIndex } from "@bookmops/ui-native";
 
 import { localDateKey } from "./format";
 
-const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"] as const;
-const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
-const WEEKDAYS_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
+// The names come from the month grid's lists, so a date reads the same in a
+// label as on the calendar. Every short form is the first three letters.
+const MONTHS_SHORT = MONTHS.map((m) => m.slice(0, 3));
+const WEEKDAYS_SHORT = WEEKDAY_NAMES.map((d) => d.slice(0, 3));
 
 /** "4 Sep" from a date key. */
 export function keyDayMonth(key: string): string {

@@ -43,7 +43,10 @@ export default function AddKitItem() {
           void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
           goBack();
         },
-        onError: (e) => setError({ message: errorText(e) }),
+        onError: (e) => {
+          key.failed(e);
+          setError({ message: errorText(e) });
+        },
       },
     );
   }
