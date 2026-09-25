@@ -20,7 +20,20 @@ import { adjustWarehouseStock, pickSourceLocationId } from "@/lib/stock.server";
  * against is therefore the same number the Requests tab and the Edit Product
  * modal show — which is what unblocks the "Only 0 Buckets in warehouse"
  * screenshot on p.5 while there were 8 on the shelf.
+ *
+ * ONCE, AND NOT BY THE REQUESTER. Every status change is a conditional update
+ * on PENDING, and on the product path it is the first write in the stock
+ * transaction. Two admins approving the same request both pass the read
+ * above it; only one gets the row, and the other's transaction rolls back
+ * before any stock moves. An owner or admin who carries a kit themselves
+ * files requests like anyone else, and approving their own is handing
+ * themselves warehouse stock, so that is refused.
  */
+
+const ALREADY_RESOLVED = "Request has already been resolved";
+
+/** Thrown inside the stock transaction to roll it back when we lost the race. */
+class AlreadyResolved extends Error {}
 export async function resolveInventoryRequest(
   requestId: string,
   decision: "APPROVED" | "REJECTED"
@@ -36,6 +49,9 @@ export async function resolveInventoryRequest(
   if (decision !== "APPROVED" && decision !== "REJECTED") {
     return { success: false, error: "Invalid decision" };
   }
+  if (typeof requestId !== "string" || !requestId) {
+    return { success: false, error: "Request not found" };
+  }
 
   try {
     const request = await db.inventoryRequest.findUnique({
@@ -43,15 +59,22 @@ export async function resolveInventoryRequest(
       include: { product: true, employee: { select: { id: true, name: true } } },
     });
     if (!request) return { success: false, error: "Request not found" };
+    if (request.employeeId === session.user.id) {
+      return {
+        success: false,
+        error: "You can't resolve your own request. Another admin has to.",
+      };
+    }
     if (request.status !== "PENDING") {
-      return { success: false, error: "Request has already been resolved" };
+      return { success: false, error: ALREADY_RESOLVED };
     }
 
     if (decision === "REJECTED") {
-      await db.inventoryRequest.update({
-        where: { id: requestId },
+      const res = await db.inventoryRequest.updateMany({
+        where: { id: requestId, status: "PENDING" },
         data: { status: "REJECTED" },
       });
+      if (res.count === 0) return { success: false, error: ALREADY_RESOLVED };
     } else if (request.productId && request.product) {
       // Block ONLY when the warehouse is genuinely short (Stage 4.4). This is
       // the maintained cache, which every writer now keeps equal to
@@ -70,10 +93,13 @@ export async function resolveInventoryRequest(
       const product = request.product;
 
       await db.$transaction(async (tx) => {
-        await tx.inventoryRequest.update({
-          where: { id: requestId },
+        // First, so a request someone else already fulfilled moves no stock:
+        // the throw rolls this whole transaction back.
+        const claimed = await tx.inventoryRequest.updateMany({
+          where: { id: requestId, status: "PENDING" },
           data: { status: "FULFILLED" },
         });
+        if (claimed.count === 0) throw new AlreadyResolved();
 
         // Multi-location is the normal case (the seeds split stock 75/25), so
         // the units have to leave a real shelf rather than always the default
@@ -147,10 +173,11 @@ export async function resolveInventoryRequest(
       });
     } else {
       // Kit request — approve only; assignment happens via the kit flow.
-      await db.inventoryRequest.update({
-        where: { id: requestId },
+      const res = await db.inventoryRequest.updateMany({
+        where: { id: requestId, status: "PENDING" },
         data: { status: "APPROVED" },
       });
+      if (res.count === 0) return { success: false, error: ALREADY_RESOLVED };
     }
 
     revalidatePath(`/admin/employees/${request.employeeId}`);
@@ -165,6 +192,9 @@ export async function resolveInventoryRequest(
       status: decision === "REJECTED" ? "REJECTED" : request.productId ? "FULFILLED" : "APPROVED",
     };
   } catch (error) {
+    if (error instanceof AlreadyResolved) {
+      return { success: false, error: ALREADY_RESOLVED };
+    }
     console.error("Error resolving inventory request:", error);
     return { success: false, error: "Failed to resolve request" };
   }
