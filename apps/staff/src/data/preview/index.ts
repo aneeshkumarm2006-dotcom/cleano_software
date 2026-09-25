@@ -7,6 +7,9 @@ import { previewClockApi } from "./clock";
 import { previewDevicesApi } from "./devices";
 import { previewJobsApi } from "./jobs";
 import { previewPayApi } from "./pay";
+import { previewPhotosApi } from "./photos";
+import { previewIssuesApi } from "./issues";
+import { previewOnMyWayApi } from "./on-my-way";
 
 export const previewSource: DataSource = {
   ...previewJobsApi,
@@ -14,4 +17,7 @@ export const previewSource: DataSource = {
   ...previewDevicesApi,
   ...previewAvailableApi,
   ...previewPayApi,
+  ...previewPhotosApi,
+  ...previewIssuesApi,
+  ...previewOnMyWayApi,
 };

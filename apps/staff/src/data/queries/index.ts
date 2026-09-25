@@ -3,3 +3,6 @@ export * from "./available";
 export * from "./clock";
 export * from "./jobs";
 export * from "./pay";
+export * from "./photos";
+export * from "./issues";
+export * from "./on-my-way";

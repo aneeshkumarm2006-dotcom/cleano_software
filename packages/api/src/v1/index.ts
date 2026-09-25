@@ -9,3 +9,6 @@ export * from "./enums";
 export * from "./jobs";
 export * from "./me";
 export * from "./pay";
+export * from "./photos";
+export * from "./issues";
+export * from "./on-my-way";

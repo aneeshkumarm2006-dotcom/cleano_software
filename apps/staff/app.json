@@ -45,6 +45,26 @@
         {
           "color": "#0e7f8d"
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Bookmops Pro uses your camera to take before and after photos of a job, and photos of a problem you report to the office.",
+          "photosPermission": "Bookmops Pro lets you pick photos of a job from your library to send to the office. Only the photos you choose are sent.",
+          "microphonePermission": false
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "When you tap On my way, Bookmops Pro can send where you are once, so the office can see you're heading to the job. It isn't tracked after that.",
+          "locationAlwaysAndWhenInUsePermission": false,
+          "locationAlwaysPermission": false,
+          "motionUsagePermission": false,
+          "isIosBackgroundLocationEnabled": false,
+          "isAndroidBackgroundLocationEnabled": false,
+          "isAndroidForegroundServiceEnabled": false
+        }
       ]
     ],
     "experiments": {
