@@ -99,7 +99,7 @@ function Summary({ completed, total, requiredLeft }: { completed: number; total:
           size={88}
           strokeWidth={9}
           color={color.successOnChrome}
-          trackColor="rgba(255,255,255,0.13)"
+          trackColor={color.trackOnChromeCard}
           accessibilityLabel={`${completed} of ${total} modules done`}
         >
           <Text variant="heading" color="onChrome" numeral style={{ lineHeight: 22 }}>

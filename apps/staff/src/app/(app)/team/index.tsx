@@ -5,6 +5,7 @@ import { Fragment } from "react";
 import { Pressable, RefreshControl, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { BackButton } from "@/components/BackButton";
 import { Empty, LoadError, Loading } from "@/components/QueryState";
 import { useTeamChannels } from "@/data/queries";
 import { Avatar } from "@/features/messages/MessageBubble";
@@ -28,7 +29,7 @@ export default function TeamChannels() {
   return (
     <View style={{ flex: 1, backgroundColor: color.ground }}>
       <View style={{ paddingTop: insets.top + space[2], paddingHorizontal: space[4], paddingBottom: space[3], flexDirection: "row", alignItems: "center", gap: space[3] }}>
-        <IconButton icon="back" label="Back" onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))} />
+        <BackButton fallback="/" />
         <Text variant="title" accessibilityRole="header" style={{ flex: 1 }} numberOfLines={1}>
           Team chat
         </Text>

@@ -3,6 +3,7 @@
 // a stray photo on the job. Once it has reached storage, a retry of the report
 // reuses the same upload rather than sending it again.
 import { ApiError } from "@bookmops/api/client";
+import { MAX_PHOTO_BYTES } from "@bookmops/api/v1";
 import type { ImagePickerAsset } from "expo-image-picker";
 import { useCallback, useRef, useState } from "react";
 
@@ -15,7 +16,8 @@ export interface IssuePhoto {
   progress: number;
 }
 
-export function useIssuePhoto(jobId: string, source: DataSource, maxBytes = 10 * 1024 * 1024) {
+/** `maxBytes` defaults to the contract's cap, the most the server will sign an upload for. */
+export function useIssuePhoto(jobId: string, source: DataSource, maxBytes = MAX_PHOTO_BYTES) {
   const [photo, setPhoto] = useState<IssuePhoto | null>(null);
   const [error, setError] = useState<string | null>(null);
   const prepared = useRef<PreparedPhoto | null>(null);

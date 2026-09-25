@@ -7,15 +7,7 @@ import { ScreenHeader } from "@/components/ScreenHeader";
 import { useAnnouncements, useDocuments, useKit, useMe, useTeamChannels, useToday, useTraining } from "@/data/queries";
 import { useSession } from "@/data/session";
 import { kitCounts } from "@/features/kit/display";
-
-function initials(name: string): string {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((p) => p[0]!.toUpperCase())
-    .join("");
-}
+import { initials } from "@/lib/format";
 
 export default function More() {
   const me = useMe();

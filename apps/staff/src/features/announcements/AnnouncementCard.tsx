@@ -115,7 +115,7 @@ function Reactions({ item, onChrome }: { item: Announcement; onChrome: boolean }
               borderWidth: 1,
               ...(onChrome
                 ? {
-                    backgroundColor: selected ? "rgba(255,255,255,0.22)" : pressed ? "rgba(255,255,255,0.16)" : "rgba(255,255,255,0.08)",
+                    backgroundColor: selected ? color.fillOnChromeSelected : pressed ? color.fillOnChromePressed : color.fillOnChrome,
                     borderColor: selected ? color.accentOnChrome : color.lineOnChrome,
                   }
                 : {

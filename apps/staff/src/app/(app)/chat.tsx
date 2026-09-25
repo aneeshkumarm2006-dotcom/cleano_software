@@ -9,7 +9,7 @@ import { useSource } from "@/data/session";
 import { ThreadHeader } from "@/features/messages/ThreadHeader";
 import { ThreadView } from "@/features/messages/ThreadView";
 import type { MessageStatus, ThreadMessage } from "@/features/messages/thread";
-import { useConversation } from "@/features/messages/use-conversation";
+import { useChatIdentity, useConversation } from "@/features/messages/use-conversation";
 import { useLive } from "@/features/messages/use-live";
 import { useThreadSender } from "@/features/messages/use-send";
 import { useNow } from "@/lib/use-now";
@@ -44,12 +44,8 @@ export default function OfficeChat() {
   const list = useOfficeMessages(live);
   const markRead = useMarkOfficeRead();
 
-  const person = me.data?.person;
   const company = me.data?.company;
-  const who = useMemo(
-    () => (person && company ? { id: person.id, name: person.name, owner: `${company.id}:${person.id}` } : null),
-    [person, company],
-  );
+  const who = useChatIdentity(me.data);
 
   const server = useMemo(() => list.data?.pages.flatMap((p) => p.items) ?? [], [list.data]);
   const { messages, latestIncomingId } = useConversation({ me: who, thread: "office", server, toMessage });

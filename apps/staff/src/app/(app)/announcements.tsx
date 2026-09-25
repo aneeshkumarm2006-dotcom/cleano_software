@@ -1,10 +1,10 @@
 import { type Announcement, MARK_READ_MAX } from "@bookmops/api/v1";
-import { Button, color, IconButton, space, Text } from "@bookmops/ui-native";
-import { router } from "expo-router";
+import { Button, color, space, Text } from "@bookmops/ui-native";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, FlatList, RefreshControl, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { BackButton } from "@/components/BackButton";
 import { Empty, LoadError, Loading } from "@/components/QueryState";
 import { useAnnouncements, useMarkAnnouncementsRead, useMe } from "@/data/queries";
 import { AnnouncementCard } from "@/features/announcements/AnnouncementCard";
@@ -61,7 +61,7 @@ export default function Announcements() {
 
   const header = (
     <View style={{ paddingTop: insets.top + space[2], paddingHorizontal: space[4], paddingBottom: space[3], flexDirection: "row", alignItems: "center", gap: space[3] }}>
-      <IconButton icon="back" label="Back" onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))} />
+      <BackButton fallback="/" />
       <Text variant="title" accessibilityRole="header" style={{ flex: 1 }} numberOfLines={1}>
         Announcements
       </Text>

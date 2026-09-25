@@ -4,9 +4,9 @@ import { Image } from "expo-image";
 import { Linking, Pressable, View } from "react-native";
 
 import { isTrustedMediaUrl } from "@/config";
-import { clockTime } from "@/lib/format";
+import { clockTime, initials } from "@/lib/format";
 
-import { initials, safeHttpsUrl, type MessageStatus, type ThreadMessage } from "./thread";
+import { safeHttpsUrl, type MessageStatus, type ThreadMessage } from "./thread";
 
 const BUBBLE_MAX = "80%";
 

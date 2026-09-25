@@ -1,13 +1,14 @@
 import type { JobPhoto, PhotoPhase, PhotoPolicy } from "@bookmops/api/v1";
 import { JOB_PHOTO_KIND_HINT } from "@bookmops/core/jobs";
-import { Button, color, Icon, IconButton, radius, Segmented, space, Text } from "@bookmops/ui-native";
+import { Button, color, Icon, radius, Segmented, space, Text } from "@bookmops/ui-native";
 import { useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
-import { router, useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import { Alert, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { BackButton } from "@/components/BackButton";
 import { Empty, LoadError, Loading } from "@/components/QueryState";
 import { useDeletePhoto, useJob, useJobPhotos, useMe } from "@/data/queries";
 import { useSource } from "@/data/session";
@@ -41,7 +42,7 @@ export default function Photos() {
   return (
     <View style={{ flex: 1, backgroundColor: color.ground }}>
       <View style={{ paddingTop: insets.top + space[2], paddingHorizontal: space[4], flexDirection: "row", alignItems: "center", gap: space[3] }}>
-        <IconButton icon="back" label="Back" onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))} />
+        <BackButton fallback="/" />
         <Text variant="eyebrow" color="ink3" style={{ flex: 1 }} numberOfLines={1}>
           {job.data?.address.line1 ?? ""}
         </Text>

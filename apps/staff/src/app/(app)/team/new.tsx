@@ -1,11 +1,12 @@
 import { ApiError } from "@bookmops/api/client";
 import type { DirectoryEntry } from "@bookmops/api/v1";
-import { color, Icon, IconButton, minTouch, radius, space, Text, TextField } from "@bookmops/ui-native";
+import { color, Icon, minTouch, radius, space, Text, TextField } from "@bookmops/ui-native";
 import { router } from "expo-router";
 import { Fragment, useState } from "react";
 import { ActivityIndicator, Alert, Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { BackButton } from "@/components/BackButton";
 import { Empty, LoadError, Loading } from "@/components/QueryState";
 import { useOpenDirect, useTeamDirectory } from "@/data/queries";
 import { Avatar } from "@/features/messages/MessageBubble";
@@ -43,7 +44,7 @@ export default function NewDirectMessage() {
   return (
     <View style={{ flex: 1, backgroundColor: color.ground }}>
       <View style={{ paddingTop: insets.top + space[2], paddingHorizontal: space[4], paddingBottom: space[3], flexDirection: "row", alignItems: "center", gap: space[3] }}>
-        <IconButton icon="back" label="Back" onPress={() => (router.canGoBack() ? router.back() : router.replace("/team"))} />
+        <BackButton fallback="/team" />
         <Text variant="title" accessibilityRole="header" style={{ flex: 1 }} numberOfLines={1}>
           New message
         </Text>

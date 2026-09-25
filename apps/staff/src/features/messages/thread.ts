@@ -89,9 +89,3 @@ export function buildRows(
 export function safeHttpsUrl(url: string): string | null {
   return /^https:\/\/[^\s/?#]+[^\s]*$/i.test(url) ? url : null;
 }
-
-/** "MD" for "Marie D.", "JM" for "Jean Morin". */
-export function initials(name: string): string {
-  const parts = name.split(/\s+/).filter(Boolean).slice(0, 2);
-  return parts.map((p) => p[0]!.toUpperCase()).join("") || "?";
-}

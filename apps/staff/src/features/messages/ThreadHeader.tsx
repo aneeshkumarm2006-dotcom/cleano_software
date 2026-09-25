@@ -1,9 +1,9 @@
 import { color, space, Text } from "@bookmops/ui-native";
-import { IconButton } from "@bookmops/ui-native";
-import { router } from "expo-router";
 import type { ReactNode } from "react";
 import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import { BackButton } from "@/components/BackButton";
 
 /** The top of a conversation: back, who it's with, and a line about them. */
 export function ThreadHeader({
@@ -34,7 +34,7 @@ export function ThreadHeader({
         borderBottomColor: color.line,
       }}
     >
-      <IconButton icon="back" label="Back" onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))} />
+      <BackButton fallback="/" />
       {badge}
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text variant="subheading" accessibilityRole="header" numberOfLines={1}>

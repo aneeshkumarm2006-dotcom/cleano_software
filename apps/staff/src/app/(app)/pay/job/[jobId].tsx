@@ -1,9 +1,10 @@
 import type { JobPayResponse } from "@bookmops/api/v1";
-import { Card, color, Icon, IconButton, space, Text } from "@bookmops/ui-native";
-import { router, useLocalSearchParams } from "expo-router";
+import { Card, color, Icon, space, Text } from "@bookmops/ui-native";
+import { useLocalSearchParams } from "expo-router";
 import { ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { BackButton } from "@/components/BackButton";
 import { LoadError, Loading } from "@/components/QueryState";
 import { useJobPay, useMe } from "@/data/queries";
 import { MoneyLine } from "@/features/pay/PayParts";
@@ -24,7 +25,7 @@ export default function JobPayScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: color.ground }}>
       <View style={{ paddingTop: insets.top + space[2], paddingHorizontal: space[4], flexDirection: "row", alignItems: "center", gap: space[3] }}>
-        <IconButton icon="back" label="Back" onPress={() => (router.canGoBack() ? router.back() : router.replace("/pay"))} />
+        <BackButton fallback="/pay" />
         <Text variant="eyebrow" color="ink3" style={{ flex: 1 }}>
           Job pay
         </Text>

@@ -1,9 +1,10 @@
 import type { PayPeriodDetailResponse } from "@bookmops/api/v1";
-import { Card, color, Icon, IconButton, minTouch, Pill, space, Text } from "@bookmops/ui-native";
+import { Card, color, Icon, minTouch, Pill, space, Text } from "@bookmops/ui-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { BackButton } from "@/components/BackButton";
 import { Empty, LoadError, Loading } from "@/components/QueryState";
 import { useMe, usePayPeriod } from "@/data/queries";
 import { MoneyLine, RowGroup, SectionTitle } from "@/features/pay/PayParts";
@@ -21,7 +22,7 @@ export default function PayPeriodScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: color.ground }}>
       <View style={{ paddingTop: insets.top + space[2], paddingHorizontal: space[4], flexDirection: "row", alignItems: "center", gap: space[3] }}>
-        <IconButton icon="back" label="Back to my pay" onPress={() => (router.canGoBack() ? router.back() : router.replace("/pay"))} />
+        <BackButton fallback="/pay" label="Back to my pay" />
         <Text variant="eyebrow" color="ink3" style={{ flex: 1 }}>
           Pay period
         </Text>

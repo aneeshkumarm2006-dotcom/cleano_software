@@ -1,9 +1,10 @@
 import type { JobDetailResponse } from "@bookmops/api/v1";
-import { Button, Card, color, Icon, IconButton, radius, space, Text } from "@bookmops/ui-native";
+import { Button, Card, color, Icon, radius, space, Text } from "@bookmops/ui-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { BackButton } from "@/components/BackButton";
 import { LoadError, Loading } from "@/components/QueryState";
 import { useJob, useMe } from "@/data/queries";
 import { OnMyWay } from "@/features/on-my-way/OnMyWay";
@@ -20,7 +21,7 @@ export default function JobDetail() {
   return (
     <View style={{ flex: 1, backgroundColor: color.ground }}>
       <View style={{ paddingTop: insets.top + space[2], paddingHorizontal: space[4], flexDirection: "row", alignItems: "center", gap: space[3] }}>
-        <IconButton icon="back" label="Back" onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))} />
+        <BackButton fallback="/" />
         <Text variant="eyebrow" color="ink3" style={{ flex: 1 }}>
           {job.data && tz ? shortDate(job.data.startsAt, tz) : ""}
         </Text>

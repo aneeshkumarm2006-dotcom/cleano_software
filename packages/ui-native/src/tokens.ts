@@ -37,6 +37,30 @@ export const color = {
   onChrome2: "rgba(255,255,255,0.72)",
   onChrome3: "rgba(255,255,255,0.56)",
 
+  // White washes on the dark chrome, for fills rather than text or lines,
+  // faintest first. Named for what they do, so a screen reaches for one of
+  // these instead of writing its own alpha.
+  /** A panel set into the chrome: the clock's facts row. */
+  panelOnChrome: "rgba(255,255,255,0.07)",
+  /** A chip or row on the chrome, at rest (a reaction), or a row pressed. */
+  fillOnChrome: "rgba(255,255,255,0.08)",
+  /** The empty part of a progress ring on the chrome. */
+  trackOnChrome: "rgba(255,255,255,0.10)",
+  /** The empty part of a progress ring on an active card. */
+  trackOnChromeCard: "rgba(255,255,255,0.13)",
+  /** A step not yet done, in a row of step bars. */
+  stepOnChrome: "rgba(255,255,255,0.14)",
+  /** A chip on the chrome, pressed. */
+  fillOnChromePressed: "rgba(255,255,255,0.16)",
+  /** A chip on the chrome, chosen. */
+  fillOnChromeSelected: "rgba(255,255,255,0.22)",
+  /** The outline of an empty checkbox on the chrome. */
+  outlineOnChrome: "rgba(255,255,255,0.25)",
+  /** A warning's wash on the chrome: `warningOnChrome` at 14%. */
+  warningWashOnChrome: "rgba(245,196,107,0.14)",
+  /** The chrome at 72%, behind a small label laid over a photo. */
+  scrim: "rgba(16,36,43,0.72)",
+
   line: "#dbe4e7",
   lineStrong: "#c2d0d4",
   lineOnChrome: "rgba(255,255,255,0.12)",

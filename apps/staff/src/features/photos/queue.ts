@@ -146,7 +146,13 @@ async function run(id: string): Promise<void> {
         if (!get(id)) return;
       }
       try {
-        await putPhoto(ticket, item.prepared!, (progress) => patch(id, { progress }));
+        await putPhoto(ticket, item.prepared!, (progress) => {
+          // A send reports progress many times a second; the row shows whole
+          // percent, so only a change in that is worth redrawing the queue for.
+          const shown = get(id)?.progress;
+          if (shown != null && Math.round(shown * 100) === Math.round(progress * 100)) return;
+          patch(id, { progress });
+        });
       } catch (e) {
         if (e instanceof UploadError && e.needsNewTicket) patch(id, { ticket: null });
         throw e;

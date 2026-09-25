@@ -10,7 +10,7 @@ import { AvailableRailLine, AvailableRow } from "@/features/available/AvailableR
 import { useClaimFlow } from "@/features/available/useClaimFlow";
 import { dayLabel } from "@/features/available/words";
 import { RAIL_WIDTH } from "@/features/jobs/TimelineRow";
-import { localDateKey } from "@/lib/format";
+import { groupByDay } from "@/lib/format";
 import { useNow } from "@/lib/use-now";
 
 const FILTERS = [
@@ -115,16 +115,4 @@ function Board({
       {hasMore ? <Button label="Show more jobs" variant="secondary" size="md" loading={loadingMore} onPress={onMore} /> : null}
     </>
   );
-}
-
-/** Jobs grouped under the calendar day they start on, in the company's zone. */
-function groupByDay(items: readonly AvailableJobSummary[], tz: string): [string, AvailableJobSummary[]][] {
-  const groups = new Map<string, AvailableJobSummary[]>();
-  for (const job of items) {
-    const key = localDateKey(job.startsAt, tz);
-    const list = groups.get(key);
-    if (list) list.push(job);
-    else groups.set(key, [job]);
-  }
-  return [...groups];
 }

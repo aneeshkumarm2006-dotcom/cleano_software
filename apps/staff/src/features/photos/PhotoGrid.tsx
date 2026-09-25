@@ -81,7 +81,7 @@ export function PhotoGrid({ photos, timeZone, onOpen }: { photos: readonly JobPh
                         paddingHorizontal: space[2],
                         paddingVertical: 2,
                         borderRadius: radius.pill,
-                        backgroundColor: "rgba(16,36,43,0.72)",
+                        backgroundColor: color.scrim,
                       }}
                     >
                       <Text variant="eyebrow" color="onChrome" style={{ fontSize: 9, lineHeight: 12 }}>

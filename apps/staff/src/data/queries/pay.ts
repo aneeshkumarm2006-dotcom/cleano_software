@@ -18,6 +18,13 @@ export function usePay() {
   return useQuery({ queryKey: payKeys.summary, queryFn: () => source.pay() });
 }
 
+/**
+ * Past payouts and withdrawals are history: they change on payday or when the
+ * cleaner asks for money (which refreshes everything under "pay"), so a few
+ * minutes between refetches is plenty. Refetching pages every visit is not.
+ */
+const HISTORY_STALE_MS = 5 * 60_000;
+
 export function usePayouts() {
   const source = useSource();
   return useInfiniteQuery({
@@ -25,6 +32,7 @@ export function usePayouts() {
     queryFn: ({ pageParam }) => source.payouts(pageParam),
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.nextCursor,
+    staleTime: HISTORY_STALE_MS,
   });
 }
 
@@ -35,6 +43,7 @@ export function useWithdrawals() {
     queryFn: ({ pageParam }) => source.withdrawals(pageParam),
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.nextCursor,
+    staleTime: HISTORY_STALE_MS,
   });
 }
 

@@ -113,7 +113,7 @@ function ClockBody({
           <ProgressRing
             progress={planned ? worked / planned : 0}
             color={clock.state === "ON_BREAK" ? color.warningOnChrome : color.successOnChrome}
-            trackColor="rgba(255,255,255,0.10)"
+            trackColor={color.trackOnChrome}
             accessibilityLabel={`${status.label}. ${duration(worked)} worked${planned ? ` of ${duration(planned)}` : ""}.`}
           >
             <View style={{ alignItems: "center", gap: space[1] }}>
@@ -136,7 +136,7 @@ function ClockBody({
         </View>
 
         {clock.pendingReview ? (
-          <View style={{ marginHorizontal: space[4], marginTop: space[4], padding: space[3], borderRadius: radius.md, backgroundColor: "rgba(245,196,107,0.14)" }}>
+          <View style={{ marginHorizontal: space[4], marginTop: space[4], padding: space[3], borderRadius: radius.md, backgroundColor: color.warningWashOnChrome }}>
             <Text variant="small" color="warningOnChrome">
               A time you sent is with the office to confirm. You don't need to do anything.
             </Text>
@@ -156,7 +156,7 @@ function ClockBody({
         </View>
 
         {running ? (
-          <View style={{ flexDirection: "row", marginHorizontal: space[4], marginTop: space[5], borderRadius: radius.xl, backgroundColor: "rgba(255,255,255,0.07)" }}>
+          <View style={{ flexDirection: "row", marginHorizontal: space[4], marginTop: space[5], borderRadius: radius.xl, backgroundColor: color.panelOnChrome }}>
             <Action
               icon="clock"
               label={clock.state === "ON_BREAK" ? "End break" : "Break"}
@@ -201,13 +201,13 @@ function ClockBody({
               {checklist.map((i) => (
                 <View
                   key={i.id}
-                  style={{ flex: 1, height: 4, borderRadius: 2, backgroundColor: i.done ? color.successOnChrome : "rgba(255,255,255,0.14)" }}
+                  style={{ flex: 1, height: 4, borderRadius: 2, backgroundColor: i.done ? color.successOnChrome : color.stepOnChrome }}
                 />
               ))}
             </View>
             {upNext.map((item, n) => (
               <View key={item.id} style={{ flexDirection: "row", alignItems: "center", gap: space[3], marginTop: space[3] }}>
-                <View style={{ width: 22, height: 22, borderRadius: 7, borderWidth: 2, borderColor: n === 0 ? color.accentOnChrome : "rgba(255,255,255,0.25)" }} />
+                <View style={{ width: 22, height: 22, borderRadius: 7, borderWidth: 2, borderColor: n === 0 ? color.accentOnChrome : color.outlineOnChrome }} />
                 <Text variant={n === 0 ? "bodyStrong" : "body"} color={n === 0 ? "onChrome" : "onChrome2"} style={{ flex: 1 }} numberOfLines={1}>
                   {item.label}
                 </Text>
@@ -269,7 +269,7 @@ function Action({ icon, label, onPress, tone }: { icon: IconName; label: string;
         justifyContent: "center",
         gap: space[1],
         borderRadius: radius.xl,
-        backgroundColor: pressed ? "rgba(255,255,255,0.08)" : "transparent",
+        backgroundColor: pressed ? color.fillOnChrome : "transparent",
       })}
     >
       <Icon name={icon} size={22} color={tone ?? "onChrome"} />

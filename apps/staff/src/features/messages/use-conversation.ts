@@ -1,3 +1,4 @@
+import type { MeResponse } from "@bookmops/api/v1";
 import { useEffect, useMemo } from "react";
 
 import { pendingStore, usePendingMessages } from "./pending";
@@ -7,6 +8,27 @@ interface ServerMessage {
   id: string;
   clientEventId: string | null;
   fromMe: boolean;
+}
+
+/** The person writing in a conversation, and who their unsent messages belong to. */
+export interface ChatIdentity {
+  id: string;
+  name: string;
+  /**
+   * "company:person": who owns the unsent messages on this phone, so a second
+   * person signing in on it never sees, or sends, the first person's.
+   */
+  owner: string;
+}
+
+/** The signed-in person as a conversation needs them; null until /me has loaded. */
+export function useChatIdentity(me: MeResponse | undefined): ChatIdentity | null {
+  const person = me?.person;
+  const company = me?.company;
+  return useMemo(
+    () => (person && company ? { id: person.id, name: person.name, owner: `${company.id}:${person.id}` } : null),
+    [person, company],
+  );
 }
 
 /**
@@ -23,7 +45,7 @@ export function useConversation<M extends ServerMessage>({
   server,
   toMessage,
 }: {
-  me: { id: string; name: string; owner: string } | null;
+  me: ChatIdentity | null;
   thread: string;
   /** Every loaded page, flattened: newest first. */
   server: readonly M[];

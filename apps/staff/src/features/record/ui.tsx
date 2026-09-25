@@ -4,22 +4,22 @@
 // screens all use — a status tag, a notice, a section title — so the six
 // areas read as one family.
 import { ApiError } from "@bookmops/api/client";
-import { color, Icon, IconButton, radius, space, Text, type IconName } from "@bookmops/ui-native";
-import { router } from "expo-router";
+import { color, Icon, radius, space, Text, type IconName } from "@bookmops/ui-native";
 import type { ReactNode, RefObject } from "react";
 import { Alert, KeyboardAvoidingView, Platform, RefreshControl, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { BackButton, goBackOr } from "@/components/BackButton";
+
 /** Back to where the person came from, or to More when opened by a link. */
 export function goBack() {
-  if (router.canGoBack()) router.back();
-  else router.replace("/more");
+  goBackOr("/more");
 }
 
 export function BackHeader({ title, subtitle, right }: { title: string; subtitle?: string; right?: ReactNode }) {
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: space[3], paddingHorizontal: space[4], paddingBottom: space[3] }}>
-      <IconButton icon="back" label="Back" onPress={goBack} />
+      <BackButton fallback="/more" />
       <View style={{ flex: 1 }}>
         <Text variant={subtitle ? "subheading" : "heading"} accessibilityRole="header" numberOfLines={2}>
           {title}

@@ -1,4 +1,4 @@
-import type { JobScope, JobSummary } from "@bookmops/api/v1";
+import type { JobScope } from "@bookmops/api/v1";
 import { Screen, Segmented, space, TAB_BAR_HEIGHT, Text } from "@bookmops/ui-native";
 import { useState } from "react";
 import { View } from "react-native";
@@ -7,7 +7,7 @@ import { Empty, LoadError, Loading } from "@/components/QueryState";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { useJobs, useMe } from "@/data/queries";
 import { RailLine, RAIL_WIDTH, TimelineRow } from "@/features/jobs/TimelineRow";
-import { localDateKey, shortDate } from "@/lib/format";
+import { groupByDay, shortDate } from "@/lib/format";
 
 const SCOPES = [
   { value: "upcoming", label: "Upcoming" },
@@ -56,16 +56,4 @@ export default function Jobs() {
       )}
     </Screen>
   );
-}
-
-/** Jobs grouped under the calendar day they fall on in the company's zone. */
-function groupByDay(items: readonly JobSummary[], tz: string): [string, JobSummary[]][] {
-  const groups = new Map<string, JobSummary[]>();
-  for (const job of items) {
-    const key = localDateKey(job.startsAt, tz);
-    const list = groups.get(key);
-    if (list) list.push(job);
-    else groups.set(key, [job]);
-  }
-  return [...groups];
 }

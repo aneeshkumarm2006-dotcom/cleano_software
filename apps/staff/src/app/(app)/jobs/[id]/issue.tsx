@@ -1,15 +1,16 @@
 import type { JobIssue, JobIssueCategory, JobIssueUrgency, ReportIssueRequest } from "@bookmops/api/v1";
 import { JOB_ISSUE_CATEGORIES, MAX_ISSUE_NOTE } from "@bookmops/api/v1";
 import { JOB_ISSUE_CATEGORY_HINT, JOB_ISSUE_CATEGORY_LABEL } from "@bookmops/core/jobs";
-import { Button, Card, ChoiceChips, color, Icon, IconButton, radius, space, Text, TextField } from "@bookmops/ui-native";
+import { Button, Card, ChoiceChips, color, Icon, radius, space, Text, TextField } from "@bookmops/ui-native";
 import { randomUUID } from "expo-crypto";
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
-import { router, useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import { type ReactNode, useRef, useState } from "react";
 import { ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { BackButton, goBackOr } from "@/components/BackButton";
 import { LoadError, Loading } from "@/components/QueryState";
 import { useJob, useJobIssues, useMe, useReportIssue } from "@/data/queries";
 import { useSource } from "@/data/session";
@@ -43,7 +44,7 @@ export default function ReportIssue() {
   return (
     <View style={{ flex: 1, backgroundColor: color.ground }}>
       <View style={{ paddingTop: insets.top + space[2], paddingHorizontal: space[4], flexDirection: "row", alignItems: "center", gap: space[3] }}>
-        <IconButton icon="back" label="Back" onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))} />
+        <BackButton fallback="/" />
         <Text variant="eyebrow" color="ink3" style={{ flex: 1 }} numberOfLines={1}>
           {job.data?.address.line1 ?? ""}
         </Text>
@@ -255,7 +256,7 @@ function Sent({ issue, jobId, bottom, onAnother }: { issue: JobIssue; jobId: str
         </View>
       </Card>
       <View style={{ gap: space[2] }}>
-        <Button label="Back to the job" onPress={() => (router.canGoBack() ? router.back() : router.replace({ pathname: "/jobs/[id]", params: { id: jobId } }))} />
+        <Button label="Back to the job" onPress={() => goBackOr({ pathname: "/jobs/[id]", params: { id: jobId } })} />
         <Button label="Report something else" variant="secondary" onPress={onAnother} />
       </View>
       <MyReports jobId={jobId} />

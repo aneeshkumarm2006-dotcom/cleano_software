@@ -48,6 +48,24 @@ export function localDateKey(iso: string, timeZone: string): string {
   return dtf(timeZone, { year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(iso));
 }
 
+/** Jobs grouped under the calendar day they start on in the company's zone, in the order given. */
+export function groupByDay<T extends { startsAt: string }>(items: readonly T[], timeZone: string): [string, T[]][] {
+  const groups = new Map<string, T[]>();
+  for (const job of items) {
+    const key = localDateKey(job.startsAt, timeZone);
+    const list = groups.get(key);
+    if (list) list.push(job);
+    else groups.set(key, [job]);
+  }
+  return [...groups];
+}
+
+/** "MD" for "Marie D.", "JM" for "Jean Morin": a person's avatar. */
+export function initials(name: string): string {
+  const parts = name.split(/\s+/).filter(Boolean).slice(0, 2);
+  return parts.map((p) => p[0]!.toUpperCase()).join("") || "?";
+}
+
 const money = new Map<string, Intl.NumberFormat>();
 /** "$96.00". Cents in, never floats. */
 export function formatMoney(cents: number, currency: string): string {
