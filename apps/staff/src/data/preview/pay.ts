@@ -13,6 +13,7 @@ import type {
 
 import type { DataSource } from "../source";
 import { delay } from "./delay";
+import { daysFromToday } from "./zone";
 
 const FEE_BPS = 500;
 const MINIMUM_CENTS = 1000;
@@ -25,10 +26,7 @@ function day(days: number): string {
 }
 /** An instant `days` from now. */
 function instant(days: number, hour = 12): string {
-  const d = new Date();
-  d.setDate(d.getDate() + days);
-  d.setHours(hour, 0, 0, 0);
-  return d.toISOString();
+  return daysFromToday(days, hour).toISOString();
 }
 
 /** Monday of this week, as an offset in days from today. */

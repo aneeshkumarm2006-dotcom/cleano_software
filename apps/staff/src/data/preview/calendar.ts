@@ -1,33 +1,16 @@
 // Sample calendar for development builds: the Jobs tab's sample jobs, plus a
 // believable spread of work on the other weekdays, for any span asked for.
 import type { JobSummary } from "@bookmops/api/v1";
-import { addDays, daysBetween, parseDateKey, weekdayIndex } from "@bookmops/ui-native";
+import { addDays, daysBetween, weekdayIndex } from "@bookmops/ui-native";
 
 import type { DataSource } from "../source";
 import { delay } from "./delay";
+import { at } from "./zone";
 import { previewMe, previewPast, previewUpcoming } from "./jobs";
 
 const TZ = previewMe.company.timezone;
 const keyOf = (iso: string) => new Intl.DateTimeFormat("en-CA", { timeZone: TZ }).format(new Date(iso));
 
-/** The instant that is `hh:mm` on `key` in the company's zone. */
-function at(key: string, hh: number, mm: number): string {
-  const p = parseDateKey(key)!;
-  const guess = Date.UTC(p.year, p.month - 1, p.day, hh, mm);
-  // How far the zone's wall clock is from UTC at that moment, then correct.
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: TZ,
-    hourCycle: "h23",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).formatToParts(new Date(guess));
-  const n = (t: string) => Number(parts.find((x) => x.type === t)?.value);
-  const shown = Date.UTC(n("year"), n("month") - 1, n("day"), n("hour"), n("minute"));
-  return new Date(guess - (shown - guess)).toISOString();
-}
 
 const PLACES = [
   { line1: "4218 rue Saint-Denis", line2: "Apt 3", area: "Le Plateau", pay: 9600, h: 9, m: 0, len: 3 },

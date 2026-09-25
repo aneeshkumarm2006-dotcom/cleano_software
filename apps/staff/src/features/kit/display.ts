@@ -20,9 +20,18 @@ export function toneOf(item: KitItem): Tone {
   }
 }
 
-/** "12 cloths", "1 bottle", with the unit as the office wrote it. */
+/**
+ * "12 cloths", "1 bottle". The office writes the unit once, usually plural
+ * ("bottles"); for exactly one, the plural ending is dropped.
+ */
 export function amount(item: Pick<KitItem, "quantity" | "unit">): string {
-  return `${quantityText(item.quantity)} ${item.unit}`;
+  return `${quantityText(item.quantity)} ${item.quantity === 1 ? singular(item.unit) : item.unit}`;
+}
+
+function singular(unit: string): string {
+  if (/(?:x|ch|sh|ss)es$/i.test(unit)) return unit.slice(0, -2); // boxes → box
+  if (/[^s]s$/i.test(unit)) return unit.slice(0, -1); // bottles → bottle
+  return unit;
 }
 
 /** The line under the name: what the number or the report says. */

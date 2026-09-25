@@ -7,7 +7,7 @@ import { Empty, LoadError, Loading } from "@/components/QueryState";
 import { useKit, useMe } from "@/data/queries";
 import { kitCounts } from "@/features/kit/display";
 import { KitRow } from "@/features/kit/KitRow";
-import { BackHeader, Page, SectionTitle, Tag } from "@/features/record/ui";
+import { BackHeader, Page, SectionTitle } from "@/features/record/ui";
 
 /**
  * My kit: what the cleaner carries and how each thing stands. Items that need
@@ -25,7 +25,7 @@ export default function Kit() {
 
   return (
     <Page
-      header={<BackHeader title="My kit" right={low > 0 ? <Tag label={`${low} running low`} tone="warn" /> : null} />}
+      header={<BackHeader title="My kit" />}
       refreshing={kit.isRefetching}
       onRefresh={() => kit.refetch()}
       footer={

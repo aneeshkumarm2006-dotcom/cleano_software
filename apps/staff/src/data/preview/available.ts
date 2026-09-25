@@ -9,16 +9,14 @@ import type { AvailableJobDetailResponse, AvailableWhen, ClaimJobResponse, JobSu
 
 import type { DataSource } from "../source";
 import { delay } from "./delay";
+import { companyHour, daysFromToday } from "./zone";
 import { previewUpcoming } from "./jobs";
 
 const TZ = "America/Toronto";
 
 /** A start `days` from today at `hour`:`minute`, company time (close enough for samples). */
 function startAt(days: number, hour: number, minute = 0): Date {
-  const d = new Date();
-  d.setDate(d.getDate() + days);
-  d.setHours(hour, minute, 0, 0);
-  return d;
+  return daysFromToday(days, hour, minute);
 }
 
 type Seed = {
@@ -47,7 +45,7 @@ const SEEDS: Seed[] = [
   {
     id: "a1",
     days: 0,
-    hour: new Date().getHours() + 3,
+    hour: Math.min(companyHour() + 3, 21),
     lengthH: 3,
     area: "Golden Square Mile",
     street: "910 rue Sherbrooke Ouest",
