@@ -22,7 +22,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { addonIcon } from "@/lib/addon-icons";
-import { addOnKey } from "@/lib/checklist-triggers";
+import { addOnKey } from "@bookmops/core/jobs";
 import {
   addOnLineTotal,
   ADDON_INCLUDED_LABEL,

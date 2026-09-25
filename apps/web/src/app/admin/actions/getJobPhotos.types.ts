@@ -1,5 +1,5 @@
 import { BOOKING_PHOTO_UPLOADER_LABEL } from "@/lib/booking-deposit";
-import type { JobPhotoKind } from "@/lib/job-photos";
+import type { JobPhotoKind } from "@bookmops/core/jobs";
 
 export type JobPhotoDTO = {
   id: string;

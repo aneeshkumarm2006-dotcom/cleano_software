@@ -40,7 +40,7 @@ import {
   type JobBillingType,
 } from "@/lib/hourly-billing";
 import { parsePropertyType, type PropertyType } from "@bookmops/core/property";
-import { HOLD_REASON, ON_HOLD_STATUS } from "@/lib/job-hold";
+import { HOLD_REASON, ON_HOLD_STATUS, parseCustomChecklist } from "@bookmops/core/jobs";
 import { resolveJobAddressId } from "@/lib/client-address-store";
 import { resolveJobClient } from "@/lib/client-capture";
 import { getServicePricingConfig } from "@/lib/booking-pricing";
@@ -72,7 +72,6 @@ import {
   recurrenceCount,
   nextOccurrence,
 } from "@/lib/booking-pricing";
-import { parseCustomChecklist } from "@/lib/job-checklist";
 import { Prisma } from "@prisma/client";
 
 // Admin recurring cadences (awer_fixes.pdf item 9 — daily, weekly, biweekly,

@@ -24,7 +24,7 @@
 //     page (`getFieldLeadWeeklyBonus`).
 //   • `notes` (raw) — free text an admin may have pasted billing into, and the
 //     column legacy BookingKoala imports wrote "Final amount CAD: …" to. Only
-//     ever emitted through `sanitizeCleanerNotes()`; see `src/lib/cleaner-notes.ts`.
+//     ever emitted through `sanitizeCleanerNotes()`; see `packages/core/src/jobs/cleaner-notes.ts`.
 //   • `clientAddress.accessNotes` — door and gate codes. A lead is not
 //     necessarily assigned to their group's jobs, and codes are released per
 //     assignment, not per hierarchy.

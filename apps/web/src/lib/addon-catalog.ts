@@ -1,4 +1,4 @@
-import { addOnKey } from "./checklist-triggers";
+import { addOnKey } from "@bookmops/core/jobs";
 import type { BkAddOn } from "./bookingkoala/core";
 
 /**

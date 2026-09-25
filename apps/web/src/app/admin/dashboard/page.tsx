@@ -33,7 +33,7 @@ import {
   simpleJobStatus,
   ACTIVE_VALUE_SELECT,
 } from "@/lib/metrics";
-import { HOLD_LABEL } from "@/lib/job-hold";
+import { HOLD_LABEL } from "@bookmops/core/jobs";
 import { activeSubtotal, type ActiveValueJob } from "@/lib/job-money";
 import { isCleanerLow } from "@bookmops/core/inventory";
 import { loadCleanerThresholdDefault } from "@/lib/inventory-thresholds.server";

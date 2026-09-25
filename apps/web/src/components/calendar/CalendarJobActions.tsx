@@ -41,7 +41,12 @@ import {
 } from "lucide-react";
 import { markArrived } from "@/app/admin/actions/markArrived";
 import { releaseJobHold } from "@/app/admin/actions/releaseJobHold";
-import { HOLD_LABEL, holdReasonText, ON_HOLD_STATUS } from "@/lib/job-hold";
+import {
+  HOLD_LABEL,
+  holdReasonText,
+  ON_HOLD_STATUS,
+  jobPhotoKindLabel,
+} from "@bookmops/core/jobs";
 import { isAwaitingQuote } from "@/lib/quote-status";
 import { addJobNote } from "@/app/admin/actions/addJobNote";
 import { getJobSummary } from "@/app/admin/actions/getJobSummary";
@@ -58,7 +63,6 @@ import { togglePaymentReceived } from "@/app/admin/actions/toggleJobPaymentStatu
 import { chargeJob } from "@/app/admin/actions/chargeJob";
 import { getJobPhotos } from "@/app/admin/actions/getJobPhotos";
 import type { JobPhotoDTO } from "@/app/admin/actions/getJobPhotos.types";
-import { jobPhotoKindLabel } from "@/lib/job-photos";
 import { saveJob } from "@/app/admin/actions/saveJob";
 
 const money = (n: number | null | undefined) =>

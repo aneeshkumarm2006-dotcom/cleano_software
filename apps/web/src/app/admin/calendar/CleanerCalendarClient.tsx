@@ -25,7 +25,7 @@ import { avatarColor, initials } from "@/lib/avatar";
 import { fmtDate as fmtDateTz, fmtTime as fmtTimeTz } from "@/lib/time";
 import { civilKey, tzDateKey, tzMinOfDay, tzToday } from "@/lib/tz-calendar";
 import { jobTypeLabel } from "@bookmops/core/services";
-import { HOLD_LABEL } from "@/lib/job-hold";
+import { HOLD_LABEL } from "@bookmops/core/jobs";
 
 interface CalJob {
   id: string;

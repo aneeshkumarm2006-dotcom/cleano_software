@@ -6,7 +6,7 @@ import { clockOut } from "@/app/admin/actions/clockOut";
 import {
   CHECKLIST_GATE_HINT,
   pendingRequiredItems,
-} from "@/lib/job-checklist";
+} from "@bookmops/core/jobs";
 import { shortStaffedNotice, type JobStaffing } from "@/lib/cleaner-jobs";
 import type { ClosingReport } from "@bookmops/core/time";
 import ClosingInventoryReport, {

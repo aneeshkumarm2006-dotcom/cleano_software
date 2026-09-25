@@ -26,7 +26,7 @@ import {
   checkTemplateName,
   parseCustomChecklist,
   templateItemsFrom,
-} from "@/lib/job-checklist";
+} from "@bookmops/core/jobs";
 
 type Result =
   | { success: true; templateId: string; itemCount: number }

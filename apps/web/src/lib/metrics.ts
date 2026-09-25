@@ -17,7 +17,7 @@ import {
   EMPLOYEE_ROLES,
   REVENUE_STATUSES,
 } from "./metrics-shared";
-import { INACTIVE_JOB_STATUSES, ON_HOLD_STATUS } from "./job-hold";
+import { INACTIVE_JOB_STATUSES, ON_HOLD_STATUS } from "@bookmops/core/jobs";
 
 export * from "./metrics-shared";
 

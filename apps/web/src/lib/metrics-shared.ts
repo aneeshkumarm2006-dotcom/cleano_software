@@ -9,7 +9,7 @@
 
 import { startOfDayTz } from "./time";
 import { activeSubtotal, type ActiveValueJob } from "./job-money";
-import { INACTIVE_JOB_STATUSES, isOnHold } from "./job-hold";
+import { INACTIVE_JOB_STATUSES, isOnHold } from "@bookmops/core/jobs";
 
 // ── Total Revenue ───────────────────────────────────────────────────────────
 // Spec: completed AND paid jobs only; excludes taxes; applies discounts;

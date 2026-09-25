@@ -12,7 +12,7 @@ import {
   MAX_ISSUE_DESCRIPTION,
   parseJobIssueStatus,
   parseJobIssueUrgency,
-} from "@/lib/job-issues";
+} from "@bookmops/core/jobs";
 
 /**
  * What the admin screens see. A shaped object rather than the Prisma row: the

@@ -20,7 +20,7 @@
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import type { Prisma } from "@prisma/client";
-import { sanitizeCleanerNotes } from "@/lib/cleaner-notes";
+import { sanitizeCleanerNotes } from "@bookmops/core/jobs";
 import { fieldLeadScopedJobsWhere } from "@/lib/cleaner-jobs";
 import { fieldLeadGroupIds } from "@/lib/field-lead-group.server";
 

@@ -11,7 +11,7 @@ import {
   jobPhotoKindLabel,
   MAX_PHOTOS_PER_JOB,
   parseJobPhotoKind,
-} from "@/lib/job-photos";
+} from "@bookmops/core/jobs";
 import type { UploadApiResponse } from "cloudinary";
 import { orgAssetFolder } from "@/lib/asset-folder";
 
@@ -145,7 +145,7 @@ export async function uploadJobPhoto(formData: FormData) {
     }
 
     // The cap is now `MAX_PHOTOS_PER_JOB` (200), up from a hardcoded 20 that
-    // lived in two files at once — see src/lib/job-photos.ts for why a ceiling
+    // lived in two files at once — see packages/core/src/jobs/job-photos.ts for why a ceiling
     // still exists at all. The widget prints the same number before a cleaner
     // picks a file, so reaching this branch should mean a genuinely enormous
     // job, not a surprise.

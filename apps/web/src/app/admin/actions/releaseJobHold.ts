@@ -5,7 +5,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { invalidateCalendarDay } from "./invalidateCalendarDay";
-import { holdReasonText, isOnHold, ON_HOLD_STATUS } from "@/lib/job-hold";
+import { holdReasonText, isOnHold, ON_HOLD_STATUS } from "@bookmops/core/jobs";
 import { isAwaitingQuote } from "@/lib/quote-status";
 
 /**

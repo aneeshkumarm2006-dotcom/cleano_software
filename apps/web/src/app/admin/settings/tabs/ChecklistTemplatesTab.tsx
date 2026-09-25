@@ -40,7 +40,7 @@ import {
   DEFAULT_SERVICE_CATALOG,
   serviceOptions as catalogServiceOptions,
 } from "@bookmops/core/services";
-import { addOnKey, describeScope } from "@/lib/checklist-triggers";
+import { addOnKey, describeScope } from "@bookmops/core/jobs";
 
 interface ChecklistTemplatesTabProps {
   templates: ChecklistTemplateRecord[];

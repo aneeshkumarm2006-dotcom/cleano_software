@@ -11,7 +11,7 @@ import {
   JOB_PHOTO_KINDS,
   JOB_PHOTO_KIND_LABEL,
   type JobPhotoKind,
-} from "@/lib/job-photos";
+} from "@bookmops/core/jobs";
 
 /** "All" plus the four types — the filter row above the grid (item 1). */
 type KindFilter = JobPhotoKind | "ALL";

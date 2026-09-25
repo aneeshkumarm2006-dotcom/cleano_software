@@ -13,7 +13,7 @@
 // so the client components can share them.
 
 import { db } from "@/lib/org-db";
-import { describeScope, describeTrigger } from "@/lib/checklist-triggers";
+import { describeScope, describeTrigger } from "@bookmops/core/jobs";
 import type { ChecklistTemplateOption } from "@/lib/checklist-options";
 
 /**

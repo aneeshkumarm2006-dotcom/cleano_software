@@ -16,7 +16,7 @@ import {
   CHECKLIST_GATE_HINT,
   pendingRequiredItems,
   requiredItemsSatisfied,
-} from "@/lib/job-checklist";
+} from "@bookmops/core/jobs";
 import { shortStaffedNotice, type JobStaffing } from "@/lib/cleaner-jobs";
 import { AlertTriangle } from "lucide-react";
 import {

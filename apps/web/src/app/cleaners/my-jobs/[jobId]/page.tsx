@@ -27,15 +27,17 @@ import {
 } from "@bookmops/core/property";
 import { addOnQuantity } from "@/lib/job-money";
 import { formatHours } from "@/lib/hourly-billing";
-import { afterPhotosAllowed, photoExpectationLine } from "@/lib/job-photos";
 import {
+  afterPhotosAllowed,
+  photoExpectationLine,
   isOpenIssueStatus,
   jobIssueCategoryLabel,
   JOB_ISSUE_STATUS_LABEL,
   parseJobIssueStatus,
-} from "@/lib/job-issues";
+  CHECKLIST_NONE_CONFIGURED,
+  sanitizeCleanerNotes,
+} from "@bookmops/core/jobs";
 import { ensureJobChecklist, readJobChecklist } from "@/lib/job-checklist.server";
-import { CHECKLIST_NONE_CONFIGURED } from "@/lib/job-checklist";
 import {
   canResume,
   sessionsFromLegacyPair,
@@ -59,7 +61,6 @@ import ScrollToTop from "./ScrollToTop";
 import JobLifeline from "./JobLifeline";
 import { cleanerPayoutForJobs } from "@/lib/cleaner-pay-display";
 import { isAwaitingQuote } from "@/lib/quote-status";
-import { sanitizeCleanerNotes } from "@/lib/cleaner-notes";
 import { listMyTimeLogRequests } from "../../actions/timeLogRequests";
 import TimeLogRequestControl from "./TimeLogRequestControl";
 

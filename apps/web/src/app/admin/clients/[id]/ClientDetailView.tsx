@@ -12,7 +12,7 @@ import ClientPaymentMethods from "./ClientPaymentMethods";
 import { jobTypeLabel } from "@bookmops/core/services";
 import { avatarColor, initials } from "@/lib/avatar";
 import type { PropertyType } from "@bookmops/core/property";
-import { HOLD_LABEL } from "@/lib/job-hold";
+import { HOLD_LABEL } from "@bookmops/core/jobs";
 import BackToList from "@/components/common/BackToList";
 
 type TabKey = "history" | "payments" | "ratings";

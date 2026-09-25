@@ -10,7 +10,7 @@ import {
 } from "@bookmops/core/services";
 import { openForClaimFilter, quoteSettledFilter } from "@/lib/cleaner-jobs";
 import { isAwaitingQuote } from "@/lib/quote-status";
-import { isOnHold } from "@/lib/job-hold";
+import { isOnHold } from "@bookmops/core/jobs";
 import { sendAdminUnassignedEvent } from "@/lib/email";
 
 export async function claimJob(jobId: string) {

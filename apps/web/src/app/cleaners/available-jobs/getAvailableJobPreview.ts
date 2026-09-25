@@ -12,10 +12,9 @@ import {
 import { getCleanerRateInputs } from "@/lib/cleaner-rates";
 import { computeJobPayout, fallbackRateInput } from "@bookmops/core/pay";
 import { getServiceCatalogWithLabels } from "@/lib/service-catalog.server";
-import { sanitizeCleanerNotes } from "@/lib/cleaner-notes";
+import { sanitizeCleanerNotes, resolveChecklistTemplates } from "@bookmops/core/jobs";
 import { formatAddressLine } from "@bookmops/core/property";
 import { addOnQuantity } from "@/lib/job-money";
-import { resolveChecklistTemplates } from "@/lib/checklist-triggers";
 import type {
   AvailableJobPreview,
   AvailableJobPreviewResult,

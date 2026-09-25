@@ -11,7 +11,7 @@ import {
   isDepositDisposition,
   type DepositDisposition,
 } from "@/lib/quote-status";
-import { HOLD_REASON } from "@/lib/job-hold";
+import { HOLD_REASON } from "@bookmops/core/jobs";
 
 /**
  * Accept or decline a sent quote (PDF #9, Stage 11, steps 11.4 + 11.6).

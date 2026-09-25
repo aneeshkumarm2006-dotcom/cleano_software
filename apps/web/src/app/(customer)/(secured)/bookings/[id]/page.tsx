@@ -9,7 +9,7 @@ import {
   addOnLineTotal,
   resolvePricingMode,
 } from "@/lib/job-money";
-import { sanitizeCleanerNotes } from "@/lib/cleaner-notes";
+import { sanitizeCleanerNotes } from "@bookmops/core/jobs";
 import { propertyTypeLabel, formatAddressLine } from "@bookmops/core/property";
 import { formatDeposit, resolveDepositCredit } from "@/lib/booking-deposit";
 import { isAwaitingQuote, quoteStatusLabel } from "@/lib/quote-status";

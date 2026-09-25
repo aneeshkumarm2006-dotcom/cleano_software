@@ -13,12 +13,10 @@ import {
   resolveChecklistTemplates,
   type ChecklistResolutionTier,
   type ChecklistScopedJob,
-} from "@/lib/checklist-triggers";
-import {
   parseCustomChecklist,
   resolveChecklistAction,
   type ChecklistItemShape,
-} from "@/lib/job-checklist";
+} from "@bookmops/core/jobs";
 import type {
   JobChecklistDTO,
   JobChecklistItemDTO,

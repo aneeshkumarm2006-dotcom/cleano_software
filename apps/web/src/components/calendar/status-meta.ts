@@ -3,7 +3,7 @@
 // label + accent color + tint, shared across Month / Week / Day / List views.
 import { CalendarEvent } from "./types";
 import { propertyTypeShortLabel } from "@bookmops/core/property";
-import { HOLD_LABEL } from "@/lib/job-hold";
+import { HOLD_LABEL } from "@bookmops/core/jobs";
 
 export interface StatusMeta {
   key: string;
@@ -15,7 +15,7 @@ export interface StatusMeta {
 export const STATUS_META: Record<string, StatusMeta> = {
   // Round 4, fix 6 — this calendar was already the ONE screen calling CREATED
   // "On hold"; the other three called it "Unconfirmed", "Created" and "Booking
-  // created". The wording won and is now shared from src/lib/job-hold.ts, and
+  // created". The wording won and is now shared from packages/core/src/jobs/job-hold.ts, and
   // the colour moved from slate to the amber every other surface uses for a
   // hold: grey read as "inert", which is exactly the wrong signal for the one
   // status that needs somebody to do something.

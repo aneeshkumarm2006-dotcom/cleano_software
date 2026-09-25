@@ -14,7 +14,7 @@ import {
   parseJobIssueStatus,
   parseJobIssueUrgency,
   type JobIssueStatus,
-} from "@/lib/job-issues";
+} from "@bookmops/core/jobs";
 
 /**
  * Same shape as NotificationsClient's TONE, keyed by urgency rather than by

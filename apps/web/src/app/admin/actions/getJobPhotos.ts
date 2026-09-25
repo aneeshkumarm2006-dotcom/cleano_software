@@ -5,7 +5,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import type { JobPhotoDTO } from "./getJobPhotos.types";
 import { BOOKING_PHOTO_UPLOADER_LABEL } from "@/lib/booking-deposit";
-import { parseJobPhotoKind } from "@/lib/job-photos";
+import { parseJobPhotoKind } from "@bookmops/core/jobs";
 
 export async function getJobPhotos(
   jobId: string

@@ -36,7 +36,7 @@ import {
   projectCalendarMetadata,
   REDACTED_CALENDAR_KEYS,
 } from "../src/app/admin/actions/_calendarScope";
-import { addressArea, clientFirstName } from "../src/lib/team-schedule";
+import { addressArea, clientFirstName } from "@bookmops/core/jobs";
 
 let pass = 0;
 let fail = 0;
@@ -611,7 +611,7 @@ ok(
     !/notes: job\.notes/.test(GET_TEAM)
 );
 // ── The two withholding rules, exercised directly ─────────────────────────
-// They live in a pure module (src/lib/team-schedule.ts) precisely so they can be
+// They live in a pure module (packages/core/src/jobs/team-schedule.ts) precisely so they can be
 // run here rather than merely grepped for: an untested privacy rule is an
 // assumption.
 check("a full name is reduced to a first name", clientFirstName("Sarah Chen"), "Sarah");
@@ -645,17 +645,17 @@ check("a comma-only address is null", addressArea(",,,"), null);
 
 ok(
   "the withholding rules are a PURE module, so this script can run them",
-  !/^import /m.test(read("src/lib/team-schedule.ts"))
+  !/^import /m.test(read("../../packages/core/src/jobs/team-schedule.ts"))
 );
 ok(
   "…and the action uses them rather than a private copy",
-  /from "@\/lib\/team-schedule"/.test(GET_TEAM) &&
+  /from "@bookmops\/core\/jobs"/.test(GET_TEAM) &&
     /clientFirstName\(job\.clientName\)/.test(GET_TEAM) &&
     /addressArea\(job\.location\)/.test(GET_TEAM)
 );
 ok(
   "the deliberate divergence from the calendar's shortLocation is documented",
-  /shortLocation/.test(read("src/lib/team-schedule.ts"))
+  /shortLocation/.test(read("../../packages/core/src/jobs/team-schedule.ts"))
 );
 ok(
   "…and the calendar's own shortLocation was NOT changed under it",

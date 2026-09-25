@@ -14,7 +14,7 @@ import Card from "@/components/ui/Card";
 import Badge from "@/components/ui/Badge";
 import AvailabilityOverview from "../employees/AvailabilityOverview";
 import type { MyTeamDTO, TeamJobDTO } from "../actions/getMyTeam.types";
-import { HOLD_LABEL } from "@/lib/job-hold";
+import { HOLD_LABEL } from "@bookmops/core/jobs";
 
 type TabId = "schedule" | "members" | "availability";
 
@@ -22,7 +22,7 @@ type TabId = "schedule" | "members" | "availability";
 const STATUS_LABEL: Record<string, string> = {
   // Round 4, fix 6 — was "Unconfirmed", which named the same enum the calendar
   // called "On hold" and the clients page called "Created". One word now, from
-  // src/lib/job-hold.ts, so a field lead and an admin describe the same job the
+  // packages/core/src/jobs/job-hold.ts, so a field lead and an admin describe the same job the
   // same way.
   CREATED: HOLD_LABEL,
   SCHEDULED: "Scheduled",

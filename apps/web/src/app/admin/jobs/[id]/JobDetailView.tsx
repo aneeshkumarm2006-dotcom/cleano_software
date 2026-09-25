@@ -25,7 +25,25 @@ import { simpleJobStatus } from "@/lib/metrics-shared";
 // client component can import it: `cleaner-earnings`, which DECIDES the basis,
 // reaches @/db and cannot be pulled into the browser bundle.
 import { PAY_BASIS_SHORT_LABEL, type PayBasisKind } from "@bookmops/core/pay";
-import { HOLD_LABEL, holdLabel, holdReasonText, isOnHold } from "@/lib/job-hold";
+import {
+  HOLD_LABEL,
+  holdLabel,
+  holdReasonText,
+  isOnHold,
+  JOB_ISSUE_STATUS_LABEL,
+  JOB_ISSUE_URGENCY_LABEL,
+  MAX_ISSUE_DESCRIPTION,
+  parseJobIssueStatus,
+  parseJobIssueUrgency,
+  type JobIssueStatus,
+  afterPhotosAllowed,
+  groupPhotosByKind,
+  JOB_PHOTO_KIND_LABEL,
+  type JobPhotoKind,
+  addOnKey,
+  CHECKLIST_TIER_HINT,
+  CHECKLIST_TIER_LABEL,
+} from "@bookmops/core/jobs";
 import { jobStaffing, shortStaffedNotice } from "@/lib/cleaner-jobs";
 import { ConfirmActionModal } from "@/components/common/ConfirmActionModal";
 import { releaseJobHold } from "../../actions/releaseJobHold";
@@ -35,14 +53,6 @@ import { setJobPriorityLabel } from "../../actions/setJobPriorityLabel";
 import { submitRating } from "../../actions/submitRating";
 import { updateJobNotificationPrefs } from "../../actions/updateJobNotificationPrefs";
 import { setJobIssueStatus, type JobIssueDTO } from "../../actions/jobIssues";
-import {
-  JOB_ISSUE_STATUS_LABEL,
-  JOB_ISSUE_URGENCY_LABEL,
-  MAX_ISSUE_DESCRIPTION,
-  parseJobIssueStatus,
-  parseJobIssueUrgency,
-  type JobIssueStatus,
-} from "@/lib/job-issues";
 import {
   ArrowLeft, MapPin, KeyRound, Clock, DollarSign, Users,
   CheckCircle2, Package, Pencil, History, Activity,
@@ -63,12 +73,6 @@ import {
   summariseBreaks,
   activeMinutes,
 } from "@/lib/time-tracking";
-import {
-  afterPhotosAllowed,
-  groupPhotosByKind,
-  JOB_PHOTO_KIND_LABEL,
-  type JobPhotoKind,
-} from "@/lib/job-photos";
 import { formatDeposit, resolveDepositCredit } from "@/lib/booking-deposit";
 import { isQuoteStatus, type QuoteStatus } from "@/lib/quote-status";
 import QuoteReviewPanel from "./QuoteReviewPanel";
@@ -102,11 +106,6 @@ import {
 } from "@/lib/job-money";
 import { taxLines } from "@/lib/tax";
 import { formatHours, hourlyLineLabel } from "@/lib/hourly-billing";
-import {
-  addOnKey,
-  CHECKLIST_TIER_HINT,
-  CHECKLIST_TIER_LABEL,
-} from "@/lib/checklist-triggers";
 import type { JobChecklistSummary } from "@/lib/job-checklist.server";
 import SaveChecklistTemplate from "./SaveChecklistTemplate";
 
@@ -3882,7 +3881,7 @@ export default function JobDetailView({
         {(() => {
           // Same predicate the cleaner app and the upload action use — one
           // helper, so the three surfaces can't disagree about whether a
-          // cleaner may upload (src/lib/job-photos.ts).
+          // cleaner may upload (packages/core/src/jobs/job-photos.ts).
           const allowed = afterPhotosAllowed({
             afterPhotoConsent: photosEnabled,
             afterPhotoOverrideAt,

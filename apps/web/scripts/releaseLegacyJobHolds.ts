@@ -52,7 +52,7 @@
  * a reason is only written where one is missing.
  */
 import { PrismaClient } from "@prisma/client";
-import { HOLD_REASON } from "../src/lib/job-hold";
+import { HOLD_REASON } from "@bookmops/core/jobs";
 import { refuseOnMultiTenant } from "./_scope";
 
 const db = new PrismaClient();

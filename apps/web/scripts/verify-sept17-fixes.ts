@@ -20,11 +20,9 @@ import {
 import type { BookingDraft } from "../src/app/(book)/book/types";
 import {
   CHECKLIST_TIER_LABEL,
-} from "../src/lib/checklist-triggers";
-import {
   CUSTOM_CHECKLIST_MAX_ITEMS,
   parseCustomChecklist,
-} from "../src/lib/job-checklist";
+} from "@bookmops/core/jobs";
 import {
   hourlyClockedHours,
   hourlyTeamPayFromClock,

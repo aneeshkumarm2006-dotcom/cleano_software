@@ -14,9 +14,8 @@
  * the supported path.
  */
 import { randomBytes } from "crypto";
-import { addOnKey } from "../checklist-triggers";
+import { addOnKey, HOLD_REASON } from "@bookmops/core/jobs";
 import { inferPropertyTypeFromText, type PropertyType } from "@bookmops/core/property";
-import { HOLD_REASON } from "../job-hold";
 
 // Broad guard window — only rejects clearly-bogus dates, not real bookings.
 // Previously hardcoded to Jun 1–Sep 1 2026, which silently dropped every

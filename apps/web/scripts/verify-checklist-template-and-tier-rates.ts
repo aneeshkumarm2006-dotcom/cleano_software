@@ -13,7 +13,7 @@ import {
   parseCustomChecklist,
   templateItemsFrom,
   TEMPLATE_NAME_MAX,
-} from "../src/lib/job-checklist";
+} from "@bookmops/core/jobs";
 import {
   NO_TIER_HOURLY_RATES,
   defaultHourlyRateFor,

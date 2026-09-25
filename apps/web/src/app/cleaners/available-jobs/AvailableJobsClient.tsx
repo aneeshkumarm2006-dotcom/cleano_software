@@ -17,7 +17,7 @@ import {
   type AvailableJobsView,
 } from "@/lib/available-jobs-calendar";
 import { jobTypeLabel } from "@bookmops/core/services";
-import { sanitizeCleanerNotes } from "@/lib/cleaner-notes";
+import { sanitizeCleanerNotes } from "@bookmops/core/jobs";
 import { propertyTypeLabel } from "@bookmops/core/property";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";

@@ -16,7 +16,7 @@ import { updateChecklistItem } from "@/app/admin/actions/updateChecklistItem";
 import {
   CHECKLIST_NONE_CONFIGURED,
   CHECKLIST_STALE_HINT,
-} from "@/lib/job-checklist";
+} from "@bookmops/core/jobs";
 import type { ChecklistItemStatus } from "@prisma/client";
 
 interface JobChecklistPanelProps {

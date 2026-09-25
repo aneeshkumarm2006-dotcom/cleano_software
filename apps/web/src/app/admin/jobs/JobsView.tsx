@@ -39,7 +39,7 @@ import {
   isUpcomingJob,
   simpleJobStatus,
 } from "@/lib/metrics-shared";
-import { HOLD_LABEL, holdLabel, holdReasonText, isOnHold } from "@/lib/job-hold";
+import { HOLD_LABEL, holdLabel, holdReasonText, isOnHold } from "@bookmops/core/jobs";
 import { releaseJobHold } from "../actions/releaseJobHold";
 // Client-safe by design (see the header of job-money.ts) — the table can price
 // a row with exactly the function the job page and the invoice use.

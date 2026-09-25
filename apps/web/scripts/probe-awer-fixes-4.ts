@@ -17,7 +17,7 @@ import { PrismaClient } from "@prisma/client";
 import { startOfDayTz } from "../src/lib/time";
 import { quoteSettledFilter, upcomingFilter } from "../src/lib/cleaner-jobs";
 import { activeJobsWhere, jobStatusWhere } from "../src/lib/metrics";
-import { ON_HOLD_STATUS } from "../src/lib/job-hold";
+import { ON_HOLD_STATUS } from "@bookmops/core/jobs";
 import { billableActualHours } from "../src/lib/hourly-billing";
 import { crewActiveMinutesByCleaner } from "../src/lib/work-sessions";
 import {

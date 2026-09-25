@@ -15,7 +15,7 @@ import { deleteJob as archiveJob } from "@/app/admin/actions/deleteJob";
 import { computeJobPayShares, type JobPayInput } from "@/lib/cleaner-earnings";
 import { resolveAmountDue } from "@/lib/job-billing";
 import { summarizeJobChecklist } from "@/lib/job-checklist.server";
-import { parseJobPhotoKind } from "@/lib/job-photos";
+import { parseJobPhotoKind } from "@bookmops/core/jobs";
 import { listJobIssues } from "@/app/admin/actions/jobIssues";
 import JobDetailView from "./JobDetailView";
 import ScrollToTop from "./ScrollToTop";

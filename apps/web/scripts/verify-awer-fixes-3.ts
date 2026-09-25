@@ -67,7 +67,13 @@ import {
   hasBillingSegments,
   sanitizeCleanerNotes,
   stripBillingSegments,
-} from "../src/lib/cleaner-notes";
+  checklistSignature,
+  isUntouched,
+  pendingRequiredItems,
+  requiredItemsSatisfied,
+  resolveChecklistAction,
+  afterPhotosAllowed,
+} from "@bookmops/core/jobs";
 import { needsPopup } from "../src/app/(book)/book/types";
 // Stage 4 (item 2). Pure by design — packages/core/src/property/client-address.ts imports no
 // Prisma, precisely so these can be exercised here without a database.
@@ -80,14 +86,6 @@ import {
 } from "@bookmops/core/property";
 // Stage 5 (items 12–15). Same reasoning as Stage 4: the rules live in pure
 // modules with no Prisma import, so they are exercised here rather than grepped.
-import {
-  checklistSignature,
-  isUntouched,
-  pendingRequiredItems,
-  requiredItemsSatisfied,
-  resolveChecklistAction,
-} from "../src/lib/job-checklist";
-import { afterPhotosAllowed } from "../src/lib/job-photos";
 import {
   activeSessionMinutes,
   canResume,
@@ -1846,7 +1844,7 @@ section(12, "Checklist + job scope visible without pressing anything (PDF #5)", 
   lacksInCode("...and so is generateJobChecklist", PANEL, "generateJobChecklist");
   lacksInCode("...and so is the client-side fetch", PANEL, "getJobChecklist(");
   has("items arrive as a prop", PANEL, "items: JobChecklistItemDTO[]");
-  has("the empty state uses the agreed copy", "src/lib/job-checklist.ts",
+  has("the empty state uses the agreed copy", "../../packages/core/src/jobs/job-checklist.ts",
     '"No checklist configured for this job type."');
 
   // 12.c — the scope card, and the add-on quantity read through the clamp.
@@ -1871,7 +1869,7 @@ section(12, "Checklist + job scope visible without pressing anything (PDF #5)", 
     "requiredItemsSatisfied(checklistItems)");
 
   // The four hand-written copies of the photo predicate are down to one. Scans
-  // src/app only — src/lib/job-photos.ts is where the one copy now lives.
+  // src/app only — packages/core/src/jobs/job-photos.ts is where the one copy now lives.
   noMatchUnder(
     "no call site re-implements the after-photo predicate inline",
     "src/app",

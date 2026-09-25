@@ -11,7 +11,7 @@ import {
   templateScopeMatchesJob,
   wantedCategoriesFor,
   type ChecklistScopedTemplate,
-} from "../src/lib/checklist-triggers";
+} from "@bookmops/core/jobs";
 
 let pass = 0, fail = 0;
 function check(name: string, actual: unknown, expected: unknown) {

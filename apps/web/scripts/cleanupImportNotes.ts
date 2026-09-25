@@ -21,7 +21,7 @@
  *    — the very text item 9 says to preserve. It now strips ONLY the billing
  *    segments and writes back whatever survives.
  *
- * The rule itself is `stripBillingSegments` in src/lib/cleaner-notes.ts, so it
+ * The rule itself is `stripBillingSegments` in packages/core/src/jobs/cleaner-notes.ts, so it
  * can be tested before it ever touches a live row. This file is only the
  * database wrapper.
  *
@@ -29,7 +29,7 @@
  * log and are skipped.
  */
 import { PrismaClient } from "@prisma/client";
-import { hasBillingSegments, stripBillingSegments } from "../src/lib/cleaner-notes";
+import { hasBillingSegments, stripBillingSegments } from "@bookmops/core/jobs";
 import { refuseOnMultiTenant } from "./_scope";
 
 const db = new PrismaClient();

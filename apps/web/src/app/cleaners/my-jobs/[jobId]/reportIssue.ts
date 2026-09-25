@@ -10,7 +10,7 @@ import {
   MAX_ISSUE_DESCRIPTION,
   parseJobIssueCategory,
   parseJobIssueUrgency,
-} from "@/lib/job-issues";
+} from "@bookmops/core/jobs";
 
 /**
  * A cleaner tells the office something is wrong (Sept 3 fix list, item 1).

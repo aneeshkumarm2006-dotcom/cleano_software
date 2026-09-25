@@ -10,7 +10,7 @@
  */
 import { PrismaClient } from "@prisma/client";
 import { normalizeJobType } from "@bookmops/core/services";
-import { BILLING_LINE_SOURCE } from "../src/lib/cleaner-notes";
+import { BILLING_LINE_SOURCE } from "@bookmops/core/jobs";
 import { refuseOnMultiTenant } from "./_scope";
 
 const db = new PrismaClient();
@@ -19,7 +19,7 @@ const db = new PrismaClient();
  * The billing-line vocabulary `sanitizeCleanerNotes` hides cleaner-side, BUILT
  * FROM the same exported source string rather than hand-copied — this used to
  * be a third independent copy that could drift from the two in
- * src/lib/cleaner-notes.ts without anything noticing.
+ * packages/core/src/jobs/cleaner-notes.ts without anything noticing.
  *
  * Re-expressed as a Postgres regex so the count is done in the database rather
  * than by pulling every note into memory. Applied with the `n` flag so `^`/`$`

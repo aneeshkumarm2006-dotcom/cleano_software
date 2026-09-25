@@ -32,7 +32,7 @@ import {
   isJobPhotoKind,
   jobPhotoKindLabel,
   parseJobPhotoKind,
-} from "../src/lib/job-photos";
+} from "@bookmops/core/jobs";
 import {
   PROPERTY_SIZE_FIELDS,
   PROPERTY_SIZE_NUMERIC_FIELDS,
@@ -69,7 +69,7 @@ const lacks = (name: string, path: string, needle: string) =>
 const SCHEMA = "prisma/schema.prisma";
 const MIGRATION =
   "prisma/migrations/20260818000000_photo_kind_and_address_property_size/migration.sql";
-const JOB_PHOTOS_LIB = "src/lib/job-photos.ts";
+const JOB_PHOTOS_LIB = "../../packages/core/src/jobs/job-photos.ts";
 const UPLOAD_ACTION = "src/app/admin/actions/uploadJobPhoto.ts";
 const UPLOAD_WIDGET = "src/app/cleaners/my-jobs/[jobId]/PhotoUpload.tsx";
 const GALLERY = "src/app/cleaners/my-jobs/[jobId]/PhotoGallery.tsx";

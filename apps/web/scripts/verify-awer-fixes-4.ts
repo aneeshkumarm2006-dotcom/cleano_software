@@ -46,7 +46,7 @@ import {
   holdLabel,
   holdReasonText,
   isOnHold,
-} from "../src/lib/job-hold";
+} from "@bookmops/core/jobs";
 import { parseAndNormalize } from "../src/lib/bookingkoala/core";
 import {
   cancelledJobsWhere,

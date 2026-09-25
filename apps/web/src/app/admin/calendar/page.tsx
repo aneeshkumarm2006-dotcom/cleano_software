@@ -10,7 +10,7 @@ import CalendarPageClient from "./CalendarPageClient";
 import CleanerCalendarClient from "./CleanerCalendarClient";
 import { getBookingConfig } from "../../(book)/actions/getBookingConfig";
 import { getTaxRates } from "@/lib/tax.server";
-import { sanitizeCleanerNotes } from "@/lib/cleaner-notes";
+import { sanitizeCleanerNotes } from "@bookmops/core/jobs";
 import { calendarJobsWhere } from "@/lib/cleaner-jobs";
 
 export default async function CalendarPage() {

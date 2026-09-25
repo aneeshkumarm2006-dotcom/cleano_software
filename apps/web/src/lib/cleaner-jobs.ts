@@ -20,7 +20,7 @@
 
 import type { Prisma } from "@prisma/client";
 import { startOfDayTz } from "@/lib/time";
-import { ON_HOLD_STATUS } from "@/lib/job-hold";
+import { ON_HOLD_STATUS } from "@bookmops/core/jobs";
 
 /** Statuses that close a job out — never "upcoming" work. */
 export const CLEANER_CLOSED_STATUSES = ["COMPLETED", "CANCELLED"] as const;

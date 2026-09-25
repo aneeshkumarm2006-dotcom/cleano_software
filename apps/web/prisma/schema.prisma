@@ -571,7 +571,7 @@ model Job {
   /// UI and became a deliberate state. The three automatic producers each write
   /// their trigger here — a $0 import, a post-construction quote awaiting a
   /// price, a flexible booking with no agreed date — from the fixed strings in
-  /// src/lib/job-hold.ts, so "automatic holds show their trigger" is one string
+  /// packages/core/src/jobs/job-hold.ts, so "automatic holds show their trigger" is one string
   /// per trigger rather than prose retyped at each call site.
   ///
   /// Nullable, and NULL is not "no reason": it is "written before this column
@@ -827,7 +827,7 @@ model Job {
   /// ever read whole and written whole.
   ///
   /// Shape: [{ title, description, isRequired }]. Validated by
-  /// `parseCustomChecklist` in src/lib/job-checklist.ts on every read, because
+  /// `parseCustomChecklist` in packages/core/src/jobs/job-checklist.ts on every read, because
   /// a JSON column is only as trustworthy as the last thing that wrote it.
   customChecklist                  Json?
   // Rag-wash projection — computed from job specs at completion.
@@ -2316,7 +2316,7 @@ model ChecklistTemplate {
   /// OVERRIDES the service-type default rather than stacking on top of it
   /// ("every Mckiernan job gets the strict Mckiernan checklist"). The
   /// precedence lives in one place: `resolveChecklistTemplates()` in
-  /// src/lib/checklist-triggers.ts.
+  /// packages/core/src/jobs/checklist-triggers.ts.
   ///
   /// onDelete: Cascade — a client-scoped template is worthless without its
   /// client, and SetNull would be actively dangerous: it would silently promote

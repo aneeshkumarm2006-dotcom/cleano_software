@@ -24,13 +24,13 @@ import {
   MAX_ISSUE_DESCRIPTION,
   type JobIssueCategory,
   type JobIssueUrgency,
-} from "@/lib/job-issues";
+} from "@bookmops/core/jobs";
 import { reportJobIssue } from "./reportIssue";
 
 /**
  * The urgency copy is FIRST PERSON here and only here.
  *
- * `JOB_ISSUE_URGENCY_LABEL` in @/lib/job-issues is the office's wording
+ * `JOB_ISSUE_URGENCY_LABEL` in @bookmops/core/jobs is the office's wording
  * ("Urgent — I'm blocked"), which is what the admin list prints. On the phone
  * the cleaner is answering a question about their own morning, so the options
  * are phrased the way they'd say it. Two values, closed union — the lib's own

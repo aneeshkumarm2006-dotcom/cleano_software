@@ -6,7 +6,7 @@
  * Three things changed here, all from the handoff:
  *
  *   1. The 20-photo cap is gone. `MAX_PHOTOS_PER_JOB` (200) is the ceiling now,
- *      it lives in @/lib/job-photos beside the server's copy of the same rule
+ *      it lives in @bookmops/core/jobs beside the server's copy of the same rule
  *      rather than being retyped here, and it is printed on the dropzone BEFORE
  *      any file is picked — "clearly shown before upload".
  *   2. Every photo is FILED: before / after / issue / general. The picker above
@@ -32,7 +32,7 @@ import {
   JOB_PHOTO_KIND_LABEL,
   MAX_PHOTOS_PER_JOB,
   type JobPhotoKind,
-} from "@/lib/job-photos";
+} from "@bookmops/core/jobs";
 
 const TARGET_MAX_SIZE_MB = 1;
 const HARD_MAX_SIZE = 10 * 1024 * 1024;

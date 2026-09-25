@@ -7,8 +7,7 @@ import {
   fieldLeadGroupIds,
   fieldLeadGroupMembers,
 } from "@/lib/field-lead-group.server";
-import { sanitizeCleanerNotes } from "@/lib/cleaner-notes";
-import { addressArea, clientFirstName } from "@/lib/team-schedule";
+import { sanitizeCleanerNotes, addressArea, clientFirstName } from "@bookmops/core/jobs";
 import { jobTypeLabel } from "@bookmops/core/services";
 import { getServiceCatalogWithLabels } from "@/lib/service-catalog.server";
 import {

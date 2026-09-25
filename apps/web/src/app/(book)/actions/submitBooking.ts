@@ -46,7 +46,7 @@ import { resolveDepositUsdForService } from "@/lib/booking-deposit.server";
 // "QUOTED" is still not a confirmed cleaning: the confirmation screen must not
 // promise one.
 import { isAwaitingQuote } from "@/lib/quote-status";
-import { HOLD_REASON } from "@/lib/job-hold";
+import { HOLD_REASON } from "@bookmops/core/jobs";
 import { logActivity } from "@/lib/activity-log";
 import { applyPromoCode } from "./applyPromoCode";
 import { formatAddressLine, parsePropertyType } from "@bookmops/core/property";

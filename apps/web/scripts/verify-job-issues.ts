@@ -3,7 +3,7 @@
  *   npx tsx --conditions=react-server scripts/verify-job-issues.ts
  *
  * Nothing in the database validates category, urgency or status — they are TEXT
- * columns mirroring TS unions in src/lib/job-issues.ts — so these three parse
+ * columns mirroring TS unions in packages/core/src/jobs/job-issues.ts — so these three parse
  * functions ARE the validation. Every one of them has to fold an unrecognised
  * value to a safe default rather than throw, because the alternative is losing
  * a cleaner's report to a select that arrived empty.
@@ -22,7 +22,7 @@ import {
   parseJobIssueStatus,
   parseJobIssueUrgency,
   type JobIssueCategory,
-} from "../src/lib/job-issues";
+} from "@bookmops/core/jobs";
 
 // Keeps `pass`, `fail` and `check` off the global scope, where they would
 // collide with every other verify script.
