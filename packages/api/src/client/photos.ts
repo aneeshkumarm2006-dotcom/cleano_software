@@ -15,6 +15,11 @@ export const photosApi = (request: Request) => ({
     request(`/api/v1/jobs/${seg(jobId)}/photos${cursor ? `?cursor=${seg(cursor)}` : ""}`, JobPhotosResponse),
   attachJobPhoto: (jobId: string, body: AttachPhotoRequest) =>
     request(`/api/v1/jobs/${seg(jobId)}/photos`, JobPhoto, json("POST", body, body.clientEventId)),
+  /**
+   * Sent with an empty JSON body: every v1 mutation must carry
+   * Content-Type: application/json (the CSRF gate, API_V1.md §4), and the
+   * client only sets it when there is a body.
+   */
   deleteJobPhoto: (jobId: string, photoId: string) =>
-    request(`/api/v1/jobs/${seg(jobId)}/photos/${seg(photoId)}`, DeletePhotoResponse, json("DELETE")),
+    request(`/api/v1/jobs/${seg(jobId)}/photos/${seg(photoId)}`, DeletePhotoResponse, json("DELETE", {})),
 });
