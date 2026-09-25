@@ -4,21 +4,18 @@ import { db } from "@/lib/org-db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { smsOnTheWay } from "@/lib/sms";
-import { sendAdminOnTheWay } from "@/lib/email";
-import { setAssignmentProgress } from "@/lib/job-assignments";
+import { requireOrgId } from "@/lib/org";
+import { actorFromSession } from "@/server/actor";
+import { fireEffects } from "@/server/effects";
+import { markOnMyWayFor } from "@/server/on-my-way/on-my-way";
 import { getSetting } from "@/lib/settings";
 import { isStaffRole } from "@/lib/role-routing";
-
-/** Default ETA (minutes) advertised to the customer when the cleaner taps
- *  "On my way". We don't run a maps SDK — this mirrors the catalog's default
- *  15-minute "on the way" threshold. */
-const DEFAULT_ETA_MIN = 15;
 
 /**
  * Marks the caller as "on the way" for a job, before clock-in.
  * Idempotent-ish: if `onMyWayAt` is already set we return the existing
- * timestamp without overwriting it or re-notifying the customer.
+ * timestamp without overwriting it or re-notifying the customer. The rules
+ * live in server/on-my-way/on-my-way.ts, shared with the phone.
  */
 export async function markOnMyWay(
   jobId: string,
@@ -33,100 +30,34 @@ export async function markOnMyWay(
   }
 
   try {
-    const job = await db.job.findUnique({
-      where: { id: jobId },
-      include: {
-        employee: true,
-        cleaners: true,
-        client: { select: { phone: true } },
-      },
-    });
-
-    if (!job) {
-      return { success: false, error: "Job not found" as const };
+    const actor = actorFromSession(
+      session.user as { id: string; name?: string | null; email: string; role?: string | null },
+      await requireOrgId(),
+    );
+    const result = await markOnMyWayFor(actor, { jobId, coords, now: new Date(), door: "web" });
+    if (!result.ok) {
+      return {
+        success: false,
+        error:
+          result.code === "NOT_ON_JOB"
+            ? ("You are not assigned to this job" as const)
+            : ("Job not found" as const),
+      };
     }
 
-    const isEmployee = job.employeeId === session.user.id;
-    const isCleaner = job.cleaners.some((c) => c.id === session.user.id);
-    if (!isEmployee && !isCleaner) {
-      return { success: false, error: "You are not assigned to this job" as const };
+    // Already marked by someone: nobody was notified again.
+    if (result.value.jobAlreadySet) {
+      return { success: true, onMyWayAt: result.value.jobOnMyWayAt, alreadySet: true };
     }
 
-    // Already marked — don't overwrite or re-notify. Still record THIS
-    // cleaner's per-assignment status (a teammate may have set the job-level
-    // flag first on a multi-cleaner job).
-    if (job.onMyWayAt) {
-      if (!job.clockInTime) {
-        await setAssignmentProgress(jobId, session.user.id, {
-          status: "ON_THE_WAY",
-          onMyWayAt: new Date(),
-        });
-      }
-      return { success: true, onMyWayAt: job.onMyWayAt.toISOString(), alreadySet: true };
-    }
-
-    const now = new Date();
-
-    // Live GPS tracking (#10) is admin-gated. When off, we still record the
-    // "On my way" status but never store coordinates.
-    const gpsEnabled = await getSetting("tracking.gpsEnabled");
-
-    await db.job.update({
-      where: { id: jobId },
-      data: {
-        onMyWayAt: now,
-        ...(gpsEnabled && coords
-          ? {
-              onMyWayLat: coords.lat,
-              onMyWayLng: coords.lng,
-              onMyWayLocationAt: now,
-            }
-          : {}),
-      },
-    });
-
-    // Per-cleaner assignment status (item 9).
-    await setAssignmentProgress(jobId, session.user.id, {
-      status: "ON_THE_WAY",
-      onMyWayAt: now,
-    });
-
-    await db.jobLog.create({
-      data: {
-        jobId,
-        userId: session.user.id,
-        action: "NOTE_ADDED",
-        description: `${session.user.name ?? "Cleaner"} is on the way${
-          gpsEnabled && coords ? " (location shared)" : ""
-        }`,
-      },
-    });
-
-    // Customer SMS — gated by `cust.booking.on_the_way` inside smsOnTheWay
-    // AND the per-booking notifyClient toggle.
-    const phone = job.notifyClient ? job.client?.phone : null;
-    if (phone) {
-      smsOnTheWay({
-        to: phone,
-        cleanerName: session.user.name ?? "Your cleaner",
-        etaMin: DEFAULT_ETA_MIN,
-      }).catch((e) => console.error("on-the-way customer sms", e));
-    }
-
-    // Admin notification — gated by `admin.clock.on_the_way`.
-    sendAdminOnTheWay({
-      jobId,
-      jobNumber: job.jobNumber,
-      clientName: job.clientName,
-      cleanerName: session.user.name ?? "Cleaner",
-    }).catch((e) => console.error("admin on-the-way email", e));
+    fireEffects(result.effects);
 
     revalidatePath("/cleaners/my-jobs");
     revalidatePath(`/cleaners/my-jobs/${jobId}`);
     revalidatePath(`/cleaners/my-jobs/${jobId}/clock`);
     revalidatePath(`/admin/jobs/${jobId}`);
 
-    return { success: true, onMyWayAt: now.toISOString() };
+    return { success: true, onMyWayAt: result.value.jobOnMyWayAt };
   } catch (error) {
     console.error("Error marking on the way:", error);
     return { success: false, error: "Failed to mark on the way" as const };
