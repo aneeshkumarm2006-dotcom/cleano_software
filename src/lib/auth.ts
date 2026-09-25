@@ -156,6 +156,10 @@ export const auth = betterAuth({
    * not match, and neither will one company's workspace posting at another's.
    */
   trustedOrigins: (request) => {
+    // better-auth also evaluates this with no request at all (at start-up, and
+    // for server-side auth.api calls). There is no browser then, so there is
+    // no origin to trust.
+    if (!request) return [];
     const host = request.headers.get("host");
     if (!host) return [];
     // A forwarded-proto header can carry a list; the first hop is the
