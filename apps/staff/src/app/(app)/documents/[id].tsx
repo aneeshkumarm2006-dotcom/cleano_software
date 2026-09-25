@@ -1,4 +1,5 @@
-import type { DocumentDetail } from "@bookmops/api/v1";
+import { ApiError } from "@bookmops/api/client";
+import { DrawnSignature, type DocumentDetail } from "@bookmops/api/v1";
 import { Button, Card, Checkbox, IconButton, SignaturePad, space, Text, type Signature } from "@bookmops/ui-native";
 import * as Haptics from "expo-haptics";
 import { useLocalSearchParams } from "expo-router";
@@ -17,7 +18,9 @@ import { safeWebUrl } from "@/lib/urls";
 /**
  * One document: read it, then sign it with a finger, as on the web. Opening
  * it is logged once per visit; signing is confirmed first and sent with an
- * idempotency key, so a retry never signs twice.
+ * idempotency key, so a retry never signs twice. The signature carries the
+ * version and content hash that were on screen, so a document the office
+ * changed in the meantime is refused rather than signed unread.
  */
 export default function DocumentScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -49,6 +52,9 @@ function Reader({ doc, timeZone, onDownload }: { doc: DocumentDetail; timeZone: 
   const [agreed, setAgreed] = useState(false);
   const [drawing, setDrawing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // A tap or a stray line is not a signature: the same rule the server
+  // applies, so the button waits for one the server will take.
+  const inked = signature && DrawnSignature.safeParse(signature).success ? signature : null;
   const fileUrl = safeWebUrl(doc.fileUrl);
   const signable = doc.status === "PENDING";
   const tag = statusTag(doc.status);
@@ -65,11 +71,11 @@ function Reader({ doc, timeZone, onDownload }: { doc: DocumentDetail; timeZone: 
   }
 
   async function submit() {
-    if (!signature || !agreed || sign.isPending) return;
+    if (!inked || !agreed || sign.isPending) return;
     const ok = await confirm({ title: `Sign ${doc.title}?`, message: RECORDED_NOTE, confirmLabel: "Sign" });
     if (!ok) return;
     setError(null);
-    const body = { agreed: true as const, signature };
+    const body = { agreed: true as const, version: doc.version, contentSha256: doc.contentSha256, signature: inked };
     sign.mutate(
       { ...body, clientEventId: key.for(body) },
       {
@@ -77,7 +83,15 @@ function Reader({ doc, timeZone, onDownload }: { doc: DocumentDetail; timeZone: 
           key.done();
           void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
         },
-        onError: (e) => setError(errorText(e)),
+        onError: (e) => {
+          if (e instanceof ApiError && e.code === "DOCUMENT_CHANGED") {
+            // The query refetches the new version; they agree to that one, not this.
+            setAgreed(false);
+            setError("The office has changed this document since you opened it. Read it again above, then tick to agree and sign.");
+            return;
+          }
+          setError(errorText(e));
+        },
       },
     );
   }
@@ -96,9 +110,9 @@ function Reader({ doc, timeZone, onDownload }: { doc: DocumentDetail; timeZone: 
         signable ? (
           <>
             <FormError message={error} />
-            <Button label="Sign document" icon="sign" disabled={!signature || !agreed} loading={sign.isPending} onPress={submit} />
+            <Button label="Sign document" icon="sign" disabled={!inked || !agreed} loading={sign.isPending} onPress={submit} />
             <Text variant="small" color="ink3" align="center">
-              {!signature ? "Sign in the box, then tick to agree." : !agreed ? "Tick the box to agree." : RECORDED_NOTE}
+              {!inked ? "Sign in the box, then tick to agree." : !agreed ? "Tick the box to agree." : RECORDED_NOTE}
             </Text>
           </>
         ) : undefined

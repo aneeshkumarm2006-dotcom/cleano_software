@@ -88,6 +88,11 @@ function summary(m: Module): TrainingModuleSummary {
   return { ...rest, questionCount: questions.length, progress: progress.get(m.id) ?? fresh() };
 }
 
+/** Failed attempts in a row, per module, for the server's three-then-wait rule. */
+const failures = new Map<string, { count: number; lastAt: number }>();
+const QUIZ_TRIES = 3;
+const QUIZ_COOLDOWN_MS = 24 * 3_600_000;
+
 function find(id: string): Module {
   const m = MODULES.find((x) => x.id === id);
   if (!m) throw new ApiError("This module isn't available.", 404, "NOT_FOUND", false);
@@ -125,12 +130,25 @@ export const previewTrainingApi = {
     once(body.clientEventId, () => {
       const m = find(id);
       if (m.questions.length === 0) throw new ApiError("This module has no quiz.", 409, "NO_QUIZ", false);
+      const failed = failures.get(id);
+      if (failed && failed.count >= QUIZ_TRIES) {
+        if (Date.now() - failed.lastAt < QUIZ_COOLDOWN_MS) {
+          throw new ApiError("You've had three tries. You can try again this time tomorrow.", 429, "QUIZ_COOLDOWN", false);
+        }
+        failures.delete(id);
+      }
+      const answered = new Set(body.answers.map((a) => a.questionId));
+      if (answered.size !== m.questions.length || m.questions.some((q) => !answered.has(q.id))) {
+        throw new ApiError("Answer every question once.", 400, "VALIDATION", false);
+      }
       const correct = m.questions.filter((q, i) => body.answers.find((a) => a.questionId === q.id)?.selectedIndex === m.answers[i]).length;
       const total = m.questions.length;
       const score = correct / total;
       const passed = score >= 0.8;
       const p = progress.get(id) ?? fresh();
       const status = passed ? (p.videoProgress >= 0.9 ? "COMPLETED" : "IN_PROGRESS") : "FAILED";
+      if (passed) failures.delete(id);
+      else failures.set(id, { count: (failures.get(id)?.count ?? 0) + 1, lastAt: Date.now() });
       const next: TrainingProgress = {
         ...p,
         quizScore: score,

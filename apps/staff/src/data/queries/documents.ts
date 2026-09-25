@@ -1,3 +1,4 @@
+import { ApiError } from "@bookmops/api/client";
 import type { SignDocumentRequest } from "@bookmops/api/v1";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
@@ -41,6 +42,14 @@ export function useSignDocument(id: string) {
     onSuccess: (doc) => {
       qc.setQueryData(documentKeys.document(id), doc);
       void qc.invalidateQueries({ queryKey: documentKeys.list, exact: true });
+    },
+    onError: (error) => {
+      // The office published a new version while it was open: fetch what it
+      // says now, so the person reads that before they sign.
+      if (error instanceof ApiError && error.code === "DOCUMENT_CHANGED") {
+        void qc.invalidateQueries({ queryKey: documentKeys.document(id), exact: true });
+        void qc.invalidateQueries({ queryKey: documentKeys.list, exact: true });
+      }
     },
   });
 }

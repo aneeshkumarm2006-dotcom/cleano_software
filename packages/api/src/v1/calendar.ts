@@ -30,6 +30,6 @@ export const MAX_CALENDAR_SPAN_DAYS = 62;
 export const JobsRangeQuery = z.object({
   from: LocalDate,
   to: LocalDate,
-  cursor: z.string().optional(),
+  cursor: z.string().max(512).optional(),
 });
 export type JobsRangeQuery = z.infer<typeof JobsRangeQuery>;

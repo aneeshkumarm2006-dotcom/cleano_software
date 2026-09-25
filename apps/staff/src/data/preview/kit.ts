@@ -147,7 +147,7 @@ export const previewKitApi = {
   reportKitIssue: (productId, body) =>
     once(body.clientEventId, () => {
       const r = mine(productId);
-      if (body.quantity > r.quantity) throw new ApiError(`You only have ${r.quantity} ${r.unit}.`, 400, "VALIDATION", false);
+      if (body.quantity > r.quantity) throw new ApiError(`You only have ${r.quantity} ${r.unit}.`, 409, "NOT_ENOUGH_IN_KIT", false);
       const condition =
         r.itemType === "REUSABLE_EQUIPMENT" ? (body.type === "LOST" ? "MISSING" : body.type === "BROKEN" ? "DAMAGED" : r.condition) : r.condition;
       return update(productId, { quantity: r.quantity - body.quantity, condition });

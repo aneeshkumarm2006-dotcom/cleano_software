@@ -38,6 +38,8 @@ export type KitIssueType = (typeof KIT_ISSUE_TYPES)[number];
 /** Kit counts are whole units, and a count above this is a typo, not a recount. */
 export const KIT_MAX_QUANTITY = 1000;
 const Note = z.string().trim().max(300);
+/** A product or location id sent in: ids are short, so anything longer is not one. */
+const Id = z.string().min(1).max(64);
 
 /** One item in the cleaner's kit. */
 export const KitItem = z.object({
@@ -114,7 +116,7 @@ export type KitCatalogResponse = z.infer<typeof KitCatalogResponse>;
  */
 export const KitAddRequest = z.object({
   clientEventId: z.uuid(),
-  productId: z.string().min(1),
+  productId: Id,
   quantity: z.number().int().min(1).max(KIT_MAX_QUANTITY),
 });
 export type KitAddRequest = z.infer<typeof KitAddRequest>;
@@ -155,11 +157,25 @@ export type KitConditionRequest = z.infer<typeof KitConditionRequest>;
  * POST /api/v1/kit/items/:productId/issues — something happened to an item.
  * Idempotent on `clientEventId`: a retry must not write stock off twice.
  *
- * Server: as `reportDamagedItem`. `quantity` may not exceed what the kit holds
- * (400 otherwise). LOST and BROKEN are written off company stock as well as
- * the kit; RAN_OUT and OTHER reduce the kit only (RAN_OUT flags a restock,
- * OTHER flags for review). For a tool, LOST sets MISSING and BROKEN sets
- * DAMAGED. Returns the item as it now stands.
+ * Server: as `reportDamagedItem`, all in one transaction:
+ *   - the kit is reduced by a conditional decrement (`… SET quantity =
+ *     quantity - n WHERE quantity >= n`), not a read and then a write, so two
+ *     reports sent at the same moment can't both pass on the same stock. When
+ *     it would take the kit below zero it changes nothing and answers 409
+ *     `NOT_ENOUGH_IN_KIT`;
+ *   - LOST and BROKEN are also written off company stock, but only up to what
+ *     the office actually put in this cleaner's hands (assignments plus
+ *     storage pickups, less what has already been written off). The kit's
+ *     count can't be the measure: the cleaner sets it themselves with a
+ *     recount or "already have it", so trusting it would let anyone write off
+ *     stock they were never given. Anything past that cap comes off the kit
+ *     only and is flagged for the office to review;
+ *   - stock that came to the cleaner through a storage pickup already left
+ *     the location's stock at the pickup, so writing it off never takes it
+ *     off the location a second time;
+ *   - RAN_OUT and OTHER reduce the kit only (RAN_OUT flags a restock, OTHER
+ *     flags for review). For a tool, LOST sets MISSING and BROKEN sets DAMAGED.
+ * Returns the item as it now stands.
  */
 export const KitIssueRequest = z.object({
   clientEventId: z.uuid(),
@@ -182,7 +198,7 @@ export type KitIssueRequest = z.infer<typeof KitIssueRequest>;
 export const KitRestockRequest = z.object({
   clientEventId: z.uuid(),
   items: z
-    .array(z.object({ productId: z.string().min(1), quantity: z.number().int().min(1).max(KIT_MAX_QUANTITY) }))
+    .array(z.object({ productId: Id, quantity: z.number().int().min(1).max(KIT_MAX_QUANTITY) }))
     .min(1)
     .max(50),
   note: Note.nullable().optional(),
@@ -238,9 +254,9 @@ export type KitLocationProductsResponse = z.infer<typeof KitLocationProductsResp
  */
 export const KitPickupRequest = z.object({
   clientEventId: z.uuid(),
-  locationId: z.string().min(1),
+  locationId: Id,
   items: z
-    .array(z.object({ productId: z.string().min(1), quantity: z.number().int().min(1).max(KIT_MAX_QUANTITY) }))
+    .array(z.object({ productId: Id, quantity: z.number().int().min(1).max(KIT_MAX_QUANTITY) }))
     .min(1)
     .max(50),
   note: Note.nullable().optional(),

@@ -36,6 +36,7 @@ let docs: DocumentDetail[] = [
     hasFile: false,
     content: CHEMICAL_POLICY,
     fileUrl: null,
+    contentSha256: "5f4f1f002f6b31b830524f0a528e9616b4147be60adec4925e4923791ee77612",
   },
   {
     id: "d-keys",
@@ -49,6 +50,7 @@ let docs: DocumentDetail[] = [
     hasFile: false,
     content: null,
     fileUrl: null,
+    contentSha256: "12bbe3829176bc3af2ef20e062d0ffa9861325d54341015d432ac3fa86fc1a23",
   },
   {
     id: "d-conduct",
@@ -62,6 +64,7 @@ let docs: DocumentDetail[] = [
     hasFile: true,
     content: null,
     fileUrl: "https://example.com/documents/code-of-conduct-v2.pdf",
+    contentSha256: "972016cde9d689d84c5807630d6e9ee0d50aca451de3c21710151c3432bf8c3b",
   },
   {
     id: "d-old",
@@ -75,6 +78,7 @@ let docs: DocumentDetail[] = [
     hasFile: false,
     content: "Replaced by the 2026 schedule.",
     fileUrl: null,
+    contentSha256: "aaef1d6026c0da380fa513ec7da7e8d014052409dca5c2b85300448e7f44a5bc",
   },
 ];
 
@@ -87,7 +91,7 @@ function find(id: string): DocumentDetail {
 export const previewDocumentsApi = {
   documents: () =>
     delay({
-      items: docs.map(({ content: _c, fileUrl: _f, ...summary }) => summary),
+      items: docs.map(({ content: _c, fileUrl: _f, contentSha256: _h, ...summary }) => summary),
       voidCheque: { fileName: "cheque-desjardins.pdf", mimeType: "application/pdf", uploadedAt: daysFromNow(-40) },
     }),
   document: (id) => {
@@ -103,6 +107,9 @@ export const previewDocumentsApi = {
       const d = find(id);
       if (d.status === "SIGNED") throw new ApiError("You've already signed this document.", 409, "ALREADY_SIGNED", false);
       if (d.status !== "PENDING") throw new ApiError("This document can no longer be signed.", 409, "NOT_SIGNABLE", false);
+      if (body.version !== d.version || body.contentSha256 !== d.contentSha256) {
+        throw new ApiError("This document has changed since you opened it.", 409, "DOCUMENT_CHANGED", false);
+      }
       const signed: DocumentDetail = { ...d, status: "SIGNED", signedAt: new Date().toISOString() };
       docs = docs.map((x) => (x.id === id ? signed : x));
       return signed;
