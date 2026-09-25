@@ -643,10 +643,21 @@ check("a null address is null", addressArea(null), null);
 check("an empty address is null", addressArea(""), null);
 check("a comma-only address is null", addressArea(",,,"), null);
 
-ok(
-  "the withholding rules are a PURE module, so this script can run them",
-  !/^import /m.test(read("../../packages/core/src/jobs/team-schedule.ts"))
-);
+{
+  // Every way a module can pull in another: import/export-from and require.
+  // A bare "^import " test missed re-exports and require(), and this module
+  // now ships to phones as part of @bookmops/core.
+  const TEAM_SCHEDULE = read("../../packages/core/src/jobs/team-schedule.ts");
+  const teamScheduleImports = [
+    ...TEAM_SCHEDULE.matchAll(/^\s*(?:import|export)\b[^;]*?\bfrom\s*["']([^"']+)["']/gm),
+    ...TEAM_SCHEDULE.matchAll(/^\s*import\s*["']([^"']+)["']/gm),
+    ...TEAM_SCHEDULE.matchAll(/\brequire\s*\(\s*["']([^"']+)["']\s*\)/g),
+  ].map((m) => m[1]);
+  ok(
+    "the withholding rules are a PURE module, so this script can run them",
+    teamScheduleImports.length === 0
+  );
+}
 ok(
   "…and the action uses them rather than a private copy",
   /from "@bookmops\/core\/jobs"/.test(GET_TEAM) &&

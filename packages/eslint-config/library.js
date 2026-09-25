@@ -29,9 +29,12 @@ export default [
       "no-restricted-imports": ["error", { patterns: PLATFORM_IMPORTS }],
       "no-restricted-globals": [
         "error",
-        ...["process", "window", "document", "navigator", "localStorage", "sessionStorage", "fetch", "Buffer", "__dirname", "__filename", "require"].map(
-          (name) => ({ name, message: `'${name}' is platform-specific. Take what you need as an argument.` }),
-        ),
+        ...[
+          "process", "window", "self", "document", "navigator", "localStorage", "sessionStorage",
+          "fetch", "Buffer", "__dirname", "__filename", "require", "crypto",
+          // Timers schedule work on a platform's event loop; core only computes.
+          "setTimeout", "setInterval", "setImmediate", "queueMicrotask",
+        ].map((name) => ({ name, message: `'${name}' is platform-specific. Take what you need as an argument.` })),
       ],
       "no-restricted-syntax": [
         "error",
@@ -44,8 +47,23 @@ export default [
           message: "No implicit 'now' in core: take the current time as a parameter.",
         },
         {
+          // new Date(2026, 8, 25) is midnight in the zone of whatever machine
+          // runs it. Use Date.UTC, or a timestamp, and say which zone you mean.
+          selector: "NewExpression[callee.name='Date'][arguments.length>1]",
+          message: "new Date(y, m, d, …) reads the device's time zone. Use Date.UTC or pass an instant.",
+        },
+        {
           selector: "CallExpression[callee.property.name=/^toLocale/][arguments.length=0]",
           message: "Pass an explicit locale: the default differs between a phone, a browser, and the server.",
+        },
+        {
+          selector: "NewExpression[callee.object.name='Intl'][arguments.length=0], CallExpression[callee.object.name='Intl'][arguments.length=0]",
+          message: "Pass an explicit locale to Intl: the default differs between a phone, a browser, and the server.",
+        },
+        {
+          // globalThis.fetch, globalThis.process… would walk around the list above.
+          selector: "MemberExpression[object.name='globalThis']",
+          message: "Reaching through globalThis gets at platform APIs. Take what you need as an argument.",
         },
       ],
     },

@@ -43,6 +43,10 @@ export interface StaleClockRow {
  * `(jobId, cleanerId)` and `(cleanerId)` indexes can serve. `isStale` is then
  * re-applied in memory as the single source of truth for the rule, so the
  * query and the definition cannot drift apart.
+ *
+ * `now` may default here, unlike in @bookmops/core/time: this runs only on the
+ * server, whose clock is the one the rule should use. The pure rules take it
+ * explicitly because a phone's clock cannot be trusted the same way.
  */
 export async function listStaleClocks(
   now: Date = new Date(),
