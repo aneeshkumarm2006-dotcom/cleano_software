@@ -28,10 +28,15 @@ export const color = {
 
   /** Body text. */
   ink: "#0b1418",
-  /** Secondary text: 6.4:1 on white. */
+  /** Secondary text: 6.7:1 on white, 6.2:1 on ground. */
   ink2: "#47606a",
-  /** Tertiary text: 4.6:1 on white — the lightest text allowed. */
-  ink3: "#64818b",
+  /**
+   * Tertiary text, the lightest text allowed: at least 4.5:1 on every ground
+   * it sits on (5.5 on white, 5.1 on ground, 4.6 on groundDeep and on
+   * accentSoft). Darkened from #64818b, which measured 3.86:1 on the ground
+   * and failed WCAG AA for the small labels that use it.
+   */
+  ink3: "#526d77",
   /** Text on the dark chrome, by emphasis. */
   onChrome: "#ffffff",
   onChrome2: "rgba(255,255,255,0.72)",
