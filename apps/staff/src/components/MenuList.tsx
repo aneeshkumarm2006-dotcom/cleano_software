@@ -10,6 +10,8 @@ export interface MenuItem {
   count?: number;
   /** A short status on the right: "2 LOW", "6/7". */
   status?: string;
+  /** How the status reads: a warning ("2 LOW", the default) or progress ("6/7"). */
+  statusTone?: "warning" | "success";
   /** Not built yet: shown, marked, and not tappable — never a dead end. */
   soon?: boolean;
 }
@@ -27,7 +29,7 @@ export function MenuGroup({ title, items }: { title: string; items: readonly Men
             {i > 0 ? <View style={{ height: 1, backgroundColor: color.line, marginLeft: 56 }} /> : null}
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={item.soon ? `${item.label}, coming soon` : item.label}
+              accessibilityLabel={item.soon ? `${item.label}, coming soon` : item.status ? `${item.label}, ${item.status}` : item.label}
               accessibilityState={{ disabled: item.soon || !item.onPress }}
               disabled={item.soon || !item.onPress}
               onPress={item.onPress}
@@ -53,7 +55,7 @@ export function MenuGroup({ title, items }: { title: string; items: readonly Men
               ) : (
                 <>
                   {item.status ? (
-                    <Text variant="eyebrow" color="warning" style={{ fontSize: 10 }}>
+                    <Text variant="eyebrow" color={item.statusTone ?? "warning"} numeral style={{ fontSize: 10 }}>
                       {item.status}
                     </Text>
                   ) : null}
