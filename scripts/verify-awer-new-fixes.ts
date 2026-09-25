@@ -363,8 +363,11 @@ check("in + out → CLOCKED_OUT",
   assignmentStatusForClock(new Date("2026-07-28T13:00:00Z"), new Date("2026-07-28T16:00:00Z")),
   "CLOCKED_OUT");
 
-const clockAction = read("src/app/admin/actions/updateClockTimes.ts");
-ok("the edit is admin-only", clockAction.includes("if (!isAdminRole(role))"));
+// The action gates; the clock-edit core (security batch 2) does the edit.
+const clockGate = read("src/app/admin/actions/updateClockTimes.ts");
+const clockAction = clockGate + read("src/app/admin/actions/_clockTimes.ts");
+ok("the edit is admin-only (and not a field lead's)",
+  clockGate.includes("if (!role || !CLOCK_EDIT_ROLES.includes(role))"));
 ok("per-cleaner edits write the JobAssignment row",
   clockAction.includes("db.jobAssignment.upsert"));
 ok("job-level edits write the legacy Job fields",
@@ -373,7 +376,7 @@ ok("the audit note records the original AND the new value",
   clockAction.includes("oldValue: `in=${fmt(previousIn)} out=${fmt(previousOut)}`") &&
     clockAction.includes("newValue: `in=${fmt(clockIn)} out=${fmt(clockOut)}`"));
 ok("the audit note records who edited it",
-  clockAction.includes("userId: session.user.id"));
+  clockAction.includes("userId: actor.id"));
 ok("a locked pay period warns instead of silently rewriting payroll",
   clockAction.includes("The recorded payout was not changed"));
 ok("clock times can't be recorded for an unassigned cleaner (would make them payable)",

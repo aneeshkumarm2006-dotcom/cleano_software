@@ -597,17 +597,22 @@ check(
 );
 check(
   "...read from the clock as it stands NOW, not from the stale stored original",
-  decide.includes("db.jobWorkSession.findUnique"),
+  /db\.jobWorkSession\s*\.findUnique/.test(decide),
   true
 );
 check(
   "the change is applied through the same path an admin uses",
-  decide.includes("updateClockTimes({"),
+  // The clock-edit core both updateClockTimes and this approval go through.
+  decide.includes("applyClockTimes(") &&
+    read("src/app/admin/actions/updateClockTimes.ts").includes("return applyClockTimes(input"),
   true
 );
 check(
-  "...and the request is only marked approved once it actually landed",
-  decide.indexOf("if (!applied.success)") < decide.indexOf('status: input.approve ? "APPROVED"'),
+  // Security batch 2 claims the decision first (so two deciders can't both
+  // apply it), and releases the claim unless the change actually landed.
+  "...and the request only stays approved once the change actually landed",
+  /if \(!applied\.success\) \{\s*await release\(\);/.test(decide) &&
+    decide.includes("status: req.status,"),
   true
 );
 check(
