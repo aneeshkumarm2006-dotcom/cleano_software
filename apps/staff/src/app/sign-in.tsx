@@ -1,10 +1,11 @@
 import type { Workspace } from "@bookmops/api/v1";
-import { Button, Card, color, Icon, radius, space, Text, TextField } from "@bookmops/ui-native";
+import { Button, Card, ChoiceChips, color, Icon, radius, space, Text, TextField } from "@bookmops/ui-native";
 import { Link } from "expo-router";
 import { useRef, useState } from "react";
 import { KeyboardAvoidingView, Platform, ScrollView, type TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { PREVIEW_ROLES, type PreviewRole } from "@/data/preview-roles";
 import { useSession } from "@/data/session";
 
 /**
@@ -21,6 +22,7 @@ export default function SignIn() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [choices, setChoices] = useState<Workspace[] | null>(null);
+  const [previewAs, setPreviewAs] = useState<PreviewRole>("EMPLOYEE");
 
   async function submit() {
     if (busy || !email.trim() || !password) return;
@@ -159,7 +161,8 @@ export default function SignIn() {
           {/* `__DEV__ &&` first, so a release build drops this branch at compile time. */}
           {__DEV__ && startPreview ? (
             <View style={{ marginTop: "auto", gap: space[2] }}>
-              <Button label="Explore with sample data" variant="secondary" size="md" onPress={startPreview} />
+              <ChoiceChips label="Explore as" options={PREVIEW_ROLES} value={previewAs} onChange={setPreviewAs} />
+              <Button label="Explore with sample data" variant="secondary" size="md" onPress={() => startPreview(previewAs)} />
               <Text variant="small" color="ink3" align="center">
                 Development build only. Nothing here is real, and nothing is saved.
               </Text>

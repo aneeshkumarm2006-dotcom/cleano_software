@@ -8,6 +8,7 @@ import { workspaceStore } from "@/auth/workspace-store";
 import { APP_VERSION, isAllowedOrigin, PLATFORM, PLATFORM_URL } from "@/config";
 import { disablePush } from "@/notifications/push";
 
+import type { PreviewRole } from "./preview-roles";
 import { runSignOutTasks } from "./sign-out";
 import type { DataSource } from "./source";
 import { recordServerDate } from "./trusted-time";
@@ -36,8 +37,8 @@ interface SessionContextValue {
   signInTo: (workspace: Workspace, email: string, password: string) => Promise<SignInResult>;
   forgotPassword: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
-  /** Development builds only. Undefined in a release build. */
-  startPreview?: () => void;
+  /** Development builds only, signed in as `role`. Undefined in a release build. */
+  startPreview?: (role: PreviewRole) => void;
 }
 
 const SessionContext = createContext<SessionContextValue | null>(null);
@@ -64,7 +65,11 @@ function liveSession(workspace: Workspace): Extract<Session, { status: "live" }>
  */
 function initialSession(): Session {
   if (__DEV__ && process.env.EXPO_PUBLIC_PREVIEW === "1") {
-    return { status: "preview", source: require("./preview").previewSource };
+    const preview = require("./preview");
+    // EXPO_PUBLIC_PREVIEW_ROLE=OPS_MANAGER (or FIELD_LEAD, ADMIN) opens the preview as that person.
+    const role = process.env.EXPO_PUBLIC_PREVIEW_ROLE;
+    if (role) preview.setPreviewRole(role);
+    return { status: "preview", source: preview.previewSource };
   }
   const workspace = workspaceStore.load();
   if (workspace && isAllowedOrigin(workspace.apiOrigin)) {
@@ -166,10 +171,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       // The preview source is required lazily and only in development, so
       // release bundles never contain the sample data.
       startPreview: __DEV__
-        ? () => setSession({ status: "preview", source: require("./preview").previewSource })
+        ? (role: PreviewRole) => {
+            const preview = require("./preview");
+            preview.setPreviewRole(role);
+            // Nothing read as the last person may show as this one.
+            queryClient.clear();
+            setSession({ status: "preview", source: preview.previewSource });
+          }
         : undefined,
     }),
-    [session, updateRequired, signIn, signInTo, forgotPassword, signOut],
+    [session, updateRequired, signIn, signInTo, forgotPassword, signOut, queryClient],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

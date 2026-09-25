@@ -7,6 +7,7 @@ import {
   KitRequestItem,
   KitRequestsResponse,
   ManagedWithdrawal,
+  ManagedWithdrawalResponse,
   type TimeDecisionRequest,
   TimeItemResponse,
   TimeItemsResponse,
@@ -70,6 +71,7 @@ export const managerApi = (request: Request) => ({
     request(`${M}/approvals/time/${seg(id)}/decision`, TimeItemResponse, json("POST", body, body.clientEventId)),
   withdrawalsQueue: (status: "open" | "handled", cursor?: string | null) =>
     request(`${M}/withdrawals${query({ status, cursor })}`, WithdrawalsQueueResponse),
+  withdrawal: (id: string) => request(`${M}/withdrawals/${seg(id)}`, ManagedWithdrawalResponse),
   decideWithdrawal: (id: string, body: WithdrawalDecisionRequest) =>
     request(`${M}/withdrawals/${seg(id)}/decision`, ManagedWithdrawal, json("POST", body, body.clientEventId)),
   kitRequests: (cursor?: string | null) => request(`${M}/kit-requests${query({ cursor })}`, KitRequestsResponse),

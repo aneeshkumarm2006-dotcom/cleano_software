@@ -192,6 +192,9 @@ export const WithdrawalsQueueResponse = page(ManagedWithdrawal).extend({
 });
 export type WithdrawalsQueueResponse = z.infer<typeof WithdrawalsQueueResponse>;
 
+/** GET /api/v1/manager/withdrawals/:id — one, for its screen. Access: WITHDRAWALS. */
+export const ManagedWithdrawalResponse = ManagedWithdrawal;
+
 export const WITHDRAWAL_ACTIONS = ["APPROVE", "COMPLETE", "REJECT"] as const;
 export type WithdrawalAction = (typeof WITHDRAWAL_ACTIONS)[number];
 

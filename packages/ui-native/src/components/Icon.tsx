@@ -67,6 +67,8 @@ const GLYPHS = {
   flag: "flag",
   tool: "construct",
   standing: "shield-checkmark",
+  approvals: "checkmark-done-circle",
+  schedule: "calendar",
   expand: "chevron-down",
   collapse: "chevron-up",
 } as const satisfies Record<string, ComponentProps<typeof Ionicons>["name"]>;

@@ -851,6 +851,14 @@ export const previewManagerApi = {
     return { ...pageOf(list, cursor), openTotalCents: open.reduce((s, w) => s + w.amountCents, 0) };
   },
 
+  withdrawal: async (id) => {
+    await delay(null);
+    guard("WITHDRAWALS");
+    const w = withdrawals.find((x) => x.id === id);
+    if (!w) throw notFound("This withdrawal");
+    return w;
+  },
+
   decideWithdrawal: (id, body) =>
     once(body.clientEventId, () => {
       guard("WITHDRAWALS");
@@ -1033,6 +1041,7 @@ export const previewManagerApi = {
   | "timeItem"
   | "decideTime"
   | "withdrawalsQueue"
+  | "withdrawal"
   | "decideWithdrawal"
   | "kitRequests"
   | "decideKitRequest"

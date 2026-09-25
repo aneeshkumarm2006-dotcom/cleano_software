@@ -1,19 +1,25 @@
-import { Button, Card, color, radius, Screen, space, TAB_BAR_HEIGHT, Text } from "@bookmops/ui-native";
+import { Button, Screen, TAB_BAR_HEIGHT } from "@bookmops/ui-native";
 import { router } from "expo-router";
-import { View } from "react-native";
 
-import { MenuGroup } from "@/components/MenuList";
+import { MenuGroup, type MenuItem } from "@/components/MenuList";
+import { ProfileCard } from "@/components/ProfileCard";
 import { ScreenHeader } from "@/components/ScreenHeader";
-import { useAnnouncements, useDocuments, useKit, useMe, useTeamChannels, useToday, useTraining } from "@/data/queries";
+import {
+  useAnnouncements,
+  useDocuments,
+  useKit,
+  useTeamChannels,
+  useToday,
+  useTraining,
+} from "@/data/queries";
+import { useStaffRole } from "@/data/role";
 import { useSession } from "@/data/session";
 import { kitCounts } from "@/features/kit/display";
-import { initials } from "@/lib/format";
 
 export default function More() {
-  const me = useMe();
   const today = useToday();
+  const role = useStaffRole();
   const { signOut } = useSession();
-  const person = me.data?.person;
   const teamChannels = useTeamChannels();
   const announcements = useAnnouncements();
   const teamUnread = teamChannels.data?.items.reduce((sum, c) => sum + c.unreadCount, 0);
@@ -24,27 +30,19 @@ export default function More() {
   const { low, tools } = kitCounts(kit.data);
   const toSign = documents.data?.items.filter((d) => d.status === "PENDING").length ?? 0;
   const trainingDone = training.data ? training.data.completed >= training.data.total : false;
+  // A field lead's manager screens: only what the web lets a field lead do
+  // (@bookmops/api/v1 manager-access.ts). A cleaner has none, so no group.
+  const team: MenuItem[] = [
+    ...(role.can("TEAM_VIEW")
+      ? [{ key: "team", label: "Team today", icon: "team" as const, onPress: () => router.push("/manage/team") }]
+      : []),
+  ];
 
   return (
     <Screen header={<ScreenHeader title="More" />} bottomInset={TAB_BAR_HEIGHT}>
-      {person ? (
-        <Card padding={4}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: space[3] }}>
-            <View style={{ width: 48, height: 48, borderRadius: radius.pill, backgroundColor: color.chrome, alignItems: "center", justifyContent: "center" }}>
-              <Text variant="bodyStrong" color="onChrome">
-                {initials(person.name)}
-              </Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text variant="subheading">{person.name}</Text>
-              <Text variant="small" color="ink2">
-                {me.data?.company.name}
-              </Text>
-            </View>
-          </View>
-        </Card>
-      ) : null}
+      <ProfileCard detail={role.role === "FIELD_LEAD" ? "Field lead" : undefined} />
 
+      {team.length > 0 ? <MenuGroup title="My team" items={team} /> : null}
       <MenuGroup
         title="My work"
         items={[
