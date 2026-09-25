@@ -6,10 +6,10 @@ import { Fragment, useState } from "react";
 import { ActivityIndicator, Alert, Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { BackButton } from "@/components/BackButton";
 import { Empty, LoadError, Loading } from "@/components/QueryState";
 import { useOpenDirect, useTeamDirectory } from "@/data/queries";
 import { Avatar } from "@/features/messages/MessageBubble";
+import { BackHeader } from "@/features/record/ui";
 
 /**
  * Start a direct message with a teammate. The list comes from the server,
@@ -43,12 +43,7 @@ export default function NewDirectMessage() {
 
   return (
     <View style={{ flex: 1, backgroundColor: color.ground }}>
-      <View style={{ paddingTop: insets.top + space[2], paddingHorizontal: space[4], paddingBottom: space[3], flexDirection: "row", alignItems: "center", gap: space[3] }}>
-        <BackButton fallback="/team" />
-        <Text variant="title" accessibilityRole="header" style={{ flex: 1 }} numberOfLines={1}>
-          New message
-        </Text>
-      </View>
+      <BackHeader safeTop title="New message" fallback="/team" />
 
       <ScrollView
         contentContainerStyle={{ padding: space[4], paddingTop: space[2], gap: space[4], paddingBottom: insets.bottom + space[8] }}

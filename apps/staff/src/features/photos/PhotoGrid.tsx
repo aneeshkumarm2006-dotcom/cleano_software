@@ -39,8 +39,8 @@ export function PhotoGrid({ photos, timeZone, onOpen }: { photos: readonly JobPh
         if (list.length === 0) return null;
         return (
           <View key={g.kind} style={{ gap: space[2] }}>
-            <View style={{ flexDirection: "row", alignItems: "baseline", gap: space[2] }}>
-              <Text variant="eyebrow" color="chrome" accessibilityRole="header">
+            <View style={{ flexDirection: "row", alignItems: "baseline", gap: space[2], paddingLeft: space[1] }}>
+              <Text variant="eyebrow" color="ink3" accessibilityRole="header">
                 {g.title}
               </Text>
               <Text variant="small" weight="semibold" color="ink3" numeral>

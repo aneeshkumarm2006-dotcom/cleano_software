@@ -90,7 +90,7 @@ function TodayBody({
       {later.length > 0 ? (
         <View style={{ gap: space[3] }}>
           <View style={{ flexDirection: "row", alignItems: "baseline", gap: space[3], paddingLeft: RAIL_WIDTH + space[5] }}>
-            <Text variant="eyebrow" color="chrome" accessibilityRole="header">
+            <Text variant="eyebrow" color="ink3" accessibilityRole="header">
               Later today
             </Text>
             <Text variant="small" weight="semibold" color="ink3" numeral>

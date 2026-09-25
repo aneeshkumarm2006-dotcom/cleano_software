@@ -12,6 +12,6 @@ export function goBackOr(fallback: Href) {
 }
 
 /** The back arrow at the top left of a screen that isn't a tab. */
-export function BackButton({ fallback, label = "Back" }: { fallback: Href; label?: string }) {
-  return <IconButton icon="back" label={label} onPress={() => goBackOr(fallback)} />;
+export function BackButton({ fallback, label }: { fallback: Href; label?: string }) {
+  return <IconButton icon="back" label={label ?? "Back"} onPress={() => goBackOr(fallback)} />;
 }

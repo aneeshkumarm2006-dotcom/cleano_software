@@ -1,13 +1,15 @@
 import type { KitReportEntry, KitReportItem } from "@bookmops/api/v1";
-import { Button, Card, ChoiceChips, color, IconButton, space, Stepper, Text } from "@bookmops/ui-native";
-import { router, useLocalSearchParams } from "expo-router";
+import { Button, Card, ChoiceChips, color, space, Stepper, Text } from "@bookmops/ui-native";
+import { useLocalSearchParams } from "expo-router";
 import { useMemo, useState } from "react";
 import { ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { goBackOr } from "@/components/BackButton";
 import { Empty, LoadError, Loading } from "@/components/QueryState";
 import { useClockActions } from "@/data/outbox/actions";
 import { useKitReport } from "@/data/queries";
+import { BackHeader } from "@/features/record/ui";
 
 const LEVELS = [
   { value: "FULL", label: "Full" },
@@ -46,6 +48,7 @@ export default function ClockOut() {
   const kit = useKitReport(id);
   const { clockOut } = useClockActions(id);
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
+  const clockScreen = { pathname: "/jobs/[id]/clock", params: { id } } as const;
 
   const items = kit.data?.items ?? [];
   const entries = useMemo(() => items.map((item) => toEntry(item, drafts[item.productId])), [items, drafts]);
@@ -59,24 +62,20 @@ export default function ClockOut() {
   function submit() {
     if (missing > 0) return;
     clockOut(report);
-    router.back();
+    goBackOr(clockScreen);
   }
 
   return (
     <View style={{ flex: 1, backgroundColor: color.ground }}>
-      <View style={{ paddingTop: insets.top + space[2], paddingHorizontal: space[4], flexDirection: "row", alignItems: "center", gap: space[3] }}>
-        <IconButton icon="back" label="Back to the clock" onPress={() => router.back()} />
-      </View>
+      <BackHeader safeTop title="Before you clock out" fallback={clockScreen} backLabel="Back to the clock" />
 
-      <ScrollView contentContainerStyle={{ padding: space[4], gap: space[4], paddingBottom: 130 + insets.bottom }} keyboardShouldPersistTaps="handled">
-        <View style={{ gap: space[1] }}>
-          <Text variant="title" accessibilityRole="header">
-            Before you clock out
-          </Text>
-          <Text variant="body" color="ink2">
-            How is your kit? This tells the office what to restock.
-          </Text>
-        </View>
+      <ScrollView
+        contentContainerStyle={{ padding: space[4], paddingTop: space[1], gap: space[4], paddingBottom: 130 + insets.bottom }}
+        keyboardShouldPersistTaps="handled"
+      >
+        <Text variant="body" color="ink2">
+          How is your kit? This tells the office what to restock.
+        </Text>
 
         {kit.isPending ? (
           <Loading label="Loading your kit" />

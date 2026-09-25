@@ -42,7 +42,7 @@ export default function Jobs() {
       ) : (
         groupByDay(jobs.data.items, tz).map(([day, items]) => (
           <View key={day} style={{ gap: space[3] }}>
-            <Text variant="eyebrow" color="chrome" accessibilityRole="header" style={{ paddingLeft: RAIL_WIDTH + space[5] }}>
+            <Text variant="eyebrow" color="ink3" accessibilityRole="header" style={{ paddingLeft: RAIL_WIDTH + space[5] }}>
               {shortDate(items[0].startsAt, tz)}
             </Text>
             <View style={{ gap: space[3] }}>

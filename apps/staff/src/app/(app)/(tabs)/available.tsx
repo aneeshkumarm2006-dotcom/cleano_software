@@ -34,7 +34,7 @@ export default function AvailableTab() {
       refreshing={board.isRefetching && !board.isFetchingNextPage}
       onRefresh={() => board.refetch()}
     >
-      <Text variant="body" color="ink2" style={{ marginTop: -space[2] }}>
+      <Text variant="body" color="ink2">
         Open jobs you can take. First to claim keeps it.
       </Text>
       <Segmented label="Which jobs" options={FILTERS} value={when} onChange={setWhen} />
@@ -92,7 +92,7 @@ function Board({
       </Text>
       {groupByDay(items, timeZone).map(([day, group]) => (
         <View key={day} style={{ gap: space[3] }}>
-          <Text variant="eyebrow" color="chrome" accessibilityRole="header" style={{ paddingLeft: RAIL_WIDTH + space[5] }}>
+          <Text variant="eyebrow" color="ink3" accessibilityRole="header" style={{ paddingLeft: RAIL_WIDTH + space[5] }}>
             {dayLabel(group[0].startsAt, timeZone, now)}
           </Text>
           <View style={{ gap: space[3] }}>

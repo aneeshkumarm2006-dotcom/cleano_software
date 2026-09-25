@@ -1,9 +1,10 @@
 import { Button, color, Icon, IconButton, radius, space, Text, TextField } from "@bookmops/ui-native";
-import { router, useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import { KeyboardAvoidingView, Platform, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { goBackOr } from "@/components/BackButton";
 import { useSession } from "@/data/session";
 
 /**
@@ -33,7 +34,7 @@ export default function ForgotPassword() {
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ paddingTop: insets.top + space[2], paddingHorizontal: space[6], paddingBottom: insets.bottom + space[6], gap: space[5] }}
       >
-        <IconButton icon="back" label="Back to sign in" onPress={() => router.back()} />
+        <IconButton icon="back" label="Back to sign in" onPress={() => goBackOr("/sign-in")} />
         <View style={{ gap: space[1] }}>
           <Text variant="title" accessibilityRole="header">
             Reset your password

@@ -1,11 +1,11 @@
 import type { AvailableJobDetailResponse } from "@bookmops/api/v1";
 import { Button, Card, color, Icon, Pill, radius, space, Text, type IconName } from "@bookmops/ui-native";
-import { router, useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import type { ReactNode } from "react";
 import { ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { BackButton } from "@/components/BackButton";
+import { BackButton, goBackOr } from "@/components/BackButton";
 import { LoadError, Loading } from "@/components/QueryState";
 import { useAvailableJob, useMe } from "@/data/queries";
 import { useClaimFlow } from "@/features/available/useClaimFlow";
@@ -27,7 +27,7 @@ export default function AvailableJobScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: color.ground }}>
-      <View style={{ paddingTop: insets.top + space[2], paddingHorizontal: space[4], flexDirection: "row", alignItems: "center", gap: space[3] }}>
+      <View style={{ paddingTop: insets.top + space[3], paddingHorizontal: space[4], flexDirection: "row", alignItems: "center", gap: space[3] }}>
         <BackButton fallback="/available" />
         <Text variant="eyebrow" color="ink3" style={{ flex: 1 }}>
           Open job
@@ -45,7 +45,7 @@ export default function AvailableJobScreen() {
               void job.refetch();
             }}
           />
-          <Button label="Back to open jobs" variant="secondary" size="md" style={{ marginTop: space[3] }} onPress={() => router.back()} />
+          <Button label="Back to open jobs" variant="secondary" size="md" style={{ marginTop: space[3] }} onPress={() => goBackOr("/available")} />
         </View>
       ) : (
         <Detail job={job.data} timeZone={tz} currency={me.data?.company.currency ?? "CAD"} bottom={insets.bottom} />

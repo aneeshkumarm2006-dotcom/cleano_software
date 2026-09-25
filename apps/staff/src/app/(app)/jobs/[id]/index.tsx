@@ -20,7 +20,7 @@ export default function JobDetail() {
 
   return (
     <View style={{ flex: 1, backgroundColor: color.ground }}>
-      <View style={{ paddingTop: insets.top + space[2], paddingHorizontal: space[4], flexDirection: "row", alignItems: "center", gap: space[3] }}>
+      <View style={{ paddingTop: insets.top + space[3], paddingHorizontal: space[4], flexDirection: "row", alignItems: "center", gap: space[3] }}>
         <BackButton fallback="/" />
         <Text variant="eyebrow" color="ink3" style={{ flex: 1 }}>
           {job.data && tz ? shortDate(job.data.startsAt, tz) : ""}

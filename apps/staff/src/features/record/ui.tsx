@@ -5,6 +5,7 @@
 // areas read as one family.
 import { ApiError } from "@bookmops/api/client";
 import { color, Icon, radius, space, Text, type IconName, type PillTone } from "@bookmops/ui-native";
+import type { Href } from "expo-router";
 import type { ReactNode, RefObject } from "react";
 import { Alert, KeyboardAvoidingView, Platform, RefreshControl, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -16,10 +17,37 @@ export function goBack() {
   goBackOr("/more");
 }
 
-export function BackHeader({ title, subtitle, right }: { title: string; subtitle?: string; right?: ReactNode }) {
+export interface BackHeaderProps {
+  title: string;
+  subtitle?: string;
+  /** An action or a figure at the right: a compose button, "3/12". */
+  right?: ReactNode;
+  /** Where the back arrow goes when there's nothing to go back to. Defaults to More. */
+  fallback?: Href;
+  /** What the back arrow says to a screen reader: "Back to my pay". */
+  backLabel?: string;
+  /**
+   * True on a screen that doesn't use Page, so the header keeps clear of the
+   * status bar itself, at the same height a tab screen's title sits.
+   */
+  safeTop?: boolean;
+}
+
+/** The top of every screen that isn't a tab: the back arrow and the title. */
+export function BackHeader({ title, subtitle, right, fallback = "/more", backLabel, safeTop }: BackHeaderProps) {
+  const insets = useSafeAreaInsets();
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: space[3], paddingHorizontal: space[4], paddingBottom: space[3] }}>
-      <BackButton fallback="/more" />
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: space[3],
+        paddingHorizontal: space[4],
+        paddingTop: safeTop ? insets.top + space[3] : 0,
+        paddingBottom: space[3],
+      }}
+    >
+      <BackButton fallback={fallback} label={backLabel} />
       <View style={{ flex: 1 }}>
         <Text variant={subtitle ? "subheading" : "heading"} accessibilityRole="header" numberOfLines={2}>
           {title}
@@ -50,7 +78,7 @@ export interface PageProps {
 export function Page({ header, children, footer, refreshing, onRefresh, scrollEnabled = true, scrollRef }: PageProps) {
   const insets = useSafeAreaInsets();
   return (
-    <View style={{ flex: 1, backgroundColor: color.ground, paddingTop: insets.top + space[2] }}>
+    <View style={{ flex: 1, backgroundColor: color.ground, paddingTop: insets.top + space[3] }}>
       {header}
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView

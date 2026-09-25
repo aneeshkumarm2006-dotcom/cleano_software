@@ -110,7 +110,7 @@ function Month({ timeZone, currency }: { timeZone: string; currency: string }) {
       ) : null}
 
       <View style={{ flexDirection: "row", alignItems: "baseline", gap: space[3], paddingLeft: space[1] }}>
-        <Text variant="eyebrow" color="chrome" accessibilityRole="header">
+        <Text variant="eyebrow" color="ink3" accessibilityRole="header">
           {selected === today ? `Today · ${keyWeekdayDayMonth(selected)}` : keyWeekdayDayMonth(selected)}
         </Text>
         {dayJobs.length > 0 ? (

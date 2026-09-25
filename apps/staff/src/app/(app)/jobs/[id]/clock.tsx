@@ -5,6 +5,7 @@ import { StatusBar } from "expo-status-bar";
 import { Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { goBackOr } from "@/components/BackButton";
 import { LoadError, Loading } from "@/components/QueryState";
 import { useOutbox } from "@/data/outbox";
 import { useClockActions } from "@/data/outbox/actions";
@@ -33,7 +34,12 @@ export default function Clock() {
       {/* A dark screen needs a light status bar, or the time vanishes. */}
       <StatusBar style="light" />
       <View style={{ flexDirection: "row", alignItems: "center", gap: space[3], paddingHorizontal: space[4] }}>
-        <IconButton icon="back" label="Back to the job" tone="onChrome" onPress={() => router.back()} />
+        <IconButton
+          icon="back"
+          label="Back to the job"
+          tone="onChrome"
+          onPress={() => goBackOr({ pathname: "/jobs/[id]", params: { id } })}
+        />
         <View style={{ flex: 1, alignItems: "center" }}>
           <Text variant="bodyStrong" color="onChrome" numberOfLines={1}>
             {job.data?.address.line1 ?? " "}
@@ -207,7 +213,17 @@ function ClockBody({
             </View>
             {upNext.map((item, n) => (
               <View key={item.id} style={{ flexDirection: "row", alignItems: "center", gap: space[3], marginTop: space[3] }}>
-                <View style={{ width: 22, height: 22, borderRadius: 7, borderWidth: 2, borderColor: n === 0 ? color.accentOnChrome : color.outlineOnChrome }} />
+                {/* A dot, as on the day rail, not a box: the ticking happens on the full list. */}
+                <View
+                  style={{
+                    width: 9,
+                    height: 9,
+                    borderRadius: 5,
+                    borderWidth: 2,
+                    borderColor: n === 0 ? color.accentOnChrome : color.outlineOnChrome,
+                    backgroundColor: n === 0 ? color.accentOnChrome : "transparent",
+                  }}
+                />
                 <Text variant={n === 0 ? "bodyStrong" : "body"} color={n === 0 ? "onChrome" : "onChrome2"} style={{ flex: 1 }} numberOfLines={1}>
                   {item.label}
                 </Text>

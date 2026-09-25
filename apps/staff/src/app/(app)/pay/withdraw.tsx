@@ -1,17 +1,18 @@
 import { ApiError } from "@bookmops/api/client";
 import type { PayResponse, WithdrawalResponse } from "@bookmops/api/v1";
-import { Button, Card, color, Icon, IconButton, radius, space, Text, TextField } from "@bookmops/ui-native";
+import { Button, Card, color, Icon, radius, space, Text, TextField } from "@bookmops/ui-native";
 import { randomUUID } from "expo-crypto";
 import * as Haptics from "expo-haptics";
-import { router } from "expo-router";
 import { useRef, useState } from "react";
 import { KeyboardAvoidingView, Platform, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { goBackOr } from "@/components/BackButton";
 import { LoadError, Loading } from "@/components/QueryState";
 import { useMe, usePay, useRequestWithdrawal } from "@/data/queries";
 import { MoneyLine } from "@/features/pay/PayParts";
 import { feeCents, parseAmount, percentText } from "@/features/pay/words";
+import { BackHeader } from "@/features/record/ui";
 import { formatMoney } from "@/lib/format";
 
 /**
@@ -28,9 +29,7 @@ export default function Withdraw() {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: color.ground }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <View style={{ paddingTop: insets.top + space[2], paddingHorizontal: space[4], flexDirection: "row", alignItems: "center", gap: space[3] }}>
-        <IconButton icon="back" label="Back to my pay" onPress={() => router.back()} />
-      </View>
+      <BackHeader safeTop title="Withdraw" fallback="/pay" backLabel="Back to my pay" />
       {pay.isPending || me.isPending ? (
         <Loading label="Loading your balance" />
       ) : pay.isError || me.isError ? (
@@ -132,7 +131,7 @@ function Flow({ pay, currency, bottom }: { pay: PayResponse; currency: string; b
   if (step.kind === "done") {
     const w = step.result.withdrawal;
     return (
-      <ScrollView contentContainerStyle={{ padding: space[4], gap: space[4], paddingBottom: bottom + space[6] }}>
+      <ScrollView contentContainerStyle={{ padding: space[4], paddingTop: space[1], gap: space[4], paddingBottom: bottom + space[6] }}>
         <View accessibilityLiveRegion="polite" style={{ alignItems: "center", gap: space[3], paddingVertical: space[6] }}>
           <View style={{ width: 64, height: 64, borderRadius: radius.pill, backgroundColor: color.successSoft, alignItems: "center", justifyContent: "center" }}>
             <Icon name="check" size={34} color="success" />
@@ -148,7 +147,7 @@ function Flow({ pay, currency, bottom }: { pay: PayResponse; currency: string; b
         <Card padding={4}>
           <MoneyLine label="Left to withdraw" value={money(step.result.availableCents)} strong />
         </Card>
-        <Button label="Done" onPress={() => router.back()} />
+        <Button label="Done" onPress={() => goBackOr("/pay")} />
       </ScrollView>
     );
   }
@@ -156,7 +155,7 @@ function Flow({ pay, currency, bottom }: { pay: PayResponse; currency: string; b
   if (step.kind === "confirm") {
     const fee = feeCents(step.amountCents, feeBasisPoints);
     return (
-      <ScrollView contentContainerStyle={{ padding: space[4], gap: space[4], paddingBottom: bottom + space[6] }} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={{ padding: space[4], paddingTop: space[1], gap: space[4], paddingBottom: bottom + space[6] }} keyboardShouldPersistTaps="handled">
         <Text variant="title" accessibilityRole="header">
           Check and send
         </Text>
@@ -199,19 +198,14 @@ function Flow({ pay, currency, bottom }: { pay: PayResponse; currency: string; b
 
   const fee = cents != null && !problem ? feeCents(cents, feeBasisPoints) : null;
   return (
-    <ScrollView contentContainerStyle={{ padding: space[4], gap: space[4], paddingBottom: bottom + space[6] }} keyboardShouldPersistTaps="handled">
-      <View style={{ gap: space[1] }}>
-        <Text variant="title" accessibilityRole="header">
-          Withdraw
-        </Text>
-        <Text variant="body" color="ink2">
-          You have{" "}
-          <Text variant="bodyStrong" color="chrome" numeral>
-            {money(available)}
-          </Text>{" "}
-          available.
-        </Text>
-      </View>
+    <ScrollView contentContainerStyle={{ padding: space[4], paddingTop: space[1], gap: space[4], paddingBottom: bottom + space[6] }} keyboardShouldPersistTaps="handled">
+      <Text variant="body" color="ink2">
+        You have{" "}
+        <Text variant="bodyStrong" color="chrome" numeral>
+          {money(available)}
+        </Text>{" "}
+        available.
+      </Text>
 
       <TextField
         label="Amount"

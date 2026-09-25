@@ -1,6 +1,6 @@
 import type { ChecklistItem } from "@bookmops/api/v1";
-import { color, Icon, IconButton, minTouch, radius, space, Text } from "@bookmops/ui-native";
-import { router, useLocalSearchParams } from "expo-router";
+import { color, Icon, minTouch, radius, space, Text } from "@bookmops/ui-native";
+import { useLocalSearchParams } from "expo-router";
 import { Fragment } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Empty, LoadError, Loading } from "@/components/QueryState";
 import { useClockActions } from "@/data/outbox/actions";
 import { useChecklist } from "@/data/queries";
+import { BackHeader } from "@/features/record/ui";
 
 /** The job's checklist, by room. Each tick is saved on the phone and sent. */
 export default function Checklist() {
@@ -20,24 +21,23 @@ export default function Checklist() {
 
   return (
     <View style={{ flex: 1, backgroundColor: color.ground }}>
-      <View style={{ paddingTop: insets.top + space[2], paddingHorizontal: space[4], flexDirection: "row", alignItems: "center", gap: space[3] }}>
-        <IconButton icon="back" label="Back" onPress={() => router.back()} />
-        <View style={{ flex: 1 }}>
-          <Text variant="title" accessibilityRole="header">
-            Checklist
-          </Text>
-        </View>
-        {items.length ? (
-          <Text variant="heading" numeral color="chrome" accessibilityLabel={`${done} of ${items.length} done`}>
-            {done}
-            <Text variant="heading" color="ink3">
-              /{items.length}
+      <BackHeader
+        safeTop
+        title="Checklist"
+        fallback={{ pathname: "/jobs/[id]", params: { id } }}
+        right={
+          items.length ? (
+            <Text variant="heading" numeral color="chrome" accessibilityLabel={`${done} of ${items.length} done`}>
+              {done}
+              <Text variant="heading" color="ink3">
+                /{items.length}
+              </Text>
             </Text>
-          </Text>
-        ) : null}
-      </View>
+          ) : null
+        }
+      />
 
-      <ScrollView contentContainerStyle={{ padding: space[4], gap: space[5], paddingBottom: insets.bottom + space[8] }}>
+      <ScrollView contentContainerStyle={{ padding: space[4], paddingTop: space[1], gap: space[5], paddingBottom: insets.bottom + space[8] }}>
         {checklist.isPending ? (
           <Loading label="Loading the checklist" />
         ) : checklist.isError ? (

@@ -5,11 +5,11 @@ import { Fragment } from "react";
 import { Pressable, RefreshControl, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { BackButton } from "@/components/BackButton";
 import { Empty, LoadError, Loading } from "@/components/QueryState";
 import { useTeamChannels } from "@/data/queries";
 import { Avatar } from "@/features/messages/MessageBubble";
 import { useLive } from "@/features/messages/use-live";
+import { BackHeader } from "@/features/record/ui";
 
 const KIND_TEXT: Record<string, string> = {
   DEFAULT: "Everyone on the team",
@@ -28,15 +28,16 @@ export default function TeamChannels() {
 
   return (
     <View style={{ flex: 1, backgroundColor: color.ground }}>
-      <View style={{ paddingTop: insets.top + space[2], paddingHorizontal: space[4], paddingBottom: space[3], flexDirection: "row", alignItems: "center", gap: space[3] }}>
-        <BackButton fallback="/" />
-        <Text variant="title" accessibilityRole="header" style={{ flex: 1 }} numberOfLines={1}>
-          Team chat
-        </Text>
-        {channels.data?.dmEnabled ? (
-          <IconButton icon="compose" label="New message to a teammate" tone="chrome" onPress={() => router.push("/team/new")} />
-        ) : null}
-      </View>
+      <BackHeader
+        safeTop
+        title="Team chat"
+        fallback="/"
+        right={
+          channels.data?.dmEnabled ? (
+            <IconButton icon="compose" label="New message to a teammate" tone="chrome" onPress={() => router.push("/team/new")} />
+          ) : null
+        }
+      />
 
       <ScrollView
         contentContainerStyle={{ padding: space[4], paddingTop: space[2], gap: space[5], paddingBottom: insets.bottom + space[8] }}

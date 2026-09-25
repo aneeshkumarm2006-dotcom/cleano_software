@@ -105,8 +105,8 @@ function Figure({ value, label, tone, icon }: { value: string; label: string; to
 /** An uppercase section label with a hairline running off it, as in the design. */
 export function SectionTitle({ title, trailing }: { title: string; trailing?: ReactNode }) {
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: space[2] }}>
-      <Text variant="eyebrow" color="accentText" accessibilityRole="header">
+    <View style={{ flexDirection: "row", alignItems: "center", gap: space[2], paddingLeft: space[1] }}>
+      <Text variant="eyebrow" color="ink3" accessibilityRole="header">
         {title}
       </Text>
       <View style={{ flex: 1, height: 1, backgroundColor: color.line }} />

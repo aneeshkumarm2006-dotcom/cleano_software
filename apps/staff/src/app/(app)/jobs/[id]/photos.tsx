@@ -8,7 +8,6 @@ import { useState } from "react";
 import { Alert, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { BackButton } from "@/components/BackButton";
 import { Empty, LoadError, Loading } from "@/components/QueryState";
 import { useDeletePhoto, useJob, useJobPhotos, useMe } from "@/data/queries";
 import { useSource } from "@/data/session";
@@ -17,6 +16,7 @@ import { PhotoViewer } from "@/features/photos/PhotoViewer";
 import { forgetLocalPhoto, usePhotoUploads } from "@/features/photos/queue";
 import { pickPhotos } from "@/features/photos/upload";
 import { UploadRow } from "@/features/photos/UploadRow";
+import { BackHeader } from "@/features/record/ui";
 
 const PHASES = [
   { value: "BEFORE", label: "Before" },
@@ -41,12 +41,7 @@ export default function Photos() {
 
   return (
     <View style={{ flex: 1, backgroundColor: color.ground }}>
-      <View style={{ paddingTop: insets.top + space[2], paddingHorizontal: space[4], flexDirection: "row", alignItems: "center", gap: space[3] }}>
-        <BackButton fallback="/" />
-        <Text variant="eyebrow" color="ink3" style={{ flex: 1 }} numberOfLines={1}>
-          {job.data?.address.line1 ?? ""}
-        </Text>
-      </View>
+      <BackHeader safeTop title="Photos" subtitle={job.data?.address.line1} fallback={{ pathname: "/jobs/[id]", params: { id } }} />
 
       {photos.isPending || !tz ? (
         <Loading label="Loading photos" />
@@ -146,15 +141,10 @@ function PhotosBody({
 
   return (
     <>
-      <ScrollView contentContainerStyle={{ padding: space[4], gap: space[5], paddingBottom: (policy.canAdd ? 120 : space[6]) + bottom }} showsVerticalScrollIndicator={false}>
-        <View style={{ gap: space[1] }}>
-          <Text variant="title" accessibilityRole="header">
-            Photos
-          </Text>
-          <Text variant="body" color="ink2" numeral>
-            {total} of {policy.maxPhotos} on this job
-          </Text>
-        </View>
+      <ScrollView contentContainerStyle={{ padding: space[4], paddingTop: space[1], gap: space[5], paddingBottom: (policy.canAdd ? 120 : space[6]) + bottom }} showsVerticalScrollIndicator={false}>
+        <Text variant="body" color="ink2" numeral>
+          {total} of {policy.maxPhotos} on this job
+        </Text>
 
         {!policy.afterPhotosAllowed ? (
           <Notice icon="info" text="After photos are off for this job. An admin turned them off, so just take before photos." />
@@ -175,8 +165,8 @@ function PhotosBody({
 
         {uploads.items.length > 0 ? (
           <View style={{ gap: space[2] }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: space[3] }}>
-              <Text variant="eyebrow" color="chrome" accessibilityRole="header" style={{ flex: 1 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: space[3], paddingLeft: space[1] }}>
+              <Text variant="eyebrow" color="ink3" accessibilityRole="header" style={{ flex: 1 }}>
                 Sending {uploads.items.length}
               </Text>
               {failed > 1 ? <Button label="Try all again" icon="retry" variant="secondary" size="md" onPress={() => uploads.retry()} /> : null}

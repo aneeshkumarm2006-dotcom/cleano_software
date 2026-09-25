@@ -10,12 +10,13 @@ import { type ReactNode, useRef, useState } from "react";
 import { ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { BackButton, goBackOr } from "@/components/BackButton";
+import { goBackOr } from "@/components/BackButton";
 import { LoadError, Loading } from "@/components/QueryState";
 import { useJob, useJobIssues, useMe, useReportIssue } from "@/data/queries";
 import { useSource } from "@/data/session";
 import { IssueList } from "@/features/issues/IssueList";
 import { useIssuePhoto } from "@/features/issues/useIssuePhoto";
+import { BackHeader } from "@/features/record/ui";
 
 const CATEGORY_OPTIONS = JOB_ISSUE_CATEGORIES.map((value) => ({ value, label: JOB_ISSUE_CATEGORY_LABEL[value], tone: "warn" as const }));
 
@@ -43,12 +44,7 @@ export default function ReportIssue() {
 
   return (
     <View style={{ flex: 1, backgroundColor: color.ground }}>
-      <View style={{ paddingTop: insets.top + space[2], paddingHorizontal: space[4], flexDirection: "row", alignItems: "center", gap: space[3] }}>
-        <BackButton fallback="/" />
-        <Text variant="eyebrow" color="ink3" style={{ flex: 1 }} numberOfLines={1}>
-          {job.data?.address.line1 ?? ""}
-        </Text>
-      </View>
+      <BackHeader safeTop title="Report an issue" subtitle={job.data?.address.line1} fallback={{ pathname: "/jobs/[id]", params: { id } }} />
 
       {sent ? (
         <Sent
@@ -109,19 +105,14 @@ function IssueForm({ jobId, bottom, onSent }: { jobId: string; bottom: number; o
   return (
     <>
       <ScrollView
-        contentContainerStyle={{ padding: space[4], gap: space[5], paddingBottom: 130 + bottom }}
+        contentContainerStyle={{ padding: space[4], paddingTop: space[1], gap: space[5], paddingBottom: 130 + bottom }}
         keyboardShouldPersistTaps="handled"
         automaticallyAdjustKeyboardInsets
         showsVerticalScrollIndicator={false}
       >
-        <View style={{ gap: space[1] }}>
-          <Text variant="title" accessibilityRole="header">
-            Report an issue
-          </Text>
-          <Text variant="body" color="ink2">
-            It goes to the office with this job attached.
-          </Text>
-        </View>
+        <Text variant="body" color="ink2">
+          It goes to the office with this job attached.
+        </Text>
 
         <Field title="What's it about?">
           <ChoiceChips label="What the problem is about" options={CATEGORY_OPTIONS} value={category} onChange={setCategory} />
@@ -241,7 +232,7 @@ function Field({ title, children }: { title: string; children: ReactNode }) {
 
 function Sent({ issue, jobId, bottom, onAnother }: { issue: JobIssue; jobId: string; bottom: number; onAnother: () => void }) {
   return (
-    <ScrollView contentContainerStyle={{ padding: space[4], gap: space[5], paddingBottom: space[6] + bottom }} showsVerticalScrollIndicator={false}>
+    <ScrollView contentContainerStyle={{ padding: space[4], paddingTop: space[1], gap: space[5], paddingBottom: space[6] + bottom }} showsVerticalScrollIndicator={false}>
       <Card padding={5} style={{ backgroundColor: color.successSoft, borderColor: color.successSoft }}>
         <View accessibilityLiveRegion="polite" style={{ alignItems: "center", gap: space[3] }}>
           <Icon name="check" size={44} color="success" />
@@ -277,7 +268,7 @@ function MyReports({ jobId }: { jobId: string }) {
 
   return (
     <View style={{ gap: space[3] }}>
-      <Text variant="eyebrow" color="chrome" accessibilityRole="header">
+      <Text variant="eyebrow" color="ink3" accessibilityRole="header" style={{ paddingLeft: space[1] }}>
         Your reports on this job
       </Text>
       <IssueList issues={items} timeZone={tz} />

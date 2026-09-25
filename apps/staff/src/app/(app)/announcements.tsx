@@ -1,14 +1,14 @@
 import { type Announcement, MARK_READ_MAX } from "@bookmops/api/v1";
-import { Button, color, space, Text } from "@bookmops/ui-native";
+import { Button, color, space } from "@bookmops/ui-native";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, FlatList, RefreshControl, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { BackButton } from "@/components/BackButton";
 import { Empty, LoadError, Loading } from "@/components/QueryState";
 import { useAnnouncements, useMarkAnnouncementsRead, useMe } from "@/data/queries";
 import { AnnouncementCard } from "@/features/announcements/AnnouncementCard";
 import { useLive } from "@/features/messages/use-live";
+import { BackHeader } from "@/features/record/ui";
 
 /**
  * How long an announcement is on screen before it counts as seen. The web's
@@ -59,14 +59,7 @@ export default function Announcements() {
     return () => clearTimeout(t);
   }, [live, items, mark]);
 
-  const header = (
-    <View style={{ paddingTop: insets.top + space[2], paddingHorizontal: space[4], paddingBottom: space[3], flexDirection: "row", alignItems: "center", gap: space[3] }}>
-      <BackButton fallback="/" />
-      <Text variant="title" accessibilityRole="header" style={{ flex: 1 }} numberOfLines={1}>
-        Announcements
-      </Text>
-    </View>
-  );
+  const header = <BackHeader safeTop title="Announcements" fallback="/" />;
 
   let body;
   if (list.isPending || (!tz && !me.isError)) {
