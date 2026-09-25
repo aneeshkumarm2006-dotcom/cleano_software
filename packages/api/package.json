@@ -1,0 +1,23 @@
+{
+  "name": "@bookmops/api",
+  "version": "0.0.0",
+  "private": true,
+  "sideEffects": false,
+  "exports": {
+    "./v1": "./src/v1/index.ts",
+    "./client": "./src/client.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "zod": "^4.1.13"
+  },
+  "devDependencies": {
+    "@bookmops/eslint-config": "*",
+    "@bookmops/typescript-config": "*",
+    "eslint": "^9",
+    "typescript": "^5"
+  }
+}

@@ -4,7 +4,8 @@
   "private": true,
   "files": [
     "base.json",
+    "library.json",
     "nextjs.json",
-    "library.json"
+    "react-native.json"
   ]
 }
