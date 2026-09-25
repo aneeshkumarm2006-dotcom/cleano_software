@@ -69,6 +69,10 @@ export default function More() {
           { key: "documents", label: "Documents", icon: "document", soon: true },
         ]}
       />
+      <MenuGroup
+        title="Account"
+        items={[{ key: "password", label: "Change password", icon: "lock", onPress: () => router.push("/account/password") }]}
+      />
 
       <Button label="Sign out" variant="danger" icon="signOut" onPress={signOut} />
     </Screen>
