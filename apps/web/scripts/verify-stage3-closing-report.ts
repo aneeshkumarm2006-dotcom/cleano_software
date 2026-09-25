@@ -445,7 +445,7 @@ const BUTTON = "src/app/cleaners/my-jobs/ClockOutButton.tsx";
 const SCREEN = "src/app/cleaners/my-jobs/[jobId]/clock/ClockPageClient.tsx";
 const SHARED = "src/app/cleaners/my-jobs/ClosingInventoryReport.tsx";
 const LIB = "../../packages/core/src/time/clock-out.ts";
-const ACTION = "src/app/admin/actions/clockOut.ts";
+const ACTION = "src/server/clock/clock-out.ts";
 
 ok("the shared report component exists", fs.existsSync(SHARED));
 for (const [label, path] of [
@@ -580,7 +580,7 @@ const WRITERS: Array<[string, string]> = [
   ["src/app/admin/actions/updateMyItemCondition.ts", 'action: "STATUS_REPORT"'],
   ["src/app/admin/actions/updateProduct.ts", 'action: "ADMIN_SET"'],
   ["src/app/cleaners/my-inventory/addMyInventoryItem.ts", 'action: "RECOUNT"'],
-  ["src/app/admin/actions/clockOut.ts", 'action: "JOB_REPORT"'],
+  ["src/server/clock/clock-out.ts", 'action: "JOB_REPORT"'],
   // Stage 4: the single writer for the warehouse side of every movement. Its
   // verb is passed in by the caller rather than hard-coded, which is the point
   // — one place writes the row, each caller says what it was doing.

@@ -2163,8 +2163,8 @@ section(15, "Clock back into a job (PDF #6)", () => {
   check("...and nobody else's", breakShares.get("b")?.hours, 2);
 
   // ── SOURCE ───────────────────────────────────────────────────────────────
-  const CLOCK_IN = "src/app/admin/actions/clockIn.ts";
-  const CLOCK_OUT = "src/app/admin/actions/clockOut.ts";
+  const CLOCK_IN = "src/server/clock/clock-in.ts";
+  const CLOCK_OUT = "src/server/clock/clock-out.ts";
   const MIGRATION = "prisma/migrations/20260807020000_job_work_sessions/migration.sql";
 
   // 15.a — the model, keyed like JobBreak so removing a cleaner from a job
@@ -2186,7 +2186,9 @@ section(15, "Clock back into a job (PDF #6)", () => {
   // 15.b — THE two latent bugs. Both guards were job-level; both are now
   // per-cleaner, which is what stops one teammate blocking the crew.
   lacksInCode("clock-in no longer blocks on the JOB's clock", CLOCK_IN, "if (job.clockInTime)");
-  has("...it asks about THIS cleaner", CLOCK_IN, "findOpenSession(jobId, session.user.id)");
+  // The rule moved into server/clock/clock-in.ts; the acting cleaner is the
+  // Actor both front doors build from their own session.
+  has("...it asks about THIS cleaner", CLOCK_IN, "findOpenSession(jobId, actor.userId)");
   lacksInCode("clock-out no longer blocks on the JOB's clock", CLOCK_OUT, "if (job.clockOutTime)");
   has("...it closes THIS cleaner's session", CLOCK_OUT, "db.jobWorkSession.update({");
   has("markArrived got the same treatment", "src/app/admin/actions/markArrived.ts",
@@ -3009,7 +3011,7 @@ section(20, "Remove Inventory Rules auto-deduction settings (PDF #14)", () => {
   // app invented (Light use = 15 sprays × 1.25 ml) and deducted as if measured.
   // The checks below are the same four properties, restated against what the
   // flow does now: it records a REPORT, and deducts nothing.
-  const CLOCK_OUT = "src/app/admin/actions/clockOut.ts";
+  const CLOCK_OUT = "src/server/clock/clock-out.ts";
   lacksInCode("clock-out no longer records estimated usage", CLOCK_OUT, "jobProductUsage");
   has("...it writes the cleaner's report to their kit", CLOCK_OUT, "db.employeeProduct.update({");
   has("...still writes the audit row, now with the status transition", CLOCK_OUT,

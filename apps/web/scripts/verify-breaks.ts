@@ -90,15 +90,17 @@ const migration = read("prisma/migrations/20260726020000_job_breaks/migration.sq
 ok("migration creates the table", migration.includes('CREATE TABLE "JobBreak"'));
 ok("migration cascades from the job", migration.includes("ON DELETE CASCADE"));
 
-const action = read("src/app/admin/actions/jobBreak.ts");
+const action = read("src/server/clock/breaks.ts");
 ok("break requires being clocked in", action.includes("to start a break"));
 ok("double-tap can't open two overlapping breaks",
   action.includes("You're already on a break"));
 ok("ending without a break is rejected", action.includes("You're not on a break"));
-ok("actions are scoped to the session user", action.includes("session.user.id"));
+// The rules moved into server/clock/breaks.ts: the cleaner is always the
+// acting person the front door authenticated, never an id from the request.
+ok("actions are scoped to the session user", action.includes("const cleanerId = actor.userId"));
 ok("legacy job-level clock is honoured", action.includes("employeeId: cleanerId"));
 
-const clockOut = read("src/app/admin/actions/clockOut.ts");
+const clockOut = read("src/server/clock/clock-out.ts");
 ok("clock-out closes any running break",
   clockOut.includes("jobBreak.updateMany") && clockOut.includes("endedAt: null"));
 

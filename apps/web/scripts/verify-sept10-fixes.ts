@@ -529,7 +529,7 @@ check(
 );
 check("the notice can name the job", claim.includes("jobNumber: true"), true);
 
-const clockOut = read("src/app/admin/actions/clockOut.ts");
+const clockOut = read("src/server/clock/clock-out.ts");
 check(
   "a failed clock-out reaches the feed, not only the alerts page",
   clockOut.includes('key: "admin.clock.clock_out_failed"'),
@@ -541,7 +541,7 @@ check(
   true
 );
 
-const clockIn = read("src/app/admin/actions/clockIn.ts");
+const clockIn = read("src/server/clock/clock-in.ts");
 check(
   "a thrown clock-in is reported",
   clockIn.includes('key: "admin.clock.clock_in_failed"'),

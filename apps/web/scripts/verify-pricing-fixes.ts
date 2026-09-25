@@ -1413,7 +1413,7 @@ has(
 // ───────────────────────────────────────────────────────────────────────────
 console.log("\n── Stage 5 · clock-out reliability (PDF fix 6) ──");
 
-const CLOCK_OUT_ACTION = "src/app/admin/actions/clockOut.ts";
+const CLOCK_OUT_ACTION = "src/server/clock/clock-out.ts";
 const CLOCK_OUT_LIB = "../../packages/core/src/time/clock-out.ts";
 const CLOCK_SCREEN = "src/app/cleaners/my-jobs/[jobId]/clock/ClockPageClient.tsx";
 const CLOCK_BUTTON = "src/app/cleaners/my-jobs/ClockOutButton.tsx";
@@ -2224,12 +2224,12 @@ console.log("\n── Stage 7 · rollout, backfills and the post-deploy watch �
 // looks once they know to look; the alert is what tells them to.
 has(
   "7.5 · a failed clock-out raises an admin alert, not just a log row",
-  "src/app/admin/actions/clockOut.ts",
+  "src/server/clock/clock-out.ts",
   "notifyAdmins("
 );
 has(
   "7.5 · …carrying the job it happened on, so the card is actionable",
-  "src/app/admin/actions/clockOut.ts",
+  "src/server/clock/clock-out.ts",
   "Clock-out failed — job #"
 );
 // The property that makes "alert on ANY CLOCK_OUT_FAILED row" true rather than
@@ -2239,7 +2239,7 @@ has(
 // logger" — a copy pasted to a single failure branch would break the first
 // half, and inlining the log at one site would break the second.
 {
-  const src = read("src/app/admin/actions/clockOut.ts");
+  const src = read("src/server/clock/clock-out.ts");
   const alerts = src.split("notifyAdmins(").length - 1;
   const callers = src.split("await logClockOutFailure({").length - 1;
   check("7.5 · the alert is raised in exactly one place", alerts, 1);
