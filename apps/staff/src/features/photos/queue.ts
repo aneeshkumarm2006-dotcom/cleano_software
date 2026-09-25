@@ -3,10 +3,10 @@
 // It lives outside any screen, so leaving the photos screen doesn't cancel an
 // upload, and coming back shows where each one got to. Each photo moves
 // through three steps, and a retry picks up at the step that failed — a photo
-// that reached storage is never sent twice, and the attach carries the same
+// that reached Cloudinary is never sent twice, and the attach carries the same
 // clientEventId every time, so the server files it once.
 //
-//   prepare (shrink, re-encode) → send (sign, PUT) → save (attach by key)
+//   prepare (shrink, re-encode) → send (sign, POST to Cloudinary) → save (attach by key)
 //
 // Held in memory: photos not yet sent are lost if the app is closed. The
 // person sees each photo's state and is never told one was saved when it
@@ -21,11 +21,11 @@ import { addPhotoToCache, photoKeys } from "@/data/queries/photos";
 import { onSignOut } from "@/data/sign-out";
 import type { DataSource } from "@/data/source";
 
-import { type PreparedPhoto, preparePhoto, putPhoto, UploadError } from "./upload";
+import { type PreparedPhoto, preparePhoto, UploadError, uploadPhoto } from "./upload";
 
 /** Two at a time: enough to hide latency, few enough not to choke a weak signal. */
 const CONCURRENCY = 2;
-/** Signed URLs last 15 minutes; get a fresh one well before that. */
+/** Cloudinary refuses a signature an hour old; get a fresh one well before that. */
 const TICKET_MAX_AGE_MS = 10 * 60_000;
 
 export type UploadStep = "waiting" | "preparing" | "sending" | "saving" | "failed";
@@ -146,7 +146,7 @@ async function run(id: string): Promise<void> {
         if (!get(id)) return;
       }
       try {
-        await putPhoto(ticket, item.prepared!, (progress) => {
+        await uploadPhoto(ticket, item.prepared!, (progress) => {
           // A send reports progress many times a second; the row shows whole
           // percent, so only a change in that is worth redrawing the queue for.
           const shown = get(id)?.progress;
@@ -185,7 +185,7 @@ function describe(e: unknown): { message: string; canRetry: boolean; resend?: bo
   if (e instanceof UploadError) return { message: e.message, canRetry: e.retryable };
   if (e instanceof ApiError) {
     if (e.signedOut) return { message: "Sign in again to send this photo.", canRetry: true };
-    // Storage doesn't have it (yet): the PUT may still be landing, or was lost.
+    // Cloudinary doesn't have it: send the file again on a new ticket.
     if (e.code === "UPLOAD_MISSING") return { message: e.message, canRetry: true, resend: !e.retryable };
     return { message: e.message, canRetry: e.retryable };
   }

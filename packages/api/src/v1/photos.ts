@@ -1,12 +1,13 @@
 // Job photos: before and after photos a cleaner takes on a job, and the signed
 // upload that carries them.
 //
-// Photos never pass through a server function (API_V1.md §7). The app asks
-// for a short-lived signed URL, PUTs the file straight to storage, then
-// attaches the stored object to the job by its key. The server checks the
-// person, the job, the size and the type when it signs, and checks the key and
-// the stored object again when it attaches — the app is never the authority on
-// either.
+// Photos live in Cloudinary, as the web's do (apps/web/src/app/admin/actions/
+// uploadJobPhoto.ts), and never pass through a server function (API_V1.md
+// §7). The app asks the server to sign an upload, POSTs the file straight to
+// Cloudinary as a multipart form, then attaches the stored asset to the job by
+// its public_id. The server checks the person, the job, the size and the type
+// when it signs, and checks the public_id and the stored asset again when it
+// attaches — the app is never the authority on either.
 //
 // The web's rules, which the server applies to both front doors
 // (apps/web/src/app/admin/actions/uploadJobPhoto.ts and
@@ -40,8 +41,12 @@ export type PhotoContentType = (typeof PHOTO_CONTENT_TYPES)[number];
 /** The web's per-file ceiling, in bytes. */
 export const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
 
-/** How the app sends the file to a signed URL. Only PUT is understood by v1 builds. */
-export const UPLOAD_METHODS = ["PUT"] as const;
+/**
+ * How the app sends the file. MULTIPART_POST: a multipart/form-data POST to
+ * Cloudinary's upload API, carrying the ticket's `fields` and the file. A
+ * build that doesn't know the method says it can't send photos any more.
+ */
+export const UPLOAD_METHODS = ["MULTIPART_POST"] as const;
 
 /**
  * A URL the app will load or send to. https only: a signed URL or an image
@@ -54,7 +59,7 @@ export const HttpsUrl = z.url({ protocol: /^https$/, hostname: z.regexes.domain 
 /**
  * POST /api/v1/uploads
  *
- * Signs one upload. The server must:
+ * Signs one direct upload to Cloudinary. The server must:
  *   - allow only the `staff` roles, as every v1 route;
  *   - for JOB_PHOTO, check the caller is assigned to `jobId` in this company
  *     (not assigned and not found both answer 404);
@@ -62,11 +67,24 @@ export const HttpsUrl = z.url({ protocol: /^https$/, hostname: z.regexes.domain 
  *     PHOTO_CONTENT_TYPES (400), and refuse when the job already has
  *     MAX_PHOTOS_PER_JOB photos (409 `PHOTO_LIMIT_REACHED`, message says so);
  *   - refuse when the job no longer takes photos (409 `PHOTOS_CLOSED`: paid,
- *     cancelled);
- *   - sign for exactly this content type and length, so the storage provider
- *     itself refuses a different or larger file, and expire within 15 minutes;
- *   - choose the key itself, under `<orgId>/jobs/<jobId>/<userId>/`, with a
- *     random name. The app never names an object.
+ *     cancelled). It does NOT refuse for the photo switch: the same ticket
+ *     carries an issue report's photo, which the switch doesn't cover. That
+ *     is checked when the photo is attached;
+ *   - choose the public_id itself, under the company's folder as the web names
+ *     it (`orgFolderFor(slug)` in apps/web/src/lib/asset-paths.ts), then
+ *     `/jobs/<jobId>/<userId>/<random>`. The app never names an asset;
+ *   - sign, with CLOUDINARY_API_SECRET (which never leaves the server) and the
+ *     Cloudinary SDK's `api_sign_request`, exactly the parameters it returns
+ *     in `fields`: `public_id`, a fresh `timestamp` (seconds, taken now),
+ *     `allowed_formats` of jpg, png, heic, heif and webp, and
+ *     `overwrite=false`, so an asset can't be replaced; plus `api_key`, which
+ *     Cloudinary needs but doesn't sign. A signed `upload_preset` may add the
+ *     account's size limit and an incoming resize. A signature can't pin
+ *     the file's exact byte length, so the size is enforced again when the
+ *     photo is attached (below);
+ *   - say `expiresAt` = timestamp + 1 hour: Cloudinary refuses a signature
+ *     older than that. The app doesn't wait that long; it asks for a new
+ *     ticket once one is 10 minutes old.
  */
 export const UploadRequest = z.object({
   purpose: z.enum(UPLOAD_PURPOSES),
@@ -77,15 +95,25 @@ export const UploadRequest = z.object({
 export type UploadRequest = z.infer<typeof UploadRequest>;
 
 export const UploadTicket = z.object({
-  /** Where to send the file. Signed, short-lived, and https. */
+  /**
+   * Where to POST the file: always
+   * `https://api.cloudinary.com/v1_1/<cloud>/image/upload`. The app refuses
+   * any other address.
+   */
   uploadUrl: HttpsUrl,
   /** An unknown method means this build can't do the upload: it says so. */
   method: openEnum(UPLOAD_METHODS),
-  /** Headers the PUT must carry exactly (the signature covers them). */
-  headers: z.record(z.string(), z.string()),
-  /** The stored object's key, to attach it afterwards. Opaque to the app. */
+  /**
+   * Form fields to send exactly as given, and no others: `api_key`,
+   * `timestamp`, `signature` and the signed parameters. The signature covers
+   * them, so a changed or added field makes Cloudinary refuse the upload.
+   */
+  fields: z.record(z.string(), z.string()),
+  /** The form field that carries the file ("file"). */
+  fileField: z.string().min(1).max(64),
+  /** The asset's Cloudinary public_id, to attach it afterwards. Opaque to the app. */
   key: z.string().min(1),
-  /** After this the URL no longer works; the app asks for a new one. */
+  /** After this the signature no longer works; the app asks for a new one. */
   expiresAt: Instant,
 });
 export type UploadTicket = z.infer<typeof UploadTicket>;
@@ -96,12 +124,15 @@ export const JobPhoto = z.object({
   id: z.string(),
   kind: openEnum(JOB_PHOTO_KINDS),
   /**
-   * The full photo. A short-lived signed read URL (an hour at most), never a
-   * public link: these are photos of the inside of clients' homes. Served
-   * with `X-Content-Type-Options: nosniff`.
+   * The full photo, a Cloudinary delivery URL on res.cloudinary.com (the
+   * only image host the app loads). These are photos of the inside of
+   * clients' homes, so authenticated, signed delivery that expires within an
+   * hour is recommended over a public link. The web stores and shows public
+   * `/image/upload/` URLs today, and its gallery and deleteJobPhoto read them
+   * as such, so moving to authenticated assets means changing those too.
    */
   url: HttpsUrl,
-  /** A small square version for the grid, when storage can make one. */
+  /** A small square version for the grid: a Cloudinary transformation of the same asset. */
   thumbnailUrl: HttpsUrl.nullable(),
   caption: z.string().nullable(),
   takenAt: Instant,
@@ -154,11 +185,16 @@ export type JobPhotosResponse = z.infer<typeof JobPhotosResponse>;
  *
  * The server must:
  *   - check the caller is assigned to the job (404);
- *   - check the key sits under this company's, this job's, and this CALLER's
- *     prefix, and was signed for them — a key from anyone else is 404;
- *   - check the object exists in storage and is within the size and type it
- *     was signed for (409 `UPLOAD_MISSING` if not, retryable: the PUT may still
- *     be landing);
+ *   - check the key (a Cloudinary public_id) sits under this company's, this
+ *     job's, and this CALLER's prefix, and was signed for them — a key from
+ *     anyone else is 404;
+ *   - look the asset up with Cloudinary's Admin API (`api.resource`, image).
+ *     Not there: 409 `UPLOAD_MISSING`, not retryable, and the app sends the
+ *     file again on a new ticket. Cloudinary answers the upload only once the
+ *     asset is stored, so a missing one was never sent;
+ *   - check the asset's `format` is jpg, png, heic, heif or webp and its
+ *     `bytes` are at most MAX_PHOTO_BYTES. Out of bounds: destroy the asset
+ *     and answer 400 `UPLOAD_INVALID`;
  *   - refuse AFTER when after-photos are off for this job (409
  *     `AFTER_PHOTOS_OFF`). BEFORE is always accepted. (The web action today
  *     refuses BEFORE too when after-photos are off, against its own on-page
@@ -167,9 +203,11 @@ export type JobPhotosResponse = z.infer<typeof JobPhotosResponse>;
  *     insert;
  *   - accept a key ONCE: an attached key is marked used, and attaching it
  *     again (other than an idempotent replay) is 409 `UPLOAD_USED`, so two
- *     rows never share one stored object;
+ *     rows never share one stored asset;
  *   - check the stored file's first bytes really are a JPEG, PNG, HEIC or
- *     WebP, not only the type it was signed for;
+ *     WebP, not only the format Cloudinary reports;
+ *   - store the photo's URL as the web does (the upload's `secure_url`), so
+ *     the web's gallery and deleteJobPhoto work on it unchanged;
  *   - send the "first photos on this job" email to the office as the web does,
  *     once per job.
  */
@@ -185,7 +223,8 @@ export type AttachPhotoRequest = z.infer<typeof AttachPhotoRequest>;
  *
  * The server must allow it only for the caller's OWN photo on this job; a
  * teammate's photo, a client's booking photo, or a photo on another job all
- * answer 404. It removes the stored object as well as the row. A second
+ * answer 404. It destroys the Cloudinary asset as well as the row, as the
+ * web's deleteJobPhoto does. A second
  * delete of the same photo answers 404, which the app treats as done.
  */
 export const DeletePhotoResponse = z.object({ id: z.string() });

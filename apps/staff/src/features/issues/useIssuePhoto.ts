@@ -1,6 +1,6 @@
 // The one optional photo on an issue report. It is picked and shrunk right
 // away, but only sent when the report is: backing out of the form never leaves
-// a stray photo on the job. Once it has reached storage, a retry of the report
+// a stray photo on the job. Once it has reached Cloudinary, a retry of the report
 // reuses the same upload rather than sending it again.
 import { ApiError } from "@bookmops/api/client";
 import { MAX_PHOTO_BYTES } from "@bookmops/api/v1";
@@ -8,7 +8,7 @@ import type { ImagePickerAsset } from "expo-image-picker";
 import { useCallback, useRef, useState } from "react";
 
 import type { DataSource } from "@/data/source";
-import { pickPhotos, type PreparedPhoto, preparePhoto, putPhoto, UploadError } from "@/features/photos/upload";
+import { pickPhotos, type PreparedPhoto, preparePhoto, UploadError, uploadPhoto } from "@/features/photos/upload";
 
 export interface IssuePhoto {
   uri: string;
@@ -80,10 +80,10 @@ export function useIssuePhoto(jobId: string, source: DataSource, maxBytes = MAX_
     setPhoto((s) => (s ? { ...s, status: "sending", progress: 0 } : s));
     try {
       const ticket = await source.createJobPhotoUpload({ purpose: "JOB_PHOTO", jobId, contentType: p.contentType, byteSize: p.byteSize });
-      await putPhoto(ticket, p, (progress) => setPhoto((s) => (s ? { ...s, progress } : s)));
-      key.current = ticket.key;
+      const publicId = await uploadPhoto(ticket, p, (progress) => setPhoto((s) => (s ? { ...s, progress } : s)));
+      key.current = publicId;
       setPhoto((s) => (s ? { ...s, status: "sent", progress: 1 } : s));
-      return ticket.key;
+      return publicId;
     } catch (e) {
       setPhoto((s) => (s ? { ...s, status: "ready", progress: 0 } : s));
       const why = e instanceof UploadError || e instanceof ApiError ? e.message : "The photo didn't send.";

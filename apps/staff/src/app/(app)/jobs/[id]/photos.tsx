@@ -28,7 +28,7 @@ const MAX_PER_PICK = 20;
 
 /**
  * Before and after photos for a job. Take or choose them, watch them send,
- * and delete your own. Photos go straight to storage from the phone; a failed
+ * and delete your own. Photos go straight to Cloudinary from the phone; a failed
  * one stays here with its reason until it's sent or removed.
  */
 export default function Photos() {
