@@ -13,6 +13,7 @@ import { sendAdminClockedOut } from "@/lib/email";
 import { ensureRatingRequest } from "@/lib/rating";
 import { isCleanerLow } from "@/lib/inventory-thresholds";
 import { loadCleanerThresholdDefault } from "@/lib/inventory-thresholds.server";
+import { isStaffRole } from "@/lib/role-routing";
 import {
   conditionFlagType,
   countableStatusFlagType,
@@ -434,6 +435,12 @@ export async function clockOut(
       "NOT_AUTHENTICATED",
       "Your session has expired. Sign in again and your entries will still be here."
     );
+  }
+  // Only staff clock out. Reported as NOT_ASSIGNED rather than a new code: to
+  // anyone outside the staff roles it means exactly that, and the clock-out UI
+  // already handles it as final rather than retryable.
+  if (!isStaffRole((session.user as { role?: string }).role)) {
+    return fail("NOT_ASSIGNED", "Only staff can clock out of a job.");
   }
   const userId = session.user.id;
   const userName = session.user.name ?? null;

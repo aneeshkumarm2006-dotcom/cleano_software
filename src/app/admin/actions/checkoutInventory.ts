@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { adjustWarehouseStock } from "@/lib/stock.server";
+import { isStaffRole } from "@/lib/role-routing";
 
 interface CheckoutInventoryInput {
   locationId: string;
@@ -19,6 +20,9 @@ export async function checkoutInventory(input: CheckoutInventoryInput) {
 
   if (!session?.user) {
     return { success: false, error: "Not authenticated" };
+  }
+  if (!isStaffRole((session.user as { role?: string }).role)) {
+    return { success: false, error: "Not authorized" };
   }
 
   if (!input.locationId) {

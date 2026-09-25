@@ -4,6 +4,7 @@ import { db } from "@/lib/org-db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { isStaffRole } from "@/lib/role-routing";
 
 interface ApproveInput {
   invoiceNumber: string;
@@ -22,6 +23,9 @@ export async function approveProviderInvoice(
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) {
     return { success: false, error: "Not authenticated" };
+  }
+  if (!isStaffRole((session.user as { role?: string }).role)) {
+    return { success: false, error: "Not authorized" };
   }
 
   const userId = session.user.id;

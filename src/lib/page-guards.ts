@@ -1,12 +1,6 @@
 import { redirect } from "next/navigation";
 import { getCachedSession } from "@/lib/auth";
-import {
-  homeForRole,
-  isAdminRole,
-  isApplicantRole,
-  isCleanerRole,
-  isClientRole,
-} from "@/lib/role-routing";
+import { homeForRole, isAdminRole, isApplicantRole, isCleanerRole, isClientRole, isStaffRole } from "@/lib/role-routing";
 
 // Server Component / page guard helpers. Use at the top of a page.tsx:
 //
@@ -72,6 +66,7 @@ export async function requireApplicant() {
 export async function requireStaff() {
   const session = await requireSession();
   const role = (session.user as { role?: string }).role;
-  if (isClientRole(role) || isApplicantRole(role)) redirect(homeForRole(role));
+  // An allow-list: a missing or unknown role is not staff either.
+  if (!isStaffRole(role)) redirect(homeForRole(role));
   return session;
 }

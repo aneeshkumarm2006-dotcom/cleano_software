@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { findAssignableProduct } from "@/lib/kit-product.server";
+import { isStaffRole } from "@/lib/role-routing";
 
 interface CreateInventoryRequestInput {
   productId?: string;
@@ -23,6 +24,9 @@ export async function createInventoryRequest(
 
   if (!session?.user) {
     return { success: false, error: "Not authenticated" };
+  }
+  if (!isStaffRole((session.user as { role?: string }).role)) {
+    return { success: false, error: "Not authorized" };
   }
 
   if (!input.productId && !input.kitId) {

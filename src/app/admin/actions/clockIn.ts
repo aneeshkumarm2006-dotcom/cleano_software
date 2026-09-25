@@ -2,6 +2,7 @@
 
 import { db } from "@/lib/org-db";
 import { auth } from "@/lib/auth";
+import { isStaffRole } from "@/lib/role-routing";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import {
@@ -31,6 +32,11 @@ export async function clockIn(jobId: string) {
 
   if (!session?.user) {
     return { success: false, error: "Not authenticated" };
+  }
+  // Being on the job is checked below; being someone who works here is
+  // checked first, so no account outside the staff roles gets that far.
+  if (!isStaffRole((session.user as { role?: string }).role)) {
+    return { success: false, error: "Not authorized" };
   }
 
   try {

@@ -8,6 +8,7 @@ import { smsOnTheWay } from "@/lib/sms";
 import { sendAdminOnTheWay } from "@/lib/email";
 import { setAssignmentProgress } from "@/lib/job-assignments";
 import { getSetting } from "@/lib/settings";
+import { isStaffRole } from "@/lib/role-routing";
 
 /** Default ETA (minutes) advertised to the customer when the cleaner taps
  *  "On my way". We don't run a maps SDK — this mirrors the catalog's default
@@ -26,6 +27,9 @@ export async function markOnMyWay(
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) {
     return { success: false, error: "Not authenticated" as const };
+  }
+  if (!isStaffRole((session.user as { role?: string }).role)) {
+    return { success: false, error: "Not authorized" as const };
   }
 
   try {
@@ -142,6 +146,9 @@ export async function updateOnMyWayLocation(
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) {
     return { success: false, error: "Not authenticated" as const };
+  }
+  if (!isStaffRole((session.user as { role?: string }).role)) {
+    return { success: false, error: "Not authorized" as const };
   }
 
   // Live GPS tracking (#10) is admin-gated. When off, silently no-op so a stray

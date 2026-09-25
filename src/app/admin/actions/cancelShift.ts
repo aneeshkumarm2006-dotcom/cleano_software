@@ -12,6 +12,7 @@ import {
   alertIfTraineeLeftUnpaired,
   resolveJobLead,
 } from "@/lib/job-assignments";
+import { isStaffRole } from "@/lib/role-routing";
 
 const LATE_CANCEL_HOURS = 24;
 /** Inside this window the cleaner cancel triggers the last-minute repost. */
@@ -21,6 +22,9 @@ export async function cancelShift(jobId: string): Promise<{ success: true; penal
   try {
     const session = await auth.api.getSession({ headers: await headers() });
     if (!session) return { success: false, error: "Not authenticated" };
+    if (!isStaffRole((session.user as { role?: string }).role)) {
+      return { success: false, error: "Not authorized" };
+    }
 
     const employeeId = session.user.id;
 

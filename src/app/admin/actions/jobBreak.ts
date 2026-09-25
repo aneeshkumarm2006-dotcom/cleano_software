@@ -2,6 +2,7 @@
 
 import { db } from "@/lib/org-db";
 import { auth } from "@/lib/auth";
+import { isStaffRole } from "@/lib/role-routing";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 
@@ -39,6 +40,9 @@ async function currentClockIn(jobId: string, cleanerId: string) {
 export async function startJobBreak(jobId: string) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) return { success: false, error: "Not authenticated" };
+  if (!isStaffRole((session.user as { role?: string }).role)) {
+    return { success: false, error: "Not authorized" };
+  }
   if (typeof jobId !== "string" || !jobId.trim()) {
     return { success: false, error: "Job is required" };
   }
@@ -71,6 +75,9 @@ export async function startJobBreak(jobId: string) {
 export async function endJobBreak(jobId: string) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) return { success: false, error: "Not authenticated" };
+  if (!isStaffRole((session.user as { role?: string }).role)) {
+    return { success: false, error: "Not authorized" };
+  }
   if (typeof jobId !== "string" || !jobId.trim()) {
     return { success: false, error: "Job is required" };
   }
@@ -93,26 +100,4 @@ export async function endJobBreak(jobId: string) {
   revalidatePath(`/admin/jobs/${jobId}`);
   revalidatePath("/admin/time-tracking");
   return { success: true };
-}
-
-/**
- * Close any break left running when the cleaner clocks out.
- *
- * Without this, forgetting to end a break would leave it open forever and the
- * job's active time would keep shrinking as the clock ran on.
- */
-export async function closeOpenBreaksOnClockOut(
-  jobId: string,
-  cleanerId: string,
-  at: Date = new Date()
-): Promise<void> {
-  try {
-    await db.jobBreak.updateMany({
-      where: { jobId, cleanerId, endedAt: null },
-      data: { endedAt: at },
-    });
-  } catch (e) {
-    // Never fail a clock-out because a break row wouldn't close.
-    console.error("closeOpenBreaksOnClockOut failed", jobId, cleanerId, e);
-  }
 }

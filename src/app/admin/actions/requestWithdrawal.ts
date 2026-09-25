@@ -9,6 +9,7 @@ import {
   sendAdminPayoutRequest,
 } from "@/lib/email";
 import { summarisePayouts } from "@/lib/payout-math";
+import { isStaffRole } from "@/lib/role-routing";
 
 /**
  * A cleaner submits an AMOUNT, nothing else (new fix list item 3).
@@ -32,6 +33,9 @@ export async function requestWithdrawal(
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) {
     return { success: false, error: "Not authenticated" };
+  }
+  if (!isStaffRole((session.user as { role?: string }).role)) {
+    return { success: false, error: "Not authorized" };
   }
 
   const userId = session.user.id;

@@ -7,6 +7,7 @@ import type {
   ProviderInvoice,
   ProviderInvoiceLine,
 } from "./generateProviderInvoice.types";
+import { isStaffRole } from "@/lib/role-routing";
 
 interface GenerateInput {
   startDate?: string;
@@ -21,6 +22,9 @@ export async function generateProviderInvoice(
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) {
     return { success: false, error: "Not authenticated" };
+  }
+  if (!isStaffRole((session.user as { role?: string }).role)) {
+    return { success: false, error: "Not authorized" };
   }
 
   const userId = session.user.id;

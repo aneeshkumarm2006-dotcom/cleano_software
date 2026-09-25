@@ -12,6 +12,7 @@
 // through the same correction path an admin uses by hand.
 
 import { auth } from "@/lib/auth";
+import { isStaffRole } from "@/lib/role-routing";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 
@@ -42,6 +43,9 @@ export async function requestTimeLogChange(input: {
 }): Promise<Result> {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) return { success: false, error: "Not authenticated" };
+  if (!isStaffRole((session.user as { role?: string }).role)) {
+    return { success: false, error: "Not authorized" };
+  }
   const cleanerId = session.user.id;
 
   if (typeof input.jobId !== "string" || !input.jobId) {
