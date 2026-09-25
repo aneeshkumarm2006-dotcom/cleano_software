@@ -3,6 +3,16 @@
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { db } from "@/lib/org-db";
+import { requireOrgId } from "@/lib/org";
+import { actorFromSession } from "@/server/actor";
+import {
+  canParticipate,
+  countReactions,
+  isAdminRole,
+  markAnnouncementsReadFor,
+  revisedAt,
+  toggleAnnouncementReaction,
+} from "@/server/announcements/announcements";
 
 // ---- Types ----------------------------------------------------------------
 
@@ -88,61 +98,12 @@ async function requireUser(): Promise<
   return { user, role: (user.role as AppRole | undefined) ?? "EMPLOYEE" };
 }
 
-// Can read + react: any staff member (everyone but clients).
-function canParticipate(role: AppRole): boolean {
-  return (
-    role === "OWNER" ||
-    role === "ADMIN" ||
-    role === "OPS_MANAGER" ||
-    role === "FIELD_LEAD" ||
-    role === "EMPLOYEE"
-  );
-}
-
-// Can publish / edit / delete / pin: office roles only.
-function isAdminRole(role: AppRole): boolean {
-  return role === "OWNER" || role === "ADMIN" || role === "OPS_MANAGER";
-}
-
-// ---- Reactions -------------------------------------------------------------
-
-// Allow-list — must match REACTION_SET in the client.
-const REACTION_EMOJIS = new Set(["👍", "🎉", "❤️"]);
-
-function countReactions(
-  rows: { userId: string; emoji: string }[],
-  userId: string
-): ReactionStateDTO {
-  const reactions: Record<string, number> = {};
-  let myReaction: string | null = null;
-  for (const r of rows) {
-    reactions[r.emoji] = (reactions[r.emoji] ?? 0) + 1;
-    if (r.userId === userId) myReaction = r.emoji;
-  }
-  return { reactions, myReaction };
-}
+// Who may read, react and publish: server/announcements/announcements.ts,
+// shared with the phone.
 
 // ---- Reads -----------------------------------------------------------------
 
-/**
- * When this announcement's text last changed, or null if it still says exactly
- * what it said when it was published.
- *
- * `updatedAt` carries the answer. It is the only timestamp the row has, and
- * the write paths below keep it truthful: togglePin and a save that leaves the
- * wording alone both carry the previous value forward instead of letting
- * @updatedAt stamp an edit that never happened. So a moved `updatedAt` means
- * the words moved, which is the thing the read rows have to be measured
- * against — a read is only evidence about the text that existed when it was
- * taken.
- */
-function revisedAt(an: { createdAt: Date; updatedAt: Date }): Date | null {
-  // Publishing writes both stamps from the same statement; a stray millisecond
-  // between them is not an edit.
-  return an.updatedAt.getTime() - an.createdAt.getTime() > 1000
-    ? an.updatedAt
-    : null;
-}
+// revisedAt (when the wording last changed) is shared with the phone.
 
 /** All announcements, pinned first then newest, with the caller's reaction. */
 export async function listAnnouncements(): Promise<Result<AnnouncementDTO[]>> {
@@ -248,35 +209,15 @@ export async function markAnnouncementsRead(
   if (!canParticipate(a.role)) return { success: false, error: "Not authorized" };
   if (ids.length === 0) return { success: true, data: { marked: 0 } };
 
-  const wanted = ids.slice(0, 200);
-  const res = await db.announcementRead.createMany({
-    data: wanted.map((announcementId) => ({
-      announcementId,
-      userId: a.user.id,
-    })),
-    skipDuplicates: true,
-  });
-
-  // Only announcements that have actually been edited can hold a stamp worth
-  // moving, and almost none of them have been, so this costs one lookup and
-  // usually no writes at all.
-  const edited = (
-    await db.announcement.findMany({
-      where: { id: { in: wanted } },
-      select: { id: true, createdAt: true, updatedAt: true },
-    })
-  ).flatMap((an) => {
-    const rev = revisedAt(an);
-    return rev ? [{ id: an.id, rev }] : [];
-  });
-  for (const { id, rev } of edited) {
-    await db.announcementRead.updateMany({
-      where: { announcementId: id, userId: a.user.id, readAt: { lt: rev } },
-      data: { readAt: new Date() },
-    });
-  }
-
-  return { success: true, data: { marked: res.count } };
+  const actor = actorFromSession(
+    { id: a.user.id, name: a.user.name, email: "", role: a.role },
+    await requireOrgId(),
+  );
+  // Only this company's announcements are written; unknown ids and another
+  // company's are ignored rather than failing the whole call.
+  const res = await markAnnouncementsReadFor(actor, ids, new Date());
+  if (!res.ok) return { success: false, error: res.message };
+  return { success: true, data: { marked: res.value.marked } };
 }
 
 // ---- Writes ----------------------------------------------------------------
@@ -470,42 +411,12 @@ export async function reactToAnnouncement(
   if ("error" in a) return { success: false, error: a.error };
   if (!canParticipate(a.role)) return { success: false, error: "Not authorized" };
 
-  if (!REACTION_EMOJIS.has(emoji)) {
-    return { success: false, error: "Unsupported reaction" };
-  }
+  const actor = actorFromSession(
+    { id: a.user.id, name: a.user.name, email: "", role: a.role },
+    await requireOrgId(),
+  );
+  const res = await toggleAnnouncementReaction(actor, announcementId, emoji);
+  if (!res.ok) return { success: false, error: res.message };
 
-  const announcement = await db.announcement.findUnique({
-    where: { id: announcementId },
-  });
-  if (!announcement) return { success: false, error: "Announcement not found" };
-
-  const existing = await db.announcementReaction.findUnique({
-    where: {
-      announcementId_userId: { announcementId, userId: a.user.id },
-    },
-  });
-
-  try {
-    if (!existing) {
-      await db.announcementReaction.create({
-        data: { announcementId, userId: a.user.id, emoji },
-      });
-    } else if (existing.emoji === emoji) {
-      await db.announcementReaction.delete({ where: { id: existing.id } });
-    } else {
-      await db.announcementReaction.update({
-        where: { id: existing.id },
-        data: { emoji },
-      });
-    }
-  } catch {
-    // Unique-constraint race (double click) — fall through to the fresh read.
-  }
-
-  const rows = await db.announcementReaction.findMany({
-    where: { announcementId },
-    select: { userId: true, emoji: true },
-  });
-
-  return { success: true, data: countReactions(rows, a.user.id) };
+  return { success: true, data: countReactions(res.value, a.user.id) };
 }
