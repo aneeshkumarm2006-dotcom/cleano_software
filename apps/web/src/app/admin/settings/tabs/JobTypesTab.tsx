@@ -9,13 +9,13 @@ import { updateAppSetting } from "../../actions/updateAppSetting";
 import Select from "@/components/ui/Select";
 import { AppSettingRecord, getSetting } from "../types";
 import { SectionCard, Feedback, Msg } from "./_shared";
-import { SERVICE_CATEGORIES } from "@/lib/calendar-labels";
 import {
+  SERVICE_CATEGORIES,
   DEFAULT_SERVICE_CATALOG,
   SERVICE_CATALOG_KEY,
   inferCategoryFromName,
   normalizeServiceCatalog,
-} from "@/lib/service-catalog";
+} from "@bookmops/core/services";
 
 interface JobTypesTabProps {
   settings: AppSettingRecord[];

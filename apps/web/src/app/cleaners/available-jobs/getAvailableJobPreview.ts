@@ -7,13 +7,13 @@ import { claimableJobsWhere } from "@/lib/cleaner-jobs";
 import {
   isCategoryAllowed,
   CATEGORY_BLOCKED_MESSAGE,
-} from "@/lib/service-permissions";
+  jobTypeLabel,
+} from "@bookmops/core/services";
 import { getCleanerRateInputs } from "@/lib/cleaner-rates";
 import { computeJobPayout, fallbackRateInput } from "@bookmops/core/pay";
 import { getServiceCatalogWithLabels } from "@/lib/service-catalog.server";
-import { jobTypeLabel } from "@/lib/calendar-labels";
 import { sanitizeCleanerNotes } from "@/lib/cleaner-notes";
-import { formatAddressLine } from "@/lib/client-address";
+import { formatAddressLine } from "@bookmops/core/property";
 import { addOnQuantity } from "@/lib/job-money";
 import { resolveChecklistTemplates } from "@/lib/checklist-triggers";
 import type {

@@ -12,7 +12,7 @@ import {
   PRIORITY_LABEL_TEXT,
   SERVICE_CATEGORIES,
   normaliseLabelMap,
-} from "@/lib/calendar-labels";
+} from "@bookmops/core/services";
 
 interface Props {
   settings: AppSettingRecord[];

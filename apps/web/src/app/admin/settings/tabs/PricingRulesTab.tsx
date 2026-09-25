@@ -22,7 +22,7 @@ import {
   normalizeServicePricing,
   DISCOUNTABLE_CATEGORIES,
   FREQ_DISCOUNT_KEYS,
-} from "@/lib/service-pricing";
+} from "@bookmops/core/services";
 import {
   PC_DEPOSIT_DEFAULT_USD,
   PC_DEPOSIT_MAX_USD,

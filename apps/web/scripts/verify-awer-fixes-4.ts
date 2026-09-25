@@ -78,8 +78,8 @@ import {
   normalizeAddressKey,
   resolveAddressParts,
   splitAptFromLocation,
-} from "../src/lib/client-address";
-import { postConstructionBasePrice } from "../src/lib/service-pricing";
+} from "@bookmops/core/property";
+import { postConstructionBasePrice } from "@bookmops/core/services";
 import type { CleanerRateInput } from "@bookmops/core/pay";
 
 let pass = 0,

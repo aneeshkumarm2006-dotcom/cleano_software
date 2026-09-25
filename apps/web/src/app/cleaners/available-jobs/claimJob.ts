@@ -7,7 +7,7 @@ import { revalidatePath } from "next/cache";
 import {
   isCategoryAllowed,
   CATEGORY_BLOCKED_MESSAGE,
-} from "@/lib/service-permissions";
+} from "@bookmops/core/services";
 import { openForClaimFilter, quoteSettledFilter } from "@/lib/cleaner-jobs";
 import { isAwaitingQuote } from "@/lib/quote-status";
 import { isOnHold } from "@/lib/job-hold";

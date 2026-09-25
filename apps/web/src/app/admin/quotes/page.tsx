@@ -2,7 +2,7 @@ import { requireAdmin } from "@/lib/page-guards";
 import { db } from "@/lib/org-db";
 import { getSetting } from "@/lib/settings";
 import { getServiceCatalogWithLabels } from "@/lib/service-catalog.server";
-import { serviceOptions } from "@/lib/service-catalog";
+import { serviceOptions } from "@bookmops/core/services";
 import {
   QUOTE_PAGE_CONFIG_KEY,
   normalizeQuotePageConfig,

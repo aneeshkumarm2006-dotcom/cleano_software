@@ -10,7 +10,7 @@ import {
   isIndustryFilter,
   type IndustryFilter,
   type JobIndustry,
-} from "@/lib/calendar-labels";
+} from "@bookmops/core/services";
 import { formatDate, storeCivilDayRange } from "@/lib/timezone";
 
 /**

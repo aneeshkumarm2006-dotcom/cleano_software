@@ -47,16 +47,14 @@ import {
   PROPERTY_TYPES,
   isPropertyType,
   type PropertyType,
-} from "@/lib/property-type";
-import { formatPropertySize } from "@/lib/property-size";
-import { DEFAULT_TAX_RATES, type TaxRates } from "@/lib/tax";
-import {
+  formatPropertySize,
   NEW_ADDRESS,
   addressOptionLabel,
   pickDefaultAddress,
   stripDuplicatedApt,
   type SavedAddress,
-} from "@/lib/client-address";
+} from "@bookmops/core/property";
+import { DEFAULT_TAX_RATES, type TaxRates } from "@/lib/tax";
 import { tzInputParts } from "@/lib/time";
 // Sept 10, item 6. This picker ran on the BROWSER's clock, so an admin in
 // Calgary saw Calgary's today and Calgary's "now" written onto a Montreal job.
@@ -65,12 +63,14 @@ import { tzInputParts } from "@/lib/time";
 import { tzToday } from "@/lib/tz-calendar";
 import { storeTimeKey, storeTzLabel } from "@/lib/timezone";
 import { taxLines } from "@/lib/tax";
-import { isSqftJobType, moveInOutBasePrice } from "@/lib/service-pricing";
 import {
+  isSqftJobType,
+  moveInOutBasePrice,
   DEFAULT_SERVICE_CATALOG,
   resolveServiceValue,
   serviceOptions as catalogServiceOptions,
-} from "@/lib/service-catalog";
+  categoryMismatchWarning,
+} from "@bookmops/core/services";
 import {
   CHECKLIST_AUTO_LABEL,
   checklistFieldHint,
@@ -87,7 +87,6 @@ import {
   AssignmentWarningPanel,
   AvailabilityLink,
 } from "@/components/admin/AssignmentIndicators";
-import { categoryMismatchWarning } from "@/lib/service-permissions";
 import { DISCOUNT_REASONS, NO_REASON_LABEL } from "@/lib/discount-reasons";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";

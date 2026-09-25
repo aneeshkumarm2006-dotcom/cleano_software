@@ -24,7 +24,7 @@ import { useRowSelection } from "@/components/common/useRowSelection";
 import BulkActionBar, { BulkAction } from "@/components/common/BulkActionBar";
 import { bulkSoftDelete, bulkRestore } from "@/lib/bulk/actions";
 import { storeTz } from "@/lib/timezone";
-import { jobTypeLabel } from "@/lib/calendar-labels";
+import { jobTypeLabel } from "@bookmops/core/services";
 import type { QuotePageConfig } from "@/lib/quote-page-config";
 import QuoteFormTab from "./QuoteFormTab";
 

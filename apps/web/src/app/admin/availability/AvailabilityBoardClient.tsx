@@ -14,7 +14,7 @@ import Badge from "@/components/ui/Badge";
 import DatePicker from "@/components/ui/DatePicker";
 import TimePicker from "@/components/ui/TimePicker";
 import AvailabilityWeekGrid from "@/components/admin/AvailabilityWeekGrid";
-import { PERMISSION_CATEGORIES, categoryLabel } from "@/lib/service-permissions";
+import { PERMISSION_CATEGORIES, categoryLabel } from "@bookmops/core/services";
 import {
   AVAILABILITY_RESULT_LABEL,
   AVAILABILITY_RESULT_TONE,

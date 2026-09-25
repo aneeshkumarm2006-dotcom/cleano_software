@@ -72,7 +72,7 @@ import {
   normalizeBookingPageConfig,
   resolveField,
 } from "../src/lib/booking-page-config";
-import { postConstructionBasePrice } from "../src/lib/service-pricing";
+import { postConstructionBasePrice } from "@bookmops/core/services";
 import { bookingPhotoFolderFor } from "../src/lib/asset-paths";
 
 let pass = 0;

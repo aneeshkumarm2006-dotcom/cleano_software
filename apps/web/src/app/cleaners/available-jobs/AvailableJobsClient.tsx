@@ -16,9 +16,9 @@ import {
   startOfMonth,
   type AvailableJobsView,
 } from "@/lib/available-jobs-calendar";
-import { jobTypeLabel } from "@/lib/calendar-labels";
+import { jobTypeLabel } from "@bookmops/core/services";
 import { sanitizeCleanerNotes } from "@/lib/cleaner-notes";
-import { propertyTypeLabel } from "@/lib/property-type";
+import { propertyTypeLabel } from "@bookmops/core/property";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import CustomDropdown from "@/components/ui/custom-dropdown";

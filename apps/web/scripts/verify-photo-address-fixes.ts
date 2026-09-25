@@ -42,7 +42,7 @@ import {
   mergeBlankPropertySize,
   parsePropertyCount,
   readPropertySize,
-} from "../src/lib/property-size";
+} from "@bookmops/core/property";
 import { SAVED_ADDRESS_SELECT } from "../src/lib/client-address-store";
 import { SERIES_PROPAGATED_FIELDS } from "../src/lib/job-series";
 
@@ -610,7 +610,7 @@ ok(
     "script without a database",
   // IMPORT statements only. These files discuss Prisma in their headers — the
   // rule is that they must not REACH it, not that they must not mention it.
-  [JOB_PHOTOS_LIB, "src/lib/property-size.ts", "src/lib/client-address.ts"].every(
+  [JOB_PHOTOS_LIB, "../../packages/core/src/property/property-size.ts", "../../packages/core/src/property/client-address.ts"].every(
     (p) =>
       !/^\s*import[^;]*from\s+["'](@\/db|@prisma\/client|server-only)["']/m.test(
         read(p)

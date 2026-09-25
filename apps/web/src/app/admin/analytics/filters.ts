@@ -9,8 +9,8 @@
 // Kept free of server-only imports so it can be exercised directly by a test
 // and read from a client component if one ever needs the same predicate.
 
-import { jobMatchesIndustry, parseIndustryFilter } from "@/lib/calendar-labels";
-import type { IndustryFilter } from "@/lib/calendar-labels";
+import { jobMatchesIndustry, parseIndustryFilter } from "@bookmops/core/services";
+import type { IndustryFilter } from "@bookmops/core/services";
 import { storeCivilDayRange } from "@/lib/timezone";
 
 export interface AnalyticsFilterState {

@@ -17,7 +17,7 @@ import { createInventoryRequest } from "@/app/admin/actions/createInventoryReque
 import type { ProductLocationStock } from "@/app/admin/actions/getLocationStock.types";
 import type { MissingEquipmentItem } from "@/app/admin/actions/checkEquipmentForJob.types";
 import { fmtDate } from "@/lib/time";
-import { jobTypeLabel } from "@/lib/calendar-labels";
+import { jobTypeLabel } from "@bookmops/core/services";
 
 interface JobInfo {
   id: string;

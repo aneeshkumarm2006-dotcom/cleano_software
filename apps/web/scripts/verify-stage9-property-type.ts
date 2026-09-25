@@ -28,12 +28,12 @@ import {
   parsePropertyType,
   propertyTypeLabel,
   propertyTypeShortLabel,
-} from "../src/lib/property-type";
+} from "@bookmops/core/property";
 import {
   CATEGORY_ALIASES,
   normalizeJobType,
   jobIndustry,
-} from "../src/lib/calendar-labels";
+} from "@bookmops/core/services";
 import { SERIES_PROPAGATED_FIELDS } from "../src/lib/job-series";
 import {
   BOOKING_PAGE_DEFAULTS,
@@ -190,7 +190,7 @@ check(
 // header names `calendar-labels` and `@prisma/client` in prose, explaining
 // exactly why it doesn't import them, and a substring check would read that
 // explanation as the violation it warns about.
-const PROPERTY_MODULE = read("src/lib/property-type.ts");
+const PROPERTY_MODULE = read("../../packages/core/src/property/property-type.ts");
 const propertyImports = [
   ...PROPERTY_MODULE.matchAll(/^\s*(?:import|export)\b[^;]*?\bfrom\s*["']([^"']+)["']/gm),
   ...PROPERTY_MODULE.matchAll(/\brequire\s*\(\s*["']([^"']+)["']\s*\)/g),

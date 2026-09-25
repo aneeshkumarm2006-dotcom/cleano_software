@@ -2,7 +2,7 @@
 // still exist in historical `Job.jobType` data.
 //
 // THE service list now lives in Settings → Job Types and is read via
-// `src/lib/service-catalog.ts` (awer_fixes.pdf item 20). Before that, this file
+// `packages/core/src/services/service-catalog.ts` (awer_fixes.pdf item 20). Before that, this file
 // was one of SIX hardcoded job-type lists, and it offered Move-in and Move-out
 // as separate services even where the business sells a single combined one.
 //

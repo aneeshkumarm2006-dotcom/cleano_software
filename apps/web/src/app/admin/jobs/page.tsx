@@ -12,7 +12,7 @@ import { getBookingConfig } from "../../(book)/actions/getBookingConfig";
 import { getTaxRates } from "@/lib/tax.server";
 import { getServicePricingConfig } from "@/lib/booking-pricing";
 import { getServiceCatalog } from "@/lib/service-catalog.server";
-import { serviceOptions } from "@/lib/service-catalog";
+import { serviceOptions } from "@bookmops/core/services";
 import { activeSubtotal } from "@/lib/job-money";
 import { startOfStoreDay } from "@/lib/timezone";
 

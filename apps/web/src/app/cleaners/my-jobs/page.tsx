@@ -2,7 +2,7 @@ import { db } from "@/lib/org-db";
 import { requireCleaner } from "@/lib/page-guards";
 import { getServiceCatalog } from "@/lib/service-catalog.server";
 import { loadPerJobAverages } from "@/lib/inventory-forecast.server";
-import { serviceOptions } from "@/lib/service-catalog";
+import { serviceOptions, serviceLabelMap } from "@bookmops/core/services";
 import { Prisma } from "@prisma/client";
 import {
   cleanerAssignedWhere,
@@ -19,7 +19,6 @@ import { JobsLoadingProvider } from "./JobsLoadingContext";
 import { ClearLoadingOnMount } from "./ClearLoadingOnMount";
 import { JobRow } from "./JobRow";
 import NextJobCard from "./NextJobCard";
-import { serviceLabelMap } from "@/lib/service-catalog";
 import { Calendar } from "lucide-react";
 import PendingInvitesPanel from "./PendingInvitesPanel";
 import { cleanerPayoutForJobs } from "@/lib/cleaner-pay-display";

@@ -22,9 +22,8 @@ import {
   SAVED_ADDRESS_ORDER,
   SAVED_ADDRESS_SELECT,
 } from "@/lib/client-address-store";
-import type { SavedAddress } from "@/lib/client-address";
-import { parsePropertyCount, readPropertySize } from "@/lib/property-size";
-import { parsePropertyType } from "@/lib/property-type";
+import type { SavedAddress } from "@bookmops/core/property";
+import { parsePropertyCount, readPropertySize, parsePropertyType } from "@bookmops/core/property";
 
 /** The signed-in customer's Client row, by the lowercased-email join key the
  *  whole portal uses. Null when there is no session or no linked record. */

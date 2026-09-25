@@ -22,7 +22,7 @@ import {
 import {
   PERMISSION_CATEGORIES,
   canonicalPermissionCategory,
-} from "./service-permissions";
+} from "@bookmops/core/services";
 
 export const AVAILABILITY_VIEW_PATH = "/admin/availability";
 

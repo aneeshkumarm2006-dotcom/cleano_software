@@ -9,7 +9,7 @@ import { useJobsLoading } from "./JobsLoadingContext";
 import {
   DEFAULT_SERVICE_CATALOG,
   serviceOptions as catalogServiceOptions,
-} from "@/lib/service-catalog";
+} from "@bookmops/core/services";
 
 export function JobsFilters({
   serviceOptions = [],

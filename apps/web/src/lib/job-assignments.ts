@@ -17,7 +17,7 @@ import {
   type AvailabilityEvaluation,
   type AvailabilityWindow,
 } from "@/lib/availability";
-import { categoryMismatchWarning } from "@/lib/service-permissions";
+import { categoryMismatchWarning } from "@bookmops/core/services";
 import type { AvailabilityConflict } from "@/app/admin/actions/checkAvailability.types";
 
 /**

@@ -14,7 +14,7 @@ import {
 import Modal from "@/components/ui/Modal";
 import { runBookingKoalaImport } from "@/app/admin/actions/runBookingKoalaImport";
 import type { ImportReport } from "@/lib/bookingkoala/core";
-import { propertyTypeLabel } from "@/lib/property-type";
+import { propertyTypeLabel } from "@bookmops/core/property";
 import { parseCsv } from "@/lib/csv/parse";
 
 const STATUS_COLOR: Record<string, string> = {

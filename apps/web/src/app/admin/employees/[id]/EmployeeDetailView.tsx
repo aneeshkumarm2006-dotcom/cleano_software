@@ -28,7 +28,7 @@ import { setFieldLead } from "../../actions/setFieldLead";
 import { setCleanerProductQuantity } from "../../actions/setCleanerProductQuantity";
 import { setEmployeeServiceCategories } from "../../actions/setEmployeeServiceCategories";
 import { getEmployeeFileUrl } from "../../actions/getEmployeeFileUrl";
-import { PERMISSION_CATEGORIES } from "@/lib/service-permissions";
+import { PERMISSION_CATEGORIES, jobTypeLabel } from "@bookmops/core/services";
 import { ITEM_TYPE_LABEL, type ItemType, unitsRemovedFromKit } from "@bookmops/core/inventory";
 import type {
   AttentionTone,
@@ -59,7 +59,6 @@ import {
 import StrikesPanel from "./StrikesPanel";
 import type { StrikeLevel } from "@/lib/strikes-constants";
 import type { StrikeReason } from "@prisma/client";
-import { jobTypeLabel } from "@/lib/calendar-labels";
 import BackToList from "@/components/common/BackToList";
 
 type TabView = "overview" | "jobs" | "products" | "availability" | "accountability";

@@ -26,7 +26,7 @@ import {
   type EmployeeDeletionPreview,
 } from "../actions/deleteEmployee";
 import { setEmployeePassword } from "../actions/setEmployeePassword";
-import { PERMISSION_CATEGORIES } from "@/lib/service-permissions";
+import { PERMISSION_CATEGORIES } from "@bookmops/core/services";
 
 interface Employee {
   id: string;

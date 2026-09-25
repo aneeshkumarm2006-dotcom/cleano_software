@@ -35,7 +35,7 @@
  * public form can both import it.
  */
 
-import { SERVICE_CATEGORY_KEYS } from "./calendar-labels";
+import { SERVICE_CATEGORY_KEYS } from "@bookmops/core/services";
 
 /* ------------------------------- vocabulary ------------------------------- */
 

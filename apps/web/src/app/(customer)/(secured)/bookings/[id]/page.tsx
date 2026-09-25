@@ -10,8 +10,7 @@ import {
   resolvePricingMode,
 } from "@/lib/job-money";
 import { sanitizeCleanerNotes } from "@/lib/cleaner-notes";
-import { propertyTypeLabel } from "@/lib/property-type";
-import { formatAddressLine } from "@/lib/client-address";
+import { propertyTypeLabel, formatAddressLine } from "@bookmops/core/property";
 import { formatDeposit, resolveDepositCredit } from "@/lib/booking-deposit";
 import { isAwaitingQuote, quoteStatusLabel } from "@/lib/quote-status";
 import { fmtDateTime } from "@/lib/time";

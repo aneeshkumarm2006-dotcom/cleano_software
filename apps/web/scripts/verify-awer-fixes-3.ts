@@ -69,7 +69,7 @@ import {
   stripBillingSegments,
 } from "../src/lib/cleaner-notes";
 import { needsPopup } from "../src/app/(book)/book/types";
-// Stage 4 (item 2). Pure by design — src/lib/client-address.ts imports no
+// Stage 4 (item 2). Pure by design — packages/core/src/property/client-address.ts imports no
 // Prisma, precisely so these can be exercised here without a database.
 import {
   autoAddressLabel,
@@ -77,7 +77,7 @@ import {
   normalizeAddressKey,
   pickDefaultAddress,
   stripDuplicatedApt,
-} from "../src/lib/client-address";
+} from "@bookmops/core/property";
 // Stage 5 (items 12–15). Same reasoning as Stage 4: the rules live in pure
 // modules with no Prisma import, so they are exercised here rather than grepped.
 import {
@@ -99,15 +99,16 @@ import { resolveClockEntry } from "../src/lib/time-tracking";
 import { CLOCK_IN_BLOCKED_STATUSES } from "../src/lib/cleaner-jobs";
 // Stage 6 (items 16–17). Both modules are deliberately Prisma-free so the
 // permission rule and the availability evaluator can be exercised for real here.
-import { CATEGORY_ALIASES, normalizeJobType } from "../src/lib/calendar-labels";
 import {
+  CATEGORY_ALIASES,
+  normalizeJobType,
   MOVE_FAMILY,
   PERMISSION_CATEGORIES,
   canonicalPermissionCategory,
   categoryMismatchWarning,
   isCategoryAllowed,
   normalizeAllowedCategories,
-} from "../src/lib/service-permissions";
+} from "@bookmops/core/services";
 import { evaluateAvailability } from "../src/lib/availability";
 // Stage 7 (item 19). Same reasoning again: the upload rule is a pure module so
 // the browser pre-check and the server check are one function, exercised here.

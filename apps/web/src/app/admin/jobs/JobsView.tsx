@@ -18,13 +18,14 @@ import { bulkCancelJobs } from "../actions/bulkCancelJobs";
 import {
   DEFAULT_SERVICE_CATALOG,
   serviceOptions as catalogServiceOptions,
-} from "@/lib/service-catalog";
+  normalizeJobType,
+  jobTypeLabel,
+} from "@bookmops/core/services";
 import JobChatUnreadPill from "@/components/JobChatUnread";
 import { bulkSetJobStatus } from "../actions/bulkSetJobStatus";
 import { bulkAssignCleaner } from "../actions/bulkAssignCleaner";
 import { togglePaymentReceived, toggleInvoiceSent } from "../actions/toggleJobPaymentStatus";
 import { generateInvoiceFromJob } from "../actions/generateInvoiceFromJob";
-import { normalizeJobType, jobTypeLabel } from "@/lib/calendar-labels";
 import { fmtDate, fmtTime } from "@/lib/time";
 import { avatarColor, initials } from "@/lib/avatar";
 import {

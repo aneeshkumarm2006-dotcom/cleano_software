@@ -4,7 +4,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { db } from "@/lib/org-db";
 import { revalidatePath } from "next/cache";
-import { jobTypeLabel } from "@/lib/calendar-labels";
+import { jobTypeLabel } from "@bookmops/core/services";
 import { isJobTaxExempt } from "@/lib/tax.server";
 import { computeJobMoney } from "@/lib/job-money";
 import { getServiceCatalogWithLabels } from "@/lib/service-catalog.server";

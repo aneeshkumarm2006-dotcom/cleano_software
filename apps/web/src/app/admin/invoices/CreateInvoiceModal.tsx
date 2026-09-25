@@ -14,7 +14,7 @@ import {
   getClientJobsForInvoice,
   type InvoiceJobOption,
 } from "../actions/getClientJobsForInvoice";
-import { jobTypeLabel } from "@/lib/calendar-labels";
+import { jobTypeLabel } from "@bookmops/core/services";
 import { fmtDate } from "@/lib/time";
 
 interface ClientOption {

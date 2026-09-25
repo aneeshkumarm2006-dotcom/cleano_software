@@ -21,7 +21,7 @@ import {
   jobIndustry,
   INDUSTRY_UNSPECIFIED,
   type JobIndustry,
-} from "@/lib/calendar-labels";
+} from "@bookmops/core/services";
 import {
   addStoreDays,
   addStoreMonths,

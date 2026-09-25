@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import Button from "@/components/ui/Button";
 import JobModal from "../JobModal";
-import { formatAddressLine } from "@/lib/client-address";
+import { formatAddressLine, formatPropertySize } from "@bookmops/core/property";
 
 // Live "on the way" map (#10). Leaflet needs browser APIs, so load client-only.
 const LiveLocationMap = dynamic(() => import("./LiveLocationMap"), {
@@ -86,7 +86,7 @@ import RatingExclusionControl from "./RatingExclusionControl";
 import { issueRefund } from "../../actions/issueRefund";
 import JobChatThread from "@/components/JobChatThread";
 import JobChatModeration from "@/components/JobChatModeration";
-import { normalizeJobType, jobTypeLabel } from "@/lib/calendar-labels";
+import { normalizeJobType, jobTypeLabel } from "@bookmops/core/services";
 import {
   ADDON_INCLUDED_LABEL,
   addOnAmountIsIncluded,
@@ -102,7 +102,6 @@ import {
 } from "@/lib/job-money";
 import { taxLines } from "@/lib/tax";
 import { formatHours, hourlyLineLabel } from "@/lib/hourly-billing";
-import { formatPropertySize } from "@/lib/property-size";
 import {
   addOnKey,
   CHECKLIST_TIER_HINT,

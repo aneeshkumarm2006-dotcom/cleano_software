@@ -2,8 +2,7 @@ import "server-only";
 
 import { db } from "@/lib/org-db";
 import { sendProviderNewJobPosted } from "@/lib/email";
-import { isCategoryAllowed } from "@/lib/service-permissions";
-import { serviceLabelMap } from "@/lib/service-catalog";
+import { isCategoryAllowed, serviceLabelMap } from "@bookmops/core/services";
 import { getServiceCatalog } from "@/lib/service-catalog.server";
 import { computeJobPayout } from "@bookmops/core/pay";
 import { getCleanerRateInputs } from "@/lib/cleaner-rates";

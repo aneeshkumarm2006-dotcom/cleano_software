@@ -19,7 +19,7 @@ import { getQuote } from "../actions/getQuote";
 import { submitBooking } from "../actions/submitBooking";
 import { getBookingConfig } from "../actions/getBookingConfig";
 import { getMyAddresses } from "../../(customer)/actions/clientAddresses";
-import type { SavedAddress } from "@/lib/client-address";
+import type { SavedAddress } from "@bookmops/core/property";
 import { calculateTax, taxLines, type TaxRates } from "@/lib/tax";
 import { addOnLineTotal, sumAddOns } from "@/lib/job-money";
 import { isValidEmail, isValidPhone } from "@bookmops/core/validation";

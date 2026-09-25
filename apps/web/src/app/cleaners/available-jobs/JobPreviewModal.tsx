@@ -6,7 +6,7 @@ import Modal from "@/components/ui/Modal";
 import { fmtDate, fmtTime } from "@/lib/time";
 import { getAvailableJobPreview } from "./getAvailableJobPreview";
 import type { AvailableJobPreview } from "./getAvailableJobPreview.types";
-import { propertyTypeLabel } from "@/lib/property-type";
+import { propertyTypeLabel } from "@bookmops/core/property";
 
 interface JobPreviewModalProps {
   jobId: string | null;

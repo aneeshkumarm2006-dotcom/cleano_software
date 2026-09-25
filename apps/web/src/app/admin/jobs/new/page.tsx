@@ -30,16 +30,24 @@ import {
   roundBilledHours,
   type JobBillingType,
 } from "@/lib/hourly-billing";
-import { parsePropertyType, type PropertyType } from "@/lib/property-type";
-import { formatPropertySize, parsePropertyCount } from "@/lib/property-size";
-import { isSqftJobType, moveInOutBasePrice } from "@/lib/service-pricing";
+import {
+  parsePropertyType,
+  type PropertyType,
+  formatPropertySize,
+  parsePropertyCount,
+} from "@bookmops/core/property";
+import {
+  isSqftJobType,
+  moveInOutBasePrice,
+  serviceOptions,
+  resolveServiceValue,
+} from "@bookmops/core/services";
 import { tzWallClockToUtc, tzInputParts } from "@/lib/time";
 import { syncJobAssignments } from "@/lib/job-assignments";
 import { clearWorkTrailForReschedule } from "@/lib/job-reschedule";
 import { requireOwnerAdmin } from "@/lib/page-guards";
 import { deleteJob as archiveJob } from "@/app/admin/actions/deleteJob";
 import { getServiceCatalog } from "@/lib/service-catalog.server";
-import { serviceOptions, resolveServiceValue } from "@/lib/service-catalog";
 import { storeInputParts } from "@/lib/timezone";
 import CleanerSelector from "./CleanerSelector";
 import JobTypeSelector from "./JobTypeSelector";

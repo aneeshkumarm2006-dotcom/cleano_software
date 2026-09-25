@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { jobTypeLabel } from "@/lib/calendar-labels";
+import { jobTypeLabel } from "@bookmops/core/services";
 import {
   Search, Plus, FileText, DollarSign, AlertTriangle,
   ChevronLeft, ChevronRight, Send, CheckCircle2, Clock, XCircle,

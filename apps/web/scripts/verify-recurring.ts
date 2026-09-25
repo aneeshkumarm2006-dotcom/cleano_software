@@ -1,7 +1,7 @@
 // Verification for fix list item 9 — recurring jobs with editable instances.
 import fs from "node:fs";
 import { nextOccurrence, recurrenceCount } from "../src/lib/booking-pricing";
-import { FREQ_DISCOUNT_KEYS } from "../src/lib/service-pricing";
+import { FREQ_DISCOUNT_KEYS } from "@bookmops/core/services";
 import { SERIES_PROPAGATED_FIELDS, seriesRootId } from "../src/lib/job-series";
 
 let pass = 0, fail = 0;

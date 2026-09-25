@@ -4,7 +4,7 @@ import { db } from "@/lib/org-db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { normalizeAllowedCategories } from "@/lib/service-permissions";
+import { normalizeAllowedCategories } from "@bookmops/core/services";
 import { checkCleanerSeats, takesASeat } from "@/lib/plan-limits";
 import { unassignFutureJobs } from "@/lib/cleaner-deactivation";
 

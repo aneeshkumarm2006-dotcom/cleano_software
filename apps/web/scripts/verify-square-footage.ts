@@ -5,7 +5,7 @@ import {
   isSqftService,
   moveInOutBasePrice,
   SERVICE_PRICING_DEFAULTS,
-} from "../src/lib/service-pricing";
+} from "@bookmops/core/services";
 
 let pass = 0, fail = 0;
 function check(name: string, actual: unknown, expected: unknown) {

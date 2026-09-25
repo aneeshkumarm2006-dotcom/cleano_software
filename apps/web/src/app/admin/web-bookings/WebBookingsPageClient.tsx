@@ -13,7 +13,7 @@ import {
   HardHat,
   Camera,
 } from "lucide-react";
-import { jobTypeLabel } from "@/lib/calendar-labels";
+import { jobTypeLabel } from "@bookmops/core/services";
 import { storeTz } from "@/lib/timezone";
 import {
   QUOTE_STATUS_LABEL,

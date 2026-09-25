@@ -23,8 +23,7 @@
 import "server-only";
 import { db } from "@/lib/org-db";
 import { orgStripeStatus } from "@/lib/stripe-org";
-import { SERVICE_CATALOG_KEY } from "@/lib/service-catalog";
-import { SERVICE_PRICING_KEY } from "@/lib/service-pricing";
+import { SERVICE_CATALOG_KEY, SERVICE_PRICING_KEY } from "@bookmops/core/services";
 
 export interface SetupStep {
   id: string;

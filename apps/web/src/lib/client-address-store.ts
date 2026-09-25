@@ -13,8 +13,9 @@ import {
   autoAddressLabel,
   normalizeAddressKey,
   type AddressParts,
-} from "./client-address";
-import { mergeBlankPropertySize, readPropertySize } from "./property-size";
+  mergeBlankPropertySize,
+  readPropertySize,
+} from "@bookmops/core/property";
 
 export interface UpsertAddressInput extends AddressParts {
   address: string;

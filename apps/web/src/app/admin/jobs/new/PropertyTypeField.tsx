@@ -22,7 +22,7 @@ import {
   PROPERTY_TYPE_LABEL,
   isPropertyType,
   type PropertyType,
-} from "@/lib/property-type";
+} from "@bookmops/core/property";
 import { onAddressPrefill } from "./address-prefill";
 
 const UNSET = "";

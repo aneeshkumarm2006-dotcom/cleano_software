@@ -14,20 +14,19 @@ import CustomerModal from "@/components/customer/Modal";
 import { NumberStepper, QuantityStepper, ChoiceButton } from "@/components/customer/atoms";
 import { addonIcon } from "@/lib/addon-icons";
 import { MAX_ADDON_QUANTITY } from "@/lib/job-money";
-import { normalizeJobType } from "@/lib/calendar-labels";
+import { normalizeJobType } from "@bookmops/core/services";
 import {
   PROPERTY_TYPE_HINT,
   PROPERTY_TYPE_LABEL,
   PROPERTY_TYPES,
-} from "@/lib/property-type";
-import PremiumSelect from "@/components/ui/PremiumSelect";
-import {
   NEW_ADDRESS,
   addressOptionLabel,
   stripDuplicatedApt,
   type SavedAddress,
-} from "@/lib/client-address";
-import { formatPropertySize, readPropertySize } from "@/lib/property-size";
+  formatPropertySize,
+  readPropertySize,
+} from "@bookmops/core/property";
+import PremiumSelect from "@/components/ui/PremiumSelect";
 import { checkServiceArea } from "../../actions/checkServiceArea";
 import BookingPhotoUpload from "./BookingPhotoUpload";
 

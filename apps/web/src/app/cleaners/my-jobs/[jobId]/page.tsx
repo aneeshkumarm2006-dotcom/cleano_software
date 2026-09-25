@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/org-db";
 import { getSetting } from "@/lib/settings";
 import { maskedNumberForJob } from "@/lib/phone-masking";
-import { jobTypeLabel } from "@/lib/calendar-labels";
+import { jobTypeLabel } from "@bookmops/core/services";
 import { getServiceCatalogWithLabels } from "@/lib/service-catalog.server";
 import { fmtDate, fmtDateTime, fmtTime } from "@/lib/time";
 import { storeTzLabel } from "@/lib/timezone";
@@ -20,10 +20,13 @@ import {
   jobStaffing,
 } from "@/lib/cleaner-jobs";
 import { Calendar, Users, Package, Zap, Camera, ClipboardList, ListChecks, MapPin, DollarSign, KeyRound, DoorOpen, TriangleAlert } from "lucide-react";
-import { formatAddressLine, resolveAddressParts } from "@/lib/client-address";
+import {
+  formatAddressLine,
+  resolveAddressParts,
+  propertyTypeLabel,
+} from "@bookmops/core/property";
 import { addOnQuantity } from "@/lib/job-money";
 import { formatHours } from "@/lib/hourly-billing";
-import { propertyTypeLabel } from "@/lib/property-type";
 import { afterPhotosAllowed, photoExpectationLine } from "@/lib/job-photos";
 import {
   isOpenIssueStatus,

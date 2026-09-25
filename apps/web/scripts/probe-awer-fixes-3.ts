@@ -9,7 +9,7 @@
  *   npx tsx scripts/probe-awer-fixes-3.ts
  */
 import { PrismaClient } from "@prisma/client";
-import { normalizeJobType } from "../src/lib/calendar-labels";
+import { normalizeJobType } from "@bookmops/core/services";
 import { BILLING_LINE_SOURCE } from "../src/lib/cleaner-notes";
 import { refuseOnMultiTenant } from "./_scope";
 

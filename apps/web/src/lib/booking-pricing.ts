@@ -2,8 +2,8 @@ import { db } from "@/lib/org-db";
 import { calculateTax, TaxBreakdown } from "./tax";
 import { getTaxRates } from "./tax.server";
 import { sumAddOns } from "./job-money";
-import { normalizeJobType } from "./calendar-labels";
 import {
+  normalizeJobType,
   SERVICE_PRICING_KEY,
   ServicePricingConfig,
   normalizeServicePricing,
@@ -11,7 +11,7 @@ import {
   postConstructionBasePrice,
   isSqftService,
   isHourlyService,
-} from "./service-pricing";
+} from "@bookmops/core/services";
 
 export interface PricingInput {
   serviceType?: string;

@@ -47,7 +47,7 @@ model User {
   // EMPTY = ALL allowed, so existing cleaners are unaffected and admins opt IN
   // to restricting someone. Enforced hard on the cleaner side (available jobs,
   // preview, claim); ADVISORY only on the admin side, which can always override.
-  // Values are canonical category keys — see src/lib/service-permissions.ts.
+  // Values are canonical category keys — see packages/core/src/services/service-permissions.ts.
   allowedServiceCategories     String[]                @default([])
   // Group membership — the Field Lead this cleaner reports to. Used for the
   // Field Lead's weekly group-revenue bonus (see packages/core/src/pay/field-lead-bonus.ts).
@@ -491,7 +491,7 @@ model ClientAddress {
   ///
   /// All nullable, with no defaults and no backfill: "not recorded" is the
   /// honest state for every row that predates this, and 0 bedrooms is a real
-  /// answer that a DEFAULT would forge. `src/lib/property-size.ts` holds the
+  /// answer that a DEFAULT would forge. `packages/core/src/property/property-size.ts` holds the
   /// rules; nothing here prices anything.
   propertyType       PropertyType?
   bedCount           Int?
@@ -803,7 +803,7 @@ model Job {
   /// `jobType` stays the answer to "what cleaning is this"; this answers "what
   /// kind of building". Nullable because "not recorded" is the honest state for
   /// every row written before this column and for a booking taken without it —
-  /// see src/lib/property-type.ts, which is the only place the rules live.
+  /// see packages/core/src/property/property-type.ts, which is the only place the rules live.
   propertyType                     PropertyType?
   /// Per-job checklist override (PDF #10, Stage 10). NULL — every existing row
   /// — means "resolve automatically", which is the behaviour that already
@@ -1572,7 +1572,7 @@ enum JobBillingType {
 /// the same service, which is why the BookingKoala importer folds both onto
 /// RESIDENTIAL — this column is where the property fact survives that fold.
 /// Exactly the PDF's two options (decision D8); extending it later is an enum
-/// add plus a label in `src/lib/property-type.ts`.
+/// add plus a label in `packages/core/src/property/property-type.ts`.
 enum PropertyType {
   APARTMENT_CONDO
   HOUSE

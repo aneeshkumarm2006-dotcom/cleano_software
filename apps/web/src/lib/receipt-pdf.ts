@@ -10,7 +10,7 @@ import {
 import { getTaxRates } from "@/lib/tax.server";
 import { taxLines, type TaxLine } from "@/lib/tax";
 import { resolveDepositCredit } from "@/lib/booking-deposit";
-import { formatAddressLine } from "@/lib/client-address";
+import { formatAddressLine } from "@bookmops/core/property";
 
 const BRAND = "#008C9C";
 

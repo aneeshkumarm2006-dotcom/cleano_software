@@ -12,7 +12,7 @@
 // checklist triggers and service permissions. The two got conflated by the
 // BookingKoala importer, which folds the CSV's property words — "House",
 // "Apartment", "Condo", "Townhouse", "Detached Home" — into the single service
-// category RESIDENTIAL (`CATEGORY_ALIASES` in src/lib/calendar-labels.ts), and
+// category RESIDENTIAL (`CATEGORY_ALIASES` in packages/core/src/services/calendar-labels.ts), and
 // so threw the property fact away. That aliasing is CORRECT for what it does —
 // a house clean and an apartment clean are the same service — and Stage 9 does
 // not change it. It captures the property word into this column *before* the

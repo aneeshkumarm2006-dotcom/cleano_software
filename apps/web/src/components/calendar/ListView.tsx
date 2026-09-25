@@ -22,7 +22,7 @@ import {
   shortLocation,
   isCancelled,
 } from "./status-meta";
-import { jobTypeLabel } from "@/lib/calendar-labels";
+import { jobTypeLabel } from "@bookmops/core/services";
 
 type ListViewProps = {
   view: "month" | "week" | "day";

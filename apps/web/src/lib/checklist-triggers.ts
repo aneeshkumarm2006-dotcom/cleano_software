@@ -14,7 +14,7 @@
 //
 // PURE — no DB imports — so the Settings editor and the generator agree.
 
-import { normalizeJobType } from "./calendar-labels";
+import { normalizeJobType } from "@bookmops/core/services";
 
 /** Comparison key for an add-on name: case- and whitespace-insensitive. */
 export function addOnKey(name: string | null | undefined): string {

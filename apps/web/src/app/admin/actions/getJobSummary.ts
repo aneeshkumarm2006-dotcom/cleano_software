@@ -12,8 +12,8 @@ import { getCleanerRateInputs } from "@/lib/cleaner-rates";
 import { resolveAmountDue } from "@/lib/job-billing";
 import { getTaxRates } from "@/lib/tax.server";
 import { formatDate, formatTime } from "@/lib/timezone";
-import { formatAddressLine } from "@/lib/client-address";
-import { jobTypeLabel } from "@/lib/calendar-labels";
+import { formatAddressLine } from "@bookmops/core/property";
+import { jobTypeLabel } from "@bookmops/core/services";
 import type {
   JobSummaryDTO,
   JobSummaryPayRow,

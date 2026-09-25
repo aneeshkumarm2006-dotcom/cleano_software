@@ -1,7 +1,7 @@
 import { requireCleaner } from "@/lib/page-guards";
 import { db } from "@/lib/org-db";
 import { claimableJobsWhere } from "@/lib/cleaner-jobs";
-import { isCategoryAllowed } from "@/lib/service-permissions";
+import { isCategoryAllowed } from "@bookmops/core/services";
 import { getCleanerRateInputs } from "@/lib/cleaner-rates";
 import {
   computeJobPayout,

@@ -46,7 +46,7 @@ import { fmtDate, fmtTime } from "@/lib/time";
 import { formatDate, storeCivilDayRange, storeDateKey } from "@/lib/timezone";
 import AnalyticsFilterBar, { type AnalyticsFilters } from "./AnalyticsFilterBar";
 import { isFilterableTab, type AnalyticsTab } from "./tabs";
-import { INDUSTRY_LABELS, type JobIndustry } from "@/lib/calendar-labels";
+import { INDUSTRY_LABELS, type JobIndustry } from "@bookmops/core/services";
 
 type TabView = AnalyticsTab;
 

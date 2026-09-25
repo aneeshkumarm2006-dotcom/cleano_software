@@ -2,7 +2,7 @@
 // Maps a job's DB status (with paid derived from paymentReceived) to a
 // label + accent color + tint, shared across Month / Week / Day / List views.
 import { CalendarEvent } from "./types";
-import { propertyTypeShortLabel } from "@/lib/property-type";
+import { propertyTypeShortLabel } from "@bookmops/core/property";
 import { HOLD_LABEL } from "@/lib/job-hold";
 
 export interface StatusMeta {

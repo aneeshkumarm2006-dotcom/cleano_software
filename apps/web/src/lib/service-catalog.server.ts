@@ -7,7 +7,7 @@ import {
   normalizeServiceCatalog,
   serviceLabelMap,
   type ServiceCatalogEntry,
-} from "./service-catalog";
+} from "@bookmops/core/services";
 
 /** The admin-configured service list, falling back to the shipped defaults. */
 export async function getServiceCatalog(): Promise<ServiceCatalogEntry[]> {

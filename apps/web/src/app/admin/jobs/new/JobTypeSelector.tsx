@@ -7,7 +7,7 @@ import {
   DEFAULT_SERVICE_CATALOG,
   resolveServiceValue,
   serviceOptions as catalogServiceOptions,
-} from "@/lib/service-catalog";
+} from "@bookmops/core/services";
 
 interface JobTypeSelectorProps {
   initialValue?: string | null;

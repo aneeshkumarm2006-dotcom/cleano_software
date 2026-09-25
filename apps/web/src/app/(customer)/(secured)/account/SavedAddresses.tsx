@@ -10,7 +10,7 @@
  */
 
 import SavedAddressManager from "@/components/addresses/SavedAddressManager";
-import type { SavedAddress } from "@/lib/client-address";
+import type { SavedAddress } from "@bookmops/core/property";
 import {
   addMyAddress,
   updateMyAddress,

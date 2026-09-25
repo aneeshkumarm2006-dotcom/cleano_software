@@ -9,7 +9,7 @@ import {
 } from "@/lib/field-lead-group.server";
 import { sanitizeCleanerNotes } from "@/lib/cleaner-notes";
 import { addressArea, clientFirstName } from "@/lib/team-schedule";
-import { jobTypeLabel } from "@/lib/calendar-labels";
+import { jobTypeLabel } from "@bookmops/core/services";
 import { getServiceCatalogWithLabels } from "@/lib/service-catalog.server";
 import {
   addStoreDays,

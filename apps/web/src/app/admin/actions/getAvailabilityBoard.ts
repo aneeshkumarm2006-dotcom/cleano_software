@@ -16,7 +16,7 @@ import {
   MOVE_CANONICAL,
   MOVE_FAMILY,
   canonicalPermissionCategory,
-} from "@/lib/service-permissions";
+} from "@bookmops/core/services";
 import {
   NO_FIELD_LEAD,
   matchesStatusFilter,

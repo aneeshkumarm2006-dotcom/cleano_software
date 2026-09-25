@@ -19,11 +19,10 @@ import {
   frequencyLabel,
   type BookingPageConfig,
 } from "@/lib/booking-page-config";
-import { formatAddressLine } from "@/lib/client-address";
+import { formatAddressLine, propertyTypeLabel } from "@bookmops/core/property";
 import { calculateTax, taxLines, type TaxRates } from "@/lib/tax";
 import { addOnLineTotal, sumAddOns } from "@/lib/job-money";
-import { normalizeJobType } from "@/lib/calendar-labels";
-import { propertyTypeLabel } from "@/lib/property-type";
+import { normalizeJobType } from "@bookmops/core/services";
 import {
   STANDARD_BOOKING_DEPOSIT_USD,
   formatDeposit,

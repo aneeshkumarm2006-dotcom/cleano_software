@@ -9,8 +9,8 @@ import {
   resolveServiceValue,
   serviceLabelMap,
   serviceOptions,
-} from "../src/lib/service-catalog";
-import { jobTypeLabel } from "../src/lib/calendar-labels";
+  jobTypeLabel,
+} from "@bookmops/core/services";
 
 let pass = 0, fail = 0;
 function check(name: string, actual: unknown, expected: unknown) {

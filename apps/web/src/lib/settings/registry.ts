@@ -16,7 +16,7 @@ import {
   DEFAULT_JOB_TYPE_LABELS,
   normaliseLabelMap,
   type PriorityLabel,
-} from "@/lib/calendar-labels";
+} from "@bookmops/core/services";
 import {
   BOOKING_PAGE_CONFIG_KEY,
   BOOKING_PAGE_DEFAULTS,

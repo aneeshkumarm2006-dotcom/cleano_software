@@ -30,7 +30,7 @@
  * well so both halves of a pre-fill are described in one place.
  */
 
-import type { PropertyType } from "@/lib/property-type";
+import type { PropertyType } from "@bookmops/core/property";
 
 /** The event `ClientNameField` fires whenever the chosen address changes. */
 export const ADDRESS_PREFILL_EVENT = "cleano:address-prefill";

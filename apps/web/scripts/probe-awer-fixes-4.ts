@@ -24,7 +24,7 @@ import {
   formatAptLabel,
   normalizeApt,
   splitAptFromLocation,
-} from "../src/lib/client-address";
+} from "@bookmops/core/property";
 import { refuseOnMultiTenant } from "./_scope";
 
 const db = new PrismaClient();

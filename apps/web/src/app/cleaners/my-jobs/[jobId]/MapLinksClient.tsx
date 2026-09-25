@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Copy, Check, Navigation } from "lucide-react";
-import { formatAddressCopy, formatAddressQuery } from "@/lib/client-address";
+import { formatAddressCopy, formatAddressQuery } from "@bookmops/core/property";
 
 /**
  * ROUND 4, FIX 7. This used to take one prop — `job.location`, the raw string —

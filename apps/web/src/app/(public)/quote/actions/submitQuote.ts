@@ -4,7 +4,7 @@ import { db } from "@/lib/org-db";
 import { sendCustomerQuoteReceived, sendAdminQuoteRequest } from "@/lib/email";
 import { getSetting } from "@/lib/settings";
 import { getServiceCatalog } from "@/lib/service-catalog.server";
-import { activeServices, serviceLabelMap } from "@/lib/service-catalog";
+import { activeServices, serviceLabelMap } from "@bookmops/core/services";
 import { storeWallClockToUtc } from "@/lib/timezone";
 import { rateLimitByIp } from "@/lib/rate-limit";
 import {

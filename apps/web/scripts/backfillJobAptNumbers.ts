@@ -38,7 +38,7 @@
  * out of the database and undone.
  */
 import { PrismaClient } from "@prisma/client";
-import { splitAptFromLocation } from "../src/lib/client-address";
+import { splitAptFromLocation } from "@bookmops/core/property";
 import { refuseOnMultiTenant } from "./_scope";
 
 const db = new PrismaClient();

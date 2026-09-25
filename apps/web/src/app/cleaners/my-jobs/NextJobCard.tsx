@@ -14,7 +14,7 @@ import Link from "next/link";
 import { MapPin, Navigation, Clock } from "lucide-react";
 
 import { fmtDate, fmtTime } from "@/lib/time";
-import { jobTypeLabel } from "@/lib/calendar-labels";
+import { jobTypeLabel } from "@bookmops/core/services";
 import { storeTzLabel } from "@/lib/timezone";
 
 /** "in 3 hours" / "in 25 minutes" / "tomorrow" — how soon, in words. */

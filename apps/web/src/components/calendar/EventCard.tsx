@@ -11,7 +11,7 @@ import {
   shortLocation,
 } from "./status-meta";
 import CornerBadge from "./CornerBadge";
-import { jobTypeLabel } from "@/lib/calendar-labels";
+import { jobTypeLabel } from "@bookmops/core/services";
 
 export interface EventCardProps {
   event: CalendarEvent;

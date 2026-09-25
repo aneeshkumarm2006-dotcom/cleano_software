@@ -5,8 +5,7 @@ import { headers } from "next/headers";
 import { db } from "@/lib/org-db";
 import { revalidatePath } from "next/cache";
 import { logActivity } from "@/lib/activity-log";
-import { parsePropertyCount, readPropertySize } from "@/lib/property-size";
-import { parsePropertyType } from "@/lib/property-type";
+import { parsePropertyCount, readPropertySize, parsePropertyType } from "@bookmops/core/property";
 
 async function requireAdmin() {
   const session = await auth.api.getSession({ headers: await headers() });

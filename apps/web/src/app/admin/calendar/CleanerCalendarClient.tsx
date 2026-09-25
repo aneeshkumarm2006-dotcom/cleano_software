@@ -20,12 +20,11 @@ import {
   Eye,
   Home,
 } from "lucide-react";
-import { propertyTypeLabel } from "@/lib/property-type";
-import { formatAddressLine } from "@/lib/client-address";
+import { propertyTypeLabel, formatAddressLine } from "@bookmops/core/property";
 import { avatarColor, initials } from "@/lib/avatar";
 import { fmtDate as fmtDateTz, fmtTime as fmtTimeTz } from "@/lib/time";
 import { civilKey, tzDateKey, tzMinOfDay, tzToday } from "@/lib/tz-calendar";
-import { jobTypeLabel } from "@/lib/calendar-labels";
+import { jobTypeLabel } from "@bookmops/core/services";
 import { HOLD_LABEL } from "@/lib/job-hold";
 
 interface CalJob {

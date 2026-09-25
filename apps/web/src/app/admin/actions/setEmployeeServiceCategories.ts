@@ -3,7 +3,7 @@
 import { db } from "@/lib/org-db";
 import { revalidatePath } from "next/cache";
 import { requireOwnerAdmin } from "@/lib/action-guards";
-import { normalizeAllowedCategories } from "@/lib/service-permissions";
+import { normalizeAllowedCategories } from "@bookmops/core/services";
 
 // Admin restricts which service categories an employee may work
 // (awerfixes.pdf item 3). An EMPTY list means "no restriction — every category",

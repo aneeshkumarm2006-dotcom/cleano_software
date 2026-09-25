@@ -15,7 +15,7 @@
  */
 import { randomBytes } from "crypto";
 import { addOnKey } from "../checklist-triggers";
-import { inferPropertyTypeFromText, type PropertyType } from "../property-type";
+import { inferPropertyTypeFromText, type PropertyType } from "@bookmops/core/property";
 import { HOLD_REASON } from "../job-hold";
 
 // Broad guard window — only rejects clearly-bogus dates, not real bookings.

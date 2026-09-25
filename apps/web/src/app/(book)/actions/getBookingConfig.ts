@@ -9,7 +9,7 @@ import {
   SERVICE_CONTENT_KEY,
   ServiceContentConfig,
   normalizeServiceContent,
-} from "@/lib/service-content";
+} from "@bookmops/core/services";
 import {
   BOOKING_PAGE_CONFIG_KEY,
   type BookingPageConfig,

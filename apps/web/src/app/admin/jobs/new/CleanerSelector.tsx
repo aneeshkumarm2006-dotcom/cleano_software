@@ -13,7 +13,7 @@ import {
   AssignmentWarningPanel,
   AvailabilityLink,
 } from "@/components/admin/AssignmentIndicators";
-import { categoryMismatchWarning } from "@/lib/service-permissions";
+import { categoryMismatchWarning } from "@bookmops/core/services";
 import { checkCustomCleanerPay } from "@/lib/job-money";
 import { crewPayBudget, readJobFormMoney } from "./form-money";
 

@@ -6,7 +6,7 @@
 
 import { db } from "@/lib/org-db";
 import { formatDate } from "@/lib/timezone";
-import { formatAddressLine, normalizeAddressKey } from "@/lib/client-address";
+import { formatAddressLine, normalizeAddressKey } from "@bookmops/core/property";
 import { resolveDepositCredit } from "@/lib/booking-deposit";
 import { taxRegistrationNumber } from "@/lib/tax";
 import { getSetting } from "@/lib/settings";

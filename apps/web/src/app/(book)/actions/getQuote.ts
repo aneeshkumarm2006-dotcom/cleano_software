@@ -7,7 +7,7 @@ import {
   isHourlyService,
   moveInOutBasePrice,
   postConstructionBasePrice,
-} from "@/lib/service-pricing";
+} from "@bookmops/core/services";
 
 interface GetQuoteInput {
   serviceType?: string;

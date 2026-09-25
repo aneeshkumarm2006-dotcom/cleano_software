@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { getSetting } from "@/lib/settings";
 import { getServiceCatalog } from "@/lib/service-catalog.server";
-import { serviceOptions } from "@/lib/service-catalog";
+import { serviceOptions } from "@bookmops/core/services";
 import {
   QUOTE_PAGE_CONFIG_KEY,
   normalizeQuotePageConfig,

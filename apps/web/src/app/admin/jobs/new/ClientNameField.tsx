@@ -17,9 +17,9 @@ import {
   pickDefaultAddress,
   stripDuplicatedApt,
   type SavedAddress,
-} from "@/lib/client-address";
-import { formatPropertySize } from "@/lib/property-size";
-import { isPropertyType } from "@/lib/property-type";
+  formatPropertySize,
+  isPropertyType,
+} from "@bookmops/core/property";
 import { announceAddressPrefill } from "./address-prefill";
 
 interface ClientOption {

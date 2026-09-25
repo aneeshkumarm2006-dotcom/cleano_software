@@ -17,7 +17,7 @@
 import { db } from "@/lib/org-db";
 import { loadPerJobAverages } from "@/lib/inventory-forecast.server";
 import { getSetting } from "@/lib/settings";
-import { resolvePriorityLabel, type PriorityLabel } from "@/lib/calendar-labels";
+import { resolvePriorityLabel, type PriorityLabel } from "@bookmops/core/services";
 
 export type MissingItem = { productName: string; needed: number; have: number };
 

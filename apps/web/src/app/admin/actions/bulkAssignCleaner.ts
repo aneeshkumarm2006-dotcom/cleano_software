@@ -6,7 +6,7 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { evaluateEmployeeWindows } from "@/lib/job-assignments";
 import { availabilityWarning, windowFromInstants } from "@/lib/availability";
-import { categoryMismatchWarning } from "@/lib/service-permissions";
+import { categoryMismatchWarning } from "@bookmops/core/services";
 
 async function requireStaff(): Promise<
   { ok: true; userId: string; userName: string } | { ok: false; error: string }

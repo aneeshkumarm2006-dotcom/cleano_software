@@ -9,7 +9,7 @@ import {
   resolveCalendarViewer,
   type CalendarViewer,
 } from "./_calendarScope";
-import type { PriorityLabel } from "@/lib/calendar-labels";
+import type { PriorityLabel } from "@bookmops/core/services";
 import { activeSubtotal } from "@/lib/job-money";
 import { storeCivilDayRange, storeDateKey, storeParts } from "@/lib/timezone";
 

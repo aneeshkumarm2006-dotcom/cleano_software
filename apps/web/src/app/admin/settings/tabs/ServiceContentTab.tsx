@@ -11,7 +11,7 @@ import {
   SERVICE_CONTENT_KEY,
   ServiceContentConfig,
   normalizeServiceContent,
-} from "@/lib/service-content";
+} from "@bookmops/core/services";
 
 interface ServiceContentTabProps {
   settings: AppSettingRecord[];

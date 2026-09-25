@@ -6,8 +6,8 @@ import { AlertTriangle, MapPin, Clock, DoorOpen } from "lucide-react";
 import PayBreakdownModal from "./PayBreakdownModal";
 import JobChatUnreadPill from "@/components/JobChatUnread";
 import { fmtDate, fmtTime } from "@/lib/time";
-import { jobTypeLabel } from "@/lib/calendar-labels";
-import { resolveAddressParts } from "@/lib/client-address";
+import { jobTypeLabel } from "@bookmops/core/services";
+import { resolveAddressParts } from "@bookmops/core/property";
 
 interface MissingEquipmentInfo {
   productId: string;

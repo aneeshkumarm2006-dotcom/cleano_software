@@ -7,7 +7,9 @@
     "./inventory": "./src/inventory/index.ts",
     "./pay": "./src/pay/index.ts",
     "./policy": "./src/policy/index.ts",
+    "./property": "./src/property/index.ts",
     "./rating": "./src/rating/index.ts",
+    "./services": "./src/services/index.ts",
     "./time": "./src/time/index.ts",
     "./validation": "./src/validation/index.ts"
   },

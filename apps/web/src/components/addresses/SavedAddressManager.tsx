@@ -14,13 +14,14 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Pencil, Trash2, Star, Check, X, KeyRound, Home } from "lucide-react";
-import { formatAddressLine, type SavedAddress } from "@/lib/client-address";
-import { formatPropertySize } from "@/lib/property-size";
 import {
+  formatAddressLine,
+  type SavedAddress,
+  formatPropertySize,
   PROPERTY_TYPES,
   PROPERTY_TYPE_LABEL,
   type PropertyType,
-} from "@/lib/property-type";
+} from "@bookmops/core/property";
 
 type ActionResult = { success?: boolean; error?: string };
 

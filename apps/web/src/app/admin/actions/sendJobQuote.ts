@@ -10,7 +10,7 @@ import { sendCustomerFinalQuote } from "@/lib/email";
 import { logActivity } from "@/lib/activity-log";
 import { resolveDepositCredit } from "@/lib/booking-deposit";
 import { hourlyLineLabel, roundBilledHours, MAX_BILLED_HOURS } from "@/lib/hourly-billing";
-import { formatAddressLine } from "@/lib/client-address";
+import { formatAddressLine } from "@bookmops/core/property";
 
 /**
  * Send the FINAL QUOTE for a post-construction booking (PDF #9, Stage 11, step
