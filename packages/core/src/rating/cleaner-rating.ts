@@ -11,14 +11,13 @@
 // other. Two queries, two roundings, two no-reviews answers, one cleaner.
 //
 // Now every surface reads the number from `getCleanerRatingSummary`
-// (cleaner-rating.server.ts) and formats it with the helpers here, so a third
-// page cannot invent a fourth answer.
+// (apps/web/src/lib/cleaner-rating.server.ts) and formats it with the helpers
+// here, so a third page cannot invent a fourth answer.
 //
-// Keep this module free of the db — it is imported by client components. The
-// query lives in the `.server.ts` companion (same split as
-// inventory-thresholds).
+// This half is pure, so client components and the mobile apps can use it. The
+// query stays with the web app's server code.
 
-import { RATING_MIN, RATING_MAX } from "@/lib/policy";
+import { RATING_MIN, RATING_MAX } from "../policy/company-policy";
 
 export interface CleanerRatingSummary {
   /**

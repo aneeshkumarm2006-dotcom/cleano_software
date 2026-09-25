@@ -26,7 +26,7 @@ export default async function MyPayPage() {
         where: { employeeId: userId },
         orderBy: { createdAt: "desc" },
       }),
-      // The shared rating definition (@/lib/cleaner-rating) — the same call the
+      // The shared rating definition (@bookmops/core/rating) — the same call the
       // dashboard's Performance tile makes. This page used to read a separate
       // average and then floor it at 4.0 in the markup, so a cleaner sitting at
       // 1.0 was told "Your Rating: 4.0 / 5.0" while the dashboard said 1.0.

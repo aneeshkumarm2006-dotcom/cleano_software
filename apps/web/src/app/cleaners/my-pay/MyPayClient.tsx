@@ -12,7 +12,7 @@ import ProviderInvoiceView from "./ProviderInvoiceView";
 import { fmtDate } from "@/lib/time";
 // Pure module (no db) — the wording of the review count is shared with the
 // dashboard's Performance tile so both pages say the same thing.
-import { ratingCountLabel } from "@/lib/cleaner-rating";
+import { ratingCountLabel } from "@bookmops/core/rating";
 
 type PayPeriod = {
   startDate: string;
@@ -93,7 +93,7 @@ interface MyPayClientProps {
   availableBalance: number;
   currentPeriod: CurrentPeriod | null;
   year: number;
-  /** Already averaged/rounded by @/lib/cleaner-rating. null = no reviews yet. */
+  /** Already averaged/rounded by @bookmops/core/rating. null = no reviews yet. */
   starRating?: number | null;
   ratingCount?: number;
   ragData?: RagData;
@@ -225,7 +225,7 @@ export default function MyPayClient({
 
         {/* Star Rating (read-only).
             The number and the count are handed down already computed by
-            @/lib/cleaner-rating, so this block only formats. It used to floor
+            @bookmops/core/rating, so this block only formats. It used to floor
             the value at 4.0 — Math.max(4, …) — which quietly turned a real 1.0
             into "Your Rating: 4.0 / 5.0" while the dashboard's Performance tile
             showed the honest 1.0. A cleaner's own page must not flatter them:

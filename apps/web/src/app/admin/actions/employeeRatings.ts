@@ -22,8 +22,8 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/org-db";
 import { isAdminRole } from "@/lib/role-routing";
 import { logActivity } from "@/lib/activity-log";
-import { RATING_MIN, RATING_MAX } from "@/lib/policy";
-import { normaliseAdminRating, RATING_NOTE_MAX } from "@/lib/rating-history";
+import { RATING_MIN, RATING_MAX } from "@bookmops/core/policy";
+import { normaliseAdminRating, RATING_NOTE_MAX } from "@bookmops/core/rating";
 import { recalculateMultiplier } from "./recalculateMultiplier";
 
 type Result = { success: true } | { success: false; error: string };

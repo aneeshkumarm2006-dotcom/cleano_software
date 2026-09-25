@@ -4,7 +4,7 @@ import { db } from "@/lib/org-db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { RATING_MIN, RATING_MAX, DEFAULT_STARTING_RATING } from "@/lib/policy";
+import { RATING_MIN, RATING_MAX, DEFAULT_STARTING_RATING } from "@bookmops/core/policy";
 import { getCleanerRatingSummary } from "@/lib/cleaner-rating.server";
 
 export async function setEmployeeRating(

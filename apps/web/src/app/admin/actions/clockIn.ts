@@ -9,7 +9,7 @@ import {
   sendAdminLateArrival,
   sendProviderLateArrival,
 } from "@/lib/email";
-import { computeLateArrivalPenalty } from "@/lib/policy";
+import { computeLateArrivalPenalty } from "@bookmops/core/policy";
 import { applyStrike } from "@/lib/strikes";
 import {
   CLOCK_IN_BLOCKED_STATUSES,

@@ -5,7 +5,7 @@ import {
   Calendar, Briefcase, ShieldAlert,
 } from "lucide-react";
 import { getStrikeSummary, STRIKE_THRESHOLD } from "@/lib/strikes";
-import { ratingCountLabel, EMPTY_RATING_SUMMARY } from "@/lib/cleaner-rating";
+import { ratingCountLabel, EMPTY_RATING_SUMMARY } from "@bookmops/core/rating";
 import { getCleanerRatingSummary } from "@/lib/cleaner-rating.server";
 import { cleanerPayoutForJobs } from "@/lib/cleaner-pay-display";
 import { isCleanerLow } from "@/lib/inventory-thresholds";
@@ -104,7 +104,7 @@ export default async function CleanerDashboard({ userId, userName }: Props) {
       where: { employeeId: userId },
       include: { product: true },
     }),
-    // Employee rating — the shared definition (@/lib/cleaner-rating), the same
+    // Employee rating — the shared definition (@bookmops/core/rating), the same
     // one My Pay reads. This tile used to average its own `take: 30` slice and
     // print that capped length as the review count, so a cleaner with more
     // ratings than that saw a different score here than on My Pay.

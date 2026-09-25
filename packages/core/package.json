@@ -4,6 +4,8 @@
   "private": true,
   "sideEffects": false,
   "exports": {
+    "./policy": "./src/policy/index.ts",
+    "./rating": "./src/rating/index.ts",
     "./validation": "./src/validation/index.ts"
   },
   "scripts": {

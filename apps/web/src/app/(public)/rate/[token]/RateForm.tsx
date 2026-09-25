@@ -7,7 +7,7 @@ import SplitShell, { BRAND_IMAGES } from "@/components/customer/SplitShell";
 import { Field, Textarea, Button } from "@/components/customer/Field";
 import { submitRating } from "../actions/submitRating";
 import { uploadReviewPhoto } from "../actions/uploadReviewPhoto";
-import { POOR_RATING_FOLLOWUP_STARS } from "@/lib/policy";
+import { POOR_RATING_FOLLOWUP_STARS } from "@bookmops/core/policy";
 
 const MAX_REVIEW_PHOTOS = 5;
 const COMPRESSION_THRESHOLD = 1 * 1024 * 1024;

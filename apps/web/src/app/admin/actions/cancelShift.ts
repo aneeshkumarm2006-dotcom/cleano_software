@@ -6,7 +6,7 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { createAssignmentInvites } from "@/lib/invites";
 import { sendAdminShiftDropped, sendProviderLastMinuteOpening } from "@/lib/email";
-import { LAST_MINUTE_CLAIM_BONUS_USD } from "@/lib/policy";
+import { LAST_MINUTE_CLAIM_BONUS_USD } from "@bookmops/core/policy";
 import { applyStrike } from "@/lib/strikes";
 import {
   alertIfTraineeLeftUnpaired,

@@ -34,7 +34,7 @@ import {
   isInternalNote,
   normaliseAdminRating,
   ratingSource,
-} from "../src/lib/rating-history";
+} from "@bookmops/core/rating";
 import {
   canDecide,
   checkTimeLogRequest,

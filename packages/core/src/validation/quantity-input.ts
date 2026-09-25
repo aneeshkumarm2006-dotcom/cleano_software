@@ -19,7 +19,7 @@
  * so the three surfaces that had their own copy of the clamp now share one rule
  * instead of three regexes.
  *
- * Pure by design: no imports, no framework, no DB — `scripts/verify-stage6-mobile-ui.ts`
+ * Pure by design: no imports, no framework, no DB — `apps/web/scripts/verify-stage6-mobile-ui.ts`
  * exercises it directly.
  */
 

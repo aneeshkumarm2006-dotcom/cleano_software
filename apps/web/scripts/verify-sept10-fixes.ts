@@ -33,7 +33,7 @@ import {
   type WorkTrailJob,
 } from "../src/lib/job-reschedule";
 import fs from "node:fs";
-import { ratedCleanerIds } from "../src/lib/rating-crew";
+import { ratedCleanerIds } from "@bookmops/core/rating";
 import { resolveRecurringDiscountPercent } from "../src/lib/booking-pricing";
 import { storeDateKey, storeTimeKey } from "../src/lib/timezone";
 import { tzToday } from "../src/lib/tz-calendar";

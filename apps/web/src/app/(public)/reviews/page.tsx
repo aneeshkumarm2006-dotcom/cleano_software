@@ -1,6 +1,6 @@
 import { db } from "@/lib/org-db";
 import { getSettings } from "@/lib/settings";
-import { CUSTOMER_RATED_BY } from "@/lib/rating-history";
+import { CUSTOMER_RATED_BY } from "@bookmops/core/rating";
 
 // Reviews + settings change at runtime, so render per request.
 export const dynamic = "force-dynamic";

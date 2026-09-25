@@ -21,7 +21,7 @@ import {
   RATING_NOTE_MAX,
   ratingSourceLabel,
   type RatingSource,
-} from "@/lib/rating-history";
+} from "@bookmops/core/rating";
 
 export interface RatingHistoryRow {
   id: string;

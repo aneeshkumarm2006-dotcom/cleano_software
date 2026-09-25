@@ -26,7 +26,7 @@ import {
   storeWeekday,
 } from "@/lib/timezone";
 import { doneJobsWhere, upcomingJobsWhere } from "@/lib/cleaner-jobs";
-import { ratingSource } from "@/lib/rating-history";
+import { ratingSource } from "@bookmops/core/rating";
 
 export default async function EmployeePage({
   params,

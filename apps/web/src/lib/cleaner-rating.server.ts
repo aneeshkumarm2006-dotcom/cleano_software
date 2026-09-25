@@ -2,7 +2,7 @@
 // rating a cleaner is shown. See that file for why one definition exists at all.
 
 import { db } from "@/lib/org-db";
-import { summarizeRatings, type CleanerRatingSummary } from "@/lib/cleaner-rating";
+import { summarizeRatings, type CleanerRatingSummary } from "@bookmops/core/rating";
 
 /**
  * The cleaner's running rating: average + how many ratings it is built from.

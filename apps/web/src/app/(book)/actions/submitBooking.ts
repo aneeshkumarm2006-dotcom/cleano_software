@@ -28,7 +28,7 @@ import {
   sendCustomerBookingsPrepaid,
 } from "@/lib/email";
 import { isValidEmail, isValidPhone } from "@bookmops/core/validation";
-import { AFTER_PHOTO_CONSENT_VERSION } from "@/lib/policy";
+import { AFTER_PHOTO_CONSENT_VERSION } from "@bookmops/core/policy";
 import { BOOKING_DEPOSIT_CURRENCY } from "@/lib/stripe";
 import { requireStripeForCurrentOrg } from "@/lib/stripe-org";
 import {

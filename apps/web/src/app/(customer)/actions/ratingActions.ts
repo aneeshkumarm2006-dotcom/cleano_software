@@ -5,9 +5,9 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { sendCustomerPoorRatingFollowUp } from "@/lib/email";
-import { POOR_RATING_FOLLOWUP_STARS, applyLateArrivalPenalty } from "@/lib/policy";
+import { POOR_RATING_FOLLOWUP_STARS, applyLateArrivalPenalty } from "@bookmops/core/policy";
 import { maybeApplyLowRatingStrike } from "@/lib/strikes";
-import { ratedCleanerIds } from "@/lib/rating-crew";
+import { ratedCleanerIds } from "@bookmops/core/rating";
 
 export interface PendingRatingJob {
   token: string;
