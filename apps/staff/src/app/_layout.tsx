@@ -10,6 +10,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ApiError } from "@bookmops/api/client";
 
+import { UpdateRequired } from "@/components/UpdateRequired";
 import { SessionProvider, useSession } from "@/data/session";
 
 // Hold the splash until the font is ready, so no screen ever draws in the
@@ -56,8 +57,9 @@ export default function RootLayout() {
 }
 
 function Routes() {
-  const { session } = useSession();
+  const { session, updateRequired } = useSession();
   const signedIn = session.status !== "signed-out";
+  if (updateRequired) return <UpdateRequired />;
   return (
     <Stack screenOptions={{ headerShown: false }}>
       {/* A route that is not allowed simply doesn't exist: no screen can link

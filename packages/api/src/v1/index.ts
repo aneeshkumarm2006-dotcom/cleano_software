@@ -3,6 +3,7 @@
 export * from "./auth";
 export * from "./clock";
 export * from "./common";
+export * from "./devices";
 export * from "./enums";
 export * from "./jobs";
 export * from "./me";

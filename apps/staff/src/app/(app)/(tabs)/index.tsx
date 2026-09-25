@@ -5,6 +5,7 @@ import { Empty, LoadError, Loading } from "@/components/QueryState";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { useMe, useToday } from "@/data/queries";
 import { RailLine, RAIL_WIDTH, TimelineRow } from "@/features/jobs/TimelineRow";
+import { NotificationsPrimer } from "@/features/notifications/NotificationsPrimer";
 import { NextJobCard } from "@/features/today/NextJobCard";
 import { duration, formatMoneyWhole, longDate, partOfDay } from "@/lib/format";
 import { useNow } from "@/lib/use-now";
@@ -74,6 +75,8 @@ function TodayBody({
       ) : (
         <Empty icon="today" title="No more jobs today" detail="Anything new the office gives you will show up here." />
       )}
+
+      <NotificationsPrimer />
 
       <StatStrip
         stats={[

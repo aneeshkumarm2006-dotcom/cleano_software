@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { OutboxProvider } from "@/data/outbox";
 import { keys, useMe } from "@/data/queries";
 import { ChangePasswordForm } from "@/features/account/ChangePasswordForm";
+import { useNotificationRouting } from "@/notifications/push";
 
 /**
  * Everything behind sign-in. The root layout guards this whole group, so a
@@ -18,6 +19,7 @@ import { ChangePasswordForm } from "@/features/account/ChangePasswordForm";
  */
 export default function SignedInLayout() {
   const me = useMe();
+  useNotificationRouting();
   if (me.data?.mustChangePassword) return <MustChangePassword />;
   return (
     <OutboxProvider>

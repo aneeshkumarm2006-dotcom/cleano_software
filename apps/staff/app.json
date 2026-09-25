@@ -15,7 +15,10 @@
     "ios": {
       "bundleIdentifier": "com.bookmops.pro",
       "supportsTablet": false,
-      "icon": "./assets/images/icon.png"
+      "icon": "./assets/images/icon.png",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.bookmops.pro",
@@ -36,10 +39,17 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#0e7f8d"
+        }
       ]
     ],
     "experiments": {
       "reactCompiler": true
-    }
+    },
+    "description": "Bookmops Pro: your shifts, your route and your pay, in one place."
   }
 }

@@ -6,6 +6,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { createCompanyAuthClient, type CompanyAuthClient } from "@/auth/auth-client";
 import { workspaceStore } from "@/auth/workspace-store";
 import { APP_VERSION, isAllowedOrigin, PLATFORM, PLATFORM_URL } from "@/config";
+import { disablePush } from "@/notifications/push";
 
 import type { DataSource } from "./source";
 import { recordServerDate } from "./trusted-time";
@@ -26,6 +27,8 @@ export type SignInResult =
 
 interface SessionContextValue {
   session: Session;
+  /** The server said this build is too old (426): the app shows only the update screen. */
+  updateRequired: boolean;
   /** Step one: find the person's company (or companies) and sign in. */
   signIn: (email: string, password: string) => Promise<SignInResult>;
   /** Step two, when there was a choice: sign in to the one they picked. */
@@ -75,6 +78,7 @@ const WRONG = "Email or password is incorrect.";
 export function SessionProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const [session, setSession] = useState<Session>(initialSession);
+  const [updateRequired, setUpdateRequired] = useState(false);
 
   const signInTo = useCallback(
     async (workspace: Workspace, email: string, password: string): Promise<SignInResult> => {
@@ -121,8 +125,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     if (session.status === "live") {
-      // Best effort: end the session on the server too. The local sign-out
-      // happens either way, so a phone with no signal still signs out.
+      // Best effort: stop this phone's notifications and end the session on
+      // the server. The local sign-out happens either way, so a phone with no
+      // signal still signs out.
+      await disablePush(session.source);
       await session.auth.signOut().catch(() => undefined);
       await workspaceStore.clear();
     }
@@ -139,13 +145,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     if (session.status !== "live") return;
     return queryClient.getQueryCache().subscribe((event) => {
       const error = event.query.state.error;
-      if (event.type === "updated" && error instanceof ApiError && error.signedOut) void signOut();
+      if (event.type !== "updated" || !(error instanceof ApiError)) return;
+      if (error.signedOut) void signOut();
+      else if (error.updateRequired) setUpdateRequired(true);
     });
   }, [session.status, queryClient, signOut]);
 
   const value = useMemo<SessionContextValue>(
     () => ({
       session,
+      updateRequired,
       signIn,
       signInTo,
       forgotPassword,
@@ -156,7 +165,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         ? () => setSession({ status: "preview", source: require("./preview").previewSource })
         : undefined,
     }),
-    [session, signIn, signInTo, forgotPassword, signOut],
+    [session, updateRequired, signIn, signInTo, forgotPassword, signOut],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

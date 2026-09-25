@@ -3,9 +3,11 @@
 // data here is a compile error rather than a crash on a simulator.
 import type { DataSource } from "../source";
 import { previewClockApi } from "./clock";
+import { previewDevicesApi } from "./devices";
 import { previewJobsApi } from "./jobs";
 
 export const previewSource: DataSource = {
   ...previewJobsApi,
   ...previewClockApi,
+  ...previewDevicesApi,
 };
