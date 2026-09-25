@@ -159,10 +159,11 @@ No behaviour change. The same routes, the same build, and the same test results.
 ### Phase 3 — API v1
 
 - An org-scoped, versioned HTTP API in `apps/web`, with its contract and typed
-  client in `packages/api`.
-- Mobile sign-in (token-based; the web keeps its cookie session).
-- Built tenant by tenant, with the same row-level-security guarantees as the
-  web.
+  client in `packages/api`. The design, reviewed before any code:
+  [API_V1.md](API_V1.md).
+- Mobile sign-in through Better Auth's Expo plugin. The phone talks to its
+  company's own address, so the same tenant and row-level-security rules as
+  the web apply unchanged.
 - This is the largest phase: about 294 files call server actions directly
   today, and a phone cannot.
 
