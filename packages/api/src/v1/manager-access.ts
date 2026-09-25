@@ -10,10 +10,14 @@
 // Every rule is the web's, with where it comes from (apps/web/src/…):
 //
 //   capability        OWNER ADMIN OPS_MGR FIELD_LEAD  web source
-//   TEAM_VIEW           ✓     ✓     ✓      group      app/admin/dashboard/page.tsx (today's and in-progress
+//   TEAM_VIEW           ✓     ✓   today*    group      app/admin/dashboard/page.tsx (today's and in-progress
 //                                                      work, company-wide, for every admin role);
 //                                                      app/admin/actions/_calendarScope.ts (a FIELD_LEAD sees
-//                                                      their group only, never money)
+//                                                      their group only, never money). *An OPS_MANAGER is
+//                                                      company-wide for TODAY only, as the dashboard; on any
+//                                                      other date, their own jobs only, as the calendar
+//                                                      (_calendarScope.ts CALENDAR_ALL_ROLES leaves them out,
+//                                                      so getJobsForDay gives them SELF). See dayScopeFor
 //   JOB_CONTACT         ✓     ✓     ✓       —         app/admin/actions/getJobSummary.ts (OWNER, ADMIN,
 //                                                      OPS_MANAGER); a lead sees what My Team shows:
 //                                                      client first name and area, never the street
@@ -27,8 +31,15 @@
 //                                                      never a trainee (OWNER, ADMIN, OPS_MANAGER);
 //                                                      checkAvailability.ts: "a lead coordinates a crew, they
 //                                                      do not assign it"
-//   TIME_APPROVE        ✓     ✓     ✓       ✓         app/admin/actions/decideTimeLogChange.ts and
-//                                                      updateClockTimes.ts (isAdminRole: all four, company-wide)
+//   TIME_APPROVE        ✓     ✓     ✓      group      app/admin/actions/decideTimeLogChange.ts and
+//                                                      updateClockTimes.ts (isAdminRole: all four, company-wide).
+//                                                      The phone narrows a FIELD_LEAD to items whose cleaner
+//                                                      is in their group (anything else 404), APPROVE and
+//                                                      REJECT only; nobody decides their own (rule 9)
+//   TIME_ADJUST         ✓     ✓     ✓       —         the same actions' hand correction: setting times
+//                                                      nobody asked for (TimeDecision ADJUST). Not granted to
+//                                                      a FIELD_LEAD, whose word on their own crew's pay-bearing
+//                                                      hours is limited to yes or no
 //   WITHDRAWALS         ✓     ✓     —       —         app/admin/actions/processWithdrawal.ts
 //   KIT_REQUESTS        ✓     ✓     —       —         app/admin/actions/resolveInventoryRequest.ts
 //   ALERTS              ✓     ✓     ✓       ✓         app/admin/notifications/page.tsx (requireAdmin)
@@ -63,6 +74,7 @@ export const MANAGER_CAPABILITIES = [
   "CREW_SET",
   "CREW_ADD",
   "TIME_APPROVE",
+  "TIME_ADJUST",
   "WITHDRAWALS",
   "KIT_REQUESTS",
   "ALERTS",
@@ -77,7 +89,7 @@ const OWNER_ADMIN: readonly ManagerCapability[] = MANAGER_CAPABILITIES;
 const BY_ROLE: Partial<Record<Role, readonly ManagerCapability[]>> = {
   OWNER: OWNER_ADMIN,
   ADMIN: OWNER_ADMIN,
-  OPS_MANAGER: ["TEAM_VIEW", "JOB_CONTACT", "CREW_ADD", "TIME_APPROVE", "ALERTS", "TEAM_MODERATE"],
+  OPS_MANAGER: ["TEAM_VIEW", "JOB_CONTACT", "CREW_ADD", "TIME_APPROVE", "TIME_ADJUST", "ALERTS", "TEAM_MODERATE"],
   FIELD_LEAD: ["TEAM_VIEW", "TIME_APPROVE", "ALERTS"],
 };
 
@@ -91,9 +103,10 @@ export function can(role: string | null | undefined, capability: ManagerCapabili
 }
 
 /**
- * Whose work a role sees on TEAM_VIEW screens. GROUP is the caller's Field
- * Lead group (`User.fieldLeadId`, resolved server-side by fieldLeadGroupIds in
- * apps/web/src/lib/field-lead-group.server.ts; the request never names one).
+ * Whose work a role sees on TEAM_VIEW screens, on TODAY. GROUP is the
+ * caller's Field Lead group (`User.fieldLeadId`, resolved server-side by
+ * fieldLeadGroupIds in apps/web/src/lib/field-lead-group.server.ts; the
+ * request never names one). For any other date, use dayScopeFor.
  */
 export type TeamScope = "COMPANY" | "GROUP";
 
@@ -101,6 +114,23 @@ export function teamScopeFor(role: string | null | undefined): TeamScope | null 
   if (role === "OWNER" || role === "ADMIN" || role === "OPS_MANAGER") return "COMPANY";
   if (role === "FIELD_LEAD") return "GROUP";
   return null;
+}
+
+/**
+ * Whose work a role sees for one company day. OWN is the web's calendar SELF
+ * scope (_calendarScope.ts calendarScopeFilter): jobs the caller leads
+ * (Job.employeeId) or is on (Job.cleaners).
+ *   OWNER, ADMIN   COMPANY on every date;
+ *   OPS_MANAGER    COMPANY today (the dashboard), OWN on any other date (the
+ *                  calendar). "Today" is the company's zone, decided by the
+ *                  server, never the phone;
+ *   FIELD_LEAD     GROUP on every date.
+ */
+export type DayScope = TeamScope | "OWN";
+
+export function dayScopeFor(role: string | null | undefined, isToday: boolean): DayScope | null {
+  if (role === "OPS_MANAGER" && !isToday) return "OWN";
+  return teamScopeFor(role);
 }
 
 /** The roles the cleaner endpoints (v1Route `access: "staff"`) admit. */
@@ -121,16 +151,25 @@ export function appSideFor(role: string | null | undefined): "crew" | "office" |
 // comment repeats them (see also API_V1.md §4, "Rules every service follows"):
 //
 //  1. ACCESS. v1Route `access: { capability: X }`: the role must have X under
-//     capabilitiesFor, read from the session (never the request); otherwise
-//     403 `FORBIDDEN`. The allow-list is this file; a role added later gets
-//     nothing until it is added here.
+//     capabilitiesFor; otherwise 403 `FORBIDDEN`. The role is re-read from
+//     the database on every request (API_V1.md §4, gate 10), never taken from
+//     the request or a cached session, so a manager who is demoted or
+//     deactivated loses access on their very next request. The allow-list is
+//     this file; a role added later gets nothing until it is added here.
 //  2. COMPANY. Every id (job, person, request, withdrawal, conversation,
 //     message) is looked up with the session's organizationId in the query.
 //     Another company's id answers 404, exactly like one that doesn't exist.
-//  3. FIELD_LEAD SCOPE. Where TEAM_VIEW is the capability, a FIELD_LEAD sees
-//     jobs matching fieldLeadScopedJobsWhere(fieldLeadGroupIds(caller)) and
-//     people in that group only; anything outside it answers 404. An empty
-//     group fails closed (the lead's own jobs only), as on the web.
+//  3. SCOPE. Where TEAM_VIEW is the capability, a job is in view by
+//     dayScopeFor(role, the job is on today in the company's zone):
+//       - a FIELD_LEAD sees jobs matching
+//         fieldLeadScopedJobsWhere(fieldLeadGroupIds(caller)) and people in
+//         that group only. An empty group fails closed (the lead's own jobs
+//         only), as on the web. Someone outside the group who is on a group
+//         job appears by name only (manager-team.ts CrewMember
+//         `outsideGroup`);
+//       - an OPS_MANAGER sees every job on today, and on any other date only
+//         the jobs they lead or are on.
+//     A job out of view answers 404, for reads and crew changes alike.
 //  4. NO MONEY. No manager response carries a price, a client charge, a
 //     payment state, a cleaner's pay or tier percentage, whatever the role.
 //     The web shows OWNER and ADMIN those; the phone doesn't need them. The
@@ -138,7 +177,7 @@ export function appSideFor(role: string | null | undefined): "crew" | "office" |
 //  5. IDEMPOTENCY. Every mutation carries `clientEventId`, also sent as the
 //     Idempotency-Key, and goes through IdempotencyRecord (§6): a replay
 //     returns the stored answer and fires no email, push or log line again;
-//     the same key with a different body answers 422.
+//     the same key with a different method, path or body answers 422.
 //  6. AUDIT. Every mutation records who did it and when, the way the web
 //     action it mirrors does (JobLog for jobs, logActivity for decisions),
 //     with the before and after values, and says "from the app" in the
@@ -150,3 +189,18 @@ export function appSideFor(role: string | null | undefined): "crew" | "office" |
 //       everything else                          gate 11's per-user limit
 //  8. EFFECTS. Emails, push alerts and invites are returned by the service and
 //     flushed with after(), never awaited inside the transaction (§5).
+//  9. NO SELF-DECISIONS. Every decision endpoint (a time item, a withdrawal,
+//     a kit request) refuses when the item's person (the cleaner, the
+//     employee) is the caller: 403 `SELF_APPROVAL`, whatever the role, OWNER
+//     included. The lists and the counts behind them leave the caller's own
+//     items out for that capability, so the queue never offers one. The web
+//     has no such check today; the phone doesn't inherit the gap.
+// 10. ONE DECISION WINS. Every state transition (a time decision; a
+//     withdrawal's approve, complete or reject; a kit request's resolve) is
+//     one conditional update on the from-states it expects (`UPDATE … WHERE
+//     id = $1 AND status IN (…)`), inside the transaction that applies its
+//     effects, never a read and then a write. Zero rows updated means someone
+//     else got there first: roll back, and answer 409 with the endpoint's
+//     "already handled" code (ALREADY_HANDLED_CODES in
+//     ./manager-approvals.ts). A replay of the winner's own key still gets
+//     the stored answer (rule 5), not the 409.

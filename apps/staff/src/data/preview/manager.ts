@@ -8,14 +8,24 @@
 // rules in @bookmops/api/v1 manager-access.ts.
 //
 // To see a refusal: approving Kofi's cloth request is "warehouse short", and
-// a crew of Kofi alone is refused as an unpaired trainee.
+// a crew of Kofi alone is refused as an unpaired trainee. Nobody sees their
+// own clock time, withdrawal or kit request in a queue (Sofia's clock time is
+// there for the office, not for her), and a field lead sees only their
+// group's clock times, with the client's first name. On a group job, a
+// field lead sees crew from outside the group by name only. An ops manager
+// sees the whole company today and only their own jobs on other days
+// (Nadia is on none, so those days are empty for her).
 import { ApiError } from "@bookmops/api/client";
 import {
   type Alert,
   type Candidate,
   can,
+  crewWarningsHash,
   type CrewMember,
   type CrewState,
+  type CrewWarning,
+  dayScopeFor,
+  FIELD_LEAD_ALERT_KINDS,
   type JobAttention,
   type KitRequestItem,
   type LateArrival,
@@ -74,6 +84,8 @@ function pageOf<T>(items: readonly T[], cursor?: string | null) {
 const forbidden = () => new ApiError("Your role can't do this. Ask an admin.", 403, "FORBIDDEN", false);
 const notFound = (what = "This") => new ApiError(`${what} isn't available.`, 404, "NOT_FOUND", false);
 const refuse = (code: string, message: string) => new ApiError(message, 409, code, false);
+const selfApproval = () => new ApiError("That one is yours, so someone else in the office decides it.", 403, "SELF_APPROVAL", false);
+const isMe = (personId: string) => personId === previewPerson().id;
 
 function guard(...any: ManagerCapability[]) {
   if (!any.some((c) => can(previewRole(), c))) throw forbidden();
@@ -99,7 +111,7 @@ interface Person {
   /** How this person's availability reads against any job, for the sample. */
   availability: Candidate["availability"];
   dayOff?: string;
-  warning?: string;
+  warning?: CrewWarning;
 }
 
 const PEOPLE: Person[] = [
@@ -112,20 +124,26 @@ const PEOPLE: Person[] = [
     name: "Thomas Nguyen",
     tier: "STANDARD",
     availability: "OUTSIDE_HOURS",
-    warning: "Thomas Nguyen is being assigned outside their availability — available 12:00–18:00 that day",
+    warning: { code: "OUTSIDE_HOURS", message: "Thomas Nguyen is being assigned outside their availability — available 12:00–18:00 that day" },
   },
   { id: "u-kofi", name: "Kofi Mensah", tier: "TRAINEE", availability: "AVAILABLE" },
   { id: "u-priya", name: "Priya Nair", tier: "STANDARD", availability: "NO_DATA" },
-  { id: "u-elise", name: "Élise Gagnon", tier: "STANDARD", availability: "AVAILABLE", warning: "Élise Gagnon is not approved for Deep clean work" },
+  {
+    id: "u-elise",
+    name: "Élise Gagnon",
+    tier: "STANDARD",
+    availability: "AVAILABLE",
+    warning: { code: "CATEGORY_NOT_APPROVED", message: "Élise Gagnon is not approved for Deep clean work" },
+  },
 ];
 const person = (id: string) => PEOPLE.find((p) => p.id === id);
 
 /** Sofia Martins' field-lead group, resolved "server-side". */
 const GROUP = new Set(["u-sofia", "preview-cleaner", "u-jean", "u-kofi"]);
 
-function warningsFor(p: Person): string[] {
-  const out: string[] = [];
-  if (p.dayOff) out.push(`${p.name} has this date blocked off (${p.dayOff})`);
+function warningsFor(p: Person): CrewWarning[] {
+  const out: CrewWarning[] = [];
+  if (p.dayOff) out.push({ code: "DAY_OFF", message: `${p.name} has this date blocked off (${p.dayOff})` });
   if (p.warning) out.push(p.warning);
   return out;
 }
@@ -390,9 +408,14 @@ function crewState(c: CrewSeed, job: JobSeed): CrewState {
   return c.state;
 }
 
+const isToday = (key: string) => key === dateKeyOf(new Date());
+
+/** Whether a job is in view for the preview's role, by the day it's on (manager-access.ts rule 3). */
 function inScope(job: JobSeed): boolean {
-  if (teamScopeFor(previewRole()) === "COMPANY") return true;
-  if (teamScopeFor(previewRole()) === "GROUP") return job.crew.some((c) => GROUP.has(c.id)) || (!!job.leadId && GROUP.has(job.leadId));
+  const scope = dayScopeFor(previewRole(), isToday(dateKeyOf(new Date(job.startsAt))));
+  if (scope === "COMPANY") return true;
+  if (scope === "GROUP") return job.crew.some((c) => GROUP.has(c.id)) || (!!job.leadId && GROUP.has(job.leadId));
+  if (scope === "OWN") return job.leadId === previewPerson().id || job.crew.some((c) => isMe(c.id));
   return false;
 }
 
@@ -401,10 +424,25 @@ function toTeamJob(job: JobSeed): TeamJob {
   const onIt = job.crew.some((c) => c.id === previewPerson().id);
   const crew: CrewMember[] = job.crew.map((c) => {
     const p = person(c.id)!;
+    if (lead && !GROUP.has(c.id)) {
+      return {
+        id: c.id,
+        name: p.name,
+        isLead: job.leadId === c.id,
+        outsideGroup: true,
+        tier: null,
+        state: null,
+        assignment: null,
+        clockedInAt: null,
+        clockedOutAt: null,
+        minutesLate: null,
+      };
+    }
     return {
       id: c.id,
       name: p.name,
       isLead: job.leadId === c.id,
+      outsideGroup: false,
       tier: p.tier,
       state: crewState(c, job),
       assignment: c.state === "DONE" ? "CLOCKED_OUT" : c.state === "NOT_STARTED" ? "ASSIGNED" : "CLOCKED_IN",
@@ -416,7 +454,7 @@ function toTeamJob(job: JobSeed): TeamJob {
   const attention: JobAttention[] = [];
   if (job.crew.length === 0) attention.push("UNASSIGNED");
   else if (job.crew.length < job.required) attention.push("SHORT_STAFFED");
-  if (crew.some((c) => c.state === "LATE")) attention.push("LATE_START");
+  if (job.crew.some((c) => crewState(c, job) === "LATE")) attention.push("LATE_START");
   if (issues.some((i) => i.job.id === job.id && i.status !== "RESOLVED")) attention.push("ISSUE_OPEN");
   return {
     id: job.id,
@@ -477,9 +515,9 @@ function scopedJob(id: string): JobSeed {
 }
 
 /** The warnings a crew change would override: the people being added. */
-function warningsForAdding(job: JobSeed, ids: readonly string[]): string[] {
+function warningsForAdding(job: JobSeed, ids: readonly string[]): (CrewWarning & { cleanerId: string })[] {
   const before = new Set(job.crew.map((c) => c.id));
-  return ids.filter((id) => !before.has(id)).flatMap((id) => warningsFor(person(id)!));
+  return ids.filter((id) => !before.has(id)).flatMap((id) => warningsFor(person(id)!).map((w) => ({ ...w, cleanerId: id })));
 }
 
 // ---- Approvals -----------------------------------------------------------------------
@@ -525,6 +563,19 @@ const timeItems: TimeItem[] = [
     decided: null,
   },
   {
+    id: "t-5",
+    kind: "CLEANER_REQUEST",
+    status: "PENDING",
+    cleaner: { id: "u-sofia", name: "Sofia Martins" },
+    job: { id: "m-prev-4", jobNumber: 1424, clientName: "Isabelle Martin", startsAt: at(-60 * 50) },
+    current: { start: at(-60 * 50, 1), end: at(-60 * 47, 1) },
+    requested: { start: at(-60 * 50 - 15, 1), end: null },
+    reason: "I opened up 15 minutes early to let the plumber in.",
+    offline: null,
+    createdAt: at(-60 * 46, 1),
+    decided: null,
+  },
+  {
     id: "t-4",
     kind: "CLEANER_REQUEST",
     status: "APPROVED",
@@ -538,6 +589,31 @@ const timeItems: TimeItem[] = [
     decided: { by: "Marc Tremblay", at: at(-60 * 50, 1), note: null },
   },
 ];
+
+/**
+ * The time items the caller could decide: never their own, and for a field
+ * lead only their group's (manager-approvals.ts, TimeItemsResponse).
+ */
+function timeInReach(t: TimeItem): boolean {
+  if (isMe(t.cleaner.id)) return false;
+  return teamScopeFor(previewRole()) !== "GROUP" || GROUP.has(t.cleaner.id);
+}
+
+/** A time item as the caller sees it: a field lead gets the client's first name only. */
+function asSeen(t: TimeItem): TimeItem {
+  if (previewRole() !== "FIELD_LEAD" || !t.job.clientName) return t;
+  return { ...t, job: { ...t.job, clientName: t.job.clientName.split(" ")[0]! } };
+}
+
+/** One time item, refused as the server would: another group's is 404, one's own 403. */
+function reachableTime(id: string): number {
+  const i = timeItems.findIndex((x) => x.id === id);
+  const t = timeItems[i];
+  if (!t) throw notFound("This time entry");
+  if (isMe(t.cleaner.id)) throw selfApproval();
+  if (!timeInReach(t)) throw notFound("This time entry");
+  return i;
+}
 
 const withdrawals: ManagedWithdrawal[] = [
   {
@@ -614,6 +690,34 @@ const alerts: Alert[] = [
   { id: "a-4", kind: "CLOCKED_IN", severity: "INFO", title: "Sofia Martins clocked in", body: "Claire Fontaine · job #1431", createdAt: at(-122, 1), read: true, jobId: "m-101" },
   { id: "a-5", kind: "CLOCK_LEFT_RUNNING", severity: "WARN", title: "Thomas Nguyen's clock is still running", body: "Nora Blake · job #1410 · open 11 h", createdAt: at(-60 * 30, 1), read: true, jobId: null },
 ];
+
+const LEAD_ALERT_TITLE: Record<(typeof FIELD_LEAD_ALERT_KINDS)[number], string> = {
+  SHIFT_DROPPED: "Shift dropped",
+  COVER_NEEDED: "Cover needed",
+  CLOCK_LEFT_RUNNING: "Clock left running",
+  CLOCK_FAILED: "Clock failed",
+  CLOCKED_IN: "Clocked in",
+  CLOCKED_OUT: "Clocked out",
+};
+
+/**
+ * The feed as the preview's role gets it (manager-inbox.ts AlertsResponse):
+ * the office's whole feed, or for a field lead only the allow-listed kinds
+ * about their group's jobs, with a plain title and no body.
+ */
+function feedFor(): Alert[] {
+  const jobIn = (id: string | null) => {
+    const job = id ? findJob(id) : undefined;
+    return job && inScope(job) ? job : undefined;
+  };
+  if (previewRole() !== "FIELD_LEAD") return alerts.map((a) => ({ ...a, jobId: jobIn(a.jobId) ? a.jobId : null }));
+  return alerts.flatMap((a) => {
+    const kind = FIELD_LEAD_ALERT_KINDS.find((k) => k === a.kind);
+    const job = jobIn(a.jobId);
+    if (!kind || !job) return [];
+    return [{ ...a, title: `${LEAD_ALERT_TITLE[kind]} · job #${job.jobNumber}`, body: null, jobId: job.id }];
+  });
+}
 
 const lateArrivals: LateArrival[] = [
   {
@@ -696,6 +800,7 @@ export const previewManagerApi = {
     await delay(null);
     guard("TEAM_VIEW");
     const key = date ?? dateKeyOf(new Date());
+    const scope = dayScopeFor(previewRole(), isToday(key)) ?? "GROUP";
     const jobs = jobsOn(key)
       .filter((j) => j.status !== "CANCELLED")
       .filter(inScope)
@@ -704,6 +809,7 @@ export const previewManagerApi = {
     const best = new Map<string, { id: string; name: string; state: CrewState; jobId: string }>();
     for (const j of jobs) {
       for (const c of j.crew) {
+        if (c.outsideGroup || !c.state) continue;
         const state = c.state as CrewState;
         const prev = best.get(c.id);
         if (!prev || PRESSING.indexOf(state) < PRESSING.indexOf(prev.state)) best.set(c.id, { id: c.id, name: c.name, state, jobId: j.id });
@@ -711,7 +817,7 @@ export const previewManagerApi = {
     }
     return {
       date: key,
-      scope: teamScopeFor(previewRole()) ?? "GROUP",
+      scope,
       jobs,
       people: [...best.values()].sort((a, b) => a.name.localeCompare(b.name)),
     };
@@ -758,12 +864,12 @@ export const previewManagerApi = {
         throw refuse("TRAINEE_UNPAIRED", "A Trainee must be paired with a Field Lead or an approved cleaner. Add one, or change the trainee's assignment.");
       }
       const overridden = warningsForAdding(job, ids);
-      if (overridden.length && !body.acknowledgedWarnings) {
-        throw refuse("WARNINGS_NOT_ACKNOWLEDGED", "Check the warnings for this crew, then save again.");
+      if (crewWarningsHash(overridden) !== body.acknowledgedWarningsHash) {
+        throw refuse("WARNINGS_CHANGED", "The warnings for this crew have changed. Check them, then save again.");
       }
       job.crew = ids.map((id) => job.crew.find((c) => c.id === id) ?? waiting(id));
       if (!job.leadId || !ids.includes(job.leadId)) job.leadId = ids[0] ?? null;
-      return { job: jobDetail(job), overridden };
+      return { job: jobDetail(job), overridden: overridden.map((w) => w.message) };
     }),
 
   addCleaner: (jobId, body) =>
@@ -776,12 +882,12 @@ export const previewManagerApi = {
         throw refuse("TRAINEE_NEEDS_CREW", "Trainees must be paired with a Field Lead, so an admin adds them with the rest of the crew.");
       }
       const overridden = warningsForAdding(job, [p.id]);
-      if (overridden.length && !body.acknowledgedWarnings) {
-        throw refuse("WARNINGS_NOT_ACKNOWLEDGED", "Check the warnings for this cleaner, then add them again.");
+      if (crewWarningsHash(overridden) !== body.acknowledgedWarningsHash) {
+        throw refuse("WARNINGS_CHANGED", "The warnings for this cleaner have changed. Check them, then add them again.");
       }
       if (!job.crew.some((c) => c.id === p.id)) job.crew.push(waiting(p.id));
       if (!job.leadId) job.leadId = p.id;
-      return { job: jobDetail(job), overridden };
+      return { job: jobDetail(job), overridden: overridden.map((w) => w.message) };
     }),
 
   approvalsSummary: async () => {
@@ -789,36 +895,37 @@ export const previewManagerApi = {
     guard("TIME_APPROVE", "WITHDRAWALS", "KIT_REQUESTS");
     const role = previewRole();
     return {
-      time: can(role, "TIME_APPROVE") ? timeItems.filter((t) => t.status === "PENDING").length : null,
-      withdrawals: can(role, "WITHDRAWALS") ? withdrawals.filter((w) => w.status === "PENDING" || w.status === "APPROVED").length : null,
-      kit: can(role, "KIT_REQUESTS") ? kitRequests.filter((k) => k.status === "PENDING").length : null,
+      time: can(role, "TIME_APPROVE") ? timeItems.filter((t) => t.status === "PENDING" && timeInReach(t)).length : null,
+      withdrawals: can(role, "WITHDRAWALS")
+        ? withdrawals.filter((w) => (w.status === "PENDING" || w.status === "APPROVED") && !isMe(w.employee.id)).length
+        : null,
+      kit: can(role, "KIT_REQUESTS") ? kitRequests.filter((k) => k.status === "PENDING" && !isMe(k.employee.id)).length : null,
     };
   },
 
   timeItems: async (status, cursor) => {
     await delay(null);
     guard("TIME_APPROVE");
+    const reach = timeItems.filter(timeInReach);
     const list =
       status === "pending"
-        ? timeItems.filter((t) => t.status === "PENDING").sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-        : timeItems.filter((t) => t.status !== "PENDING").sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-    return pageOf(list, cursor);
+        ? reach.filter((t) => t.status === "PENDING").sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+        : reach.filter((t) => t.status !== "PENDING").sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return pageOf(list.map(asSeen), cursor);
   },
 
   timeItem: async (id) => {
     await delay(null);
     guard("TIME_APPROVE");
-    const t = timeItems.find((x) => x.id === id);
-    if (!t) throw notFound("This time entry");
-    return t;
+    return asSeen(timeItems[reachableTime(id)]!);
   },
 
   decideTime: (id, body) =>
     once(body.clientEventId, () => {
       guard("TIME_APPROVE");
-      const i = timeItems.findIndex((x) => x.id === id);
-      const t = timeItems[i];
-      if (!t) throw notFound("This time entry");
+      const i = reachableTime(id);
+      const t = timeItems[i]!;
+      if (body.decision === "ADJUST" && !can(previewRole(), "TIME_ADJUST")) throw forbidden();
       if (t.status !== "PENDING") throw refuse("ALREADY_DECIDED", `This request was already ${t.status.toLowerCase()}.`);
       const note = body.note?.trim() || null;
       if (body.decision !== "APPROVE" && !note) throw new ApiError("Add a note for the cleaner.", 400, "NOTE_REQUIRED", false);
@@ -837,17 +944,18 @@ export const previewManagerApi = {
         decided: { by: previewPerson().name, at: new Date().toISOString(), note },
       };
       timeItems[i] = decided;
-      return decided;
+      return asSeen(decided);
     }),
 
   withdrawalsQueue: async (status, cursor) => {
     await delay(null);
     guard("WITHDRAWALS");
-    const open = withdrawals.filter((w) => w.status === "PENDING" || w.status === "APPROVED");
+    const others = withdrawals.filter((w) => !isMe(w.employee.id));
+    const open = others.filter((w) => w.status === "PENDING" || w.status === "APPROVED");
     const list =
       status === "open"
         ? open.sort((a, b) => a.requestedAt.localeCompare(b.requestedAt))
-        : withdrawals.filter((w) => !open.includes(w)).sort((a, b) => b.requestedAt.localeCompare(a.requestedAt));
+        : others.filter((w) => !open.includes(w)).sort((a, b) => b.requestedAt.localeCompare(a.requestedAt));
     return { ...pageOf(list, cursor), openTotalCents: open.reduce((s, w) => s + w.amountCents, 0) };
   },
 
@@ -856,6 +964,7 @@ export const previewManagerApi = {
     guard("WITHDRAWALS");
     const w = withdrawals.find((x) => x.id === id);
     if (!w) throw notFound("This withdrawal");
+    if (isMe(w.employee.id)) throw selfApproval();
     return w;
   },
 
@@ -865,6 +974,7 @@ export const previewManagerApi = {
       const i = withdrawals.findIndex((w) => w.id === id);
       const w = withdrawals[i];
       if (!w) throw notFound("This withdrawal");
+      if (isMe(w.employee.id)) throw selfApproval();
       const ok =
         (body.action === "APPROVE" && w.status === "PENDING") ||
         (body.action !== "APPROVE" && (w.status === "PENDING" || w.status === "APPROVED"));
@@ -888,7 +998,7 @@ export const previewManagerApi = {
   kitRequests: async (cursor) => {
     await delay(null);
     guard("KIT_REQUESTS");
-    return pageOf(kitRequests.filter((k) => k.status === "PENDING"), cursor);
+    return pageOf(kitRequests.filter((k) => k.status === "PENDING" && !isMe(k.employee.id)), cursor);
   },
 
   decideKitRequest: (id, body) =>
@@ -897,6 +1007,7 @@ export const previewManagerApi = {
       const i = kitRequests.findIndex((k) => k.id === id);
       const k = kitRequests[i];
       if (!k) throw notFound("This request");
+      if (isMe(k.employee.id)) throw selfApproval();
       if (k.status !== "PENDING") throw refuse("ALREADY_RESOLVED", "Request has already been resolved");
       if (body.decision === "APPROVE" && k.product && k.product.inWarehouse < k.quantity) {
         throw refuse(
@@ -916,15 +1027,16 @@ export const previewManagerApi = {
   alerts: async (cursor) => {
     await delay(null);
     guard("ALERTS");
-    const visible = alerts.map((a) => ({ ...a, jobId: a.jobId && findJob(a.jobId) && inScope(findJob(a.jobId)!) ? a.jobId : null }));
-    return { ...pageOf(visible, cursor), unreadCount: alerts.filter((a) => !a.read).length };
+    const visible = feedFor();
+    return { ...pageOf(visible, cursor), unreadCount: visible.filter((a) => !a.read).length };
   },
 
   markAlertsRead: async ({ ids }) => {
     await delay(null, 150);
     guard("ALERTS");
-    for (const a of alerts) if (ids.includes(a.id)) a.read = true;
-    return { unreadCount: alerts.filter((a) => !a.read).length };
+    const mine = new Set(feedFor().map((a) => a.id));
+    for (const a of alerts) if (ids.includes(a.id) && mine.has(a.id)) a.read = true;
+    return { unreadCount: feedFor().filter((a) => !a.read).length };
   },
 
   lateArrivals: async (cursor) => {

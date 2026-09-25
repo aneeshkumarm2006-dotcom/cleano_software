@@ -11,7 +11,7 @@ import { LoadError, Loading } from "@/components/QueryState";
 import { useDecideTime, useMe, useTimeItem } from "@/data/queries";
 import { useStaffRole } from "@/data/role";
 import { TimeStepper } from "@/features/manage/TimeStepper";
-import { OFFLINE_EVENT, OFFLINE_WHY } from "@/features/manage/words";
+import { ALREADY_HANDLED, handledElsewhere, OFFLINE_EVENT, OFFLINE_WHY } from "@/features/manage/words";
 import { BackHeader, confirm, errorText, FormError, Notice, Page, SectionTitle } from "@/features/record/ui";
 import { clockTime, shortDate } from "@/lib/format";
 import { useEventKey } from "@/lib/idempotency";
@@ -27,7 +27,9 @@ const DECISIONS = [
  * take at its word (API_V1.md §6), or a cleaner's own correction request.
  * Approve applies what was asked; Adjust applies the time the office knows
  * is right; Reject leaves the record as it is. Adjusting or rejecting needs
- * a note, which the cleaner sees.
+ * a note, which the cleaner sees. A field lead approves or rejects only:
+ * Adjust isn't offered without TIME_ADJUST, and the server refuses it too.
+ * Nobody is shown their own time (the server leaves it out of the queue).
  */
 export default function TimeItemScreen() {
   return (
@@ -65,7 +67,15 @@ function TimeItemView() {
       </Page>
     );
   }
-  return <Decide header={header} item={item.data} timeZone={tz} back={role.side === "office" ? "/manage/approvals" : "/manage/queue"} />;
+  return (
+    <Decide
+      header={header}
+      item={item.data}
+      timeZone={tz}
+      canAdjust={role.can("TIME_ADJUST")}
+      back={role.side === "office" ? "/manage/approvals" : "/manage/queue"}
+    />
+  );
 }
 
 function Row({ label, now, asked, timeZone }: { label: string; now: string | null; asked: string | null; timeZone: string }) {
@@ -86,10 +96,24 @@ function Row({ label, now, asked, timeZone }: { label: string; now: string | nul
   );
 }
 
-function Decide({ header, item, timeZone, back }: { header: ReactNode; item: TimeItem; timeZone: string; back: Href }) {
+function Decide({
+  header,
+  item,
+  timeZone,
+  canAdjust,
+  back,
+}: {
+  header: ReactNode;
+  item: TimeItem;
+  timeZone: string;
+  canAdjust: boolean;
+  back: Href;
+}) {
   const decide = useDecideTime(item.id);
   const key = useEventKey();
+  const options = canAdjust ? DECISIONS : DECISIONS.filter((d) => d.value !== "ADJUST");
   const [decision, setDecision] = useState<TimeDecision>("APPROVE");
+  const [handled, setHandled] = useState(false);
   const [start, setStart] = useState(item.requested.start ?? item.current.start);
   const [end, setEnd] = useState(item.requested.end ?? item.current.end);
   const [note, setNote] = useState("");
@@ -135,7 +159,12 @@ function Decide({ header, item, timeZone, back }: { header: ReactNode; item: Tim
         },
         onError: (e) => {
           key.failed(e);
-          setError(errorText(e));
+          if (handledElsewhere(e)) {
+            setHandled(true);
+            void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+          } else {
+            setError(errorText(e));
+          }
         },
       },
     );
@@ -160,6 +189,11 @@ function Decide({ header, item, timeZone, back }: { header: ReactNode; item: Tim
         ) : undefined
       }
     >
+      {handled ? (
+        <Notice tone="neutral" icon="info">
+          {ALREADY_HANDLED}
+        </Notice>
+      ) : null}
       <Card padding={4}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: space[2] }}>
           <Text variant="bodyStrong" style={{ flex: 1 }}>
@@ -202,7 +236,7 @@ function Decide({ header, item, timeZone, back }: { header: ReactNode; item: Tim
 
       {pending ? (
         <>
-          <Segmented label="Your decision" options={DECISIONS} value={decision} onChange={(d) => { setDecision(d); setError(null); }} />
+          <Segmented label="Your decision" options={options} value={decision} onChange={(d) => { setDecision(d); setError(null); }} />
           {decision === "ADJUST" ? (
             <>
               <SectionTitle>The right times</SectionTitle>

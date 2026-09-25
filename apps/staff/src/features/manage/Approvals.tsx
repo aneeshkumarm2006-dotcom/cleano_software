@@ -8,11 +8,11 @@ import { View } from "react-native";
 import { Empty, LoadError, Loading } from "@/components/QueryState";
 import { useApprovalsSummary, useDecideKitRequest, useKitRequests, useMe, useTimeItems, useWithdrawalsQueue } from "@/data/queries";
 import { useStaffRole } from "@/data/role";
-import { confirm, errorText, FormError, SectionTitle } from "@/features/record/ui";
+import { confirm, errorText, FormError, Notice, SectionTitle } from "@/features/record/ui";
 import { clockTime, formatMoney, shortDate } from "@/lib/format";
 import { useEventKey } from "@/lib/idempotency";
 
-import { withdrawalStatus } from "./words";
+import { ALREADY_HANDLED, handledElsewhere, withdrawalStatus } from "./words";
 
 type Queue = "time" | "withdrawals" | "kit";
 
@@ -140,7 +140,7 @@ function WithdrawalQueue({ timeZone, currency }: { timeZone: string; currency: s
   );
 }
 
-function KitCard({ item, timeZone }: { item: KitRequestItem; timeZone: string }) {
+function KitCard({ item, timeZone, onHandledElsewhere }: { item: KitRequestItem; timeZone: string; onHandledElsewhere: () => void }) {
   const decide = useDecideKitRequest();
   const key = useEventKey();
   const [error, setError] = useState<string | null>(null);
@@ -172,7 +172,9 @@ function KitCard({ item, timeZone }: { item: KitRequestItem; timeZone: string })
         },
         onError: (e) => {
           key.failed(e);
-          setError(errorText(e));
+          // The list reloads and this card leaves it, so the queue says why.
+          if (handledElsewhere(e)) onHandledElsewhere();
+          else setError(errorText(e));
         },
       },
     );
@@ -205,15 +207,25 @@ function KitCard({ item, timeZone }: { item: KitRequestItem; timeZone: string })
 
 function KitQueue({ timeZone }: { timeZone: string }) {
   const kit = useKitRequests();
+  const [handled, setHandled] = useState(false);
   if (kit.isPending) return <Loading label="Loading kit requests" />;
   if (kit.isError) return <LoadError error={kit.error} onRetry={() => kit.refetch()} />;
   const items = kit.data.pages.flatMap((p) => p.items);
+  const notice = handled ? (
+    <Notice tone="neutral" icon="info">
+      {ALREADY_HANDLED}
+    </Notice>
+  ) : null;
   return items.length === 0 ? (
-    <Empty icon="kit" title="No kit requests waiting" />
+    <>
+      {notice}
+      <Empty icon="kit" title="No kit requests waiting" />
+    </>
   ) : (
     <>
+      {notice}
       {items.map((k) => (
-        <KitCard key={k.id} item={k} timeZone={timeZone} />
+        <KitCard key={k.id} item={k} timeZone={timeZone} onHandledElsewhere={() => setHandled(true)} />
       ))}
       <MoreButton query={kit} />
     </>
@@ -229,8 +241,9 @@ export function useApprovalsCount(): number | undefined {
 
 /**
  * The approval queues the role may act on, one at a time: clock times for
- * every manager role and field leads; withdrawals and kit for owners and
- * admins. A queue the role can't use isn't offered at all.
+ * every manager role and field leads (a lead's own group only); withdrawals
+ * and kit for owners and admins. A queue the role can't use isn't offered at
+ * all, and nobody's own items are in any of them (the server leaves them out).
  */
 export function ApprovalsBody() {
   const me = useMe();

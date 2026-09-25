@@ -1,7 +1,8 @@
 // The manager screens' words for the contract's vocabularies, and the tone
 // each reads in. A value from a newer server (UNKNOWN, or anything not
 // listed) gets a neutral fallback rather than a blank.
-import type { CrewState, JobAttention, PaymentMethod } from "@bookmops/api/v1";
+import { ApiError } from "@bookmops/api/client";
+import { type CrewState, isAlreadyHandled, type JobAttention, type PaymentMethod } from "@bookmops/api/v1";
 import { JOB_ISSUE_CATEGORY_LABEL } from "@bookmops/core/jobs";
 import type { PillTone } from "@bookmops/ui-native";
 
@@ -13,7 +14,9 @@ export const CREW_STATE: Record<CrewState, { label: string; tone: PillTone }> = 
   DONE: { label: "Done", tone: "success" },
 };
 
-export function crewState(state: string): { label: string; tone: PillTone } {
+/** A crew member's state in words. Null is a field lead's view of someone outside their group. */
+export function crewState(state: string | null): { label: string; tone: PillTone } {
+  if (state === null) return { label: "Not in your group", tone: "neutral" };
   return CREW_STATE[state as CrewState] ?? { label: "Unknown", tone: "neutral" };
 }
 
@@ -88,4 +91,15 @@ export const issueStatus = (s: string) => ISSUE_STATUS[s] ?? { label: "Report", 
 export function shortName(name: string): string {
   const [first, last] = name.split(/\s+/);
   return last ? `${first} ${last[0]}.` : (first ?? name);
+}
+
+/**
+ * What the office sees when another manager decided the same item first
+ * (manager-access.ts rule 10). The hook has already reloaded it.
+ */
+export const ALREADY_HANDLED = "Someone already handled this. It now shows as it stands.";
+
+/** True for a 409 that means another decision got there first. */
+export function handledElsewhere(e: unknown): boolean {
+  return e instanceof ApiError && isAlreadyHandled(e.code);
 }

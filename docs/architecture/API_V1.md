@@ -195,7 +195,7 @@ because it keeps real REST paths.
 | 403 | The role isn't allowed, `ACCOUNT_INACTIVE`, `PASSWORD_CHANGE_REQUIRED`, or `WORKSPACE_SUSPENDED` |
 | 404 | Doesn't exist, **or isn't yours**. Same answer on purpose, so ids can't be probed. |
 | 409 | Conflicts with current state, or the same request is still in flight |
-| 422 | An idempotency key reused with a different body |
+| 422 | An idempotency key reused with a different method, path or body |
 | 426 | App too old |
 | 429 | Rate limited |
 
@@ -265,7 +265,11 @@ export const POST = v1Route(
    - `PASSWORD_CHANGE_REQUIRED` if a change is pending, except on `/me`,
      change-password, and sign-out.
 10. **Role.** `access` is an **allow-list**, and a missing or unknown role is
-    403. For `staff`, the list is `EMPLOYEE` and `FIELD_LEAD`. Manager routes
+    403. The role is **re-read from the database on every request**, with
+    the account state in gate 9, never taken from the session payload, a
+    cookie cache or the request. A manager who is demoted (say ADMIN to
+    EMPLOYEE) loses the manager routes on their very next request, without
+    being signed out. For `staff`, the list is `EMPLOYEE` and `FIELD_LEAD`. Manager routes
     (`/api/v1/manager/*`) use `{ capability: X }`, resolved by
     `capabilitiesFor(role)` in `packages/api/src/v1/manager-access.ts`, the
     same function the app reads, so the two can't drift. `/me`, device
@@ -407,11 +411,17 @@ out, breaks, withdrawals):
 
 - **Columns:** company, user, key, route, request hash, state, stored response,
   expiry.
+- **The request hash covers the method, the path and the body:** a SHA-256
+  of the method, the concrete path with its ids filled in
+  (`/api/v1/manager/withdrawals/w_123/decision`, not the route pattern), and
+  the canonical JSON body. Ids live in the path, so a hash of the body alone
+  would let one key, reused by a buggy client, replay the answer for one
+  withdrawal or time item as if it were another's.
 - **Unique on (company, user, key).** One person's key can never collide with,
   or replay, another's.
 - **Replay:**
   - a retry returns the stored response and fires no effects;
-  - the same key with a different body answers 422;
+  - the same key with a different method, path or body answers 422;
   - a key still in flight answers 409, `retryable: true`.
 - Records are kept at least as long as the correction window.
 - Server actions don't use it. The web has no offline queue, and a double
@@ -568,7 +578,21 @@ All paths are under `/api/v1`. Notes on the endpoints:
   - a POST from a sibling subdomain;
   - a `text/plain` JSON body;
   - another user's idempotency key;
-  - a reused key with a different body.
+  - a reused key with a different method, path or body;
+  - a manager demoted in the database while their session stays open.
+- **Manager rules** (`packages/api/src/v1/manager-access.ts`, rules 9 and
+  10), each checked against the staging database:
+  - deciding one's own clock time, withdrawal or kit request is 403
+    `SELF_APPROVAL`, and none of them appear in the caller's queues or
+    counts;
+  - a field lead reaching another group's clock time is 404, and sending
+    ADJUST is 403;
+  - two decisions on one item, sent at once, apply exactly once: one
+    succeeds, the other is 409 with the endpoint's "already handled" code,
+    and no stock moves or email goes twice;
+  - two crew changes on one job, sent at once, with the same
+    `expectedCrewIds`: one succeeds, the other is 409 `CREW_CHANGED`; a
+    stale warnings hash is 409 `WARNINGS_CHANGED`.
 - **Offline rules:** each rule in §6 is tested against fixed times. The cases
   are:
   - a backdated clock-in after online activity;

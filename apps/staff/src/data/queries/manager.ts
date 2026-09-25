@@ -3,14 +3,15 @@
 // `enabled` flag), so a field lead's phone never asks for a queue it can't
 // see and gets a 403 back.
 import { ApiError } from "@bookmops/api/client";
-import type {
-  AddCleanerRequest,
-  CrewChangeResponse,
-  IssueStatusRequest,
-  KitDecisionRequest,
-  SetCrewRequest,
-  TimeDecisionRequest,
-  WithdrawalDecisionRequest,
+import {
+  type AddCleanerRequest,
+  type CrewChangeResponse,
+  isAlreadyHandled,
+  type IssueStatusRequest,
+  type KitDecisionRequest,
+  type SetCrewRequest,
+  type TimeDecisionRequest,
+  type WithdrawalDecisionRequest,
 } from "@bookmops/api/v1";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -135,6 +136,10 @@ export function useDecideTime(id: string) {
       qc.setQueryData(managerKeys.timeItem(id), item);
       changed();
       void qc.invalidateQueries({ queryKey: ["manager", "job", item.job.id] });
+    },
+    // Someone else decided it first: reload it (and the queue) as it now stands.
+    onError: (e) => {
+      if (e instanceof ApiError && isAlreadyHandled(e.code)) changed();
     },
   });
 }

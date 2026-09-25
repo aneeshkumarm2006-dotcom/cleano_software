@@ -54,7 +54,14 @@ function ScheduleDays() {
       ) : day.isError ? (
         <LoadError error={day.error} onRetry={() => day.refetch()} />
       ) : (
-        <TeamDayView data={day.data} timeZone={tz} live={isToday} />
+        <>
+          {day.data.scope === "OWN" ? (
+            <Text variant="small" color="ink2" align="center">
+              Other days show only the jobs you're on. Today shows everyone's.
+            </Text>
+          ) : null}
+          <TeamDayView data={day.data} timeZone={tz} live={isToday} />
+        </>
       )}
     </Screen>
   );

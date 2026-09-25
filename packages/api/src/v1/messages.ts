@@ -123,7 +123,9 @@ export type OfficeMessagesResponse = z.infer<typeof OfficeMessagesResponse>;
  * Response: the saved OfficeMessage.
  *
  * Server: staff only; posts to the caller's OWN conversation with
- * senderRole EMPLOYEE (never taken from the request). Trims, refuses empty or
+ * senderRole EMPLOYEE, a FIELD_LEAD included (never taken from the request,
+ * nor from the caller's role as the web's sendChatMessage does; see
+ * ./manager-messages.ts). Trims, refuses empty or
  * over MESSAGE_BODY_MAX (400). Keeps the web's side effects: delivery state
  * from the office's presence, and the email to the office when nobody is
  * online (as an effect, flushed after the response, and not re-sent on an
