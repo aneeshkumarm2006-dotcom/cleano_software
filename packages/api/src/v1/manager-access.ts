@@ -27,8 +27,15 @@
 //                                                      never a trainee (OWNER, ADMIN, OPS_MANAGER);
 //                                                      checkAvailability.ts: "a lead coordinates a crew, they
 //                                                      do not assign it"
-//   TIME_APPROVE        ✓     ✓     ✓       ✓         app/admin/actions/decideTimeLogChange.ts and
-//                                                      updateClockTimes.ts (isAdminRole: all four, company-wide)
+//   TIME_APPROVE        ✓     ✓     ✓      group      app/admin/actions/decideTimeLogChange.ts and
+//                                                      updateClockTimes.ts (isAdminRole: all four, company-wide).
+//                                                      The phone narrows a FIELD_LEAD to items whose cleaner
+//                                                      is in their group (anything else 404), APPROVE and
+//                                                      REJECT only; nobody decides their own (rule 9)
+//   TIME_ADJUST         ✓     ✓     ✓       —         the same actions' hand correction: setting times
+//                                                      nobody asked for (TimeDecision ADJUST). Not granted to
+//                                                      a FIELD_LEAD, whose word on their own crew's pay-bearing
+//                                                      hours is limited to yes or no
 //   WITHDRAWALS         ✓     ✓     —       —         app/admin/actions/processWithdrawal.ts
 //   KIT_REQUESTS        ✓     ✓     —       —         app/admin/actions/resolveInventoryRequest.ts
 //   ALERTS              ✓     ✓     ✓       ✓         app/admin/notifications/page.tsx (requireAdmin)
@@ -63,6 +70,7 @@ export const MANAGER_CAPABILITIES = [
   "CREW_SET",
   "CREW_ADD",
   "TIME_APPROVE",
+  "TIME_ADJUST",
   "WITHDRAWALS",
   "KIT_REQUESTS",
   "ALERTS",
@@ -77,7 +85,7 @@ const OWNER_ADMIN: readonly ManagerCapability[] = MANAGER_CAPABILITIES;
 const BY_ROLE: Partial<Record<Role, readonly ManagerCapability[]>> = {
   OWNER: OWNER_ADMIN,
   ADMIN: OWNER_ADMIN,
-  OPS_MANAGER: ["TEAM_VIEW", "JOB_CONTACT", "CREW_ADD", "TIME_APPROVE", "ALERTS", "TEAM_MODERATE"],
+  OPS_MANAGER: ["TEAM_VIEW", "JOB_CONTACT", "CREW_ADD", "TIME_APPROVE", "TIME_ADJUST", "ALERTS", "TEAM_MODERATE"],
   FIELD_LEAD: ["TEAM_VIEW", "TIME_APPROVE", "ALERTS"],
 };
 
@@ -121,9 +129,11 @@ export function appSideFor(role: string | null | undefined): "crew" | "office" |
 // comment repeats them (see also API_V1.md §4, "Rules every service follows"):
 //
 //  1. ACCESS. v1Route `access: { capability: X }`: the role must have X under
-//     capabilitiesFor, read from the session (never the request); otherwise
-//     403 `FORBIDDEN`. The allow-list is this file; a role added later gets
-//     nothing until it is added here.
+//     capabilitiesFor; otherwise 403 `FORBIDDEN`. The role is re-read from
+//     the database on every request (API_V1.md §4, gate 10), never taken from
+//     the request or a cached session, so a manager who is demoted or
+//     deactivated loses access on their very next request. The allow-list is
+//     this file; a role added later gets nothing until it is added here.
 //  2. COMPANY. Every id (job, person, request, withdrawal, conversation,
 //     message) is looked up with the session's organizationId in the query.
 //     Another company's id answers 404, exactly like one that doesn't exist.
@@ -150,3 +160,18 @@ export function appSideFor(role: string | null | undefined): "crew" | "office" |
 //       everything else                          gate 11's per-user limit
 //  8. EFFECTS. Emails, push alerts and invites are returned by the service and
 //     flushed with after(), never awaited inside the transaction (§5).
+//  9. NO SELF-DECISIONS. Every decision endpoint (a time item, a withdrawal,
+//     a kit request) refuses when the item's person (the cleaner, the
+//     employee) is the caller: 403 `SELF_APPROVAL`, whatever the role, OWNER
+//     included. The lists and the counts behind them leave the caller's own
+//     items out for that capability, so the queue never offers one. The web
+//     has no such check today; the phone doesn't inherit the gap.
+// 10. ONE DECISION WINS. Every state transition (a time decision; a
+//     withdrawal's approve, complete or reject; a kit request's resolve) is
+//     one conditional update on the from-states it expects (`UPDATE … WHERE
+//     id = $1 AND status IN (…)`), inside the transaction that applies its
+//     effects, never a read and then a write. Zero rows updated means someone
+//     else got there first: roll back, and answer 409 with the endpoint's
+//     "already handled" code (ALREADY_HANDLED_CODES in
+//     ./manager-approvals.ts). A replay of the winner's own key still gets
+//     the stored answer (rule 5), not the 409.

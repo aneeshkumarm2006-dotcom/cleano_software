@@ -8,7 +8,7 @@ import { View } from "react-native";
 import { Guarded } from "@/components/Guarded";
 import { LoadError, Loading } from "@/components/QueryState";
 import { useDecideWithdrawal, useManagedWithdrawal, useMe } from "@/data/queries";
-import { PAYMENT_METHOD_LABEL, paymentMethodLabel, withdrawalStatus } from "@/features/manage/words";
+import { ALREADY_HANDLED, handledElsewhere, PAYMENT_METHOD_LABEL, paymentMethodLabel, withdrawalStatus } from "@/features/manage/words";
 import { BackHeader, confirm, errorText, FormError, Notice, Page, SectionTitle } from "@/features/record/ui";
 import { formatMoney, shortDate } from "@/lib/format";
 import { useEventKey } from "@/lib/idempotency";
@@ -58,6 +58,7 @@ function Decide({ header, w, timeZone, currency }: { header: ReactNode; w: Manag
   const [method, setMethod] = useState<PaymentMethod>((w.paymentMethod as PaymentMethod | null) ?? "E_TRANSFER");
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState<WithdrawalAction | null>(null);
+  const [handled, setHandled] = useState(false);
   const status = withdrawalStatus(w.status);
   const amount = formatMoney(w.amountCents, currency);
   const open = w.status === "PENDING" || w.status === "APPROVED";
@@ -65,6 +66,7 @@ function Decide({ header, w, timeZone, currency }: { header: ReactNode; w: Manag
   async function run(action: WithdrawalAction) {
     if (decide.isPending) return;
     setError(null);
+    setHandled(false);
     const how = PAYMENT_METHOD_LABEL[method];
     const ok = await confirm(
       action === "APPROVE"
@@ -85,7 +87,12 @@ function Decide({ header, w, timeZone, currency }: { header: ReactNode; w: Manag
         },
         onError: (e) => {
           key.failed(e);
-          setError(errorText(e));
+          if (handledElsewhere(e)) {
+            setHandled(true);
+            void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+          } else {
+            setError(errorText(e));
+          }
         },
         onSettled: () => setRunning(null),
       },
@@ -110,6 +117,11 @@ function Decide({ header, w, timeZone, currency }: { header: ReactNode; w: Manag
         ) : undefined
       }
     >
+      {handled ? (
+        <Notice tone="neutral" icon="info">
+          {ALREADY_HANDLED}
+        </Notice>
+      ) : null}
       <Card padding={5}>
         <View style={{ gap: space[2] }} accessible accessibilityLabel={`${w.employee.name} asked for ${amount}. ${status.label}.`}>
           <Pill label={status.label} tone={status.tone} />

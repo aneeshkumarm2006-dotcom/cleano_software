@@ -8,7 +8,10 @@
 // rules in @bookmops/api/v1 manager-access.ts.
 //
 // To see a refusal: approving Kofi's cloth request is "warehouse short", and
-// a crew of Kofi alone is refused as an unpaired trainee.
+// a crew of Kofi alone is refused as an unpaired trainee. Nobody sees their
+// own clock time, withdrawal or kit request in a queue (Sofia's clock time is
+// there for the office, not for her), and a field lead sees only their
+// group's clock times, with the client's first name.
 import { ApiError } from "@bookmops/api/client";
 import {
   type Alert,
@@ -74,6 +77,8 @@ function pageOf<T>(items: readonly T[], cursor?: string | null) {
 const forbidden = () => new ApiError("Your role can't do this. Ask an admin.", 403, "FORBIDDEN", false);
 const notFound = (what = "This") => new ApiError(`${what} isn't available.`, 404, "NOT_FOUND", false);
 const refuse = (code: string, message: string) => new ApiError(message, 409, code, false);
+const selfApproval = () => new ApiError("That one is yours, so someone else in the office decides it.", 403, "SELF_APPROVAL", false);
+const isMe = (personId: string) => personId === previewPerson().id;
 
 function guard(...any: ManagerCapability[]) {
   if (!any.some((c) => can(previewRole(), c))) throw forbidden();
@@ -525,6 +530,19 @@ const timeItems: TimeItem[] = [
     decided: null,
   },
   {
+    id: "t-5",
+    kind: "CLEANER_REQUEST",
+    status: "PENDING",
+    cleaner: { id: "u-sofia", name: "Sofia Martins" },
+    job: { id: "m-prev-4", jobNumber: 1424, clientName: "Isabelle Martin", startsAt: at(-60 * 50) },
+    current: { start: at(-60 * 50, 1), end: at(-60 * 47, 1) },
+    requested: { start: at(-60 * 50 - 15, 1), end: null },
+    reason: "I opened up 15 minutes early to let the plumber in.",
+    offline: null,
+    createdAt: at(-60 * 46, 1),
+    decided: null,
+  },
+  {
     id: "t-4",
     kind: "CLEANER_REQUEST",
     status: "APPROVED",
@@ -538,6 +556,31 @@ const timeItems: TimeItem[] = [
     decided: { by: "Marc Tremblay", at: at(-60 * 50, 1), note: null },
   },
 ];
+
+/**
+ * The time items the caller could decide: never their own, and for a field
+ * lead only their group's (manager-approvals.ts, TimeItemsResponse).
+ */
+function timeInReach(t: TimeItem): boolean {
+  if (isMe(t.cleaner.id)) return false;
+  return teamScopeFor(previewRole()) !== "GROUP" || GROUP.has(t.cleaner.id);
+}
+
+/** A time item as the caller sees it: a field lead gets the client's first name only. */
+function asSeen(t: TimeItem): TimeItem {
+  if (previewRole() !== "FIELD_LEAD" || !t.job.clientName) return t;
+  return { ...t, job: { ...t.job, clientName: t.job.clientName.split(" ")[0]! } };
+}
+
+/** One time item, refused as the server would: another group's is 404, one's own 403. */
+function reachableTime(id: string): number {
+  const i = timeItems.findIndex((x) => x.id === id);
+  const t = timeItems[i];
+  if (!t) throw notFound("This time entry");
+  if (isMe(t.cleaner.id)) throw selfApproval();
+  if (!timeInReach(t)) throw notFound("This time entry");
+  return i;
+}
 
 const withdrawals: ManagedWithdrawal[] = [
   {
@@ -789,36 +832,37 @@ export const previewManagerApi = {
     guard("TIME_APPROVE", "WITHDRAWALS", "KIT_REQUESTS");
     const role = previewRole();
     return {
-      time: can(role, "TIME_APPROVE") ? timeItems.filter((t) => t.status === "PENDING").length : null,
-      withdrawals: can(role, "WITHDRAWALS") ? withdrawals.filter((w) => w.status === "PENDING" || w.status === "APPROVED").length : null,
-      kit: can(role, "KIT_REQUESTS") ? kitRequests.filter((k) => k.status === "PENDING").length : null,
+      time: can(role, "TIME_APPROVE") ? timeItems.filter((t) => t.status === "PENDING" && timeInReach(t)).length : null,
+      withdrawals: can(role, "WITHDRAWALS")
+        ? withdrawals.filter((w) => (w.status === "PENDING" || w.status === "APPROVED") && !isMe(w.employee.id)).length
+        : null,
+      kit: can(role, "KIT_REQUESTS") ? kitRequests.filter((k) => k.status === "PENDING" && !isMe(k.employee.id)).length : null,
     };
   },
 
   timeItems: async (status, cursor) => {
     await delay(null);
     guard("TIME_APPROVE");
+    const reach = timeItems.filter(timeInReach);
     const list =
       status === "pending"
-        ? timeItems.filter((t) => t.status === "PENDING").sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-        : timeItems.filter((t) => t.status !== "PENDING").sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-    return pageOf(list, cursor);
+        ? reach.filter((t) => t.status === "PENDING").sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+        : reach.filter((t) => t.status !== "PENDING").sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return pageOf(list.map(asSeen), cursor);
   },
 
   timeItem: async (id) => {
     await delay(null);
     guard("TIME_APPROVE");
-    const t = timeItems.find((x) => x.id === id);
-    if (!t) throw notFound("This time entry");
-    return t;
+    return asSeen(timeItems[reachableTime(id)]!);
   },
 
   decideTime: (id, body) =>
     once(body.clientEventId, () => {
       guard("TIME_APPROVE");
-      const i = timeItems.findIndex((x) => x.id === id);
-      const t = timeItems[i];
-      if (!t) throw notFound("This time entry");
+      const i = reachableTime(id);
+      const t = timeItems[i]!;
+      if (body.decision === "ADJUST" && !can(previewRole(), "TIME_ADJUST")) throw forbidden();
       if (t.status !== "PENDING") throw refuse("ALREADY_DECIDED", `This request was already ${t.status.toLowerCase()}.`);
       const note = body.note?.trim() || null;
       if (body.decision !== "APPROVE" && !note) throw new ApiError("Add a note for the cleaner.", 400, "NOTE_REQUIRED", false);
@@ -837,17 +881,18 @@ export const previewManagerApi = {
         decided: { by: previewPerson().name, at: new Date().toISOString(), note },
       };
       timeItems[i] = decided;
-      return decided;
+      return asSeen(decided);
     }),
 
   withdrawalsQueue: async (status, cursor) => {
     await delay(null);
     guard("WITHDRAWALS");
-    const open = withdrawals.filter((w) => w.status === "PENDING" || w.status === "APPROVED");
+    const others = withdrawals.filter((w) => !isMe(w.employee.id));
+    const open = others.filter((w) => w.status === "PENDING" || w.status === "APPROVED");
     const list =
       status === "open"
         ? open.sort((a, b) => a.requestedAt.localeCompare(b.requestedAt))
-        : withdrawals.filter((w) => !open.includes(w)).sort((a, b) => b.requestedAt.localeCompare(a.requestedAt));
+        : others.filter((w) => !open.includes(w)).sort((a, b) => b.requestedAt.localeCompare(a.requestedAt));
     return { ...pageOf(list, cursor), openTotalCents: open.reduce((s, w) => s + w.amountCents, 0) };
   },
 
@@ -856,6 +901,7 @@ export const previewManagerApi = {
     guard("WITHDRAWALS");
     const w = withdrawals.find((x) => x.id === id);
     if (!w) throw notFound("This withdrawal");
+    if (isMe(w.employee.id)) throw selfApproval();
     return w;
   },
 
@@ -865,6 +911,7 @@ export const previewManagerApi = {
       const i = withdrawals.findIndex((w) => w.id === id);
       const w = withdrawals[i];
       if (!w) throw notFound("This withdrawal");
+      if (isMe(w.employee.id)) throw selfApproval();
       const ok =
         (body.action === "APPROVE" && w.status === "PENDING") ||
         (body.action !== "APPROVE" && (w.status === "PENDING" || w.status === "APPROVED"));
@@ -888,7 +935,7 @@ export const previewManagerApi = {
   kitRequests: async (cursor) => {
     await delay(null);
     guard("KIT_REQUESTS");
-    return pageOf(kitRequests.filter((k) => k.status === "PENDING"), cursor);
+    return pageOf(kitRequests.filter((k) => k.status === "PENDING" && !isMe(k.employee.id)), cursor);
   },
 
   decideKitRequest: (id, body) =>
@@ -897,6 +944,7 @@ export const previewManagerApi = {
       const i = kitRequests.findIndex((k) => k.id === id);
       const k = kitRequests[i];
       if (!k) throw notFound("This request");
+      if (isMe(k.employee.id)) throw selfApproval();
       if (k.status !== "PENDING") throw refuse("ALREADY_RESOLVED", "Request has already been resolved");
       if (body.decision === "APPROVE" && k.product && k.product.inWarehouse < k.quantity) {
         throw refuse(
