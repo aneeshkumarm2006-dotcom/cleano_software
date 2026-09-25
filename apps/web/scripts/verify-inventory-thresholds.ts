@@ -64,7 +64,7 @@ check("cleaner alert names restocking", LOW_STOCK_LABEL.CLEANER_RESTOCK, "Cleane
 // ── Source sweep: no cleaner-side path may read the company threshold ──────
 const read = (p: string) => fs.readFileSync(p, "utf8");
 
-const clockOut = read("src/app/admin/actions/clockOut.ts");
+const clockOut = read("src/server/clock/clock-out.ts");
 ok("clockOut no longer falls back to minStock", !clockOut.includes("?? ep.product.minStock"));
 ok("clockOut uses the cleaner threshold rule", clockOut.includes("isCleanerLow"));
 

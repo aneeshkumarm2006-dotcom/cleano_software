@@ -307,7 +307,7 @@ section("4.7 · the Requests-tab flood");
 for (const f of [
   "src/app/admin/actions/updateMyInventoryCount.ts",
   "src/app/admin/actions/updateMyItemCondition.ts",
-  "src/app/admin/actions/clockOut.ts",
+  "src/server/clock/clock-out.ts",
 ]) {
   ok(
     `${f.split("/").pop()} files no InventoryRequest`,
@@ -327,7 +327,7 @@ for (const f of [
     "src/app/admin/actions/resolveInventoryFlag.ts",
   ]);
 }
-has("...and clock-out raises a flag instead", "src/app/admin/actions/clockOut.ts",
+has("...and clock-out raises a flag instead", "src/server/clock/clock-out.ts",
   "inventoryFlag.create");
 
 /* ═════════════ the invariant, over real data (opt-in with --db) ══════════ */

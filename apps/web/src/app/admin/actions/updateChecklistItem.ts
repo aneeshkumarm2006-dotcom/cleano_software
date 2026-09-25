@@ -1,11 +1,13 @@
 "use server";
 
-import { db } from "@/lib/org-db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
-import { revalidatePath } from "next/cache";
 import type { ChecklistItemStatus } from "@prisma/client";
-import { sendAdminChecklistCompleted } from "@/lib/email";
+
+import { actorFromSession } from "@/server/actor";
+import { updateChecklistItemFor } from "@/server/checklist/checklist";
+import { revalidateAfterChecklist } from "@/server/clock/revalidate";
+import { fireEffects } from "@/server/effects";
 
 interface UpdateChecklistItemInput {
   itemId: string;
@@ -13,6 +15,13 @@ interface UpdateChecklistItemInput {
   notes?: string | null;
 }
 
+/**
+ * Tick, untick or annotate a checklist item. The rule — who may, what is
+ * written, and the "checklist completed" email to the office — lives in
+ * server/checklist/checklist.ts, shared with the phone's
+ * PUT /api/v1/jobs/:id/checklist/:itemId. This action is the web's front door
+ * onto it and answers exactly as it always has.
+ */
 export async function updateChecklistItem(input: UpdateChecklistItemInput) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) {
@@ -20,83 +29,18 @@ export async function updateChecklistItem(input: UpdateChecklistItemInput) {
   }
 
   try {
-    const item = await db.jobChecklistItem.findUnique({
-      where: { id: input.itemId },
-      include: {
-        checklist: {
-          include: {
-            job: { include: { cleaners: { select: { id: true } } } },
-          },
-        },
-      },
-    });
-    if (!item) return { success: false as const, error: "Item not found" };
-
-    const role = (session.user as { role?: string }).role;
-    const isAdmin = role === "OWNER" || role === "ADMIN";
-    const isOwnChecklist = item.checklist.employeeId === session.user.id;
-    const isJobLead = item.checklist.job.employeeId === session.user.id;
-    const isCleaner = item.checklist.job.cleaners.some(
-      (c) => c.id === session.user.id
+    const result = await updateChecklistItemFor(
+      actorFromSession(session.user as { id: string; name?: string | null; email: string; role?: string | null }),
+      { itemId: input.itemId, status: input.status, notes: input.notes, now: new Date() },
     );
+    if (!result.ok) return { success: false as const, error: result.message };
+    fireEffects(result.effects);
 
-    if (!isAdmin && !isOwnChecklist && !isJobLead && !isCleaner) {
-      return { success: false as const, error: "Not authorized" };
-    }
-
-    const data: {
-      status?: ChecklistItemStatus;
-      notes?: string | null;
-      completedAt?: Date | null;
-    } = {};
-    if (input.status !== undefined) {
-      data.status = input.status;
-      data.completedAt = input.status === "COMPLETED" ? new Date() : null;
-    }
-    if (input.notes !== undefined) {
-      data.notes = input.notes?.trim() ? input.notes.trim() : null;
-    }
-
-    await db.jobChecklistItem.update({
-      where: { id: input.itemId },
-      data,
-    });
-
-    // After marking an item COMPLETED, check whether the whole checklist
-    // is now done — if so, notify admin (gated by `admin.checklist.completed`).
-    if (input.status === "COMPLETED") {
-      const itemsAfter = await db.jobChecklistItem.findMany({
-        where: { checklistId: item.checklistId },
-        select: { status: true },
-      });
-      const allDone =
-        itemsAfter.length > 0 &&
-        itemsAfter.every((i) => i.status === "COMPLETED");
-      if (allDone) {
-        const jobInfo = await db.job.findUnique({
-          where: { id: item.checklist.jobId },
-          select: { jobNumber: true, clientName: true },
-        });
-        if (jobInfo) {
-          sendAdminChecklistCompleted({
-            jobId: item.checklist.jobId,
-            jobNumber: jobInfo.jobNumber,
-            clientName: jobInfo.clientName,
-            cleanerName: session.user.name ?? "Cleaner",
-            itemCount: itemsAfter.length,
-          }).catch((e) => console.error("admin checklist email", e));
-        }
-      }
-    }
-
-    revalidatePath(`/cleaners/my-jobs/${item.checklist.jobId}`);
-    // The clock screen ticks the same checklist through the same action, and it
-    // is a route of its own — without this it kept serving the payload it was
-    // rendered with, so its progress bar and its clock-out gate disagreed with
-    // the boxes the cleaner had just ticked. Every other action on these two
-    // screens (clockIn, clockOut, markOnMyWay, jobBreak) already revalidates
-    // both paths; this one only ever did the first.
-    revalidatePath(`/cleaners/my-jobs/${item.checklist.jobId}/clock`);
+    // Both the job page and the clock screen show this checklist. The clock
+    // screen is a route of its own — without it, it kept serving the payload
+    // it was rendered with, so its progress bar and its clock-out gate
+    // disagreed with the boxes the cleaner had just ticked.
+    revalidateAfterChecklist(result.value.jobId);
     return { success: true as const };
   } catch (error) {
     console.error("Error updating checklist item:", error);

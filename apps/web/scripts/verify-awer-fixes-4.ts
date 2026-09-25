@@ -598,7 +598,7 @@ section(1, "no payment writer stamps a lifecycle status without a date guard", (
   // inference from payment, not the real completion paths.
   has("the past-only cron sweep still exists", "src/lib/job-sweep.ts", "startTime: { lt: dayStart }");
   has("explicit mark-complete still exists", "src/app/admin/actions/markJobComplete.ts", 'data: {');
-  has("final clock-out still sets the job status", "src/app/admin/actions/clockOut.ts", "data: { status: nextStatus }");
+  has("final clock-out still sets the job status", "src/server/clock/clock-out.ts", "data: { status: nextStatus }");
 });
 
 section(1, "every Completed surface reads the one predicate", () => {
@@ -1683,7 +1683,7 @@ section(5, "step 4B.1 — the mount site that was resetting the pay type", () =>
 });
 
 section(5, "step 4B.3/4B.4 — the clock writes the pay, with guards", () => {
-  const CLOCK_OUT = "src/app/admin/actions/clockOut.ts";
+  const CLOCK_OUT = "src/server/clock/clock-out.ts";
   const CLOCK_EDIT = "src/app/admin/actions/updateClockTimes.ts";
   const PAY_SERVER = "src/lib/hourly-pay.server.ts";
 

@@ -217,7 +217,7 @@ const KIT_SURFACES: Array<[string, string]> = [
   ["the employee detail page", "src/app/admin/employees/[id]/page.tsx"],
   ["the admin dashboard", "src/app/admin/dashboard/page.tsx"],
   ["the cleaner dashboard", "src/app/admin/dashboard/CleanerDashboard.tsx"],
-  ["clock-out", "src/app/admin/actions/clockOut.ts"],
+  ["clock-out", "src/server/clock/clock-out.ts"],
   ["the product detail page", "src/app/admin/inventory/[id]/page.tsx"],
 ];
 for (const [label, path] of KIT_SURFACES) {

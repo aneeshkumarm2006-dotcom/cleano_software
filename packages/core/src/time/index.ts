@@ -5,3 +5,4 @@ export * from "./clock-edit";
 export * from "./clock-out";
 export * from "./stale-clock";
 export * from "./time-log-requests";
+export * from "./offline-clock";

@@ -16,6 +16,8 @@
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@better-auth/expo": "1.4.22",
+    "@bookmops/api": "*",
     "@bookmops/core": "*",
     "@hookform/resolvers": "^5.2.2",
     "@prisma/client": "^6.17.1",

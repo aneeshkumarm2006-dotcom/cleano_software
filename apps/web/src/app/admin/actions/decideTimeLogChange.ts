@@ -23,6 +23,9 @@ import { db } from "@/lib/org-db";
 import { isAdminRole } from "@/lib/role-routing";
 import { logActivity } from "@/lib/activity-log";
 import { canDecide, TIME_LOG_REASON_MAX } from "@bookmops/core/time";
+import { fmtDateTime } from "@/lib/time";
+import { snapshotBilledActualHours } from "@/lib/hourly-billing.server";
+import { snapshotHourlyEmployeePay } from "@/lib/hourly-pay.server";
 import { updateClockTimes } from "./updateClockTimes";
 
 type Result = { success: true } | { success: false; error: string };
@@ -58,7 +61,35 @@ export async function decideTimeLogChange(input: {
       };
     }
 
-    if (input.approve) {
+    // Raised by the server from a phone clock event (API_V1.md §6, source
+    // OFFLINE_CLOCK). Two shapes need their own handling; everything else about them
+    // -- a session and a requested start or end -- is the ordinary shape
+    // below.
+    if (input.approve && req.source === "OFFLINE_CLOCK") {
+      if (req.breakId) {
+        const applied = await applyBreakCorrection({
+          jobId: req.jobId,
+          cleanerId: req.cleanerId,
+          breakId: req.breakId,
+          requestedStart: req.requestedStart,
+          requestedEnd: req.requestedEnd,
+          adminName: session.user.name ?? "an admin",
+        });
+        if (!applied.ok) {
+          return { success: false, error: `Couldn't apply it: ${applied.error} The request is still waiting.` };
+        }
+      } else if (!req.sessionId) {
+        // An event that could not be applied at all (a clock-out with no
+        // clock-in, a tap on a job since paid): there is no entry to move.
+        return {
+          success: false,
+          error:
+            "This came from the app with no time entry to change. Enter the times on the job by hand, then reject this request with a note.",
+        };
+      }
+    }
+
+    if (input.approve && !(req.source === "OFFLINE_CLOCK" && req.breakId)) {
       // BOTH times have to be sent, every time.
       //
       // `updateClockTimes` reads null as "CLEAR this time", not "leave it
@@ -151,6 +182,54 @@ export async function decideTimeLogChange(input: {
     console.error("decideTimeLogChange", e);
     return { success: false, error: "Couldn't record that decision. Nothing was changed." };
   }
+}
+
+/**
+ * Move one break to the time the phone reported (an OFFLINE_CLOCK request with a
+ * breakId). Breaks come off paid hours, so the job's hourly pay and billed
+ * hours are re-snapshotted afterwards, as a clock edit does; both snapshots
+ * refuse a locked pay period on their own.
+ */
+async function applyBreakCorrection(args: {
+  jobId: string;
+  cleanerId: string;
+  breakId: string;
+  requestedStart: Date | null;
+  requestedEnd: Date | null;
+  adminName: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const row = await db.jobBreak.findFirst({
+    where: { id: args.breakId, jobId: args.jobId, cleanerId: args.cleanerId },
+    select: { id: true, startedAt: true, endedAt: true },
+  });
+  if (!row) return { ok: false, error: "That break no longer exists." };
+
+  const nextStart = args.requestedStart ?? row.startedAt;
+  const nextEnd = args.requestedEnd ?? row.endedAt;
+  if (nextEnd && nextEnd.getTime() <= nextStart.getTime()) {
+    return { ok: false, error: "The break would end before it starts." };
+  }
+
+  await db.jobBreak.update({
+    where: { id: row.id },
+    data: { startedAt: nextStart, endedAt: nextEnd },
+  });
+  await db.jobLog
+    .create({
+      data: {
+        jobId: args.jobId,
+        userId: args.cleanerId,
+        action: "NOTE_ADDED",
+        field: "breakTimes",
+        oldValue: `start=${fmtDateTime(row.startedAt)} end=${row.endedAt ? fmtDateTime(row.endedAt) : "—"}`,
+        newValue: `start=${fmtDateTime(nextStart)} end=${nextEnd ? fmtDateTime(nextEnd) : "—"}`,
+        description: `Break times corrected by ${args.adminName}, approving the time the app reported.`,
+      },
+    })
+    .catch((e) => console.error("break correction log", e));
+  await snapshotBilledActualHours(args.jobId).catch((e) => console.error("billed-hours snapshot", e));
+  await snapshotHourlyEmployeePay(args.jobId).catch((e) => console.error("hourly-pay snapshot", e));
+  return { ok: true };
 }
 
 export interface TimeLogRequestRow {

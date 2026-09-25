@@ -4,8 +4,8 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { db } from "@/lib/org-db";
 import { revalidatePath } from "next/cache";
-import { hashPassword, verifyPassword } from "better-auth/crypto";
 import { endOtherSessions } from "@/lib/session-revocation";
+import { verifyAndSetPassword } from "@/server/account/password";
 
 interface UpdateUserSettingsParams {
   name: string;
@@ -73,38 +73,11 @@ export async function updateUserPassword(params: UpdateUserPasswordParams) {
 
     const { currentPassword, newPassword } = params;
 
-    // Get user's account with password (better-auth uses "credential" as providerId)
-    const account = await db.account.findFirst({
-      where: {
-        userId: session.user.id,
-        providerId: "credential",
-      },
-    });
-
-    if (!account || !account.password) {
-      return { success: false, error: "No password found for this account. You may be using a social login." };
-    }
-
-    // Verify current password using better-auth's password utilities (scrypt)
-    const isValidPassword = await verifyPassword({
-      password: currentPassword,
-      hash: account.password,
-    });
-
-    if (!isValidPassword) {
-      return { success: false, error: "Current password is incorrect" };
-    }
-
-    // Hash new password using better-auth's password utilities (scrypt)
-    const hashedPassword = await hashPassword(newPassword);
-
-    // Update password
-    await db.account.update({
-      where: { id: account.id },
-      data: {
-        password: hashedPassword,
-      },
-    });
+    // Check the current password and store the new one (scrypt, via
+    // better-auth's utilities). Shared with the phone's change-password
+    // endpoint; the messages are this form's own.
+    const set = await verifyAndSetPassword(session.user.id, currentPassword, newPassword);
+    if (!set.ok) return { success: false, error: set.message };
 
     // Anyone else signed in with the old password is signed out; this device
     // stays signed in.

@@ -489,11 +489,11 @@ has("the modal labels the customer's rate as the customer's", MODAL, "Customer h
 has("the full-page form does too", SAVE_PAGE.replace("page.tsx", "BillingTypeFields.tsx"), "Customer hourly rate");
 
 // ── The snapshot (step 8.5). ───────────────────────────────────────────────
-has("clock-out snapshots the hours it measured", "src/app/admin/actions/clockOut.ts", "snapshotBilledActualHours(");
+has("clock-out snapshots the hours it measured", "src/server/clock/clock-out.ts", "snapshotBilledActualHours(");
 ok(
   "...only on the FINAL clock-out, so a teammate still on site can't bill early",
   /isFinalClockOut\)\s*\{\s*\n\s*await snapshotBilledActualHours/.test(
-    read("src/app/admin/actions/clockOut.ts")
+    read("src/server/clock/clock-out.ts")
   )
 );
 has(
