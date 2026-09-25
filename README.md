@@ -9,7 +9,8 @@ deployment.
 | [`apps/web`](apps/web) | The web product: marketing site, booking, customer portal, admin console, cleaner portal, platform console. Next.js on Vercel. |
 | `apps/staff` | **Bookmops Pro**, the iOS and Android app for cleaners, managers, and admins. *(planned)* |
 | `apps/customer` | **Bookmops**, the iOS and Android app for customers. *(planned)* |
-| `packages/*` | Code shared between the apps. *(from phase 2)* |
+| [`packages/core`](packages/core) | Business rules shared by every app: pay, jobs, time, inventory, rating, services, property, validation. Pure TypeScript, enforced. |
+| [`packages/typescript-config`](packages/typescript-config), [`packages/eslint-config`](packages/eslint-config) | Shared compiler and lint settings. |
 | [`docs`](docs) | Architecture, product decisions, fix lists, and cutover records. |
 
 How the repository is organised and the order it is being built in:
@@ -34,9 +35,9 @@ Run these from the repository root:
 | Command | What it does |
 |---|---|
 | `npm run dev` | Start the web app in development |
-| `npm run build` | Production build of the web app |
-| `npm run typecheck` | Type-check the web app |
-| `npm run lint` | Lint the web app |
+| `npm run build` | Production builds, in dependency order |
+| `npm run typecheck` | Type-check every package |
+| `npm run lint` | Lint every package |
 | `npm run verify` | The code-only regression sweep (`apps/web/scripts/verify-*.ts`) |
 
 ## License
