@@ -2,11 +2,13 @@ import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { APIError } from "better-auth/api";
 import { customSession } from "better-auth/plugins"
+import { expo } from "@better-auth/expo";
 import { cache } from "react";
 import { headers as nextHeaders } from "next/headers";
 
 import { db } from "@/lib/org-db";
-import { requestOrigin } from "@/lib/org-url";
+import { orgFromContext } from "@/lib/org-context";
+import { originForSlug, requestOrigin } from "@/lib/org-url";
 import { sendAccountEmail } from "@/lib/email";
 
 /**
@@ -64,11 +66,25 @@ async function roleOf(userId: string): Promise<"CUSTOMER" | "PROVIDER"> {
  * is what the proxy resolves the organization from on every request.
  */
 async function onRequestHost(url: string): Promise<string> {
-  const origin = await requestOrigin();
+  // A request that announced its company explicitly -- the phone's
+  // forgot-password, which runs on the platform host and asks each company in
+  // turn (server/auth/forgot-password.ts) -- gets that company's own address,
+  // not the host it happened to arrive on. Nothing on the web runs a password
+  // email inside such an announcement, so every web link is built exactly as
+  // before.
+  const announced = orgFromContext();
+  const origin = announced?.slug ? originForSlug(announced.slug) : await requestOrigin();
   if (!origin) return url;
   try {
     const here = new URL(origin);
-    const link = new URL(url);
+    // Only the announced path can meet a relative link: a direct auth.api
+    // call on an instance that has never served an /api/auth request has no
+    // baseURL yet, and better-auth then builds "/reset-password/<token>…"
+    // with neither host nor base path.
+    const link =
+      announced?.slug && url.startsWith("/")
+        ? new URL(url.startsWith("/api/auth/") ? url : `/api/auth${url}`, here)
+        : new URL(url);
     link.protocol = here.protocol;
     link.host = here.host;
     const callback = link.searchParams.get("callbackURL");
@@ -80,6 +96,42 @@ async function onRequestHost(url: string): Promise<string> {
     // Not a URL we can parse. Sending the original beats sending nothing.
     return url;
   }
+}
+
+/**
+ * The mobile apps' URL schemes, trusted as an ORIGIN and never as a redirect.
+ *
+ * Bookmops Pro talks to `<slug>.useawer.com` from a native app, which has no
+ * web origin; Better Auth's Expo plugin sends `bookmopspro://` in its place.
+ * Better Auth checks the Origin of any state-changing request that carries a
+ * cookie, so sign-out (and a sign-in from a phone that still holds an old
+ * cookie) needs that origin trusted.
+ *
+ * But the same list also decides which callback and redirect URLs are allowed,
+ * and the Expo plugin appends the session cookie to any trusted custom-scheme
+ * redirect after a callback or email verification. A custom scheme can be
+ * claimed by any installed app, so trusting it there would hand a session to
+ * whoever registered `bookmopspro://` first. So the scheme is trusted on the
+ * two exact paths that need an origin and on nothing else: not on password
+ * reset, email verification, OAuth callbacks, or any path added later.
+ * Anything that returns to the app uses https Universal Links / App Links.
+ *
+ * Exact paths, compared raw: a path spelled any other way ("//sign-out",
+ * "/sign-out/") gets no app origin at all.
+ */
+const APP_ORIGIN_PATHS = new Set(["/api/auth/sign-in/email", "/api/auth/sign-out"]);
+const APP_SCHEMES = ["bookmopspro://"];
+
+function appOriginsFor(request: Request): string[] {
+  let path: string;
+  try {
+    path = new URL(request.url).pathname;
+  } catch {
+    return [];
+  }
+  if (!APP_ORIGIN_PATHS.has(path)) return [];
+  // Expo Go serves a development build from exp://; never trusted in production.
+  return process.env.NODE_ENV === "development" ? [...APP_SCHEMES, "exp://"] : APP_SCHEMES;
 }
 
 export const auth = betterAuth({
@@ -191,7 +243,10 @@ export const auth = betterAuth({
       host.startsWith("localhost") ||
       host.includes(".localhost") ||
       host.startsWith("127.0.0.1");
-    return [`${forwarded || (isLocal ? "http" : "https")}://${host}`];
+    return [
+      `${forwarded || (isLocal ? "http" : "https")}://${host}`,
+      ...appOriginsFor(request),
+    ];
   },
   // Spec item 14 (staff homescreen-app login persistence): sessions last 30
   // days and slide forward daily with use, so cleaners opening the installed
@@ -318,7 +373,13 @@ export const auth = betterAuth({
       }).catch((e) => console.error("verify email", e));
     },
   },
-  plugins: [customSession(async (session) => {
+  plugins: [
+    // Bookmops Pro signs in here through Better Auth's Expo plugin (API_V1.md
+    // §2). The plugin copies the app's `expo-origin` header into Origin when a
+    // request has none; `appOriginsFor` above decides where that origin is
+    // trusted, which is only ever sign-in and sign-out.
+    expo(),
+    customSession(async (session) => {
       if (session.user) {
         // Only fetch the role — full user record was an expensive overshoot.
         //
@@ -363,7 +424,8 @@ export const auth = betterAuth({
         };
       }
       return session;
-  })],
+    }),
+  ],
   secret: process.env.BETTER_AUTH_SECRET!,
 });
 

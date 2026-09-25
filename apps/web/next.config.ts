@@ -32,7 +32,7 @@ const nextConfig: NextConfig = {
   },
   // Workspace packages ship TypeScript source rather than a build; Next
   // compiles them like its own files.
-  transpilePackages: ["@bookmops/core"],
+  transpilePackages: ["@bookmops/core", "@bookmops/api"],
   serverExternalPackages: ["@prisma/client", ".prisma/client"],
   turbopack: { root: WORKSPACE_ROOT },
   outputFileTracingRoot: WORKSPACE_ROOT,
