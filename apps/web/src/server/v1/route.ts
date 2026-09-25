@@ -235,6 +235,12 @@ function limitOrThrow(name: string, key: string, opts: { max: number; windowMs: 
 }
 
 async function readJsonBody(req: Request): Promise<unknown> {
+  // Refused on the declared length before a byte is read; the read itself is
+  // checked again below for a body that lied about its length or sent none.
+  const declared = Number(req.headers.get("content-length") ?? "0");
+  if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) {
+    throw new V1Error(413, "BODY_TOO_LARGE", "That request is too large.");
+  }
   const text = await req.text();
   if (text.length > MAX_BODY_BYTES) throw new V1Error(413, "BODY_TOO_LARGE", "That request is too large.");
   if (!text) return undefined;
@@ -307,8 +313,9 @@ export function v1Route<
       at: "v1",
       requestId,
       route: routeName,
-      appVersion: req.headers.get("x-app-version"),
-      platform: req.headers.get("x-app-platform"),
+      // Client-set headers: bounded, so a log line can't be made arbitrarily long.
+      appVersion: req.headers.get("x-app-version")?.slice(0, 40) ?? null,
+      platform: req.headers.get("x-app-platform")?.slice(0, 16) ?? null,
     };
     const finish = (res: Response, code?: string) => {
       log.status = res.status;
@@ -384,10 +391,9 @@ export function v1Route<
 
       // 7. Everything else as this company.
       return await runAsOrg(org, async () => {
-        const tenant = { ...base, org } as TenantContext<unknown, unknown>;
-
         if (options.access === "public") {
           await validate();
+          const tenant: TenantContext<unknown, unknown> = { ...base, org };
           const result = await handler(tenant as ContextFor<A, H, Infer<B>, Infer<Q>>);
           return finish(await respond(result, requestId, org, null, options.response));
         }
@@ -488,8 +494,10 @@ export function v1Route<
           throw e;
         }
 
+        // Built after validation, so it carries the parsed body and query.
         const ctx: AuthedContext<unknown, unknown> = {
-          ...tenant,
+          ...base,
+          org,
           actor,
           session: { id: sessionRow.id, token: session.session.token, lastRequestAt: sessionRow.lastRequestAt },
           idempotencyKey,
