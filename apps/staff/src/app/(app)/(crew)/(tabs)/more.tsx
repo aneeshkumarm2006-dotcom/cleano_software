@@ -6,6 +6,7 @@ import { ProfileCard } from "@/components/ProfileCard";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import {
   useAnnouncements,
+  useApprovalsSummary,
   useDocuments,
   useKit,
   useTeamChannels,
@@ -32,9 +33,13 @@ export default function More() {
   const trainingDone = training.data ? training.data.completed >= training.data.total : false;
   // A field lead's manager screens: only what the web lets a field lead do
   // (@bookmops/api/v1 manager-access.ts). A cleaner has none, so no group.
+  const approvals = useApprovalsSummary();
   const team: MenuItem[] = [
     ...(role.can("TEAM_VIEW")
       ? [{ key: "team", label: "Team today", icon: "team" as const, onPress: () => router.push("/manage/team") }]
+      : []),
+    ...(role.can("TIME_APPROVE")
+      ? [{ key: "queue", label: "Approvals", icon: "approvals" as const, count: approvals.data?.time ?? undefined, onPress: () => router.push("/manage/queue") }]
       : []),
   ];
 

@@ -3,6 +3,7 @@ import { Redirect } from "expo-router";
 import { TabList, TabSlot, Tabs, TabTrigger } from "expo-router/ui";
 
 import { useStaffRole } from "@/data/role";
+import { useApprovalsCount } from "@/features/manage/Approvals";
 
 /**
  * The manager app's tabs, in the same floating capsule as the cleaner's,
@@ -11,6 +12,7 @@ import { useStaffRole } from "@/data/role";
  */
 export default function ManagerTabs() {
   const role = useStaffRole();
+  const approvals = useApprovalsCount();
   if (role.side !== "office") return <Redirect href={role.home} />;
 
   return (
@@ -23,6 +25,9 @@ export default function ManagerTabs() {
           </TabTrigger>
           <TabTrigger name="schedule" href="/manage/schedule" asChild>
             <TabBarButton label="Schedule" icon="schedule" />
+          </TabTrigger>
+          <TabTrigger name="approvals" href="/manage/approvals" asChild>
+            <TabBarButton label="Approvals" icon="approvals" count={approvals} />
           </TabTrigger>
           <TabTrigger name="more" href="/manage/more" asChild>
             <TabBarButton label="More" icon="more" />
