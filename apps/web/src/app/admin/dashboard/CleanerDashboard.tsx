@@ -8,7 +8,7 @@ import { getStrikeSummary, STRIKE_THRESHOLD } from "@/lib/strikes";
 import { ratingCountLabel, EMPTY_RATING_SUMMARY } from "@bookmops/core/rating";
 import { getCleanerRatingSummary } from "@/lib/cleaner-rating.server";
 import { cleanerPayoutForJobs } from "@/lib/cleaner-pay-display";
-import { isCleanerLow } from "@/lib/inventory-thresholds";
+import { isCleanerLow } from "@bookmops/core/inventory";
 import { loadCleanerThresholdDefault } from "@/lib/inventory-thresholds.server";
 import { fmtDate, fmtTime, startOfDayTz } from "@/lib/time";
 import {

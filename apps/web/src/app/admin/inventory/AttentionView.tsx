@@ -11,7 +11,7 @@ import { fmtDateTime } from "@/lib/time";
 import {
   INVENTORY_FLAG_LABEL,
   type InventoryFlagType,
-} from "@/lib/inventory-status";
+} from "@bookmops/core/inventory";
 import {
   createRestockRequestFromFlag,
   resolveInventoryFlag,

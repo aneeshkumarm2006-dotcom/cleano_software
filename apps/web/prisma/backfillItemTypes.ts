@@ -11,7 +11,7 @@
  * second run changes 0 rows.
  *
  * ── Read the table it prints ───────────────────────────────────────────────
- * The rule is `inferItemType()` in `src/lib/item-type.ts`: the legacy category
+ * The rule is `inferItemType()` in `packages/core/src/inventory/item-type.ts`: the legacy category
  * decides liquids and disposables, and only `OTHER` — the bucket every durable
  * good was dumped into — falls through to a name regex. A regex cannot know
  * that "Magic erasers" are disposable and a "2-Sided Scraper" is not, so this
@@ -28,7 +28,7 @@ import {
   ITEM_TYPE_LABEL,
   inferItemType,
   type ItemType,
-} from "../src/lib/item-type";
+} from "@bookmops/core/inventory";
 
 const db = new PrismaClient();
 

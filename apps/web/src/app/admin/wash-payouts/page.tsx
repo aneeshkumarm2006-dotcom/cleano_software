@@ -1,7 +1,7 @@
 import { requireOwnerAdmin } from "@/lib/page-guards";
 import { db } from "@/lib/org-db";
 import WashPayoutsPageClient from "./WashPayoutsPageClient";
-import { isOverProjection } from "@/lib/wash";
+import { isOverProjection } from "@bookmops/core/inventory";
 
 export default async function WashPayoutsPage() {
   // requireOwnerAdmin, NOT requireAdmin: `isAdminRole` also admits

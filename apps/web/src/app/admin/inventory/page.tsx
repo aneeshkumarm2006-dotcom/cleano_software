@@ -8,7 +8,7 @@ import {
   isCleanerLow,
   isCompanyLow,
   itemAttentionState,
-} from "@/lib/inventory-thresholds";
+} from "@bookmops/core/inventory";
 import { loadCleanerThresholdDefault } from "@/lib/inventory-thresholds.server";
 import { projectUsage } from "@/lib/inventory-forecast";
 import { INVENTORY_FORECAST_ENABLED } from "@/lib/inventory-forecast.flag";

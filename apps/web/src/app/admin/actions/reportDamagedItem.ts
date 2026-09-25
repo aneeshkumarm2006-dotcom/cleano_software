@@ -11,11 +11,9 @@ import {
   normalizeIssueType,
   writesOffCompanyStock,
   type InventoryIssueType,
-} from "@/lib/inventory-issues";
-import {
   conditionFlagType,
   type EquipmentCondition,
-} from "@/lib/inventory-status";
+} from "@bookmops/core/inventory";
 import { adjustWarehouseStock, pickSourceLocationId } from "@/lib/stock.server";
 
 /**
@@ -44,7 +42,7 @@ const ISSUE_CONDITION: Record<InventoryIssueType, EquipmentCondition | null> = {
  * product was handed over, so writing it off again would double-count — and
  * "Other" is unexplained, so it adjusts the kit and asks an admin to look
  * rather than quietly reducing what the company believes it owns.
- * See src/lib/inventory-issues.ts.
+ * See packages/core/src/inventory/inventory-issues.ts.
  *
  * Every movement is written to `InventoryChange`, so reported issues appear in
  * the admin inventory activity log (item 18) and in the product's Stock History.

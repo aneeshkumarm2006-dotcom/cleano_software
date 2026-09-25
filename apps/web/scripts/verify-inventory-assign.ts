@@ -1,7 +1,7 @@
 // Verification for fix list items 6 + 13 (+ 17's "Assign more").
 // Pure quantity semantics + structural checks. No DB access, no writes.
 import fs from "node:fs";
-import { resolveAssignedQuantity } from "../src/lib/inventory-assign";
+import { resolveAssignedQuantity } from "@bookmops/core/inventory";
 
 let pass = 0, fail = 0;
 function check(name: string, actual: unknown, expected: unknown) {

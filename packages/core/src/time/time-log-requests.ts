@@ -46,7 +46,7 @@ export type TimeLogRequestCheck =
  */
 export function checkTimeLogRequest(
   input: TimeLogRequestInput,
-  now: Date = new Date(),
+  now: Date,
 ): TimeLogRequestCheck {
   const reason = String(input.reason ?? "").trim();
   if (reason.length < TIME_LOG_REASON_MIN) {

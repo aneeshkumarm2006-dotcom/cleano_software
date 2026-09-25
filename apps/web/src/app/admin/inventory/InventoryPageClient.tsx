@@ -16,8 +16,7 @@ import QuickAssignModal, {
 import ActivityView from "./ActivityView";
 import AttentionView, { type InventoryFlagEntry } from "./AttentionView";
 import { INVENTORY_FORECAST_ENABLED } from "@/lib/inventory-forecast.flag";
-import type { ItemType } from "@/lib/item-type";
-import type { ItemAttentionState } from "@/lib/inventory-thresholds";
+import type { ItemType, ItemAttentionState } from "@bookmops/core/inventory";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import {

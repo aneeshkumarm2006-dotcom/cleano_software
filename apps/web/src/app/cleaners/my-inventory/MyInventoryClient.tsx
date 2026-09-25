@@ -10,20 +10,17 @@ import {
   needsRestock,
   writesOffCompanyStock,
   type InventoryIssueType,
-} from "@/lib/inventory-issues";
-import { createInventoryRequest } from "@/app/admin/actions/createInventoryRequest";
-import { updateMyInventoryCount } from "@/app/admin/actions/updateMyInventoryCount";
-import { updateMyItemCondition } from "@/app/admin/actions/updateMyItemCondition";
-import type { ItemAttentionState, AttentionTone } from "@/lib/inventory-thresholds";
-import {
   EQUIPMENT_CONDITIONS,
   EQUIPMENT_CONDITION_HINT,
   EQUIPMENT_CONDITION_LABEL,
   LIQUID_LEVEL_LABEL,
   type EquipmentCondition,
   type LiquidLevel,
-} from "@/lib/inventory-status";
-import type { ItemType } from "@/lib/item-type";
+} from "@bookmops/core/inventory";
+import { createInventoryRequest } from "@/app/admin/actions/createInventoryRequest";
+import { updateMyInventoryCount } from "@/app/admin/actions/updateMyInventoryCount";
+import { updateMyItemCondition } from "@/app/admin/actions/updateMyItemCondition";
+import type { ItemAttentionState, AttentionTone, ItemType } from "@bookmops/core/inventory";
 import { parseQuantityInput } from "@bookmops/core/validation";
 import { addMyInventoryItem } from "./addMyInventoryItem";
 

@@ -24,7 +24,7 @@ import {
   type ClosingReport,
   type ClosingReportValidation,
   type KitItem,
-} from "../src/lib/clock-out";
+} from "@bookmops/core/time";
 import {
   COUNTABLE_STATUSES,
   EQUIPMENT_CONDITIONS,
@@ -34,16 +34,14 @@ import {
   countableStatusFlagType,
   levelFlagType,
   statusLabel,
-} from "../src/lib/inventory-status";
-import {
   INVENTORY_ACTIONS,
   INVENTORY_ACTION_LABEL,
   activityActionLabel,
   isInventoryAction,
   legacyActionLabel,
-} from "../src/lib/inventory-action";
-import { itemAttentionState } from "../src/lib/inventory-thresholds";
-import { ITEM_TYPES } from "../src/lib/item-type";
+  itemAttentionState,
+  ITEM_TYPES,
+} from "@bookmops/core/inventory";
 
 let pass = 0;
 let fail = 0;
@@ -446,7 +444,7 @@ section("3.4 · the estimated-usage flow is GONE from both screens");
 const BUTTON = "src/app/cleaners/my-jobs/ClockOutButton.tsx";
 const SCREEN = "src/app/cleaners/my-jobs/[jobId]/clock/ClockPageClient.tsx";
 const SHARED = "src/app/cleaners/my-jobs/ClosingInventoryReport.tsx";
-const LIB = "src/lib/clock-out.ts";
+const LIB = "../../packages/core/src/time/clock-out.ts";
 const ACTION = "src/app/admin/actions/clockOut.ts";
 
 ok("the shared report component exists", fs.existsSync(SHARED));

@@ -2,7 +2,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/org-db";
-import { itemAttentionState } from "@/lib/inventory-thresholds";
+import { itemAttentionState } from "@bookmops/core/inventory";
 import { loadCleanerThresholdDefault } from "@/lib/inventory-thresholds.server";
 import ProductDetailView from "./ProductDetailView";
 

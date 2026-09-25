@@ -4,8 +4,10 @@
   "private": true,
   "sideEffects": false,
   "exports": {
+    "./inventory": "./src/inventory/index.ts",
     "./policy": "./src/policy/index.ts",
     "./rating": "./src/rating/index.ts",
+    "./time": "./src/time/index.ts",
     "./validation": "./src/validation/index.ts"
   },
   "scripts": {

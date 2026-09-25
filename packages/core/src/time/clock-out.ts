@@ -37,7 +37,7 @@
  * and writes nothing at all.
  */
 
-import type { ItemType } from "./item-type";
+import type { ItemType } from "../inventory/item-type";
 import {
   isCountableStatus,
   isEquipmentCondition,
@@ -45,7 +45,7 @@ import {
   type CountableStatus,
   type EquipmentCondition,
   type LiquidLevel,
-} from "./inventory-status";
+} from "../inventory/inventory-status";
 
 /** Which vocabulary one reported line is written in. */
 export type ClosingReportKind = "LEVEL" | "COUNT" | "CONDITION";

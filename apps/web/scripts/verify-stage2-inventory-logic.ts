@@ -20,8 +20,6 @@ import {
   isCleanerLow,
   itemAttentionState,
   tracksRefill,
-} from "../src/lib/inventory-thresholds";
-import {
   DEFAULT_EQUIPMENT_CONDITION,
   EQUIPMENT_CONDITIONS,
   EQUIPMENT_CONDITION_LABEL,
@@ -30,7 +28,7 @@ import {
   conditionFlagType,
   conditionNeedsAttention,
   isEquipmentCondition,
-} from "../src/lib/inventory-status";
+} from "@bookmops/core/inventory";
 
 let pass = 0;
 let fail = 0;
@@ -182,7 +180,7 @@ ok("the condition guard rejects junk",
     isEquipmentCondition("DAMAGED"));
 
 /* ═════════ 5. THE MIRRORED VOCABULARIES MATCH prisma/schema.prisma ═════════ */
-// src/lib/inventory-status.ts mirrors three Prisma enums as string unions so
+// packages/core/src/inventory/inventory-status.ts mirrors three Prisma enums as string unions so
 // client components don't have to import the generated client. If the schema
 // grows a value and the mirror doesn't, a cleaner can report a state no screen
 // can render — assert they stay in step.
@@ -205,7 +203,7 @@ check("InventoryFlagType mirror matches the schema",
 
 /* ═════════════════ 6. SOURCE SWEEP: ONE RULE, EVERY SURFACE ════════════════ */
 
-const THRESHOLDS = "src/lib/inventory-thresholds.ts";
+const THRESHOLDS = "../../packages/core/src/inventory/inventory-thresholds.ts";
 has("isCleanerLow short-circuits on item type", THRESHOLDS,
   "if (p.itemType && !usesRefillThresholds(p.itemType)) return false;");
 has("itemAttentionState is the shared classifier", THRESHOLDS,

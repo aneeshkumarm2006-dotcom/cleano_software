@@ -2,7 +2,7 @@
 
 import { db } from "@/lib/org-db";
 import { requireOwnerAdmin } from "@/lib/action-guards";
-import { activityActionLabel, isInventoryAction } from "@/lib/inventory-action";
+import { activityActionLabel, isInventoryAction } from "@bookmops/core/inventory";
 import type {
   InventoryActivityEntry,
   InventoryActivityPage,
@@ -18,7 +18,7 @@ import type {
  *
  * The verb on each row is now STORED (`InventoryChange.action`) rather than
  * pattern-matched out of its `reason` sentence — see
- * `src/lib/inventory-action.ts` for why, and for how rows written before that
+ * `packages/core/src/inventory/inventory-action.ts` for why, and for how rows written before that
  * column existed are still labelled.
  *
  * CURSOR pagination, not offset: the log grows constantly, and `skip` would

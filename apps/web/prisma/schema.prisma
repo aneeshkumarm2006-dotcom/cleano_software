@@ -852,7 +852,7 @@ model Job {
   noShowAt                         DateTime?
   lateArrivalAt                    DateTime?
   // Stars deducted from this job's customer rating because the cleaner arrived
-  // late (flat −0.5 past the 10-min grace; see src/lib/policy.ts). Column name
+  // late (flat −0.5 past the 10-min grace; see packages/core/src/policy/company-policy.ts). Column name
   // kept as the legacy "lateArrivalRatingCap" to avoid a migration.
   lateArrivalRatingPenalty         Float?                @map("lateArrivalRatingCap")
   // Manager override for the Rag Wash review flag.
@@ -1056,7 +1056,7 @@ model InventoryChange {
   // (Stage 3). Nullable because every row written before that migration has no
   // action — back-filling one would bake the very guess we are retiring into
   // the permanent record, so old rows keep their prose and are labelled as
-  // derived at read time (`src/lib/inventory-action.ts`).
+  // derived at read time (`packages/core/src/inventory/inventory-action.ts`).
   action         InventoryAction?
   // Status transition, when this row records one (PDF #1 wants history to carry
   // "previous status → new status" alongside the count columns above). Stored as
@@ -1405,7 +1405,7 @@ enum InventoryFlagStatus {
 // movement so the activity log reads a stored verb instead of pattern-matching
 // the `reason` sentence — eleven action files write those sentences, and
 // rewording any of them used to silently reclassify history.
-// Labels and the legacy fallback live in `src/lib/inventory-action.ts`.
+// Labels and the legacy fallback live in `packages/core/src/inventory/inventory-action.ts`.
 enum InventoryAction {
   RECOUNT // cleaner recounted their own kit
   STATUS_REPORT // level/condition report that moved no quantity

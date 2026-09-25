@@ -9,7 +9,7 @@ import {
   isCompanyLow,
   usesDefaultCleanerThreshold,
   LOW_STOCK_LABEL,
-} from "../src/lib/inventory-thresholds";
+} from "@bookmops/core/inventory";
 
 let pass = 0, fail = 0;
 function check(name: string, actual: unknown, expected: unknown) {

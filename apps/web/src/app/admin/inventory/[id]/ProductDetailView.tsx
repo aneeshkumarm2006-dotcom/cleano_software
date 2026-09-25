@@ -35,12 +35,12 @@ import {
   ITEM_TYPE_DESCRIPTION,
   ITEM_TYPE_NAME,
   type ItemType,
-} from "@/lib/item-type";
+} from "@bookmops/core/inventory";
 import BackToList from "@/components/common/BackToList";
 import type {
   AttentionTone,
   ItemAttentionState,
-} from "@/lib/inventory-thresholds";
+} from "@bookmops/core/inventory";
 
 type TabView = "overview" | "usage" | "assignments" | "history";
 

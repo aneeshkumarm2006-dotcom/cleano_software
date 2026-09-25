@@ -24,7 +24,7 @@
 //      they are now editable, not that they don't exist.
 
 import fs from "node:fs";
-import { unitsRemovedFromKit } from "../src/lib/kit-edit";
+import { unitsRemovedFromKit } from "@bookmops/core/inventory";
 
 let pass = 0;
 let fail = 0;

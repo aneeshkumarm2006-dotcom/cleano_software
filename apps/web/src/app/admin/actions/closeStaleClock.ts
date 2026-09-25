@@ -22,7 +22,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/org-db";
 import { isAdminRole } from "@/lib/role-routing";
 import { updateClockTimes } from "./updateClockTimes";
-import { isStale } from "@/lib/stale-clock";
+import { isStale } from "@bookmops/core/time";
 
 type Result = { success: true; warning?: string } | { success: false; error: string };
 
@@ -65,7 +65,7 @@ export async function closeStaleClock(input: {
     // Re-checked here, not trusted from the client: a row that stopped being
     // stale between the page load and the click (the cleaner finally clocked
     // out, an admin edited it) must not be closed from a stale queue.
-    if (!isStale({ startedAt: row.startedAt, endedAt: null })) {
+    if (!isStale({ startedAt: row.startedAt, endedAt: null }, new Date())) {
       return {
         success: false,
         error: "This clock isn't old enough to close from here. Edit it on the job instead.",

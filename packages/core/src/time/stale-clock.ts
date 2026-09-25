@@ -21,7 +21,9 @@
  * what looks wrong and what the likely answer is; a person confirms it. There
  * is deliberately no sweep that writes `endedAt`.
  *
- * Pure. The queries live in stale-clock.server.ts.
+ * Pure. The queries live in apps/web/src/lib/stale-clock.server.ts. Every
+ * function takes `now` from its caller: the server passes its own clock, and a
+ * phone, whose clock can be wrong, has to say which one it trusts.
  */
 
 /**
@@ -60,7 +62,7 @@ function toDate(v: Date | string | null | undefined): Date | null {
 /** Hours this session has been running. */
 export function openHours(
   session: OpenSessionInput,
-  now: Date = new Date(),
+  now: Date,
 ): number {
   const start = toDate(session.startedAt);
   if (!start) return 0;
@@ -74,7 +76,7 @@ export function openHours(
  */
 export function isStale(
   session: OpenSessionInput,
-  now: Date = new Date(),
+  now: Date,
 ): boolean {
   if (toDate(session.endedAt ?? null)) return false;
   return openHours(session, now) >= STALE_SESSION_HOURS;
@@ -82,7 +84,7 @@ export function isStale(
 
 export function severityOf(
   session: OpenSessionInput,
-  now: Date = new Date(),
+  now: Date,
 ): StaleSeverity {
   return openHours(session, now) >= ABANDONED_SESSION_HOURS
     ? "abandoned"
@@ -107,7 +109,7 @@ export const ASSUMED_SHIFT_HOURS = 3;
 
 export function suggestedEnd(
   session: OpenSessionInput,
-  now: Date = new Date(),
+  now: Date,
 ): Date | null {
   const start = toDate(session.startedAt);
   if (!start) return null;
@@ -134,7 +136,7 @@ export function suggestedEnd(
 /** "3 days" / "16 hours" — for a list an admin scans, not a precise readout. */
 export function describeOpenFor(
   session: OpenSessionInput,
-  now: Date = new Date(),
+  now: Date,
 ): string {
   const h = openHours(session, now);
   if (h < 48) {
@@ -154,7 +156,7 @@ export function describeOpenFor(
  */
 export function overstatedHours(
   session: OpenSessionInput,
-  now: Date = new Date(),
+  now: Date,
 ): number {
   const guess = suggestedEnd(session, now);
   const start = toDate(session.startedAt);

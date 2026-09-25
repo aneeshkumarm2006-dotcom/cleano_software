@@ -10,7 +10,7 @@ import {
   conditionFlagType,
   isEquipmentCondition,
   type EquipmentCondition,
-} from "@/lib/inventory-status";
+} from "@bookmops/core/inventory";
 
 /**
  * Cleaner reports the CONDITION of a reusable tool in their own kit

@@ -4,7 +4,7 @@ import { db } from "@/lib/org-db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { isItemType } from "@/lib/item-type";
+import { isItemType } from "@bookmops/core/inventory";
 
 async function requireStaff(): Promise<
   { ok: true } | { ok: false; error: string }

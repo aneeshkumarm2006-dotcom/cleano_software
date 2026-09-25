@@ -11,7 +11,7 @@ export interface InventoryActivityEntry {
   /**
    * Human-readable verb. Comes from the row's stored `InventoryAction` when it
    * has one; rows written before Stage 3 fall back to reading their prose (see
-   * `src/lib/inventory-action.ts`).
+   * `packages/core/src/inventory/inventory-action.ts`).
    */
   action: string;
   /** True when the label was derived from prose rather than stored. */

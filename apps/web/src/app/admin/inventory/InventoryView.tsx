@@ -26,13 +26,13 @@ import {
   Layers,
 } from "lucide-react";
 import Link from "next/link";
-import { LOW_STOCK_LABEL } from "@/lib/inventory-thresholds";
 import {
+  LOW_STOCK_LABEL,
   ITEM_TYPES,
   ITEM_TYPE_LABEL,
   ITEM_TYPE_NAME,
   type ItemType,
-} from "@/lib/item-type";
+} from "@bookmops/core/inventory";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import Input from "@/components/ui/Input";

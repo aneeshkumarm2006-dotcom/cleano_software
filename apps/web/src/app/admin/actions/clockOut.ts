@@ -6,20 +6,20 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import type { Prisma } from "@prisma/client";
-import { projectWashables } from "@/lib/wash";
-import { notifyAdmins } from "@/lib/admin-alerts";
-import { recordAdminNotification } from "@/lib/admin-notifications";
-import { sendAdminClockedOut } from "@/lib/email";
-import { ensureRatingRequest } from "@/lib/rating";
-import { isCleanerLow } from "@/lib/inventory-thresholds";
-import { loadCleanerThresholdDefault } from "@/lib/inventory-thresholds.server";
 import {
+  projectWashables,
+  isCleanerLow,
   conditionFlagType,
   countableStatusFlagType,
   levelFlagType,
   statusLabel,
   type InventoryFlagType,
-} from "@/lib/inventory-status";
+} from "@bookmops/core/inventory";
+import { notifyAdmins } from "@/lib/admin-alerts";
+import { recordAdminNotification } from "@/lib/admin-notifications";
+import { sendAdminClockedOut } from "@/lib/email";
+import { ensureRatingRequest } from "@/lib/rating";
+import { loadCleanerThresholdDefault } from "@/lib/inventory-thresholds.server";
 import {
   jobStaffing,
   shortStaffedNotice,
@@ -43,7 +43,7 @@ import {
   type ClockOutKit,
   type ClosingReport,
   type ValidatedReportEntry,
-} from "@/lib/clock-out";
+} from "@bookmops/core/time";
 
 /**
  * Cleaner clock-out — cleano_new_fixes.pdf fix 6 (`_ai_context/TODO.md` Stage 5)
@@ -104,7 +104,7 @@ import {
  *   PDF #1 asks history to keep.
  *
  * Pure rules — payload validation, error classification, the log summary — live
- * in `src/lib/clock-out.ts` so they can be tested without a database. This file
+ * in `packages/core/src/time/clock-out.ts` so they can be tested without a database. This file
  * is `"use server"`, so anything exported from it has to be a server action.
  */
 
@@ -403,7 +403,7 @@ async function finishClockOut(args: {
  * The admin review flag one reported line raises, or null when it is fine.
  *
  * One switch over the three vocabularies, each delegating to the SAME mapping
- * every other writer uses (`src/lib/inventory-status.ts`), so a scraper
+ * every other writer uses (`packages/core/src/inventory/inventory-status.ts`), so a scraper
  * reported damaged at clock-out and one reported damaged from My Inventory land
  * on an identically-typed flag.
  */

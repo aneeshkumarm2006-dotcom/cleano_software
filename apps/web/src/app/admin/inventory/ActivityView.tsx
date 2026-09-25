@@ -5,7 +5,7 @@ import { Activity, Loader, Package, User } from "lucide-react";
 import Badge from "@/components/ui/Badge";
 import Select from "@/components/ui/Select";
 import { fmtDateTime } from "@/lib/time";
-import { statusLabel } from "@/lib/inventory-status";
+import { statusLabel } from "@bookmops/core/inventory";
 import { getInventoryActivity } from "../actions/getInventoryActivity";
 import type { InventoryActivityEntry } from "../actions/getInventoryActivity.types";
 

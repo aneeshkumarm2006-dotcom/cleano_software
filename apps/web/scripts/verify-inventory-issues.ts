@@ -9,7 +9,7 @@ import {
   needsRestock,
   normalizeIssueType,
   writesOffCompanyStock,
-} from "../src/lib/inventory-issues";
+} from "@bookmops/core/inventory";
 
 let pass = 0, fail = 0;
 function check(name: string, actual: unknown, expected: unknown) {
@@ -99,7 +99,7 @@ ok("UI explains the consequence per type",
 // Stage 3 replaced reason-string matching with a stored `InventoryAction`
 // column. These rows are old enough to predate that column, so the derived
 // reading is still what labels them — and still has to know the issue words.
-const log = read("src/lib/inventory-action.ts");
+const log = read("../../packages/core/src/inventory/inventory-action.ts");
 ok("activity log labels the new issue types",
   log.includes('"Reported broken"') && log.includes('"Ran out"'));
 ok("activity log still labels legacy 'damaged' rows",

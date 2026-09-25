@@ -22,7 +22,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/org-db";
 import { isAdminRole } from "@/lib/role-routing";
 import { logActivity } from "@/lib/activity-log";
-import { canDecide, TIME_LOG_REASON_MAX } from "@/lib/time-log-requests";
+import { canDecide, TIME_LOG_REASON_MAX } from "@bookmops/core/time";
 import { updateClockTimes } from "./updateClockTimes";
 
 type Result = { success: true } | { success: false; error: string };

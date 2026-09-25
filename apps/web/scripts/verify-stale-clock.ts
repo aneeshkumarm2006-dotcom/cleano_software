@@ -21,7 +21,7 @@ import {
   overstatedHours,
   severityOf,
   suggestedEnd,
-} from "../src/lib/stale-clock";
+} from "@bookmops/core/time";
 
 let passed = 0;
 const failures: string[] = [];

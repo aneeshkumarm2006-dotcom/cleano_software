@@ -7,7 +7,7 @@ import {
   kindForItemType,
   type ClosingReport,
   type ClosingReportEntry,
-} from "@/lib/clock-out";
+} from "@bookmops/core/time";
 import {
   COUNTABLE_STATUSES,
   COUNTABLE_STATUS_HINT,
@@ -20,8 +20,9 @@ import {
   type CountableStatus,
   type EquipmentCondition,
   type LiquidLevel,
-} from "@/lib/inventory-status";
-import { ITEM_TYPE_LABEL, type ItemType } from "@/lib/item-type";
+  ITEM_TYPE_LABEL,
+  type ItemType,
+} from "@bookmops/core/inventory";
 import {
   ClockOutFieldNote,
   clockOutFieldStyle,

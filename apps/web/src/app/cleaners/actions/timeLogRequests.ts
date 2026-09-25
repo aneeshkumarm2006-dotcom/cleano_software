@@ -22,7 +22,7 @@ import {
   checkTimeLogRequest,
   describeChange,
   TIME_LOG_REASON_MAX,
-} from "@/lib/time-log-requests";
+} from "@bookmops/core/time";
 
 type Result = { success: true } | { success: false; error: string };
 
@@ -104,13 +104,16 @@ export async function requestTimeLogChange(input: {
     const requestedStart = asDate(input.requestedStart);
     const requestedEnd = asDate(input.requestedEnd);
 
-    const check = checkTimeLogRequest({
-      originalStart,
-      originalEnd,
-      requestedStart,
-      requestedEnd,
-      reason: input.reason,
-    });
+    const check = checkTimeLogRequest(
+      {
+        originalStart,
+        originalEnd,
+        requestedStart,
+        requestedEnd,
+        reason: input.reason,
+      },
+      new Date(),
+    );
     if (!check.ok) return { success: false, error: check.error };
 
     // One open request per time entry. A second one is not extra information,

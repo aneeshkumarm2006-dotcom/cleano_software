@@ -28,12 +28,11 @@ import { setEmployeeServiceCategories } from "../../actions/setEmployeeServiceCa
 import { getEmployeeFileUrl } from "../../actions/getEmployeeFileUrl";
 import { PERMISSION_CATEGORIES } from "@/lib/service-permissions";
 import { TIER_LABEL, type CleanerTier } from "@/lib/pay-tiers";
-import { ITEM_TYPE_LABEL, type ItemType } from "@/lib/item-type";
-import { unitsRemovedFromKit } from "@/lib/kit-edit";
+import { ITEM_TYPE_LABEL, type ItemType, unitsRemovedFromKit } from "@bookmops/core/inventory";
 import type {
   AttentionTone,
   ItemAttentionState,
-} from "@/lib/inventory-thresholds";
+} from "@bookmops/core/inventory";
 import { fmtDateTime, fmtDate, fmtTime } from "@/lib/time";
 import {
   ArrowLeft,

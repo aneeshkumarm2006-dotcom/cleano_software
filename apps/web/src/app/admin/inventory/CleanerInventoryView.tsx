@@ -22,14 +22,13 @@ import {
   LOW_STOCK_LABEL,
   type AttentionTone,
   type ItemAttentionState,
-} from "@/lib/inventory-thresholds";
-import {
   INVENTORY_FLAG_LABEL,
   isInventoryFlagType,
   statusLabel,
-} from "@/lib/inventory-status";
-import { ITEM_TYPE_LABEL, type ItemType } from "@/lib/item-type";
-import { unitsRemovedFromKit } from "@/lib/kit-edit";
+  ITEM_TYPE_LABEL,
+  type ItemType,
+  unitsRemovedFromKit,
+} from "@bookmops/core/inventory";
 import { setCleanerProductQuantity } from "../actions/setCleanerProductQuantity";
 
 interface LastChange {

@@ -10,7 +10,7 @@ import {
   assignmentStatusForClock,
   parseInstant,
   validateClockEdit,
-} from "@/lib/clock-edit";
+} from "@bookmops/core/time";
 import { syncClockMirrors } from "@/lib/work-sessions.server";
 import { snapshotBilledActualHours } from "@/lib/hourly-billing.server";
 import {

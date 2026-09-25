@@ -8,7 +8,7 @@ import { requireOwnerAdmin } from "@/lib/action-guards";
 import {
   resolveAssignedQuantity,
   type AssignMode as AssignModeType,
-} from "@/lib/inventory-assign";
+} from "@bookmops/core/inventory";
 import { adjustWarehouseStock } from "@/lib/stock.server";
 
 /**

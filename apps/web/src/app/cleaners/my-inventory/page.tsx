@@ -4,7 +4,7 @@ import {
   cleanerRestockThreshold,
   itemAttentionState,
   usesDefaultCleanerThreshold,
-} from "@/lib/inventory-thresholds";
+} from "@bookmops/core/inventory";
 import { loadCleanerThresholdDefault } from "@/lib/inventory-thresholds.server";
 import MyInventoryClient from "./MyInventoryClient";
 

@@ -124,7 +124,7 @@ import { perJobAverages, projectUsage } from "../src/lib/inventory-forecast";
 import {
   DEFAULT_CLEANER_RESTOCK_THRESHOLD,
   cleanerRestockThreshold,
-} from "../src/lib/inventory-thresholds";
+} from "@bookmops/core/inventory";
 
 // ── Stage 0.1 baselines, recorded 2026-08-06 ────────────────────────────────
 // `npx tsc --noEmit` clean · `npm run build` compiles · migrations in sync.

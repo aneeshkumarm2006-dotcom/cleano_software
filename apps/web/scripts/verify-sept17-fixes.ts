@@ -39,7 +39,7 @@ import {
   canDecide,
   checkTimeLogRequest,
   TIME_LOG_REQUEST_WINDOW_DAYS,
-} from "../src/lib/time-log-requests";
+} from "@bookmops/core/time";
 
 
 let pass = 0,

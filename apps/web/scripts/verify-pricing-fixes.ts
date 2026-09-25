@@ -68,7 +68,7 @@ import {
   type ClosingReport,
   type ClosingReportValidation,
   type KitItem,
-} from "../src/lib/clock-out";
+} from "@bookmops/core/time";
 import { jobRevenue, jobScheduledValue } from "../src/lib/metrics-shared";
 import { DEFAULT_TAX_RATES } from "../src/lib/tax";
 import {
@@ -1413,7 +1413,7 @@ has(
 console.log("\n── Stage 5 · clock-out reliability (PDF fix 6) ──");
 
 const CLOCK_OUT_ACTION = "src/app/admin/actions/clockOut.ts";
-const CLOCK_OUT_LIB = "src/lib/clock-out.ts";
+const CLOCK_OUT_LIB = "../../packages/core/src/time/clock-out.ts";
 const CLOCK_SCREEN = "src/app/cleaners/my-jobs/[jobId]/clock/ClockPageClient.tsx";
 const CLOCK_BUTTON = "src/app/cleaners/my-jobs/ClockOutButton.tsx";
 
@@ -1961,14 +1961,14 @@ ok(
   // nothing else. Asserted transitively: each of those must itself import
   // nothing, so no `db`, `auth` or `@prisma/client` can arrive one hop away and
   // make these checks un-runnable without a database.
-  const PURE = ["./inventory-status", "./item-type"];
+  const PURE = ["../inventory/inventory-status", "../inventory/item-type"];
   check(
     "the clock-out rules module imports only pure local vocabularies",
     imports.filter((i) => !PURE.includes(i)),
     []
   );
   for (const dep of imports) {
-    const depSrc = codeOf(`src/lib/${dep.replace("./", "")}.ts`);
+    const depSrc = codeOf(`../../packages/core/src/inventory/${dep.split("/").pop()}.ts`);
     check(
       `…and ${dep} imports nothing at all`,
       [...depSrc.matchAll(/from "([^"]+)"/g)].map((m) => m[1]),

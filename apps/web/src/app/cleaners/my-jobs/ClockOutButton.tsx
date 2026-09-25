@@ -8,7 +8,7 @@ import {
   pendingRequiredItems,
 } from "@/lib/job-checklist";
 import { shortStaffedNotice, type JobStaffing } from "@/lib/cleaner-jobs";
-import type { ClosingReport } from "@/lib/clock-out";
+import type { ClosingReport } from "@bookmops/core/time";
 import ClosingInventoryReport, {
   answeredCount,
   buildReport,

@@ -207,7 +207,7 @@ async function runRagWashDashboard(
   // exceeded the typical category envelope as flagged (since the hard cap
   // was removed, the projection now flows straight through to credits and
   // we want to surface oversize ones). The numbers below mirror the loosest
-  // per-category range in `src/lib/wash/index.ts` (3+BR / MOVE_IN).
+  // per-category range in `packages/core/src/inventory/wash.ts` (3+BR / MOVE_IN).
   const FLAG_RAGS = 35;
   const FLAG_PADS = 4;
   const flaggedJobsCount = await db.job.count({

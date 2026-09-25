@@ -14,7 +14,7 @@ import {
   severityOf,
   suggestedEnd,
   type StaleSeverity,
-} from "@/lib/stale-clock";
+} from "@bookmops/core/time";
 
 export interface StaleClockRow {
   sessionId: string;

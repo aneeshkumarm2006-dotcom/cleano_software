@@ -35,7 +35,7 @@ import {
 } from "@/lib/metrics";
 import { HOLD_LABEL } from "@/lib/job-hold";
 import { activeSubtotal, type ActiveValueJob } from "@/lib/job-money";
-import { isCleanerLow } from "@/lib/inventory-thresholds";
+import { isCleanerLow } from "@bookmops/core/inventory";
 import { loadCleanerThresholdDefault } from "@/lib/inventory-thresholds.server";
 import { avatarColor, initials } from "@/lib/avatar";
 import CleanerDashboard from "./CleanerDashboard";

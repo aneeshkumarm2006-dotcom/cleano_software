@@ -1,6 +1,6 @@
 "use client";
 
-import type { ClockOutFailure } from "@/lib/clock-out";
+import type { ClockOutFailure } from "@bookmops/core/time";
 
 /**
  * The clock-out failure notice, shared by both modals (cleano_new_fixes.pdf

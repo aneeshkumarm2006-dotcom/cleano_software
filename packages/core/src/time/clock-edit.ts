@@ -9,7 +9,13 @@ export const MAX_SHIFT_HOURS = 24;
 
 export type ParsedInstant = Date | null | "invalid";
 
-/** Parse an ISO string into a Date, null (cleared) or "invalid". */
+/**
+ * Parse an ISO instant into a Date, null (cleared) or "invalid".
+ *
+ * Expects an instant WITH its offset — what `Date#toISOString()` produces, and
+ * what every caller sends. A bare "2026-09-25T08:45" would be read in whatever
+ * zone the code happens to run in: UTC on the server, the device's on a phone.
+ */
 export function parseInstant(value: string | null | undefined): ParsedInstant {
   if (!value) return null;
   const d = new Date(value);

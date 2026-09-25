@@ -8,7 +8,7 @@ import { hashPassword } from "better-auth/crypto";
 import { randomBytes } from "crypto";
 import { sendAccountEmail } from "@/lib/email";
 import { adjustWarehouseStock } from "@/lib/stock.server";
-import { inferItemType, isItemType } from "@/lib/item-type";
+import { inferItemType, isItemType } from "@bookmops/core/inventory";
 import { startOfDayTz, tzWallClockToUtc } from "@/lib/time";
 import { allocateJobNumber } from "@/lib/job-number";
 import { checkCleanerSeats } from "@/lib/plan-limits";

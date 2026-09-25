@@ -9,7 +9,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { sanitizeHttpUrl } from "@/lib/safe-url";
 import { parseProductLinks } from "@/lib/product-links";
-import { inferItemType, isItemType, type ItemType } from "@/lib/item-type";
+import { inferItemType, isItemType, type ItemType } from "@bookmops/core/inventory";
 
 const ALLOWED_CATEGORIES: readonly ProductCategory[] = [
   "LIQUID_SPRAY",

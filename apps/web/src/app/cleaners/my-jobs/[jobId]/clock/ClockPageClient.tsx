@@ -30,7 +30,7 @@ import {
 } from "@/lib/work-sessions";
 import { markOnMyWay } from "../onMyWay";
 import { getCoords } from "../OnMyWayButton";
-import type { ClosingReport } from "@/lib/clock-out";
+import type { ClosingReport } from "@bookmops/core/time";
 import ClosingInventoryReport, {
   answeredCount,
   buildReport,

@@ -13,7 +13,7 @@ import {
   assignmentStatusForClock,
   parseInstant,
   validateClockEdit,
-} from "../src/lib/clock-edit";
+} from "@bookmops/core/time";
 
 let pass = 0,
   fail = 0;

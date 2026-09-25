@@ -31,7 +31,7 @@ import {
   ITEM_TYPE_DESCRIPTION,
   ITEM_TYPE_NAME,
   type ItemType,
-} from "@/lib/item-type";
+} from "@bookmops/core/inventory";
 
 type ProductCategory = "LIQUID_SPRAY" | "MOP_LIQUID" | "DISPOSABLE" | "OTHER";
 

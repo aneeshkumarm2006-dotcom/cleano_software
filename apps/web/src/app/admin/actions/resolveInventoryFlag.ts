@@ -4,7 +4,7 @@ import { db } from "@/lib/org-db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { INVENTORY_FLAG_LABEL } from "@/lib/inventory-status";
+import { INVENTORY_FLAG_LABEL } from "@bookmops/core/inventory";
 
 /**
  * Working the inventory attention queue (cleano_inventory_operations_fixes.pdf
