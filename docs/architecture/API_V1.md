@@ -294,7 +294,7 @@ them:
   | Endpoint | Limit | Why |
   |---|---|---|
   | Office chat send | 10 a minute | Emails the office when no one is online |
-  | Team chat send | 20 a minute | Fans out to every member |
+  | Team chat send or edit | 20 a minute | Fans out to every member |
   | Issue report | 10 an hour | URGENT reports email the office at once |
   | Withdrawal request | 5 an hour | Emails the cleaner and the office |
   | Claim a job | 10 a minute | Races other cleaners for the same job |

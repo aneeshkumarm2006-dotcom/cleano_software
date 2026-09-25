@@ -1,7 +1,7 @@
 import type { MessageAttachment } from "@bookmops/api/v1";
 import { color, Icon, minTouch, radius, space, Text } from "@bookmops/ui-native";
 import { Image } from "expo-image";
-import { Linking, Pressable, View } from "react-native";
+import { type AccessibilityActionEvent, Linking, Pressable, View } from "react-native";
 
 import { isTrustedMediaUrl } from "@/config";
 import { clockTime, initials } from "@/lib/format";
@@ -33,10 +33,27 @@ export function Avatar({ name, size = 28 }: { name: string; size?: number }) {
   );
 }
 
+const OWN_ACTIONS = [
+  { name: "edit", label: "Edit" },
+  { name: "delete", label: "Delete" },
+];
+
+/** What can be done with one of the person's own sent messages. */
+export interface OwnMessageActions {
+  /** Long press: offer Edit and Delete. */
+  onOptions: (message: ThreadMessage) => void;
+  onEdit: (message: ThreadMessage) => void;
+  onDelete: (message: ThreadMessage) => void;
+}
+
 /**
  * One message. The person's own are filled with the dark chrome on the right;
  * everyone else's are quiet white cards on the left, with who sent them.
  * Importance and ownership are fill, never a coloured stripe.
+ *
+ * A message the person may change (`editableId`) opens Edit and Delete on a
+ * long press, and offers the same two as accessibility actions. A deleted
+ * message keeps its place as an italic "Message deleted".
  */
 export function MessageBubble({
   message,
@@ -44,6 +61,7 @@ export function MessageBubble({
   namesAbove,
   timeZone,
   onFailedPress,
+  own,
 }: {
   message: ThreadMessage;
   /** Team chat: the sender's name over the first of their run of messages. */
@@ -52,34 +70,60 @@ export function MessageBubble({
   namesAbove: boolean;
   timeZone: string;
   onFailedPress: (message: ThreadMessage) => void;
+  /** Team chat only: editing and deleting the person's own messages. */
+  own?: OwnMessageActions;
 }) {
-  const { mine } = message;
+  const { mine, deleted } = message;
   const time = clockTime(message.createdAt, timeZone);
   const failed = message.status === "failed";
-  const status = mine && message.status ? STATUS_TEXT[message.status] : null;
-  const spoken = `${mine ? "You" : message.senderName}, ${time}${status ? `, ${status}` : ""}. ${message.body}`;
+  const status = mine && message.status && !deleted ? STATUS_TEXT[message.status] : null;
+  const edited = !deleted && message.editedAt ? "edited" : null;
+  const text = deleted ? "Message deleted" : message.body;
+  const spoken = `${mine ? "You" : message.senderName}, ${time}${edited ? ", edited" : ""}${status ? `, ${status}` : ""}. ${text}`;
+  const actions = own && message.editableId && !deleted ? own : null;
 
-  const bubble = message.body ? (
-    <View
+  const bubbleStyle = {
+    paddingHorizontal: space[4] - 2,
+    paddingVertical: space[3],
+    backgroundColor: deleted ? "transparent" : mine ? color.chrome : color.surface,
+    borderWidth: mine && !deleted ? 0 : 1,
+    borderColor: color.line,
+    borderRadius: 16,
+    borderBottomRightRadius: mine ? 5 : 16,
+    borderBottomLeftRadius: mine ? 16 : 5,
+    opacity: failed ? 0.72 : 1,
+  } as const;
+
+  const content = deleted ? (
+    <Text variant="body" color="ink3" style={{ fontStyle: "italic" }}>
+      Message deleted
+    </Text>
+  ) : (
+    // Selecting text would take the long press, so a message with actions isn't selectable.
+    <Text variant="body" color={mine ? "onChrome" : "ink"} selectable={!actions}>
+      {message.body}
+    </Text>
+  );
+
+  const bubble = !text ? null : actions ? (
+    <Pressable
       accessible
       accessibilityLabel={spoken}
-      style={{
-        paddingHorizontal: space[4] - 2,
-        paddingVertical: space[3],
-        backgroundColor: mine ? color.chrome : color.surface,
-        borderWidth: mine ? 0 : 1,
-        borderColor: color.line,
-        borderRadius: 16,
-        borderBottomRightRadius: mine ? 5 : 16,
-        borderBottomLeftRadius: mine ? 16 : 5,
-        opacity: failed ? 0.72 : 1,
+      accessibilityActions={OWN_ACTIONS}
+      onAccessibilityAction={(e: AccessibilityActionEvent) => {
+        if (e.nativeEvent.actionName === "edit") actions.onEdit(message);
+        else if (e.nativeEvent.actionName === "delete") actions.onDelete(message);
       }}
+      onLongPress={() => actions.onOptions(message)}
+      style={({ pressed }) => [bubbleStyle, pressed ? { opacity: 0.8 } : null]}
     >
-      <Text variant="body" color={mine ? "onChrome" : "ink"} selectable>
-        {message.body}
-      </Text>
+      {content}
+    </Pressable>
+  ) : (
+    <View accessible accessibilityLabel={spoken} style={bubbleStyle}>
+      {content}
     </View>
-  ) : null;
+  );
 
   const meta = failed ? (
     <Pressable
@@ -103,7 +147,9 @@ export function MessageBubble({
       accessibilityElementsHidden
       style={{ fontSize: 11.5, lineHeight: 15, paddingHorizontal: space[1], textAlign: mine ? "right" : "left" }}
     >
-      {mine ? [time, status].filter(Boolean).join(" · ") : namesAbove ? time : `${message.senderName} · ${time}`}
+      {mine
+        ? [time, edited, status].filter(Boolean).join(" · ")
+        : [namesAbove ? null : message.senderName, time, edited].filter(Boolean).join(" · ")}
     </Text>
   );
 
@@ -115,7 +161,7 @@ export function MessageBubble({
         </Text>
       ) : null}
       {bubble}
-      {message.attachment ? <Attachment attachment={message.attachment} mine={mine} /> : null}
+      {message.attachment && !deleted ? <Attachment attachment={message.attachment} mine={mine} /> : null}
       {meta}
     </View>
   );

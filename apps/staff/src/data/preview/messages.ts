@@ -4,7 +4,8 @@
 //
 // To see a failed send and its retry on a simulator, send a message containing
 // "#fail": the first attempt fails as if the connection dropped, the retry
-// (same clientEventId) goes through.
+// (same clientEventId) goes through. An edit to text containing "#fail"
+// always fails, to show it being rolled back.
 import { ApiError } from "@bookmops/api/client";
 import type {
   DirectoryEntry,
@@ -142,10 +143,38 @@ export const previewMessagesApi = {
       senderName: ME.name,
       body: req.body.trim(),
       createdAt: new Date().toISOString(),
+      editedAt: null,
+      deleted: false,
     };
     rows.push(message);
     readAt.set(channelId, Date.now());
     return message;
+  },
+
+  editTeamMessage: async (channelId, messageId, req) => {
+    await delay(null, 500);
+    const rows = teamRows.get(channelId);
+    const i = rows?.findIndex((m) => m.id === messageId) ?? -1;
+    // Only the sender's own message; anyone else's is "not found", as on the server.
+    if (!rows || i < 0 || !rows[i]!.fromMe) throw new ApiError("This message isn't available.", 404, "NOT_FOUND", false);
+    const edit = editsSeen.get(req.clientEventId);
+    if (edit) return edit;
+    if (rows[i]!.deleted) throw new ApiError("This message was deleted, so it can't be edited.", 409, "MESSAGE_DELETED", false);
+    if (req.body.includes("#fail")) throw new ApiError("You're offline. We'll try again when you're back.", 0, "NETWORK", true);
+    const updated: TeamMessage = { ...rows[i]!, body: req.body.trim(), editedAt: new Date().toISOString() };
+    rows[i] = updated;
+    editsSeen.set(req.clientEventId, updated);
+    return updated;
+  },
+
+  deleteTeamMessage: async (channelId, messageId) => {
+    await delay(null, 400);
+    const rows = teamRows.get(channelId);
+    const i = rows?.findIndex((m) => m.id === messageId) ?? -1;
+    if (!rows || i < 0 || !rows[i]!.fromMe) throw new ApiError("This message isn't available.", 404, "NOT_FOUND", false);
+    // Soft, and the same answer again for a message already deleted.
+    rows[i] = { ...rows[i]!, body: "", deleted: true };
+    return { id: messageId };
   },
 
   markChannelRead: (channelId) => {
@@ -178,6 +207,8 @@ export const previewMessagesApi = {
   | "teamChannel"
   | "teamMessages"
   | "sendTeamMessage"
+  | "editTeamMessage"
+  | "deleteTeamMessage"
   | "markChannelRead"
   | "teamDirectory"
   | "openDirect"
@@ -203,8 +234,13 @@ function team(channelId: string, minutes: number, who: { id: string; name: strin
     senderName: who.name,
     body,
     createdAt: minutesAgo(minutes),
+    editedAt: null,
+    deleted: false,
   };
 }
+
+/** Edits already applied, by clientEventId: a retry returns the same answer. */
+const editsSeen = new Map<string, TeamMessage>();
 
 const JEAN = { id: "u-jean", name: "Jean Morin" };
 const LUCIE = { id: "u-lucie", name: "Lucie Paquette" };
@@ -218,7 +254,8 @@ const teamRows = new Map<string, TeamMessage[]>([
       team("ch-all", 60 * 24 + 20, JEAN, "Thanks Sofia. Enjoy the long weekend everyone."),
       team("ch-all", 58, JEAN, "Does anyone have a spare descaler? Mine ran out on Rachel Est."),
       team("ch-all", 55, LUCIE, "I have two in the van. I am on Duluth until 11, come by any time."),
-      team("ch-all", 51, ME, "Jean, I am at Saint-Denis until 12 and I have one spare too if Lucie runs out."),
+      { ...team("ch-all", 53, SOFIA, ""), deleted: true },
+      { ...team("ch-all", 51, ME, "Jean, I am at Saint-Denis until 12 and I have one spare too if Lucie runs out."), editedAt: minutesAgo(50) },
       team("ch-all", 49, JEAN, "Sorted, thank you both."),
     ],
   ],

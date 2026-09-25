@@ -1,7 +1,7 @@
 import type { TeamMessage } from "@bookmops/api/v1";
 import { color, Icon, radius, space } from "@bookmops/ui-native";
 import { useLocalSearchParams } from "expo-router";
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { View } from "react-native";
 
 import { LoadError, Loading } from "@/components/QueryState";
@@ -9,10 +9,11 @@ import { messageKeys, useMarkChannelRead, useMe, useTeamChannel, useTeamMessages
 import { useSource } from "@/data/session";
 import { Avatar } from "@/features/messages/MessageBubble";
 import { ThreadHeader } from "@/features/messages/ThreadHeader";
-import { ThreadView } from "@/features/messages/ThreadView";
+import { type OwnMessages, ThreadView } from "@/features/messages/ThreadView";
 import type { ThreadMessage } from "@/features/messages/thread";
 import { useChatIdentity, useConversation } from "@/features/messages/use-conversation";
 import { useLive } from "@/features/messages/use-live";
+import { useOwnMessageEdits } from "@/features/messages/use-own-edits";
 import { useThreadSender } from "@/features/messages/use-send";
 import { useNow } from "@/lib/use-now";
 
@@ -28,11 +29,16 @@ function toMessage(m: TeamMessage): ThreadMessage {
     mine: m.fromMe,
     senderKey: m.senderId,
     senderName: m.senderName,
-    body: m.body,
+    body: m.deleted ? "" : m.body,
     createdAt: m.createdAt,
     attachment: null,
     // Team chat has no delivery receipts; the person's own show just the time.
     status: null,
+    editedAt: m.editedAt,
+    deleted: m.deleted,
+    // The server decides in the end (only the sender, else 404); this only
+    // decides what to offer.
+    editableId: m.fromMe && !m.deleted ? m.id : undefined,
   };
 }
 
@@ -40,6 +46,8 @@ function toMessage(m: TeamMessage): ThreadMessage {
  * One team channel or direct conversation. Who may read and post is the
  * server's call (the web's canAccessChannel): a channel this cleaner isn't in
  * answers "not found", and this screen shows that as an error with retry.
+ * The person can edit and delete their own sent messages; unsent ones keep
+ * Try again and Delete.
  */
 export default function TeamConversation() {
   const { channelId } = useLocalSearchParams<{ channelId: string }>();
@@ -55,8 +63,37 @@ export default function TeamConversation() {
   const who = useChatIdentity(me.data);
 
   const thread = `team:${channelId}`;
-  const server = useMemo(() => list.data?.pages.flatMap((p) => p.items) ?? [], [list.data]);
+  const edits = useOwnMessageEdits(channelId, source);
+  const { apply } = edits;
+  const server = useMemo(() => apply(list.data?.pages.flatMap((p) => p.items) ?? []), [list.data, apply]);
   const { messages, latestIncomingId } = useConversation({ me: who, thread, server, toMessage });
+
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const editing = editingId ? (messages.find((m) => m.editableId === editingId) ?? null) : null;
+  // Deleted meanwhile (from another phone, or by the office): the edit ends.
+  if (editingId && !editing) setEditingId(null);
+
+  const { edit, remove } = edits;
+  const own = useMemo<OwnMessages>(
+    () => ({
+      editing,
+      startEdit: (m) => {
+        if (m.editableId) setEditingId(m.editableId);
+      },
+      cancelEdit: () => setEditingId(null),
+      saveEdit: (text) => {
+        if (!editing?.editableId) return;
+        setEditingId(null);
+        if (text.trim() !== editing.body) void edit(editing.editableId, text);
+      },
+      remove: (m) => {
+        if (!m.editableId) return;
+        if (m.editableId === editingId) setEditingId(null);
+        void remove(m.editableId);
+      },
+    }),
+    [editing, editingId, edit, remove],
+  );
   const send = useCallback((req: Parameters<typeof source.sendTeamMessage>[1]) => source.sendTeamMessage(channelId, req), [source, channelId]);
   const { sendNew, retry, discard } = useThreadSender({
     owner: who?.owner ?? null,
@@ -119,6 +156,7 @@ export default function TeamConversation() {
       onSend={sendNew}
       onRetry={retry}
       onDiscard={discard}
+      own={own}
     />
   );
 }

@@ -1,5 +1,8 @@
 import {
+  DeleteTeamMessageResponse,
   DirectoryResponse,
+  type EditTeamMessageRequest,
+  EditTeamMessageResponse,
   MarkChannelReadResponse,
   MarkReadResponse,
   OfficeChatResponse,
@@ -36,6 +39,16 @@ export const messagesApi = (request: Request) => ({
       SendTeamMessageResponse,
       json("POST", body, body.clientEventId),
     ),
+  /** The caller's own message only; anyone else's answers 404. */
+  editTeamMessage: (channelId: string, messageId: string, body: EditTeamMessageRequest) =>
+    request(
+      `/api/v1/team/channels/${seg(channelId)}/messages/${seg(messageId)}`,
+      EditTeamMessageResponse,
+      json("PATCH", body, body.clientEventId),
+    ),
+  /** The caller's own message only. Soft: it shows as "Message deleted" to everyone. */
+  deleteTeamMessage: (channelId: string, messageId: string) =>
+    request(`/api/v1/team/channels/${seg(channelId)}/messages/${seg(messageId)}`, DeleteTeamMessageResponse, json("DELETE")),
   markChannelRead: (channelId: string) =>
     request(`/api/v1/team/channels/${seg(channelId)}/read`, MarkChannelReadResponse, json("POST", {})),
   teamDirectory: () => request("/api/v1/team/directory", DirectoryResponse),
