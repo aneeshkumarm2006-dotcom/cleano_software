@@ -145,9 +145,14 @@ export type MarkReadResponse = z.infer<typeof MarkReadResponse>;
 // Who may do what is the web's, unchanged (groupChat.ts):
 //   canParticipate  — any staff role; never a CLIENT.
 //   canAccessChannel — the DEFAULT channel is open to all staff; any other
-//                      channel only to its members (office admins may see all
-//                      channels for moderation on the web; the v1 `staff`
-//                      access list does not include them yet).
+//                      channel only to its members, except that OWNER, ADMIN
+//                      and OPS_MANAGER see every channel (moderation).
+// The team endpoints below admit every staff role: the `staff` list
+// (EMPLOYEE, FIELD_LEAD) and the office roles (OWNER, ADMIN, OPS_MANAGER),
+// who use the manager side of the app (./manager-access.ts). A FIELD_LEAD is
+// a member like any cleaner. Removing someone ELSE's message is
+// ./manager-messages.ts, for TEAM_MODERATE only; the edit and delete here
+// stay the caller's own messages, whatever their role.
 // A channel the caller can't access answers 404, exactly like one that
 // doesn't exist (API_V1.md §3), so channel ids can't be probed.
 
@@ -168,8 +173,9 @@ export type TeamChannel = z.infer<typeof TeamChannel>;
  * GET /api/v1/team/channels — the channels the caller can access: the default
  * channel first, then groups by age, then direct conversations.
  *
- * Server: staff only; members-only filter as listGroupChannels, never the
- * admin "see everything" view. Creates the default channel if missing.
+ * Server: any staff role; listGroupChannels' filter for the caller's role
+ * (members-only for EMPLOYEE and FIELD_LEAD, every channel for OWNER, ADMIN
+ * and OPS_MANAGER). Creates the default channel if missing.
  */
 export const TeamChannelsResponse = page(TeamChannel).extend({
   /** Whether the company lets cleaners start direct messages. */

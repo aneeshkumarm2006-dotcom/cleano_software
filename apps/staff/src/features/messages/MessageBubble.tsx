@@ -38,6 +38,13 @@ const OWN_ACTIONS = [
   { name: "delete", label: "Delete" },
 ];
 
+const MODERATE_ACTIONS = [{ name: "remove", label: "Remove message" }];
+
+/** Team chat moderation: removing someone else's message (OWNER, ADMIN, OPS_MANAGER). */
+export interface ModerationActions {
+  onRemove: (message: ThreadMessage) => void;
+}
+
 /** What can be done with one of the person's own sent messages. */
 export interface OwnMessageActions {
   /** Long press: offer Edit and Delete. */
@@ -62,6 +69,7 @@ export function MessageBubble({
   timeZone,
   onFailedPress,
   own,
+  moderate,
 }: {
   message: ThreadMessage;
   /** Team chat: the sender's name over the first of their run of messages. */
@@ -72,6 +80,8 @@ export function MessageBubble({
   onFailedPress: (message: ThreadMessage) => void;
   /** Team chat only: editing and deleting the person's own messages. */
   own?: OwnMessageActions;
+  /** Team chat, for the office: removing anyone else's message. */
+  moderate?: ModerationActions;
 }) {
   const { mine, deleted } = message;
   const time = clockTime(message.createdAt, timeZone);
@@ -81,6 +91,7 @@ export function MessageBubble({
   const text = deleted ? "Message deleted" : message.body;
   const spoken = `${mine ? "You" : message.senderName}, ${time}${edited ? ", edited" : ""}${status ? `, ${status}` : ""}. ${text}`;
   const actions = own && message.editableId && !deleted ? own : null;
+  const removable = !actions && moderate && message.removableId && !deleted && !mine ? moderate : null;
 
   const bubbleStyle = {
     paddingHorizontal: space[4] - 2,
@@ -100,7 +111,7 @@ export function MessageBubble({
     </Text>
   ) : (
     // Selecting text would take the long press, so a message with actions isn't selectable.
-    <Text variant="body" color={mine ? "onChrome" : "ink"} selectable={!actions}>
+    <Text variant="body" color={mine ? "onChrome" : "ink"} selectable={!actions && !removable}>
       {message.body}
     </Text>
   );
@@ -115,6 +126,20 @@ export function MessageBubble({
         else if (e.nativeEvent.actionName === "delete") actions.onDelete(message);
       }}
       onLongPress={() => actions.onOptions(message)}
+      style={({ pressed }) => [bubbleStyle, pressed ? { opacity: 0.8 } : null]}
+    >
+      {content}
+    </Pressable>
+  ) : removable ? (
+    <Pressable
+      accessible
+      accessibilityLabel={spoken}
+      accessibilityHint="Long press to remove it"
+      accessibilityActions={MODERATE_ACTIONS}
+      onAccessibilityAction={(e: AccessibilityActionEvent) => {
+        if (e.nativeEvent.actionName === "remove") removable.onRemove(message);
+      }}
+      onLongPress={() => removable.onRemove(message)}
       style={({ pressed }) => [bubbleStyle, pressed ? { opacity: 0.8 } : null]}
     >
       {content}

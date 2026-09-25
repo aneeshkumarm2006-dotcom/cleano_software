@@ -8,6 +8,7 @@ export * from "./documents";
 export * from "./issues";
 export * from "./jobs";
 export * from "./kit";
+export * from "./manager";
 export * from "./messages";
 export * from "./on-my-way";
 export * from "./pay";

@@ -1,6 +1,9 @@
 # Bookmops Pro (`@bookmops/staff`)
 
-The iOS and Android app for cleaners, and later managers and admins.
+The iOS and Android app for everyone who works for a company: cleaners and
+field leads get the cleaner app, ops managers, admins and owners the manager
+app. The signed-in role decides; the rules are `capabilitiesFor` in
+`packages/api/src/v1/manager-access.ts`.
 Expo SDK 57 (React Native 0.86), expo-router, bundle id `com.bookmops.pro`.
 
 Built on `@bookmops/ui-native` (design system), `@bookmops/api` (the v1
@@ -20,13 +23,17 @@ npx expo export --platform ios --platform android   # production bundles
 ```
 
 **Sample data.** Until the v1 API ships, a development build offers
-"Explore with sample data" on the sign-in screen. Set
-`EXPO_PUBLIC_PREVIEW=1` to start straight in it, which lets any screen be
-opened by deep link on a simulator:
+"Explore with sample data" on the sign-in screen, as a Cleaner, a Field
+lead, a Manager (OPS_MANAGER) or an Admin, and answers as the server would
+for that role. Set `EXPO_PUBLIC_PREVIEW=1` to start straight in it (and
+`EXPO_PUBLIC_PREVIEW_ROLE=FIELD_LEAD`, `OPS_MANAGER` or `ADMIN` to pick who),
+which lets any screen be opened by deep link on a simulator:
 
 ```bash
 EXPO_PUBLIC_PREVIEW=1 npx expo start --ios
 xcrun simctl openurl booted "exp://127.0.0.1:8081/--/jobs/j1"
+EXPO_PUBLIC_PREVIEW=1 EXPO_PUBLIC_PREVIEW_ROLE=ADMIN npx expo start --ios
+xcrun simctl openurl booted "exp://127.0.0.1:8081/--/manage/jobs/m-104/crew"
 ```
 
 Release builds contain neither the sample data nor the button: the only

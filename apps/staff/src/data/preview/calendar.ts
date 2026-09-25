@@ -8,7 +8,7 @@ import { delay } from "./delay";
 import { at } from "./zone";
 import { previewMe, previewPast, previewUpcoming } from "./jobs";
 
-const TZ = previewMe.company.timezone;
+const TZ = previewMe().company.timezone;
 const keyOf = (iso: string) => new Intl.DateTimeFormat("en-CA", { timeZone: TZ }).format(new Date(iso));
 
 

@@ -5,7 +5,7 @@ import { addDays, parseDateKey } from "@bookmops/ui-native";
 
 import { previewMe } from "./jobs";
 
-const TZ = previewMe.company.timezone;
+const TZ = previewMe().company.timezone;
 
 /** Today's date in the company's zone, "2026-09-25". */
 export const companyToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: TZ }).format(new Date());
