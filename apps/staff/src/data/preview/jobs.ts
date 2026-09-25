@@ -1,10 +1,13 @@
-// Sample data for development builds. Never bundled into a release: the only
-// import is behind __DEV__ in ./index, and Metro strips dead branches from
-// production bundles.
+// Sample data for the Me, Today and Jobs areas, in development builds only.
+// Never bundled into a release: the only import is behind __DEV__
+// (../session.tsx), and Metro strips dead branches from production bundles.
 //
 // Times are built relative to "now" so the Today screen always has a next job
 // and a later one, whatever time the preview is opened.
 import type { JobDetailResponse, JobSummary, MeResponse, TodayResponse } from "@bookmops/api/v1";
+
+import type { DataSource } from "../source";
+import { delay } from "./delay";
 
 const TZ = "America/Toronto";
 
@@ -87,3 +90,10 @@ export function previewJob(id: string): JobDetailResponse {
     plannedMinutes: 180,
   };
 }
+
+export const previewJobsApi = {
+  me: () => delay(previewMe),
+  today: () => delay(previewToday),
+  jobs: (scope) => delay({ items: scope === "past" ? previewPast : previewUpcoming, nextCursor: null }),
+  job: (id) => delay(previewJob(id)),
+} satisfies Pick<DataSource, "me" | "today" | "jobs" | "job">;

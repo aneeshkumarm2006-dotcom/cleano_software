@@ -1,12 +1,11 @@
+// The development-only data source: every area's sample data, composed. Typed
+// as the full DataSource, so an area added to the API client without sample
+// data here is a compile error rather than a crash on a simulator.
 import type { DataSource } from "../source";
-import { previewJob, previewMe, previewPast, previewToday, previewUpcoming } from "./fixtures";
-
-/** A little latency, so loading states are seen and designed, not assumed. */
-const delay = <T,>(value: T, ms = 350) => new Promise<T>((r) => setTimeout(() => r(value), ms));
+import { previewClockApi } from "./clock";
+import { previewJobsApi } from "./jobs";
 
 export const previewSource: DataSource = {
-  me: () => delay(previewMe),
-  today: () => delay(previewToday),
-  jobs: (scope) => delay({ items: scope === "past" ? previewPast : previewUpcoming, nextCursor: null }),
-  job: (id) => delay(previewJob(id)),
+  ...previewJobsApi,
+  ...previewClockApi,
 };

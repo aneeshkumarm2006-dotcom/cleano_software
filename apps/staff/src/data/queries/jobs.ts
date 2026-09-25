@@ -1,7 +1,7 @@
 import type { JobScope } from "@bookmops/api/v1";
 import { useQuery } from "@tanstack/react-query";
 
-import { useSource } from "./session";
+import { useSource } from "../session";
 
 // One place for query keys, so invalidating after a mutation (clock in, claim)
 // names the same keys the screens read.

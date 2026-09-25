@@ -5,7 +5,7 @@ import library from "@bookmops/eslint-config/library";
 export default [
   ...library,
   {
-    files: ["src/client.ts"],
+    files: ["src/client/request.ts"],
     rules: { "no-restricted-globals": "off" },
   },
 ];

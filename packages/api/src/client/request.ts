@@ -1,13 +1,8 @@
-// The typed client the mobile apps use to call /api/v1.
-//
-// It knows nothing about screens or state. It adds the headers every v1 call
-// carries, checks every response against the contract, and turns every failure
-// into one error type the app can branch on.
+// The core of the v1 client: options, the error type, and the request function
+// every endpoint shares. Endpoints live beside this file, one per area.
 import type { z } from "zod";
 
-import { ErrorBody } from "./v1/common";
-import { JobDetailResponse, JobsListResponse, type JobScope, TodayResponse } from "./v1/jobs";
-import { MeResponse } from "./v1/me";
+import { ErrorBody } from "../v1/common";
 
 export interface ClientOptions {
   /** The company's own address, from sign-in discovery: "https://acme.useawer.com". */
@@ -19,6 +14,12 @@ export interface ClientOptions {
   getCookie: () => string | null | undefined | Promise<string | null | undefined>;
   /** Injectable for tests. */
   fetch?: typeof fetch;
+  /**
+   * Called with the server's own time on every response (its Date header).
+   * The app anchors offline clock events to it, so a phone whose clock is
+   * wrong — or has been changed — still records when a tap really happened.
+   */
+  onServerDate?: (serverDate: Date) => void;
 }
 
 /** Anything a v1 call can fail with, network failures included. */
@@ -47,11 +48,19 @@ export class ApiError extends Error {
   }
 }
 
-export function createClient(options: ClientOptions) {
+/** A v1 call: the path, the schema its response must match, and fetch options. */
+export type Request = <S extends z.ZodType>(path: string, schema: S, init?: RequestInit) => Promise<z.infer<S>>;
+
+/**
+ * Build the one function every endpoint goes through. It adds the headers
+ * every v1 call carries, sends the session as an explicit header, checks the
+ * response against the contract, and turns every failure into an ApiError.
+ */
+export function makeRequest(options: ClientOptions): Request {
   const doFetch = options.fetch ?? fetch;
   const base = options.baseUrl.replace(/\/+$/, "");
 
-  async function request<S extends z.ZodType>(path: string, schema: S, init: RequestInit = {}): Promise<z.infer<S>> {
+  return async function request<S extends z.ZodType>(path: string, schema: S, init: RequestInit = {}): Promise<z.infer<S>> {
     const cookie = await options.getCookie();
     let res: Response;
     try {
@@ -71,6 +80,12 @@ export function createClient(options: ClientOptions) {
       });
     } catch {
       throw new ApiError("You're offline. We'll try again when you're back.", 0, "NETWORK", true);
+    }
+
+    const serverDate = res.headers.get("date");
+    if (serverDate && options.onServerDate) {
+      const d = new Date(serverDate);
+      if (!Number.isNaN(d.getTime())) options.onServerDate(d);
     }
 
     const text = await res.text();
@@ -97,18 +112,23 @@ export function createClient(options: ClientOptions) {
       throw new ApiError("This screen couldn't load. Please update the app.", res.status, "BAD_RESPONSE", false);
     }
     return parsed.data;
-  }
-
-  return {
-    me: () => request("/api/v1/me", MeResponse),
-    today: () => request("/api/v1/today", TodayResponse),
-    jobs: (scope: JobScope, cursor?: string | null) =>
-      request(
-        `/api/v1/jobs?scope=${encodeURIComponent(scope)}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`,
-        JobsListResponse,
-      ),
-    job: (id: string) => request(`/api/v1/jobs/${encodeURIComponent(id)}`, JobDetailResponse),
   };
 }
 
-export type ApiClient = ReturnType<typeof createClient>;
+/** Encode a path segment taken from data (an id), never trusted as-is. */
+export const seg = (value: string) => encodeURIComponent(value);
+
+/**
+ * A JSON request. A mutation the app may retry (clock in, claim, withdraw)
+ * passes an idempotency key generated when the person tapped, so a retry is
+ * applied once however many times it is sent (API_V1.md §6).
+ */
+export const json = (
+  method: "POST" | "PUT" | "PATCH" | "DELETE",
+  body?: unknown,
+  idempotencyKey?: string,
+): RequestInit => ({
+  method,
+  body: body === undefined ? undefined : JSON.stringify(body),
+  headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
+});

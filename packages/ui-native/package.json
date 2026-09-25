@@ -13,7 +13,8 @@
     "@expo/vector-icons": "*",
     "react": "*",
     "react-native": "*",
-    "react-native-safe-area-context": "*"
+    "react-native-safe-area-context": "*",
+    "react-native-svg": "*"
   },
   "devDependencies": {
     "@bookmops/typescript-config": "*"

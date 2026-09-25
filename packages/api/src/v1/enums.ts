@@ -12,3 +12,9 @@ export const JOB_STATUSES = ["CREATED", "SCHEDULED", "IN_PROGRESS", "COMPLETED",
 
 /** Where this cleaner stands on this job right now. */
 export const CLOCK_STATES = ["NOT_STARTED", "CLOCKED_IN", "ON_BREAK", "CLOCKED_OUT"] as const;
+
+/** How a kit item is reported at clock-out, by what kind of item it is. */
+export const REPORT_KINDS = ["LEVEL", "COUNT", "CONDITION"] as const;
+export const LIQUID_LEVELS = ["FULL", "GOOD", "HALF", "LOW", "EMPTY"] as const;
+export const COUNTABLE_STATUSES = ["OK", "LOW", "EMPTY", "MISSING", "DAMAGED"] as const;
+export const EQUIPMENT_CONDITIONS = ["AVAILABLE", "MISSING", "DAMAGED", "NEEDS_REPLACEMENT", "NEEDS_MAINTENANCE"] as const;

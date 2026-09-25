@@ -61,13 +61,13 @@ function Routes() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
       {/* A route that is not allowed simply doesn't exist: no screen can link
-          past sign-in, and signing out takes every signed-in screen away. */}
+          past sign-in, and signing out takes every signed-in screen away.
+          Every signed-in screen lives under (app)/, guarded as one. */}
       <Stack.Protected guard={!signedIn}>
         <Stack.Screen name="sign-in" />
       </Stack.Protected>
       <Stack.Protected guard={signedIn}>
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="jobs/[id]" />
+        <Stack.Screen name="(app)" />
       </Stack.Protected>
     </Stack>
   );

@@ -66,7 +66,7 @@ export function NextJobCard({ job, now, timeZone, currency }: { job: JobSummary;
           label={onClock ? "Open job" : "Clock in"}
           variant="onChrome"
           style={{ flex: 1 }}
-          onPress={() => router.push({ pathname: "/jobs/[id]", params: { id: job.id } })}
+          onPress={() => router.push({ pathname: "/jobs/[id]/clock", params: { id: job.id } })}
         />
         <IconButton
           icon="directions"

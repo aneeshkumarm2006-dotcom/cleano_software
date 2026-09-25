@@ -1,7 +1,6 @@
 import type { JobDetailResponse } from "@bookmops/api/v1";
 import { Button, Card, color, Icon, IconButton, radius, space, Text } from "@bookmops/ui-native";
 import { router, useLocalSearchParams } from "expo-router";
-import { useState } from "react";
 import { ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -52,7 +51,6 @@ function Detail({
   myId?: string;
   bottom: number;
 }) {
-  const [notice, setNotice] = useState<string | null>(null);
   const minutes =
     job.plannedMinutes ??
     (job.endsAt ? Math.round((new Date(job.endsAt).getTime() - new Date(job.startsAt).getTime()) / 60_000) : null);
@@ -149,14 +147,9 @@ function Detail({
           gap: space[2],
         }}
       >
-        {notice ? (
-          <Text variant="small" color="warning" accessibilityLiveRegion="polite">
-            {notice}
-          </Text>
-        ) : null}
         <Button
-          label="Clock in"
-          onPress={() => setNotice("Clocking in from the app arrives with the next update. Use the web app for now.")}
+          label={job.clock.state === "CLOCKED_IN" || job.clock.state === "ON_BREAK" ? "Open the clock" : job.clock.state === "CLOCKED_OUT" ? "View time" : "Clock in"}
+          onPress={() => router.push({ pathname: "/jobs/[id]/clock", params: { id: job.id } })}
         />
       </View>
     </>
