@@ -94,7 +94,7 @@ function Flow({ pay, currency, bottom }: { pay: PayResponse; currency: string; b
     setServerError(null);
     const clientEventId = key.current ?? (key.current = randomUUID());
     withdraw.mutate(
-      { amountCents, clientEventId, ...(sentNote ? { note: sentNote } : {}) },
+      { amountCents, expectedFeeBasisPoints: feeBasisPoints, clientEventId, ...(sentNote ? { note: sentNote } : {}) },
       {
         onSuccess: (result) => {
           key.current = null;
@@ -105,8 +105,10 @@ function Flow({ pay, currency, bottom }: { pay: PayResponse; currency: string; b
           void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
           const retryable = error instanceof ApiError && error.retryable;
           if (!retryable) key.current = null;
-          if (error instanceof ApiError && (error.code === "INSUFFICIENT_BALANCE" || error.code === "AMOUNT_TOO_SMALL")) {
-            // The balance moved under us (or the rules did): back to the amount, with the server's reason.
+          if (error instanceof ApiError && (error.code === "INSUFFICIENT_BALANCE" || error.code === "AMOUNT_TOO_SMALL" || error.code === "FEE_CHANGED")) {
+            // The balance or the fee moved under us: back to the amount, with
+            // the server's reason. The pay summary refetches, so the form
+            // shows the new figures before they confirm again.
             setServerError(error.message);
             setStep({ kind: "form" });
             return;

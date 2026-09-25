@@ -181,6 +181,9 @@ export const previewPayApi = {
     await delay(null, 800);
     const replay = replays.get(body.clientEventId);
     if (replay) return replay;
+    if (body.expectedFeeBasisPoints !== FEE_BPS) {
+      throw new ApiError("The processing fee has changed. Check the new amount before you send.", 409, "FEE_CHANGED", false);
+    }
     if (body.amountCents < MINIMUM_CENTS) {
       throw new ApiError("The smallest withdrawal is $10.00.", 400, "AMOUNT_TOO_SMALL", false);
     }

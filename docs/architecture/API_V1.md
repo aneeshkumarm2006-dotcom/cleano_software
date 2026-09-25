@@ -279,6 +279,35 @@ export const POST = v1Route(
 **Ownership isn't a gate.** "Is this cleaner on this job?" depends on the data,
 so it lives in the service. Not assigned and not found both answer 404.
 
+**Rules every service follows,** whether or not an endpoint's contract repeats
+them:
+
+- **Every id resolves inside the session's company.** An id in a path, a query
+  or a body (a job, a channel, a person, an announcement, an upload key) is
+  looked up with the company in the query, never found first and checked
+  after. Another company's id is 404, the same as one that doesn't exist. In a
+  list of ids, such as announcements to mark read, it is ignored. A cursor is
+  untrusted input and never widens what the query would otherwise return.
+- **Tighter limits where a request costs something.** Gate 11 applies to
+  every route. These carry their own, per person, answering 429:
+
+  | Endpoint | Limit | Why |
+  |---|---|---|
+  | Office chat send | 10 a minute | Emails the office when no one is online |
+  | Team chat send | 20 a minute | Fans out to every member |
+  | Issue report | 10 an hour | URGENT reports email the office at once |
+  | Withdrawal request | 5 an hour | Emails the cleaner and the office |
+  | Claim a job | 10 a minute | Races other cleaners for the same job |
+  | Upload sign | 60 an hour | Each one is storage the company pays for |
+
+  A replayed idempotency key is not counted again.
+- **No redirects.** A v1 route answers, or fails with the envelope; it never
+  redirects. The app sends the session as a header and refuses a redirect,
+  since some platforms carry custom headers to the new host.
+- **Only stored URLs go out.** A URL in a response (photo, attachment,
+  upload) is https on the company's own storage. Photo reads are signed and
+  short-lived. A URL a client once sent in is never passed on to other people.
+
 Every request is logged as structured data: request id, company, user, route,
 app version, status, error code, duration.
 

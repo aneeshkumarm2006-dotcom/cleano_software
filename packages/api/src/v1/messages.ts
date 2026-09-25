@@ -55,9 +55,11 @@ export type SendMessageRequest = z.infer<typeof SendMessageRequest>;
 export const MessageAttachment = z.object({
   kind: openEnum(ATTACHMENT_KINDS),
   /**
-   * An https URL on the company's own asset storage. The server returns only
-   * URLs it stored from its own upload flow, never a URL a client supplied;
-   * the app still refuses anything that isn't https.
+   * An https URL on the company's own asset storage. Kept a plain string so
+   * one odd legacy row can't fail a whole page: the SERVER leaves out any
+   * attachment whose URL isn't https on its own storage (the web has stored
+   * whatever URL a client sent). The app still opens only https, and loads an
+   * image inline only from a trusted storage host.
    */
   url: z.string(),
   /** The file's name as uploaded, for a file attachment's label. */
@@ -237,8 +239,8 @@ export type DirectoryEntry = z.infer<typeof DirectoryEntry>;
  *
  * Server: staff only. When direct messages are off the list is EMPTY (a
  * server-side gate, as on the web, not just a hidden button). Phone and email
- * are null unless the company's setting shows them. Never includes the
- * caller, clients, inactive or deleted people.
+ * are null unless the company's setting shows them. Only people in the
+ * caller's company; never the caller, clients, inactive or deleted people.
  */
 export const DirectoryResponse = page(DirectoryEntry).extend({
   dmEnabled: z.boolean(),
@@ -251,11 +253,13 @@ export type DirectoryResponse = z.infer<typeof DirectoryResponse>;
  * the caller and another staff member. Response: that TeamChannel.
  *
  * Server: staff only; refuses when direct messages are off (403) and refuses
- * the caller's own id (400). The other person must be active staff, else 404.
+ * the caller's own id (400). The other person must be active staff IN THE
+ * CALLER'S COMPANY, else 404 — the same answer for "no such person" and "not
+ * in your company", so ids from elsewhere can't be probed for names.
  * Find-or-create must be race-safe (one direct channel per pair), so a double
  * tap or a retry opens the same conversation; that is what makes it safe
  * without an idempotency key.
  */
-export const OpenDirectRequest = z.object({ userId: z.string().min(1) });
+export const OpenDirectRequest = z.object({ userId: z.string().min(1).max(64) });
 export type OpenDirectRequest = z.infer<typeof OpenDirectRequest>;
 export const OpenDirectResponse = TeamChannel;

@@ -3,6 +3,7 @@ import { color, Icon, minTouch, radius, space, Text } from "@bookmops/ui-native"
 import { Image } from "expo-image";
 import { Linking, Pressable, View } from "react-native";
 
+import { isTrustedMediaUrl } from "@/config";
 import { clockTime } from "@/lib/format";
 
 import { initials, safeHttpsUrl, type MessageStatus, type ThreadMessage } from "./thread";
@@ -137,7 +138,8 @@ function Attachment({ attachment, mine }: { attachment: MessageAttachment; mine:
     if (url) void Linking.openURL(url).catch(() => {});
   };
 
-  if (attachment.kind === "IMAGE" && url) {
+  // Shown inline only from our own storage; any other link waits for a tap.
+  if (attachment.kind === "IMAGE" && url && isTrustedMediaUrl(url)) {
     return (
       <Pressable accessibilityRole="link" accessibilityLabel="Photo. Opens full size." onPress={open}>
         <Image

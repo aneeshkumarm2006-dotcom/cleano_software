@@ -72,10 +72,11 @@ export type AnnouncementsResponse = z.infer<typeof AnnouncementsResponse>;
  * Server: staff only; writes only the CALLER's read rows. Keeps the web's
  * rules: an existing read is not moved (first seen is what the office wants
  * to know), except one that predates the last edit, which is re-stamped.
- * Unknown ids are ignored, not an error; at most 200 per call.
+ * Unknown ids, and ids of another company's announcements, are ignored, not an
+ * error; at most 200 per call.
  */
 export const MarkAnnouncementsReadRequest = z.object({
-  ids: z.array(z.string().min(1)).min(1).max(200),
+  ids: z.array(z.string().min(1).max(64)).min(1).max(200),
 });
 export type MarkAnnouncementsReadRequest = z.infer<typeof MarkAnnouncementsReadRequest>;
 

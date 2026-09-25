@@ -70,7 +70,7 @@ export const HttpsUrl = z.url({ protocol: /^https$/, hostname: z.regexes.domain 
  */
 export const UploadRequest = z.object({
   purpose: z.enum(UPLOAD_PURPOSES),
-  jobId: z.string().min(1),
+  jobId: z.string().min(1).max(64),
   contentType: z.enum(PHOTO_CONTENT_TYPES),
   byteSize: z.number().int().min(1).max(MAX_PHOTO_BYTES),
 });
@@ -95,7 +95,11 @@ export type UploadTicket = z.infer<typeof UploadTicket>;
 export const JobPhoto = z.object({
   id: z.string(),
   kind: openEnum(JOB_PHOTO_KINDS),
-  /** The full photo. */
+  /**
+   * The full photo. A short-lived signed read URL (an hour at most), never a
+   * public link: these are photos of the inside of clients' homes. Served
+   * with `X-Content-Type-Options: nosniff`.
+   */
   url: HttpsUrl,
   /** A small square version for the grid, when storage can make one. */
   thumbnailUrl: HttpsUrl.nullable(),
@@ -161,6 +165,11 @@ export type JobPhotosResponse = z.infer<typeof JobPhotosResponse>;
  *     copy; the shared service should settle on core's rule.)
  *   - re-check the per-job cap at attach time, in the same transaction as the
  *     insert;
+ *   - accept a key ONCE: an attached key is marked used, and attaching it
+ *     again (other than an idempotent replay) is 409 `UPLOAD_USED`, so two
+ *     rows never share one stored object;
+ *   - check the stored file's first bytes really are a JPEG, PNG, HEIC or
+ *     WebP, not only the type it was signed for;
  *   - send the "first photos on this job" email to the office as the web does,
  *     once per job.
  */

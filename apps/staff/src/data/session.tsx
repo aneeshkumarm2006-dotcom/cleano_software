@@ -8,6 +8,7 @@ import { workspaceStore } from "@/auth/workspace-store";
 import { APP_VERSION, isAllowedOrigin, PLATFORM, PLATFORM_URL } from "@/config";
 import { disablePush } from "@/notifications/push";
 
+import { runSignOutTasks } from "./sign-out";
 import type { DataSource } from "./source";
 import { recordServerDate } from "./trusted-time";
 
@@ -133,7 +134,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       await workspaceStore.clear();
     }
     // Queued clock events stay (they're owned, and sent when that person
-    // signs in again); everything else read into memory goes.
+    // signs in again); everything else read into memory goes, including
+    // photos still waiting to upload, which would otherwise go out under the
+    // next person's session.
+    runSignOutTasks();
     queryClient.clear();
     setSession({ status: "signed-out" });
   }, [session, queryClient]);

@@ -28,7 +28,7 @@ export class ApiError extends Error {
     message: string,
     /** HTTP status; 0 when the request never reached the server. */
     readonly status: number,
-    /** The server's stable code, or NETWORK / BAD_RESPONSE from the client. */
+    /** The server's stable code, or NETWORK / BAD_RESPONSE / UNEXPECTED_REDIRECT from the client. */
     readonly code: string,
     readonly retryable: boolean,
     readonly requestId?: string,
@@ -69,6 +69,10 @@ export function makeRequest(options: ClientOptions): Request {
         // The session travels as an explicit header; the platform's own cookie
         // jar is not used, so nothing is sent that the app didn't choose.
         credentials: "omit",
+        // The session is an explicit header, and some platforms keep custom
+        // headers across a redirect to another host. v1 never redirects, so
+        // one is refused rather than followed.
+        redirect: "error",
         headers: {
           Accept: "application/json",
           ...(init.body ? { "Content-Type": "application/json" } : {}),
@@ -80,6 +84,12 @@ export function makeRequest(options: ClientOptions): Request {
       });
     } catch {
       throw new ApiError("You're offline. We'll try again when you're back.", 0, "NETWORK", true);
+    }
+
+    // Where `redirect` isn't honoured, a response from anywhere but the
+    // company's own origin is still never trusted.
+    if (res.url && originOf(res.url) !== originOf(base)) {
+      throw new ApiError("Something went wrong. Try again.", res.status, "UNEXPECTED_REDIRECT", false);
     }
 
     const serverDate = res.headers.get("date");
@@ -132,3 +142,11 @@ export const json = (
   body: body === undefined ? undefined : JSON.stringify(body),
   headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
 });
+
+function originOf(url: string): string | null {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return null;
+  }
+}

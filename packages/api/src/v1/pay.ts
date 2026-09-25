@@ -184,8 +184,16 @@ export type WithdrawalsResponse = z.infer<typeof WithdrawalsResponse>;
  *   2. refuse `amountCents` below `minimumCents` (400 AMOUNT_TOO_SMALL) or
  *      above that balance (409 INSUFFICIENT_BALANCE, with the balance in the
  *      message);
- *   3. compute the fee from the SERVER's rate, never the app's;
+ *   3. compute the fee from the SERVER's rate, never the app's. If that rate
+ *      isn't `expectedFeeBasisPoints` (the rate the person was shown and
+ *      agreed to), refuse with 409 FEE_CHANGED rather than charge a fee they
+ *      never saw. The rate is an integer from 0 to 10000. The fee rounds half
+ *      up to the cent, round(amountCents × rate ÷ 10000), exactly as the app
+ *      shows it, and the net must be at least 1 cent (else 400
+ *      AMOUNT_TOO_SMALL);
  *   4. create the Withdrawal (PENDING) and the office alert.
+ * Per-person rate limit: 5 an hour (429). Each request emails the cleaner and
+ * the office, and every retry of a new request carries a new key.
  * Without the lock, two requests sent together would each see the whole
  * balance and both succeed; web requestWithdrawal has that race today.
  * The confirmation emails to the cleaner and the office are effects, flushed
@@ -195,6 +203,8 @@ export type WithdrawalsResponse = z.infer<typeof WithdrawalsResponse>;
 export const WithdrawalRequest = z.object({
   /** What to take from the available balance, before the fee. */
   amountCents: z.number().int().positive(),
+  /** The fee rate on the confirmation the person agreed to. */
+  expectedFeeBasisPoints: z.number().int().min(0).max(10_000),
   /** Anything the office should know. */
   note: z.string().trim().max(500).optional(),
   clientEventId: z.uuid(),

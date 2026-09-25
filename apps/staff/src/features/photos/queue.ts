@@ -18,6 +18,7 @@ import { randomUUID } from "expo-crypto";
 import { useCallback, useMemo, useSyncExternalStore } from "react";
 
 import { addPhotoToCache, photoKeys } from "@/data/queries/photos";
+import { onSignOut } from "@/data/sign-out";
 import type { DataSource } from "@/data/source";
 
 import { type PreparedPhoto, preparePhoto, putPhoto, UploadError } from "./upload";
@@ -90,6 +91,20 @@ function patch(id: string, change: Partial<Internal>) {
 
 const get = (id: string) => items.find((i) => i.id === id);
 
+/**
+ * Sign-out: forget every photo in the queue. A request already on the wire
+ * finishes, but its upload goes no further — each step checks the photo is
+ * still queued first. Without this, the next person to sign in to the same
+ * company would carry on sending the last person's photos with their own
+ * session, since the session cookie is stored per company, not per person.
+ */
+function dropAllPhotoUploads(): void {
+  items = [];
+  localUris.clear();
+  emit();
+}
+onSignOut(dropAllPhotoUploads);
+
 function pump() {
   while (active < CONCURRENCY) {
     const next = items.find((i) => i.step === "waiting");
@@ -114,9 +129,10 @@ async function run(id: string): Promise<void> {
         throw new UploadError(`This photo is over ${Math.round(item.maxBytes / 1024 / 1024)} MB even after shrinking. Try another.`, false);
       }
       patch(id, { prepared, previewUri: prepared.uri, step: "sending" });
-      item = get(id)!;
     }
 
+    item = get(id);
+    if (!item) return;
     if (!item.sent) {
       let ticket = item.ticket;
       if (!ticket || performance.now() - item.ticketAt > TICKET_MAX_AGE_MS) {
@@ -127,6 +143,7 @@ async function run(id: string): Promise<void> {
           byteSize: item.prepared!.byteSize,
         });
         patch(id, { ticket, ticketAt: performance.now() });
+        if (!get(id)) return;
       }
       try {
         await putPhoto(ticket, item.prepared!, (progress) => patch(id, { progress }));
@@ -135,8 +152,10 @@ async function run(id: string): Promise<void> {
         throw e;
       }
       patch(id, { sent: true, step: "saving" });
-      item = get(id)!;
     }
+
+    item = get(id);
+    if (!item) return;
 
     const photo = await source.attachJobPhoto(item.jobId, {
       key: item.ticket!.key,
