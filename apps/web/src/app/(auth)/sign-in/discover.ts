@@ -1,10 +1,8 @@
 "use server";
 
 import { headers } from "next/headers";
-import { hashPassword, verifyPassword } from "better-auth/crypto";
 
-import { platformDb } from "@/lib/platform-db";
-import { originForSlug } from "@/lib/tenant";
+import { discoverWorkspacesFor } from "@/server/auth/discover";
 
 /**
  * "Which workspace do I belong to?", answered without telling strangers.
@@ -44,121 +42,23 @@ export type DiscoverResult =
  */
 const REFUSED = { ok: false as const, error: "Email or password is incorrect." };
 
-/**
- * Attempts per address per window.
- *
- * KNOWN LIMIT, stated rather than implied: this is in memory, so it is per
- * instance, and Vercel runs several. It raises the cost of guessing without
- * ending it. The same caveat applies to better-auth's own limiter (see the note
- * in src/lib/auth.ts) and the real answer for a determined attacker is a WAF
- * rule, not this. It is here because this endpoint checks a password against
- * EVERY organization at once, which makes it a more attractive target than any
- * single workspace's login.
- */
-const ATTEMPTS = new Map<string, { n: number; resetAt: number }>();
-const WINDOW_MS = 60_000;
-const MAX_ATTEMPTS = 8;
-
-/**
- * A hash nobody's password matches, checked when an email has no account.
- *
- * Without it the answer's timing said what the message would not: an unknown
- * email came back in milliseconds, a known one only after a scrypt check per
- * workspace. Checking something either way makes "no such account" and "wrong
- * password" take the same time. Built once, lazily, from a random secret.
- */
-let dummyHash: Promise<string> | undefined;
-function hashNobodyHas(): Promise<string> {
-  dummyHash ??= hashPassword(crypto.randomUUID());
-  return dummyHash;
-}
-
-function rateLimited(key: string): boolean {
-  const now = Date.now();
-  // Keys now include emails, which a caller chooses, so expired windows are
-  // dropped rather than left to grow the map without bound.
-  if (ATTEMPTS.size > 5_000) {
-    for (const [k, v] of ATTEMPTS) if (v.resetAt < now) ATTEMPTS.delete(k);
-  }
-  const hit = ATTEMPTS.get(key);
-  if (!hit || hit.resetAt < now) {
-    ATTEMPTS.set(key, { n: 1, resetAt: now + WINDOW_MS });
-    return false;
-  }
-  hit.n += 1;
-  return hit.n > MAX_ATTEMPTS;
-}
-
 export async function discoverWorkspaces(
   emailRaw: string,
   password: string,
 ): Promise<DiscoverResult> {
-  const email = emailRaw.trim().toLowerCase();
-  if (!email || !password) return REFUSED;
-
   const h = await headers();
   const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-  // Per address AND per email. Per address alone let one attacker spread
-  // guesses for a single person's password across many addresses.
-  if (rateLimited(`ip:${ip}`) || rateLimited(`email:${email}`)) {
+
+  // The rules, the counters and the cross-organization read now live in one
+  // service shared with the phone's sign-in (server/auth/discover.ts). This
+  // adapter keeps the web's answers word for word.
+  const outcome = await discoverWorkspacesFor(emailRaw, password, ip);
+  if (outcome.kind === "limited") {
     return { ok: false, error: "Too many attempts. Wait a minute and try again." };
   }
-
-  // Reading across organizations. `platformDb` is the elevated connection, and
-  // needing it is the reason this lives in its own file -- everything else in
-  // the product goes through the org-scoped client on purpose.
-  //
-  // A suspended or cancelled workspace is left out here rather than refused
-  // later, so "your company stopped paying" is not distinguishable from "wrong
-  // password" to someone who is only guessing.
-  const orgs = await platformDb.organization.findMany({
-    where: { status: "ACTIVE" },
-    select: { id: true, slug: true, name: true },
-  });
-  const byId = new Map(orgs.map((o) => [o.id, o]));
-
-  const candidates = await platformDb.user.findMany({
-    where: {
-      email,
-      isActive: true,
-      // Archived people are refused at sign-in, so listing their workspace
-      // would only lead them to a door that will not open.
-      deletedAt: null,
-      organizationId: { in: orgs.map((o) => o.id) },
-    },
-    select: {
-      organizationId: true,
-      accounts: {
-        where: { providerId: "credential" },
-        select: { password: true },
-      },
-    },
-  });
-
-  const matched: DiscoveredWorkspace[] = [];
-  let checked = 0;
-  for (const user of candidates) {
-    const org = byId.get(user.organizationId);
-    if (!org) continue;
-    // Each membership is a separate account row with its own hash, so someone
-    // in two workspaces may well have two different passwords. Check each; a
-    // match in one says nothing about the other.
-    for (const account of user.accounts) {
-      if (!account.password) continue;
-      checked++;
-      if (await verifyPassword({ hash: account.password, password })) {
-        matched.push({
-          slug: org.slug,
-          name: org.name,
-          origin: originForSlug(org.slug),
-        });
-        break;
-      }
-    }
-  }
-
-  if (checked === 0) await verifyPassword({ hash: await hashNobodyHas(), password });
-
-  if (matched.length === 0) return REFUSED;
-  return { ok: true, workspaces: matched };
+  if (outcome.kind === "refused") return REFUSED;
+  return {
+    ok: true,
+    workspaces: outcome.workspaces.map((w) => ({ slug: w.slug, name: w.name, origin: w.origin })),
+  };
 }

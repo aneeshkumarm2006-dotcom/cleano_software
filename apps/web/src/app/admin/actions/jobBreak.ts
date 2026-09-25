@@ -1,103 +1,52 @@
 "use server";
 
-import { db } from "@/lib/org-db";
 import { auth } from "@/lib/auth";
 import { isStaffRole } from "@/lib/role-routing";
 import { headers } from "next/headers";
-import { revalidatePath } from "next/cache";
+
+import { actorFromSession } from "@/server/actor";
+import { endBreakService, startBreakService } from "@/server/clock/breaks";
+import { revalidateAfterBreak } from "@/server/clock/revalidate";
 
 /**
  * Start / end a break while clocked in to a job (awer_fixes.pdf item 26).
  *
- * AUTHZ: everything is scoped to the SESSION user — a cleaner can only start or
- * end their own break, on a job they are clocked in to.
- *
- * Breaks are separate rows, so a cleaner can take several on a long job. Break
- * time is subtracted from active working time (see src/lib/time-tracking.ts) so
- * it can never inflate paid hours.
+ * The rules live in server/clock/breaks.ts, shared with the phone's break
+ * endpoints. These actions are the web's front door onto them and answer
+ * exactly as they always have.
  */
 
-/** Is this cleaner currently clocked in to this job? */
-async function currentClockIn(jobId: string, cleanerId: string) {
-  const assignment = await db.jobAssignment.findUnique({
-    where: { jobId_cleanerId: { jobId, cleanerId } },
-    select: { clockInTime: true, clockOutTime: true },
-  });
-  if (assignment?.clockInTime && !assignment.clockOutTime) return true;
-
-  // Legacy jobs with no per-cleaner assignment row fall back to the job-level
-  // clock, same as the rest of the time-tracking read paths.
-  if (!assignment) {
-    const job = await db.job.findFirst({
-      where: { id: jobId, employeeId: cleanerId },
-      select: { clockInTime: true, clockOutTime: true },
-    });
-    return !!job?.clockInTime && !job.clockOutTime;
+async function staffActor() {
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session?.user) return { error: "Not authenticated" } as const;
+  if (!isStaffRole((session.user as { role?: string }).role)) {
+    return { error: "Not authorized" } as const;
   }
-  return false;
+  return {
+    actor: actorFromSession(
+      session.user as { id: string; name?: string | null; email: string; role?: string | null },
+    ),
+  } as const;
 }
 
 export async function startJobBreak(jobId: string) {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session?.user) return { success: false, error: "Not authenticated" };
-  if (!isStaffRole((session.user as { role?: string }).role)) {
-    return { success: false, error: "Not authorized" };
-  }
-  if (typeof jobId !== "string" || !jobId.trim()) {
-    return { success: false, error: "Job is required" };
-  }
-  const cleanerId = session.user.id;
+  const who = await staffActor();
+  if ("error" in who) return { success: false, error: who.error };
 
-  if (!(await currentClockIn(jobId, cleanerId))) {
-    return {
-      success: false,
-      error: "You need to be clocked in to this job to start a break.",
-    };
-  }
+  const result = await startBreakService(who.actor, { jobId, now: new Date() });
+  if (!result.ok) return { success: false, error: result.message };
 
-  // Guard against a double-tap opening two overlapping breaks, which would
-  // double-count the time against the cleaner.
-  const running = await db.jobBreak.findFirst({
-    where: { jobId, cleanerId, endedAt: null },
-    select: { id: true },
-  });
-  if (running) return { success: false, error: "You're already on a break." };
-
-  await db.jobBreak.create({ data: { jobId, cleanerId } });
-
-  revalidatePath(`/cleaners/my-jobs/${jobId}`);
-  revalidatePath(`/cleaners/my-jobs/${jobId}/clock`);
-  revalidatePath(`/admin/jobs/${jobId}`);
-  revalidatePath("/admin/time-tracking");
+  revalidateAfterBreak(jobId);
   return { success: true };
 }
 
 export async function endJobBreak(jobId: string) {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session?.user) return { success: false, error: "Not authenticated" };
-  if (!isStaffRole((session.user as { role?: string }).role)) {
-    return { success: false, error: "Not authorized" };
-  }
-  if (typeof jobId !== "string" || !jobId.trim()) {
-    return { success: false, error: "Job is required" };
-  }
-  const cleanerId = session.user.id;
+  const who = await staffActor();
+  if ("error" in who) return { success: false, error: who.error };
 
-  const running = await db.jobBreak.findFirst({
-    where: { jobId, cleanerId, endedAt: null },
-    orderBy: { startedAt: "desc" },
-    select: { id: true },
-  });
-  if (!running) return { success: false, error: "You're not on a break." };
+  const result = await endBreakService(who.actor, { jobId, now: new Date() });
+  if (!result.ok) return { success: false, error: result.message };
 
-  await db.jobBreak.update({
-    where: { id: running.id },
-    data: { endedAt: new Date() },
-  });
-
-  revalidatePath(`/cleaners/my-jobs/${jobId}`);
-  revalidatePath(`/cleaners/my-jobs/${jobId}/clock`);
-  revalidatePath(`/admin/jobs/${jobId}`);
-  revalidatePath("/admin/time-tracking");
+  revalidateAfterBreak(jobId);
   return { success: true };
 }
