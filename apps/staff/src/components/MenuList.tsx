@@ -49,13 +49,13 @@ export function MenuGroup({ title, items }: { title: string; items: readonly Men
                 {item.label}
               </Text>
               {item.soon ? (
-                <Text variant="eyebrow" color="ink3" style={{ fontSize: 10 }}>
+                <Text variant="eyebrow" color="ink3">
                   Soon
                 </Text>
               ) : (
                 <>
                   {item.status ? (
-                    <Text variant="eyebrow" color={item.statusTone ?? "warning"} numeral style={{ fontSize: 10 }}>
+                    <Text variant="eyebrow" color={item.statusTone ?? "warning"} numeral>
                       {item.status}
                     </Text>
                   ) : null}

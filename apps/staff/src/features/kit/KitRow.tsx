@@ -1,9 +1,9 @@
 import type { KitItem } from "@bookmops/api/v1";
-import { color, Icon, minTouch, radius, space, Text } from "@bookmops/ui-native";
+import { color, Icon, minTouch, Pill, radius, space, Text } from "@bookmops/ui-native";
 import { router } from "expo-router";
 import { Pressable, View } from "react-native";
 
-import { Tag } from "@/features/record/ui";
+import { pillTone } from "@/features/record/ui";
 import { dayMonth } from "@/lib/dates";
 
 import { fill, subline, toneOf } from "./display";
@@ -50,7 +50,7 @@ export function KitRow({ item, timeZone, first }: { item: KitItem; timeZone: str
             </Text>
           ) : null}
         </View>
-        <Tag label={item.attention.label} tone={tone} />
+        <Pill label={item.attention.label} tone={pillTone(tone)} />
         <Icon name="forward" size={16} color="ink3" />
       </View>
       {f != null ? (

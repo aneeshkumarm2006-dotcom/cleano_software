@@ -1,12 +1,12 @@
 import type { TrainingModuleSummary } from "@bookmops/api/v1";
-import { Button, Card, color, Icon, ProgressRing, radius, space, Text } from "@bookmops/ui-native";
+import { Button, Card, color, Icon, Pill, ProgressRing, radius, space, Text } from "@bookmops/ui-native";
 import { router } from "expo-router";
 import { Fragment } from "react";
 import { Pressable, View } from "react-native";
 
 import { Empty, LoadError, Loading } from "@/components/QueryState";
 import { useMe, useTraining } from "@/data/queries";
-import { BackHeader, Page, SectionTitle, Tag } from "@/features/record/ui";
+import { BackHeader, Page, SectionTitle } from "@/features/record/ui";
 import { isDone, moduleFacts, percent } from "@/features/training/display";
 import { dayMonth } from "@/lib/dates";
 
@@ -110,7 +110,7 @@ function Summary({ completed, total, requiredLeft }: { completed: number; total:
           </Text>
         </ProgressRing>
         <View style={{ flex: 1, gap: space[1] }}>
-          <Text variant="eyebrow" color="onChrome3" style={{ fontSize: 10 }}>
+          <Text variant="eyebrow" color="onChrome3">
             Your progress
           </Text>
           <Text variant="subheading" color="onChrome">
@@ -145,7 +145,7 @@ function ToDoCard({ module: m, next }: { module: TrainingModuleSummary; next: bo
               {moduleFacts(m)}
             </Text>
           </View>
-          {m.isRequired ? <Tag label="Required" tone="warn" /> : null}
+          {m.isRequired ? <Pill label="Required" tone="warning" /> : null}
         </View>
         {status === "FAILED" && m.progress.quizScore != null ? (
           <Text variant="small" color="danger" numeral>

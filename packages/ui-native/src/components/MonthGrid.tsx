@@ -132,7 +132,7 @@ export const MonthGrid = memo(function MonthGrid({
     <View style={{ gap: 3 }}>
       <View style={{ flexDirection: "row" }} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
         {WEEKDAYS.map((d, i) => (
-          <Text key={i} variant="eyebrow" color="ink3" align="center" style={{ flex: 1, fontSize: 10, paddingBottom: space[1] }}>
+          <Text key={i} variant="eyebrow" color="ink3" align="center" style={{ flex: 1, paddingBottom: space[1] }}>
             {d}
           </Text>
         ))}

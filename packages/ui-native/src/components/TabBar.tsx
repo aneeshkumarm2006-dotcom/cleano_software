@@ -57,6 +57,13 @@ export const TabBarShell = forwardRef<View, ViewProps & { children: ReactNode }>
   );
 });
 
+/**
+ * How far a tab's label grows with the phone's text size. The bar floats at
+ * a fixed size; past 1.3× the labels collide with each other and the icons.
+ * Anyone at a larger size still hears the full label from VoiceOver.
+ */
+const LABEL_MAX_SCALE = 1.3;
+
 export interface TabBarButtonProps extends Omit<PressableProps, "children" | "style"> {
   label: string;
   icon: IconName;
@@ -82,7 +89,7 @@ export const TabBarButton = forwardRef<View, TabBarButtonProps>(function TabBarB
         gap: 3,
         paddingVertical: space[2],
         borderRadius: radius.pill,
-        backgroundColor: isFocused ? "rgba(255,255,255,0.16)" : pressed ? "rgba(255,255,255,0.08)" : "transparent",
+        backgroundColor: isFocused ? color.tabOnChrome : pressed ? color.fillOnChrome : "transparent",
       })}
     >
       <View>
@@ -97,6 +104,7 @@ export const TabBarButton = forwardRef<View, TabBarButtonProps>(function TabBarB
         variant="small"
         weight={isFocused ? "bold" : "semibold"}
         color={isFocused ? "onChrome" : "onChrome3"}
+        maxFontSizeMultiplier={LABEL_MAX_SCALE}
         style={{ fontSize: 11, lineHeight: 13 }}
       >
         {label}

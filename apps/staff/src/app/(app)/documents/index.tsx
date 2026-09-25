@@ -1,12 +1,12 @@
 import type { DocumentSummary, VoidChequeOnFile } from "@bookmops/api/v1";
-import { Card, color, Icon, radius, space, Text } from "@bookmops/ui-native";
+import { Card, color, Icon, Pill, radius, space, Text } from "@bookmops/ui-native";
 import { router } from "expo-router";
 import { View } from "react-native";
 
 import { Empty, LoadError, Loading } from "@/components/QueryState";
 import { useDocuments, useMe } from "@/data/queries";
 import { dueLine, statusTag } from "@/features/documents/display";
-import { BackHeader, Page, SectionTitle, Tag } from "@/features/record/ui";
+import { BackHeader, Page, pillTone, SectionTitle } from "@/features/record/ui";
 import { dayMonthYear } from "@/lib/dates";
 import { useNow } from "@/lib/use-now";
 
@@ -95,7 +95,7 @@ function DocCard({ doc, now, timeZone }: { doc: DocumentSummary; now: Date; time
             </Text>
           ) : null}
         </View>
-        <Tag label={tag.label} tone={tag.tone} />
+        <Pill label={tag.label} tone={pillTone(tag.tone)} />
       </View>
     </Card>
   );

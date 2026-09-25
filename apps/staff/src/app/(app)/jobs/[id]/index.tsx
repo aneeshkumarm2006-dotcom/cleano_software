@@ -207,7 +207,7 @@ function Fact({ label, value, tone, small }: { label: string; value: string; ton
         borderColor: color.line,
       }}
     >
-      <Text variant="eyebrow" color="ink3" style={{ fontSize: 10 }}>
+      <Text variant="eyebrow" color="ink3">
         {label}
       </Text>
       <Text variant={small ? "bodyStrong" : "heading"} color={tone ?? "chrome"} numeral numberOfLines={1}>
@@ -230,7 +230,7 @@ function StatusPill({ status }: { status: string }) {
   const s = STATUS_TEXT[status] ?? { label: "Job", fg: "ink2" as const, bg: color.groundDeep };
   return (
     <View style={{ paddingHorizontal: space[2] + 2, paddingVertical: space[1], borderRadius: radius.pill, backgroundColor: s.bg, marginTop: space[1] }}>
-      <Text variant="eyebrow" color={s.fg} style={{ fontSize: 10 }}>
+      <Text variant="eyebrow" color={s.fg}>
         {s.label}
       </Text>
     </View>

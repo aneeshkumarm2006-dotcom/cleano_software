@@ -28,7 +28,7 @@ export function AnnouncementCard({ item, isNew, timeZone }: { item: Announcement
           {pinned ? (
             <>
               <Icon name="pin" size={15} color="warningOnChrome" />
-              <Text variant="eyebrow" color="warningOnChrome" style={{ fontSize: 10.5 }}>
+              <Text variant="eyebrow" color="warningOnChrome">
                 Pinned
               </Text>
             </>
@@ -36,7 +36,7 @@ export function AnnouncementCard({ item, isNew, timeZone }: { item: Announcement
           {isNew ? (
             <View style={{ flexDirection: "row", alignItems: "center", gap: space[1] + 2 }}>
               <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: pinned ? color.accentOnChrome : color.accent }} />
-              <Text variant="eyebrow" color={pinned ? "onChrome" : "accentText"} style={{ fontSize: 10.5 }}>
+              <Text variant="eyebrow" color={pinned ? "onChrome" : "accentText"}>
                 New
               </Text>
             </View>

@@ -17,17 +17,21 @@ type Variant =
   | "danger";
 
 const LOOK: Record<Variant, { bg: string; bgPressed: string; fg: keyof typeof color; border?: string }> = {
-  primary: { bg: color.chrome, bgPressed: "#0b1a1f", fg: "onChrome" },
+  primary: { bg: color.chrome, bgPressed: color.chromePressed, fg: "onChrome" },
   onChrome: { bg: color.surface, bgPressed: color.groundDeep, fg: "chrome" },
   secondary: { bg: color.surface, bgPressed: color.groundDeep, fg: "ink", border: color.line },
-  ghostOnChrome: { bg: "rgba(255,255,255,0.11)", bgPressed: "rgba(255,255,255,0.2)", fg: "onChrome" },
-  danger: { bg: color.dangerSoft, bgPressed: "#f4d6d6", fg: "danger" },
+  ghostOnChrome: { bg: color.buttonOnChrome, bgPressed: color.buttonOnChromePressed, fg: "onChrome" },
+  danger: { bg: color.dangerSoft, bgPressed: color.dangerSoftPressed, fg: "danger" },
 };
 
 export interface ButtonProps extends Omit<PressableProps, "style" | "children"> {
   label: string;
   variant?: Variant;
-  /** 52pt, the size of a primary action; `md` is 44pt, the minimum touch target. */
+  /**
+   * 52pt, the size of a primary action; `md` is 44pt, the minimum touch
+   * target. A floor, not a fixed height: at a large text size the button
+   * grows to fit its label rather than clipping it.
+   */
   size?: "lg" | "md";
   icon?: IconName;
   loading?: boolean;
@@ -55,8 +59,9 @@ export function Button({
       {...rest}
       style={({ pressed }) => [
         {
-          height: size === "lg" ? 52 : minTouch,
+          minHeight: size === "lg" ? 52 : minTouch,
           paddingHorizontal: space[5],
+          paddingVertical: size === "lg" ? space[3] : space[2],
           borderRadius: radius.lg,
           backgroundColor: pressed ? look.bgPressed : look.bg,
           borderWidth: look.border ? 1 : 0,

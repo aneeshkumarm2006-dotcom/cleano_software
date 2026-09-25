@@ -212,7 +212,7 @@ function ClockBody({
                   {item.label}
                 </Text>
                 {n === 0 ? (
-                  <Text variant="eyebrow" color="accentOnChrome" style={{ fontSize: 10 }}>
+                  <Text variant="eyebrow" color="accentOnChrome">
                     Up next
                   </Text>
                 ) : null}
@@ -242,7 +242,7 @@ function ClockBody({
 function Stat({ label, value, tone }: { label: string; value: string; tone?: string }) {
   return (
     <View style={{ flex: 1, alignItems: "center", gap: space[1] }}>
-      <Text variant="eyebrow" color="onChrome3" style={{ fontSize: 10 }}>
+      <Text variant="eyebrow" color="onChrome3">
         {label}
       </Text>
       <Text variant="bodyStrong" numeral style={{ color: tone ?? color.onChrome }} numberOfLines={1}>

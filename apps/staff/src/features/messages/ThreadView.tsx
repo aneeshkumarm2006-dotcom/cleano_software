@@ -164,7 +164,7 @@ function DayMarker({ label }: { label: string }) {
   return (
     <View style={{ alignItems: "center", paddingVertical: space[1] }}>
       <View style={{ paddingHorizontal: space[3], paddingVertical: space[1] + 1, borderRadius: radius.pill, backgroundColor: color.groundDeep }}>
-        <Text variant="eyebrow" color="ink2" accessibilityRole="header" style={{ fontSize: 10, lineHeight: 13 }}>
+        <Text variant="eyebrow" color="ink2" accessibilityRole="header">
           {label}
         </Text>
       </View>

@@ -55,7 +55,7 @@ export function BalanceCard({ pay, currency, onWithdraw }: { pay: PayResponse; c
 function ChromeStat({ label, value, inset }: { label: string; value: string; inset?: boolean }) {
   return (
     <View accessible accessibilityLabel={`${label}: ${value}`} style={{ flex: 1, gap: 2, paddingLeft: inset ? space[4] : 0 }}>
-      <Text variant="eyebrow" color="onChrome3" style={{ fontSize: 10 }}>
+      <Text variant="eyebrow" color="onChrome3">
         {label}
       </Text>
       <Text variant="subheading" color="onChrome" numeral>

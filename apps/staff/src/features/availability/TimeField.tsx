@@ -34,7 +34,7 @@ export function TimeField({ label, value, onChange }: { label: string; value: st
   };
   return (
     <View style={{ flex: 1, gap: space[2] }}>
-      <Text variant="eyebrow" color="ink3" style={{ fontSize: 10 }}>
+      <Text variant="eyebrow" color="ink3">
         {label}
       </Text>
       <View style={{ flexDirection: "row", alignItems: "center", gap: space[2] }}>

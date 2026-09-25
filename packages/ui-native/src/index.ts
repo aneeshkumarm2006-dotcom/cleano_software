@@ -8,7 +8,7 @@ export { ChoiceChips, type ChoiceChipsProps } from "./components/ChoiceChips";
 export { CountBadge } from "./components/CountBadge";
 export { Icon, type IconName, type IconProps } from "./components/Icon";
 export { IconButton, type IconButtonProps } from "./components/IconButton";
-export { Pill, type PillProps } from "./components/Pill";
+export { Pill, type PillProps, type PillTone } from "./components/Pill";
 export {
   addDays,
   dateKey,

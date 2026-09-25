@@ -1,5 +1,5 @@
 import type { QuizSubmitResponse, TrainingModuleDetail } from "@bookmops/api/v1";
-import { Button, Card, color, Icon, radius, space, Text } from "@bookmops/ui-native";
+import { Button, Card, color, Icon, Pill, radius, space, Text } from "@bookmops/ui-native";
 import * as Haptics from "expo-haptics";
 import { useLocalSearchParams } from "expo-router";
 import { useState } from "react";
@@ -8,7 +8,7 @@ import { Linking, View } from "react-native";
 import { LoadError, Loading } from "@/components/QueryState";
 import { useMe, useSetTrainingProgress, useSubmitQuiz, useTrainingModule } from "@/data/queries";
 import { OptionList } from "@/features/record/OptionList";
-import { BackHeader, confirm, errorText, FormError, Notice, Page, SectionTitle, Tag } from "@/features/record/ui";
+import { BackHeader, confirm, errorText, FormError, Notice, Page, SectionTitle } from "@/features/record/ui";
 import { moduleFacts, percent } from "@/features/training/display";
 import { dayMonth } from "@/lib/dates";
 import { useEventKey } from "@/lib/idempotency";
@@ -145,8 +145,8 @@ function Module({
       }
     >
       <View style={{ flexDirection: "row", gap: space[2], flexWrap: "wrap" }}>
-        {m.isRequired ? <Tag label="Required" tone="warn" /> : null}
-        {done ? <Tag label="Completed" tone="ok" /> : p.status === "FAILED" ? <Tag label="Quiz not passed" tone="critical" /> : null}
+        {m.isRequired ? <Pill label="Required" tone="warning" /> : null}
+        {done ? <Pill label="Completed" tone="success" /> : p.status === "FAILED" ? <Pill label="Quiz not passed" tone="danger" /> : null}
       </View>
 
       {done ? (

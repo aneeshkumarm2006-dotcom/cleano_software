@@ -33,7 +33,7 @@ export function StatStrip({ stats }: { stats: readonly Stat[] }) {
             <Text variant="heading" numeral color={s.tone ?? "chrome"} style={{ fontSize: 22, lineHeight: 24 }}>
               {s.value}
             </Text>
-            <Text variant="eyebrow" color="ink3" style={{ fontSize: 10 }}>
+            <Text variant="eyebrow" color="ink3">
               {s.label}
             </Text>
           </View>

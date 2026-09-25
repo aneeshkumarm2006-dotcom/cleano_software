@@ -1,6 +1,6 @@
 import { ApiError } from "@bookmops/api/client";
 import { DrawnSignature, type DocumentDetail } from "@bookmops/api/v1";
-import { Button, Card, Checkbox, IconButton, SignaturePad, space, Text, type Signature } from "@bookmops/ui-native";
+import { Button, Card, Checkbox, IconButton, Pill, type Signature, SignaturePad, space, Text } from "@bookmops/ui-native";
 import * as Haptics from "expo-haptics";
 import { useLocalSearchParams } from "expo-router";
 import { useEffect, useRef, useState } from "react";
@@ -10,7 +10,7 @@ import { LoadError, Loading } from "@/components/QueryState";
 import { useDocument, useLogDocumentAccess, useMe, useSignDocument } from "@/data/queries";
 import { statusTag } from "@/features/documents/display";
 import { acknowledgement, ACKNOWLEDGEMENT_POINTS, agreementParts, DRAW_PROMPT, notSignable, RECORDED_NOTE } from "@/features/documents/wording";
-import { BackHeader, confirm, errorText, FormError, Notice, Page, SectionTitle, Tag } from "@/features/record/ui";
+import { BackHeader, confirm, errorText, FormError, Notice, Page, pillTone, SectionTitle } from "@/features/record/ui";
 import { dayMonthYear } from "@/lib/dates";
 import { useEventKey } from "@/lib/idempotency";
 import { safeWebUrl } from "@/lib/urls";
@@ -136,7 +136,7 @@ function Reader({ doc, timeZone, onDownload }: { doc: DocumentDetail; timeZone: 
       )}
 
       <View style={{ flexDirection: "row" }}>
-        <Tag label={tag.label} tone={tag.tone} />
+        <Pill label={tag.label} tone={pillTone(tag.tone)} />
       </View>
 
       <Card padding={5}>

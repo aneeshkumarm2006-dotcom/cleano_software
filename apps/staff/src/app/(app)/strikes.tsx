@@ -1,11 +1,11 @@
 import type { StrikeItem, StrikesResponse } from "@bookmops/api/v1";
-import { Card, color, Icon, minTouch, radius, space, Text } from "@bookmops/ui-native";
+import { Card, color, Icon, minTouch, Pill, radius, space, Text } from "@bookmops/ui-native";
 import { router } from "expo-router";
 import { Pressable, View } from "react-native";
 
 import { LoadError, Loading } from "@/components/QueryState";
 import { useMe, useStrikes } from "@/data/queries";
-import { BackHeader, Page, SectionTitle, Tag, type Tone } from "@/features/record/ui";
+import { BackHeader, Page, pillTone, SectionTitle, type Tone } from "@/features/record/ui";
 import { dayMonthYear } from "@/lib/dates";
 
 const STANDING: Record<string, { title: string; tone: Tone; icon: "standing" | "warning" }> = {
@@ -152,7 +152,7 @@ function StrikeCard({ strike: s, timeZone, active }: { strike: StrikeItem; timeZ
           <Text variant="bodyStrong" style={{ flex: 1 }} color={active ? "ink" : "ink2"}>
             {s.title}
           </Text>
-          {active ? null : <Tag label={past.label} tone={past.tone} />}
+          {active ? null : <Pill label={past.label} tone={pillTone(past.tone)} />}
         </View>
         {detail ? (
           <Text variant="body" color={active ? "ink" : "ink2"}>

@@ -1,10 +1,10 @@
 // The frame the "my work" and "my record" screens share: a back header, a
 // scrolling body that makes room for the keyboard, and an optional footer
 // pinned under it for the screen's one action. Plus the small pieces those
-// screens all use — a status tag, a notice, a section title — so the six
+// screens all use — a status's pill tone, a notice, a section title — so the six
 // areas read as one family.
 import { ApiError } from "@bookmops/api/client";
-import { color, Icon, radius, space, Text, type IconName } from "@bookmops/ui-native";
+import { color, Icon, radius, space, Text, type IconName, type PillTone } from "@bookmops/ui-native";
 import type { ReactNode, RefObject } from "react";
 import { Alert, KeyboardAvoidingView, Platform, RefreshControl, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -97,17 +97,21 @@ const TONE: Record<Tone, { bg: string; fg: "success" | "warning" | "danger" | "i
   accent: { bg: color.accentSoft, fg: "accentText" },
 };
 
-/** A short status in a filled pill: "LOW", "SIGNED". */
-export function Tag({ label, tone }: { label: string; tone: Tone }) {
-  const t = TONE[tone];
-  return (
-    <View style={{ paddingHorizontal: space[2] + 1, paddingVertical: 4, borderRadius: radius.sm - 4, backgroundColor: t.bg, alignSelf: "flex-start" }}>
-      <Text variant="eyebrow" color={t.fg} style={{ fontSize: 10, lineHeight: 12, letterSpacing: 0.6 }}>
-        {label}
-      </Text>
-    </View>
-  );
+/**
+ * The Pill tone for a Tone, so a status reads the same in a pill as in a
+ * notice: `<Pill label="Signed" tone={pillTone("ok")} />`.
+ */
+export function pillTone(tone: Tone): PillTone {
+  return PILL_TONE[tone];
 }
+
+const PILL_TONE: Record<Tone, PillTone> = {
+  ok: "success",
+  warn: "warning",
+  critical: "danger",
+  neutral: "neutral",
+  accent: "accent",
+};
 
 /** A filled message block. Importance is the fill, never a stripe. */
 export function Notice({ tone, icon, children, title }: { tone: Tone; icon: IconName; title?: string; children: ReactNode }) {

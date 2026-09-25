@@ -84,7 +84,7 @@ export function PhotoGrid({ photos, timeZone, onOpen }: { photos: readonly JobPh
                         backgroundColor: color.scrim,
                       }}
                     >
-                      <Text variant="eyebrow" color="onChrome" style={{ fontSize: 9, lineHeight: 12 }}>
+                      <Text variant="eyebrow" color="onChrome">
                         You
                       </Text>
                     </View>

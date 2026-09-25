@@ -189,7 +189,7 @@ function Fact({
       accessibilityLabel={[label, value, note].filter(Boolean).join(", ")}
       style={{ flexBasis: "47%", flexGrow: 1, padding: space[4], gap: space[1], borderRadius: radius.lg, backgroundColor: color.surface, borderWidth: 1, borderColor: color.line }}
     >
-      <Text variant="eyebrow" color="ink3" style={{ fontSize: 10 }}>
+      <Text variant="eyebrow" color="ink3">
         {label}
       </Text>
       <Text variant="heading" color={tone ?? "chrome"} numeral numberOfLines={1}>

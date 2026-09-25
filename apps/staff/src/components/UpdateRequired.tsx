@@ -16,7 +16,7 @@ export function UpdateRequired() {
   const insets = useSafeAreaInsets();
   return (
     <View style={{ flex: 1, backgroundColor: color.chrome, paddingTop: insets.top + space[12], paddingHorizontal: space[6], paddingBottom: insets.bottom + space[6], gap: space[5] }}>
-      <View style={{ width: 64, height: 64, borderRadius: radius.xl, backgroundColor: "rgba(255,255,255,0.1)", alignItems: "center", justifyContent: "center" }}>
+      <View style={{ width: 64, height: 64, borderRadius: radius.xl, backgroundColor: color.tileOnChrome, alignItems: "center", justifyContent: "center" }}>
         <Icon name="info" size={32} color="accentOnChrome" />
       </View>
       <Text variant="title" color="onChrome" accessibilityRole="header">

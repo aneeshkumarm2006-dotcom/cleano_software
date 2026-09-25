@@ -38,8 +38,8 @@ export function IconButton({ icon, label, tone = "surface", count, dot, ...rest 
         justifyContent: "center",
         backgroundColor: onChrome
           ? pressed
-            ? "rgba(255,255,255,0.2)"
-            : "rgba(255,255,255,0.11)"
+            ? color.buttonOnChromePressed
+            : color.buttonOnChrome
           : chrome
             ? color.chrome
             : color.surface,

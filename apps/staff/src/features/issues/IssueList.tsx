@@ -28,7 +28,7 @@ export function IssueList({ issues, timeZone }: { issues: readonly JobIssue[]; t
                   {categoryLabel(issue.category)}
                 </Text>
                 <View style={{ paddingHorizontal: space[2] + 2, paddingVertical: space[1], borderRadius: radius.pill, backgroundColor: s.bg }}>
-                  <Text variant="eyebrow" color={s.fg} style={{ fontSize: 10 }}>
+                  <Text variant="eyebrow" color={s.fg}>
                     {s.label}
                   </Text>
                 </View>

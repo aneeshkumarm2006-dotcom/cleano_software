@@ -16,6 +16,8 @@ export const color = {
 
   /** The dark chrome: the tab bar, the "now" block, primary buttons. */
   chrome: "#10242b",
+  /** The chrome, pressed: a primary button under the finger. */
+  chromePressed: "#0b1a1f",
   /** The accent. Large text, icons, fills behind white — never small text. */
   accent: "#0e7f8d",
   /** The accent for small text: 7.95:1 on white, where `accent` fails AA. */
@@ -49,14 +51,24 @@ export const color = {
   panelOnChrome: "rgba(255,255,255,0.07)",
   /** A chip or row on the chrome, at rest (a reaction), or a row pressed. */
   fillOnChrome: "rgba(255,255,255,0.08)",
+  /** An icon tile set into the chrome: the update screen's badge. */
+  tileOnChrome: "rgba(255,255,255,0.10)",
   /** The empty part of a progress ring on the chrome. */
   trackOnChrome: "rgba(255,255,255,0.10)",
+  /** A button on the chrome, at rest: a ghost button, an icon button in a card. */
+  buttonOnChrome: "rgba(255,255,255,0.11)",
+  /** A small tag on the chrome: "PRO" beside the name on sign-in. */
+  tagOnChrome: "rgba(255,255,255,0.12)",
   /** The empty part of a progress ring on an active card. */
   trackOnChromeCard: "rgba(255,255,255,0.13)",
   /** A step not yet done, in a row of step bars. */
   stepOnChrome: "rgba(255,255,255,0.14)",
   /** A chip on the chrome, pressed. */
   fillOnChromePressed: "rgba(255,255,255,0.16)",
+  /** The focused tab in the tab bar. */
+  tabOnChrome: "rgba(255,255,255,0.16)",
+  /** A button on the chrome, pressed. */
+  buttonOnChromePressed: "rgba(255,255,255,0.20)",
   /** A chip on the chrome, chosen. */
   fillOnChromeSelected: "rgba(255,255,255,0.22)",
   /** The outline of an empty checkbox on the chrome. */
@@ -81,6 +93,8 @@ export const color = {
   warningOnChrome: "#f5c46b",
   danger: "#ae2b2b",
   dangerSoft: "#fae9e9",
+  /** A danger button, pressed. */
+  dangerSoftPressed: "#f4d6d6",
   /** Unread badges: a bright red reads as a count, not an error. */
   badge: "#dc2626",
 } as const;

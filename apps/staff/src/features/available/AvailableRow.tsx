@@ -102,7 +102,7 @@ export function AvailableRow({
               <Text variant="heading" color={pay ? "success" : "ink3"} numeral style={pay ? { fontSize: 22, lineHeight: 26 } : undefined}>
                 {pay ?? "TBC"}
               </Text>
-              <Text variant="eyebrow" color="accentText" numeral style={{ fontSize: 10 }}>
+              <Text variant="eyebrow" color="accentText" numeral>
                 {lengthText(job)}
               </Text>
             </View>

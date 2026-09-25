@@ -47,7 +47,7 @@ export function UploadRow({ item, onRetry, onRemove }: { item: UploadItem; onRet
       <View style={{ flex: 1, gap: space[2], justifyContent: "center" }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: space[2] }}>
           {failed ? <Icon name="warning" size={16} color="danger" /> : null}
-          <Text variant="eyebrow" color={failed ? "danger" : "ink3"} style={{ fontSize: 10 }}>
+          <Text variant="eyebrow" color={failed ? "danger" : "ink3"}>
             {phase}
           </Text>
         </View>

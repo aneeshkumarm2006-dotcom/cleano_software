@@ -1,5 +1,5 @@
 import type { KitItem } from "@bookmops/api/v1";
-import { Card, color, radius, space, Text } from "@bookmops/ui-native";
+import { Card, color, Pill, radius, space, Text } from "@bookmops/ui-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { View } from "react-native";
 
@@ -7,7 +7,7 @@ import { MenuGroup, type MenuItem } from "@/components/MenuList";
 import { Empty, LoadError, Loading } from "@/components/QueryState";
 import { useKitItem, useMe } from "@/data/queries";
 import { amount, canRestock, fill, isTool, toneOf } from "@/features/kit/display";
-import { BackHeader, Notice, Page, quantityText, Tag } from "@/features/record/ui";
+import { BackHeader, Notice, Page, pillTone, quantityText } from "@/features/record/ui";
 import { dayMonth } from "@/lib/dates";
 
 /** One kit item: where it stands, and what the cleaner can do about it. */
@@ -75,7 +75,7 @@ function Detail({ item, timeZone }: { item: KitItem; timeZone: string }) {
                 {tool || reportedLevel ? amount(item) : item.unit}
               </Text>
             </View>
-            <Tag label={item.attention.label} tone={tone} />
+            <Pill label={item.attention.label} tone={pillTone(tone)} />
           </View>
           {f != null ? (
             <View style={{ height: 8, borderRadius: radius.pill, backgroundColor: color.groundDeep, overflow: "hidden" }}>

@@ -54,7 +54,7 @@ export default function SignIn() {
             <Text variant="eyebrow" color="onChrome" style={{ fontSize: 15, letterSpacing: 2 }}>
               Bookmops
             </Text>
-            <View style={{ paddingHorizontal: space[2], paddingVertical: 2, borderRadius: radius.sm, backgroundColor: "rgba(255,255,255,0.12)" }}>
+            <View style={{ paddingHorizontal: space[2], paddingVertical: 2, borderRadius: radius.sm, backgroundColor: color.tagOnChrome }}>
               <Text variant="eyebrow" color="accentOnChrome">
                 Pro
               </Text>
