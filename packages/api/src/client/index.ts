@@ -1,9 +1,11 @@
 // The typed client the mobile apps use to call /api/v1: one factory per area,
 // composed here. It knows nothing about screens or state.
+import { availableApi } from "./available";
 import { clockApi } from "./clock";
 import { devicesApi } from "./devices";
 import { jobsApi } from "./jobs";
 import { meApi } from "./me";
+import { payApi } from "./pay";
 import { type ClientOptions, makeRequest } from "./request";
 
 export { createPlatformClient, type PlatformClient } from "./platform";
@@ -16,6 +18,8 @@ export function createClient(options: ClientOptions) {
     ...jobsApi(request),
     ...clockApi(request),
     ...devicesApi(request),
+    ...availableApi(request),
+    ...payApi(request),
   };
 }
 

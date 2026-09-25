@@ -7,6 +7,7 @@ export { ChoiceChips, type ChoiceChipsProps } from "./components/ChoiceChips";
 export { CountBadge } from "./components/CountBadge";
 export { Icon, type IconName, type IconProps } from "./components/Icon";
 export { IconButton, type IconButtonProps } from "./components/IconButton";
+export { Pill, type PillProps } from "./components/Pill";
 export { ProgressRing, type ProgressRingProps } from "./components/ProgressRing";
 export { Screen, type ScreenProps } from "./components/Screen";
 export { Segmented, type SegmentedProps } from "./components/Segmented";
