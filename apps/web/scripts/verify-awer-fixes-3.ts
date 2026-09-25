@@ -2240,14 +2240,17 @@ section(15, "Clock back into a job (PDF #6)", () => {
   // 15.e — admin. Editing a derived column would be silently overwritten, so
   // the server refuses it and points at the session.
   const UPDATE = "src/app/admin/actions/updateClockTimes.ts";
-  has("admins can edit one session", UPDATE, "db.jobWorkSession.update({");
+  // The edit body lives in the clock-edit core since security batch 2, so the
+  // action and an approved time change request apply identical corrections.
+  const CORE = "src/app/admin/actions/_clockTimes.ts";
+  has("admins can edit one session", CORE, "db.jobWorkSession.update({");
   has("...and delete one recorded in error", UPDATE, "export async function deleteJobWorkSession");
-  has("editing a derived pair is refused, not silently lost", UPDATE,
+  has("editing a derived pair is refused, not silently lost", CORE,
     "edit the session times instead");
-  has("every session edit is logged", UPDATE, "`sessionTimes:${sessionId}`");
+  has("every session edit is logged", CORE, "`sessionTimes:${sessionId}`");
   has("...and so is every deletion", UPDATE, "`sessionDeleted:${row.cleanerId}`");
   has("the locked-payout warning still fires", UPDATE, "Payroll for this date is already");
-  has("validation still comes from clock-edit.ts", UPDATE, "validateClockEdit({ clockIn: parsedIn, clockOut: parsedOut })");
+  has("validation still comes from clock-edit.ts", CORE, "validateClockEdit({ clockIn: parsedIn, clockOut: parsedOut })");
   has("the Team card lists sessions", "src/app/admin/jobs/[id]/JobDetailView.tsx", "Session {i + 1}");
   has("the time-tracking page does too", "src/app/admin/time-tracking/TimeTrackingClient.tsx",
     "e.sessions.length > 1");

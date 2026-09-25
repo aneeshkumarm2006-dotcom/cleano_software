@@ -75,8 +75,13 @@ export async function notifyChatEmail(opts: {
     const enabled = await isNotificationEnabled("ADMIN", "admin.chat.customer_provider_msg", "EMAIL");
     if (!enabled) return;
 
+    // The office only (OWNER/ADMIN), the same people who can open the
+    // inbox. The email carries the message body, so it doesn't go to leads.
     const admins = await db.user.findMany({
-      where: { role: { in: ["OWNER", "ADMIN", "OPS_MANAGER", "FIELD_LEAD"] } },
+      where: {
+        role: { in: ["OWNER", "ADMIN"] },
+        id: { not: convo.employee.id },
+      },
       select: { id: true, name: true, email: true },
     });
     if (admins.length === 0) return;

@@ -13,6 +13,7 @@ import type {
 } from "./types";
 import { notifyChatEmail } from "./notifyChatEmail";
 import { orgAssetFolder } from "@/lib/asset-folder";
+import { isOwnerAdminRole, isStaffRole } from "@/lib/role-routing";
 
 type SessionUser = { id: string; name: string; role?: string };
 type AppRole = "OWNER" | "ADMIN" | "OPS_MANAGER" | "FIELD_LEAD" | "EMPLOYEE";
@@ -21,24 +22,34 @@ type RequireUserResult =
   | { error: string }
   | { user: SessionUser; role: AppRole };
 
+// WHO IS "THE OFFICE" HERE.
+//
+// OWNER and ADMIN, and nobody else. This used to be a local copy of the admin
+// app's role list, which also takes in OPS_MANAGER and FIELD_LEAD. So a field
+// lead could list every cleaner's office conversation, read any of them, and
+// reply in them as the office, although the chat page itself only ever showed
+// the inbox to OWNER/ADMIN.
+//
+// Everyone else on staff, OPS_MANAGER and FIELD_LEAD included, is a
+// correspondent. They have their own conversation with the office and post in
+// it as EMPLOYEE, which is the side the office's inbox reads. Their messages
+// used to be stamped ADMIN and marked read by the office on arrival, in a
+// conversation the inbox didn't list. So a lead's message to the office
+// reached nobody.
+const isOfficeRole = isOwnerAdminRole;
+
+/** Roles whose conversation with the office appears in the office's inbox. */
+const CORRESPONDENT_ROLES = ["EMPLOYEE", "FIELD_LEAD", "OPS_MANAGER"] as const;
+
 async function requireUser(): Promise<RequireUserResult> {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) return { error: "Not authenticated" };
   const user = session.user as SessionUser;
-  return {
-    user,
-    role: (user.role as AppRole | undefined) ?? "EMPLOYEE",
-  };
-}
-
-// Must match ADMIN_ROLES in src/lib/role-routing.ts
-function isAdminRole(role: string | undefined) {
-  return (
-    role === "OWNER" ||
-    role === "ADMIN" ||
-    role === "OPS_MANAGER" ||
-    role === "FIELD_LEAD"
-  );
+  // Staff only, and a missing role is not staff. This used to default a
+  // missing role to EMPLOYEE, and let a CLIENT or APPLICANT open a
+  // conversation with the office and upload files to it.
+  if (!isStaffRole(user.role)) return { error: "Not authorized" };
+  return { user, role: user.role as AppRole };
 }
 
 type RawMessage = {
@@ -157,12 +168,12 @@ export async function getAdminChatList(): Promise<
 > {
   const a = await requireUser();
   if ("error" in a) return { success: false, error: a.error };
-  if (!isAdminRole(a.role)) return { success: false, error: "Not authorized" };
+  if (!isOfficeRole(a.role)) return { success: false, error: "Not authorized" };
 
   // Make sure every employee has a conversation row so the list isn't empty
   // before the first message is sent. Idempotent.
   const employees = await db.user.findMany({
-    where: { role: "EMPLOYEE" },
+    where: { role: { in: [...CORRESPONDENT_ROLES] } },
     select: { id: true, name: true, image: true },
   });
 
@@ -243,13 +254,19 @@ export async function getAdminChat(
 ): Promise<{ success: true; data: AdminChatPayload } | { success: false; error: string }> {
   const a = await requireUser();
   if ("error" in a) return { success: false, error: a.error };
-  if (!isAdminRole(a.role)) return { success: false, error: "Not authorized" };
+  if (!isOfficeRole(a.role)) return { success: false, error: "Not authorized" };
+  if (typeof employeeId !== "string" || !employeeId) {
+    return { success: false, error: "Employee not found" };
+  }
 
   const employee = await db.user.findUnique({
     where: { id: employeeId },
     select: { id: true, name: true, image: true, role: true, lastSeenAt: true },
   });
-  if (!employee || isAdminRole(employee.role) || employee.role === "CLIENT") {
+  if (
+    !employee ||
+    !(CORRESPONDENT_ROLES as readonly string[]).includes(employee.role)
+  ) {
     return { success: false, error: "Employee not found" };
   }
 
@@ -299,6 +316,9 @@ export async function sendChatMessage(
   const a = await requireUser();
   if ("error" in a) return { success: false, error: a.error };
 
+  if (typeof conversationId !== "string" || typeof body !== "string") {
+    return { success: false, error: "Conversation not found" };
+  }
   const trimmed = body.trim();
   // A message must have text or an attachment.
   if (!trimmed && !attachment) {
@@ -313,11 +333,24 @@ export async function sendChatMessage(
   });
   if (!conversation) return { success: false, error: "Conversation not found" };
 
-  const senderRole: "EMPLOYEE" | "ADMIN" = isAdminRole(a.role) ? "ADMIN" : "EMPLOYEE";
+  const senderRole: "EMPLOYEE" | "ADMIN" = isOfficeRole(a.role) ? "ADMIN" : "EMPLOYEE";
 
   // An employee can only post in their own conversation.
   if (senderRole === "EMPLOYEE" && conversation.employeeId !== a.user.id) {
     return { success: false, error: "Not authorized" };
+  }
+  // The office replies in conversations its inbox lists, and nowhere else.
+  if (senderRole === "ADMIN") {
+    const correspondent = await db.user.findUnique({
+      where: { id: conversation.employeeId },
+      select: { role: true },
+    });
+    if (
+      !correspondent ||
+      !(CORRESPONDENT_ROLES as readonly string[]).includes(correspondent.role)
+    ) {
+      return { success: false, error: "Conversation not found" };
+    }
   }
 
   const now = new Date();
@@ -378,7 +411,7 @@ export async function sendChatMessage(
     recipientOnline,
   }).catch((err) => console.error("notifyChatEmail failed", err));
 
-  return { success: true, data: toMessageDTO(message, isAdminRole(a.role)) };
+  return { success: true, data: toMessageDTO(message, senderRole === "ADMIN") };
 }
 
 // getUnreadChatCount used to live here. It is now
@@ -400,7 +433,7 @@ export async function markChatRead(
 
   const now = new Date();
 
-  if (isAdminRole(a.role)) {
+  if (isOfficeRole(a.role)) {
     await db.chatMessage.updateMany({
       where: {
         conversationId,

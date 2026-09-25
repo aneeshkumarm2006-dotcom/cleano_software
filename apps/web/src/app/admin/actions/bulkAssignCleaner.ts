@@ -4,7 +4,10 @@ import { db } from "@/lib/org-db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { evaluateEmployeeWindows } from "@/lib/job-assignments";
+import {
+  ASSIGNABLE_CREW_WHERE,
+  evaluateEmployeeWindows,
+} from "@/lib/job-assignments";
 import { availabilityWarning, windowFromInstants } from "@/lib/availability";
 import { categoryMismatchWarning } from "@bookmops/core/services";
 
@@ -51,10 +54,9 @@ export async function bulkAssignCleaner(
 
   try {
     const cleaner = await db.user.findFirst({
-      where: {
-        id: cleanerId,
-        role: { in: ["EMPLOYEE", "FIELD_LEAD"] },
-      },
+      // Switched on and not archived, as well as the right role: a cleaner
+      // who has been switched off must not collect a batch of new jobs.
+      where: { id: cleanerId, ...ASSIGNABLE_CREW_WHERE },
       select: {
         id: true,
         name: true,

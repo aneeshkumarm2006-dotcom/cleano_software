@@ -4,65 +4,32 @@ import { db } from "@/lib/org-db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { isAdminRole } from "@/lib/role-routing";
 import { fmtDateTime } from "@/lib/time";
-import {
-  assignmentStatusForClock,
-  parseInstant,
-  validateClockEdit,
-} from "@bookmops/core/time";
 import { syncClockMirrors } from "@/lib/work-sessions.server";
 import { snapshotBilledActualHours } from "@/lib/hourly-billing.server";
 import {
   LOCKED_PAY_PERIOD_STATUSES,
   snapshotHourlyEmployeePay,
 } from "@/lib/hourly-pay.server";
+import {
+  applyClockTimes,
+  OWN_ENTRY,
+  type UpdateClockTimesInput,
+  type UpdateClockTimesResult,
+} from "./_clockTimes";
+
+export type { UpdateClockTimesInput, UpdateClockTimesResult };
 
 /**
- * Admin correction of clock-in / clock-out times (new fix list item 4).
+ * Who may type clock times in directly: OWNER, ADMIN and OPS_MANAGER.
  *
- * Cleaners miss a clock-in, clock out on the drive home, or the app drops a
- * tap — until now nothing but `clockIn`/`clockOut`/`markArrived` could write
- * these fields, so a wrong time stayed wrong and carried into hours, payroll
- * review and job financials.
- *
- * Three scopes:
- *   • `sessionId` set   → one JobWorkSession row (awerfixes.pdf item 6, round
- *     3). This is the real record of work now; the two below are its mirrors.
- *   • `cleanerId` set   → that cleaner's `JobAssignment` row. LEGACY ONLY —
- *     refused once that cleaner has sessions, because syncClockMirrors would
- *     overwrite the edit on their next clock action and the admin would watch
- *     their correction silently revert.
- *   • neither           → the job-level `Job.clockInTime/clockOutTime`, the
- *     fallback for jobs created before per-cleaner assignments. Also refused
- *     once the job has sessions, for the same reason.
- *
- * Every edit writes a JobLog entry recording the original value, the new value,
- * who changed it and when — the audit note the spec asks for.
+ * NOT a Field Lead. A lead approves or rejects their own group's requests
+ * (`decideTimeLogChange`), and that is the whole of their say over hours: a
+ * request carries the cleaner's reason and leaves a decision on record, a
+ * direct edit does neither. The core (`./_clockTimes.ts`) separately refuses
+ * an edit to the editor's own entry, whoever they are.
  */
-
-export interface UpdateClockTimesInput {
-  jobId: string;
-  /**
-   * Edit ONE work session. Takes precedence over `cleanerId` (item 6).
-   */
-  sessionId?: string | null;
-  /** Null / omitted = edit the job-level clock fields. */
-  cleanerId?: string | null;
-  /** ISO instant, or null to clear the time. */
-  clockInTime: string | null;
-  clockOutTime: string | null;
-  /** Optional free-text reason, kept in the audit note. */
-  reason?: string;
-}
-
-export type UpdateClockTimesResult =
-  | {
-      success: true;
-      /** Set when the edit lands in a pay period that's already locked. */
-      warning?: string;
-    }
-  | { success: false; error: string };
+const CLOCK_EDIT_ROLES = ["OWNER", "ADMIN", "OPS_MANAGER"];
 
 export async function updateClockTimes(
   input: UpdateClockTimesInput
@@ -71,232 +38,14 @@ export async function updateClockTimes(
   if (!session?.user) return { success: false, error: "Not authenticated" };
 
   const role = (session.user as { role?: string }).role;
-  if (!isAdminRole(role)) {
+  if (!role || !CLOCK_EDIT_ROLES.includes(role)) {
     return { success: false, error: "Not authorized" };
   }
 
-  const parsedIn = parseInstant(input.clockInTime);
-  const parsedOut = parseInstant(input.clockOutTime);
-  const invalid = validateClockEdit({ clockIn: parsedIn, clockOut: parsedOut });
-  if (invalid) return { success: false, error: invalid };
-
-  // Past validation these are real Dates or null.
-  const clockIn = parsedIn as Date | null;
-  const clockOut = parsedOut as Date | null;
-
-  const job = await db.job.findUnique({
-    where: { id: input.jobId },
-    select: {
-      id: true,
-      jobNumber: true,
-      jobDate: true,
-      startTime: true,
-      clockInTime: true,
-      clockOutTime: true,
-      deletedAt: true,
-      employeeId: true,
-      cleaners: { select: { id: true } },
-    },
+  return applyClockTimes(input, {
+    id: session.user.id,
+    name: session.user.name ?? null,
   });
-  if (!job) return { success: false, error: "Job not found" };
-  if (job.deletedAt) {
-    return { success: false, error: "This job is archived." };
-  }
-
-  const sessionId = input.sessionId || null;
-  const cleanerId = input.cleanerId || null;
-  let cleanerName: string | null = null;
-  let previousIn: Date | null;
-  let previousOut: Date | null;
-
-  if (sessionId) {
-    // ── Edit ONE work session (item 6) ────────────────────────────────
-    const row = await db.jobWorkSession.findUnique({
-      where: { id: sessionId },
-      select: { id: true, jobId: true, cleanerId: true, startedAt: true, endedAt: true },
-    });
-    if (!row || row.jobId !== job.id) {
-      return { success: false, error: "Session not found on this job" };
-    }
-    // A session with no start is not a session. Clearing both times is how you
-    // delete one — that's deleteJobWorkSession, so the intent is explicit.
-    if (!clockIn) {
-      return {
-        success: false,
-        error:
-          "A session needs a start time. To remove it entirely, delete the session.",
-      };
-    }
-
-    const cleaner = await db.user.findUnique({
-      where: { id: row.cleanerId },
-      select: { name: true },
-    });
-    cleanerName = cleaner?.name ?? null;
-    previousIn = row.startedAt;
-    previousOut = row.endedAt;
-
-    await db.jobWorkSession.update({
-      where: { id: sessionId },
-      data: { startedAt: clockIn, endedAt: clockOut },
-    });
-    // Job + assignment columns are derived, so they are rebuilt rather than
-    // edited — an admin fixing a session must not leave the mirrors stale.
-    await syncClockMirrors(job.id);
-    // An hourly job bills the hours these sessions record, so correcting a
-    // session has to correct the bill (Stage 8). No-op on a flat job, and it
-    // refuses to re-price a job that has already been paid.
-    await snapshotBilledActualHours(job.id).catch((e) =>
-      console.error("billed-hours snapshot", e)
-    );
-    // ...and pays the crew from the same corrected sessions (round 4, fix 5).
-    // It refuses to write under a locked pay period — the same rule the warning
-    // at the bottom of this action reports, off the same status list.
-    await snapshotHourlyEmployeePay(job.id).catch((e) =>
-      console.error("hourly-pay snapshot", e)
-    );
-  } else if (cleanerId) {
-    // Only someone actually on the job can have times recorded against them.
-    // Without this, the upsert below would MINT a JobAssignment row for an
-    // unassigned cleaner — and `jobParticipantIds` treats an assignment row as
-    // proof of participation, so that cleaner would start drawing pay from
-    // this job. Assigning is a separate, deliberate action.
-    const onTheJob =
-      job.cleaners.some((c) => c.id === cleanerId) || job.employeeId === cleanerId;
-    if (!onTheJob) {
-      return {
-        success: false,
-        error: "That cleaner isn't assigned to this job — assign them first.",
-      };
-    }
-
-    // Once this cleaner has sessions, the assignment pair is DERIVED from them
-    // — writing it here would be overwritten by the next syncClockMirrors, and
-    // the admin would see their correction quietly revert.
-    const sessionCount = await db.jobWorkSession.count({
-      where: { jobId: job.id, cleanerId },
-    });
-    if (sessionCount > 0) {
-      return {
-        success: false,
-        error:
-          "This cleaner has recorded work sessions — edit the session times instead. The clock-in/out shown here is calculated from them.",
-      };
-    }
-
-    const assignment = await db.jobAssignment.findUnique({
-      where: { jobId_cleanerId: { jobId: job.id, cleanerId } },
-      select: { clockInTime: true, clockOutTime: true },
-    });
-    const cleaner = await db.user.findUnique({
-      where: { id: cleanerId },
-      select: { name: true },
-    });
-    if (!cleaner) return { success: false, error: "Cleaner not found" };
-    cleanerName = cleaner.name;
-    // Legacy jobs have no assignment row yet — the job-level times are what
-    // was showing for this cleaner, so that's what the audit note compares to.
-    previousIn = assignment?.clockInTime ?? job.clockInTime;
-    previousOut = assignment?.clockOutTime ?? job.clockOutTime;
-
-    const status = assignmentStatusForClock(clockIn, clockOut);
-    await db.jobAssignment.upsert({
-      where: { jobId_cleanerId: { jobId: job.id, cleanerId } },
-      update: { clockInTime: clockIn, clockOutTime: clockOut, status },
-      create: {
-        jobId: job.id,
-        cleanerId,
-        clockInTime: clockIn,
-        clockOutTime: clockOut,
-        status,
-      },
-    });
-  } else {
-    // Same reasoning as the per-cleaner branch: the job-level pair is derived
-    // once any session exists.
-    const sessionCount = await db.jobWorkSession.count({
-      where: { jobId: job.id },
-    });
-    if (sessionCount > 0) {
-      return {
-        success: false,
-        error:
-          "This job has recorded work sessions — edit the session times instead. The job clock is calculated from them.",
-      };
-    }
-    previousIn = job.clockInTime;
-    previousOut = job.clockOutTime;
-    await db.job.update({
-      where: { id: job.id },
-      data: { clockInTime: clockIn, clockOutTime: clockOut },
-    });
-  }
-
-  // ── Audit note ───────────────────────────────────────────────────
-  const fmt = (d: Date | null) => (d ? fmtDateTime(d) : "—");
-  const scope = sessionId
-    ? `${cleanerName ?? "A cleaner"}'s session`
-    : cleanerName
-      ? `${cleanerName}'s`
-      : "Job";
-  const changes: string[] = [];
-  if (previousIn?.getTime() !== clockIn?.getTime()) {
-    changes.push(`clock-in ${fmt(previousIn)} → ${fmt(clockIn)}`);
-  }
-  if (previousOut?.getTime() !== clockOut?.getTime()) {
-    changes.push(`clock-out ${fmt(previousOut)} → ${fmt(clockOut)}`);
-  }
-
-  if (changes.length > 0) {
-    await db.jobLog
-      .create({
-        data: {
-          jobId: job.id,
-          userId: session.user.id,
-          action: "UPDATED",
-          field: sessionId
-            ? `sessionTimes:${sessionId}`
-            : cleanerId
-              ? `clockTimes:${cleanerId}`
-              : "clockTimes",
-          oldValue: `in=${fmt(previousIn)} out=${fmt(previousOut)}`,
-          newValue: `in=${fmt(clockIn)} out=${fmt(clockOut)}`,
-          description:
-            `${scope} times edited by ${session.user.name ?? "an admin"}: ` +
-            changes.join(", ") +
-            (input.reason?.trim() ? ` — ${input.reason.trim()}` : ""),
-        },
-      })
-      .catch((e) => console.error("clock-edit log", e));
-  }
-
-  // ── Payroll already closed on this date? ──────────────────────────
-  // Hours are snapshotted into Payout rows when a pay period is generated. An
-  // edit inside a period that's been approved or paid does NOT rewrite that
-  // frozen payout — the admin is told so they can adjust it deliberately.
-  let warning: string | undefined;
-  const jobDay = job.jobDate ?? job.startTime;
-  const period = await db.payPeriod.findFirst({
-    where: {
-      status: { in: [...LOCKED_PAY_PERIOD_STATUSES] },
-      startDate: { lte: jobDay },
-      endDate: { gte: jobDay },
-    },
-    select: { status: true },
-  });
-  if (period) {
-    warning = `Payroll for this date is already ${period.status
-      .toLowerCase()
-      .replace("_", " ")}. The recorded payout was not changed, and neither was this job's stored cleaner pay — adjust it on the pay period if this edit affects it.`;
-  }
-
-  revalidatePath(`/admin/jobs/${job.id}`);
-  revalidatePath("/admin/jobs");
-  revalidatePath("/admin/time-tracking");
-  revalidatePath("/admin/payouts");
-  revalidatePath(`/cleaners/my-jobs/${job.id}`);
-
-  return warning ? { success: true, warning } : { success: true };
 }
 
 /**
@@ -320,7 +69,9 @@ export async function deleteJobWorkSession(input: {
   if (!session?.user) return { success: false, error: "Not authenticated" };
 
   const role = (session.user as { role?: string }).role;
-  if (!isAdminRole(role)) return { success: false, error: "Not authorized" };
+  if (!role || !CLOCK_EDIT_ROLES.includes(role)) {
+    return { success: false, error: "Not authorized" };
+  }
 
   const job = await db.job.findUnique({
     where: { id: input.jobId },
@@ -336,6 +87,8 @@ export async function deleteJobWorkSession(input: {
   if (!row || row.jobId !== job.id) {
     return { success: false, error: "Session not found on this job" };
   }
+  // Deleting a session is the bluntest edit of all to one's own hours.
+  if (row.cleanerId === session.user.id) return OWN_ENTRY;
 
   const cleaner = await db.user.findUnique({
     where: { id: row.cleanerId },
