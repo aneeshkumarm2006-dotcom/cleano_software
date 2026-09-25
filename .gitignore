@@ -59,3 +59,6 @@ shots-cleaner/
 
 # Playwright MCP session artifacts
 .playwright-mcp/
+
+# Turborepo local cache and logs
+.turbo/

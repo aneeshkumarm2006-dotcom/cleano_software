@@ -10,11 +10,14 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "npm run dev -w @bookmops/web --",
-    "build": "npm run build -w @bookmops/web --",
+    "dev": "turbo run dev --filter=@bookmops/web --",
+    "build": "turbo run build --",
+    "typecheck": "turbo run typecheck --",
+    "lint": "turbo run lint --",
     "start": "npm run start -w @bookmops/web --",
-    "lint": "npm run lint -w @bookmops/web --",
-    "typecheck": "npm run typecheck -w @bookmops/web --",
     "verify": "npm run verify -w @bookmops/web --"
+  },
+  "devDependencies": {
+    "turbo": "2.11.4"
   }
 }
