@@ -220,7 +220,7 @@ export type WithdrawalsResponse = z.infer<typeof WithdrawalsResponse>;
  * balance and both succeed; web requestWithdrawal has that race today.
  * The confirmation emails to the cleaner and the office are effects, flushed
  * after the commit and never on a replay. A replayed key returns the stored
- * response; the same key with a different body answers 422.
+ * response; the same key with a different method, path or body answers 422.
  */
 export const WithdrawalRequest = z.object({
   /**

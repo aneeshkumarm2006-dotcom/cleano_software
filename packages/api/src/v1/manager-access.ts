@@ -177,7 +177,7 @@ export function appSideFor(role: string | null | undefined): "crew" | "office" |
 //  5. IDEMPOTENCY. Every mutation carries `clientEventId`, also sent as the
 //     Idempotency-Key, and goes through IdempotencyRecord (§6): a replay
 //     returns the stored answer and fires no email, push or log line again;
-//     the same key with a different body answers 422.
+//     the same key with a different method, path or body answers 422.
 //  6. AUDIT. Every mutation records who did it and when, the way the web
 //     action it mirrors does (JobLog for jobs, logActivity for decisions),
 //     with the before and after values, and says "from the app" in the
