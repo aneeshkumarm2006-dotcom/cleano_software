@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { db } from "@/lib/org-db";
 import { writeAppSetting } from "@/lib/app-setting-write";
+import { logActivity } from "@/lib/activity-log";
 
 // ---- Types ----------------------------------------------------------------
 
@@ -697,14 +698,37 @@ export async function deleteGroupMessage(
   if ("error" in a) return { success: false, error: a.error };
   if (!isAdminRole(a.role)) return { success: false, error: "Not authorized" };
 
+  if (typeof messageId !== "string" || !messageId) {
+    return { success: false, error: "Message not found" };
+  }
   const message = await db.groupMessage.findUnique({ where: { id: messageId } });
   if (!message) return { success: false, error: "Message not found" };
   if (message.deletedAt) return { success: true, data: { id: messageId } };
 
-  await db.groupMessage.update({
-    where: { id: messageId },
+  // Conditional, so that when two admins remove the same message the audit
+  // entry below names the one whose removal actually landed.
+  const removed = await db.groupMessage.updateMany({
+    where: { id: messageId, deletedAt: null },
     data: { deletedAt: new Date() },
   });
+
+  // WHO removed it. GroupMessage has no column for that (only deletedAt), and
+  // adding one is a migration, so it goes in the activity log. That is the
+  // record an admin already reads for "who did what". The body is not copied
+  // there: removing it from view is the point of deleting it.
+  if (removed.count > 0) {
+    await logActivity({
+      category: "ADMIN",
+      action: "groupchat.message.deleted",
+      status: "SUCCESS",
+      actorId: a.user.id,
+      actorLabel: a.user.name ?? null,
+      targetType: "GroupMessage",
+      targetId: messageId,
+      message: `${a.user.name ?? "An admin"} removed a team chat message from ${message.senderName}.`,
+      metadata: { channelId: message.channelId, senderId: message.senderId },
+    });
+  }
 
   return { success: true, data: { id: messageId } };
 }
