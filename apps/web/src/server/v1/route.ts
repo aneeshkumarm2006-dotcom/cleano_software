@@ -48,6 +48,7 @@ import { rateLimitHit } from "@/lib/rate-limit";
 import { orgSlugFromHost, PLATFORM_ORG_SLUG, publicHostFromHeaders } from "@/lib/tenant";
 
 import type { Actor } from "../actor";
+import { roleAllowed, type Access } from "./access";
 import { flushEffects, type Effect } from "../effects";
 import type { Failure, Result } from "../result";
 import { E, errorBody, errorResponse, jsonResponse, V1Error } from "./http";
@@ -56,27 +57,6 @@ import { verifiedSessionToken } from "./session-token";
 import { appVersions, isBelow, parseVersion } from "./versions";
 
 // ── Policy ──────────────────────────────────────────────────────────────────
-
-/**
- * Who may call an endpoint. Allow-lists: a missing or unknown role is refused.
- *
- *   staff     the cleaner screens of Bookmops Pro: EMPLOYEE and FIELD_LEAD.
- *             Manager and admin roles are added with their endpoints, pending
- *             the field-lead decision (API_V1.md §12, decision 3).
- *   signedIn  any role of this company: only /me and /me/password, so the app
- *             can learn the role, sign out a role it doesn't serve, and let a
- *             person on a temporary password choose their own.
- *   public    no session at all: platform endpoints.
- */
-export type Access = "staff" | "signedIn" | "public";
-
-const ROLE_ALLOW_LIST: Record<Exclude<Access, "public">, readonly string[] | "any"> = {
-  staff: ["EMPLOYEE", "FIELD_LEAD"],
-  signedIn: "any",
-};
-
-/** Every role the schema knows. "any" still refuses a role outside it. */
-const KNOWN_ROLES = new Set(["OWNER", "ADMIN", "OPS_MANAGER", "FIELD_LEAD", "EMPLOYEE", "CLIENT", "APPLICANT"]);
 
 /**
  * A cheap limit per address, before the database. Set with carrier NAT in
@@ -430,10 +410,12 @@ export function v1Route<
         }
 
         // 10. Role.
-        const allowed = ROLE_ALLOW_LIST[options.access as Exclude<Access, "public">];
+        const access = options.access as Exclude<Access, "public">;
         const role = person.role as string | null;
-        if (!role || !KNOWN_ROLES.has(role) || (allowed !== "any" && !allowed.includes(role))) {
-          throw E.forbidden("ROLE_NOT_ALLOWED", "This app isn't for your account. Use the web app instead.");
+        if (!role || !roleAllowed(access, role)) {
+          throw typeof access === "object"
+            ? E.forbidden("FORBIDDEN", "Your role can't do this.")
+            : E.forbidden("ROLE_NOT_ALLOWED", "This app isn't for your account. Use the web app instead.");
         }
 
         // 11. Per-person limit.

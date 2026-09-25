@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export const POST = v1Route(
   {
     host: "tenant",
-    access: "signedIn",
+    access: "anyStaff",
     allowPendingPasswordChange: true,
     body: ChangePasswordRequest,
     response: ChangePasswordResponse,

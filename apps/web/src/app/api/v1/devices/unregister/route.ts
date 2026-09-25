@@ -8,6 +8,6 @@ import { v1Route } from "@/server/v1/route";
 export const dynamic = "force-dynamic";
 
 export const POST = v1Route(
-  { host: "tenant", access: "staff", body: UnregisterDeviceRequest, response: OkResponse },
+  { host: "tenant", access: "anyStaff", body: UnregisterDeviceRequest, response: OkResponse },
   (ctx) => unregisterDevice(ctx.actor, ctx.body.token),
 );

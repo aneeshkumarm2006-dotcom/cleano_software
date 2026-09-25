@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export const POST = v1Route(
   {
     host: "tenant",
-    access: "staff",
+    access: "anyStaff",
     body: RegisterDeviceRequest,
     response: DeviceResponse,
     limit: { name: "devices", max: 20, windowMs: 60 * 60_000 },
