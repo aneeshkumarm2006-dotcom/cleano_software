@@ -2213,8 +2213,8 @@ section(6, "stage 6 — the drawer asked to charge a card before it said 'on hol
 // without its checks being written.
 {
   console.log("\n── Completeness ──");
-  const TODO = "_ai_context/TODO.md";
-  const todoPath = fs.existsSync(TODO) ? TODO : `../${TODO}`;
+  // _ai_context/ sits beside the repository, three levels up from apps/web.
+  const todoPath = "../../../_ai_context/TODO.md";
   if (!fs.existsSync(todoPath)) {
     console.log("NOTE  TODO.md not found from this cwd — skipping the coverage cross-check");
   } else {

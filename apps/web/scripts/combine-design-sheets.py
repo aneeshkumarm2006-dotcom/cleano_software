@@ -7,7 +7,8 @@ take only what sits between them and drop the canvas scaffolding.
 import re
 import pathlib
 
-SRC = pathlib.Path("docs/design/mobile")
+# Anchored to this file: apps/web/scripts/ -> repo root -> docs/.
+SRC = pathlib.Path(__file__).resolve().parents[3] / "docs" / "design" / "mobile"
 OUT = SRC
 
 PRO = [

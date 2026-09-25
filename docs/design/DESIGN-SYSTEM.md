@@ -2,7 +2,9 @@
 
 A living catalog of every UI primitive in the app, for redesign work.
 
-**Live gallery:** run the app and visit **`/design`** — every admin atom renders on one page ([src/app/design/page.tsx](src/app/design/page.tsx)).
+Paths in this document are relative to `apps/web/` unless they are links.
+
+**Live gallery:** run the app and visit **`/design`** — every admin atom renders on one page ([src/app/design/page.tsx](../../apps/web/src/app/design/page.tsx)).
 
 There are three layers:
 1. **React components** — `src/components/ui/` + `src/components/customer/`
@@ -117,15 +119,15 @@ These are the official "winners" — build new code against these, migrate old u
 
 | Primitive | Canonical | Status | Replaces |
 |---|---|---|---|
-| Avatars | [`avatarColor()` / `initials()`](src/lib/avatar.ts) | ✅ built | 6 divergent `avatarColor` copies |
-| Page header | [`<PageHeader>`](src/components/ui/PageHeader.tsx) | ✅ built | 4 hand-rolled blocks |
-| Dropdown | [`<CanonSelect>`](src/components/ui/CanonSelect.tsx) | ✅ built | `Select`, `PremiumSelect`, `SearchableDropdown`, `Dropdown`, `custom-dropdown` |
-| Loader | [`<CleanoLoader>`](src/components/ui/CleanoLoader.tsx) | ✅ built (droplet) | — |
+| Avatars | [`avatarColor()` / `initials()`](../../apps/web/src/lib/avatar.ts) | ✅ built | 6 divergent `avatarColor` copies |
+| Page header | [`<PageHeader>`](../../apps/web/src/components/ui/PageHeader.tsx) | ✅ built | 4 hand-rolled blocks |
+| Dropdown | [`<CanonSelect>`](../../apps/web/src/components/ui/CanonSelect.tsx) | ✅ built | `Select`, `PremiumSelect`, `SearchableDropdown`, `Dropdown`, `custom-dropdown` |
+| Loader | [`<CleanoLoader>`](../../apps/web/src/components/ui/CleanoLoader.tsx) | ✅ built (droplet) | — |
 | Buttons | `.btn` CSS | use existing | `Button.tsx`, `.act-*`, `FilterStat` |
 | Pills | `.pill` CSS | use existing | `Badge.tsx`, `STATUS_PILL`, inline hex |
 | Cards | `.dcard` CSS | use existing | `Card.tsx`, `.jcard` |
 
-All seven are rendered with their canonical badge in the [`/design`](src/app/design/page.tsx) gallery.
+All seven are rendered with their canonical badge in the [`/design`](../../apps/web/src/app/design/page.tsx) gallery.
 
 ### Rollout still pending (per-page migration)
 The canonical components exist but old usages haven't been swapped yet:

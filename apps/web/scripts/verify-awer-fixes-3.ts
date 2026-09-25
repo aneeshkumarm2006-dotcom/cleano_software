@@ -3172,7 +3172,7 @@ section(25, "the availability lookup cannot fail, or wait, in silence", () => {
 // ticked item has checks" while checking nothing, which is worse than not
 // running at all. So it says which of the two it did.
 {
-  const todo = "../_ai_context/TODO.md";
+  const todo = "../../../_ai_context/TODO.md";
   const round = fs.existsSync(todo) ? read(todo) : "";
   const done = [...round.matchAll(/^###\s*\[x\]\s*(\d+)\./gim)].map((m) =>
     Number(m[1])

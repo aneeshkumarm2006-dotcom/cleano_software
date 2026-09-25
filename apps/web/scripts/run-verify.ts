@@ -19,7 +19,15 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
-const SCRIPTS_DIR = path.join(process.cwd(), "scripts");
+// Anchored to this file, not the cwd, so `npm run verify` works from the repo
+// root and from apps/web alike. Every verify script reads "src/…" and
+// "prisma/…" relative to its working directory, so they all run from here.
+const APP_ROOT = path.resolve(__dirname, "..");
+const SCRIPTS_DIR = path.join(APP_ROOT, "scripts");
+
+// Resolved through Node rather than spelled as node_modules/tsx/…: in the
+// workspace, npm hoists tsx to the monorepo root, not this app's folder.
+const TSX_CLI = require.resolve("tsx/cli");
 
 const files = fs
   .readdirSync(SCRIPTS_DIR)
@@ -27,7 +35,7 @@ const files = fs
   .sort();
 
 if (files.length === 0) {
-  console.error("No scripts/verify-*.ts found — is the cwd the app root?");
+  console.error(`No verify-*.ts found in ${SCRIPTS_DIR}`);
   process.exit(1);
 }
 
@@ -49,11 +57,11 @@ for (const file of targets) {
   const run = spawnSync(
     process.execPath,
     [
-      path.join("node_modules", "tsx", "dist", "cli.mjs"),
+      TSX_CLI,
       "--conditions=react-server",
       path.join("scripts", file),
     ],
-    { encoding: "utf8", cwd: process.cwd() },
+    { encoding: "utf8", cwd: APP_ROOT },
   );
 
   const out = `${run.stdout ?? ""}${run.stderr ?? ""}`;

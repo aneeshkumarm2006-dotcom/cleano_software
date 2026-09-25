@@ -1,4 +1,16 @@
+import path from "node:path";
 import type { NextConfig } from "next";
+
+// The monorepo root. npm hoists dependencies there, so the Prisma query engine
+// lives in <root>/node_modules/.prisma — outside this app's folder. Both roots
+// below must reach it or Vercel ships server bundles without the engine. Next
+// would infer the same from the lockfile; saying it keeps a stray lockfile in
+// apps/web from silently changing the answer.
+//
+// __dirname exists because Next loads this file as CommonJS, which it does
+// while package.json has no "type": "module". Adding that would make this
+// undefined and quietly drop the engine from the bundles.
+const WORKSPACE_ROOT = path.join(__dirname, "..", "..");
 
 // Routes that moved under /admin/* (admin-only + shared admin/cleaner pages).
 const ADMIN_ROUTES = [
@@ -19,6 +31,8 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: false,
   },
   serverExternalPackages: ["@prisma/client", ".prisma/client"],
+  turbopack: { root: WORKSPACE_ROOT },
+  outputFileTracingRoot: WORKSPACE_ROOT,
   experimental: {
     // Careers résumé uploads stream through a server action; the default 1 MB
     // body limit 400s before our 8 MB size check runs. Keep these in sync.
