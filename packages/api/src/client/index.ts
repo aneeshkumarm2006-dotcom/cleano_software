@@ -3,6 +3,8 @@
 import { clockApi } from "./clock";
 import { jobsApi } from "./jobs";
 import { meApi } from "./me";
+import { messagesApi } from "./messages";
+import { announcementsApi } from "./announcements";
 import { type ClientOptions, makeRequest } from "./request";
 
 export { ApiError, type ClientOptions, type Request } from "./request";
@@ -13,6 +15,8 @@ export function createClient(options: ClientOptions) {
     ...meApi(request),
     ...jobsApi(request),
     ...clockApi(request),
+    ...messagesApi(request),
+    ...announcementsApi(request),
   };
 }
 

@@ -1,4 +1,5 @@
 import { IconButton, Screen, space, StatStrip, TAB_BAR_HEIGHT, Text } from "@bookmops/ui-native";
+import { router } from "expo-router";
 import { View } from "react-native";
 
 import { Empty, LoadError, Loading } from "@/components/QueryState";
@@ -25,7 +26,7 @@ export default function Today() {
       actions={
         <>
           <IconButton icon="notifications" label="Notifications" dot={!!today.data?.unread.notifications} />
-          <IconButton icon="chat" label="Chat with the office" tone="chrome" count={today.data?.unread.office} />
+          <IconButton icon="chat" label="Chat with the office" tone="chrome" count={today.data?.unread.office} onPress={() => router.push("/chat")} />
         </>
       }
     />
