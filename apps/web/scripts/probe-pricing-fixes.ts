@@ -28,7 +28,7 @@
  */
 import { PrismaClient } from "@prisma/client";
 import { computeJobMoney } from "../src/lib/job-money";
-import { computeJobPayout } from "../src/lib/pay-tiers";
+import { computeJobPayout } from "@bookmops/core/pay";
 import { DEFAULT_TAX_RATES } from "../src/lib/tax";
 // The REAL rate resolver, not a hand-built STANDARD/1.0 stand-in: a snapshot
 // the client will be shown has to use the rates payroll would actually use.

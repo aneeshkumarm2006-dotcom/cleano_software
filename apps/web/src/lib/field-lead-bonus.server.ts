@@ -1,5 +1,5 @@
 import { db } from "@/lib/org-db";
-import { computeFieldLeadBonus, type FieldLeadBonus } from "./field-lead-bonus";
+import { computeFieldLeadBonus, type FieldLeadBonus } from "@bookmops/core/pay";
 import { fieldLeadGroupIds } from "./field-lead-group.server";
 import { ACTIVE_VALUE_SELECT } from "./metrics";
 import { activeSubtotal } from "./job-money";

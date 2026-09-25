@@ -3,7 +3,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/org-db";
 import PayoutsPageClient from "./PayoutsPageClient";
-import { computePayoutTotals, summarisePayouts } from "@/lib/payout-math";
+import { computePayoutTotals, summarisePayouts } from "@bookmops/core/pay";
 
 export default async function PayoutsPage() {
   const session = await auth.api.getSession({ headers: await headers() });

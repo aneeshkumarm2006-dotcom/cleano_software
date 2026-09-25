@@ -21,13 +21,14 @@ import {
   defaultHourlyRateFor,
   hourlyRateSource,
   type TierHourlyRates,
-} from "@/lib/pay-tiers";
+  TIER_LABEL,
+  type CleanerTier,
+} from "@bookmops/core/pay";
 import { setFieldLead } from "../../actions/setFieldLead";
 import { setCleanerProductQuantity } from "../../actions/setCleanerProductQuantity";
 import { setEmployeeServiceCategories } from "../../actions/setEmployeeServiceCategories";
 import { getEmployeeFileUrl } from "../../actions/getEmployeeFileUrl";
 import { PERMISSION_CATEGORIES } from "@/lib/service-permissions";
-import { TIER_LABEL, type CleanerTier } from "@/lib/pay-tiers";
 import { ITEM_TYPE_LABEL, type ItemType, unitsRemovedFromKit } from "@bookmops/core/inventory";
 import type {
   AttentionTone,
@@ -744,7 +745,7 @@ export default function EmployeeDetailView({
     }
   }
 
-  // Pay-tier rate preview (mirrors src/lib/pay-tiers.ts).
+  // Pay-tier rate preview (mirrors packages/core/src/pay/pay-tiers.ts).
   const tierRatePct =
     tier === "TRAINEE"
       ? "30%"

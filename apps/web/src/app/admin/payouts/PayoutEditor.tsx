@@ -6,7 +6,7 @@ import { Pencil, Loader, Check, X, AlertTriangle } from "lucide-react";
 import Button from "@/components/ui/Button";
 import { updatePayout } from "../actions/updatePayout";
 import { PayoutRow } from "./PayoutsPageClient";
-import { computePayoutTotals } from "@/lib/payout-math";
+import { computePayoutTotals } from "@bookmops/core/pay";
 
 interface Props {
   payout: PayoutRow;

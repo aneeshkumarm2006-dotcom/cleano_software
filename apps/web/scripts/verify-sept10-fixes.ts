@@ -27,7 +27,7 @@ import {
   liveAssignments,
   type JobPayInput,
 } from "../src/lib/cleaner-earnings";
-import type { CleanerRateInput } from "../src/lib/pay-tiers";
+import type { CleanerRateInput } from "@bookmops/core/pay";
 import {
   planWorkTrailReset,
   type WorkTrailJob,

@@ -6,7 +6,7 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 
 // Assigns a cleaner to a Field Lead's group (or clears it with null). Used for
-// the Field Lead's weekly group-revenue bonus (src/lib/field-lead-bonus.ts).
+// the Field Lead's weekly group-revenue bonus (packages/core/src/pay/field-lead-bonus.ts).
 export async function setFieldLead(
   employeeId: string,
   fieldLeadId: string | null

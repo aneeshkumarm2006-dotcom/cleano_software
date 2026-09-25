@@ -9,7 +9,7 @@ import { db } from "@/lib/org-db";
 import { getCleanerRateInputs } from "@/lib/cleaner-rates";
 import { getFieldLeadWeeklyBonus } from "@/lib/field-lead-bonus.server";
 import { formatPayPeriodRange, type PayPeriodRange } from "@/lib/pay-period";
-import { computePayoutTotals } from "@/lib/payout-math";
+import { computePayoutTotals } from "@bookmops/core/pay";
 import {
   JOB_PAY_SELECT,
   PAYABLE_JOB_STATUSES,
@@ -153,7 +153,7 @@ export async function generatePayPeriodForWeek(
             // A freshly generated period has no adjustments/deductions yet, but
             // route it through the canonical helper anyway so a negative base
             // (e.g. a negative per-cleaner override) can never be written as a
-            // negative payout. See src/lib/payout-math.ts.
+            // negative payout. See packages/core/src/pay/payout-math.ts.
             const { final } = computePayoutTotals({
               baseAmount,
               adjustments: 0,

@@ -14,8 +14,11 @@ import {
   MIN_RATING_MULTIPLIER,
   MAX_RATING_MULTIPLIER,
   type RatingMultiplierMap,
-} from "@/lib/pay-multiplier";
-import { TIER_LABEL, formatRatePct, tierBaseRate, type CleanerTier } from "@/lib/pay-tiers";
+  TIER_LABEL,
+  formatRatePct,
+  tierBaseRate,
+  type CleanerTier,
+} from "@bookmops/core/pay";
 
 interface MultipliersTabProps {
   settings: AppSettingRecord[];

@@ -5,7 +5,7 @@ import {
   MIN_RATING_MULTIPLIER,
   RATING_STEPS,
   type RatingMultiplierMap,
-} from "./pay-multiplier";
+} from "@bookmops/core/pay";
 
 export const RATING_MULTIPLIER_SETTING_KEY = "multipliers.ratings";
 

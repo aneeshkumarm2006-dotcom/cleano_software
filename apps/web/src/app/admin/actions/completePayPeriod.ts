@@ -6,7 +6,7 @@ import { db } from "@/lib/org-db";
 import { revalidatePath } from "next/cache";
 import { isNotificationEnabled } from "@/lib/notifications";
 import type { NotificationGate } from "@/lib/email";
-import { computePayoutTotals, summarisePayouts } from "@/lib/payout-math";
+import { computePayoutTotals, summarisePayouts } from "@bookmops/core/pay";
 import { requireBudgetCategoryId } from "@/lib/budget-categories";
 import { Resend } from "resend";
 
@@ -66,7 +66,7 @@ export async function completePayPeriod(payPeriodId: string) {
     const paidAt = new Date();
     // Sum through the canonical helper, not the stored column: a payout written
     // before the $0 floor landed could otherwise subtract from the labour
-    // expense and under-state payroll cost. See src/lib/payout-math.ts.
+    // expense and under-state payroll cost. See packages/core/src/pay/payout-math.ts.
     const totalLabour = summarisePayouts(period.payouts).totalFinal;
     const periodLabel = `${period.startDate.toISOString().slice(0, 10)} → ${period.endDate.toISOString().slice(0, 10)}`;
 

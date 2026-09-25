@@ -18,7 +18,7 @@ import {
   NO_TIER_HOURLY_RATES,
   defaultHourlyRateFor,
   hourlyRateSource,
-} from "../src/lib/pay-tiers";
+} from "@bookmops/core/pay";
 
 let passed = 0;
 const failures: string[] = [];

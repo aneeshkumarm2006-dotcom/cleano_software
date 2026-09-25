@@ -37,12 +37,10 @@ import {
   standardRateForRating,
   type CleanerRateInput,
   type CleanerTier,
-} from "../src/lib/pay-tiers";
-import {
   DEFAULT_RATING_MULTIPLIERS,
   effectiveMultiplier,
   type RatingMultiplierMap,
-} from "../src/lib/pay-multiplier";
+} from "@bookmops/core/pay";
 import {
   formatPayPeriodRange,
   previousPayPeriodRange,

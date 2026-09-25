@@ -21,7 +21,7 @@ import {
 import { isNotificationEnabled } from "@/lib/notifications";
 import { smsBookingConfirmation, smsCancellation } from "@/lib/sms";
 import { getCleanerRateInputs } from "@/lib/cleaner-rates";
-import { computeJobPayout, fallbackRateInput } from "@/lib/pay-tiers";
+import { computeJobPayout, fallbackRateInput } from "@bookmops/core/pay";
 import { getTaxRates } from "@/lib/tax.server";
 import {
   addOnQuantity,

@@ -5,6 +5,7 @@
   "sideEffects": false,
   "exports": {
     "./inventory": "./src/inventory/index.ts",
+    "./pay": "./src/pay/index.ts",
     "./policy": "./src/policy/index.ts",
     "./rating": "./src/rating/index.ts",
     "./time": "./src/time/index.ts",

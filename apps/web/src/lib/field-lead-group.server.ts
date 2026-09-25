@@ -81,7 +81,7 @@ export async function fieldLeadGroupIds(
  * column on User are deliberately not selected — see the privacy note in
  * `src/app/admin/actions/getMyTeam.types.ts`. `cleanerTier` is here because it
  * is a *skill/seniority* label the lead needs when deciding who to send where;
- * the pay percentages attached to a tier live in `src/lib/pay-tiers.ts` and are
+ * the pay percentages attached to a tier live in `packages/core/src/pay/pay-tiers.ts` and are
  * never sent to this surface.
  */
 export async function fieldLeadGroupMembers(

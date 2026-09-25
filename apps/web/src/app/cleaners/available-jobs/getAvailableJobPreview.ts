@@ -9,7 +9,7 @@ import {
   CATEGORY_BLOCKED_MESSAGE,
 } from "@/lib/service-permissions";
 import { getCleanerRateInputs } from "@/lib/cleaner-rates";
-import { computeJobPayout, fallbackRateInput } from "@/lib/pay-tiers";
+import { computeJobPayout, fallbackRateInput } from "@bookmops/core/pay";
 import { getServiceCatalogWithLabels } from "@/lib/service-catalog.server";
 import { jobTypeLabel } from "@/lib/calendar-labels";
 import { sanitizeCleanerNotes } from "@/lib/cleaner-notes";

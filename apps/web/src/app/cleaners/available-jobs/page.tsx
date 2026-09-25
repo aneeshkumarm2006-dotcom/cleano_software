@@ -7,7 +7,7 @@ import {
   computeJobPayout,
   fallbackRateInput,
   type CleanerRateInput,
-} from "@/lib/pay-tiers";
+} from "@bookmops/core/pay";
 import AvailableJobsClient from "./AvailableJobsClient";
 
 /**

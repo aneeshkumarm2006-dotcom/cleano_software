@@ -20,7 +20,7 @@ export type PayoutRow = {
   adjustments: number;
   deductions: number;
   reimbursements: number;
-  /** Already floored at $0 by the server (src/lib/payout-math.ts). */
+  /** Already floored at $0 by the server (packages/core/src/pay/payout-math.ts). */
   finalAmount: number;
   /** Deductions this period could not cover. > 0 means the payout was floored. */
   shortfall: number;

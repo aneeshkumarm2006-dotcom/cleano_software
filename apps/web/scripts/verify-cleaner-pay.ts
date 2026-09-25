@@ -8,7 +8,7 @@ import {
   type JobPayInput,
 } from "../src/lib/cleaner-earnings";
 import { resolveJobLead } from "../src/lib/job-assignments";
-import { fallbackRateInput, type CleanerRateInput } from "../src/lib/pay-tiers";
+import { fallbackRateInput, type CleanerRateInput } from "@bookmops/core/pay";
 
 let pass = 0;
 let fail = 0;

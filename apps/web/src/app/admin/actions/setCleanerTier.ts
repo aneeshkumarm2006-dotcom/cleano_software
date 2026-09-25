@@ -4,7 +4,7 @@ import { db } from "@/lib/org-db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
-import type { CleanerTier } from "@/lib/pay-tiers";
+import type { CleanerTier } from "@bookmops/core/pay";
 
 const VALID_TIERS: CleanerTier[] = ["TRAINEE", "STANDARD", "FIELD_LEAD"];
 

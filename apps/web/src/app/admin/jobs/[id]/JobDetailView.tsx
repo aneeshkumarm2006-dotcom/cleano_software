@@ -24,7 +24,7 @@ import { simpleJobStatus } from "@/lib/metrics-shared";
 // Round 4, fix 5 — the pay-basis vocabulary. Its own module precisely so a
 // client component can import it: `cleaner-earnings`, which DECIDES the basis,
 // reaches @/db and cannot be pulled into the browser bundle.
-import { PAY_BASIS_SHORT_LABEL, type PayBasisKind } from "@/lib/pay-basis";
+import { PAY_BASIS_SHORT_LABEL, type PayBasisKind } from "@bookmops/core/pay";
 import { HOLD_LABEL, holdLabel, holdReasonText, isOnHold } from "@/lib/job-hold";
 import { jobStaffing, shortStaffedNotice } from "@/lib/cleaner-jobs";
 import { ConfirmActionModal } from "@/components/common/ConfirmActionModal";

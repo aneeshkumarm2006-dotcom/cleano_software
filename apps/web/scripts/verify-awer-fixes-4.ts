@@ -69,7 +69,7 @@ import {
   hourlyTeamPayFromClock,
   type JobPayInput,
 } from "../src/lib/cleaner-earnings";
-import { PAY_BASIS_SHORT_LABEL, payBasisLabel } from "../src/lib/pay-basis";
+import { PAY_BASIS_SHORT_LABEL, payBasisLabel } from "@bookmops/core/pay";
 import {
   formatAddressCopy,
   formatAddressLine,
@@ -80,7 +80,7 @@ import {
   splitAptFromLocation,
 } from "../src/lib/client-address";
 import { postConstructionBasePrice } from "../src/lib/service-pricing";
-import type { CleanerRateInput } from "../src/lib/pay-tiers";
+import type { CleanerRateInput } from "@bookmops/core/pay";
 
 let pass = 0,
   fail = 0;
@@ -1736,9 +1736,9 @@ section(5, "step 4B.6/4B.7 — every pay surface states its basis", () => {
     "the label module is pure, so client components can import it",
     // `codeOf`, because the module's own header legitimately NAMES `@/db` while
     // explaining why it exists apart from the module that imports it.
-    !codeOf("src/lib/pay-basis.ts").includes("@/db") &&
-      !codeOf("src/lib/pay-basis.ts").includes('"server-only"') &&
-      !/^\s*import\s/m.test(read("src/lib/pay-basis.ts"))
+    !codeOf("../../packages/core/src/pay/pay-basis.ts").includes("@/db") &&
+      !codeOf("../../packages/core/src/pay/pay-basis.ts").includes('"server-only"') &&
+      !/^\s*import\s/m.test(read("../../packages/core/src/pay/pay-basis.ts"))
   );
   // A cleaner must never read a client charge or the internal split mechanics
   // off their own pay screen — the reason getPayBreakdown redacts server-side.

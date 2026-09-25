@@ -34,7 +34,7 @@ import {
   bulkSetFieldLead,
 } from "../actions/bulkEmployeeActions";
 import { sendLoginInvites } from "../actions/sendLoginInvites";
-import type { CleanerTier } from "@/lib/pay-tiers";
+import type { CleanerTier } from "@bookmops/core/pay";
 import { fmtDateTime } from "@/lib/time";
 import { avatarColor, initials } from "@/lib/avatar";
 

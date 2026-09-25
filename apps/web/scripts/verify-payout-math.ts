@@ -1,5 +1,5 @@
 // Pure-math verification for fix list item 1. No DB access.
-import { computePayoutTotals, summarisePayouts } from "../src/lib/payout-math";
+import { computePayoutTotals, summarisePayouts } from "@bookmops/core/pay";
 
 let pass = 0;
 let fail = 0;

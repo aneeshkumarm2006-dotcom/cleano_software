@@ -3,10 +3,9 @@
 import { db } from "@/lib/org-db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
-import { multiplierForRating } from "@/lib/pay-multiplier";
+import { multiplierForRating, STANDARD_RATINGS_REQUIRED } from "@bookmops/core/pay";
 import { getRatingMultiplierMap } from "@/lib/pay-multiplier-config";
 import { getCleanerRateInputs } from "@/lib/cleaner-rates";
-import { STANDARD_RATINGS_REQUIRED } from "@/lib/pay-tiers";
 import type {
   PerformanceData,
   RecentRating,

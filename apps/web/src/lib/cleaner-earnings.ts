@@ -21,9 +21,10 @@ import {
   computeJobPayout,
   fallbackRateInput,
   type CleanerRateInput,
-} from "./pay-tiers";
-import { computePayoutTotals } from "./payout-math";
-import { payBasisLabel, type PayBasisKind } from "./pay-basis";
+  computePayoutTotals,
+  payBasisLabel,
+  type PayBasisKind,
+} from "@bookmops/core/pay";
 import { summariseBreaks } from "./time-tracking";
 import { crewActiveMinutesByCleaner } from "./work-sessions";
 import {
@@ -458,7 +459,7 @@ export interface JobPayShare {
   base: number;
   /**
    * @deprecated Always equal to `base`. The rating multiplier is now folded
-   * into the cleaner's RATE (src/lib/pay-tiers.ts) instead of being applied to
+   * into the cleaner's RATE (packages/core/src/pay/pay-tiers.ts) instead of being applied to
    * the finished amount, and `Job.payRateMultiplier` is no longer read — so
    * there is no "after multiplier" step left. Kept for one release so callers
    * migrate to `base` deliberately. Do not use in new code.
@@ -514,7 +515,7 @@ export const EMPTY_PAY_SHARE: JobPayShare = {
  *     until an admin clears the flag. This is the PDF's "if admin enters $88.50,
  *     use it".
  *   • PERCENTAGE — each cleaner earns their own rating-based rate on the job's
- *     PAY BASIS (src/lib/pay-tiers.ts). Paired jobs no longer halve anything.
+ *     PAY BASIS (packages/core/src/pay/pay-tiers.ts). Paired jobs no longer halve anything.
  *     Legacy jobs with no basis fall back to an even split of employeePay.
  *   • FLAT       — employeePay is the agreed TEAM TOTAL, split between the crew.
  *   • HOURLY     — each cleaner earns THEIR OWN clocked hours × `hourlyRate`

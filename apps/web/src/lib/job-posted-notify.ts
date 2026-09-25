@@ -5,7 +5,7 @@ import { sendProviderNewJobPosted } from "@/lib/email";
 import { isCategoryAllowed } from "@/lib/service-permissions";
 import { serviceLabelMap } from "@/lib/service-catalog";
 import { getServiceCatalog } from "@/lib/service-catalog.server";
-import { computeJobPayout } from "@/lib/pay-tiers";
+import { computeJobPayout } from "@bookmops/core/pay";
 import { getCleanerRateInputs } from "@/lib/cleaner-rates";
 
 /**

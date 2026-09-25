@@ -52,7 +52,7 @@ import {
   computeJobPayout,
   individualRate,
   type CleanerRateInput,
-} from "../src/lib/pay-tiers";
+} from "@bookmops/core/pay";
 import {
   computeJobPayShares,
   type JobPayInput,
@@ -991,7 +991,7 @@ lacks(
 );
 has(
   "D1 · …and is still documented as retired",
-  "src/lib/pay-tiers.ts",
+  "../../packages/core/src/pay/pay-tiers.ts",
   "@deprecated"
 );
 
@@ -1140,12 +1140,12 @@ has(
 );
 has(
   "4c.4 · …whose manual wording survives round 4",
-  "src/lib/pay-basis.ts",
+  "../../packages/core/src/pay/pay-basis.ts",
   'MANUAL_TEAM: "Manual amount"'
 );
 has(
   "4c.4 · …and whose automatic wording does too",
-  "src/lib/pay-basis.ts",
+  "../../packages/core/src/pay/pay-basis.ts",
   'PERCENTAGE: "Automatic (tier rates)"'
 );
 has(

@@ -32,7 +32,7 @@ model User {
   phone                        String?
   role                         Roles                   @default(EMPLOYEE)
   // Payroll tier — set manually by admin, never auto-changed. Drives the
-  // individual pay rate used by the split-job calculation (see src/lib/pay-tiers.ts):
+  // individual pay rate used by the split-job calculation (see packages/core/src/pay/pay-tiers.ts):
   // Trainee = 30%, Standard = 40–45% (rating-based after 5 ratings), Field Lead = 46%.
   cleanerTier                  CleanerTier             @default(STANDARD)
   timeLogRequests              TimeLogChangeRequest[]  @relation("TimeLogRequests")
@@ -50,7 +50,7 @@ model User {
   // Values are canonical category keys — see src/lib/service-permissions.ts.
   allowedServiceCategories     String[]                @default([])
   // Group membership — the Field Lead this cleaner reports to. Used for the
-  // Field Lead's weekly group-revenue bonus (see src/lib/field-lead-bonus.ts).
+  // Field Lead's weekly group-revenue bonus (see packages/core/src/pay/field-lead-bonus.ts).
   fieldLeadId                  String?
   fieldLead                    User?                   @relation("FieldLeadGroup", fields: [fieldLeadId], references: [id], onDelete: SetNull)
   groupMembers                 User[]                  @relation("FieldLeadGroup")

@@ -6,7 +6,7 @@
 // the SERVER (getPayBreakdown.ts) — the fields simply do not exist in the
 // response a cleaner receives.
 
-import type { PayBasisKind } from "@/lib/pay-basis";
+import type { PayBasisKind } from "@bookmops/core/pay";
 
 export type JobPayType = "PERCENTAGE" | "FLAT" | "HOURLY";
 
@@ -127,7 +127,7 @@ export type AdminPayBreakdown = PayBasisFields & {
   /** The bottom line for the viewed cleaner: base + tip share + parking share. */
   totalEmployeePay: number;
   isLead: boolean;
-  // Tier-based pay context (src/lib/pay-tiers.ts)
+  // Tier-based pay context (packages/core/src/pay/pay-tiers.ts)
   tier: "TRAINEE" | "STANDARD" | "FIELD_LEAD";
   /** Effective fraction of job price = tier base × multiplier. 0 when the
    *  percentage model doesn't apply (FLAT / HOURLY / manual override). */

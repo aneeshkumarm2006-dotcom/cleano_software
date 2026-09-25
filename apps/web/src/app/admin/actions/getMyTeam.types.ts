@@ -16,7 +16,7 @@
 //     A lead must not be able to read what their crew (or they) are paid per
 //     job, which is also why `FieldLeadGroupMember` carries `cleanerTier` but no
 //     `payMultiplier`: the tier is a seniority label used for dispatch, the
-//     percentages attached to it live in `src/lib/pay-tiers.ts` and stay there.
+//     percentages attached to it live in `packages/core/src/pay/pay-tiers.ts` and stay there.
 //   • `paymentReceived`, `invoiceSent`, `paymentType`, `isCashJob` — client
 //     payment state. Chasing an invoice is not a Field Lead's job.
 //   • Group revenue / the weekly group bonus — a MONEY figure, even though it is

@@ -7,7 +7,7 @@ import {
   DEFAULT_TAX_RATES,
 } from "../src/lib/tax";
 import { computeJobPayShares, type JobPayInput } from "../src/lib/cleaner-earnings";
-import type { CleanerRateInput } from "../src/lib/pay-tiers";
+import type { CleanerRateInput } from "@bookmops/core/pay";
 
 let pass = 0, fail = 0;
 function check(name: string, actual: unknown, expected: unknown) {

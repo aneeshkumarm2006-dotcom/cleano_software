@@ -4,9 +4,8 @@ import { db } from "@/lib/org-db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { ratingStepFor } from "@/lib/pay-multiplier";
+import { ratingStepFor, STANDARD_RATINGS_REQUIRED } from "@bookmops/core/pay";
 import { getCleanerRateInputs } from "@/lib/cleaner-rates";
-import { STANDARD_RATINGS_REQUIRED } from "@/lib/pay-tiers";
 
 interface RecalculateInput {
   employeeId?: string;

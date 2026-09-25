@@ -4,7 +4,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { db } from "@/lib/org-db";
 import { revalidatePath } from "next/cache";
-import { computePayoutTotals } from "@/lib/payout-math";
+import { computePayoutTotals } from "@bookmops/core/pay";
 
 function parseFloatSafe(v: FormDataEntryValue | null): number {
   if (v === null || v === "") return 0;

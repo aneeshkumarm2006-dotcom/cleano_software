@@ -31,12 +31,10 @@ import {
   fallbackRateInput,
   individualRate,
   type CleanerRateInput,
-} from "../src/lib/pay-tiers";
-import {
   DEFAULT_RATING_MULTIPLIERS,
   effectiveMultiplier,
   multiplierForRating,
-} from "../src/lib/pay-multiplier";
+} from "@bookmops/core/pay";
 import { sanitizeRatingMultiplierMap } from "../src/lib/pay-multiplier-config";
 import {
   MAX_ADDON_QUANTITY,
@@ -473,20 +471,20 @@ section(1, "pay multiplier drives cleaner pay", () => {
 
   // ══ SOURCE — 1.c: the ladder is retired but still exported ════════════════
   lacks("individualRate no longer calls the retired rating ladder",
-    "src/lib/pay-tiers.ts", "return standardRateForRating(");
+    "../../packages/core/src/pay/pay-tiers.ts", "return standardRateForRating(");
   has("standardRateForRating is kept, deprecated, so a stale import is caught",
-    "src/lib/pay-tiers.ts", "export function standardRateForRating");
+    "../../packages/core/src/pay/pay-tiers.ts", "export function standardRateForRating");
   has("...and it carries the @deprecated marker",
-    "src/lib/pay-tiers.ts", "@deprecated");
+    "../../packages/core/src/pay/pay-tiers.ts", "@deprecated");
   // pay-tiers.ts itself legitimately still names it, so sweep the app surfaces.
   noMatchUnder("no app surface imports the retired ladder", "src/app",
     /\bstandardRateForRating\b/);
   lacks("the money module does not use the retired ladder",
     "src/lib/cleaner-earnings.ts", "standardRateForRating");
   has("the multiplier is REQUIRED on CleanerRateInput",
-    "src/lib/pay-tiers.ts", "multiplier: number;");
+    "../../packages/core/src/pay/pay-tiers.ts", "multiplier: number;");
   has("one shared fallback so the call sites cannot drift",
-    "src/lib/pay-tiers.ts", "export function fallbackRateInput");
+    "../../packages/core/src/pay/pay-tiers.ts", "export function fallbackRateInput");
 
   // ══ SOURCE — 1.b/1.e: window, gate and the display cache ══════════════════
   has("the rate loader reads the settings map",

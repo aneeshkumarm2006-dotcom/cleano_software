@@ -14,7 +14,7 @@ import {
   STANDARD_RATINGS_REQUIRED,
   tierBaseRate,
   type CleanerTier,
-} from "@/lib/pay-tiers";
+} from "@bookmops/core/pay";
 import {
   EMPTY_PAY_SHARE,
   computeJobPayShares,

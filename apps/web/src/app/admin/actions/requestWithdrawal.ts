@@ -8,7 +8,7 @@ import {
   sendProviderPayoutRequested,
   sendAdminPayoutRequest,
 } from "@/lib/email";
-import { summarisePayouts } from "@/lib/payout-math";
+import { summarisePayouts } from "@bookmops/core/pay";
 
 /**
  * A cleaner submits an AMOUNT, nothing else (new fix list item 3).

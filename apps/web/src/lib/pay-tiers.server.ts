@@ -3,7 +3,7 @@
 
 import "server-only";
 import { getSetting } from "@/lib/settings";
-import { NO_TIER_HOURLY_RATES, type TierHourlyRates } from "@/lib/pay-tiers";
+import { NO_TIER_HOURLY_RATES, type TierHourlyRates } from "@bookmops/core/pay";
 
 /**
  * This workspace's default hourly rate per payroll tier.

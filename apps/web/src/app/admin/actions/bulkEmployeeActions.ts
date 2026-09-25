@@ -4,7 +4,7 @@ import { db } from "@/lib/org-db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
-import type { CleanerTier } from "@/lib/pay-tiers";
+import type { CleanerTier } from "@bookmops/core/pay";
 import { checkCleanerSeats } from "@/lib/plan-limits";
 import {
   previewCleanerDeactivation,
