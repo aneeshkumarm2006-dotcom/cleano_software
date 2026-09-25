@@ -48,7 +48,10 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(function TextFiel
           editable={editable}
           placeholderTextColor={color.ink3}
           secureTextEntry={secret && !revealed}
+          {...rest}
           autoCapitalize={secret ? "none" : rest.autoCapitalize}
+          // After the spread, so a caller's own onFocus/onBlur is chained
+          // rather than replacing ours and leaving the focus ring stuck.
           onFocus={(e) => {
             setFocused(true);
             rest.onFocus?.(e);
@@ -57,7 +60,6 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(function TextFiel
             setFocused(false);
             rest.onBlur?.(e);
           }}
-          {...rest}
           style={{
             flex: 1,
             minHeight: minTouch,
