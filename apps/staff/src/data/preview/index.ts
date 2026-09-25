@@ -4,8 +4,14 @@
 import type { DataSource } from "../source";
 import { previewClockApi } from "./clock";
 import { previewJobsApi } from "./jobs";
+import { previewPhotosApi } from "./photos";
+import { previewIssuesApi } from "./issues";
+import { previewOnMyWayApi } from "./on-my-way";
 
 export const previewSource: DataSource = {
   ...previewJobsApi,
   ...previewClockApi,
+  ...previewPhotosApi,
+  ...previewIssuesApi,
+  ...previewOnMyWayApi,
 };

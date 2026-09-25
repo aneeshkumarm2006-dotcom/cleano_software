@@ -3,6 +3,7 @@ import { Button, Card, IconButton, space, Text } from "@bookmops/ui-native";
 import { router } from "expo-router";
 import { View } from "react-native";
 
+import { OnMyWay } from "@/features/on-my-way/OnMyWay";
 import { addressLine, openDirections } from "@/lib/directions";
 import { clockTime, duration, formatMoney } from "@/lib/format";
 
@@ -75,6 +76,8 @@ export function NextJobCard({ job, now, timeZone, currency }: { job: JobSummary;
           onPress={() => openDirections(addressLine(job.address))}
         />
       </View>
+
+      <OnMyWay job={job} timeZone={timeZone} tone="chrome" style={{ marginTop: space[2] }} />
     </Card>
   );
 }

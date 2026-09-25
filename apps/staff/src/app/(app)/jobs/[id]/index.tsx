@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { LoadError, Loading } from "@/components/QueryState";
 import { useJob, useMe } from "@/data/queries";
+import { OnMyWay } from "@/features/on-my-way/OnMyWay";
 import { addressLine, openDirections } from "@/lib/directions";
 import { clockTime, duration, formatMoney, shortDate } from "@/lib/format";
 
@@ -80,6 +81,7 @@ function Detail({
         </View>
 
         <Button label="Get directions" variant="secondary" icon="directions" onPress={() => openDirections(addressLine(job.address))} />
+        <OnMyWay job={job} timeZone={timeZone} tone="light" clientName={job.client.firstName} />
 
         {job.notes ? (
           <Card padding={4} style={{ backgroundColor: color.warningSoft, borderColor: color.warningSoft }}>
@@ -125,6 +127,22 @@ function Detail({
           </Card>
         ) : null}
 
+        {job.clock.state !== "NOT_STARTED" || job.status === "IN_PROGRESS" || job.status === "COMPLETED" ? (
+          <LinkCard
+            icon="camera"
+            title="Photos"
+            detail="Before and after photos of this job"
+            onPress={() => router.push({ pathname: "/jobs/[id]/photos", params: { id: job.id } })}
+          />
+        ) : null}
+
+        <LinkCard
+          icon="warning"
+          title="Something wrong?"
+          detail="Locked out, supplies missing, damage — tell the office"
+          onPress={() => router.push({ pathname: "/jobs/[id]/issue", params: { id: job.id } })}
+        />
+
         {job.client.firstName ? (
           <Text variant="small" color="ink3" align="center">
             Client: {job.client.firstName}
@@ -153,6 +171,24 @@ function Detail({
         />
       </View>
     </>
+  );
+}
+
+/** A quiet row that opens one of the job's own screens. */
+function LinkCard({ icon, title, detail, onPress }: { icon: "camera" | "warning"; title: string; detail: string; onPress: () => void }) {
+  return (
+    <Card padding={4} onPress={onPress} accessibilityLabel={`${title}. ${detail}`}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: space[3] }}>
+        <Icon name={icon} size={22} color={icon === "warning" ? "warning" : "accentText"} />
+        <View style={{ flex: 1 }}>
+          <Text variant="bodyStrong">{title}</Text>
+          <Text variant="small" color="ink2">
+            {detail}
+          </Text>
+        </View>
+        <Icon name="forward" size={18} color="ink3" />
+      </View>
+    </Card>
   );
 }
 

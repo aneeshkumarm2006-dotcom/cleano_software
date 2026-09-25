@@ -3,6 +3,9 @@
 import { clockApi } from "./clock";
 import { jobsApi } from "./jobs";
 import { meApi } from "./me";
+import { photosApi } from "./photos";
+import { issuesApi } from "./issues";
+import { onMyWayApi } from "./on-my-way";
 import { type ClientOptions, makeRequest } from "./request";
 
 export { ApiError, type ClientOptions, type Request } from "./request";
@@ -13,6 +16,9 @@ export function createClient(options: ClientOptions) {
     ...meApi(request),
     ...jobsApi(request),
     ...clockApi(request),
+    ...photosApi(request),
+    ...issuesApi(request),
+    ...onMyWayApi(request),
   };
 }
 
