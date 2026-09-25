@@ -26,19 +26,24 @@ export interface AfterPhotoPolicySource {
   afterPhotoOverrideAt: Date | string | null;
 }
 
-/** True when this job accepts after-photos. Allowed by default. */
+/**
+ * True when this job accepts photos. Allowed by default. Named for
+ * after-photos, but uploadJobPhoto applies it to every photo a cleaner adds,
+ * before or after; only an ISSUE photo is exempt.
+ */
 export function afterPhotosAllowed(job: AfterPhotoPolicySource): boolean {
   return job.afterPhotoConsent || job.afterPhotoOverrideAt !== null;
 }
 
 /**
- * The one-line photo expectation shown on the cleaner's job-scope card.
- * Before-photos are always welcome; only after-photos can be switched off.
+ * The one-line photo expectation shown on the cleaner's job-scope card. When
+ * an admin turns photos off, the job takes none, before or after: that is
+ * what uploadJobPhoto enforces, so the line says so.
  */
 export function photoExpectationLine(job: AfterPhotoPolicySource): string {
   return afterPhotosAllowed(job)
     ? "Before and after photos — both welcome on this job."
-    : "Before photos only — an admin turned after-photos off for this job.";
+    : "No photos — an admin turned photos off for this job.";
 }
 
 // ── The per-job photo cap (item 1) ──────────────────────────────────────────

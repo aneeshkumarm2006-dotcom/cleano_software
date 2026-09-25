@@ -14,8 +14,10 @@
 // packages/core/src/jobs/job-photos.ts):
 //   - at most MAX_PHOTOS_PER_JOB photos on one job (200 today);
 //   - at most 10 MB each, JPEG, PNG, HEIC, HEIF or WebP;
-//   - after-photos can be turned off per job by an admin. Before-photos are
-//     always welcome (core `photoExpectationLine`).
+//   - an admin can turn photos off for a job (the web's "after-photos"
+//     switch, core `afterPhotosAllowed`). When they're off the job takes no
+//     photos at all, before or after, as the web's upload refuses both. Only
+//     an issue report's photo still goes on (./issues.ts).
 import { z } from "zod";
 
 import { Instant, openEnum, page } from "./common";
@@ -150,12 +152,19 @@ export type JobPhoto = z.infer<typeof JobPhoto>;
 
 /** What this person may add to this job right now, decided by the server. */
 export const PhotoPolicy = z.object({
-  /** False once the job is paid or cancelled, or the cleaner is off it. */
+  /**
+   * False once the job is paid or cancelled, or the cleaner is off it, and
+   * whenever `photosAllowed` is false.
+   */
   canAdd: z.boolean(),
   /** Why not, in words for the cleaner, when `canAdd` is false. */
   closedReason: z.string().nullable(),
-  /** False when an admin turned after-photos off for this job. */
-  afterPhotosAllowed: z.boolean(),
+  /**
+   * False when an admin turned photos off for this job (core
+   * `afterPhotosAllowed`). Then nothing can be added, before or after, and
+   * the app says the office turned photos off rather than `closedReason`.
+   */
+  photosAllowed: z.boolean(),
   /** The per-job cap (MAX_PHOTOS_PER_JOB), shown before anything is picked. */
   maxPhotos: z.number().int(),
   /** The per-file cap in bytes, checked on the phone before asking to upload. */
@@ -195,10 +204,8 @@ export type JobPhotosResponse = z.infer<typeof JobPhotosResponse>;
  *   - check the asset's `format` is jpg, png, heic, heif or webp and its
  *     `bytes` are at most MAX_PHOTO_BYTES. Out of bounds: destroy the asset
  *     and answer 400 `UPLOAD_INVALID`;
- *   - refuse AFTER when after-photos are off for this job (409
- *     `AFTER_PHOTOS_OFF`). BEFORE is always accepted. (The web action today
- *     refuses BEFORE too when after-photos are off, against its own on-page
- *     copy; the shared service should settle on core's rule.)
+ *   - refuse any phase, BEFORE or AFTER, when an admin turned photos off
+ *     for this job (409 `PHOTOS_OFF`), as the web's upload does;
  *   - re-check the per-job cap at attach time, in the same transaction as the
  *     insert;
  *   - accept a key ONCE: an attached key is marked used, and attaching it

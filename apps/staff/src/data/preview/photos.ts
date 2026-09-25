@@ -48,11 +48,14 @@ function photosOf(jobId: string): JobPhoto[] {
   return p;
 }
 
+/** The sample job whose photos the office has turned off. */
+const PHOTOS_OFF_JOB = "j2";
+
 const POLICY: PhotoPolicy = {
   canAdd: true,
   closedReason: null,
-  // j2 shows what a job with after-photos turned off looks like.
-  afterPhotosAllowed: true,
+  // j2 shows what a job with photos turned off looks like.
+  photosAllowed: true,
   maxPhotos: 200,
   maxBytes: 10 * 1024 * 1024,
 };
@@ -93,7 +96,7 @@ export const previewPhotosApi = {
       items,
       nextCursor: null,
       total: items.length,
-      policy: { ...POLICY, afterPhotosAllowed: jobId !== "j2" },
+      policy: jobId === PHOTOS_OFF_JOB ? { ...POLICY, canAdd: false, photosAllowed: false } : POLICY,
     };
     return delay(res);
   },
@@ -104,9 +107,9 @@ export const previewPhotosApi = {
       await delay(null, 200);
       throw new ApiError("That photo didn't reach us. Try again.", 404, "NOT_FOUND", false);
     }
-    if (body.phase === "AFTER" && jobId === "j2") {
+    if (jobId === PHOTOS_OFF_JOB) {
       await delay(null, 200);
-      throw new ApiError("After-photos are off for this job.", 409, "AFTER_PHOTOS_OFF", false);
+      throw new ApiError("The office has turned photos off for this job.", 409, "PHOTOS_OFF", false);
     }
     const p = photo(`ph-${body.clientEventId.slice(0, 8)}`, { kind: body.phase, takenAt: new Date().toISOString() });
     photos.set(jobId, [p, ...photosOf(jobId)]);
