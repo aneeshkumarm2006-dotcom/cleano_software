@@ -62,10 +62,10 @@ export async function decideTimeLogChange(input: {
     }
 
     // Raised by the server from a phone clock event (API_V1.md §6, source
-    // PHONE). Two shapes need their own handling; everything else about them
+    // OFFLINE_CLOCK). Two shapes need their own handling; everything else about them
     // -- a session and a requested start or end -- is the ordinary shape
     // below.
-    if (input.approve && req.source === "PHONE") {
+    if (input.approve && req.source === "OFFLINE_CLOCK") {
       if (req.breakId) {
         const applied = await applyBreakCorrection({
           jobId: req.jobId,
@@ -89,7 +89,7 @@ export async function decideTimeLogChange(input: {
       }
     }
 
-    if (input.approve && !(req.source === "PHONE" && req.breakId)) {
+    if (input.approve && !(req.source === "OFFLINE_CLOCK" && req.breakId)) {
       // BOTH times have to be sent, every time.
       //
       // `updateClockTimes` reads null as "CLEAR this time", not "leave it
@@ -185,7 +185,7 @@ export async function decideTimeLogChange(input: {
 }
 
 /**
- * Move one break to the time the phone reported (a PHONE request with a
+ * Move one break to the time the phone reported (an OFFLINE_CLOCK request with a
  * breakId). Breaks come off paid hours, so the job's hourly pay and billed
  * hours are re-snapshotted afterwards, as a clock edit does; both snapshots
  * refuse a locked pay period on their own.

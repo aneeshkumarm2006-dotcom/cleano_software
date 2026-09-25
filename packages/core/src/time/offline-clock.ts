@@ -12,7 +12,8 @@
 //
 // Anything else is applied at the time the server received it, and the
 // phone's time goes to the office as a correction request to approve. Nothing
-// is dropped either way.
+// is dropped either way. The reasons use the v1 contract's words
+// (OFFLINE_REASONS in packages/api/src/v1/manager-approvals.ts).
 //
 // Pure: every instant comes in as a parameter.
 
@@ -47,7 +48,7 @@ export type EventTimeDecision =
       appliedAt: Date;
       gapMs: number;
       review: boolean;
-      reason: "FUTURE" | "DISPROVEN" | "TOO_LATE";
+      reason: "FUTURE" | "NOT_PROVEN_OFFLINE" | "GAP_OVER_LIMIT";
     };
 
 export interface EventTimeInput {
@@ -98,7 +99,7 @@ export function decideEventTime(input: EventTimeInput): EventTimeDecision {
       appliedAt: input.receivedAt,
       gapMs,
       review: gapMs >= 1_000,
-      reason: "DISPROVEN",
+      reason: "NOT_PROVEN_OFFLINE",
     };
   }
 
@@ -108,7 +109,7 @@ export function decideEventTime(input: EventTimeInput): EventTimeDecision {
       appliedAt: input.receivedAt,
       gapMs,
       review: true,
-      reason: "TOO_LATE",
+      reason: "GAP_OVER_LIMIT",
     };
   }
 
@@ -134,7 +135,7 @@ export function offlineCorrectionReason(args: {
   kind: ClockEventKind;
   occurredAt: Date;
   receivedAt: Date;
-  why: "DISPROVEN" | "TOO_LATE" | "NOT_APPLIED";
+  why: "NOT_PROVEN_OFFLINE" | "GAP_OVER_LIMIT" | "COULD_NOT_APPLY";
   detail?: string;
   fmt: (d: Date) => string;
 }): string {
@@ -142,9 +143,9 @@ export function offlineCorrectionReason(args: {
   const tapped = args.fmt(args.occurredAt);
   const arrived = args.fmt(args.receivedAt);
   const head =
-    args.why === "NOT_APPLIED"
+    args.why === "COULD_NOT_APPLY"
       ? `The app sent a ${what} tapped at ${tapped} that could not be applied`
-      : args.why === "DISPROVEN"
+      : args.why === "NOT_PROVEN_OFFLINE"
         ? `The app sent a ${what} tapped at ${tapped}, but the phone was online after that time, so it was recorded at ${arrived} when it arrived`
         : `The app sent a ${what} tapped at ${tapped} with no signal; it arrived at ${arrived} and was recorded then`;
   return `${head}${args.detail ? ` (${args.detail})` : ""}. Approve to use the tapped time.`;

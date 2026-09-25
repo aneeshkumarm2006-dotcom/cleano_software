@@ -131,7 +131,7 @@ async function buildState(actor: Actor, job: JobForClock & { clockInTime?: Date 
   );
   const mine = clocks.get(job.id)!;
   const pending = await db.timeLogChangeRequest.count({
-    where: { jobId: job.id, cleanerId: actor.userId, source: "PHONE", status: "PENDING" },
+    where: { jobId: job.id, cleanerId: actor.userId, source: "OFFLINE_CLOCK", status: "PENDING" },
   });
   return {
     jobId: job.id,
@@ -154,7 +154,7 @@ interface CorrectionInput {
   kind: ClockEventKind;
   occurredAt: Date;
   clientEventId: string;
-  why: "DISPROVEN" | "TOO_LATE" | "NOT_APPLIED";
+  why: "NOT_PROVEN_OFFLINE" | "GAP_OVER_LIMIT" | "COULD_NOT_APPLY";
   detail?: string;
   /** What approval would change; absent when the office has to enter it by hand. */
   target?:
@@ -217,8 +217,9 @@ async function raiseCorrection(input: CorrectionInput): Promise<Effect[]> {
         requestedStart: side === "start" ? input.occurredAt : null,
         requestedEnd: side === "end" ? input.occurredAt : null,
         reason,
-        source: "PHONE",
+        source: "OFFLINE_CLOCK",
         eventKind: input.kind,
+        offlineReason: input.why,
         clientEventId: input.clientEventId,
         occurredAt: input.occurredAt,
         receivedAt: ctx.receivedAt,
@@ -251,7 +252,7 @@ interface Applied {
   decision: EventTimeDecision;
   /** The phone's time was not applied and the office should see it. */
   review: boolean;
-  why: "DISPROVEN" | "TOO_LATE" | "NOT_APPLIED";
+  why: "NOT_PROVEN_OFFLINE" | "GAP_OVER_LIMIT" | "COULD_NOT_APPLY";
   detail?: string;
 }
 
@@ -259,7 +260,8 @@ function applyTime(ctx: PhoneEventContext, occurredAt: Date, notBefore: Date | n
   const decision = decideEventTime({ occurredAt, receivedAt: ctx.receivedAt, lastRequestAt: ctx.lastRequestAt });
   let at = decision.appliedAt;
   let review = decision.kind === "RECEIVED" && decision.review;
-  let why: Applied["why"] = decision.kind === "RECEIVED" && decision.reason === "DISPROVEN" ? "DISPROVEN" : "TOO_LATE";
+  let why: Applied["why"] =
+    decision.kind === "RECEIVED" && decision.reason === "NOT_PROVEN_OFFLINE" ? "NOT_PROVEN_OFFLINE" : "GAP_OVER_LIMIT";
   let detail: string | undefined;
   // Ordering against the cleaner's own records: a claimed time that would put
   // this event before the one it follows (a clock-out before its clock-in) is
@@ -267,7 +269,7 @@ function applyTime(ctx: PhoneEventContext, occurredAt: Date, notBefore: Date | n
   if (notBefore && at.getTime() < notBefore.getTime()) {
     at = ctx.receivedAt;
     review = true;
-    why = "NOT_APPLIED";
+    why = "COULD_NOT_APPLY";
     detail = "it was earlier than the entry it follows";
   }
   return { at, decision, review, why, detail };
@@ -302,7 +304,7 @@ export async function phoneClockIn(ctx: PhoneEventContext, event: ClockEvent): P
       kind: "CLOCK_IN",
       occurredAt,
       clientEventId: event.clientEventId,
-      why: "NOT_APPLIED",
+      why: "COULD_NOT_APPLY",
       detail: job.status === "PAID" ? "the job had already been paid" : "payroll for that day is closed",
     });
     return ok(await buildState(ctx.actor, job), effects);
@@ -316,7 +318,7 @@ export async function phoneClockIn(ctx: PhoneEventContext, event: ClockEvent): P
       kind: "CLOCK_IN",
       occurredAt,
       clientEventId: event.clientEventId,
-      why: "NOT_APPLIED",
+      why: "COULD_NOT_APPLY",
       detail: "they are no longer on this job",
     });
     return ok(await buildState(ctx.actor, job), effects);
@@ -404,7 +406,7 @@ export async function phoneClockOut(
       kind: "CLOCK_OUT",
       occurredAt,
       clientEventId: body.clientEventId,
-      why: "NOT_APPLIED",
+      why: "COULD_NOT_APPLY",
       detail: "there was no clock-in to close",
     });
     return ok({ clock: await buildState(ctx.actor, job), jobCompleted: false, restockNeeded: false }, effects);
@@ -424,7 +426,7 @@ export async function phoneClockOut(
       kind: "CLOCK_OUT",
       occurredAt,
       clientEventId: body.clientEventId,
-      why: "NOT_APPLIED",
+      why: "COULD_NOT_APPLY",
       detail: "payroll for that day is closed",
       target: { sessionId: open.id, side: "end" },
     });
@@ -515,7 +517,7 @@ export async function phoneBreak(
         kind,
         occurredAt,
         clientEventId: event.clientEventId,
-        why: "NOT_APPLIED",
+        why: "COULD_NOT_APPLY",
         detail: "they were not clocked in at the time",
       });
       return ok(await buildState(ctx.actor, job), effects);
