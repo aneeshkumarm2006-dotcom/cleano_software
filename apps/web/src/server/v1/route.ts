@@ -455,7 +455,7 @@ export function v1Route<
             userId: person.id,
             key,
             route: routeName,
-            hash: requestHash(routeName, params, base.body),
+            hash: requestHash(req.method, url.pathname, base.body),
             now: receivedAt,
           });
           if (claim.kind === "replay") {

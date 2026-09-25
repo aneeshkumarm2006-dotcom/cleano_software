@@ -98,16 +98,10 @@ check("1.10.0 is not below 1.9.0", isBelow([1, 10, 0], [1, 9, 0]), false);
 // ── The idempotency fingerprint ───────────────────────────────────────────
 check("key order doesn't change the body", canonicalJson({ b: 1, a: { d: 2, c: 3 } }), canonicalJson({ a: { c: 3, d: 2 }, b: 1 }));
 check("an undefined field is the same as a missing one", canonicalJson({ a: 1, b: undefined }), canonicalJson({ a: 1 }));
-check(
-  "a different body is a different hash",
-  requestHash("POST /x", { jobId: "j" }, { a: 1 }) === requestHash("POST /x", { jobId: "j" }, { a: 2 }),
-  false,
-);
-check(
-  "a different route is a different hash",
-  requestHash("POST /x", { jobId: "j" }, { a: 1 }) === requestHash("POST /y", { jobId: "j" }, { a: 1 }),
-  false,
-);
+check("a different body is a different hash", requestHash("POST", "/x/j1", { a: 1 }) === requestHash("POST", "/x/j1", { a: 2 }), false);
+check("a different id in the path is a different hash", requestHash("POST", "/x/j1", { a: 1 }) === requestHash("POST", "/x/j2", { a: 1 }), false);
+check("a different method is a different hash", requestHash("POST", "/x/j1", { a: 1 }) === requestHash("PUT", "/x/j1", { a: 1 }), false);
+check("the same request is the same hash", requestHash("post", "/x/j1", { b: 1, a: 2 }), requestHash("POST", "/x/j1", { a: 2, b: 1 }));
 
 // ── Who may call ──────────────────────────────────────────────────────────
 {

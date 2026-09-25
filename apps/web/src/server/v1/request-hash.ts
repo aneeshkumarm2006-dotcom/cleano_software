@@ -12,7 +12,13 @@ export function canonicalJson(value: unknown): string {
   return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${canonicalJson(v)}`).join(",")}}`;
 }
 
-/** sha256 of the route, the path parameters and the canonical body. */
-export function requestHash(route: string, params: unknown, body: unknown): string {
-  return createHash("sha256").update(`${route}\n${canonicalJson(params)}\n${canonicalJson(body)}`).digest("hex");
+/**
+ * SHA-256 of the method, the concrete path with its ids filled in, and the
+ * canonical body (API_V1.md §6). Ids live in the path, so a hash of the body
+ * alone would let one reused key replay one job's answer as another's.
+ */
+export function requestHash(method: string, path: string, body: unknown): string {
+  return createHash("sha256")
+    .update(`${method.toUpperCase()}\n${path}\n${canonicalJson(body)}`)
+    .digest("hex");
 }
