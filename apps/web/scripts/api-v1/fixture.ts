@@ -13,8 +13,11 @@ import { hashPassword } from "better-auth/crypto";
 
 import { describeTarget } from "../../src/lib/safe-target";
 
-export const SLUG_A = "v1test-alpha";
-export const SLUG_B = "v1test-bravo";
+// V1_SLUG_SUFFIX lets two runs share staging without deleting each other's
+// companies (the fixture removes its own slugs before it starts).
+const SUFFIX = /^[a-z0-9]{1,12}$/.test(process.env.V1_SLUG_SUFFIX ?? "") ? `-${process.env.V1_SLUG_SUFFIX}` : "";
+export const SLUG_A = `v1test-alpha${SUFFIX}`;
+export const SLUG_B = `v1test-bravo${SUFFIX}`;
 export const PASSWORD = "V1-Test-Pass-2026!";
 
 export interface Fixture {
