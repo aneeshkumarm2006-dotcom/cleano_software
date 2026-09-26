@@ -381,7 +381,10 @@ lacks("...and is not one", GRID, '"use server"');
 // No new query, no widened select: page.tsx is untouched by this stage.
 has("the board still scopes to claimable jobs", PAGE, "claimableJobsWhere(cleanerId, now)");
 has("...with the widened take the category filter needs", PAGE, "take: 300");
-has("...and the estimate still comes from the real split math", PAGE, "computeJobPayout(j.price, [rateFor(cleanerId)])");
+// The estimate moved into the service the board, the preview and the phone share.
+has("...and the estimate still comes from the real split math", PAGE, "estimateFor(j, cleanerId, myRate)");
+has("...which is computeJobPayout on this cleaner's own rate", "src/server/available/board.ts",
+  "computeJobPayout(job.price, [rate ?? fallbackRateInput(cleanerId)])");
 has("the preview modal is untouched", PREVIEW, '"Set by dispatch"');
 
 /* ═══════════════ 5. MOBILE: TAP TARGETS + CONTRAST (step 13.6) ════════════ */

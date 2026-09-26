@@ -294,10 +294,13 @@ console.log("\n── Item 3 · cleaners don't choose the payment type ──");
 const modal = read("src/app/cleaners/my-pay/WithdrawModal.tsx");
 ok("withdraw modal has no payment-method picker", !modal.includes("PAYMENT_METHODS"));
 ok("withdraw modal has no paymentMethod state", !modal.includes("setPaymentMethod"));
-ok("the cleaner still submits an amount", modal.includes("amount: netAmt"));
+// The modal sends what the person asked for and the rate it showed; the server
+// takes the fee and records the net (server/pay/withdraw.ts, shared with the
+// phone's POST /api/v1/pay/withdrawals).
+ok("the cleaner still submits an amount", modal.includes("amountCents: Math.round(num * 100)"));
 has(
   "the request stores no method — admin sets it",
-  "src/app/admin/actions/requestWithdrawal.ts",
+  "src/server/pay/withdraw.ts",
   "paymentMethod: null,"
 );
 has(

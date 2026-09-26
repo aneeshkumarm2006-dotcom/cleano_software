@@ -521,7 +521,9 @@ check(
 // Each check below is a line that was missing, and a regression is that line
 // being deleted again.
 
-const claim = read("src/app/cleaners/available-jobs/claimJob.ts");
+// The claim's rules and its notice live in server/available/claim.ts, shared
+// with the phone's POST /api/v1/jobs/available/:id/claim.
+const claim = read("src/server/available/claim.ts");
 check(
   "claiming a job from the board tells the office",
   /sendAdminUnassignedEvent\(\{\s*event: "grabbed"/.test(claim),

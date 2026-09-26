@@ -1,30 +1,10 @@
 import { requireCleaner } from "@/lib/page-guards";
 import { db } from "@/lib/org-db";
 import { claimableJobsWhere } from "@/lib/cleaner-jobs";
-import { isCategoryAllowed } from "@bookmops/core/services";
 import { getCleanerRateInputs } from "@/lib/cleaner-rates";
-import {
-  computeJobPayout,
-  fallbackRateInput,
-  type CleanerRateInput,
-} from "@bookmops/core/pay";
+import { deriveArea } from "@/server/jobs/area";
+import { allowedCategoriesOf, estimateFor, isOpenForCaller } from "@/server/available/board";
 import AvailableJobsClient from "./AvailableJobsClient";
-
-/**
- * Coarse area for the filter dropdown, derived from the job address
- * ("123 Rue Sainte-Catherine, Montreal, QC H2X 1Y4" → "Montreal"). Purely a
- * scanning aid — an unparseable address just has no area.
- */
-function deriveArea(location: string | null): string | null {
-  if (!location) return null;
-  const parts = location
-    .split(",")
-    .map((p) => p.trim())
-    .filter(Boolean);
-  if (parts.length < 2) return null;
-  const area = parts[1].replace(/\s+[A-Z]\d[A-Z]\s*\d[A-Z]\d$/i, "").trim();
-  return area || null;
-}
 
 export default async function AvailableJobsPage() {
   const session = await requireCleaner();
@@ -34,11 +14,7 @@ export default async function AvailableJobsPage() {
 
   // Which service categories this cleaner is approved for (awerfixes.pdf item
   // 3). An empty list means no restriction — see @/lib/service-permissions.
-  const me = await db.user.findUnique({
-    where: { id: cleanerId },
-    select: { allowedServiceCategories: true },
-  });
-  const allowedCategories = me?.allowedServiceCategories ?? [];
+  const allowedCategories = await allowedCategoriesOf(cleanerId);
 
   // Genuinely open, claimable jobs only (see @/lib/cleaner-jobs): not deleted,
   // still ahead of us, CREATED/SCHEDULED only (IN_PROGRESS / PAID jobs are not
@@ -78,43 +54,23 @@ export default async function AvailableJobsPage() {
   // Filter to jobs that still need cleaners AND that this cleaner is approved
   // to work. Category gating cannot live in the Prisma where-clause: jobType is
   // free text ("House", "Move In & Out", "R - Residential"), so it takes the
-  // alias map in normalizeJobType to decide.
-  const openJobs = jobs.filter(
-    (j) =>
-      j.cleaners.length < j.requiredCleaners &&
-      isCategoryAllowed(j.jobType, allowedCategories)
-  );
+  // alias map in normalizeJobType to decide. The same predicate the phone's
+  // board and the claim use (server/available/board.ts).
+  const openJobs = jobs.filter((j) => isOpenForCaller(j, allowedCategories));
 
   // Estimated payout for THIS cleaner if they claimed the job. Computed
   // server-side from the real tier/split math — the card used to print
   // `price / 2`, which both leaked half the client price and wasn't the
-  // cleaner's actual pay. `price` never leaves the server.
-  const participantIds = new Set<string>([cleanerId]);
-  for (const j of openJobs) {
-    if (j.employeeId) participantIds.add(j.employeeId);
-    for (const c of j.cleaners) participantIds.add(c.id);
-  }
-  const rateInputs = await getCleanerRateInputs([...participantIds]);
-  // The multiplier rides inside CleanerRateInput, so the estimate below picks up
-  // the cleaner's rating premium automatically (awerfixes.pdf item 1).
-  const rateFor = (id: string): CleanerRateInput =>
-    rateInputs.get(id) ?? fallbackRateInput(id);
+  // cleaner's actual pay. `price` never leaves the server. Each cleaner earns
+  // their own rate on the full price, so the estimate doesn't depend on who
+  // else is on the job; the rating multiplier rides inside the rate
+  // (awerfixes.pdf item 1). FLAT: dispatch sets the payout per assignment, so
+  // there's no honest estimate. Shared with the phone (estimateFor).
+  const rateInputs = await getCleanerRateInputs([cleanerId]);
+  const myRate = rateInputs.get(cleanerId);
 
   const serialized = openJobs.map((j) => {
-    let estPay: number | null = null;
-    let estHourly: number | null = null;
-
-    if (j.payType === "HOURLY") {
-      estHourly = j.hourlyRate ?? null;
-    } else if (j.payType === "PERCENTAGE" && j.price != null && j.price > 0) {
-      // Each cleaner earns their own rate on the full price, so the estimate no
-      // longer depends on who else is on the job — no roster simulation, and no
-      // way for a stale employeeId to skew the number (awer_fixes.pdf item 3).
-      const payout = computeJobPayout(j.price, [rateFor(cleanerId)]);
-      estPay = payout.shares.find((s) => s.id === cleanerId)?.amount ?? null;
-    }
-    // FLAT: the payout is set by dispatch per assignment — no honest estimate
-    // to show here, so the card says so rather than inventing a number.
+    const { estPay, estHourly } = estimateFor(j, cleanerId, myRate);
 
     return {
       id: j.id,

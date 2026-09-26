@@ -6,22 +6,17 @@ import { headers } from "next/headers";
 import type {
   AdminPayBreakdown,
   CleanerPayBreakdown,
-  JobPayType,
   PayBreakdown,
 } from "./getPayBreakdown.types";
 import { getCleanerRateInputs } from "@/lib/cleaner-rates";
+import { tierBaseRate, type CleanerTier } from "@bookmops/core/pay";
+import { computeJobMoney } from "@/lib/job-money";
 import {
-  STANDARD_RATINGS_REQUIRED,
-  tierBaseRate,
-  type CleanerTier,
-} from "@bookmops/core/pay";
-import {
-  EMPTY_PAY_SHARE,
-  computeJobPayShares,
-  liveAssignments,
-  type JobPayInput,
-} from "@/lib/cleaner-earnings";
-import { computeJobMoney, jobPayBasis } from "@/lib/job-money";
+  JOB_PAY_BREAKDOWN_INCLUDE,
+  jobPayContext,
+  participantIdsOf,
+  ratingBoostFor,
+} from "@/server/pay/job-pay";
 import { hourlyLineLabel } from "@/lib/hourly-billing";
 import { getTaxRates } from "@/lib/tax.server";
 
@@ -56,38 +51,12 @@ export async function getPayBreakdown(
   }
 
   try {
+    // The include lives beside the shared pay math (server/pay/job-pay.ts):
+    // the manual overrides, the assignment status and the clock rows it
+    // carries are exactly what the figure a cleaner sees depends on.
     const job = await db.job.findUnique({
       where: { id: jobId },
-      include: {
-        employee: true,
-        cleaners: true,
-        addOns: true,
-        // Manual per-cleaner pay overrides — without these the number a cleaner
-        // sees here would disagree with what payroll actually pays them.
-        // `status` so a CANCELLED row (a cleaner who left the job) is not
-        // read as a live assignment by the pay math (Sept 10, items 3 + 5).
-        assignments: {
-          select: {
-            cleanerId: true,
-            payAmount: true,
-            status: true,
-            // This cleaner's own $/hr on this job (Sept 17, item 22). Without
-            // it this modal quotes a cleaner the crew rate while payroll pays
-            // them theirs.
-            hourlyRate: true,
-          },
-        },
-        // THE CLOCK (round 4, fix 5). An HOURLY job is now settled from these
-        // rows — each cleaner's own sessions × the rate — so a payload built
-        // without them falls back to splitting the stored team total evenly and
-        // this modal quotes a cleaner a different figure from the one payroll
-        // pays. `include` loads scalars but never relations, which is exactly
-        // how they were missing: nothing here asked for them.
-        workSessions: {
-          select: { cleanerId: true, startedAt: true, endedAt: true },
-        },
-        breaks: { select: { cleanerId: true, startedAt: true, endedAt: true } },
-      },
+      include: JOB_PAY_BREAKDOWN_INCLUDE,
     });
 
     if (!job) {
@@ -103,14 +72,7 @@ export async function getPayBreakdown(
       return { success: false, error: "You do not have access to this job" };
     }
 
-    const payType = (job.payType as JobPayType) ?? "PERCENTAGE";
-    const participantIds = Array.from(
-      new Set(
-        [job.employeeId, ...job.cleaners.map((c) => c.id)].filter(
-          (id): id is string => !!id
-        )
-      )
-    );
+    const participantIds = participantIdsOf(job);
     const rateInputs = await getCleanerRateInputs(participantIds);
 
     // The "viewer" is the current cleaner when they're on the job, otherwise the
@@ -120,60 +82,16 @@ export async function getPayBreakdown(
         ? session.user.id
         : job.employeeId ?? participantIds[0] ?? "";
 
-    // ONE route. This file used to compute the payout TWICE — cleanerJobPay
-    // here AND computeJobPayout further down — and the two disagreed on every
-    // job with a manual override, every FLAT/HOURLY job, and every job still
-    // carrying an ADMIN on employeeId (computeJobPayout has no equivalent of
-    // the jobParticipantIds guard, so it paid the phantom and inflated
-    // poolTotal). Same math as payroll, so the number a cleaner sees here is
-    // the number they get paid.
-    const shares = computeJobPayShares(
-      job as unknown as JobPayInput,
-      rateInputs
-    );
-    const share = shares.get(viewerId) ?? EMPTY_PAY_SHARE;
-
-    // THE basis the percentage model is a fraction of (fix 5). Not `job.price`:
-    // that is the base service line, and every add-on and custom extra charge
-    // used to be invisible to this whole file.
-    const payBasis = jobPayBasis(job);
-
-    const viewerRate = rateInputs.get(viewerId);
-    // Live rows only, the same set `computeJobPayShares` honours an override
-    // for. A cancelled row's stored amount is history, not a promise.
-    const hasOverride = liveAssignments(job).some(
-      (a) => a.cleanerId === viewerId && a.payAmount != null
-    );
-    // D2 — the admin (or the BookingKoala CSV) stated the crew's total outright,
-    // so no rate and no multiplier is involved for anyone on this job.
-    const payIsManual = job.employeePayIsManual === true;
-    // The multiplier only shapes the PERCENTAGE-of-basis path. A manual team
-    // total, a manual per-cleaner override, a FLAT total or an HOURLY amount is
-    // the figure the admin typed and is paid through untouched.
-    const multiplierApplies =
-      payType === "PERCENTAGE" && !hasOverride && !payIsManual && payBasis > 0;
+    // ONE route: the share comes from computeJobPayShares, the same math as
+    // payroll, so the number a cleaner sees here is the number they get paid.
+    // The decision (basis, override, manual total, whether the rating
+    // multiplier applies) is shared with GET /api/v1/pay/jobs/:id.
+    const pay = jobPayContext(job, viewerId, rateInputs);
+    const { payType, shares, share, payBasis, viewerRate, hasOverride, payIsManual, multiplierApplies } = pay;
 
     // ── Cleaner (and any non-admin) payload: payout only. ────────────────────
     if (!isAdmin) {
-      const ratingBoost: CleanerPayBreakdown["ratingBoost"] = hasOverride ||
-        payIsManual
-        ? { state: "NOT_APPLICABLE", reason: "FIXED_AMOUNT" }
-        : !multiplierApplies
-          ? {
-              state: "NOT_APPLICABLE",
-              reason: payType === "HOURLY" ? "HOURLY" : "FLAT",
-            }
-          : (viewerRate?.ratingCount ?? 0) < STANDARD_RATINGS_REQUIRED
-            ? {
-                state: "LOCKED",
-                ratingsSoFar: viewerRate?.ratingCount ?? 0,
-                ratingsRequired: STANDARD_RATINGS_REQUIRED,
-              }
-            : {
-                state: "APPLIED",
-                multiplier: viewerRate?.multiplier ?? 1,
-                averageRating: viewerRate?.avgRating ?? null,
-              };
+      const ratingBoost: CleanerPayBreakdown["ratingBoost"] = ratingBoostFor(pay);
 
       const redacted: CleanerPayBreakdown = {
         audience: "CLEANER",

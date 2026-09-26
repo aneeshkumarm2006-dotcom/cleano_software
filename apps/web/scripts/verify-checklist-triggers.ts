@@ -262,7 +262,8 @@ ok("generated checklists record which template produced them (step 10.3)",
 
 // The pre-claim preview must answer with the SAME list the cleaner gets after
 // claiming — and must still write nothing (verify-awer-fixes-3 owns that half).
-const preview = read("src/app/cleaners/available-jobs/getAvailableJobPreview.ts");
+// The preview's rules live in server/available/board.ts, shared with the phone.
+const preview = read("src/server/available/board.ts");
 ok("the pre-claim preview runs the same resolver",
   preview.includes("resolveChecklistTemplates("));
 ok("...with the job's customer link", preview.includes("clientId: job.clientId"));

@@ -15,9 +15,13 @@ import { describeTarget } from "../../src/lib/safe-target";
 
 // Parallel runs against the same staging database must not delete each
 // other's companies mid-run: name them outright with V1_SLUG_A / V1_SLUG_B,
-// or add a suffix (V1_FIXTURE_SUFFIX, or V1_SLUG_SUFFIX) to the defaults.
-const RAW_SUFFIX = process.env.V1_FIXTURE_SUFFIX ?? process.env.V1_SLUG_SUFFIX ?? "";
-const SUFFIX = /^[a-z0-9]{1,12}$/.test(RAW_SUFFIX) ? `-${RAW_SUFFIX}` : "";
+// or add a suffix (V1_FIXTURE_SUFFIX, or V1_SLUG_SUFFIX) to the defaults. A
+// malformed suffix stops the run rather than falling back to the shared names.
+const SUFFIX = (() => {
+  const s = process.env.V1_FIXTURE_SUFFIX ?? process.env.V1_SLUG_SUFFIX ?? "";
+  if (s && !/^[a-z0-9]{1,12}$/.test(s)) throw new Error("V1_FIXTURE_SUFFIX must be 1-12 of a-z, 0-9");
+  return s ? `-${s}` : "";
+})();
 export const SLUG_A = process.env.V1_SLUG_A ?? `v1test-alpha${SUFFIX}`;
 export const SLUG_B = process.env.V1_SLUG_B ?? `v1test-bravo${SUFFIX}`;
 export const PASSWORD = "V1-Test-Pass-2026!";
