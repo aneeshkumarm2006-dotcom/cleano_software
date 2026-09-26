@@ -175,6 +175,8 @@ interface Plan {
   allowMissing?: boolean;
   /** Compound-key reads cannot be filtered up front; check the result instead. */
   postFilter?: boolean;
+  /** organizationId was added to the caller's `select` for the check; strip it after. */
+  stripOrganizationId?: boolean;
 }
 
 /**
@@ -265,7 +267,23 @@ function plan(operation: string, a: Record<string, unknown>, organizationId: str
     const compound = Object.values(where).some(
       (v) => v !== null && typeof v === "object" && !(v instanceof Date),
     );
-    if (compound) return { operation, args: a, postFilter: true };
+    if (compound) {
+      // The after-the-fact check needs the row's organizationId. A caller who
+      // narrowed `select` to other fields (`select: { clockInTime: true }`)
+      // would otherwise get a row the check can't place, and every such lookup
+      // would come back null — a clocked-in cleaner read as not clocked in. So
+      // ask for it, check it, and hand back exactly the fields they chose.
+      const select = a.select as Record<string, unknown> | undefined;
+      if (select && !select.organizationId) {
+        return {
+          operation,
+          args: { ...a, select: { ...select, organizationId: true } },
+          postFilter: true,
+          stripOrganizationId: true,
+        };
+      }
+      return { operation, args: a, postFilter: true };
+    }
     return {
       // Re-issued as findFirst so the filter can be applied up front. Checking
       // the returned row's organizationId instead would be wrong, and quietly
@@ -416,6 +434,7 @@ export function scopedTo(base: PrismaClient, organizationId: string) {
                 }
                 return null;
               }
+              if (p.stripOrganizationId) delete (row as Record<string, unknown>).organizationId;
             }
             return result;
           }, TX_OPTIONS);
