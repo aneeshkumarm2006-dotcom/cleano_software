@@ -29,6 +29,11 @@ import { smsOnTheWay } from "@/lib/sms";
 import { storeDateKey } from "@/lib/timezone";
 
 import type { Actor } from "../actor";
+
+// JobAssignment is read with findFirst on (jobId, cleanerId), never
+// findUnique on the compound key: outside a transaction the scoped client
+// checks a compound-key read's organizationId after the fact, and a select
+// without that column comes back as not found.
 import { effect, type Effect } from "../effects";
 import { failure, notFound, ok, type Result } from "../result";
 
@@ -65,8 +70,8 @@ async function phoneJob(actor: Actor, jobId: string): Promise<OmwJob | null> {
 async function hasStarted(jobId: string, cleanerId: string): Promise<boolean> {
   const [session, assignment] = await Promise.all([
     db.jobWorkSession.findFirst({ where: { jobId, cleanerId }, select: { id: true } }),
-    db.jobAssignment.findUnique({
-      where: { jobId_cleanerId: { jobId, cleanerId } },
+    db.jobAssignment.findFirst({
+      where: { jobId, cleanerId },
       select: { clockInTime: true },
     }),
   ]);
@@ -80,8 +85,8 @@ async function gpsEnabled(): Promise<boolean> {
 export async function onMyWayState(actor: Actor, jobId: string): Promise<Result<OnMyWayState>> {
   const job = await phoneJob(actor, jobId);
   if (!job) return notFound("This job isn't available.");
-  const assignment = await db.jobAssignment.findUnique({
-    where: { jobId_cleanerId: { jobId: job.id, cleanerId: actor.userId } },
+  const assignment = await db.jobAssignment.findFirst({
+    where: { jobId: job.id, cleanerId: actor.userId },
     select: { onMyWayAt: true },
   });
   return ok({
@@ -120,8 +125,8 @@ export async function markOnMyWayFor(actor: Actor, input: MarkOnMyWayInput): Pro
 
   if (input.door === "phone") {
     // Once per cleaner: a second tap answers with the first, and tells no one.
-    const mine = await db.jobAssignment.findUnique({
-      where: { jobId_cleanerId: { jobId: job.id, cleanerId: actor.userId } },
+    const mine = await db.jobAssignment.findFirst({
+      where: { jobId: job.id, cleanerId: actor.userId },
       select: { onMyWayAt: true },
     });
     if (mine?.onMyWayAt) {
@@ -161,8 +166,8 @@ export async function markOnMyWayFor(actor: Actor, input: MarkOnMyWayInput): Pro
         data: { status: "ON_THE_WAY", onMyWayAt: now },
       });
       if (claimed.count === 0) {
-        const row = await tx.jobAssignment.findUnique({
-          where: { jobId_cleanerId: { jobId: job.id, cleanerId: actor.userId } },
+        const row = await tx.jobAssignment.findFirst({
+          where: { jobId: job.id, cleanerId: actor.userId },
           select: { onMyWayAt: true },
         });
         if (row?.onMyWayAt) return { kind: "mine" as const, sentAt: row.onMyWayAt };

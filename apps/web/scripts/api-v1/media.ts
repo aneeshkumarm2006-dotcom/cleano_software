@@ -117,7 +117,10 @@ export async function mediaChecks(h: MediaHarness): Promise<void> {
       body,
       headers: key ?? (body.clientEventId as string | undefined) ? { "Idempotency-Key": key ?? (body.clientEventId as string) } : {},
     });
-  const del = (path: string, who: string) => call("DELETE", host, path, { cookie: who, body: {} });
+  // As the app's fetch sends it: "{}" with its length. (node:http would send
+  // a DELETE body chunked, which the server's body read doesn't accept.)
+  const del = (path: string, who: string) =>
+    call("DELETE", host, path, { cookie: who, body: "{}", headers: { "Content-Length": "2" } });
 
   // Jobs of our own, so no other section's clock state matters.
   let n = 9500;
@@ -617,7 +620,7 @@ export async function mediaChecks(h: MediaHarness): Promise<void> {
     check("announcements: unreadCount counts what I never opened", p1.body?.unreadCount === total - 2, p1.body?.unreadCount);
     check(
       "announcements: no register — no audience, no read counts",
-      !/audience|readCount|staleReadCount/.test(p1.text + (p2?.text ?? "")),
+      !/"(audience|readCount|staleReadCount|reads)"/.test(p1.text + (p2?.text ?? "")),
     );
     const n20: any = all.find((a: any) => a.id === plain[20]);
     check("announcements: reactions by name, with mine", JSON.stringify(n20?.reactions) === JSON.stringify([{ kind: "THUMBS_UP", count: 1 }]) && n20.myReaction === null, n20);
