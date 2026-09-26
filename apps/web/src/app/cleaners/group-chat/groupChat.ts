@@ -5,6 +5,17 @@ import { headers } from "next/headers";
 import { db } from "@/lib/org-db";
 import { writeAppSetting } from "@/lib/app-setting-write";
 import { logActivity } from "@/lib/activity-log";
+import { actorFromSession, type Actor } from "@/server/actor";
+import {
+  accessibleChannel,
+  listTeamChannels,
+  markTeamChannelRead,
+  openDirectChannel,
+  readTeamChatSettings,
+  sendTeamMessage,
+  teamDirectory,
+  TEAM_MESSAGE_SELECT,
+} from "@/server/messages/team-chat";
 
 // ---- Types ----------------------------------------------------------------
 
@@ -22,8 +33,13 @@ export interface GroupMessageDTO {
   channelId: string;
   senderId: string;
   senderName: string;
+  /** Empty when deleted: a deleted message's text is never sent. */
   body: string;
   createdAt: string;
+  /** When its sender last edited it (from the app); null or absent if never. */
+  editedAt?: string | null;
+  /** Deleted by its sender or removed by the office: shown as a placeholder. */
+  deleted?: boolean;
 }
 
 export interface ChannelMemberDTO {
@@ -87,56 +103,17 @@ function isAdminRole(role: AppRole): boolean {
 }
 
 /**
- * Server-side channel access check. The default channel is open to all staff;
- * admins see everything (moderation); everyone else must have a member row.
+ * The session user as a service Actor. Channel access, sending, direct
+ * messages and the directory are server/messages/team-chat.ts, shared with
+ * the phone's API, so the two can't drift.
  */
-async function canAccessChannel(
-  channel: { id: string; isDefault: boolean },
-  userId: string,
-  role: AppRole
-): Promise<boolean> {
-  if (!canParticipate(role)) return false;
-  if (channel.isDefault) return true;
-  if (isAdminRole(role)) return true;
-  const member = await db.groupChannelMember.findUnique({
-    where: { channelId_userId: { channelId: channel.id, userId } },
-  });
-  return !!member;
+function actorOf(user: SessionUser, role: AppRole): Actor {
+  return actorFromSession({ id: user.id, name: user.name, email: "", role });
 }
 
 // ---- Team chat settings (AppSetting, key "team.chat") ------------------------
 
 const TEAM_CHAT_KEY = "team.chat";
-
-const DEFAULT_TEAM_CHAT: TeamChatSettingsDTO = {
-  dmEnabled: true,
-  showContactInfo: false,
-};
-
-async function readTeamChatSettings(): Promise<TeamChatSettingsDTO> {
-  try {
-    const row = await db.appSetting.findFirst({
-      where: { key: TEAM_CHAT_KEY },
-    });
-    const raw = (row?.value ?? null) as {
-      dmEnabled?: unknown;
-      showContactInfo?: unknown;
-    } | null;
-    return {
-      dmEnabled:
-        typeof raw?.dmEnabled === "boolean"
-          ? raw.dmEnabled
-          : DEFAULT_TEAM_CHAT.dmEnabled,
-      showContactInfo:
-        typeof raw?.showContactInfo === "boolean"
-          ? raw.showContactInfo
-          : DEFAULT_TEAM_CHAT.showContactInfo,
-    };
-  } catch {
-    // Fail safe: defaults keep chat usable and contact info hidden.
-    return { ...DEFAULT_TEAM_CHAT };
-  }
-}
 
 /** Current team-chat settings. Any staff member may read (gates cleaner UI). */
 export async function getTeamChatSettings(): Promise<Result<TeamChatSettingsDTO>> {
@@ -171,24 +148,9 @@ export async function updateTeamChatSettings(
 
 // ---- Default channel -------------------------------------------------------
 
-const DEFAULT_CHANNEL_NAME = "All Cleaners";
-
-/**
- * Lazily returns the single default group channel, creating it if none exists.
- * Idempotent — safe to call on every read.
- *
- * Not exported: every export of a "use server" file is a public endpoint, and
- * this one does no auth check of its own. Its callers here do.
- */
-async function ensureDefaultChannel() {
-  const existing = await db.groupChannel.findFirst({
-    where: { isDefault: true },
-  });
-  if (existing) return existing;
-  return db.groupChannel.create({
-    data: { name: DEFAULT_CHANNEL_NAME, isDefault: true, isActive: true },
-  });
-}
+// The default channel is created lazily by ensureDefaultChannel
+// (server/messages/team-chat.ts). Not re-exported: every export of a
+// "use server" file is a public endpoint, and it does no auth check of its own.
 
 // ---- Reads -----------------------------------------------------------------
 
@@ -202,94 +164,17 @@ export async function listGroupChannels(): Promise<Result<GroupChannelDTO[]>> {
   if ("error" in a) return { success: false, error: a.error };
   if (!canParticipate(a.role)) return { success: false, error: "Not authorized" };
 
-  await ensureDefaultChannel();
-
-  const admin = isAdminRole(a.role);
-  const channels = await db.groupChannel.findMany({
-    where: {
-      isActive: true,
-      ...(admin
-        ? {}
-        : {
-            OR: [
-              { isDefault: true },
-              { members: { some: { userId: a.user.id } } },
-            ],
-          }),
-    },
-    orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
-    include: { members: { select: { userId: true } } },
-  });
-
-  // Resolve names for DM participants so direct channels can be titled with
-  // the other member's name (or both names for a moderating admin).
-  const dmUserIds = new Set<string>();
-  for (const c of channels) {
-    if (c.isDirect) for (const m of c.members) dmUserIds.add(m.userId);
-  }
-  const nameById = new Map<string, string>();
-  if (dmUserIds.size > 0) {
-    const users = await db.user.findMany({
-      where: { id: { in: [...dmUserIds] } },
-      select: { id: true, name: true },
-    });
-    for (const u of users) nameById.set(u.id, u.name);
-  }
-
-  const sorted = [...channels].sort((x, y) => {
-    if (x.isDefault !== y.isDefault) return x.isDefault ? -1 : 1;
-    if (x.isDirect !== y.isDirect) return x.isDirect ? 1 : -1;
-    return x.createdAt.getTime() - y.createdAt.getTime();
-  });
-
-  // Per-channel unread badge: messages newer than the caller's read cursor
-  // (GroupChannelRead.lastReadAt) that the caller did not send themselves.
-  // No cursor yet → every message from others counts as unread.
-  const reads = await db.groupChannelRead.findMany({
-    where: { userId: a.user.id, channelId: { in: sorted.map((c) => c.id) } },
-    select: { channelId: true, lastReadAt: true },
-  });
-  const lastReadById = new Map(reads.map((r) => [r.channelId, r.lastReadAt]));
-  const unreadById = new Map<string, number>();
-  await Promise.all(
-    sorted.map(async (c) => {
-      const lastReadAt = lastReadById.get(c.id);
-      const count = await db.groupMessage.count({
-        where: {
-          channelId: c.id,
-          deletedAt: null,
-          senderId: { not: a.user.id },
-          ...(lastReadAt ? { createdAt: { gt: lastReadAt } } : {}),
-        },
-      });
-      unreadById.set(c.id, count);
-    })
-  );
-
+  const res = await listTeamChannels(actorOf(a.user, a.role));
+  if (!res.ok) return { success: false, error: res.message };
   return {
     success: true,
-    data: sorted.map((c) => {
-      let name = c.name;
-      if (c.isDirect) {
-        const others = c.members.filter((m) => m.userId !== a.user.id);
-        if (others.length !== c.members.length) {
-          // Caller is a member — title the DM with the other person's name.
-          name = others.map((m) => nameById.get(m.userId) ?? "Unknown").join(", ") || c.name;
-        } else {
-          // Moderating admin who is not a member — show both participants.
-          name = c.members
-            .map((m) => nameById.get(m.userId) ?? "Unknown")
-            .join(" ↔ ") || c.name;
-        }
-      }
-      return {
-        id: c.id,
-        name,
-        isDefault: c.isDefault,
-        isDirect: c.isDirect,
-        unreadCount: unreadById.get(c.id) ?? 0,
-      };
-    }),
+    data: res.value.items.map((c) => ({
+      id: c.id,
+      name: c.name,
+      isDefault: c.kind === "DEFAULT",
+      isDirect: c.kind === "DIRECT",
+      unreadCount: c.unreadCount,
+    })),
   };
 }
 
@@ -305,23 +190,16 @@ export async function markChannelRead(
   if ("error" in a) return { success: false, error: a.error };
   if (!canParticipate(a.role)) return { success: false, error: "Not authorized" };
 
-  const channel = await db.groupChannel.findUnique({ where: { id: channelId } });
-  if (!channel) return { success: false, error: "Channel not found" };
-  if (!(await canAccessChannel(channel, a.user.id, a.role))) {
-    return { success: false, error: "Not authorized" };
-  }
-
-  const now = new Date();
-  await db.groupChannelRead.upsert({
-    where: { channelId_userId: { channelId, userId: a.user.id } },
-    create: { channelId, userId: a.user.id, lastReadAt: now },
-    update: { lastReadAt: now },
-  });
-
-  return { success: true, data: { channelId } };
+  const res = await markTeamChannelRead(actorOf(a.user, a.role), channelId, new Date());
+  if (!res.ok) return { success: false, error: "Channel not found" };
+  return { success: true, data: res.value };
 }
 
-/** Non-deleted messages for a channel, oldest first. Members only. */
+/**
+ * A channel's messages, oldest first. Members only. A deleted message keeps
+ * its place with no text (`deleted`), as the phone shows it; its original body
+ * never leaves the server.
+ */
 export async function getGroupMessages(
   channelId: string
 ): Promise<Result<GroupMessageDTO[]>> {
@@ -329,15 +207,13 @@ export async function getGroupMessages(
   if ("error" in a) return { success: false, error: a.error };
   if (!canParticipate(a.role)) return { success: false, error: "Not authorized" };
 
-  const channel = await db.groupChannel.findUnique({ where: { id: channelId } });
+  const channel = await accessibleChannel(actorOf(a.user, a.role), channelId);
   if (!channel) return { success: false, error: "Channel not found" };
-  if (!(await canAccessChannel(channel, a.user.id, a.role))) {
-    return { success: false, error: "Not authorized" };
-  }
 
   const messages = await db.groupMessage.findMany({
-    where: { channelId, deletedAt: null },
-    orderBy: { createdAt: "asc" },
+    where: { channelId: channel.id },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    select: TEAM_MESSAGE_SELECT,
   });
 
   return {
@@ -347,8 +223,10 @@ export async function getGroupMessages(
       channelId: m.channelId,
       senderId: m.senderId,
       senderName: m.senderName,
-      body: m.body,
+      body: m.deletedAt ? "" : m.body,
       createdAt: m.createdAt.toISOString(),
+      editedAt: m.editedAt ? m.editedAt.toISOString() : null,
+      deleted: !!m.deletedAt,
     })),
   };
 }
@@ -416,36 +294,14 @@ export async function listCleanerDirectory(): Promise<
   if ("error" in a) return { success: false, error: a.error };
   if (!canParticipate(a.role)) return { success: false, error: "Not authorized" };
 
-  const settings = await readTeamChatSettings();
-  if (!settings.dmEnabled && !isAdminRole(a.role)) {
-    return {
-      success: true,
-      data: { dmEnabled: false, showContactInfo: settings.showContactInfo, cleaners: [] },
-    };
-  }
-
-  const cleaners = await db.user.findMany({
-    where: {
-      role: "EMPLOYEE",
-      isActive: true,
-      deletedAt: null,
-      id: { not: a.user.id },
-    },
-    select: { id: true, name: true, phone: true, email: true },
-    orderBy: { name: "asc" },
-  });
-
+  const res = await teamDirectory(actorOf(a.user, a.role));
+  if (!res.ok) return { success: false, error: res.message };
   return {
     success: true,
     data: {
-      dmEnabled: settings.dmEnabled,
-      showContactInfo: settings.showContactInfo,
-      cleaners: cleaners.map((c) => ({
-        id: c.id,
-        name: c.name,
-        phone: settings.showContactInfo ? c.phone ?? null : null,
-        email: settings.showContactInfo ? c.email : null,
-      })),
+      dmEnabled: res.value.dmEnabled,
+      showContactInfo: res.value.showContactInfo,
+      cleaners: res.value.items,
     },
   };
 }
@@ -460,39 +316,26 @@ export async function sendGroupMessage(
   const a = await requireUser();
   if ("error" in a) return { success: false, error: a.error };
   if (!canParticipate(a.role)) return { success: false, error: "Not authorized" };
-
-  const trimmed = body.trim();
-  if (!trimmed) return { success: false, error: "Message cannot be empty" };
-  if (trimmed.length > 4000) {
-    return { success: false, error: "Message is too long (max 4000 characters)" };
-  }
-
-  const channel = await db.groupChannel.findUnique({ where: { id: channelId } });
-  if (!channel || !channel.isActive) {
+  if (typeof channelId !== "string" || typeof body !== "string") {
     return { success: false, error: "Channel not found" };
   }
-  if (!(await canAccessChannel(channel, a.user.id, a.role))) {
-    return { success: false, error: "Not authorized" };
+
+  const res = await sendTeamMessage(actorOf(a.user, a.role), channelId, { body, now: new Date() });
+  if (!res.ok) {
+    return { success: false, error: res.status === 404 ? "Channel not found" : res.message };
   }
-
-  const message = await db.groupMessage.create({
-    data: {
-      channelId,
-      senderId: a.user.id,
-      senderName: a.user.name ?? "Unknown",
-      body: trimmed,
-    },
-  });
-
+  const m = res.value.row;
   return {
     success: true,
     data: {
-      id: message.id,
-      channelId: message.channelId,
-      senderId: message.senderId,
-      senderName: message.senderName,
-      body: message.body,
-      createdAt: message.createdAt.toISOString(),
+      id: m.id,
+      channelId: m.channelId,
+      senderId: m.senderId,
+      senderName: m.senderName,
+      body: m.body,
+      createdAt: m.createdAt.toISOString(),
+      editedAt: null,
+      deleted: false,
     },
   };
 }
@@ -622,7 +465,8 @@ export async function removeChannelMember(
 
 /**
  * Open (or create) the 1:1 direct conversation between the caller and another
- * staff member. Enforces the team-chat DM setting server-side.
+ * staff member. Enforces the team-chat DM setting server-side, and is
+ * race-safe: one direct conversation per pair.
  */
 export async function getOrCreateDirectChannel(
   otherUserId: string
@@ -631,62 +475,13 @@ export async function getOrCreateDirectChannel(
   if ("error" in a) return { success: false, error: a.error };
   if (!canParticipate(a.role)) return { success: false, error: "Not authorized" };
 
-  if (typeof otherUserId !== "string" || !otherUserId) {
-    return { success: false, error: "User is required" };
+  const res = await openDirectChannel(actorOf(a.user, a.role), otherUserId);
+  if (!res.ok) {
+    return { success: false, error: res.status === 404 ? "User not found" : res.message };
   }
-  if (otherUserId === a.user.id) {
-    return { success: false, error: "You cannot message yourself" };
-  }
-
-  const settings = await readTeamChatSettings();
-  if (!settings.dmEnabled && !isAdminRole(a.role)) {
-    return { success: false, error: "Direct messages are disabled" };
-  }
-
-  const other = await db.user.findFirst({
-    where: {
-      id: otherUserId,
-      role: { in: ["EMPLOYEE", "FIELD_LEAD", "OPS_MANAGER", "ADMIN", "OWNER"] },
-      isActive: true,
-      deletedAt: null,
-    },
-    select: { id: true, name: true },
-  });
-  if (!other) return { success: false, error: "User not found" };
-
-  // DMs always have exactly two member rows, so a direct channel containing
-  // both users IS the pair's conversation.
-  const existing = await db.groupChannel.findFirst({
-    where: {
-      isDirect: true,
-      isActive: true,
-      AND: [
-        { members: { some: { userId: a.user.id } } },
-        { members: { some: { userId: other.id } } },
-      ],
-    },
-  });
-  if (existing) {
-    return {
-      success: true,
-      data: { id: existing.id, name: other.name, isDefault: false, isDirect: true, unreadCount: 0 },
-    };
-  }
-
-  const channel = await db.groupChannel.create({
-    data: {
-      name: "Direct message",
-      isDefault: false,
-      isActive: true,
-      isDirect: true,
-      createdById: a.user.id,
-      members: { create: [{ userId: a.user.id }, { userId: other.id }] },
-    },
-  });
-
   return {
     success: true,
-    data: { id: channel.id, name: other.name, isDefault: false, isDirect: true, unreadCount: 0 },
+    data: { id: res.value.id, name: res.value.name, isDefault: false, isDirect: true, unreadCount: res.value.unreadCount },
   };
 }
 
@@ -709,13 +504,12 @@ export async function deleteGroupMessage(
   // entry below names the one whose removal actually landed.
   const removed = await db.groupMessage.updateMany({
     where: { id: messageId, deletedAt: null },
-    data: { deletedAt: new Date() },
+    data: { deletedAt: new Date(), deletedById: a.user.id },
   });
 
-  // WHO removed it. GroupMessage has no column for that (only deletedAt), and
-  // adding one is a migration, so it goes in the activity log. That is the
-  // record an admin already reads for "who did what". The body is not copied
-  // there: removing it from view is the point of deleting it.
+  // WHO removed it: on the row (deletedById), and in the activity log, which
+  // is the record an admin already reads for "who did what". The body is not
+  // copied there: removing it from view is the point of deleting it.
   if (removed.count > 0) {
     await logActivity({
       category: "ADMIN",

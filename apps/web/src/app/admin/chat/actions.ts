@@ -14,6 +14,13 @@ import type {
 import { notifyChatEmail } from "./notifyChatEmail";
 import { orgAssetFolder } from "@/lib/asset-folder";
 import { isOwnerAdminRole, isStaffRole } from "@/lib/role-routing";
+import { actorFromSession } from "@/server/actor";
+import { fireEffects } from "@/server/effects";
+import {
+  isOwnConversation,
+  markOfficeRead,
+  sendOfficeMessage,
+} from "@/server/messages/office-chat";
 
 type SessionUser = { id: string; name: string; role?: string };
 type AppRole = "OWNER" | "ADMIN" | "OPS_MANAGER" | "FIELD_LEAD" | "EMPLOYEE";
@@ -50,6 +57,11 @@ async function requireUser(): Promise<RequireUserResult> {
   // conversation with the office and upload files to it.
   if (!isStaffRole(user.role)) return { error: "Not authorized" };
   return { user, role: user.role as AppRole };
+}
+
+/** The session user as a service Actor. The role is what requireUser checked. */
+function actorOf(user: SessionUser) {
+  return actorFromSession({ id: user.id, name: user.name, email: "", role: user.role ?? null });
 }
 
 type RawMessage = {
@@ -328,19 +340,31 @@ export async function sendChatMessage(
     return { success: false, error: "Message is too long (max 4000 characters)" };
   }
 
+  // A correspondent posts in their OWN conversation, as EMPLOYEE, through the
+  // service the phone uses too (server/messages/office-chat.ts): same
+  // presence rule, same delivery state, same email to the office.
+  if (!isOfficeRole(a.role)) {
+    const own = await isOwnConversation(actorOf(a.user), conversationId);
+    if (own === "missing") return { success: false, error: "Conversation not found" };
+    if (own === "no") return { success: false, error: "Not authorized" };
+    const res = await sendOfficeMessage(actorOf(a.user), {
+      body,
+      attachment: attachment ?? null,
+      now: new Date(),
+    });
+    if (!res.ok) return { success: false, error: res.message };
+    fireEffects(res.effects);
+    return { success: true, data: toMessageDTO(res.value.row, false) };
+  }
+
   const conversation = await db.chatConversation.findUnique({
     where: { id: conversationId },
   });
   if (!conversation) return { success: false, error: "Conversation not found" };
 
-  const senderRole: "EMPLOYEE" | "ADMIN" = isOfficeRole(a.role) ? "ADMIN" : "EMPLOYEE";
-
-  // An employee can only post in their own conversation.
-  if (senderRole === "EMPLOYEE" && conversation.employeeId !== a.user.id) {
-    return { success: false, error: "Not authorized" };
-  }
+  const senderRole = "ADMIN" as const;
   // The office replies in conversations its inbox lists, and nowhere else.
-  if (senderRole === "ADMIN") {
+  {
     const correspondent = await db.user.findUnique({
       where: { id: conversation.employeeId },
       select: { role: true },
@@ -358,23 +382,11 @@ export async function sendChatMessage(
   // Is the recipient online right now? Used to immediately set deliveredAt
   // (gives ✓✓) and also to gate the email notification (only email when
   // they're not active).
-  let recipientOnline = false;
-  if (senderRole === "EMPLOYEE") {
-    const adminPresent = await db.user.findFirst({
-      where: {
-        role: { in: ["OWNER", "ADMIN", "OPS_MANAGER", "FIELD_LEAD"] },
-        lastSeenAt: { gte: new Date(Date.now() - PRESENCE_WINDOW_MS) },
-      },
-      select: { id: true },
-    });
-    recipientOnline = !!adminPresent;
-  } else {
-    const emp = await db.user.findUnique({
-      where: { id: conversation.employeeId },
-      select: { lastSeenAt: true },
-    });
-    recipientOnline = isOnline(emp?.lastSeenAt);
-  }
+  const emp = await db.user.findUnique({
+    where: { id: conversation.employeeId },
+    select: { lastSeenAt: true },
+  });
+  const recipientOnline = isOnline(emp?.lastSeenAt);
 
   const message = await db.chatMessage.create({
     data: {
@@ -385,8 +397,8 @@ export async function sendChatMessage(
       attachmentUrl: attachment?.url ?? null,
       attachmentType: attachment?.type ?? null,
       attachmentName: attachment?.name ?? null,
-      readByAdminAt: senderRole === "ADMIN" ? now : null,
-      readByEmployeeAt: senderRole === "EMPLOYEE" ? now : null,
+      readByAdminAt: now,
+      readByEmployeeAt: null,
       deliveredAt: recipientOnline ? now : null,
     },
     include: { sender: { select: { name: true } } },
@@ -396,9 +408,7 @@ export async function sendChatMessage(
     where: { id: conversationId },
     data: {
       lastMessageAt: now,
-      ...(senderRole === "EMPLOYEE"
-        ? { lastEmployeeMessageAt: now }
-        : { lastAdminMessageAt: now }),
+      lastAdminMessageAt: now,
     },
   });
 
@@ -411,7 +421,7 @@ export async function sendChatMessage(
     recipientOnline,
   }).catch((err) => console.error("notifyChatEmail failed", err));
 
-  return { success: true, data: toMessageDTO(message, senderRole === "ADMIN") };
+  return { success: true, data: toMessageDTO(message, true) };
 }
 
 // getUnreadChatCount used to live here. It is now
@@ -446,14 +456,7 @@ export async function markChatRead(
     if (conversation.employeeId !== a.user.id) {
       return { success: false, error: "Not authorized" };
     }
-    await db.chatMessage.updateMany({
-      where: {
-        conversationId,
-        senderRole: "ADMIN",
-        readByEmployeeAt: null,
-      },
-      data: { readByEmployeeAt: now },
-    });
+    await markOfficeRead(actorOf(a.user), now);
   }
 
   return { success: true };
@@ -538,10 +541,9 @@ export async function uploadChatAttachment(formData: FormData): Promise<
       type: isImage ? "image" : "file",
       name: file.name,
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
+    // The detail stays in the server log; the person gets a plain sentence.
     console.error("Error uploading chat attachment:", error);
-    const detail =
-      error?.message ?? error?.error?.message ?? String(error ?? "unknown");
-    return { success: false, error: `Upload failed: ${detail}` };
+    return { success: false, error: "Upload failed. Try again." };
   }
 }
