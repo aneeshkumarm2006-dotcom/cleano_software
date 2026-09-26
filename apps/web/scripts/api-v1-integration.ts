@@ -22,6 +22,7 @@ import { randomUUID } from "node:crypto";
 import { createFixture, openDb, PASSWORD, removeFixture, SLUG_A, SLUG_B, type Fixture } from "./api-v1/fixture";
 import { runTalkChecks } from "./api-v1/talk";
 import { recordChecks } from "./api-v1/record";
+import { mediaChecks } from "./api-v1/media";
 
 const PORT = Number(process.env.V1_PORT ?? 3100);
 const APEX = `localhost:${PORT}`;
@@ -651,6 +652,7 @@ async function main() {
 
     // ── Areas, one file each ──────────────────────────────────────────────
     await runTalkChecks({ db, F, HOST_A, HOST_B, call, check, signIn: (h, e) => signIn(h, e) });
+    await mediaChecks({ db, F, host: HOST_A, slugA: SLUG_A, call, check, signIn: (h, e) => signIn(h, e) });
 
     // ── Password change ends the other sessions ───────────────────────────
     {

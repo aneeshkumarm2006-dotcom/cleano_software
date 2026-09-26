@@ -119,6 +119,7 @@ model User {
   // Mobile API v1 (docs/architecture/API_V1.md §6, §7).
   idempotencyRecords           IdempotencyRecord[]
   pushDevices                  PushDevice[]
+  mediaUploads                 MediaUpload[]
 
   @@unique([organizationId, email])
   // Present in the database since an earlier migration but never declared here,
@@ -907,6 +908,7 @@ model Job {
   invoiceLineItems                 InvoiceLineItem[]     @relation("InvoiceLineJobs")
   photos                           JobPhoto[]
   issues                           JobIssue[]
+  mediaUploads                     MediaUpload[]
   maskedContacts                   MaskedContact[]
   reviewPhotos                     ReviewPhoto[]
   chatMessages                     JobChatMessage[]
@@ -4464,5 +4466,38 @@ model MaskedContact {
   @@unique([proxyNumberId, clientPhone])
   @@index([jobId, cleanerId])
   @@index([organizationId, expiresAt])
+  @@index([organizationId])
+}
+
+/// A direct upload the server signed for the phone (API_V1.md §7,
+/// packages/api/src/v1/photos.ts). The server chooses the Cloudinary
+/// public_id and records it here when it signs, so attaching can prove the
+/// key was issued to THIS person for THIS job, and can accept it only once
+/// (`usedAt`, set in the same transaction as the photo row).
+model MediaUpload {
+  organizationId String    @default("")
+  id             String    @id @default(cuid())
+  userId         String
+  jobId          String
+  /// JOB_PHOTO today.
+  purpose        String
+  /// The Cloudinary public_id the server chose: <org folder>/jobs/<job>/<user>/<random>.
+  publicId       String
+  /// What the phone declared when it asked; the stored asset is checked again on attach.
+  contentType    String
+  byteSize       Int
+  /// When the signature stops working at Cloudinary.
+  expiresAt      DateTime
+  /// Set once, when the asset becomes a JobPhoto. A second attach is refused.
+  usedAt         DateTime?
+  /// The JobPhoto it became. No foreign key: deleting the photo keeps the record that the key was used.
+  photoId        String?
+  createdAt      DateTime  @default(now())
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job            Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, publicId])
+  @@index([organizationId, userId, createdAt])
+  @@index([jobId])
   @@index([organizationId])
 }
