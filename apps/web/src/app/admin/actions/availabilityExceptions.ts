@@ -3,9 +3,10 @@
 import { db } from "@/lib/org-db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
-import { revalidatePath } from "next/cache";
 import { DATE_KEY_RE, dateKeyToStoredDate } from "@/lib/availability";
 import type { AvailabilityExceptionDTO } from "./getAvailability.types";
+import { blockDates } from "@/server/availability/availability";
+import { revalidateAfterAvailability } from "@/server/availability/revalidate";
 
 // One-off blocked dates (cleaner-app item 8). EmployeeAvailability is unique per
 // (employee, weekday), so it can never express "this specific Monday is off" —
@@ -39,13 +40,7 @@ async function authorizeFor(
   return { ok: true, employeeId: targetId };
 }
 
-function revalidate(employeeId: string) {
-  revalidatePath("/admin/settings");
-  revalidatePath("/cleaners/availability");
-  revalidatePath(`/admin/employees/${employeeId}`);
-  revalidatePath("/admin/calendar");
-  revalidatePath("/admin/jobs/new");
-}
+const revalidate = revalidateAfterAvailability;
 
 /**
  * Block a single date for an employee. Idempotent: re-blocking the same date
@@ -94,13 +89,9 @@ export async function addAvailabilityException(input: {
     });
     if (!employee) return { success: false, error: "Employee not found" };
 
-    const row = await db.availabilityException.upsert({
-      where: {
-        employeeId_date: { employeeId: gate.employeeId, date: stored },
-      },
-      update: { reason },
-      create: { employeeId: gate.employeeId, date: stored, reason },
-    });
+    // The write is server/availability/availability.ts (blockDates), shared
+    // with the phone's POST /api/v1/availability/days-off.
+    const [row] = await blockDates(gate.employeeId, [input.date], reason);
 
     revalidate(gate.employeeId);
 
@@ -108,7 +99,7 @@ export async function addAvailabilityException(input: {
       success: true,
       exception: {
         id: row.id,
-        employeeId: row.employeeId,
+        employeeId: gate.employeeId,
         date: input.date,
         reason: row.reason,
       },
