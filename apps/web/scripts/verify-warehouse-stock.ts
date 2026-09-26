@@ -181,8 +181,10 @@ const ROUTED: Array<[string, string]> = [
   ["src/app/admin/actions/setLocationStock.ts", "setLocationQuantity(tx, {"],
   ["src/app/admin/actions/resolveInventoryRequest.ts", "adjustWarehouseStock(tx, {"],
   ["src/app/admin/actions/assignKit.ts", "adjustWarehouseStock(tx, {"],
-  ["src/app/admin/actions/reportDamagedItem.ts", "adjustWarehouseStock(tx, {"],
-  ["src/app/admin/actions/checkoutInventory.ts", "adjustWarehouseStock(tx, {"],
+  // reportDamagedItem and checkoutInventory: their rules moved into the kit
+  // service (issue.ts, kit.ts pickUp), shared with the phone's API.
+  ["src/server/kit/issue.ts", "adjustWarehouseStock(tx, {"],
+  ["src/server/kit/kit.ts", "adjustWarehouseStock(tx, {"],
   ["src/app/admin/actions/bulkAssignCleanerInventory.ts", "adjustWarehouseStock(tx, {"],
   ["src/app/admin/actions/createProduct.ts", "adjustWarehouseStock(tx, {"],
   ["src/app/admin/actions/updateProduct.ts", "adjustWarehouseStock(tx, {"],
@@ -209,7 +211,7 @@ for (const [path] of ROUTED) {
 // routing it through the helper was double-counting; assert the hand-written
 // product decrement is gone.
 {
-  const co = codeOf("src/app/admin/actions/checkoutInventory.ts");
+  const co = codeOf("src/server/kit/kit.ts");
   ok(
     "checkoutInventory no longer decrements the product itself",
     !/product\.update\([\s\S]{0,200}stockLevel/.test(co)
@@ -325,6 +327,8 @@ for (const f of [
     "src/app/admin/actions/importCsv.ts",
     "src/app/admin/actions/requestRefill.ts",
     "src/app/admin/actions/resolveInventoryFlag.ts",
+    // The cleaner asking (requestRestock), shared with the phone's API.
+    "src/server/kit/kit.ts",
   ]);
 }
 has("...and clock-out raises a flag instead", "src/server/clock/clock-out.ts",

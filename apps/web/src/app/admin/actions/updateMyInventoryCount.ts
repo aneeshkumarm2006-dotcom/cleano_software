@@ -1,10 +1,11 @@
 "use server";
 
-import { db } from "@/lib/org-db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
-import { revalidatePath } from "next/cache";
 import { isCleanerRole } from "@/lib/role-routing";
+import { actorFromSession } from "@/server/actor";
+import { MAX_KIT_QUANTITY, setKitCount } from "@/server/kit/kit";
+import { revalidateAfterKitChange } from "@/server/kit/revalidate";
 
 /**
  * Cleaner self-service stock correction.
@@ -17,17 +18,13 @@ import { isCleanerRole } from "@/lib/role-routing";
  *
  * Every correction writes an `InventoryChange` audit row so the movement shows
  * up in the product's Stock History on the admin side — a cleaner cannot move
- * their own numbers silently.
+ * their own numbers silently. The rules live in server/kit/kit.ts
+ * (setKitCount), shared with the phone's PUT /api/v1/kit/items/:id/count.
  *
  * AUTHZ: the caller may only ever edit a row keyed to their OWN session user
  * id. The employeeId is taken from the session, never from client input, so
  * there is no IDOR surface here (no cleaner can pass someone else's id).
  */
-
-/** Guardrail: a self-reported kit count above this is a typo, not a recount. */
-const MAX_KIT_QUANTITY = 1000;
-const MAX_REASON_LEN = 300;
-
 export async function updateMyInventoryCount(input: {
   productId: string;
   quantity: number;
@@ -36,11 +33,11 @@ export async function updateMyInventoryCount(input: {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) return { success: false, error: "Not authenticated" };
 
-  const actor = session.user as { id: string; name?: string; role?: string };
+  const user = session.user as { id: string; name?: string | null; email: string; role?: string | null };
 
   // Fail closed: this is a cleaner-only self-service path. Admins have their
   // own audited flows (assignToCleanerKit / removeFromCleanerKit).
-  if (!isCleanerRole(actor.role)) {
+  if (!isCleanerRole(user.role)) {
     return { success: false, error: "Not authorized" };
   }
 
@@ -61,55 +58,13 @@ export async function updateMyInventoryCount(input: {
     return { success: false, error: "Enter a whole number" };
   }
 
-  const reason = input.reason?.trim().slice(0, MAX_REASON_LEN) || "";
-  if (!reason) {
-    return { success: false, error: "Add a short reason for the correction" };
-  }
-
-  // Scoped to the session user: a cleaner can only ever load THEIR OWN row.
-  const kit = await db.employeeProduct.findUnique({
-    where: {
-      employeeId_productId: {
-        employeeId: actor.id,
-        productId: input.productId,
-      },
-    },
-    include: { product: { select: { unit: true } } },
+  const res = await setKitCount(actorFromSession(user), {
+    productId: input.productId,
+    quantity: qty,
+    reason: typeof input.reason === "string" ? input.reason : "",
   });
-  if (!kit) {
-    return { success: false, error: "This item is not in your kit" };
-  }
+  if (!res.ok) return { success: false, error: res.message };
 
-  const delta = qty - kit.quantity;
-  if (delta === 0) {
-    // Idempotent: saving the same number twice is a no-op, not a second
-    // audit row.
-    return { success: true, quantity: qty };
-  }
-
-  await db.$transaction(async (tx) => {
-    await tx.employeeProduct.update({
-      where: { id: kit.id },
-      data: { quantity: qty },
-    });
-
-    await tx.inventoryChange.create({
-      data: {
-        productId: kit.productId,
-        employeeId: actor.id,
-        employeeName: actor.name ?? null,
-        quantityChange: delta,
-        newQuantity: qty,
-        unit: kit.product.unit,
-        action: "RECOUNT",
-        reason: `Cleaner recount: ${reason}`,
-        changedById: actor.id,
-        changedByName: actor.name ?? null,
-      },
-    });
-  });
-
-  revalidatePath("/cleaners/my-inventory");
-  revalidatePath("/admin/inventory");
+  if (res.value.changed) revalidateAfterKitChange();
   return { success: true, quantity: qty };
 }

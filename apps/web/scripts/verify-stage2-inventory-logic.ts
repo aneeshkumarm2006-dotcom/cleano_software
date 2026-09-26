@@ -270,25 +270,32 @@ for (const [label, path] of [
   has(`...${label} does not invent its own tone`, path, "attention.tone");
 }
 
-// 2.6 — an issue report against a tool is also a condition report.
-const DAMAGE = "src/app/admin/actions/reportDamagedItem.ts";
+// 2.6 — an issue report against a tool is also a condition report. The rules
+// live in server/kit/issue.ts now, shared by reportDamagedItem (an adapter)
+// and the phone's API.
+const DAMAGE = "src/server/kit/issue.ts";
 has("issue reports set the equipment condition", DAMAGE, "ISSUE_CONDITION[issue]");
 // `tx.`, not `db.`, since Stage 4 moved this into the interactive transaction
 // so the flag lookup and the warehouse write-off share it.
 has("...open an admin review flag", DAMAGE, "tx.inventoryFlag.create({");
-has("...de-duped against what is already open", DAMAGE, 'status: "OPEN",');
+has("...de-duped against what is already open", DAMAGE, 'status: "OPEN"');
 has("...and record the status transition", DAMAGE, "previousStatus:");
 has("the existing write-off rule is untouched", DAMAGE,
   "const writeOff = writesOffCompanyStock(issue);");
+has("reportDamagedItem hands the report to that service",
+  "src/app/admin/actions/reportDamagedItem.ts", "reportKitIssue(");
 
-// 2.3 — the cleaner's condition action.
-const COND = "src/app/admin/actions/updateMyItemCondition.ts";
-has("the condition action writes the kit row", COND, "tx.employeeProduct.update({");
-has("...with previous → new status history", COND, "previousStatus: previous,");
-has("...opens a flag for anything but Available", COND, "tx.inventoryFlag.create({");
-has("...and resolves stale flags when it is fine again", COND,
-  "tx.inventoryFlag.updateMany({");
-lacks("...and never moves a quantity", COND, "quantity:");
+// 2.3 — the cleaner's condition action: server/kit/kit.ts setKitCondition,
+// shared by updateMyItemCondition (an adapter) and the phone's API.
+const KIT = read("src/server/kit/kit.ts");
+const COND = KIT.slice(KIT.indexOf("export async function setKitCondition"), KIT.indexOf("// ── Restock requests"));
+ok("the condition action writes the kit row", COND.includes("tx.employeeProduct.update({"));
+ok("...with previous → new status history", COND.includes("previousStatus: previous,"));
+ok("...opens a flag for anything but Available", COND.includes("tx.inventoryFlag.create({"));
+ok("...and resolves stale flags when it is fine again", COND.includes("tx.inventoryFlag.updateMany({"));
+ok("...and never moves a quantity", COND.length > 0 && !/quantity: (?!kit\.quantity)/.test(COND));
+has("updateMyItemCondition hands the report to that service",
+  "src/app/admin/actions/updateMyItemCondition.ts", "setKitCondition(");
 
 console.log(`\n${pass}/${pass + fail} passed`);
 process.exit(fail === 0 ? 0 : 1);

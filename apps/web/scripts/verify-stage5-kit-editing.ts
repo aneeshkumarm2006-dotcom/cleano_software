@@ -156,14 +156,21 @@ has("...and the picker `where` clause", LOOKUP, "export const ASSIGNABLE_PRODUCT
 }
 has("...the message says where to restore it from", LOOKUP, "Inventory → Archived");
 
-// All five sibling actions now share it, instead of each guessing.
+// All five sibling actions now share it, instead of each guessing. The
+// cleaner's request and "already have it" moved into server/kit/kit.ts
+// (requestRestock, addKitItem), shared with the phone's API; their web actions
+// are adapters over it.
+const KIT_SERVICE = "src/server/kit/kit.ts";
 const ASSIGNERS = [
   SET_QTY,
   KIT_ACTIONS,
-  "src/app/admin/actions/createInventoryRequest.ts",
+  KIT_SERVICE,
   "src/app/admin/actions/requestRefill.ts",
-  "src/app/cleaners/my-inventory/addMyInventoryItem.ts",
 ];
+has("createInventoryRequest.ts requests a product through the service",
+  "src/app/admin/actions/createInventoryRequest.ts", "requestRestock(");
+has("addMyInventoryItem.ts adds through the service",
+  "src/app/cleaners/my-inventory/addMyInventoryItem.ts", "addKitItem(");
 for (const f of ASSIGNERS) {
   has(`${f.split("/").pop()} uses the shared lookup`, f, "findAssignableProduct");
 }
@@ -203,9 +210,11 @@ const PICKERS: Array<[string, string]> = [
   ["src/app/admin/inventory/page.tsx", "ASSIGNABLE_PRODUCT_WHERE"],
   ["src/app/admin/actions/checkEquipmentForJob.ts", "ASSIGNABLE_PRODUCT_WHERE"],
   ["src/app/cleaners/my-inventory/page.tsx", "deletedAt: null"],
-  ["src/app/admin/actions/getLocationProducts.ts", "deletedAt: null"],
+  // getLocationProducts and checkoutInventory: server/kit/kit.ts
+  // (locationProducts, pickUp), shared with the phone's API.
+  [KIT_SERVICE, "deletedAt: null"],
+  [KIT_SERVICE, "ASSIGNABLE_PRODUCT_WHERE"],
   ["src/app/admin/actions/bulkAssignCleanerInventory.ts", "deletedAt: null"],
-  ["src/app/admin/actions/checkoutInventory.ts", "deletedAt: null"],
 ];
 for (const [path, needle] of PICKERS) {
   has(`${path.split("/").pop()} offers active products only`, path, needle);

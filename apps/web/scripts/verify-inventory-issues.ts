@@ -11,6 +11,8 @@ import {
   writesOffCompanyStock,
 } from "@bookmops/core/inventory";
 
+import { custodyLeft, splitWriteOff } from "../src/server/kit/custody";
+
 let pass = 0, fail = 0;
 function check(name: string, actual: unknown, expected: unknown) {
   const okv = JSON.stringify(actual) === JSON.stringify(expected);
@@ -65,25 +67,53 @@ ok("type guard rejects junk",
 // ── Source sweep ───────────────────────────────────────────────────────────
 const read = (p: string) => fs.readFileSync(p, "utf8");
 
+// The rules moved into server/kit/issue.ts, shared by the web action (now an
+// adapter) and the phone's POST /api/v1/kit/items/:id/issues.
 const action = read("src/app/admin/actions/reportDamagedItem.ts");
+const service = read("src/server/kit/issue.ts");
 ok("action accepts the typed issue", action.includes("normalizeIssueType"));
-ok("cleaner kit is always updated", action.includes("employeeProduct.update"));
+ok("...and hands it to the shared service", action.includes("reportKitIssue("));
+ok("cleaner kit is always updated, by a conditional decrement",
+  service.includes("employeeProduct.updateMany") && service.includes("quantity: { gte: qty }") &&
+    service.includes("quantity: { decrement: qty }"));
 ok("company write-off is conditional, not unconditional",
-  action.includes("if (writeOff)"));
-ok("a kit audit row is always written", action.includes("inventoryChange.create"));
+  service.includes("if (writeOff)") && service.includes("if (split.fromStock > 0)"));
+ok("a kit audit row is always written", service.includes("inventoryChange.create"));
 // Stage 4 turned this from the array form of $transaction into the interactive
 // form — `adjustWarehouseStock` reads the location rows before it writes, which
 // no prepared promise can do. Still one transaction; the open-flag lookup moved
 // inside it as a bonus.
 ok("everything runs in one transaction",
-  action.includes("db.$transaction(async (tx) => {"));
+  service.includes("db.$transaction(async (tx) => {"));
 ok("the company write-off goes through the one warehouse writer",
-  action.includes("adjustWarehouseStock(tx, {"));
+  service.includes("adjustWarehouseStock(tx, {"));
 ok("cleaner can only report against their OWN kit",
-  action.includes("employeeId: actor.id"));
-ok("over-reporting is rejected", action.includes("You only have"));
+  service.includes("employeeId: actor.userId") && !service.includes("employeeId: input."));
+ok("over-reporting is rejected", service.includes("You only have") && service.includes('"NOT_ENOUGH_IN_KIT"'));
 ok("alert severity differentiates restock from loss",
-  action.includes('needsRestock(issue) ? "INFO" : "WARNING"'));
+  service.includes('needsRestock(issue) && split.excess === 0 ? "INFO" : "WARNING"'));
+ok("the write-off is capped at custody, read inside the transaction",
+  service.includes("splitWriteOff(qty, await custodyOf(tx,"));
+ok("...recording what came off pickup stock", service.includes("issuedWriteOff: writeOff ? split.fromIssued : null"));
+
+// ── The custody cap (pure) ─────────────────────────────────────────────────
+{
+  const none = { issuedInPlace: 0, issuedOffStock: 0, stockWrittenOff: 0, issuedWrittenOff: 0 };
+  const eq = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+  ok("nothing issued: a write-off is all excess, nothing leaves stock",
+    eq(splitWriteOff(3, custodyLeft(none)), { fromStock: 0, fromIssued: 0, excess: 3 }));
+  ok("assigned stock is written off the warehouse",
+    eq(splitWriteOff(2, custodyLeft({ ...none, issuedInPlace: 5 })), { fromStock: 2, fromIssued: 0, excess: 0 }));
+  ok("picked-up stock is never taken off a location twice",
+    eq(splitWriteOff(4, custodyLeft({ ...none, issuedOffStock: 5 })), { fromStock: 0, fromIssued: 4, excess: 0 }));
+  ok("assigned first, then picked up, then excess",
+    eq(splitWriteOff(10, custodyLeft({ ...none, issuedInPlace: 3, issuedOffStock: 4 })), { fromStock: 3, fromIssued: 4, excess: 3 }));
+  ok("past write-offs use custody up",
+    eq(custodyLeft({ issuedInPlace: 3, issuedOffStock: 4, stockWrittenOff: 3, issuedWrittenOff: 1 }), { inPlace: 0, offStock: 3 }));
+  ok("a legacy over-deduction comes out of what is left",
+    eq(custodyLeft({ issuedInPlace: 1, issuedOffStock: 4, stockWrittenOff: 3, issuedWrittenOff: 0 }), { inPlace: 0, offStock: 2 }));
+  ok("never negative", eq(custodyLeft({ ...none, stockWrittenOff: 9 }), { inPlace: 0, offStock: 0 }));
+}
 
 const ui = read("src/app/cleaners/my-inventory/MyInventoryClient.tsx");
 ok("UI offers all four types from the shared list",

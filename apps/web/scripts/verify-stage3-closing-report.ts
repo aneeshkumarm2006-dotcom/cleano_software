@@ -572,15 +572,16 @@ const WRITERS: Array<[string, string]> = [
   ["src/app/admin/actions/assignKit.ts", 'action: "ASSIGN"'],
   ["src/app/admin/actions/assignToCleanerKit.ts", 'action: "ASSIGN"'],
   ["src/app/admin/actions/bulkAssignCleanerInventory.ts", 'action: mode === "FROM_LOCKER"'],
-  ["src/app/admin/actions/checkoutInventory.ts", 'action: "PICKUP"'],
   ["src/app/admin/actions/resolveInventoryRequest.ts", 'action: "REQUEST_FULFILLED"'],
-  ["src/app/admin/actions/reportDamagedItem.ts", 'action: "ISSUE"'],
   ["src/app/admin/actions/setCleanerProductQuantity.ts", 'action: "ADMIN_SET"'],
-  ["src/app/admin/actions/updateMyInventoryCount.ts", 'action: "RECOUNT"'],
-  ["src/app/admin/actions/updateMyItemCondition.ts", 'action: "STATUS_REPORT"'],
   ["src/app/admin/actions/updateProduct.ts", 'action: "ADMIN_SET"'],
-  ["src/app/cleaners/my-inventory/addMyInventoryItem.ts", 'action: "RECOUNT"'],
   ["src/server/clock/clock-out.ts", 'action: "JOB_REPORT"'],
+  // The cleaner's own kit writers (pickups, issues, recounts, conditions,
+  // "already have it"): server/kit, shared by the web actions and the phone.
+  ["src/server/kit/kit.ts", 'action: "PICKUP"'],
+  ["src/server/kit/kit.ts", 'action: "RECOUNT"'],
+  ["src/server/kit/kit.ts", 'action: "STATUS_REPORT"'],
+  ["src/server/kit/issue.ts", 'action: "ISSUE"'],
   // Stage 4: the single writer for the warehouse side of every movement. Its
   // verb is passed in by the caller rather than hard-coded, which is the point
   // — one place writes the row, each caller says what it was doing.
