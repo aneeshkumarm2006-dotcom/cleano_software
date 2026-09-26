@@ -144,9 +144,11 @@ export async function recordChecks(t: RecordHarness): Promise<void> {
   const now = Date.now();
   const strike = (data: Record<string, unknown>) =>
     db.cleanerStrike.create({ data: { organizationId: A, cleanerId: cleaner, reasonCode: "LATE_45", reason: "45+ minutes late without approved notice — 50 min late to job #9000", expiresAt: new Date(now + 20 * day), ...data } as never });
-  await strike({ jobId: F.jobs.mine, adminNote: "SECRET-ADMIN-NOTE", appliedById: F.users.owner.id, isAuto: false });
-  await strike({ reasonCode: "NO_SHOW", reason: "No-show", expiresAt: new Date(now - day), createdAt: new Date(now - 31 * day) });
-  await strike({ reasonCode: "MANUAL", reason: "Manual strike", status: "EXCUSED", excusedById: F.users.owner.id, excusedAt: new Date(), createdAt: new Date(now - 5 * day) });
+  // The clock checks earlier in the run may have given this cleaner real
+  // lateness strikes; the checks below allow for those.
+  const sActive = await strike({ jobId: F.jobs.mine, adminNote: "SECRET-ADMIN-NOTE", appliedById: F.users.owner.id, isAuto: false });
+  const sRolled = await strike({ reasonCode: "NO_SHOW", reason: "No-show", expiresAt: new Date(now - day), createdAt: new Date(now - 31 * day) });
+  const sExcused = await strike({ reasonCode: "MANUAL", reason: "Manual strike", status: "EXCUSED", excusedById: F.users.owner.id, excusedAt: new Date(), createdAt: new Date(now - 5 * day) });
   await db.cleanerStrike.create({
     data: { organizationId: A, cleanerId: teammate, reasonCode: "NO_SHOW", reason: "No-show", expiresAt: new Date(now + 20 * day) },
   });
@@ -408,18 +410,23 @@ export async function recordChecks(t: RecordHarness): Promise<void> {
   // ── Strikes ───────────────────────────────────────────────────────────────
   {
     const r = await call("GET", hostA, "/api/v1/strikes", { cookie });
+    const active = await db.cleanerStrike.count({ where: { cleanerId: cleaner, status: "ACTIVE", expiresAt: { gt: new Date() } } });
+    const all = await db.cleanerStrike.count({ where: { cleanerId: cleaner } });
+    const level = active >= 3 ? "REVIEW" : active >= 1 ? "WARNING" : "OK";
     check(
       "strikes: standing, with the web's rules",
-      r.status === 200 && r.body?.activeCount === 1 && r.body?.threshold === 3 && r.body?.windowDays === 30 && r.body?.level === "WARNING",
-      r.body,
+      r.status === 200 && active >= 1 && r.body?.activeCount === active && r.body?.threshold === 3 && r.body?.windowDays === 30 && r.body?.level === level,
+      { body: r.body?.activeCount, active, level: r.body?.level },
     );
-    const items = r.body?.items ?? [];
-    check("strikes: only the caller's, newest first", items.length === 3 && items[0]?.status === "ACTIVE" && items[1]?.status === "EXCUSED", items.map((i: { status: string }) => i.status));
-    check("strikes: an active strike past its date is EXPIRED", items[2]?.status === "EXPIRED" && items[2]?.title === "No-show", items[2]);
-    const withJob = items.find((i: { job: unknown }) => i.job);
+    const items: { id: string; status: string; title: string; givenAt: string; job: { id: string; number: number } | null }[] = r.body?.items ?? [];
+    const byId = new Map(items.map((i) => [i.id, i]));
+    const sorted = items.every((i, k) => k === 0 || items[k - 1]!.givenAt >= i.givenAt);
+    check("strikes: only the caller's, newest first", items.length === all && sorted && byId.get(sActive.id)?.status === "ACTIVE" && byId.get(sExcused.id)?.status === "EXCUSED", items.map((i) => i.status));
+    check("strikes: an active strike past its date is EXPIRED", byId.get(sRolled.id)?.status === "EXPIRED" && byId.get(sRolled.id)?.title === "No-show", byId.get(sRolled.id));
+    const withJob = byId.get(sActive.id);
     check(
       "strikes: the job is its id and number only",
-      withJob?.job?.id === F.jobs.mine && typeof withJob.job.number === "number" && Object.keys(withJob.job).sort().join() === "id,number",
+      withJob?.job?.id === F.jobs.mine && typeof withJob.job.number === "number" && Object.keys(withJob.job).sort().join() === "id,number" && items.every((i) => !i.job || Object.keys(i.job).sort().join() === "id,number"),
       withJob,
     );
     check(
