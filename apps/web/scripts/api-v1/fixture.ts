@@ -13,10 +13,12 @@ import { hashPassword } from "better-auth/crypto";
 
 import { describeTarget } from "../../src/lib/safe-target";
 
-// Overridable, so two worktrees running the suite at once against the same
-// staging database don't delete each other's companies mid-run.
-export const SLUG_A = process.env.V1_SLUG_A ?? "v1test-alpha";
-export const SLUG_B = process.env.V1_SLUG_B ?? "v1test-bravo";
+// Parallel runs against the same staging database must not delete each
+// other's companies mid-run: name them outright with V1_SLUG_A / V1_SLUG_B,
+// or add a V1_FIXTURE_SUFFIX (lowercase letters) to the defaults.
+const SUFFIX = /^[a-z]{1,12}$/.test(process.env.V1_FIXTURE_SUFFIX ?? "") ? `-${process.env.V1_FIXTURE_SUFFIX}` : "";
+export const SLUG_A = process.env.V1_SLUG_A ?? `v1test-alpha${SUFFIX}`;
+export const SLUG_B = process.env.V1_SLUG_B ?? `v1test-bravo${SUFFIX}`;
 export const PASSWORD = "V1-Test-Pass-2026!";
 
 export interface Fixture {

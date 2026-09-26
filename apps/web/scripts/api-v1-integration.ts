@@ -21,6 +21,7 @@ import { randomUUID } from "node:crypto";
 
 import { createFixture, openDb, PASSWORD, removeFixture, SLUG_A, SLUG_B, type Fixture } from "./api-v1/fixture";
 import { runTalkChecks } from "./api-v1/talk";
+import { recordChecks } from "./api-v1/record";
 
 const PORT = Number(process.env.V1_PORT ?? 3100);
 const APEX = `localhost:${PORT}`;
@@ -669,6 +670,9 @@ async function main() {
       check("me/password: this device stays signed in", mine.status === 200, mine.body);
       check("me/password: every other session ends", theirs.status === 401, theirs.body);
     }
+
+    // ── Record: training, documents, strikes (./api-v1/record.ts) ─────────
+    await recordChecks({ db, fx: F, hostA: HOST_A, hostB: HOST_B, cookie, call, check, signIn });
   } finally {
     if (fx && !KEEP) {
       await removeFixture(db).catch((e) => console.error("cleanup failed:", e));

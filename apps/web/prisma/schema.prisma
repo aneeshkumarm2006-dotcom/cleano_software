@@ -2445,6 +2445,13 @@ model Document {
   fileUrl        String?
   version        String              @default("1.0")
   dueDate        DateTime?
+  /// SHA-256 (hex) of what this version shows: the file's bytes, else the
+  /// text, else the acknowledgement built from title/version/description.
+  /// Signers echo it (server/documents/documents.ts).
+  contentSha256      String?
+  /// What contentSha256 was worked out from ("file:<url>", "file-ref:<url>",
+  /// "content", "summary"), so a replaced file is re-hashed.
+  contentSha256Basis String?
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
   signatures     DocumentSignature[]
@@ -2484,6 +2491,12 @@ model DocumentSignature {
   signatureUrl   String?
   signedAt       DateTime?
   ipAddress      String?
+  /// The evidence kept with a signature: the version and content hash that
+  /// were on screen, the consent sentence as shown, and the User-Agent.
+  signedVersion       String?
+  signedContentSha256 String?
+  consentText         String?
+  userAgent           String?
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
   document       Document       @relation(fields: [documentId], references: [id], onDelete: Cascade)
@@ -2581,6 +2594,12 @@ model TrainingProgress {
   quizScore      Float?
   quizAttempts   Int            @default(0)
   completedAt    DateTime?
+  /// The video / "I've read it" progress is the person's own word: the app
+  /// can't see what another player played. Reports should say so.
+  selfAttested      Boolean   @default(false)
+  /// Failed quiz attempts in a row; three start a 24-hour wait.
+  quizFailStreak    Int       @default(0)
+  quizCooldownUntil DateTime?
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
   module         TrainingModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)

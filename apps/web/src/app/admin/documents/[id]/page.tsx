@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect, notFound } from "next/navigation";
 import { db } from "@/lib/org-db";
+import { documentFingerprint } from "@/server/documents/documents";
 import DocumentSigningView from "./DocumentSigningView";
 
 export default async function DocumentSigningPage({
@@ -45,6 +46,10 @@ export default async function DocumentSigningPage({
     })
     .catch((e) => console.error("document access log", e));
 
+  // The hash of what this version shows, echoed when signing so a signature
+  // is tied to the text that was on screen (server/documents/documents.ts).
+  const { contentSha256 } = await documentFingerprint(signature.document);
+
   return (
     <div className="h-full overflow-hidden overflow-y-auto p-8">
       <DocumentSigningView
@@ -56,6 +61,7 @@ export default async function DocumentSigningPage({
           fileUrl: signature.document.fileUrl,
           version: signature.document.version,
           dueDate: signature.document.dueDate?.toISOString() ?? null,
+          contentSha256,
         }}
         signature={{
           status: signature.status,

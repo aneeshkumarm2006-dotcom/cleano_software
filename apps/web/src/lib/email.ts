@@ -2064,7 +2064,7 @@ export async function sendAdminDocSigned(opts: {
   if (admins.length === 0) return;
   const html = layout(
     h1("Document signed") +
-      p(`<strong>${opts.signerName}</strong> signed <strong>${opts.documentTitle}</strong>.`)
+      p(`<strong>${esc(opts.signerName)}</strong> signed <strong>${esc(opts.documentTitle)}</strong>.`)
   );
   for (const admin of admins) {
     await deliver({

@@ -1,100 +1,47 @@
 "use server";
 
-import { db } from "@/lib/org-db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
-import { revalidatePath } from "next/cache";
+
+import { actorFromSession } from "@/server/actor";
+import { revalidateAfterTraining } from "@/server/training/revalidate";
+import { submitQuizFor } from "@/server/training/training";
 
 interface SubmitQuizInput {
   moduleId: string;
   answers: { quizId: string; selectedIndex: number }[];
 }
 
-interface QuizOption {
-  text: string;
-  isCorrect: boolean;
-}
-
-const PASS_THRESHOLD = 0.8;
-
+/**
+ * Submit a quiz. Marking lives in server/training/training.ts, shared with the
+ * phone's POST /api/v1/training/:moduleId/quiz. Stricter than this action used
+ * to be: every question must be answered exactly once (the quiz page always
+ * does), an inactive module is refused, and three failed attempts in a row
+ * are followed by a 24-hour wait.
+ */
 export async function submitQuiz(input: SubmitQuizInput) {
   try {
     const session = await auth.api.getSession({ headers: await headers() });
     if (!session) return { success: false as const, error: "Not authenticated" };
-    const employeeId = session.user.id;
 
-    if (!input.moduleId) {
+    if (!input.moduleId || typeof input.moduleId !== "string") {
       return { success: false as const, error: "Module id is required" };
     }
+    const answers = Array.isArray(input.answers) ? input.answers.slice(0, 200) : [];
 
-    const quizzes = await db.trainingQuiz.findMany({
-      where: { moduleId: input.moduleId },
-    });
-    if (quizzes.length === 0) {
-      return { success: false as const, error: "Module has no quiz" };
-    }
-
-    let correct = 0;
-    for (const quiz of quizzes) {
-      const answer = input.answers.find((a) => a.quizId === quiz.id);
-      if (!answer) continue;
-      const options = (quiz.options as unknown as QuizOption[]) || [];
-      const opt = options[answer.selectedIndex];
-      if (opt?.isCorrect) correct++;
-    }
-    const score = correct / quizzes.length;
-    const passed = score >= PASS_THRESHOLD;
-
-    const existing = await db.trainingProgress.findUnique({
-      where: {
-        moduleId_employeeId: {
-          moduleId: input.moduleId,
-          employeeId,
-        },
-      },
-    });
-
-    const videoProgress = existing?.videoProgress ?? 0;
-    const passedVideo = videoProgress >= 0.9;
-
-    const status: "COMPLETED" | "FAILED" | "IN_PROGRESS" = passed
-      ? passedVideo
-        ? "COMPLETED"
-        : "IN_PROGRESS"
-      : "FAILED";
-
-    await db.trainingProgress.upsert({
-      where: {
-        moduleId_employeeId: {
-          moduleId: input.moduleId,
-          employeeId,
-        },
-      },
-      update: {
-        quizScore: score,
-        quizAttempts: { increment: 1 },
-        status,
-        completedAt: status === "COMPLETED" ? new Date() : null,
-      },
-      create: {
+    const result = await submitQuizFor(
+      actorFromSession(session.user as { id: string; name?: string | null; email: string; role?: string | null }),
+      {
         moduleId: input.moduleId,
-        employeeId,
-        quizScore: score,
-        quizAttempts: 1,
-        status,
-        completedAt: status === "COMPLETED" ? new Date() : null,
+        answers: answers.map((a) => ({ questionId: String(a?.quizId ?? ""), selectedIndex: Number(a?.selectedIndex) })),
+        now: new Date(),
       },
-    });
+    );
+    if (!result.ok) return { success: false as const, error: result.message };
 
-    revalidatePath("/admin/training");
-    revalidatePath(`/admin/training/${input.moduleId}`);
-    return {
-      success: true as const,
-      score,
-      passed,
-      correct,
-      total: quizzes.length,
-    };
+    revalidateAfterTraining(input.moduleId);
+    const { score, passed, correct, total } = result.value;
+    return { success: true as const, score, passed, correct, total };
   } catch (error) {
     console.error("Error submitting quiz:", error);
     return { success: false as const, error: "Failed to submit quiz" };

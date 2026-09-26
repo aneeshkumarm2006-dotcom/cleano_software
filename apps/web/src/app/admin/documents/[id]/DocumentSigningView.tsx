@@ -25,6 +25,8 @@ interface DocumentData {
   fileUrl: string | null;
   version: string;
   dueDate: string | null;
+  /** What this version shows, hashed; echoed when signing. */
+  contentSha256: string;
 }
 
 interface SignatureData {
@@ -52,6 +54,34 @@ const STATUS: Record<
   EXPIRED: { label: "Expired", dot: "#64748b", bg: "var(--slate-100)", fg: "var(--slate-700)" },
   REVOKED: { label: "Revoked", dot: "var(--error)", bg: "var(--error-bg)", fg: "var(--error-text)" },
 };
+
+// The pad's strokes, in the shape the server draws from (DrawnSignature in
+// @bookmops/api): the pad's size in CSS pixels and each stroke's points,
+// scaled into the allowed pad and kept inside it. The picture itself is never
+// sent; the server makes the stored image from these numbers.
+const PAD_MAX_W = 2000;
+const PAD_MAX_H = 1000;
+const MAX_POINTS = 10_000;
+
+function strokesFromPad(pad: SignatureCanvas) {
+  const canvas = pad.getCanvas();
+  const cssW = canvas.offsetWidth || 1;
+  const cssH = canvas.offsetHeight || 1;
+  const scale = Math.min(1, PAD_MAX_W / cssW, PAD_MAX_H / cssH);
+  const width = Math.max(100, Math.round(cssW * scale));
+  const height = Math.max(50, Math.round(cssH * scale));
+  const groups = (pad.toData() as unknown as { x: number; y: number }[][]).filter((g) => g.length > 0).slice(0, 64);
+  const total = groups.reduce((n, g) => n + g.length, 0);
+  const every = Math.max(1, Math.ceil(total / MAX_POINTS));
+  const clamp = (v: number, max: number) => Math.round(Math.min(max, Math.max(0, v)) * 100) / 100;
+  const strokes = groups.map((g) =>
+    g
+      .filter((_, i) => i % every === 0 || i === g.length - 1)
+      .slice(0, 2000)
+      .map((p) => [clamp(p.x * scale, width), clamp(p.y * scale, height)] as [number, number]),
+  );
+  return { width, height, strokes };
+}
 
 function formatDate(value: string | null) {
   if (!value) return "—";
@@ -107,10 +137,12 @@ export default function DocumentSigningView({
     setSaving(true);
     setError(null);
 
-    const dataUrl = sigRef.current.toDataURL("image/png");
     const res = await signDocument({
       documentId: document.id,
-      signatureDataUrl: dataUrl,
+      version: document.version,
+      contentSha256: document.contentSha256,
+      agreed,
+      signature: strokesFromPad(sigRef.current),
     });
 
     if (res.success) {

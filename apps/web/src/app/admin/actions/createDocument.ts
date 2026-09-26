@@ -9,6 +9,7 @@ import {
   resolveDocumentAssignees,
   type DocumentAssignInput,
 } from "@/lib/document-assignees";
+import { fingerprintNewDocument } from "@/server/documents/documents";
 
 interface CreateDocumentInput {
   title: string;
@@ -54,6 +55,10 @@ export async function createDocument(input: CreateDocumentInput) {
         dueDate: due,
       },
     });
+
+    // What this version shows, hashed at publish; signers echo it. Best
+    // effort: reading the document works it out again if this fails.
+    await fingerprintNewDocument(document.id).catch((e) => console.error("document hash", e));
 
     if (input.assignTo) {
       const targetUserIds = await resolveDocumentAssignees(input.assignTo);
