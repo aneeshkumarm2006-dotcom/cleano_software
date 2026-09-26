@@ -13,8 +13,18 @@ import { hashPassword } from "better-auth/crypto";
 
 import { describeTarget } from "../../src/lib/safe-target";
 
-export const SLUG_A = "v1test-alpha";
-export const SLUG_B = "v1test-bravo";
+/**
+ * V1_FIXTURE_SUFFIX (a-z, 0-9, up to 12) gives a run its own two companies, so
+ * runs against the same staging database at the same time can't delete each
+ * other's rows. Unset, the names are the ones they always were.
+ */
+const SUFFIX = (() => {
+  const s = process.env.V1_FIXTURE_SUFFIX ?? "";
+  if (s && !/^[a-z0-9]{1,12}$/.test(s)) throw new Error("V1_FIXTURE_SUFFIX must be 1-12 of a-z, 0-9");
+  return s ? `-${s}` : "";
+})();
+export const SLUG_A = `v1test-alpha${SUFFIX}`;
+export const SLUG_B = `v1test-bravo${SUFFIX}`;
 export const PASSWORD = "V1-Test-Pass-2026!";
 
 export interface Fixture {
