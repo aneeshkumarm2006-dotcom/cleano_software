@@ -544,14 +544,22 @@ section(1, "pay multiplier drives cleaner pay", () => {
     "(job.price || 0) - (job.employeePay || 0)");
   has("a divergent stored value is surfaced, not hidden",
     "src/app/admin/jobs/[id]/JobDetailView.tsx", "storedPayDiffers");
+  // The estimate moved into the service the board, the preview and the phone
+  // share (API_V1.md §5).
   has("the available-jobs estimate uses the shared fallback",
-    "src/app/cleaners/available-jobs/page.tsx", "fallbackRateInput(id)");
+    "src/server/available/board.ts", "fallbackRateInput(cleanerId)");
   has("the admin breakdown reports the RESOLVED cleaner multiplier",
     "src/app/admin/actions/getPayBreakdown.ts", "payMultiplier: resolvedMultiplier");
   has("...and says when it does not apply",
     "src/app/admin/actions/getPayBreakdown.ts", "payMultiplierApplies");
+  // The cleaner's share is decided in server/pay/job-pay.ts, which the modal
+  // and GET /api/v1/pay/jobs/:id both call.
   has("getPayBreakdown computes the payout by ONE route",
-    "src/app/admin/actions/getPayBreakdown.ts", "computeJobPayShares(");
+    "src/app/admin/actions/getPayBreakdown.ts", "jobPayContext(");
+  has("...which is computeJobPayShares",
+    "src/server/pay/job-pay.ts", "computeJobPayShares(");
+  lacks("...with no second route there either",
+    "src/server/pay/job-pay.ts", "computeJobPayout(");
   lacks("...the second, diverging route is gone",
     "src/app/admin/actions/getPayBreakdown.ts", "computeJobPayout(");
   has("the cleaner payload carries a rating-boost state",
@@ -1882,6 +1890,9 @@ section(13, "Preview an available job before claiming (PDF #8)", () => {
   const TYPES = "src/app/cleaners/available-jobs/getAvailableJobPreview.types.ts";
   const CARD = "src/app/cleaners/available-jobs/AvailableJobsClient.tsx";
   const MODAL = "src/app/cleaners/available-jobs/JobPreviewModal.tsx";
+  // The preview's rules moved into the service the web action and the phone's
+  // GET /api/v1/jobs/available/:id share; the action maps its result.
+  const BOARD = "src/server/available/board.ts";
 
   // 13.b — THE promise of this item: previewing changes nothing. Asserted
   // mechanically rather than trusted, because "read-only" is one careless
@@ -1895,25 +1906,37 @@ section(13, "Preview an available job before claiming (PDF #8)", () => {
     []
   );
   lacksInCode("...and never opens a transaction", ACTION, "$transaction");
+  check(
+    "...nor does the shared preview service",
+    [...fs.readFileSync(BOARD, "utf8").matchAll(/(db|tx)\.\w+\.(create|createMany|update|updateMany|upsert|delete|deleteMany)\b/g)].map(
+      (m) => m[0]
+    ),
+    []
+  );
+  lacksInCode("...which opens no transaction", BOARD, "$transaction");
   // In particular it matches checklist TEMPLATES without creating a checklist.
   // Stage 10 (PDF #10) swapped the flat `templateMatchesJob` filter for the
   // precedence resolver — same read-only property, and now the same answer the
   // cleaner gets after claiming, instead of the service default on a job whose
   // customer has a bespoke list.
-  has("checklist matching is template-only", ACTION, "resolveChecklistTemplates(");
+  has("checklist matching is template-only", BOARD, "resolveChecklistTemplates(");
   lacksInCode("...no JobChecklist row is minted", ACTION, "jobChecklist");
+  lacksInCode("...anywhere in the preview service", BOARD, "jobChecklist");
 
   // 13.a — authorisation reuses the claimable rule rather than restating it,
   // so a job a cleaner can't claim is a job they can't preview, permanently.
-  has("visibility reuses claimableJobsWhere", ACTION, "claimableJobsWhere(cleanerId, new Date())");
-  has("...and the capacity filter the list applies in JS", ACTION,
+  has("visibility reuses claimableJobsWhere", BOARD, "claimableJobsWhere(actor.userId, now)");
+  has("...judged at the moment of the request", ACTION, "loadAvailablePreview(actor, jobId, new Date())");
+  has("...and the capacity filter the list applies in JS", BOARD,
     "job.cleaners.length >= job.requiredCleaners");
 
   // Redactions. These are the reason the detail route hard-redirects
   // non-assigned cleaners in the first place.
   lacksInCode("the payload has no client price", TYPES, "price:");
   lacksInCode("...no door/gate codes", ACTION, "accessNotes");
+  lacksInCode("...nor in the service", BOARD, "accessNotes");
   lacksInCode("...and no customer contact details", ACTION, "client: {");
+  lacksInCode("...nor in the service", BOARD, "client: {");
   has("the address is still shown, formatted", ACTION, "formatAddressLine({");
   has("notes are sanitised of billing text", ACTION, "sanitizeCleanerNotes(job.notes)");
   has("add-on quantities go through the clamp", ACTION, "addOnQuantity(a)");
@@ -2005,10 +2028,16 @@ section(14, 'Kill the 10-minute "pending assignment" experience (PDF #4)', () =>
     "the cron sweep marks it EXPIRED and removes them from the job");
 
   // 14.c — the claim path was already clean. These lock it that way.
-  const CLAIM = "src/app/cleaners/available-jobs/claimJob.ts";
+  // The claim's rules and write moved into server/available/claim.ts, shared
+  // with POST /api/v1/jobs/available/:id/claim. The over-capacity rollback
+  // became a row lock: the capacity is checked under it, in the same
+  // transaction as the write, so there is nothing to roll back.
+  const CLAIM = "src/server/available/claim.ts";
+  has("the web action calls the shared claim", "src/app/cleaners/available-jobs/claimJob.ts", "claimJobService(actor,");
   has("claiming is an atomic compare-and-set", CLAIM, "data: { cleaners: { connect: { id: userId } } },");
-  has("over-capacity rolls the claim straight back", CLAIM,
-    "data: { cleaners: { disconnect: { id: userId } } },");
+  has("...inside one transaction", CLAIM, "db.$transaction(async (tx) =>");
+  has("...holding the job's row lock", CLAIM, "FOR UPDATE");
+  has("over-capacity is refused under that lock", CLAIM, "job.cleaners.length >= job.requiredCleaners");
   lacksInCode("a claim leaves no invite residue", CLAIM, "jobAssignmentInvite");
 
   // 14.d — admin assign/reassign is unrestricted by any hold.
@@ -2420,12 +2449,16 @@ section(16, "Service category permissions per employee (PDF #3)", () => {
 
   // 16.c — all three cleaner surfaces enforce, and all three ask the SAME
   // function. A surface that restated the rule would drift from the other two.
-  const BOARD = "src/app/cleaners/available-jobs/page.tsx";
+  // All three surfaces now ask ONE module (server/available/board.ts for the
+  // board and the preview, server/available/claim.ts for the claim), shared
+  // with the phone's endpoints.
+  const BOARD = "src/server/available/board.ts";
   const PREVIEW = "src/app/cleaners/available-jobs/getAvailableJobPreview.ts";
-  const CLAIM = "src/app/cleaners/available-jobs/claimJob.ts";
+  const CLAIM = "src/server/available/claim.ts";
+  has("the web board uses the shared predicate", "src/app/cleaners/available-jobs/page.tsx", "isOpenForCaller(j, allowedCategories)");
+  has("the preview maps the shared refusal", PREVIEW, '"CATEGORY_NOT_ALLOWED"');
   for (const [label, path] of [
     ["the board filters on it", BOARD],
-    ["the preview refuses on it", PREVIEW],
     ["the claim refuses on it", CLAIM],
   ] as const) {
     has(label, path, "isCategoryAllowed(");
@@ -2439,7 +2472,9 @@ section(16, "Service category permissions per employee (PDF #3)", () => {
   lacksInCode("the preview still writes nothing", PREVIEW, "db.user.update");
   // Two JS-side filters now run after the fetch; a 100-row page would truncate
   // a restricted cleaner's board to whatever survived.
-  has("the board fetch was widened to match", BOARD, "take: 300");
+  has("the board fetch was widened to match", "src/app/cleaners/available-jobs/page.tsx", "take: 300");
+  // The phone's board pages AFTER the JS filters, scanning on until a page is full.
+  has("...and the phone's board filters before it paginates", BOARD, "picked.length > AVAILABLE_PAGE_SIZE");
 
   // 16.d — advisory on every admin path, and never a block.
   has("the shared conflict finder exists", "src/lib/job-assignments.ts",

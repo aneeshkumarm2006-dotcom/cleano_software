@@ -756,7 +756,8 @@ section(2, "every assignment write records all three halves", () => {
   // cleaner's own list reads the first two, the admin employee profile reads
   // the lead, and JobAssignment carries per-cleaner status and pay — so a path
   // that writes only some of them is how the four surfaces drift apart.
-  const CLAIM = "src/app/cleaners/available-jobs/claimJob.ts";
+  // The claim moved into server/available/claim.ts (shared with the phone).
+  const CLAIM = "src/server/available/claim.ts";
   has("claimJob connects the cleaner (M2M)", CLAIM, "data: { cleaners: { connect: { id: userId } } }");
   has("claimJob takes the lead slot if it is empty", CLAIM, "where: { id: jobId, employeeId: null },");
   has("claimJob writes the per-cleaner assignment row", CLAIM, "jobId_cleanerId: { jobId, cleanerId: userId }");
@@ -1186,7 +1187,8 @@ section(6, "the available-jobs board — an EXPLAINED hold is not claimable", ()
   // The action takes a jobId from the client, so the board's filter is
   // decorative unless claimJob enforces the same rule — twice: once as a guard,
   // once inside the atomic WHERE so a hold placed mid-claim wins the race.
-  const CLAIM = "src/app/cleaners/available-jobs/claimJob.ts";
+  // The claim moved into server/available/claim.ts (shared with the phone).
+  const CLAIM = "src/server/available/claim.ts";
   has("claimJob refuses an explained hold", CLAIM, "isOnHold(job) && job.holdReason !== null");
   has("...reads the column it checks", CLAIM, "holdReason: true");
   has("...and carries the same filter into the atomic WHERE", CLAIM, "AND: [quoteSettledFilter(), openForClaimFilter()]");

@@ -483,7 +483,7 @@ section("3 · no cleaner-facing surface sees an unsettled quote", () => {
   // decorative — the action needs the rule too, in the read AND the write.
   has(
     "claimJob refuses an unsettled quote on the read",
-    "src/app/cleaners/available-jobs/claimJob.ts",
+    "src/server/available/claim.ts",
     "if (isAwaitingQuote(job.quoteStatus))"
   );
   // Matched on the CALL, not on the whole `AND: [...]` literal it sits in: AWER
@@ -493,13 +493,13 @@ section("3 · no cleaner-facing surface sees an unsettled quote", () => {
   // read as the quote guard leaving.
   has(
     "...and in the compare-and-set WHERE, so an admin un-quoting mid-claim wins the race",
-    "src/app/cleaners/available-jobs/claimJob.ts",
+    "src/server/available/claim.ts",
     "AND: [quoteSettledFilter(),"
   );
   has(
     "the available-jobs preview reuses claimableJobsWhere rather than restating it",
-    "src/app/cleaners/available-jobs/getAvailableJobPreview.ts",
-    "claimableJobsWhere(cleanerId, new Date())"
+    "src/server/available/board.ts",
+    "claimableJobsWhere(actor.userId, now)"
   );
 });
 

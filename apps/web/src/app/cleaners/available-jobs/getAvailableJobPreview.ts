@@ -1,21 +1,15 @@
 "use server";
 
-import { db } from "@/lib/org-db";
 import { auth } from "@/lib/auth";
 import { isStaffRole } from "@/lib/role-routing";
 import { headers } from "next/headers";
-import { claimableJobsWhere } from "@/lib/cleaner-jobs";
-import {
-  isCategoryAllowed,
-  CATEGORY_BLOCKED_MESSAGE,
-  jobTypeLabel,
-} from "@bookmops/core/services";
-import { getCleanerRateInputs } from "@/lib/cleaner-rates";
-import { computeJobPayout, fallbackRateInput } from "@bookmops/core/pay";
-import { getServiceCatalogWithLabels } from "@/lib/service-catalog.server";
-import { sanitizeCleanerNotes, resolveChecklistTemplates } from "@bookmops/core/jobs";
+import { CATEGORY_BLOCKED_MESSAGE } from "@bookmops/core/services";
 import { formatAddressLine } from "@bookmops/core/property";
+import { sanitizeCleanerNotes } from "@bookmops/core/jobs";
 import { addOnQuantity } from "@/lib/job-money";
+
+import { actorFromSession } from "@/server/actor";
+import { loadAvailablePreview } from "@/server/available/board";
 import type {
   AvailableJobPreview,
   AvailableJobPreviewResult,
@@ -52,121 +46,26 @@ export async function getAvailableJobPreview(
     return { success: false, error: "Invalid request" };
   }
 
-  const cleanerId = session.user.id;
+  const actor = actorFromSession(
+    session.user as { id: string; name?: string | null; email: string; role?: string | null },
+  );
 
   try {
-    const job = await db.job.findFirst({
-      // The claimable rule IS the visibility rule. Narrowing it by id keeps the
-      // two in lockstep: soft-deleted, past, non-CREATED/SCHEDULED, and
-      // already-mine jobs are all invisible here for free.
-      where: { AND: [{ id: jobId }, claimableJobsWhere(cleanerId, new Date())] },
-      select: {
-        id: true,
-        jobNumber: true,
-        clientName: true,
-        startTime: true,
-        endTime: true,
-        isFlexible: true,
-        location: true,
-        aptNumber: true,
-        // The job's own postal-code snapshot (item 2) — the fallback below.
-        postalCode: true,
-        jobType: true,
-        price: true,
-        payType: true,
-        hourlyRate: true,
-        bedCount: true,
-        bathCount: true,
-        halfBathCount: true,
-        squareFootage: true,
-        propertyType: true,
-        // Stage 10 — inputs to the shared checklist resolution. Scalars only:
-        // this action deliberately never selects the `client` relation (the
-        // preview withholds customer contact details, asserted by
-        // verify-awer-fixes-3), and the resolver only needs the ids.
-        clientId: true,
-        clientAddressId: true,
-        checklistTemplateId: true,
-        customChecklist: true,
-        requiredCleaners: true,
-        notes: true,
-        addOns: { select: { name: true, quantity: true } },
-        cleaners: { select: { id: true } },
-        // City / postal only — NOT accessNotes. See the types file.
-        clientAddress: {
-          select: { aptNumber: true, city: true, postalCode: true },
-        },
-      },
-    });
-
-    if (!job) {
+    // The claimable rule IS the visibility rule (claimableJobsWhere(cleanerId,
+    // new Date()), then capacity, then the cleaner's categories), decided in
+    // server/available/board.ts for the web board, this preview and the phone
+    // alike. READ-ONLY: templates are matched, no JobChecklist is created.
+    const r = await loadAvailablePreview(actor, jobId, new Date());
+    if (!r.ok) {
+      if (r.reason === "FULLY_STAFFED") {
+        return { success: false, error: "This job is already fully staffed" };
+      }
+      if (r.reason === "CATEGORY_NOT_ALLOWED") {
+        return { success: false, error: CATEGORY_BLOCKED_MESSAGE };
+      }
       return { success: false, error: "This job is no longer available" };
     }
-    // Capacity is a relation count, which the shared where-clause can't express
-    // — the list page filters it in JS for the same reason.
-    if (job.cleaners.length >= job.requiredCleaners) {
-      return { success: false, error: "This job is already fully staffed" };
-    }
-
-    // Service category permission (awerfixes.pdf item 3), same JS-side reason:
-    // jobType is free text, so the alias map decides. A job this cleaner may not
-    // claim is a job they may not preview — the two stay in lockstep.
-    const me = await db.user.findUnique({
-      where: { id: cleanerId },
-      select: { allowedServiceCategories: true },
-    });
-    if (!isCategoryAllowed(job.jobType, me?.allowedServiceCategories)) {
-      return { success: false, error: CATEGORY_BLOCKED_MESSAGE };
-    }
-
-    const [{ labels: serviceLabels }, rateInputs, templates] = await Promise.all([
-      getServiceCatalogWithLabels(),
-      getCleanerRateInputs([cleanerId]),
-      db.checklistTemplate.findMany({
-        where: { isActive: true },
-        select: {
-          id: true,
-          name: true,
-          jobType: true,
-          addOnName: true,
-          // Stage 10 scope columns — the resolver needs them to answer with the
-          // SAME list the cleaner will get after claiming.
-          clientId: true,
-          clientAddressId: true,
-          items: { select: { isRequired: true } },
-        },
-      }),
-    ]);
-
-    // Same estimate the list card shows: this cleaner's own rate on the full
-    // price, with the rating multiplier already inside the rate.
-    let estPay: number | null = null;
-    let estHourly: number | null = null;
-    if (job.payType === "HOURLY") {
-      estHourly = job.hourlyRate ?? null;
-    } else if (job.payType === "PERCENTAGE" && job.price != null && job.price > 0) {
-      const rate = rateInputs.get(cleanerId) ?? fallbackRateInput(cleanerId);
-      const payout = computeJobPayout(job.price, [rate]);
-      estPay = payout.shares.find((s) => s.id === cleanerId)?.amount ?? null;
-    }
-    // FLAT jobs are set per assignment by dispatch — no honest estimate exists.
-
-    const addOnNames = job.addOns.map((a) => a.name);
-    // Step 10.7 — the SAME resolver `ensureJobChecklist` runs after the claim,
-    // so the preview can never advertise the service-type default on a job that
-    // will actually generate the customer's bespoke list. Still read-only: this
-    // resolves templates, it does not create a JobChecklist.
-    const checklistTemplates = resolveChecklistTemplates(templates, {
-      jobType: job.jobType,
-      addOnNames,
-      clientId: job.clientId,
-      clientAddressId: job.clientAddressId,
-      checklistTemplateId: job.checklistTemplateId,
-    }).templates.map((t) => ({
-      name: t.name,
-      itemCount: t.items.length,
-      requiredCount: t.items.filter((i) => i.isRequired).length,
-    }));
+    const { job, serviceLabel, estPay, estHourly, checklists, durationMinutes } = r.preview;
 
     const preview: AvailableJobPreview = {
       id: job.id,
@@ -174,7 +73,7 @@ export async function getAvailableJobPreview(
       clientName: job.clientName,
       startTime: job.startTime.toISOString(),
       isFlexible: job.isFlexible,
-      serviceType: jobTypeLabel(job.jobType, serviceLabels) || null,
+      serviceType: serviceLabel,
       address: job.location
         ? formatAddressLine({
             address: job.location,
@@ -196,16 +95,8 @@ export async function getAvailableJobPreview(
         quantity: addOnQuantity(a),
       })),
       notes: sanitizeCleanerNotes(job.notes),
-      durationMinutes:
-        job.endTime && job.startTime
-          ? Math.max(
-              0,
-              Math.round(
-                (job.endTime.getTime() - job.startTime.getTime()) / 60_000
-              )
-            )
-          : null,
-      checklistTemplates,
+      durationMinutes,
+      checklistTemplates: checklists,
       estPay,
       estHourly,
       payType: job.payType as string,
