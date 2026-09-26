@@ -68,6 +68,7 @@ const IP_LIMIT = { max: 600, windowMs: 60_000 };
 const USER_LIMIT = { max: 240, windowMs: 60_000 };
 
 const MAX_BODY_BYTES = 64 * 1024;
+const MAX_BODY_BYTES_CEILING = 512 * 1024;
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -92,6 +93,11 @@ export interface RouteOptions<B extends z.ZodType | undefined, Q extends z.ZodTy
   limit?: { name: string; max: number; windowMs: number };
   /** An extra per-address limit for a platform endpoint, by name. */
   ipLimit?: { name: string; max: number; windowMs: number };
+  /**
+   * A larger body cap than the default 64 KB, for the one kind of request that
+   * needs it (a drawn signature's strokes). Never above MAX_BODY_BYTES_CEILING.
+   */
+  maxBodyBytes?: number;
 }
 
 type Infer<T> = T extends z.ZodType ? z.output<T> : undefined;
@@ -214,15 +220,15 @@ function limitOrThrow(name: string, key: string, opts: { max: number; windowMs: 
   if (rateLimitHit(name, key, opts)) throw E.rateLimited(opts.windowMs / 1000);
 }
 
-async function readJsonBody(req: Request): Promise<unknown> {
+async function readJsonBody(req: Request, maxBytes = MAX_BODY_BYTES): Promise<unknown> {
   // Refused on the declared length before a byte is read; the read itself is
   // checked again below for a body that lied about its length or sent none.
   const declared = Number(req.headers.get("content-length") ?? "0");
-  if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) {
+  if (Number.isFinite(declared) && declared > maxBytes) {
     throw new V1Error(413, "BODY_TOO_LARGE", "That request is too large.");
   }
   const text = await req.text();
-  if (text.length > MAX_BODY_BYTES) throw new V1Error(413, "BODY_TOO_LARGE", "That request is too large.");
+  if (text.length > maxBytes) throw new V1Error(413, "BODY_TOO_LARGE", "That request is too large.");
   if (!text) return undefined;
   try {
     return JSON.parse(text);
@@ -341,7 +347,8 @@ export function v1Route<
           : undefined;
         const method = req.method.toUpperCase();
         if (options.body) {
-          base.body = parseOrThrow(options.body, await readJsonBody(req), requestId, "body");
+          const cap = Math.min(options.maxBodyBytes ?? MAX_BODY_BYTES, MAX_BODY_BYTES_CEILING);
+          base.body = parseOrThrow(options.body, await readJsonBody(req, cap), requestId, "body");
         } else if (method !== "GET" && method !== "HEAD") {
           // No body expected: one that is sent anyway is still read and bounded.
           await readJsonBody(req);

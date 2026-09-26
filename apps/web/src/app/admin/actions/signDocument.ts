@@ -1,130 +1,69 @@
 "use server";
 
-import { db } from "@/lib/org-db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
-import { revalidatePath } from "next/cache";
-import { cloudinary } from "@/lib/cloudinary";
-import type { UploadApiResponse } from "cloudinary";
-import { sendAdminDocSigned } from "@/lib/email";
-import { orgAssetFolder } from "@/lib/asset-folder";
+
+import { actorFromSession } from "@/server/actor";
+import { signDocumentFor } from "@/server/documents/documents";
+import { revalidateAfterSign } from "@/server/documents/revalidate";
+import { fireEffects } from "@/server/effects";
 
 interface SignDocumentInput {
   documentId: string;
-  signatureDataUrl: string;
+  /** The version and content hash the page showed. */
+  version: string;
+  contentSha256: string;
+  /** The "I have read and agree" box. */
+  agreed: boolean;
+  /** The strokes drawn on the pad, as the phone sends them (DrawnSignature). */
+  signature: unknown;
 }
 
-function uploadDataUrl(
-  dataUrl: string,
-  folder: string,
-  publicId: string
-): Promise<UploadApiResponse> {
-  return new Promise((resolve, reject) => {
-    cloudinary.uploader.upload(
-      dataUrl,
-      {
-        folder,
-        public_id: publicId,
-        resource_type: "image",
-        overwrite: false,
-      },
-      (error, result) => {
-        if (error || !result) {
-          reject(error || new Error("Upload failed"));
-        } else {
-          resolve(result);
-        }
-      }
-    );
-  });
-}
-
+/**
+ * Sign a document assigned to the caller. The rules live in
+ * server/documents/documents.ts, shared with the phone's
+ * POST /api/v1/documents/:id/sign.
+ *
+ * What changed from the old action: the page sends the pad's STROKES, not a
+ * picture of them, and the server draws the stored image itself; the version
+ * and content hash shown are echoed and must still be current; the agreement
+ * tick is checked on the server; and an EXPIRED document can no longer be
+ * signed (the page already said so). The signature now also keeps the
+ * version, hash, consent sentence and User-Agent beside the IP.
+ */
 export async function signDocument(input: SignDocumentInput) {
   try {
     const hdrs = await headers();
     const session = await auth.api.getSession({ headers: hdrs });
     if (!session) return { success: false, error: "Not authenticated" };
 
-    const { documentId, signatureDataUrl } = input;
-    if (!documentId) {
+    if (!input?.documentId || typeof input.documentId !== "string") {
       return { success: false, error: "Document id is required" };
     }
-    if (!signatureDataUrl?.startsWith("data:image")) {
-      return { success: false, error: "A signature is required" };
+    if (typeof input.version !== "string" || typeof input.contentSha256 !== "string") {
+      return { success: false, error: "Reload the page and try again." };
     }
 
-    const employeeId = session.user.id;
-
-    const signatureRow = await db.documentSignature.findUnique({
-      where: { documentId_employeeId: { documentId, employeeId } },
-    });
-    if (!signatureRow) {
-      return {
-        success: false,
-        error: "This document is not assigned to you",
-      };
-    }
-    if (signatureRow.status === "SIGNED") {
-      return { success: false, error: "Document already signed" };
-    }
-    if (signatureRow.status === "REVOKED") {
-      return { success: false, error: "Document has been revoked" };
-    }
-
-    let signatureUrl: string | null = null;
-    if (
-      process.env.CLOUDINARY_CLOUD_NAME &&
-      process.env.CLOUDINARY_API_KEY &&
-      process.env.CLOUDINARY_API_SECRET
-    ) {
-      try {
-        const folder = await orgAssetFolder("signatures", documentId);
-        const publicId = `${employeeId}-${Date.now()}`;
-        const result = await uploadDataUrl(signatureDataUrl, folder, publicId);
-        signatureUrl = result.secure_url;
-      } catch (err) {
-        console.error("Signature upload failed:", err);
-        return { success: false, error: "Failed to store signature image" };
-      }
-    } else {
-      signatureUrl = signatureDataUrl;
-    }
-
-    const ipAddress =
-      hdrs.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-      hdrs.get("x-real-ip") ||
-      null;
-
-    const updated = await db.documentSignature.update({
-      where: { documentId_employeeId: { documentId, employeeId } },
-      data: {
-        status: "SIGNED",
-        signatureUrl,
-        signedAt: new Date(),
-        ipAddress,
+    const ip =
+      hdrs.get("x-forwarded-for")?.split(",")[0]?.trim() || hdrs.get("x-real-ip")?.trim() || null;
+    const result = await signDocumentFor(
+      actorFromSession(session.user as { id: string; name?: string | null; email: string; role?: string | null }),
+      {
+        documentId: input.documentId,
+        version: input.version.slice(0, 32),
+        contentSha256: input.contentSha256.slice(0, 64),
+        agreed: input.agreed === true,
+        signature: input.signature,
+        ip,
+        userAgent: hdrs.get("user-agent"),
+        now: new Date(),
       },
-    });
+    );
+    if (!result.ok) return { success: false, error: result.message };
 
-    // Item 20: signing = completing the document, into the access log.
-    await db.documentAccessLog
-      .create({ data: { documentId, userId: employeeId, action: "COMPLETE" } })
-      .catch((e) => console.error("document access log", e));
-
-    revalidatePath("/admin/documents");
-    revalidatePath(`/admin/documents/${documentId}`);
-    revalidatePath("/admin/settings");
-
-    // Admin notification — gated by `admin.docs.signed_completed`.
-    const doc = await db.document.findUnique({
-      where: { id: documentId },
-      select: { title: true },
-    });
-    sendAdminDocSigned({
-      signerName: session.user.name ?? "Cleaner",
-      documentTitle: doc?.title ?? "Document",
-    }).catch((e) => console.error("admin doc-signed", e));
-
-    return { success: true, signature: updated };
+    fireEffects(result.effects);
+    revalidateAfterSign(input.documentId);
+    return { success: true };
   } catch (error) {
     console.error("Error signing document:", error);
     return { success: false, error: "Failed to sign document" };
