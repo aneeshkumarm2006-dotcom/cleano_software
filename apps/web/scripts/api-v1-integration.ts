@@ -20,6 +20,7 @@ import http from "node:http";
 import { randomUUID } from "node:crypto";
 
 import { createFixture, openDb, PASSWORD, removeFixture, SLUG_A, SLUG_B, type Fixture } from "./api-v1/fixture";
+import { runTalkChecks } from "./api-v1/talk";
 
 const PORT = Number(process.env.V1_PORT ?? 3100);
 const APEX = `localhost:${PORT}`;
@@ -646,6 +647,9 @@ async function main() {
       const early = await post(HOST_A, `${job(F.jobs.mineTomorrow)}/clock-in`, cookie, future);
       check("clock-in: a job 26 hours away is too early (409), as on the web", early.status === 409 && early.body?.error?.code === "TOO_EARLY", early.body);
     }
+
+    // ── Areas, one file each ──────────────────────────────────────────────
+    await runTalkChecks({ db, F, HOST_A, HOST_B, call, check, signIn: (h, e) => signIn(h, e) });
 
     // ── Password change ends the other sessions ───────────────────────────
     {

@@ -4,8 +4,10 @@ import { db } from "@/lib/org-db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { findAssignableProduct } from "@/lib/kit-product.server";
 import { isStaffRole } from "@/lib/role-routing";
+import { actorFromSession } from "@/server/actor";
+import { requestRestock } from "@/server/kit/kit";
+import { revalidateAfterRestockRequest } from "@/server/kit/revalidate";
 
 interface CreateInventoryRequestInput {
   productId?: string;
@@ -40,6 +42,33 @@ export async function createInventoryRequest(
     return { success: false, error: "Quantity must be greater than zero" };
   }
 
+  const reason = input.jobId
+    ? `${input.reason || "Equipment for upcoming job"} (Job: ${input.jobId})`
+    : input.reason || "Equipment request";
+
+  // A product: the rules live in server/kit/kit.ts (requestRestock), shared
+  // with the phone's POST /api/v1/kit/requests — one PENDING request per
+  // cleaner and product, taken under a lock so two taps can't both create one.
+  if (input.productId) {
+    try {
+      const res = await requestRestock(
+        actorFromSession(session.user as { id: string; name?: string | null; email: string; role?: string | null }),
+        { items: [{ productId: input.productId, quantity: input.quantity }], reason },
+      );
+      if (!res.ok) return { success: false, error: res.message };
+      const [line] = res.value.results;
+      const request = await db.inventoryRequest.findFirst({ where: { id: line.request.id } });
+      if (line.outcome === "ALREADY_PENDING") {
+        return { success: true, request, alreadyPending: true };
+      }
+      revalidateAfterRestockRequest();
+      return { success: true, request };
+    } catch (error) {
+      console.error("Error creating inventory request:", error);
+      return { success: false, error: "Failed to create equipment request" };
+    }
+  }
+
   try {
     // Idempotency: one open request per employee + item. Re-requesting while a
     // request is still PENDING returns the existing row instead of creating a
@@ -49,9 +78,7 @@ export async function createInventoryRequest(
       where: {
         employeeId: session.user.id,
         status: "PENDING",
-        ...(input.productId
-          ? { productId: input.productId }
-          : { kitId: input.kitId }),
+        kitId: input.kitId,
       },
     });
     if (existing) {
@@ -63,19 +90,8 @@ export async function createInventoryRequest(
     let relatedId: string | null = null;
     let relatedType: string | null = null;
 
-    if (input.productId) {
-      // Requesting an item is a request to be GIVEN one, so the catalogue
-      // rules apply (Stage 5): an archived product is refused by name.
-      const lookup = await findAssignableProduct(input.productId);
-      if (!lookup.ok) {
-        return { success: false, error: lookup.error };
-      }
-      const product = lookup.product;
-      alertTitle = `Equipment requested: ${product.name}`;
-      alertMessage = `${session.user.name} requested ${input.quantity} ${product.unit} of ${product.name}`;
-      relatedId = product.id;
-      relatedType = "Product";
-    } else if (input.kitId) {
+    // A kit template (a product returned above).
+    if (input.kitId) {
       const kit = await db.kitTemplate.findUnique({
         where: { id: input.kitId },
       });
@@ -88,14 +104,10 @@ export async function createInventoryRequest(
       relatedType = "KitTemplate";
     }
 
-    const reason = input.jobId
-      ? `${input.reason || "Equipment for upcoming job"} (Job: ${input.jobId})`
-      : input.reason || "Equipment request";
-
     const request = await db.inventoryRequest.create({
       data: {
         employeeId: session.user.id,
-        productId: input.productId ?? null,
+        productId: null,
         kitId: input.kitId ?? null,
         quantity: input.quantity,
         reason,

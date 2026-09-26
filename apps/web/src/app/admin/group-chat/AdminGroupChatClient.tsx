@@ -258,12 +258,13 @@ export default function AdminGroupChatClient({
   }
 
   async function handleDelete(messageId: string) {
-    if (!confirm("Delete this message? Cleaners will no longer see it.")) return;
+    if (!confirm("Delete this message? Cleaners will see \"Message deleted\" in its place.")) return;
     setError(null);
-    // Optimistic removal
-    await mutate((cur) => (cur ? cur.filter((m) => m.id !== messageId) : cur), {
-      revalidate: false,
-    });
+    // Optimistic: the message keeps its place, without its text.
+    await mutate(
+      (cur) => (cur ? cur.map((m) => (m.id === messageId ? { ...m, body: "", deleted: true } : m)) : cur),
+      { revalidate: false },
+    );
     const res = await deleteGroupMessage(messageId);
     if (!res.success) {
       setError(res.error);
@@ -844,7 +845,7 @@ export default function AdminGroupChatClient({
                         key={m.id}
                         className={`chat-msg ${mine ? "mine" : "theirs"}`}
                         style={{ marginTop: 4, alignItems: "center", gap: 6 }}>
-                        {mine && (
+                        {mine && !m.deleted && (
                           <button
                             onClick={() => handleDelete(m.id)}
                             title="Delete message"
@@ -862,10 +863,17 @@ export default function AdminGroupChatClient({
                         )}
                         <div className="chat-msg-bubble">
                           {!mine && <div className="chat-msg-author">{m.senderName}</div>}
-                          {m.body && <div>{m.body}</div>}
-                          <div className="chat-msg-time">{timeOnly(m.createdAt)}</div>
+                          {m.deleted ? (
+                            <div style={{ fontStyle: "italic", opacity: 0.6 }}>Message deleted</div>
+                          ) : (
+                            m.body && <div>{m.body}</div>
+                          )}
+                          <div className="chat-msg-time">
+                            {timeOnly(m.createdAt)}
+                            {m.editedAt && !m.deleted ? " · edited" : ""}
+                          </div>
                         </div>
-                        {!mine && (
+                        {!mine && !m.deleted && (
                           <button
                             onClick={() => handleDelete(m.id)}
                             title="Delete message"

@@ -13,8 +13,10 @@ import { hashPassword } from "better-auth/crypto";
 
 import { describeTarget } from "../../src/lib/safe-target";
 
-export const SLUG_A = "v1test-alpha";
-export const SLUG_B = "v1test-bravo";
+// Overridable, so two worktrees running the suite at once against the same
+// staging database don't delete each other's companies mid-run.
+export const SLUG_A = process.env.V1_SLUG_A ?? "v1test-alpha";
+export const SLUG_B = process.env.V1_SLUG_B ?? "v1test-bravo";
 export const PASSWORD = "V1-Test-Pass-2026!";
 
 export interface Fixture {

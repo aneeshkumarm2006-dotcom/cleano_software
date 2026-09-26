@@ -1,11 +1,11 @@
 "use server";
 
-import { db } from "@/lib/org-db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
-import { revalidatePath } from "next/cache";
 import type { AvailabilityDay } from "@prisma/client";
 import type { AvailabilitySlotInput } from "./setAvailability.types";
+import { replaceWeek } from "@/server/availability/availability";
+import { revalidateAfterAvailability } from "@/server/availability/revalidate";
 
 interface SetAvailabilityInput {
   employeeId?: string;
@@ -58,8 +58,9 @@ export async function setAvailability(input: SetAvailabilityInput) {
       }
     }
 
+    // The write is server/availability/availability.ts (replaceWeek), shared
+    // with the phone's PUT /api/v1/availability/week.
     const data = input.slots.map((s) => ({
-      employeeId: targetEmployeeId,
       day: s.day,
       startTime: s.startTime,
       endTime: s.endTime,
@@ -69,19 +70,9 @@ export async function setAvailability(input: SetAvailabilityInput) {
       effectiveTo: s.effectiveTo ? new Date(s.effectiveTo) : null,
     }));
 
-    await db.$transaction(async (tx) => {
-      await tx.employeeAvailability.deleteMany({
-        where: { employeeId: targetEmployeeId },
-      });
-      if (data.length > 0) {
-        await tx.employeeAvailability.createMany({ data });
-      }
-    });
+    await replaceWeek(targetEmployeeId, data);
 
-    revalidatePath("/admin/settings");
-    revalidatePath(`/admin/employees/${targetEmployeeId}`);
-    revalidatePath("/admin/calendar");
-    revalidatePath("/admin/jobs/new");
+    revalidateAfterAvailability(targetEmployeeId);
 
     return { success: true };
   } catch (error) {

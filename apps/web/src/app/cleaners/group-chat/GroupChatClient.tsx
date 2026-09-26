@@ -562,8 +562,15 @@ export default function GroupChatClient({
                           {!mine && (
                             <div className="chat-msg-author">{m.senderName}</div>
                           )}
-                          {m.body && <div>{m.body}</div>}
-                          <div className="chat-msg-time">{timeOnly(m.createdAt)}</div>
+                          {m.deleted ? (
+                            <div style={{ fontStyle: "italic", opacity: 0.6 }}>Message deleted</div>
+                          ) : (
+                            m.body && <div>{m.body}</div>
+                          )}
+                          <div className="chat-msg-time">
+                            {timeOnly(m.createdAt)}
+                            {m.editedAt && !m.deleted ? " · edited" : ""}
+                          </div>
                         </div>
                       </div>
                     );

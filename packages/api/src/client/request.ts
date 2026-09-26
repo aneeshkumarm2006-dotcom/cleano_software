@@ -140,7 +140,12 @@ export const json = (
 ): RequestInit => ({
   method,
   body: body === undefined ? undefined : JSON.stringify(body),
-  headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
+  headers: {
+    // Every mutation says JSON, a body or not: the server's CSRF gate refuses
+    // any non-GET without it (API_V1.md §4, gate 3), a bodyless DELETE included.
+    "Content-Type": "application/json",
+    ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
+  },
 });
 
 function originOf(url: string): string | null {

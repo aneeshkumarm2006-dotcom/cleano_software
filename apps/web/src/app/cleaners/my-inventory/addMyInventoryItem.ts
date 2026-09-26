@@ -1,11 +1,11 @@
 "use server";
 
-import { db } from "@/lib/org-db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
-import { revalidatePath } from "next/cache";
 import { isCleanerRole } from "@/lib/role-routing";
-import { findAssignableProduct } from "@/lib/kit-product.server";
+import { actorFromSession } from "@/server/actor";
+import { addKitItem, MAX_KIT_QUANTITY } from "@/server/kit/kit";
+import { revalidateAfterKitChange } from "@/server/kit/revalidate";
 
 /**
  * Cleaner self-service starting inventory (spec item 15).
@@ -16,11 +16,11 @@ import { findAssignableProduct } from "@/lib/kit-product.server";
  * is untouched (their supplies are already out of the warehouse). Every add is
  * written to the `InventoryChange` audit trail.
  *
+ * The rules live in server/kit/kit.ts (addKitItem), shared with the phone's
+ * POST /api/v1/kit/items. This is the web's adapter: its gate, its messages.
+ *
  * AUTHZ: employeeId always comes from the session — no IDOR surface.
  */
-
-const MAX_KIT_QUANTITY = 1000;
-
 export async function addMyInventoryItem(input: {
   productId: string;
   quantity: number;
@@ -28,8 +28,8 @@ export async function addMyInventoryItem(input: {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) return { success: false, error: "Not authenticated" };
 
-  const actor = session.user as { id: string; name?: string; role?: string };
-  if (!isCleanerRole(actor.role)) {
+  const user = session.user as { id: string; name?: string | null; email: string; role?: string | null };
+  if (!isCleanerRole(user.role)) {
     return { success: false, error: "Not authorized" };
   }
 
@@ -47,47 +47,9 @@ export async function addMyInventoryItem(input: {
     return { success: false, error: "Enter a whole number" };
   }
 
-  // Adding an item creates a NEW kit row, so the catalogue rules apply
-  // (Stage 5's shared lookup). Same answer as before for an active product;
-  // an archived one now says which product and how to bring it back.
-  const lookup = await findAssignableProduct(input.productId);
-  if (!lookup.ok) return { success: false, error: lookup.error };
-  const product = lookup.product;
+  const res = await addKitItem(actorFromSession(user), { productId: input.productId, quantity: qty });
+  if (!res.ok) return { success: false, error: res.message };
 
-  const existing = await db.employeeProduct.findUnique({
-    where: {
-      employeeId_productId: { employeeId: actor.id, productId: product.id },
-    },
-    select: { id: true },
-  });
-  if (existing) {
-    return {
-      success: false,
-      error: "Already in your kit — use Update count instead",
-    };
-  }
-
-  await db.$transaction(async (tx) => {
-    await tx.employeeProduct.create({
-      data: { employeeId: actor.id, productId: product.id, quantity: qty },
-    });
-    await tx.inventoryChange.create({
-      data: {
-        productId: product.id,
-        employeeId: actor.id,
-        employeeName: actor.name ?? null,
-        quantityChange: qty,
-        newQuantity: qty,
-        unit: product.unit,
-        action: "RECOUNT",
-        reason: "Starting inventory set by cleaner",
-        changedById: actor.id,
-        changedByName: actor.name ?? null,
-      },
-    });
-  });
-
-  revalidatePath("/cleaners/my-inventory");
-  revalidatePath("/admin/inventory");
+  revalidateAfterKitChange();
   return { success: true };
 }

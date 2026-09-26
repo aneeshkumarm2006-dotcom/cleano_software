@@ -1,11 +1,19 @@
 "use server";
 
-import { db } from "@/lib/org-db";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import type { LocationProductEntry } from "./getLocationProducts.types";
 import { isStaffRole } from "@/lib/role-routing";
+import { locationProducts } from "@/server/kit/kit";
 
+/**
+ * EVERY active product at a location, with what it has on record. Hiding
+ * out-of-stock items was a hard block by omission: a cleaner could not pick up
+ * something that had been restocked outside the app, and had no way to record
+ * that they took it (fix list items 5 + 19). The read is server/kit/kit.ts
+ * (locationProducts), shared with the phone's
+ * GET /api/v1/kit/locations/:id/products.
+ */
 export async function getLocationProducts(
   locationId: string
 ): Promise<
@@ -32,51 +40,17 @@ export async function getLocationProducts(
   }
 
   try {
-    const location = await db.inventoryLocation.findUnique({
-      where: { id: locationId },
-    });
-
-    if (!location || !location.isActive) {
-      return { success: false, error: "Location not found" };
-    }
-
-    // EVERY active product is listed, not just the ones this location currently
-    // has stock for. Hiding out-of-stock items was a hard block by omission: a
-    // cleaner could not pick up something that had been restocked outside the
-    // app, and had no way to record that they took it (fix list items 5 + 19).
-    const [products, stocks] = await Promise.all([
-      db.product.findMany({
-        where: { deletedAt: null },
-        orderBy: { name: "asc" },
-        select: {
-          id: true,
-          name: true,
-          description: true,
-          unit: true,
-          minStock: true,
-        },
-      }),
-      db.inventoryLocationStock.findMany({
-        where: { locationId },
-        select: { productId: true, quantity: true },
-      }),
-    ]);
-
-    const qtyByProduct = new Map(stocks.map((s) => [s.productId, s.quantity]));
-
+    const res = await locationProducts(locationId);
+    if (!res.ok) return { success: false, error: "Location not found" };
     return {
       success: true,
-      location: {
-        id: location.id,
-        name: location.name,
-        address: location.address,
-      },
-      products: products.map((p) => ({
-        productId: p.id,
+      location: res.value.location,
+      products: res.value.items.map((p) => ({
+        productId: p.productId,
         productName: p.name,
         productDescription: p.description,
         unit: p.unit,
-        available: qtyByProduct.get(p.id) ?? 0,
+        available: p.available,
         minStock: p.minStock,
       })),
     };
