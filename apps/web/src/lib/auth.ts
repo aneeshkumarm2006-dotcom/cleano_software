@@ -139,6 +139,17 @@ export const auth = betterAuth({
     provider: "postgresql",
   }),
   /**
+   * The Expo plugin's OAuth helper, switched off.
+   *
+   * `GET /expo-authorization-proxy?authorizationURL=…` redirects to whatever
+   * URL it is handed and, with `oauthState`, first sets an `oauth_state`
+   * cookie to a value the caller chose: an open redirect on every company's
+   * own address, and a way to plant OAuth state. Bookmops signs in with email
+   * and password only — no social provider is configured — so nothing needs
+   * it. The [...all] route refuses it too, before better-auth sees it.
+   */
+  disabledPaths: ["/expo-authorization-proxy"],
+  /**
    * Brute-force limiting, stated out loud rather than inherited.
    *
    * better-auth turns this on by default, and the default behaves differently
