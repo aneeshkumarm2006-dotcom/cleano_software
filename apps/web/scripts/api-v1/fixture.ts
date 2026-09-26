@@ -13,8 +13,11 @@ import { hashPassword } from "better-auth/crypto";
 
 import { describeTarget } from "../../src/lib/safe-target";
 
-export const SLUG_A = "v1test-alpha";
-export const SLUG_B = "v1test-bravo";
+// V1_FIXTURE_SUFFIX (lowercase letters) keeps parallel runs against the same
+// staging database out of each other's companies.
+const SUFFIX = /^[a-z]{1,12}$/.test(process.env.V1_FIXTURE_SUFFIX ?? "") ? `-${process.env.V1_FIXTURE_SUFFIX}` : "";
+export const SLUG_A = `v1test-alpha${SUFFIX}`;
+export const SLUG_B = `v1test-bravo${SUFFIX}`;
 export const PASSWORD = "V1-Test-Pass-2026!";
 
 export interface Fixture {
