@@ -3,6 +3,7 @@ import { requireCleaner } from "@/lib/page-guards";
 import MyPayClient from "./MyPayClient";
 import { getCleanerRatingSummary } from "@/lib/cleaner-rating.server";
 import { getCleanerEarnings } from "@/lib/cleaner-earnings";
+import { readBalance } from "@/server/pay/balance";
 
 export default async function MyPayPage() {
   const session = await requireCleaner();
@@ -14,7 +15,7 @@ export default async function MyPayPage() {
   // that payroll and My Income also use — My Pay no longer invents its own math.
   // Rag-wash credits are removed from the cleaner side for now (fix 5) — no
   // longer queried or passed to the client.
-  const [earnings, payouts, withdrawals, ratingSummary] =
+  const [earnings, payouts, withdrawals, ratingSummary, balance] =
     await Promise.all([
       getCleanerEarnings(userId, year, now),
       db.payout.findMany({
@@ -31,19 +32,13 @@ export default async function MyPayPage() {
       // average and then floor it at 4.0 in the markup, so a cleaner sitting at
       // 1.0 was told "Your Rating: 4.0 / 5.0" while the dashboard said 1.0.
       getCleanerRatingSummary(userId),
+      // THE withdrawable balance: the same function the withdrawal request
+      // checks against (server/pay/balance.ts), so the figure shown and the
+      // figure enforced can't differ. This page used to compute its own copy.
+      readBalance(userId),
     ]);
 
-  // Reserved = withdrawals not rejected
-  const reservedTotal = withdrawals
-    .filter(
-      (w) =>
-        w.status === "PENDING" ||
-        w.status === "APPROVED" ||
-        w.status === "COMPLETED"
-    )
-    .reduce((sum, w) => sum + w.amount, 0);
-
-  const availableBalance = Math.max(0, earnings.walletBalance - reservedTotal);
+  const availableBalance = balance.availableCents / 100;
 
   // Serialize Dates to strings for client component
   const serializePayout = (p: (typeof payouts)[number]) => ({

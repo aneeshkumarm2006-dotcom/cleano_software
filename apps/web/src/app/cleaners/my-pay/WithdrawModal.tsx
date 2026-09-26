@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { DollarSign, Clock, Info, CheckCircle2 } from "lucide-react";
 import { requestWithdrawal } from "@/app/admin/actions/requestWithdrawal";
+import { WITHDRAWAL_FEE_BASIS_POINTS, withdrawalFeeCents } from "@/lib/withdrawal-rules";
 
 interface WithdrawModalProps {
   isOpen: boolean;
@@ -11,7 +12,9 @@ interface WithdrawModalProps {
   availableBalance: number;
 }
 
-const INSTANT_FEE_PCT = 0.05;
+// The server's own rate (lib/withdrawal-rules.ts): the fee shown here is the
+// fee the server charges, and it refuses a request made at any other rate.
+const FEE_PERCENT = WITHDRAWAL_FEE_BASIS_POINTS / 100;
 
 export default function WithdrawModal({
   isOpen,
@@ -26,8 +29,11 @@ export default function WithdrawModal({
   const [success, setSuccess] = useState(false);
 
   const requestedAmt = parseFloat(amount) || 0;
-  const feeAmt = Math.round(requestedAmt * INSTANT_FEE_PCT * 100) / 100;
-  const netAmt = Math.max(0, Math.round((requestedAmt - feeAmt) * 100) / 100);
+  // Integer cents, as the server computes it: round(cents × rate ÷ 10000).
+  const requestedCents = Math.max(0, Math.round(requestedAmt * 100));
+  const feeCents = withdrawalFeeCents(requestedCents, WITHDRAWAL_FEE_BASIS_POINTS);
+  const feeAmt = feeCents / 100;
+  const netAmt = Math.max(0, requestedCents - feeCents) / 100;
 
   function reset() {
     setAmount("");
@@ -56,8 +62,11 @@ export default function WithdrawModal({
 
     setSubmitting(true);
     // Amount only — how it's paid out is the admin's call (new fix list item 3).
+    // What the person ASKED FOR and the rate they were shown: the server takes
+    // the fee itself and records the net.
     const result = await requestWithdrawal({
-      amount: netAmt,
+      amountCents: Math.round(num * 100),
+      expectedFeeBasisPoints: WITHDRAWAL_FEE_BASIS_POINTS,
       notes: notes.trim() || undefined,
     });
     setSubmitting(false);
@@ -154,7 +163,7 @@ export default function WithdrawModal({
                     <span>${requestedAmt.toFixed(2)}</span>
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "var(--primary-70)", marginBottom: 8 }}>
-                    <span>Processing fee (5%)</span>
+                    <span>Processing fee ({FEE_PERCENT}%)</span>
                     <span style={{ color: "var(--error)" }}>-${feeAmt.toFixed(2)}</span>
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 600, color: "var(--ink)", paddingTop: 8, borderTop: "1px solid var(--primary-10)" }}>

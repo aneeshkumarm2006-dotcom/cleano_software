@@ -56,6 +56,8 @@ export const WITHDRAWAL_REFUSALS = [
   "INSUFFICIENT_BALANCE",
   /** Zero, negative, or below the minimum. */
   "AMOUNT_TOO_SMALL",
+  /** The server's fee rate isn't `expectedFeeBasisPoints` (409): show the new fee and ask again. */
+  "FEE_CHANGED",
 ] as const;
 export type WithdrawalRefusal = (typeof WITHDRAWAL_REFUSALS)[number];
 

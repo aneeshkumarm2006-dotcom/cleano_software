@@ -756,6 +756,10 @@ export interface CleanerPeriodSummary {
   totalHours: number;
   /** True when the figures are computed live from jobs, not from a Payout row. */
   isLive: boolean;
+  /** The Payout row's id, or null for the live week (no payout yet). */
+  payoutId: string | null;
+  /** When the period was paid, if it has been. */
+  paidAt: Date | null;
 }
 
 export interface CleanerEarnings {
@@ -950,6 +954,8 @@ export async function getCleanerEarnings(
         jobCount: currentPayout.jobCount,
         totalHours: currentPayout.totalHours,
         isLive: false,
+        payoutId: currentPayout.id,
+        paidAt: currentPayout.payPeriod.paidAt ? new Date(currentPayout.payPeriod.paidAt) : null,
       }
     : {
         startDate: currentRange.start,
@@ -966,6 +972,8 @@ export async function getCleanerEarnings(
         jobCount: liveJobs,
         totalHours: round2(liveHours),
         isLive: true,
+        payoutId: null,
+        paidAt: null,
       };
 
   return {
