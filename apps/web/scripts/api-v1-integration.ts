@@ -239,6 +239,22 @@ async function main() {
       check("auth: sign-in trusts the scheme as origin only if no callback asks for it", signInRedirect.status === 200 || signInRedirect.status === 403, signInRedirect.status);
     }
 
+    // ── The Expo plugin's OAuth proxy is switched off (VULN-003) ───────────
+    for (const path of [
+      "/api/auth/expo-authorization-proxy?authorizationURL=https%3A%2F%2Fevil.test%2F&oauthState=planted",
+      "/api/auth/expo-authorization-proxy/?authorizationURL=https%3A%2F%2Fevil.test%2F%3Fstate%3Dx",
+      "/api/auth/Expo-Authorization-Proxy?authorizationURL=https%3A%2F%2Fevil.test%2F&oauthState=planted",
+      "/api/auth/expo%2Dauthorization%2Dproxy?authorizationURL=https%3A%2F%2Fevil.test%2F&oauthState=planted",
+    ]) {
+      const r = await call("GET", HOST_A, path, { noAppHeaders: true });
+      const cookies = ([] as string[]).concat(r.headers["set-cookie"] ?? []);
+      check(
+        `auth: ${path.split("?")[0]} is 404, no redirect, no cookie`,
+        r.status === 404 && !r.headers.location && !cookies.some((c) => /oauth_state|state=/.test(c)),
+        { status: r.status, location: r.headers.location, cookies },
+      );
+    }
+
     // ── Gates ─────────────────────────────────────────────────────────────
     {
       const r = await call("GET", HOST_A, "/api/v1/me");
@@ -546,6 +562,93 @@ async function main() {
       check("clock-out: the job is COMPLETED, as on the web", jobRow?.status === "COMPLETED", jobRow);
       const out2 = await post(HOST_A, `${job(F.jobs.mine)}/clock-out`, cookie, { ...event(), report: { items: [] } });
       check("clock-out: a second tap answers with the state the first made", out2.status === 200 && out2.body?.clock?.state === "CLOCKED_OUT", out2.body);
+    }
+
+    // ── Compound-key reads with a narrow select (lib/db-scoped.ts) ────────
+    // A crew member who is NOT the job's lead keeps their clock only on their
+    // JobAssignment row, read by (jobId, cleanerId) with a narrow select. That
+    // read used to come back null outside a transaction: the break said "clock
+    // in first", and a retried clock-out re-sent the office's notice.
+    {
+      const start = new Date(Date.now() + 30 * 60_000);
+      const crewJob = await db.job.create({
+        data: {
+          organizationId: F.orgA.id,
+          jobNumber: 9900,
+          clientName: "Prem Sai Crew",
+          employeeId: F.users.teammate.id,
+          jobType: "Standard Clean",
+          location: "9900 Test Street",
+          startTime: start,
+          endTime: new Date(start.getTime() + 3 * 3600_000),
+          jobDate: start,
+          status: "SCHEDULED",
+          price: 120,
+          subtotalAmount: 120,
+          requiredCleaners: 2,
+          cleaners: { connect: [{ id: F.users.teammate.id }, { id: F.users.cleaner.id }] },
+        },
+        select: { id: true },
+      });
+      await db.jobAssignment.create({ data: { organizationId: F.orgA.id, jobId: crewJob.id, cleanerId: F.users.teammate.id } });
+      await db.jobAssignment.create({ data: { organizationId: F.orgA.id, jobId: crewJob.id, cleanerId: F.users.cleaner.id } });
+      const path = job(crewJob.id);
+      const cin = await post(HOST_A, `${path}/clock-in`, cookie, event(1_000));
+      check("crew: a cleaner who isn't the lead clocks in", cin.status === 200 && cin.body?.state === "CLOCKED_IN", cin.body);
+      const br = await post(HOST_A, `${path}/breaks`, cookie, event());
+      check("crew: ...and can start a break (their assignment row is found)", br.status === 200 && br.body?.state === "ON_BREAK", br.body);
+      const be = await post(HOST_A, `${path}/breaks/current/end`, cookie, event());
+      check("crew: ...and end it", be.status === 200 && be.body?.state === "CLOCKED_IN" && !!be.body?.breaks?.[0]?.endedAt, be.body);
+
+      const notices = () =>
+        db.notification.count({ where: { organizationId: F.orgA.id, notificationKey: "admin.clock.clocked_out", href: `/admin/jobs/${crewJob.id}` } });
+      const waitFor = async (want: number) => {
+        let n = await notices();
+        for (let i = 0; i < 20 && n < want; i++) {
+          await new Promise((r) => setTimeout(r, 500));
+          n = await notices();
+        }
+        return n;
+      };
+      const e = { ...event(), report: { items: [] } };
+      const out = await post(HOST_A, `${path}/clock-out`, cookie, e);
+      const first = await waitFor(1);
+      check("crew: clock-out tells the office once", out.status === 200 && out.body?.clock?.state === "CLOCKED_OUT" && first === 1, { out: out.body, first });
+      // The answer was lost after the commit: the key is freed (as a 5xx frees
+      // it) and the phone sends the same event again. That is the resume path,
+      // and the tail already ran, so no second notice.
+      await db.idempotencyRecord.deleteMany({ where: { organizationId: F.orgA.id, userId: F.users.cleaner.id, key: e.clientEventId } });
+      const again = await post(HOST_A, `${path}/clock-out`, cookie, e);
+      await new Promise((r) => setTimeout(r, 4_000));
+      const second = await notices();
+      check("crew: a resumed clock-out doesn't tell the office twice (tailAlreadyRan)", again.status === 200 && again.headers["idempotent-replayed"] === undefined && second === 1, { again: again.body, second });
+
+      // The scoped client itself, on a connection that bypasses RLS, so the
+      // check in code is the only thing deciding.
+      const { PrismaClient } = await import("@prisma/client");
+      const { scopedTo, CrossTenantError } = await import("../src/lib/db-scoped");
+      const raw = new PrismaClient({ datasources: { db: { url: process.env.FIXTURE_DATABASE_URL } } });
+      try {
+        const key = { jobId_cleanerId: { jobId: crewJob.id, cleanerId: F.users.cleaner.id } };
+        const narrow = await scopedTo(raw, F.orgA.id).jobAssignment.findUnique({ where: key, select: { clockOutTime: true } });
+        check("scoped: same company, narrow select finds the row", !!narrow?.clockOutTime, narrow);
+        check("scoped: ...and hands back only the fields asked for", !!narrow && Object.keys(narrow).join(",") === "clockOutTime", narrow);
+        const asked = await scopedTo(raw, F.orgA.id).jobAssignment.findUnique({ where: key, select: { organizationId: true } });
+        check("scoped: a select that asks for organizationId keeps it", asked?.organizationId === F.orgA.id, asked);
+        const omitted = await scopedTo(raw, F.orgA.id).jobAssignment.findUnique({ where: key, omit: { organizationId: true } });
+        check("scoped: omit organizationId still finds the row, and leaves it out", !!omitted && !("organizationId" in omitted), omitted);
+        const foreign = await scopedTo(raw, F.orgB.id).jobAssignment.findUnique({ where: key, select: { clockOutTime: true } });
+        check("scoped: another company's compound lookup is null", foreign === null, foreign);
+        let threw: unknown = null;
+        try {
+          await scopedTo(raw, F.orgB.id).jobAssignment.findUniqueOrThrow({ where: key, select: { clockOutTime: true } });
+        } catch (err) {
+          threw = err;
+        }
+        check("scoped: ...and findUniqueOrThrow throws CrossTenantError", threw instanceof CrossTenantError, String(threw));
+      } finally {
+        await raw.$disconnect();
+      }
     }
 
     // In-flight with the same body, on a fresh key.
