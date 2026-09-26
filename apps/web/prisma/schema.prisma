@@ -1074,6 +1074,11 @@ model InventoryChange {
   // OK/LOW/EMPTY/MISSING/DAMAGED chips.
   previousStatus String?
   newStatus      String?
+  // On a cleaner's LOST/BROKEN report (action ISSUE, employeeId set): how much
+  // of the write-off was stock already issued off the warehouse (a pickup or a
+  // fulfilled request), which therefore moved no warehouse stock at the
+  // report. See src/server/kit/issue.ts.
+  issuedWriteOff Float?
   changedById    String?
   changedByName  String?
   createdAt      DateTime         @default(now())
@@ -2265,10 +2270,18 @@ model GroupMessage {
   senderId       String
   senderName     String
   body           String       @db.Text
+  // Soft delete, by its sender or an office moderator. The body is kept on
+  // the row and never served once this is set.
   deletedAt      DateTime?
+  deletedById    String?
+  // When its sender last edited it; null if never.
+  editedAt       DateTime?
+  // The id the sending phone made at the tap (API v1); returned to its sender only.
+  clientEventId  String?
   createdAt      DateTime     @default(now())
   channel        GroupChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
 
+  @@unique([organizationId, senderId, clientEventId])
   @@index([channelId, createdAt])
   @@index([organizationId])
 }
@@ -2839,10 +2852,14 @@ model ChatMessage {
   readByAdminAt    DateTime?
   readByEmployeeAt DateTime?
   deliveredAt      DateTime?
+  // The id the sending phone made at the tap (API v1). Returned to its sender
+  // only, so the app can match a message it is showing as "sending".
+  clientEventId    String?
   createdAt        DateTime         @default(now())
   conversation     ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   sender           User             @relation("ChatMessageSender", fields: [senderId], references: [id], onDelete: Cascade)
 
+  @@unique([organizationId, senderId, clientEventId])
   @@index([conversationId, createdAt])
   @@index([senderId])
   @@index([organizationId])
