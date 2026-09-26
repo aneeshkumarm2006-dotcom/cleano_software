@@ -53,7 +53,7 @@ export async function runTalkChecks(t: TalkHarness): Promise<void> {
     data: {
       organizationId: A,
       name: "Lead Tester",
-      email: `lead-${randomUUID().slice(0, 8)}@v1test-alpha.test`,
+      email: `lead-${randomUUID().slice(0, 8)}@${F.orgA.slug}.test`,
       role: "FIELD_LEAD",
       emailVerified: true,
       isActive: true,
