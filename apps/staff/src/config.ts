@@ -9,7 +9,10 @@ import { Platform } from "react-native";
  * can point it elsewhere (a local server or staging) with
  * EXPO_PUBLIC_PLATFORM_URL.
  */
-export const PLATFORM_URL = (__DEV__ && process.env.EXPO_PUBLIC_PLATFORM_URL) || "https://useawer.com";
+// www, not the apex: the apex answers with a redirect to www, and the app
+// refuses redirects on principle (a redirect could carry the session cookie to
+// another host).
+export const PLATFORM_URL = (__DEV__ && process.env.EXPO_PUBLIC_PLATFORM_URL) || "https://www.useawer.com";
 
 /** "1.0.0 (42)": the native version and build, sent with every call. */
 export const APP_VERSION = `${Application.nativeApplicationVersion ?? "0.0.0"} (${Application.nativeBuildVersion ?? "0"})`;
