@@ -28,6 +28,9 @@
 // still-decidable states, made BEFORE anything is applied. Two admins who open
 // the same request both pass the read; only one of them gets the row, and the
 // other is told it was already decided rather than applying it a second time.
+// The claim and the change it applies share one transaction
+// (server/manager/time.ts, the service the phone's approvals also run), so a
+// change that can't be applied takes the claim back with it.
 
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
@@ -36,20 +39,10 @@ import { revalidatePath } from "next/cache";
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/org-db";
 import { isAdminRole } from "@/lib/role-routing";
-import { logActivity } from "@/lib/activity-log";
-import {
-  fieldLeadGroupIds,
-  isFieldLeadGroupMember,
-} from "@/lib/field-lead-group.server";
-import {
-  canDecide,
-  DECIDABLE_TIME_LOG_STATUSES,
-  TIME_LOG_REASON_MAX,
-} from "@bookmops/core/time";
-import { fmtDateTime } from "@/lib/time";
-import { snapshotBilledActualHours } from "@/lib/hourly-billing.server";
-import { snapshotHourlyEmployeePay } from "@/lib/hourly-pay.server";
-import { applyClockTimes } from "./_clockTimes";
+import { fieldLeadGroupIds } from "@/lib/field-lead-group.server";
+import { TIME_LOG_REASON_MAX } from "@bookmops/core/time";
+import { actorFromSession } from "@/server/actor";
+import { decideTimeRequest } from "@/server/manager/time";
 
 type Result = { success: true } | { success: false; error: string };
 
@@ -88,251 +81,30 @@ export async function decideTimeLogChange(input: {
   const note = String(input.note ?? "").trim().slice(0, TIME_LOG_REASON_MAX) || null;
 
   try {
-    const req = await db.timeLogChangeRequest.findUnique({
-      where: { id: input.requestId },
-      include: {
-        cleaner: { select: { name: true } },
-        job: { select: { jobNumber: true, clientName: true } },
+    // The decision itself is the shared service (server/manager/time.ts), the
+    // one the phone's approvals run: scope, the self rule, the claim and the
+    // apply in ONE transaction, then the derived state and the activity line.
+    const res = await decideTimeRequest(
+      actorFromSession({ ...session.user, role: role ?? null }),
+      {
+        requestId: input.requestId,
+        decision: input.approve ? "APPROVE" : "REJECT",
+        note,
+        now: new Date(),
+        via: "web",
       },
-    });
-    if (!req) return { success: false, error: "Request not found" };
-    if (req.cleanerId === session.user.id) {
-      return {
-        success: false,
-        error: "You can't decide your own time change request. Another admin has to.",
-      };
-    }
-    if (
-      role === "FIELD_LEAD" &&
-      !(await isFieldLeadGroupMember(session.user.id, req.cleanerId))
-    ) {
-      return { success: false, error: "Request not found" };
-    }
-    if (!canDecide(req.status)) {
-      return {
-        success: false,
-        error: `This request was already ${req.status.toLowerCase()}.`,
-      };
-    }
-
-    // Raised by the server from a phone clock event (API_V1.md §6, source
-    // OFFLINE_CLOCK). An event that could not be applied at all (a clock-out
-    // with no clock-in, a tap on a job since paid) has no entry to move, so
-    // approving it is refused here, BEFORE the claim below, so that nothing is
-    // left marked approved. The break shape is applied inside the claim.
-    const offlineBreakId = req.source === "OFFLINE_CLOCK" ? req.breakId : null;
-    if (input.approve && req.source === "OFFLINE_CLOCK" && !req.breakId && !req.sessionId) {
-      return {
-        success: false,
-        error:
-          "This came from the app with no time entry to change. Enter the times on the job by hand, then reject this request with a note.",
-      };
-    }
-
-    // Claim the decision first (see the header). 0 rows means somebody else's
-    // decision landed between our read and now.
-    const claimed = await db.timeLogChangeRequest.updateMany({
-      where: { id: req.id, status: { in: [...DECIDABLE_TIME_LOG_STATUSES] } },
-      data: {
-        status: input.approve ? "APPROVED" : "REJECTED",
-        decidedById: session.user.id,
-        decidedAt: new Date(),
-        decisionNote: note,
-      },
-    });
-    if (claimed.count === 0) {
-      const now = await db.timeLogChangeRequest.findUnique({
-        where: { id: req.id },
-        select: { status: true },
-      });
-      return {
-        success: false,
-        error: `This request was already ${(now?.status ?? "decided").toLowerCase()}.`,
-      };
-    }
-    // Put the request back exactly as it was, for when the approved change
-    // could not be applied. Conditional on still being OUR approval, so it can
-    // never undo anything else.
-    const release = () =>
-      db.timeLogChangeRequest.updateMany({
-        where: { id: req.id, status: "APPROVED", decidedById: session.user.id },
-        data: {
-          status: req.status,
-          decidedById: req.decidedById,
-          decidedAt: req.decidedAt,
-          decisionNote: req.decisionNote,
-        },
-      });
-
-    // Anything that throws before the change lands releases the claim too, or
-    // a database hiccup would leave a request marked approved and never applied.
-    try {
-      if (input.approve && offlineBreakId) {
-        // A break the phone reported: move the break, not the session.
-        const applied = await applyBreakCorrection({
-          jobId: req.jobId,
-          cleanerId: req.cleanerId,
-          breakId: offlineBreakId,
-          requestedStart: req.requestedStart,
-          requestedEnd: req.requestedEnd,
-          adminName: session.user.name ?? "an admin",
-        });
-        if (!applied.ok) {
-          await release();
-          return {
-            success: false,
-            error: `Couldn't apply it: ${applied.error} The request is still waiting.`,
-          };
-        }
-      } else if (input.approve) {
-        // BOTH times have to be sent, every time.
-        //
-        // The clock-edit core reads null as "CLEAR this time", not "leave it
-        // alone" — so approving a request that only moves the start time, and
-        // passing null for the finish, would wipe the cleaner's clock-out and
-        // zero their hours. The side the cleaner did not ask about is therefore
-        // re-read from the clock as it stands NOW and passed back unchanged.
-        //
-        // Now, not from the request's stored `original*`: those were captured
-        // when the cleaner filed it, and an admin may have corrected the entry
-        // in the meantime. Using the stale value would silently undo that edit
-        // as a side effect of approving something unrelated.
-        const current = req.sessionId
-          ? await db.jobWorkSession
-              .findUnique({
-                where: { id: req.sessionId },
-                select: { startedAt: true, endedAt: true, cleanerId: true },
-              })
-              // The session has to be the requester's. Scope was checked on the
-              // request's cleaner, so it must be that cleaner's hours that move.
-              .then((w) => (w && w.cleanerId === req.cleanerId ? w : null))
-          : await db.jobAssignment
-              .findUnique({
-                where: { jobId_cleanerId: { jobId: req.jobId, cleanerId: req.cleanerId } },
-                select: { clockInTime: true, clockOutTime: true },
-              })
-              .then((a) =>
-                a ? { startedAt: a.clockInTime, endedAt: a.clockOutTime } : null,
-              );
-        if (!current) {
-          await release();
-          return {
-            success: false,
-            error: "That time entry no longer exists, so there is nothing to correct.",
-          };
-        }
-
-        const nextIn = req.requestedStart ?? current.startedAt;
-        const nextOut = req.requestedEnd ?? current.endedAt;
-
-        // The request is already claimed as APPROVED, but it only STAYS approved
-        // if the change actually lands. Otherwise it is released back to waiting,
-        // because the worst outcome available here is a request stamped
-        // APPROVED, a cleaner told their hours were fixed, and a clock that never
-        // moved because the pay period was locked.
-        //
-        // Applied through the clock-edit core rather than the `updateClockTimes`
-        // action: that action refuses a Field Lead (no direct edits), and an
-        // approved request from their own group is exactly what a lead may apply.
-        const applied = await applyClockTimes(
-          {
-            jobId: req.jobId,
-            sessionId: req.sessionId ?? undefined,
-            // No session means a legacy job whose times sit on the assignment row.
-            cleanerId: req.sessionId ? undefined : req.cleanerId,
-            clockInTime: nextIn ? nextIn.toISOString() : null,
-            clockOutTime: nextOut ? nextOut.toISOString() : null,
-            reason: `Approved ${req.cleaner?.name ?? "a cleaner"}'s time change request: ${req.reason}`,
-          },
-          { id: session.user.id, name: session.user.name ?? null },
-        );
-        if (!applied.success) {
-          await release();
-          return {
-            success: false,
-            error: `Couldn't apply it: ${applied.error} The request is still waiting.`,
-          };
-        }
-      }
-    } catch (e) {
-      await release().catch(() => {});
-      throw e;
-    }
-
-    // The whole history the PDF asks for — original time, requested time,
-    // reason, cleaner, decision and timestamp — is on the row itself. This is
-    // the line that puts the DECISION where an admin browsing the log will see
-    // it next to everything else that happened that day.
-    await logActivity({
-      category: "ADMIN",
-      action: input.approve ? "timelog.request.approved" : "timelog.request.rejected",
-      status: "SUCCESS",
-      targetType: "Job",
-      targetId: req.jobId,
-      message:
-        `${session.user.name ?? "An admin"} ${input.approve ? "approved" : "rejected"} ` +
-        `${req.cleaner?.name ?? "a cleaner"}'s time change on job #${req.job?.jobNumber} ` +
-        `(${req.job?.clientName}). Their reason: ${req.reason}.` +
-        (note ? ` Decision note: ${note}` : ""),
-    }).catch(() => {});
+    );
+    if (!res.ok) return { success: false, error: res.message };
 
     revalidatePath("/admin/notifications");
-    revalidatePath(`/admin/jobs/${req.jobId}`);
+    revalidatePath(`/admin/jobs/${res.value.jobId}`);
     revalidatePath("/admin/time-tracking");
-    revalidatePath(`/cleaners/my-jobs/${req.jobId}`);
+    revalidatePath(`/cleaners/my-jobs/${res.value.jobId}`);
     return { success: true };
   } catch (e) {
     console.error("decideTimeLogChange", e);
     return { success: false, error: "Couldn't record that decision. Nothing was changed." };
   }
-}
-
-/**
- * Move one break to the time the phone reported (an OFFLINE_CLOCK request with a
- * breakId). Breaks come off paid hours, so the job's hourly pay and billed
- * hours are re-snapshotted afterwards, as a clock edit does; both snapshots
- * refuse a locked pay period on their own.
- */
-async function applyBreakCorrection(args: {
-  jobId: string;
-  cleanerId: string;
-  breakId: string;
-  requestedStart: Date | null;
-  requestedEnd: Date | null;
-  adminName: string;
-}): Promise<{ ok: true } | { ok: false; error: string }> {
-  const row = await db.jobBreak.findFirst({
-    where: { id: args.breakId, jobId: args.jobId, cleanerId: args.cleanerId },
-    select: { id: true, startedAt: true, endedAt: true },
-  });
-  if (!row) return { ok: false, error: "That break no longer exists." };
-
-  const nextStart = args.requestedStart ?? row.startedAt;
-  const nextEnd = args.requestedEnd ?? row.endedAt;
-  if (nextEnd && nextEnd.getTime() <= nextStart.getTime()) {
-    return { ok: false, error: "The break would end before it starts." };
-  }
-
-  await db.jobBreak.update({
-    where: { id: row.id },
-    data: { startedAt: nextStart, endedAt: nextEnd },
-  });
-  await db.jobLog
-    .create({
-      data: {
-        jobId: args.jobId,
-        userId: args.cleanerId,
-        action: "NOTE_ADDED",
-        field: "breakTimes",
-        oldValue: `start=${fmtDateTime(row.startedAt)} end=${row.endedAt ? fmtDateTime(row.endedAt) : "—"}`,
-        newValue: `start=${fmtDateTime(nextStart)} end=${nextEnd ? fmtDateTime(nextEnd) : "—"}`,
-        description: `Break times corrected by ${args.adminName}, approving the time the app reported.`,
-      },
-    })
-    .catch((e) => console.error("break correction log", e));
-  await snapshotBilledActualHours(args.jobId).catch((e) => console.error("billed-hours snapshot", e));
-  await snapshotHourlyEmployeePay(args.jobId).catch((e) => console.error("hourly-pay snapshot", e));
-  return { ok: true };
 }
 
 export interface TimeLogRequestRow {

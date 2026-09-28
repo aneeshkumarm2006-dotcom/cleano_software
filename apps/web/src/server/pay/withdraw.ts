@@ -67,7 +67,7 @@ const NOTE_MAX = 500;
  * Released by the commit or rollback, so it can't leak, and it works through
  * the transaction pooler because it never outlives the transaction.
  */
-async function lockWithdrawalsOf(
+export async function lockWithdrawalsOf(
   tx: { $executeRaw: (q: TemplateStringsArray, ...v: unknown[]) => Promise<unknown> },
   organizationId: string,
   employeeId: string,

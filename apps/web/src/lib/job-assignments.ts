@@ -7,6 +7,7 @@
 // job-level clockInTime/clockOutTime/onMyWayAt fields instead.
 
 import { db } from "@/lib/org-db";
+import type { ScopedTx } from "@/lib/db-scoped";
 import type { JobCleanerStatus, Prisma } from "@prisma/client";
 import { notifyAdmins } from "@/lib/admin-alerts";
 import {
@@ -49,13 +50,16 @@ export function resolveJobLead(
  */
 export async function syncJobAssignments(
   jobId: string,
-  cleanerIds: string[]
+  cleanerIds: string[],
+  // A transaction's client, when the caller is inside one (the v1 crew
+  // change); the org-scoped client otherwise, as every web caller has it.
+  client: ScopedTx = db
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const ids = Array.from(new Set(cleanerIds.filter((id): id is string => !!id)));
 
   try {
     // Remove rows for cleaners taken off the job (keep CANCELLED history).
-    await db.jobAssignment.deleteMany({
+    await client.jobAssignment.deleteMany({
       where: {
         jobId,
         cleanerId: { notIn: ids },
@@ -74,12 +78,12 @@ export async function syncJobAssignments(
     // work already done but not yet paid.
     let seedRates = new Map<string, number>();
     if (ids.length > 0) {
-      const job = await db.job.findUnique({
+      const job = await client.job.findFirst({
         where: { id: jobId },
         select: { payType: true },
       });
       if (job?.payType === "HOURLY") {
-        const profiles = await db.user.findMany({
+        const profiles = await client.user.findMany({
           where: { id: { in: ids }, defaultHourlyRate: { not: null } },
           select: { id: true, defaultHourlyRate: true },
         });
@@ -93,7 +97,7 @@ export async function syncJobAssignments(
 
     for (const cleanerId of ids) {
       const seed = seedRates.get(cleanerId);
-      await db.jobAssignment.upsert({
+      await client.jobAssignment.upsert({
         where: { jobId_cleanerId: { jobId, cleanerId } },
         // Existing rows keep whatever live status they already reached — and
         // whatever rate an admin has already set on them. A re-save of the

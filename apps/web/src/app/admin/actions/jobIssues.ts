@@ -9,10 +9,10 @@ import {
   jobIssueCategoryLabel,
   JOB_ISSUE_STATUSES,
   JOB_ISSUE_STATUS_LABEL,
-  MAX_ISSUE_DESCRIPTION,
   parseJobIssueStatus,
   parseJobIssueUrgency,
 } from "@bookmops/core/jobs";
+import { setIssueStatus } from "@/server/manager/issues";
 
 /**
  * What the admin screens see. A shaped object rather than the Prisma row: the
@@ -106,55 +106,23 @@ export async function setJobIssueStatus(
   const guard = await requireOwnerAdmin();
   if (!guard.ok) return { ok: false, message: guard.error };
 
-  const next = parseJobIssueStatus(status);
-  const note =
-    typeof resolutionNote === "string" && resolutionNote.trim().length > 0
-      ? resolutionNote.trim().slice(0, MAX_ISSUE_DESCRIPTION)
-      : null;
-
-  const issue = await db.jobIssue.findUnique({
-    where: { id: issueId },
-    select: { id: true, jobId: true, category: true, acknowledgedAt: true },
-  });
-  if (!issue) return { ok: false, message: "That issue no longer exists." };
-
-  const now = new Date();
-
-  await db.jobIssue.update({
-    where: { id: issueId },
-    data: {
-      status: next,
-      // Resolving implies somebody read it, so a straight OPEN → RESOLVED still
-      // leaves an acknowledged-at behind; without it the timeline shows a jump
-      // with no first-response time in it.
-      acknowledgedAt:
-        next === "OPEN" ? null : (issue.acknowledgedAt ?? now),
-      resolvedAt: next === "RESOLVED" ? now : null,
-      resolvedById: next === "RESOLVED" ? guard.userId : null,
-      resolutionNote: next === "RESOLVED" ? note : null,
-    },
-  });
-
-  await db.jobLog
-    .create({
-      data: {
-        jobId: issue.jobId,
-        userId: guard.userId,
-        action: "NOTE_ADDED",
-        field: "issue",
-        newValue: next,
-        description:
-          next === "RESOLVED"
-            ? `Issue resolved (${jobIssueCategoryLabel(issue.category)})${note ? `: ${note}` : "."}`
-            : `Issue marked ${JOB_ISSUE_STATUS_LABEL[next].toLowerCase()} (${jobIssueCategoryLabel(issue.category)}).`,
-      },
-    })
-    .catch((e) => console.error("setJobIssueStatus: log failed", e));
+  if (typeof issueId !== "string" || !issueId) return { ok: false, message: "That issue no longer exists." };
+  // The change itself is the shared service (server/manager/issues.ts), the
+  // one the phone's POST /manager/issues/:id/status runs.
+  const res = await setIssueStatus(
+    { userId: guard.userId, organizationId: "", role: guard.role, name: null, email: "" },
+    issueId,
+    status,
+    resolutionNote,
+    new Date(),
+    "web",
+  );
+  if (!res.ok) return { ok: false, message: res.message };
 
   revalidatePath("/admin/issues");
-  revalidatePath(`/admin/jobs/${issue.jobId}`);
+  revalidatePath(`/admin/jobs/${res.value.jobId}`);
 
-  return { ok: true, status: next };
+  return { ok: true, status: res.value.status };
 }
 
 /**

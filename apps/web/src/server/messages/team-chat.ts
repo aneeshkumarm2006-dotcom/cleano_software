@@ -18,6 +18,7 @@ import "server-only";
 import { Prisma } from "@prisma/client";
 import type { TeamChannel, TeamMessage } from "@bookmops/api/v1";
 
+import { logActivity } from "@/lib/activity-log";
 import { requireOrgId } from "@/lib/org";
 import { db } from "@/lib/org-db";
 
@@ -495,6 +496,57 @@ export async function deleteOwnTeamMessage(
     await db.groupMessage.updateMany({
       where: { id: message.id, senderId: actor.userId, deletedAt: null },
       data: { deletedAt: now, deletedById: actor.userId },
+    });
+  }
+  return ok({ id: message.id });
+}
+
+/**
+ * Remove anyone's message: moderation, for OWNER, ADMIN and OPS_MANAGER
+ * (isModerator). Soft, like a sender's own delete: deletedAt and deletedById
+ * (the moderator) are set, and the body and attachment stay on the row for a
+ * dispute, never served again. Conditional on not yet deleted, so when two
+ * moderators remove the same message the first stays on record and the
+ * activity line names only them. `channelId` is the channel the message must
+ * be in (the phone's path); null for the web's action, which names only the
+ * message. The web's deleteGroupMessage and the manager API both call this.
+ */
+export async function moderateTeamMessage(
+  actor: Actor,
+  channelId: string | null,
+  messageId: string,
+  now: Date,
+  via: "web" | "app",
+): Promise<Result<{ id: string }>> {
+  if (!isModerator(actor.role)) return failure(403, "FORBIDDEN", "Your role can't do this.");
+  if (typeof messageId !== "string" || !messageId) return notFound(MESSAGE_NOT_FOUND);
+  if (channelId !== null && !(await accessibleChannel(actor, channelId))) return notFound(CHANNEL_NOT_FOUND);
+  const message = await db.groupMessage.findFirst({
+    where: { id: messageId, ...(channelId !== null ? { channelId } : {}) },
+    select: { id: true, channelId: true, senderId: true, senderName: true, deletedAt: true },
+  });
+  if (!message) return notFound(MESSAGE_NOT_FOUND);
+  if (message.deletedAt) return ok({ id: message.id });
+
+  const removed = await db.groupMessage.updateMany({
+    where: { id: message.id, deletedAt: null },
+    data: { deletedAt: now, deletedById: actor.userId },
+  });
+  // WHO removed it: on the row, and in the activity log. Never the text:
+  // removing it from view is the point.
+  if (removed.count > 0) {
+    await logActivity({
+      category: "ADMIN",
+      action: "groupchat.message.deleted",
+      status: "SUCCESS",
+      actorId: actor.userId,
+      actorLabel: actor.name ?? null,
+      targetType: "GroupMessage",
+      targetId: message.id,
+      message:
+        `${actor.name ?? "An admin"} removed a team chat message from ${message.senderName}` +
+        (via === "app" ? " from the app." : "."),
+      metadata: { channelId: message.channelId, senderId: message.senderId },
     });
   }
   return ok({ id: message.id });

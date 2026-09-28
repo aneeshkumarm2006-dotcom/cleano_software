@@ -2672,6 +2672,8 @@ model Withdrawal {
   paymentMethod  PaymentType?
   notes          String?
   processedAt    DateTime?
+  // Who last moved it: approved, marked paid or rejected (web or phone).
+  processedById  String?
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
   employee       User             @relation(fields: [employeeId], references: [id], onDelete: Cascade)
