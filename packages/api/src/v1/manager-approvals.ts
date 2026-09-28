@@ -77,6 +77,12 @@ export const TimeItem = z.object({
   /** The times on record now (what applies until someone decides). */
   current: z.object({ start: Instant.nullable(), end: Instant.nullable() }),
   /**
+   * The times on record when the request was made, as stored with it. A
+   * decided item's "before": once approved, `current` already holds the new
+   * times. Absent from older servers; fall back to `current`.
+   */
+  original: z.object({ start: Instant.nullable(), end: Instant.nullable() }).optional(),
+  /**
    * The times asked for: the cleaner's request, or the phone's claimed time.
    * A side nobody asked to change is null and is kept as it stands.
    */

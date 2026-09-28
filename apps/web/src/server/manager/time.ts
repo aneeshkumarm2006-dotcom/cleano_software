@@ -160,6 +160,7 @@ async function toItems(actor: Actor, rows: ItemRow[]): Promise<TimeItem[]> {
         startsAt: r.job.startTime.toISOString(),
       },
       current: { start: iso(current.start), end: iso(current.end) },
+      original: { start: iso(r.originalStart), end: iso(r.originalEnd) },
       requested: { start: iso(r.requestedStart), end: iso(r.requestedEnd) },
       reason: offline ? null : r.reason,
       offline:

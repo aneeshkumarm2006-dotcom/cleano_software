@@ -28,8 +28,17 @@ function change(label: string, from: string | null, to: string | null, timeZone:
   return `${label} ${from ? clockTime(from, timeZone) : "none"} → ${clockTime(to, timeZone)}`;
 }
 
+/**
+ * The "before" side: what was on record now while pending; once decided, what
+ * was on record when it was asked — `current` then already holds the new times.
+ */
+export function timeBefore(t: TimeItem): TimeItem["current"] {
+  return t.status !== "PENDING" && t.original ? t.original : t.current;
+}
+
 export function timeChangeLines(t: TimeItem, timeZone: string): string[] {
-  return [change("Start", t.current.start, t.requested.start, timeZone), change("Finish", t.current.end, t.requested.end, timeZone)].filter(
+  const before = timeBefore(t);
+  return [change("Start", before.start, t.requested.start, timeZone), change("Finish", before.end, t.requested.end, timeZone)].filter(
     (x): x is string => !!x,
   );
 }

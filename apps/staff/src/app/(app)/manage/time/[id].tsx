@@ -10,6 +10,7 @@ import { Guarded } from "@/components/Guarded";
 import { LoadError, Loading } from "@/components/QueryState";
 import { useDecideTime, useMe, useTimeItem } from "@/data/queries";
 import { useStaffRole } from "@/data/role";
+import { timeBefore } from "@/features/manage/Approvals";
 import { TimeStepper } from "@/features/manage/TimeStepper";
 import { ALREADY_HANDLED, handledElsewhere, OFFLINE_EVENT, OFFLINE_WHY } from "@/features/manage/words";
 import { BackHeader, confirm, errorText, FormError, Notice, Page, SectionTitle } from "@/features/record/ui";
@@ -78,11 +79,23 @@ function TimeItemView() {
   );
 }
 
-function Row({ label, now, asked, timeZone }: { label: string; now: string | null; asked: string | null; timeZone: string }) {
+function Row({
+  label,
+  nowLabel,
+  now,
+  asked,
+  timeZone,
+}: {
+  label: string;
+  nowLabel: string;
+  now: string | null;
+  asked: string | null;
+  timeZone: string;
+}) {
   const nowText = now ? clockTime(now, timeZone) : "—";
   const askedText = asked ? clockTime(asked, timeZone) : "No change";
   return (
-    <View accessible accessibilityLabel={`${label}: on record ${nowText}, asked for ${askedText}`} style={{ flexDirection: "row", alignItems: "baseline", gap: space[3] }}>
+    <View accessible accessibilityLabel={`${label}: ${nowLabel.toLowerCase()} ${nowText}, asked for ${askedText}`} style={{ flexDirection: "row", alignItems: "baseline", gap: space[3] }}>
       <Text variant="eyebrow" color="ink3" style={{ width: 56 }}>
         {label}
       </Text>
@@ -119,6 +132,9 @@ function Decide({
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
   const pending = item.status === "PENDING";
+  // Once decided, the times as they were when asked: `current` has moved on.
+  const before = timeBefore(item);
+  const nowLabel = pending ? "On record" : "Before";
   const needsNote = decision !== "APPROVE";
   const badOrder = decision === "ADJUST" && !!start && !!end && end <= start;
 
@@ -223,14 +239,14 @@ function Decide({
           <View style={{ flexDirection: "row", gap: space[3] }}>
             <View style={{ width: 56 }} />
             <Text variant="eyebrow" color="ink3" style={{ flex: 1 }}>
-              On record
+              {nowLabel}
             </Text>
             <Text variant="eyebrow" color="ink3" style={{ flex: 1 }}>
               Asked for
             </Text>
           </View>
-          <Row label="Start" now={item.current.start} asked={item.requested.start} timeZone={timeZone} />
-          <Row label="Finish" now={item.current.end} asked={item.requested.end} timeZone={timeZone} />
+          <Row label="Start" nowLabel={nowLabel} now={before.start} asked={item.requested.start} timeZone={timeZone} />
+          <Row label="Finish" nowLabel={nowLabel} now={before.end} asked={item.requested.end} timeZone={timeZone} />
         </View>
       </Card>
 
