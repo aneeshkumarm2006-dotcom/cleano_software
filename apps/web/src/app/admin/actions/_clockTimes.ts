@@ -18,7 +18,8 @@
 
 import "server-only";
 
-import { db } from "@/lib/org-db";
+import { db as orgDb } from "@/lib/org-db";
+import type { ScopedTx } from "@/lib/db-scoped";
 import { revalidatePath } from "next/cache";
 import { fmtDateTime } from "@/lib/time";
 import {
@@ -91,10 +92,87 @@ export const OWN_ENTRY = {
   error: "You can't change your own clock times. Ask another admin to do it.",
 } as const;
 
+/**
+ * What the write half did, for the caller to finish: `recompute` is true when
+ * a work session moved, so the job/assignment mirrors and the hourly pay and
+ * billed-hours snapshots have to be rebuilt from the sessions.
+ */
+export type ClockEditWrite =
+  | { success: true; jobId: string; jobDay: Date; recompute: boolean }
+  | { success: false; error: string };
+
+/**
+ * The web's clock edit: validate, write, audit, then rebuild what derives from
+ * the sessions and warn about a locked pay period. Unchanged in behaviour; the
+ * write half is `writeClockEdit`, which the phone's time decisions also run,
+ * inside their own transaction (server/manager/time.ts).
+ */
 export async function applyClockTimes(
   input: UpdateClockTimesInput,
   actor: ClockEditActor
 ): Promise<UpdateClockTimesResult> {
+  const written = await writeClockEdit(orgDb, input, actor);
+  if (!written.success) return written;
+  if (written.recompute) await recomputeAfterClockEdit(written.jobId);
+
+  // ── Payroll already closed on this date? ──────────────────────────
+  // Hours are snapshotted into Payout rows when a pay period is generated. An
+  // edit inside a period that's been approved or paid does NOT rewrite that
+  // frozen payout — the admin is told so they can adjust it deliberately.
+  let warning: string | undefined;
+  const period = await orgDb.payPeriod.findFirst({
+    where: {
+      status: { in: [...LOCKED_PAY_PERIOD_STATUSES] },
+      startDate: { lte: written.jobDay },
+      endDate: { gte: written.jobDay },
+    },
+    select: { status: true },
+  });
+  if (period) {
+    warning = `Payroll for this date is already ${period.status
+      .toLowerCase()
+      .replace("_", " ")}. The recorded payout was not changed, and neither was this job's stored cleaner pay — adjust it on the pay period if this edit affects it.`;
+  }
+
+  revalidatePath(`/admin/jobs/${written.jobId}`);
+  revalidatePath("/admin/jobs");
+  revalidatePath("/admin/time-tracking");
+  revalidatePath("/admin/payouts");
+  revalidatePath(`/cleaners/my-jobs/${written.jobId}`);
+
+  return warning ? { success: true, warning } : { success: true };
+}
+
+/**
+ * Rebuild what derives from a job's sessions after one moved: the job and
+ * assignment clock mirrors (so the next clock action doesn't silently revert
+ * the edit), then the hourly job's billed hours and the crew's hourly pay.
+ * Both snapshots refuse a paid job or a locked pay period on their own.
+ * Never inside a transaction: each reads the sessions as committed.
+ */
+export async function recomputeAfterClockEdit(jobId: string): Promise<void> {
+  await syncClockMirrors(jobId);
+  await snapshotBilledActualHours(jobId).catch((e) =>
+    console.error("billed-hours snapshot", e)
+  );
+  await snapshotHourlyEmployeePay(jobId).catch((e) =>
+    console.error("hourly-pay snapshot", e)
+  );
+}
+
+/**
+ * The write half of a clock edit: validation, the one row it moves, and the
+ * JobLog line, all through `db` — the org-scoped client for the web, or a
+ * transaction's client for the phone's decision, so a refusal later in that
+ * transaction takes the edit back with it. Rebuilding the mirrors and
+ * snapshots is left to the caller (`recompute`), because those read the
+ * sessions as committed.
+ */
+export async function writeClockEdit(
+  db: ScopedTx,
+  input: UpdateClockTimesInput,
+  actor: ClockEditActor
+): Promise<ClockEditWrite> {
   const parsedIn = parseInstant(input.clockInTime);
   const parsedOut = parseInstant(input.clockOutTime);
   const invalid = validateClockEdit({ clockIn: parsedIn, clockOut: parsedOut });
@@ -104,7 +182,7 @@ export async function applyClockTimes(
   const clockIn = parsedIn as Date | null;
   const clockOut = parsedOut as Date | null;
 
-  const job = await db.job.findUnique({
+  const job = await db.job.findFirst({
     where: { id: input.jobId },
     select: {
       id: true,
@@ -128,10 +206,11 @@ export async function applyClockTimes(
   let cleanerName: string | null = null;
   let previousIn: Date | null;
   let previousOut: Date | null;
+  let recompute = false;
 
   if (sessionId) {
     // ── Edit ONE work session (item 6) ────────────────────────────────
-    const row = await db.jobWorkSession.findUnique({
+    const row = await db.jobWorkSession.findFirst({
       where: { id: sessionId },
       select: { id: true, jobId: true, cleanerId: true, startedAt: true, endedAt: true },
     });
@@ -149,7 +228,7 @@ export async function applyClockTimes(
       };
     }
 
-    const cleaner = await db.user.findUnique({
+    const cleaner = await db.user.findFirst({
       where: { id: row.cleanerId },
       select: { name: true },
     });
@@ -163,19 +242,11 @@ export async function applyClockTimes(
     });
     // Job + assignment columns are derived, so they are rebuilt rather than
     // edited — an admin fixing a session must not leave the mirrors stale.
-    await syncClockMirrors(job.id);
     // An hourly job bills the hours these sessions record, so correcting a
-    // session has to correct the bill (Stage 8). No-op on a flat job, and it
-    // refuses to re-price a job that has already been paid.
-    await snapshotBilledActualHours(job.id).catch((e) =>
-      console.error("billed-hours snapshot", e)
-    );
-    // ...and pays the crew from the same corrected sessions (round 4, fix 5).
-    // It refuses to write under a locked pay period — the same rule the warning
-    // at the bottom of this action reports, off the same status list.
-    await snapshotHourlyEmployeePay(job.id).catch((e) =>
-      console.error("hourly-pay snapshot", e)
-    );
+    // session has to correct the bill (Stage 8), and pays the crew from the
+    // same corrected sessions (round 4, fix 5). All three are the caller's
+    // `recomputeAfterClockEdit`, run once the edit is committed.
+    recompute = true;
   } else if (cleanerId) {
     // Only someone actually on the job can have times recorded against them.
     // Without this, the upsert below would MINT a JobAssignment row for an
@@ -206,11 +277,14 @@ export async function applyClockTimes(
       };
     }
 
-    const assignment = await db.jobAssignment.findUnique({
-      where: { jobId_cleanerId: { jobId: job.id, cleanerId } },
+    // By job and person, not the compound key: outside a transaction the
+    // scoped client checks a compound-key read's organizationId after the
+    // fact, and this select doesn't carry it.
+    const assignment = await db.jobAssignment.findFirst({
+      where: { jobId: job.id, cleanerId },
       select: { clockInTime: true, clockOutTime: true },
     });
-    const cleaner = await db.user.findUnique({
+    const cleaner = await db.user.findFirst({
       where: { id: cleanerId },
       select: { name: true },
     });
@@ -300,31 +374,5 @@ export async function applyClockTimes(
       .catch((e) => console.error("clock-edit log", e));
   }
 
-  // ── Payroll already closed on this date? ──────────────────────────
-  // Hours are snapshotted into Payout rows when a pay period is generated. An
-  // edit inside a period that's been approved or paid does NOT rewrite that
-  // frozen payout — the admin is told so they can adjust it deliberately.
-  let warning: string | undefined;
-  const jobDay = job.jobDate ?? job.startTime;
-  const period = await db.payPeriod.findFirst({
-    where: {
-      status: { in: [...LOCKED_PAY_PERIOD_STATUSES] },
-      startDate: { lte: jobDay },
-      endDate: { gte: jobDay },
-    },
-    select: { status: true },
-  });
-  if (period) {
-    warning = `Payroll for this date is already ${period.status
-      .toLowerCase()
-      .replace("_", " ")}. The recorded payout was not changed, and neither was this job's stored cleaner pay — adjust it on the pay period if this edit affects it.`;
-  }
-
-  revalidatePath(`/admin/jobs/${job.id}`);
-  revalidatePath("/admin/jobs");
-  revalidatePath("/admin/time-tracking");
-  revalidatePath("/admin/payouts");
-  revalidatePath(`/cleaners/my-jobs/${job.id}`);
-
-  return warning ? { success: true, warning } : { success: true };
+  return { success: true, jobId: job.id, jobDay: job.jobDate ?? job.startTime, recompute };
 }
