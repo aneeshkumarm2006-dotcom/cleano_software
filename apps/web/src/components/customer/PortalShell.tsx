@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import BrandMark from "@/components/BrandMark";
 import { usePathname } from "next/navigation";
-import { Home, CalendarClock, UserCircle, HelpCircle, LogOut, Sparkles, Menu, X } from "lucide-react";
+import { Home, CalendarClock, UserCircle, HelpCircle, LogOut, Menu, X } from "lucide-react";
 import ScrollReset from "@/components/ScrollReset";
 import { useJobChatUnread } from "@/components/JobChatUnread";
 import { useWorkspaceName } from "@/components/WorkspaceName";
@@ -78,7 +79,7 @@ export default function PortalShell({
             <span
               className="cl-logo-mark"
               style={{ background: "#fff", color: "var(--primary)" }}>
-              <Sparkles size={18} strokeWidth={1.8} />
+              <BrandMark size={18} />
             </span>
             <span className="cl-psidebar-name" title={brandName}>{brandName}</span>
             <button

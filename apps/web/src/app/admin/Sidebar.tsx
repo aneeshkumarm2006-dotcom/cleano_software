@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import Link from "next/link";
+import BrandMark from "@/components/BrandMark";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Bell,
@@ -36,7 +37,6 @@ import {
   ScrollText,
   Settings,
   LogOut,
-  Sparkles,
   IdCard,
   LineChart,
   Database,
@@ -804,7 +804,7 @@ export default function Sidebar({
             className="flex items-center gap-2 min-w-0"
           >
             <span className="logo-mark-dark">
-              <Sparkles size={16} strokeWidth={2} />
+              <BrandMark size={16} />
             </span>
             <span className="logo-word" title={brandName}>
               {brandName}

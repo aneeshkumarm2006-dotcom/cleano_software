@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Sparkles } from "lucide-react";
+import BrandMark from "@/components/BrandMark";
 import { useWorkspaceName } from "@/components/WorkspaceName";
 
 export default function CustomerLogo({
@@ -18,7 +18,7 @@ export default function CustomerLogo({
       href={href}
       className={`cl-logo ${onDark ? "cl-logo-on-dark" : ""}`}>
       <span className="cl-logo-mark">
-        <Sparkles size={18} strokeWidth={1.8} />
+        <BrandMark size={18} />
       </span>
       <span>{brandName}</span>
     </Link>
