@@ -1,12 +1,23 @@
 import type { Workspace } from "@bookmops/api/v1";
 import { Button, Card, ChoiceChips, color, Icon, radius, space, Text, TextField } from "@bookmops/ui-native";
 import { Link } from "expo-router";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { KeyboardAvoidingView, Platform, ScrollView, type TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { PREVIEW_ROLES, type PreviewRole } from "@/data/preview-roles";
 import { useSession } from "@/data/session";
+
+/**
+ * Development builds only: an account to sign in as without typing, for a
+ * simulator run against a local server (README, "Running against a real
+ * server"). `__DEV__ &&` comes first, so a release build folds each to ""
+ * and neither string is in its bundle.
+ */
+const DEV_EMAIL = (__DEV__ && process.env.EXPO_PUBLIC_DEV_SIGNIN_EMAIL) || "";
+const DEV_PASSWORD = (__DEV__ && process.env.EXPO_PUBLIC_DEV_SIGNIN_PASSWORD) || "";
+/** Signed in with them once per launch, so signing out leaves the person on this screen. */
+let devSignInTried = false;
 
 /**
  * Sign in. The company is found from the work email (docs/architecture/
@@ -17,8 +28,8 @@ export default function SignIn() {
   const insets = useSafeAreaInsets();
   const { signIn, signInTo, startPreview } = useSession();
   const passwordRef = useRef<TextInput>(null);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState(DEV_EMAIL);
+  const [password, setPassword] = useState(DEV_PASSWORD);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [choices, setChoices] = useState<Workspace[] | null>(null);
@@ -34,6 +45,13 @@ export default function SignIn() {
     if ("choose" in result) setChoices(result.choose);
     else setError(result.error);
   }
+
+  useEffect(() => {
+    if (!__DEV__ || !DEV_EMAIL || !DEV_PASSWORD || devSignInTried) return;
+    devSignInTried = true;
+    void submit();
+    // Once, on the first mount of a launch; nothing it reads changes.
+  }, []);
 
   async function choose(workspace: Workspace) {
     setBusy(true);

@@ -71,7 +71,15 @@ npx next dev --turbopack -H 0.0.0.0 -p 3000
 ```
 
 Shell variables win over every `.env*` file, so this overrides the local
-database in `.env.development.local`. Check
+database in `.env.development.local`. `APP_ROOT_DOMAIN` must carry the
+`http://`: `.env.development.local`'s bare `localhost:3000` is read as
+https, and sign-in would hand the app `https://<slug>.…`, which the app
+refuses as not its `EXPO_PUBLIC_DEV_ORIGIN`. Add
+`RESEND_API_KEY= TWILIO_ACCOUNT_SID= TWILIO_AUTH_TOKEN= CRON_SECRET=` (empty)
+to the same command so nothing is emailed or texted: `.env.development.local`
+holds real keys, and an empty shell variable still wins.
+`scripts/app-e2e-staging.ts` walks every role's flows through the app's own
+client against this server. Check
 `curl http://www.$LAN.nip.io:3000/api/v1/meta` answers before going on.
 
 **2. The app**, from this folder:
@@ -83,7 +91,11 @@ npx expo start --ios --clear
 ```
 
 `<slug>` is the staging company you'll sign in to. Sign in with a staging
-staff account of that company (not the sample-data button). The app only
+staff account of that company (not the sample-data button). To skip typing,
+add `EXPO_PUBLIC_DEV_SIGNIN_EMAIL=…` and `EXPO_PUBLIC_DEV_SIGNIN_PASSWORD=…`:
+a development build signs in with them once per launch (a release build
+contains neither). Start Metro with `--clear` whenever these change, or it
+keeps the old values. The app only
 sends a password to `EXPO_PUBLIC_PLATFORM_URL` and to the one company address
 in `EXPO_PUBLIC_DEV_ORIGIN`; a sign-in that returns any other address is
 refused ("That company's address isn't one this app can use"), which is how
