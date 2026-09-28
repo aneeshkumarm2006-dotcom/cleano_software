@@ -122,6 +122,9 @@ model User {
   requestActivity              UserRequestActivity[]
   mediaUploads                 MediaUpload[]
   accountDeletionRequests      AccountDeletionRequest[]
+  teamChatBlocksMade           TeamChatBlock[]              @relation("TeamChatBlocker")
+  teamChatBlocksReceived       TeamChatBlock[]              @relation("TeamChatBlocked")
+  teamMessageReports           TeamMessageReport[]
 
   @@unique([organizationId, email])
   // Present in the database since an earlier migration but never declared here,
@@ -2286,6 +2289,8 @@ model GroupMessage {
   channel        GroupChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
   // What each edit replaced. Moderators only; never served to anyone else.
   edits          GroupMessageEdit[]
+  // Reports people made about it (App Store guideline 1.2).
+  reports        TeamMessageReport[]
 
   @@unique([organizationId, senderId, clientEventId])
   @@index([channelId, createdAt])
@@ -4591,6 +4596,49 @@ model AccountDeletionRequest {
   user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, userId])
+  @@index([organizationId, status])
+  @@index([organizationId])
+}
+
+/// One person blocking another in team chat (App Store guideline 1.2;
+/// /api/v1/team/blocks). The blocked person's messages are left out of the
+/// blocker's lists, and neither can open or send a direct message to the
+/// other. Team chat only; office chat is unaffected.
+model TeamChatBlock {
+  organizationId String   @default("")
+  id             String   @id @default(cuid())
+  blockerId      String
+  blockedId      String
+  createdAt      DateTime @default(now())
+  blocker        User     @relation("TeamChatBlocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked        User     @relation("TeamChatBlocked", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, blockerId, blockedId])
+  @@index([blockedId])
+  @@index([organizationId])
+}
+
+/// A team chat message reported to the company's moderators (App Store
+/// guideline 1.2; POST /api/v1/team/messages/:messageId/report). One per
+/// person per message. OPEN until a moderator deals with it.
+model TeamMessageReport {
+  organizationId String       @default("")
+  id             String       @id @default(cuid())
+  messageId      String
+  reporterId     String
+  /// Who sent the reported message, as it was when reported.
+  senderId       String
+  /// HARASSMENT | INAPPROPRIATE | SPAM | OTHER
+  reason         String
+  note           String?      @db.Text
+  status         String       @default("OPEN")
+  clientEventId  String?
+  createdAt      DateTime     @default(now())
+  message        GroupMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  reporter       User         @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, reporterId, messageId])
+  @@index([messageId])
   @@index([organizationId, status])
   @@index([organizationId])
 }

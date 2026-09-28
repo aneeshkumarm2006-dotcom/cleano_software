@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Empty, LoadError, Loading } from "@/components/QueryState";
 
 import { Composer } from "./Composer";
-import { MessageBubble, type ModerationActions, type OwnMessageActions } from "./MessageBubble";
+import { MessageBubble, type OthersMessageActions, type OwnMessageActions } from "./MessageBubble";
 import { buildRows, type ThreadMessage, type ThreadRow } from "./thread";
 import { useKeyboardVisible } from "./use-live";
 
@@ -30,6 +30,14 @@ export interface OwnMessages {
   saveEdit: (text: string) => void;
   cancelEdit: () => void;
   remove: (message: ThreadMessage) => void;
+}
+
+/** Team chat: what the person can do about someone else's message. */
+export interface OthersMessages {
+  /** Opens the report form for this message. */
+  report: (message: ThreadMessage) => void;
+  /** Blocks its sender, once confirmed here. */
+  block: (message: ThreadMessage) => void;
 }
 
 /**
@@ -56,6 +64,8 @@ export function ThreadView({
   onDiscard,
   own,
   onModerate,
+  others,
+  notice,
 }: {
   header: ReactNode;
   query: ThreadQuery;
@@ -74,6 +84,10 @@ export function ThreadView({
   own?: OwnMessages;
   /** Team chat, for a role that may moderate: remove someone else's message. */
   onModerate?: (message: ThreadMessage) => void;
+  /** Team chat: report someone else's message, or block its sender. */
+  others?: OthersMessages;
+  /** A line under the header, e.g. that blocked people's messages are hidden. */
+  notice?: ReactNode;
 }) {
   const insets = useSafeAreaInsets();
   const keyboard = useKeyboardVisible();
@@ -125,18 +139,58 @@ export function ThreadView({
     };
   }, [own]);
 
-  const moderation = useMemo<ModerationActions | undefined>(() => {
-    if (!onModerate) return undefined;
+  const othersActions = useMemo<OthersMessageActions | undefined>(() => {
+    if (!onModerate && !others) return undefined;
+    const confirmRemove = onModerate
+      ? (m: ThreadMessage) =>
+          Alert.alert("Remove this message?", `${m.senderName}'s message is replaced by “Message deleted” for everyone in the conversation.`, [
+            { text: "Cancel", style: "cancel" },
+            { text: "Remove", style: "destructive", onPress: () => onModerate(m) },
+          ])
+      : undefined;
+    const confirmBlock = others
+      ? (m: ThreadMessage) =>
+          Alert.alert(
+            `Block ${m.senderName}?`,
+            "You won't see their messages in team chat, and neither of you can send the other a direct message. They won't be told. You can unblock them any time.",
+            [
+              { text: "Cancel", style: "cancel" },
+              { text: "Block", style: "destructive", onPress: () => others.block(m) },
+            ],
+          )
+      : undefined;
     return {
-      onRemove: (m) => {
+      onReport: others?.report,
+      onBlock: confirmBlock,
+      onRemove: confirmRemove,
+      onOptions: (m) => {
         void Haptics.selectionAsync().catch(() => {});
-        Alert.alert("Remove this message?", `${m.senderName}'s message is replaced by “Message deleted” for everyone in the conversation.`, [
-          { text: "Cancel", style: "cancel" },
-          { text: "Remove", style: "destructive", onPress: () => onModerate(m) },
-        ]);
+        const choices: { label: string; destructive?: boolean; run: () => void }[] = [
+          ...(others && m.reportableId ? [{ label: "Report message", run: () => others.report(m) }] : []),
+          ...(confirmBlock && m.reportableId ? [{ label: `Block ${m.senderName}`, destructive: true, run: () => confirmBlock(m) }] : []),
+          ...(confirmRemove && m.removableId ? [{ label: "Remove message", destructive: true, run: () => confirmRemove(m) }] : []),
+        ];
+        if (choices.length === 0) return;
+        if (Platform.OS === "ios") {
+          const destructive = choices.map((c, i) => (c.destructive ? i : -1)).filter((i) => i >= 0);
+          ActionSheetIOS.showActionSheetWithOptions(
+            { title: `${m.senderName}'s message`, options: [...choices.map((c) => c.label), "Cancel"], destructiveButtonIndex: destructive, cancelButtonIndex: choices.length },
+            (i) => choices[i]?.run(),
+          );
+        } else {
+          // Android shows at most three buttons; a tap outside cancels.
+          Alert.alert(
+            `${m.senderName}'s message`,
+            undefined,
+            choices.length < 3
+              ? [{ text: "Cancel", style: "cancel" }, ...choices.map((c) => ({ text: c.label, onPress: c.run }))]
+              : choices.map((c) => ({ text: c.label, onPress: c.run })),
+            { cancelable: true },
+          );
+        }
       },
     };
-  }, [onModerate]);
+  }, [onModerate, others]);
 
   // A refresh that fails while messages are already on screen keeps them,
   // and says so quietly; only a first load that fails takes the whole space.
@@ -171,7 +225,7 @@ export function ThreadView({
               timeZone={timeZone}
               onFailedPress={onFailedPress}
               own={ownActions}
-              moderate={moderation}
+              others={othersActions}
             />
           )
         }
@@ -205,6 +259,7 @@ export function ThreadView({
   return (
     <View style={{ flex: 1, backgroundColor: color.ground }}>
       {header}
+      {notice}
       <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
         <View style={{ flex: 1 }}>{body}</View>
         {staleBanner ? (

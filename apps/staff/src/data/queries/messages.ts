@@ -3,7 +3,7 @@
 // No websockets in v1: a conversation on screen polls (refetchInterval) while
 // the screen is focused and the app is in the foreground, and stops otherwise.
 // Callers pass `live` for that; see features/messages/use-live.ts.
-import type { OfficeMessagesResponse, TeamMessagesResponse } from "@bookmops/api/v1";
+import type { OfficeMessagesResponse, ReportMessageRequest, TeamMessagesResponse } from "@bookmops/api/v1";
 import { type InfiniteData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useSource } from "../session";
@@ -23,6 +23,7 @@ export const messageKeys = {
   teamChannel: (channelId: string) => ["team", "channel", channelId, "summary"] as const,
   teamMessages: (channelId: string) => ["team", "channel", channelId, "messages"] as const,
   directory: ["team", "directory"] as const,
+  blocks: ["team", "blocks"] as const,
 };
 
 export type OfficePages = InfiniteData<OfficeMessagesResponse, string | null>;
@@ -125,4 +126,31 @@ export function useOpenDirect() {
       void qc.invalidateQueries({ queryKey: messageKeys.teamChannels });
     },
   });
+}
+
+// ---- Reporting and blocking ---------------------------------------------------
+
+export function useTeamBlocks() {
+  const source = useSource();
+  return useQuery({ queryKey: messageKeys.blocks, queryFn: () => source.teamBlocks() });
+}
+
+/**
+ * Block or unblock a person. Afterwards every team list is read again: the
+ * server leaves a blocked person's messages out, so what's on screen changes.
+ */
+export function useSetBlocked() {
+  const source = useSource();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userId, blocked }: { userId: string; blocked: boolean }) =>
+      blocked ? source.blockPerson(userId) : source.unblockPerson(userId),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["team"] }),
+  });
+}
+
+/** Report someone else's message to the company's moderators. */
+export function useReportMessage(messageId: string) {
+  const source = useSource();
+  return useMutation({ mutationFn: (body: ReportMessageRequest) => source.reportTeamMessage(messageId, body) });
 }

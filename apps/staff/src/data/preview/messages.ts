@@ -6,9 +6,15 @@
 // "#fail": the first attempt fails as if the connection dropped, the retry
 // (same clientEventId) goes through. An edit to text containing "#fail"
 // always fails, to show it being rolled back.
+//
+// Amara starts with Thomas Nguyen blocked, so "Montréal crew" shows the
+// "messages from people you blocked are hidden" notice and Blocked people has
+// someone to unblock. Reporting a message and blocking anyone stick while the
+// preview is open.
 import { ApiError } from "@bookmops/api/client";
 import { can } from "@bookmops/api/v1";
 import type {
+  BlockedPerson,
   DirectoryEntry,
   OfficeMessage,
   SendMessageRequest,
@@ -128,7 +134,11 @@ export const previewMessagesApi = {
     if (!channels.some((c) => c.id === channelId)) {
       return Promise.reject(new ApiError("This conversation isn't available.", 404, "NOT_FOUND", false));
     }
-    return delay(pageOf([...(teamRows.get(channelId) ?? [])].reverse().map(withMe), cursor));
+    // As the server does: the page is cut first, then the blocked are left out.
+    const page = pageOf([...(teamRows.get(channelId) ?? [])].reverse().map(withMe), cursor);
+    const blocked = myBlocks();
+    const items = page.items.filter((m) => !blocked.has(m.senderId));
+    return delay({ items, nextCursor: page.nextCursor, hiddenCount: page.items.length - items.length });
   },
 
   sendTeamMessage: async (channelId, req) => {
@@ -137,6 +147,8 @@ export const previewMessagesApi = {
     if (!rows) throw new ApiError("This conversation isn't available.", 404, "NOT_FOUND", false);
     const existing = rows.find((m) => m.clientEventId === req.clientEventId);
     if (existing) return existing;
+    const dmPerson = dmWith.get(channelId);
+    if (dmPerson && myBlocks().has(dmPerson)) throw new ApiError("You can't message this person.", 403, "BLOCKED", false);
     maybeFail(req);
     const me = previewPerson();
     const message: TeamMessage = {
@@ -204,6 +216,7 @@ export const previewMessagesApi = {
     await delay(null, 300);
     const person = directory.find((d) => d.id === userId);
     if (!person) throw new ApiError("That person isn't available.", 404, "NOT_FOUND", false);
+    if (myBlocks().has(userId)) throw new ApiError("You can't message this person.", 403, "BLOCKED", false);
     let channel = channels.find((c) => c.kind === "DIRECT" && dmWith.get(c.id) === userId);
     if (!channel) {
       channel = { id: `dm-${userId}`, name: person.name, kind: "DIRECT", unreadCount: 0 };
@@ -212,6 +225,38 @@ export const previewMessagesApi = {
       teamRows.set(channel.id, []);
     }
     return { ...channel, unreadCount: unreadIn(channel.id) };
+  },
+
+  reportTeamMessage: async (messageId, req) => {
+    await delay(null, 500);
+    const message = [...teamRows.values()].flat().find((m) => m.id === messageId);
+    if (!message) throw new ApiError("This message isn't available.", 404, "NOT_FOUND", false);
+    if (message.senderId === previewPerson().id) {
+      throw new ApiError("You can't report your own message. Edit or delete it instead.", 400, "CANNOT_REPORT_OWN", false);
+    }
+    // One report per person per message, as on the server.
+    const key = `${previewPerson().id}:${messageId}`;
+    const first = reports.get(key) ?? { id: `r-${req.clientEventId}`, messageId, reportedAt: new Date().toISOString() };
+    reports.set(key, first);
+    return first;
+  },
+
+  teamBlocks: () => delay({ items: [...myBlocks().values()].sort((a, b) => b.blockedAt.localeCompare(a.blockedAt)), nextCursor: null }),
+
+  blockPerson: async (userId) => {
+    await delay(null, 300);
+    if (userId === previewPerson().id) throw new ApiError("You can't block yourself.", 400, "CANNOT_BLOCK_SELF", false);
+    const name = PEOPLE_BY_ID.get(userId);
+    if (!name) throw new ApiError("This person isn't available.", 404, "NOT_FOUND", false);
+    const blocks = myBlocks();
+    if (!blocks.has(userId)) blocks.set(userId, { id: userId, name, blockedAt: new Date().toISOString() });
+    return { userId, blocked: true };
+  },
+
+  unblockPerson: async (userId) => {
+    await delay(null, 300);
+    myBlocks().delete(userId);
+    return { userId, blocked: false };
   },
 } satisfies Pick<
   DataSource,
@@ -229,6 +274,10 @@ export const previewMessagesApi = {
   | "markChannelRead"
   | "teamDirectory"
   | "openDirect"
+  | "reportTeamMessage"
+  | "teamBlocks"
+  | "blockPerson"
+  | "unblockPerson"
 >;
 
 // ---- Team data ----------------------------------------------------------------
@@ -262,6 +311,30 @@ const editsSeen = new Map<string, TeamMessage>();
 const JEAN = { id: "u-jean", name: "Jean Morin" };
 const LUCIE = { id: "u-lucie", name: "Lucie Paquette" };
 const SOFIA = { id: "u-sofia", name: "Sofia Martins" };
+const THOMAS = { id: "u-thomas", name: "Thomas Nguyen" };
+
+/** Everyone a message can come from, for blocking by id. */
+const PEOPLE_BY_ID = new Map<string, string>(
+  [ME, JEAN, LUCIE, SOFIA, THOMAS, { id: "u-nadia", name: "Nadia Rahman" }, { id: "u-marc", name: "Marc Tremblay" }].map((p) => [p.id, p.name]),
+);
+
+/** Who each preview person has blocked. Amara starts with Thomas blocked. */
+const blocksBy = new Map<string, Map<string, BlockedPerson>>([
+  ["preview-cleaner", new Map([["u-thomas", { id: "u-thomas", name: THOMAS.name, blockedAt: minutesAgo(60 * 24 * 3) }]])],
+]);
+
+function myBlocks(): Map<string, BlockedPerson> {
+  const me = previewPerson().id;
+  let blocks = blocksBy.get(me);
+  if (!blocks) {
+    blocks = new Map();
+    blocksBy.set(me, blocks);
+  }
+  return blocks;
+}
+
+/** Reports made, by reporter and message: reporting again answers with the first. */
+const reports = new Map<string, { id: string; messageId: string; reportedAt: string }>();
 
 const teamRows = new Map<string, TeamMessage[]>([
   [
@@ -269,6 +342,7 @@ const teamRows = new Map<string, TeamMessage[]>([
     [
       team("ch-all", 60 * 24 + 40, SOFIA, "Reminder that the Mile End office is closed Monday for Thanksgiving."),
       team("ch-all", 60 * 24 + 20, JEAN, "Thanks Sofia. Enjoy the long weekend everyone."),
+      team("ch-all", 60 * 20, THOMAS, "Anyone want my Saturday shift? Message me."),
       team("ch-all", 58, JEAN, "Does anyone have a spare descaler? Mine ran out on Rachel Est."),
       team("ch-all", 55, LUCIE, "I have two in the van. I am on Duluth until 11, come by any time."),
       { ...team("ch-all", 53, SOFIA, ""), deleted: true },
@@ -295,7 +369,10 @@ const readAt = new Map<string, number>([
 function unreadIn(channelId: string): number {
   const since = readAt.get(channelId) ?? 0;
   const me = previewPerson().id;
-  return (teamRows.get(channelId) ?? []).filter((m) => m.senderId !== me && new Date(m.createdAt).getTime() > since).length;
+  const blocked = myBlocks();
+  return (teamRows.get(channelId) ?? []).filter(
+    (m) => m.senderId !== me && !blocked.has(m.senderId) && new Date(m.createdAt).getTime() > since,
+  ).length;
 }
 
 const directory: DirectoryEntry[] = [

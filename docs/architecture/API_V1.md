@@ -585,6 +585,15 @@ All paths are under `/api/v1`. Notes on the endpoints:
     confirmation sends the request to the company
     (`POST /api/v1/me/deletion-request`). The company's owners and admins get
     an in-app alert and an email; the screen then shows "Request sent".
+  - *User-generated content (1.2).* Team chat lets anyone long-press someone
+    else's message to **Report message** (harassment, inappropriate, spam,
+    other, with an optional note), which alerts the company's moderators, and
+    to **Block** its sender, which hides their messages from the blocker at
+    once (server-side) and stops direct messages between the two either way.
+    Blocked people are listed, with Unblock, from the notice in any
+    conversation that hides messages, and are marked in New message (hold
+    a person there to block or unblock). Office roles can also remove any
+    message.
 
 ---
 

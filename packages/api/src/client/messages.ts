@@ -1,4 +1,6 @@
 import {
+  BlockResponse,
+  BlocksResponse,
   DeleteTeamMessageResponse,
   DirectoryResponse,
   type EditTeamMessageRequest,
@@ -9,6 +11,8 @@ import {
   OfficeMessagesResponse,
   type OpenDirectRequest,
   OpenDirectResponse,
+  type ReportMessageRequest,
+  ReportMessageResponse,
   type SendMessageRequest,
   SendOfficeMessageResponse,
   SendTeamMessageResponse,
@@ -53,4 +57,13 @@ export const messagesApi = (request: Request) => ({
     request(`/api/v1/team/channels/${seg(channelId)}/read`, MarkChannelReadResponse, json("POST", {})),
   teamDirectory: () => request("/api/v1/team/directory", DirectoryResponse),
   openDirect: (body: OpenDirectRequest) => request("/api/v1/team/direct", OpenDirectResponse, json("POST", body)),
+
+  // Reporting and blocking (App Store guideline 1.2)
+  /** Someone else's message only; one report per person per message. */
+  reportTeamMessage: (messageId: string, body: ReportMessageRequest) =>
+    request(`/api/v1/team/messages/${seg(messageId)}/report`, ReportMessageResponse, json("POST", body, body.clientEventId)),
+  teamBlocks: () => request("/api/v1/team/blocks", BlocksResponse),
+  /** Idempotent by nature: blocking someone already blocked answers the same. */
+  blockPerson: (userId: string) => request(`/api/v1/team/blocks/${seg(userId)}`, BlockResponse, json("POST", {})),
+  unblockPerson: (userId: string) => request(`/api/v1/team/blocks/${seg(userId)}`, BlockResponse, json("DELETE")),
 });

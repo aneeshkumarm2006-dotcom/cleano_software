@@ -3,11 +3,11 @@ import type { DirectoryEntry } from "@bookmops/api/v1";
 import { color, Icon, minTouch, radius, space, Text, TextField } from "@bookmops/ui-native";
 import { router } from "expo-router";
 import { Fragment, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, ScrollView, View } from "react-native";
+import { ActivityIndicator, Alert, type AccessibilityActionEvent, Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Empty, LoadError, Loading } from "@/components/QueryState";
-import { useOpenDirect, useTeamDirectory } from "@/data/queries";
+import { useOpenDirect, useSetBlocked, useTeamBlocks, useTeamDirectory } from "@/data/queries";
 import { Avatar } from "@/features/messages/MessageBubble";
 import { BackHeader } from "@/features/record/ui";
 
@@ -15,11 +15,16 @@ import { BackHeader } from "@/features/record/ui";
  * Start a direct message with a teammate. The list comes from the server,
  * which leaves it empty when the company has turned direct messages off, and
  * includes phone and email only when the company chose to share them.
+ * Someone the person blocked is marked, and tapping them offers Unblock;
+ * holding anyone else offers Block.
  */
 export default function NewDirectMessage() {
   const insets = useSafeAreaInsets();
   const directory = useTeamDirectory();
   const open = useOpenDirect();
+  const blocks = useTeamBlocks();
+  const setBlocked = useSetBlocked();
+  const blockedIds = new Set(blocks.data?.items.map((b) => b.id) ?? []);
   const [query, setQuery] = useState("");
   const [opening, setOpening] = useState<string | null>(null);
 
@@ -27,7 +32,33 @@ export default function NewDirectMessage() {
   const q = query.trim().toLocaleLowerCase("en-CA");
   const shown = q ? people.filter((p) => p.name.toLocaleLowerCase("en-CA").includes(q)) : people;
 
+  function changeBlock(person: DirectoryEntry, blocked: boolean) {
+    const verb = blocked ? "Block" : "Unblock";
+    Alert.alert(
+      `${verb} ${person.name}?`,
+      blocked
+        ? "You won't see their messages in team chat, and neither of you can send the other a direct message. They won't be told."
+        : "You'll see their messages in team chat again, and you can message each other.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: verb,
+          style: blocked ? "destructive" : "default",
+          onPress: () =>
+            setBlocked.mutate(
+              { userId: person.id, blocked },
+              {
+                onError: (e) =>
+                  Alert.alert(`Couldn't ${verb.toLowerCase()} ${person.name}`, e instanceof ApiError ? e.message : "Check your connection and try again."),
+              },
+            ),
+        },
+      ],
+    );
+  }
+
   function start(person: DirectoryEntry) {
+    if (blockedIds.has(person.id)) return changeBlock(person, false);
     if (opening) return;
     setOpening(person.id);
     open.mutate(person.id, {
@@ -78,7 +109,14 @@ export default function NewDirectMessage() {
                 {shown.map((p, i) => (
                   <Fragment key={p.id}>
                     {i > 0 ? <View style={{ height: 1, backgroundColor: color.line, marginLeft: 68 }} /> : null}
-                    <PersonRow person={p} busy={opening === p.id} disabled={!!opening} onPress={() => start(p)} />
+                    <PersonRow
+                      person={p}
+                      blocked={blockedIds.has(p.id)}
+                      busy={opening === p.id}
+                      disabled={!!opening}
+                      onPress={() => start(p)}
+                      onBlock={() => changeBlock(p, !blockedIds.has(p.id))}
+                    />
                   </Fragment>
                 ))}
               </View>
@@ -90,15 +128,37 @@ export default function NewDirectMessage() {
   );
 }
 
-function PersonRow({ person, busy, disabled, onPress }: { person: DirectoryEntry; busy: boolean; disabled: boolean; onPress: () => void }) {
-  const contact = [person.phone, person.email].filter(Boolean).join(" · ");
+function PersonRow({
+  person,
+  blocked,
+  busy,
+  disabled,
+  onPress,
+  onBlock,
+}: {
+  person: DirectoryEntry;
+  blocked: boolean;
+  busy: boolean;
+  disabled: boolean;
+  onPress: () => void;
+  /** Block them, or unblock them when `blocked`. */
+  onBlock: () => void;
+}) {
+  const contact = blocked ? "Blocked" : [person.phone, person.email].filter(Boolean).join(" · ");
+  const blockAction = blocked ? `Unblock ${person.name}` : `Block ${person.name}`;
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`Message ${person.name}`}
+      accessibilityLabel={blocked ? `${person.name}, blocked. Unblock` : `Message ${person.name}`}
+      accessibilityHint={blocked ? undefined : "Hold to block"}
       accessibilityState={{ disabled, busy }}
+      accessibilityActions={[{ name: "block", label: blockAction }]}
+      onAccessibilityAction={(e: AccessibilityActionEvent) => {
+        if (e.nativeEvent.actionName === "block") onBlock();
+      }}
       disabled={disabled}
       onPress={onPress}
+      onLongPress={onBlock}
       style={({ pressed }) => ({
         minHeight: minTouch + 16,
         flexDirection: "row",
@@ -115,12 +175,16 @@ function PersonRow({ person, busy, disabled, onPress }: { person: DirectoryEntry
           {person.name}
         </Text>
         {contact ? (
-          <Text variant="small" color="ink2" numberOfLines={1} selectable>
+          <Text variant="small" color="ink2" numberOfLines={1} selectable={!blocked}>
             {contact}
           </Text>
         ) : null}
       </View>
-      {busy ? <ActivityIndicator color={color.accent} /> : <Icon name="chat" size={20} color="accentText" />}
+      {busy ? (
+        <ActivityIndicator color={color.accent} />
+      ) : (
+        <Icon name={blocked ? "eyeOff" : "chat"} size={20} color={blocked ? "ink3" : "accentText"} />
+      )}
     </Pressable>
   );
 }

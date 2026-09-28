@@ -29,6 +29,8 @@ export interface ThreadMessage {
   editableId?: string;
   /** The server's id, on someone else's message the office may remove (team chat moderation). */
   removableId?: string;
+  /** The server's id, on someone else's team chat message the person may report, and whose sender they may block. */
+  reportableId?: string;
   /** When it was last edited, or null. */
   editedAt?: string | null;
   /** Deleted: shown as "Message deleted", with no body. */

@@ -37,6 +37,10 @@ export const ATTACHMENT_KINDS = ["IMAGE", "FILE"] as const;
 /** What kind of team channel this is. */
 export const TEAM_CHANNEL_KINDS = ["DEFAULT", "GROUP", "DIRECT"] as const;
 
+/** Why a team chat message is reported. A request field, so a strict enum. */
+export const MESSAGE_REPORT_REASONS = ["HARASSMENT", "INAPPROPRIATE", "SPAM", "OTHER"] as const;
+export type MessageReportReason = (typeof MESSAGE_REPORT_REASONS)[number];
+
 /**
  * The longest message body, after trimming. The web's limit
  * (sendChatMessage and sendGroupMessage both refuse past 4000), so a message
@@ -221,8 +225,15 @@ export type TeamMessage = z.infer<typeof TeamMessage>;
  * body, so everyone sees where one was.
  *
  * Server: canAccessChannel, else 404. Does not move the read cursor.
+ * Messages from anyone the CALLER has blocked are left out, server-side
+ * (their text never reaches the phone); `hiddenCount` says how many this page
+ * left out, so the app can say some are hidden. Pages keep their size before
+ * the filter, so a page can be short, or empty with a `nextCursor`.
  */
-export const TeamMessagesResponse = page(TeamMessage);
+export const TeamMessagesResponse = page(TeamMessage).extend({
+  /** Messages on this page from people the caller blocked, left out. */
+  hiddenCount: z.number().int().nonnegative().default(0),
+});
 export type TeamMessagesResponse = z.infer<typeof TeamMessagesResponse>;
 
 /**
@@ -231,7 +242,8 @@ export type TeamMessagesResponse = z.infer<typeof TeamMessagesResponse>;
  *
  * Server: canAccessChannel (else 404) and the channel is active. Sender id
  * and name come from the session, never the request. Trims, refuses empty or
- * over MESSAGE_BODY_MAX.
+ * over MESSAGE_BODY_MAX. In a DIRECT channel, a block between the two people,
+ * either way round, is 403 `BLOCKED`.
  */
 export const SendTeamMessageResponse = TeamMessage;
 
@@ -317,8 +329,86 @@ export type DirectoryResponse = z.infer<typeof DirectoryResponse>;
  * in your company", so ids from elsewhere can't be probed for names.
  * Find-or-create must be race-safe (one direct channel per pair), so a double
  * tap or a retry opens the same conversation; that is what makes it safe
- * without an idempotency key.
+ * without an idempotency key. A block between the two, either way round, is
+ * 403 `BLOCKED`.
  */
 export const OpenDirectRequest = z.object({ userId: z.string().min(1).max(64) });
 export type OpenDirectRequest = z.infer<typeof OpenDirectRequest>;
 export const OpenDirectResponse = TeamChannel;
+
+// ---- Reporting and blocking (App Store guideline 1.2) --------------------------
+//
+// Team chat is content people make, so anyone can report a message to the
+// company's moderators and block a person. Both are team chat only: office
+// chat is the person's line to their employer and can't be blocked.
+
+export const REPORT_NOTE_MAX = 500;
+
+/**
+ * POST /api/v1/team/messages/:messageId/report — report someone else's
+ * message to the company's moderators. Idempotent on `clientEventId` (also
+ * the Idempotency-Key). Response: the report.
+ *
+ * Server:
+ *   - any staff role; the message must be in a channel the caller can access,
+ *     else 404 (as for anything not theirs);
+ *   - the caller's OWN message is 400 `CANNOT_REPORT_OWN`;
+ *   - one report per person per message: reporting it again answers with the
+ *     first report and raises nothing new;
+ *   - a new report raises an alert for the office's moderators (the admin
+ *     notification feed, the manager app's Alerts) with who reported whom,
+ *     the reason, the note, and the message's text, as an effect;
+ *   - rate-limited per person (429);
+ *   - hides and removes nothing by itself: moderators decide.
+ */
+export const ReportMessageRequest = z.object({
+  reason: z.enum(MESSAGE_REPORT_REASONS),
+  note: z.string().max(REPORT_NOTE_MAX).optional(),
+  clientEventId: z.uuid(),
+});
+export type ReportMessageRequest = z.infer<typeof ReportMessageRequest>;
+
+export const ReportMessageResponse = z.object({
+  id: z.string(),
+  messageId: z.string(),
+  reportedAt: Instant,
+});
+export type ReportMessageResponse = z.infer<typeof ReportMessageResponse>;
+
+export const BlockedPerson = z.object({
+  id: z.string(),
+  name: z.string(),
+  blockedAt: Instant,
+});
+export type BlockedPerson = z.infer<typeof BlockedPerson>;
+
+/**
+ * GET /api/v1/team/blocks — the people the caller has blocked, newest first.
+ * One page: `nextCursor` is always null.
+ *
+ * Server: any staff role; the caller's own blocks only.
+ */
+export const BlocksResponse = page(BlockedPerson);
+export type BlocksResponse = z.infer<typeof BlocksResponse>;
+
+/**
+ * POST /api/v1/team/blocks/:userId — block a person in team chat.
+ * DELETE /api/v1/team/blocks/:userId — unblock them. No body. Both are
+ * idempotent by nature: blocking someone already blocked, or unblocking
+ * someone who isn't, answers the same.
+ *
+ * Server:
+ *   - any staff role; the person must be staff in the caller's company, else
+ *     404 (the same answer as nobody); the caller themselves is 400
+ *     `CANNOT_BLOCK_SELF`;
+ *   - while blocked: the blocked person's team messages are left out of the
+ *     blocker's lists and unread counts, and a direct message between the two
+ *     can't be opened or sent, either way round (403 `BLOCKED`);
+ *   - the blocked person isn't told, and office chat is unaffected;
+ *   - the blocker's name for them comes from the account, not the request.
+ */
+export const BlockResponse = z.object({
+  userId: z.string(),
+  blocked: z.boolean(),
+});
+export type BlockResponse = z.infer<typeof BlockResponse>;

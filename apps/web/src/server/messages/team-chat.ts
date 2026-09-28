@@ -10,6 +10,10 @@
 // A channel the caller can't access is the same answer as one that doesn't
 // exist (null here, 404 on the wire), so channel ids can't be probed.
 //
+// Blocking (./blocks.ts) leaves a blocked person's messages out of the
+// blocker's lists and unread counts, and stops direct messages between the
+// two either way round.
+//
 // Editing and deleting are the caller's OWN messages only, whatever their
 // role. Removing someone else's is moderation (groupChat.ts
 // deleteGroupMessage, and the manager API), not this.
@@ -24,6 +28,7 @@ import { db } from "@/lib/org-db";
 
 import type { Actor } from "../actor";
 import { failure, notFound, ok, type Result } from "../result";
+import { BLOCKED, blockedEitherWay, blockedIdsFor } from "./blocks";
 import { decodeCursor, NEWEST_FIRST, olderThan, pageOf } from "./cursor";
 import { MESSAGE_BODY_MAX, MESSAGE_EMPTY, MESSAGE_TOO_LONG } from "./office-chat";
 
@@ -138,7 +143,7 @@ export async function accessibleChannel(
   return member ? channel : null;
 }
 
-async function unreadCount(actor: Actor, channelId: string): Promise<number> {
+async function unreadCount(actor: Actor, channelId: string, blocked: readonly string[]): Promise<number> {
   const read = await db.groupChannelRead.findFirst({
     where: { channelId, userId: actor.userId },
     select: { lastReadAt: true },
@@ -147,7 +152,8 @@ async function unreadCount(actor: Actor, channelId: string): Promise<number> {
     where: {
       channelId,
       deletedAt: null,
-      senderId: { not: actor.userId },
+      // Nobody the caller blocked counts as unread either.
+      senderId: { notIn: [actor.userId, ...blocked] },
       ...(read ? { createdAt: { gt: read.lastReadAt } } : {}),
     },
   });
@@ -186,7 +192,8 @@ function kindOf(c: { isDefault: boolean; isDirect: boolean }): "DEFAULT" | "GROU
 
 async function toTeamChannels(actor: Actor, channels: ChannelRow[]): Promise<TeamChannel[]> {
   const titles = await channelTitles(actor, channels);
-  const counts = await Promise.all(channels.map((c) => unreadCount(actor, c.id)));
+  const blocked = await blockedIdsFor(actor.userId);
+  const counts = await Promise.all(channels.map((c) => unreadCount(actor, c.id, blocked)));
   return channels.map((c, i) => ({
     id: c.id,
     name: titles.get(c.id) ?? c.name,
@@ -297,12 +304,17 @@ export function toTeamMessage(m: TeamMessageRow, actor: Actor): TeamMessage {
 
 const PAGE_SIZE = 50;
 
-/** Newest first, deleted ones included as placeholders. Moves no read cursor. */
+/**
+ * Newest first, deleted ones included as placeholders. Moves no read cursor.
+ * Messages from anyone the caller blocked are left out after the page is
+ * read, so the cursor still walks every message; `hiddenCount` is how many
+ * this page left out.
+ */
 export async function listTeamMessages(
   actor: Actor,
   channelId: string,
   cursorRaw: string | undefined,
-): Promise<Result<{ items: TeamMessage[]; nextCursor: string | null }>> {
+): Promise<Result<{ items: TeamMessage[]; nextCursor: string | null; hiddenCount: number }>> {
   const cursor = decodeCursor(cursorRaw);
   if (cursor === "invalid") return failure(400, "VALIDATION_FAILED", "That page link isn't valid. Refresh and try again.");
   const channel = await accessibleChannel(actor, channelId);
@@ -314,7 +326,13 @@ export async function listTeamMessages(
     select: TEAM_MESSAGE_SELECT,
   });
   const page = pageOf(rows, PAGE_SIZE);
-  return ok({ items: page.rows.map((m) => toTeamMessage(m, actor)), nextCursor: page.nextCursor });
+  const blocked = new Set(await blockedIdsFor(actor.userId));
+  const shown = page.rows.filter((m) => !blocked.has(m.senderId));
+  return ok({
+    items: shown.map((m) => toTeamMessage(m, actor)),
+    nextCursor: page.nextCursor,
+    hiddenCount: page.rows.length - shown.length,
+  });
 }
 
 function checkBody(body: string): { ok: true; text: string } | { ok: false; message: string } {
@@ -334,6 +352,7 @@ export async function sendTeamMessage(
   if (!body.ok) return failure(400, "VALIDATION_FAILED", body.message);
   const channel = await accessibleChannel(actor, channelId, { active: true });
   if (!channel) return notFound(CHANNEL_NOT_FOUND);
+  if (channel.isDirect && (await directBlocked(actor, channel.id))) return failure(403, "BLOCKED", BLOCKED);
 
   const findPrior = () =>
     input.clientEventId
@@ -370,6 +389,20 @@ export async function sendTeamMessage(
     }
     throw e;
   }
+}
+
+/**
+ * Whether a direct channel the caller is IN joins them to someone they
+ * blocked, or who blocked them. A moderator reading a direct channel they
+ * aren't in isn't one of its pair, so no block applies to them.
+ */
+async function directBlocked(actor: Actor, channelId: string): Promise<boolean> {
+  const members = await db.groupChannelMember.findMany({ where: { channelId }, select: { userId: true } });
+  if (!members.some((m) => m.userId === actor.userId)) return false;
+  for (const m of members) {
+    if (m.userId !== actor.userId && (await blockedEitherWay(actor.userId, m.userId))) return true;
+  }
+  return false;
 }
 
 /** The caller's own message in this channel, or null (404 on the wire). */
@@ -617,6 +650,7 @@ export async function openDirectChannel(actor: Actor, otherUserId: string): Prom
     select: { id: true },
   });
   if (!other) return notFound("This person isn't available.");
+  if (await blockedEitherWay(actor.userId, other.id)) return failure(403, "BLOCKED", BLOCKED);
 
   const orgId = await requireOrgId();
   const [a, b] = [actor.userId, other.id].sort();

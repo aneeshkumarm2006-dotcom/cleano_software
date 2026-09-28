@@ -37,6 +37,14 @@ export const NOTIFICATION_CATALOG: CatalogEntry[] = [
     trigger: "A staff member asks, from Bookmops Pro, for their account to be deleted.",
     channels: { EMAIL: true },
   },
+  {
+    recipient: "ADMIN",
+    category: "Account",
+    key: "admin.chat.message_reported",
+    label: "Team chat message reported",
+    trigger: "A staff member reports a team chat message from Bookmops Pro. Shown in the notification feed.",
+    channels: { EMAIL: false },
+  },
   // General
   {
     recipient: "ADMIN",

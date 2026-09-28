@@ -38,11 +38,25 @@ const OWN_ACTIONS = [
   { name: "delete", label: "Delete" },
 ];
 
-const MODERATE_ACTIONS = [{ name: "remove", label: "Remove message" }];
+/**
+ * What can be done with someone else's team chat message: report it and block
+ * its sender (anyone), and remove it (the office, where the role may moderate).
+ * Any one of them may be missing.
+ */
+export interface OthersMessageActions {
+  /** Long press: every action below, in one sheet. */
+  onOptions: (message: ThreadMessage) => void;
+  onReport?: (message: ThreadMessage) => void;
+  onBlock?: (message: ThreadMessage) => void;
+  onRemove?: (message: ThreadMessage) => void;
+}
 
-/** Team chat moderation: removing someone else's message (OWNER, ADMIN, OPS_MANAGER). */
-export interface ModerationActions {
-  onRemove: (message: ThreadMessage) => void;
+function othersActionList(o: OthersMessageActions, m: ThreadMessage) {
+  return [
+    ...(o.onReport && m.reportableId ? [{ name: "report", label: "Report message" }] : []),
+    ...(o.onBlock && m.reportableId ? [{ name: "block", label: `Block ${m.senderName}` }] : []),
+    ...(o.onRemove && m.removableId ? [{ name: "remove", label: "Remove message" }] : []),
+  ];
 }
 
 /** What can be done with one of the person's own sent messages. */
@@ -69,7 +83,7 @@ export function MessageBubble({
   timeZone,
   onFailedPress,
   own,
-  moderate,
+  others,
 }: {
   message: ThreadMessage;
   /** Team chat: the sender's name over the first of their run of messages. */
@@ -80,8 +94,8 @@ export function MessageBubble({
   onFailedPress: (message: ThreadMessage) => void;
   /** Team chat only: editing and deleting the person's own messages. */
   own?: OwnMessageActions;
-  /** Team chat, for the office: removing anyone else's message. */
-  moderate?: ModerationActions;
+  /** Team chat: reporting, blocking and (for the office) removing someone else's message. */
+  others?: OthersMessageActions;
 }) {
   const { mine, deleted } = message;
   const time = clockTime(message.createdAt, timeZone);
@@ -91,7 +105,8 @@ export function MessageBubble({
   const text = deleted ? "Message deleted" : message.body;
   const spoken = `${mine ? "You" : message.senderName}, ${time}${edited ? ", edited" : ""}${status ? `, ${status}` : ""}. ${text}`;
   const actions = own && message.editableId && !deleted ? own : null;
-  const removable = !actions && moderate && message.removableId && !deleted && !mine ? moderate : null;
+  const othersList = !actions && others && !deleted && !mine ? othersActionList(others, message) : [];
+  const removable = othersList.length > 0 ? others! : null;
 
   const bubbleStyle = {
     paddingHorizontal: space[4] - 2,
@@ -134,12 +149,15 @@ export function MessageBubble({
     <Pressable
       accessible
       accessibilityLabel={spoken}
-      accessibilityHint="Long press to remove it"
-      accessibilityActions={MODERATE_ACTIONS}
+      accessibilityHint={`Long press for options: ${othersList.map((a) => a.label).join(", ")}`}
+      accessibilityActions={othersList}
       onAccessibilityAction={(e: AccessibilityActionEvent) => {
-        if (e.nativeEvent.actionName === "remove") removable.onRemove(message);
+        const name = e.nativeEvent.actionName;
+        if (name === "report") removable.onReport?.(message);
+        else if (name === "block") removable.onBlock?.(message);
+        else if (name === "remove") removable.onRemove?.(message);
       }}
-      onLongPress={() => removable.onRemove(message)}
+      onLongPress={() => removable.onOptions(message)}
       style={({ pressed }) => [bubbleStyle, pressed ? { opacity: 0.8 } : null]}
     >
       {content}
